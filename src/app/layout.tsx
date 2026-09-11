@@ -36,6 +36,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}})()",
+          }}
+        />
         <Providers>{children}</Providers>
       </body>
     </html>

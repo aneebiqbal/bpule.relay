@@ -31,7 +31,7 @@ export default async function AppLayout({
         todaySends={queue.todaySends}
         dailyLimit={queue.dailyLimit}
       />
-      <main className="mx-auto w-full max-w-6xl px-5 py-7 lg:px-10">
+      <main className="mx-auto w-full max-w-6xl px-5 pt-7 pb-24 lg:px-10 lg:pb-7">
         {children}
       </main>
     </div>

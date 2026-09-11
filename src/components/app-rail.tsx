@@ -15,6 +15,7 @@ import {
 import { cn } from 'cn'
 import { RelayBrand } from '@/components/brand'
 import { IdentityChip } from '@/components/identity-chip'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { APP_VERSION } from '@/lib/version'
 import type { RepRole } from '@/lib/domain/types'
 
@@ -53,7 +54,6 @@ export function AppRail({
   const router = useRouter()
   const [sends, setSends] = useState(todaySends)
 
-  // Refresh the counter as the rep moves through the app, no page reload.
   useEffect(() => {
     let cancelled = false
     fetch('/api/me/status')
@@ -88,7 +88,8 @@ export function AppRail({
   const sendCounter = (
     <div className="flex items-center gap-2" title={`${sends} of ${dailyLimit} sends used today`}>
       <span className="font-mono text-xs text-ink">
-        {sends}<span className="text-slate"> / {dailyLimit}</span>
+        {sends}
+        <span className="text-slate"> / {dailyLimit}</span>
       </span>
       <div className="h-1 w-12 overflow-hidden rounded-full bg-paper-tint">
         <div
@@ -99,41 +100,45 @@ export function AppRail({
           style={{ width: `${Math.min(Math.round((sends / dailyLimit) * 100), 100)}%` }}
         />
       </div>
-      {atCeiling ? (
-        <span className="text-[11px] text-status-research">Ceiling</span>
-      ) : null}
+      {atCeiling ? <span className="text-[11px] text-status-research">Ceiling</span> : null}
     </div>
   )
 
   return (
-    <aside className="border-b border-line lg:sticky lg:top-0 lg:h-dvh lg:border-b-0 lg:border-r">
-      <div className="flex h-full flex-col">
-        <div className="flex items-center justify-between px-4 py-4 lg:px-5">
+    <>
+      {/* Mobile top bar */}
+      <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur lg:hidden">
+        <div className="flex items-center justify-between px-4 py-3">
           <RelayBrand />
-          <div className="flex items-center gap-1 lg:hidden">
+          <div className="flex items-center gap-3">
             {sendCounter}
             <Link
               href="/onboarding"
-              className="rounded-md p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="rounded-md p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink"
               title="Your voice"
             >
               <Sparkles className="size-4" />
             </Link>
-            <Link
-              href="/login"
-              onClick={(e) => {
-                e.preventDefault()
-                void signOut()
-              }}
-              className="rounded-md p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            <ThemeToggle />
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="rounded-md p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink"
               title="Sign out"
             >
               <LogOut className="size-4" />
-            </Link>
+            </button>
           </div>
         </div>
+      </header>
 
-        <nav className="flex items-center gap-1 overflow-x-auto px-3 pb-2 lg:flex-1 lg:flex-col lg:items-stretch lg:gap-0.5 lg:overflow-visible lg:px-4 lg:pb-4">
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:border-r lg:border-line">
+        <div className="flex items-center justify-between px-5 py-4">
+          <RelayBrand />
+        </div>
+
+        <nav className="flex flex-1 flex-col gap-0.5 px-4 pb-4">
           {NAV.map(({ href, label, icon: Icon, exact }) => {
             const active = isActive(href, exact)
             return (
@@ -142,20 +147,20 @@ export function AppRail({
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex min-w-fit items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                  'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                   active
                     ? 'bg-muted font-medium text-ink'
                     : 'text-slate hover:bg-muted/60 hover:text-ink',
                 )}
               >
                 <Icon className="size-4 shrink-0" aria-hidden="true" />
-                <span className="whitespace-nowrap">{label}</span>
+                <span>{label}</span>
               </Link>
             )
           })}
         </nav>
 
-        <div className="hidden border-t border-line px-4 py-4 lg:block">
+        <div className="border-t border-line px-4 py-4">
           <Link
             href="/onboarding"
             className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-slate transition-colors hover:bg-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -172,7 +177,6 @@ export function AppRail({
 
           <div className="mt-3 flex items-center justify-between gap-2 px-2">
             <IdentityChip name={repName} subtitle={ROLE_LABEL[role]} />
-            {sendCounter}
             <button
               type="button"
               onClick={() => void signOut()}
@@ -183,11 +187,45 @@ export function AppRail({
             </button>
           </div>
 
-          <p className="mt-3 px-2 font-mono text-[11px] text-slate">
-            Relay v{APP_VERSION}
-          </p>
+          <div className="mt-2 flex items-center justify-between gap-2 px-2">
+            {sendCounter}
+            <div className="flex items-center gap-1">
+              <ThemeToggle className="rounded-md p-1 text-slate transition-colors hover:bg-muted hover:text-ink" />
+              <span className="font-mono text-[11px] text-slate">v{APP_VERSION}</span>
+            </div>
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+
+      {/* Mobile bottom nav */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] lg:hidden"
+        aria-label="Primary"
+      >
+        <div className="flex items-stretch">
+          {NAV.map(({ href, label, icon: Icon, exact }) => {
+            const active = isActive(href, exact)
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'flex flex-1 flex-col items-center gap-1 py-2 text-[11px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                  active ? 'text-ink' : 'text-slate hover:text-ink',
+                )}
+              >
+                <Icon
+                  className={cn('size-5', active ? 'text-gold' : '')}
+                  aria-hidden="true"
+                  strokeWidth={active ? 2.4 : 2}
+                />
+                {label}
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
+    </>
   )
 }
