@@ -1,9 +1,9 @@
 import type { Profile, ProofItem } from '@/lib/domain/types'
-import type { SelfCheck, DraftResult, DraftInput } from '@/lib/ai/draft'
+import type { SelfCheck, DraftResult, DraftInput, DraftVariant } from '@/lib/ai/draft'
 import { baseDraftSystem, buildUserPrompt, generateDraft } from '@/lib/ai/draft'
 import { pickModel } from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
-import { streamChatText } from '@/lib/ai/provider'
+import { streamChatText, structuredJson } from '@/lib/ai/provider'
 import { sanitizeDraft } from '@/lib/facts/sanitize'
 
 export type DraftStreamEvent =
@@ -12,18 +12,46 @@ export type DraftStreamEvent =
   | { type: 'profile'; profile: Profile | null }
   | { type: 'attempt'; attempt: number; model: string; tier: 'cheap' | 'strong' }
   | { type: 'draft'; chunk: string }
+  | { type: 'variant'; draft: DraftVariant }
   | { type: 'selfcheck'; pass: boolean; selfCheck: SelfCheck }
   | { type: 'done'; draft: DraftResult; matchedProof: ProofItem | null }
   | { type: 'error'; message: string }
 
 const SELFCHECK_MARKER = '---SELFCHECK---'
 
+interface RawVariant {
+  draft: string
+  test_1_reply_or_delete: boolean
+  test_1_note: string
+  test_2_not_generic: boolean
+  test_2_note: string
+}
+
+const DRAFT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'draft',
+    'test_1_reply_or_delete',
+    'test_1_note',
+    'test_2_not_generic',
+    'test_2_note',
+  ],
+  properties: {
+    draft: { type: 'string' },
+    test_1_reply_or_delete: { type: 'boolean' },
+    test_1_note: { type: 'string' },
+    test_2_not_generic: { type: 'boolean' },
+    test_2_note: { type: 'string' },
+  },
+} as const
+
 /**
- * Streaming draft pipeline. The draft AND the self-check live in a single
- * model call. The model streams the draft message, writes the marker, then
- * finishes with the JSON self-check block on the same output. The marker is
- * stripped from the stream so the client sees only the clean draft text token
- * by token; after the stream ends the JSON is parsed server-side.
+ * Streaming draft pipeline with best-of-two support.
+ *
+ * Two variants are generated in parallel on the cheap model. The stronger one
+ * is streamed to the client token-by-token; the weaker one is emitted as a
+ * 'variant' event so the UI can show a one-click swap.
  */
 export async function streamDraft(
   input: DraftInput,
@@ -50,42 +78,196 @@ export async function streamDraft(
     )
   }
 
-  const model = pickModel('draft').model
+  const system = baseDraftSystem(input.styleCard, input.facts)
+  const user = buildUserPrompt(input)
+  const cheap = pickModel('draft-variant')
 
-  emit({ type: 'status', message: 'Drafting in your voice' })
+  emit({ type: 'status', message: 'Drafting two variants in parallel' })
+  emit({ type: 'attempt', attempt: 0, model: cheap.model, tier: 'cheap' })
 
-  const firstResult = await streamOneAttempt(input, model, 0, emit)
+  // Best-of-two: generate both variants in parallel using the cheap model.
+  const [rawA, rawB] = await Promise.all([
+    structuredJson<RawVariant>({
+      model: cheap.model,
+      system,
+      user,
+      schema: DRAFT_SCHEMA,
+    }).catch(() => null),
+    structuredJson<RawVariant>({
+      model: cheap.model,
+      system,
+      user,
+      schema: DRAFT_SCHEMA,
+    }).catch(() => null),
+  ])
 
-  if (firstResult.check.passed) {
-    const draft = finishDraft(
-      input,
-      firstResult.draftText,
-      firstResult.check,
-      [model],
-      1,
-    )
-    emit({ type: 'selfcheck', pass: true, selfCheck: draft.selfCheck })
-    emit({ type: 'done', draft, matchedProof })
-    return draft
+  const variantA = rawA ? normalizeVariant(rawA, input) : null
+  const variantB = rawB ? normalizeVariant(rawB, input) : null
+
+  if (!variantA && !variantB) {
+    throw new Error('Both draft variants failed. Try again.')
   }
 
-  emit({ type: 'status', message: 'Rewriting once — the self-check flagged something' })
+  const { primary, secondary, pickReason } = pickBestVariant(variantA, variantB)
 
-  const secondResult = await streamOneAttempt(input, model, 1, emit)
+  // Stream the primary draft in chunks so the UI feels alive.
+  const text = primary.draftText
+  const chunkSize = 4
+  for (let i = 0; i < text.length; i += chunkSize) {
+    emit({ type: 'draft', chunk: text.slice(i, i + chunkSize) })
+    // Tiny artificial delay so the client sees token-by-token appearance.
+    if (i < text.length - chunkSize) {
+      await new Promise((r) => setTimeout(r, 8))
+    }
+  }
 
-  const draft = finishDraft(
-    input,
-    secondResult.draftText,
-    secondResult.check,
-    [model],
-    2,
-  )
-  emit({ type: 'selfcheck', pass: draft.passed, selfCheck: draft.selfCheck })
+  emit({ type: 'selfcheck', pass: primary.passed, selfCheck: primary.selfCheck })
+
+  if (secondary) {
+    emit({
+      type: 'variant',
+      draft: {
+        draftText: secondary.draftText,
+        selfCheck: secondary.selfCheck,
+        passed: secondary.passed,
+      },
+    })
+  }
+
+  const draft: DraftResult = {
+    leadId: input.leadId,
+    type: input.type,
+    draftText: primary.draftText,
+    selfCheck: primary.selfCheck,
+    passed: primary.passed,
+    modelUsed: cheap.model,
+    attempts: 1,
+    strippedNumbers: primary.strippedNumbers,
+    hadEmDash: primary.hadEmDash,
+    variant: secondary
+      ? {
+          draftText: secondary.draftText,
+          selfCheck: secondary.selfCheck,
+          passed: secondary.passed,
+        }
+      : undefined,
+    pickReason,
+    fewShotReason:
+      input.fewShotExamples && input.fewShotExamples.length > 0
+        ? `Informed by ${input.fewShotExamples.length} real win(s): ${input.fewShotExamples.map((e) => e.company).join(', ')}.`
+        : 'No few-shot examples matched this lead.',
+  }
+
   emit({ type: 'done', draft, matchedProof })
   return draft
 }
 
-async function streamOneAttempt(
+function normalizeVariant(
+  raw: RawVariant,
+  input: DraftInput,
+): {
+  draftText: string
+  selfCheck: SelfCheck
+  passed: boolean
+  strippedNumbers: string[]
+  hadEmDash: boolean
+} {
+  const cleaned = (raw.draft ?? '').trim()
+  const codeChecks = deterministicChecks(cleaned, {
+    company: input.lead.company,
+    evidence: input.extracted.signalEvidence,
+  })
+  const passed = Boolean(
+    raw.test_1_reply_or_delete &&
+      raw.test_2_not_generic &&
+      codeChecks.companyMentioned &&
+      codeChecks.specificEvidenceMentioned,
+  )
+  const sanitized = sanitizeDraft(cleaned, input.facts)
+  return {
+    draftText: sanitized.text,
+    selfCheck: {
+      test1ReplyOrDelete: Boolean(raw.test_1_reply_or_delete),
+      test1Note: raw.test_1_note || '',
+      test2NotGeneric: Boolean(raw.test_2_not_generic),
+      test2Note: raw.test_2_note || '',
+      codeChecks,
+    },
+    passed: passed && sanitized.strippedNumbers.length === 0,
+    strippedNumbers: sanitized.strippedNumbers,
+    hadEmDash: sanitized.hadEmDash,
+  }
+}
+
+function pickBestVariant(
+  a: ReturnType<typeof normalizeVariant> | null,
+  b: ReturnType<typeof normalizeVariant> | null,
+): {
+  primary: ReturnType<typeof normalizeVariant>
+  secondary: ReturnType<typeof normalizeVariant> | null
+  pickReason: string
+} {
+  if (a && !b) return { primary: a, secondary: null, pickReason: 'Only variant A succeeded.' }
+  if (b && !a) return { primary: b, secondary: null, pickReason: 'Only variant B succeeded.' }
+  if (!a && !b) {
+    // Unreachable in practice because we guard upstream, but satisfies types.
+    throw new Error('Both variants failed.')
+  }
+
+  const score = (v: NonNullable<typeof a>) => {
+    let s = 0
+    if (v.passed) s += 4
+    if (v.selfCheck.test1ReplyOrDelete) s += 2
+    if (v.selfCheck.test2NotGeneric) s += 2
+    if (v.selfCheck.codeChecks.companyMentioned) s += 1
+    if (v.selfCheck.codeChecks.specificEvidenceMentioned) s += 1
+    return s
+  }
+
+  const sa = score(a!)
+  const sb = score(b!)
+
+  if (sa >= sb) {
+    return {
+      primary: a!,
+      secondary: b,
+      pickReason:
+        sa === sb
+          ? 'Both variants scored the same. Showing variant A by default.'
+          : 'Variant A scored higher on self-check + code checks.',
+    }
+  }
+
+  return {
+    primary: b!,
+    secondary: a,
+    pickReason: 'Variant B scored higher on self-check + code checks.',
+  }
+}
+
+function deterministicChecks(
+  draft: string,
+  leadTokens: { company: string | null; evidence: string | null },
+): SelfCheck['codeChecks'] {
+  const c = leadTokens.company?.toLowerCase() ?? ''
+  const evidenceWords =
+    leadTokens.evidence
+      ?.toLowerCase()
+      .split(/\W+/)
+      .filter((w) => w.length >= 5) ?? []
+
+  const companyMentioned = c.length > 0 ? draft.toLowerCase().includes(c) : true
+  const specificEvidenceMentioned = evidenceWords.some((w) =>
+    draft.toLowerCase().includes(w),
+  )
+  return { companyMentioned, specificEvidenceMentioned }
+}
+
+/**
+ * Legacy single-attempt streaming. Kept for scenarios where you truly want
+ * one streamed call (e.g. strong-model fallback or debugging).
+ */
+export async function streamOneAttemptLegacy(
   input: DraftInput,
   model: string,
   attempt: number,
@@ -130,7 +312,9 @@ async function streamOneAttempt(
   })
 
   const draftPart =
-    markerIdx >= 0 ? full.slice(0, markerIdx) : full.slice(0, full.lastIndexOf('\n') + 1 || full.length)
+    markerIdx >= 0
+      ? full.slice(0, markerIdx)
+      : full.slice(0, full.lastIndexOf('\n') + 1 || full.length)
   const jsonPart = markerIdx >= 0 ? full.slice(markerIdx + marker.length) : ''
 
   const remaining = draftPart.length > shownCount ? draftPart.slice(shownCount) : ''
@@ -166,10 +350,7 @@ async function streamOneAttempt(
   })
 
   const passed =
-    test1 &&
-    test2 &&
-    codeChecks.companyMentioned &&
-    codeChecks.specificEvidenceMentioned
+    test1 && test2 && codeChecks.companyMentioned && codeChecks.specificEvidenceMentioned
 
   const selfCheck: SelfCheck = {
     test1ReplyOrDelete: test1,
@@ -182,11 +363,6 @@ async function streamOneAttempt(
   return { draftText, check: { passed, selfCheck } }
 }
 
-/**
- * The streaming prompt asks for the draft first, then a marker and a JSON
- * self-check block. Models occasionally stray and wrap it in markdown fences
- * or drop extra commentary; this helper parses as best it can.
- */
 function parseSelfCheckBlock(raw: string): {
   test_1_reply_or_delete?: boolean
   test_1_note?: string
@@ -207,46 +383,6 @@ function parseSelfCheckBlock(raw: string): {
     }
   }
   return null
-}
-
-function deterministicChecks(
-  draft: string,
-  leadTokens: { company: string | null; evidence: string | null },
-): SelfCheck['codeChecks'] {
-  const c = leadTokens.company?.toLowerCase() ?? ''
-  const evidenceWords =
-    leadTokens.evidence
-      ?.toLowerCase()
-      .split(/\W+/)
-      .filter((w) => w.length >= 5) ?? []
-
-  const companyMentioned = c.length > 0 ? draft.toLowerCase().includes(c) : true
-  const specificEvidenceMentioned = evidenceWords.some((w) =>
-    draft.toLowerCase().includes(w),
-  )
-  return { companyMentioned, specificEvidenceMentioned }
-}
-
-function finishDraft(
-  input: DraftInput,
-  text: string,
-  check: { passed: boolean; selfCheck: SelfCheck },
-  modelsUsed: string[],
-  attempts: number,
-): DraftResult {
-  const sanitized = sanitizeDraft(text, input.facts)
-  const passed = check.passed && sanitized.strippedNumbers.length === 0
-  return {
-    leadId: input.leadId,
-    type: input.type,
-    draftText: sanitized.text,
-    selfCheck: check.selfCheck,
-    passed,
-    modelUsed: modelsUsed.join(' then '),
-    attempts,
-    strippedNumbers: sanitized.strippedNumbers,
-    hadEmDash: sanitized.hadEmDash,
-  }
 }
 
 export { baseDraftSystem, buildUserPrompt, generateDraft }

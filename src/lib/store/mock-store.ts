@@ -1,13 +1,18 @@
 import type {
+  CsvImport,
   Fact,
   Lead,
   Message,
   MessageType,
+  NotificationLogEntry,
   Outcome,
   Play,
   Profile,
   ProofItem,
+  PushSubscription,
   Rep,
+  UpworkJob,
+  UpworkMessage,
   Verdict,
   VoiceProfile,
 } from '@/lib/domain/types'
@@ -313,6 +318,12 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       createdAt: t(12),
     },
   ]
+
+  const upworkJobs: UpworkJob[] = []
+  const upworkMessages: UpworkMessage[] = []
+  const pushSubs: PushSubscription[] = []
+  const notifications: NotificationLogEntry[] = []
+  const csvImports: CsvImport[] = []
 
   function bucketByOwner(ownerId: string): RateBucket[] {
     return leads
@@ -653,6 +664,152 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     async listAllLeadsAdmin() {
       return leads
+    },
+    async matchProofItemsByEmbedding() {
+      return []
+    },
+    async listGoldenSet() {
+      return []
+    },
+    async addGoldenCase() {
+      throw new Error('Admin only')
+    },
+    async removeGoldenCase() {
+      throw new Error('Admin only')
+    },
+    async listEvalRuns() {
+      return []
+    },
+    async saveEvalRun() {
+      throw new Error('Admin only')
+    },
+    async listFewShotWins() {
+      return []
+    },
+    async refreshFewShotWins() {
+      return 0
+    },
+    async createUpworkJob(input) {
+      const job: UpworkJob = {
+        id: nextId('upwork'),
+        ownerRepId: rep.id,
+        title: input.title.trim(),
+        description: input.description.trim(),
+        budgetMin: input.budgetMin ?? null,
+        budgetMax: input.budgetMax ?? null,
+        hourlyRateMin: input.hourlyRateMin ?? null,
+        hourlyRateMax: input.hourlyRateMax ?? null,
+        proposalCount: input.proposalCount ?? null,
+        connectsCost: input.connectsCost ?? 0,
+        requiredSkills: input.requiredSkills ?? [],
+        urgencySignal: input.urgencySignal ?? null,
+        score: null,
+        verdict: null,
+        status: 'new',
+        extractedFields: null,
+        rawInput: input.rawInput ?? null,
+        tags: input.tags ?? [],
+        createdAt: new Date().toISOString(),
+      }
+      upworkJobs.unshift(job)
+      return job
+    },
+    async getUpworkJob(id: string) {
+      const job = upworkJobs.find((j) => j.id === id)
+      if (!job) return null
+      return {
+        ...job,
+        messages: upworkMessages.filter((m) => m.jobId === id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+      }
+    },
+    async listUpworkJobs() {
+      return upworkJobs.filter((j) => j.ownerRepId === rep.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    },
+    async updateUpworkJobScore(id, score) {
+      const job = upworkJobs.find((j) => j.id === id)
+      if (job) {
+        job.score = score.total
+        job.verdict = score.verdict
+      }
+    },
+    async saveUpworkDraft(input) {
+      const msg: UpworkMessage = {
+        id: nextId('umsg'),
+        jobId: input.jobId,
+        repId: rep.id,
+        type: input.type,
+        draftText: input.draftText,
+        sentText: null,
+        sentAt: null,
+        modelUsed: input.modelUsed,
+        createdAt: new Date().toISOString(),
+      }
+      upworkMessages.unshift(msg)
+      return msg
+    },
+    async markUpworkApplied(jobId, sentText, type = 'cover') {
+      const job = upworkJobs.find((j) => j.id === jobId)
+      if (job) job.status = 'applied'
+      upworkMessages.push({
+        id: nextId('umsg'),
+        jobId,
+        repId: rep.id,
+        type,
+        draftText: null,
+        sentText,
+        sentAt: new Date().toISOString(),
+        modelUsed: null,
+        createdAt: new Date().toISOString(),
+      })
+    },
+    async logCsvImport(input) {
+      const imp: CsvImport = {
+        id: nextId('csv'),
+        repId: rep.id,
+        fileName: input.fileName ?? null,
+        totalRows: input.totalRows,
+        imported: input.imported,
+        duplicates: input.duplicates,
+        invalid: input.invalid,
+        details: input.details ?? null,
+        createdAt: new Date().toISOString(),
+      }
+      csvImports.unshift(imp)
+      return imp
+    },
+    async listCsvImports() {
+      return csvImports.filter((c) => c.repId === rep.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    },
+    async archiveSearch() {
+      return []
+    },
+    async savePushSubscription(sub) {
+      const existing = pushSubs.find((s) => s.repId === sub.repId)
+      const ps: PushSubscription = {
+        id: existing?.id ?? nextId('push'),
+        repId: sub.repId,
+        endpoint: sub.endpoint,
+        p256dh: sub.p256dh,
+        auth: sub.auth,
+        createdAt: new Date().toISOString(),
+      }
+      if (existing) Object.assign(existing, ps)
+      else pushSubs.push(ps)
+      return ps
+    },
+    async getPushSubscription(repId: string) {
+      return pushSubs.find((s) => s.repId === repId) ?? null
+    },
+    async deletePushSubscription(repId: string) {
+      const idx = pushSubs.findIndex((s) => s.repId === repId)
+      if (idx >= 0) pushSubs.splice(idx, 1)
+    },
+    async listNotifications() {
+      return notifications.filter((n) => n.repId === rep.id && !n.read).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    },
+    async markNotificationRead(id: string) {
+      const n = notifications.find((x) => x.id === id && x.repId === rep.id)
+      if (n) n.read = true
     },
   }
 }

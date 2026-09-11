@@ -1,16 +1,21 @@
 import type {
+  CsvImport,
   Fact,
   Lead,
   Message,
   MessageType,
+  NotificationLogEntry,
   Outcome,
   Play,
   Profile,
   ProofItem,
+  PushSubscription,
   Rep,
   SignalId,
   StyleCard,
   StyleSampleSource,
+  UpworkJob,
+  UpworkMessage,
   Verdict,
   VoiceProfile,
 } from '@/lib/domain/types'
@@ -96,6 +101,42 @@ export interface DosageResult {
   message?: string
 }
 
+export interface GoldenCaseRow {
+  id: string
+  leadId: string
+  knownReplied: boolean
+  sentText: string
+  note: string | null
+  active: boolean
+  createdAt: string
+}
+
+export interface EvalRunRow {
+  id: string
+  promptVersion: string
+  goldenSetSize: number
+  replyRateScore: number
+  selfCheckPassRate: number
+  companyMentionRate: number
+  evidenceMentionRate: number
+  overallScore: number
+  details: unknown
+  createdAt: string
+}
+
+export interface FewShotWin {
+  id: string
+  messageId: string
+  leadId: string
+  playId: string | null
+  signalType: number | null
+  sentText: string
+  company: string
+  signalEvidence: string | null
+  tags: string[]
+  createdAt: string
+}
+
 export interface ScoutStore {
   // leads
   createLead(lead: NewLeadInput): Promise<CreateLeadResult>
@@ -140,10 +181,13 @@ export interface ScoutStore {
     projectSummary: string
     reviewQuote?: string | null
     tags?: string[]
+    embedding?: number[] | null
   }): Promise<ProofItem>
   deleteProofItem(id: string): Promise<void>
   /** Find proof items whose tags overlap with the given tags, ranked by overlap count. */
   matchProofItems(tags: string[], limit?: number): Promise<ProofItem[]>
+  /** Semantic proof matching via pgvector embedding search. */
+  matchProofItemsByEmbedding(embedding: number[], limit?: number): Promise<Array<{ item: ProofItem; similarity: number }>>
   // facts
   listFacts(): Promise<Fact[]>
   upsertFact(input: {
@@ -160,4 +204,63 @@ export interface ScoutStore {
   getTeamStats(): Promise<TeamStats>
   /** All leads a team lead can see; admin only in Supabase mode. */
   listAllLeadsAdmin(): Promise<Lead[]>
+  // eval harness
+  listGoldenSet(): Promise<GoldenCaseRow[]>
+  addGoldenCase(input: { leadId: string; messageId?: string; knownReplied: boolean; sentText?: string; note?: string }): Promise<GoldenCaseRow>
+  removeGoldenCase(id: string): Promise<void>
+  listEvalRuns(): Promise<EvalRunRow[]>
+  saveEvalRun(run: Omit<EvalRunRow, 'id' | 'createdAt'>): Promise<EvalRunRow>
+  // few-shot wins
+  listFewShotWins(limit?: number): Promise<FewShotWin[]>
+  refreshFewShotWins(): Promise<number>
+  // upwork jobs
+  createUpworkJob(input: {
+    title: string
+    description: string
+    budgetMin?: number | null
+    budgetMax?: number | null
+    hourlyRateMin?: number | null
+    hourlyRateMax?: number | null
+    proposalCount?: number | null
+    connectsCost?: number
+    requiredSkills?: string[]
+    urgencySignal?: string | null
+    rawInput?: string | null
+    tags?: string[]
+  }): Promise<UpworkJob>
+  getUpworkJob(id: string): Promise<(UpworkJob & { messages: UpworkMessage[] }) | null>
+  listUpworkJobs(): Promise<UpworkJob[]>
+  updateUpworkJobScore(id: string, score: { total: number; verdict: UpworkJob['verdict'] }): Promise<void>
+  saveUpworkDraft(input: { jobId: string; type: UpworkMessage['type']; draftText: string; modelUsed: string }): Promise<UpworkMessage>
+  markUpworkApplied(jobId: string, sentText: string, type?: UpworkMessage['type']): Promise<void>
+  // csv imports
+  logCsvImport(input: Omit<CsvImport, 'id' | 'createdAt' | 'repId'>): Promise<CsvImport>
+  listCsvImports(): Promise<CsvImport[]>
+  // archive search
+  archiveSearch(opts: {
+    query: string
+    entityFilter?: 'lead' | 'proof' | 'upwork' | 'all'
+    statusFilter?: string[]
+    signalFilter?: number[]
+    playFilter?: string[]
+    repFilter?: string[]
+    dateFrom?: string | null
+    dateTo?: string | null
+    limit?: number
+  }): Promise<Array<{
+    entityType: string
+    id: string
+    title: string
+    subtitle: string
+    status: string | null
+    createdAt: string
+    rank: number
+  }>>
+  // push subscriptions
+  savePushSubscription(sub: Omit<PushSubscription, 'id' | 'createdAt'>): Promise<PushSubscription>
+  getPushSubscription(repId: string): Promise<PushSubscription | null>
+  deletePushSubscription(repId: string): Promise<void>
+  // notifications
+  listNotifications(): Promise<NotificationLogEntry[]>
+  markNotificationRead(id: string): Promise<void>
 }

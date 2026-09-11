@@ -67,8 +67,8 @@ export function SupabaseSignIn() {
         password,
       })
       if (authError) throw new Error(authError.message)
-      router.replace('/')
-      router.refresh()
+      // Force a full page reload so the server picks up the fresh session cookie.
+      window.location.href = '/'
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed.')
     } finally {

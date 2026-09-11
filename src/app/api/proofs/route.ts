@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { classifyProofTags } from '@/lib/ai/proof-tags'
+import { embedText } from '@/lib/ai/embed'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -80,6 +81,15 @@ export async function POST(request: Request) {
     )
   }
 
+  // One-time embedding cost per proof item. Not per-draft.
+  const embeddingText = `${projectSummary} ${tags.join(' ')}`
+  let embedding: number[] | null = null
+  try {
+    embedding = await embedText(embeddingText)
+  } catch {
+    // Embedding is optional; tag matching still works as fallback.
+  }
+
   const item = await store.upsertProofItem({
     id: typeof body.id === 'string' ? body.id : undefined,
     profileId,
@@ -89,6 +99,7 @@ export async function POST(request: Request) {
     projectSummary,
     reviewQuote: typeof body.reviewQuote === 'string' ? body.reviewQuote : null,
     tags,
+    embedding,
   })
   return NextResponse.json({ item })
 }

@@ -9,6 +9,8 @@ export type AiTask =
   | 'classify'
   /** Outreach message drafting. */
   | 'draft'
+  /** Best-of-two variant drafting (cheap model, parallel calls). */
+  | 'draft-variant'
 
 export interface ModelChoice {
   model: string
@@ -42,6 +44,12 @@ export function pickModel(task: AiTask): ModelChoice {
         model: strongModel(),
         tier: 'strong',
         reason: 'Drafting is quality-critical and runs the self-check in the same call; always spend the strong model here.',
+      }
+    case 'draft-variant':
+      return {
+        model: cheapModel(),
+        tier: 'cheap',
+        reason: 'Best-of-two variant generation runs twice in parallel on the cheap model to keep cost low while improving selection.',
       }
   }
 }

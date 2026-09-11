@@ -20,8 +20,9 @@ const password = process.env.SCOUT_DEV_PASSWORD ?? 'scout-dev-password'
 const USERS = [
   'aneeb@scout.dev',
   'hassan@scout.dev',
-  'madiha@scout.dev',
   'ahmad@scout.dev',
+  'abdullah@scout.dev',
+  'madiha@scout.dev',
 ]
 
 if (!url || !serviceRole || !anonKey) {

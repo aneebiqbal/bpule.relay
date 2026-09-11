@@ -6,11 +6,14 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   BookOpen,
   CalendarDays,
+  FileUp,
   IdCard,
   LogOut,
   Plus,
+  Search,
   Sparkles,
   Users,
+  Briefcase,
 } from 'lucide-react'
 import { cn } from 'cn'
 import { RelayBrand } from '@/components/brand'
@@ -19,9 +22,21 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { APP_VERSION } from '@/lib/version'
 import type { RepRole } from '@/lib/domain/types'
 
-const NAV = [
+const BASE_NAV = [
   { href: '/', label: 'Today', icon: CalendarDays, exact: true },
   { href: '/leads/new', label: 'New lead', icon: Plus, exact: true },
+  { href: '/upwork', label: 'Upwork', icon: Briefcase, exact: false },
+  { href: '/archive', label: 'Archive', icon: Search, exact: false },
+  { href: '/team', label: 'Team', icon: Users, exact: false },
+  { href: '/profiles', label: 'Profiles', icon: IdCard, exact: false },
+  { href: '/facts', label: 'Facts', icon: BookOpen, exact: false },
+]
+
+const SOURCER_NAV = [
+  { href: '/', label: 'Today', icon: CalendarDays, exact: true },
+  { href: '/leads/new', label: 'New lead', icon: Plus, exact: true },
+  { href: '/leads/import', label: 'Import', icon: FileUp, exact: false },
+  { href: '/archive', label: 'Archive', icon: Search, exact: false },
   { href: '/team', label: 'Team', icon: Users, exact: false },
   { href: '/profiles', label: 'Profiles', icon: IdCard, exact: false },
   { href: '/facts', label: 'Facts', icon: BookOpen, exact: false },
@@ -53,6 +68,8 @@ export function AppRail({
   const pathname = usePathname()
   const router = useRouter()
   const [sends, setSends] = useState(todaySends)
+
+  const NAV = role === 'sourcer' ? SOURCER_NAV : BASE_NAV
 
   useEffect(() => {
     let cancelled = false
@@ -203,7 +220,7 @@ export function AppRail({
         aria-label="Primary"
       >
         <div className="flex items-stretch">
-          {NAV.map(({ href, label, icon: Icon, exact }) => {
+          {NAV.slice(0, 5).map(({ href, label, icon: Icon, exact }) => {
             const active = isActive(href, exact)
             return (
               <Link

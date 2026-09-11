@@ -27,8 +27,22 @@ where id = 'ffffffff-0000-0000-0000-000000000001' and status = 'contacted';
 -- ---------------------------------------------------------------------------
 -- FAKE seed board, part 2. All companies/contacts are fictional. Scores are
 -- rubric-exact: weight + [url + name + title + specific evidence + quote].
+-- Only inserted if the dev reps from 0004 exist (the seed script may not have
+-- run yet, e.g. in CI or fresh local environments).
 -- ---------------------------------------------------------------------------
-insert into leads
+do $$
+begin
+  if (select count(*) from reps where id in (
+    'bbbbbbbb-0000-0000-0000-000000000001',
+    'bbbbbbbb-0000-0000-0000-000000000002',
+    'bbbbbbbb-0000-0000-0000-000000000003',
+    'bbbbbbbb-0000-0000-0000-000000000004'
+  )) < 4 then
+    raise notice 'Skipping 0005 seed: dev reps not found. Run scripts/seed-dev-users.mjs first.';
+    return;
+  end if;
+
+  insert into leads
   (id, owner_rep_id, company, contact_name, contact_title, url, raw_input,
    signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, created_at)
 values
@@ -387,3 +401,5 @@ values
     'quiz', now() - interval '6 days'
   )
 on conflict (rep_id) do nothing;
+
+end $$;

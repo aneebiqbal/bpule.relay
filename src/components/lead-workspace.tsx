@@ -84,6 +84,7 @@ type DraftEvent =
   | { type: 'profile'; profile?: Profile | null }
   | { type: 'attempt'; attempt: number; model: string; tier: 'cheap' | 'strong' }
   | { type: 'draft'; chunk: string }
+  | { type: 'variant'; draft: import('@/lib/ai/draft').DraftVariant }
   | { type: 'selfcheck'; pass: boolean; selfCheck: SelfCheck }
   | { type: 'done'; draft: DraftResult; matchedProof: ProofItem | null }
   | { type: 'error'; message: string }
@@ -150,6 +151,8 @@ export function LeadWorkspace({
   )
   const [proofList, setProofList] = useState<ProofItem[]>(matchedProofs)
   const [matchedProofId, setMatchedProofId] = useState<string | null>(null)
+  const [variantDraft, setVariantDraft] = useState<import('@/lib/ai/draft').DraftVariant | null>(null)
+  const [showVariant, setShowVariant] = useState(false)
 
   const streamBuffer = useRef('')
 
@@ -203,6 +206,8 @@ export function LeadWorkspace({
       setDraftError(null)
       setDrafts((d) => ({ ...d, [target]: { result: null, text: '' } }))
       setStatusMessage(null)
+      setVariantDraft(null)
+      setShowVariant(false)
       streamBuffer.current = ''
       try {
         let res: Response
@@ -246,6 +251,10 @@ export function LeadWorkspace({
                 ...d,
                 [target]: { result: d[target]?.result ?? null, text: streamBuffer.current },
               }))
+              return
+            }
+            if (event.type === 'variant') {
+              setVariantDraft(event.draft)
               return
             }
             if (event.type === 'error') {
@@ -613,12 +622,23 @@ export function LeadWorkspace({
 
                     {drafting || draft || draftText ? (
                       <DraftEditor
-                        value={draftText}
+                        value={showVariant && variantDraft ? variantDraft.draftText : draftText}
                         onChange={editDraft}
                         artifact={artifact}
-                        draft={draft}
+                        draft={showVariant && variantDraft ? { ...draft, draftText: variantDraft.draftText, selfCheck: variantDraft.selfCheck, passed: variantDraft.passed } as DraftResult : draft}
                         company={lead.company}
                         onCopy={copyDraft}
+                        showVariant={showVariant}
+                        onToggleVariant={() => setShowVariant((s) => !s)}
+                        quality={
+                          draft
+                            ? {
+                                fewShotReason: draft.fewShotReason,
+                                pickReason: draft.pickReason,
+                                variantAvailable: Boolean(variantDraft),
+                              }
+                            : null
+                        }
                       />
                     ) : null}
                   </>
@@ -955,6 +975,9 @@ const DraftEditor = memo(function DraftEditor({
   draft,
   company,
   onCopy,
+  showVariant,
+  onToggleVariant,
+  quality,
 }: {
   value: string
   onChange: (v: string) => void
@@ -962,6 +985,13 @@ const DraftEditor = memo(function DraftEditor({
   draft: DraftResult | null
   company: string
   onCopy: () => void
+  showVariant?: boolean
+  onToggleVariant?: () => void
+  quality?: {
+    fewShotReason?: string
+    pickReason?: string
+    variantAvailable?: boolean
+  } | null
 }) {
   const { kind, max, label } = artifactCount(artifact)
   const count = countFor(kind, value)
@@ -970,6 +1000,29 @@ const DraftEditor = memo(function DraftEditor({
 
   return (
     <div className="space-y-3">
+      {quality ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper-tint/40 px-3 py-2">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-slate">
+            Draft quality
+          </span>
+          {quality.fewShotReason ? (
+            <span className="text-xs text-ink">{quality.fewShotReason}</span>
+          ) : null}
+          {quality.pickReason ? (
+            <span className="text-xs text-slate">{quality.pickReason}</span>
+          ) : null}
+          {quality.variantAvailable ? (
+            <button
+              type="button"
+              onClick={onToggleVariant}
+              className="ml-auto text-xs font-medium text-gold underline-offset-4 hover:underline"
+            >
+              {showVariant ? 'Show primary' : 'Compare variant'}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="rounded-xl border border-line bg-paper-tint/30 p-3">
         <Textarea
           value={value}

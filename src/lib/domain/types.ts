@@ -72,6 +72,80 @@ export interface Outcome {
   occurredAt: string
 }
 
+export type UpworkJobVerdict = 'apply' | 'apply_if_connects' | 'skip'
+
+export type UpworkJobStatus =
+  | 'new'
+  | 'drafted'
+  | 'applied'
+  | 'replied'
+  | 'no'
+  | 'dead'
+
+export interface UpworkJob {
+  id: string
+  ownerRepId: string | null
+  title: string
+  description: string
+  budgetMin: number | null
+  budgetMax: number | null
+  hourlyRateMin: number | null
+  hourlyRateMax: number | null
+  proposalCount: number | null
+  connectsCost: number
+  requiredSkills: string[]
+  urgencySignal: string | null
+  score: number | null
+  verdict: UpworkJobVerdict | null
+  status: UpworkJobStatus
+  extractedFields: Record<string, unknown> | null
+  rawInput: string | null
+  tags: string[]
+  createdAt: string
+}
+
+export interface UpworkMessage {
+  id: string
+  jobId: string
+  repId: string | null
+  type: 'cover' | 'followup' | 'reply'
+  draftText: string | null
+  sentText: string | null
+  sentAt: string | null
+  modelUsed: string | null
+  createdAt: string
+}
+
+export interface PushSubscription {
+  id: string
+  repId: string
+  endpoint: string
+  p256dh: string
+  auth: string
+  createdAt: string
+}
+
+export interface NotificationLogEntry {
+  id: string
+  repId: string
+  type: 'reply' | 'followup_eligible'
+  payload: Record<string, unknown>
+  read: boolean
+  createdAt: string
+}
+
+export interface CsvImport {
+  id: string
+  repId: string
+  fileName: string | null
+  totalRows: number
+  imported: number
+  duplicates: number
+  invalid: number
+  details: unknown
+  createdAt: string
+}
+
 export type StyleSampleSource = 'quiz' | 'pasted_samples' | 'both'
 
 export interface StyleCard {

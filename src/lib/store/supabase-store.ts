@@ -1,14 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
+  CsvImport,
   Fact,
   Lead,
   Message,
+  NotificationLogEntry,
   Outcome,
   Play,
   Profile,
   ProofItem,
+  PushSubscription,
   Rep,
   SignalId,
+  UpworkJob,
+  UpworkMessage,
   Verdict,
   VoiceProfile,
 } from '@/lib/domain/types'
@@ -565,6 +570,7 @@ export class SupabaseStore implements ScoutStore {
     projectSummary: string
     reviewQuote?: string | null
     tags?: string[]
+    embedding?: number[] | null
   }): Promise<ProofItem> {
     const permission = Boolean(input.permissionOnFile)
     // The client name is only stored if permission is on file.
@@ -579,6 +585,7 @@ export class SupabaseStore implements ScoutStore {
             project_summary: input.projectSummary,
             review_quote: input.reviewQuote ?? null,
             tags: input.tags ?? [],
+            embedding: input.embedding ?? null,
           })
           .eq('id', input.id)
           .eq('profile_id', input.profileId)
@@ -594,6 +601,7 @@ export class SupabaseStore implements ScoutStore {
             project_summary: input.projectSummary,
             review_quote: input.reviewQuote ?? null,
             tags: input.tags ?? [],
+            embedding: input.embedding ?? null,
           })
           .select('*')
           .single()
@@ -676,5 +684,530 @@ export class SupabaseStore implements ScoutStore {
   async listAllLeadsAdmin(): Promise<Lead[]> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
     return this.fetchLeadsAll()
+  }
+
+  // ==========================================================================
+  // Semantic proof matching via pgvector
+  // ==========================================================================
+
+  async matchProofItemsByEmbedding(
+    embedding: number[],
+    limit = 2,
+  ): Promise<Array<{ item: ProofItem; similarity: number }>> {
+    const { data, error } = await this.client.rpc('match_proofs_by_embedding', {
+      query_embedding: embedding,
+      match_threshold: 0.72,
+      match_count: limit,
+    })
+    if (error) throw error
+    return (data ?? []).map((r: Row) => ({
+      item: mapProofItem(r),
+      similarity: (r.similarity as number) ?? 0,
+    }))
+  }
+
+  // ==========================================================================
+  // Eval harness
+  // ==========================================================================
+
+  async listGoldenSet(): Promise<import('@/lib/store/types').GoldenCaseRow[]> {
+    const { data, error } = await this.client
+      .from('golden_set')
+      .select('*')
+      .eq('active', true)
+      .order('created_at', { ascending: true })
+    if (error) throw error
+    return (data ?? []).map((r: Row) => ({
+      id: r.id as string,
+      leadId: r.lead_id as string,
+      knownReplied: Boolean(r.known_replied),
+      sentText: (r.sent_text as string) ?? '',
+      note: (r.note as string) ?? null,
+      active: Boolean(r.active),
+      createdAt: r.created_at as string,
+    }))
+  }
+
+  async addGoldenCase(input: {
+    leadId: string
+    messageId?: string
+    knownReplied: boolean
+    sentText?: string
+    note?: string
+  }): Promise<import('@/lib/store/types').GoldenCaseRow> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('golden_set')
+      .insert({
+        lead_id: input.leadId,
+        message_id: input.messageId ?? null,
+        known_replied: input.knownReplied,
+        sent_text: input.sentText ?? null,
+        note: input.note ?? null,
+        active: true,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    const r = data as Row
+    return {
+      id: r.id as string,
+      leadId: r.lead_id as string,
+      knownReplied: Boolean(r.known_replied),
+      sentText: (r.sent_text as string) ?? '',
+      note: (r.note as string) ?? null,
+      active: Boolean(r.active),
+      createdAt: r.created_at as string,
+    }
+  }
+
+  async removeGoldenCase(id: string): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { error } = await this.client.from('golden_set').delete().eq('id', id)
+    if (error) throw error
+  }
+
+  async listEvalRuns(): Promise<import('@/lib/store/types').EvalRunRow[]> {
+    const { data, error } = await this.client
+      .from('eval_runs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50)
+    if (error) throw error
+    return (data ?? []).map((r: Row) => ({
+      id: r.id as string,
+      promptVersion: r.prompt_version as string,
+      goldenSetSize: r.golden_set_size as number,
+      replyRateScore: r.reply_rate_score as number,
+      selfCheckPassRate: r.self_check_pass_rate as number,
+      companyMentionRate: r.company_mention_rate as number,
+      evidenceMentionRate: r.evidence_mention_rate as number,
+      overallScore: r.overall_score as number,
+      details: r.details as unknown,
+      createdAt: r.created_at as string,
+    }))
+  }
+
+  async saveEvalRun(
+    run: Omit<import('@/lib/store/types').EvalRunRow, 'id' | 'createdAt'>,
+  ): Promise<import('@/lib/store/types').EvalRunRow> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('eval_runs')
+      .insert({
+        prompt_version: run.promptVersion,
+        golden_set_size: run.goldenSetSize,
+        reply_rate_score: run.replyRateScore,
+        self_check_pass_rate: run.selfCheckPassRate,
+        company_mention_rate: run.companyMentionRate,
+        evidence_mention_rate: run.evidenceMentionRate,
+        overall_score: run.overallScore,
+        details: run.details ?? null,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    const r = data as Row
+    return {
+      id: r.id as string,
+      promptVersion: r.prompt_version as string,
+      goldenSetSize: r.golden_set_size as number,
+      replyRateScore: r.reply_rate_score as number,
+      selfCheckPassRate: r.self_check_pass_rate as number,
+      companyMentionRate: r.company_mention_rate as number,
+      evidenceMentionRate: r.evidence_mention_rate as number,
+      overallScore: r.overall_score as number,
+      details: r.details as unknown,
+      createdAt: r.created_at as string,
+    }
+  }
+
+  // ==========================================================================
+  // Few-shot wins
+  // ==========================================================================
+
+  async listFewShotWins(limit = 100): Promise<import('@/lib/store/types').FewShotWin[]> {
+    const { data, error } = await this.client
+      .from('few_shot_wins')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return (data ?? []).map((r: Row) => ({
+      id: r.id as string,
+      messageId: r.message_id as string,
+      leadId: r.lead_id as string,
+      playId: (r.play_id as string) ?? null,
+      signalType: (r.signal_type as number) ?? null,
+      sentText: r.sent_text as string,
+      company: r.company as string,
+      signalEvidence: (r.signal_evidence as string) ?? null,
+      tags: (r.tags as string[]) ?? [],
+      createdAt: r.created_at as string,
+    }))
+  }
+
+  async refreshFewShotWins(): Promise<number> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client.rpc('refresh_few_shot_wins')
+    if (error) throw error
+    return (data as number) ?? 0
+  }
+
+  // ==========================================================================
+  // Upwork jobs
+  // ==========================================================================
+
+  async createUpworkJob(input: {
+    title: string
+    description: string
+    budgetMin?: number | null
+    budgetMax?: number | null
+    hourlyRateMin?: number | null
+    hourlyRateMax?: number | null
+    proposalCount?: number | null
+    connectsCost?: number
+    requiredSkills?: string[]
+    urgencySignal?: string | null
+    rawInput?: string | null
+    tags?: string[]
+  }): Promise<UpworkJob> {
+    const { data, error } = await this.client
+      .from('upwork_jobs')
+      .insert({
+        owner_rep_id: this.rep.id,
+        title: input.title.trim(),
+        description: input.description.trim(),
+        budget_min: input.budgetMin ?? null,
+        budget_max: input.budgetMax ?? null,
+        hourly_rate_min: input.hourlyRateMin ?? null,
+        hourly_rate_max: input.hourlyRateMax ?? null,
+        proposal_count: input.proposalCount ?? null,
+        connects_cost: input.connectsCost ?? 0,
+        required_skills: input.requiredSkills ?? [],
+        urgency_signal: input.urgencySignal ?? null,
+        raw_input: input.rawInput ?? null,
+        tags: input.tags ?? [],
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapUpworkJob(data as Row)
+  }
+
+  async getUpworkJob(id: string) {
+    const { data, error } = await this.client
+      .from('upwork_jobs')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    const messages = await this.client
+      .from('upwork_messages')
+      .select('*')
+      .eq('job_id', id)
+      .order('created_at', { ascending: false })
+      .then((r) => {
+        if (r.error) throw r.error
+        return (r.data ?? []).map(mapUpworkMessage)
+      })
+    return { ...mapUpworkJob(data as Row), messages }
+  }
+
+  async listUpworkJobs(): Promise<UpworkJob[]> {
+    const { data, error } = await this.client
+      .from('upwork_jobs')
+      .select('*')
+      .eq('owner_rep_id', this.rep.id)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map(mapUpworkJob)
+  }
+
+  async updateUpworkJobScore(
+    id: string,
+    score: { total: number; verdict: UpworkJob['verdict'] },
+  ): Promise<void> {
+    const { error } = await this.client
+      .from('upwork_jobs')
+      .update({ score: score.total, verdict: score.verdict })
+      .eq('id', id)
+      .eq('owner_rep_id', this.rep.id)
+    if (error) throw error
+  }
+
+  async saveUpworkDraft(input: {
+    jobId: string
+    type: UpworkMessage['type']
+    draftText: string
+    modelUsed: string
+  }): Promise<UpworkMessage> {
+    const { data, error } = await this.client
+      .from('upwork_messages')
+      .insert({
+        job_id: input.jobId,
+        rep_id: this.rep.id,
+        type: input.type,
+        draft_text: input.draftText,
+        model_used: input.modelUsed,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapUpworkMessage(data as Row)
+  }
+
+  async markUpworkApplied(
+    jobId: string,
+    sentText: string,
+    type: UpworkMessage['type'] = 'cover',
+  ): Promise<void> {
+    await Promise.all([
+      this.client
+        .from('upwork_jobs')
+        .update({ status: 'applied' })
+        .eq('id', jobId)
+        .eq('owner_rep_id', this.rep.id),
+      this.client.from('upwork_messages').insert({
+        job_id: jobId,
+        rep_id: this.rep.id,
+        type,
+        sent_text: sentText,
+        sent_at: new Date().toISOString(),
+      }),
+    ])
+  }
+
+  // ==========================================================================
+  // CSV imports
+  // ==========================================================================
+
+  async logCsvImport(
+    input: Omit<CsvImport, 'id' | 'createdAt'>,
+  ): Promise<CsvImport> {
+    const { data, error } = await this.client
+      .from('csv_imports')
+      .insert({
+        rep_id: this.rep.id,
+        file_name: input.fileName ?? null,
+        total_rows: input.totalRows,
+        imported: input.imported,
+        duplicates: input.duplicates,
+        invalid: input.invalid,
+        details: input.details ?? null,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    const r = data as Row
+    return {
+      id: r.id as string,
+      repId: r.rep_id as string,
+      fileName: (r.file_name as string) ?? null,
+      totalRows: r.total_rows as number,
+      imported: r.imported as number,
+      duplicates: r.duplicates as number,
+      invalid: r.invalid as number,
+      details: r.details as unknown,
+      createdAt: r.created_at as string,
+    }
+  }
+
+  async listCsvImports(): Promise<CsvImport[]> {
+    const { data, error } = await this.client
+      .from('csv_imports')
+      .select('*')
+      .eq('rep_id', this.rep.id)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r: Row) => ({
+      id: r.id as string,
+      repId: r.rep_id as string,
+      fileName: (r.file_name as string) ?? null,
+      totalRows: r.total_rows as number,
+      imported: r.imported as number,
+      duplicates: r.duplicates as number,
+      invalid: r.invalid as number,
+      details: r.details as unknown,
+      createdAt: r.created_at as string,
+    }))
+  }
+
+  // ==========================================================================
+  // Archive search
+  // ==========================================================================
+
+  async archiveSearch(opts: {
+    query: string
+    entityFilter?: 'lead' | 'proof' | 'upwork' | 'all'
+    statusFilter?: string[]
+    signalFilter?: number[]
+    playFilter?: string[]
+    repFilter?: string[]
+    dateFrom?: string | null
+    dateTo?: string | null
+    limit?: number
+  }): Promise<
+    Array<{
+      entityType: string
+      id: string
+      title: string
+      subtitle: string
+      status: string | null
+      createdAt: string
+      rank: number
+    }>
+  > {
+    const { data, error } = await this.client.rpc('archive_search', {
+      query: opts.query,
+      entity_filter: opts.entityFilter ?? 'all',
+      status_filter: opts.statusFilter ?? [],
+      signal_filter: opts.signalFilter ?? [],
+      play_filter: opts.playFilter ?? [],
+      rep_filter: opts.repFilter ?? [],
+      date_from: opts.dateFrom ?? null,
+      date_to: opts.dateTo ?? null,
+      result_limit: opts.limit ?? 20,
+    })
+    if (error) throw error
+    return (data ?? []).map((r: Row) => ({
+      entityType: r.entity_type as string,
+      id: r.id as string,
+      title: r.title as string,
+      subtitle: r.subtitle as string,
+      status: (r.status as string) ?? null,
+      createdAt: r.created_at as string,
+      rank: (r.rank as number) ?? 0,
+    }))
+  }
+
+  // ==========================================================================
+  // Push subscriptions
+  // ==========================================================================
+
+  async savePushSubscription(
+    sub: Omit<PushSubscription, 'id' | 'createdAt'>,
+  ): Promise<PushSubscription> {
+    const { data, error } = await this.client
+      .from('push_subscriptions')
+      .upsert(
+        {
+          rep_id: sub.repId,
+          endpoint: sub.endpoint,
+          p256dh: sub.p256dh,
+          auth: sub.auth,
+        },
+        { onConflict: 'rep_id' },
+      )
+      .select('*')
+      .single()
+    if (error) throw error
+    const r = data as Row
+    return {
+      id: r.id as string,
+      repId: r.rep_id as string,
+      endpoint: r.endpoint as string,
+      p256dh: r.p256dh as string,
+      auth: r.auth as string,
+      createdAt: r.created_at as string,
+    }
+  }
+
+  async getPushSubscription(repId: string): Promise<PushSubscription | null> {
+    const { data, error } = await this.client
+      .from('push_subscriptions')
+      .select('*')
+      .eq('rep_id', repId)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    const r = data as Row
+    return {
+      id: r.id as string,
+      repId: r.rep_id as string,
+      endpoint: r.endpoint as string,
+      p256dh: r.p256dh as string,
+      auth: r.auth as string,
+      createdAt: r.created_at as string,
+    }
+  }
+
+  async deletePushSubscription(repId: string): Promise<void> {
+    const { error } = await this.client
+      .from('push_subscriptions')
+      .delete()
+      .eq('rep_id', repId)
+    if (error) throw error
+  }
+
+  // ==========================================================================
+  // Notifications
+  // ==========================================================================
+
+  async listNotifications(): Promise<NotificationLogEntry[]> {
+    const { data, error } = await this.client
+      .from('notification_log')
+      .select('*')
+      .eq('rep_id', this.rep.id)
+      .eq('read', false)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    if (error) throw error
+    return (data ?? []).map((r: Row) => ({
+      id: r.id as string,
+      repId: r.rep_id as string,
+      type: r.type as NotificationLogEntry['type'],
+      payload: r.payload as Record<string, unknown>,
+      read: Boolean(r.read),
+      createdAt: r.created_at as string,
+    }))
+  }
+
+  async markNotificationRead(id: string): Promise<void> {
+    const { error } = await this.client
+      .from('notification_log')
+      .update({ read: true })
+      .eq('id', id)
+      .eq('rep_id', this.rep.id)
+    if (error) throw error
+  }
+}
+
+function mapUpworkJob(r: Row): UpworkJob {
+  return {
+    id: r.id as string,
+    ownerRepId: (r.owner_rep_id as string) ?? null,
+    title: r.title as string,
+    description: r.description as string,
+    budgetMin: (r.budget_min as number) ?? null,
+    budgetMax: (r.budget_max as number) ?? null,
+    hourlyRateMin: (r.hourly_rate_min as number) ?? null,
+    hourlyRateMax: (r.hourly_rate_max as number) ?? null,
+    proposalCount: (r.proposal_count as number) ?? null,
+    connectsCost: (r.connects_cost as number) ?? 0,
+    requiredSkills: (r.required_skills as string[]) ?? [],
+    urgencySignal: (r.urgency_signal as string) ?? null,
+    score: (r.score as number) ?? null,
+    verdict: (r.verdict as UpworkJob['verdict']) ?? null,
+    status: (r.status as UpworkJob['status']) ?? 'new',
+    extractedFields: (r.extracted_fields as Record<string, unknown>) ?? null,
+    rawInput: (r.raw_input as string) ?? null,
+    tags: (r.tags as string[]) ?? [],
+    createdAt: r.created_at as string,
+  }
+}
+
+function mapUpworkMessage(r: Row): UpworkMessage {
+  return {
+    id: r.id as string,
+    jobId: r.job_id as string,
+    repId: (r.rep_id as string) ?? null,
+    type: r.type as UpworkMessage['type'],
+    draftText: (r.draft_text as string) ?? null,
+    sentText: (r.sent_text as string) ?? null,
+    sentAt: (r.sent_at as string) ?? null,
+    modelUsed: (r.model_used as string) ?? null,
+    createdAt: r.created_at as string,
   }
 }

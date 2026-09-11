@@ -44,6 +44,23 @@ export function isDemoMode(): boolean {
   return dbMode() === 'demo'
 }
 
+/** Embedding model for semantic proof matching. */
+export function embeddingModel(): string {
+  return process.env.SCOUT_EMBEDDING_MODEL ?? 'text-embedding-3-small'
+}
+
+export function embeddingApiKey(): string | undefined {
+  return process.env.EMBEDDING_API_KEY ?? process.env.GROQ_API_KEY
+}
+
+export function embeddingBaseUrl(): string {
+  return process.env.EMBEDDING_BASE_URL ?? 'https://api.openai.com/v1'
+}
+
+export function hasEmbeddingProvider(): boolean {
+  return Boolean(embeddingApiKey())
+}
+
 /** Per-rep daily send ceiling (Part 7 rule). */
 export function dailySendLimit(): number {
   const raw = Number(process.env.SCOUT_DAILY_SEND_LIMIT ?? '15')

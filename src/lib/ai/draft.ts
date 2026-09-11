@@ -31,6 +31,12 @@ export interface SelfCheck {
   }
 }
 
+export interface DraftVariant {
+  draftText: string
+  selfCheck: SelfCheck
+  passed: boolean
+}
+
 export interface DraftResult {
   leadId: string
   type: DraftMessageType
@@ -41,6 +47,12 @@ export interface DraftResult {
   attempts: number
   strippedNumbers: string[]
   hadEmDash: boolean
+  /** The second variant, when best-of-two drafting is enabled. */
+  variant?: DraftVariant
+  /** Why the primary draft was picked over the variant. */
+  pickReason?: string
+  /** Which few-shot examples informed this draft. */
+  fewShotReason?: string
 }
 
 export interface DraftInput {
@@ -58,6 +70,8 @@ export interface DraftInput {
   profile?: Profile | null
   /** Proof item matched to this lead's tags, referenced instead of a generic pitch. */
   matchedProof?: ProofItem | null
+  /** Few-shot examples from real wins to inject into the prompt. */
+  fewShotExamples?: { company: string; signalEvidence: string; sentText: string }[]
 }
 
 interface DraftModelOutput {
@@ -144,6 +158,23 @@ Write the draft first, then honestly run the tests on it, then the marker and th
     .join('\n\n')
 }
 
+function buildFewShotBlock(
+  examples: { company: string; signalEvidence: string; sentText: string }[],
+): string {
+  if (examples.length === 0) return ''
+  const lines: string[] = [
+    'Here are real messages that got a reply from a similar lead. Use them as a style reference, not a template to copy word for word.',
+  ]
+  for (const ex of examples) {
+    lines.push('')
+    lines.push(`Example (lead: ${ex.company}, signal: ${ex.signalEvidence || 'unknown'}):`)
+    lines.push(ex.sentText)
+  }
+  lines.push('')
+  lines.push('Now write a fresh message for the lead below. Do not copy the example verbatim.')
+  return lines.join('\n')
+}
+
 export function buildUserPrompt(
   input: DraftInput,
   opts?: { asPlainText?: boolean },
@@ -213,6 +244,8 @@ export function buildUserPrompt(
       .join('\n')}`
   })()
 
+  const fewShotBlock = buildFewShotBlock(input.fewShotExamples ?? [])
+
   return [
     `Message kind: ${messageKind(input)}`,
     '',
@@ -221,6 +254,8 @@ export function buildUserPrompt(
     playBlock,
     '',
     proofBlock,
+    '',
+    fewShotBlock,
     '',
     historyBlock,
     '',
@@ -264,19 +299,81 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
     return demoDraft(input, userPrompt)
   }
 
-  // Every draft runs on the strong model (see routing.ts). If the self-check
-  // fails, the draft is rewritten once on the same tier rather than shipped
-  // half-passed.
-  const model = pickModel('draft').model
-  const firstRes = await runDraftAttempt(model, systemPrompt, userPrompt)
+  // Best-of-two: generate two variants in parallel on the cheap model,
+  // self-check both, and return the stronger one as primary with the other
+  // as a variant. This catches the cases where the first draft is mediocre
+  // without paying for a bigger model.
+  const cheap = pickModel('draft-variant')
+  const [variantA, variantB] = await Promise.all([
+    runDraftAttempt(cheap.model, systemPrompt, userPrompt),
+    runDraftAttempt(cheap.model, systemPrompt, userPrompt),
+  ])
 
-  if (firstRes.passed) {
-    return finishDraft(input, firstRes, [model], 1)
+  const { primary, secondary, pickReason } = pickBestVariant(variantA, variantB)
+
+  const draft = finishDraft(input, primary, [cheap.model], 1)
+  const second: DraftVariant | undefined = secondary
+    ? {
+        draftText: secondary.output.draft,
+        selfCheck: {
+          test1ReplyOrDelete: Boolean(secondary.output.test_1_reply_or_delete),
+          test1Note: secondary.output.test_1_note || '',
+          test2NotGeneric: Boolean(secondary.output.test_2_not_generic),
+          test2Note: secondary.output.test_2_note || '',
+          codeChecks: secondary.codeChecks,
+        },
+        passed: secondary.passed,
+      }
+    : undefined
+
+  return {
+    ...draft,
+    variant: second,
+    pickReason,
+    fewShotReason:
+      input.fewShotExamples && input.fewShotExamples.length > 0
+        ? `Informed by ${input.fewShotExamples.length} real win(s): ${input.fewShotExamples.map((e) => e.company).join(', ')}.`
+        : 'No few-shot examples matched this lead.',
+  }
+}
+
+function pickBestVariant(
+  a: { output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks'] },
+  b: { output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks'] },
+): {
+  primary: typeof a
+  secondary: typeof a | null
+  pickReason: string
+} {
+  const score = (v: typeof a) => {
+    let s = 0
+    if (v.passed) s += 4
+    if (v.output.test_1_reply_or_delete) s += 2
+    if (v.output.test_2_not_generic) s += 2
+    if (v.codeChecks.companyMentioned) s += 1
+    if (v.codeChecks.specificEvidenceMentioned) s += 1
+    return s
   }
 
-  const secondRes = await runDraftAttempt(model, systemPrompt, userPrompt)
+  const sa = score(a)
+  const sb = score(b)
 
-  return finishDraft(input, secondRes, [model], 2)
+  if (sa >= sb) {
+    return {
+      primary: a,
+      secondary: b,
+      pickReason:
+        sa === sb
+          ? 'Both variants scored the same. Variant A is shown by default.'
+          : 'Variant A scored higher on self-check + code checks.',
+    }
+  }
+
+  return {
+    primary: b,
+    secondary: a,
+    pickReason: 'Variant B scored higher on self-check + code checks.',
+  }
 }
 
 async function runDraftAttempt(

@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createScoutStore } from '@/lib/store'
 import { REPLY_RATE_TARGET, READ_TO_CHECK_TARGET } from '@/lib/ai/config'
 import type { RateMetric } from '@/lib/store/types'
@@ -118,6 +119,12 @@ export default async function TeamPage() {
           <p className="mt-3 text-xs leading-relaxed text-slate">
             Every number here is computed from real logged sends and outcomes, never an estimate.
           </p>
+          <Link
+            href="/team/eval"
+            className="mt-3 inline-block text-xs font-medium text-gold underline-offset-4 hover:underline"
+          >
+            Open eval harness
+          </Link>
         </div>
       </section>
 

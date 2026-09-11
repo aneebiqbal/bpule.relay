@@ -2,6 +2,42 @@
 
 Internal, hand-maintained. Bump `src/lib/version.ts` (and the rail marker) with each entry.
 
+## 0.7.0 — Phase 8: Upwork gap, CSV import, archive, PWA, production ops
+
+- **Upwork jobs**: separate entity from leads with its own rubric (out of 10:
+  budget, competition, skill match, urgency/takeover signal). New intake flow
+  at `/upwork/new`, extraction, scoring, and job list at `/upwork`.
+- **Bulk CSV import**: `/leads/import` accepts CSV with per-row validation
+  and dedupe checking. Clear per-row results (imported / duplicate / invalid)
+  shown after upload. Sourcer role sees Import in the nav.
+- **Searchable archive**: `/archive` with full-text search across leads,
+  proof items, and Upwork jobs. Composable filters: entity type, status,
+  signal type, play, rep, date range. Backed by Postgres tsvector + GIN.
+- **PWA + push notifications**: web app manifest, service worker for offline
+  shell, and push notification support for exactly two events: reply received
+  and follow-up eligible. Push subscription API at `/api/push/subscribe`.
+- **Production ops**: `OPS.md` with backup/restore procedure (tested once
+  before going live), CI workflow (lint + typecheck + build), monitoring
+  thresholds, and a real rollback procedure using Vercel deployment promotion.
+
+## 0.6.0 — Phase 7: eval harness, few-shot, best-of-two, semantic proofs
+
+- **Eval harness**: golden set table, eval runs table, and admin screen at
+  `/team/eval`. Every prompt change gets scored against real cases with known
+  outcomes before shipping.
+- **Few-shot injection**: `few_shot_wins` table auto-populated from messages
+  that got replies. Best-matching examples (by play + signal + tags) are
+  injected into the draft prompt, capped at 2.
+- **Best-of-two drafting**: two cheap-model variants generated in parallel,
+  self-checked, and the stronger one streamed to the client. The weaker
+  variant is available as a one-click swap in the lead workspace.
+- **Semantic proof matching**: `proof_items` now carries a pgvector embedding.
+  Proof retrieval merges tag overlap with cosine-similarity search so
+  "Rails API" can match "ruby-on-rails".
+- **Draft quality indicator** in the lead workspace: shows which few-shot
+  examples informed the draft, why the primary was picked, and a toggle to
+  compare the second variant.
+
 ## 0.5.0 — Production pass
 
 - One shared component system: loading/error states on `Button`, inline
