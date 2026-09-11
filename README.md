@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Scout
 
-## Getting Started
+Internal lead-gen operations system for bpulse (work codename: Relay). Runs the
+Calibrate -> Extract -> Score -> Draft pipeline end to end, with scoring as pure
+arithmetic (zero model tokens) and a single AI call per lead at draft time.
 
-First, run the development server:
+## Pipeline
+
+1. **Calibrate** (one time per rep) - a quiz plus optional pasted messages build
+   a style card. Every later draft is written in that voice.
+2. **Extract** - raw research becomes structured fields, using the cheapest
+   capable model.
+3. **Score** - a published 12-point rubric in code only. No model is involved.
+   - Signal (max 7): hiring, understaffed, funding, stale, weak stack, pain,
+     asking.
+   - Completeness (max 5): URL, name, title, specific evidence, verbatim quote.
+   - Verdict: send (10-12), research_more (7-9), skip (0-6).
+4. **Draft** - a single strong-model call drafts AND self-checks against two
+   fixed tests (a senior engineer would reply; the message would not survive a
+   company swap). A failed check rewrites the draft once on the same call
+   shape, never ships half-passed.
+
+## Guardrails
+
+- No auto-send anywhere. Messages are human copy-pasted; the app logs the text
+  you actually sent so outcomes can be scored.
+- Drafts may only claim numbers that exist in the Facts table. Anything else is
+  stripped in code before display.
+- No em dashes in any generated text; replaced with hyphens.
+- A company marked `no` or `dead` is locked for everyone, forever (app-level
+  fuzzy check plus a DB unique index backstop).
+- Daily send ceiling per rep (default 15). No follow-up or reply drafting in
+  this pass; the schema and routes are scaffolded, the logic is TODO.
+
+## Modes
+
+- **demo** (default): in-memory store with obvious FAKE seed data and a fixed
+  demo rep. Set `GROQ_API_KEY` to use the real models, or run without it and
+  the deterministic demo paths cover the whole loop.
+- **supabase**: real Postgres + Auth + RLS. Apply `supabase/migrations` and set
+  the env vars below.
+
+## Models (Groq)
+
+All model calls go through `src/lib/ai/routing.ts` -> `config.ts`; no feature
+code names a model id. By default:
+
+- Structuring tasks (extract, tag, calibrate) run on `llama-3.1-8b-instant`.
+- Drafting runs on `llama-3.3-70b-versatile` and self-checks in the same call.
+
+Override with `SCOUT_CHEAP_MODEL` / `SCOUT_STRONG_MODEL`. Free-tier Groq rate
+limits are handled by a backoff queue that reports "queued, drafting shortly"
+instead of failing the draft.
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.local.example .env.local   # edit as needed
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+To move to Supabase mode:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# 1. Point .env.local at the hosted project (URL + anon key).
+# 2. Push the schema, RLS, and seed migrations:
+supabase link --project-ref <your-project-ref>
+supabase db push
+# 3. Create the dev auth users via the GoTrue admin API
+#    (raw SQL auth inserts can break hosted sign-in):
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key> node scripts/seed-dev-users.mjs
+# 4. Link reps to those users (idempotent by email):
+supabase db push   # applies pending linking migration if not already
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Dev users: `aneeb@scout.dev`, `hassan@scout.dev` (admin), `madiha@scout.dev`,
+`ahmad@scout.dev`, password `scout-dev-password`.
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm dev        # dev server
+pnpm build      # production build
+pnpm lint       # eslint
+pnpm exec tsc --noEmit   # typecheck
+```

@@ -1,0 +1,100 @@
+import type { Fact } from '@/lib/domain/types'
+
+/**
+ * The published facts guard, enforced here in code and not left to the model:
+ *
+ *  1. Any number in a draft that does not appear in an approved fact is
+ *     stripped (replaced) before the draft is ever shown.
+ *  2. Any em dash in a draft is replaced with a hyphen, because em dashes are
+ *     banned everywhere in Scout output.
+ *  3. When the public site is not live (facts flag `Site live` = false), any
+ *     outbound link to that site is removed so a draft can never point a
+ *     prospect somewhere that does not exist. CTAs then have to land in a
+ *     reply or the free Read.
+ */
+
+const NUMBER_RE = /\b\d+(?:[.,]\d+)?\b/g
+
+function digitsOnly(s: string): string {
+  return s.replace(/\./g, '')
+}
+
+/** Truthy when the facts table says the public site is live. */
+export function siteIsLive(facts: Fact[]): boolean {
+  const flag = facts.find(
+    (f) => f.label.toLowerCase() === 'site live' || f.factType === 'config',
+  )
+  if (!flag) return false
+  const v = flag.value.toLowerCase().trim()
+  return v === 'true' || v === 'yes' || v === '1'
+}
+
+const PUBLIC_SITE_HOSTS = [
+  (process.env.NEXT_PUBLIC_SITE_HOST ?? '').toLowerCase(),
+]
+  .filter(Boolean)
+
+/**
+ * Removes any https link to the team's public site when it is not live yet.
+ * The replacement keeps the sentence readable; the CTA is gone, so the model
+ * cannot route a prospect to a dead page.
+ */
+export function stripDeadSiteLinks(text: string, facts: Fact[]): string {
+  if (siteIsLive(facts)) return text
+  const hosts = PUBLIC_SITE_HOSTS
+  if (hosts.length === 0) {
+    // Without a configured site host there is nothing named worth stripping.
+    return text
+  }
+  const hostRe = hosts.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+  return text.replace(
+    new RegExp(`https?:\\/\\/(?:www\\.)?(?:${hostRe})[^\\s)]*`, 'gi'),
+    '',
+  )
+}
+
+/**
+ * Returns a copy of text where every number token that is not backed by an
+ * approved fact value is redacted. Numbers the model could only have pulled
+ * from the facts table survive.
+ */
+export function stripUnauthorizedNumbers(
+  draft: string,
+  facts: Fact[],
+): { text: string; stripped: string[] } {
+  const approved = new Set<string>()
+  for (const fact of facts) {
+    const matches = fact.value.match(NUMBER_RE) ?? []
+    for (const m of matches) {
+      approved.add(digitsOnly(m))
+    }
+  }
+
+  const stripped: string[] = []
+  const text = draft.replace(NUMBER_RE, (token) => {
+    if (approved.has(digitsOnly(token))) return token
+    stripped.push(token)
+    return '[number]'
+  })
+  return { text, stripped }
+}
+
+/** Em dashes are banned in every draft. Replace, never beautify. */
+export function stripEmDashes(text: string): string {
+  return text.replace(/[\u2014\u2013]/g, '-')
+}
+
+export function sanitizeDraft(
+  draft: string,
+  facts: Fact[],
+): { text: string; strippedNumbers: string[]; hadEmDash: boolean } {
+  const before = draft
+  const noDashes = stripEmDashes(draft)
+  const { text, stripped } = stripUnauthorizedNumbers(noDashes, facts)
+  const withoutDeadLinks = stripDeadSiteLinks(text, facts)
+  return {
+    text: withoutDeadLinks,
+    strippedNumbers: stripped,
+    hadEmDash: before !== noDashes,
+  }
+}
