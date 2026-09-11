@@ -45,8 +45,8 @@ arithmetic (zero model tokens) and a single AI call per lead at draft time.
 All model calls go through `src/lib/ai/routing.ts` -> `config.ts`; no feature
 code names a model id. By default:
 
-- Structuring tasks (extract, tag, calibrate) run on `llama-3.1-8b-instant`.
-- Drafting runs on `llama-3.3-70b-versatile` and self-checks in the same call.
+- Structuring tasks (extract, tag, calibrate) run on `openai/gpt-oss-20b`.
+- Drafting runs on `openai/gpt-oss-120b` and self-checks in the same call.
 
 Override with `SCOUT_CHEAP_MODEL` / `SCOUT_STRONG_MODEL`. Free-tier Groq rate
 limits are handled by a backoff queue that reports "queued, drafting shortly"

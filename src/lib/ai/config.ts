@@ -20,12 +20,12 @@ export function hasProvider(): boolean {
 
 /** Cheapest capable model: extraction, classification, calibration. */
 export function cheapModel(): string {
-  return process.env.SCOUT_CHEAP_MODEL ?? 'llama-3.1-8b-instant'
+  return process.env.SCOUT_CHEAP_MODEL ?? 'openai/gpt-oss-20b'
 }
 
 /** Stronger model: drafting and self-check retries. */
 export function strongModel(): string {
-  return process.env.SCOUT_STRONG_MODEL ?? 'llama-3.3-70b-versatile'
+  return process.env.SCOUT_STRONG_MODEL ?? 'openai/gpt-oss-120b'
 }
 
 export function dbMode(): 'supabase' | 'demo' {
