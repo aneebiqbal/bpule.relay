@@ -1,16 +1,14 @@
-/// <reference lib="webworker" />
-
 const CACHE_NAME = 'relay-v1'
 const STATIC_ASSETS = ['/', '/login', '/onboarding']
 
-self.addEventListener('install', (event: ExtendableEvent) => {
+self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)),
   )
-  ;(self as unknown as ServiceWorkerGlobalScope).skipWaiting()
+  self.skipWaiting()
 })
 
-self.addEventListener('activate', (event: ExtendableEvent) => {
+self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
@@ -20,10 +18,10 @@ self.addEventListener('activate', (event: ExtendableEvent) => {
         ),
       ),
   )
-  ;(self as unknown as ServiceWorkerGlobalScope).clients.claim()
+  self.clients.claim()
 })
 
-self.addEventListener('fetch', (event: FetchEvent) => {
+self.addEventListener('fetch', (event) => {
   // Only cache GET requests for static assets and navigation.
   if (event.request.method !== 'GET') return
   const url = new URL(event.request.url)
@@ -54,10 +52,10 @@ self.addEventListener('fetch', (event: FetchEvent) => {
   }
 })
 
-self.addEventListener('push', (event: PushEvent) => {
+self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? {}
   const title = data.title ?? 'Relay'
-  const options: NotificationOptions = {
+  const options = {
     body: data.body ?? 'Something needs your attention.',
     icon: '/icon-192x192.png',
     badge: '/icon-192x192.png',
@@ -66,27 +64,24 @@ self.addEventListener('push', (event: PushEvent) => {
     data: data.payload ?? {},
   }
   event.waitUntil(
-    (self as unknown as ServiceWorkerGlobalScope).registration.showNotification(
-      title,
-      options,
-    ),
+    self.registration.showNotification(title, options),
   )
 })
 
-self.addEventListener('notificationclick', (event: NotificationEvent) => {
+self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const payload = event.notification.data as { leadId?: string; url?: string }
-  const url = payload.url ?? (payload.leadId ? `/leads/${payload.leadId}` : '/')
+  const payload = event.notification.data
+  const url = payload?.url ?? (payload?.leadId ? `/leads/${payload.leadId}` : '/')
   event.waitUntil(
-    (self as unknown as ServiceWorkerGlobalScope).clients
+    self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
         for (const client of clientList) {
           if (client.url === url && 'focus' in client) {
-            return (client as WindowClient).focus()
+            return client.focus()
           }
         }
-        return (self as unknown as ServiceWorkerGlobalScope).clients.openWindow(url)
+        return self.clients.openWindow(url)
       }),
   )
 })
