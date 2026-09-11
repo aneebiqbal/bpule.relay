@@ -54,13 +54,19 @@ export async function POST(request: Request) {
     )
   }
 
-  const result = await calibrateStyleCard({
-    quiz,
-    samples: typeof body.samples === 'string' ? body.samples : '',
-  })
+  try {
+    const result = await calibrateStyleCard({
+      quiz,
+      samples: typeof body.samples === 'string' ? body.samples : '',
+    })
 
-  return NextResponse.json({
-    card: result.card,
-    sampleSource: result.sampleSource,
-  })
+    return NextResponse.json({
+      card: result.card,
+      sampleSource: result.sampleSource,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to build style card.'
+    console.error('[onboarding/preview] error:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }

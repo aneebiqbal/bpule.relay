@@ -97,14 +97,24 @@ export async function calibrateStyleCard(
     .filter(Boolean)
     .join('\n')
 
-  const card = await structuredJson<StyleCard>({
-    model,
-    system: CALIBRATE_SYSTEM,
-    user: userBlock,
-    schema: STYLE_CARD_SCHEMA,
-  })
+  try {
+    const card = await structuredJson<StyleCard>({
+      model,
+      system: CALIBRATE_SYSTEM,
+      user: userBlock,
+      schema: STYLE_CARD_SCHEMA,
+    })
 
-  return normalizeCard(card, quizSeed, sampleSource)
+    return normalizeCard(card, quizSeed, sampleSource)
+  } catch (err) {
+    // If the AI provider fails (invalid key, rate limit, model error),
+    // fall back to the deterministic quiz-based card so onboarding never blocks.
+    console.warn('[calibrateStyleCard] AI provider failed, falling back to quiz-based card:', err instanceof Error ? err.message : err)
+    const card = hasSamples
+      ? mergeSamplesIntoCard(quizSeed, input.samples)
+      : quizSeed
+    return { card, sampleSource: hasSamples ? 'pasted_samples' : 'quiz' }
+  }
 }
 
 /**

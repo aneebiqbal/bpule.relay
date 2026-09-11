@@ -51,19 +51,25 @@ export async function POST(request: Request) {
     )
   }
 
-  const result = await calibrateStyleCard({
-    quiz,
-    samples: typeof body.samples === 'string' ? body.samples : '',
-  })
+  try {
+    const result = await calibrateStyleCard({
+      quiz,
+      samples: typeof body.samples === 'string' ? body.samples : '',
+    })
 
-  const store = await createScoutStore()
-  await store.setVoiceProfile(result.card, result.sampleSource)
+    const store = await createScoutStore()
+    await store.setVoiceProfile(result.card, result.sampleSource)
 
-  return NextResponse.json({
-    profile: {
-      card: result.card,
-      sampleSource: result.sampleSource,
-      calibratedAt: new Date().toISOString(),
-    },
-  })
+    return NextResponse.json({
+      profile: {
+        card: result.card,
+        sampleSource: result.sampleSource,
+        calibratedAt: new Date().toISOString(),
+      },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to save voice profile.'
+    console.error('[onboarding] error:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }
