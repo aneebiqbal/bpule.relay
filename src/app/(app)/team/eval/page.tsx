@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { createScoutStore } from '@/lib/store'
-import { ArrowLeft, Play, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Play, RefreshCw, Database, FlaskConical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from 'cn'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,61 +13,80 @@ export default async function EvalPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center gap-3">
+      {/* Back nav */}
+      <div className="reveal-up">
         <Link
           href="/team"
-          className="inline-flex items-center gap-1.5 text-sm text-slate transition-colors hover:text-ink"
+          className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-slate transition-colors hover:bg-paper-tint hover:text-ink"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
           Back to Team
         </Link>
       </div>
 
-      <div>
-        <h1 className="text-2xl font-medium tracking-tight text-ink">Eval harness</h1>
-        <p className="mt-1 text-sm text-slate">
+      {/* Header */}
+      <header className="reveal-up stagger-1 space-y-2">
+        <p className="font-mono text-xs uppercase tracking-widest text-slate">Quality assurance</p>
+        <h1 className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">Eval harness</h1>
+        <p className="max-w-xl text-sm leading-relaxed text-slate">
           Every prompt change gets scored against the golden set before it ships.
         </p>
-      </div>
+      </header>
 
-      <section className="rounded-2xl border border-line bg-paper p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-base font-medium text-ink">Golden set</h2>
-            <p className="mt-1 text-sm text-slate">
-              {golden.length} curated case{golden.length === 1 ? '' : 's'} with known outcomes.
-            </p>
+      {/* Golden set */}
+      <section className="reveal-up stagger-2 rounded-2xl border border-line bg-paper p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-gold/10">
+              <Database className="size-4 text-gold" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 className="text-base font-medium text-ink">Golden set</h2>
+              <p className="text-sm text-slate">
+                {golden.length} curated case{golden.length === 1 ? '' : 's'} with known outcomes.
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <form action="/api/few-shot/refresh" method="POST">
-              <Button variant="outline" size="sm" type="submit">
-                <RefreshCw className="mr-1.5 size-3.5" />
-                Refresh wins
-              </Button>
-            </form>
-          </div>
+          <form action="/api/few-shot/refresh" method="POST">
+            <Button variant="outline" size="sm" type="submit">
+              <RefreshCw className="mr-1.5 size-3.5" />
+              Refresh wins
+            </Button>
+          </form>
         </div>
 
         {golden.length === 0 ? (
-          <p className="mt-4 text-sm text-slate">
-            No golden cases yet. Add them once real send and reply data exists in the log.
-          </p>
+          <div className="mt-5 rounded-xl border border-dashed border-line py-8 text-center">
+            <p className="text-sm text-slate">
+              No golden cases yet. Add them once real send and reply data exists in the log.
+            </p>
+          </div>
         ) : (
-          <ul className="mt-4 divide-y divide-line border-t border-line">
-            {golden.map((c) => (
-              <li key={c.id} className="flex items-start justify-between gap-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-ink">
+          <ul className="mt-5 divide-y divide-line border-t border-line">
+            {golden.map((c, i) => (
+              <li
+                key={c.id}
+                className="slide-in-right flex items-start justify-between gap-4 py-4"
+                style={{ animationDelay: `${0.05 + i * 0.04}s` }}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-ink">
                     {c.sentText.slice(0, 80)}
                     {c.sentText.length > 80 ? '…' : ''}
                   </p>
-                  <p className="mt-0.5 text-xs text-slate">
-                    Known outcome:{' '}
-                    <span className={c.knownReplied ? 'text-status-send' : 'text-status-no'}>
-                      {c.knownReplied ? 'replied' : 'no reply'}
+                  <div className="mt-1.5 flex items-center gap-3">
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium',
+                        c.knownReplied
+                          ? 'bg-status-send/10 text-status-send'
+                          : 'bg-status-no/10 text-status-no',
+                      )}
+                    >
+                      {c.knownReplied ? 'Replied' : 'No reply'}
                     </span>
-                    {c.note ? ` · ${c.note}` : ''}
-                  </p>
+                    {c.note && <span className="text-xs text-slate">{c.note}</span>}
+                  </div>
                 </div>
               </li>
             ))}
@@ -74,13 +94,19 @@ export default async function EvalPage() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-line bg-paper p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-base font-medium text-ink">Eval runs</h2>
-            <p className="mt-1 text-sm text-slate">
-              Previous prompt versions scored against the golden set.
-            </p>
+      {/* Eval runs */}
+      <section className="reveal-up stagger-3 rounded-2xl border border-line bg-paper p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-ink/5">
+              <FlaskConical className="size-4 text-ink/60" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 className="text-base font-medium text-ink">Eval runs</h2>
+              <p className="text-sm text-slate">
+                Previous prompt versions scored against the golden set.
+              </p>
+            </div>
           </div>
           <form
             action="/api/eval/run"
@@ -102,33 +128,39 @@ export default async function EvalPage() {
         </div>
 
         {runs.length === 0 ? (
-          <p className="mt-4 text-sm text-slate">
-            No eval runs yet. Run one after the golden set has cases in it.
-          </p>
+          <div className="mt-5 rounded-xl border border-dashed border-line py-8 text-center">
+            <p className="text-sm text-slate">
+              No eval runs yet. Run one after the golden set has cases in it.
+            </p>
+          </div>
         ) : (
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-5 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-line text-left text-xs text-slate">
-                  <th className="pb-2 pr-4 font-medium">Version</th>
-                  <th className="pb-2 pr-4 font-medium">Cases</th>
-                  <th className="pb-2 pr-4 font-medium">Overall</th>
-                  <th className="pb-2 pr-4 font-medium">Self-check pass</th>
-                  <th className="pb-2 pr-4 font-medium">Reply rate</th>
-                  <th className="pb-2 pr-4 font-medium">Company mention</th>
-                  <th className="pb-2 font-medium">Evidence mention</th>
+                <tr className="border-b border-line text-left font-mono text-[10px] uppercase tracking-widest text-slate">
+                  <th className="pb-3 pr-4 font-medium">Version</th>
+                  <th className="pb-3 pr-4 font-medium">Cases</th>
+                  <th className="pb-3 pr-4 font-medium">Overall</th>
+                  <th className="pb-3 pr-4 font-medium">Self-check</th>
+                  <th className="pb-3 pr-4 font-medium">Reply</th>
+                  <th className="pb-3 pr-4 font-medium">Company</th>
+                  <th className="pb-3 font-medium">Evidence</th>
                 </tr>
               </thead>
               <tbody>
-                {runs.map((r) => (
-                  <tr key={r.id} className="border-b border-line/50">
-                    <td className="py-3 pr-4 font-mono text-xs text-ink">{r.promptVersion}</td>
-                    <td className="py-3 pr-4 text-ink">{r.goldenSetSize}</td>
-                    <td className="py-3 pr-4 font-medium text-gold">{r.overallScore}%</td>
-                    <td className="py-3 pr-4 text-ink">{r.selfCheckPassRate}%</td>
-                    <td className="py-3 pr-4 text-ink">{r.replyRateScore}%</td>
-                    <td className="py-3 pr-4 text-ink">{r.companyMentionRate}%</td>
-                    <td className="py-3 text-ink">{r.evidenceMentionRate}%</td>
+                {runs.map((r, i) => (
+                  <tr
+                    key={r.id}
+                    className="slide-in-right border-b border-line/40 transition-colors hover:bg-paper-tint/30"
+                    style={{ animationDelay: `${0.05 + i * 0.03}s` }}
+                  >
+                    <td className="py-3.5 pr-4 font-mono text-xs text-ink">{r.promptVersion}</td>
+                    <td className="py-3.5 pr-4 text-ink">{r.goldenSetSize}</td>
+                    <td className="py-3.5 pr-4 font-medium text-gold">{r.overallScore}%</td>
+                    <td className="py-3.5 pr-4 text-ink">{r.selfCheckPassRate}%</td>
+                    <td className="py-3.5 pr-4 text-ink">{r.replyRateScore}%</td>
+                    <td className="py-3.5 pr-4 text-ink">{r.companyMentionRate}%</td>
+                    <td className="py-3.5 text-ink">{r.evidenceMentionRate}%</td>
                   </tr>
                 ))}
               </tbody>

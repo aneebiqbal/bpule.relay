@@ -1,9 +1,6 @@
 import { cn } from "cn"
+import { AlertTriangle, Info } from "lucide-react"
 
-/**
- * Inline validation text under an input. Use FieldError for a failing state and
- * FieldHint for neutral guidance, so every form reads the same.
- */
 export function FieldError({
   id,
   className,
@@ -14,8 +11,9 @@ export function FieldError({
   children: React.ReactNode
 }) {
   return (
-    <p id={id} role="alert" className={cn("text-xs text-status-no", className)}>
-      {children}
+    <p id={id} role="alert" className={cn("flex items-start gap-1.5 text-xs text-status-no", className)}>
+      <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+      <span>{children}</span>
     </p>
   )
 }
@@ -28,8 +26,9 @@ export function FieldHint({
   children: React.ReactNode
 }) {
   return (
-    <p className={cn("text-xs leading-relaxed text-slate", className)}>
-      {children}
+    <p className={cn("flex items-start gap-1.5 text-xs leading-relaxed text-slate", className)}>
+      <Info className="mt-0.5 size-3 shrink-0 text-slate/60" aria-hidden="true" />
+      <span>{children}</span>
     </p>
   )
 }

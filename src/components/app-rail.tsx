@@ -115,36 +115,46 @@ export function AppRail({
     router.refresh()
   }
 
+  const sendPct = Math.min(sends / dailyLimit, 1)
+  const circumference = 2 * Math.PI * 13
+
   const sendCounter = (
-    <div className="flex items-center gap-2" title={`${sends} of ${dailyLimit} sends used today`}>
-      <span className="font-mono text-xs text-ink">
-        {sends}
-        <span className="text-slate"> / {dailyLimit}</span>
-      </span>
-      <div className="h-1 w-12 overflow-hidden rounded-full bg-paper-tint">
-        <div
-          className={cn(
-            'h-full rounded-full transition-[width] duration-300',
-            atCeiling ? 'bg-status-research' : 'bg-gold',
-          )}
-          style={{ width: `${Math.min(Math.round((sends / dailyLimit) * 100), 100)}%` }}
-        />
+    <div className="flex items-center gap-2.5" title={`${sends} of ${dailyLimit} sends used today`}>
+      <div className="relative size-8">
+        <svg className="size-8 -rotate-90" viewBox="0 0 32 32">
+          <circle cx="16" cy="16" r="13" fill="none" stroke="var(--line)" strokeWidth="2.5" />
+          <circle
+            cx="16"
+            cy="16"
+            r="13"
+            fill="none"
+            stroke={atCeiling ? 'var(--status-research)' : 'var(--gold)'}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={circumference * (1 - sendPct)}
+            className="transition-all duration-700 ease-out"
+          />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-mono-medium text-[8px] font-medium text-ink">
+          {sends}
+        </span>
       </div>
-      {atCeiling ? <span className="text-[11px] text-status-research">Ceiling</span> : null}
+      {atCeiling && <span className="text-label text-status-research">Ceiling</span>}
     </div>
   )
 
   return (
     <>
       {/* Mobile top bar */}
-      <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur lg:hidden">
+      <header className="sticky top-0 z-40 border-b border-line/60 surface-glass lg:hidden">
         <div className="flex items-center justify-between px-4 py-3">
           <RelayBrand />
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {sendCounter}
             <Link
               href="/onboarding"
-              className="rounded-md p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink"
+              className="rounded-lg p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink"
               title="Your voice"
             >
               <Sparkles className="size-4" />
@@ -153,7 +163,7 @@ export function AppRail({
             <button
               type="button"
               onClick={() => void signOut()}
-              className="rounded-md p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink"
+              className="rounded-lg p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink"
               title="Sign out"
             >
               <LogOut className="size-4" />
@@ -163,12 +173,14 @@ export function AppRail({
       </header>
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:border-r lg:border-line">
-        <div className="flex items-center justify-between px-5 py-4">
+      <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-64 lg:flex-col lg:border-r lg:border-line/60">
+        {/* Brand */}
+        <div className="flex items-center justify-between px-5 py-5">
           <RelayBrand />
         </div>
 
-        <nav className="flex flex-1 flex-col gap-0.5 px-4 pb-4">
+        {/* Nav */}
+        <nav className="flex flex-1 flex-col gap-0.5 px-3 pb-4">
           {NAV.map(({ href, label, icon: Icon, exact }) => {
             const active = isActive(href, exact)
             return (
@@ -177,51 +189,63 @@ export function AppRail({
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                  'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200',
                   active
-                    ? 'bg-muted font-medium text-ink'
-                    : 'text-slate hover:bg-muted/60 hover:text-ink',
+                    ? 'bg-ink text-paper shadow-sm'
+                    : 'text-slate hover:bg-muted/50 hover:text-ink',
                 )}
               >
-                <Icon className="size-4 shrink-0" aria-hidden="true" />
+                <Icon
+                  className={cn(
+                    'size-[18px] shrink-0 transition-colors',
+                    active ? 'text-gold' : 'text-slate group-hover:text-ink',
+                  )}
+                  aria-hidden="true"
+                  strokeWidth={active ? 2.2 : 1.8}
+                />
                 <span>{label}</span>
+                {active && (
+                  <span className="absolute right-2.5 size-1.5 rounded-full bg-gold" />
+                )}
               </Link>
             )
           })}
         </nav>
 
-        <div className="border-t border-line px-4 py-4">
+        {/* Bottom */}
+        <div className="border-t border-line/60 px-4 py-4 space-y-3">
           <Link
             href="/onboarding"
-            className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-slate transition-colors hover:bg-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            title="Review or rebuild your style card"
+            className="flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] transition-colors hover:bg-muted"
           >
-            <Sparkles className="size-4 shrink-0 text-gold" aria-hidden="true" />
-            <span className="flex-1">Your voice</span>
+            <Sparkles className="size-[18px] shrink-0 text-gold" aria-hidden="true" />
+            <span className="flex-1 text-slate">Your voice</span>
             {calibrated ? (
-              <span className="text-xs text-slate">saved</span>
+              <span className="text-label text-slate">saved</span>
             ) : (
-              <span className="text-xs font-medium text-gold">start</span>
+              <span className="rounded-full bg-gold/10 px-2 py-0.5 text-label text-gold">
+                start
+              </span>
             )}
           </Link>
 
-          <div className="mt-3 flex items-center justify-between gap-2 px-2">
+          <div className="flex items-center justify-between gap-2 px-1">
             <IdentityChip name={repName} subtitle={ROLE_LABEL[role]} />
             <button
               type="button"
               onClick={() => void signOut()}
-              className="rounded-md p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="rounded-lg p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink"
               title="Sign out"
             >
               <LogOut className="size-4" />
             </button>
           </div>
 
-          <div className="mt-2 flex items-center justify-between gap-2 px-2">
+          <div className="flex items-center justify-between gap-2 px-1">
             {sendCounter}
-            <div className="flex items-center gap-1">
-              <ThemeToggle className="rounded-md p-1 text-slate transition-colors hover:bg-muted hover:text-ink" />
-              <span className="font-mono text-[11px] text-slate">v{APP_VERSION}</span>
+            <div className="flex items-center gap-2">
+              <ThemeToggle className="rounded-lg p-1 text-slate transition-colors hover:bg-muted hover:text-ink" />
+              <span className="text-mono-medium text-[10px] text-slate/50">v{APP_VERSION}</span>
             </div>
           </div>
         </div>
@@ -229,7 +253,7 @@ export function AppRail({
 
       {/* Mobile bottom nav */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-line/60 surface-glass pb-[env(safe-area-inset-bottom)] lg:hidden"
         aria-label="Primary"
       >
         <div className="flex items-stretch">
@@ -241,14 +265,17 @@ export function AppRail({
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex flex-1 flex-col items-center gap-1 py-2 text-[11px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                  'relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition-colors',
                   active ? 'text-ink' : 'text-slate hover:text-ink',
                 )}
               >
+                {active && (
+                  <span className="absolute top-0 left-1/2 h-[2px] w-6 -translate-x-1/2 rounded-full bg-gold" />
+                )}
                 <Icon
-                  className={cn('size-5', active ? 'text-gold' : '')}
+                  className={cn('size-5 transition-all', active ? 'text-gold' : '')}
                   aria-hidden="true"
-                  strokeWidth={active ? 2.4 : 2}
+                  strokeWidth={active ? 2.2 : 1.8}
                 />
                 {label}
               </Link>

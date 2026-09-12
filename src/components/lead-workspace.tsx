@@ -131,12 +131,12 @@ function Chip({
   return (
     <span
       className={cn(
-        'rounded-md px-2 py-1 text-xs',
+        'rounded-lg px-2.5 py-1 text-xs font-medium',
         tone === 'mono'
           ? 'bg-paper-tint font-mono text-ink'
           : tone === 'gold'
-            ? 'bg-gold/15 text-gold'
-            : 'bg-paper-tint text-ink',
+            ? 'bg-gold/10 text-gold'
+            : 'bg-paper-tint text-ink/80',
       )}
     >
       {children}
@@ -440,29 +440,30 @@ export function LeadWorkspace({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-line bg-paper p-6 sm:p-7">
+      {/* Hero card */}
+      <section className="reveal-up rounded-2xl border border-line bg-paper p-6 sm:p-7 card-elevated">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1">
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 text-sm text-slate transition-colors hover:text-ink"
+              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate transition-colors hover:bg-paper-tint hover:text-ink"
             >
               <ArrowLeft className="size-4" aria-hidden="true" />
               Back to Today
             </Link>
-            <h1 className="mt-3 text-2xl font-medium tracking-tight text-ink sm:text-3xl">
+            <h1 className="mt-3 text-heading text-2xl text-ink sm:text-3xl">
               {lead.company}
             </h1>
             <p className="mt-1 text-sm text-slate">{contactLine}</p>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              {signal ? <Chip>{signal.short} signal</Chip> : null}
+              {signal ? <Chip tone="gold">{signal.short} signal</Chip> : null}
               {lead.url ? (
                 <a
                   href={lead.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md bg-paper-tint px-2 py-1 text-xs text-ink transition-colors hover:bg-line"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-paper-tint px-2.5 py-1 text-xs text-ink transition-colors hover:bg-line"
                 >
                   {host ?? 'Source'}
                   <ExternalLink className="size-3 text-slate" aria-hidden="true" />
@@ -476,7 +477,7 @@ export function LeadWorkspace({
             </div>
 
             {lead.titleRaw || lead.locationRaw || lead.roleCategory || lead.marketRegion ? (
-              <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate">
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate">
                 {lead.titleRaw ? <span>{lead.titleRaw}</span> : null}
                 {lead.locationRaw ? <span>{lead.locationRaw}</span> : null}
                 {lead.roleCategory ? <span>{ROLE_LABELS[lead.roleCategory]}</span> : null}
@@ -496,7 +497,7 @@ export function LeadWorkspace({
                     {lead.extractionConfidence}/100 confidence
                   </span>
                 ) : null}
-              </p>
+              </div>
             ) : null}
 
             <dl className="mt-5 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
@@ -534,7 +535,7 @@ export function LeadWorkspace({
             ) : (
               <Link
                 href="/profiles"
-                className="text-sm text-slate underline-offset-4 hover:text-ink hover:underline"
+                className="text-sm text-gold underline-offset-4 hover:underline"
               >
                 Add an identity
               </Link>
@@ -554,30 +555,34 @@ export function LeadWorkspace({
       ) : null}
 
       {!canDraft && !locked ? (
-        <p className="border-l-2 border-line py-1 pl-4 text-sm leading-relaxed text-slate">
-          This lead scored {score.total}/12 and is not eligible for drafting. There is not
-          enough here to act on. Go back, add more research, and it may cross the line.
-        </p>
+        <div className="flex items-start gap-3 rounded-xl border border-line bg-paper-tint/40 px-4 py-3">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-research" />
+          <p className="text-sm leading-relaxed text-slate">
+            This lead scored {score.total}/12 and is not eligible for drafting. There is not
+            enough here to act on. Go back, add more research, and it may cross the line.
+          </p>
+        </div>
       ) : null}
 
       {canDraft && !locked ? (
         <button
           type="button"
           onClick={() => setTab('draft')}
-          className="w-full rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-left transition-colors hover:bg-gold/10"
+          className="group w-full rounded-2xl border border-gold/20 bg-gradient-to-r from-gold/5 to-gold/10 px-5 py-4 text-left transition-all duration-300 hover:border-gold/40 hover:from-gold/10 hover:to-gold/5"
         >
-          <span className="text-[11px] font-medium uppercase tracking-wide text-gold">
+          <span className="font-mono text-[10px] font-medium uppercase tracking-widest text-gold">
             Next step
           </span>
-          <p className="mt-0.5 text-sm font-medium text-ink">{nextStep.title}</p>
+          <p className="mt-0.5 text-sm font-medium text-ink leading-snug">{nextStep.title}</p>
           {nextStep.hint ? <p className="mt-0.5 text-xs text-slate">{nextStep.hint}</p> : null}
         </button>
       ) : null}
 
+      {/* Tabs */}
       <div
         role="tablist"
         aria-label="Lead workspace sections"
-        className="flex flex-wrap gap-1 rounded-xl bg-paper-tint p-1"
+        className="flex flex-wrap gap-1 rounded-xl bg-paper-tint/60 p-1"
       >
         {WORKSPACE_TABS.map((t) => {
           const active = tab === t.id
@@ -589,8 +594,10 @@ export function LeadWorkspace({
               aria-selected={active}
               onClick={() => setTab(t.id)}
               className={cn(
-                'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                active ? 'bg-ink font-medium text-paper shadow-sm' : 'text-slate hover:text-ink',
+                'flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                active
+                  ? 'bg-ink text-paper shadow-sm'
+                  : 'text-slate hover:bg-paper-tint hover:text-ink',
               )}
             >
               <Icon className="size-3.5" aria-hidden="true" />
@@ -598,7 +605,7 @@ export function LeadWorkspace({
               {t.id === 'proof' && matchedProofs.length > 0 ? (
                 <span
                   className={cn(
-                    'ml-0.5 inline-flex size-4 items-center justify-center rounded-full text-[10px]',
+                    'ml-0.5 inline-flex size-4.5 items-center justify-center rounded-full text-[10px] font-medium',
                     active ? 'bg-paper/20 text-paper' : 'bg-paper-tint text-slate',
                   )}
                 >
@@ -617,13 +624,13 @@ export function LeadWorkspace({
       {tab === 'draft' ? (
         <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
-          <section className="rounded-2xl border border-line bg-paper p-6">
+          <section className="rounded-2xl border border-line bg-paper p-6 card-elevated">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base font-medium text-ink">Write the message</h2>
+              <h2 className="text-heading text-base text-ink">Write the message</h2>
               {draft ? (
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
+                    'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
                     draft.passed
                       ? 'bg-status-send/10 text-status-send'
                       : 'bg-status-research/10 text-status-research',
@@ -656,7 +663,7 @@ export function LeadWorkspace({
                 <div
                   role="tablist"
                   aria-label="Message artifacts"
-                  className="flex flex-wrap gap-1 rounded-xl bg-paper-tint p-1"
+                  className="flex flex-wrap gap-1 rounded-xl bg-paper-tint/60 p-1"
                 >
                   {ARTIFACTS.map((t) => {
                     const disabledHint = artifactDisabled[t.id]
@@ -675,12 +682,12 @@ export function LeadWorkspace({
                           }
                         }}
                         className={cn(
-                          'rounded-lg px-3 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                          'rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                           active
-                            ? 'bg-ink font-medium text-paper shadow-sm'
+                            ? 'bg-ink text-paper shadow-sm'
                             : disabledHint
-                              ? 'cursor-not-allowed text-slate/60'
-                              : 'text-slate hover:text-ink',
+                              ? 'cursor-not-allowed text-slate/50'
+                              : 'text-slate hover:bg-paper-tint hover:text-ink',
                         )}
                       >
                         {t.label}
@@ -711,9 +718,12 @@ export function LeadWorkspace({
                               : 'Generate draft'}
                       </Button>
                       {statusMessage ? (
-                        <span className="text-sm text-slate">{statusMessage}</span>
+                        <span className="flex items-center gap-2 text-sm text-slate">
+                          <span className="size-1.5 rounded-full bg-gold gentle-pulse" aria-hidden="true" />
+                          {statusMessage}
+                        </span>
                       ) : (
-                        <span className="text-xs text-slate">Cmd / Ctrl + Enter to draft</span>
+                        <span className="text-mono-medium text-xs text-slate">⌘ + Enter to draft</span>
                       )}
                     </div>
 
@@ -756,20 +766,19 @@ export function LeadWorkspace({
             )}
           </section>
 
-          <section className="rounded-2xl border border-line bg-paper p-6">
-            <h2 className="text-base font-medium text-ink">Send it</h2>
+          <section className="rounded-2xl border border-line bg-paper p-6 card-elevated">
+            <h2 className="text-heading text-base text-ink">Send it</h2>
             <p className="mt-1 text-sm leading-relaxed text-slate">
               Relay never sends for you. Copy the message into LinkedIn or Upwork, then log the
               exact text you sent so outcomes get scored.
             </p>
 
             {draft || textToCheck ? (
-              <div className="mt-4 space-y-1.5 border-t border-line pt-4">
-                <p className="text-xs text-slate">
-                  Pre-send checks, resolved as you go. Logging stays open once every line reads
-                  confirmed.
+              <div className="mt-4 space-y-2 rounded-xl bg-paper-tint/40 p-4">
+                <p className="text-label">
+                  Pre-send checks
                 </p>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {gates.map((g) => (
                     <li
                       key={g.label}
@@ -782,7 +791,7 @@ export function LeadWorkspace({
                         <Check className="mt-0.5 size-4 shrink-0 text-status-send" aria-hidden="true" />
                       ) : (
                         <span
-                          aria-hidden
+                          aria-hidden="true"
                           className="mt-1.5 inline-block size-1.5 shrink-0 rounded-full bg-line"
                         />
                       )}
@@ -796,12 +805,12 @@ export function LeadWorkspace({
                   ))}
                 </ul>
                 {needOverride ? (
-                  <label className="flex items-start gap-2 pt-1 text-xs text-slate">
+                  <label className="flex items-start gap-2.5 pt-1 text-xs text-slate">
                     <input
                       type="checkbox"
                       checked={overrideCheck}
                       onChange={(e) => setOverrideCheck(e.target.checked)}
-                      className="mt-0.5 accent-[--gold]"
+                      className="mt-0.5 size-4 accent-gold"
                     />
                     <span>I read the flagged lines and will send this as written anyway.</span>
                   </label>
@@ -847,7 +856,7 @@ export function LeadWorkspace({
                     ? 'Check the flags to log'
                     : 'Log this send'}
               </Button>
-              <span className="text-xs text-slate">Cmd / Ctrl + Enter</span>
+              <span className="text-mono-medium text-xs text-slate">⌘ + Enter</span>
             </div>
             {sendError ? (
               <p className="mt-2 text-sm text-status-no" role="alert">
@@ -862,7 +871,7 @@ export function LeadWorkspace({
           </section>
         </div>
 
-        <aside className="rounded-2xl border border-line bg-paper">
+        <aside className="rounded-2xl border border-line bg-paper card-elevated">
           <ProofPanel
             proofList={proofList}
             activeProof={activeProof}
@@ -876,7 +885,7 @@ export function LeadWorkspace({
       ) : null}
 
       {tab === 'proof' ? (
-        <div className="rounded-2xl border border-line bg-paper">
+        <div className="rounded-2xl border border-line bg-paper card-elevated">
           <ProofPanel
             proofList={proofList}
             activeProof={activeProof}
@@ -889,7 +898,7 @@ export function LeadWorkspace({
       ) : null}
 
       {tab === 'timeline' ? (
-        <div className="rounded-2xl border border-line bg-paper">
+        <div className="rounded-2xl border border-line bg-paper card-elevated">
           <Timeline lead={lead} />
         </div>
       ) : null}
@@ -900,7 +909,7 @@ export function LeadWorkspace({
 function HeroField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-slate">{label}</dt>
+      <dt className="text-label">{label}</dt>
       <dd className="mt-1 text-sm leading-relaxed text-ink">{value}</dd>
     </div>
   )
@@ -916,11 +925,11 @@ const ScorePanel = memo(function ScorePanel({
   lead: LeadDetail
 }) {
   return (
-    <section className="rounded-2xl border border-line bg-paper p-6 sm:p-7">
+    <section className="rounded-2xl border border-line bg-paper p-6 sm:p-7 card-elevated">
       <div className="flex items-center gap-4">
         <ScoreRing score={score.total} size={64} />
         <div>
-          <h2 className="text-sm font-medium text-ink">Why this score</h2>
+          <h2 className="text-heading text-sm text-ink">Why this score</h2>
           <p className="mt-0.5 text-sm text-ink">{verdictCall(verdict)}</p>
           {verdict === 'research_more' ? (
             <p className="mt-1 text-xs leading-relaxed text-status-research">
@@ -934,17 +943,17 @@ const ScorePanel = memo(function ScorePanel({
         {score.breakdown.map((item) => {
           const frac = item.max > 0 ? item.points / item.max : 0
           return (
-            <li key={item.category + item.label} className="space-y-1">
+            <li key={item.category + item.label} className="space-y-1.5">
               <div className="flex items-baseline justify-between gap-3 text-sm">
                 <span className="text-slate">{item.label}</span>
                 <span className="font-mono text-xs text-ink">
                   {item.points}/{item.max}
                 </span>
               </div>
-              <div className="h-1 overflow-hidden rounded-full bg-paper-tint">
+              <div className="h-1.5 overflow-hidden rounded-full bg-paper-tint">
                 <div
                   className={cn(
-                    'h-full rounded-full',
+                    'h-full rounded-full transition-all duration-700',
                     frac >= 1 ? 'bg-status-send' : frac > 0 ? 'bg-gold' : 'bg-line',
                   )}
                   style={{ width: `${Math.max(frac * 100, frac > 0 ? 8 : 0)}%` }}
@@ -979,10 +988,10 @@ const ProofPanel = memo(function ProofPanel({
   return (
     <section className="p-6">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-medium text-ink">Proof to cite</h2>
+        <h2 className="text-heading text-sm text-ink">Proof to cite</h2>
         <Link
           href="/profiles"
-          className="text-xs text-slate underline-offset-4 hover:text-ink hover:underline"
+          className="text-xs text-gold underline-offset-4 hover:underline"
         >
           Manage
         </Link>
@@ -991,7 +1000,7 @@ const ProofPanel = memo(function ProofPanel({
         Past work that matches this lead by tag overlap. Pick the one that wins, then draft.
       </p>
       {proofList.length === 0 ? (
-        <p className="mt-3 text-sm text-slate">
+        <p className="mt-4 text-sm text-slate">
           {profiles.length === 0
             ? 'No identity profiles exist yet, so nothing can be matched. Add one under Manage.'
             : 'No proof items overlap this lead yet. Add projects under Manage.'}
@@ -1004,8 +1013,10 @@ const ProofPanel = memo(function ProofPanel({
               <li
                 key={p.id}
                 className={cn(
-                  'rounded-lg border p-4 transition-colors',
-                  active ? 'border-gold bg-gold/5' : 'border-line bg-paper-tint/30',
+                  'rounded-xl border p-4 transition-all duration-200',
+                  active
+                    ? 'border-gold/30 bg-gold/5 shadow-[0_2px_12px_-4px_color-mix(in_srgb,var(--gold)_15%,transparent)]'
+                    : 'border-line bg-paper-tint/20 hover:bg-paper-tint/40',
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -1022,11 +1033,11 @@ const ProofPanel = memo(function ProofPanel({
                   </Button>
                 </div>
                 {p.reviewQuote ? (
-                  <p className="mt-1 text-xs italic text-slate">&ldquo;{p.reviewQuote}&rdquo;</p>
+                  <p className="mt-1.5 text-xs italic text-slate">&ldquo;{p.reviewQuote}&rdquo;</p>
                 ) : null}
                 <p className="mt-1.5 text-xs leading-relaxed text-slate">{p.projectSummary}</p>
                 {p.tags.length > 0 ? (
-                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
                     {p.tags.map((t) => {
                       const matches = leadTags.some(
                         (lt) => lt.toLowerCase() === t.toLowerCase(),
@@ -1036,7 +1047,7 @@ const ProofPanel = memo(function ProofPanel({
                           key={t}
                           className={cn(
                             'rounded-md px-2 py-0.5 font-mono text-[11px]',
-                            matches ? 'bg-gold/15 text-ink' : 'bg-paper-tint text-slate',
+                            matches ? 'bg-gold/10 text-gold' : 'bg-paper-tint text-slate',
                           )}
                         >
                           {t}
@@ -1057,42 +1068,54 @@ const ProofPanel = memo(function ProofPanel({
 const Timeline = memo(function Timeline({ lead }: { lead: LeadDetail }) {
   return (
     <section className="p-6">
-      <h2 className="text-sm font-medium text-ink">Timeline</h2>
+      <h2 className="text-heading text-sm text-ink">Timeline</h2>
       {lead.messages.length === 0 && lead.outcomes.length === 0 ? (
-        <p className="mt-2 text-sm text-slate">Nothing here yet.</p>
+        <p className="mt-3 text-sm text-slate">Nothing here yet.</p>
       ) : (
-        <ul className="mt-3 space-y-3 text-sm">
+        <ul className="mt-4 space-y-0">
           {[...lead.outcomes]
             .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
             .map((o) => (
-              <li key={o.id} className="flex items-baseline justify-between gap-3">
-                <span className="text-ink">{o.stage}</span>
-                <span className="font-mono text-xs text-slate">
-                  {new Date(o.occurredAt).toLocaleDateString()}{' '}
-                  {new Date(o.occurredAt).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </span>
+              <li key={o.id} className="relative flex items-start gap-3 py-3">
+                <div className="flex flex-col items-center">
+                  <span className="size-2 rounded-full bg-gold" aria-hidden="true" />
+                  <div className="w-px flex-1 bg-line" />
+                </div>
+                <div className="pb-3">
+                  <span className="text-sm text-ink">{o.stage}</span>
+                    <span className="ml-2 text-mono-medium text-xs text-slate">
+                    {new Date(o.occurredAt).toLocaleDateString()}{' '}
+                    {new Date(o.occurredAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
               </li>
             ))}
           {[...lead.messages]
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
             .map((m) => (
-              <li key={m.id} className="space-y-0.5">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-ink">{m.type}</span>
-                  <span className="font-mono text-xs text-slate">
-                    {m.sentAt
-                      ? `sent ${new Date(m.sentAt).toLocaleDateString()}`
-                      : `drafted ${new Date(m.createdAt).toLocaleDateString()}`}
-                  </span>
+              <li key={m.id} className="relative flex items-start gap-3 py-3">
+                <div className="flex flex-col items-center">
+                  <span className="size-2 rounded-full bg-ink/20" aria-hidden="true" />
+                  <div className="w-px flex-1 bg-line" />
                 </div>
-                {m.sentText ? (
-                  <p className="text-xs leading-relaxed text-slate">{m.sentText}</p>
-                ) : m.draftText ? (
-                  <p className="text-xs leading-relaxed text-slate">{m.draftText}</p>
-                ) : null}
+                <div className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-ink">{m.type}</span>
+                    <span className="text-mono-medium text-xs text-slate">
+                      {m.sentAt
+                        ? `sent ${new Date(m.sentAt).toLocaleDateString()}`
+                        : `drafted ${new Date(m.createdAt).toLocaleDateString()}`}
+                    </span>
+                  </div>
+                  {m.sentText ? (
+                    <p className="mt-1 text-xs leading-relaxed text-slate">{m.sentText}</p>
+                  ) : m.draftText ? (
+                    <p className="mt-1 text-xs leading-relaxed text-slate">{m.draftText}</p>
+                  ) : null}
+                </div>
               </li>
             ))}
         </ul>
@@ -1123,7 +1146,7 @@ const DraftEditor = memo(function DraftEditor({
   quality?: {
     fewShotReason?: string
     pickReason?: string
-    variantAvailable?: boolean
+    variantAvailable?: boolean;
   } | null
 }) {
   const { kind, max, label } = artifactCount(artifact)
@@ -1135,7 +1158,7 @@ const DraftEditor = memo(function DraftEditor({
     <div className="space-y-3">
       {quality ? (
         <div className="flex flex-wrap items-center gap-2 border-t border-line pt-2">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-slate">
+          <span className="text-label">
             Draft quality
           </span>
           {quality.fewShotReason ? (
@@ -1156,19 +1179,19 @@ const DraftEditor = memo(function DraftEditor({
         </div>
       ) : null}
 
-      <div className="rounded-xl border-2 border-ink/10 bg-paper-tint/30 p-3">
+      <div className="rounded-xl border-2 border-ink/10 bg-paper-tint/20 p-4">
         <Textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
           rows={7}
-          className="max-h-[32rem] overflow-y-auto border-0 bg-transparent px-0 text-[15px] leading-relaxed shadow-none focus-visible:ring-0"
+          className="max-h-[32rem] overflow-y-auto border-0 bg-transparent px-1 text-[15px] leading-relaxed shadow-none focus-visible:ring-0"
           aria-label="Draft text, editable"
           placeholder="Your message appears here as it is written. Edit it freely."
         />
         <div className="mt-2 flex items-center justify-between gap-3 border-t border-line pt-2">
           <span
             className={cn(
-              'text-xs',
+              'font-mono text-xs',
               over
                 ? 'text-status-no'
                 : frac >= 0.9
@@ -1254,14 +1277,14 @@ function SelfCheckLine({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex items-start gap-2">
+    <div className="flex items-start gap-2.5">
       {pass ? (
         <Check className="mt-0.5 size-4 shrink-0 text-status-send" aria-hidden="true" />
       ) : (
         <X className="mt-0.5 size-4 shrink-0 text-status-research" aria-hidden="true" />
       )}
       <div>
-        <p className={pass ? 'text-sm text-status-send' : 'text-sm text-status-research'}>
+        <p className={cn('text-sm', pass ? 'text-status-send' : 'text-status-research')}>
           {pass ? `Passed: ${children}.` : `Failed: ${failNote}`}
         </p>
         {!pass && note && note !== 'No self-check note was produced.' ? (

@@ -22,7 +22,7 @@ export default async function AppLayout({
   const queue = await store.getQueue()
 
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[15.5rem_1fr]">
+    <div className="min-h-dvh bg-dot-grid lg:grid lg:grid-cols-[16rem_1fr]">
       <AppRail
         repName={user.rep.name}
         role={user.rep.role}
@@ -31,7 +31,7 @@ export default async function AppLayout({
         todaySends={queue.todaySends}
         dailyLimit={queue.dailyLimit}
       />
-      <main className="mx-auto w-full max-w-6xl px-5 pt-7 pb-24 lg:px-10 lg:pb-7">
+      <main className="mx-auto w-full max-w-5xl px-5 pt-6 pb-24 lg:px-8 lg:pt-8 lg:pb-8">
         {children}
       </main>
     </div>

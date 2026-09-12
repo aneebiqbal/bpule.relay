@@ -3,11 +3,12 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
 import { cn } from "cn"
+import { CheckCircle2, AlertTriangle, Info, X } from "lucide-react"
 
 export interface ToastInput {
   title: string
   description?: string
-  variant?: "default" | "destructive"
+  variant?: "default" | "success" | "destructive" | "info"
 }
 
 interface ToastItem extends ToastInput {
@@ -30,7 +31,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts((list) => [...list, { ...toast, id }])
     setTimeout(() => {
       setToasts((list) => list.filter((t) => t.id !== id))
-    }, 4000)
+    }, 4500)
   }, [])
 
   const dismiss = React.useCallback((id: number) => {
@@ -43,7 +44,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {toasts.length > 0
         ? createPortal(
             <div
-              className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4"
+              className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2.5 px-4"
               role="region"
               aria-label="Notifications"
             >
@@ -51,14 +52,32 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 <div
                   key={t.id}
                   className={cn(
-                    "pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border px-3.5 py-2.5 text-sm shadow-lg",
+                    "pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl border px-4 py-3.5 scale-in",
                     t.variant === "destructive"
-                      ? "border-status-no/30 bg-paper text-status-no"
-                      : "border-line bg-paper text-ink",
+                      ? "border-status-no/20 bg-paper-raised/95 text-ink shadow-lg"
+                      : t.variant === "success"
+                        ? "border-status-send/20 bg-paper-raised/95 text-ink shadow-lg"
+                        : t.variant === "info"
+                          ? "border-gold/20 bg-paper-raised/95 text-ink shadow-lg"
+                          : "border-line/60 bg-paper-raised/95 text-ink shadow-lg",
                   )}
+                  style={{ backdropFilter: "blur(16px)" }}
+                  role="status"
+                  aria-live="polite"
                 >
+                  <div className="mt-0.5 shrink-0">
+                    {t.variant === "destructive" ? (
+                      <AlertTriangle className="size-4 text-status-no" />
+                    ) : t.variant === "success" ? (
+                      <CheckCircle2 className="size-4 text-status-send" />
+                    ) : t.variant === "info" ? (
+                      <Info className="size-4 text-gold" />
+                    ) : (
+                      <Info className="size-4 text-slate" />
+                    )}
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium">{t.title}</div>
+                    <div className="text-sm font-medium">{t.title}</div>
                     {t.description ? (
                       <div className="mt-0.5 text-xs leading-relaxed text-slate">
                         {t.description}
@@ -68,10 +87,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   <button
                     type="button"
                     onClick={() => dismiss(t.id)}
-                    aria-label="Dismiss"
-                    className="rounded p-0.5 text-slate transition-colors hover:text-ink"
+                    aria-label="Dismiss notification"
+                    className="rounded-lg p-1 text-slate transition-colors hover:bg-paper-tint hover:text-ink"
                   >
-                    ×
+                    <X className="size-3.5" />
                   </button>
                 </div>
               ))}

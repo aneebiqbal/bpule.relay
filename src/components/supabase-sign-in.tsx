@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { getBrowserSupabase } from '@/lib/supabase/client'
+import { Mail, ArrowRight } from 'lucide-react'
 
 type Mode = 'magic' | 'password'
 
@@ -95,7 +96,7 @@ export function SupabaseSignIn() {
         <button
           type="button"
           onClick={() => setSent(false)}
-          className="text-sm text-slate underline-offset-4 hover:text-ink hover:underline"
+          className="text-sm text-gold underline-offset-4 hover:underline"
         >
           Use a password instead
         </button>
@@ -106,7 +107,7 @@ export function SupabaseSignIn() {
   return (
     <form
       onSubmit={mode === 'magic' ? sendMagicLink : signIn}
-      className="space-y-4"
+      className="space-y-5"
       noValidate
     >
       {error ? (
@@ -130,13 +131,10 @@ export function SupabaseSignIn() {
           }}
           onBlur={() => validateEmail(email)}
           aria-describedby={emailError ? 'email-error' : undefined}
+          placeholder="you@company.com"
         />
         {emailError ? (
-          <p
-            id="email-error"
-            className="text-xs text-status-no"
-            role="alert"
-          >
+          <p id="email-error" className="text-xs text-status-no" role="alert">
             {emailError}
           </p>
         ) : null}
@@ -151,14 +149,16 @@ export function SupabaseSignIn() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
           />
         </div>
       ) : null}
 
       {mode === 'magic' ? (
         <>
-          <Button type="submit" variant="gold" className="w-full" loading={busy}>
+          <Button type="submit" variant="gold" className="w-full" size="lg" loading={busy}>
             {busy ? 'Sending the link' : 'Email me a link'}
+            {!busy && <Mail className="ml-1.5 size-4" />}
           </Button>
           <p className="text-center text-xs text-slate">
             Small team, trusted group. No password needed.
@@ -166,20 +166,21 @@ export function SupabaseSignIn() {
           <button
             type="button"
             onClick={() => setMode('password')}
-            className="w-full text-center text-sm text-slate underline-offset-4 hover:text-ink hover:underline"
+            className="w-full text-center text-sm text-gold underline-offset-4 hover:underline"
           >
             Sign in with a password instead
           </button>
         </>
       ) : (
         <>
-          <Button type="submit" variant="gold" className="w-full" loading={busy}>
+          <Button type="submit" variant="gold" className="w-full" size="lg" loading={busy}>
             {busy ? 'Signing in...' : 'Sign in'}
+            {!busy && <ArrowRight className="ml-1.5 size-4" />}
           </Button>
           <button
             type="button"
             onClick={() => setMode('magic')}
-            className="w-full text-center text-sm text-slate underline-offset-4 hover:text-ink hover:underline"
+            className="w-full text-center text-sm text-gold underline-offset-4 hover:underline"
           >
             Back to the magic link
           </button>

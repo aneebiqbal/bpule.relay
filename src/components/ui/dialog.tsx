@@ -5,11 +5,6 @@ import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 import { cn } from "cn"
 
-/**
- * Minimal accessible modal. Focus lands in the panel, Escape and backdrop
- * close it, and the page behind stays inert to pointer events. Use for
- * destructive confirmations instead of window.confirm.
- */
 export function Dialog({
   open,
   onClose,
@@ -26,15 +21,22 @@ export function Dialog({
   className?: string
 }) {
   const panelRef = React.useRef<HTMLDivElement | null>(null)
+  const titleId = React.useId()
+  const descId = React.useId()
+  const triggerRef = React.useRef<HTMLElement | null>(null)
 
   React.useEffect(() => {
     if (!open) return
+    triggerRef.current = document.activeElement as HTMLElement
     panelRef.current?.focus()
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose()
     }
     document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("keydown", onKey)
+      triggerRef.current?.focus()
+    }
   }, [open, onClose])
 
   if (!open) return null
@@ -42,7 +44,8 @@ export function Dialog({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
       <div
-        className="absolute inset-0 bg-ink/40"
+        className="absolute inset-0 bg-ink/30 fade-in"
+        style={{ backdropFilter: "blur(4px)" }}
         aria-hidden="true"
         onClick={onClose}
       />
@@ -50,30 +53,32 @@ export function Dialog({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-labelledby={titleId}
+        aria-describedby={description ? descId : undefined}
         tabIndex={-1}
         className={cn(
-          "relative w-full max-w-md rounded-xl bg-paper p-5 shadow-xl ring-1 ring-line outline-none",
+          "relative w-full max-w-md rounded-2xl bg-paper-raised/95 p-6 shadow-xl ring-1 ring-line/60 outline-none scale-in",
           className,
         )}
+        style={{ backdropFilter: "blur(20px)" }}
       >
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <h2 className="text-base font-medium text-ink">{title}</h2>
+            <h2 id={titleId} className="text-heading text-lg text-ink">{title}</h2>
             {description ? (
-              <p className="text-sm leading-relaxed text-slate">{description}</p>
+              <p id={descId} className="text-sm leading-relaxed text-slate">{description}</p>
             ) : null}
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
-            className="rounded-md p-1 text-slate transition-colors hover:bg-paper-tint hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            aria-label="Close dialog"
+            className="rounded-lg p-1.5 text-slate transition-colors hover:bg-paper-tint hover:text-ink"
           >
             <X className="size-4" />
           </button>
         </div>
-        {children ? <div className="mt-4">{children}</div> : null}
+        {children ? <div className="mt-5">{children}</div> : null}
       </div>
     </div>,
     document.body,
@@ -88,7 +93,7 @@ export function DialogActions({
   children: React.ReactNode
 }) {
   return (
-    <div className={cn("mt-5 flex items-center justify-end gap-3", className)}>
+    <div className={cn("flex items-center justify-end gap-3", className)}>
       {children}
     </div>
   )

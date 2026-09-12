@@ -1,12 +1,18 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowRight, ShieldCheck } from 'lucide-react'
+import { ArrowRight, ShieldCheck, Zap, Users, BarChart3, Sparkles } from 'lucide-react'
 import { SupabaseSignIn } from '@/components/supabase-sign-in'
 import { RelayBrand } from '@/components/brand'
 import { getCurrentUser } from '@/lib/auth/current'
 import { isDemoMode } from '@/lib/ai/config'
 
 export const dynamic = 'force-dynamic'
+
+const FEATURES = [
+  { icon: Zap, label: 'AI extraction & scoring', desc: 'Paste research, get a full breakdown in seconds' },
+  { icon: Users, label: 'Voice-calibrated drafts', desc: 'Every message sounds like you, not a template' },
+  { icon: BarChart3, label: 'Outcome analytics', desc: 'Reply rates, costs, team metrics — all real' },
+] as const
 
 export default async function LoginPage() {
   const user = await getCurrentUser()
@@ -15,47 +21,102 @@ export default async function LoginPage() {
   const demo = isDemoMode()
 
   return (
-    <div className="flex min-h-dvh items-center justify-center px-4 py-12">
-      <div className="w-full max-w-sm space-y-8">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <RelayBrand />
+    <div className="flex min-h-dvh">
+      {/* Left panel — brand story */}
+      <div className="hidden lg:flex lg:w-[45%] xl:w-[40%]">
+        <div className="relative flex flex-1 flex-col justify-between overflow-hidden bg-ink p-10 xl:p-12">
+          {/* Ambient glow */}
+          <div className="pointer-events-none absolute -right-24 -top-24 size-80 rounded-full bg-gold/[0.08] blur-[100px]" />
+          <div className="pointer-events-none absolute -bottom-32 -left-16 size-96 rounded-full bg-gold/[0.04] blur-[80px]" />
+
+          <div className="relative">
+            <RelayBrand />
+          </div>
+
+          <div className="relative space-y-10">
+            <div className="space-y-4">
+              <h2 className="text-display text-3xl text-paper xl:text-4xl">
+                Know who&apos;s worth<br />your next message.
+              </h2>
+              <p className="max-w-sm text-[15px] leading-relaxed text-paper/50">
+                Relay scores every lead on a transparent rubric, drafts in your voice,
+                and tracks what actually works — so you stop guessing.
+              </p>
+            </div>
+
+            <div className="space-y-5">
+              {FEATURES.map(({ icon: Icon, label, desc }) => (
+                <div key={label} className="flex items-start gap-4 group">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gold/10 transition-colors group-hover:bg-gold/15">
+                    <Icon className="size-[18px] text-gold" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-paper">{label}</p>
+                    <p className="text-[13px] text-paper/40">{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p className="relative font-mono text-[11px] text-paper/25">
+            v0.7.0 · Built for reps who hate spray-and-pray
+          </p>
+        </div>
+      </div>
+
+      {/* Right panel — auth */}
+      <div className="flex flex-1 items-center justify-center px-6 py-12 sm:px-10 gradient-mesh">
+        <div className="absolute -top-32 right-1/4 size-64 rounded-full bg-gold/[0.06] blur-[80px]" />
+
+        <div className="relative w-full max-w-sm space-y-8">
+          <div className="lg:hidden"><RelayBrand /></div>
+
           <div className="space-y-2">
-            <h1 className="text-2xl font-medium tracking-tight text-ink">
+            <h1 className="text-heading text-3xl text-ink">
               {demo ? 'Demo build' : 'Welcome back'}
             </h1>
-            <p className="text-sm leading-relaxed text-slate">
+            <p className="text-[15px] leading-relaxed text-slate">
               {demo
-                ? 'No Supabase is connected, so there is no real auth.'
+                ? 'No Supabase is connected — this runs on an in-memory store.'
                 : 'Qualify leads, draft in your voice, and know what actually works.'}
             </p>
           </div>
-        </div>
 
-        {demo ? (
-          <div className="space-y-4 rounded-2xl border border-line bg-paper p-6 shadow-sm">
-            <p className="text-sm leading-relaxed text-slate">
-              This build runs on an in-memory store with a fixed demo rep (Hassan, admin). Onboarding
-              calibrates a style card every draft is written in.
+          {demo ? (
+            <div className="space-y-5 rounded-2xl border border-line/60 bg-surface-raised p-6">
+              <div className="flex items-start gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gold/10">
+                  <Sparkles className="size-4 text-gold" aria-hidden="true" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-ink">Demo mode active</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate">
+                    Onboarding calibrates a style card every draft is written in. Explore with full admin access.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/"
+                className="group flex w-full items-center justify-center gap-2.5 rounded-2xl gradient-gold px-4 py-3.5 text-sm font-semibold text-paper transition-all duration-300 hover:shadow-gold active:scale-[0.97]"
+              >
+                Enter as Hassan (demo)
+                <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
+              </Link>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-line/60 bg-surface-raised p-6">
+              <SupabaseSignIn />
+            </div>
+          )}
+
+          <div className="flex items-start gap-2.5 rounded-2xl bg-paper-tint/40 px-4 py-3">
+            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-status-send" aria-hidden="true" />
+            <p className="text-xs leading-relaxed text-slate">
+              Relay never sends a message for you. You copy, you paste, outcomes get scored from what really happened.
             </p>
-            <Link
-              href="/"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gold px-4 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-gold/90"
-            >
-              Enter as Hassan (demo)
-              <ArrowRight className="size-4" aria-hidden="true" />
-            </Link>
           </div>
-        ) : (
-          <div className="rounded-2xl border border-line bg-paper p-6 shadow-sm">
-            <SupabaseSignIn />
-          </div>
-        )}
-
-        <p className="flex items-center justify-center gap-1.5 text-center text-xs leading-relaxed text-slate">
-          <ShieldCheck className="size-3.5 shrink-0 text-status-send" aria-hidden="true" />
-          Relay never sends a message for you. You copy, you paste, outcomes get scored from what
-          really happened.
-        </p>
+        </div>
       </div>
     </div>
   )

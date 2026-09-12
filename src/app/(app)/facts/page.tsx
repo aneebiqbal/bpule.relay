@@ -2,6 +2,7 @@ import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import { FactsManager } from '@/components/facts-manager'
 
+
 export const dynamic = 'force-dynamic'
 
 export default async function FactsPage() {
@@ -11,10 +12,11 @@ export default async function FactsPage() {
   const isAdmin = (user?.rep.role ?? 'rep') === 'admin'
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-medium tracking-tight text-ink sm:text-3xl">Facts</h1>
-        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate">
+    <div className="space-y-8">
+      <header className="reveal-up space-y-2">
+        <p className="font-mono text-xs uppercase tracking-widest text-slate">Knowledge base</p>
+        <h1 className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">Facts</h1>
+        <p className="max-w-xl text-sm leading-relaxed text-slate">
           The only numbers and claims the draft model is allowed to use. Anything not in this
           table is stripped out of generated copy, in code, before it ever reaches a human eye.
         </p>

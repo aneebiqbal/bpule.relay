@@ -260,7 +260,7 @@ export function ManageProfiles({
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-2xl font-medium tracking-tight text-ink sm:text-3xl">
+        <h1 className="text-heading text-2xl text-ink sm:text-3xl">
           Manage Profiles
         </h1>
         <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate">
@@ -279,7 +279,7 @@ export function ManageProfiles({
 
       <div className="space-y-6">
         {repsWithProfiles.map(({ rep, profiles: repProfiles }) => (
-          <section key={rep.id} className="rounded-lg border border-line">
+          <section key={rep.id} className="rounded-2xl border border-line/60 bg-surface-raised">
             <div className="flex items-center justify-between gap-3 border-b border-line bg-paper-tint/40 px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-ink">{rep.name}</span>
@@ -363,7 +363,7 @@ export function ManageProfiles({
       </div>
 
       {isAdmin && profileDraft ? (
-        <section className="rounded-lg border border-line p-5">
+        <section className="rounded-2xl border border-line/60 bg-surface-raised p-5">
           <h2 className="text-sm font-medium text-ink">
             {profileDraft.id ? 'Edit identity' : 'New identity'}
           </h2>
@@ -410,7 +410,7 @@ export function ManageProfiles({
               Cancel
             </Button>
             <Button
-              className="bg-gold text-paper hover:bg-gold/90"
+              variant="gold"
               onClick={() => void saveProfile()}
               disabled={saving === 'profile'}
             >
@@ -519,7 +519,7 @@ function ProfileCard({
           <span
             className={cn(
               'rounded-md px-2 py-1 font-mono text-xs',
-              profile.platform === 'linkedin' ? 'bg-[#0a66c2]/10 text-ink' : 'bg-[#14a800]/10 text-ink',
+              profile.platform === 'linkedin' ? 'bg-[color-mix(in_oklch,#0a66c2_10%,transparent)] text-[#0a66c2]' : 'bg-[color-mix(in_oklch,#14a800_10%,transparent)] text-[#14a800]',
             )}
           >
             {profile.platform}
@@ -589,7 +589,7 @@ function ProfileCard({
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-ink">Proof items</h3>
             {isAdmin ? (
-              <Button className="bg-gold text-paper hover:bg-gold/90" size="sm" onClick={onProofStart}>
+              <Button variant="gold" size="sm" onClick={onProofStart}>
                 Add proof
               </Button>
             ) : null}
@@ -658,7 +658,7 @@ function ProofForm({
   const permission = draft.permissionOnFile
 
   return (
-    <section className="rounded-lg border border-line p-5">
+    <section className="rounded-2xl border border-line/60 bg-surface-raised p-5">
       <h2 className="text-sm font-medium text-ink">{draft.id ? 'Edit proof item' : 'New proof item'}</h2>
       <p className="mt-1 text-xs leading-relaxed text-slate">
         Tags are what match this project to leads. Leave them blank and a single cheap
@@ -762,7 +762,7 @@ function ProofForm({
           Cancel
         </Button>
         <Button
-          className="bg-gold text-paper hover:bg-gold/90"
+          variant="gold"
           onClick={onSave}
           disabled={saving || !draft.projectSummary.trim()}
         >

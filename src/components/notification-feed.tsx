@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Bell, Check, MessageCircle } from 'lucide-react'
+import { Bell, MessageCircle, X } from 'lucide-react'
 import { cn } from 'cn'
 
 export interface NotificationItem {
@@ -22,11 +22,6 @@ function timeAgo(iso: string): string {
   return `${Math.round(hours / 24)}d ago`
 }
 
-/**
- * First UI surface for the notifications API — it existed end to end
- * (DB triggers, store methods, /api/notifications) with zero consumers
- * before this. Dismissing here calls the same PATCH the API already exposed.
- */
 export function NotificationFeed({ initial }: { initial: NotificationItem[] }) {
   const [items, setItems] = useState(initial)
   const [dismissing, setDismissing] = useState<string | null>(null)
@@ -50,46 +45,70 @@ export function NotificationFeed({ initial }: { initial: NotificationItem[] }) {
   if (items.length === 0) return null
 
   return (
-    <section className="rounded-2xl border border-line bg-paper">
-      <div className="flex items-center gap-2 border-b border-line px-5 py-3">
-        <Bell className="size-4 text-gold" aria-hidden="true" />
+    <section className="overflow-hidden rounded-[1.25rem] border border-line/80 bg-surface-raised">
+      {/* Header */}
+      <div className="flex items-center gap-3 border-b border-line/60 bg-paper-tint/30 px-5 py-3">
+        <div className="relative">
+          <Bell className="size-4 text-gold" aria-hidden="true" />
+          <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-gold gentle-pulse" />
+        </div>
         <h2 className="text-sm font-medium text-ink">Since you last checked</h2>
-        <span className="ml-auto rounded-full bg-gold/15 px-2 py-0.5 text-[11px] font-medium text-gold">
+        <span className="ml-auto rounded-full bg-gold/10 px-2 py-0.5 text-mono-medium text-[10px] font-medium text-gold">
           {items.length}
         </span>
       </div>
-      <ul className="divide-y divide-line">
-        {items.map((n) => (
-          <li key={n.id} className="flex items-center gap-3 px-5 py-3">
-            <MessageCircle
+
+      {/* Items */}
+      <ul className="divide-y divide-line/50">
+        {items.map((n, i) => (
+          <li
+            key={n.id}
+            className={cn(
+              'reveal-up flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-paper-tint/30',
+              dismissing === n.id && 'opacity-40',
+            )}
+            style={{ animationDelay: `${i * 0.05}s` }}
+          >
+            {/* Icon */}
+            <div
               className={cn(
-                'size-4 shrink-0',
-                n.type === 'reply' ? 'text-status-send' : 'text-status-research',
+                'flex size-8 shrink-0 items-center justify-center rounded-xl',
+                n.type === 'reply'
+                  ? 'bg-status-send/8 text-status-send'
+                  : 'bg-status-research/8 text-status-research',
               )}
-              aria-hidden="true"
-            />
+            >
+              <MessageCircle className="size-3.5" aria-hidden="true" />
+            </div>
+
+            {/* Content */}
             <div className="min-w-0 flex-1">
               {n.leadId ? (
-                <Link href={`/leads/${n.leadId}`} className="text-sm text-ink hover:underline">
+                <Link
+                  href={`/leads/${n.leadId}`}
+                  className="text-sm text-ink transition-colors hover:text-gold"
+                >
                   {n.type === 'reply'
                     ? `${n.company ?? 'A lead'} replied`
-                    : `${n.company ?? 'A lead'} is overdue for a follow-up`}
+                    : `${n.company ?? 'A lead'} needs a follow-up`}
                 </Link>
               ) : (
                 <span className="text-sm text-ink">
-                  {n.type === 'reply' ? 'A lead replied' : 'A lead is overdue for a follow-up'}
+                  {n.type === 'reply' ? 'A lead replied' : 'A lead needs a follow-up'}
                 </span>
               )}
-              <span className="ml-2 text-xs text-slate">{timeAgo(n.createdAt)}</span>
+              <span className="ml-2 text-mono-medium text-[11px] text-slate">{timeAgo(n.createdAt)}</span>
             </div>
+
+            {/* Dismiss */}
             <button
               type="button"
               onClick={() => void dismiss(n.id)}
               disabled={dismissing === n.id}
-              className="shrink-0 rounded-md p-1.5 text-slate transition-colors hover:bg-paper-tint hover:text-ink disabled:opacity-50"
+              className="flex size-7 shrink-0 items-center justify-center rounded-lg text-slate transition-all duration-200 hover:bg-paper-tint hover:text-ink disabled:opacity-50"
               title="Mark as read"
             >
-              <Check className="size-4" aria-hidden="true" />
+              <X className="size-3.5" aria-hidden="true" />
             </button>
           </li>
         ))}

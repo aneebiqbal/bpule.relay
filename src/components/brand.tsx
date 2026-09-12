@@ -4,12 +4,12 @@ export function BrandMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        'inline-flex size-5 items-center justify-center rounded-sm bg-gold',
+        'inline-flex size-6 items-center justify-center rounded-[5px] gradient-gold',
         className,
       )}
       aria-hidden="true"
     >
-      <span className="font-mono text-[11px] font-medium leading-none text-paper">
+      <span className="text-mono-medium text-[11px] font-semibold leading-none text-paper">
         R
       </span>
     </span>

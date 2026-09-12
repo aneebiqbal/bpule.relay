@@ -6,10 +6,20 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { Search, FileText, Briefcase, Award, AlertCircle } from 'lucide-react'
+
+
+type EntityType = 'all' | 'lead' | 'proof' | 'upwork'
+
+const ENTITY_ICONS: Record<string, React.ReactNode> = {
+  lead: <FileText className="size-4" />,
+  proof: <Award className="size-4" />,
+  upwork: <Briefcase className="size-4" />,
+}
 
 export default function SearchPage() {
   const [query, setQuery] = useState('')
-  const [entity, setEntity] = useState<'all' | 'lead' | 'proof' | 'upwork'>('all')
+  const [entity, setEntity] = useState<EntityType>('all')
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<
@@ -23,11 +33,13 @@ export default function SearchPage() {
     }>
   >([])
   const [error, setError] = useState<string | null>(null)
+  const [hasSearched, setHasSearched] = useState(false)
 
   async function search() {
     if (!query.trim()) return
     setLoading(true)
     setError(null)
+    setHasSearched(true)
     try {
       const params = new URLSearchParams()
       params.set('q', query)
@@ -45,91 +57,141 @@ export default function SearchPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <header>
-        <h1 className="text-2xl font-medium tracking-tight text-ink sm:text-3xl">Archive</h1>
-        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate">
-          Search across leads, proof items, and Upwork jobs. Filter by type, status, and more.
+    <div className="mx-auto max-w-4xl space-y-8">
+      {/* Header */}
+      <header className="reveal-up space-y-2">
+        <p className="font-mono text-xs uppercase tracking-widest text-slate">Global search</p>
+        <h1 className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">Archive</h1>
+        <p className="max-w-xl text-sm leading-relaxed text-slate">
+          Search across leads, proof items, and Upwork jobs.
         </p>
       </header>
 
-      <div className="flex flex-col gap-4 border-b border-line pb-6 sm:flex-row">
-        <div className="flex-1">
-          <Label htmlFor="query">Search</Label>
-          <Input
-            id="query"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void search()
-            }}
-            placeholder="company name, skill, quote..."
-          />
+      {/* Search controls */}
+      <div className="reveal-up stagger-1 space-y-4 rounded-2xl border border-line bg-paper p-5 sm:p-6">
+        <div className="flex items-center gap-2 text-slate">
+          <Search className="size-4" />
+          <span className="font-mono text-xs uppercase tracking-widest">Search</span>
         </div>
-        <div>
-          <Label htmlFor="entity">Type</Label>
-          <Select id="entity" value={entity} onChange={(e) => setEntity(e.target.value as typeof entity)}>
-            <option value="all">All</option>
-            <option value="lead">Leads</option>
-            <option value="proof">Proof</option>
-            <option value="upwork">Upwork</option>
-          </Select>
+        <div className="flex flex-col gap-4 sm:flex-row">
+          <div className="flex-1">
+            <Label htmlFor="query" className="sr-only">Search query</Label>
+            <Input
+              id="query"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void search()
+              }}
+              placeholder="company name, skill, quote..."
+              className="h-11"
+            />
+          </div>
+          <div className="flex gap-3">
+            <div className="sm:w-36">
+              <Label htmlFor="entity" className="sr-only">Type</Label>
+              <Select
+                id="entity"
+                value={entity}
+                onChange={(e) => setEntity(e.target.value as EntityType)}
+              >
+                <option value="all">All types</option>
+                <option value="lead">Leads</option>
+                <option value="proof">Proof</option>
+                <option value="upwork">Upwork</option>
+              </Select>
+            </div>
+            <div className="sm:w-32">
+              <Label htmlFor="status" className="sr-only">Status</Label>
+              <Select id="status" value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="">Any</option>
+                <option value="new">new</option>
+                <option value="contacted">contacted</option>
+                <option value="replied">replied</option>
+                <option value="no">no</option>
+                <option value="dead">dead</option>
+              </Select>
+            </div>
+          </div>
         </div>
-        <div>
-          <Label htmlFor="status">Status</Label>
-          <Select id="status" value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Any</option>
-            <option value="new">new</option>
-            <option value="contacted">contacted</option>
-            <option value="replied">replied</option>
-            <option value="no">no</option>
-            <option value="dead">dead</option>
-          </Select>
-        </div>
-        <div className="flex items-end">
-          <Button variant="gold" onClick={() => void search()} loading={loading}>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-slate">Press Enter to search</span>
+          <Button variant="gold" onClick={() => void search()} loading={loading} disabled={!query.trim()}>
+            <Search className="mr-1.5 size-3.5" />
             {loading ? 'Searching...' : 'Search'}
           </Button>
         </div>
       </div>
 
+      {/* Error */}
       {error ? (
-        <p className="text-sm text-status-no">{error}</p>
+        <div className="reveal-up flex items-center gap-2 rounded-xl bg-status-no/10 px-4 py-3 text-sm text-status-no">
+          <AlertCircle className="size-4 shrink-0" />
+          {error}
+        </div>
       ) : null}
 
-      {results.length > 0 ? (
-        <section>
-          <p className="mb-3 text-xs text-slate">{results.length} result(s)</p>
-          <ul className="space-y-3">
-            {results.map((r) => (
-              <li key={r.entityType + r.id}>
-                <Link
-                  href={
-                    r.entityType === 'lead'
-                      ? `/leads/${r.id}`
-                      : r.entityType === 'upwork'
-                        ? `/upwork/${r.id}`
-                        : '/profiles'
-                  }
-                  className="block rounded-lg border border-line p-4 transition-colors hover:bg-paper-tint/40"
-                >
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-sm font-medium text-ink">{r.title}</span>
-                    <span className="rounded-md bg-paper-tint px-2 py-0.5 font-mono text-[11px] uppercase text-slate">
-                      {r.entityType}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-slate">{r.subtitle}</p>
-                  {r.status ? (
-                    <p className="mt-1 text-xs text-slate">Status: {r.status}</p>
-                  ) : null}
-                </Link>
-              </li>
-            ))}
-          </ul>
+      {/* Results */}
+      {hasSearched && !loading ? (
+        <section className="reveal-up stagger-2 space-y-3">
+          <p className="font-mono text-xs text-slate">
+            {results.length} result{results.length === 1 ? '' : 's'} for &ldquo;{query}&rdquo;
+          </p>
+
+          {results.length > 0 ? (
+            <div className="overflow-hidden rounded-2xl border border-line bg-paper">
+              <ul className="divide-y divide-line">
+                {results.map((r, i) => (
+                  <li
+                    key={r.entityType + r.id}
+                    className="slide-in-right"
+                    style={{ animationDelay: `${0.03 + i * 0.03}s` }}
+                  >
+                    <Link
+                      href={
+                        r.entityType === 'lead'
+                          ? `/leads/${r.id}`
+                          : r.entityType === 'upwork'
+                            ? `/upwork/${r.id}`
+                            : '/profiles'
+                      }
+                      className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-paper-tint/40"
+                    >
+                      {/* Icon */}
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-paper-tint text-slate">
+                        {ENTITY_ICONS[r.entityType] ?? <FileText className="size-4" />}
+                      </div>
+
+                      {/* Content */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-sm font-medium text-ink transition-colors group-hover:text-gold">
+                            {r.title}
+                          </span>
+                          {r.status && (
+                            <span className="shrink-0 rounded-md bg-paper-tint px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate">
+                              {r.status}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 truncate text-xs text-slate">{r.subtitle}</p>
+                      </div>
+
+                      {/* Entity type badge */}
+                      <span className="shrink-0 rounded-md bg-gold/10 px-2 py-0.5 font-mono text-[10px] font-medium uppercase text-gold">
+                        {r.entityType}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-line py-12 text-center">
+              <p className="text-sm text-slate">No results found. Try a different query.</p>
+            </div>
+          )}
         </section>
-      ) : query && !loading ? (
-        <p className="text-sm text-slate">No results found.</p>
       ) : null}
     </div>
   )

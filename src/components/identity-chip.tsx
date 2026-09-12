@@ -7,10 +7,6 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-/**
- * The identity chip used for the rep and the sending profile. A small initials
- * mark plus name and a role/subtitle line, so identity reads at a glance.
- */
 export function IdentityChip({
   name,
   subtitle,
@@ -24,7 +20,7 @@ export function IdentityChip({
     <span className={cn("flex items-center gap-2.5", className)}>
       <span
         aria-hidden="true"
-        className="flex size-7 shrink-0 items-center justify-center rounded-full bg-paper-tint text-[11px] font-medium text-ink ring-1 ring-line"
+        className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold/15 to-gold/5 text-[11px] font-semibold text-gold ring-1 ring-gold/10"
       >
         {initials(name)}
       </span>

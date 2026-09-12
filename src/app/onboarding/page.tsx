@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ArrowRight, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Sparkles, Check, PenLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -39,11 +39,10 @@ function sampleLine(card: StyleCard): string {
       ? 'Are you the right person for this?'
       : 'I could help you ship faster.'
   const gr = card.greeting ? `${card.greeting} ` : ''
-  const so = card.sign_off ? ` ${card.sign_off}.` : ''
+  const so = card.sign_off ? ` ${card.sign_off.replace(/[.!?]+$/, '')}.` : ''
   return `${gr}${open}.${so}`
 }
 
-/** Plain-language reading of the card, one short line per trait. */
 function plainSentences(card: StyleCard): string[] {
   const lines: string[] = []
 
@@ -129,10 +128,11 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-dvh bg-paper">
       <div className="mx-auto w-full max-w-2xl px-6 py-10 sm:py-14">
+        {/* Brand */}
         <header className="mb-10 flex flex-col items-center gap-4 text-center">
           <RelayBrand />
           <div className="space-y-2">
-            <h1 className="text-2xl font-medium tracking-tight text-ink sm:text-3xl">
+            <h1 className="text-heading text-2xl text-ink sm:text-3xl">
               Sound like you, on every message.
             </h1>
             <p className="mx-auto max-w-md text-sm leading-relaxed text-slate">
@@ -142,6 +142,7 @@ export default function OnboardingPage() {
           </div>
         </header>
 
+        {/* Error */}
         {error ? (
           <Alert variant="destructive" className="mb-6">
             <AlertTitle>Something failed</AlertTitle>
@@ -151,6 +152,7 @@ export default function OnboardingPage() {
 
         {phase === 'form' ? (
           <div className="space-y-8">
+            {/* Progress */}
             <div className="mx-auto max-w-md">
               <div className="flex items-center justify-between">
                 {STEPS.map((s, i) => {
@@ -159,19 +161,19 @@ export default function OnboardingPage() {
                     <div key={s.label} className="flex flex-1 items-center gap-2 first:justify-start last:justify-end">
                       <span
                         className={cn(
-                          'flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-colors',
+                          'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-all duration-300',
                           state === 'active'
-                            ? 'bg-gold text-paper'
+                            ? 'bg-gold text-paper shadow-[0_2px_12px_-2px_color-mix(in_srgb,var(--gold)_50%,transparent)]'
                             : state === 'done'
-                              ? 'bg-ink text-paper'
+                              ? 'bg-status-send text-paper'
                               : 'border border-line text-slate',
                         )}
                       >
-                        {state === 'done' ? '✓' : i + 1}
+                        {state === 'done' ? <Check className="size-3.5" /> : i + 1}
                       </span>
                       <span
                         className={cn(
-                          'text-xs font-medium',
+                          'text-xs font-medium transition-colors',
                           state === 'todo' ? 'text-slate' : 'text-ink',
                         )}
                       >
@@ -181,13 +183,13 @@ export default function OnboardingPage() {
                   )
                 })}
               </div>
-              <div className="mt-3 h-1 overflow-hidden rounded-full bg-paper-tint">
+              <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-paper-tint">
                 <div
-                  className="h-full rounded-full bg-gold transition-[width] duration-300"
+                  className="h-full rounded-full bg-gold transition-[width] duration-500 ease-out"
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <p className="mt-2 text-center text-xs text-slate">
+              <p className="mt-2 text-center font-mono text-xs text-slate">
                 Step {stepIndex + 1} of {STEPS.length} — {STEPS[stepIndex].hint}
               </p>
             </div>
@@ -195,8 +197,12 @@ export default function OnboardingPage() {
             {step === 1 ? (
               <>
                 <div className="divide-y divide-line">
-                  {QUIZ_QUESTIONS.map((q) => (
-                    <fieldset key={q.id} className="py-6 first:pt-0 last:pb-0">
+                  {QUIZ_QUESTIONS.map((q, qi) => (
+                    <fieldset
+                      key={q.id}
+                      className="reveal-up py-6 first:pt-0 last:pb-0"
+                      style={{ animationDelay: `${0.05 + qi * 0.04}s` }}
+                    >
                       <legend className="text-[15px] font-medium text-ink">
                         {q.prompt}
                       </legend>
@@ -212,7 +218,7 @@ export default function OnboardingPage() {
                           }
                         />
                       ) : (
-                        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                        <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
                           {q.options.map((opt) => {
                             const checked = String(answers[q.id]) === String(opt.value)
                             return (
@@ -224,13 +230,18 @@ export default function OnboardingPage() {
                                 }
                                 aria-pressed={checked}
                                 className={cn(
-                                  'rounded-lg border px-4 py-3 text-left transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                                  'group rounded-xl border px-4 py-3.5 text-left transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                                   checked
-                                    ? 'border-gold bg-gold/10 ring-1 ring-gold'
-                                    : 'border-transparent bg-paper-tint/60 hover:bg-paper-tint',
+                                    ? 'border-gold bg-gold/5 shadow-[0_2px_12px_-4px_color-mix(in_srgb,var(--gold)_30%,transparent)]'
+                                    : 'border-line bg-paper hover:border-line/80 hover:bg-paper-tint/40',
                                 )}
                               >
-                                <span className="block text-sm font-medium text-ink">
+                                <span
+                                  className={cn(
+                                    'block text-sm font-medium transition-colors',
+                                    checked ? 'text-ink' : 'text-ink/80',
+                                  )}
+                                >
                                   {String(opt.label)}
                                 </span>
                                 {opt.hint ? (
@@ -249,7 +260,7 @@ export default function OnboardingPage() {
 
                 <div className="flex items-center justify-between border-t border-line pt-5">
                   <span className="text-xs text-slate">
-                    {QUIZ_QUESTIONS.length} questions · you can change any of this later
+                    {QUIZ_QUESTIONS.length} questions · change any later
                   </span>
                   <Button size="lg" onClick={() => setStep(2)}>
                     Continue
@@ -259,20 +270,20 @@ export default function OnboardingPage() {
               </>
             ) : (
               <>
-                <div>
+                <div className="reveal-up space-y-3">
                   <div className="flex items-center gap-2">
-                    <Sparkles className="size-4 text-gold" aria-hidden="true" />
+                    <PenLine className="size-4 text-gold" aria-hidden="true" />
                     <h2 className="text-[15px] font-medium text-ink">
                       Paste a few real messages (optional)
                     </h2>
                   </div>
-                  <p className="mt-2 text-sm leading-relaxed text-slate">
+                  <p className="text-sm leading-relaxed text-slate">
                     Five messages you have actually sent, with a blank line between
-                    each. Real samples beat any quiz; this is the strongest proof of
+                    each. Real samples beat any quiz — this is the strongest proof of
                     how you actually write.
                   </p>
                   <Textarea
-                    className="mt-4 max-h-[24rem] overflow-y-auto font-mono text-[13px]"
+                    className="mt-2 max-h-[24rem] overflow-y-auto font-mono text-[13px]"
                     value={samples}
                     onChange={(e) => setSamples(e.target.value)}
                     placeholder={
@@ -293,6 +304,7 @@ export default function OnboardingPage() {
                     onClick={() => buildCard(false)}
                     loading={loading}
                   >
+                    <Sparkles className="mr-1.5 size-4" aria-hidden="true" />
                     {loading ? 'Building your card' : 'Build my style card'}
                   </Button>
                 </div>
@@ -330,41 +342,53 @@ function PreviewPhase({
   const lines = plainSentences(card)
 
   return (
-    <div className="reveal-up space-y-6">
+    <div className="reveal-up space-y-8">
       <header className="text-center">
-        <h2 className="text-xl font-medium tracking-tight text-ink">
+        <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-gold/10">
+          <Sparkles className="size-5 text-gold" aria-hidden="true" />
+        </div>
+        <h2 className="text-heading text-xl text-ink sm:text-2xl">
           This is how you sound.
         </h2>
-        <p className="mt-1 text-sm text-slate">
+        <p className="mt-2 text-sm text-slate">
           Read it back. If it is you, save it and every draft inherits it.
         </p>
       </header>
 
-      <ul className="divide-y divide-line border-y border-line">
-        {lines.map((line) => (
-          <li key={line} className="flex items-start gap-3 py-3 text-[15px] text-ink">
-            <span
-              className="mt-2 size-1.5 shrink-0 rounded-full bg-gold"
-              aria-hidden="true"
-            />
-            <span>{line}</span>
-          </li>
-        ))}
-      </ul>
+      {/* Style sentences */}
+      <div className="rounded-2xl border border-line bg-paper p-6">
+        <ul className="space-y-3">
+          {lines.map((line, i) => (
+            <li
+              key={line}
+              className="slide-in-right flex items-start gap-3 text-[15px] text-ink"
+              style={{ animationDelay: `${0.05 + i * 0.04}s` }}
+            >
+              <span
+                className="mt-2 size-1.5 shrink-0 rounded-full bg-gold"
+                aria-hidden="true"
+              />
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
 
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-slate">
+      {/* Sample */}
+      <div className="space-y-3">
+        <p className="font-mono text-xs uppercase tracking-widest text-slate">
           A sample draft in your voice
         </p>
-        <blockquote className="mt-3 border-l-2 border-gold py-1 pl-4 text-[15px] leading-relaxed text-ink italic">
+        <blockquote className="rounded-2xl border-l-[3px] border-gold bg-paper-tint/40 py-4 pl-5 pr-4 text-[15px] leading-relaxed text-ink italic">
           {sampleLine(card)}
         </blockquote>
-        <p className="mt-3 text-sm leading-relaxed text-slate">
+        <p className="text-sm leading-relaxed text-slate">
           {card.summary}
         </p>
       </div>
 
-      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-center">
+      {/* Actions */}
+      <div className="flex flex-col-reverse gap-3 border-t border-line pt-6 sm:flex-row sm:justify-center">
         <Button variant="outline" size="lg" onClick={onBack} disabled={saving}>
           Rebuild it
         </Button>

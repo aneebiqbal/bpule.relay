@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Dialog, DialogActions } from '@/components/ui/dialog'
+import { Plus, ChevronDown, ChevronRight, FileText, Trash2, Upload, Lock } from 'lucide-react'
 import { cn } from 'cn'
 import type { Profile, ProofItem } from '@/lib/domain/types'
 
@@ -54,6 +55,11 @@ function parseTags(raw: string): string[] {
         .filter((t) => t.length > 0),
     ),
   ].slice(0, 12)
+}
+
+const PLATFORM_STYLE: Record<Platform, { bg: string; text: string }> = {
+  linkedin: { bg: 'bg-[color-mix(in_oklch,#0a66c2_10%,transparent)]', text: 'text-[#0a66c2]' },
+  upwork: { bg: 'bg-[color-mix(in_oklch,#14a800_10%,transparent)]', text: 'text-[#14a800]' },
 }
 
 export function ProfilesManager({ initialProfiles }: { initialProfiles: Profile[] }) {
@@ -243,16 +249,7 @@ export function ProfilesManager({ initialProfiles }: { initialProfiles: Profile[
   }
 
   return (
-    <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-medium tracking-tight text-ink sm:text-3xl">Profiles</h1>
-        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate">
-          The identities you write from, per platform, plus the past projects each one can cite.
-          Proof items are matched to leads by tag overlap in code, never by a model call at draft
-          time. A client name only surfaces when permission is on file.
-        </p>
-      </header>
-
+    <div className="space-y-6">
       {error ? (
         <Alert variant="destructive">
           <AlertTitle>Something failed</AlertTitle>
@@ -261,14 +258,15 @@ export function ProfilesManager({ initialProfiles }: { initialProfiles: Profile[
       ) : null}
 
       {profiles.length === 0 && !profileDraft ? (
-        <div className="border-y border-dashed border-line py-6 text-sm leading-relaxed text-slate">
-          No profiles yet. Add the LinkedIn and Upwork identities you write from,
-          then attach CVs and proof items so drafts can reference real work.
+        <div className="rounded-2xl border border-dashed border-line bg-paper/50 py-10 text-center">
+          <p className="text-sm text-slate">
+            No profiles yet. Add the LinkedIn and Upwork identities you write from.
+          </p>
         </div>
       ) : null}
 
-      <div className="space-y-4">
-        {profiles.map((p) => (
+      <div className="space-y-3">
+        {profiles.map((p, i) => (
           <ProfileCard
             key={p.id}
             profile={p}
@@ -288,17 +286,19 @@ export function ProfilesManager({ initialProfiles }: { initialProfiles: Profile[
               setPendingDelete({ kind: 'proof', profileId: p.id, itemId })
             }
             onCvFile={(file) => void uploadCv(p.id, file)}
+            index={i}
           />
         ))}
       </div>
 
       {!profileDraft ? (
-        <Button variant="outline" onClick={() => { setError(null); setProfileDraft({ ...INITIAL_PROFILE }) }}>
-          Add an identity
-        </Button>
+            <Button variant="outline" onClick={() => { setError(null); setProfileDraft({ ...INITIAL_PROFILE }) }}>
+              <Plus className="mr-1.5 size-3.5" aria-hidden="true" />
+              Add an identity
+            </Button>
       ) : (
-        <section className="rounded-lg border border-line p-5">
-          <h2 className="text-sm font-medium text-ink">New identity</h2>
+        <section className="reveal-up rounded-2xl border border-line bg-paper p-6 card-elevated">
+          <h2 className="text-heading text-base text-ink">New identity</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label>Platform</Label>
@@ -351,7 +351,7 @@ export function ProfilesManager({ initialProfiles }: { initialProfiles: Profile[
               Cancel
             </Button>
             <Button
-              className="bg-gold text-paper hover:bg-gold/90"
+              variant="gold"
               onClick={() => void saveProfile()}
               disabled={saving === 'profile'}
             >
@@ -409,6 +409,7 @@ function ProfileCard({
   onProofStart,
   onDeleteProof,
   onCvFile,
+  index,
 }: {
   profile: Profile
   proofs: ProofItem[]
@@ -420,6 +421,7 @@ function ProfileCard({
   onProofStart: () => void
   onDeleteProof: (itemId: string) => void
   onCvFile: (file: File) => void
+  index: number
 }) {
   const [cvUrl, setCvUrl] = useState<string | null>(null)
   const [cvLoading, setCvLoading] = useState(false)
@@ -446,19 +448,23 @@ function ProfileCard({
     }
   }
 
+  const platformStyle = PLATFORM_STYLE[profile.platform]
+
   return (
-    <section className="rounded-lg border border-line">
+    <section
+      className="slide-in-right overflow-hidden rounded-2xl border border-line bg-paper transition-shadow duration-300 hover:shadow-[0_2px_12px_-4px_color-mix(in_srgb,var(--ink)_8%,transparent)]"
+      style={{ animationDelay: `${0.05 + index * 0.04}s` }}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="flex items-center gap-3">
           <span
             className={cn(
-              'rounded-md px-2 py-1 font-mono text-xs',
-              profile.platform === 'linkedin'
-                ? 'bg-[#0a66c2]/10 text-ink'
-                : 'bg-[#14a800]/10 text-ink',
+              'flex size-8 items-center justify-center rounded-lg font-mono text-xs font-medium',
+              platformStyle.bg,
+              platformStyle.text,
             )}
           >
-            {profile.platform}
+            {profile.platform === 'linkedin' ? 'in' : 'uw'}
           </span>
           <div>
             <div className="text-sm font-medium text-ink">
@@ -477,7 +483,8 @@ function ProfileCard({
               onClick={() => void openCv()}
               disabled={cvLoading || cvBusy}
             >
-              {cvLoading ? 'Opening...' : 'View CV'}
+              <FileText className="mr-1 size-3" />
+              {cvLoading ? 'Opening...' : 'CV'}
             </Button>
           ) : null}
           <input
@@ -496,40 +503,43 @@ function ProfileCard({
             onClick={() => inputRef.current?.click()}
             disabled={cvBusy}
           >
-            {cvBusy ? 'Uploading...' : profile.cvPath ? 'Replace CV' : 'Add CV'}
+            <Upload className="mr-1 size-3" />
+            {cvBusy ? '...' : profile.cvPath ? 'Replace' : 'Add CV'}
           </Button>
           <Button variant="outline" size="sm" onClick={onToggle}>
-            {expanded ? 'Hide proof' : `Proof (${proofs.length})`}
+            {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+            Proof ({proofs.length})
           </Button>
           <Button
             variant="outline"
             size="sm"
-            className="text-status-no hover:border-status-no/40"
+            className="text-status-no hover:border-status-no/40 hover:bg-status-no/5"
             onClick={onDelete}
             disabled={deleting}
           >
-            Delete
+            <Trash2 className="size-3" />
           </Button>
         </div>
       </div>
 
       {expanded ? (
-        <div className="space-y-4 border-t border-line p-4">
+        <div className="border-t border-line bg-paper-tint/20 p-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-ink">Proof items</h3>
-            <Button className="bg-gold text-paper hover:bg-gold/90" size="sm" onClick={onProofStart}>
+            <h3 className="text-heading text-sm text-ink">Proof items</h3>
+            <Button variant="gold" size="sm" onClick={onProofStart}>
+              <Plus className="mr-1 size-3" aria-hidden="true" />
               Add proof
             </Button>
           </div>
 
           {proofs.length === 0 ? (
-            <p className="text-sm text-slate">
+            <p className="mt-3 text-sm text-slate">
               No proof items yet. Add the projects this identity can honestly cite.
             </p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="mt-3 space-y-2">
               {proofs.map((item) => (
-                <li key={item.id} className="rounded-md border border-line p-3">
+                <li key={item.id} className="rounded-xl border border-line bg-paper p-3.5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm leading-relaxed text-ink">
@@ -537,29 +547,29 @@ function ProfileCard({
                           ? item.clientName
                           : 'Client protected'}
                         {item.reviewQuote ? (
-                          <span className="block text-slate">
+                          <span className="mt-0.5 block text-xs italic text-slate">
                             &ldquo;{item.reviewQuote}&rdquo;
                           </span>
                         ) : null}
                       </p>
-                      <p className="mt-1 text-xs leading-relaxed text-slate">
+                      <p className="mt-1.5 text-xs leading-relaxed text-slate">
                         {item.projectSummary}
                       </p>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
+                    <button
                       onClick={() => onDeleteProof(item.id)}
+                      className="flex size-7 shrink-0 items-center justify-center rounded-lg text-slate transition-colors hover:bg-status-no/10 hover:text-status-no"
+                      aria-label="Remove proof"
                     >
-                      Remove
-                    </Button>
+                      <Trash2 className="size-3" />
+                    </button>
                   </div>
                   {item.tags.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
                       {item.tags.map((t) => (
                         <span
                           key={t}
-                          className="rounded-md bg-paper-tint px-2 py-0.5 font-mono text-xs text-ink"
+                          className="rounded-md bg-paper-tint px-2 py-0.5 font-mono text-[11px] text-ink"
                         >
                           {t}
                         </span>
@@ -593,12 +603,11 @@ function ProofForm({
   const permission = draft.permissionOnFile
 
   return (
-    <section className="rounded-lg border border-line p-5">
-      <h2 className="text-sm font-medium text-ink">New proof item</h2>
+    <section className="reveal-up rounded-2xl border border-line bg-paper p-6 card-elevated">
+      <h2 className="text-base font-medium text-ink">New proof item</h2>
       <p className="mt-1 text-xs leading-relaxed text-slate">
-        Tags are what match this project to leads. Leave them blank and a single
-        cheap classification call will suggest them once, cached forever on the
-        row.
+        Tags are what match this project to leads. Leave them blank and a single cheap
+        classification call will suggest them once, cached forever on the row.
       </p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div className="grid gap-1.5 sm:col-span-2">
@@ -618,7 +627,7 @@ function ProofForm({
             placeholder="e.g. Took over a stalled dashboard and shipped the compliance module."
           />
         </div>
-        <label className="flex items-start gap-2.5 rounded-lg border border-line p-3 sm:col-span-2">
+        <label className="flex items-start gap-2.5 rounded-xl border border-line p-3.5 sm:col-span-2">
           <input
             type="checkbox"
             checked={permission}
@@ -645,7 +654,8 @@ function ProofForm({
             />
           </div>
         ) : (
-          <div className="flex items-center gap-2 rounded-lg bg-paper-tint px-3 py-2 text-xs text-slate sm:col-span-2">
+          <div className="flex items-center gap-2 rounded-xl bg-paper-tint/60 px-3 py-2.5 text-xs text-slate sm:col-span-2">
+            <Lock className="size-3 shrink-0" />
             Client name field stays locked until permission is confirmed.
           </div>
         )}
@@ -702,7 +712,7 @@ function ProofForm({
           Cancel
         </Button>
         <Button
-          className="bg-gold text-paper hover:bg-gold/90"
+          variant="gold"
           onClick={onSave}
           disabled={saving || !draft.projectSummary.trim()}
         >

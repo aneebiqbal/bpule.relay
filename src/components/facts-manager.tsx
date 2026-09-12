@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Plus, X, Eye } from 'lucide-react'
 import type { Fact } from '@/lib/domain/types'
 
 export function FactsManager({
@@ -66,6 +67,13 @@ export function FactsManager({
     }
   }
 
+  const factsByType = facts.reduce<Record<string, Fact[]>>((acc, f) => {
+    const type = f.factType ?? 'uncategorized'
+    if (!acc[type]) acc[type] = []
+    acc[type].push(f)
+    return acc
+  }, {})
+
   return (
     <div className="space-y-6">
       {error ? (
@@ -76,29 +84,35 @@ export function FactsManager({
       ) : null}
 
       {!isAdmin ? (
-        <Alert>
-          <AlertTitle>Read only for your role</AlertTitle>
-          <AlertDescription>
-            Facts are edited by admins only. Reps and sourcers can view them.
-          </AlertDescription>
-        </Alert>
+        <div className="flex items-start gap-3 rounded-2xl border border-line/60 bg-paper-tint/30 px-4 py-3">
+          <Eye className="mt-0.5 size-4 shrink-0 text-slate" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium text-ink">Read-only</p>
+            <p className="text-xs text-slate">Facts are edited by admins only. Reps and sourcers can view them.</p>
+          </div>
+        </div>
       ) : null}
 
       {isAdmin ? (
-        <section className="rounded-2xl border border-line bg-paper p-6">
-          <h2 className="text-base font-medium text-ink">Add a fact</h2>
+        <section className="reveal-up rounded-2xl border border-line/60 bg-surface-raised p-6">
+          <div className="flex items-center gap-2">
+            <Plus className="size-4 text-gold" aria-hidden="true" />
+            <h2 className="text-heading text-base text-ink">Add a fact</h2>
+          </div>
           <form onSubmit={save} className="mt-4 grid gap-3">
             <div className="grid gap-1.5">
-              <Label>Label</Label>
+              <Label htmlFor="fact-label">Label</Label>
               <Input
+                id="fact-label"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="e.g. Years shipping"
               />
             </div>
             <div className="grid gap-1.5">
-              <Label>Value (exactly as a model may quote it)</Label>
+              <Label htmlFor="fact-value">Value (exactly as a model may quote it)</Label>
               <Textarea
+                id="fact-value"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 rows={2}
@@ -106,8 +120,8 @@ export function FactsManager({
               />
             </div>
             <div className="grid gap-1.5">
-              <Label>Type</Label>
-              <Select value={factType} onChange={(e) => setFactType(e.target.value)}>
+              <Label htmlFor="fact-type">Type</Label>
+              <Select id="fact-type" value={factType} onChange={(e) => setFactType(e.target.value)}>
                 <option value="credential">credential</option>
                 <option value="price">price</option>
                 <option value="case">case</option>
@@ -130,33 +144,48 @@ export function FactsManager({
         </section>
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-line bg-paper">
+      <div className="space-y-6">
         {facts.length === 0 ? (
-          <p className="p-6 text-sm text-slate">No facts yet.</p>
+          <div className="rounded-2xl border border-dashed border-line py-10 text-center">
+            <p className="text-sm text-slate">No facts yet.</p>
+          </div>
         ) : (
-          <ul className="divide-y divide-line">
-            {facts.map((f) => (
-              <li key={f.id} className="flex items-center justify-between gap-4 px-5 py-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-ink">{f.label}</span>
-                    {f.factType ? <Badge variant="outline">{f.factType}</Badge> : null}
-                  </div>
-                  <p className="mt-0.5 text-sm text-slate">{f.value}</p>
-                </div>
-                {isAdmin ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => remove(f.id)}
-                    disabled={busy}
-                  >
-                    Delete
-                  </Button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          Object.entries(factsByType).map(([type, typeFacts]) => (
+            <div key={type} className="reveal-up space-y-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-label">{type}</Badge>
+                <span className="text-mono-medium text-xs text-slate">{typeFacts.length}</span>
+              </div>
+              <div className="overflow-hidden rounded-2xl border border-line/60 bg-surface-raised">
+                <ul className="divide-y divide-line/50">
+                  {typeFacts.map((f, i) => (
+                    <li
+                      key={f.id}
+                      className="slide-in-right flex items-start justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-paper-tint/20"
+                      style={{ animationDelay: `${0.03 + i * 0.02}s` }}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-ink">{f.label}</p>
+                        <p className="mt-0.5 text-sm text-slate">{f.value}</p>
+                      </div>
+                      {isAdmin ? (
+                        <button
+                          onClick={() => remove(f.id)}
+                          disabled={busy}
+                          className="flex size-7 shrink-0 items-center justify-center rounded-lg text-slate transition-colors hover:bg-status-no/8 hover:text-status-no disabled:opacity-50"
+                          aria-label={`Delete ${f.label}`}
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      ) : (
+                        <Eye className="mt-1 size-3.5 shrink-0 text-line" aria-hidden="true" />
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
