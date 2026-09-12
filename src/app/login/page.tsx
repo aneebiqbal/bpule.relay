@@ -32,7 +32,7 @@ export default async function LoginPage() {
         </div>
 
         {demo ? (
-          <div className="space-y-4 rounded-2xl border border-line bg-paper p-6">
+          <div className="space-y-4 rounded-2xl border border-line bg-paper p-6 shadow-sm">
             <p className="text-sm leading-relaxed text-slate">
               This build runs on an in-memory store with a fixed demo rep (Hassan, admin). Onboarding
               calibrates a style card every draft is written in.
@@ -46,7 +46,7 @@ export default async function LoginPage() {
             </Link>
           </div>
         ) : (
-          <div className="rounded-2xl border border-line bg-paper p-6">
+          <div className="rounded-2xl border border-line bg-paper p-6 shadow-sm">
             <SupabaseSignIn />
           </div>
         )}

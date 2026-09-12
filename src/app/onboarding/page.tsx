@@ -194,12 +194,9 @@ export default function OnboardingPage() {
 
             {step === 1 ? (
               <>
-                <div className="space-y-4">
+                <div className="divide-y divide-line">
                   {QUIZ_QUESTIONS.map((q) => (
-                    <fieldset
-                      key={q.id}
-                      className="rounded-2xl border border-line bg-paper p-6"
-                    >
+                    <fieldset key={q.id} className="py-6 first:pt-0 last:pb-0">
                       <legend className="text-[15px] font-medium text-ink">
                         {q.prompt}
                       </legend>
@@ -227,10 +224,10 @@ export default function OnboardingPage() {
                                 }
                                 aria-pressed={checked}
                                 className={cn(
-                                  'rounded-xl border px-4 py-3 text-left transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                                  'rounded-lg border px-4 py-3 text-left transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                                   checked
                                     ? 'border-gold bg-gold/10 ring-1 ring-gold'
-                                    : 'border-line bg-paper hover:border-slate hover:bg-paper-tint',
+                                    : 'border-transparent bg-paper-tint/60 hover:bg-paper-tint',
                                 )}
                               >
                                 <span className="block text-sm font-medium text-ink">
@@ -250,7 +247,7 @@ export default function OnboardingPage() {
                   ))}
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between border-t border-line pt-5">
                   <span className="text-xs text-slate">
                     {QUIZ_QUESTIONS.length} questions · you can change any of this later
                   </span>
@@ -262,7 +259,7 @@ export default function OnboardingPage() {
               </>
             ) : (
               <>
-                <div className="rounded-2xl border border-line bg-paper p-6">
+                <div>
                   <div className="flex items-center gap-2">
                     <Sparkles className="size-4 text-gold" aria-hidden="true" />
                     <h2 className="text-[15px] font-medium text-ink">
@@ -285,7 +282,7 @@ export default function OnboardingPage() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-3 border-t border-line pt-5">
                   <Button variant="outline" size="lg" onClick={() => setStep(1)}>
                     <ArrowLeft className="size-4" aria-hidden="true" />
                     Back
@@ -343,28 +340,23 @@ function PreviewPhase({
         </p>
       </header>
 
-      <div className="rounded-2xl border border-line bg-paper p-7">
-        <ul className="space-y-3">
-          {lines.map((line) => (
-            <li
-              key={line}
-              className="flex items-start gap-3 border-b border-line pb-3 text-[15px] text-ink last:border-b-0 last:pb-0"
-            >
-              <span
-                className="mt-2 size-1.5 shrink-0 rounded-full bg-gold"
-                aria-hidden="true"
-              />
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <ul className="divide-y divide-line border-y border-line">
+        {lines.map((line) => (
+          <li key={line} className="flex items-start gap-3 py-3 text-[15px] text-ink">
+            <span
+              className="mt-2 size-1.5 shrink-0 rounded-full bg-gold"
+              aria-hidden="true"
+            />
+            <span>{line}</span>
+          </li>
+        ))}
+      </ul>
 
-      <div className="rounded-2xl border border-line bg-paper p-7">
+      <div>
         <p className="text-xs font-medium uppercase tracking-wide text-slate">
           A sample draft in your voice
         </p>
-        <blockquote className="mt-3 rounded-xl border border-line bg-paper-tint/60 p-4 text-[15px] leading-relaxed text-ink">
+        <blockquote className="mt-3 border-l-2 border-gold py-1 pl-4 text-[15px] leading-relaxed text-ink italic">
           {sampleLine(card)}
         </blockquote>
         <p className="mt-3 text-sm leading-relaxed text-slate">

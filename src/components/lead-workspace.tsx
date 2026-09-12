@@ -488,12 +488,10 @@ export function LeadWorkspace({
       ) : null}
 
       {!canDraft && !locked ? (
-        <div className="rounded-2xl border border-line bg-paper p-6">
-          <p className="text-sm leading-relaxed text-slate">
-            This lead scored {score.total}/12 and is not eligible for drafting. There is not
-            enough here to act on. Go back, add more research, and it may cross the line.
-          </p>
-        </div>
+        <p className="border-l-2 border-line py-1 pl-4 text-sm leading-relaxed text-slate">
+          This lead scored {score.total}/12 and is not eligible for drafting. There is not
+          enough here to act on. Go back, add more research, and it may cross the line.
+        </p>
       ) : null}
 
       {canDraft && !locked ? (
@@ -655,7 +653,7 @@ export function LeadWorkspace({
             </p>
 
             {draft || textToCheck ? (
-              <div className="mt-4 space-y-1.5 rounded-xl border border-line bg-paper-tint/40 p-4">
+              <div className="mt-4 space-y-1.5 border-t border-line pt-4">
                 <p className="text-xs text-slate">
                   Pre-send checks, resolved as you go. Logging stays open once every line reads
                   confirmed.
@@ -752,7 +750,7 @@ export function LeadWorkspace({
           </section>
         </div>
 
-        <aside className="space-y-6">
+        <aside className="divide-y divide-line rounded-2xl border border-line bg-paper">
           <ScorePanel score={score} verdict={verdict} lead={lead} />
           <ProofPanel
             proofList={proofList}
@@ -788,7 +786,7 @@ const ScorePanel = memo(function ScorePanel({
   lead: LeadDetail
 }) {
   return (
-    <section className="rounded-2xl border border-line bg-paper p-6">
+    <section className="p-6">
       <h2 className="text-sm font-medium text-ink">Why this score</h2>
       <p className="mt-1 text-sm text-ink">{verdictCall(verdict)}</p>
       {verdict === 'research_more' ? (
@@ -844,7 +842,7 @@ const ProofPanel = memo(function ProofPanel({
   onDraftProof: (id: string) => void
 }) {
   return (
-    <section className="rounded-2xl border border-line bg-paper p-6">
+    <section className="p-6">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-medium text-ink">Proof to cite</h2>
         <Link
@@ -871,8 +869,8 @@ const ProofPanel = memo(function ProofPanel({
               <li
                 key={p.id}
                 className={cn(
-                  'rounded-xl border p-4 transition-colors',
-                  active ? 'border-gold bg-gold/5' : 'border-line',
+                  'rounded-lg border p-4 transition-colors',
+                  active ? 'border-gold bg-gold/5' : 'border-line bg-paper-tint/30',
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -923,7 +921,7 @@ const ProofPanel = memo(function ProofPanel({
 
 const Timeline = memo(function Timeline({ lead }: { lead: LeadDetail }) {
   return (
-    <section className="rounded-2xl border border-line bg-paper p-6">
+    <section className="p-6">
       <h2 className="text-sm font-medium text-ink">Timeline</h2>
       {lead.messages.length === 0 && lead.outcomes.length === 0 ? (
         <p className="mt-2 text-sm text-slate">Nothing here yet.</p>
@@ -1001,7 +999,7 @@ const DraftEditor = memo(function DraftEditor({
   return (
     <div className="space-y-3">
       {quality ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper-tint/40 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-t border-line pt-2">
           <span className="text-[11px] font-medium uppercase tracking-wide text-slate">
             Draft quality
           </span>
@@ -1023,7 +1021,7 @@ const DraftEditor = memo(function DraftEditor({
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-line bg-paper-tint/30 p-3">
+      <div className="rounded-xl border-2 border-ink/10 bg-paper-tint/30 p-3">
         <Textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -1055,7 +1053,7 @@ const DraftEditor = memo(function DraftEditor({
       </div>
 
       {draft ? (
-        <div className="space-y-2 rounded-xl border border-line p-4">
+        <div className="space-y-2 border-t border-line pt-3">
           <SelfCheckLine
             pass={draft.passed && draft.selfCheck.test1ReplyOrDelete}
             failNote="Test 1: a senior engineer would delete this."

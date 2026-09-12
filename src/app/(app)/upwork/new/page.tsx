@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Step } from '@/components/wizard-step'
 import { readSse } from '@/lib/sse/client'
 import { cn } from 'cn'
 import type { UpworkJob } from '@/lib/domain/types'
@@ -181,15 +182,8 @@ export default function NewUpworkJobPage() {
         </Alert>
       ) : null}
 
-      <section className="rounded-2xl border border-line bg-paper p-6">
-        <div className="flex items-start gap-3">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gold text-xs font-medium text-paper">1</span>
-          <div>
-            <h2 className="text-base font-medium text-ink">Paste the job post</h2>
-            <p className="mt-0.5 text-sm text-slate">Title, description, budget, and any skills listed.</p>
-          </div>
-        </div>
-        <div className="mt-4">
+      <div>
+      <Step n={1} title="Paste the job post" hint="Title, description, budget, and any skills listed.">
           <Textarea
             ref={rawRef}
             value={form.rawInput}
@@ -198,24 +192,16 @@ export default function NewUpworkJobPage() {
             rows={8}
             className="font-mono text-[13px]"
           />
-        </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <span className="text-xs text-slate">Cmd / Ctrl + Enter to extract</span>
           <Button variant="gold" size="lg" onClick={() => void extract()} loading={extracting}>
             {extracting ? 'Extracting' : 'Extract'}
           </Button>
         </div>
-      </section>
+      </Step>
 
-      <section className="rounded-2xl border border-line bg-paper p-6">
-        <div className="flex items-start gap-3">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gold text-xs font-medium text-paper">2</span>
-          <div>
-            <h2 className="text-base font-medium text-ink">Check the fields</h2>
-            <p className="mt-0.5 text-sm text-slate">Fix anything the extractor got wrong.</p>
-          </div>
-        </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+      <Step n={2} title="Check the fields" hint="Fix anything the extractor got wrong.">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid gap-1.5 sm:col-span-2">
             <Label htmlFor="title">Job title</Label>
             <Input id="title" value={form.title} onChange={(e) => set('title', e.target.value)} />
@@ -257,17 +243,10 @@ export default function NewUpworkJobPage() {
             <Input id="urgency" value={form.urgencySignal} onChange={(e) => set('urgencySignal', e.target.value)} placeholder='e.g. "previous developer left"' />
           </div>
         </div>
-      </section>
+      </Step>
 
-      <section className="rounded-2xl border border-line bg-paper p-6">
-        <div className="flex items-start gap-3">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gold text-xs font-medium text-paper">3</span>
-          <div>
-            <h2 className="text-base font-medium text-ink">Score and save</h2>
-            <p className="mt-0.5 text-sm text-slate">Pure arithmetic, never a model call.</p>
-          </div>
-        </div>
-        <div className="mt-5 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+      <Step n={3} title="Score and save" hint="Pure arithmetic, never a model call." last>
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-baseline gap-3">
               <span className="font-mono text-4xl font-medium text-ink">{score.total}</span>
@@ -316,7 +295,8 @@ export default function NewUpworkJobPage() {
             {saving ? 'Saving' : 'Save job'}
           </Button>
         </div>
-      </section>
+      </Step>
+      </div>
     </div>
   )
 }

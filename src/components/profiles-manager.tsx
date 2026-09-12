@@ -261,7 +261,7 @@ export function ProfilesManager({ initialProfiles }: { initialProfiles: Profile[
       ) : null}
 
       {profiles.length === 0 && !profileDraft ? (
-        <div className="rounded-lg border border-line p-6 text-sm leading-relaxed text-slate">
+        <div className="border-y border-dashed border-line py-6 text-sm leading-relaxed text-slate">
           No profiles yet. Add the LinkedIn and Upwork identities you write from,
           then attach CVs and proof items so drafts can reference real work.
         </div>

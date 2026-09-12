@@ -20,7 +20,7 @@ function pct(n: number | null): string {
   return n === null ? 'no data' : `${Math.round(n * 100)}%`
 }
 
-function StatCard({
+function Stat({
   label,
   value,
   sub,
@@ -36,14 +36,14 @@ function StatCard({
   tone?: 'neutral' | 'gold' | 'warn'
 }) {
   return (
-    <div className="rounded-2xl border border-line bg-paper p-5">
+    <div>
       <div className="text-xs font-medium uppercase tracking-wide text-slate">
         {label}
       </div>
-      <div className="mt-2 flex items-baseline gap-2">
+      <div className="mt-1.5 flex items-baseline gap-2">
         <span
           className={cn(
-            'font-mono text-3xl font-medium',
+            'font-mono text-2xl font-medium',
             tone === 'gold' ? 'text-gold' : tone === 'warn' ? 'text-status-research' : 'text-ink',
           )}
         >
@@ -52,7 +52,7 @@ function StatCard({
         {sub ? <span className="text-xs text-slate">{sub}</span> : null}
       </div>
       {typeof progress === 'number' ? (
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-paper-tint">
+        <div className="mt-2.5 h-1 w-full max-w-32 overflow-hidden rounded-full bg-paper-tint">
           <div
             className={cn(
               'h-full rounded-full transition-[width] duration-300',
@@ -63,7 +63,7 @@ function StatCard({
         </div>
       ) : null}
       {footer ? (
-        <p className={cn('mt-2 text-xs', tone === 'warn' ? 'text-status-research' : 'text-slate')}>
+        <p className={cn('mt-1.5 text-xs', tone === 'warn' ? 'text-status-research' : 'text-slate')}>
           {footer}
         </p>
       ) : null}
@@ -111,8 +111,8 @@ export default async function TodayPage() {
         </Link>
       </header>
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard
+      <section className="grid grid-cols-1 gap-6 border-y border-line py-5 sm:grid-cols-3 sm:gap-4">
+        <Stat
           label="Sends today"
           value={String(mine.todaySends)}
           sub={`of ${mine.dailyLimit}`}
@@ -120,13 +120,13 @@ export default async function TodayPage() {
           tone={atCeiling ? 'warn' : 'gold'}
           footer={atCeiling ? 'Ceiling reached. Sends resume tomorrow.' : `${sendsLeft} left today`}
         />
-        <StatCard
+        <Stat
           label="Team reply rate"
           value={pct(team.replyRate)}
           sub={`target ${pct(REPLY_RATE_TARGET)}`}
           footer={`${team.repliedLeads} replied across ${team.sentLeads} sent lines`}
         />
-        <StatCard
+        <Stat
           label="Read to check"
           value={pct(team.readToCheckRate)}
           sub={`target ${pct(READ_TO_CHECK_TARGET)}`}
@@ -164,7 +164,7 @@ export default async function TodayPage() {
           <span className="font-mono text-xs text-slate">{queue.length} leads</span>
         </div>
         {queue.length === 0 ? (
-          <div className="space-y-4 rounded-2xl border border-line bg-paper p-8 text-center">
+          <div className="space-y-4 border-y border-dashed border-line py-8 text-center">
             <div>
               <p className="text-sm font-medium text-ink">Nothing queued yet.</p>
               <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-slate">

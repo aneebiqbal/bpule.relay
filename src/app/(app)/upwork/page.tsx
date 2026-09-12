@@ -27,7 +27,7 @@ export default async function UpworkListPage() {
       </header>
 
       {jobs.length === 0 ? (
-        <div className="space-y-4 rounded-2xl border border-line bg-paper p-8 text-center">
+        <div className="space-y-4 border-y border-dashed border-line py-8 text-center">
           <div>
             <p className="text-sm font-medium text-ink">No Upwork jobs yet.</p>
             <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-slate">

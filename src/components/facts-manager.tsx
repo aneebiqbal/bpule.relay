@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -86,53 +85,49 @@ export function FactsManager({
       ) : null}
 
       {isAdmin ? (
-        <Card className="rounded-2xl">
-          <CardHeader>
-            <CardTitle className="text-base">Add a fact</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={save} className="grid gap-3">
-              <div className="grid gap-1.5">
-                <Label>Label</Label>
-                <Input
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
-                  placeholder="e.g. Years shipping"
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label>Value (exactly as a model may quote it)</Label>
-                <Textarea
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  rows={2}
-                  placeholder="e.g. first plan in 10 days"
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label>Type</Label>
-                <Select value={factType} onChange={(e) => setFactType(e.target.value)}>
-                  <option value="credential">credential</option>
-                  <option value="price">price</option>
-                  <option value="case">case</option>
-                  <option value="process">process</option>
-                  <option value="industry:saas">industry:...</option>
-                  <option value="play:...">play:...</option>
-                </Select>
-              </div>
-              <div>
-                <Button
-                  variant="gold"
-                  type="submit"
-                  disabled={busy || !label.trim() || !value.trim()}
-                  loading={busy}
-                >
-                  Add fact
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+        <section className="rounded-2xl border border-line bg-paper p-6">
+          <h2 className="text-base font-medium text-ink">Add a fact</h2>
+          <form onSubmit={save} className="mt-4 grid gap-3">
+            <div className="grid gap-1.5">
+              <Label>Label</Label>
+              <Input
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="e.g. Years shipping"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Value (exactly as a model may quote it)</Label>
+              <Textarea
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                rows={2}
+                placeholder="e.g. first plan in 10 days"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Type</Label>
+              <Select value={factType} onChange={(e) => setFactType(e.target.value)}>
+                <option value="credential">credential</option>
+                <option value="price">price</option>
+                <option value="case">case</option>
+                <option value="process">process</option>
+                <option value="industry:saas">industry:...</option>
+                <option value="play:...">play:...</option>
+              </Select>
+            </div>
+            <div>
+              <Button
+                variant="gold"
+                type="submit"
+                disabled={busy || !label.trim() || !value.trim()}
+                loading={busy}
+              >
+                Add fact
+              </Button>
+            </div>
+          </form>
+        </section>
       ) : null}
 
       <div className="overflow-hidden rounded-2xl border border-line bg-paper">

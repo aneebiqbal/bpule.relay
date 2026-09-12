@@ -98,30 +98,28 @@ export default async function TeamPage() {
         </p>
       </header>
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl border border-line bg-paper p-6">
+      <section className="grid grid-cols-1 gap-6 border-y border-line py-5 sm:grid-cols-[auto_auto_1fr] sm:gap-10">
+        <div>
           <div className="text-xs font-medium uppercase tracking-wide text-slate">Whole team</div>
-          <div className="mt-4 space-y-4">
-            <div className="space-y-1.5">
-              <RateCells rates={stats.overall} showCaption />
-            </div>
-            <p className="text-xs text-slate">
-              target {pct(REPLY_RATE_TARGET)} reply · {pct(READ_TO_CHECK_TARGET)} check
-            </p>
+          <div className="mt-1.5 space-y-1.5">
+            <RateCells rates={stats.overall} showCaption />
           </div>
+          <p className="mt-2 text-xs text-slate">
+            target {pct(REPLY_RATE_TARGET)} reply · {pct(READ_TO_CHECK_TARGET)} check
+          </p>
         </div>
-        <div className="rounded-2xl border border-line bg-paper p-6">
-          <Metric
-            label="Messages sent"
-            value={String(stats.overall.sent)}
-            caption={`across ${stats.overall.sentLeads} leads`}
-          />
-          <p className="mt-3 text-xs leading-relaxed text-slate">
+        <Metric
+          label="Messages sent"
+          value={String(stats.overall.sent)}
+          caption={`across ${stats.overall.sentLeads} leads`}
+        />
+        <div className="sm:text-right">
+          <p className="text-xs leading-relaxed text-slate">
             Every number here is computed from real logged sends and outcomes, never an estimate.
           </p>
           <Link
             href="/team/eval"
-            className="mt-3 inline-block text-xs font-medium text-gold underline-offset-4 hover:underline"
+            className="mt-1.5 inline-block text-xs font-medium text-gold underline-offset-4 hover:underline"
           >
             Open eval harness
           </Link>
@@ -150,7 +148,7 @@ export default async function TeamPage() {
             </ul>
           </div>
         ) : (
-          <p className="rounded-2xl border border-line bg-paper p-6 text-sm text-slate">
+          <p className="border-y border-dashed border-line py-6 text-center text-sm text-slate">
             No sent lines yet this quarter.
           </p>
         )}

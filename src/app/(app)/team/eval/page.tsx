@@ -52,12 +52,9 @@ export default async function EvalPage() {
             No golden cases yet. Add them once real send and reply data exists in the log.
           </p>
         ) : (
-          <ul className="mt-4 space-y-2">
+          <ul className="mt-4 divide-y divide-line border-t border-line">
             {golden.map((c) => (
-              <li
-                key={c.id}
-                className="flex items-start justify-between gap-4 rounded-xl border border-line bg-paper-tint/40 p-3"
-              >
+              <li key={c.id} className="flex items-start justify-between gap-4 py-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-ink">
                     {c.sentText.slice(0, 80)}

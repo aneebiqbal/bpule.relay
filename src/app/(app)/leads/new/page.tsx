@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { FieldError } from '@/components/ui/field-message'
 import { VerdictWord } from '@/components/status-word'
 import { ScoreRing } from '@/components/score-ring'
+import { Step } from '@/components/wizard-step'
 import { signalById, SIGNALS } from '@/lib/score/signals'
 import { computeScore } from '@/lib/score/rubric'
 import { readSse } from '@/lib/sse/client'
@@ -57,28 +58,6 @@ function pasteGuard(raw: string): string | null {
     return 'That paste is too short to extract anything useful. Add a sentence or two of real research.'
   }
   return null
-}
-
-function StepHeading({
-  n,
-  title,
-  hint,
-}: {
-  n: number
-  title: string
-  hint?: string
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gold text-xs font-medium text-paper">
-        {n}
-      </span>
-      <div>
-        <h2 className="text-base font-medium text-ink">{title}</h2>
-        {hint ? <p className="mt-0.5 text-sm text-slate">{hint}</p> : null}
-      </div>
-    </div>
-  )
 }
 
 export default function NewLeadPage() {
@@ -263,13 +242,12 @@ export default function NewLeadPage() {
         </Alert>
       ) : null}
 
-      <section className="rounded-2xl border border-line bg-paper p-6">
-        <StepHeading
-          n={1}
-          title="Paste the research"
-          hint="A LinkedIn profile, a job post, an app store listing. Anything you found."
-        />
-        <div className="mt-4">
+      <div>
+      <Step
+        n={1}
+        title="Paste the research"
+        hint="A LinkedIn profile, a job post, an app store listing. Anything you found."
+      >
           <Textarea
             id="raw-input"
             ref={rawRef}
@@ -285,18 +263,16 @@ export default function NewLeadPage() {
             rows={6}
             className="font-mono text-[13px]"
           />
-        </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <span className="text-xs text-slate">Cmd / Ctrl + Enter to extract</span>
           <Button variant="gold" size="lg" onClick={() => void extract()} loading={extracting}>
             {extracting ? 'Extracting' : 'Extract'}
           </Button>
         </div>
-      </section>
+      </Step>
 
-      <section className="rounded-2xl border border-line bg-paper p-6">
-        <StepHeading n={2} title="Check the fields" hint="Fix anything the extractor got wrong." />
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+      <Step n={2} title="Check the fields" hint="Fix anything the extractor got wrong.">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid gap-1.5">
             <Label htmlFor="company">Company</Label>
             <Input
@@ -374,15 +350,15 @@ export default function NewLeadPage() {
             />
           </div>
         </div>
-      </section>
+      </Step>
 
-      <section className="rounded-2xl border border-line bg-paper p-6">
-        <StepHeading
-          n={3}
-          title="Score and save"
-          hint="Pure arithmetic, never a model call. The score is stored as-is so the queue orders by it."
-        />
-        <div className="mt-5 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+      <Step
+        n={3}
+        title="Score and save"
+        hint="Pure arithmetic, never a model call. The score is stored as-is so the queue orders by it."
+        last
+      >
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-5">
             <ScoreRing score={score.total} size={88} />
             <div>
@@ -434,7 +410,8 @@ export default function NewLeadPage() {
             {saving ? 'Saving' : 'Save lead'}
           </Button>
         </div>
-      </section>
+      </Step>
+      </div>
     </div>
   )
 }
