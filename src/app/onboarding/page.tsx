@@ -272,7 +272,7 @@ export default function OnboardingPage() {
                     how you actually write.
                   </p>
                   <Textarea
-                    className="mt-4 font-mono text-[13px]"
+                    className="mt-4 max-h-[24rem] overflow-y-auto font-mono text-[13px]"
                     value={samples}
                     onChange={(e) => setSamples(e.target.value)}
                     placeholder={

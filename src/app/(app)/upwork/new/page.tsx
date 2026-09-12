@@ -190,7 +190,7 @@ export default function NewUpworkJobPage() {
             onChange={(e) => set('rawInput', e.target.value)}
             placeholder="Paste the full Upwork job post..."
             rows={8}
-            className="font-mono text-[13px]"
+            className="max-h-[28rem] overflow-y-auto font-mono text-[13px]"
           />
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <span className="text-xs text-slate">Cmd / Ctrl + Enter to extract</span>
