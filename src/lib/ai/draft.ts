@@ -363,6 +363,38 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
     }
   }
 
+  // Corrective retry: if the draft still fails after best-of-two (and any
+  // paid escalation), retry once more on the free tier with explicit
+  // feedback about exactly what failed. Without this, an environment with
+  // no paid tier configured (tier2Chain() empty) would ship a failing draft
+  // with zero attempt to fix it — best-of-two alone doesn't help here since
+  // both variants share the same prompt and tend to fail the same way.
+  if (!primary.passed) {
+    const feedback = buildCorrectiveFeedback(primary, input)
+    if (feedback) {
+      try {
+        const retried = await runDraftAttempt(
+          chain,
+          systemPrompt,
+          `${userPrompt}\n\n${feedback}`,
+          callLog,
+        )
+        const better =
+          retried.passed && !primary.passed
+            ? true
+            : retried.passed === primary.passed && variantScore(retried) > variantScore(primary)
+        if (better) {
+          secondary = primary
+          primary = retried
+          pickReason = 'Rewritten after the first pass failed its own self-check, with the specific failure fed back in.'
+          modelsUsed.push(retried.hostLabel)
+        }
+      } catch {
+        // Keep the best draft so far if the corrective retry fails outright.
+      }
+    }
+  }
+
   const draft = finishDraft(input, primary, modelsUsed, modelsUsed.length, callLog)
   const second: DraftVariant | undefined = secondary
     ? {
@@ -501,6 +533,42 @@ function finishDraft(
     hadEmDash: sanitized.hadEmDash,
     callLog,
   }
+}
+
+/**
+ * Builds a corrective-feedback block naming exactly what failed on the
+ * rejected attempt, so a retry fixes the actual problem instead of just
+ * re-rolling the dice on the same prompt. Returns null when nothing
+ * specific can be said (the draft came back empty, so there's nothing to
+ * diagnose beyond "try again").
+ */
+export function buildCorrectiveFeedback(
+  attempt: { output: DraftModelOutput; codeChecks: SelfCheck['codeChecks'] },
+  input: DraftInput,
+): string | null {
+  const problems: string[] = []
+  if (!attempt.codeChecks.companyMentioned) {
+    problems.push(`- It never named "${input.lead.company}". Write the company name into the first or second line.`)
+  }
+  if (!attempt.codeChecks.specificEvidenceMentioned) {
+    problems.push(
+      `- It dropped the specific evidence ("${input.extracted.signalEvidence || 'the signal noted for this lead'}"). Lead with that exact detail, not a generic version of it.`,
+    )
+  }
+  if (!attempt.output.test_1_reply_or_delete) {
+    problems.push(`- Its own test 1 failed: ${attempt.output.test_1_note || 'not specific enough to earn a reply.'} Make it worth 30 seconds of their time.`)
+  }
+  if (!attempt.output.test_2_not_generic) {
+    problems.push(`- Its own test 2 failed: ${attempt.output.test_2_note || 'would survive a company swap.'} Tie it to something only this company/signal has.`)
+  }
+
+  if (problems.length === 0) return null
+
+  return [
+    'CORRECTIVE FEEDBACK — your previous attempt failed its own checks. Do not repeat these mistakes:',
+    ...problems,
+    'Write a new draft that fixes all of the above. Run both tests honestly again before returning it.',
+  ].join('\n')
 }
 
 function deterministicChecks(

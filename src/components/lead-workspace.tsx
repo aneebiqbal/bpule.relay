@@ -390,11 +390,11 @@ export function LeadWorkspace({
         : '',
     },
     {
-      label: 'Passed both self-checks',
+      label: 'Passed every draft check',
       ok: Boolean(draft?.passed),
       why: !draft?.passed
         ? draft
-          ? 'The draft flagged itself. Read the failing lines and fix the weakest one.'
+          ? 'The draft flagged itself. Read the failing lines below and fix them.'
           : 'Generate a draft first.'
         : '',
     },
@@ -426,7 +426,7 @@ export function LeadWorkspace({
         : drafting
           ? { title: 'Writing your message', hint: statusMessage ?? 'This usually takes a few seconds.' }
           : draft && !draft.passed
-            ? { title: 'Fix the draft before you send', hint: 'One check failed. Read the note below and edit.' }
+            ? { title: 'Fix the draft before you send', hint: 'A check failed. Read the notes below and edit.' }
             : draft && !sentText
               ? { title: 'Copy it and send it yourself', hint: 'Relay never sends for you. Paste back what you sent to log it.' }
               : !sentOk
@@ -630,7 +630,7 @@ export function LeadWorkspace({
                   )}
                 >
                   {draft.passed ? <Check className="size-3.5" /> : <X className="size-3.5" />}
-                  {draft.passed ? 'Passed both tests' : 'Needs an edit'}
+                  {draft.passed ? 'Ready to send' : 'Needs an edit'}
                 </span>
               ) : null}
             </div>
@@ -1190,14 +1190,14 @@ const DraftEditor = memo(function DraftEditor({
       {draft ? (
         <div className="space-y-2 border-t border-line pt-3">
           <SelfCheckLine
-            pass={draft.passed && draft.selfCheck.test1ReplyOrDelete}
+            pass={draft.selfCheck.test1ReplyOrDelete}
             failNote="Test 1: a senior engineer would delete this."
             note={draft.selfCheck.test1Note}
           >
             A senior engineer would reply
           </SelfCheckLine>
           <SelfCheckLine
-            pass={draft.passed && draft.selfCheck.test2NotGeneric}
+            pass={draft.selfCheck.test2NotGeneric}
             failNote="Test 2: swapping the company name changes nothing."
             note={draft.selfCheck.test2Note}
           >
