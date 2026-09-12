@@ -537,6 +537,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     ): Promise<DosageResult> {
       const lead = leads.find((l) => l.id === leadId)
       if (!lead) throw new Error('Lead not found')
+      if (lead.ownerRepId !== rep.id) {
+        throw new Error('You are not the owner of this lead, so it could not be marked contacted.')
+      }
       const type = messageType
       const todaySends = await (async () => {
         const now = new Date()
