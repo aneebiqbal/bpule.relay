@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     emit({ type: 'status', message: 'Scanning the paste' })
     const scanned = scanForSecrets(rawText)
     if (scanned.blocked) {
-      await safeLog({
+      void safeLog({
         success: false,
         latencyMs: Date.now() - started,
         model,
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
           emit({ type: 'status', message })
         },
       })
-      await safeLog({
+      void safeLog({
         success: true,
         latencyMs: Date.now() - started,
         model,
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Extraction failed.'
-      await safeLog({
+      void safeLog({
         success: false,
         latencyMs: Date.now() - started,
         model,

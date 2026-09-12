@@ -1,6 +1,6 @@
 import type { ExtractedLead, RecentPostExtract, SignalId } from '@/lib/domain/types'
 import { pickModel } from '@/lib/ai/routing'
-import { cheapModel, hasProvider } from '@/lib/ai/config'
+import { hasProvider } from '@/lib/ai/config'
 import { structuredJson } from '@/lib/ai/provider'
 import { SIGNALS } from '@/lib/score/signals'
 import { classifyRoleWithFallback, mapLocationToRegion } from '@/lib/leads/targeting'
@@ -30,9 +30,9 @@ export interface ExtractionBundle {
   candidates: ExtractedLead[]
 }
 
-const MAX_INPUT_CHARS = 24_000
-const MAX_SEGMENTS = 4
-const MAX_SEGMENT_CHARS = 9_000
+const MAX_INPUT_CHARS = 14_000
+const MAX_SEGMENTS = 3
+const MAX_SEGMENT_CHARS = 5_500
 
 const signalLines = SIGNALS.map(
   (s) => `${s.id}. ${s.short}: ${s.description}`,
@@ -116,6 +116,17 @@ function splitIntoSegments(rawText: string): string[] {
     .map((c) => c.slice(0, MAX_SEGMENT_CHARS))
 
   return chunks.length > 0 ? chunks : [rawText.slice(0, MAX_SEGMENT_CHARS)]
+}
+
+function segmentPriority(segment: string): number {
+  const lower = segment.toLowerCase()
+  let score = 0
+  if (/\bco[- ]?founder\b|\bfounder\b|\bceo\b|\bcto\b|\bhead of\b|\bvp\b/.test(lower)) score += 5
+  if (/\bhiring\b|\bopen role\b|\blooking for\b|\bneed\b|\bhelp us\b/.test(lower)) score += 4
+  if (/\babout\b|\bexperience\b|\bactivity\b|\bfeatured\b/.test(lower)) score += 2
+  if (/followers|connections|reactions|comments/.test(lower)) score -= 2
+  score += Math.min(4, Math.floor(segment.length / 1200))
+  return score
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -258,33 +269,22 @@ function dedupeCandidates(items: ExtractedLead[]): ExtractedLead[] {
 }
 
 async function modelExtract(rawText: string, opts: ExtractLeadOptions): Promise<ExtractionOutput> {
-  const primary = pickModel('extract').model
-  const fallbacks = [primary, cheapModel()].filter((v, i, arr) => arr.indexOf(v) === i)
+  const model = pickModel('extract').model
+  let userPrompt = `Raw profile paste:\n\n${rawText}`
 
-  for (const model of fallbacks) {
-    let userPrompt = `Raw profile paste:\n\n${rawText}`
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const raw = await structuredJson<unknown>({
+      model,
+      system: EXTRACT_SYSTEM,
+      user: userPrompt,
+      schema: EXTRACTION_SCHEMA,
+      onStatus: opts.onStatus,
+    })
 
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
-      try {
-        const raw = await structuredJson<unknown>({
-          model,
-          system: EXTRACT_SYSTEM,
-          user: userPrompt,
-          schema: EXTRACTION_SCHEMA,
-          onStatus: opts.onStatus,
-        })
-
-        const parsed = validateOutput(raw)
-        if (parsed) return parsed
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : ''
-        const unavailable = /does not exist|do not have access|unknown model/i.test(msg)
-        if (unavailable) break
-      }
-
-      if (attempt === 1) {
-        userPrompt = `${userPrompt}\n\nYour previous JSON failed schema validation. Return a single JSON object that matches the schema exactly.`
-      }
+    const parsed = validateOutput(raw)
+    if (parsed) return parsed
+    if (attempt === 1) {
+      userPrompt = `${userPrompt}\n\nYour previous JSON failed schema validation. Return a single JSON object that matches the schema exactly.`
     }
   }
 
@@ -358,26 +358,23 @@ export async function extractLeadBundle(
 
   const normalized = compactWhitespace(rawText).slice(0, MAX_INPUT_CHARS)
   const segments = splitIntoSegments(normalized)
+  const ranked = [...segments].sort((a, b) => segmentPriority(b) - segmentPriority(a))
+  const primarySegment = ranked[0] ?? normalized
 
   if (!hasProvider()) {
-    const one = demoExtract(segments[0] ?? normalized)
-    return { primary: one, candidates: [one] }
+    const one = demoExtract(primarySegment)
+    const others = ranked.slice(1).map((s) => demoExtract(s))
+    const candidates = dedupeCandidates([one, ...others]).sort((a, b) => candidateScore(b) - candidateScore(a))
+    return { primary: candidates[0], candidates }
   }
 
-  if (segments.length === 1) {
-    const one = await extractSegment(segments[0] ?? normalized, opts)
-    return { primary: one, candidates: [one] }
+  if (segments.length > 1) {
+    opts.onStatus?.(`Detected ${segments.length} profiles. Fast mode: extracting strongest profile first.`)
   }
 
-  opts.onStatus?.(`Detected ${segments.length} profiles. Extracting each and choosing the best lead.`)
-  const extracted = await Promise.all(
-    segments.map(async (segment, index) => {
-      opts.onStatus?.(`Extracting profile ${index + 1} of ${segments.length}`)
-      return await extractSegment(segment, opts)
-    }),
-  )
-
-  const candidates = dedupeCandidates(extracted).sort((a, b) => candidateScore(b) - candidateScore(a))
+  const primary = await extractSegment(primarySegment, opts)
+  const lightweight = ranked.slice(1).map((s) => demoExtract(s))
+  const candidates = dedupeCandidates([primary, ...lightweight]).sort((a, b) => candidateScore(b) - candidateScore(a))
   return { primary: candidates[0], candidates }
 }
 

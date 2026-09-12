@@ -4,6 +4,10 @@ import { structuredJson } from '@/lib/ai/provider'
 
 const roleCache = new Map<string, RoleCategory>()
 
+function enableRoleFallbackModel(): boolean {
+  return process.env.SCOUT_ROLE_FALLBACK_MODEL === '1'
+}
+
 const ROLE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -66,6 +70,8 @@ export async function classifyRoleWithFallback(titleRaw: string | null | undefin
 
   const direct = classifyRoleFromTitle(title)
   if (direct !== 'other') return direct
+
+  if (!enableRoleFallbackModel()) return 'other'
 
   if (roleCache.has(title)) return roleCache.get(title) as RoleCategory
 
