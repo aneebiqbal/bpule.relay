@@ -2,12 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "comment": "Few-shot pool refresh, off-peak. DeepSeek peak hours (per Sept 2026 pricing research) are 01:00-04:00 and 06:00-10:00 UTC; 11:00 UTC sits outside both windows year-round.",
       "path": "/api/few-shot/refresh",
       "schedule": "0 11 * * *"
     },
     {
-      "comment": "Nightly eval harness run, off-peak, same reasoning as above.",
       "path": "/api/eval/cron-run",
       "schedule": "30 11 * * *"
     }
