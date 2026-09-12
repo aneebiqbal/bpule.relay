@@ -56,6 +56,7 @@ Rules:
 - signal_type: one integer from 1..7, strongest supported signal.
 - signal_evidence: one concrete factual line from the paste.
 - extraction_confidence: integer 0..100 for field reliability.
+- Every required key must always be present. If uncertain: signal_type=7, signal_evidence="", extraction_confidence=50.
 - Never invent missing facts. Use empty strings for unknown text fields.
 - Keep quotes short; never include huge blocks.`
 
@@ -286,16 +287,32 @@ async function modelExtractWithModel(
   }
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const raw = await structuredJson<unknown>({
-      model,
-      system: EXTRACT_SYSTEM,
-      user: userPrompt,
-      schema: EXTRACTION_SCHEMA,
-      responseMode: 'json_schema',
-      schemaName: 'lead_profile_extract',
-      strict: true,
-      onStatus: opts.onStatus,
-    })
+    let raw: unknown
+    try {
+      raw = await structuredJson<unknown>({
+        model,
+        system: EXTRACT_SYSTEM,
+        user: userPrompt,
+        schema: EXTRACTION_SCHEMA,
+        responseMode: 'json_schema',
+        schemaName: 'lead_profile_extract',
+        strict: true,
+        onStatus: opts.onStatus,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      const schemaMismatch = /jsonschema|json_validate_failed|does not match the expected schema|missing properties/i.test(message)
+      if (!schemaMismatch) throw err
+
+      raw = await structuredJson<unknown>({
+        model,
+        system: EXTRACT_SYSTEM,
+        user: `${userPrompt}\n\nReturn ALL required keys, even if unknown values are defaults.`,
+        schema: EXTRACTION_SCHEMA,
+        responseMode: 'json_object',
+        onStatus: opts.onStatus,
+      })
+    }
 
     const parsed = validateOutput(raw)
     if (parsed) return parsed
