@@ -778,7 +778,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async matchProofItems(tags: string[], limit = 2): Promise<ProofItem[]> {
-    const profiles = await this.listProfiles()
+    const profiles = await this.listAllProfiles()
     const items = (
       await Promise.all(profiles.map((p) => this.listProofItems(p.id)))
     ).flat()

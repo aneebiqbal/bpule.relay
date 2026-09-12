@@ -691,10 +691,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       if (idx >= 0) proofItems.splice(idx, 1)
     },
     async matchProofItems(tags: string[], limit = 2) {
-      const myProofs = proofItems.filter((x) =>
-        profiles.some((p) => p.id === x.profileId && p.repId === rep.id),
-      )
-      return matchProofItemsByTags(myProofs, tags, limit)
+      return matchProofItemsByTags(proofItems, tags, limit)
     },
     async getTodayDashboard(): Promise<TodayDashboard> {
       const mine = await this.getQueue()
