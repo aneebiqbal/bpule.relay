@@ -8,16 +8,21 @@ export default async function ContentPage() {
   const user = await getCurrentUser()
   if (!user) return null
 
-  const store = await createScoutStore()
-  const personas = await store.listContentPersonas(user.rep.id)
+  try {
+    const store = await createScoutStore()
+    const personas = await store.listContentPersonas(user.rep.id)
 
-  const personasWithPillars = await Promise.all(
-    personas.map(async (p) => ({
-      ...p,
-      pillars: await store.listContentPillars(p.id),
-      drafts: await store.listContentDrafts(p.id),
-    })),
-  )
+    const personasWithPillars = await Promise.all(
+      personas.map(async (p) => ({
+        ...p,
+        pillars: await store.listContentPillars(p.id),
+        drafts: await store.listContentDrafts(p.id),
+      })),
+    )
 
-  return <ContentDashboard personas={personasWithPillars} />
+    return <ContentDashboard personas={personasWithPillars} />
+  } catch {
+    // Migration 0018 not yet applied — render empty state
+    return <ContentDashboard personas={[]} />
+  }
 }
