@@ -1,4 +1,5 @@
-import { cheapModel, extractModel, strongModel } from '@/lib/ai/config'
+import type { ProviderHost } from '@/lib/ai/config'
+import { cheapModel, strongModel, tier1Hosts, tier2Hosts, tier3Host, tier4Host } from '@/lib/ai/config'
 
 export type AiTask =
   /** One-time style-card calibration from quiz answers and pasted samples. */
@@ -9,7 +10,7 @@ export type AiTask =
   | 'classify'
   /** Outreach message drafting. */
   | 'draft'
-  /** Best-of-two variant drafting (cheap model, parallel calls). */
+  /** Best-of-two variant drafting (parallel calls on tier 1). */
   | 'draft-variant'
 
 export interface ModelChoice {
@@ -18,16 +19,67 @@ export interface ModelChoice {
   reason: string
 }
 
+export type CostTierName = 'tier1' | 'tier2' | 'tier3' | 'tier4'
+
+export interface ChainStep {
+  costTier: CostTierName
+  host: ProviderHost
+}
+
 /**
- * The single model-routing decision for the whole app, by task.
+ * The full tier chain for a task, in try-order: DeepSeek V4 Flash across
+ * every configured host, then DeepSeek V4 Pro across every configured host
+ * (escalation only — callers decide whether to actually use tier 2, this
+ * just says what's available if they do), then Groq, then OpenAI.
  *
- * Structuring work (calibration, extraction, classification) runs on the
- * cheapest capable model; every drafting task runs on the strong model so a
- * draft is right the first time and the self-check lives in the same call.
- *
- * Keep every route through this function; never hand-pick a model id in
- * feature code. Models are resolved from config.ts, so a provider or tier
- * change is a one-line edit.
+ * A host only appears if it has a configured API key, so an environment with
+ * just GROQ_API_KEY set still works exactly as before — the chain degrades
+ * to Groq-primary automatically rather than erroring on missing DeepSeek
+ * config.
+ */
+export function tier1Chain(): ChainStep[] {
+  return tier1Hosts().map((host) => ({ costTier: 'tier1' as const, host }))
+}
+
+export function tier2Chain(): ChainStep[] {
+  return tier2Hosts().map((host) => ({ costTier: 'tier2' as const, host }))
+}
+
+export function fallbackChain(kind: 'cheap' | 'strong'): ChainStep[] {
+  const steps: ChainStep[] = []
+  const groq = tier3Host(kind)
+  if (groq) steps.push({ costTier: 'tier3', host: groq })
+  const openai = tier4Host()
+  if (openai) steps.push({ costTier: 'tier4', host: openai })
+  return steps
+}
+
+/**
+ * Full ordered chain for a structuring task (extraction, classification,
+ * calibration): tier 1 hosts, then tier 3/4 fallback. Tier 2 is escalation
+ * only and is fetched separately via tier2Chain() by callers that decide to
+ * escalate (extract.ts, draft.ts), not tried automatically here — trying a
+ * stronger, pricier tier before exhausting tier 1's own hosts would defeat
+ * the point of tier 1 being multi-host in the first place.
+ */
+export function pickModelChain(task: 'extract' | 'classify' | 'calibrate'): ChainStep[] {
+  void task
+  return [...tier1Chain(), ...fallbackChain('cheap')]
+}
+
+/**
+ * Full ordered chain for drafting (best-of-two runs on tier 1; escalation to
+ * tier 2 is a separate explicit step in draft.ts, not part of this chain).
+ */
+export function pickDraftChain(): ChainStep[] {
+  return [...tier1Chain(), ...fallbackChain('strong')]
+}
+
+/**
+ * @deprecated Legacy single-model picker, kept only for call sites not yet
+ * migrated to pickModelChain/pickDraftChain (the calibration and role-fallback
+ * classification paths, which are low-volume enough that the multi-host/
+ * multi-tier chain is not worth the added complexity yet).
  */
 export function pickModel(task: AiTask): ModelChoice {
   switch (task) {
@@ -40,21 +92,21 @@ export function pickModel(task: AiTask): ModelChoice {
       }
     case 'extract':
       return {
-        model: extractModel(),
+        model: cheapModel(),
         tier: 'cheap',
-        reason: 'Extraction runs on the cheapest Groq tier optimized for high-volume profile parsing.',
+        reason: 'Legacy path; extraction now routes through pickModelChain("extract") in extract.ts.',
       }
     case 'draft':
       return {
         model: strongModel(),
         tier: 'strong',
-        reason: 'Drafting is quality-critical and runs the self-check in the same call; always spend the strong model here.',
+        reason: 'Legacy path; drafting now routes through pickDraftChain() in draft.ts.',
       }
     case 'draft-variant':
       return {
         model: cheapModel(),
         tier: 'cheap',
-        reason: 'Best-of-two variant generation runs twice in parallel on the cheap model to keep cost low while improving selection.',
+        reason: 'Legacy path; best-of-two now routes through pickDraftChain() in draft.ts.',
       }
   }
 }
