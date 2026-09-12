@@ -1,6 +1,6 @@
 import type { Profile, ProofItem } from '@/lib/domain/types'
 import type { SelfCheck, DraftResult, DraftInput, DraftVariant, DraftCallLog } from '@/lib/ai/draft'
-import { baseDraftSystem, buildUserPrompt, generateDraft } from '@/lib/ai/draft'
+import { baseDraftSystem, buildCorrectiveFeedback, buildUserPrompt, generateDraft } from '@/lib/ai/draft'
 import { pickDraftChain, tier2Chain } from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
 import { streamChatText, structuredJsonChain } from '@/lib/ai/provider'
@@ -139,23 +139,61 @@ export async function streamDraft(
         secondary = primary
         primary = escalated
         pickReason = 'Escalated to the precision tier: the lead scored 10+ or the first pass did not clear both self-checks.'
-      } else if (escalated.passed === primary.passed) {
-        const scoreOf = (v: typeof escalated) => {
-          let s = v.passed ? 4 : 0
-          s += v.selfCheck.test1ReplyOrDelete ? 2 : 0
-          s += v.selfCheck.test2NotGeneric ? 2 : 0
-          s += v.selfCheck.codeChecks.companyMentioned ? 1 : 0
-          s += v.selfCheck.codeChecks.specificEvidenceMentioned ? 1 : 0
-          return s
-        }
-        if (scoreOf(escalated) > scoreOf(primary)) {
-          secondary = primary
-          primary = escalated
-          pickReason = 'Escalated to the precision tier: the lead scored 10+ or the first pass did not clear both self-checks.'
-        }
+      } else if (escalated.passed === primary.passed && variantScore(escalated) > variantScore(primary)) {
+        secondary = primary
+        primary = escalated
+        pickReason = 'Escalated to the precision tier: the lead scored 10+ or the first pass did not clear both self-checks.'
       }
     } catch {
       // Keep the tier 1 draft if the precision pass fails outright.
+    }
+  }
+
+  // Corrective retry: if the draft still fails after best-of-two (and any
+  // paid escalation), retry once more on the free tier with explicit
+  // feedback about exactly what failed. Without this, an environment with
+  // no paid tier configured (tier2Chain() empty) would stream a failing
+  // draft to the rep with zero attempt to fix it.
+  if (!primary.passed) {
+    const feedback = buildCorrectiveFeedback(
+      {
+        output: {
+          draft: primary.draftText,
+          test_1_reply_or_delete: primary.selfCheck.test1ReplyOrDelete,
+          test_1_note: primary.selfCheck.test1Note,
+          test_2_not_generic: primary.selfCheck.test2NotGeneric,
+          test_2_note: primary.selfCheck.test2Note,
+        },
+        codeChecks: primary.selfCheck.codeChecks,
+      },
+      input,
+    )
+    if (feedback) {
+      try {
+        emit({ type: 'status', message: 'Rewriting after a failed self-check' })
+        const retriedRaw = await structuredJsonChain<RawVariant>(chain, {
+          system,
+          user: `${user}\n\n${feedback}`,
+          schema: DRAFT_SCHEMA,
+        })
+        callLog.push({
+          costTier: retriedRaw.costTier,
+          host: retriedRaw.host,
+          estimatedCostUsd: retriedRaw.estimatedCostUsd,
+        })
+        const retried = normalizeVariant(retriedRaw.data, input)
+        const better =
+          retried.passed && !primary.passed
+            ? true
+            : retried.passed === primary.passed && variantScore(retried) > variantScore(primary)
+        if (better) {
+          secondary = primary
+          primary = retried
+          pickReason = 'Rewritten after the first pass failed its own self-check, with the specific failure fed back in.'
+        }
+      } catch {
+        // Keep the best draft so far if the corrective retry fails outright.
+      }
     }
   }
 
@@ -283,6 +321,18 @@ function fallbackText(input: DraftInput): string {
   ].join(' ')
 }
 
+function variantScore(v: {
+  passed: boolean
+  selfCheck: { test1ReplyOrDelete: boolean; test2NotGeneric: boolean; codeChecks: SelfCheck['codeChecks'] }
+}): number {
+  let s = v.passed ? 4 : 0
+  s += v.selfCheck.test1ReplyOrDelete ? 2 : 0
+  s += v.selfCheck.test2NotGeneric ? 2 : 0
+  s += v.selfCheck.codeChecks.companyMentioned ? 1 : 0
+  s += v.selfCheck.codeChecks.specificEvidenceMentioned ? 1 : 0
+  return s
+}
+
 function normalizeVariant(
   raw: RawVariant,
   input: DraftInput,
@@ -335,18 +385,8 @@ function pickBestVariant(
     throw new Error('Both variants failed.')
   }
 
-  const score = (v: NonNullable<typeof a>) => {
-    let s = 0
-    if (v.passed) s += 4
-    if (v.selfCheck.test1ReplyOrDelete) s += 2
-    if (v.selfCheck.test2NotGeneric) s += 2
-    if (v.selfCheck.codeChecks.companyMentioned) s += 1
-    if (v.selfCheck.codeChecks.specificEvidenceMentioned) s += 1
-    return s
-  }
-
-  const sa = score(a!)
-  const sb = score(b!)
+  const sa = variantScore(a!)
+  const sb = variantScore(b!)
 
   if (sa >= sb) {
     return {
