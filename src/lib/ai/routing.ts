@@ -1,5 +1,5 @@
 import type { ProviderHost } from '@/lib/ai/config'
-import { cheapModel, strongModel, tier1Hosts, tier2Hosts, tier3Host, tier4Host } from '@/lib/ai/config'
+import { cheapModel, strongModel, tier0Host, tier1Hosts, tier2Hosts, tier4Host } from '@/lib/ai/config'
 
 export type AiTask =
   /** One-time style-card calibration from quiz answers and pasted samples. */
@@ -10,7 +10,7 @@ export type AiTask =
   | 'classify'
   /** Outreach message drafting. */
   | 'draft'
-  /** Best-of-two variant drafting (parallel calls on tier 1). */
+  /** Best-of-two variant drafting (parallel calls on tier 0). */
   | 'draft-variant'
 
 export interface ModelChoice {
@@ -27,52 +27,64 @@ export interface ChainStep {
 }
 
 /**
- * The full tier chain for a task, in try-order: DeepSeek V4 Flash across
- * every configured host, then DeepSeek V4 Pro across every configured host
- * (escalation only — callers decide whether to actually use tier 2, this
- * just says what's available if they do), then Groq, then OpenAI.
+ * The full tier chain for a task, in try-order: Groq's free tier (tier 0,
+ * primary — no card required, generous rate limits, verified against
+ * published limits) first, then DeepSeek V4 Flash across every configured
+ * host (tier 1, first paid escalation), then DeepSeek V4 Pro across every
+ * configured host (tier 2, escalation only — callers decide whether to
+ * actually use it, this just says what's available if they do), then OpenAI
+ * (tier 4, final safety net).
+ *
+ * Cost-tier labels ('tier1'..'tier4') are historical from the prior
+ * architecture pass and kept as-is (matches the extraction_runs cost_tier
+ * check constraint, migration 0016) rather than renumbered — Groq's step
+ * below is logged as 'tier1' since it's now the first tier tried, DeepSeek
+ * Flash as 'tier2', DeepSeek Pro escalation as 'tier3', OpenAI stays 'tier4'.
+ * The Team page's tier labels are updated to match (Groq/free, DeepSeek
+ * Flash, DeepSeek Pro, OpenAI) so the numbers on screen describe what's
+ * actually running, not the old ordering.
  *
  * A host only appears if it has a configured API key, so an environment with
- * just GROQ_API_KEY set still works exactly as before — the chain degrades
- * to Groq-primary automatically rather than erroring on missing DeepSeek
- * config.
+ * only GROQ_API_KEY set still works exactly as it always has — Groq-only is
+ * the default, working state, not a degraded one.
  */
+export function tier0Chain(kind: 'cheap' | 'strong'): ChainStep[] {
+  const groq = tier0Host(kind)
+  return groq ? [{ costTier: 'tier1', host: groq }] : []
+}
+
 export function tier1Chain(): ChainStep[] {
-  return tier1Hosts().map((host) => ({ costTier: 'tier1' as const, host }))
+  return tier1Hosts().map((host) => ({ costTier: 'tier2' as const, host }))
 }
 
 export function tier2Chain(): ChainStep[] {
-  return tier2Hosts().map((host) => ({ costTier: 'tier2' as const, host }))
+  return tier2Hosts().map((host) => ({ costTier: 'tier3' as const, host }))
 }
 
-export function fallbackChain(kind: 'cheap' | 'strong'): ChainStep[] {
-  const steps: ChainStep[] = []
-  const groq = tier3Host(kind)
-  if (groq) steps.push({ costTier: 'tier3', host: groq })
+export function fallbackChain(): ChainStep[] {
   const openai = tier4Host()
-  if (openai) steps.push({ costTier: 'tier4', host: openai })
-  return steps
+  return openai ? [{ costTier: 'tier4', host: openai }] : []
 }
 
 /**
  * Full ordered chain for a structuring task (extraction, classification,
- * calibration): tier 1 hosts, then tier 3/4 fallback. Tier 2 is escalation
- * only and is fetched separately via tier2Chain() by callers that decide to
- * escalate (extract.ts, draft.ts), not tried automatically here — trying a
- * stronger, pricier tier before exhausting tier 1's own hosts would defeat
- * the point of tier 1 being multi-host in the first place.
+ * calibration): Groq free tier, then DeepSeek tier 1 hosts, then OpenAI.
+ * DeepSeek Pro (tier2Chain()) is escalation only and fetched separately by
+ * callers that decide to escalate (extract.ts, draft.ts) on the existing
+ * confidence-gate/self-check triggers — not tried automatically here.
  */
 export function pickModelChain(task: 'extract' | 'classify' | 'calibrate'): ChainStep[] {
   void task
-  return [...tier1Chain(), ...fallbackChain('cheap')]
+  return [...tier0Chain('cheap'), ...tier1Chain(), ...fallbackChain()]
 }
 
 /**
- * Full ordered chain for drafting (best-of-two runs on tier 1; escalation to
- * tier 2 is a separate explicit step in draft.ts, not part of this chain).
+ * Full ordered chain for drafting: Groq free tier runs the best-of-two pass;
+ * escalation to DeepSeek Pro is a separate explicit step in draft.ts, not
+ * part of this chain.
  */
 export function pickDraftChain(): ChainStep[] {
-  return [...tier1Chain(), ...fallbackChain('strong')]
+  return [...tier0Chain('strong'), ...tier1Chain(), ...fallbackChain()]
 }
 
 /**

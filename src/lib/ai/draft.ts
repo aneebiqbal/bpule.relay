@@ -294,10 +294,12 @@ function shouldEscalateDraft(score: ScoreResult, primaryPassed: boolean): boolea
 }
 
 /**
- * Generate an outreach draft for a lead: best-of-two on tier 1 (DeepSeek V4
- * Flash), self-checked against the two fixed tests, escalating to tier 2
- * (DeepSeek V4 Pro) when the lead scores 10+ or neither variant passes on the
- * first pass. This is the only per-lead spend in the pipeline.
+ * Generate an outreach draft for a lead: best-of-two starting on Groq's
+ * free tier (escalating through DeepSeek then OpenAI only if Groq's own
+ * hosts fail or exhaust their rate-limit budget), self-checked against the
+ * two fixed tests, then escalating to DeepSeek V4 Pro specifically when the
+ * lead scores 10+ or neither variant passes on the first pass. This is the
+ * only per-lead spend in the pipeline.
  */
 export async function generateDraft(input: DraftInput): Promise<DraftResult> {
   if (input.type === 'reply') {
@@ -325,10 +327,10 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
 
   const callLog: DraftCallLog[] = []
 
-  // Best-of-two: generate two variants in parallel on tier 1, self-check
-  // both, and return the stronger one as primary with the other as a
-  // variant. This catches the cases where the first draft is mediocre
-  // without paying for a bigger tier.
+  // Best-of-two: generate two variants in parallel starting on Groq's free
+  // tier, self-check both, and return the stronger one as primary with the
+  // other as a variant. This catches the cases where the first draft is
+  // mediocre without paying for a bigger tier.
   const chain = pickDraftChain()
   const [variantA, variantB] = await Promise.all([
     runDraftAttempt(chain, systemPrompt, userPrompt, callLog),
@@ -342,9 +344,9 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
   if (shouldEscalateDraft(input.score, primary.passed) && tier2.length > 0) {
     try {
       const escalated = await runDraftAttempt(tier2, systemPrompt, userPrompt, callLog)
-      // Keep the escalated draft unless it's strictly worse than what tier 1
-      // already produced — escalation should only ever help, never regress
-      // a draft that was already passing both tests.
+      // Keep the escalated draft unless it's strictly worse than what the
+      // first pass already produced — escalation should only ever help,
+      // never regress a draft that was already passing both tests.
       const better =
         escalated.passed && !primary.passed
           ? true
@@ -357,7 +359,7 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
         modelsUsed.push(escalated.hostLabel)
       }
     } catch {
-      // Keep the tier 1 draft if the precision pass fails outright.
+      // Keep the first-pass draft if the precision pass fails outright.
     }
   }
 

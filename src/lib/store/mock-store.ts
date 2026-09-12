@@ -20,17 +20,20 @@ import type {
   CreateLeadResult,
   DosageResult,
   ExtractionMetrics,
+  FollowupDue,
   ModelCallLogInput,
   NewLeadInput,
   QueueData,
   SaveDraftInput,
   ScoutStore,
+  SendBudget,
   StoreContext,
   TeamStats,
   TodayDashboard,
+  UpworkSnapshot,
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey } from '@/lib/leads/normalize'
-import { dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
+import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
 import { pickPlayForSignal } from '@/lib/score/plays'
@@ -321,10 +324,62 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
   ]
 
-  const upworkJobs: UpworkJob[] = []
+  const upworkJobs: UpworkJob[] = [
+    {
+      id: 'upwork-fintech-rebuild',
+      ownerRepId: 'rep-hassan',
+      title: 'Rebuild fintech onboarding flow (FAKE demo job)',
+      description: 'FAKE demo Upwork job. Client needs a KYC onboarding rebuild, previous dev went unresponsive mid-project.',
+      budgetMin: 4000,
+      budgetMax: 8000,
+      hourlyRateMin: null,
+      hourlyRateMax: null,
+      proposalCount: 6,
+      connectsCost: 4,
+      requiredSkills: ['react', 'nodejs', 'stripe'],
+      urgencySignal: 'Previous developer went unresponsive mid-project.',
+      score: 8,
+      verdict: 'apply',
+      status: 'new',
+      extractedFields: null,
+      rawInput: null,
+      tags: ['fintech', 'react', 'nodejs'],
+      createdAt: t(1),
+    },
+    {
+      id: 'upwork-dashboard-perf',
+      ownerRepId: 'rep-hassan',
+      title: 'Speed up analytics dashboard (FAKE demo job)',
+      description: 'FAKE demo Upwork job. Dashboard queries take 20s+, client wants it under 2s.',
+      budgetMin: null,
+      budgetMax: null,
+      hourlyRateMin: 60,
+      hourlyRateMax: 90,
+      proposalCount: 3,
+      connectsCost: 2,
+      requiredSkills: ['postgres', 'react'],
+      urgencySignal: null,
+      score: 6,
+      verdict: 'apply_if_connects',
+      status: 'drafted',
+      extractedFields: null,
+      rawInput: null,
+      tags: ['performance', 'postgres'],
+      createdAt: t(2),
+    },
+  ]
   const upworkMessages: UpworkMessage[] = []
   const pushSubs: PushSubscription[] = []
-  const notifications: NotificationLogEntry[] = []
+  const notifications: NotificationLogEntry[] = [
+    {
+      id: 'notif-acme-reply',
+      repId: 'rep-hassan',
+      type: 'reply',
+      payload: { lead_id: 'lead-acme', stage: 'replied', occurred_at: t(4) },
+      read: false,
+      createdAt: t(4),
+    },
+  ]
   const csvImports: CsvImport[] = []
   const extractionRuns: Array<{
     task: 'extract' | 'draft'
@@ -718,7 +773,79 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         sentMessages: messages.filter((m) => m.leadId === lead.id),
         outcomes: outcomes.filter((o) => o.leadId === lead.id),
       })))
-      return { mine: { ...mine, queue: mine.queue, replies: mine.replies }, team }
+
+      const isToday = (iso: string | null) => {
+        if (!iso) return false
+        const d = new Date(iso)
+        const now = new Date()
+        return (
+          d.getFullYear() === now.getFullYear() &&
+          d.getMonth() === now.getMonth() &&
+          d.getDate() === now.getDate()
+        )
+      }
+      const ownedIds = new Set(leads.filter((l) => l.ownerRepId === rep.id).map((l) => l.id))
+      const dmFollowupSent = messages.filter(
+        (m) => ownedIds.has(m.leadId) && (m.type === 'dm' || m.type === 'followup') && isToday(m.sentAt),
+      ).length
+      const connectionSent = messages.filter(
+        (m) => ownedIds.has(m.leadId) && m.type === 'connection' && isToday(m.sentAt),
+      ).length
+      const upworkApplies = upworkMessages.filter(
+        (m) => m.repId === rep.id && isToday(m.sentAt),
+      ).length
+
+      const sendBudgets: SendBudget[] = [
+        {
+          label: 'DM & follow-up',
+          types: ['dm', 'followup'],
+          used: dmFollowupSent,
+          limit: dailySendLimit(),
+        },
+        {
+          label: 'Connection & Upwork',
+          types: ['connection', 'upwork'],
+          used: connectionSent + upworkApplies,
+          limit: dailyConnectionSendLimit(),
+        },
+      ]
+
+      const notifications = await this.listNotifications()
+
+      const contacted = leads.filter((l) => l.ownerRepId === rep.id && l.status === 'contacted')
+      const now = Date.now()
+      const followupsDue: FollowupDue[] = contacted
+        .map((lead) => {
+          const hasReply = outcomes.some((o) => o.leadId === lead.id && o.stage === 'replied')
+          if (hasReply) return null
+          const sent = messages
+            .filter((m) => m.leadId === lead.id && m.sentAt)
+            .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''))[0]
+          if (!sent?.sentAt) return null
+          const daysSinceContact = Math.floor((now - new Date(sent.sentAt).getTime()) / 86_400_000)
+          return daysSinceContact >= 3 ? { lead, daysSinceContact } : null
+        })
+        .filter((x): x is FollowupDue => x !== null)
+        .sort((a, b) => b.daysSinceContact - a.daysSinceContact)
+
+      const teamStats = await this.getTeamStats()
+      const mineRow = teamStats.perRep.find((r) => r.rep.id === rep.id)
+      const withSends = teamStats.perRep.filter((r) => r.sent > 0 && r.replyRate !== null)
+      const ranked = [...withSends].sort((a, b) => (b.replyRate ?? 0) - (a.replyRate ?? 0))
+      const position = mineRow && mineRow.sent > 0 ? ranked.findIndex((r) => r.rep.id === rep.id) + 1 : null
+      const myRank = {
+        mine: mineRow ?? null,
+        teamAverage: teamStats.overall,
+        position: position && position > 0 ? position : null,
+        ofTotal: ranked.length,
+      }
+
+      const upworkQueue = upworkJobs
+        .filter((j) => j.status === 'new' || j.status === 'drafted')
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+      const upwork: UpworkSnapshot = { queue: upworkQueue, todayApplies: upworkApplies }
+
+      return { mine: { ...mine, queue: mine.queue, replies: mine.replies }, team, sendBudgets, notifications, followupsDue, myRank, upwork }
     },
     async getTeamStats(): Promise<TeamStats> {
       const buckets = leads.map((lead) => ({
@@ -780,11 +907,15 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
           ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95))]
           : 0
       const costByTier = { tier1: 0, tier2: 0, tier3: 0, tier4: 0 }
+      const requestsByTier = { tier1: 0, tier2: 0, tier3: 0, tier4: 0 }
       for (const r of rows) {
-        if (r.costTier) costByTier[r.costTier] += r.costUsd
+        if (r.costTier) {
+          costByTier[r.costTier] += r.costUsd
+          requestsByTier[r.costTier] += 1
+        }
       }
       const totalCostUsd = Object.values(costByTier).reduce((sum, n) => sum + n, 0)
-      return { total, failures, failureRate, avgLatencyMs, p95LatencyMs, costByTier, totalCostUsd }
+      return { total, failures, failureRate, avgLatencyMs, p95LatencyMs, costByTier, totalCostUsd, requestsByTier }
     },
     async listAllLeadsAdmin() {
       return leads

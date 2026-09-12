@@ -482,12 +482,12 @@ async function modelExtract(
 }
 
 /**
- * Runs one extraction call across a tier chain (tier 1 hosts, then Groq/
- * OpenAI fallback). Every host is asked in json_object mode — DeepSeek's own
- * strict json_schema mode has an open bug returning malformed JSON on some
- * calls, so this app never relies on schema-adherence claims from any
- * provider; validateOutput() below is the real check, applied unconditionally
- * regardless of which host answered.
+ * Runs one extraction call across a tier chain (Groq's free tier first,
+ * then DeepSeek hosts, then OpenAI). Every host is asked in json_object
+ * mode — DeepSeek's own strict json_schema mode has an open bug returning
+ * malformed JSON on some calls, so this app never relies on schema-adherence
+ * claims from any provider; validateOutput() below is the real check,
+ * applied unconditionally regardless of which host answered.
  */
 async function modelExtractOnChain(
   rawText: string,

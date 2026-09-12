@@ -1,9 +1,10 @@
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { Briefcase, Plus, TrendingDown, TrendingUp } from 'lucide-react'
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import { REPLY_RATE_TARGET, READ_TO_CHECK_TARGET } from '@/lib/ai/config'
 import { LeadList } from '@/components/lead-list'
+import { NotificationFeed, type NotificationItem } from '@/components/notification-feed'
 import { cn } from 'cn'
 
 export const dynamic = 'force-dynamic'
@@ -75,17 +76,40 @@ export default async function TodayPage() {
   const user = await getCurrentUser()
   const store = await createScoutStore()
   const dashboard = await store.getTodayDashboard()
-  const { mine, team } = dashboard
+  const { mine, team, sendBudgets, notifications, followupsDue, myRank, upwork } = dashboard
 
   const firstName = user?.rep.name.split(' ')[0] ?? 'there'
-  const sendPct = Math.min(Math.round((mine.todaySends / mine.dailyLimit) * 100), 100)
-  const atCeiling = mine.todaySends >= mine.dailyLimit
-  const sendsLeft = Math.max(0, mine.dailyLimit - mine.todaySends)
   const queue = [...mine.queue].sort(
     (a, b) =>
       (b.score ?? 0) - (a.score ?? 0) ||
       b.createdAt.localeCompare(a.createdAt),
   )
+
+  // Resolve each notification's lead_id to a company name from data already
+  // on hand (owned leads + queue + replies), rather than an extra query —
+  // notifications almost always point at a lead this rep already owns.
+  const knownLeads = new Map(
+    [...mine.queue, ...mine.replies, ...followupsDue.map((f) => f.lead)].map((l) => [l.id, l.company]),
+  )
+  const notificationItems: NotificationItem[] = notifications.map((n) => {
+    const leadId = typeof n.payload.lead_id === 'string' ? n.payload.lead_id : null
+    return {
+      id: n.id,
+      type: n.type,
+      leadId,
+      company: leadId ? (knownLeads.get(leadId) ?? null) : null,
+      createdAt: n.createdAt,
+    }
+  })
+
+  const rankLabel =
+    myRank.position && myRank.ofTotal > 1
+      ? `#${myRank.position} of ${myRank.ofTotal} on the team`
+      : null
+  const mineReplyRate = myRank.mine?.replyRate ?? null
+  const teamReplyRate = myRank.teamAverage.replyRate
+  const aboveTeam =
+    mineReplyRate !== null && teamReplyRate !== null ? mineReplyRate >= teamReplyRate : null
 
   return (
     <div className="space-y-10">
@@ -111,15 +135,25 @@ export default async function TodayPage() {
         </Link>
       </header>
 
-      <section className="grid grid-cols-1 gap-6 border-y border-line py-5 sm:grid-cols-3 sm:gap-4">
-        <Stat
-          label="Sends today"
-          value={String(mine.todaySends)}
-          sub={`of ${mine.dailyLimit}`}
-          progress={sendPct}
-          tone={atCeiling ? 'warn' : 'gold'}
-          footer={atCeiling ? 'Ceiling reached. Sends resume tomorrow.' : `${sendsLeft} left today`}
-        />
+      {notificationItems.length > 0 ? <NotificationFeed initial={notificationItems} /> : null}
+
+      <section className="grid grid-cols-1 gap-6 border-y border-line py-5 sm:grid-cols-2 lg:grid-cols-5 sm:gap-4">
+        {sendBudgets.map((budget) => {
+          const used = budget.used
+          const atCeiling = used >= budget.limit
+          const budgetPct = Math.min(Math.round((used / budget.limit) * 100), 100)
+          return (
+            <Stat
+              key={budget.label}
+              label={budget.label}
+              value={String(used)}
+              sub={`of ${budget.limit}`}
+              progress={budgetPct}
+              tone={atCeiling ? 'warn' : 'gold'}
+              footer={atCeiling ? 'Ceiling reached today.' : `${budget.limit - used} left today`}
+            />
+          )
+        })}
         <Stat
           label="Team reply rate"
           value={pct(team.replyRate)}
@@ -132,7 +166,75 @@ export default async function TodayPage() {
           sub={`target ${pct(READ_TO_CHECK_TARGET)}`}
           footer={`${team.checkedLeads} checks from ${team.readLeads} reads`}
         />
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-slate">You vs team</div>
+          <div className="mt-1.5 flex items-baseline gap-2">
+            <span className="font-mono text-2xl font-medium text-ink">{pct(mineReplyRate)}</span>
+            {aboveTeam !== null ? (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-0.5 text-xs',
+                  aboveTeam ? 'text-status-send' : 'text-status-research',
+                )}
+              >
+                {aboveTeam ? (
+                  <TrendingUp className="size-3.5" aria-hidden="true" />
+                ) : (
+                  <TrendingDown className="size-3.5" aria-hidden="true" />
+                )}
+                team {pct(teamReplyRate)}
+              </span>
+            ) : (
+              <span className="text-xs text-slate">no sends yet</span>
+            )}
+          </div>
+          {rankLabel ? (
+            <p className="mt-1.5 text-xs text-slate">
+              <Link href="/team" className="hover:text-ink hover:underline">
+                {rankLabel}
+              </Link>
+            </p>
+          ) : null}
+        </div>
       </section>
+
+      {followupsDue.length > 0 ? (
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-medium text-ink">Follow-ups due</h2>
+                <span className="rounded-full bg-status-research/15 px-2 py-0.5 text-[11px] font-medium text-status-research">
+                  {followupsDue.length}
+                </span>
+              </div>
+              <p className="mt-0.5 text-sm text-slate">
+                Contacted 3+ days ago with no reply yet. A nudge now beats letting it go cold.
+              </p>
+            </div>
+          </div>
+          <ul className="divide-y divide-line rounded-xl border border-line bg-paper">
+            {followupsDue.map((f) => (
+              <li key={f.lead.id}>
+                <Link
+                  href={`/leads/${f.lead.id}`}
+                  className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-paper-tint"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-ink">{f.lead.company}</div>
+                    {f.lead.contactName ? (
+                      <div className="mt-0.5 truncate text-xs text-slate">{f.lead.contactName}</div>
+                    ) : null}
+                  </div>
+                  <span className="shrink-0 font-mono text-xs text-status-research">
+                    {f.daysSinceContact}d since contact
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {mine.replies.length > 0 ? (
         <section>
@@ -184,6 +286,65 @@ export default async function TodayPage() {
           <LeadList leads={queue} highlightTop />
         )}
       </section>
+
+      {upwork.queue.length > 0 ? (
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Briefcase className="size-4 text-slate" aria-hidden="true" />
+              <div>
+                <h2 className="text-base font-medium text-ink">Upwork jobs waiting</h2>
+                <p className="mt-0.5 text-sm text-slate">
+                  {upwork.todayApplies > 0
+                    ? `${upwork.todayApplies} applied today, sharing your connection budget above.`
+                    : 'Scored the same way as leads. Sharing your connection budget above.'}
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/upwork"
+              className="shrink-0 text-xs font-medium text-gold underline-offset-4 hover:underline"
+            >
+              View all
+            </Link>
+          </div>
+          <ul className="divide-y divide-line rounded-xl border border-line bg-paper">
+            {upwork.queue.slice(0, 5).map((job) => (
+              <li key={job.id}>
+                <Link
+                  href={`/upwork/${job.id}`}
+                  className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-paper-tint"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-ink">{job.title}</div>
+                    <div className="mt-0.5 truncate text-xs text-slate">
+                      {job.budgetMin && job.budgetMax
+                        ? `$${job.budgetMin}-$${job.budgetMax} fixed`
+                        : job.hourlyRateMin && job.hourlyRateMax
+                          ? `$${job.hourlyRateMin}-$${job.hourlyRateMax}/hr`
+                          : 'Budget not stated'}
+                      {' · '}
+                      {job.connectsCost} Connects
+                    </div>
+                  </div>
+                  <span
+                    className={cn(
+                      'shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium',
+                      job.verdict === 'apply'
+                        ? 'bg-status-send/10 text-status-send'
+                        : job.verdict === 'apply_if_connects'
+                          ? 'bg-status-research/10 text-status-research'
+                          : 'bg-line/50 text-slate',
+                    )}
+                  >
+                    {job.score ?? '-'} / 10
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   )
 }

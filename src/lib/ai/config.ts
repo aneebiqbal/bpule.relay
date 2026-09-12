@@ -1,13 +1,29 @@
 /**
- * Scout model configuration — architecture v2 (September 2026).
+ * Scout model configuration — architecture v2.1 (September 2026).
  *
  * Every provider host and model id used anywhere in the app must be resolved
  * through this module, so a provider swap or a routing change stays a
- * one-line edit. Defaults target DeepSeek V4 as the primary tier (multi-host,
- * cheapest capable option verified in the September 2026 research pass) with
- * Groq and OpenAI retained as cross-family fallbacks. Every id is
- * env-overridable so spend and provider choice stay a deployment decision,
- * not a code change.
+ * one-line edit.
+ *
+ * Groq's free tier (no card required, 30 req/min, 14,400 req/day — verified
+ * against Groq's published limits, not a trial) is tier 0 and primary for
+ * extraction and standard drafting: it's free, and its rate limits are
+ * generous enough that a five-person team is unlikely to hit them on a
+ * normal day. DeepSeek V4 (multi-host) and OpenAI sit one level down as paid
+ * escalation, unchanged in their own internal structure from the prior
+ * architecture pass — they now fire only when Groq's own daily/per-minute
+ * ceiling is actually hit, or the confidence gate/self-check fails on a Groq
+ * response and the existing escalation trigger applies. An OpenRouter tier
+ * was considered and deliberately dropped: OpenRouter's free tier requires a
+ * one-time $10 real payment just to raise its daily cap from 50 to 1,000
+ * requests, which is strictly worse than Groq's free tier for a team that
+ * already has Groq working. If Groq's free tier is ever actually exhausted
+ * in practice, the fix is adding a card to the existing Groq account (its
+ * paid Developer tier is still a fraction of a cent per call), not adding a
+ * third provider.
+ *
+ * Every id is env-overridable so spend and provider choice stay a deployment
+ * decision, not a code change.
  */
 
 export interface ProviderHost {
@@ -20,8 +36,43 @@ export interface ProviderHost {
 }
 
 // ============================================================================
+// Tier 0 — Groq, free, primary. No card required; a different model family
+// on different infrastructure from DeepSeek/OpenAI below it, so a Groq-side
+// issue and a DeepSeek-side issue are genuinely independent failure modes.
+// ============================================================================
+
+export function groqApiKey(): string | undefined {
+  return process.env.GROQ_API_KEY
+}
+
+export function groqBaseUrl(): string {
+  return process.env.GROQ_BASE_URL ?? 'https://api.groq.com/openai/v1'
+}
+
+export function groqCheapModel(): string {
+  return process.env.SCOUT_TIER0_CHEAP_MODEL ?? process.env.SCOUT_TIER3_CHEAP_MODEL ?? 'openai/gpt-oss-20b'
+}
+
+export function groqStrongModel(): string {
+  return process.env.SCOUT_TIER0_STRONG_MODEL ?? process.env.SCOUT_TIER3_STRONG_MODEL ?? 'openai/gpt-oss-120b'
+}
+
+export function tier0Host(kind: 'cheap' | 'strong'): ProviderHost | null {
+  if (!groqApiKey()) return null
+  return {
+    id: 'groq',
+    apiKey: groqApiKey(),
+    baseUrl: groqBaseUrl(),
+    model: kind === 'strong' ? groqStrongModel() : groqCheapModel(),
+  }
+}
+
+// ============================================================================
 // Tier 1 — DeepSeek V4 Flash, multi-host. Same weights served by two
 // independent providers; the host retry lives in provider.ts, not here.
+// First paid escalation once tier 0 (Groq) is actually exhausted or fails
+// its own retry budget — structurally identical to the prior architecture
+// pass, just one level down instead of primary.
 // ============================================================================
 
 export function deepseekOfficialApiKey(): string | undefined {
@@ -106,42 +157,10 @@ export function tier2Hosts(): ProviderHost[] {
 }
 
 // ============================================================================
-// Tier 3 — Groq, cross-family fallback. Kept exactly as the prior
-// architecture: a different model family on different infrastructure, which
-// is what actually protects against a DeepSeek-wide outage rather than a
-// single host being slow.
-// ============================================================================
-
-export function groqApiKey(): string | undefined {
-  return process.env.GROQ_API_KEY
-}
-
-export function groqBaseUrl(): string {
-  return process.env.GROQ_BASE_URL ?? 'https://api.groq.com/openai/v1'
-}
-
-export function groqCheapModel(): string {
-  return process.env.SCOUT_TIER3_CHEAP_MODEL ?? 'openai/gpt-oss-20b'
-}
-
-export function groqStrongModel(): string {
-  return process.env.SCOUT_TIER3_STRONG_MODEL ?? 'openai/gpt-oss-120b'
-}
-
-export function tier3Host(kind: 'cheap' | 'strong'): ProviderHost | null {
-  if (!groqApiKey()) return null
-  return {
-    id: 'groq',
-    apiKey: groqApiKey(),
-    baseUrl: groqBaseUrl(),
-    model: kind === 'strong' ? groqStrongModel() : groqCheapModel(),
-  }
-}
-
-// ============================================================================
-// Tier 4 — OpenAI, final safety net. Fires only if every DeepSeek host and
-// Groq have failed. There is no prior OpenAI chat fallback in this codebase
-// to "restore" — this is new, added specifically as the last-resort tier.
+// Tier 4 — OpenAI, final safety net. Fires only if tier 0 (Groq) and every
+// tier 1/2 (DeepSeek) host have failed. There is no prior OpenAI chat
+// fallback in this codebase to "restore" — this is new, added specifically
+// as the last-resort tier.
 // ============================================================================
 
 export function openaiApiKey(): string | undefined {

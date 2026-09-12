@@ -6,18 +6,19 @@ import type { ChainStep } from '@/lib/ai/routing'
 import { estimateCostUsd, estimateTokens, type CostTier } from '@/lib/ai/cost'
 
 /**
- * Multi-host, multi-tier model provider (architecture v2, September 2026).
+ * Multi-host, multi-tier model provider (architecture v2.1, September 2026).
  *
- * A "chain" is an ordered list of hosts to try for one call: every host in
- * tier 1 (DeepSeek V4 Flash, one entry per configured provider — official API
- * and Fireworks are the same weights, genuinely interchangeable), then the
- * cross-family fallbacks (Groq, then OpenAI). A host only gets skipped to the
- * next one on a real failure — a timeout, a 5xx, a malformed response after
- * its own retry budget is exhausted — never just because it was slow once.
- * This is what "if one host is slow, retry against the other host before
- * considering it a real failure, not before falling back to a different
- * model family" means in code: exhaust tier 1's hosts before tier 3 is ever
- * touched.
+ * A "chain" is an ordered list of hosts to try for one call: Groq's free
+ * tier first (tier 0, primary — no card required, generous rate limits),
+ * then every host in DeepSeek V4 Flash (one entry per configured provider —
+ * official API and Fireworks are the same weights, genuinely
+ * interchangeable), then OpenAI as the final safety net. A host only gets
+ * skipped to the next one on a real failure — a timeout, a 5xx, a malformed
+ * response after its own retry budget is exhausted — never just because it
+ * was slow once. This is what "escalate only on the free tier's own
+ * daily/rate-limit overflow or a confidence-gate/self-check failure, not on
+ * every call" means in code: Groq is exhausted (or its response fails the
+ * quality gate) before DeepSeek is ever touched.
  */
 
 const clients = new Map<string, OpenAI>()

@@ -84,14 +84,14 @@ export async function streamDraft(
   const callLog: DraftCallLog[] = []
 
   emit({ type: 'status', message: 'Drafting two variants in parallel' })
-  emit({ type: 'attempt', attempt: 0, model: 'tier1', tier: 'cheap' })
+  emit({ type: 'attempt', attempt: 0, model: 'tier0', tier: 'cheap' })
 
-  // Best-of-two: generate both variants in parallel on tier 1 (DeepSeek V4
-  // Flash across every configured host; a host that fails or exhausts its
-  // rate-limit budget falls through to the next host in the chain before
-  // this call ever fails outright). Never strict json_schema mode — same
-  // reasoning as extraction: DeepSeek's own strict mode has an open bug
-  // returning malformed JSON on some calls, so the code-level checks below
+  // Best-of-two: generate both variants in parallel starting on tier 0
+  // (Groq's free tier; a host that fails or exhausts its rate-limit budget
+  // falls through to DeepSeek, then OpenAI, before this call ever fails
+  // outright). Never strict json_schema mode — same reasoning as extraction:
+  // DeepSeek's own strict mode has an open bug returning malformed JSON on
+  // some calls, so the code-level checks below
   // are the real gate, not a provider's schema-adherence claim.
   const [rawA, rawB] = await Promise.all([
     structuredJsonChain<RawVariant>(chain, { system, user, schema: DRAFT_SCHEMA })

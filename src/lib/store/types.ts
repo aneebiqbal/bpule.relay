@@ -55,6 +55,8 @@ export interface ExtractionMetrics {
   /** Estimated USD cost over the same rolling window, split by which tier served the call. */
   costByTier: Record<'tier1' | 'tier2' | 'tier3' | 'tier4', number>
   totalCostUsd: number
+  /** Request count by tier over the same window — the number that actually shows whether the free tier (tier1/Groq, $0 cost either way) is absorbing real volume or the paid chain is doing more work than expected. */
+  requestsByTier: Record<'tier1' | 'tier2' | 'tier3' | 'tier4', number>
 }
 
 export interface ModelCallLogInput {
@@ -98,7 +100,9 @@ export interface LeadDetail extends Lead {
 }
 
 export interface QueueData {
+  /** @deprecated blends two different daily ceilings into one number; use sendBudgets on TodayDashboard instead. Kept only so existing callers of getQueue() don't break. */
   todaySends: number
+  /** @deprecated see todaySends. */
   dailyLimit: number
   queue: Lead[]
   /** Owned leads whose prospect has replied and still needs a response. */
@@ -119,9 +123,43 @@ export interface PlayRateRow extends RateMetric {
   play: Play | null
 }
 
+/** One of the two real daily send ceilings (Part 7 rule) — dm/followup and connection/upwork are tracked and limited separately, never blended into one number. */
+export interface SendBudget {
+  label: string
+  types: MessageType[]
+  used: number
+  limit: number
+}
+
+/** A contacted lead 3+ days past its last send with no reply — the same threshold the followup_eligible notification trigger uses, computed here so the homepage can show the whole bucket, not just one notification at a time. */
+export interface FollowupDue {
+  lead: Lead
+  daysSinceContact: number
+}
+
+/** This rep's reply rate against the team's, so "where do I stand" doesn't require a trip to /team. */
+export interface MyRank {
+  mine: RateMetric | null
+  teamAverage: RateMetric
+  /** 1-based position among reps with at least one send, best reply rate first; null if this rep has no sends yet. */
+  position: number | null
+  ofTotal: number
+}
+
+/** Upwork's own pipeline, summarized for the homepage the same way the lead queue is — Upwork jobs are a fully parallel, equally-scored pipeline that previously had zero homepage visibility. */
+export interface UpworkSnapshot {
+  queue: UpworkJob[]
+  todayApplies: number
+}
+
 export interface TodayDashboard {
   mine: QueueData
   team: RateMetric
+  sendBudgets: SendBudget[]
+  notifications: NotificationLogEntry[]
+  followupsDue: FollowupDue[]
+  myRank: MyRank
+  upwork: UpworkSnapshot
 }
 
 export interface DosageResult {
