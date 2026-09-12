@@ -2,15 +2,22 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { classifyProofTags } from '@/lib/ai/proof-tags'
 import { embedText } from '@/lib/ai/embed'
+import { getCurrentUser } from '@/lib/auth/current'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const profileId = url.searchParams.get('profileId')
+  const admin = url.searchParams.get('admin') === '1'
   if (!profileId) {
     return NextResponse.json(
       { error: 'profileId is required.' },
       { status: 400 },
     )
+  }
+
+  const user = await getCurrentUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
 
   let store
@@ -21,6 +28,16 @@ export async function GET(request: Request) {
       { error: err instanceof Error ? err.message : 'Not signed in.' },
       { status: 401 },
     )
+  }
+
+  if (admin) {
+    // Reading another rep's proof items unredacted is an admin-only action.
+    // Enforced here server-side, independent of the RLS policy.
+    if (user.rep.role !== 'admin') {
+      return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+    }
+    const items = await store.listProofItemsAdmin(profileId)
+    return NextResponse.json({ items })
   }
 
   const items = await store.listProofItems(profileId)
@@ -53,6 +70,11 @@ export async function POST(request: Request) {
   // Enforced above the store as well as inside it: no permission, no name.
   if (!permissionOnFile) clientName = null
 
+  const user = await getCurrentUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  }
+
   let store
   try {
     store = await createScoutStore()
@@ -63,7 +85,14 @@ export async function POST(request: Request) {
     )
   }
 
-  const owned = await store.getProfile(profileId)
+  const admin = Boolean(body.admin)
+  if (admin && user.rep.role !== 'admin') {
+    return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  }
+
+  const owned = admin
+    ? (await store.listAllProfiles()).find((p) => p.id === profileId) ?? null
+    : await store.getProfile(profileId)
   if (!owned) {
     return NextResponse.json(
       { error: 'Profile not found or not yours.' },
@@ -90,16 +119,28 @@ export async function POST(request: Request) {
     // Embedding is optional; tag matching still works as fallback.
   }
 
-  const item = await store.upsertProofItem({
-    id: typeof body.id === 'string' ? body.id : undefined,
-    profileId,
-    clientNamed: Boolean(body.clientNamed),
-    clientName,
-    permissionOnFile,
-    projectSummary,
-    reviewQuote: typeof body.reviewQuote === 'string' ? body.reviewQuote : null,
-    tags,
-    embedding,
-  })
+  const item = admin
+    ? await store.upsertProofItemAdmin({
+        id: typeof body.id === 'string' ? body.id : undefined,
+        profileId,
+        clientNamed: Boolean(body.clientNamed),
+        clientName,
+        permissionOnFile,
+        projectSummary,
+        reviewQuote: typeof body.reviewQuote === 'string' ? body.reviewQuote : null,
+        tags,
+        embedding,
+      })
+    : await store.upsertProofItem({
+        id: typeof body.id === 'string' ? body.id : undefined,
+        profileId,
+        clientNamed: Boolean(body.clientNamed),
+        clientName,
+        permissionOnFile,
+        projectSummary,
+        reviewQuote: typeof body.reviewQuote === 'string' ? body.reviewQuote : null,
+        tags,
+        embedding,
+      })
   return NextResponse.json({ item })
 }

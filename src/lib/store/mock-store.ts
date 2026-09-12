@@ -548,6 +548,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async listPlays() {
       return [...plays]
     },
+    async listAllReps() {
+      return [...reps].sort((a, b) => a.name.localeCompare(b.name))
+    },
     async listProfiles() {
       return profiles
         .filter((p) => p.repId === rep.id)
@@ -584,7 +587,43 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const idx = profiles.findIndex((p) => p.id === id && p.repId === rep.id)
       if (idx >= 0) profiles.splice(idx, 1)
     },
+    async listAllProfiles() {
+      return [...profiles].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    },
+    async upsertProfileAdmin(input) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      const existing = input.id ? profiles.find((p) => p.id === input.id) : null
+      if (existing) {
+        existing.platform = input.platform
+        existing.label = input.label ?? null
+        existing.profileUrl = input.profileUrl ?? null
+        existing.headline = input.headline ?? null
+        existing.cvPath = input.cvPath ?? null
+        return existing
+      }
+      const profile: Profile = {
+        id: nextId('profile'),
+        repId: input.repId,
+        platform: input.platform,
+        label: input.label ?? null,
+        profileUrl: input.profileUrl ?? null,
+        headline: input.headline ?? null,
+        cvPath: input.cvPath ?? null,
+        createdAt: new Date().toISOString(),
+      }
+      profiles.push(profile)
+      return profile
+    },
+    async deleteProfileAdmin(id: string) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      const idx = profiles.findIndex((p) => p.id === id)
+      if (idx >= 0) profiles.splice(idx, 1)
+    },
     async listProofItems(profileId: string) {
+      return proofItems.filter((x) => x.profileId === profileId)
+    },
+    async listProofItemsAdmin(profileId: string) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
       return proofItems.filter((x) => x.profileId === profileId)
     },
     async upsertProofItem(input) {
@@ -615,6 +654,39 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       return item
     },
     async deleteProofItem(id: string) {
+      const idx = proofItems.findIndex((x) => x.id === id)
+      if (idx >= 0) proofItems.splice(idx, 1)
+    },
+    async upsertProofItemAdmin(input) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      const permission = Boolean(input.permissionOnFile)
+      const clientName = permission ? (input.clientName ?? null) : null
+      const existing = input.id ? proofItems.find((x) => x.id === input.id) : null
+      if (existing) {
+        existing.clientNamed = Boolean(input.clientNamed)
+        existing.permissionOnFile = permission
+        existing.clientName = clientName
+        existing.projectSummary = input.projectSummary
+        existing.reviewQuote = input.reviewQuote ?? null
+        existing.tags = input.tags ?? []
+        return existing
+      }
+      const item: ProofItem = {
+        id: nextId('proof'),
+        profileId: input.profileId,
+        clientNamed: Boolean(input.clientNamed),
+        permissionOnFile: permission,
+        clientName,
+        projectSummary: input.projectSummary,
+        reviewQuote: input.reviewQuote ?? null,
+        tags: input.tags ?? [],
+        createdAt: new Date().toISOString(),
+      }
+      proofItems.push(item)
+      return item
+    },
+    async deleteProofItemAdmin(id: string) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
       const idx = proofItems.findIndex((x) => x.id === id)
       if (idx >= 0) proofItems.splice(idx, 1)
     },

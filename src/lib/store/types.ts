@@ -158,6 +158,8 @@ export interface ScoutStore {
     styleCard: StyleCard,
     sampleSource: StyleSampleSource,
   ): Promise<VoiceProfile>
+  /** Every rep, for the Manage Profiles screen's rep grouping (read is open to any authenticated rep, matching RLS). */
+  listAllReps(): Promise<Rep[]>
   // profiles (multi-platform identity)
   listProfiles(): Promise<Profile[]>
   getProfile(id: string): Promise<Profile | null>
@@ -170,8 +172,24 @@ export interface ScoutStore {
     cvPath?: string | null
   }): Promise<Profile>
   deleteProfile(id: string): Promise<void>
+  /** Every rep's profiles, for the Manage Profiles screen. Read is open to any authenticated rep, matching RLS; writes are still admin-only. */
+  listAllProfiles(): Promise<Profile[]>
+  /** Admin only: create/update a profile on behalf of any rep. */
+  upsertProfileAdmin(input: {
+    id?: string
+    repId: string
+    platform: 'linkedin' | 'upwork'
+    label?: string | null
+    profileUrl?: string | null
+    headline?: string | null
+    cvPath?: string | null
+  }): Promise<Profile>
+  /** Admin only: delete any rep's profile. */
+  deleteProfileAdmin(id: string): Promise<void>
   // proof items
   listProofItems(profileId: string): Promise<ProofItem[]>
+  /** Admin only: proof items for a profile with client_name unredacted, for the edit view. */
+  listProofItemsAdmin(profileId: string): Promise<ProofItem[]>
   upsertProofItem(input: {
     id?: string
     profileId: string
@@ -184,6 +202,20 @@ export interface ScoutStore {
     embedding?: number[] | null
   }): Promise<ProofItem>
   deleteProofItem(id: string): Promise<void>
+  /** Admin only: create/update a proof item on any profile, unredacted. */
+  upsertProofItemAdmin(input: {
+    id?: string
+    profileId: string
+    clientNamed?: boolean
+    clientName?: string | null
+    permissionOnFile?: boolean
+    projectSummary: string
+    reviewQuote?: string | null
+    tags?: string[]
+    embedding?: number[] | null
+  }): Promise<ProofItem>
+  /** Admin only: delete any proof item. */
+  deleteProofItemAdmin(id: string): Promise<void>
   /** Find proof items whose tags overlap with the given tags, ranked by overlap count. */
   matchProofItems(tags: string[], limit?: number): Promise<ProofItem[]>
   /** Semantic proof matching via pgvector embedding search. */

@@ -53,16 +53,21 @@ async function ensureBucket() {
 async function ensurePolicies() {
   const sql = `
     do $$ begin
+      drop policy if exists storage_cv_insert on storage.objects;
       create policy storage_cv_insert on storage.objects for insert
         to authenticated
         with check (
           bucket_id = 'proof-cvs'
-          and (storage.foldername(name))[1] = public.current_rep_id()::text
+          and (
+            (storage.foldername(name))[1] = public.current_rep_id()::text
+            or public.is_admin()
+          )
         );
     exception when duplicate_object then null;
     end $$;
 
     do $$ begin
+      drop policy if exists storage_cv_select on storage.objects;
       create policy storage_cv_select on storage.objects for select
         to authenticated
         using (
@@ -76,11 +81,15 @@ async function ensurePolicies() {
     end $$;
 
     do $$ begin
+      drop policy if exists storage_cv_delete on storage.objects;
       create policy storage_cv_delete on storage.objects for delete
         to authenticated
         using (
           bucket_id = 'proof-cvs'
-          and (storage.foldername(name))[1] = public.current_rep_id()::text
+          and (
+            (storage.foldername(name))[1] = public.current_rep_id()::text
+            or public.is_admin()
+          )
         );
     exception when duplicate_object then null;
     end $$;

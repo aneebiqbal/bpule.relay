@@ -134,6 +134,26 @@ function mapProofItem(r: Row): ProofItem {
 }
 
 /**
+ * Admin-only mapping: the real client_name is exposed regardless of
+ * permission_on_file, so the admin can see who the client actually is when
+ * deciding whether to flip that flag. Never used on a path a non-admin can
+ * reach.
+ */
+function mapProofItemUnredacted(r: Row): ProofItem {
+  return {
+    id: r.id as string,
+    profileId: r.profile_id as string,
+    clientNamed: Boolean(r.client_named),
+    clientName: (r.client_name as string) ?? null,
+    permissionOnFile: Boolean(r.permission_on_file),
+    projectSummary: r.project_summary as string,
+    reviewQuote: (r.review_quote as string) ?? null,
+    tags: (r.tags as string[]) ?? [],
+    createdAt: r.created_at as string,
+  }
+}
+
+/**
  * Supabase store. RLS is enforced by the per-request client that carries the
  * signed-in session, so a rep literally cannot read or mutate another rep's
  * queue from this code path.
@@ -480,6 +500,20 @@ export class SupabaseStore implements ScoutStore {
     return (data ?? []).map(mapPlay)
   }
 
+  async listAllReps(): Promise<Rep[]> {
+    const { data, error } = await this.client
+      .from('reps')
+      .select('id, name, role, created_at')
+      .order('name', { ascending: true })
+    if (error) throw error
+    return (data ?? []).map((row: Row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      role: row.role as Rep['role'],
+      createdAt: row.created_at as string,
+    }))
+  }
+
   async listProfiles(): Promise<Profile[]> {
     const { data, error } = await this.client
       .from('profiles')
@@ -552,6 +586,69 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
   }
 
+  async listAllProfiles(): Promise<Profile[]> {
+    const { data, error } = await this.client
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: true })
+    if (error) throw error
+    return (data ?? []).map(mapProfile)
+  }
+
+  async upsertProfileAdmin(input: {
+    id?: string
+    repId: string
+    platform: 'linkedin' | 'upwork'
+    label?: string | null
+    profileUrl?: string | null
+    headline?: string | null
+    cvPath?: string | null
+  }): Promise<Profile> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const row = input.id
+      ? await this.client
+          .from('profiles')
+          .update({
+            platform: input.platform,
+            label: input.label ?? null,
+            profile_url: input.profileUrl ?? null,
+            headline: input.headline ?? null,
+            cv_path: input.cvPath ?? null,
+          })
+          .eq('id', input.id)
+          .select('*')
+          .single()
+      : await this.client
+          .from('profiles')
+          .insert({
+            rep_id: input.repId,
+            platform: input.platform,
+            label: input.label ?? null,
+            profile_url: input.profileUrl ?? null,
+            headline: input.headline ?? null,
+            cv_path: input.cvPath ?? null,
+          })
+          .select('*')
+          .single()
+    if (row.error) throw row.error
+    return mapProfile(row.data as Row)
+  }
+
+  async deleteProfileAdmin(id: string): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data } = await this.client
+      .from('profiles')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+    const cvPath = (data as Row | null)?.cv_path as string | undefined
+    if (cvPath) {
+      await this.client.storage.from('proof-cvs').remove([cvPath])
+    }
+    const { error } = await this.client.from('profiles').delete().eq('id', id)
+    if (error) throw error
+  }
+
   async listProofItems(profileId: string): Promise<ProofItem[]> {
     const { data, error } = await this.client
       .from('proof_items')
@@ -559,6 +656,16 @@ export class SupabaseStore implements ScoutStore {
       .eq('profile_id', profileId)
     if (error) throw error
     return (data ?? []).map(mapProofItem)
+  }
+
+  async listProofItemsAdmin(profileId: string): Promise<ProofItem[]> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('proof_items')
+      .select('*')
+      .eq('profile_id', profileId)
+    if (error) throw error
+    return (data ?? []).map(mapProofItemUnredacted)
   }
 
   async upsertProofItem(input: {
@@ -614,6 +721,59 @@ export class SupabaseStore implements ScoutStore {
       .from('proof_items')
       .delete()
       .eq('id', id)
+    if (error) throw error
+  }
+
+  async upsertProofItemAdmin(input: {
+    id?: string
+    profileId: string
+    clientNamed?: boolean
+    clientName?: string | null
+    permissionOnFile?: boolean
+    projectSummary: string
+    reviewQuote?: string | null
+    tags?: string[]
+    embedding?: number[] | null
+  }): Promise<ProofItem> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const permission = Boolean(input.permissionOnFile)
+    const clientName = permission ? (input.clientName ?? null) : null
+    const row = input.id
+      ? await this.client
+          .from('proof_items')
+          .update({
+            client_named: Boolean(input.clientNamed),
+            permission_on_file: permission,
+            client_name: clientName,
+            project_summary: input.projectSummary,
+            review_quote: input.reviewQuote ?? null,
+            tags: input.tags ?? [],
+            embedding: input.embedding ?? null,
+          })
+          .eq('id', input.id)
+          .select('*')
+          .single()
+      : await this.client
+          .from('proof_items')
+          .insert({
+            profile_id: input.profileId,
+            client_named: Boolean(input.clientNamed),
+            permission_on_file: permission,
+            client_name: clientName,
+            project_summary: input.projectSummary,
+            review_quote: input.reviewQuote ?? null,
+            tags: input.tags ?? [],
+            embedding: input.embedding ?? null,
+          })
+          .select('*')
+          .single()
+    if (row.error) throw row.error
+    return mapProofItemUnredacted(row.data as Row)
+  }
+
+  async deleteProofItemAdmin(id: string): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { error } = await this.client.from('proof_items').delete().eq('id', id)
     if (error) throw error
   }
 

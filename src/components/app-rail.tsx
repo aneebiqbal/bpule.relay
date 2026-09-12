@@ -11,6 +11,7 @@ import {
   LogOut,
   Plus,
   Search,
+  ShieldCheck,
   Sparkles,
   Users,
   Briefcase,
@@ -42,6 +43,13 @@ const SOURCER_NAV = [
   { href: '/facts', label: 'Facts', icon: BookOpen, exact: false },
 ]
 
+const ADMIN_NAV_ITEM = {
+  href: '/manage-profiles',
+  label: 'Manage Profiles',
+  icon: ShieldCheck,
+  exact: false,
+}
+
 const ROLE_LABEL: Record<RepRole, string> = {
   admin: 'Admin',
   rep: 'Rep',
@@ -69,7 +77,12 @@ export function AppRail({
   const router = useRouter()
   const [sends, setSends] = useState(todaySends)
 
-  const NAV = role === 'sourcer' ? SOURCER_NAV : BASE_NAV
+  const NAV =
+    role === 'admin'
+      ? [...BASE_NAV, ADMIN_NAV_ITEM]
+      : role === 'sourcer'
+        ? SOURCER_NAV
+        : BASE_NAV
 
   useEffect(() => {
     let cancelled = false

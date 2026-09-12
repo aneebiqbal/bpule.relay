@@ -18,24 +18,34 @@ begin
 exception when duplicate_object then null;
 end $$;
 
+-- insert/delete also allow the admin, so the Manage Profiles screen can
+-- upload/replace/remove a CV in any rep's folder, not just the owner's.
 do $$
 begin
+  drop policy if exists storage_cv_insert on storage.objects;
   create policy storage_cv_insert on storage.objects for insert
     to authenticated
     with check (
       bucket_id = 'proof-cvs'
-      and (storage.foldername(name))[1] = public.current_rep_id()::text
+      and (
+        (storage.foldername(name))[1] = public.current_rep_id()::text
+        or public.is_admin()
+      )
     );
 exception when duplicate_object then null;
 end $$;
 
 do $$
 begin
+  drop policy if exists storage_cv_delete on storage.objects;
   create policy storage_cv_delete on storage.objects for delete
     to authenticated
     using (
       bucket_id = 'proof-cvs'
-      and (storage.foldername(name))[1] = public.current_rep_id()::text
+      and (
+        (storage.foldername(name))[1] = public.current_rep_id()::text
+        or public.is_admin()
+      )
     );
 exception when duplicate_object then null;
 end $$;

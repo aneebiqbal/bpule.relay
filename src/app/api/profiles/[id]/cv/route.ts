@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { getCurrentUser } from '@/lib/auth/current'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const ALLOWED: Record<string, string> = {
@@ -9,11 +10,28 @@ const ALLOWED: Record<string, string> = {
   'image/png': 'png',
 }
 
+async function loadProfileForRequest(
+  store: Awaited<ReturnType<typeof createScoutStore>>,
+  isAdmin: boolean,
+  id: string,
+) {
+  if (isAdmin) {
+    const profiles = await store.listAllProfiles()
+    return profiles.find((p) => p.id === id) ?? null
+  }
+  return store.getProfile(id)
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
+
+  const user = await getCurrentUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  }
 
   let store
   try {
@@ -25,7 +43,13 @@ export async function GET(
     )
   }
 
-  const profile = await store.getProfile(id)
+  const url = new URL(request.url)
+  const admin = url.searchParams.get('admin') === '1'
+  if (admin && user.rep.role !== 'admin') {
+    return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  }
+
+  const profile = await loadProfileForRequest(store, admin, id)
   if (!profile) {
     return NextResponse.json({ error: 'Profile not found.' }, { status: 404 })
   }
@@ -47,6 +71,11 @@ export async function POST(
 ) {
   const { id } = await params
 
+  const user = await getCurrentUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  }
+
   let store
   try {
     store = await createScoutStore()
@@ -57,7 +86,16 @@ export async function POST(
     )
   }
 
-  const profile = await store.getProfile(id)
+  const url = new URL(request.url)
+  const admin = url.searchParams.get('admin') === '1'
+  // Uploading/replacing a CV on another rep's behalf is an admin-only
+  // action. Enforced here server-side, independent of the RLS/storage
+  // policy checks (see supabase/storage-proof-cvs-policies.sql).
+  if (admin && user.rep.role !== 'admin') {
+    return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  }
+
+  const profile = await loadProfileForRequest(store, admin, id)
   if (!profile) {
     return NextResponse.json({ error: 'Profile not found.' }, { status: 404 })
   }
@@ -103,14 +141,24 @@ export async function POST(
     )
   }
 
-  const updated = await store.upsertProfile({
-    id: profile.id,
-    platform: profile.platform,
-    label: profile.label,
-    profileUrl: profile.profileUrl,
-    headline: profile.headline,
-    cvPath: path,
-  })
+  const updated = admin
+    ? await store.upsertProfileAdmin({
+        id: profile.id,
+        repId: profile.repId,
+        platform: profile.platform,
+        label: profile.label,
+        profileUrl: profile.profileUrl,
+        headline: profile.headline,
+        cvPath: path,
+      })
+    : await store.upsertProfile({
+        id: profile.id,
+        platform: profile.platform,
+        label: profile.label,
+        profileUrl: profile.profileUrl,
+        headline: profile.headline,
+        cvPath: path,
+      })
 
   const { data: signed } = await client.storage
     .from('proof-cvs')
