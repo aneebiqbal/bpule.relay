@@ -20,6 +20,7 @@ import type {
 import type {
   CreateLeadResult,
   DosageResult,
+  ExtractionMetrics,
   NewLeadInput,
   QueueData,
   SaveDraftInput,
@@ -43,8 +44,14 @@ function mapLead(r: Row): Lead {
     companyKey: r.company_key as string,
     contactName: (r.contact_name as string) ?? null,
     contactTitle: (r.contact_title as string) ?? null,
+    titleRaw: (r.title_raw as string) ?? null,
+    locationRaw: (r.location_raw as string) ?? null,
     url: (r.url as string) ?? null,
     rawInput: (r.raw_input as string) ?? null,
+    roleCategory: (r.role_category as Lead['roleCategory']) ?? null,
+    marketRegion: (r.market_region as Lead['marketRegion']) ?? null,
+    extractionConfidence: (r.extraction_confidence as number) ?? null,
+    extractionProfile: (r.extraction_profile as Record<string, unknown>) ?? null,
     signalType: (r.signal_type as Lead['signalType']) ?? null,
     signalEvidence: (r.signal_evidence as string) ?? null,
     verbatimQuote: (r.verbatim_quote as string) ?? null,
@@ -243,25 +250,36 @@ export class SupabaseStore implements ScoutStore {
       }
     }
 
-    const { data, error } = await this.client
-      .from('leads')
-      .insert({
-        owner_rep_id: this.rep.id,
-        company: input.company.trim(),
-        contact_name: input.contactName?.trim() || null,
-        contact_title: input.contactTitle?.trim() || null,
-        url: input.url?.trim() || null,
-        raw_input: input.rawInput?.trim() || null,
-        signal_type: input.signalType,
-        signal_evidence: input.signalEvidence.trim(),
-        verbatim_quote: input.verbatimQuote?.trim() || null,
-        tags: input.tags ?? [],
-        play_id: (await this.playForSignal(input.signalType))?.id ?? null,
-      })
-      .select('*')
-      .single()
-    if (error) throw error
-    return { blocked: false, lead: mapLead(data as Row) }
+    const insertBase = {
+      owner_rep_id: this.rep.id,
+      company: input.company.trim(),
+      contact_name: input.contactName?.trim() || null,
+      contact_title: input.contactTitle?.trim() || null,
+      url: input.url?.trim() || null,
+      raw_input: input.rawInput?.trim() || null,
+      signal_type: input.signalType,
+      signal_evidence: input.signalEvidence.trim(),
+      verbatim_quote: input.verbatimQuote?.trim() || null,
+      tags: input.tags ?? [],
+      play_id: (await this.playForSignal(input.signalType))?.id ?? null,
+    }
+
+    const insertRich = {
+      ...insertBase,
+      title_raw: input.titleRaw?.trim() || null,
+      location_raw: input.locationRaw?.trim() || null,
+      role_category: input.roleCategory ?? null,
+      market_region: input.marketRegion ?? null,
+      extraction_confidence: input.extractionConfidence ?? null,
+      extraction_profile: input.extractionProfile ?? null,
+    }
+
+    let row = await this.client.from('leads').insert(insertRich).select('*').single()
+    if (row.error && (row.error as { code?: string }).code === '42703') {
+      row = await this.client.from('leads').insert(insertBase).select('*').single()
+    }
+    if (row.error) throw row.error
+    return { blocked: false, lead: mapLead(row.data as Row) }
   }
 
   private async playForSignal(signalType: SignalId): Promise<Play | null> {
@@ -839,6 +857,60 @@ export class SupabaseStore implements ScoutStore {
       })
 
     return { overall, perRep, perPlay }
+  }
+
+  async logExtractionRun(input: {
+    success: boolean
+    latencyMs: number
+    model: string
+    error?: string | null
+  }): Promise<void> {
+    const { error } = await this.client.from('extraction_runs').insert({
+      rep_id: this.rep.id,
+      success: input.success,
+      latency_ms: Math.max(0, Math.round(input.latencyMs)),
+      model: input.model,
+      error_message: input.error ?? null,
+    })
+    if (error) throw error
+  }
+
+  async getExtractionMetrics(): Promise<ExtractionMetrics> {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const { data, error } = await this.client
+      .from('extraction_runs')
+      .select('success, latency_ms, created_at')
+      .gte('created_at', since)
+
+    if (error) {
+      if ((error as { code?: string }).code === '42P01') {
+        return { total: 0, failures: 0, failureRate: 0, avgLatencyMs: 0, p95LatencyMs: 0 }
+      }
+      throw error
+    }
+    const rows = (data ?? []) as Array<{ success: boolean; latency_ms: number | null }>
+    const total = rows.length
+    const failures = rows.filter((r) => !r.success).length
+    const failureRate = total > 0 ? failures / total : 0
+    const latencies = rows
+      .map((r) => Number(r.latency_ms ?? 0))
+      .filter((n) => Number.isFinite(n) && n > 0)
+      .sort((a, b) => a - b)
+    const avgLatencyMs =
+      latencies.length > 0
+        ? Math.round(latencies.reduce((sum, n) => sum + n, 0) / latencies.length)
+        : 0
+    const p95LatencyMs =
+      latencies.length > 0
+        ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95))]
+        : 0
+    return {
+      total,
+      failures,
+      failureRate,
+      avgLatencyMs,
+      p95LatencyMs,
+    }
   }
 
   async listAllLeadsAdmin(): Promise<Lead[]> {

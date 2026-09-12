@@ -30,8 +30,14 @@ export interface Lead {
   companyKey: string
   contactName: string | null
   contactTitle: string | null
+  titleRaw?: string | null
+  locationRaw?: string | null
   url: string | null
   rawInput: string | null
+  roleCategory?: RoleCategory | null
+  marketRegion?: MarketRegion | null
+  extractionConfidence?: number | null
+  extractionProfile?: Record<string, unknown> | null
   signalType: SignalId | null
   signalEvidence: string | null
   verbatimQuote: string | null
@@ -220,16 +226,42 @@ export interface ScoreBreakdownItem {
 export interface ScoreResult {
   total: number
   verdict: Verdict
+  baseVerdict?: Verdict
   breakdown: ScoreBreakdownItem[]
+  gates?: string[]
+}
+
+export type RoleCategory =
+  | 'founder_cofounder'
+  | 'ceo'
+  | 'technical_leadership'
+  | 'product'
+  | 'hiring_manager_recruiter'
+  | 'other'
+
+export type MarketRegion = 'US' | 'UK' | 'EU' | 'CA' | 'AU' | 'UAE' | 'SG' | 'outside_core' | 'unknown'
+
+export interface RecentPostExtract {
+  paraphrase: string
+  verbatimQuote: string | null
 }
 
 export interface ExtractedLead {
   name: string | null
   title: string | null
+  titleRaw?: string | null
   company: string
   url: string | null
+  locationRaw?: string | null
+  aboutSummary?: string | null
+  experienceSummary?: string | null
+  recentPosts?: RecentPostExtract[]
+  roleCategory?: RoleCategory
+  marketRegion?: MarketRegion
   signalType: SignalId
   signalEvidence: string
+  extractionConfidence?: number
+  confidenceNotes?: string[]
   verbatimQuote: string | null
   /** Stack/domain tags for proof matching; produced once at extraction time. */
   tags: string[]

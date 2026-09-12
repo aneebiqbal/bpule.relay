@@ -19,6 +19,7 @@ import type {
 import type {
   CreateLeadResult,
   DosageResult,
+  ExtractionMetrics,
   NewLeadInput,
   QueueData,
   SaveDraftInput,
@@ -324,6 +325,13 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const pushSubs: PushSubscription[] = []
   const notifications: NotificationLogEntry[] = []
   const csvImports: CsvImport[] = []
+  const extractionRuns: Array<{
+    success: boolean
+    latencyMs: number
+    model: string
+    error: string | null
+    createdAt: string
+  }> = []
 
   function bucketByOwner(ownerId: string): RateBucket[] {
     return leads
@@ -378,8 +386,14 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         companyKey: companyKey(input.company),
         contactName: input.contactName?.trim() || null,
         contactTitle: input.contactTitle?.trim() || null,
+        titleRaw: input.titleRaw?.trim() || null,
+        locationRaw: input.locationRaw?.trim() || null,
         url: input.url?.trim() || null,
         rawInput: input.rawInput?.trim() || null,
+        roleCategory: input.roleCategory ?? null,
+        marketRegion: input.marketRegion ?? null,
+        extractionConfidence: input.extractionConfidence ?? null,
+        extractionProfile: input.extractionProfile ?? null,
         signalType: input.signalType,
         signalEvidence: input.signalEvidence.trim(),
         verbatimQuote: input.verbatimQuote?.trim() || null,
@@ -730,6 +744,35 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         .filter((row) => row.sent > 0 || row.replyRate !== null)
         .sort((a, b) => (a.play?.name ?? 'No play').localeCompare(b.play?.name ?? 'No play'))
       return { overall, perRep, perPlay }
+    },
+    async logExtractionRun(input) {
+      extractionRuns.push({
+        success: input.success,
+        latencyMs: Math.max(0, Math.round(input.latencyMs)),
+        model: input.model,
+        error: input.error ?? null,
+        createdAt: new Date().toISOString(),
+      })
+    },
+    async getExtractionMetrics(): Promise<ExtractionMetrics> {
+      const since = Date.now() - 7 * 24 * 60 * 60 * 1000
+      const rows = extractionRuns.filter((r) => new Date(r.createdAt).getTime() >= since)
+      const total = rows.length
+      const failures = rows.filter((r) => !r.success).length
+      const failureRate = total > 0 ? failures / total : 0
+      const latencies = rows
+        .map((r) => r.latencyMs)
+        .filter((n) => Number.isFinite(n) && n > 0)
+        .sort((a, b) => a - b)
+      const avgLatencyMs =
+        latencies.length > 0
+          ? Math.round(latencies.reduce((sum, n) => sum + n, 0) / latencies.length)
+          : 0
+      const p95LatencyMs =
+        latencies.length > 0
+          ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95))]
+          : 0
+      return { total, failures, failureRate, avgLatencyMs, p95LatencyMs }
     },
     async listAllLeadsAdmin() {
       return leads

@@ -16,6 +16,7 @@ import { injectStyleCard } from '@/lib/style/inject'
 import { signalById } from '@/lib/score/signals'
 import { pickPlayForSignal } from '@/lib/score/plays'
 import { sanitizeDraft, siteIsLive } from '@/lib/facts/sanitize'
+import { classifyRoleFromTitle, rolePromptGuidance } from '@/lib/leads/targeting'
 
 export type DraftMessageType = 'dm' | 'connection' | 'upwork' | 'followup' | 'reply'
 
@@ -181,6 +182,9 @@ export function buildUserPrompt(
 ): string {
   const signal = signalById(input.extracted.signalType)
   const play = pickPlayForSignal(input.plays, input.extracted.signalType)
+  const role =
+    input.extracted.roleCategory ??
+    (input.lead.contactTitle ? classifyRoleFromTitle(input.lead.contactTitle) : 'other')
   const factsTable = filterFacts(input.facts)
 
   // Static-first ordering for prompt caching: the approved facts and the play
@@ -194,6 +198,8 @@ export function buildUserPrompt(
   const playBlock = play
     ? `MATCHED PLAY TEMPLATE "${play.name}":\n${play.templateShape}`
     : 'No matched play; write a simple direct first message.'
+
+  const roleBlock = `CONTACT ROLE: ${role}\n${rolePromptGuidance(role)}`
 
   const proof = input.matchedProof
   const proofBlock = proof
@@ -252,6 +258,8 @@ export function buildUserPrompt(
     factsBlock,
     '',
     playBlock,
+    '',
+    roleBlock,
     '',
     proofBlock,
     '',

@@ -1,4 +1,4 @@
-import { cheapModel, strongModel } from '@/lib/ai/config'
+import { cheapModel, extractModel, strongModel } from '@/lib/ai/config'
 
 export type AiTask =
   /** One-time style-card calibration from quiz answers and pasted samples. */
@@ -32,12 +32,17 @@ export interface ModelChoice {
 export function pickModel(task: AiTask): ModelChoice {
   switch (task) {
     case 'calibrate':
-    case 'extract':
     case 'classify':
       return {
         model: cheapModel(),
         tier: 'cheap',
         reason: `${task} is a structuring task; the cheap model is capable and the call is not on the per-lead hot path.`,
+      }
+    case 'extract':
+      return {
+        model: extractModel(),
+        tier: 'cheap',
+        reason: 'Extraction runs on the cheapest Groq tier optimized for high-volume profile parsing.',
       }
     case 'draft':
       return {

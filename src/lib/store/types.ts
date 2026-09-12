@@ -1,5 +1,6 @@
 import type {
   CsvImport,
+  MarketRegion,
   Fact,
   Lead,
   Message,
@@ -11,6 +12,7 @@ import type {
   ProofItem,
   PushSubscription,
   Rep,
+  RoleCategory,
   SignalId,
   StyleCard,
   StyleSampleSource,
@@ -30,12 +32,26 @@ export interface NewLeadInput {
   company: string
   contactName?: string | null
   contactTitle?: string | null
+  titleRaw?: string | null
+  locationRaw?: string | null
   url?: string | null
   rawInput?: string | null
   signalType: SignalId
   signalEvidence: string
   verbatimQuote?: string | null
   tags?: string[]
+  roleCategory?: RoleCategory
+  marketRegion?: MarketRegion
+  extractionConfidence?: number
+  extractionProfile?: Record<string, unknown>
+}
+
+export interface ExtractionMetrics {
+  total: number
+  failures: number
+  failureRate: number
+  avgLatencyMs: number
+  p95LatencyMs: number
 }
 
 export interface CreateLeadResult {
@@ -234,6 +250,8 @@ export interface ScoutStore {
   // dashboard / team
   getTodayDashboard(): Promise<TodayDashboard>
   getTeamStats(): Promise<TeamStats>
+  getExtractionMetrics(): Promise<ExtractionMetrics>
+  logExtractionRun(input: { success: boolean; latencyMs: number; model: string; error?: string | null }): Promise<void>
   /** All leads a team lead can see; admin only in Supabase mode. */
   listAllLeadsAdmin(): Promise<Lead[]>
   // eval harness

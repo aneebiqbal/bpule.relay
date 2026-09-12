@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { computeScore } from '@/lib/score/rubric'
 import type { ExtractedLead, SignalId } from '@/lib/domain/types'
 import { createScoutStore } from '@/lib/store'
+import { classifyRoleFromTitle, mapLocationToRegion } from '@/lib/leads/targeting'
 
 export async function POST(request: Request) {
   let body: Record<string, unknown>
@@ -45,11 +46,62 @@ export async function POST(request: Request) {
       typeof body.contactTitle === 'string' && body.contactTitle.trim()
         ? body.contactTitle.trim()
         : null,
+    titleRaw:
+      typeof body.titleRaw === 'string' && body.titleRaw.trim()
+        ? body.titleRaw.trim()
+        : typeof body.contactTitle === 'string' && body.contactTitle.trim()
+          ? body.contactTitle.trim()
+          : null,
     company,
     url:
       typeof body.url === 'string' && body.url.trim() ? body.url.trim() : null,
+    locationRaw:
+      typeof body.locationRaw === 'string' && body.locationRaw.trim()
+        ? body.locationRaw.trim()
+        : null,
+    aboutSummary:
+      typeof body.aboutSummary === 'string' && body.aboutSummary.trim()
+        ? body.aboutSummary.trim()
+        : null,
+    experienceSummary:
+      typeof body.experienceSummary === 'string' && body.experienceSummary.trim()
+        ? body.experienceSummary.trim()
+        : null,
+    recentPosts: Array.isArray(body.recentPosts)
+      ? (body.recentPosts as Array<{ paraphrase?: unknown; verbatimQuote?: unknown }>)
+          .filter((p) => typeof p?.paraphrase === 'string')
+          .slice(0, 3)
+          .map((p) => ({
+            paraphrase: String(p.paraphrase),
+            verbatimQuote:
+              typeof p.verbatimQuote === 'string' && p.verbatimQuote.trim()
+                ? p.verbatimQuote.trim()
+                : null,
+          }))
+      : [],
+    roleCategory:
+      typeof body.roleCategory === 'string' && body.roleCategory.trim()
+        ? (body.roleCategory as ExtractedLead['roleCategory'])
+        : classifyRoleFromTitle(
+            typeof body.contactTitle === 'string' ? body.contactTitle : null,
+          ),
+    marketRegion:
+      typeof body.marketRegion === 'string' && body.marketRegion.trim()
+        ? (body.marketRegion as ExtractedLead['marketRegion'])
+        : mapLocationToRegion(
+            typeof body.locationRaw === 'string' ? body.locationRaw : null,
+          ),
     signalType,
     signalEvidence,
+    extractionConfidence:
+      typeof body.extractionConfidence === 'number'
+        ? Math.max(0, Math.min(100, Math.round(body.extractionConfidence)))
+        : 50,
+    confidenceNotes: Array.isArray(body.confidenceNotes)
+      ? (body.confidenceNotes as unknown[])
+          .filter((n): n is string => typeof n === 'string' && n.trim().length > 0)
+          .slice(0, 8)
+      : [],
     verbatimQuote:
       typeof body.verbatimQuote === 'string' && body.verbatimQuote.trim()
         ? body.verbatimQuote.trim()
@@ -84,6 +136,17 @@ export async function POST(request: Request) {
     signalEvidence,
     verbatimQuote: extracted.verbatimQuote,
     tags: extracted.tags,
+    titleRaw: extracted.titleRaw ?? extracted.title,
+    locationRaw: extracted.locationRaw ?? null,
+    roleCategory: extracted.roleCategory ?? classifyRoleFromTitle(extracted.title),
+    marketRegion: extracted.marketRegion ?? mapLocationToRegion(extracted.locationRaw ?? null),
+    extractionConfidence: extracted.extractionConfidence ?? 50,
+    extractionProfile: {
+      aboutSummary: extracted.aboutSummary ?? null,
+      experienceSummary: extracted.experienceSummary ?? null,
+      recentPosts: extracted.recentPosts ?? [],
+      confidenceNotes: extracted.confidenceNotes ?? [],
+    },
   })
 
   if (result.blocked) {

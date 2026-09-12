@@ -86,7 +86,10 @@ function TableHeader() {
 
 export default async function TeamPage() {
   const store = await createScoutStore()
-  const stats = await store.getTeamStats()
+  const [stats, extraction] = await Promise.all([
+    store.getTeamStats(),
+    store.getExtractionMetrics(),
+  ])
 
   return (
     <div className="space-y-8">
@@ -124,6 +127,25 @@ export default async function TeamPage() {
             Open eval harness
           </Link>
         </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-6 border-b border-line pb-5 sm:grid-cols-3">
+        <Metric
+          label="Extraction failures (7d)"
+          value={pct(extraction.failureRate)}
+          caption={`${extraction.failures} failed / ${extraction.total} total`}
+          ok={extraction.total === 0 || extraction.failureRate <= 0.08}
+        />
+        <Metric
+          label="Extraction avg latency"
+          value={`${extraction.avgLatencyMs}ms`}
+          ok={extraction.avgLatencyMs > 0 && extraction.avgLatencyMs <= 4500}
+        />
+        <Metric
+          label="Extraction p95 latency"
+          value={`${Math.round(extraction.p95LatencyMs)}ms`}
+          ok={extraction.p95LatencyMs > 0 && extraction.p95LatencyMs <= 8000}
+        />
       </section>
 
       <section>

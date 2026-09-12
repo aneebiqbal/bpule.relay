@@ -71,8 +71,16 @@ export async function POST(
     const extracted: ExtractedLead = {
       name: detail.contactName,
       title: detail.contactTitle,
+      titleRaw: detail.titleRaw ?? detail.contactTitle,
       company: detail.company,
       url: detail.url,
+      locationRaw: detail.locationRaw ?? null,
+      roleCategory: detail.roleCategory ?? undefined,
+      marketRegion: detail.marketRegion ?? undefined,
+      extractionConfidence: detail.extractionConfidence ?? undefined,
+      confidenceNotes:
+        ((detail.extractionProfile as { confidenceNotes?: string[] } | null)
+          ?.confidenceNotes as string[] | undefined) ?? [],
       signalType: detail.signalType ?? 7,
       signalEvidence: detail.signalEvidence ?? '',
       verbatimQuote: detail.verbatimQuote,

@@ -22,6 +22,15 @@ interface FormState {
   company: string
   contactName: string
   contactTitle: string
+  titleRaw: string
+  locationRaw: string
+  aboutSummary: string
+  experienceSummary: string
+  recentPosts: Array<{ paraphrase: string; verbatimQuote: string | null }>
+  roleCategory: string
+  marketRegion: string
+  extractionConfidence: number
+  confidenceNotes: string[]
   url: string
   signalType: SignalId
   signalEvidence: string
@@ -34,6 +43,15 @@ const INITIAL: FormState = {
   company: '',
   contactName: '',
   contactTitle: '',
+  titleRaw: '',
+  locationRaw: '',
+  aboutSummary: '',
+  experienceSummary: '',
+  recentPosts: [],
+  roleCategory: 'other',
+  marketRegion: 'unknown',
+  extractionConfidence: 0,
+  confidenceNotes: [],
   url: '',
   signalType: 7,
   signalEvidence: '',
@@ -76,10 +94,19 @@ export default function NewLeadPage() {
     const lead: ExtractedLead = {
       name: form.contactName.trim() || null,
       title: form.contactTitle.trim() || null,
+      titleRaw: form.titleRaw.trim() || null,
       company: form.company.trim() || 'Unnamed company',
       url: form.url.trim() || null,
+      locationRaw: form.locationRaw.trim() || null,
+      aboutSummary: form.aboutSummary.trim() || null,
+      experienceSummary: form.experienceSummary.trim() || null,
+      recentPosts: form.recentPosts,
+      roleCategory: form.roleCategory as ExtractedLead['roleCategory'],
+      marketRegion: form.marketRegion as ExtractedLead['marketRegion'],
       signalType: form.signalType,
       signalEvidence: form.signalEvidence,
+      extractionConfidence: form.extractionConfidence,
+      confidenceNotes: form.confidenceNotes,
       verbatimQuote: form.verbatimQuote.trim() || null,
       tags: form.tags,
     }
@@ -98,9 +125,18 @@ export default function NewLeadPage() {
       company: ex.company?.trim() || f.company.trim() || f.company,
       contactName: ex.name?.trim() || f.contactName.trim() || f.contactName,
       contactTitle: ex.title?.trim() || f.contactTitle.trim() || f.contactTitle,
+      titleRaw: ex.titleRaw?.trim() || ex.title?.trim() || f.titleRaw,
+      locationRaw: ex.locationRaw?.trim() || f.locationRaw,
+      aboutSummary: ex.aboutSummary?.trim() || f.aboutSummary,
+      experienceSummary: ex.experienceSummary?.trim() || f.experienceSummary,
+      recentPosts: ex.recentPosts ?? f.recentPosts,
+      roleCategory: ex.roleCategory ?? f.roleCategory,
+      marketRegion: ex.marketRegion ?? f.marketRegion,
       url: ex.url?.trim() || f.url.trim() || f.url,
       signalType: ex.signalType ?? f.signalType,
       signalEvidence: ex.signalEvidence ?? f.signalEvidence,
+      extractionConfidence: ex.extractionConfidence ?? f.extractionConfidence,
+      confidenceNotes: ex.confidenceNotes ?? f.confidenceNotes,
       verbatimQuote: ex.verbatimQuote?.trim() ?? f.verbatimQuote,
       tags: ex.tags ?? [],
     }))
@@ -190,6 +226,15 @@ export default function NewLeadPage() {
           company: form.company.trim() || 'Unnamed company',
           contactName: form.contactName.trim() || null,
           contactTitle: form.contactTitle.trim() || null,
+          titleRaw: form.titleRaw.trim() || null,
+          locationRaw: form.locationRaw.trim() || null,
+          aboutSummary: form.aboutSummary.trim() || null,
+          experienceSummary: form.experienceSummary.trim() || null,
+          recentPosts: form.recentPosts,
+          roleCategory: form.roleCategory,
+          marketRegion: form.marketRegion,
+          extractionConfidence: form.extractionConfidence,
+          confidenceNotes: form.confidenceNotes,
           url: form.url.trim() || null,
           signalType: form.signalType,
           signalEvidence: form.signalEvidence.trim(),
@@ -394,6 +439,9 @@ export default function NewLeadPage() {
               <p className="mt-1 text-xs text-slate">
                 {signalById(form.signalType)?.short} signal, plus completeness.
               </p>
+              <p className="mt-1 text-xs text-slate">
+                Confidence: {form.extractionConfidence}/100 · Role: {form.roleCategory} · Region: {form.marketRegion}
+              </p>
             </div>
           </div>
           <ul className="w-full space-y-2 sm:max-w-sm">
@@ -421,6 +469,13 @@ export default function NewLeadPage() {
             })}
           </ul>
         </div>
+
+        {score.gates && score.gates.length > 0 ? (
+          <Alert className="mt-5">
+            <AlertTitle>Quality gate applied</AlertTitle>
+            <AlertDescription>{score.gates.join(' ')}</AlertDescription>
+          </Alert>
+        ) : null}
 
         <div className="mt-6 flex items-center justify-end border-t border-line pt-5">
           <Button

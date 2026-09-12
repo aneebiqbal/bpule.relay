@@ -1,5 +1,5 @@
-export function ScoreRing({ score, size = 76 }: { score: number; size?: number }) {
-  const pct = Math.min(score / 12, 1)
+export function ScoreRing({ score, size = 76, max = 12 }: { score: number; size?: number; max?: number }) {
+  const pct = Math.min(Math.max(score, 0) / max, 1)
   const r = (size - 8) / 2
   const c = 2 * Math.PI * r
   const color =
@@ -34,7 +34,7 @@ export function ScoreRing({ score, size = 76 }: { score: number; size?: number }
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="font-mono text-lg font-medium text-ink">{score}</span>
-        <span className="font-mono text-[10px] text-slate">/ 12</span>
+        <span className="font-mono text-[10px] text-slate">/ {max}</span>
       </div>
     </div>
   )

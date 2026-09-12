@@ -5,6 +5,9 @@ import type {
   Verdict,
 } from '@/lib/domain/types'
 import { signalById, VERDICT_RULES } from '@/lib/score/signals'
+import { mapLocationToRegion } from '@/lib/leads/targeting'
+
+const CONFIDENCE_SEND_THRESHOLD = 72
 
 /**
  * Scout qualification rubric (published, version 1).
@@ -34,6 +37,8 @@ export function computeScore(lead: ExtractedLead): ScoreResult {
   const signal = signalById(lead.signalType)
 
   const evidenceSpecific = evidenceIsSpecific(lead.signalEvidence)
+  const region = mapLocationToRegion(lead.locationRaw ?? null)
+  const regionPoints = region === 'outside_core' ? -2 : region === 'unknown' ? 0 : 2
 
   const items: ScoreBreakdownItem[] = [
     {
@@ -77,6 +82,18 @@ export function computeScore(lead: ExtractedLead): ScoreResult {
     },
     {
       category: 'completeness',
+      label: 'Core market fit',
+      points: regionPoints,
+      max: 2,
+      note:
+        region === 'outside_core'
+          ? 'Location maps outside the core markets (US, UK, EU, CA, AU, UAE, SG).'
+          : region === 'unknown'
+            ? 'Location missing or ambiguous; no market-fit adjustment applied.'
+            : `Location maps to core market ${region}.`,
+    },
+    {
+      category: 'completeness',
       label: 'Verbatim quote',
       points: lead.verbatimQuote ? 1 : 0,
       max: 1,
@@ -86,10 +103,24 @@ export function computeScore(lead: ExtractedLead): ScoreResult {
     },
   ]
 
-  const total = items.reduce((sum, item) => sum + item.points, 0)
-  const verdict = verdictFor(total)
+  const rawTotal = items.reduce((sum, item) => sum + item.points, 0)
+  const total = Math.max(0, Math.min(12, rawTotal))
+  const baseVerdict = verdictFor(total)
+  const gates: string[] = []
 
-  return { total, verdict, breakdown: items }
+  let verdict = baseVerdict
+  const confidence = lead.extractionConfidence ?? 100
+  if (confidence < CONFIDENCE_SEND_THRESHOLD && baseVerdict === 'send') {
+    verdict = 'research_more'
+    gates.push(
+      `Extraction confidence is ${confidence}/100 (needs ${CONFIDENCE_SEND_THRESHOLD}+ for auto-send).`,
+    )
+  }
+  for (const note of lead.confidenceNotes ?? []) {
+    gates.push(note)
+  }
+
+  return { total, verdict, baseVerdict, breakdown: items, gates }
 }
 
 export function verdictFor(total: number): Verdict {

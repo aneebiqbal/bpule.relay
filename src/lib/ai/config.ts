@@ -23,6 +23,11 @@ export function cheapModel(): string {
   return process.env.SCOUT_CHEAP_MODEL ?? 'openai/gpt-oss-20b'
 }
 
+/** Extraction model on Groq's cheapest tier. */
+export function extractModel(): string {
+  return process.env.SCOUT_EXTRACT_MODEL ?? 'llama-3.1-8b-instant'
+}
+
 /** Stronger model: drafting and self-check retries. */
 export function strongModel(): string {
   return process.env.SCOUT_STRONG_MODEL ?? 'openai/gpt-oss-120b'
