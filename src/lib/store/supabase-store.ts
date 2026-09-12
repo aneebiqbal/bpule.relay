@@ -1,5 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
+  ContentDraft,
+  ContentDraftStatus,
+  ContentHistoryEntry,
+  ContentPersona,
+  ContentPillar,
+  ContentPlatform,
   CsvImport,
   Fact,
   Lead,
@@ -1604,6 +1610,186 @@ export class SupabaseStore implements ScoutStore {
       .eq('rep_id', this.rep.id)
     if (error) throw error
   }
+
+  // ── content engine ──
+
+  async createContentPersona(input: {
+    repId: string
+    displayName: string
+    platforms: ContentPlatform[]
+    voiceProfileId?: string | null
+  }): Promise<ContentPersona> {
+    const { data, error } = await this.client
+      .from('content_personas')
+      .insert({
+        rep_id: input.repId,
+        display_name: input.displayName,
+        platforms: input.platforms,
+        voice_profile_id: input.voiceProfileId ?? null,
+      })
+      .select()
+      .single()
+    if (error) throw error
+    return mapContentPersona(data)
+  }
+
+  async listContentPersonas(repId: string): Promise<ContentPersona[]> {
+    const { data, error } = await this.client
+      .from('content_personas')
+      .select('*')
+      .eq('rep_id', repId)
+      .order('display_name')
+    if (error) throw error
+    return data.map(mapContentPersona)
+  }
+
+  async getContentPersona(personaId: string): Promise<ContentPersona | null> {
+    const { data, error } = await this.client
+      .from('content_personas')
+      .select('*')
+      .eq('id', personaId)
+      .single()
+    if (error) return null
+    return mapContentPersona(data)
+  }
+
+  async deleteContentPersona(personaId: string): Promise<void> {
+    const { error } = await this.client
+      .from('content_personas')
+      .delete()
+      .eq('id', personaId)
+    if (error) throw error
+  }
+
+  async createContentPillar(input: {
+    personaId: string
+    pillarName: string
+    description?: string
+  }): Promise<ContentPillar> {
+    const { data, error } = await this.client
+      .from('content_pillars')
+      .insert({
+        persona_id: input.personaId,
+        pillar_name: input.pillarName,
+        description: input.description ?? '',
+      })
+      .select()
+      .single()
+    if (error) throw error
+    return mapContentPillar(data)
+  }
+
+  async listContentPillars(personaId: string): Promise<ContentPillar[]> {
+    const { data, error} = await this.client
+      .from('content_pillars')
+      .select('*')
+      .eq('persona_id', personaId)
+      .order('pillar_name')
+    if (error) throw error
+    return data.map(mapContentPillar)
+  }
+
+  async deleteContentPillar(pillarId: string): Promise<void> {
+    const { error } = await this.client
+      .from('content_pillars')
+      .delete()
+      .eq('id', pillarId)
+    if (error) throw error
+  }
+
+  async createContentDraft(input: {
+    personaId: string
+    pillarId: string | null
+    sourceMaterial: string
+    platform: ContentPlatform
+    caption: string
+    hookScore?: number | null
+    hookFeedback?: string
+    selfCheckPassed?: boolean
+    selfCheckNote?: string
+    status?: ContentDraftStatus
+  }): Promise<ContentDraft> {
+    const { data, error } = await this.client
+      .from('content_drafts')
+      .insert({
+        persona_id: input.personaId,
+        pillar_id: input.pillarId,
+        source_material: input.sourceMaterial,
+        platform: input.platform,
+        caption: input.caption,
+        hook_score: input.hookScore ?? null,
+        hook_feedback: input.hookFeedback ?? '',
+        self_check_passed: input.selfCheckPassed ?? false,
+        self_check_note: input.selfCheckNote ?? '',
+        status: input.status ?? 'draft',
+      })
+      .select()
+      .single()
+    if (error) throw error
+    return mapContentDraft(data)
+  }
+
+  async listContentDrafts(personaId: string): Promise<ContentDraft[]> {
+    const { data, error } = await this.client
+      .from('content_drafts')
+      .select('*')
+      .eq('persona_id', personaId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data.map(mapContentDraft)
+  }
+
+  async updateContentDraftStatus(draftId: string, status: ContentDraftStatus): Promise<ContentDraft> {
+    const { data, error } = await this.client
+      .from('content_drafts')
+      .update({ status })
+      .eq('id', draftId)
+      .select()
+      .single()
+    if (error) throw error
+    if (status === 'posted') {
+      const draft = mapContentDraft(data)
+      await this.logContentPosted({
+        personaId: draft.personaId,
+        pillarId: draft.pillarId,
+        platform: draft.platform,
+        openingLine: draft.caption.split('\n')[0] ?? '',
+      })
+      return draft
+    }
+    return mapContentDraft(data)
+  }
+
+  async listContentHistory(personaId: string, limit = 20): Promise<ContentHistoryEntry[]> {
+    const { data, error } = await this.client
+      .from('content_history')
+      .select('*')
+      .eq('persona_id', personaId)
+      .order('posted_at', { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return data.map(mapContentHistory)
+  }
+
+  async logContentPosted(input: {
+    personaId: string
+    pillarId: string | null
+    platform: ContentPlatform
+    openingLine: string
+  }): Promise<ContentHistoryEntry> {
+    const { data, error } = await this.client
+      .from('content_history')
+      .insert({
+        persona_id: input.personaId,
+        pillar_id: input.pillarId,
+        platform: input.platform,
+        opening_line: input.openingLine,
+      })
+      .select()
+      .single()
+    if (error) throw error
+    return mapContentHistory(data)
+  }
 }
 
 function mapUpworkJob(r: Row): UpworkJob {
@@ -1641,5 +1827,56 @@ function mapUpworkMessage(r: Row): UpworkMessage {
     sentAt: (r.sent_at as string) ?? null,
     modelUsed: (r.model_used as string) ?? null,
     createdAt: r.created_at as string,
+  }
+}
+
+// ── content engine mappers ──
+
+function mapContentPersona(r: Record<string, unknown>): ContentPersona {
+  return {
+    id: r.id as string,
+    repId: r.rep_id as string,
+    displayName: r.display_name as string,
+    platforms: (r.platforms as ContentPlatform[]) ?? [],
+    voiceProfileId: (r.voice_profile_id as string) ?? null,
+    createdAt: r.created_at as string,
+  }
+}
+
+function mapContentPillar(r: Record<string, unknown>): ContentPillar {
+  return {
+    id: r.id as string,
+    personaId: r.persona_id as string,
+    pillarName: r.pillar_name as string,
+    description: (r.description as string) ?? '',
+    createdAt: r.created_at as string,
+  }
+}
+
+function mapContentDraft(r: Record<string, unknown>): ContentDraft {
+  return {
+    id: r.id as string,
+    personaId: r.persona_id as string,
+    pillarId: (r.pillar_id as string) ?? null,
+    sourceMaterial: r.source_material as string,
+    platform: r.platform as ContentPlatform,
+    caption: (r.caption as string) ?? '',
+    hookScore: (r.hook_score as number) ?? null,
+    hookFeedback: (r.hook_feedback as string) ?? '',
+    selfCheckPassed: (r.self_check_passed as boolean) ?? false,
+    selfCheckNote: (r.self_check_note as string) ?? '',
+    status: (r.status as ContentDraftStatus) ?? 'draft',
+    createdAt: r.created_at as string,
+  }
+}
+
+function mapContentHistory(r: Record<string, unknown>): ContentHistoryEntry {
+  return {
+    id: r.id as string,
+    personaId: r.persona_id as string,
+    pillarId: (r.pillar_id as string) ?? null,
+    platform: r.platform as ContentPlatform,
+    openingLine: r.opening_line as string,
+    postedAt: r.posted_at as string,
   }
 }

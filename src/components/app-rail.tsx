@@ -9,6 +9,7 @@ import {
   FileUp,
   IdCard,
   LogOut,
+  PenLine,
   Plus,
   Search,
   ShieldCheck,
@@ -25,6 +26,7 @@ import type { RepRole } from '@/lib/domain/types'
 
 const BASE_NAV = [
   { href: '/', label: 'Today', icon: CalendarDays, exact: true },
+  { href: '/content', label: 'Content', icon: PenLine, exact: false },
   { href: '/leads/new', label: 'New lead', icon: Plus, exact: true },
   { href: '/upwork', label: 'Upwork', icon: Briefcase, exact: false },
   { href: '/archive', label: 'Archive', icon: Search, exact: false },
@@ -35,6 +37,7 @@ const BASE_NAV = [
 
 const SOURCER_NAV = [
   { href: '/', label: 'Today', icon: CalendarDays, exact: true },
+  { href: '/content', label: 'Content', icon: PenLine, exact: false },
   { href: '/leads/new', label: 'New lead', icon: Plus, exact: true },
   { href: '/leads/import', label: 'Import', icon: FileUp, exact: false },
   { href: '/archive', label: 'Archive', icon: Search, exact: false },

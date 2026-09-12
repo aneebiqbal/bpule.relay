@@ -20,6 +20,12 @@ import type {
   UpworkMessage,
   Verdict,
   VoiceProfile,
+  ContentPlatform,
+  ContentDraftStatus,
+  ContentPersona,
+  ContentPillar,
+  ContentDraft,
+  ContentHistoryEntry,
 } from '@/lib/domain/types'
 
 export interface StoreContext {
@@ -365,4 +371,42 @@ export interface ScoutStore {
   // notifications
   listNotifications(): Promise<NotificationLogEntry[]>
   markNotificationRead(id: string): Promise<void>
+  // content engine
+  createContentPersona(input: {
+    repId: string
+    displayName: string
+    platforms: ContentPlatform[]
+    voiceProfileId?: string | null
+  }): Promise<ContentPersona>
+  listContentPersonas(repId: string): Promise<ContentPersona[]>
+  getContentPersona(personaId: string): Promise<ContentPersona | null>
+  deleteContentPersona(personaId: string): Promise<void>
+  createContentPillar(input: {
+    personaId: string
+    pillarName: string
+    description?: string
+  }): Promise<ContentPillar>
+  listContentPillars(personaId: string): Promise<ContentPillar[]>
+  deleteContentPillar(pillarId: string): Promise<void>
+  createContentDraft(input: {
+    personaId: string
+    pillarId: string | null
+    sourceMaterial: string
+    platform: ContentPlatform
+    caption: string
+    hookScore?: number | null
+    hookFeedback?: string
+    selfCheckPassed?: boolean
+    selfCheckNote?: string
+    status?: ContentDraftStatus
+  }): Promise<ContentDraft>
+  listContentDrafts(personaId: string): Promise<ContentDraft[]>
+  updateContentDraftStatus(draftId: string, status: ContentDraftStatus): Promise<ContentDraft>
+  listContentHistory(personaId: string, limit?: number): Promise<ContentHistoryEntry[]>
+  logContentPosted(input: {
+    personaId: string
+    pillarId: string | null
+    platform: ContentPlatform
+    openingLine: string
+  }): Promise<ContentHistoryEntry>
 }

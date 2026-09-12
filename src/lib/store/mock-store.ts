@@ -1,4 +1,8 @@
 import type {
+  ContentDraft,
+  ContentHistoryEntry,
+  ContentPersona,
+  ContentPillar,
   CsvImport,
   Fact,
   Lead,
@@ -381,6 +385,11 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
   ]
   const csvImports: CsvImport[] = []
+  // content engine
+  const contentPersonas: ContentPersona[] = []
+  const contentPillars: ContentPillar[] = []
+  const contentDrafts: ContentDraft[] = []
+  const contentHistoryEntries: ContentHistoryEntry[] = []
   const extractionRuns: Array<{
     task: 'extract' | 'draft'
     success: boolean
@@ -1071,6 +1080,108 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async markNotificationRead(id: string) {
       const n = notifications.find((x) => x.id === id && x.repId === rep.id)
       if (n) n.read = true
+    },
+    // ── content engine ──
+    async createContentPersona(input) {
+      const persona: ContentPersona = {
+        id: nextId('cp'),
+        repId: input.repId,
+        displayName: input.displayName,
+        platforms: input.platforms,
+        voiceProfileId: input.voiceProfileId ?? null,
+        createdAt: new Date().toISOString(),
+      }
+      contentPersonas.push(persona)
+      return persona
+    },
+    async listContentPersonas(repId) {
+      return contentPersonas
+        .filter((p) => p.repId === repId)
+        .sort((a, b) => a.displayName.localeCompare(b.displayName))
+    },
+    async getContentPersona(personaId) {
+      return contentPersonas.find((p) => p.id === personaId) ?? null
+    },
+    async deleteContentPersona(personaId) {
+      const idx = contentPersonas.findIndex((p) => p.id === personaId)
+      if (idx >= 0) contentPersonas.splice(idx, 1)
+    },
+    async createContentPillar(input) {
+      const pillar: ContentPillar = {
+        id: nextId('cpl'),
+        personaId: input.personaId,
+        pillarName: input.pillarName,
+        description: input.description ?? '',
+        createdAt: new Date().toISOString(),
+      }
+      contentPillars.push(pillar)
+      return pillar
+    },
+    async listContentPillars(personaId) {
+      return contentPillars
+        .filter((p) => p.personaId === personaId)
+        .sort((a, b) => a.pillarName.localeCompare(b.pillarName))
+    },
+    async deleteContentPillar(pillarId) {
+      const idx = contentPillars.findIndex((p) => p.id === pillarId)
+      if (idx >= 0) contentPillars.splice(idx, 1)
+    },
+    async createContentDraft(input) {
+      const draft: ContentDraft = {
+        id: nextId('cd'),
+        personaId: input.personaId,
+        pillarId: input.pillarId,
+        sourceMaterial: input.sourceMaterial,
+        platform: input.platform,
+        caption: input.caption,
+        hookScore: input.hookScore ?? null,
+        hookFeedback: input.hookFeedback ?? '',
+        selfCheckPassed: input.selfCheckPassed ?? false,
+        selfCheckNote: input.selfCheckNote ?? '',
+        status: input.status ?? 'draft',
+        createdAt: new Date().toISOString(),
+      }
+      contentDrafts.push(draft)
+      return draft
+    },
+    async listContentDrafts(personaId) {
+      return contentDrafts
+        .filter((d) => d.personaId === personaId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    },
+    async updateContentDraftStatus(draftId, status) {
+      const draft = contentDrafts.find((d) => d.id === draftId)
+      if (!draft) throw new Error('Draft not found')
+      draft.status = status
+      if (status === 'posted' && draft.platform) {
+        contentHistoryEntries.push({
+          id: nextId('ch'),
+          personaId: draft.personaId,
+          pillarId: draft.pillarId,
+          platform: draft.platform,
+          openingLine: draft.caption.split('\n')[0] ?? '',
+          postedAt: new Date().toISOString(),
+        })
+      }
+      return draft
+    },
+    async listContentHistory(personaId, limit = 20) {
+      return contentHistoryEntries
+        .filter((h) => h.personaId === personaId)
+        .sort((a, b) => b.postedAt.localeCompare(a.postedAt))
+        .slice(0, limit)
+    },
+    async logContentPosted(input) {
+      const entry: ContentHistoryEntry = {
+        id: nextId('ch'),
+        personaId: input.personaId,
+        pillarId: input.pillarId,
+        platform: input.platform,
+        openingLine: input.openingLine,
+        postedAt: new Date().toISOString(),
+      }
+      contentHistoryEntries.push(entry)
+      return entry
     },
   }
 }

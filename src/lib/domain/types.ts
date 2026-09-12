@@ -266,3 +266,50 @@ export interface ExtractedLead {
   /** Stack/domain tags for proof matching; produced once at extraction time. */
   tags: string[]
 }
+
+// ── Content Engine (decoupled — no references to bpulse-specific tables) ──
+
+export type ContentPlatform = 'linkedin' | 'x'
+
+export type ContentDraftStatus = 'draft' | 'ready' | 'posted' | 'rejected'
+
+export interface ContentPersona {
+  id: string
+  repId: string
+  displayName: string
+  platforms: ContentPlatform[]
+  voiceProfileId: string | null
+  createdAt: string
+}
+
+export interface ContentPillar {
+  id: string
+  personaId: string
+  pillarName: string
+  description: string
+  createdAt: string
+}
+
+export interface ContentDraft {
+  id: string
+  personaId: string
+  pillarId: string | null
+  sourceMaterial: string
+  platform: ContentPlatform
+  caption: string
+  hookScore: number | null
+  hookFeedback: string
+  selfCheckPassed: boolean
+  selfCheckNote: string
+  status: ContentDraftStatus
+  createdAt: string
+}
+
+export interface ContentHistoryEntry {
+  id: string
+  personaId: string
+  pillarId: string | null
+  platform: ContentPlatform
+  openingLine: string
+  postedAt: string
+}
