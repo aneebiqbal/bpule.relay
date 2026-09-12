@@ -446,12 +446,13 @@ export class SupabaseStore implements ScoutStore {
       }
     }
 
-    const [{ error: updateError }, { error: insertError }] = await Promise.all([
+    const [{ data: updatedRows, error: updateError }, { error: insertError }] = await Promise.all([
       this.client
         .from('leads')
         .update({ status: type === 'followup' ? 'followed_up' : 'contacted' })
         .eq('id', leadId)
-        .eq('owner_rep_id', this.rep.id),
+        .eq('owner_rep_id', this.rep.id)
+        .select('id'),
       this.client.from('messages').insert({
         lead_id: leadId,
         rep_id: this.rep.id,
@@ -462,6 +463,12 @@ export class SupabaseStore implements ScoutStore {
     ])
     if (updateError) throw updateError
     if (insertError) throw insertError
+    // A 0-row update means this lead is now visible (team-wide select) but not
+    // owned by this rep — Postgres does not error on a matched-0-rows update,
+    // so without this check the caller would wrongly be told the send worked.
+    if (!updatedRows || updatedRows.length === 0) {
+      throw new Error('You are not the owner of this lead, so it could not be marked contacted.')
+    }
     return { allowed: true, todaySends: todaySends + 1, limit }
   }
 
