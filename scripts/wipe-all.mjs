@@ -40,9 +40,16 @@ async function main() {
   console.log('Step 1: Ensuring auth users exist...\n')
   const seedPath = new URL('./seed-dev-users.mjs', import.meta.url).pathname
   const { spawn } = await import('child_process')
-  const { stdout, stderr } = spawn('node', [seedPath], {
+  const child = spawn('node', [seedPath], {
     env: { ...process.env },
-    stdio: 'pipe',
+    stdio: 'inherit',
+  })
+  await new Promise((resolve, reject) => {
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0) resolve(undefined)
+      else reject(new Error(`seed-dev-users.mjs exited with code ${code ?? 'unknown'}`))
+    })
   })
 
   // Order matters: child tables first, parent tables last.

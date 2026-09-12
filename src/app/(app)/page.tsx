@@ -137,7 +137,7 @@ export default async function TodayPage() {
               {next.reason === 'replied' ? (
                 <>
                   <MessageCircle className="size-4" aria-hidden="true" />
-                  Reply now
+                  Open reply context
                 </>
               ) : (
                 <>

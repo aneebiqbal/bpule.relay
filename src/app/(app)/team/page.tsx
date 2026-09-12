@@ -98,10 +98,39 @@ function TableHeader() {
 
 export default async function TeamPage() {
   const store = await createScoutStore()
-  const [stats, extraction] = await Promise.all([
+  const [statsRes, extractionRes] = await Promise.allSettled([
     store.getTeamStats(),
     store.getExtractionMetrics(),
   ])
+  const stats =
+    statsRes.status === 'fulfilled'
+      ? statsRes.value
+      : {
+          overall: {
+            sent: 0,
+            sentLeads: 0,
+            repliedLeads: 0,
+            replyRate: null,
+            readLeads: 0,
+            checkedLeads: 0,
+            readToCheckRate: null,
+          },
+          perRep: [],
+          perPlay: [],
+        }
+  const extraction =
+    extractionRes.status === 'fulfilled'
+      ? extractionRes.value
+      : {
+          total: 0,
+          failures: 0,
+          failureRate: 0,
+          avgLatencyMs: 0,
+          p95LatencyMs: 0,
+          costByTier: { tier1: 0, tier2: 0, tier3: 0, tier4: 0 },
+          totalCostUsd: 0,
+          requestsByTier: { tier1: 0, tier2: 0, tier3: 0, tier4: 0 },
+        }
   const totalRequests = Object.values(extraction.requestsByTier).reduce((sum, n) => sum + n, 0)
   const freeShare = totalRequests > 0 ? extraction.requestsByTier.tier1 / totalRequests : null
 
@@ -113,6 +142,11 @@ export default async function TeamPage() {
           Two numbers, both tied to defined targets: reply rate against {pct(REPLY_RATE_TARGET)}
           and Read-to-Check against {pct(READ_TO_CHECK_TARGET)}.
         </p>
+        {statsRes.status === 'rejected' || extractionRes.status === 'rejected' ? (
+          <p className="mt-2 text-xs text-status-research">
+            Some analytics data could not load right now. Showing partial metrics.
+          </p>
+        ) : null}
       </header>
 
       <section className="grid grid-cols-1 gap-6 border-y border-line py-5 sm:grid-cols-[auto_auto_1fr] sm:gap-10">

@@ -540,6 +540,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       if (lead.ownerRepId !== rep.id) {
         throw new Error('You are not the owner of this lead, so it could not be marked contacted.')
       }
+      if (lead.status === 'no' || lead.status === 'dead') {
+        throw new Error('This lead is locked and cannot be contacted.')
+      }
       const type = messageType
       const todaySends = await (async () => {
         const now = new Date()

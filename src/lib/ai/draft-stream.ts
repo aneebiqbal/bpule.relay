@@ -112,7 +112,12 @@ export async function streamDraft(
   const variantB = rawB ? normalizeVariant(rawB, input) : null
 
   if (!variantA && !variantB) {
-    throw new Error('Both draft variants failed. Try again.')
+    emit({ type: 'status', message: 'Model output failed, using safe fallback draft' })
+    const fallback = buildDeterministicFallback(input, callLog)
+    emit({ type: 'draft', chunk: fallback.draftText })
+    emit({ type: 'selfcheck', pass: fallback.passed, selfCheck: fallback.selfCheck })
+    emit({ type: 'done', draft: fallback, matchedProof })
+    return fallback
   }
 
   let { primary, secondary, pickReason } = pickBestVariant(variantA, variantB)
@@ -207,6 +212,77 @@ export async function streamDraft(
   return draft
 }
 
+function buildDeterministicFallback(input: DraftInput, callLog: DraftCallLog[]): DraftResult {
+  const draftText = fallbackText(input)
+  const codeChecks = deterministicChecks(draftText, {
+    company: input.lead.company,
+    evidence: input.extracted.signalEvidence,
+  })
+  const sanitized = sanitizeDraft(draftText, input.facts)
+  const passed = Boolean(codeChecks.companyMentioned && codeChecks.specificEvidenceMentioned && sanitized.strippedNumbers.length === 0)
+
+  return {
+    leadId: input.leadId,
+    type: input.type,
+    draftText: sanitized.text,
+    selfCheck: {
+      test1ReplyOrDelete: false,
+      test1Note: 'Fallback draft used because model variants failed.',
+      test2NotGeneric: codeChecks.specificEvidenceMentioned,
+      test2Note: codeChecks.specificEvidenceMentioned
+        ? 'Draft references lead-specific evidence.'
+        : 'Draft is generic because source evidence was missing.',
+      codeChecks,
+    },
+    passed,
+    modelUsed: callLog.map((c) => `${c.costTier}:${c.host}`).join(', ') || 'deterministic-fallback',
+    attempts: callLog.length,
+    strippedNumbers: sanitized.strippedNumbers,
+    hadEmDash: sanitized.hadEmDash,
+    callLog,
+  }
+}
+
+function fallbackText(input: DraftInput): string {
+  const name = input.extracted.name ?? input.lead.contactName ?? 'there'
+  const company = input.lead.company
+  const evidence = input.extracted.signalEvidence?.trim() || `current priorities at ${company}`
+  const lastSent = (input.history ?? [])
+    .filter((m) => m.sentText && m.sentAt)
+    .sort((a, b) => (a.sentAt ?? '').localeCompare(b.sentAt ?? ''))
+    .at(-1)
+
+  if (input.type === 'followup') {
+    return [
+      `Hi ${name}, following up on my last note about ${evidence}.`,
+      `If this is not a priority for ${company} right now, a quick \"not now\" is perfect and I will close the loop.`,
+    ].join(' ')
+  }
+
+  if (input.type === 'connection') {
+    return `Hi ${name}, noticed ${evidence} at ${company}. Open to connecting?`
+  }
+
+  if (input.type === 'upwork') {
+    return [
+      `Hi ${name}, I read your brief and noticed ${evidence}.`,
+      `I can help ${company} ship this cleanly and can share a short, concrete approach in one reply if useful.`,
+    ].join(' ')
+  }
+
+  if (lastSent?.sentText) {
+    return [
+      `Hi ${name}, quick note after my previous message.`,
+      `Given ${evidence}, I can share a focused plan for ${company} in one short reply if that helps.`,
+    ].join(' ')
+  }
+
+  return [
+    `Hi ${name}, noticed ${evidence}.`,
+    `If useful, I can send one practical idea for ${company} in a short reply.`,
+  ].join(' ')
+}
+
 function normalizeVariant(
   raw: RawVariant,
   input: DraftInput,
@@ -217,7 +293,7 @@ function normalizeVariant(
   strippedNumbers: string[]
   hadEmDash: boolean
 } {
-  const cleaned = (raw.draft ?? '').trim()
+  const cleaned = (raw.draft ?? '').trim() || fallbackText(input)
   const codeChecks = deterministicChecks(cleaned, {
     company: input.lead.company,
     evidence: input.extracted.signalEvidence,

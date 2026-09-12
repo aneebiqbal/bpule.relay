@@ -24,7 +24,17 @@ export async function POST(
   const profileId = body.profileId ?? null
   const proofId = body.proofId ?? null
 
-  if (!['dm', 'connection', 'upwork', 'followup', 'reply'].includes(type)) {
+  if (type === 'reply') {
+    return new Response(
+      JSON.stringify({ error: 'Reply drafting is not available yet. Log the outcome and continue with follow-up flow.' }),
+      {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    )
+  }
+
+  if (!['dm', 'connection', 'upwork', 'followup'].includes(type)) {
     return new Response(JSON.stringify({ error: 'Unknown message type.' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },

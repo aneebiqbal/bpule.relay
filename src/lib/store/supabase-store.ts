@@ -446,28 +446,51 @@ export class SupabaseStore implements ScoutStore {
       }
     }
 
-    const [{ data: updatedRows, error: updateError }, { error: insertError }] = await Promise.all([
-      this.client
-        .from('leads')
-        .update({ status: type === 'followup' ? 'followed_up' : 'contacted' })
-        .eq('id', leadId)
-        .eq('owner_rep_id', this.rep.id)
-        .select('id'),
-      this.client.from('messages').insert({
+    const { data: leadRow, error: leadError } = await this.client
+      .from('leads')
+      .select('id, status')
+      .eq('id', leadId)
+      .eq('owner_rep_id', this.rep.id)
+      .maybeSingle()
+    if (leadError) throw leadError
+    if (!leadRow) {
+      throw new Error('You are not the owner of this lead, so it could not be marked contacted.')
+    }
+    if (leadRow.status === 'no' || leadRow.status === 'dead') {
+      throw new Error('This lead is locked and cannot be contacted.')
+    }
+
+    const { data: inserted, error: insertError } = await this.client
+      .from('messages')
+      .insert({
         lead_id: leadId,
         rep_id: this.rep.id,
         type,
         sent_text: sentText,
         sent_at: new Date().toISOString(),
-      }),
-    ])
-    if (updateError) throw updateError
+      })
+      .select('id')
+      .single()
     if (insertError) throw insertError
+
+    const { data: updatedRows, error: updateError } = await this.client
+      .from('leads')
+      .update({ status: type === 'followup' ? 'followed_up' : 'contacted' })
+      .eq('id', leadId)
+      .eq('owner_rep_id', this.rep.id)
+      .neq('status', 'no')
+      .neq('status', 'dead')
+      .select('id')
+    if (updateError) {
+      await this.client.from('messages').delete().eq('id', inserted.id)
+      throw updateError
+    }
     // A 0-row update means this lead is now visible (team-wide select) but not
     // owned by this rep — Postgres does not error on a matched-0-rows update,
     // so without this check the caller would wrongly be told the send worked.
     if (!updatedRows || updatedRows.length === 0) {
-      throw new Error('You are not the owner of this lead, so it could not be marked contacted.')
+      await this.client.from('messages').delete().eq('id', inserted.id)
+      throw new Error('This lead became locked or unavailable while logging the send. Try again.')
     }
     return { allowed: true, todaySends: todaySends + 1, limit }
   }
@@ -1023,18 +1046,28 @@ export class SupabaseStore implements ScoutStore {
 
     const emptyCostByTier = { tier1: 0, tier2: 0, tier3: 0, tier4: 0 }
     const emptyRequestsByTier = { tier1: 0, tier2: 0, tier3: 0, tier4: 0 }
+    const emptyMetrics: ExtractionMetrics = {
+      total: 0,
+      failures: 0,
+      failureRate: 0,
+      avgLatencyMs: 0,
+      p95LatencyMs: 0,
+      costByTier: emptyCostByTier,
+      totalCostUsd: 0,
+      requestsByTier: emptyRequestsByTier,
+    }
     if (error) {
-      if ((error as { code?: string }).code === '42P01') {
-        return {
-          total: 0,
-          failures: 0,
-          failureRate: 0,
-          avgLatencyMs: 0,
-          p95LatencyMs: 0,
-          costByTier: emptyCostByTier,
-          totalCostUsd: 0,
-          requestsByTier: emptyRequestsByTier,
-        }
+      const code = (error as { code?: string }).code ?? ''
+      const message = (error as { message?: string }).message ?? ''
+      const schemaGap =
+        code === '42P01' ||
+        code === '42703' ||
+        code === '42501' ||
+        /could not find the table|column .* does not exist|permission denied|forbidden|not found in the schema cache/i.test(
+          message,
+        )
+      if (schemaGap) {
+        return emptyMetrics
       }
       throw error
     }

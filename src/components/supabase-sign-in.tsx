@@ -39,6 +39,12 @@ export function SupabaseSignIn() {
       const supabase = getBrowserSupabase()
       const { error: authError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
+        options: {
+          emailRedirectTo:
+            typeof window !== 'undefined'
+              ? `${window.location.origin}/auth/callback`
+              : undefined,
+        },
       })
       if (authError) throw new Error(authError.message)
       setSent(true)
@@ -67,8 +73,8 @@ export function SupabaseSignIn() {
         password,
       })
       if (authError) throw new Error(authError.message)
-      // Force a full page reload so the server picks up the fresh session cookie.
-      window.location.href = '/'
+      router.replace('/')
+      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed.')
     } finally {

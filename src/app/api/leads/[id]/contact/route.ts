@@ -39,6 +39,17 @@ export async function POST(
     )
   }
 
+  const lead = await store.getLead(id)
+  if (!lead) {
+    return NextResponse.json({ error: 'Lead not found.' }, { status: 404 })
+  }
+  if (lead.status === 'no' || lead.status === 'dead') {
+    return NextResponse.json(
+      { error: 'This lead is no or dead. It is locked.' },
+      { status: 409 },
+    )
+  }
+
   try {
     const result = await store.markContacted(id, sentText, type)
     if (!result.allowed) {
@@ -53,8 +64,12 @@ export async function POST(
       type,
     })
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to log send.'
+    if (/locked|owner|unavailable/i.test(message)) {
+      return NextResponse.json({ error: message }, { status: 409 })
+    }
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to log send.' },
+      { error: message },
       { status: 500 },
     )
   }
