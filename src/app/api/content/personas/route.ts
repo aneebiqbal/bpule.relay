@@ -45,12 +45,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ persona })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create persona'
+    console.error('[content/api] POST /personas failed:', message)
     if (message.includes('relation') && message.includes('does not exist')) {
       return NextResponse.json(
-        { error: 'Content tables not yet created. Run migration 0018_personal_content_engine.sql' },
+        {
+          error: 'Content tables not yet created. Run: supabase db push',
+          detail: message,
+          migration: '0018_personal_content_engine.sql',
+        },
         { status: 503 },
       )
     }
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: message, detail: message }, { status: 500 })
   }
 }
