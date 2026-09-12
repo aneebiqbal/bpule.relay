@@ -21,6 +21,7 @@ import type {
   CreateLeadResult,
   DosageResult,
   ExtractionMetrics,
+  ModelCallLogInput,
   NewLeadInput,
   QueueData,
   SaveDraftInput,
@@ -250,7 +251,7 @@ export class SupabaseStore implements ScoutStore {
       }
     }
 
-    const insertBase = {
+    const insertRow = {
       owner_rep_id: this.rep.id,
       company: input.company.trim(),
       contact_name: input.contactName?.trim() || null,
@@ -262,10 +263,6 @@ export class SupabaseStore implements ScoutStore {
       verbatim_quote: input.verbatimQuote?.trim() || null,
       tags: input.tags ?? [],
       play_id: (await this.playForSignal(input.signalType))?.id ?? null,
-    }
-
-    const insertRich = {
-      ...insertBase,
       title_raw: input.titleRaw?.trim() || null,
       location_raw: input.locationRaw?.trim() || null,
       role_category: input.roleCategory ?? null,
@@ -274,11 +271,21 @@ export class SupabaseStore implements ScoutStore {
       extraction_profile: input.extractionProfile ?? null,
     }
 
-    let row = await this.client.from('leads').insert(insertRich).select('*').single()
-    if (row.error && (row.error as { code?: string }).code === '42703') {
-      row = await this.client.from('leads').insert(insertBase).select('*').single()
+    const row = await this.client.from('leads').insert(insertRow).select('*').single()
+    if (row.error) {
+      // Never silently drop the extraction fields (title/location/role/region/
+      // confidence): a lead saved without them looks fine but is missing the
+      // data a rep would need to trust it later. Fail loudly instead so
+      // whoever operates this environment applies migration 0015, rather than
+      // BD discovering thin leads after the fact.
+      if ((row.error as { code?: string }).code === '42703') {
+        throw new Error(
+          'This environment is missing the extraction-fields migration (0015_extraction_schema_and_metrics.sql). ' +
+            'Apply it before saving leads, so title, location, role, region, and confidence are never silently dropped.',
+        )
+      }
+      throw row.error
     }
-    if (row.error) throw row.error
     return { blocked: false, lead: mapLead(row.data as Row) }
   }
 
@@ -859,17 +866,16 @@ export class SupabaseStore implements ScoutStore {
     return { overall, perRep, perPlay }
   }
 
-  async logExtractionRun(input: {
-    success: boolean
-    latencyMs: number
-    model: string
-    error?: string | null
-  }): Promise<void> {
+  async logExtractionRun(input: ModelCallLogInput): Promise<void> {
     const { error } = await this.client.from('extraction_runs').insert({
       rep_id: this.rep.id,
+      task: input.task,
       success: input.success,
       latency_ms: Math.max(0, Math.round(input.latencyMs)),
       model: input.model,
+      cost_tier: input.costTier ?? null,
+      host: input.host ?? null,
+      cost_usd: input.costUsd ?? null,
       error_message: input.error ?? null,
     })
     if (error) throw error
@@ -879,16 +885,30 @@ export class SupabaseStore implements ScoutStore {
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const { data, error } = await this.client
       .from('extraction_runs')
-      .select('success, latency_ms, created_at')
+      .select('success, latency_ms, created_at, cost_tier, cost_usd')
       .gte('created_at', since)
 
+    const emptyCostByTier = { tier1: 0, tier2: 0, tier3: 0, tier4: 0 }
     if (error) {
       if ((error as { code?: string }).code === '42P01') {
-        return { total: 0, failures: 0, failureRate: 0, avgLatencyMs: 0, p95LatencyMs: 0 }
+        return {
+          total: 0,
+          failures: 0,
+          failureRate: 0,
+          avgLatencyMs: 0,
+          p95LatencyMs: 0,
+          costByTier: emptyCostByTier,
+          totalCostUsd: 0,
+        }
       }
       throw error
     }
-    const rows = (data ?? []) as Array<{ success: boolean; latency_ms: number | null }>
+    const rows = (data ?? []) as Array<{
+      success: boolean
+      latency_ms: number | null
+      cost_tier: string | null
+      cost_usd: number | null
+    }>
     const total = rows.length
     const failures = rows.filter((r) => !r.success).length
     const failureRate = total > 0 ? failures / total : 0
@@ -904,10 +924,19 @@ export class SupabaseStore implements ScoutStore {
       latencies.length > 0
         ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95))]
         : 0
+    const costByTier = { ...emptyCostByTier }
+    for (const r of rows) {
+      if (r.cost_tier && r.cost_tier in costByTier) {
+        costByTier[r.cost_tier as keyof typeof costByTier] += Number(r.cost_usd ?? 0)
+      }
+    }
+    const totalCostUsd = Object.values(costByTier).reduce((sum, n) => sum + n, 0)
     return {
       total,
       failures,
       failureRate,
+      costByTier,
+      totalCostUsd,
       avgLatencyMs,
       p95LatencyMs,
     }

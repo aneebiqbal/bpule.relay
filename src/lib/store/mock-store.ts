@@ -20,6 +20,7 @@ import type {
   CreateLeadResult,
   DosageResult,
   ExtractionMetrics,
+  ModelCallLogInput,
   NewLeadInput,
   QueueData,
   SaveDraftInput,
@@ -326,9 +327,12 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const notifications: NotificationLogEntry[] = []
   const csvImports: CsvImport[] = []
   const extractionRuns: Array<{
+    task: 'extract' | 'draft'
     success: boolean
     latencyMs: number
     model: string
+    costTier: 'tier1' | 'tier2' | 'tier3' | 'tier4' | null
+    costUsd: number
     error: string | null
     createdAt: string
   }> = []
@@ -745,11 +749,14 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         .sort((a, b) => (a.play?.name ?? 'No play').localeCompare(b.play?.name ?? 'No play'))
       return { overall, perRep, perPlay }
     },
-    async logExtractionRun(input) {
+    async logExtractionRun(input: ModelCallLogInput) {
       extractionRuns.push({
+        task: input.task,
         success: input.success,
         latencyMs: Math.max(0, Math.round(input.latencyMs)),
         model: input.model,
+        costTier: input.costTier ?? null,
+        costUsd: input.costUsd ?? 0,
         error: input.error ?? null,
         createdAt: new Date().toISOString(),
       })
@@ -772,7 +779,12 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         latencies.length > 0
           ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95))]
           : 0
-      return { total, failures, failureRate, avgLatencyMs, p95LatencyMs }
+      const costByTier = { tier1: 0, tier2: 0, tier3: 0, tier4: 0 }
+      for (const r of rows) {
+        if (r.costTier) costByTier[r.costTier] += r.costUsd
+      }
+      const totalCostUsd = Object.values(costByTier).reduce((sum, n) => sum + n, 0)
+      return { total, failures, failureRate, avgLatencyMs, p95LatencyMs, costByTier, totalCostUsd }
     },
     async listAllLeadsAdmin() {
       return leads

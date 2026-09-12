@@ -111,6 +111,7 @@ export async function POST(
     // Few-shot injection from real wins.
     const fewShotSelection = selectFewShotExamples(fewShotPool, { leadId: detail.id, lead: detail, extracted, score, type: type as DraftMessageType, styleCard: voiceProfile?.styleCard ?? null, facts, plays, history: detail.messages, profile, matchedProof: matched[0] ?? null }, plays)
 
+    const draftStarted = Date.now()
     const draftResult = await streamDraft(
       {
         leadId: detail.id,
@@ -141,5 +142,24 @@ export async function POST(
       draftText: draftResult.draftText,
       modelUsed: draftResult.modelUsed,
     })
+
+    // Log one entry per model call actually made (best-of-two, plus an
+    // escalation pass if one ran), so cost-by-tier reflects real spend.
+    const draftLatencyMs = Date.now() - draftStarted
+    for (const call of draftResult.callLog) {
+      try {
+        await store.logExtractionRun({
+          task: 'draft',
+          success: true,
+          latencyMs: draftLatencyMs,
+          model: call.host,
+          costTier: call.costTier,
+          host: call.host,
+          costUsd: call.estimatedCostUsd,
+        })
+      } catch {
+        // Metrics logging must never break drafting.
+      }
+    }
   })
 }

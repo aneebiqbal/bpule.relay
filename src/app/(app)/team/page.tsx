@@ -38,6 +38,15 @@ function Metric({
   )
 }
 
+function TierCost({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="text-xs text-slate">{label}</div>
+      <div className="mt-0.5 font-mono text-sm text-ink">${value.toFixed(2)}</div>
+    </div>
+  )
+}
+
 function RateCells({
   rates,
   showCaption = false,
@@ -146,6 +155,25 @@ export default async function TeamPage() {
           value={`${Math.round(extraction.p95LatencyMs)}ms`}
           ok={extraction.p95LatencyMs > 0 && extraction.p95LatencyMs <= 8000}
         />
+      </section>
+
+      <section className="border-b border-line pb-5">
+        <div className="flex items-baseline justify-between gap-4">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate">
+            Model spend, by tier (7d)
+          </div>
+          <span className="font-mono text-sm text-ink">${extraction.totalCostUsd.toFixed(2)}</span>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <TierCost label="Tier 1 — DeepSeek Flash" value={extraction.costByTier.tier1} />
+          <TierCost label="Tier 2 — DeepSeek Pro" value={extraction.costByTier.tier2} />
+          <TierCost label="Tier 3 — Groq" value={extraction.costByTier.tier3} />
+          <TierCost label="Tier 4 — OpenAI" value={extraction.costByTier.tier4} />
+        </div>
+        <p className="mt-2 text-xs leading-relaxed text-slate">
+          Estimated from token counts × published per-tier rates, not a provider invoice. Tier 3/4
+          spend rising as a share of the total is the signal to check tier 1 host health.
+        </p>
       </section>
 
       <section>

@@ -52,6 +52,20 @@ export interface ExtractionMetrics {
   failureRate: number
   avgLatencyMs: number
   p95LatencyMs: number
+  /** Estimated USD cost over the same rolling window, split by which tier served the call. */
+  costByTier: Record<'tier1' | 'tier2' | 'tier3' | 'tier4', number>
+  totalCostUsd: number
+}
+
+export interface ModelCallLogInput {
+  task: 'extract' | 'draft'
+  success: boolean
+  latencyMs: number
+  model: string
+  costTier?: 'tier1' | 'tier2' | 'tier3' | 'tier4'
+  host?: string
+  costUsd?: number
+  error?: string | null
 }
 
 export interface CreateLeadResult {
@@ -251,7 +265,7 @@ export interface ScoutStore {
   getTodayDashboard(): Promise<TodayDashboard>
   getTeamStats(): Promise<TeamStats>
   getExtractionMetrics(): Promise<ExtractionMetrics>
-  logExtractionRun(input: { success: boolean; latencyMs: number; model: string; error?: string | null }): Promise<void>
+  logExtractionRun(input: ModelCallLogInput): Promise<void>
   /** All leads a team lead can see; admin only in Supabase mode. */
   listAllLeadsAdmin(): Promise<Lead[]>
   // eval harness

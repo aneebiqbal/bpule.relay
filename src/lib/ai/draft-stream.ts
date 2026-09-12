@@ -1,9 +1,9 @@
 import type { Profile, ProofItem } from '@/lib/domain/types'
-import type { SelfCheck, DraftResult, DraftInput, DraftVariant } from '@/lib/ai/draft'
+import type { SelfCheck, DraftResult, DraftInput, DraftVariant, DraftCallLog } from '@/lib/ai/draft'
 import { baseDraftSystem, buildUserPrompt, generateDraft } from '@/lib/ai/draft'
-import { pickModel } from '@/lib/ai/routing'
+import { pickDraftChain, tier2Chain } from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
-import { streamChatText, structuredJson } from '@/lib/ai/provider'
+import { streamChatText, structuredJsonChain } from '@/lib/ai/provider'
 import { sanitizeDraft } from '@/lib/facts/sanitize'
 
 export type DraftStreamEvent =
@@ -80,25 +80,32 @@ export async function streamDraft(
 
   const system = baseDraftSystem(input.styleCard, input.facts)
   const user = buildUserPrompt(input)
-  const cheap = pickModel('draft-variant')
+  const chain = pickDraftChain()
+  const callLog: DraftCallLog[] = []
 
   emit({ type: 'status', message: 'Drafting two variants in parallel' })
-  emit({ type: 'attempt', attempt: 0, model: cheap.model, tier: 'cheap' })
+  emit({ type: 'attempt', attempt: 0, model: 'tier1', tier: 'cheap' })
 
-  // Best-of-two: generate both variants in parallel using the cheap model.
+  // Best-of-two: generate both variants in parallel on tier 1 (DeepSeek V4
+  // Flash across every configured host; a host that fails or exhausts its
+  // rate-limit budget falls through to the next host in the chain before
+  // this call ever fails outright). Never strict json_schema mode — same
+  // reasoning as extraction: DeepSeek's own strict mode has an open bug
+  // returning malformed JSON on some calls, so the code-level checks below
+  // are the real gate, not a provider's schema-adherence claim.
   const [rawA, rawB] = await Promise.all([
-    structuredJson<RawVariant>({
-      model: cheap.model,
-      system,
-      user,
-      schema: DRAFT_SCHEMA,
-    }).catch(() => null),
-    structuredJson<RawVariant>({
-      model: cheap.model,
-      system,
-      user,
-      schema: DRAFT_SCHEMA,
-    }).catch(() => null),
+    structuredJsonChain<RawVariant>(chain, { system, user, schema: DRAFT_SCHEMA })
+      .then((r) => {
+        callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
+        return r.data
+      })
+      .catch(() => null),
+    structuredJsonChain<RawVariant>(chain, { system, user, schema: DRAFT_SCHEMA })
+      .then((r) => {
+        callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
+        return r.data
+      })
+      .catch(() => null),
   ])
 
   const variantA = rawA ? normalizeVariant(rawA, input) : null
@@ -108,7 +115,44 @@ export async function streamDraft(
     throw new Error('Both draft variants failed. Try again.')
   }
 
-  const { primary, secondary, pickReason } = pickBestVariant(variantA, variantB)
+  let { primary, secondary, pickReason } = pickBestVariant(variantA, variantB)
+
+  // Escalate to tier 2 (DeepSeek V4 Pro) when the lead is a high-value send
+  // (score 10+) or neither variant passed self-check — same trigger as
+  // extraction's precision pass, on the drafting side.
+  const tier2 = tier2Chain()
+  if ((input.score.total >= 10 || !primary.passed) && tier2.length > 0) {
+    try {
+      const escalatedRaw = await structuredJsonChain<RawVariant>(tier2, { system, user, schema: DRAFT_SCHEMA })
+      callLog.push({
+        costTier: escalatedRaw.costTier,
+        host: escalatedRaw.host,
+        estimatedCostUsd: escalatedRaw.estimatedCostUsd,
+      })
+      const escalated = normalizeVariant(escalatedRaw.data, input)
+      if (escalated.passed && !primary.passed) {
+        secondary = primary
+        primary = escalated
+        pickReason = 'Escalated to the precision tier: the lead scored 10+ or the first pass did not clear both self-checks.'
+      } else if (escalated.passed === primary.passed) {
+        const scoreOf = (v: typeof escalated) => {
+          let s = v.passed ? 4 : 0
+          s += v.selfCheck.test1ReplyOrDelete ? 2 : 0
+          s += v.selfCheck.test2NotGeneric ? 2 : 0
+          s += v.selfCheck.codeChecks.companyMentioned ? 1 : 0
+          s += v.selfCheck.codeChecks.specificEvidenceMentioned ? 1 : 0
+          return s
+        }
+        if (scoreOf(escalated) > scoreOf(primary)) {
+          secondary = primary
+          primary = escalated
+          pickReason = 'Escalated to the precision tier: the lead scored 10+ or the first pass did not clear both self-checks.'
+        }
+      }
+    } catch {
+      // Keep the tier 1 draft if the precision pass fails outright.
+    }
+  }
 
   // Stream the primary draft in chunks so the UI feels alive.
   const text = primary.draftText
@@ -140,8 +184,8 @@ export async function streamDraft(
     draftText: primary.draftText,
     selfCheck: primary.selfCheck,
     passed: primary.passed,
-    modelUsed: cheap.model,
-    attempts: 1,
+    modelUsed: callLog.map((c) => `${c.costTier}:${c.host}`).join(', ') || 'unknown',
+    attempts: callLog.length,
     strippedNumbers: primary.strippedNumbers,
     hadEmDash: primary.hadEmDash,
     variant: secondary
@@ -156,6 +200,7 @@ export async function streamDraft(
       input.fewShotExamples && input.fewShotExamples.length > 0
         ? `Informed by ${input.fewShotExamples.length} real win(s): ${input.fewShotExamples.map((e) => e.company).join(', ')}.`
         : 'No few-shot examples matched this lead.',
+    callLog,
   }
 
   emit({ type: 'done', draft, matchedProof })
