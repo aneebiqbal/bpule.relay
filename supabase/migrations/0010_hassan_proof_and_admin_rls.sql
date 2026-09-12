@@ -21,7 +21,8 @@ from reps r
 where r.name = 'Hassan'
   and not exists (
     select 1 from profiles p where p.rep_id = r.id and p.platform = 'upwork'
-  );
+  )
+on conflict (id) do nothing;
 
 -- ============================================================================
 -- Proof items.

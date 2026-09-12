@@ -10,7 +10,7 @@ create extension if not exists vector;
 -- Golden set: curated real leads with known outcomes for prompt evaluation.
 -- ============================================================================
 
-create table golden_set (
+create table if not exists golden_set (
   id uuid primary key default gen_random_uuid(),
   lead_id uuid references leads(id) not null,
   message_id uuid references messages(id),
@@ -25,14 +25,14 @@ create table golden_set (
   created_at timestamptz default now()
 );
 
-create index golden_set_lead_idx on golden_set (lead_id);
-create index golden_set_active_idx on golden_set (active);
+create index if not exists golden_set_lead_idx on golden_set (lead_id);
+create index if not exists golden_set_active_idx on golden_set (active);
 
 -- ============================================================================
 -- Eval runs: score a prompt version against the golden set.
 -- ============================================================================
 
-create table eval_runs (
+create table if not exists eval_runs (
   id uuid primary key default gen_random_uuid(),
   prompt_version text not null,
   -- Scores out of the golden set size.
@@ -52,17 +52,17 @@ create table eval_runs (
 -- Proof items: add embedding vector for semantic search.
 -- ============================================================================
 
-alter table proof_items add column embedding vector(384);
+alter table proof_items add column if not exists embedding vector(384);
 
 -- Index for cosine-similarity search on proof embeddings.
-create index proof_items_embedding_idx on proof_items using hnsw (embedding vector_cosine_ops);
+create index if not exists proof_items_embedding_idx on proof_items using hnsw (embedding vector_cosine_ops);
 
 -- ============================================================================
 -- Few-shot wins: indexed view of sent messages that got replies.
 -- We keep this denormalized for fast lookup at draft time.
 -- ============================================================================
 
-create table few_shot_wins (
+create table if not exists few_shot_wins (
   id uuid primary key default gen_random_uuid(),
   message_id uuid references messages(id) not null unique,
   lead_id uuid references leads(id) not null,
@@ -78,9 +78,9 @@ create table few_shot_wins (
   created_at timestamptz default now()
 );
 
-create index few_shot_wins_play_idx on few_shot_wins (play_id);
-create index few_shot_wins_signal_idx on few_shot_wins (signal_type);
-create index few_shot_wins_tags_idx on few_shot_wins using gin (tags);
+create index if not exists few_shot_wins_play_idx on few_shot_wins (play_id);
+create index if not exists few_shot_wins_signal_idx on few_shot_wins (signal_type);
+create index if not exists few_shot_wins_tags_idx on few_shot_wins using gin (tags);
 
 -- ============================================================================
 -- RLS
@@ -91,18 +91,24 @@ alter table eval_runs enable row level security;
 alter table few_shot_wins enable row level security;
 
 -- Admin-only write, all authenticated read for golden set and eval runs.
+drop policy if exists golden_set_select on golden_set;
 create policy golden_set_select on golden_set for select
   to authenticated using (auth.role() = 'authenticated');
+drop policy if exists golden_set_admin_write on golden_set;
 create policy golden_set_admin_write on golden_set for all
   to authenticated using (public.is_admin()) with check (public.is_admin());
 
+drop policy if exists eval_runs_select on eval_runs;
 create policy eval_runs_select on eval_runs for select
   to authenticated using (auth.role() = 'authenticated');
+drop policy if exists eval_runs_admin_write on eval_runs;
 create policy eval_runs_admin_write on eval_runs for all
   to authenticated using (public.is_admin()) with check (public.is_admin());
 
+drop policy if exists few_shot_wins_select on few_shot_wins;
 create policy few_shot_wins_select on few_shot_wins for select
   to authenticated using (auth.role() = 'authenticated');
+drop policy if exists few_shot_wins_admin_write on few_shot_wins;
 create policy few_shot_wins_admin_write on few_shot_wins for all
   to authenticated using (public.is_admin()) with check (public.is_admin());
 
