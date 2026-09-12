@@ -21,7 +21,8 @@ from (values
   ('bbbbbbbb-0000-0000-0000-000000000006'::uuid, 'Mehak'::text, 'rep'::text, null::uuid),
   ('bbbbbbbb-0000-0000-0000-000000000007'::uuid, 'Zaira'::text, 'rep'::text, null::uuid)
 ) as v(id, name, role, auth_user_id)
-where not exists (select 1 from reps r where r.name = v.name);
+where not exists (select 1 from reps r where r.name = v.name)
+on conflict (id) do nothing;
 
 -- ============================================================================
 -- Profiles. profile_url, headline, and cv_path are intentionally null: none

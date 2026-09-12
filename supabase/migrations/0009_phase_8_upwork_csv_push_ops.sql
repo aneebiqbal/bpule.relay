@@ -4,7 +4,7 @@
 -- Upwork jobs: separate from leads, scored on their own rubric.
 -- ============================================================================
 
-create table upwork_jobs (
+create table if not exists upwork_jobs (
   id uuid primary key default gen_random_uuid(),
   owner_rep_id uuid references reps(id),
   title text not null,
@@ -26,19 +26,23 @@ create table upwork_jobs (
   created_at timestamptz default now()
 );
 
-create index upwork_jobs_owner_idx on upwork_jobs (owner_rep_id);
-create index upwork_jobs_status_idx on upwork_jobs (status);
+create index if not exists upwork_jobs_owner_idx on upwork_jobs (owner_rep_id);
+create index if not exists upwork_jobs_status_idx on upwork_jobs (status);
 
 -- RLS: owner or admin.
 alter table upwork_jobs enable row level security;
 
+drop policy if exists upwork_jobs_select on upwork_jobs;
 create policy upwork_jobs_select on upwork_jobs for select
   to authenticated using (owner_rep_id = public.current_rep_id() or public.is_admin());
+drop policy if exists upwork_jobs_insert on upwork_jobs;
 create policy upwork_jobs_insert on upwork_jobs for insert
   to authenticated with check (owner_rep_id = public.current_rep_id());
+drop policy if exists upwork_jobs_update on upwork_jobs;
 create policy upwork_jobs_update on upwork_jobs for update
   to authenticated using (owner_rep_id = public.current_rep_id() or public.is_admin())
   with check (owner_rep_id = public.current_rep_id() or public.is_admin());
+drop policy if exists upwork_jobs_delete on upwork_jobs;
 create policy upwork_jobs_delete on upwork_jobs for delete
   to authenticated using (public.is_admin());
 
@@ -46,7 +50,7 @@ create policy upwork_jobs_delete on upwork_jobs for delete
 -- Upwork messages: cover letters and follow-ups tied to a job.
 -- ============================================================================
 
-create table upwork_messages (
+create table if not exists upwork_messages (
   id uuid primary key default gen_random_uuid(),
   job_id uuid references upwork_jobs(id) not null,
   rep_id uuid references reps(id),
@@ -58,14 +62,16 @@ create table upwork_messages (
   created_at timestamptz default now()
 );
 
-create index upwork_messages_job_idx on upwork_messages (job_id);
+create index if not exists upwork_messages_job_idx on upwork_messages (job_id);
 
 alter table upwork_messages enable row level security;
 
+drop policy if exists upwork_messages_select on upwork_messages;
 create policy upwork_messages_select on upwork_messages for select
   to authenticated using (
     exists (select 1 from upwork_jobs j where j.id = job_id and (j.owner_rep_id = public.current_rep_id() or public.is_admin()))
   );
+drop policy if exists upwork_messages_insert on upwork_messages;
 create policy upwork_messages_insert on upwork_messages for insert
   to authenticated with check (
     exists (select 1 from upwork_jobs j where j.id = job_id and (j.owner_rep_id = public.current_rep_id() or public.is_admin()))
@@ -75,7 +81,7 @@ create policy upwork_messages_insert on upwork_messages for insert
 -- Push subscriptions: one per rep, for reply + follow-up-eligible notifications.
 -- ============================================================================
 
-create table push_subscriptions (
+create table if not exists push_subscriptions (
   id uuid primary key default gen_random_uuid(),
   rep_id uuid references reps(id) unique not null,
   endpoint text not null,
@@ -86,6 +92,7 @@ create table push_subscriptions (
 
 alter table push_subscriptions enable row level security;
 
+drop policy if exists push_subscriptions_own on push_subscriptions;
 create policy push_subscriptions_own on push_subscriptions for all
   to authenticated using (rep_id = public.current_rep_id())
   with check (rep_id = public.current_rep_id());
@@ -95,7 +102,7 @@ create policy push_subscriptions_own on push_subscriptions for all
 -- ============================================================================
 
 -- Add a generated search vector column to leads for tsvector search.
-alter table leads add column search_vector tsvector
+alter table leads add column if not exists search_vector tsvector
   generated always as (
     setweight(to_tsvector('english', coalesce(company, '')), 'A') ||
     setweight(to_tsvector('english', coalesce(contact_name, '')), 'B') ||
@@ -105,27 +112,27 @@ alter table leads add column search_vector tsvector
     setweight(to_tsvector('english', coalesce(raw_input, '')), 'D')
   ) stored;
 
-create index leads_search_idx on leads using gin (search_vector);
+create index if not exists leads_search_idx on leads using gin (search_vector);
 
 -- Add a generated search vector column to proof_items.
-alter table proof_items add column search_vector tsvector
+alter table proof_items add column if not exists search_vector tsvector
   generated always as (
     setweight(to_tsvector('english', coalesce(project_summary, '')), 'A') ||
     setweight(to_tsvector('english', coalesce(review_quote, '')), 'B') ||
     setweight(to_tsvector('english', coalesce(client_name, '')), 'B')
   ) stored;
 
-create index proof_items_search_idx on proof_items using gin (search_vector);
+create index if not exists proof_items_search_idx on proof_items using gin (search_vector);
 
 -- Add a generated search vector column to upwork_jobs.
-alter table upwork_jobs add column search_vector tsvector
+alter table upwork_jobs add column if not exists search_vector tsvector
   generated always as (
     setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
     setweight(to_tsvector('english', coalesce(description, '')), 'B') ||
     setweight(to_tsvector('english', coalesce(urgency_signal, '')), 'C')
   ) stored;
 
-create index upwork_jobs_search_idx on upwork_jobs using gin (search_vector);
+create index if not exists upwork_jobs_search_idx on upwork_jobs using gin (search_vector);
 
 -- ============================================================================
 -- Function: archive search across leads, proof_items, and upwork_jobs.
@@ -254,7 +261,7 @@ $$;
 -- Notification log: polled by the client when push is not available.
 -- ============================================================================
 
-create table notification_log (
+create table if not exists notification_log (
   id uuid primary key default gen_random_uuid(),
   rep_id uuid references reps(id) not null,
   type text not null check (type in ('reply', 'followup_eligible')),
@@ -263,10 +270,11 @@ create table notification_log (
   created_at timestamptz default now()
 );
 
-create index notification_log_rep_idx on notification_log (rep_id, read);
+create index if not exists notification_log_rep_idx on notification_log (rep_id, read);
 
 alter table notification_log enable row level security;
 
+drop policy if exists notification_log_own on notification_log;
 create policy notification_log_own on notification_log for all
   to authenticated using (rep_id = public.current_rep_id())
   with check (rep_id = public.current_rep_id());
@@ -313,7 +321,7 @@ $$;
 -- CSV import log: audit trail for bulk uploads.
 -- ============================================================================
 
-create table csv_imports (
+create table if not exists csv_imports (
   id uuid primary key default gen_random_uuid(),
   rep_id uuid references reps(id) not null,
   file_name text,
@@ -327,7 +335,9 @@ create table csv_imports (
 
 alter table csv_imports enable row level security;
 
+drop policy if exists csv_imports_own on csv_imports;
 create policy csv_imports_own on csv_imports for select
   to authenticated using (rep_id = public.current_rep_id() or public.is_admin());
+drop policy if exists csv_imports_insert on csv_imports;
 create policy csv_imports_insert on csv_imports for insert
   to authenticated with check (rep_id = public.current_rep_id());
