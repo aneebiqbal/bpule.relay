@@ -1,4 +1,4 @@
-import { extractLead } from '@/lib/ai/extract'
+import { extractLeadBundle } from '@/lib/ai/extract'
 import { hasProvider } from '@/lib/ai/config'
 import { scanForSecrets } from '@/lib/ai/secrets'
 import { sseStream } from '@/lib/sse/sse'
@@ -33,10 +33,15 @@ export async function POST(request: Request) {
     emit({ type: 'status', message: 'Reading the profile' })
     emit({ type: 'status', message: 'Extracting fields' })
 
-    const extracted = await extractLead(rawText)
+    const bundle = await extractLeadBundle(rawText, {
+      onStatus(message) {
+        emit({ type: 'status', message })
+      },
+    })
     emit({
       type: 'done',
-      extracted,
+      extracted: bundle.primary,
+      candidates: bundle.candidates,
       demoMode: !hasProvider(),
     })
   })

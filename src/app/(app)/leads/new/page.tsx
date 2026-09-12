@@ -66,6 +66,7 @@ export default function NewLeadPage() {
   const [extracting, setExtracting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [demoMode, setDemoMode] = useState(false)
+  const [candidates, setCandidates] = useState<ExtractedLead[]>([])
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<{ company?: string; signalEvidence?: string }>({})
   const [blocked, setBlocked] = useState<{ reason?: string; existingOwnerName?: string } | null>(null)
@@ -89,6 +90,20 @@ export default function NewLeadPage() {
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  function applyExtracted(ex: ExtractedLead) {
+    setForm((f) => ({
+      ...f,
+      company: ex.company?.trim() || f.company.trim() || f.company,
+      contactName: ex.name?.trim() || f.contactName.trim() || f.contactName,
+      contactTitle: ex.title?.trim() || f.contactTitle.trim() || f.contactTitle,
+      url: ex.url?.trim() || f.url.trim() || f.url,
+      signalType: ex.signalType ?? f.signalType,
+      signalEvidence: ex.signalEvidence ?? f.signalEvidence,
+      verbatimQuote: ex.verbatimQuote?.trim() ?? f.verbatimQuote,
+      tags: ex.tags ?? [],
+    }))
   }
 
   function validateField<K extends 'company' | 'signalEvidence'>(key: K): boolean {
@@ -115,6 +130,7 @@ export default function NewLeadPage() {
     setExtracting(true)
     setError(null)
     setDemoMode(false)
+    setCandidates([])
     setForm((f) => ({ ...f, tags: [] }))
     try {
       let res: Response
@@ -130,7 +146,7 @@ export default function NewLeadPage() {
 
       type ExtractEvent =
         | { type: 'status'; message: string }
-        | { type: 'done'; extracted: ExtractedLead; demoMode: boolean }
+        | { type: 'done'; extracted: ExtractedLead; candidates?: ExtractedLead[]; demoMode: boolean }
         | { type: 'error'; message: string }
 
       await readSse<ExtractEvent>(res, {
@@ -145,17 +161,8 @@ export default function NewLeadPage() {
           if (event.type === 'done') {
             const ex = event.extracted ?? {}
             setDemoMode(Boolean(event.demoMode))
-            setForm((f) => ({
-              ...f,
-              company: ex.company?.trim() || f.company.trim() || f.company,
-              contactName: ex.name?.trim() || f.contactName.trim() || f.contactName,
-              contactTitle: ex.title?.trim() || f.contactTitle.trim() || f.contactTitle,
-              url: ex.url?.trim() || f.url.trim() || f.url,
-              signalType: ex.signalType ?? f.signalType,
-              signalEvidence: ex.signalEvidence ?? f.signalEvidence,
-              verbatimQuote: ex.verbatimQuote?.trim() ?? f.verbatimQuote,
-              tags: ex.tags ?? [],
-            }))
+            applyExtracted(ex)
+            setCandidates((event.candidates ?? []).filter((c) => c.company?.trim().length > 0))
           }
         },
       })
@@ -239,6 +246,22 @@ export default function NewLeadPage() {
             No GROQ_API_KEY is set, so extraction used the deterministic demo extractor. Fill in
             any rough edges by hand.
           </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {candidates.length > 1 ? (
+        <Alert>
+          <AlertTitle>Multiple profiles detected</AlertTitle>
+          <AlertDescription>
+            Relay extracted {candidates.length} candidates from your paste. Pick one to load into the form.
+          </AlertDescription>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {candidates.map((c, idx) => (
+              <Button key={`${c.company}-${idx}`} variant="outline" size="sm" onClick={() => applyExtracted(c)}>
+                Use {idx + 1}: {c.company}
+              </Button>
+            ))}
+          </div>
         </Alert>
       ) : null}
 
