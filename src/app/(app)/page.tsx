@@ -1,10 +1,11 @@
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { ArrowRight, MessageCircle, Plus, Sparkles } from 'lucide-react'
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
-import { REPLY_RATE_TARGET, READ_TO_CHECK_TARGET } from '@/lib/ai/config'
-import { LeadList } from '@/components/lead-list'
+import { signalById } from '@/lib/score/signals'
+import { NotificationFeed, type NotificationItem } from '@/components/notification-feed'
 import { cn } from 'cn'
+import type { Lead } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,90 +17,87 @@ function greeting(): string {
   return 'Good evening'
 }
 
-function pct(n: number | null): string {
-  return n === null ? 'no data' : `${Math.round(n * 100)}%`
+type ReasonTag = 'replied' | 'followup' | 'new'
+
+interface PriorityItem {
+  lead: Lead
+  reason: ReasonTag
+  detail: string
 }
 
-function Stat({
-  label,
-  value,
-  sub,
-  footer,
-  progress,
-  tone = 'neutral',
-}: {
-  label: string
-  value: string
-  sub?: string
-  footer?: string
-  progress?: number
-  tone?: 'neutral' | 'gold' | 'warn'
-}) {
-  return (
-    <div>
-      <div className="text-xs font-medium uppercase tracking-wide text-slate">
-        {label}
-      </div>
-      <div className="mt-1.5 flex items-baseline gap-2">
-        <span
-          className={cn(
-            'font-mono text-2xl font-medium',
-            tone === 'gold' ? 'text-gold' : tone === 'warn' ? 'text-status-research' : 'text-ink',
-          )}
-        >
-          {value}
-        </span>
-        {sub ? <span className="text-xs text-slate">{sub}</span> : null}
-      </div>
-      {typeof progress === 'number' ? (
-        <div className="mt-2.5 h-1 w-full max-w-32 overflow-hidden rounded-full bg-paper-tint">
-          <div
-            className={cn(
-              'h-full rounded-full transition-[width] duration-300',
-              tone === 'warn' ? 'bg-status-research' : 'bg-gold',
-            )}
-            style={{ width: `${Math.min(Math.max(progress, 2), 100)}%` }}
-          />
-        </div>
-      ) : null}
-      {footer ? (
-        <p className={cn('mt-1.5 text-xs', tone === 'warn' ? 'text-status-research' : 'text-slate')}>
-          {footer}
-        </p>
-      ) : null}
-    </div>
-  )
+const REASON_LABEL: Record<ReasonTag, { label: string; tone: string }> = {
+  replied: { label: 'Replied', tone: 'bg-status-send/10 text-status-send' },
+  followup: { label: 'Needs a follow-up', tone: 'bg-status-research/10 text-status-research' },
+  new: { label: 'New', tone: 'bg-paper-tint text-slate' },
 }
 
 export default async function TodayPage() {
   const user = await getCurrentUser()
   const store = await createScoutStore()
   const dashboard = await store.getTodayDashboard()
-  const { mine, team } = dashboard
+  const { mine, sendBudgets, notifications, followupsDue, team } = dashboard
 
   const firstName = user?.rep.name.split(' ')[0] ?? 'there'
-  const sendPct = Math.min(Math.round((mine.todaySends / mine.dailyLimit) * 100), 100)
-  const atCeiling = mine.todaySends >= mine.dailyLimit
-  const sendsLeft = Math.max(0, mine.dailyLimit - mine.todaySends)
-  const queue = [...mine.queue].sort(
-    (a, b) =>
-      (b.score ?? 0) - (a.score ?? 0) ||
-      b.createdAt.localeCompare(a.createdAt),
+
+  // One ranked list, one story: someone waiting on you beats a lead going
+  // cold beats a fresh lead sitting in the queue. No separate sections for a
+  // rep to reconcile — just the order to work in.
+  const coldQueue = [...mine.queue].sort(
+    (a, b) => (b.score ?? 0) - (a.score ?? 0) || b.createdAt.localeCompare(a.createdAt),
   )
+  const followupIds = new Set(followupsDue.map((f) => f.lead.id))
+
+  const priority: PriorityItem[] = [
+    ...mine.replies.map((lead) => ({
+      lead,
+      reason: 'replied' as const,
+      detail: 'They wrote back. Answer them first.',
+    })),
+    ...followupsDue.map((f) => ({
+      lead: f.lead,
+      reason: 'followup' as const,
+      detail: `Contacted ${f.daysSinceContact} days ago, no reply yet. A nudge now beats letting it go cold.`,
+    })),
+    ...coldQueue
+      .filter((lead) => !followupIds.has(lead.id))
+      .map((lead) => ({
+        lead,
+        reason: 'new' as const,
+        detail: signalById(lead.signalType)?.description ?? 'Scored and ready to work.',
+      })),
+  ]
+
+  const [next, ...rest] = priority
+
+  // Resolve each notification's lead_id to a company name from data already
+  // on hand, rather than an extra query.
+  const knownLeads = new Map(priority.map((p) => [p.lead.id, p.lead.company]))
+  const notificationItems: NotificationItem[] = notifications.map((n) => {
+    const leadId = typeof n.payload.lead_id === 'string' ? n.payload.lead_id : null
+    return {
+      id: n.id,
+      type: n.type,
+      leadId,
+      company: leadId ? (knownLeads.get(leadId) ?? null) : null,
+      createdAt: n.createdAt,
+    }
+  })
+
+  const sendsLeftToday = sendBudgets.reduce((sum, b) => sum + Math.max(0, b.limit - b.used), 0)
+  const atAnyCeiling = sendBudgets.some((b) => b.used >= b.limit)
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-medium tracking-tight text-ink sm:text-3xl">
             {greeting()}, {firstName}
           </h1>
-          <p className="mt-1.5 font-mono text-xs text-slate">
-            {new Date().toLocaleDateString(undefined, {
-              weekday: 'long',
-              month: 'long',
-              day: 'numeric',
-            })}
+          <p className="mt-1.5 text-sm text-slate">
+            {atAnyCeiling
+              ? "You've hit a send limit today. It resumes tomorrow."
+              : `${sendsLeftToday} sends left today`}
+            {team.replyRate !== null ? ` · team is replying ${Math.round(team.replyRate * 100)}% of the time` : ''}
           </p>
         </div>
         <Link
@@ -111,79 +109,100 @@ export default async function TodayPage() {
         </Link>
       </header>
 
-      <section className="grid grid-cols-1 gap-6 border-y border-line py-5 sm:grid-cols-3 sm:gap-4">
-        <Stat
-          label="Sends today"
-          value={String(mine.todaySends)}
-          sub={`of ${mine.dailyLimit}`}
-          progress={sendPct}
-          tone={atCeiling ? 'warn' : 'gold'}
-          footer={atCeiling ? 'Ceiling reached. Sends resume tomorrow.' : `${sendsLeft} left today`}
-        />
-        <Stat
-          label="Team reply rate"
-          value={pct(team.replyRate)}
-          sub={`target ${pct(REPLY_RATE_TARGET)}`}
-          footer={`${team.repliedLeads} replied across ${team.sentLeads} sent lines`}
-        />
-        <Stat
-          label="Read to check"
-          value={pct(team.readToCheckRate)}
-          sub={`target ${pct(READ_TO_CHECK_TARGET)}`}
-          footer={`${team.checkedLeads} checks from ${team.readLeads} reads`}
-        />
-      </section>
+      {notificationItems.length > 0 ? <NotificationFeed initial={notificationItems} /> : null}
 
-      {mine.replies.length > 0 ? (
-        <section>
-          <div className="mb-3 flex items-end justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-medium text-ink">Replies waiting</h2>
-                <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[11px] font-medium text-gold">
-                  {mine.replies.length} warm
-                </span>
-              </div>
-              <p className="mt-0.5 text-sm text-slate">
-                These leads already replied. Answer them first, before the cold queue.
-              </p>
-            </div>
+      {next ? (
+        <section className="rounded-2xl border-2 border-gold/40 bg-paper p-6 sm:p-8">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gold">
+            <Sparkles className="size-3.5" aria-hidden="true" />
+            Work this one next
           </div>
-          <LeadList leads={mine.replies} showRepliedOnly />
-        </section>
-      ) : null}
-
-      <section>
-        <div className="mb-3 flex items-end justify-between gap-4">
-          <div>
-            <h2 className="text-base font-medium text-ink">Your queue</h2>
-            <p className="mt-0.5 text-sm text-slate">
-              Ordered by score. Start at the top and work down.
-            </p>
-          </div>
-          <span className="font-mono text-xs text-slate">{queue.length} leads</span>
-        </div>
-        {queue.length === 0 ? (
-          <div className="space-y-4 border-y border-dashed border-line py-8 text-center">
-            <div>
-              <p className="text-sm font-medium text-ink">Nothing queued yet.</p>
-              <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-slate">
-                Paste research on a company you think needs delivery help, and Relay
-                scores it before you spend a minute on it.
-              </p>
+          <div className="mt-3 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-xl font-medium tracking-tight text-ink sm:text-2xl">
+                {next.lead.company}
+              </h2>
+              {next.lead.contactName ? (
+                <p className="mt-1 text-sm text-slate">
+                  {next.lead.contactName}
+                  {next.lead.contactTitle ? ` · ${next.lead.contactTitle}` : ''}
+                </p>
+              ) : null}
+              <p className="mt-3 max-w-lg text-sm leading-relaxed text-ink">{next.detail}</p>
             </div>
             <Link
-              href="/leads/new"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-gold px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-gold/90"
+              href={`/leads/${next.lead.id}`}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gold px-5 py-3 text-sm font-medium text-paper transition-colors hover:bg-gold/90"
             >
-              <Plus className="size-4" aria-hidden="true" />
-              Add the first lead
+              {next.reason === 'replied' ? (
+                <>
+                  <MessageCircle className="size-4" aria-hidden="true" />
+                  Reply now
+                </>
+              ) : (
+                <>
+                  Open and draft a message
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </>
+              )}
             </Link>
           </div>
-        ) : (
-          <LeadList leads={queue} highlightTop />
-        )}
-      </section>
+        </section>
+      ) : (
+        <section className="space-y-4 border-y border-dashed border-line py-10 text-center">
+          <div>
+            <p className="text-sm font-medium text-ink">Nothing to work right now.</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-slate">
+              Paste research on a company you think needs delivery help, and Relay
+              scores it before you spend a minute on it.
+            </p>
+          </div>
+          <Link
+            href="/leads/new"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-gold px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-gold/90"
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            Add your first lead
+          </Link>
+        </section>
+      )}
+
+      {rest.length > 0 ? (
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <h2 className="text-sm font-medium text-slate">Then, in order</h2>
+            <span className="font-mono text-xs text-slate">{rest.length} more</span>
+          </div>
+          <ul className="divide-y divide-line rounded-xl border border-line bg-paper">
+            {rest.map(({ lead, reason, detail }) => (
+              <li key={lead.id}>
+                <Link
+                  href={`/leads/${lead.id}`}
+                  className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-paper-tint"
+                >
+                  <span
+                    className={cn(
+                      'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                      REASON_LABEL[reason].tone,
+                    )}
+                  >
+                    {REASON_LABEL[reason].label}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-ink">{lead.company}</div>
+                    <div className="mt-0.5 truncate text-xs text-slate">
+                      {lead.contactName ?? detail}
+                    </div>
+                  </div>
+                  {lead.score !== null ? (
+                    <span className="shrink-0 font-mono text-xs text-slate">{lead.score}/12</span>
+                  ) : null}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   )
 }

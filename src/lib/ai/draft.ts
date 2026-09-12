@@ -9,14 +9,21 @@ import type {
   ScoreResult,
   StyleCard,
 } from '@/lib/domain/types'
-import { pickModel } from '@/lib/ai/routing'
+import { pickDraftChain, tier2Chain, type CostTierName } from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
-import { structuredJson } from '@/lib/ai/provider'
+import { structuredJsonChain } from '@/lib/ai/provider'
 import { injectStyleCard } from '@/lib/style/inject'
 import { signalById } from '@/lib/score/signals'
 import { pickPlayForSignal } from '@/lib/score/plays'
 import { sanitizeDraft, siteIsLive } from '@/lib/facts/sanitize'
 import { classifyRoleFromTitle, rolePromptGuidance } from '@/lib/leads/targeting'
+
+/** One entry per model call made while producing one draft, for cost/tier reporting on the route. */
+export interface DraftCallLog {
+  costTier: CostTierName
+  host: string
+  estimatedCostUsd: number
+}
 
 export type DraftMessageType = 'dm' | 'connection' | 'upwork' | 'followup' | 'reply'
 
@@ -54,6 +61,8 @@ export interface DraftResult {
   pickReason?: string
   /** Which few-shot examples informed this draft. */
   fewShotReason?: string
+  /** Every model call made while producing this draft, for cost/tier reporting. */
+  callLog: DraftCallLog[]
 }
 
 export interface DraftInput {
@@ -277,11 +286,20 @@ export function buildUserPrompt(
   ].join('\n')
 }
 
+/** Escalate to tier 2 (DeepSeek V4 Pro) when the lead is a high-value send, or when neither best-of-two variant passed self-check. Mirrors the extraction escalation pattern, on the drafting side. */
+function shouldEscalateDraft(score: ScoreResult, primaryPassed: boolean): boolean {
+  if (score.total >= 10) return true
+  if (!primaryPassed) return true
+  return false
+}
+
 /**
- * Generate an outreach draft for a lead: one model call that drafts AND
- * self-checks against the two fixed tests. If a test fails on the first
- * attempt, the call is retried once on the strong model. This is the only
- * per-lead spend in the pipeline.
+ * Generate an outreach draft for a lead: best-of-two starting on Groq's
+ * free tier (escalating through DeepSeek then OpenAI only if Groq's own
+ * hosts fail or exhaust their rate-limit budget), self-checked against the
+ * two fixed tests, then escalating to DeepSeek V4 Pro specifically when the
+ * lead scores 10+ or neither variant passes on the first pass. This is the
+ * only per-lead spend in the pipeline.
  */
 export async function generateDraft(input: DraftInput): Promise<DraftResult> {
   if (input.type === 'reply') {
@@ -307,19 +325,45 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
     return demoDraft(input, userPrompt)
   }
 
-  // Best-of-two: generate two variants in parallel on the cheap model,
-  // self-check both, and return the stronger one as primary with the other
-  // as a variant. This catches the cases where the first draft is mediocre
-  // without paying for a bigger model.
-  const cheap = pickModel('draft-variant')
+  const callLog: DraftCallLog[] = []
+
+  // Best-of-two: generate two variants in parallel starting on Groq's free
+  // tier, self-check both, and return the stronger one as primary with the
+  // other as a variant. This catches the cases where the first draft is
+  // mediocre without paying for a bigger tier.
+  const chain = pickDraftChain()
   const [variantA, variantB] = await Promise.all([
-    runDraftAttempt(cheap.model, systemPrompt, userPrompt),
-    runDraftAttempt(cheap.model, systemPrompt, userPrompt),
+    runDraftAttempt(chain, systemPrompt, userPrompt, callLog),
+    runDraftAttempt(chain, systemPrompt, userPrompt, callLog),
   ])
 
-  const { primary, secondary, pickReason } = pickBestVariant(variantA, variantB)
+  let { primary, secondary, pickReason } = pickBestVariant(variantA, variantB)
+  const modelsUsed = [primary.hostLabel]
 
-  const draft = finishDraft(input, primary, [cheap.model], 1)
+  const tier2 = tier2Chain()
+  if (shouldEscalateDraft(input.score, primary.passed) && tier2.length > 0) {
+    try {
+      const escalated = await runDraftAttempt(tier2, systemPrompt, userPrompt, callLog)
+      // Keep the escalated draft unless it's strictly worse than what the
+      // first pass already produced — escalation should only ever help,
+      // never regress a draft that was already passing both tests.
+      const better =
+        escalated.passed && !primary.passed
+          ? true
+          : escalated.passed === primary.passed &&
+            variantScore(escalated) > variantScore(primary)
+      if (better) {
+        secondary = primary
+        primary = escalated
+        pickReason = 'Escalated to the precision tier: the lead scored 10+ or the first pass did not clear both self-checks.'
+        modelsUsed.push(escalated.hostLabel)
+      }
+    } catch {
+      // Keep the first-pass draft if the precision pass fails outright.
+    }
+  }
+
+  const draft = finishDraft(input, primary, modelsUsed, modelsUsed.length, callLog)
   const second: DraftVariant | undefined = secondary
     ? {
         draftText: secondary.output.draft,
@@ -345,26 +389,26 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
   }
 }
 
+function variantScore(v: { passed: boolean; output: DraftModelOutput; codeChecks: SelfCheck['codeChecks'] }): number {
+  let s = 0
+  if (v.passed) s += 4
+  if (v.output.test_1_reply_or_delete) s += 2
+  if (v.output.test_2_not_generic) s += 2
+  if (v.codeChecks.companyMentioned) s += 1
+  if (v.codeChecks.specificEvidenceMentioned) s += 1
+  return s
+}
+
 function pickBestVariant(
-  a: { output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks'] },
-  b: { output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks'] },
+  a: { output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks']; hostLabel: string },
+  b: { output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks']; hostLabel: string },
 ): {
   primary: typeof a
   secondary: typeof a | null
   pickReason: string
 } {
-  const score = (v: typeof a) => {
-    let s = 0
-    if (v.passed) s += 4
-    if (v.output.test_1_reply_or_delete) s += 2
-    if (v.output.test_2_not_generic) s += 2
-    if (v.codeChecks.companyMentioned) s += 1
-    if (v.codeChecks.specificEvidenceMentioned) s += 1
-    return s
-  }
-
-  const sa = score(a)
-  const sb = score(b)
+  const sa = variantScore(a)
+  const sb = variantScore(b)
 
   if (sa >= sb) {
     return {
@@ -385,16 +429,24 @@ function pickBestVariant(
 }
 
 async function runDraftAttempt(
-  model: string,
+  chain: ReturnType<typeof pickDraftChain>,
   system: string,
   userPrompt: string,
-): Promise<{ output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks'] }> {
-  const output = await structuredJson<DraftModelOutput>({
-    model,
+  callLog: DraftCallLog[],
+): Promise<{ output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks']; hostLabel: string }> {
+  // json_object mode only, never strict schema — same reasoning as
+  // extraction: DeepSeek's own strict mode has an open bug returning
+  // malformed JSON on some calls, so this app never trusts a provider's
+  // schema-adherence claim. The code-level checks below are the real gate,
+  // applied identically regardless of which tier answered.
+  const result = await structuredJsonChain<DraftModelOutput>(chain, {
     system,
     user: userPrompt,
     schema: DRAFT_SCHEMA,
   })
+  callLog.push({ costTier: result.costTier, host: result.host, estimatedCostUsd: result.estimatedCostUsd })
+  const output = result.data
+  const hostLabel = `${result.costTier}:${result.host}`
 
   const cleaned = (output.draft ?? '').trim()
   if (!cleaned) {
@@ -402,6 +454,7 @@ async function runDraftAttempt(
       output: { ...output, draft: '' },
       passed: false,
       codeChecks: { companyMentioned: false, specificEvidenceMentioned: false },
+      hostLabel,
     }
   }
 
@@ -417,7 +470,7 @@ async function runDraftAttempt(
       codeChecks.specificEvidenceMentioned,
   )
 
-  return { output: { ...output, draft: cleaned }, passed, codeChecks }
+  return { output: { ...output, draft: cleaned }, passed, codeChecks, hostLabel }
 }
 
 function finishDraft(
@@ -425,6 +478,7 @@ function finishDraft(
   result: { output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks'] },
   modelsUsed: string[],
   attempts: number,
+  callLog: DraftCallLog[],
 ): DraftResult {
   const sanitized = sanitizeDraft(result.output.draft, input.facts)
   const passed = result.passed && sanitized.strippedNumbers.length === 0
@@ -445,6 +499,7 @@ function finishDraft(
     attempts: attempts,
     strippedNumbers: sanitized.strippedNumbers,
     hadEmDash: sanitized.hadEmDash,
+    callLog,
   }
 }
 
@@ -524,6 +579,7 @@ function demoDraft(input: DraftInput, userPrompt: string): DraftResult {
     attempts: 1,
     strippedNumbers: sanitized.strippedNumbers,
     hadEmDash: sanitized.hadEmDash,
+    callLog: [],
   }
 }
 

@@ -1,9 +1,16 @@
 import type { ExtractedLead, RecentPostExtract, SignalId } from '@/lib/domain/types'
-import { pickModel } from '@/lib/ai/routing'
-import { hasProvider, strongModel } from '@/lib/ai/config'
-import { structuredJson } from '@/lib/ai/provider'
+import { pickModelChain, tier2Chain, type CostTierName } from '@/lib/ai/routing'
+import { hasProvider } from '@/lib/ai/config'
+import { structuredJsonChain } from '@/lib/ai/provider'
 import { SIGNALS } from '@/lib/score/signals'
 import { classifyRoleWithFallback, mapLocationToRegion } from '@/lib/leads/targeting'
+
+/** One entry per model call made while extracting one lead, for cost/tier reporting on the route. */
+export interface ExtractionCallLog {
+  costTier: CostTierName
+  host: string
+  estimatedCostUsd: number
+}
 
 interface ExtractionOutput {
   name: string
@@ -28,6 +35,8 @@ interface ExtractLeadOptions {
 export interface ExtractionBundle {
   primary: ExtractedLead
   candidates: ExtractedLead[]
+  /** Every model call made while producing this bundle, for cost/tier reporting. */
+  callLog: ExtractionCallLog[]
 }
 
 const MAX_INPUT_CHARS = 14_000
@@ -35,6 +44,17 @@ const MAX_SEGMENTS = 3
 const MAX_SEGMENT_CHARS = 5_500
 const ESCALATE_ENABLED = process.env.SCOUT_EXTRACT_ESCALATE !== '0'
 const ESCALATE_BELOW_CONFIDENCE = Number(process.env.SCOUT_EXTRACT_ESCALATE_BELOW ?? '62')
+const EXTRACTION_CACHE_MAX = 120
+
+interface ProfileHints {
+  name: string | null
+  titleRaw: string | null
+  company: string | null
+  locationRaw: string | null
+  evidenceLine: string | null
+}
+
+const extractionCache = new Map<string, ExtractionOutput>()
 
 const signalLines = SIGNALS.map(
   (s) => `${s.id}. ${s.short}: ${s.description}`,
@@ -110,6 +130,14 @@ function compactWhitespace(value: string): string {
   return value.replace(/\r/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
+function normalizeInput(value: string): string {
+  return compactWhitespace(value)
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\u00a0/g, ' ')
+}
+
 function splitIntoSegments(rawText: string): string[] {
   const chunks = rawText
     .split(/\n\s*-{3,}\s*\n/g)
@@ -134,6 +162,104 @@ function segmentPriority(segment: string): number {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function likelyLocation(value: string): boolean {
+  return /,/.test(value) || /\b(remote|hybrid|onsite|on-site|united states|usa|uk|uae|india|canada|europe|asia|pakistan)\b/i.test(value)
+}
+
+function likelyName(value: string): boolean {
+  if (!/^[A-Za-z][A-Za-z .'-]{2,60}$/.test(value)) return false
+  if (/\b(founder|ceo|cto|vp|head|director|manager|engineer|developer|consultant)\b/i.test(value)) return false
+  const parts = value.trim().split(/\s+/)
+  return parts.length >= 2 && parts.length <= 4
+}
+
+function sanitizeLine(value: string): string {
+  return value.replace(/^[-*\d.)\s]+/, '').trim()
+}
+
+function profileHints(rawText: string): ProfileHints {
+  const lines = rawText
+    .split('\n')
+    .map((line) => sanitizeLine(line))
+    .filter((line) => line.length >= 2)
+    .slice(0, 80)
+
+  let name: string | null = null
+  let titleRaw: string | null = null
+  let company: string | null = null
+  let locationRaw: string | null = null
+
+  for (let i = 0; i < Math.min(lines.length, 12); i += 1) {
+    const line = lines[i]
+    if (!name && likelyName(line)) {
+      name = line
+      continue
+    }
+    if (!titleRaw && /\b(founder|ceo|cto|cmo|coo|vp|head|director|manager|lead|owner|president|consultant|engineer|developer)\b/i.test(line)) {
+      titleRaw = line
+      const atMatch = line.match(/\bat\s+([^|,]+)/i)
+      if (!company && atMatch?.[1]) company = atMatch[1].trim()
+      continue
+    }
+    if (!company) {
+      const companyMatch = line.match(/\b(?:at|for|of|with)\s+([A-Z][A-Za-z0-9&._' -]{1,80})/)
+      if (companyMatch?.[1]) {
+        company = companyMatch[1].trim()
+        continue
+      }
+    }
+    if (!locationRaw && likelyLocation(line) && line.length <= 80) {
+      locationRaw = line
+    }
+  }
+
+  const evidenceLine = firstMatchingLine(rawText, [
+    /\bhiring\b/i,
+    /\bopen roles?\b/i,
+    /\braised\b/i,
+    /\bseed\b/i,
+    /\bseries [abc]\b/i,
+    /\bneed help\b/i,
+    /\blooking for\b/i,
+    /\boverdue\b/i,
+    /\bstuck\b/i,
+    /\boutdated\b/i,
+    /\blegacy\b/i,
+  ])
+
+  return { name, titleRaw, company, locationRaw, evidenceLine }
+}
+
+function mergeWithHints(out: ExtractionOutput, hints: ProfileHints): ExtractionOutput {
+  return {
+    ...out,
+    name: empty(out.name) ?? hints.name ?? '',
+    title_raw: empty(out.title_raw) ?? hints.titleRaw ?? '',
+    company: empty(out.company) ?? hints.company ?? '',
+    location_raw: empty(out.location_raw) ?? hints.locationRaw ?? '',
+    signal_evidence: empty(out.signal_evidence) ?? hints.evidenceLine ?? '',
+  }
+}
+
+function cacheKey(rawText: string, model: string, seeded: boolean): string {
+  return `${model}|${seeded ? 'seed' : 'base'}|${rawText}`
+}
+
+function getCachedExtraction(key: string): ExtractionOutput | null {
+  const hit = extractionCache.get(key)
+  if (!hit) return null
+  extractionCache.delete(key)
+  extractionCache.set(key, hit)
+  return hit
+}
+
+function setCachedExtraction(key: string, value: ExtractionOutput): void {
+  extractionCache.set(key, value)
+  if (extractionCache.size <= EXTRACTION_CACHE_MAX) return
+  const first = extractionCache.keys().next().value
+  if (typeof first === 'string') extractionCache.delete(first)
 }
 
 function validateOutput(raw: unknown): ExtractionOutput | null {
@@ -245,6 +371,82 @@ function confidenceDetails(out: ExtractionOutput): { score: number; notes: strin
   return { score, notes }
 }
 
+function firstMatchingLine(rawText: string, patterns: RegExp[]): string | null {
+  const lines = rawText
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 220)
+  for (const line of lines) {
+    if (line.length < 12) continue
+    if (patterns.some((p) => p.test(line))) return line
+  }
+  return null
+}
+
+function deriveSignal(rawText: string, out: ExtractionOutput): {
+  signalType: SignalId
+  signalEvidence: string
+} {
+  const providedEvidence = empty(out.signal_evidence) ?? ''
+  const lower = rawText.toLowerCase()
+
+  const rules: Array<{ id: SignalId; patterns: RegExp[] }> = [
+    {
+      id: 1,
+      patterns: [/\bhiring\b/i, /\bopen roles?\b/i, /\bposition\b/i, /\bwe'?re hiring\b/i, /\bjobs?\b/i],
+    },
+    {
+      id: 3,
+      patterns: [/\braised\b/i, /\bseed\b/i, /\bseries [abc]\b/i, /\bfunding\b/i, /\binvestment\b/i],
+    },
+    {
+      id: 2,
+      patterns: [/\bsolo founder\b/i, /\bone[- ]person\b/i, /\btiny team\b/i, /\bjust me\b/i],
+    },
+    {
+      id: 6,
+      patterns: [/\bbehind\b/i, /\bdelayed\b/i, /\boverdue\b/i, /\bstuck\b/i, /\bslow\b/i, /\bpain\b/i],
+    },
+    {
+      id: 4,
+      patterns: [/\blast update\b/i, /\boutdated\b/i, /\bstale\b/i, /\babandoned\b/i, /\bno update\b/i],
+    },
+    {
+      id: 5,
+      patterns: [/\blegacy\b/i, /\bwordpress\b/i, /\bjquery\b/i, /\bphp\s*5\b/i, /\bunsupported\b/i],
+    },
+    {
+      id: 7,
+      patterns: [/\blooking for\b/i, /\bneed help\b/i, /\bopen to\b/i, /\bagency\b/i, /\bfreelancer\b/i],
+    },
+  ]
+
+  for (const rule of rules) {
+    const line = firstMatchingLine(rawText, rule.patterns)
+    if (line) {
+      const signalType = rule.id
+      const signalEvidence = providedEvidence.length >= 12 ? providedEvidence : line
+      return { signalType, signalEvidence }
+    }
+  }
+
+  const fallbackType = (typeof out.signal_type === 'number' && [1, 2, 3, 4, 5, 6, 7].includes(out.signal_type))
+    ? (out.signal_type as SignalId)
+    : pickDefaultSignal(lower)
+  const hasAskingLine = Boolean(
+    firstMatchingLine(rawText, [/\blooking for\b/i, /\bneed help\b/i, /\bopen to\b/i, /\bagency\b/i, /\bfreelancer\b/i]),
+  )
+  let adjusted = fallbackType
+  if (adjusted === 7 && !hasAskingLine) {
+    adjusted = /\bco[- ]?founder\b|\bfounder\b|\bceo\b/i.test(out.title_raw)
+      ? 2
+      : 6
+  }
+  const fallbackEvidence = providedEvidence.length >= 12 ? providedEvidence : rawText.slice(0, 160).trim()
+  return { signalType: adjusted, signalEvidence: fallbackEvidence }
+}
+
 function toRecentPosts(posts: ExtractionOutput['recent_posts']): RecentPostExtract[] {
   return posts.slice(0, 3).map((p) => ({
     paraphrase: p.paraphrase.trim(),
@@ -271,53 +473,56 @@ function dedupeCandidates(items: ExtractedLead[]): ExtractedLead[] {
   return out
 }
 
-async function modelExtract(rawText: string, opts: ExtractLeadOptions): Promise<ExtractionOutput> {
-  return modelExtractWithModel(rawText, pickModel('extract').model, opts)
+async function modelExtract(
+  rawText: string,
+  opts: ExtractLeadOptions,
+  callLog: ExtractionCallLog[],
+): Promise<ExtractionOutput> {
+  return modelExtractOnChain(rawText, pickModelChain('extract'), opts, callLog)
 }
 
-async function modelExtractWithModel(
+/**
+ * Runs one extraction call across a tier chain (Groq's free tier first,
+ * then DeepSeek hosts, then OpenAI). Every host is asked in json_object
+ * mode — DeepSeek's own strict json_schema mode has an open bug returning
+ * malformed JSON on some calls, so this app never relies on schema-adherence
+ * claims from any provider; validateOutput() below is the real check,
+ * applied unconditionally regardless of which host answered.
+ */
+async function modelExtractOnChain(
   rawText: string,
-  model: string,
+  chain: ReturnType<typeof pickModelChain>,
   opts: ExtractLeadOptions,
+  callLog: ExtractionCallLog[],
   seed?: Partial<ExtractionOutput>,
 ): Promise<ExtractionOutput> {
+  const cacheModelKey = chain.map((s) => s.host.model).join(',')
+  const key = cacheKey(rawText, cacheModelKey, Boolean(seed))
+  const cached = getCachedExtraction(key)
+  if (cached) return cached
+
   let userPrompt = `Raw profile paste:\n\n${rawText}`
   if (seed) {
     userPrompt += `\n\nPrevious extraction (improve precision, keep only text-supported facts):\n${JSON.stringify(seed)}`
   }
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
-    let raw: unknown
-    try {
-      raw = await structuredJson<unknown>({
-        model,
-        system: EXTRACT_SYSTEM,
-        user: userPrompt,
-        schema: EXTRACTION_SCHEMA,
-        responseMode: 'json_schema',
-        schemaName: 'lead_profile_extract',
-        strict: true,
-        onStatus: opts.onStatus,
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      const schemaMismatch = /jsonschema|json_validate_failed|does not match the expected schema|missing properties/i.test(message)
-      if (!schemaMismatch) throw err
+    const result = await structuredJsonChain<unknown>(chain, {
+      system: EXTRACT_SYSTEM,
+      user: userPrompt,
+      schema: EXTRACTION_SCHEMA,
+      schemaName: 'lead_profile_extract',
+      onStatus: opts.onStatus,
+    })
+    callLog.push({ costTier: result.costTier, host: result.host, estimatedCostUsd: result.estimatedCostUsd })
 
-      raw = await structuredJson<unknown>({
-        model,
-        system: EXTRACT_SYSTEM,
-        user: `${userPrompt}\n\nReturn ALL required keys, even if unknown values are defaults.`,
-        schema: EXTRACTION_SCHEMA,
-        responseMode: 'json_object',
-        onStatus: opts.onStatus,
-      })
+    const parsed = validateOutput(result.data)
+    if (parsed) {
+      setCachedExtraction(key, parsed)
+      return parsed
     }
-
-    const parsed = validateOutput(raw)
-    if (parsed) return parsed
     if (attempt === 1) {
-      userPrompt = `${userPrompt}\n\nYour previous JSON failed schema validation. Return a single JSON object that matches the schema exactly.`
+      userPrompt = `${userPrompt}\n\nYour previous JSON failed schema validation. Return a single JSON object that matches the schema exactly, with every required key present.`
     }
   }
 
@@ -327,25 +532,35 @@ async function modelExtractWithModel(
 function shouldEscalate(out: ExtractionOutput, confidence: number): boolean {
   if (!ESCALATE_ENABLED) return false
   if (confidence < ESCALATE_BELOW_CONFIDENCE) return true
-  if (!empty(out.company) || !empty(out.title_raw) || !empty(out.name)) return true
+  const hasCompany = Boolean(empty(out.company))
+  const hasTitle = Boolean(empty(out.title_raw))
+  const hasName = Boolean(empty(out.name))
+  if (!hasCompany || !hasTitle) return true
+  if (!hasName && confidence < ESCALATE_BELOW_CONFIDENCE + 10) return true
   if ((empty(out.signal_evidence) ?? '').length < 20) return true
   if (out.recent_posts.length === 0) return true
   return false
 }
 
-async function extractSegment(rawText: string, opts: ExtractLeadOptions): Promise<ExtractedLead> {
-  const out = await modelExtract(rawText, opts)
+async function extractSegment(
+  rawText: string,
+  opts: ExtractLeadOptions,
+  callLog: ExtractionCallLog[],
+): Promise<ExtractedLead> {
+  const hints = profileHints(rawText)
+  const out = mergeWithHints(await modelExtract(rawText, opts, callLog), hints)
   let chosen = out
-  let chosenConfidence = confidenceDetails(out)
+  let chosenConfidence = confidenceDetails(chosen)
 
-  const upgradeModel = strongModel()
-  if (shouldEscalate(out, chosenConfidence.score) && upgradeModel !== pickModel('extract').model) {
+  const tier2 = tier2Chain()
+  if (shouldEscalate(out, chosenConfidence.score) && tier2.length > 0) {
     opts.onStatus?.('Running precision pass for higher-quality extraction')
     try {
-      const upgraded = await modelExtractWithModel(rawText, upgradeModel, opts, out)
-      const upgradedConfidence = confidenceDetails(upgraded)
+      const upgraded = await modelExtractOnChain(rawText, tier2, opts, callLog, out)
+      const upgradedMerged = mergeWithHints(upgraded, hints)
+      const upgradedConfidence = confidenceDetails(upgradedMerged)
       if (upgradedConfidence.score >= chosenConfidence.score + 4) {
-        chosen = upgraded
+        chosen = upgradedMerged
         chosenConfidence = upgradedConfidence
       }
     } catch {
@@ -357,6 +572,12 @@ async function extractSegment(rawText: string, opts: ExtractLeadOptions): Promis
   const roleCategory = await classifyRoleWithFallback(titleRaw)
   const locationRaw = empty(chosen.location_raw)
   const quote = chosen.recent_posts.find((p) => p.verbatim_quote.trim().length >= 16)?.verbatim_quote ?? null
+  const signal = deriveSignal(rawText, chosen)
+  const notes = [...chosenConfidence.notes]
+  if (signal.signalEvidence.length >= 18) {
+    const idx = notes.findIndex((n) => n.toLowerCase().includes('signal evidence is too thin'))
+    if (idx >= 0) notes.splice(idx, 1)
+  }
 
   return {
     name: empty(chosen.name),
@@ -370,10 +591,10 @@ async function extractSegment(rawText: string, opts: ExtractLeadOptions): Promis
     recentPosts: toRecentPosts(chosen.recent_posts),
     roleCategory,
     marketRegion: mapLocationToRegion(locationRaw),
-    signalType: chosen.signal_type as SignalId,
-    signalEvidence: empty(chosen.signal_evidence) ?? '',
+    signalType: signal.signalType,
+    signalEvidence: signal.signalEvidence,
     extractionConfidence: chosenConfidence.score,
-    confidenceNotes: chosenConfidence.notes,
+    confidenceNotes: notes,
     verbatimQuote: empty(quote),
     tags: normalizeTags(rawText),
   }
@@ -415,7 +636,7 @@ export async function extractLeadBundle(
     throw new Error('Paste some raw research first.')
   }
 
-  const normalized = compactWhitespace(rawText).slice(0, MAX_INPUT_CHARS)
+  const normalized = normalizeInput(rawText).slice(0, MAX_INPUT_CHARS)
   const segments = splitIntoSegments(normalized)
   const ranked = [...segments].sort((a, b) => segmentPriority(b) - segmentPriority(a))
   const primarySegment = ranked[0] ?? normalized
@@ -424,17 +645,18 @@ export async function extractLeadBundle(
     const one = demoExtract(primarySegment)
     const others = ranked.slice(1).map((s) => demoExtract(s))
     const candidates = dedupeCandidates([one, ...others]).sort((a, b) => candidateScore(b) - candidateScore(a))
-    return { primary: candidates[0], candidates }
+    return { primary: candidates[0], candidates, callLog: [] }
   }
 
   if (segments.length > 1) {
     opts.onStatus?.(`Detected ${segments.length} profiles. Fast mode: extracting strongest profile first.`)
   }
 
-  const primary = await extractSegment(primarySegment, opts)
+  const callLog: ExtractionCallLog[] = []
+  const primary = await extractSegment(primarySegment, opts, callLog)
   const lightweight = ranked.slice(1).map((s) => demoExtract(s))
   const candidates = dedupeCandidates([primary, ...lightweight]).sort((a, b) => candidateScore(b) - candidateScore(a))
-  return { primary: candidates[0], candidates }
+  return { primary: candidates[0], candidates, callLog }
 }
 
 export async function extractLead(rawText: string, opts: ExtractLeadOptions = {}): Promise<ExtractedLead> {

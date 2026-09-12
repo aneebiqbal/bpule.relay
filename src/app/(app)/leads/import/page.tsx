@@ -66,7 +66,7 @@ export default function ImportPage() {
 Acme Corp,Jane Doe,CTO,https://example.com/acme,1,Hiring 3 senior engineers,We need help shipping faster,"react,node"
 Beta Inc,John Smith,CEO,,3,Raised a $2M seed round,Looking for a delivery partner,"python,django"`}
           rows={12}
-          className="font-mono text-[13px]"
+          className="max-h-[28rem] overflow-y-auto font-mono text-[13px]"
         />
         <div className="mt-4 flex items-center justify-between gap-3">
           <span className="text-xs text-slate">

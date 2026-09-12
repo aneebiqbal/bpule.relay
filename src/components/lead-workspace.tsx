@@ -3,7 +3,18 @@
 import { memo, useCallback, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Check, Copy, ExternalLink, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Award,
+  Check,
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  History,
+  MessageSquare,
+  X,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -15,8 +26,29 @@ import { signalById } from '@/lib/score/signals'
 import { readSse } from '@/lib/sse/client'
 import { cn } from 'cn'
 import type { LeadDetail } from '@/lib/store/types'
-import type { Profile, ProofItem, ScoreResult } from '@/lib/domain/types'
+import type { MarketRegion, Profile, ProofItem, RoleCategory, ScoreResult } from '@/lib/domain/types'
 import type { DraftResult, SelfCheck } from '@/lib/ai/draft'
+
+const ROLE_LABELS: Record<RoleCategory, string> = {
+  founder_cofounder: 'Founder / co-founder',
+  ceo: 'CEO',
+  technical_leadership: 'Technical leadership',
+  product: 'Product',
+  hiring_manager_recruiter: 'Hiring manager / recruiter',
+  other: 'Other role',
+}
+
+const REGION_LABELS: Record<MarketRegion, string> = {
+  US: 'United States',
+  UK: 'United Kingdom',
+  EU: 'Europe',
+  CA: 'Canada',
+  AU: 'Australia',
+  UAE: 'UAE',
+  SG: 'Singapore',
+  outside_core: 'Outside core markets',
+  unknown: 'Region unknown',
+}
 
 const ARTIFACTS = [
   { id: 'dm', label: 'DM', count: { kind: 'words', max: 55, label: 'words' } },
@@ -121,6 +153,15 @@ function hostOf(url: string | null): string | null {
   }
 }
 
+const WORKSPACE_TABS = [
+  { id: 'overview', label: 'Overview', icon: Award },
+  { id: 'draft', label: 'Draft & send', icon: MessageSquare },
+  { id: 'proof', label: 'Proof', icon: CheckCircle2 },
+  { id: 'timeline', label: 'Timeline', icon: History },
+] as const
+
+type WorkspaceTabId = (typeof WORKSPACE_TABS)[number]['id']
+
 export function LeadWorkspace({
   lead,
   score,
@@ -137,6 +178,7 @@ export function LeadWorkspace({
   const verdict = lead.verdict ?? score.verdict
   const canDraft = verdict === 'send' || verdict === 'research_more'
 
+  const [tab, setTab] = useState<WorkspaceTabId>(canDraft && !locked ? 'draft' : 'overview')
   const [artifact, setArtifact] = useState<ArtifactId>('dm')
   const [drafting, setDrafting] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -433,6 +475,30 @@ export function LeadWorkspace({
               ))}
             </div>
 
+            {lead.titleRaw || lead.locationRaw || lead.roleCategory || lead.marketRegion ? (
+              <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate">
+                {lead.titleRaw ? <span>{lead.titleRaw}</span> : null}
+                {lead.locationRaw ? <span>{lead.locationRaw}</span> : null}
+                {lead.roleCategory ? <span>{ROLE_LABELS[lead.roleCategory]}</span> : null}
+                {lead.marketRegion ? <span>{REGION_LABELS[lead.marketRegion]}</span> : null}
+                {typeof lead.extractionConfidence === 'number' ? (
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1',
+                      lead.extractionConfidence >= 72 ? 'text-status-send' : 'text-status-research',
+                    )}
+                  >
+                    {lead.extractionConfidence >= 72 ? (
+                      <CheckCircle2 className="size-3" aria-hidden="true" />
+                    ) : (
+                      <AlertTriangle className="size-3" aria-hidden="true" />
+                    )}
+                    {lead.extractionConfidence}/100 confidence
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
+
             <dl className="mt-5 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
               <HeroField label="Why this matters now" value={lead.signalEvidence ?? 'Not set'} />
               <HeroField label="Their words" value={lead.verbatimQuote ?? 'No quote captured'} />
@@ -495,16 +561,61 @@ export function LeadWorkspace({
       ) : null}
 
       {canDraft && !locked ? (
-        <div className="rounded-xl border border-gold/30 bg-gold/5 px-4 py-3">
+        <button
+          type="button"
+          onClick={() => setTab('draft')}
+          className="w-full rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-left transition-colors hover:bg-gold/10"
+        >
           <span className="text-[11px] font-medium uppercase tracking-wide text-gold">
             Next step
           </span>
           <p className="mt-0.5 text-sm font-medium text-ink">{nextStep.title}</p>
           {nextStep.hint ? <p className="mt-0.5 text-xs text-slate">{nextStep.hint}</p> : null}
-        </div>
+        </button>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+      <div
+        role="tablist"
+        aria-label="Lead workspace sections"
+        className="flex flex-wrap gap-1 rounded-xl bg-paper-tint p-1"
+      >
+        {WORKSPACE_TABS.map((t) => {
+          const active = tab === t.id
+          const Icon = t.icon
+          return (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={active}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                active ? 'bg-ink font-medium text-paper shadow-sm' : 'text-slate hover:text-ink',
+              )}
+            >
+              <Icon className="size-3.5" aria-hidden="true" />
+              {t.label}
+              {t.id === 'proof' && matchedProofs.length > 0 ? (
+                <span
+                  className={cn(
+                    'ml-0.5 inline-flex size-4 items-center justify-center rounded-full text-[10px]',
+                    active ? 'bg-paper/20 text-paper' : 'bg-paper-tint text-slate',
+                  )}
+                >
+                  {matchedProofs.length}
+                </span>
+              ) : null}
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'overview' ? (
+        <ScorePanel score={score} verdict={verdict} lead={lead} />
+      ) : null}
+
+      {tab === 'draft' ? (
+        <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
           <section className="rounded-2xl border border-line bg-paper p-6">
             <div className="flex items-center justify-between gap-3">
@@ -713,6 +824,7 @@ export function LeadWorkspace({
                 }}
                 rows={5}
                 disabled={locked}
+                className="max-h-[20rem] overflow-y-auto"
                 placeholder={
                   draft
                     ? 'Paste the draft above once it looks right, or paste what you typed.'
@@ -750,8 +862,7 @@ export function LeadWorkspace({
           </section>
         </div>
 
-        <aside className="divide-y divide-line rounded-2xl border border-line bg-paper">
-          <ScorePanel score={score} verdict={verdict} lead={lead} />
+        <aside className="rounded-2xl border border-line bg-paper">
           <ProofPanel
             proofList={proofList}
             activeProof={activeProof}
@@ -760,9 +871,28 @@ export function LeadWorkspace({
             drafting={drafting}
             onDraftProof={onDraftProof}
           />
-          <Timeline lead={lead} />
         </aside>
-      </div>
+        </div>
+      ) : null}
+
+      {tab === 'proof' ? (
+        <div className="rounded-2xl border border-line bg-paper">
+          <ProofPanel
+            proofList={proofList}
+            activeProof={activeProof}
+            profiles={profiles}
+            leadTags={lead.tags ?? []}
+            drafting={drafting}
+            onDraftProof={onDraftProof}
+          />
+        </div>
+      ) : null}
+
+      {tab === 'timeline' ? (
+        <div className="rounded-2xl border border-line bg-paper">
+          <Timeline lead={lead} />
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -786,16 +916,21 @@ const ScorePanel = memo(function ScorePanel({
   lead: LeadDetail
 }) {
   return (
-    <section className="p-6">
-      <h2 className="text-sm font-medium text-ink">Why this score</h2>
-      <p className="mt-1 text-sm text-ink">{verdictCall(verdict)}</p>
-      {verdict === 'research_more' ? (
-        <p className="mt-1.5 text-xs leading-relaxed text-status-research">
-          The record is missing {researchWhy(lead) ?? 'one more source'}. One more detail usually
-          lifts this to a send.
-        </p>
-      ) : null}
-      <ul className="mt-4 space-y-3 border-t border-line pt-4">
+    <section className="rounded-2xl border border-line bg-paper p-6 sm:p-7">
+      <div className="flex items-center gap-4">
+        <ScoreRing score={score.total} size={64} />
+        <div>
+          <h2 className="text-sm font-medium text-ink">Why this score</h2>
+          <p className="mt-0.5 text-sm text-ink">{verdictCall(verdict)}</p>
+          {verdict === 'research_more' ? (
+            <p className="mt-1 text-xs leading-relaxed text-status-research">
+              The record is missing {researchWhy(lead) ?? 'one more source'}. One more detail
+              usually lifts this to a send.
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <ul className="mt-5 grid gap-x-6 gap-y-3 border-t border-line pt-4 sm:grid-cols-2">
         {score.breakdown.map((item) => {
           const frac = item.max > 0 ? item.points / item.max : 0
           return (
@@ -1026,7 +1161,7 @@ const DraftEditor = memo(function DraftEditor({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           rows={7}
-          className="border-0 bg-transparent px-0 text-[15px] leading-relaxed shadow-none focus-visible:ring-0"
+          className="max-h-[32rem] overflow-y-auto border-0 bg-transparent px-0 text-[15px] leading-relaxed shadow-none focus-visible:ring-0"
           aria-label="Draft text, editable"
           placeholder="Your message appears here as it is written. Edit it freely."
         />

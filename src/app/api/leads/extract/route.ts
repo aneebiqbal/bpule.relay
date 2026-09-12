@@ -1,6 +1,5 @@
 import { extractLeadBundle } from '@/lib/ai/extract'
 import { hasProvider } from '@/lib/ai/config'
-import { pickModel } from '@/lib/ai/routing'
 import { scanForSecrets } from '@/lib/ai/secrets'
 import { sseStream } from '@/lib/sse/sse'
 import { createScoutStore } from '@/lib/store'
@@ -26,7 +25,6 @@ export async function POST(request: Request) {
 
   return sseStream(async (emit) => {
     const started = Date.now()
-    const model = pickModel('extract').model
     let store = null
     try {
       store = await createScoutStore()
@@ -38,10 +36,13 @@ export async function POST(request: Request) {
       success: boolean
       latencyMs: number
       model: string
+      costTier?: 'tier1' | 'tier2' | 'tier3' | 'tier4'
+      host?: string
+      costUsd?: number
       error?: string | null
     }) => {
       try {
-        await store?.logExtractionRun(input)
+        await store?.logExtractionRun({ task: 'extract', ...input })
       } catch {
         // Metrics logging must never break extraction.
       }
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
       void safeLog({
         success: false,
         latencyMs: Date.now() - started,
-        model,
+        model: 'n/a',
         error: scanned.reason,
       })
       emit({ type: 'error', message: scanned.reason })
@@ -69,11 +70,23 @@ export async function POST(request: Request) {
           emit({ type: 'status', message })
         },
       })
-      void safeLog({
-        success: true,
-        latencyMs: Date.now() - started,
-        model,
-      })
+      // One log entry per model call actually made (fast pass, plus an
+      // escalation pass if one ran), so cost-by-tier reflects real spend.
+      const latencyMs = Date.now() - started
+      if (bundle.callLog.length === 0) {
+        void safeLog({ success: true, latencyMs, model: 'demo' })
+      } else {
+        for (const call of bundle.callLog) {
+          void safeLog({
+            success: true,
+            latencyMs,
+            model: call.host,
+            costTier: call.costTier,
+            host: call.host,
+            costUsd: call.estimatedCostUsd,
+          })
+        }
+      }
       emit({
         type: 'done',
         extracted: bundle.primary,
@@ -85,7 +98,7 @@ export async function POST(request: Request) {
       void safeLog({
         success: false,
         latencyMs: Date.now() - started,
-        model,
+        model: 'n/a',
         error: message,
       })
       throw err

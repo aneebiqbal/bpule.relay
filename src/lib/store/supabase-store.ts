@@ -21,15 +21,20 @@ import type {
   CreateLeadResult,
   DosageResult,
   ExtractionMetrics,
+  FollowupDue,
+  ModelCallLogInput,
+  MyRank,
   NewLeadInput,
   QueueData,
   SaveDraftInput,
   ScoutStore,
+  SendBudget,
   TeamStats,
   TodayDashboard,
+  UpworkSnapshot,
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey } from '@/lib/leads/normalize'
-import { dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
+import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
 import { pickPlayForSignal } from '@/lib/score/plays'
@@ -221,6 +226,41 @@ export class SupabaseStore implements ScoutStore {
     return count ?? 0
   }
 
+  private todayRange(): { start: string; end: string } {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(start.getTime() + 86_400_000)
+    return { start: start.toISOString(), end: end.toISOString() }
+  }
+
+  /** Counts lead messages of any of the given types sent today — dm+followup and connection are two different ceilings (Part 7 rule) and must never be blended into one number. */
+  private async countTodaysSendsByTypes(types: string[]): Promise<number> {
+    const { start, end } = this.todayRange()
+    const { count, error } = await this.client
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('rep_id', this.rep.id)
+      .in('type', types)
+      .gte('sent_at', start)
+      .lt('sent_at', end)
+    if (error) throw error
+    return count ?? 0
+  }
+
+  /** Upwork applies today share the connection-type daily ceiling but live in a separate table; countTodaysSendsByTypes alone would silently miss them. */
+  private async countTodaysUpworkApplies(): Promise<number> {
+    const { start, end } = this.todayRange()
+    const { count, error } = await this.client
+      .from('upwork_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('rep_id', this.rep.id)
+      .not('sent_at', 'is', null)
+      .gte('sent_at', start)
+      .lt('sent_at', end)
+    if (error) throw error
+    return count ?? 0
+  }
+
   async createLead(input: NewLeadInput): Promise<CreateLeadResult> {
     const key = companyKey(input.company)
     const fuzzy = companyFuzzyKey(input.company)
@@ -250,7 +290,7 @@ export class SupabaseStore implements ScoutStore {
       }
     }
 
-    const insertBase = {
+    const insertRow = {
       owner_rep_id: this.rep.id,
       company: input.company.trim(),
       contact_name: input.contactName?.trim() || null,
@@ -262,10 +302,6 @@ export class SupabaseStore implements ScoutStore {
       verbatim_quote: input.verbatimQuote?.trim() || null,
       tags: input.tags ?? [],
       play_id: (await this.playForSignal(input.signalType))?.id ?? null,
-    }
-
-    const insertRich = {
-      ...insertBase,
       title_raw: input.titleRaw?.trim() || null,
       location_raw: input.locationRaw?.trim() || null,
       role_category: input.roleCategory ?? null,
@@ -274,11 +310,21 @@ export class SupabaseStore implements ScoutStore {
       extraction_profile: input.extractionProfile ?? null,
     }
 
-    let row = await this.client.from('leads').insert(insertRich).select('*').single()
-    if (row.error && (row.error as { code?: string }).code === '42703') {
-      row = await this.client.from('leads').insert(insertBase).select('*').single()
+    const row = await this.client.from('leads').insert(insertRow).select('*').single()
+    if (row.error) {
+      // Never silently drop the extraction fields (title/location/role/region/
+      // confidence): a lead saved without them looks fine but is missing the
+      // data a rep would need to trust it later. Fail loudly instead so
+      // whoever operates this environment applies migration 0015, rather than
+      // BD discovering thin leads after the fact.
+      if ((row.error as { code?: string }).code === '42703') {
+        throw new Error(
+          'This environment is missing the extraction-fields migration (0015_extraction_schema_and_metrics.sql). ' +
+            'Apply it before saving leads, so title, location, role, region, and confidence are never silently dropped.',
+        )
+      }
+      throw row.error
     }
-    if (row.error) throw row.error
     return { blocked: false, lead: mapLead(row.data as Row) }
   }
 
@@ -803,10 +849,97 @@ export class SupabaseStore implements ScoutStore {
     return matchProofItemsByTags(items, tags, limit)
   }
 
+  /** Contacted leads 3+ days past their last send with no reply — same threshold the followup_eligible DB trigger uses (migration 0009), computed here so the homepage can show the whole bucket at once. */
+  private async fetchFollowupsDue(): Promise<FollowupDue[]> {
+    const owned = await this.listOwnedLeads()
+    const contacted = owned.filter((l) => l.status === 'contacted')
+    if (contacted.length === 0) return []
+
+    const leadIds = contacted.map((l) => l.id)
+    const [{ data: msgRows, error: msgErr }, { data: outcomeRows, error: outcomeErr }] = await Promise.all([
+      this.client
+        .from('messages')
+        .select('lead_id, sent_at')
+        .in('lead_id', leadIds)
+        .not('sent_at', 'is', null),
+      this.client.from('outcomes').select('lead_id').in('lead_id', leadIds).eq('stage', 'replied'),
+    ])
+    if (msgErr) throw msgErr
+    if (outcomeErr) throw outcomeErr
+
+    const repliedLeadIds = new Set((outcomeRows ?? []).map((r) => r.lead_id as string))
+    const lastSentByLead = new Map<string, string>()
+    for (const row of (msgRows ?? []) as Array<{ lead_id: string; sent_at: string }>) {
+      const existing = lastSentByLead.get(row.lead_id)
+      if (!existing || row.sent_at > existing) lastSentByLead.set(row.lead_id, row.sent_at)
+    }
+
+    const now = Date.now()
+    const due: FollowupDue[] = []
+    for (const lead of contacted) {
+      if (repliedLeadIds.has(lead.id)) continue
+      const lastSent = lastSentByLead.get(lead.id)
+      if (!lastSent) continue
+      const daysSinceContact = Math.floor((now - new Date(lastSent).getTime()) / 86_400_000)
+      if (daysSinceContact >= 3) due.push({ lead, daysSinceContact })
+    }
+    return due.sort((a, b) => b.daysSinceContact - a.daysSinceContact)
+  }
+
+  private async fetchMyRank(): Promise<MyRank> {
+    const stats = await this.getTeamStats()
+    const mineRow = stats.perRep.find((r) => r.rep.id === this.rep.id)
+    const withSends = stats.perRep.filter((r) => r.sent > 0 && r.replyRate !== null)
+    const ranked = [...withSends].sort((a, b) => (b.replyRate ?? 0) - (a.replyRate ?? 0))
+    const position = mineRow && mineRow.sent > 0 ? ranked.findIndex((r) => r.rep.id === this.rep.id) + 1 : null
+    return {
+      mine: mineRow ?? null,
+      teamAverage: stats.overall,
+      position: position && position > 0 ? position : null,
+      ofTotal: ranked.length,
+    }
+  }
+
+  private async fetchUpworkSnapshot(): Promise<UpworkSnapshot> {
+    const [jobs, todayApplies] = await Promise.all([
+      this.listUpworkJobs(),
+      this.countTodaysUpworkApplies(),
+    ])
+    const queue = jobs
+      .filter((j) => j.status === 'new' || j.status === 'drafted')
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    return { queue, todayApplies }
+  }
+
   async getTodayDashboard(): Promise<TodayDashboard> {
-    const [mine, buckets] = await Promise.all([this.getQueue(), this.fetchRates()])
+    const [mine, buckets, dmFollowupSent, connectionSent, upworkApplies, notifications, followupsDue, myRank, upwork] =
+      await Promise.all([
+        this.getQueue(),
+        this.fetchRates(),
+        this.countTodaysSendsByTypes(['dm', 'followup']),
+        this.countTodaysSendsByTypes(['connection']),
+        this.countTodaysUpworkApplies(),
+        this.listNotifications(),
+        this.fetchFollowupsDue(),
+        this.fetchMyRank(),
+        this.fetchUpworkSnapshot(),
+      ])
     const team = computeRates(buckets)
-    return { mine, team }
+    const sendBudgets: SendBudget[] = [
+      {
+        label: 'DM & follow-up',
+        types: ['dm', 'followup'],
+        used: dmFollowupSent,
+        limit: dailySendLimit(),
+      },
+      {
+        label: 'Connection & Upwork',
+        types: ['connection', 'upwork'],
+        used: connectionSent + upworkApplies,
+        limit: dailyConnectionSendLimit(),
+      },
+    ]
+    return { mine, team, sendBudgets, notifications, followupsDue, myRank, upwork }
   }
 
   async getTeamStats(): Promise<TeamStats> {
@@ -859,17 +992,16 @@ export class SupabaseStore implements ScoutStore {
     return { overall, perRep, perPlay }
   }
 
-  async logExtractionRun(input: {
-    success: boolean
-    latencyMs: number
-    model: string
-    error?: string | null
-  }): Promise<void> {
+  async logExtractionRun(input: ModelCallLogInput): Promise<void> {
     const { error } = await this.client.from('extraction_runs').insert({
       rep_id: this.rep.id,
+      task: input.task,
       success: input.success,
       latency_ms: Math.max(0, Math.round(input.latencyMs)),
       model: input.model,
+      cost_tier: input.costTier ?? null,
+      host: input.host ?? null,
+      cost_usd: input.costUsd ?? null,
       error_message: input.error ?? null,
     })
     if (error) throw error
@@ -879,16 +1011,32 @@ export class SupabaseStore implements ScoutStore {
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const { data, error } = await this.client
       .from('extraction_runs')
-      .select('success, latency_ms, created_at')
+      .select('success, latency_ms, created_at, cost_tier, cost_usd')
       .gte('created_at', since)
 
+    const emptyCostByTier = { tier1: 0, tier2: 0, tier3: 0, tier4: 0 }
+    const emptyRequestsByTier = { tier1: 0, tier2: 0, tier3: 0, tier4: 0 }
     if (error) {
       if ((error as { code?: string }).code === '42P01') {
-        return { total: 0, failures: 0, failureRate: 0, avgLatencyMs: 0, p95LatencyMs: 0 }
+        return {
+          total: 0,
+          failures: 0,
+          failureRate: 0,
+          avgLatencyMs: 0,
+          p95LatencyMs: 0,
+          costByTier: emptyCostByTier,
+          totalCostUsd: 0,
+          requestsByTier: emptyRequestsByTier,
+        }
       }
       throw error
     }
-    const rows = (data ?? []) as Array<{ success: boolean; latency_ms: number | null }>
+    const rows = (data ?? []) as Array<{
+      success: boolean
+      latency_ms: number | null
+      cost_tier: string | null
+      cost_usd: number | null
+    }>
     const total = rows.length
     const failures = rows.filter((r) => !r.success).length
     const failureRate = total > 0 ? failures / total : 0
@@ -904,10 +1052,22 @@ export class SupabaseStore implements ScoutStore {
       latencies.length > 0
         ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95))]
         : 0
+    const costByTier = { ...emptyCostByTier }
+    const requestsByTier = { ...emptyRequestsByTier }
+    for (const r of rows) {
+      if (r.cost_tier && r.cost_tier in costByTier) {
+        costByTier[r.cost_tier as keyof typeof costByTier] += Number(r.cost_usd ?? 0)
+        requestsByTier[r.cost_tier as keyof typeof requestsByTier] += 1
+      }
+    }
+    const totalCostUsd = Object.values(costByTier).reduce((sum, n) => sum + n, 0)
     return {
       total,
       failures,
       failureRate,
+      costByTier,
+      totalCostUsd,
+      requestsByTier,
       avgLatencyMs,
       p95LatencyMs,
     }
