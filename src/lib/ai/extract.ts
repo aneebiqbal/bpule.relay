@@ -1,6 +1,6 @@
 import type { ExtractedLead, RecentPostExtract, SignalId } from '@/lib/domain/types'
 import { pickModel } from '@/lib/ai/routing'
-import { hasProvider } from '@/lib/ai/config'
+import { hasProvider, strongModel } from '@/lib/ai/config'
 import { structuredJson } from '@/lib/ai/provider'
 import { SIGNALS } from '@/lib/score/signals'
 import { classifyRoleWithFallback, mapLocationToRegion } from '@/lib/leads/targeting'
@@ -33,6 +33,8 @@ export interface ExtractionBundle {
 const MAX_INPUT_CHARS = 14_000
 const MAX_SEGMENTS = 3
 const MAX_SEGMENT_CHARS = 5_500
+const ESCALATE_ENABLED = process.env.SCOUT_EXTRACT_ESCALATE !== '0'
+const ESCALATE_BELOW_CONFIDENCE = Number(process.env.SCOUT_EXTRACT_ESCALATE_BELOW ?? '62')
 
 const signalLines = SIGNALS.map(
   (s) => `${s.id}. ${s.short}: ${s.description}`,
@@ -269,8 +271,19 @@ function dedupeCandidates(items: ExtractedLead[]): ExtractedLead[] {
 }
 
 async function modelExtract(rawText: string, opts: ExtractLeadOptions): Promise<ExtractionOutput> {
-  const model = pickModel('extract').model
+  return modelExtractWithModel(rawText, pickModel('extract').model, opts)
+}
+
+async function modelExtractWithModel(
+  rawText: string,
+  model: string,
+  opts: ExtractLeadOptions,
+  seed?: Partial<ExtractionOutput>,
+): Promise<ExtractionOutput> {
   let userPrompt = `Raw profile paste:\n\n${rawText}`
+  if (seed) {
+    userPrompt += `\n\nPrevious extraction (improve precision, keep only text-supported facts):\n${JSON.stringify(seed)}`
+  }
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const raw = await structuredJson<unknown>({
@@ -278,6 +291,9 @@ async function modelExtract(rawText: string, opts: ExtractLeadOptions): Promise<
       system: EXTRACT_SYSTEM,
       user: userPrompt,
       schema: EXTRACTION_SCHEMA,
+      responseMode: 'json_schema',
+      schemaName: 'lead_profile_extract',
+      strict: true,
       onStatus: opts.onStatus,
     })
 
@@ -291,30 +307,56 @@ async function modelExtract(rawText: string, opts: ExtractLeadOptions): Promise<
   throw new Error("couldn't extract cleanly, try pasting again")
 }
 
+function shouldEscalate(out: ExtractionOutput, confidence: number): boolean {
+  if (!ESCALATE_ENABLED) return false
+  if (confidence < ESCALATE_BELOW_CONFIDENCE) return true
+  if (!empty(out.company) || !empty(out.title_raw) || !empty(out.name)) return true
+  if ((empty(out.signal_evidence) ?? '').length < 20) return true
+  if (out.recent_posts.length === 0) return true
+  return false
+}
+
 async function extractSegment(rawText: string, opts: ExtractLeadOptions): Promise<ExtractedLead> {
   const out = await modelExtract(rawText, opts)
-  const titleRaw = empty(out.title_raw)
+  let chosen = out
+  let chosenConfidence = confidenceDetails(out)
+
+  const upgradeModel = strongModel()
+  if (shouldEscalate(out, chosenConfidence.score) && upgradeModel !== pickModel('extract').model) {
+    opts.onStatus?.('Running precision pass for higher-quality extraction')
+    try {
+      const upgraded = await modelExtractWithModel(rawText, upgradeModel, opts, out)
+      const upgradedConfidence = confidenceDetails(upgraded)
+      if (upgradedConfidence.score >= chosenConfidence.score + 4) {
+        chosen = upgraded
+        chosenConfidence = upgradedConfidence
+      }
+    } catch {
+      // Keep fast-pass extraction if precision pass fails.
+    }
+  }
+
+  const titleRaw = empty(chosen.title_raw)
   const roleCategory = await classifyRoleWithFallback(titleRaw)
-  const locationRaw = empty(out.location_raw)
-  const { score, notes } = confidenceDetails(out)
-  const quote = out.recent_posts.find((p) => p.verbatim_quote.trim().length >= 16)?.verbatim_quote ?? null
+  const locationRaw = empty(chosen.location_raw)
+  const quote = chosen.recent_posts.find((p) => p.verbatim_quote.trim().length >= 16)?.verbatim_quote ?? null
 
   return {
-    name: empty(out.name),
+    name: empty(chosen.name),
     title: titleRaw,
     titleRaw,
-    company: empty(out.company) ?? 'Unknown company',
+    company: empty(chosen.company) ?? 'Unknown company',
     url: null,
     locationRaw,
-    aboutSummary: empty(out.about_summary),
-    experienceSummary: empty(out.experience_summary),
-    recentPosts: toRecentPosts(out.recent_posts),
+    aboutSummary: empty(chosen.about_summary),
+    experienceSummary: empty(chosen.experience_summary),
+    recentPosts: toRecentPosts(chosen.recent_posts),
     roleCategory,
     marketRegion: mapLocationToRegion(locationRaw),
-    signalType: out.signal_type as SignalId,
-    signalEvidence: empty(out.signal_evidence) ?? '',
-    extractionConfidence: score,
-    confidenceNotes: notes,
+    signalType: chosen.signal_type as SignalId,
+    signalEvidence: empty(chosen.signal_evidence) ?? '',
+    extractionConfidence: chosenConfidence.score,
+    confidenceNotes: chosenConfidence.notes,
     verbatimQuote: empty(quote),
     tags: normalizeTags(rawText),
   }

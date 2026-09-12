@@ -115,9 +115,12 @@ async function withRateLimitFallback<T>(
 export interface JsonCallOptions {
   system: string
   user: string
-  /** Schema is advisory; JSON object mode cannot enforce it. */
+  /** Schema definition used by json_schema mode; advisory in json_object mode. */
   schema: Record<string, unknown>
   model?: string
+  responseMode?: 'json_object' | 'json_schema'
+  schemaName?: string
+  strict?: boolean
   /** Emitted during rate-limit backoff so the UI can show the queue state. */
   onStatus?: (message: string) => void
 }
@@ -127,9 +130,8 @@ function isJsonObjectOut(obj: unknown): obj is Record<string, unknown> {
 }
 
 /**
- * Single helper for every structured-output call in the app. Uses JSON object
- * mode (Llama models reject strict json_schema) and validates the shape as
- * best it can, retrying once when the model returns invalid JSON.
+ * Single helper for every structured-output call in the app. Supports both
+ * json_object and json_schema response modes with retry on invalid JSON.
  */
 export async function structuredJson<T>(
   opts: JsonCallOptions,
@@ -138,6 +140,17 @@ export async function structuredJson<T>(
   const api = getClient()
   const system = opts.system
   let user = opts.user
+  const responseMode = opts.responseMode ?? 'json_object'
+  const responseFormat = responseMode === 'json_schema'
+    ? {
+        type: 'json_schema' as const,
+        json_schema: {
+          name: opts.schemaName ?? 'scout_schema',
+          strict: opts.strict ?? false,
+          schema: opts.schema,
+        },
+      }
+    : ({ type: 'json_object' } as const)
 
   return await withRateLimitFallback(`Model call (${model})`, opts.onStatus, async () => {
     for (let attempt = 0; attempt <= 2; attempt += 1) {
@@ -147,7 +160,7 @@ export async function structuredJson<T>(
           { role: 'system', content: system },
           { role: 'user', content: user },
         ] satisfies ChatCompletionMessageParam[],
-        response_format: { type: 'json_object' },
+        response_format: responseFormat,
       })
       const raw = completion.choices[0]?.message?.content
       if (!raw) {

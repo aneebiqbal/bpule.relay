@@ -45,7 +45,7 @@ arithmetic (zero model tokens) and a single AI call per lead at draft time.
 All model calls go through `src/lib/ai/routing.ts` -> `config.ts`; no feature
 code names a model id. By default:
 
-- Extraction runs on `llama-3.1-8b-instant` (override `SCOUT_EXTRACT_MODEL`).
+- Extraction runs on `openai/gpt-oss-20b` (override `SCOUT_EXTRACT_MODEL`).
 - Other structuring tasks (tag, calibrate, classify fallback) run on `openai/gpt-oss-20b`.
 - Drafting runs on `openai/gpt-oss-120b` and self-checks in the same call.
 
