@@ -23,6 +23,7 @@ import type {
   SignalId,
   StyleCard,
   StyleSampleSource,
+  TrendingAngle,
   UpworkJob,
   UpworkMessage,
   Verdict,
@@ -384,6 +385,15 @@ export interface ScoutStore {
     displayName: string
     platforms: ContentPlatform[]
     voiceProfileId?: string | null
+    humorStyle?: string
+    valuesAndOpinions?: string[]
+    admiredExamples?: string[]
+  }): Promise<ContentPersona>
+  updateContentPersonaProfile(input: {
+    personaId: string
+    humorStyle?: string
+    valuesAndOpinions?: string[]
+    admiredExamples?: string[]
   }): Promise<ContentPersona>
   listContentPersonas(repId: string): Promise<ContentPersona[]>
   getContentPersona(personaId: string): Promise<ContentPersona | null>
@@ -416,4 +426,14 @@ export interface ScoutStore {
     platform: ContentPlatform
     openingLine: string
   }): Promise<ContentHistoryEntry>
+  createTrendingAngle(input: {
+    pillarId: string
+    angleDescription: string
+    sourceNote?: string
+    addedBy?: string | null
+  }): Promise<TrendingAngle>
+  getTrendingAngle(angleId: string): Promise<TrendingAngle | null>
+  listTrendingAnglesByPillarIds(pillarIds: string[], opts?: { unusedOnly?: boolean }): Promise<TrendingAngle[]>
+  markTrendingAngleUsed(angleId: string): Promise<TrendingAngle>
+  countContentDraftsToday(personaId: string): Promise<number>
 }

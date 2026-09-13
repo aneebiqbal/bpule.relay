@@ -16,6 +16,7 @@ import type {
   ProofItem,
   PushSubscription,
   Rep,
+  TrendingAngle,
   UpworkJob,
   UpworkMessage,
   Verdict,
@@ -413,6 +414,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const contentPillars: ContentPillar[] = []
   const contentDrafts: ContentDraft[] = []
   const contentHistoryEntries: ContentHistoryEntry[] = []
+  const trendingAngles: TrendingAngle[] = []
   const extractionRuns: Array<{
     task: 'extract' | 'draft'
     success: boolean
@@ -1163,9 +1165,20 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         displayName: input.displayName,
         platforms: input.platforms,
         voiceProfileId: input.voiceProfileId ?? null,
+        humorStyle: input.humorStyle ?? '',
+        valuesAndOpinions: input.valuesAndOpinions ?? [],
+        admiredExamples: input.admiredExamples ?? [],
         createdAt: new Date().toISOString(),
       }
       contentPersonas.push(persona)
+      return persona
+    },
+    async updateContentPersonaProfile(input) {
+      const persona = contentPersonas.find((p) => p.id === input.personaId)
+      if (!persona) throw new Error('Persona not found')
+      if (typeof input.humorStyle === 'string') persona.humorStyle = input.humorStyle
+      if (Array.isArray(input.valuesAndOpinions)) persona.valuesAndOpinions = input.valuesAndOpinions
+      if (Array.isArray(input.admiredExamples)) persona.admiredExamples = input.admiredExamples
       return persona
     },
     async listContentPersonas(repId) {
@@ -1260,6 +1273,48 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }
       contentHistoryEntries.push(entry)
       return entry
+    },
+    async createTrendingAngle(input) {
+      const angle: TrendingAngle = {
+        id: nextId('ta'),
+        organizationId: DEMO_ORG_ID,
+        pillarId: input.pillarId,
+        angleDescription: input.angleDescription,
+        sourceNote: input.sourceNote ?? '',
+        addedBy: input.addedBy ?? null,
+        addedAt: new Date().toISOString(),
+        used: false,
+      }
+      trendingAngles.unshift(angle)
+      return angle
+    },
+    async getTrendingAngle(angleId) {
+      return trendingAngles.find((a) => a.id === angleId) ?? null
+    },
+    async listTrendingAnglesByPillarIds(pillarIds, opts) {
+      return trendingAngles
+        .filter((a) => pillarIds.includes(a.pillarId))
+        .filter((a) => (opts?.unusedOnly ? !a.used : true))
+        .sort((a, b) => b.addedAt.localeCompare(a.addedAt))
+    },
+    async markTrendingAngleUsed(angleId) {
+      const angle = trendingAngles.find((a) => a.id === angleId)
+      if (!angle) throw new Error('Trending angle not found')
+      angle.used = true
+      return angle
+    },
+    async countContentDraftsToday(personaId) {
+      const start = new Date()
+      start.setHours(0, 0, 0, 0)
+      const end = new Date()
+      end.setHours(23, 59, 59, 999)
+      return contentDrafts
+        .filter((d) => d.personaId === personaId)
+        .filter((d) => {
+          const created = new Date(d.createdAt).getTime()
+          return created >= start.getTime() && created <= end.getTime()
+        })
+        .length
     },
   }
 }

@@ -25,7 +25,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
 
-    const { displayName, platforms } = body as { displayName: string; platforms: string[] }
+    const { displayName, platforms, humorStyle, valuesAndOpinions, admiredExamples } = body as {
+      displayName: string
+      platforms: string[]
+      humorStyle?: string
+      valuesAndOpinions?: string[]
+      admiredExamples?: string[]
+    }
     if (!displayName?.trim()) return NextResponse.json({ error: 'displayName is required' }, { status: 400 })
     if (!Array.isArray(platforms) || platforms.length === 0) {
       return NextResponse.json({ error: 'platforms must be a non-empty array' }, { status: 400 })
@@ -40,6 +46,13 @@ export async function POST(req: NextRequest) {
       repId: user.rep.id,
       displayName: displayName.trim(),
       platforms: filtered as ('linkedin' | 'x')[],
+      humorStyle: humorStyle?.trim() ?? '',
+      valuesAndOpinions: Array.isArray(valuesAndOpinions)
+        ? valuesAndOpinions.map((v) => String(v).trim()).filter(Boolean)
+        : [],
+      admiredExamples: Array.isArray(admiredExamples)
+        ? admiredExamples.map((v) => String(v).trim()).filter(Boolean)
+        : [],
     })
 
     return NextResponse.json({ persona })

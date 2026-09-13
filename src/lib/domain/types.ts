@@ -324,6 +324,9 @@ export interface ContentPersona {
   displayName: string
   platforms: ContentPlatform[]
   voiceProfileId: string | null
+  humorStyle: string
+  valuesAndOpinions: string[]
+  admiredExamples: string[]
   createdAt: string
 }
 
@@ -360,4 +363,15 @@ export interface ContentHistoryEntry {
   platform: ContentPlatform
   openingLine: string
   postedAt: string
+}
+
+export interface TrendingAngle {
+  id: string
+  organizationId: string
+  pillarId: string
+  angleDescription: string
+  sourceNote: string
+  addedBy: string | null
+  addedAt: string
+  used: boolean
 }

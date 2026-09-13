@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
@@ -11,11 +11,26 @@ import {
   Copy,
   RefreshCw,
   Check,
+  Sparkles,
 } from 'lucide-react'
 import { cn } from 'cn'
-import type { ContentPersona, ContentPillar, ContentDraft, ContentHistoryEntry } from '@/lib/domain/types'
+import type {
+  ContentPersona,
+  ContentPillar,
+  ContentDraft,
+  ContentHistoryEntry,
+  TrendingAngle,
+} from '@/lib/domain/types'
 
 type DraftStatus = ContentDraft['status']
+
+interface SuggestedAngle {
+  id: string
+  pillarId: string
+  pillarName: string
+  angleDescription: string
+  sourceNote: string
+}
 
 export function PersonaWorkspace({
   persona,
@@ -43,15 +58,53 @@ export function PersonaWorkspace({
   const [bannedHits, setBannedHits] = useState<string[]>([])
   const [specificityHit, setSpecificityHit] = useState(true)
   const [showAddPillar, setShowAddPillar] = useState(false)
+  const [showAddAngle, setShowAddAngle] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [suggestions, setSuggestions] = useState<SuggestedAngle[]>([])
+  const [capped, setCapped] = useState(false)
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [skippedSuggestionIds, setSkippedSuggestionIds] = useState<string[]>([])
+  const [angleInputById, setAngleInputById] = useState<Record<string, string>>({})
+  const [allAngles, setAllAngles] = useState<Array<TrendingAngle & { pillarName: string }>>([])
 
   const activeDrafts = drafts.filter((d) => d.status === 'draft' || d.status === 'ready')
 
-  const generateDraft = useCallback(async () => {
-    if (!sourceMaterial.trim()) {
-      setDraftError('What is one real thing from today? A sentence or two is enough.')
-      return
+  const loadSuggestions = useCallback(async () => {
+    setLoadingSuggestions(true)
+    try {
+      const res = await fetch(`/api/content/suggestions?personaId=${persona.id}`)
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error ?? 'Failed to load suggestions.')
+      setSuggestions((data?.suggestions ?? []) as SuggestedAngle[])
+      setCapped(Boolean(data?.capped))
+    } catch {
+      setSuggestions([])
+      setCapped(false)
+    } finally {
+      setLoadingSuggestions(false)
     }
+  }, [persona.id])
+
+  const loadAngles = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/content/trending-angles?personaId=${persona.id}`)
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error ?? 'Failed to load angles.')
+      setAllAngles((data?.angles ?? []) as Array<TrendingAngle & { pillarName: string }>)
+    } catch {
+      setAllAngles([])
+    }
+  }, [persona.id])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void loadSuggestions()
+      void loadAngles()
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [loadSuggestions, loadAngles])
+
+  const runGeneration = useCallback(async (payload: Record<string, unknown>) => {
     setGenerating(true)
     setDraftError(null)
     setStatusMessage('Starting...')
@@ -67,12 +120,7 @@ export function PersonaWorkspace({
       const res = await fetch('/api/content/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          personaId: persona.id,
-      pillarId: selectedPillar || null,
-          sourceMaterial: sourceMaterial.trim(),
-          platform,
-        }),
+        body: JSON.stringify(payload),
       })
 
       if (!res.ok) {
@@ -80,13 +128,12 @@ export function PersonaWorkspace({
         throw new Error(data?.error ?? 'Generation failed.')
       }
 
-      // Read SSE stream
       const reader = res.body?.getReader()
       if (!reader) throw new Error('No response stream.')
 
       const decoder = new TextDecoder()
       let buffer = ''
-      let finalResult = null
+      let finalResult: Record<string, unknown> | null = null
 
       while (true) {
         const { done, value } = await reader.read()
@@ -97,13 +144,13 @@ export function PersonaWorkspace({
         for (const frame of frames) {
           if (!frame.startsWith('data: ')) continue
           try {
-            const event = JSON.parse(frame.slice(6))
+            const event = JSON.parse(frame.slice(6)) as { type: string; message?: string; result?: Record<string, unknown> }
             if (event.type === 'status') {
-              setStatusMessage(event.message)
+              setStatusMessage(event.message ?? null)
             } else if (event.type === 'done') {
-              finalResult = event.result
+              finalResult = event.result ?? null
             } else if (event.type === 'error') {
-              throw new Error(event.message)
+              throw new Error(event.message ?? 'Generation failed.')
             }
           } catch {
             // skip malformed frame
@@ -112,21 +159,45 @@ export function PersonaWorkspace({
       }
 
       if (finalResult) {
-        setDraftText(finalResult.caption ?? '')
-        setHookScore(finalResult.hookScore ?? null)
-        setHookFeedback(finalResult.hookFeedback ?? '')
-        setSelfCheckPassed(finalResult.selfCheckPassed ?? false)
-        setSelfCheckNote(finalResult.selfCheckNote ?? '')
-        setBannedHits(finalResult.bannedHits ?? [])
-        setSpecificityHit(finalResult.specificityHit ?? true)
+        setDraftText((finalResult.caption as string) ?? '')
+        setHookScore((finalResult.hookScore as number) ?? null)
+        setHookFeedback((finalResult.hookFeedback as string) ?? '')
+        setSelfCheckPassed((finalResult.selfCheckPassed as boolean) ?? false)
+        setSelfCheckNote((finalResult.selfCheckNote as string) ?? '')
+        setBannedHits((finalResult.bannedHits as string[]) ?? [])
+        setSpecificityHit((finalResult.specificityHit as boolean) ?? true)
       }
     } catch (err) {
       setDraftError(err instanceof Error ? err.message : 'Generation failed.')
     } finally {
       setGenerating(false)
       setStatusMessage(null)
+      await loadSuggestions()
     }
-  }, [sourceMaterial, selectedPillar, platform, persona.id])
+  }, [loadSuggestions])
+
+  const generateDraft = useCallback(async () => {
+    if (!sourceMaterial.trim()) {
+      setDraftError('What is one real thing from today? A sentence or two is enough.')
+      return
+    }
+    await runGeneration({
+      personaId: persona.id,
+      pillarId: selectedPillar || null,
+      sourceMaterial: sourceMaterial.trim(),
+      platform,
+    })
+  }, [sourceMaterial, selectedPillar, platform, persona.id, runGeneration])
+
+  const generateFromSuggestion = useCallback(async (suggestion: SuggestedAngle) => {
+    await runGeneration({
+      personaId: persona.id,
+      angleId: suggestion.id,
+      pillarId: suggestion.pillarId,
+      personalLine: angleInputById[suggestion.id] ?? '',
+      platform,
+    })
+  }, [angleInputById, persona.id, platform, runGeneration])
 
   async function copyDraft() {
     if (!draftText) return
@@ -152,6 +223,12 @@ export function PersonaWorkspace({
     }
   }
 
+  function skipSuggestion(angleId: string) {
+    setSkippedSuggestionIds((prev) => [...prev, angleId])
+  }
+
+  const visibleSuggestions = suggestions.filter((s) => !skippedSuggestionIds.includes(s.id))
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -173,6 +250,82 @@ export function PersonaWorkspace({
           </div>
         </div>
       </header>
+
+      <section className="reveal-up rounded-2xl border border-line/60 bg-surface-raised p-5">
+        <h2 className="text-heading text-base text-ink">Persona profile</h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl bg-paper-tint/40 p-3">
+            <p className="text-label">Humor style</p>
+            <p className="mt-1 text-sm text-ink">{persona.humorStyle || 'Not set yet'}</p>
+          </div>
+          <div className="rounded-xl bg-paper-tint/40 p-3 sm:col-span-2">
+            <p className="text-label">Values and opinions</p>
+            {persona.valuesAndOpinions.length === 0 ? (
+              <p className="mt-1 text-sm text-slate">No convictions captured yet.</p>
+            ) : (
+              <ul className="mt-1 space-y-1">
+                {persona.valuesAndOpinions.slice(0, 3).map((op, idx) => (
+                  <li key={`${idx}-${op}`} className="text-sm text-ink">- {op}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="reveal-up stagger-1 rounded-[1.75rem] border border-line/60 bg-surface-raised p-6">
+        <div className="flex items-center gap-2">
+          <Sparkles className="size-4 text-gold" aria-hidden="true" />
+          <h2 className="text-heading text-base text-ink">Today&apos;s suggested angles</h2>
+        </div>
+        <p className="mt-1 text-sm text-slate">
+          Up to two curated angles from your pillars. Add one real line for a personal story, or leave it blank for a values-based opinion post.
+        </p>
+
+        {capped && (
+          <p className="mt-3 rounded-lg bg-paper-tint/40 px-3 py-2 text-sm text-slate">
+            Daily cap reached for this persona (2 generated drafts).
+          </p>
+        )}
+
+        {!capped && loadingSuggestions && (
+          <p className="mt-3 text-sm text-slate">Loading suggestions...</p>
+        )}
+
+        {!capped && !loadingSuggestions && visibleSuggestions.length === 0 && (
+          <p className="mt-3 text-sm text-slate">No fresh suggestions right now. Skip is a valid outcome.</p>
+        )}
+
+        <div className="mt-4 space-y-3">
+          {visibleSuggestions.map((suggestion) => (
+            <article key={suggestion.id} className="rounded-xl border border-line/60 bg-paper-tint/20 p-4">
+              <p className="text-xs text-slate">{suggestion.pillarName}</p>
+              <p className="mt-1 text-sm text-ink">Angle: {suggestion.angleDescription}</p>
+              <input
+                value={angleInputById[suggestion.id] ?? ''}
+                onChange={(e) => setAngleInputById((prev) => ({ ...prev, [suggestion.id]: e.target.value }))}
+                placeholder="Got something real of your own on this? (optional one line)"
+                className="mt-3 h-9 w-full rounded-lg border border-line bg-paper-raised px-3 text-sm outline-none focus-visible:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/20"
+              />
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  onClick={() => void generateFromSuggestion(suggestion)}
+                  disabled={generating}
+                  className="rounded-lg gradient-gold px-4 py-1.5 text-sm font-semibold text-paper disabled:opacity-50"
+                >
+                  Generate
+                </button>
+                <button
+                  onClick={() => skipSuggestion(suggestion.id)}
+                  className="rounded-lg border border-line px-3 py-1.5 text-sm text-slate hover:bg-paper-tint"
+                >
+                  Skip this one
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
       {/* ── Daily Prompt ── */}
       <section className="reveal-up stagger-1 rounded-[1.75rem] border border-line/60 bg-surface-raised p-6">
@@ -330,6 +483,53 @@ export function PersonaWorkspace({
         )}
       </section>
 
+      <section className="reveal-up stagger-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-heading text-base text-ink">Trending angles</h2>
+          <button
+            onClick={() => setShowAddAngle(true)}
+            className="inline-flex items-center gap-1 text-sm text-gold transition-colors hover:text-gold-dark"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            Add
+          </button>
+        </div>
+
+        {showAddAngle && (
+          <AddTrendingAngleForm
+            personaId={persona.id}
+            pillars={pillars}
+            defaultPillarId={selectedPillar || pillars[0]?.id || ''}
+            onClose={() => setShowAddAngle(false)}
+            onAdded={() => {
+              void loadAngles()
+              void loadSuggestions()
+            }}
+          />
+        )}
+
+        {allAngles.length === 0 ? (
+          <p className="text-sm text-slate">No curated angles yet. Add real trends your team actually observed.</p>
+        ) : (
+          <div className="space-y-2">
+            {allAngles.slice(0, 6).map((angle) => (
+              <div key={angle.id} className="rounded-xl border border-line/60 bg-surface-raised p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-ink">{angle.angleDescription}</p>
+                  <span className={cn(
+                    'rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide',
+                    angle.used ? 'bg-paper-tint text-slate' : 'bg-gold/10 text-gold',
+                  )}>
+                    {angle.used ? 'used' : 'fresh'}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate">{angle.pillarName}{angle.sourceNote ? ` - ${angle.sourceNote}` : ''}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* ── Recent History ── */}
       {history.length > 0 && (
         <section className="reveal-up stagger-4 space-y-3">
@@ -458,5 +658,91 @@ function AddPillarForm({ personaId, onClose }: { personaId: string; onClose: () 
   )
 }
 
-// Need to import Sparkles — add it at the top
-import { Sparkles } from 'lucide-react'
+function AddTrendingAngleForm({
+  personaId,
+  pillars,
+  defaultPillarId,
+  onClose,
+  onAdded,
+}: {
+  personaId: string
+  pillars: ContentPillar[]
+  defaultPillarId: string
+  onClose: () => void
+  onAdded: () => void
+}) {
+  const [pillarId, setPillarId] = useState(defaultPillarId)
+  const [angleDescription, setAngleDescription] = useState('')
+  const [sourceNote, setSourceNote] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (!pillarId || !angleDescription.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/content/trending-angles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personaId,
+          pillarId,
+          angleDescription: angleDescription.trim(),
+          sourceNote: sourceNote.trim(),
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to add angle.')
+      onAdded()
+      onClose()
+    } catch {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-line/60 bg-paper-tint/30 p-4 space-y-3">
+      <div>
+        <label htmlFor="angle-pillar" className="text-sm font-medium text-ink-soft">Pillar</label>
+        <select
+          id="angle-pillar"
+          value={pillarId}
+          onChange={(e) => setPillarId(e.target.value)}
+          className="mt-1 h-9 w-full rounded-lg border border-line bg-paper-raised px-3 text-sm text-ink"
+        >
+          {pillars.map((p) => (
+            <option key={p.id} value={p.id}>{p.pillarName}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label htmlFor="angle-desc" className="text-sm font-medium text-ink-soft">Angle</label>
+        <input
+          id="angle-desc"
+          value={angleDescription}
+          onChange={(e) => setAngleDescription(e.target.value)}
+          placeholder="One real trend your team spotted"
+          className="mt-1 h-9 w-full rounded-lg border border-line bg-paper-raised px-3 text-sm outline-none focus-visible:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/20"
+        />
+      </div>
+      <div>
+        <label htmlFor="angle-source" className="text-sm font-medium text-ink-soft">Source note (optional)</label>
+        <input
+          id="angle-source"
+          value={sourceNote}
+          onChange={(e) => setSourceNote(e.target.value)}
+          placeholder="Where your team saw this"
+          className="mt-1 h-9 w-full rounded-lg border border-line bg-paper-raised px-3 text-sm outline-none focus-visible:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/20"
+        />
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-slate hover:bg-paper-tint">Cancel</button>
+        <button
+          onClick={() => void save()}
+          disabled={saving || !pillarId || !angleDescription.trim()}
+          className="rounded-lg gradient-gold px-4 py-1.5 text-sm font-semibold text-paper disabled:opacity-50"
+        >
+          {saving ? 'Adding...' : 'Add angle'}
+        </button>
+      </div>
+    </div>
+  )
+}

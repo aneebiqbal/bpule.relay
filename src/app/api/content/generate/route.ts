@@ -5,6 +5,7 @@ import { generateContent } from '@/lib/ai/content'
 import { sseStream } from '@/lib/sse/sse'
 import { injectStyleCard } from '@/lib/style/inject'
 import type { ContentGenerationInput } from '@/lib/ai/content'
+import type { TrendingAngle } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,15 +22,16 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
 
-  const { personaId, pillarId, sourceMaterial, platform } = body as {
+  const { personaId, pillarId, sourceMaterial, platform, angleId, personalLine } = body as {
     personaId: string
     pillarId: string | null
-    sourceMaterial: string
+    sourceMaterial?: string
     platform: 'linkedin' | 'x'
+    angleId?: string | null
+    personalLine?: string
   }
 
   if (!personaId?.trim()) return NextResponse.json({ error: 'personaId is required' }, { status: 400 })
-  if (!sourceMaterial?.trim()) return NextResponse.json({ error: 'sourceMaterial is required — the system never invents a post' }, { status: 400 })
   if (!['linkedin', 'x'].includes(platform)) return NextResponse.json({ error: 'platform must be linkedin or x' }, { status: 400 })
 
   const store = await createScoutStore()
@@ -42,9 +44,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
   }
 
+  const generatedToday = await store.countContentDraftsToday(personaId)
+  if (generatedToday >= 2) {
+    return NextResponse.json({ error: 'Daily cap reached: up to 2 generated drafts per persona.' }, { status: 429 })
+  }
+
+  let angle: TrendingAngle | null = null
+
   // Resolve pillar
   let pillar = null
-  if (pillarId) {
+  if (angleId) {
+    angle = await store.getTrendingAngle(angleId)
+    if (!angle) return NextResponse.json({ error: 'Trending angle not found' }, { status: 404 })
+    const anglePillarId = angle.pillarId
+    const pillars = await store.listContentPillars(personaId)
+    pillar = pillars.find((p) => p.id === anglePillarId) ?? null
+    if (!pillar) {
+      return NextResponse.json({ error: 'Trending angle does not belong to this persona' }, { status: 400 })
+    }
+  } else if (pillarId) {
     const pillars = await store.listContentPillars(personaId)
     pillar = pillars.find((p) => p.id === pillarId) ?? null
   }
@@ -68,19 +86,64 @@ export async function POST(req: NextRequest) {
   const history = await store.listContentHistory(personaId, 10)
   const recentOpenings = history.map((h) => h.openingLine).filter(Boolean)
 
+  const material = sourceMaterial?.trim() ?? ''
+  const realLine = personalLine?.trim() ?? ''
+  const generationMode: 'personal' | 'opinion' = angle
+    ? (realLine ? 'personal' : 'opinion')
+    : 'personal'
+
+  if (!angle && !material) {
+    return NextResponse.json({ error: 'sourceMaterial is required - the system never invents a post' }, { status: 400 })
+  }
+
+  if (angle && generationMode === 'opinion' && persona.valuesAndOpinions.length === 0) {
+    return NextResponse.json({
+      error: 'No values/opinions stored for this persona yet. Add convictions first or provide one real line.',
+    }, { status: 400 })
+  }
+
+  const sourceForGeneration = angle
+    ? buildSourceFromAngle({
+        angle: angle.angleDescription,
+        personalLine: realLine,
+        valuesAndOpinions: persona.valuesAndOpinions,
+      })
+    : material
+
   const input: ContentGenerationInput = {
     personaName: persona.displayName,
     pillar,
-    sourceMaterial: sourceMaterial.trim(),
+    sourceMaterial: sourceForGeneration,
     platform,
     styleCard,
     recentOpenings,
+    humorStyle: persona.humorStyle,
+    valuesAndOpinions: persona.valuesAndOpinions,
+    generationMode,
+    trendingAngle: angle?.angleDescription ?? null,
   }
 
   return sseStream(async (emit) => {
     try {
       const result = await generateContent(input, (msg) => emit({ type: 'status', message: msg }))
-      emit({ type: 'done', result })
+      const draft = await store.createContentDraft({
+        personaId,
+        pillarId: pillar.id,
+        sourceMaterial: sourceForGeneration,
+        platform,
+        caption: result.caption,
+        hookScore: result.hookScore,
+        hookFeedback: result.hookFeedback,
+        selfCheckPassed: result.selfCheckPassed,
+        selfCheckNote: result.selfCheckNote,
+        status: result.selfCheckPassed ? 'ready' : 'draft',
+      })
+
+      if (angle && result.selfCheckPassed) {
+        await store.markTrendingAngleUsed(angle.id)
+      }
+
+      emit({ type: 'done', result: { ...result, draftId: draft.id } })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Generation failed.'
       emit({ type: 'error', message })
@@ -88,4 +151,18 @@ export async function POST(req: NextRequest) {
   })
 }
 
+function buildSourceFromAngle(input: {
+  angle: string
+  personalLine: string
+  valuesAndOpinions: string[]
+}): string {
+  if (input.personalLine) {
+    return `Trending angle: ${input.angle}\n\nReal line from today:\n${input.personalLine}`
+  }
 
+  const convictions = input.valuesAndOpinions.length > 0
+    ? input.valuesAndOpinions.map((v, i) => `${i + 1}. ${v}`).join('\n')
+    : 'None supplied.'
+
+  return `Trending angle: ${input.angle}\n\nOpinion mode: no personal anecdote supplied today. Build from real convictions only:\n${convictions}`
+}

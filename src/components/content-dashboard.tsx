@@ -114,6 +114,9 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
 function NewPersonaForm({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('')
   const [platforms, setPlatforms] = useState<string[]>([])
+  const [humorStyle, setHumorStyle] = useState('')
+  const [valuesAndOpinions, setValuesAndOpinions] = useState('')
+  const [admiredExamples, setAdmiredExamples] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -127,10 +130,18 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
     setSaving(true)
     setError(null)
     try {
+      const values = valuesAndOpinions.split('\n').map((v) => v.trim()).filter(Boolean)
+      const examples = admiredExamples.split('\n').map((v) => v.trim()).filter(Boolean)
       const res = await fetch('/api/content/personas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ displayName: name.trim(), platforms }),
+        body: JSON.stringify({
+          displayName: name.trim(),
+          platforms,
+          humorStyle: humorStyle.trim(),
+          valuesAndOpinions: values,
+          admiredExamples: examples,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to create persona.')
@@ -180,6 +191,41 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="grid gap-1.5">
+          <label htmlFor="humor-style" className="text-sm font-medium text-ink-soft">Humor style (optional)</label>
+          <input
+            id="humor-style"
+            value={humorStyle}
+            onChange={(e) => setHumorStyle(e.target.value)}
+            placeholder="e.g. dry, blunt, self-deprecating"
+            className="h-9 w-full rounded-xl border border-line bg-paper-raised px-3 text-sm transition-all outline-none focus-visible:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/20"
+          />
+        </div>
+
+        <div className="grid gap-1.5">
+          <label htmlFor="values" className="text-sm font-medium text-ink-soft">Values and opinions (one per line)</label>
+          <textarea
+            id="values"
+            value={valuesAndOpinions}
+            onChange={(e) => setValuesAndOpinions(e.target.value)}
+            rows={4}
+            placeholder="e.g. Most product delays are decision delays, not coding delays."
+            className="w-full rounded-xl border border-line bg-paper-raised px-3 py-2 text-sm transition-all outline-none focus-visible:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/20"
+          />
+        </div>
+
+        <div className="grid gap-1.5">
+          <label htmlFor="admired-examples" className="text-sm font-medium text-ink-soft">Admired examples (paraphrased, optional)</label>
+          <textarea
+            id="admired-examples"
+            value={admiredExamples}
+            onChange={(e) => setAdmiredExamples(e.target.value)}
+            rows={3}
+            placeholder="What worked in posts they liked, in your own words."
+            className="w-full rounded-xl border border-line bg-paper-raised px-3 py-2 text-sm transition-all outline-none focus-visible:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/20"
+          />
         </div>
       </div>
 

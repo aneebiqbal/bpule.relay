@@ -20,6 +20,7 @@ import type {
   PushSubscription,
   Rep,
   SignalId,
+  TrendingAngle,
   UpworkJob,
   UpworkMessage,
   Verdict,
@@ -1692,6 +1693,9 @@ export class SupabaseStore implements ScoutStore {
     displayName: string
     platforms: ContentPlatform[]
     voiceProfileId?: string | null
+    humorStyle?: string
+    valuesAndOpinions?: string[]
+    admiredExamples?: string[]
   }): Promise<ContentPersona> {
     const { data, error } = await this.client
       .from('content_personas')
@@ -1701,7 +1705,31 @@ export class SupabaseStore implements ScoutStore {
         display_name: input.displayName,
         platforms: input.platforms,
         voice_profile_id: input.voiceProfileId ?? null,
+        humor_style: input.humorStyle ?? '',
+        values_and_opinions: input.valuesAndOpinions ?? [],
+        admired_examples: input.admiredExamples ?? [],
       })
+      .select()
+      .single()
+    if (error) throw error
+    return mapContentPersona(data)
+  }
+
+  async updateContentPersonaProfile(input: {
+    personaId: string
+    humorStyle?: string
+    valuesAndOpinions?: string[]
+    admiredExamples?: string[]
+  }): Promise<ContentPersona> {
+    const patch: Record<string, unknown> = {}
+    if (typeof input.humorStyle === 'string') patch.humor_style = input.humorStyle
+    if (Array.isArray(input.valuesAndOpinions)) patch.values_and_opinions = input.valuesAndOpinions
+    if (Array.isArray(input.admiredExamples)) patch.admired_examples = input.admiredExamples
+
+    const { data, error } = await this.client
+      .from('content_personas')
+      .update(patch)
+      .eq('id', input.personaId)
       .select()
       .single()
     if (error) throw error
@@ -1868,6 +1896,84 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
     return mapContentHistory(data)
   }
+
+  async createTrendingAngle(input: {
+    pillarId: string
+    angleDescription: string
+    sourceNote?: string
+    addedBy?: string | null
+  }): Promise<TrendingAngle> {
+    const { data, error } = await this.client
+      .from('trending_angles')
+      .insert({
+        organization_id: this.orgId,
+        pillar_id: input.pillarId,
+        angle_description: input.angleDescription,
+        source_note: input.sourceNote ?? '',
+        added_by: input.addedBy ?? null,
+      })
+      .select()
+      .single()
+    if (error) throw error
+    return mapTrendingAngle(data)
+  }
+
+  async getTrendingAngle(angleId: string): Promise<TrendingAngle | null> {
+    const { data, error } = await this.client
+      .from('trending_angles')
+      .select('*')
+      .eq('id', angleId)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return mapTrendingAngle(data)
+  }
+
+  async listTrendingAnglesByPillarIds(
+    pillarIds: string[],
+    opts?: { unusedOnly?: boolean },
+  ): Promise<TrendingAngle[]> {
+    if (pillarIds.length === 0) return []
+    let query = this.client
+      .from('trending_angles')
+      .select('*')
+      .in('pillar_id', pillarIds)
+      .order('added_at', { ascending: false })
+
+    if (opts?.unusedOnly) {
+      query = query.eq('used', false)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+    return (data ?? []).map(mapTrendingAngle)
+  }
+
+  async markTrendingAngleUsed(angleId: string): Promise<TrendingAngle> {
+    const { data, error } = await this.client
+      .from('trending_angles')
+      .update({ used: true })
+      .eq('id', angleId)
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapTrendingAngle(data)
+  }
+
+  async countContentDraftsToday(personaId: string): Promise<number> {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const end = new Date()
+    end.setHours(23, 59, 59, 999)
+    const { count, error } = await this.client
+      .from('content_drafts')
+      .select('id', { count: 'exact', head: true })
+      .eq('persona_id', personaId)
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString())
+    if (error) throw error
+    return count ?? 0
+  }
 }
 
 function mapUpworkJob(r: Row): UpworkJob {
@@ -1920,6 +2026,9 @@ function mapContentPersona(r: Record<string, unknown>): ContentPersona {
     displayName: r.display_name as string,
     platforms: (r.platforms as ContentPlatform[]) ?? [],
     voiceProfileId: (r.voice_profile_id as string) ?? null,
+    humorStyle: (r.humor_style as string) ?? '',
+    valuesAndOpinions: (r.values_and_opinions as string[]) ?? [],
+    admiredExamples: (r.admired_examples as string[]) ?? [],
     createdAt: r.created_at as string,
   }
 }
@@ -1962,5 +2071,18 @@ function mapContentHistory(r: Record<string, unknown>): ContentHistoryEntry {
     platform: r.platform as ContentPlatform,
     openingLine: r.opening_line as string,
     postedAt: r.posted_at as string,
+  }
+}
+
+function mapTrendingAngle(r: Record<string, unknown>): TrendingAngle {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    pillarId: r.pillar_id as string,
+    angleDescription: r.angle_description as string,
+    sourceNote: (r.source_note as string) ?? '',
+    addedBy: (r.added_by as string) ?? null,
+    addedAt: r.added_at as string,
+    used: Boolean(r.used),
   }
 }

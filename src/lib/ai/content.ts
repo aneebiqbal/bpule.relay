@@ -44,6 +44,10 @@ export interface ContentGenerationInput {
   platform: ContentPlatform
   styleCard: string | null
   recentOpenings: string[]
+  humorStyle?: string
+  valuesAndOpinions?: string[]
+  generationMode?: 'personal' | 'opinion'
+  trendingAngle?: string | null
 }
 
 export interface ContentGenerationResult {
@@ -103,8 +107,14 @@ export async function generateContent(
   const badHook = checkBadHook(hook)
   const specificityHit = checkSpecificity(hook + '\n' + caption, input.sourceMaterial)
   const repeats = checkRepetition(hook, input.recentOpenings)
+  const fabricatedPersonalClaim = checkFabricatedPersonalClaim(caption, input.generationMode ?? 'personal')
 
-  const selfCheckPassed = result.data.self_check_passed && bannedHits.length === 0 && !badHook && specificityHit && !repeats
+  const selfCheckPassed = result.data.self_check_passed
+    && bannedHits.length === 0
+    && !badHook
+    && specificityHit
+    && !repeats
+    && !fabricatedPersonalClaim
   let selfCheckNote = result.data.self_check_note
 
   if (bannedHits.length > 0) {
@@ -115,6 +125,8 @@ export async function generateContent(
     selfCheckNote = 'No concrete detail from today\'s material.'
   } else if (repeats) {
     selfCheckNote = 'Too similar to a recent opening line.'
+  } else if (fabricatedPersonalClaim) {
+    selfCheckNote = 'Opinion mode cannot claim a specific personal event.'
   }
 
   onStatus?.('Done')
@@ -126,10 +138,18 @@ export async function generateContent(
 
 function buildContentSystemPrompt(input: ContentGenerationInput): string {
   const styleBlock = input.styleCard ?? ''
+  const personalityBlock = [
+    input.humorStyle ? `Humor style: ${input.humorStyle}` : '',
+    input.valuesAndOpinions && input.valuesAndOpinions.length > 0
+      ? `Real convictions: ${input.valuesAndOpinions.join(' | ')}`
+      : '',
+  ].filter(Boolean).join('\n')
+  const mode = input.generationMode ?? 'personal'
 
   return `You write social media posts for ${input.personaName}. Your job is to turn their real observation into a post that sounds like them, not like a generic content engine.
 
 ${styleBlock}
+${personalityBlock}
 
 HARD RULES:
 1. NEVER use banned phrases: "unpopular opinion:", "here's the thing", "let that sink in", "thread 🧵", emoji as bullets.
@@ -137,15 +157,22 @@ HARD RULES:
 3. NEVER invent details. Everything must trace back to the source material.
 4. NEVER use clickbait ("stop scrolling", "read that again").
 5. NEVER use corporate jargon.
+6. If mode is opinion, do not claim a specific personal incident happened to ${input.personaName}.
 
-HOOK — the first 1-2 lines must contain a concrete, specific detail from the source material. Score it honestly 1-10.`
+MODE: ${mode}
+
+HOOK - the first 1-2 lines must contain a concrete, specific detail from the source material. Score it honestly 1-10.`
 }
 
 function buildContentUserPrompt(input: ContentGenerationInput): string {
+  const mode = input.generationMode ?? 'personal'
   return `PILLAR: ${input.pillar.pillarName}
 ${input.pillar.description ? `(${input.pillar.description})` : ''}
 
 PLATFORM: ${input.platform}
+
+MODE: ${mode}
+${input.trendingAngle ? `TRENDING ANGLE: ${input.trendingAngle}` : ''}
 
 REAL MATERIAL FROM TODAY:
 """
@@ -200,4 +227,14 @@ function checkRepetition(hook: string, recentOpenings: string[]): boolean {
     if (hookLower.slice(0, 30) === openingLower.slice(0, 30)) return true
     return false
   })
+}
+
+function checkFabricatedPersonalClaim(caption: string, mode: 'personal' | 'opinion'): boolean {
+  if (mode !== 'opinion') return false
+  const text = caption.toLowerCase()
+  const directEventClaims = [
+    /\b(today|yesterday|last week|this morning)\b.{0,30}\b(i|we)\b/,
+    /\b(i|we)\s+(spent|debugged|shipped|fixed|met|saw|handled|dealt|worked)\b/,
+  ]
+  return directEventClaims.some((re) => re.test(text))
 }
