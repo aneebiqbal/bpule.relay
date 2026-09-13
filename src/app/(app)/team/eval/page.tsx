@@ -1,11 +1,16 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
+import { getCurrentUser } from '@/lib/auth/current'
 import { ArrowLeft, Play, RefreshCw, Database, FlaskConical } from 'lucide-react'
 import { cn } from 'cn'
 
 export const dynamic = 'force-dynamic'
 
 export default async function EvalPage() {
+  const user = await getCurrentUser()
+  if (!user) redirect('/login')
+
   const store = await createScoutStore()
   const [runsRes, goldenRes] = await Promise.allSettled([
     store.listEvalRuns(),

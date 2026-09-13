@@ -1,5 +1,7 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
+import { getCurrentUser } from '@/lib/auth/current'
 import { REPLY_RATE_TARGET, READ_TO_CHECK_TARGET } from '@/lib/ai/config'
 import { TrendingUp, Users, Zap, Clock, DollarSign, Activity } from 'lucide-react'
 
@@ -16,6 +18,9 @@ function onTarget(n: number | null, target: number) {
 }
 
 export default async function TeamPage() {
+  const user = await getCurrentUser()
+  if (!user) redirect('/login')
+
   const store = await createScoutStore()
   const [statsRes, extractionRes] = await Promise.allSettled([
     store.getTeamStats(),
