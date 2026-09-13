@@ -127,6 +127,7 @@ export async function POST(request: Request) {
   }
 
   await store.logCsvImport({
+    organizationId: store.organizationId,
     fileName,
     totalRows: rows.length,
     imported,

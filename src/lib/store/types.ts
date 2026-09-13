@@ -212,6 +212,8 @@ export interface FewShotWin {
 }
 
 export interface ScoutStore {
+  /** The organization this store is scoped to. */
+  readonly organizationId: string
   // leads
   createLead(lead: NewLeadInput): Promise<CreateLeadResult>
   updateLeadScore(

@@ -33,6 +33,7 @@ export async function POST(request: Request) {
   }
 
   const sub = await store.savePushSubscription({
+    organizationId: user.rep.organizationId,
     repId: user.rep.id,
     endpoint,
     p256dh,

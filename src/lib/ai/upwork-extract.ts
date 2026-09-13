@@ -86,6 +86,7 @@ export async function extractUpworkJob(rawText: string): Promise<
 
   return {
     title: empty(out.title) ?? 'Untitled job',
+    organizationId: 'org-import',
     description: empty(out.description) ?? '',
     budgetMin: out.budget_min,
     budgetMax: out.budget_max,
@@ -127,6 +128,7 @@ function demoExtract(rawText: string): ReturnType<typeof extractUpworkJob> exten
     : []
 
   return {
+    organizationId: 'org-import',
     title: titleMatch?.[1]?.trim() ?? 'Untitled job',
     description: rawText.slice(0, 400),
     budgetMin: budgetMatch && !hourlyMatch ? Number(budgetMatch[1].replace(/,/g, '')) : null,

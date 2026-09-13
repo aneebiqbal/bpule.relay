@@ -229,6 +229,7 @@ export async function streamDraft(
     attempts: callLog.length,
     strippedNumbers: primary.strippedNumbers,
     hadEmDash: primary.hadEmDash,
+    hadExclamation: primary.hadExclamation,
     variant: secondary
       ? {
           draftText: secondary.draftText,
@@ -275,6 +276,7 @@ function buildDeterministicFallback(input: DraftInput, callLog: DraftCallLog[]):
     attempts: callLog.length,
     strippedNumbers: sanitized.strippedNumbers,
     hadEmDash: sanitized.hadEmDash,
+    hadExclamation: sanitized.hadExclamation,
     callLog,
   }
 }
@@ -340,6 +342,7 @@ function normalizeVariant(
   passed: boolean
   strippedNumbers: string[]
   hadEmDash: boolean
+  hadExclamation: boolean
 } {
   const cleaned = (raw.draft ?? '').trim() || fallbackText(input)
   const codeChecks = deterministicChecks(cleaned, {
@@ -365,6 +368,7 @@ function normalizeVariant(
     passed: passed && sanitized.strippedNumbers.length === 0,
     strippedNumbers: sanitized.strippedNumbers,
     hadEmDash: sanitized.hadEmDash,
+    hadExclamation: sanitized.hadExclamation,
   }
 }
 

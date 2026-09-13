@@ -55,8 +55,10 @@ export function stripDeadSiteLinks(text: string, facts: Fact[]): string {
 
 /**
  * Returns a copy of text where every number token that is not backed by an
- * approved fact value is redacted. Numbers the model could only have pulled
- * from the facts table survive.
+ * approved fact value is removed. Numbers the model could only have pulled
+ * from the facts table survive. Unauthorized numbers are stripped entirely
+ * — never replaced with a placeholder like '[number]' that could leak into
+ * the final draft.
  */
 export function stripUnauthorizedNumbers(
   draft: string,
@@ -74,9 +76,10 @@ export function stripUnauthorizedNumbers(
   const text = draft.replace(NUMBER_RE, (token) => {
     if (approved.has(digitsOnly(token))) return token
     stripped.push(token)
-    return '[number]'
+    return ''
   })
-  return { text, stripped }
+  // Clean up any double spaces left by removal
+  return { text: text.replace(/  +/g, ' ').trim(), stripped }
 }
 
 /** Em dashes are banned in every draft. Replace, never beautify. */
@@ -87,14 +90,18 @@ export function stripEmDashes(text: string): string {
 export function sanitizeDraft(
   draft: string,
   facts: Fact[],
-): { text: string; strippedNumbers: string[]; hadEmDash: boolean } {
+): { text: string; strippedNumbers: string[]; hadEmDash: boolean; hadExclamation: boolean } {
   const before = draft
   const noDashes = stripEmDashes(draft)
-  const { text, stripped } = stripUnauthorizedNumbers(noDashes, facts)
-  const withoutDeadLinks = stripDeadSiteLinks(text, facts)
+  const { text: noNumbers, stripped } = stripUnauthorizedNumbers(noDashes, facts)
+  const withoutDeadLinks = stripDeadSiteLinks(noNumbers, facts)
+  // Exclamation marks are banned in Scout output — strip them
+  const hadExclamation = /!/.test(withoutDeadLinks)
+  const clean = withoutDeadLinks.replace(/!/g, '.')
   return {
-    text: withoutDeadLinks,
+    text: clean,
     strippedNumbers: stripped,
     hadEmDash: before !== noDashes,
+    hadExclamation,
   }
 }

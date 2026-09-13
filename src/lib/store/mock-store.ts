@@ -51,6 +51,8 @@ const nextId = (prefix: string) => `${prefix}-${(++seq).toString(36)}`
  * by setting the Supabase env vars (see .env.local.example).
  */
 
+const DEMO_ORG_ID = '11111111-1111-1111-1111-111111111111'
+
 const t = (daysAgo: number, hour = 10) => {
   const d = new Date()
   d.setDate(d.getDate() - daysAgo)
@@ -62,16 +64,17 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const rep = ctx.rep
 
   const reps: Rep[] = [
-    { id: 'rep-hassan', name: 'Hassan (demo)', role: 'admin', createdAt: t(60) },
-    { id: 'rep-ahmed', name: 'Ahmed (demo)', role: 'rep', createdAt: t(50) },
-    { id: 'rep-nadia', name: 'Nadia (demo)', role: 'rep', createdAt: t(40) },
-    { id: 'rep-samir', name: 'Samir (demo)', role: 'sourcer', createdAt: t(12) },
+    { id: 'rep-hassan', name: 'Hassan (demo)', role: 'admin', organizationId: 'org-demo', createdAt: t(60) },
+    { id: 'rep-ahmed', name: 'Ahmed (demo)', role: 'rep', organizationId: 'org-demo', createdAt: t(50) },
+    { id: 'rep-nadia', name: 'Nadia (demo)', role: 'rep', organizationId: 'org-demo', createdAt: t(40) },
+    { id: 'rep-samir', name: 'Samir (demo)', role: 'sourcer', organizationId: 'org-demo', createdAt: t(12) },
   ]
 
   const voiceProfiles: VoiceProfile[] = [
     {
       id: 'vp-ahmed',
-      repId: 'rep-ahmed',
+      organizationId: DEMO_ORG_ID,
+    repId: 'rep-ahmed',
       styleCard: {
         contractions: 'mostly_no',
         formality: 3,
@@ -90,7 +93,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     {
       id: 'vp-nadia',
-      repId: 'rep-nadia',
+      organizationId: DEMO_ORG_ID,
+    repId: 'rep-nadia',
       styleCard: {
         contractions: 'mostly_yes',
         formality: 2,
@@ -112,9 +116,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const leads: Lead[] = [
     {
       id: 'lead-acme',
+      organizationId: DEMO_ORG_ID,
       ownerRepId: 'rep-hassan',
       company: 'Acme Nail Polish Co',
-      companyKey: companyKey('Acme Nail Polish Co'),
+    companyKey: companyKey('Acme Nail Polish Co'),
       contactName: 'Priya Sharma',
       contactTitle: 'Founder',
       url: 'https://example.com/acme',
@@ -131,9 +136,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     {
       id: 'lead-beacon',
+      organizationId: DEMO_ORG_ID,
       ownerRepId: 'rep-hassan',
       company: 'Beacon Hotel Booking',
-      companyKey: companyKey('Beacon Hotel Booking'),
+    companyKey: companyKey('Beacon Hotel Booking'),
       contactName: 'Leo Fontaine',
       contactTitle: 'CTO',
       url: 'https://example.com/beacon',
@@ -150,9 +156,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     {
       id: 'lead-cedar',
+      organizationId: DEMO_ORG_ID,
       ownerRepId: 'rep-ahmed',
       company: 'Cedar Tree Software',
-      companyKey: companyKey('Cedar Tree Software'),
+    companyKey: companyKey('Cedar Tree Software'),
       contactName: 'Maya Osei',
       contactTitle: 'Head of Product',
       url: 'https://example.com/cedar',
@@ -169,9 +176,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     {
       id: 'lead-delta',
+      organizationId: DEMO_ORG_ID,
       ownerRepId: 'rep-hassan',
       company: 'Delta Bakery App',
-      companyKey: companyKey('Delta Bakery App'),
+    companyKey: companyKey('Delta Bakery App'),
       contactName: 'Marco Ruiz',
       contactTitle: 'Owner',
       url: 'https://example.com/delta',
@@ -188,9 +196,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     {
       id: 'lead-everest',
+      organizationId: DEMO_ORG_ID,
       ownerRepId: 'rep-nadia',
       company: 'Everest Fitness Wear',
-      companyKey: companyKey('Everest Fitness Wear'),
+    companyKey: companyKey('Everest Fitness Wear'),
       contactName: 'Anna Kowalski',
       contactTitle: 'CEO',
       url: 'https://example.com/everest',
@@ -210,8 +219,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const messages: Message[] = [
     {
       id: 'msg-acme-dm',
+      organizationId: DEMO_ORG_ID,
       leadId: 'lead-acme',
-      repId: 'rep-hassan',
+    repId: 'rep-hassan',
       type: 'dm',
       draftText: null,
       sentText: 'Hey Priya, saw your post about the backlog. We help teams like yours take a product off their shoulders. Want a quick read on your mobile app? Best.',
@@ -221,8 +231,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     {
       id: 'msg-cedar-dm',
+      organizationId: DEMO_ORG_ID,
       leadId: 'lead-cedar',
-      repId: 'rep-ahmed',
+    repId: 'rep-ahmed',
       type: 'dm',
       draftText: null,
       sentText: 'Hi Maya, the review about the six month wait caught my eye. We ship faster than that for teams your size. Worth 15 minutes? Best regards.',
@@ -232,8 +243,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     {
       id: 'msg-everest-dm',
+      organizationId: DEMO_ORG_ID,
       leadId: 'lead-everest',
-      repId: 'rep-nadia',
+    repId: 'rep-nadia',
       type: 'dm',
       draftText: null,
       sentText: 'Hey Anna, congrats on the round. When teams expand markets that fast, the app usually needs to keep up. Want to talk through it? Cheers.',
@@ -244,37 +256,40 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   ]
 
   const outcomes: Outcome[] = [
-    { id: 'out-acme-read', leadId: 'lead-acme', stage: 'read', occurredAt: t(5) },
-    { id: 'out-acme-check', leadId: 'lead-acme', stage: 'check', occurredAt: t(4) },
-    { id: 'out-acme-replied', leadId: 'lead-acme', stage: 'replied', occurredAt: t(4) },
-    { id: 'out-cedar-read', leadId: 'lead-cedar', stage: 'read', occurredAt: t(3) },
-    { id: 'out-everest-replied', leadId: 'lead-everest', stage: 'replied', occurredAt: t(7) },
+    { id: 'out-acme-read', organizationId: DEMO_ORG_ID, leadId: 'lead-acme', stage: 'read', occurredAt: t(5) },
+    { id: 'out-acme-check', organizationId: DEMO_ORG_ID, leadId: 'lead-acme', stage: 'check', occurredAt: t(4) },
+    { id: 'out-acme-replied', organizationId: DEMO_ORG_ID, leadId: 'lead-acme', stage: 'replied', occurredAt: t(4) },
+    { id: 'out-cedar-read', organizationId: DEMO_ORG_ID, leadId: 'lead-cedar', stage: 'read', occurredAt: t(3) },
+    { id: 'out-everest-replied', organizationId: DEMO_ORG_ID, leadId: 'lead-everest', stage: 'replied', occurredAt: t(7) },
   ]
 
   const facts: Fact[] = [
-    { id: 'fact-years', label: 'Years shipping (FAKE)', value: '8 years', factType: 'credential', addedBy: 'rep-hassan', createdAt: t(30) },
-    { id: 'fact-price', label: 'Typical senior project (FAKE)', value: '$14k per month', factType: 'price', addedBy: 'rep-hassan', createdAt: t(30) },
-    { id: 'fact-reboot', label: 'Reliable rewrites (FAKE)', value: 'ship a reboot without a rewrite', factType: 'credential', addedBy: 'rep-hassan', createdAt: t(30) },
-    { id: 'fact-cases', label: 'AI products shipped (FAKE)', value: '40+ products', factType: 'case', addedBy: 'rep-hassan', createdAt: t(30) },
-    { id: 'fact-process', label: 'Review pace (FAKE)', value: 'first plan in 10 days', factType: 'process', addedBy: 'rep-hassan', createdAt: t(30) },
+    { id: 'fact-years', organizationId: DEMO_ORG_ID, label: 'Years shipping (FAKE)', value: '8 years', factType: 'credential', addedBy: 'rep-hassan', createdAt: t(30) },
+    { id: 'fact-price', organizationId: DEMO_ORG_ID, label: 'Typical senior project (FAKE)', value: '$14k per month', factType: 'price', addedBy: 'rep-hassan', createdAt: t(30) },
+    { id: 'fact-reboot', organizationId: DEMO_ORG_ID, label: 'Reliable rewrites (FAKE)', value: 'ship a reboot without a rewrite', factType: 'credential', addedBy: 'rep-hassan', createdAt: t(30) },
+    { id: 'fact-cases', organizationId: DEMO_ORG_ID, label: 'AI products shipped (FAKE)', value: '40+ products', factType: 'case', addedBy: 'rep-hassan', createdAt: t(30) },
+    { id: 'fact-process', organizationId: DEMO_ORG_ID, label: 'Review pace (FAKE)', value: 'first plan in 10 days', factType: 'process', addedBy: 'rep-hassan', createdAt: t(30) },
   ]
 
   const plays: Play[] = [
     {
       id: 'play-rescue',
-      name: 'Play: rescue the backlog (FAKE)',
+      organizationId: DEMO_ORG_ID,
+    name: 'Play: rescue the backlog (FAKE)',
       situation: 'asking',
       templateShape: 'Addresses the specific bottleneck they mentioned, offers one concrete next step, keeps it to 3 sentences.',
     },
     {
       id: 'play-hiring',
-      name: 'Play: hiring ramp (FAKE)',
+      organizationId: DEMO_ORG_ID,
+    name: 'Play: hiring ramp (FAKE)',
       situation: 'hiring',
       templateShape: 'Notices the hiring signal, names the capacity gap, asks if a delivery partner would let them keep hiring on the roadmap.',
     },
     {
       id: 'play-price',
-      name: 'Play: budget anchor (FAKE)',
+      organizationId: DEMO_ORG_ID,
+    name: 'Play: budget anchor (FAKE)',
       situation: 'funding',
       templateShape: 'Congratulates briefly, then gives a clear, budget-relevant fact and a low-friction next step.',
     },
@@ -283,7 +298,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const profiles: Profile[] = [
     {
       id: 'profile-hassan-linkedin',
-      repId: 'rep-hassan',
+      organizationId: DEMO_ORG_ID,
+    repId: 'rep-hassan',
       platform: 'linkedin',
       label: 'Hassan, LinkedIn',
       profileUrl: 'https://example.com/in/hassan',
@@ -293,7 +309,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     {
       id: 'profile-hassan-upwork',
-      repId: 'rep-hassan',
+      organizationId: DEMO_ORG_ID,
+    repId: 'rep-hassan',
       platform: 'upwork',
       label: 'Hassan, Upwork',
       profileUrl: 'https://example.com/up/hassan',
@@ -306,7 +323,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const proofItems: ProofItem[] = [
     {
       id: 'proof-1',
-      profileId: 'profile-hassan-linkedin',
+      organizationId: DEMO_ORG_ID,
+    profileId: 'profile-hassan-linkedin',
       clientNamed: true,
       clientName: 'Example Client',
       permissionOnFile: true,
@@ -317,7 +335,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     {
       id: 'proof-2',
-      profileId: 'profile-hassan-upwork',
+      organizationId: DEMO_ORG_ID,
+    profileId: 'profile-hassan-upwork',
       clientNamed: false,
       clientName: null,
       permissionOnFile: false,
@@ -331,7 +350,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const upworkJobs: UpworkJob[] = [
     {
       id: 'upwork-fintech-rebuild',
-      ownerRepId: 'rep-hassan',
+      organizationId: DEMO_ORG_ID,
+    ownerRepId: 'rep-hassan',
       title: 'Rebuild fintech onboarding flow (FAKE demo job)',
       description: 'FAKE demo Upwork job. Client needs a KYC onboarding rebuild, previous dev went unresponsive mid-project.',
       budgetMin: 4000,
@@ -352,7 +372,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     {
       id: 'upwork-dashboard-perf',
-      ownerRepId: 'rep-hassan',
+      organizationId: DEMO_ORG_ID,
+    ownerRepId: 'rep-hassan',
       title: 'Speed up analytics dashboard (FAKE demo job)',
       description: 'FAKE demo Upwork job. Dashboard queries take 20s+, client wants it under 2s.',
       budgetMin: null,
@@ -377,7 +398,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const notifications: NotificationLogEntry[] = [
     {
       id: 'notif-acme-reply',
-      repId: 'rep-hassan',
+      organizationId: DEMO_ORG_ID,
+    repId: 'rep-hassan',
       type: 'reply',
       payload: { lead_id: 'lead-acme', stage: 'replied', occurred_at: t(4) },
       read: false,
@@ -444,14 +466,16 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   }
 
   return {
+    organizationId: DEMO_ORG_ID,
     async createLead(input: NewLeadInput): Promise<CreateLeadResult> {
       const blocked = dedupe(input.company)
       if (blocked) return blocked
       const lead: Lead = {
         id: nextId('lead'),
+        organizationId: DEMO_ORG_ID,
         ownerRepId: rep.id,
         company: input.company.trim(),
-        companyKey: companyKey(input.company),
+    companyKey: companyKey(input.company),
         contactName: input.contactName?.trim() || null,
         contactTitle: input.contactTitle?.trim() || null,
         titleRaw: input.titleRaw?.trim() || null,
@@ -527,8 +551,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async saveDraft(input: SaveDraftInput) {
       const msg: Message = {
         id: nextId('msg'),
+        organizationId: DEMO_ORG_ID,
         leadId: input.leadId,
-        repId: rep.id,
+    repId: rep.id,
         type: input.type,
         draftText: input.draftText,
         sentText: null,
@@ -575,6 +600,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       lead.status = type === 'followup' ? 'followed_up' : 'contacted'
       messages.push({
         id: nextId('msg'),
+        organizationId: DEMO_ORG_ID,
         leadId,
         repId: rep.id,
         type,
@@ -593,6 +619,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const existing = voiceProfiles.find((v) => v.repId === rep.id)
       const vp: VoiceProfile = {
         id: existing?.id ?? nextId('vp'),
+        organizationId: DEMO_ORG_ID,
         repId: rep.id,
         styleCard,
         sampleSource,
@@ -619,6 +646,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }
       fact = {
         id: nextId('fact'),
+        organizationId: DEMO_ORG_ID,
         label: input.label,
         value: input.value,
         factType: input.factType ?? null,
@@ -660,7 +688,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }
       const profile: Profile = {
         id: nextId('profile'),
-        repId: rep.id,
+        organizationId: DEMO_ORG_ID,
+    repId: rep.id,
         platform: input.platform,
         label: input.label ?? null,
         profileUrl: input.profileUrl ?? null,
@@ -691,6 +720,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }
       const profile: Profile = {
         id: nextId('profile'),
+        organizationId: DEMO_ORG_ID,
         repId: input.repId,
         platform: input.platform,
         label: input.label ?? null,
@@ -729,7 +759,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }
       const item: ProofItem = {
         id: nextId('proof'),
-        profileId: input.profileId,
+        organizationId: DEMO_ORG_ID,
+    profileId: input.profileId,
         clientNamed: Boolean(input.clientNamed),
         permissionOnFile: permission,
         clientName,
@@ -761,7 +792,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }
       const item: ProofItem = {
         id: nextId('proof'),
-        profileId: input.profileId,
+        organizationId: DEMO_ORG_ID,
+    profileId: input.profileId,
         clientNamed: Boolean(input.clientNamed),
         permissionOnFile: permission,
         clientName,
@@ -962,7 +994,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async createUpworkJob(input) {
       const job: UpworkJob = {
         id: nextId('upwork'),
-        ownerRepId: rep.id,
+        organizationId: DEMO_ORG_ID,
+    ownerRepId: rep.id,
         title: input.title.trim(),
         description: input.description.trim(),
         budgetMin: input.budgetMin ?? null,
@@ -1005,8 +1038,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async saveUpworkDraft(input) {
       const msg: UpworkMessage = {
         id: nextId('umsg'),
+        organizationId: DEMO_ORG_ID,
         jobId: input.jobId,
-        repId: rep.id,
+    repId: rep.id,
         type: input.type,
         draftText: input.draftText,
         sentText: null,
@@ -1022,6 +1056,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       if (job) job.status = 'applied'
       upworkMessages.push({
         id: nextId('umsg'),
+        organizationId: DEMO_ORG_ID,
         jobId,
         repId: rep.id,
         type,
@@ -1035,7 +1070,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async logCsvImport(input) {
       const imp: CsvImport = {
         id: nextId('csv'),
-        repId: rep.id,
+        organizationId: DEMO_ORG_ID,
+    repId: rep.id,
         fileName: input.fileName ?? null,
         totalRows: input.totalRows,
         imported: input.imported,
@@ -1057,7 +1093,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const existing = pushSubs.find((s) => s.repId === sub.repId)
       const ps: PushSubscription = {
         id: existing?.id ?? nextId('push'),
-        repId: sub.repId,
+        organizationId: DEMO_ORG_ID,
+    repId: sub.repId,
         endpoint: sub.endpoint,
         p256dh: sub.p256dh,
         auth: sub.auth,
@@ -1085,7 +1122,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async createContentPersona(input) {
       const persona: ContentPersona = {
         id: nextId('cp'),
-        repId: input.repId,
+        organizationId: 'org-demo',
+    repId: input.repId,
         displayName: input.displayName,
         platforms: input.platforms,
         voiceProfileId: input.voiceProfileId ?? null,
@@ -1109,7 +1147,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async createContentPillar(input) {
       const pillar: ContentPillar = {
         id: nextId('cpl'),
-        personaId: input.personaId,
+        organizationId: 'org-demo',
+    personaId: input.personaId,
         pillarName: input.pillarName,
         description: input.description ?? '',
         createdAt: new Date().toISOString(),
@@ -1129,6 +1168,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async createContentDraft(input) {
       const draft: ContentDraft = {
         id: nextId('cd'),
+        organizationId: DEMO_ORG_ID,
         personaId: input.personaId,
         pillarId: input.pillarId,
         sourceMaterial: input.sourceMaterial,
@@ -1156,7 +1196,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       if (status === 'posted' && draft.platform) {
         contentHistoryEntries.push({
           id: nextId('ch'),
-          personaId: draft.personaId,
+          organizationId: 'org-demo',
+    personaId: draft.personaId,
           pillarId: draft.pillarId,
           platform: draft.platform,
           openingLine: draft.caption.split('\n')[0] ?? '',
@@ -1174,6 +1215,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async logContentPosted(input) {
       const entry: ContentHistoryEntry = {
         id: nextId('ch'),
+        organizationId: DEMO_ORG_ID,
         personaId: input.personaId,
         pillarId: input.pillarId,
         platform: input.platform,

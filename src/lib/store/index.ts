@@ -5,11 +5,6 @@ import { isDemoMode } from '@/lib/ai/config'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth/current'
 
-/**
- * Builds the store for the current request. Demo mode returns the in-memory
- * store; otherwise a Supabase store bound to the signed-in user so RLS
- * applies on every query.
- */
 export async function createScoutStore(): Promise<ScoutStore> {
   const user = await getCurrentUser()
   if (!user) throw new Error('No signed-in rep for this request')
@@ -19,7 +14,7 @@ export async function createScoutStore(): Promise<ScoutStore> {
   }
 
   const client = await createServerSupabase()
-  return new SupabaseStore(user.rep, client)
+  return new SupabaseStore(user.rep, client, user.organization)
 }
 
 export { getCurrentUser }

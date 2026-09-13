@@ -2,13 +2,21 @@ import { NextResponse } from 'next/server'
 import { SupabaseStore } from '@/lib/store/supabase-store'
 import { createServiceSupabase, requireCronSecret } from '@/lib/supabase/service'
 import { runEvalHarness } from '@/app/api/eval/run/route'
-import type { Rep } from '@/lib/domain/types'
+import type { Organization, Rep } from '@/lib/domain/types'
 
-/** Not tied to any real account — exists only so store methods gated on `rep.role === 'admin'` accept a scheduled, unattended run. Never persisted, never returned to a client. */
-const CRON_SYSTEM_REP: Rep = {
+const CRON_SYSTEM_ORG: Organization = {
   id: '00000000-0000-0000-0000-000000000000',
+  name: 'System',
+  plan: 'active',
+  billingCustomerId: null,
+  createdAt: new Date(0).toISOString(),
+}
+
+const CRON_SYSTEM_REP: Rep = {
+  id: '00000000-0000-0000-0000-000000000001',
   name: 'Scheduled job',
   role: 'admin',
+  organizationId: CRON_SYSTEM_ORG.id,
   createdAt: new Date(0).toISOString(),
 }
 
@@ -28,7 +36,7 @@ export async function GET(request: Request) {
 
   try {
     const client = createServiceSupabase()
-    const store = new SupabaseStore(CRON_SYSTEM_REP, client)
+    const store = new SupabaseStore(CRON_SYSTEM_REP, client, CRON_SYSTEM_ORG)
     const { run, result } = await runEvalHarness(store, 'scheduled')
     return NextResponse.json({ run, result })
   } catch (err) {

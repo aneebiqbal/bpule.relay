@@ -11,6 +11,7 @@ import type {
   Lead,
   Message,
   NotificationLogEntry,
+  Organization,
   Outcome,
   Play,
   Profile,
@@ -50,6 +51,7 @@ type Row = Record<string, unknown>
 function mapLead(r: Row): Lead {
   return {
     id: r.id as string,
+    organizationId: r.organization_id as string,
     ownerRepId: (r.owner_rep_id as string) ?? null,
     company: r.company as string,
     companyKey: r.company_key as string,
@@ -78,6 +80,7 @@ function mapLead(r: Row): Lead {
 function mapMessage(r: Row): Message {
   return {
     id: r.id as string,
+    organizationId: r.organization_id as string,
     leadId: r.lead_id as string,
     repId: (r.rep_id as string) ?? null,
     type: r.type as Message['type'],
@@ -92,6 +95,7 @@ function mapMessage(r: Row): Message {
 function mapOutcome(r: Row): Outcome {
   return {
     id: r.id as string,
+    organizationId: r.organization_id as string,
     leadId: r.lead_id as string,
     stage: r.stage as Outcome['stage'],
     occurredAt: r.occurred_at as string,
@@ -101,6 +105,7 @@ function mapOutcome(r: Row): Outcome {
 function mapFact(r: Row): Fact {
   return {
     id: r.id as string,
+    organizationId: r.organization_id as string,
     label: r.label as string,
     value: r.value as string,
     factType: (r.fact_type as string) ?? null,
@@ -112,6 +117,7 @@ function mapFact(r: Row): Fact {
 function mapPlay(r: Row): Play {
   return {
     id: r.id as string,
+    organizationId: r.organization_id as string,
     name: r.name as string,
     situation: r.situation as string,
     templateShape: r.template_shape as string,
@@ -122,6 +128,7 @@ function mapProfile(r: Row): Profile {
   return {
     id: r.id as string,
     repId: r.rep_id as string,
+    organizationId: r.organization_id as string,
     platform: r.platform as Profile['platform'],
     label: (r.label as string) ?? null,
     profileUrl: (r.profile_url as string) ?? null,
@@ -140,6 +147,7 @@ function mapProofItem(r: Row): ProofItem {
   const permissionOnFile = Boolean(r.permission_on_file)
   return {
     id: r.id as string,
+    organizationId: r.organization_id as string,
     profileId: r.profile_id as string,
     clientNamed: Boolean(r.client_named),
     clientName: permissionOnFile ? ((r.client_name as string) ?? null) : null,
@@ -160,6 +168,7 @@ function mapProofItem(r: Row): ProofItem {
 function mapProofItemUnredacted(r: Row): ProofItem {
   return {
     id: r.id as string,
+    organizationId: r.organization_id as string,
     profileId: r.profile_id as string,
     clientNamed: Boolean(r.client_named),
     clientName: (r.client_name as string) ?? null,
@@ -180,7 +189,16 @@ export class SupabaseStore implements ScoutStore {
   constructor(
     private readonly rep: Rep,
     private readonly client: SupabaseClient,
+    private readonly organization: Organization,
   ) {}
+
+  get organizationId(): string {
+    return this.organization.id
+  }
+
+  private get orgId(): string {
+    return this.organization.id
+  }
 
   private async fetchLeadsAll(): Promise<Lead[]> {
     const { data, error } = await this.client
@@ -297,6 +315,7 @@ export class SupabaseStore implements ScoutStore {
     }
 
     const insertRow = {
+      organization_id: this.orgId,
       owner_rep_id: this.rep.id,
       company: input.company.trim(),
       contact_name: input.contactName?.trim() || null,
@@ -423,6 +442,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('messages')
       .insert({
+        organization_id: this.orgId,
         lead_id: input.leadId,
         rep_id: this.rep.id,
         type: input.type,
@@ -469,6 +489,7 @@ export class SupabaseStore implements ScoutStore {
     const { data: inserted, error: insertError } = await this.client
       .from('messages')
       .insert({
+        organization_id: this.orgId,
         lead_id: leadId,
         rep_id: this.rep.id,
         type,
@@ -513,6 +534,7 @@ export class SupabaseStore implements ScoutStore {
     return {
       id: r.id as string,
       repId: r.rep_id as string,
+      organizationId: r.organization_id as string,
       styleCard: r.style_card as VoiceProfile['styleCard'],
       sampleSource: r.sample_source as VoiceProfile['sampleSource'],
       calibratedAt: r.calibrated_at as string,
@@ -528,6 +550,7 @@ export class SupabaseStore implements ScoutStore {
       .upsert(
         {
           rep_id: this.rep.id,
+          organization_id: this.orgId,
           style_card: JSON.parse(JSON.stringify(styleCard)),
           sample_source: sampleSource,
           calibrated_at: new Date().toISOString(),
@@ -541,6 +564,7 @@ export class SupabaseStore implements ScoutStore {
     return {
       id: r.id as string,
       repId: r.rep_id as string,
+      organizationId: r.organization_id as string,
       styleCard: r.style_card as VoiceProfile['styleCard'],
       sampleSource: r.sample_source as VoiceProfile['sampleSource'],
       calibratedAt: r.calibrated_at as string,
@@ -577,6 +601,7 @@ export class SupabaseStore implements ScoutStore {
       : await this.client
           .from('facts')
           .insert({
+            organization_id: this.orgId,
             label: input.label,
             value: input.value,
             fact_type: input.factType ?? null,
@@ -603,13 +628,14 @@ export class SupabaseStore implements ScoutStore {
   async listAllReps(): Promise<Rep[]> {
     const { data, error } = await this.client
       .from('reps')
-      .select('id, name, role, created_at')
+      .select('id, name, role, organization_id, created_at')
       .order('name', { ascending: true })
     if (error) throw error
     return (data ?? []).map((row: Row) => ({
       id: row.id as string,
       name: row.name as string,
       role: row.role as Rep['role'],
+      organizationId: row.organization_id as string,
       createdAt: row.created_at as string,
     }))
   }
@@ -660,6 +686,7 @@ export class SupabaseStore implements ScoutStore {
       : await this.client
           .from('profiles')
           .insert({
+            organization_id: this.orgId,
             rep_id: this.rep.id,
             platform: input.platform,
             label: input.label ?? null,
@@ -721,6 +748,7 @@ export class SupabaseStore implements ScoutStore {
       : await this.client
           .from('profiles')
           .insert({
+            organization_id: this.orgId,
             rep_id: input.repId,
             platform: input.platform,
             label: input.label ?? null,
@@ -798,9 +826,10 @@ export class SupabaseStore implements ScoutStore {
           .eq('profile_id', input.profileId)
           .select('*')
           .single()
-      : await this.client
+       : await this.client
           .from('proof_items')
           .insert({
+            organization_id: this.orgId,
             profile_id: input.profileId,
             client_named: Boolean(input.clientNamed),
             permission_on_file: permission,
@@ -853,9 +882,10 @@ export class SupabaseStore implements ScoutStore {
           .eq('id', input.id)
           .select('*')
           .single()
-      : await this.client
+       : await this.client
           .from('proof_items')
           .insert({
+            organization_id: this.orgId,
             profile_id: input.profileId,
             client_named: Boolean(input.clientNamed),
             permission_on_file: permission,
@@ -983,13 +1013,14 @@ export class SupabaseStore implements ScoutStore {
       this.fetchRates(),
       this.client
         .from('reps')
-        .select('id, name, role, created_at')
+        .select('id, name, role, organization_id, created_at')
         .then((r) => {
           if (r.error) throw r.error
           return (r.data ?? []).map((row: Row) => ({
             id: row.id as string,
             name: row.name as string,
             role: row.role as Rep['role'],
+            organizationId: row.organization_id as string,
             createdAt: row.created_at as string,
           }))
         }),
@@ -1030,6 +1061,7 @@ export class SupabaseStore implements ScoutStore {
 
   async logExtractionRun(input: ModelCallLogInput): Promise<void> {
     const { error } = await this.client.from('extraction_runs').insert({
+      organization_id: this.orgId,
       rep_id: this.rep.id,
       task: input.task,
       success: input.success,
@@ -1177,6 +1209,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('golden_set')
       .insert({
+        organization_id: this.orgId,
         lead_id: input.leadId,
         message_id: input.messageId ?? null,
         known_replied: input.knownReplied,
@@ -1233,6 +1266,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('eval_runs')
       .insert({
+        organization_id: this.orgId,
         prompt_version: run.promptVersion,
         golden_set_size: run.goldenSetSize,
         reply_rate_score: run.replyRateScore,
@@ -1313,6 +1347,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('upwork_jobs')
       .insert({
+        organization_id: this.orgId,
         owner_rep_id: this.rep.id,
         title: input.title.trim(),
         description: input.description.trim(),
@@ -1384,6 +1419,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('upwork_messages')
       .insert({
+        organization_id: this.orgId,
         job_id: input.jobId,
         rep_id: this.rep.id,
         type: input.type,
@@ -1408,6 +1444,7 @@ export class SupabaseStore implements ScoutStore {
         .eq('id', jobId)
         .eq('owner_rep_id', this.rep.id),
       this.client.from('upwork_messages').insert({
+        organization_id: this.orgId,
         job_id: jobId,
         rep_id: this.rep.id,
         type,
@@ -1422,11 +1459,12 @@ export class SupabaseStore implements ScoutStore {
   // ==========================================================================
 
   async logCsvImport(
-    input: Omit<CsvImport, 'id' | 'createdAt'>,
+    input: Omit<CsvImport, 'id' | 'createdAt' | 'repId'>,
   ): Promise<CsvImport> {
     const { data, error } = await this.client
       .from('csv_imports')
       .insert({
+        organization_id: this.orgId,
         rep_id: this.rep.id,
         file_name: input.fileName ?? null,
         total_rows: input.totalRows,
@@ -1441,6 +1479,7 @@ export class SupabaseStore implements ScoutStore {
     const r = data as Row
     return {
       id: r.id as string,
+      organizationId: r.organization_id as string,
       repId: r.rep_id as string,
       fileName: (r.file_name as string) ?? null,
       totalRows: r.total_rows as number,
@@ -1461,6 +1500,7 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
     return (data ?? []).map((r: Row) => ({
       id: r.id as string,
+      organizationId: r.organization_id as string,
       repId: r.rep_id as string,
       fileName: (r.file_name as string) ?? null,
       totalRows: r.total_rows as number,
@@ -1532,6 +1572,7 @@ export class SupabaseStore implements ScoutStore {
       .upsert(
         {
           rep_id: sub.repId,
+          organization_id: this.orgId,
           endpoint: sub.endpoint,
           p256dh: sub.p256dh,
           auth: sub.auth,
@@ -1544,8 +1585,9 @@ export class SupabaseStore implements ScoutStore {
     const r = data as Row
     return {
       id: r.id as string,
-      repId: r.rep_id as string,
-      endpoint: r.endpoint as string,
+      organizationId: r.organization_id as string,
+    repId: r.rep_id as string,
+    endpoint: r.endpoint as string,
       p256dh: r.p256dh as string,
       auth: r.auth as string,
       createdAt: r.created_at as string,
@@ -1563,8 +1605,9 @@ export class SupabaseStore implements ScoutStore {
     const r = data as Row
     return {
       id: r.id as string,
-      repId: r.rep_id as string,
-      endpoint: r.endpoint as string,
+      organizationId: r.organization_id as string,
+    repId: r.rep_id as string,
+    endpoint: r.endpoint as string,
       p256dh: r.p256dh as string,
       auth: r.auth as string,
       createdAt: r.created_at as string,
@@ -1594,8 +1637,9 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
     return (data ?? []).map((r: Row) => ({
       id: r.id as string,
-      repId: r.rep_id as string,
-      type: r.type as NotificationLogEntry['type'],
+      organizationId: r.organization_id as string,
+    repId: r.rep_id as string,
+    type: r.type as NotificationLogEntry['type'],
       payload: r.payload as Record<string, unknown>,
       read: Boolean(r.read),
       createdAt: r.created_at as string,
@@ -1622,6 +1666,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('content_personas')
       .insert({
+        organization_id: this.orgId,
         rep_id: input.repId,
         display_name: input.displayName,
         platforms: input.platforms,
@@ -1669,6 +1714,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('content_pillars')
       .insert({
+        organization_id: this.orgId,
         persona_id: input.personaId,
         pillar_name: input.pillarName,
         description: input.description ?? '',
@@ -1712,6 +1758,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('content_drafts')
       .insert({
+        organization_id: this.orgId,
         persona_id: input.personaId,
         pillar_id: input.pillarId,
         source_material: input.sourceMaterial,
@@ -1780,6 +1827,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('content_history')
       .insert({
+        organization_id: this.orgId,
         persona_id: input.personaId,
         pillar_id: input.pillarId,
         platform: input.platform,
@@ -1795,6 +1843,7 @@ export class SupabaseStore implements ScoutStore {
 function mapUpworkJob(r: Row): UpworkJob {
   return {
     id: r.id as string,
+    organizationId: r.organization_id as string,
     ownerRepId: (r.owner_rep_id as string) ?? null,
     title: r.title as string,
     description: r.description as string,
@@ -1819,6 +1868,7 @@ function mapUpworkJob(r: Row): UpworkJob {
 function mapUpworkMessage(r: Row): UpworkMessage {
   return {
     id: r.id as string,
+    organizationId: r.organization_id as string,
     jobId: r.job_id as string,
     repId: (r.rep_id as string) ?? null,
     type: r.type as UpworkMessage['type'],
@@ -1835,6 +1885,7 @@ function mapUpworkMessage(r: Row): UpworkMessage {
 function mapContentPersona(r: Record<string, unknown>): ContentPersona {
   return {
     id: r.id as string,
+    organizationId: r.organization_id as string,
     repId: r.rep_id as string,
     displayName: r.display_name as string,
     platforms: (r.platforms as ContentPlatform[]) ?? [],
@@ -1846,6 +1897,7 @@ function mapContentPersona(r: Record<string, unknown>): ContentPersona {
 function mapContentPillar(r: Record<string, unknown>): ContentPillar {
   return {
     id: r.id as string,
+    organizationId: r.organization_id as string,
     personaId: r.persona_id as string,
     pillarName: r.pillar_name as string,
     description: (r.description as string) ?? '',
@@ -1856,6 +1908,7 @@ function mapContentPillar(r: Record<string, unknown>): ContentPillar {
 function mapContentDraft(r: Record<string, unknown>): ContentDraft {
   return {
     id: r.id as string,
+    organizationId: r.organization_id as string,
     personaId: r.persona_id as string,
     pillarId: (r.pillar_id as string) ?? null,
     sourceMaterial: r.source_material as string,
@@ -1873,6 +1926,7 @@ function mapContentDraft(r: Record<string, unknown>): ContentDraft {
 function mapContentHistory(r: Record<string, unknown>): ContentHistoryEntry {
   return {
     id: r.id as string,
+    organizationId: r.organization_id as string,
     personaId: r.persona_id as string,
     pillarId: (r.pillar_id as string) ?? null,
     platform: r.platform as ContentPlatform,

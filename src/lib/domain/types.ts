@@ -1,17 +1,48 @@
 export type RepRole = 'rep' | 'sourcer' | 'admin'
 
+export type OrganizationPlan = 'trial' | 'active' | 'past_due' | 'canceled'
+
+export interface Organization {
+  id: string
+  name: string
+  plan: OrganizationPlan
+  billingCustomerId: string | null
+  createdAt: string
+}
+
+export interface SignalDefinition {
+  id: number
+  name: string
+  weight: number
+  short: string
+  description: string
+  example: string
+}
+
+export interface VerdictThresholds {
+  send: { min: number; max: number }
+  research_more: { min: number; max: number }
+  skip: { min: number; max: number }
+}
+
+export interface OrganizationRulebook {
+  organizationId: string
+  signals: SignalDefinition[]
+  verdictThresholds: VerdictThresholds
+  maxSignalWeight: number
+  maxCompleteness: number
+  confidenceSendThreshold: number
+}
+
 export interface Rep {
   id: string
   name: string
   role: RepRole
+  organizationId: string
   createdAt: string
 }
 
-export const SIGNAL_IDS = [
-  1, 2, 3, 4, 5, 6, 7,
-] as const
-
-export type SignalId = (typeof SIGNAL_IDS)[number]
+export type SignalId = number
 
 export type Verdict = 'send' | 'research_more' | 'skip'
 
@@ -25,6 +56,7 @@ export type LeadStatus =
 
 export interface Lead {
   id: string
+  organizationId: string
   ownerRepId: string | null
   company: string
   companyKey: string
@@ -53,6 +85,7 @@ export type MessageType = 'dm' | 'connection' | 'upwork' | 'followup' | 'reply'
 
 export interface Message {
   id: string
+  organizationId: string
   leadId: string
   repId: string | null
   type: MessageType
@@ -73,6 +106,7 @@ export type OutcomeStage =
 
 export interface Outcome {
   id: string
+  organizationId: string
   leadId: string
   stage: OutcomeStage
   occurredAt: string
@@ -90,6 +124,7 @@ export type UpworkJobStatus =
 
 export interface UpworkJob {
   id: string
+  organizationId: string
   ownerRepId: string | null
   title: string
   description: string
@@ -112,6 +147,7 @@ export interface UpworkJob {
 
 export interface UpworkMessage {
   id: string
+  organizationId: string
   jobId: string
   repId: string | null
   type: 'cover' | 'followup' | 'reply'
@@ -124,6 +160,7 @@ export interface UpworkMessage {
 
 export interface PushSubscription {
   id: string
+  organizationId: string
   repId: string
   endpoint: string
   p256dh: string
@@ -133,6 +170,7 @@ export interface PushSubscription {
 
 export interface NotificationLogEntry {
   id: string
+  organizationId: string
   repId: string
   type: 'reply' | 'followup_eligible'
   payload: Record<string, unknown>
@@ -142,6 +180,7 @@ export interface NotificationLogEntry {
 
 export interface CsvImport {
   id: string
+  organizationId: string
   repId: string
   fileName: string | null
   totalRows: number
@@ -171,6 +210,7 @@ export interface StyleCard {
 export interface VoiceProfile {
   id: string
   repId: string
+  organizationId: string
   styleCard: StyleCard
   sampleSource: StyleSampleSource
   calibratedAt: string
@@ -178,6 +218,7 @@ export interface VoiceProfile {
 
 export interface Fact {
   id: string
+  organizationId: string
   label: string
   value: string
   factType: string | null
@@ -188,6 +229,7 @@ export interface Fact {
 export interface Profile {
   id: string
   repId: string
+  organizationId: string
   platform: 'linkedin' | 'upwork'
   label: string | null
   profileUrl: string | null
@@ -198,6 +240,7 @@ export interface Profile {
 
 export interface ProofItem {
   id: string
+  organizationId: string
   profileId: string
   clientNamed: boolean
   clientName: string | null
@@ -210,6 +253,7 @@ export interface ProofItem {
 
 export interface Play {
   id: string
+  organizationId: string
   name: string
   situation: string
   templateShape: string
@@ -276,6 +320,7 @@ export type ContentDraftStatus = 'draft' | 'ready' | 'posted' | 'rejected'
 export interface ContentPersona {
   id: string
   repId: string
+  organizationId: string
   displayName: string
   platforms: ContentPlatform[]
   voiceProfileId: string | null
@@ -284,6 +329,7 @@ export interface ContentPersona {
 
 export interface ContentPillar {
   id: string
+  organizationId: string
   personaId: string
   pillarName: string
   description: string
@@ -292,6 +338,7 @@ export interface ContentPillar {
 
 export interface ContentDraft {
   id: string
+  organizationId: string
   personaId: string
   pillarId: string | null
   sourceMaterial: string
@@ -307,6 +354,7 @@ export interface ContentDraft {
 
 export interface ContentHistoryEntry {
   id: string
+  organizationId: string
   personaId: string
   pillarId: string | null
   platform: ContentPlatform

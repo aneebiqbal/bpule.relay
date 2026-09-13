@@ -62,6 +62,7 @@ export interface DraftResult {
   attempts: number
   strippedNumbers: string[]
   hadEmDash: boolean
+  hadExclamation: boolean
   /** The second variant, when best-of-two drafting is enabled. */
   variant?: DraftVariant
   /** Why the primary draft was picked over the variant. */
@@ -147,8 +148,8 @@ export function baseDraftSystem(
 ): string {
   const styleBlock = injectStyleCard(styleCard)
   const siteBlock = siteIsLive(facts)
-    ? 'The public site is live. A CTA may reference it.'
-    : 'The public site is NOT live yet. Every call to action must land in a reply to this message or a free Read offer. Never link to a website that does not exist. If no relevant past project is provided, do not invent one. Reference a matched proof item only when one is listed.'
+    ? 'The public site is live. A CTA may reference it, but never ask for a call — the offer is always a free Read (a short written review of their product/Stack/status), never a chat or meeting.'
+    : 'The public site is NOT live yet. Every call to action must land in a reply to this message or a free Read offer. Never link to a website that does not exist. Never ask for a call or meeting — the offer is always a free Read.'
   const testsBlock = opts?.asPlainText
     ? `Write the draft, then on the line after it write the marker ---SELFCHECK--- followed by ONLY this single JSON object:
 {"test_1_reply_or_delete": true or false, "test_1_note": "one sentence", "test_2_not_generic": true or false, "test_2_note": "one sentence"}
@@ -167,6 +168,8 @@ Write the draft first, then honestly run the tests on it, then the marker and th
     "Voice rule: the sender is ONE person. Write in first person singular. Never use 'we', 'our', or 'us' for the sender. Never mention a team, a headcount, or anyone else doing the work. A client's quoted words may keep their own 'we'.",
     'Do not use em dashes anywhere in the draft. Write plain sentences in the sender\'s voice.',
     'Keep the message short enough for a first cold message: a greeting, a specific reason for reaching out based on their signal, one relevant fact or question, and a close.',
+    'CTA rule: NEVER ask for a call, meeting, chat, or intro. The offer is ALWAYS a free Read — a short written review. Phrase it as "I can write up a quick read of your product" or similar. No exceptions.',
+    'Specificity rule: the one verifiable, specific thing about this person MUST be the hook. Not a generic opener. If you cannot name something specific the reader would recognize as truly theirs, do not send.',
     siteBlock,
     styleBlock ? `SENDER VOICE (mandatory):\n${styleBlock}` : '',
     testsBlock,
@@ -321,6 +324,16 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
     )
   }
 
+  // Signal-evidence gate: if the claimed signal isn't supported by the
+  // evidence text, block generation. Drafting around a false signal premise
+  // produces fabricated claims ("you're hiring aggressively") that get sent to
+  // real people. Force a rescore instead.
+  if (!signalEvidenceMatch(input.extracted.signalType, input.extracted.signalEvidence)) {
+    throw new Error(
+      `Signal type ${input.extracted.signalType} is not supported by its evidence ("${input.extracted.signalEvidence}"). Rescore this lead before drafting.`,
+    )
+  }
+
   const userPrompt = buildUserPrompt(input)
   const systemPrompt = baseDraftSystem(input.styleCard, input.facts)
 
@@ -469,6 +482,26 @@ function fewShotLabel(examples?: { company: string }[]): string {
     : 'No few-shot examples matched this lead.'
 }
 
+/**
+ * Returns true if the evidence text actually supports the claimed signal type.
+ * This is the hard gate that prevents drafting around a false signal premise —
+ * e.g. signalType=1 (hiring) with evidence that says nothing about hiring.
+ */
+function signalEvidenceMatch(signalType: number | null, evidence: string | null): boolean {
+  if (!evidence || evidence.trim().length < 12) return false
+  const e = evidence.toLowerCase()
+  switch (signalType) {
+    case 1: return /\bhiring\b|\bopen role\b|\bjoining\b|\bwe'?re growing\b|\bscaling the team\b|\bnew position\b/i.test(e)
+    case 2: return /\bsolo\b|\bone[- ]person\b|\btiny team\b|\bjust me\b|\bfounder\b.*\balone\b/i.test(e)
+    case 3: return /\braised\b|\bseed\b|\bseries [abc]\b|\bfunding\b|\binvestment\b|\bbacked by\b/i.test(e)
+    case 4: return /\blast update\b|\boutdated\b|\bstale\b|\babandoned\b|\bno update\b|\bdormant\b/i.test(e)
+    case 5: return /\blegacy\b|\bwordpress\b|\bjquery\b|\bunsupported\b|\bdeprecated\b|\baging\b/i.test(e)
+    case 6: return /\bbehind\b|\bdelayed\b|\boverdue\b|\bstuck\b|\bslow\b|\bpain\b|\bfrustrat\b/i.test(e)
+    case 7: return /\blooking for\b|\bneed help\b|\bopen to\b|\bagency\b|\bfreelancer\b|\bseeking\b/i.test(e)
+    default: return false
+  }
+}
+
 function variantScore(v: { passed: boolean; output: DraftModelOutput; codeChecks: SelfCheck['codeChecks'] }): number {
   let s = 0
   if (v.passed) s += 4
@@ -579,6 +612,7 @@ function finishDraft(
     attempts: attempts,
     strippedNumbers: sanitized.strippedNumbers,
     hadEmDash: sanitized.hadEmDash,
+    hadExclamation: sanitized.hadExclamation,
     callLog,
   }
 }
@@ -695,6 +729,7 @@ function demoDraft(input: DraftInput, userPrompt: string): DraftResult {
     attempts: 1,
     strippedNumbers: sanitized.strippedNumbers,
     hadEmDash: sanitized.hadEmDash,
+    hadExclamation: sanitized.hadExclamation,
     callLog: [],
   }
 }
