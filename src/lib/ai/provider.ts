@@ -154,6 +154,18 @@ export interface CallResult<T> {
  * errors outright) is recorded and the walk moves to the next host. Throws
  * AllTiersFailedError only once every host in the chain has failed.
  */
+type FailureReason = 'rate_limit' | 'insufficient_balance' | 'timeout' | 'auth' | 'other'
+
+function categorizeFailure(err: unknown): FailureReason {
+  const status = (err as { status?: number })?.status ?? 0
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+  if (status === 402 || /insufficient balance|payment required|no funds/i.test(msg)) return 'insufficient_balance'
+  if (status === 401 || status === 403 || /unauthorized|invalid api key|forbidden/i.test(msg)) return 'auth'
+  if (status === 408 || status === 524 || /timeout|timed? ?out/i.test(msg)) return 'timeout'
+  if (status === 429 || /rate limit|too many requests/i.test(msg)) return 'rate_limit'
+  return 'other'
+}
+
 async function walkChain<T>(
   chain: ChainStep[],
   onStatus: ((message: string) => void) | undefined,
@@ -162,20 +174,23 @@ async function walkChain<T>(
   if (chain.length === 0) {
     throw new Error('No provider host is configured for this call. Set at least one API key.')
   }
-  const failures: Array<{ host: string; tier: CostTier; error: string }> = []
+  const failures: Array<{ host: string; tier: CostTier; error: string; reason: FailureReason }> = []
   for (const step of chain) {
     try {
       const data = await withHostRetry(`${step.costTier}:${step.host.id} (${step.host.model})`, onStatus, () =>
         attempt(step),
       )
+      console.info(`[ai/host] served by ${step.host.id} (${step.costTier})`)
       return { data, host: step.host.id, costTier: step.costTier, estimatedCostUsd: 0 }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      failures.push({ host: step.host.id, tier: step.costTier, error: message })
+      const reason = categorizeFailure(err)
+      failures.push({ host: step.host.id, tier: step.costTier, error: message, reason })
+      console.warn(`[ai/host] ${step.host.id} (${step.costTier}) failed: ${reason} — ${message}`)
       onStatus?.(`${step.host.id} unavailable (${message}); trying next host`)
     }
   }
-  throw new AllTiersFailedError(failures)
+  throw new AllTiersFailedError(failures.map(({ host, tier, error }) => ({ host, tier, error })))
 }
 
 export interface JsonCallOptions {

@@ -528,6 +528,16 @@
     background-size: 20px 20px;
   }
 
+  /* Studio's own room: a quiet violet wash instead of the base app's dot
+     grid, so stepping from Today into Content reads as a different space. */
+  .bg-studio-wash {
+    background-color: var(--paper);
+    background-image:
+      radial-gradient(ellipse 900px 500px at 8% -10%, color-mix(in srgb, var(--studio) 7%, transparent) 0%, transparent 60%),
+      radial-gradient(circle, color-mix(in srgb, var(--studio) 12%, var(--line)) 0.75px, transparent 0.75px);
+    background-size: auto, 22px 22px;
+  }
+
   .bg-noise::before {
     content: '';
     position: absolute;

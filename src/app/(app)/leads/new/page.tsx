@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
@@ -160,6 +160,16 @@ export default function NewLeadPage() {
     [form.locationRaw],
   )
 
+  const [orgRulebook, setOrgRulebook] = useState<OrganizationRulebook | null>(null)
+  useEffect(() => {
+    fetch('/api/me/rulebook')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.rulebook) setOrgRulebook(d.rulebook) })
+      .catch(() => {})
+  }, [])
+
+  const activeRulebook = orgRulebook ?? DEFAULT_RULEBOOK
+
   const score = useMemo(() => {
     const lead: ExtractedLead = {
       name: form.contactName.trim() || null,
@@ -180,8 +190,8 @@ export default function NewLeadPage() {
       verbatimQuote: form.verbatimQuote.trim() || null,
       tags: form.tags,
     }
-    return computeScore(lead, DEFAULT_RULEBOOK)
-  }, [form, liveRegion])
+    return computeScore(lead, activeRulebook)
+  }, [form, liveRegion, activeRulebook])
 
   const hasContent = Boolean(form.signalEvidence.trim() || form.company.trim())
   const weakFields = new Set(form.confidenceNotes.map(noteField).filter(Boolean))

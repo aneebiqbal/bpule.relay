@@ -55,13 +55,15 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
             Real material, shaped into your voice. Never invented, never generic.
           </p>
         </div>
-        <button
-          onClick={() => setShowNewPersona(true)}
-          className="group inline-flex items-center gap-2.5 rounded-2xl gradient-studio px-5 py-3 text-sm font-semibold text-paper shadow-studio transition-all duration-300 hover:brightness-110 active:scale-[0.97]"
-        >
-          <Plus className="size-4 transition-transform duration-300 group-hover:rotate-90" aria-hidden="true" />
-          New persona
-        </button>
+        {personas.length > 0 && (
+          <button
+            onClick={() => setShowNewPersona(true)}
+            className="group inline-flex items-center gap-2.5 rounded-2xl gradient-studio px-5 py-3 text-sm font-semibold text-paper shadow-studio transition-all duration-300 hover:brightness-110 active:scale-[0.97]"
+          >
+            <Plus className="size-4 transition-transform duration-300 group-hover:rotate-90" aria-hidden="true" />
+            New persona
+          </button>
+        )}
       </header>
 
       {/* ── New persona wizard ── */}
@@ -105,8 +107,8 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
       {personas.length === 0 && !showNewPersona && (
         <section className="rounded-[1.75rem] border border-dashed border-line bg-surface-raised p-14 text-center">
           <div className="mx-auto max-w-sm space-y-4">
-            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-studio/15 to-studio/5 ring-1 ring-studio/10">
-              <PenLine className="size-6 text-studio" aria-hidden="true" />
+            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-paper-tint">
+              <PenLine className="size-6 text-slate" aria-hidden="true" />
             </div>
             <div className="space-y-2">
               <p className="text-heading text-lg text-ink">No personas yet.</p>
@@ -125,22 +127,37 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
         </section>
       )}
 
-      {/* ── Persona list ── */}
+      {/* ── Persona list — action-first: waiting drafts surface first, unset-up personas read as unset-up ── */}
       {personas.length > 0 && (
         <div className="space-y-4">
-          {personas.map((persona) => {
+          {sortedPersonas.map((persona) => {
             const readyDrafts = persona.drafts.filter((d) => d.status === 'draft' || d.status === 'ready').length
             const namedClusters = persona.topicClusters.filter((c) => c.clusterName.trim().length > 0)
             const subjects = namedClusters.slice(0, 4)
+            const needsSetup = namedClusters.length === 0
+            const hasWaiting = readyDrafts > 0
+
             return (
               <article
                 key={persona.id}
-                className="overflow-hidden rounded-[1.25rem] border border-line/60 bg-surface-raised transition-shadow hover:shadow-md"
+                className={cn(
+                  'overflow-hidden rounded-[1.25rem] transition-shadow',
+                  hasWaiting
+                    ? 'border-2 border-studio/40 bg-surface-raised shadow-studio hover:shadow-md'
+                    : needsSetup
+                      ? 'border border-dashed border-line bg-paper-tint/30'
+                      : 'border border-line/60 bg-surface-raised hover:shadow-md',
+                )}
               >
                 <div className="flex flex-wrap items-center justify-between gap-4 p-5">
                   <div className="flex items-center gap-4">
-                    <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-studio/15 to-studio/5">
-                      <PenLine className="size-5 text-studio" aria-hidden="true" />
+                    <div
+                      className={cn(
+                        'flex size-11 shrink-0 items-center justify-center rounded-xl',
+                        hasWaiting ? 'bg-gradient-to-br from-studio/20 to-studio/5' : 'bg-paper-tint',
+                      )}
+                    >
+                      <PenLine className={cn('size-5', hasWaiting ? 'text-studio' : 'text-slate')} aria-hidden="true" />
                     </div>
                     <div>
                       <h2 className="text-heading text-base text-ink">{persona.displayName}</h2>
@@ -148,42 +165,59 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                         {[
                           `${namedClusters.length} subject${namedClusters.length === 1 ? '' : 's'}`,
                           persona.platforms.join(', '),
-                          readyDrafts > 0 ? `${readyDrafts} ready` : null,
                         ].filter(Boolean).join(' · ')}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        'rounded-full px-2.5 py-1 text-mono-medium text-[10px]',
-                        persona.dailyStatus === 'posted' && 'bg-status-send/10 text-status-send',
-                        persona.dailyStatus === 'drafted' && 'bg-studio/10 text-studio',
-                        persona.dailyStatus === 'asked' && 'bg-paper-tint text-ink-soft',
-                        persona.dailyStatus === 'none' && 'bg-paper-tint text-slate',
-                      )}
-                    >
-                      {DAILY_STATUS_LABEL[persona.dailyStatus]}
-                    </span>
+                    {hasWaiting ? (
+                      <span className="rounded-full bg-studio px-2.5 py-1 text-mono-medium text-[10px] text-paper">
+                        {readyDrafts} draft{readyDrafts === 1 ? '' : 's'} waiting
+                      </span>
+                    ) : (
+                      <span
+                        className={cn(
+                          'rounded-full px-2.5 py-1 text-mono-medium text-[10px]',
+                          persona.dailyStatus === 'posted' ? 'bg-status-send/10 text-status-send' : 'bg-paper-tint text-slate',
+                        )}
+                      >
+                        {DAILY_STATUS_LABEL[persona.dailyStatus]}
+                      </span>
+                    )}
                     <button
                       onClick={() => setUnderstandingFor((prev) => (prev === persona.id ? null : persona.id))}
                       className={cn(
                         'inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition-colors',
                         understandingFor === persona.id
-                          ? 'border-studio/30 bg-studio/10 text-studio'
+                          ? 'border-ink/30 bg-paper-tint text-ink'
                           : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
                       )}
                     >
                       <Settings2 className="size-3.5" aria-hidden="true" />
                       About you
                     </button>
-                    <Link
-                      href={`/content/${persona.id}`}
-                      className="group inline-flex items-center gap-1.5 rounded-xl gradient-studio px-4 py-2 text-sm font-medium text-paper transition-all hover:brightness-110 active:scale-[0.97]"
-                    >
-                      Open
-                      <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                    </Link>
+                    {needsSetup ? (
+                      <Link
+                        href={`/content/${persona.id}`}
+                        className="group inline-flex items-center gap-1.5 rounded-xl gradient-studio px-4 py-2 text-sm font-medium text-paper transition-all hover:brightness-110 active:scale-[0.97]"
+                      >
+                        Finish setup
+                        <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                      </Link>
+                    ) : (
+                      <Link
+                        href={`/content/${persona.id}`}
+                        className={cn(
+                          'group inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-all active:scale-[0.97]',
+                          hasWaiting
+                            ? 'gradient-studio text-paper hover:brightness-110'
+                            : 'bg-ink text-paper hover:bg-ink/90',
+                        )}
+                      >
+                        Open
+                        <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                      </Link>
+                    )}
                   </div>
                 </div>
 
@@ -197,7 +231,13 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                   </div>
                 )}
 
-                {subjects.length > 0 && (
+                {needsSetup ? (
+                  <div className="border-t border-line/40 px-5 py-3">
+                    <p className="text-xs text-slate">
+                      No subjects yet — nothing to draft from. Open this persona and answer the first question to get started.
+                    </p>
+                  </div>
+                ) : subjects.length > 0 && (
                   <div className="border-t border-line/40 px-5 py-3">
                     <div className="flex flex-wrap gap-1.5">
                       {subjects.map((s) => (

@@ -301,8 +301,24 @@ function validateOutput(raw: unknown): ExtractionOutput | null {
   }
 }
 
-function normalizeTags(rawText: string): string[] {
-  const lower = rawText.toLowerCase()
+function normalizeTagsFromFields(fields: {
+  title: string | null
+  company: string
+  aboutSummary: string | null
+  experienceSummary: string | null
+  recentPosts: Array<{ paraphrase: string; verbatimQuote: string | null }>
+}): string[] {
+  // Build a context string ONLY from extracted structured fields — never the
+  // raw paste, which may contain job descriptions or other people's mentions.
+  const parts = [
+    fields.title ?? '',
+    fields.company ?? '',
+    fields.aboutSummary ?? '',
+    fields.experienceSummary ?? '',
+    ...fields.recentPosts.flatMap((p) => [p.paraphrase, p.verbatimQuote ?? '']),
+  ]
+  const lower = parts.join(' ').toLowerCase()
+
   const tags: string[] = []
   const pool: Array<[string, string]> = [
     ['react', 'react'],
@@ -345,7 +361,8 @@ function normalizeTags(rawText: string): string[] {
     if (lower.includes(needle) && !tags.includes(tag)) tags.push(tag)
     if (tags.length >= 6) break
   }
-  return tags.length > 0 ? tags : ['saas']
+  // No fabricated fallback: if nothing grounds, return empty and let UI say so.
+  return tags
 }
 
 function confidenceDetails(out: ExtractionOutput, signalConfidence?: 'strong' | 'moderate' | 'weak'): { score: number; notes: string[] } {
@@ -617,7 +634,13 @@ async function extractSegment(
     extractionConfidence: chosenConfidence.score,
     confidenceNotes: notes,
     verbatimQuote: empty(quote),
-    tags: normalizeTags(rawText),
+    tags: normalizeTagsFromFields({
+      title: titleRaw,
+      company: empty(chosen.company) ?? 'Unknown company',
+      aboutSummary: empty(chosen.about_summary),
+      experienceSummary: empty(chosen.experience_summary),
+      recentPosts: toRecentPosts(chosen.recent_posts),
+    }),
   }
 }
 
@@ -645,7 +668,13 @@ function demoExtract(rawText: string): ExtractedLead {
     extractionConfidence: 55,
     confidenceNotes: ['Demo mode: configure GROQ_API_KEY for full extraction quality.'],
     verbatimQuote: null,
-    tags: normalizeTags(rawText),
+    tags: normalizeTagsFromFields({
+      title: titleMatch?.[0]?.trim() ?? null,
+      company: companyMatch?.[1]?.trim() ?? 'Unknown company',
+      aboutSummary: rawText.slice(0, 140),
+      experienceSummary: 'Career details were pasted; review profile for specifics.',
+      recentPosts: [],
+    }),
   }
 }
 

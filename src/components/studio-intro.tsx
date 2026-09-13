@@ -39,7 +39,13 @@ function markSeen() {
 export function StudioIntro({ children }: { children: React.ReactNode }) {
   const seen = useSyncExternalStore(subscribe, readSeen, getServerSnapshot)
 
-  if (seen) return <>{children}</>
+  if (seen) {
+    return (
+      <div className="-m-5 bg-studio-wash p-5 lg:-m-8 lg:p-8">
+        {children}
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-[#0e0c1a] px-6">
