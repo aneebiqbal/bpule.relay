@@ -76,7 +76,7 @@ async function main() {
     'profiles', 'proof_items', 'golden_set', 'few_shot_wins', 'upwork_jobs',
     'upwork_messages', 'csv_imports', 'content_personas', 'content_pillars',
     'content_drafts', 'content_history', 'push_subscriptions', 'notification_log',
-    'eval_runs', 'extraction_runs',
+    'eval_runs', 'extraction_runs', 'organization_rulebook', 'subscriptions',
   ]
 
   const results: TableResult[] = []
@@ -96,7 +96,49 @@ async function main() {
     console.log(`   ${status} ${table}: ${rows.length} visible, ${leaked.length} leaked`)
   }
 
-  // Step 6: Summary
+  // Step 6: Reverse direction — create data in org B, verify org A can't see it
+  console.log('\n6. Reverse direction: creating data in org B...\n')
+
+  const bpulseUser = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+  const { data: bpulseSignIn } = await bpulseUser.auth.signInWithPassword({
+    email: 'hassan@bpulse.example.com',
+    password: 'password123',
+  })
+  if (!bpulseSignIn.user) {
+    console.log('   ⚠ Could not sign in as bpulse user, skipping reverse check')
+  } else {
+    // Create a lead in org B via admin (service role bypasses RLS)
+    const testLeadId = '66666666-6666-6666-6666-666666666666'
+    await admin.from('leads').insert({
+      id: testLeadId,
+      organization_id: TEST_ORG_ID,
+      company: 'Test Org B Lead',
+      company_key: 'test-org-b-lead',
+      owner_rep_id: '77777777-7777-7777-7777-777777777777',
+      signal_type: 7,
+      signal_evidence: 'Test evidence',
+      status: 'new',
+    })
+
+    // Now query as bpulse user — should NOT see org B's lead
+    const { data: bpulseLeads } = await bpulseUser.from('leads').select('id, organization_id, company')
+    const bpulseSeesOrgB = ((bpulseLeads || []) as { organization_id?: string }[])
+      .filter((r) => r.organization_id === TEST_ORG_ID)
+
+    if (bpulseSeesOrgB.length === 0) {
+      console.log('   ✅ bpulse user CANNOT see org B data (reverse direction)')
+    } else {
+      console.log(`   ❌ LEAK: bpulse user can see ${bpulseSeesOrgB.length} rows from org B!`)
+      console.log(`      Rows: ${JSON.stringify(bpulseSeesOrgB)}`)
+    }
+
+    // Cleanup test data
+    await admin.from('leads').delete().eq('id', testLeadId)
+  }
+
+  // Step 7: Summary
   console.log('\n=== Summary ===')
   const passed = results.filter((r) => r.pass).length
   const failed = results.filter((r) => !r.pass && r.visibleRows >= 0).length
@@ -108,9 +150,9 @@ async function main() {
     }
   }
 
-  // Step 7: Cleanup
-  console.log('\n6. Cleaning up...')
-  await admin.from('reps').delete().eq('id', 'rep-test-b')
+  // Step 8: Cleanup
+  console.log('\n7. Cleaning up...')
+  await admin.from('reps').delete().eq('id', '77777777-7777-7777-7777-777777777777')
   await admin.from('organizations').delete().eq('id', TEST_ORG_ID)
   await admin.auth.admin.deleteUser(TEST_USER_ID)
   console.log('   Done.')
