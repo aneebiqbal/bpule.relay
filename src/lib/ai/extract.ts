@@ -317,6 +317,29 @@ function normalizeTags(rawText: string): string[] {
     ['rails', 'rails'],
     ['node', 'nodejs'],
     ['ai', 'ai'],
+    ['llm', 'llm'],
+    ['machine learning', 'ml'],
+    ['deep learning', 'ml'],
+    ['gpu', 'gpu'],
+    ['kubernetes', 'kubernetes'],
+    ['devops', 'devops'],
+    ['sre', 'sre'],
+    ['rlhf', 'rlhf'],
+    ['fine-tun', 'llm'],
+    ['aws', 'aws'],
+    ['gcp', 'gcp'],
+    ['azure', 'azure'],
+    ['typescript', 'typescript'],
+    ['rust', 'rust'],
+    ['go ', 'golang'],
+    ['postgres', 'postgres'],
+    ['mongodb', 'mongodb'],
+    ['redis', 'redis'],
+    ['stripe', 'payments'],
+    ['crypto', 'web3'],
+    ['web3', 'web3'],
+    ['open source', 'opensource'],
+    ['saas', 'saas'],
   ]
   for (const [needle, tag] of pool) {
     if (lower.includes(needle) && !tags.includes(tag)) tags.push(tag)
@@ -325,7 +348,7 @@ function normalizeTags(rawText: string): string[] {
   return tags.length > 0 ? tags : ['saas']
 }
 
-function confidenceDetails(out: ExtractionOutput): { score: number; notes: string[] } {
+function confidenceDetails(out: ExtractionOutput, signalConfidence?: 'strong' | 'moderate' | 'weak'): { score: number; notes: string[] } {
   let score = 100
   const notes: string[] = []
 
@@ -348,6 +371,13 @@ function confidenceDetails(out: ExtractionOutput): { score: number; notes: strin
   if ((empty(out.signal_evidence) ?? '').length < 18) {
     score -= 16
     notes.push('Signal evidence is too thin.')
+  }
+  if (signalConfidence === 'weak') {
+    score -= 25
+    notes.push('Signal type and evidence do not match.')
+  } else if (signalConfidence === 'moderate') {
+    score -= 8
+    notes.push('Signal evidence partially supports the chosen signal.')
   }
 
   const hasQuote = out.recent_posts.some((p) => (p.verbatim_quote ?? '').trim().length >= 16)
@@ -387,64 +417,52 @@ function firstMatchingLine(rawText: string, patterns: RegExp[]): string | null {
 function deriveSignal(rawText: string, out: ExtractionOutput): {
   signalType: SignalId
   signalEvidence: string
+  signalConfidence: 'strong' | 'moderate' | 'weak'
 } {
   const providedEvidence = empty(out.signal_evidence) ?? ''
   const lower = rawText.toLowerCase()
 
   const rules: Array<{ id: SignalId; patterns: RegExp[] }> = [
-    {
-      id: 1,
-      patterns: [/\bhiring\b/i, /\bopen roles?\b/i, /\bposition\b/i, /\bwe'?re hiring\b/i, /\bjobs?\b/i],
-    },
-    {
-      id: 3,
-      patterns: [/\braised\b/i, /\bseed\b/i, /\bseries [abc]\b/i, /\bfunding\b/i, /\binvestment\b/i],
-    },
-    {
-      id: 2,
-      patterns: [/\bsolo founder\b/i, /\bone[- ]person\b/i, /\btiny team\b/i, /\bjust me\b/i],
-    },
-    {
-      id: 6,
-      patterns: [/\bbehind\b/i, /\bdelayed\b/i, /\boverdue\b/i, /\bstuck\b/i, /\bslow\b/i, /\bpain\b/i],
-    },
-    {
-      id: 4,
-      patterns: [/\blast update\b/i, /\boutdated\b/i, /\bstale\b/i, /\babandoned\b/i, /\bno update\b/i],
-    },
-    {
-      id: 5,
-      patterns: [/\blegacy\b/i, /\bwordpress\b/i, /\bjquery\b/i, /\bphp\s*5\b/i, /\bunsupported\b/i],
-    },
-    {
-      id: 7,
-      patterns: [/\blooking for\b/i, /\bneed help\b/i, /\bopen to\b/i, /\bagency\b/i, /\bfreelancer\b/i],
-    },
+    { id: 1, patterns: [/\bhiring\b/i, /\bopen roles?\b/i, /\bposition\b/i, /\bwe\'?re hiring\b/i, /\bjobs?\b/i] },
+    { id: 3, patterns: [/\braised\b/i, /\bseed\b/i, /\bseries [abc]\b/i, /\bfunding\b/i, /\binvestment\b/i] },
+    { id: 2, patterns: [/\bsolo founder\b/i, /\bone[- ]?person\b/i, /\btiny team\b/i, /\bjust me\b/i] },
+    { id: 6, patterns: [/\bbehind\b/i, /\bdelayed\b/i, /\boverdue\b/i, /\bstuck\b/i, /\bslow\b/i, /\bpain\b/i] },
+    { id: 4, patterns: [/\blast update\b/i, /\boutdated\b/i, /\bstale\b/i, /\babandoned\b/i, /\bno update\b/i] },
+    { id: 5, patterns: [/\blegacy\b/i, /\bwordpress\b/i, /\bjquery\b/i, /\bphp\s*5\b/i, /\bunsupported\b/i] },
+    { id: 7, patterns: [/\blooking for\b/i, /\bneed help\b/i, /\bopen to\b/i, /\bagency\b/i, /\bfreelancer\b/i] },
   ]
 
   for (const rule of rules) {
     const line = firstMatchingLine(rawText, rule.patterns)
     if (line) {
-      const signalType = rule.id
-      const signalEvidence = providedEvidence.length >= 12 ? providedEvidence : line
-      return { signalType, signalEvidence }
+      return { signalType: rule.id, signalEvidence: line, signalConfidence: 'strong' }
     }
   }
 
-  const fallbackType = (typeof out.signal_type === 'number' && [1, 2, 3, 4, 5, 6, 7].includes(out.signal_type))
+  // No raw-text pattern match \u2014 use the AI's signal but verify evidence supports it
+  const aiType = (typeof out.signal_type === 'number' && [1, 2, 3, 4, 5, 6, 7].includes(out.signal_type))
     ? (out.signal_type as SignalId)
     : pickDefaultSignal(lower)
-  const hasAskingLine = Boolean(
-    firstMatchingLine(rawText, [/\blooking for\b/i, /\bneed help\b/i, /\bopen to\b/i, /\bagency\b/i, /\bfreelancer\b/i]),
-  )
-  let adjusted = fallbackType
-  if (adjusted === 7 && !hasAskingLine) {
-    adjusted = /\bco[- ]?founder\b|\bfounder\b|\bceo\b/i.test(out.title_raw)
-      ? 2
-      : 6
+
+  const evidenceOk = evidenceSupportsSignal(providedEvidence, aiType)
+  const signalEvidence = providedEvidence.length >= 12 && evidenceOk
+    ? providedEvidence
+    : rawText.slice(0, 160).trim()
+
+  return { signalType: aiType, signalEvidence, signalConfidence: evidenceOk ? 'moderate' : 'weak' }
+}
+
+function evidenceSupportsSignal(evidence: string, signalType: SignalId): boolean {
+  const e = evidence.toLowerCase()
+  switch (signalType) {
+    case 1: return /\bhiring\b|\bopen role\b|\bposition\b|\bjoin our team\b/i.test(e)
+    case 2: return /\bsolo\b|\bone[- ]person\b|\btiny team\b|\bjust me\b|\bfounder\b/i.test(e)
+    case 3: return /\braised\b|\bseed\b|\bseries [abc]\b|\bfunding\b|\binvestment\b/i.test(e)
+    case 4: return /\blast update\b|\boutdated\b|\bstale\b|\babandoned\b|\bno update\b/i.test(e)
+    case 5: return /\blegacy\b|\bwordpress\b|\bjquery\b|\bunsupported\b|\bdeprecated\b/i.test(e)
+    case 6: return /\bbehind\b|\bdelayed\b|\boverdue\b|\bstuck\b|\bslow\b|\bpain\b/i.test(e)
+    case 7: return /\blooking for\b|\bneed help\b|\bopen to\b|\bagency\b|\bfreelancer\b/i.test(e)
   }
-  const fallbackEvidence = providedEvidence.length >= 12 ? providedEvidence : rawText.slice(0, 160).trim()
-  return { signalType: adjusted, signalEvidence: fallbackEvidence }
 }
 
 function toRecentPosts(posts: ExtractionOutput['recent_posts']): RecentPostExtract[] {
@@ -550,7 +568,8 @@ async function extractSegment(
   const hints = profileHints(rawText)
   const out = mergeWithHints(await modelExtract(rawText, opts, callLog), hints)
   let chosen = out
-  let chosenConfidence = confidenceDetails(chosen)
+  let signal = deriveSignal(rawText, chosen)
+  let chosenConfidence = confidenceDetails(chosen, signal.signalConfidence)
 
   const tier2 = tier2Chain()
   if (shouldEscalate(out, chosenConfidence.score) && tier2.length > 0) {
@@ -558,9 +577,11 @@ async function extractSegment(
     try {
       const upgraded = await modelExtractOnChain(rawText, tier2, opts, callLog, out)
       const upgradedMerged = mergeWithHints(upgraded, hints)
-      const upgradedConfidence = confidenceDetails(upgradedMerged)
+      const upgradedSignal = deriveSignal(rawText, upgradedMerged)
+      const upgradedConfidence = confidenceDetails(upgradedMerged, upgradedSignal.signalConfidence)
       if (upgradedConfidence.score >= chosenConfidence.score + 4) {
         chosen = upgradedMerged
+        signal = upgradedSignal
         chosenConfidence = upgradedConfidence
       }
     } catch {
@@ -572,7 +593,6 @@ async function extractSegment(
   const roleCategory = await classifyRoleWithFallback(titleRaw)
   const locationRaw = empty(chosen.location_raw)
   const quote = chosen.recent_posts.find((p) => p.verbatim_quote.trim().length >= 16)?.verbatim_quote ?? null
-  const signal = deriveSignal(rawText, chosen)
   const notes = [...chosenConfidence.notes]
   if (signal.signalEvidence.length >= 18) {
     const idx = notes.findIndex((n) => n.toLowerCase().includes('signal evidence is too thin'))
