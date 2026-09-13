@@ -388,6 +388,7 @@ export interface ContentDraft {
   pillarId: string | null
   topicClusterId: string | null
   researchFindingId: string | null
+  structureId: string | null
   sourceKind: 'answer' | 'conviction' | 'field_update'
   sourceMaterial: string
   platform: ContentPlatform
@@ -401,7 +402,19 @@ export interface ContentDraft {
   createdAt: string
 }
 
-export interface ContentHistoryEntry {
+/** A real, logged performance snapshot — always optional, always manual entry. */
+export interface ContentPostMetrics {
+  likes: number | null
+  reach: number | null
+  comments: number | null
+  reposts: number | null
+  saves: number | null
+  profileVisits: number | null
+  followerDelta: number | null
+  metricsLoggedAt: string | null
+}
+
+export interface ContentHistoryEntry extends ContentPostMetrics {
   id: string
   organizationId: string
   personaId: string
@@ -412,6 +425,18 @@ export interface ContentHistoryEntry {
   postedAt: string
   ledToRealOutcome: boolean
   outcomeNotedAt: string | null
+}
+
+export type PostStructureCategory = 'contrarian_opener' | 'story_opener' | 'question_opener' | 'data_point_opener'
+
+/** A curated, observed post shape used as generation scaffolding — never a performance promise. */
+export interface ContentPostStructure {
+  id: string
+  category: PostStructureCategory
+  structureName: string
+  shape: string
+  example: string
+  createdAt: string
 }
 
 export interface TrendingAngle {

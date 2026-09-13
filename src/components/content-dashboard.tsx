@@ -2,27 +2,53 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Plus, PenLine, ChevronRight, Check, ArrowRight, ArrowLeft } from 'lucide-react'
+import { Plus, PenLine, ChevronRight, Check, ArrowRight, ArrowLeft, Settings2, TrendingUp } from 'lucide-react'
 import { cn } from 'cn'
 import { StudioBrand } from '@/components/studio-brand'
-import type { ContentPersona, TopicCluster, ContentDraft } from '@/lib/domain/types'
+import { UnderstandingScreen } from '@/components/understanding-screen'
+import type { ContentPersona, TopicCluster, ContentDraft, ContentHistoryEntry } from '@/lib/domain/types'
 import type { OnboardingQuestion } from '@/lib/ai/onboarding-questions'
+import type { DailyStatus } from '@/app/(app)/content/page'
 
 interface PersonaWithExtras extends ContentPersona {
   topicClusters: TopicCluster[]
   drafts: ContentDraft[]
+  /** Already filtered to the last 14 days, server-side, so the client never needs "now". */
+  recentPosts: ContentHistoryEntry[]
+  dailyStatus: DailyStatus
+}
+
+const DAILY_STATUS_LABEL: Record<DailyStatus, string> = {
+  asked: 'Question ready',
+  drafted: 'Drafted today',
+  posted: 'Posted today',
+  none: 'Nothing surfaced today',
 }
 
 export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }) {
   const [showNewPersona, setShowNewPersona] = useState(false)
+  const [understandingFor, setUnderstandingFor] = useState<string | null>(null)
 
   const totalDrafts = personas.reduce((sum, p) => sum + p.drafts.filter((d) => d.status === 'draft' || d.status === 'ready').length, 0)
   const totalSubjects = personas.reduce((sum, p) => sum + p.topicClusters.length, 0)
 
+  const postedLast14Days = personas.flatMap((p) => p.recentPosts)
+  const withOutcome = postedLast14Days.filter((h) => h.ledToRealOutcome).length
+  const withMetrics = postedLast14Days.filter((h) => h.metricsLoggedAt).length
+
+  const readyByPersona = new Map(
+    personas.map((p) => [p.id, p.drafts.filter((d) => d.status === 'draft' || d.status === 'ready').length]),
+  )
+  const topWaitingPersona = [...personas].sort((a, b) => (readyByPersona.get(b.id) ?? 0) - (readyByPersona.get(a.id) ?? 0))[0]
+
+  // Action-first ordering: personas with drafts waiting surface first (most
+  // waiting first), then everything else keeps its natural order.
+  const sortedPersonas = [...personas].sort((a, b) => (readyByPersona.get(b.id) ?? 0) - (readyByPersona.get(a.id) ?? 0))
+
   return (
     <div className="space-y-8">
       {/* ── Header ── */}
-      <header className="reveal-up flex flex-wrap items-start justify-between gap-6">
+      <header className="flex flex-wrap items-start justify-between gap-6">
         <div className="space-y-2">
           <StudioBrand />
           <p className="max-w-md text-[15px] text-slate">
@@ -45,16 +71,39 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
 
       {/* ── Stats strip ── */}
       {personas.length > 0 && (
-        <div className="reveal-up stagger-1 grid gap-px overflow-hidden rounded-2xl border border-line/60 bg-line/40 sm:grid-cols-3">
+        <div className="grid gap-px overflow-hidden rounded-2xl border border-line/60 bg-line/40 sm:grid-cols-3">
           <Stat label="Personas" value={String(personas.length)} sub={personas.length === 1 ? 'voice profile' : 'voice profiles'} />
           <Stat label="Subjects" value={String(totalSubjects)} sub={totalSubjects === 1 ? 'focus area' : 'focus areas'} />
-          <Stat label="Ready drafts" value={String(totalDrafts)} sub={totalDrafts === 1 ? 'waiting' : 'waiting'} />
+          {totalDrafts > 0 && topWaitingPersona ? (
+            <Link
+              href={`/content/${topWaitingPersona.id}`}
+              className="flex flex-col gap-1 bg-paper px-4 py-3.5 transition-colors hover:bg-studio/[0.04]"
+            >
+              <span className="text-label text-studio">Ready drafts</span>
+              <span className="font-mono text-xl font-medium tracking-tight text-ink">{totalDrafts}</span>
+              <p className="text-[11px] text-studio">waiting on {topWaitingPersona.displayName} &rarr;</p>
+            </Link>
+          ) : (
+            <Stat label="Ready drafts" value={String(totalDrafts)} sub="waiting" />
+          )}
+        </div>
+      )}
+
+      {/* ── Performance trend, from real logged data only ── */}
+      {postedLast14Days.length > 0 && (
+        <div className="flex items-center gap-2 border-y border-line/50 py-3 text-sm text-slate">
+          <TrendingUp className="size-4 shrink-0 text-slate" aria-hidden="true" />
+          <span>
+            Last 14 days: <span className="font-medium text-ink">{postedLast14Days.length}</span> posted,{' '}
+            <span className="font-medium text-ink">{withMetrics}</span> with results logged,{' '}
+            <span className="font-medium text-ink">{withOutcome}</span> led to something real.
+          </span>
         </div>
       )}
 
       {/* ── Empty state ── */}
       {personas.length === 0 && !showNewPersona && (
-        <section className="reveal-up stagger-2 rounded-[1.75rem] border border-dashed border-line bg-surface-raised p-14 text-center">
+        <section className="rounded-[1.75rem] border border-dashed border-line bg-surface-raised p-14 text-center">
           <div className="mx-auto max-w-sm space-y-4">
             <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-studio/15 to-studio/5 ring-1 ring-studio/10">
               <PenLine className="size-6 text-studio" aria-hidden="true" />
@@ -79,14 +128,14 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
       {/* ── Persona list ── */}
       {personas.length > 0 && (
         <div className="space-y-4">
-          {personas.map((persona, i) => {
+          {personas.map((persona) => {
             const readyDrafts = persona.drafts.filter((d) => d.status === 'draft' || d.status === 'ready').length
-            const subjects = persona.topicClusters.slice(0, 4)
+            const namedClusters = persona.topicClusters.filter((c) => c.clusterName.trim().length > 0)
+            const subjects = namedClusters.slice(0, 4)
             return (
               <article
                 key={persona.id}
-                className="reveal-up slide-in-right overflow-hidden rounded-[1.25rem] border border-line/60 bg-surface-raised transition-shadow hover:shadow-md"
-                style={{ animationDelay: `${0.05 + i * 0.04}s` }}
+                className="overflow-hidden rounded-[1.25rem] border border-line/60 bg-surface-raised transition-shadow hover:shadow-md"
               >
                 <div className="flex flex-wrap items-center justify-between gap-4 p-5">
                   <div className="flex items-center gap-4">
@@ -96,17 +145,38 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                     <div>
                       <h2 className="text-heading text-base text-ink">{persona.displayName}</h2>
                       <p className="text-xs text-slate">
-                        {persona.topicClusters.length} subject{persona.topicClusters.length === 1 ? '' : 's'} &middot; {persona.platforms.join(', ')}
-                        {readyDrafts > 0 && ` &middot; ${readyDrafts} ready`}
+                        {[
+                          `${namedClusters.length} subject${namedClusters.length === 1 ? '' : 's'}`,
+                          persona.platforms.join(', '),
+                          readyDrafts > 0 ? `${readyDrafts} ready` : null,
+                        ].filter(Boolean).join(' · ')}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {readyDrafts > 0 && (
-                      <span className="rounded-full bg-studio/10 px-2.5 py-1 text-mono-medium text-[10px] text-studio">
-                        {readyDrafts} draft{readyDrafts === 1 ? '' : 's'}
-                      </span>
-                    )}
+                    <span
+                      className={cn(
+                        'rounded-full px-2.5 py-1 text-mono-medium text-[10px]',
+                        persona.dailyStatus === 'posted' && 'bg-status-send/10 text-status-send',
+                        persona.dailyStatus === 'drafted' && 'bg-studio/10 text-studio',
+                        persona.dailyStatus === 'asked' && 'bg-paper-tint text-ink-soft',
+                        persona.dailyStatus === 'none' && 'bg-paper-tint text-slate',
+                      )}
+                    >
+                      {DAILY_STATUS_LABEL[persona.dailyStatus]}
+                    </span>
+                    <button
+                      onClick={() => setUnderstandingFor((prev) => (prev === persona.id ? null : persona.id))}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition-colors',
+                        understandingFor === persona.id
+                          ? 'border-studio/30 bg-studio/10 text-studio'
+                          : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
+                      )}
+                    >
+                      <Settings2 className="size-3.5" aria-hidden="true" />
+                      About you
+                    </button>
                     <Link
                       href={`/content/${persona.id}`}
                       className="group inline-flex items-center gap-1.5 rounded-xl gradient-studio px-4 py-2 text-sm font-medium text-paper transition-all hover:brightness-110 active:scale-[0.97]"
@@ -117,6 +187,16 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                   </div>
                 </div>
 
+                {understandingFor === persona.id && (
+                  <div className="border-t border-line/40 p-5">
+                    <UnderstandingScreen
+                      persona={persona}
+                      topicClusters={persona.topicClusters}
+                      onUpdated={() => setUnderstandingFor(null)}
+                    />
+                  </div>
+                )}
+
                 {subjects.length > 0 && (
                   <div className="border-t border-line/40 px-5 py-3">
                     <div className="flex flex-wrap gap-1.5">
@@ -125,9 +205,9 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                           {s.clusterName}
                         </span>
                       ))}
-                      {persona.topicClusters.length > 4 && (
+                      {namedClusters.length > 4 && (
                         <span className="rounded-lg bg-paper-tint/60 px-2 py-0.5 text-[11px] text-slate">
-                          +{persona.topicClusters.length - 4} more
+                          +{namedClusters.length - 4} more
                         </span>
                       )}
                     </div>
@@ -152,7 +232,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub: string
   )
 }
 
-type WizardStep = 'profile' | 'loading-questions' | 'questions' | 'voice' | 'creating'
+type WizardStep = 'profile' | 'loading-questions' | 'questions' | 'voice' | 'creating' | 'cold-start'
 
 const HUMOR_STYLES = ['Dry / deadpan', 'Playful', 'Sarcastic', 'Mostly serious', 'None of these']
 
@@ -169,12 +249,18 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('')
   const [platforms, setPlatforms] = useState<string[]>([])
   const [profileInput, setProfileInput] = useState('')
+  const [pastPostsInput, setPastPostsInput] = useState('')
+  const [showPastPosts, setShowPastPosts] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [questions, setQuestions] = useState<OnboardingQuestion[]>([])
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [otherOpen, setOtherOpen] = useState<Record<string, boolean>>({})
+
+  const [coldQuestion, setColdQuestion] = useState<{ id: string; prompt: string; kind: 'yes_no' | 'choice'; options: string[]; done: boolean } | null>(null)
+  const [coldAnswers, setColdAnswers] = useState<Array<{ questionId: string; prompt: string; selectedOption: string; typedInput?: string }>>([])
+  const [coldDepth, setColdDepth] = useState(0)
 
   const [humorStyle, setHumorStyle] = useState('')
   const [humorOtherOpen, setHumorOtherOpen] = useState(false)
@@ -193,24 +279,73 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
   async function goToQuestions() {
     if (!name.trim()) { setError('Give this persona a name.'); return }
     if (platforms.length === 0) { setError('Pick at least one platform.'); return }
-    if (!profileInput.trim()) { setError('Paste a LinkedIn URL or a short bio.'); return }
+    if (!profileInput.trim() && !pastPostsInput.trim()) {
+      setError('Paste a LinkedIn URL, a short bio, or a few real past posts.')
+      return
+    }
     setError(null)
     setStep('loading-questions')
+
+    // Cold-start: no past posts to lean on → use adaptive branching questions.
+    const hasPastedPosts = pastPostsInput.trim().split(/\s+/).length >= 30
+    if (!hasPastedPosts) {
+      await loadColdStartQuestion([], 0)
+      return
+    }
+
     try {
+      const questionSeed = pastPostsInput.trim() || profileInput.trim()
       const res = await fetch('/api/content/onboarding-questions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileInput: profileInput.trim() }),
+        body: JSON.stringify({ profileInput: questionSeed }),
       })
       const data = await res.json().catch(() => null)
       const generated: OnboardingQuestion[] = Array.isArray(data?.questions) ? data.questions : []
       setQuestions(generated)
       setCurrentQuestion(0)
-      // No host available or nothing generated — skip straight to the voice step.
       setStep(generated.length === 0 ? 'voice' : 'questions')
     } catch {
       setStep('voice')
     }
+  }
+
+  async function loadColdStartQuestion(previousAnswers: Array<{ questionId: string; prompt: string; selectedOption: string; typedInput?: string }>, depth: number) {
+    try {
+      const res = await fetch('/api/content/cold-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profileInput: pastPostsInput.trim() || profileInput.trim(),
+          previousAnswers,
+          depth,
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      const q = data?.question
+      if (!q || q.done) {
+        setStep('voice')
+        return
+      }
+      setColdQuestion(q)
+      setColdDepth(depth)
+      setStep('cold-start')
+    } catch {
+      setStep('voice')
+    }
+  }
+
+  function pickColdStart(value: string) {
+    if (!coldQuestion) return
+    const answer = {
+      questionId: coldQuestion.id,
+      prompt: coldQuestion.prompt,
+      selectedOption: value,
+      typedInput: !coldQuestion.options.includes(value) ? value : undefined,
+    }
+    const next = [...coldAnswers, answer]
+    setColdAnswers(next)
+    loadColdStartQuestion(next, coldDepth + 1)
   }
 
   function pick(questionId: string, value: string) {
@@ -228,6 +363,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
           displayName: name.trim(),
           platforms,
           profileInput: profileInput.trim(),
+          pastPostsInput: pastPostsInput.trim(),
           valuesAndOpinions,
           humorStyle: humor,
           admiredExamples,
@@ -261,11 +397,14 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
       ...admiredStyles,
       ...(admiredOther.trim() ? [admiredOther.trim()] : []),
     ]
-    void create(pendingValuesAndOpinions(), humorStyle, admiredExamples)
+    const coldStartValues = coldAnswers
+      .filter((a) => a.typedInput?.trim() || (a.selectedOption && !a.selectedOption.includes('Other')))
+      .map((a) => `${a.prompt} ${a.typedInput?.trim() || a.selectedOption}`)
+    void create([...pendingValuesAndOpinions(), ...coldStartValues], humorStyle, admiredExamples)
   }
 
   return (
-    <section className="reveal-up rounded-2xl border border-studio/25 bg-surface-raised p-6 shadow-studio/20">
+    <section className="reveal-up rounded-2xl border border-studio/25 bg-surface-raised p-6 shadow-studio">
       {error && (
         <p className="mb-3 text-sm text-status-no" role="alert">{error}</p>
       )}
@@ -273,7 +412,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
       {step === 'profile' && (
         <>
           <h2 className="text-heading text-base text-ink">New persona</h2>
-          <p className="mt-1 text-sm text-slate">Paste a profile. Studio will ask a few quick tap questions next, tailored to what it finds.</p>
+          <p className="mt-1 text-sm text-slate">Paste a profile, or a few real past posts. Studio asks a few quick tap questions next, tailored to what it finds.</p>
 
           <div className="mt-4 grid gap-4">
             <div className="grid gap-1.5">
@@ -307,17 +446,45 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            <div className="grid gap-1.5">
-              <label htmlFor="profile-input" className="text-sm font-medium text-ink-soft">LinkedIn URL or bio</label>
+            <div className="grid gap-1.5 rounded-xl border border-studio/20 bg-studio/[0.03] p-3.5">
+              <label htmlFor="past-posts-input" className="text-sm font-medium text-ink-soft">
+                Paste a few of your real past posts <span className="font-normal text-slate">(fastest, most accurate)</span>
+              </label>
               <textarea
-                id="profile-input"
-                value={profileInput}
-                onChange={(e) => setProfileInput(e.target.value)}
-                rows={4}
-                placeholder="Paste a LinkedIn profile URL, About section, or short bio."
+                id="past-posts-input"
+                value={pastPostsInput}
+                onChange={(e) => setPastPostsInput(e.target.value)}
+                rows={5}
+                placeholder="Paste 2-3 real posts you've written before, from LinkedIn, X, wherever. Plain text — no connected account needed."
                 className="w-full rounded-xl border border-line bg-paper-raised px-3 py-2 text-sm transition-all outline-none focus-visible:border-studio/40 focus-visible:ring-2 focus-visible:ring-studio/20"
               />
+              <p className="text-xs text-slate">This reads your own writing directly, so it seeds voice and topics more accurately than answers alone.</p>
             </div>
+
+            {(showPastPosts || profileInput.trim().length > 0 || pastPostsInput.trim().length === 0) && (
+              <div className="grid gap-1.5">
+                <label htmlFor="profile-input" className="text-sm font-medium text-ink-soft">
+                  LinkedIn URL or bio <span className="font-normal text-slate">(optional if you pasted posts above)</span>
+                </label>
+                <textarea
+                  id="profile-input"
+                  value={profileInput}
+                  onChange={(e) => setProfileInput(e.target.value)}
+                  rows={4}
+                  placeholder="Paste a LinkedIn profile URL, About section, or short bio."
+                  className="w-full rounded-xl border border-line bg-paper-raised px-3 py-2 text-sm transition-all outline-none focus-visible:border-studio/40 focus-visible:ring-2 focus-visible:ring-studio/20"
+                />
+              </div>
+            )}
+            {!showPastPosts && pastPostsInput.trim().length > 0 && profileInput.trim().length === 0 && (
+              <button
+                type="button"
+                onClick={() => setShowPastPosts(true)}
+                className="justify-self-start text-xs text-studio hover:underline"
+              >
+                Also add a bio (optional)
+              </button>
+            )}
           </div>
 
           <div className="mt-5 flex items-center justify-end gap-3">
@@ -434,6 +601,64 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
           </>
         )
       })()}
+
+      {step === 'cold-start' && coldQuestion && (
+        <>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-studio-light">Tailored to you</span>
+              <span className="text-xs text-slate">Q{coldDepth + 1}</span>
+            </div>
+            <div className="flex gap-1">
+              {Array.from({ length: Math.min(coldDepth + 1, 6) }).map((_, i) => (
+                <span key={i} className={cn('h-1 flex-1 rounded-full', i <= coldDepth ? 'bg-studio' : 'bg-line/60')} />
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            <p className="text-heading text-lg text-ink">{coldQuestion.prompt}</p>
+            <div className="flex flex-col gap-2">
+              {coldQuestion.options.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => pickColdStart(opt)}
+                  className="flex items-center gap-2 rounded-xl border border-line bg-paper-raised px-4 py-3 text-left text-sm text-slate transition-all hover:border-studio/30 hover:bg-studio/10 hover:text-studio"
+                >
+                  {opt}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  const typed = prompt('Type your answer:')
+                  if (typed?.trim()) pickColdStart(typed.trim())
+                }}
+                className="rounded-xl border border-dashed border-line px-4 py-3 text-left text-sm text-slate transition-colors hover:border-studio/40 hover:text-studio"
+              >
+                Other, let me type it
+              </button>
+            </div>
+          </div>
+
+          {coldDepth > 0 && (
+            <div className="mt-4">
+              <button
+                onClick={() => {
+                  const prev = coldAnswers.slice(0, -1)
+                  setColdAnswers(prev)
+                  loadColdStartQuestion(prev, coldDepth - 1)
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2 text-sm text-slate transition-colors hover:bg-paper-tint"
+              >
+                <ArrowLeft className="size-3.5" aria-hidden="true" />
+                Previous
+              </button>
+            </div>
+          )}
+        </>
+      )}
 
       {step === 'voice' && (
         <>

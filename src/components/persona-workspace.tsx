@@ -2,11 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Copy, Check, RefreshCw, Sparkles, Settings2 } from 'lucide-react'
+import { ArrowLeft, Copy, Check, RefreshCw, Sparkles, Settings2, MessageCircleQuestion, PenSquare, ThumbsUp, Bold, Italic, Eye, BarChart3 } from 'lucide-react'
 import { cn } from 'cn'
-import type { ContentPersona, TopicCluster, ContentDraft, ContentHistoryEntry, ContentDraftFeedback } from '@/lib/domain/types'
+import type { ContentPersona, TopicCluster, ContentDraft, ContentHistoryEntry, ContentDraftFeedback, ContentPostStructure } from '@/lib/domain/types'
 import type { DailyDecision } from '@/lib/content/daily-decision'
 import { UnderstandingScreen } from '@/components/understanding-screen'
+import { toBoldUnicode, toItalicUnicode } from '@/lib/content/unicode-format'
+import { previewTruncation } from '@/lib/content/truncation'
+import { computeBestTime } from '@/lib/content/best-time'
+import { BestTimeCard } from '@/components/best-time-card'
+import { MetricsLogForm } from '@/components/metrics-log-form'
 
 export function PersonaWorkspace({
   persona,
@@ -44,6 +49,25 @@ export function PersonaWorkspace({
   const [personaState, setPersonaState] = useState(persona)
   const [refining, setRefining] = useState(false)
   const [refineMessage, setRefineMessage] = useState<string | null>(null)
+  const [structures, setStructures] = useState<ContentPostStructure[]>([])
+  const [structureId, setStructureId] = useState<string | null>(null)
+  const [showTruncationPreview, setShowTruncationPreview] = useState(false)
+  const [metricsHistoryId, setMetricsHistoryId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/content/post-structures')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && Array.isArray(d?.structures)) setStructures(d.structures)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const bestTime = useMemo(() => computeBestTime(historyRows), [historyRows])
 
   const activeDrafts = drafts.filter((d) => d.status === 'draft' || d.status === 'ready')
 
@@ -150,6 +174,7 @@ export function PersonaWorkspace({
         topicClusterId: decision?.contextId || topicClusters[0]?.id || null,
         sourceMaterial: answer.trim(),
         platform,
+        structureId,
       }
       if (decision?.decisionType === 'react' && decision.fieldUpdate?.id) payload.findingId = decision.fieldUpdate.id
       if (decision?.decisionType === 'ready' && !answer.trim()) payload.useStoredOpinion = true
@@ -197,7 +222,23 @@ export function PersonaWorkspace({
       setGenerating(false)
       setStatusMessage(null)
     }
-  }, [persona.id, decision, answer, platform, topicClusters])
+  }, [persona.id, decision, answer, platform, topicClusters, structureId])
+
+  function applyFormatting(kind: 'bold' | 'italic') {
+    const el = document.getElementById('draft-editor') as HTMLTextAreaElement | null
+    if (!el) return
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    if (start === end) return
+    const selected = editableDraft.slice(start, end)
+    const styled = kind === 'bold' ? toBoldUnicode(selected) : toItalicUnicode(selected)
+    const next = editableDraft.slice(0, start) + styled + editableDraft.slice(end)
+    setEditableDraft(next)
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(start, start + styled.length)
+    })
+  }
 
   async function reactToDraft(action: 'posting' | 'not_for_me') {
     if (!draftId) return
@@ -261,12 +302,12 @@ export function PersonaWorkspace({
     }
   }, [shouldRefine, refining, runRefinement])
 
-  const askLine = decision?.prompt ?? decision?.reason ?? 'No question right now.'
-  const canGenerate = Boolean(answer.trim()) || decision?.decisionType === 'ready' || decision?.decisionType === 'react'
+  const askLine = decision?.uncertainPrompt ?? decision?.prompt ?? decision?.reason ?? 'No question right now.'
+  const canGenerate = Boolean(answer.trim()) || decision?.decisionType === 'ready' || decision?.decisionType === 'react' || decision?.decisionType === 'ask_uncertain'
 
   return (
     <div className="space-y-6">
-      <header className="reveal-up space-y-2">
+      <header className="space-y-4">
         <div className="flex items-center justify-between">
           <button onClick={() => router.push('/content')} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate transition-colors hover:bg-paper-tint hover:text-ink">
             <ArrowLeft className="size-4" aria-hidden="true" />
@@ -285,8 +326,28 @@ export function PersonaWorkspace({
             About you
           </button>
         </div>
-        <h1 className="text-heading text-2xl text-ink sm:text-3xl">{personaState.displayName}</h1>
-        <p className="text-sm text-slate">Simple loop: Ask, Draft, React.</p>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-1.5">
+            <p className="text-label text-studio">Studio persona</p>
+            <h1 className="text-heading text-2xl text-ink sm:text-3xl">{personaState.displayName}</h1>
+            <p className="text-sm text-slate">Ask, draft, react — what you keep shapes what comes next.</p>
+          </div>
+          <div className="flex items-center gap-3 rounded-2xl border border-line/60 bg-surface-raised px-5 py-3">
+            <div className="text-right">
+              <p className="font-mono text-xl font-medium tracking-tight text-ink">{metrics.keptRate}%</p>
+              <p className="text-[11px] text-slate">kept</p>
+            </div>
+            <button
+              onClick={() => void runRefinement()}
+              disabled={refining || totalDecisions < 6}
+              className="rounded-lg border border-line px-2.5 py-1.5 text-xs text-slate transition-colors hover:bg-paper-tint disabled:opacity-40"
+              title={totalDecisions < 6 ? 'Need at least 6 keep/skip decisions' : 'Re-analyze from your keep/skip patterns'}
+            >
+              {refining ? 'Analyzing...' : 'Refresh profile'}
+            </button>
+          </div>
+        </div>
+        {refineMessage && <p className="text-xs text-slate">{refineMessage}</p>}
       </header>
 
       {showUnderstanding && (
@@ -296,21 +357,6 @@ export function PersonaWorkspace({
           onUpdated={(updated) => { setPersonaState(updated); setShowUnderstanding(false) }}
         />
       )}
-
-      <section className="rounded-2xl border border-line/60 bg-surface-raised p-5 space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-slate">Kept posts: {metrics.keptRate}%</p>
-          <button
-            onClick={() => void runRefinement()}
-            disabled={refining || totalDecisions < 6}
-            className="rounded-lg border border-line px-2 py-1 text-xs text-slate transition-colors hover:bg-paper-tint disabled:opacity-40"
-            title={totalDecisions < 6 ? 'Need at least 6 keep/skip decisions' : 'Re-analyze from your keep/skip patterns'}
-          >
-            {refining ? 'Analyzing...' : 'Refresh profile'}
-          </button>
-        </div>
-        {refineMessage && <p className="text-xs text-slate">{refineMessage}</p>}
-      </section>
 
       <section className="rounded-2xl border border-line/60 bg-surface-raised p-5">
         <h2 className="text-heading text-base text-ink">What you keep</h2>
@@ -346,8 +392,8 @@ export function PersonaWorkspace({
       </section>
 
       <section className="rounded-2xl border border-line/60 bg-surface-raised p-6">
-        <h2 className="text-heading text-base text-ink">1. Ask</h2>
-        <p className="mt-2 text-sm text-ink">{askLine}</p>
+        <StepHeader icon={MessageCircleQuestion} step={1} title="Ask" />
+        <p className="mt-3 text-sm text-ink">{askLine}</p>
         {decision?.fieldUpdate && (
           <p className="mt-2 text-xs text-slate">
             Source: {decision.fieldUpdate.sourceLabel} - {decision.fieldUpdate.sourceUrl}
@@ -358,7 +404,7 @@ export function PersonaWorkspace({
           onChange={(e) => setAnswer(e.target.value)}
           placeholder="Add one real line. If it is a no-input day, leave blank and continue only when prompted."
           rows={3}
-          className="mt-4 w-full rounded-xl border border-line bg-paper-raised px-3.5 py-2.5 text-sm outline-none focus-visible:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/20"
+          className="mt-4 w-full rounded-xl border border-line bg-paper-raised px-3.5 py-2.5 text-sm outline-none focus-visible:border-studio/40 focus-visible:ring-2 focus-visible:ring-studio/20"
         />
         <div className="mt-3 flex items-center gap-2">
           {(['linkedin', 'x'] as const).map((p) => (
@@ -373,33 +419,115 @@ export function PersonaWorkspace({
       </section>
 
       <section className="rounded-2xl border border-line/60 bg-surface-raised p-6">
-        <h2 className="text-heading text-base text-ink">2. Draft</h2>
-        <button onClick={() => void generateDraft()} disabled={generating || !canGenerate} className="mt-3 inline-flex items-center gap-2 rounded-xl gradient-gold px-5 py-2.5 text-sm font-semibold text-paper disabled:opacity-50">
+        <StepHeader icon={PenSquare} step={2} title="Draft" />
+
+        {structures.length > 0 && (
+          <div className="mt-4 space-y-1.5">
+            <p className="text-xs text-slate">Scaffolding, optional — shapes how this gets built, never a claim about how it performs.</p>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setStructureId(null)}
+                className={cn(
+                  'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
+                  structureId === null ? 'border-studio/30 bg-studio/10 text-studio' : 'border-line text-slate hover:bg-paper-tint',
+                )}
+              >
+                No structure
+              </button>
+              {structures.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setStructureId(s.id)}
+                  title={s.shape}
+                  className={cn(
+                    'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
+                    structureId === s.id ? 'border-studio/30 bg-studio/10 text-studio' : 'border-line text-slate hover:bg-paper-tint',
+                  )}
+                >
+                  {s.structureName}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button onClick={() => void generateDraft()} disabled={generating || !canGenerate} className="mt-4 inline-flex items-center gap-2 rounded-xl gradient-studio px-5 py-2.5 text-sm font-semibold text-paper shadow-studio disabled:opacity-50">
           {generating ? <RefreshCw className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
           {generating ? (statusMessage ?? 'Generating...') : 'Generate'}
         </button>
         {draftError && <p className="mt-2 text-sm text-status-no">{draftError}</p>}
         {draftText && (
           <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-end">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => applyFormatting('bold')}
+                  title="Bold selected text (Unicode)"
+                  className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs text-slate transition-colors hover:bg-paper-tint hover:text-ink"
+                >
+                  <Bold className="size-3.5" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyFormatting('italic')}
+                  title="Italicize selected text (Unicode)"
+                  className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs text-slate transition-colors hover:bg-paper-tint hover:text-ink"
+                >
+                  <Italic className="size-3.5" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTruncationPreview((v) => !v)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors',
+                    showTruncationPreview ? 'border-studio/30 bg-studio/10 text-studio' : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
+                  )}
+                >
+                  <Eye className="size-3.5" aria-hidden="true" />
+                  See more preview
+                </button>
+              </div>
               <button onClick={() => void copyDraft()} className="inline-flex items-center gap-1.5 rounded-lg bg-paper-tint px-3 py-1.5 text-sm text-ink hover:bg-line">
                 {copied ? <Check className="size-3.5 text-status-send" /> : <Copy className="size-3.5" />}
                 {copied ? 'Copied' : 'Copy'}
               </button>
             </div>
             <textarea
+              id="draft-editor"
               value={editableDraft}
               onChange={(e) => setEditableDraft(e.target.value)}
               rows={8}
-              className="w-full rounded-xl border border-line bg-paper-raised px-3.5 py-2.5 text-sm outline-none focus-visible:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/20"
+              className="w-full rounded-xl border border-line bg-paper-raised px-3.5 py-2.5 text-sm outline-none focus-visible:border-studio/40 focus-visible:ring-2 focus-visible:ring-studio/20"
             />
+            {showTruncationPreview && (() => {
+              const preview = previewTruncation(editableDraft, platform)
+              return (
+                <div className="rounded-xl border border-line/60 bg-paper-tint/40 p-3.5 text-sm">
+                  <p className="whitespace-pre-wrap text-ink">{preview.visible}</p>
+                  {preview.truncated && (
+                    <>
+                      <span className="text-slate">... </span>
+                      <span className="text-xs font-medium text-studio">see more</span>
+                      <p className="mt-2 whitespace-pre-wrap text-slate/50">{preview.hidden}</p>
+                      <p className="mt-2 text-xs text-slate">Everything above the divider is what shows before a reader taps &quot;see more&quot; on {platform}.</p>
+                    </>
+                  )}
+                  {!preview.truncated && (
+                    <p className="mt-2 text-xs text-status-send">Fits within the visible preview — no truncation on {platform}.</p>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         )}
       </section>
 
       <section className="rounded-2xl border border-line/60 bg-surface-raised p-6">
-        <h2 className="text-heading text-base text-ink">3. React</h2>
-        <p className="mt-1 text-sm text-slate">What you pick shapes tomorrow&apos;s post.</p>
+        <StepHeader icon={ThumbsUp} step={3} title="React" />
+        <p className="mt-2 text-sm text-slate">What you pick shapes tomorrow&apos;s post.</p>
         <div className="mt-3 flex items-center gap-2">
           <button onClick={() => void reactToDraft('posting')} disabled={reacting || !draftId} className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-paper disabled:opacity-50">
             Posting this
@@ -412,32 +540,63 @@ export function PersonaWorkspace({
       </section>
 
       {historyRows.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-heading text-base text-ink">Recent posts</h2>
-          <ul className="overflow-hidden rounded-2xl border border-line/60 bg-surface-raised divide-y divide-line/50">
-            {historyRows.slice(0, 5).map((h) => (
-              <li key={h.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                <div className="min-w-0">
-                  <p className="line-clamp-1 text-sm text-ink">{h.openingLine}</p>
-                  <p className="mt-0.5 text-xs text-slate">{new Date(h.postedAt).toLocaleDateString()}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void toggleOutcome(h.id, !h.ledToRealOutcome)}
-                  disabled={taggingId === h.id}
-                  className={cn(
-                    'shrink-0 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50',
-                    h.ledToRealOutcome
-                      ? 'border-status-send/30 bg-status-send/10 text-status-send'
-                      : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
+        <>
+          <BestTimeCard result={bestTime} />
+
+          <section className="space-y-2">
+            <h2 className="text-heading text-base text-ink">Recent posts</h2>
+            <ul className="overflow-hidden rounded-2xl border border-line/60 bg-surface-raised divide-y divide-line/50">
+              {historyRows.slice(0, 5).map((h) => (
+                <li key={h.id} className="px-5 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="line-clamp-1 text-sm text-ink">{h.openingLine}</p>
+                      <p className="mt-0.5 text-xs text-slate">
+                        {new Date(h.postedAt).toLocaleDateString()}
+                        {h.metricsLoggedAt && ` · ${[h.likes, h.reach, h.comments].filter((v) => v !== null).length} metrics logged`}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setMetricsHistoryId((prev) => (prev === h.id ? null : h.id))}
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
+                          metricsHistoryId === h.id ? 'border-studio/30 bg-studio/10 text-studio' : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
+                        )}
+                      >
+                        <BarChart3 className="size-3.5" aria-hidden="true" />
+                        Log results
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void toggleOutcome(h.id, !h.ledToRealOutcome)}
+                        disabled={taggingId === h.id}
+                        className={cn(
+                          'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50',
+                          h.ledToRealOutcome
+                            ? 'border-status-send/30 bg-status-send/10 text-status-send'
+                            : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
+                        )}
+                      >
+                        {h.ledToRealOutcome ? 'Led to something real' : 'This led to something real'}
+                      </button>
+                    </div>
+                  </div>
+                  {metricsHistoryId === h.id && (
+                    <MetricsLogForm
+                      entry={h}
+                      onSaved={(updated) => {
+                        setHistoryRows((prev) => prev.map((row) => (row.id === updated.id ? updated : row)))
+                        setMetricsHistoryId(null)
+                      }}
+                    />
                   )}
-                >
-                  {h.ledToRealOutcome ? 'Led to something real' : 'This led to something real'}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </>
       )}
 
       {activeDrafts.length > 0 && (
@@ -452,6 +611,28 @@ export function PersonaWorkspace({
           </ul>
         </section>
       )}
+    </div>
+  )
+}
+
+function StepHeader({
+  icon: Icon,
+  step,
+  title,
+}: {
+  icon: typeof MessageCircleQuestion
+  step: number
+  title: string
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-studio/15 to-studio/5">
+        <Icon className="size-4 text-studio" aria-hidden="true" />
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-label text-studio">Step {step}</span>
+        <h2 className="text-heading text-base text-ink">{title}</h2>
+      </div>
     </div>
   )
 }

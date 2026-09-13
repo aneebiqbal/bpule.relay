@@ -2,6 +2,7 @@ import { pickDraftChain } from '@/lib/ai/routing'
 import { structuredJsonChain } from '@/lib/ai/provider'
 
 import type { ContentPlatform } from '@/lib/domain/types'
+import { checkHumanization, rewriteToHumanize } from '@/lib/ai/humanization'
 
 /**
  * Content generation pipeline.
@@ -53,6 +54,8 @@ export interface ContentGenerationInput {
   generationMode?: 'personal' | 'opinion'
   trendingAngle?: string | null
   preferenceHints?: string[]
+  /** A curated post shape used as scaffolding only — never a claim about how the post will perform. */
+  structure?: { structureName: string; shape: string } | null
 }
 
 export interface ContentGenerationResult {
@@ -64,6 +67,8 @@ export interface ContentGenerationResult {
   selfCheckNote: string
   bannedHits: string[]
   specificityHit: boolean
+  humanizationTells: string[]
+  humanizationPassed: boolean
 }
 
 interface ModelContentOutput {
@@ -114,12 +119,27 @@ export async function generateContent(
   const repeats = checkRepetition(hook, input.recentOpenings)
   const fabricatedPersonalClaim = checkFabricatedPersonalClaim(caption, input.generationMode ?? 'personal')
 
+  // ── Humanization check (rhythm, hedging, listiness, transitions) ────
+  let humanizationTells: string[] = []
+  let humanizationPassed = true
+  let finalCaption = caption
+  const humanization = checkHumanization(caption)
+  if (!humanization.passed) {
+    humanizationTells = humanization.flaggedTells
+    humanizationPassed = false
+    const rewritten = rewriteToHumanize(caption, humanization.flaggedTells)
+    if (rewritten !== caption) {
+      finalCaption = rewritten
+    }
+  }
+
   const selfCheckPassed = result.data.self_check_passed
     && bannedHits.length === 0
     && !badHook
     && specificityHit
     && !repeats
     && !fabricatedPersonalClaim
+    && humanizationPassed
   let selfCheckNote = result.data.self_check_note
 
   if (bannedHits.length > 0) {
@@ -132,11 +152,13 @@ export async function generateContent(
     selfCheckNote = 'Too similar to a recent opening line.'
   } else if (fabricatedPersonalClaim) {
     selfCheckNote = 'Opinion mode cannot claim a specific personal event.'
+  } else if (!humanizationPassed) {
+    selfCheckNote = `Humanization tell(s): ${humanizationTells.join('; ')}.`
   }
 
   onStatus?.('Done')
 
-  return { caption, hook, hookScore: result.data.hook_score, hookFeedback: result.data.hook_feedback, selfCheckPassed, selfCheckNote, bannedHits, specificityHit }
+  return { caption: finalCaption, hook: extractHook(finalCaption), hookScore: result.data.hook_score, hookFeedback: result.data.hook_feedback, selfCheckPassed, selfCheckNote, bannedHits, specificityHit, humanizationTells, humanizationPassed }
 }
 
 // ── Prompts ────────────────────────────────────────────────────────────────
@@ -153,12 +175,16 @@ function buildContentSystemPrompt(input: ContentGenerationInput): string {
     ? `What this person tends to keep:\n- ${input.preferenceHints.join('\n- ')}`
     : ''
   const mode = input.generationMode ?? 'personal'
+  const structureBlock = input.structure
+    ? `SUGGESTED SHAPE (scaffolding only, not a rule you must force — drop it if the real material doesn't fit): ${input.structure.structureName}. ${input.structure.shape}`
+    : ''
 
   return `You write social media posts for ${input.personaName}. Your job is to turn their real observation into a post that sounds like them, not like a generic content engine.
 
 ${styleBlock}
 ${personalityBlock}
 ${preferenceBlock}
+${structureBlock}
 
 HARD RULES:
 1. NEVER use banned phrases: "unpopular opinion:", "here's the thing", "let that sink in", "thread 🧵", emoji as bullets.
@@ -167,6 +193,7 @@ HARD RULES:
 4. NEVER use clickbait ("stop scrolling", "read that again").
 5. NEVER use corporate jargon.
 6. If mode is opinion, do not claim a specific personal incident happened to ${input.personaName}.
+7. The suggested shape above, if given, is structural scaffolding only. Never let it override rule 3 — do not invent a moment, a number, or a quote just to fit the shape.
 
 MODE: ${mode}
 

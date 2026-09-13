@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
 
-  const { personaId, pillarId, topicClusterId, sourceMaterial, platform, angleId, personalLine, findingId, useStoredOpinion } = body as {
+  const { personaId, pillarId, topicClusterId, sourceMaterial, platform, angleId, personalLine, findingId, useStoredOpinion, structureId } = body as {
     personaId: string
     pillarId: string | null
     topicClusterId?: string | null
@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
     personalLine?: string
     findingId?: string | null
     useStoredOpinion?: boolean
+    structureId?: string | null
   }
 
   if (!personaId?.trim()) return NextResponse.json({ error: 'personaId is required' }, { status: 400 })
@@ -98,6 +99,13 @@ export async function POST(req: NextRequest) {
         sourceType: 'system',
       })
     }
+  }
+
+  let structure: { id: string; structureName: string; shape: string } | null = null
+  if (structureId) {
+    const structures = await store.listPostStructures()
+    const found = structures.find((s) => s.id === structureId)
+    if (found) structure = { id: found.id, structureName: found.structureName, shape: found.shape }
   }
 
   // Get voice profile
@@ -168,6 +176,7 @@ export async function POST(req: NextRequest) {
     generationMode,
     trendingAngle: angle?.angleDescription ?? finding?.finding ?? null,
     preferenceHints,
+    structure: structure ? { structureName: structure.structureName, shape: structure.shape } : null,
   }
 
   return sseStream(async (emit) => {
@@ -178,6 +187,7 @@ export async function POST(req: NextRequest) {
           pillarId: pillar?.id ?? null,
           topicClusterId: topicCluster?.id ?? finding?.topicClusterId ?? null,
           researchFindingId: finding?.id ?? null,
+          structureId: structure?.id ?? null,
           sourceKind: finding ? 'field_update' : (useStoredOpinion ? 'conviction' : 'answer'),
           sourceMaterial: sourceForGeneration,
           platform,

@@ -7,6 +7,7 @@ import type {
   ContentPersona,
   ContentPillar,
   ContentPlatform,
+  ContentPostStructure,
   CsvImport,
   Fact,
   OrganizationRulebook,
@@ -1844,6 +1845,7 @@ export class SupabaseStore implements ScoutStore {
     pillarId: string | null
     topicClusterId?: string | null
     researchFindingId?: string | null
+    structureId?: string | null
     sourceKind?: 'answer' | 'conviction' | 'field_update'
     sourceMaterial: string
     platform: ContentPlatform
@@ -1855,27 +1857,43 @@ export class SupabaseStore implements ScoutStore {
     specificityHit?: boolean
     status?: ContentDraftStatus
   }): Promise<ContentDraft> {
-    const { data, error } = await this.client
+    const payload = {
+      organization_id: this.orgId,
+      persona_id: input.personaId,
+      pillar_id: input.pillarId,
+      topic_cluster_id: input.topicClusterId ?? null,
+      research_finding_id: input.researchFindingId ?? null,
+      structure_id: input.structureId ?? null,
+      source_kind: input.sourceKind ?? 'answer',
+      source_material: input.sourceMaterial,
+      platform: input.platform,
+      caption: input.caption,
+      hook_score: input.hookScore ?? null,
+      hook_feedback: input.hookFeedback ?? '',
+      self_check_passed: input.selfCheckPassed ?? false,
+      self_check_note: input.selfCheckNote ?? '',
+      specificity_hit: input.specificityHit ?? false,
+      status: input.status ?? 'draft',
+    }
+
+    let { data, error } = await this.client
       .from('content_drafts')
-      .insert({
-        organization_id: this.orgId,
-        persona_id: input.personaId,
-        pillar_id: input.pillarId,
-        topic_cluster_id: input.topicClusterId ?? null,
-        research_finding_id: input.researchFindingId ?? null,
-        source_kind: input.sourceKind ?? 'answer',
-        source_material: input.sourceMaterial,
-        platform: input.platform,
-        caption: input.caption,
-        hook_score: input.hookScore ?? null,
-        hook_feedback: input.hookFeedback ?? '',
-        self_check_passed: input.selfCheckPassed ?? false,
-        self_check_note: input.selfCheckNote ?? '',
-        specificity_hit: input.specificityHit ?? false,
-        status: input.status ?? 'draft',
-      })
+      .insert(payload)
       .select()
       .single()
+
+    if (error && error.code === 'PGRST204') {
+      const { structure_id: _structureId, ...withoutStructure } = payload
+      void _structureId
+      const retry = await this.client
+        .from('content_drafts')
+        .insert(withoutStructure)
+        .select()
+        .single()
+      data = retry.data
+      error = retry.error
+    }
+
     if (error) throw error
     return mapContentDraft(data)
   }
@@ -1991,6 +2009,43 @@ export class SupabaseStore implements ScoutStore {
       .single()
     if (error) throw error
     return mapContentHistory(data)
+  }
+
+  async logContentMetrics(historyId: string, metrics: {
+    likes?: number | null
+    reach?: number | null
+    comments?: number | null
+    reposts?: number | null
+    saves?: number | null
+    profileVisits?: number | null
+    followerDelta?: number | null
+  }): Promise<ContentHistoryEntry> {
+    const patch: Record<string, unknown> = { metrics_logged_at: new Date().toISOString() }
+    if ('likes' in metrics) patch.likes = metrics.likes ?? null
+    if ('reach' in metrics) patch.reach = metrics.reach ?? null
+    if ('comments' in metrics) patch.comments = metrics.comments ?? null
+    if ('reposts' in metrics) patch.reposts = metrics.reposts ?? null
+    if ('saves' in metrics) patch.saves = metrics.saves ?? null
+    if ('profileVisits' in metrics) patch.profile_visits = metrics.profileVisits ?? null
+    if ('followerDelta' in metrics) patch.follower_delta = metrics.followerDelta ?? null
+
+    const { data, error } = await this.client
+      .from('content_history')
+      .update(patch)
+      .eq('id', historyId)
+      .select()
+      .single()
+    if (error) throw error
+    return mapContentHistory(data)
+  }
+
+  async listPostStructures(): Promise<ContentPostStructure[]> {
+    const { data, error } = await this.client
+      .from('content_post_structures')
+      .select('*')
+      .order('category')
+    if (error) throw error
+    return data.map(mapPostStructure)
   }
 
   async createTrendingAngle(input: {
@@ -2294,6 +2349,7 @@ function mapContentDraft(r: Record<string, unknown>): ContentDraft {
     pillarId: (r.pillar_id as string) ?? null,
     topicClusterId: (r.topic_cluster_id as string) ?? null,
     researchFindingId: (r.research_finding_id as string) ?? null,
+    structureId: (r.structure_id as string) ?? null,
     sourceKind: ((r.source_kind as ContentDraft['sourceKind']) ?? 'answer'),
     sourceMaterial: r.source_material as string,
     platform: r.platform as ContentPlatform,
@@ -2320,6 +2376,25 @@ function mapContentHistory(r: Record<string, unknown>): ContentHistoryEntry {
     postedAt: r.posted_at as string,
     ledToRealOutcome: Boolean(r.led_to_real_outcome ?? false),
     outcomeNotedAt: (r.outcome_noted_at as string) ?? null,
+    likes: (r.likes as number) ?? null,
+    reach: (r.reach as number) ?? null,
+    comments: (r.comments as number) ?? null,
+    reposts: (r.reposts as number) ?? null,
+    saves: (r.saves as number) ?? null,
+    profileVisits: (r.profile_visits as number) ?? null,
+    followerDelta: (r.follower_delta as number) ?? null,
+    metricsLoggedAt: (r.metrics_logged_at as string) ?? null,
+  }
+}
+
+function mapPostStructure(r: Record<string, unknown>): ContentPostStructure {
+  return {
+    id: r.id as string,
+    category: r.category as ContentPostStructure['category'],
+    structureName: r.structure_name as string,
+    shape: r.shape as string,
+    example: (r.example as string) ?? '',
+    createdAt: r.created_at as string,
   }
 }
 

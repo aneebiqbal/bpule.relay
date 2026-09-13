@@ -6,9 +6,23 @@ import { buildMockStore } from '@/lib/store/mock-store'
 // voice profiles persist across requests for the local dev server. This lives
 // in its own module so both getCurrentUser and createScoutStore can reach it
 // without a circular import.
-const demoStores = new Map<string, ScoutStore>()
+//
+// Stashed on globalThis (not just a module-level const) because Next.js dev
+// (Turbopack) compiles Route Handlers and Server Components as separate
+// module graphs — a plain module-level Map ends up as two different
+// instances between an API route and a page, so a persona created via one
+// would silently vanish when the other read it back. globalThis is the one
+// thing both graphs actually share within the same server process.
+const registryKey = Symbol.for('scout.demoStores')
+
+function getRegistry(): Map<string, ScoutStore> {
+  const g = globalThis as unknown as { [registryKey]?: Map<string, ScoutStore> }
+  if (!g[registryKey]) g[registryKey] = new Map()
+  return g[registryKey]
+}
 
 export function getDemoStore(rep: Rep): ScoutStore {
+  const demoStores = getRegistry()
   let store = demoStores.get(rep.id)
   if (store) return store
   store = buildMockStore({ rep, mode: 'demo' })

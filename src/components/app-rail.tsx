@@ -25,25 +25,25 @@ import { APP_VERSION } from '@/lib/version'
 import type { RepRole } from '@/lib/domain/types'
 
 const BASE_NAV = [
-  { href: '/', label: 'Today', icon: CalendarDays, exact: true },
-  { href: '/content', label: 'Content', icon: PenLine, exact: false },
-  { href: '/leads/new', label: 'New lead', icon: Plus, exact: true },
-  { href: '/upwork', label: 'Upwork', icon: Briefcase, exact: false },
-  { href: '/archive', label: 'Archive', icon: Search, exact: false },
-  { href: '/team', label: 'Team', icon: Users, exact: false },
-  { href: '/profiles', label: 'Profiles', icon: IdCard, exact: false },
-  { href: '/facts', label: 'Facts', icon: BookOpen, exact: false },
+  { href: '/', label: 'Today', icon: CalendarDays, exact: true, accent: 'gold' as const },
+  { href: '/content', label: 'Content', icon: PenLine, exact: false, accent: 'studio' as const },
+  { href: '/leads/new', label: 'New lead', icon: Plus, exact: true, accent: 'gold' as const },
+  { href: '/upwork', label: 'Upwork', icon: Briefcase, exact: false, accent: 'gold' as const },
+  { href: '/archive', label: 'Archive', icon: Search, exact: false, accent: 'gold' as const },
+  { href: '/team', label: 'Team', icon: Users, exact: false, accent: 'gold' as const },
+  { href: '/profiles', label: 'Profiles', icon: IdCard, exact: false, accent: 'gold' as const },
+  { href: '/facts', label: 'Facts', icon: BookOpen, exact: false, accent: 'gold' as const },
 ]
 
 const SOURCER_NAV = [
-  { href: '/', label: 'Today', icon: CalendarDays, exact: true },
-  { href: '/content', label: 'Content', icon: PenLine, exact: false },
-  { href: '/leads/new', label: 'New lead', icon: Plus, exact: true },
-  { href: '/leads/import', label: 'Import', icon: FileUp, exact: false },
-  { href: '/archive', label: 'Archive', icon: Search, exact: false },
-  { href: '/team', label: 'Team', icon: Users, exact: false },
-  { href: '/profiles', label: 'Profiles', icon: IdCard, exact: false },
-  { href: '/facts', label: 'Facts', icon: BookOpen, exact: false },
+  { href: '/', label: 'Today', icon: CalendarDays, exact: true, accent: 'gold' as const },
+  { href: '/content', label: 'Content', icon: PenLine, exact: false, accent: 'studio' as const },
+  { href: '/leads/new', label: 'New lead', icon: Plus, exact: true, accent: 'gold' as const },
+  { href: '/leads/import', label: 'Import', icon: FileUp, exact: false, accent: 'gold' as const },
+  { href: '/archive', label: 'Archive', icon: Search, exact: false, accent: 'gold' as const },
+  { href: '/team', label: 'Team', icon: Users, exact: false, accent: 'gold' as const },
+  { href: '/profiles', label: 'Profiles', icon: IdCard, exact: false, accent: 'gold' as const },
+  { href: '/facts', label: 'Facts', icon: BookOpen, exact: false, accent: 'gold' as const },
 ]
 
 const ADMIN_NAV_ITEM = {
@@ -51,6 +51,7 @@ const ADMIN_NAV_ITEM = {
   label: 'Manage Profiles',
   icon: ShieldCheck,
   exact: false,
+  accent: 'gold' as const,
 }
 
 const ROLE_LABEL: Record<RepRole, string> = {
@@ -184,8 +185,9 @@ export function AppRail({
 
         {/* Nav */}
         <nav className="flex flex-1 flex-col gap-0.5 px-3 pb-4">
-          {NAV.map(({ href, label, icon: Icon, exact }) => {
+          {NAV.map(({ href, label, icon: Icon, exact, accent }) => {
             const active = isActive(href, exact)
+            const isStudio = accent === 'studio'
             return (
               <Link
                 key={href}
@@ -202,18 +204,18 @@ export function AppRail({
                   className={cn(
                     'size-[18px] shrink-0 transition-colors',
                     active
-                      ? (href === '/content' ? 'text-studio' : 'text-gold')
+                      ? (isStudio ? 'text-studio' : 'text-gold')
                       : 'text-slate group-hover:text-ink',
                   )}
                   aria-hidden="true"
                   strokeWidth={active ? 2.2 : 1.8}
                 />
                 <span>{label}</span>
-                {href === '/content' && !active && (
+                {isStudio && !active && (
                   <span className="ml-auto size-1.5 rounded-full bg-studio/60" aria-hidden="true" />
                 )}
                 {active && (
-                  <span className={cn('absolute right-2.5 size-1.5 rounded-full', href === '/content' ? 'bg-studio' : 'bg-gold')} />
+                  <span className={cn('absolute right-2.5 size-1.5 rounded-full', isStudio ? 'bg-studio' : 'bg-gold')} />
                 )}
               </Link>
             )
@@ -265,8 +267,9 @@ export function AppRail({
         aria-label="Primary"
       >
         <div className="flex items-stretch">
-          {NAV.slice(0, 5).map(({ href, label, icon: Icon, exact }) => {
+          {NAV.slice(0, 5).map(({ href, label, icon: Icon, exact, accent }) => {
             const active = isActive(href, exact)
+            const isStudio = accent === 'studio'
             return (
               <Link
                 key={href}
@@ -278,10 +281,10 @@ export function AppRail({
                 )}
               >
                 {active && (
-                  <span className="absolute top-0 left-1/2 h-[2px] w-6 -translate-x-1/2 rounded-full bg-gold" />
+                  <span className={cn('absolute top-0 left-1/2 h-[2px] w-6 -translate-x-1/2 rounded-full', isStudio ? 'bg-studio' : 'bg-gold')} />
                 )}
                 <Icon
-                  className={cn('size-5 transition-all', active ? 'text-gold' : '')}
+                  className={cn('size-5 transition-all', active ? (isStudio ? 'text-studio' : 'text-gold') : '')}
                   aria-hidden="true"
                   strokeWidth={active ? 2.2 : 1.8}
                 />

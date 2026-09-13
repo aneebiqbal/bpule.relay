@@ -6,6 +6,7 @@ import type {
   ContentPersona,
   ContentPillar,
   ContentPlatform,
+  ContentPostStructure,
   CsvImport,
   Fact,
   Lead,
@@ -413,6 +414,7 @@ export interface ScoutStore {
     pillarId: string | null
     topicClusterId?: string | null
     researchFindingId?: string | null
+    structureId?: string | null
     sourceKind?: 'answer' | 'conviction' | 'field_update'
     sourceMaterial: string
     platform: ContentPlatform
@@ -438,6 +440,16 @@ export interface ScoutStore {
     openingLine: string
   }): Promise<ContentHistoryEntry>
   markContentHistoryOutcome(historyId: string, ledToRealOutcome: boolean): Promise<ContentHistoryEntry>
+  logContentMetrics(historyId: string, metrics: {
+    likes?: number | null
+    reach?: number | null
+    comments?: number | null
+    reposts?: number | null
+    saves?: number | null
+    profileVisits?: number | null
+    followerDelta?: number | null
+  }): Promise<ContentHistoryEntry>
+  listPostStructures(): Promise<ContentPostStructure[]>
   createTrendingAngle(input: {
     pillarId: string
     angleDescription: string

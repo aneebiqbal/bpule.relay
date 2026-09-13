@@ -4,6 +4,7 @@ import type {
   ContentHistoryEntry,
   ContentPersona,
   ContentPillar,
+  ContentPostStructure,
   CsvImport,
   Fact,
   Lead,
@@ -64,6 +65,59 @@ const t = (daysAgo: number, hour = 10) => {
   d.setHours(hour, 0, 0, 0)
   return d.toISOString()
 }
+
+// Mirrors supabase/migrations/0031_seed_post_structures.sql — same curated,
+// observed shapes, used only as generation scaffolding, never a promise.
+const DEMO_POST_STRUCTURES: ContentPostStructure[] = [
+  {
+    id: 'struct-reversal',
+    category: 'contrarian_opener',
+    structureName: 'The reversal',
+    shape: 'State the common belief in one line. Flatly contradict it in the next. Spend the rest of the post on the real reason, grounded in the source material, not abstract theory.',
+    example: 'Everyone says ship fast and fix later. We shipped fast for two years and spent the third year fixing. Here\'s what that actually cost us.',
+    createdAt: t(30),
+  },
+  {
+    id: 'struct-quiet-disagreement',
+    category: 'contrarian_opener',
+    structureName: 'The quiet disagreement',
+    shape: 'Open by naming what most people in the field do. State plainly that you do the opposite, then explain the one real situation that taught you why.',
+    example: 'Most PMs write a spec before talking to an engineer. I stopped doing that after a project where the spec was wrong on page one.',
+    createdAt: t(30),
+  },
+  {
+    id: 'struct-specific-moment',
+    category: 'story_opener',
+    structureName: 'The specific moment',
+    shape: 'Open on one concrete moment in time (a meeting, a message, a bug) with a real detail, not a summary. Let the lesson emerge from what happened, not be stated first.',
+    example: 'Tuesday, 4pm. A client asked why the dashboard was still loading. It wasn\'t the query. It was the query we forgot to cache six months ago.',
+    createdAt: t(30),
+  },
+  {
+    id: 'struct-before-after',
+    category: 'story_opener',
+    structureName: 'Before and after',
+    shape: 'Describe the state of things before, in one or two lines. Describe what changed. Let the contrast carry the point instead of explaining it.',
+    example: 'Before: three people manually checking this every morning. After: one alert, one owner, zero manual checks. The change took an afternoon.',
+    createdAt: t(30),
+  },
+  {
+    id: 'struct-real-question',
+    category: 'question_opener',
+    structureName: 'The real question someone asked',
+    shape: 'Open with an actual question a real person asked you or your team, attributed honestly (a client, a teammate, a comment) not a rhetorical one aimed at the reader.',
+    example: 'A client asked me last week why we don\'t just use the cheapest option. Here\'s the honest answer I gave them.',
+    createdAt: t(30),
+  },
+  {
+    id: 'struct-surprising-number',
+    category: 'data_point_opener',
+    structureName: 'The number that surprised you',
+    shape: 'Lead with one real, specific number from your own material. Explain what it actually measures before drawing any conclusion from it.',
+    example: '14 seconds. That\'s how long our onboarding took before we cut it down. Here is what we removed.',
+    createdAt: t(30),
+  },
+]
 
 export function buildMockStore(ctx: StoreContext): ScoutStore {
   const rep = ctx.rep
@@ -1228,6 +1282,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         pillarId: input.pillarId,
         topicClusterId: input.topicClusterId ?? null,
         researchFindingId: input.researchFindingId ?? null,
+        structureId: input.structureId ?? null,
         sourceKind: input.sourceKind ?? 'answer',
         sourceMaterial: input.sourceMaterial,
         platform: input.platform,
@@ -1273,6 +1328,14 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
           postedAt: new Date().toISOString(),
           ledToRealOutcome: false,
           outcomeNotedAt: null,
+          likes: null,
+          reach: null,
+          comments: null,
+          reposts: null,
+          saves: null,
+          profileVisits: null,
+          followerDelta: null,
+          metricsLoggedAt: null,
         })
       }
       return draft
@@ -1295,6 +1358,14 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         postedAt: new Date().toISOString(),
         ledToRealOutcome: false,
         outcomeNotedAt: null,
+        likes: null,
+        reach: null,
+        comments: null,
+        reposts: null,
+        saves: null,
+        profileVisits: null,
+        followerDelta: null,
+        metricsLoggedAt: null,
       }
       contentHistoryEntries.push(entry)
       return entry
@@ -1308,6 +1379,22 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       entry.ledToRealOutcome = ledToRealOutcome
       entry.outcomeNotedAt = ledToRealOutcome ? new Date().toISOString() : null
       return entry
+    },
+    async logContentMetrics(historyId, metrics) {
+      const entry = contentHistoryEntries.find((h) => h.id === historyId)
+      if (!entry) throw new Error('History entry not found')
+      if ('likes' in metrics) entry.likes = metrics.likes ?? null
+      if ('reach' in metrics) entry.reach = metrics.reach ?? null
+      if ('comments' in metrics) entry.comments = metrics.comments ?? null
+      if ('reposts' in metrics) entry.reposts = metrics.reposts ?? null
+      if ('saves' in metrics) entry.saves = metrics.saves ?? null
+      if ('profileVisits' in metrics) entry.profileVisits = metrics.profileVisits ?? null
+      if ('followerDelta' in metrics) entry.followerDelta = metrics.followerDelta ?? null
+      entry.metricsLoggedAt = new Date().toISOString()
+      return entry
+    },
+    async listPostStructures() {
+      return DEMO_POST_STRUCTURES
     },
     async createTrendingAngle(input) {
       const angle: TrendingAngle = {

@@ -1,7 +1,7 @@
 import type { ContentDraftFeedback, ContentPersona, ContentResearchFinding, TopicCluster } from '@/lib/domain/types'
 
 export type DailyDecision = {
-  decisionType: 'question' | 'react' | 'ready' | 'none'
+  decisionType: 'question' | 'react' | 'ready' | 'none' | 'ask_uncertain'
   prompt?: string
   reason?: string
   contextId?: string | null
@@ -12,6 +12,8 @@ export type DailyDecision = {
     sourceLabel: string
     sourceUrl: string
   }
+  confidence?: 'high' | 'medium' | 'low'
+  uncertainPrompt?: string
 }
 
 export function buildDailyDecision(input: {
@@ -71,15 +73,47 @@ export function buildDailyDecision(input: {
   }
 
   if (input.persona.valuesAndOpinions.length >= 2 && input.clusters.length > 0) {
+    // ── Confidence check: do we have enough SPECIFIC material, or would we be guessing? ──
+    const hasRecentInput = input.clusters.some((c) => {
+      if (!c.lastInputAt) return false
+      const daysSince = (nowMs - new Date(c.lastInputAt).getTime()) / 86_400_000
+      return daysSince <= 10
+    })
+    const hasFindings = input.findings.length > 0
+    const hasEnoughFeedback = totalDecisions(input.feedback) >= 4
+    const confidence: 'high' | 'medium' | 'low' =
+      hasRecentInput && (hasFindings || hasEnoughFeedback) ? 'high'
+      : hasRecentInput || hasFindings ? 'medium'
+      : 'low'
+
+    if (confidence === 'low') {
+      const targetCluster = preferredCluster ?? input.clusters[0]
+      return {
+        decisionType: 'ask_uncertain',
+        contextId: targetCluster?.id ?? null,
+        topicLabel: targetCluster?.clusterName ?? 'your field',
+        confidence: 'low',
+        prompt: 'Before I draft, I want to make sure I get this right.',
+        uncertainPrompt: targetCluster
+          ? `What is one specific thing you have noticed or changed your mind about lately, even small, related to ${targetCluster.clusterName}?`
+          : 'What is one specific thing you have noticed or changed your mind about lately, even small?',
+      }
+    }
+
     return {
       decisionType: 'ready',
       contextId: preferredCluster?.id ?? input.clusters[0].id,
       topicLabel: preferredCluster?.clusterName ?? input.clusters[0].clusterName,
       prompt: 'Want me to draft one from what you have already shared?',
+      confidence,
     }
   }
 
   return { decisionType: 'none', reason: 'Nothing worth surfacing today.' }
+}
+
+function totalDecisions(feedback: ContentDraftFeedback[]): number {
+  return feedback.filter((f) => f.reaction === 'posting' || f.reaction === 'posting_after_edit' || f.reaction === 'not_for_me').length
 }
 
 function pickPreferredCluster(clusters: TopicCluster[], feedback: ContentDraftFeedback[]) {

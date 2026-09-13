@@ -463,6 +463,14 @@
     box-shadow: var(--shadow-gold);
   }
 
+  .shadow-gold {
+    box-shadow: var(--shadow-gold);
+  }
+
+  .shadow-studio {
+    box-shadow: var(--shadow-studio);
+  }
+
   /* ── Gradients ── */
   .gradient-gold {
     background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
