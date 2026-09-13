@@ -111,8 +111,6 @@ export async function POST(request: Request) {
       : [],
   }
 
-  const score = computeScore(extracted)
-
   let store
   try {
     store = await createScoutStore()
@@ -122,6 +120,13 @@ export async function POST(request: Request) {
       { status: 401 },
     )
   }
+
+  const rulebook = await store.getRulebook()
+  if (!rulebook) {
+    return NextResponse.json({ error: 'Organization rulebook not found.' }, { status: 500 })
+  }
+
+  const score = computeScore(extracted, rulebook)
 
   const result = await store.createLead({
     company,

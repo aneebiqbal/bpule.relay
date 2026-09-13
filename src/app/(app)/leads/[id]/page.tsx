@@ -15,6 +15,8 @@ export default async function LeadPage({
   const lead = await store.getLead(id)
   if (!lead) notFound()
 
+  const rulebook = await store.getRulebook()
+
   const score = computeScore({
     name: lead.contactName,
     title: lead.contactTitle,
@@ -24,7 +26,7 @@ export default async function LeadPage({
     signalEvidence: lead.signalEvidence ?? '',
     verbatimQuote: lead.verbatimQuote,
     tags: lead.tags ?? [],
-  })
+  }, rulebook!)
 
   const [profiles, matchedProofs] = await Promise.all([
     store.listProfiles(),

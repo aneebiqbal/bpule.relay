@@ -63,6 +63,8 @@ export async function POST(request: Request) {
     )
   }
 
+  const rulebook = await store.getRulebook()
+
   const rows = parseCsv(csvText)
   const results: Array<{
     row: number
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
       tags: row.tags?.split(/[,;]/).map((t) => t.trim()).filter(Boolean) ?? [],
     }
 
-    const score = computeScore(extracted)
+    const score = computeScore(extracted, rulebook!)
 
     const createResult = await store.createLead({
       company: extracted.company,

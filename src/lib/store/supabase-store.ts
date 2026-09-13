@@ -8,6 +8,7 @@ import type {
   ContentPlatform,
   CsvImport,
   Fact,
+  OrganizationRulebook,
   Lead,
   Message,
   NotificationLogEntry,
@@ -45,6 +46,7 @@ import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/li
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
 import { pickPlayForSignal } from '@/lib/score/plays'
+import { loadRulebook } from '@/lib/score/rulebook'
 
 type Row = Record<string, unknown>
 
@@ -198,6 +200,10 @@ export class SupabaseStore implements ScoutStore {
 
   private get orgId(): string {
     return this.organization.id
+  }
+
+  async getRulebook(): Promise<OrganizationRulebook | null> {
+    return loadRulebook(this.client, this.orgId)
   }
 
   private async fetchLeadsAll(): Promise<Lead[]> {
@@ -623,6 +629,30 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client.from('plays').select('*')
     if (error) throw error
     return (data ?? []).map(mapPlay)
+  }
+
+  async createPlay(input: {
+    name: string
+    situation: string
+    templateShape: string
+  }): Promise<Play> {
+    const { data, error } = await this.client
+      .from('plays')
+      .insert({
+        organization_id: this.orgId,
+        name: input.name,
+        situation: input.situation,
+        template_shape: input.templateShape,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapPlay(data as Row)
+  }
+
+  async deletePlay(id: string): Promise<void> {
+    const { error } = await this.client.from('plays').delete().eq('id', id)
+    if (error) throw error
   }
 
   async listAllReps(): Promise<Rep[]> {

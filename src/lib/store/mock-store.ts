@@ -9,6 +9,7 @@ import type {
   Message,
   MessageType,
   NotificationLogEntry,
+  OrganizationRulebook,
   Outcome,
   Play,
   Profile,
@@ -465,8 +466,28 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     return null
   }
 
+  const demoRulebook: OrganizationRulebook = {
+    organizationId: DEMO_ORG_ID,
+    signals: [
+      { id: 1, name: 'hiring', weight: 6, short: 'Hiring ramp', description: 'Recent job posts.', example: 'Three open engineering roles.' },
+      { id: 2, name: 'understaffed', weight: 5, short: 'Tiny team', description: 'A solo founder or very small team.', example: 'Single developer credited.' },
+      { id: 3, name: 'funding', weight: 4, short: 'Raised money', description: 'A recent funding round.', example: 'Announced a seed round.' },
+      { id: 4, name: 'stale', weight: 4, short: 'Stale product', description: 'No meaningful updates for months.', example: 'Last update was over a year ago.' },
+      { id: 5, name: 'weak_stack', weight: 3, short: 'Aging stack', description: 'Dated or weak technology.', example: 'Unsupported framework version.' },
+      { id: 6, name: 'pain', weight: 5, short: 'Recorded pain', description: 'Complaints about delivery.', example: 'Six month wait for a fix.' },
+      { id: 7, name: 'asking', weight: 7, short: 'Asking for help', description: 'Publicly asking for help.', example: 'Looking for a dev shop.' },
+    ],
+    verdictThresholds: { send: { min: 10, max: 12 }, research_more: { min: 7, max: 9 }, skip: { min: 0, max: 6 } },
+    maxSignalWeight: 7,
+    maxCompleteness: 5,
+    confidenceSendThreshold: 72,
+  }
+
   return {
     organizationId: DEMO_ORG_ID,
+    async getRulebook() {
+      return demoRulebook
+    },
     async createLead(input: NewLeadInput): Promise<CreateLeadResult> {
       const blocked = dedupe(input.company)
       if (blocked) return blocked
@@ -663,6 +684,21 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     async listPlays() {
       return [...plays]
+    },
+    async createPlay(input) {
+      const play = {
+        id: nextId('play'),
+        organizationId: DEMO_ORG_ID,
+        name: input.name,
+        situation: input.situation,
+        templateShape: input.templateShape,
+      }
+      plays.push(play)
+      return play
+    },
+    async deletePlay(id) {
+      const idx = plays.findIndex((p) => p.id === id)
+      if (idx >= 0) plays.splice(idx, 1)
     },
     async listAllReps() {
       return [...reps].sort((a, b) => a.name.localeCompare(b.name))

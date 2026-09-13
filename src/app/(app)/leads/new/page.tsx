@@ -23,6 +23,16 @@ import { VerdictWord } from '@/components/status-word'
 import { ScoreRing } from '@/components/score-ring'
 import { signalById, SIGNALS } from '@/lib/score/signals'
 import { computeScore } from '@/lib/score/rubric'
+import type { OrganizationRulebook } from '@/lib/domain/types'
+
+const DEFAULT_RULEBOOK: OrganizationRulebook = {
+  organizationId: '',
+  signals: SIGNALS,
+  verdictThresholds: { send: { min: 10, max: 12 }, research_more: { min: 7, max: 9 }, skip: { min: 0, max: 6 } },
+  maxSignalWeight: 7,
+  maxCompleteness: 5,
+  confidenceSendThreshold: 72,
+}
 import { classifyRoleFromTitle, mapLocationToRegion } from '@/lib/leads/targeting'
 import { readSse } from '@/lib/sse/client'
 import { cn } from 'cn'
@@ -170,7 +180,7 @@ export default function NewLeadPage() {
       verbatimQuote: form.verbatimQuote.trim() || null,
       tags: form.tags,
     }
-    return computeScore(lead)
+    return computeScore(lead, DEFAULT_RULEBOOK)
   }, [form, liveRegion])
 
   const hasContent = Boolean(form.signalEvidence.trim() || form.company.trim())

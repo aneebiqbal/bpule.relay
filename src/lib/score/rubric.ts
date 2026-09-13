@@ -1,40 +1,37 @@
 import type {
   ExtractedLead,
+  OrganizationRulebook,
   ScoreBreakdownItem,
   ScoreResult,
+  SignalDefinition,
   Verdict,
 } from '@/lib/domain/types'
-import { signalById, VERDICT_RULES } from '@/lib/score/signals'
 import { mapLocationToRegion } from '@/lib/leads/targeting'
 
-const CONFIDENCE_SEND_THRESHOLD = 72
-
 /**
- * Scout qualification rubric (published, version 1).
+ * Scout qualification rubric.
  *
  * Pure arithmetic. No model is ever consulted here. The score is the sum of
  * two groups:
  *
- *   Signal base (max 7 points)
- *     Each of the seven signal types has a published weight. The weight is the
- *     distance between the signal and "this team needs delivery help now."
+ *   Signal base (max rulebook.maxSignalWeight points)
+ *     Each signal type has a configurable weight.
  *
- *   Completeness (max 5 points)
+ *   Completeness (max rulebook.maxCompleteness points)
  *     +1 url present
  *     +1 contact name present
  *     +1 contact title present
  *     +1 evidence is specific (mentions a number or a year)
  *     +1 verbatim quote present
+ *     +2/-2 market region fit
  *
- *   Total max 12.
- *
- * Verdicts
- *    10-12 send
- *    7-9   research_more
- *    0-6   skip
+ * Verdict bands are configurable per organization via verdictThresholds.
  */
-export function computeScore(lead: ExtractedLead): ScoreResult {
-  const signal = signalById(lead.signalType)
+export function computeScore(
+  lead: ExtractedLead,
+  rulebook: OrganizationRulebook,
+): ScoreResult {
+  const signal = rulebook.signals.find((s) => s.id === lead.signalType) ?? null
 
   const evidenceSpecific = evidenceIsSpecific(lead.signalEvidence)
   const region = mapLocationToRegion(lead.locationRaw ?? null)
@@ -45,7 +42,7 @@ export function computeScore(lead: ExtractedLead): ScoreResult {
       category: 'signal',
       label: signal ? `${signal.short} (${signal.name})` : 'No signal',
       points: signal ? signal.weight : 0,
-      max: 7,
+      max: rulebook.maxSignalWeight,
       note: signal
         ? signal.description
         : 'No recognized signal type was extracted.',
@@ -105,15 +102,15 @@ export function computeScore(lead: ExtractedLead): ScoreResult {
 
   const rawTotal = items.reduce((sum, item) => sum + item.points, 0)
   const total = Math.max(0, Math.min(12, rawTotal))
-  const baseVerdict = verdictFor(total)
+  const baseVerdict = verdictFor(total, rulebook)
   const gates: string[] = []
 
   let verdict = baseVerdict
   const confidence = lead.extractionConfidence ?? 100
-  if (confidence < CONFIDENCE_SEND_THRESHOLD && baseVerdict === 'send') {
+  if (confidence < rulebook.confidenceSendThreshold && baseVerdict === 'send') {
     verdict = 'research_more'
     gates.push(
-      `Extraction confidence is ${confidence}/100 (needs ${CONFIDENCE_SEND_THRESHOLD}+ for auto-send).`,
+      `Extraction confidence is ${confidence}/100 (needs ${rulebook.confidenceSendThreshold}+ for auto-send).`,
     )
   }
   for (const note of lead.confidenceNotes ?? []) {
@@ -123,9 +120,10 @@ export function computeScore(lead: ExtractedLead): ScoreResult {
   return { total, verdict, baseVerdict, breakdown: items, gates }
 }
 
-export function verdictFor(total: number): Verdict {
-  if (total >= VERDICT_RULES.send.min) return 'send'
-  if (total >= VERDICT_RULES.research_more.min) return 'research_more'
+export function verdictFor(total: number, rulebook: OrganizationRulebook): Verdict {
+  const t = rulebook.verdictThresholds
+  if (total >= t.send.min) return 'send'
+  if (total >= t.research_more.min) return 'research_more'
   return 'skip'
 }
 

@@ -462,6 +462,7 @@ function evidenceSupportsSignal(evidence: string, signalType: SignalId): boolean
     case 5: return /\blegacy\b|\bwordpress\b|\bjquery\b|\bunsupported\b|\bdeprecated\b/i.test(e)
     case 6: return /\bbehind\b|\bdelayed\b|\boverdue\b|\bstuck\b|\bslow\b|\bpain\b/i.test(e)
     case 7: return /\blooking for\b|\bneed help\b|\bopen to\b|\bagency\b|\bfreelancer\b/i.test(e)
+    default: return false
   }
 }
 

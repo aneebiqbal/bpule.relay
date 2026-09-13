@@ -67,6 +67,8 @@ export async function POST(
     )
   }
 
+  const rulebook = await store.getRulebook()
+
   return sseStream(async (emit) => {
     const [facts, plays, profiles, fewShotPool] = await Promise.all([
       store.listFacts(),
@@ -97,7 +99,7 @@ export async function POST(
       tags: detail.tags ?? [],
     }
 
-    const score = computeScore(extracted)
+    const score = computeScore(extracted, rulebook!)
 
     // Proof matching: tag overlap + semantic embedding merge.
     const tagMatches = await store.matchProofItems(detail.tags ?? [], 8)

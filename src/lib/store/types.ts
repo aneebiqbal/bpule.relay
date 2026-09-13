@@ -1,11 +1,18 @@
 import type {
+  ContentDraft,
+  ContentDraftStatus,
+  ContentHistoryEntry,
+  ContentPersona,
+  ContentPillar,
+  ContentPlatform,
   CsvImport,
-  MarketRegion,
   Fact,
   Lead,
+  MarketRegion,
   Message,
   MessageType,
   NotificationLogEntry,
+  OrganizationRulebook,
   Outcome,
   Play,
   Profile,
@@ -20,12 +27,6 @@ import type {
   UpworkMessage,
   Verdict,
   VoiceProfile,
-  ContentPlatform,
-  ContentDraftStatus,
-  ContentPersona,
-  ContentPillar,
-  ContentDraft,
-  ContentHistoryEntry,
 } from '@/lib/domain/types'
 
 export interface StoreContext {
@@ -214,6 +215,8 @@ export interface FewShotWin {
 export interface ScoutStore {
   /** The organization this store is scoped to. */
   readonly organizationId: string
+  /** The scoring rulebook for this organization. Loaded once per request. */
+  getRulebook(): Promise<OrganizationRulebook | null>
   // leads
   createLead(lead: NewLeadInput): Promise<CreateLeadResult>
   updateLeadScore(
@@ -307,6 +310,8 @@ export interface ScoutStore {
   deleteFact(id: string): Promise<void>
   // plays
   listPlays(): Promise<Play[]>
+  createPlay(input: { name: string; situation: string; templateShape: string }): Promise<Play>
+  deletePlay(id: string): Promise<void>
   // dashboard / team
   getTodayDashboard(): Promise<TodayDashboard>
   getTeamStats(): Promise<TeamStats>
