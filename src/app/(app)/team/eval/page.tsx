@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { createScoutStore } from '@/lib/store'
 import { ArrowLeft, Play, RefreshCw, Database, FlaskConical } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { cn } from 'cn'
 
 export const dynamic = 'force-dynamic'
@@ -57,10 +56,13 @@ export default async function EvalPage() {
             </div>
           </div>
           <form action="/api/few-shot/refresh" method="POST">
-            <Button variant="outline" size="sm" type="submit">
+            <button
+              type="submit"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-paper px-3 text-[0.8rem] font-medium text-ink transition-colors hover:bg-paper-tint"
+            >
               <RefreshCw className="mr-1.5 size-3.5" />
               Refresh wins
-            </Button>
+            </button>
           </form>
         </div>
 
@@ -121,10 +123,13 @@ export default async function EvalPage() {
             action="/api/eval/run"
             method="POST"
           >
-            <Button variant="gold" size="sm" type="submit">
+            <button
+              type="submit"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-gold px-3 text-[0.8rem] font-medium text-paper transition-colors hover:bg-gold/90"
+            >
               <Play className="mr-1.5 size-3.5" />
               Run eval now
-            </Button>
+            </button>
           </form>
         </div>
 
