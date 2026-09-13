@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     pillar = pillars.find((p) => p.id === pillarId) ?? null
   }
 
-  const topicCluster = resolvedTopicClusterId
+  let topicCluster = resolvedTopicClusterId
     ? clusters.find((c) => c.id === resolvedTopicClusterId) ?? null
     : (clusters[0] ?? null)
 
@@ -91,7 +91,12 @@ export async function POST(req: NextRequest) {
     if (pillars.length > 0) {
       pillar = pillars[0]
     } else {
-      return NextResponse.json({ error: 'No topic context exists for this persona yet.' }, { status: 400 })
+      topicCluster = await store.createTopicCluster({
+        personaId,
+        clusterName: 'Core perspective',
+        description: 'Default topic created automatically so drafting can start from real input.',
+        sourceType: 'system',
+      })
     }
   }
 

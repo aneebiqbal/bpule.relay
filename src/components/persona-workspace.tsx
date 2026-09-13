@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Copy, Check, RefreshCw, Sparkles } from 'lucide-react'
 import { cn } from 'cn'
-import type { ContentPersona, TopicCluster, ContentDraft, ContentHistoryEntry } from '@/lib/domain/types'
+import type { ContentPersona, TopicCluster, ContentDraft, ContentHistoryEntry, ContentDraftFeedback } from '@/lib/domain/types'
 import type { DailyDecision } from '@/lib/content/daily-decision'
 
 export function PersonaWorkspace({
@@ -12,12 +12,14 @@ export function PersonaWorkspace({
   topicClusters,
   drafts,
   history,
+  feedback,
   initialDecision,
 }: {
   persona: ContentPersona
   topicClusters: TopicCluster[]
   drafts: ContentDraft[]
   history: ContentHistoryEntry[]
+  feedback: ContentDraftFeedback[]
   initialDecision: DailyDecision
 }) {
   const router = useRouter()
@@ -39,11 +41,55 @@ export function PersonaWorkspace({
   const activeDrafts = drafts.filter((d) => d.status === 'draft' || d.status === 'ready')
 
   const metrics = useMemo(() => {
-    const accepted = drafts.filter((d) => d.status === 'posted').length
-    const rejected = drafts.filter((d) => d.status === 'rejected').length
+    const accepted = feedback.filter((f) => f.reaction === 'posting' || f.reaction === 'posting_after_edit').length
+    const rejected = feedback.filter((f) => f.reaction === 'not_for_me').length
     const keptRate = accepted + rejected > 0 ? Math.round((accepted / (accepted + rejected)) * 100) : 0
     return { keptRate }
-  }, [drafts])
+  }, [feedback])
+
+  const learningReport = useMemo(() => {
+    const bySubject = new Map<string, { kept: number; skipped: number }>()
+    const bySource = new Map<'answer' | 'conviction' | 'field_update', { kept: number; skipped: number }>([
+      ['answer', { kept: 0, skipped: 0 }],
+      ['conviction', { kept: 0, skipped: 0 }],
+      ['field_update', { kept: 0, skipped: 0 }],
+    ])
+    const names = new Map(topicClusters.map((c) => [c.id, c.clusterName]))
+
+    for (const row of feedback) {
+      const kept = row.reaction === 'posting' || row.reaction === 'posting_after_edit'
+      if (row.topicClusterId) {
+        const label = names.get(row.topicClusterId) ?? 'Other'
+        const current = bySubject.get(label) ?? { kept: 0, skipped: 0 }
+        if (kept) current.kept += 1
+        else current.skipped += 1
+        bySubject.set(label, current)
+      }
+      const source = bySource.get(row.sourceKind) ?? { kept: 0, skipped: 0 }
+      if (kept) source.kept += 1
+      else source.skipped += 1
+      bySource.set(row.sourceKind, source)
+    }
+
+    const subjects = [...bySubject.entries()]
+      .map(([label, counts]) => ({ label, ...counts, total: counts.kept + counts.skipped }))
+      .filter((item) => item.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 4)
+
+    const sourceRows = ([
+      ['answer', 'From your answer'],
+      ['conviction', 'From saved opinions'],
+      ['field_update', 'From field updates'],
+    ] as const).map(([key, label]) => {
+      const counts = bySource.get(key) ?? { kept: 0, skipped: 0 }
+      const total = counts.kept + counts.skipped
+      const keptRate = total > 0 ? Math.round((counts.kept / total) * 100) : null
+      return { label, keptRate, total }
+    })
+
+    return { subjects, sourceRows }
+  }, [feedback, topicClusters])
 
   const loadDecision = useCallback(async () => {
     setLoadingDecision(true)
@@ -173,6 +219,39 @@ export function PersonaWorkspace({
 
       <section className="rounded-2xl border border-line/60 bg-surface-raised p-5">
         <p className="text-sm text-slate">Kept posts: {metrics.keptRate}%</p>
+      </section>
+
+      <section className="rounded-2xl border border-line/60 bg-surface-raised p-5">
+        <h2 className="text-heading text-base text-ink">What you keep</h2>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate">By subject</p>
+            {learningReport.subjects.length === 0 ? (
+              <p className="mt-2 text-sm text-slate">No keep/skip data yet.</p>
+            ) : (
+              <div className="mt-2 space-y-1.5">
+                {learningReport.subjects.map((row) => {
+                  const rate = Math.round((row.kept / row.total) * 100)
+                  return (
+                    <p key={row.label} className="text-sm text-ink">
+                      {row.label}: {rate}% kept ({row.kept}/{row.total})
+                    </p>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate">By draft type</p>
+            <div className="mt-2 space-y-1.5">
+              {learningReport.sourceRows.map((row) => (
+                <p key={row.label} className="text-sm text-ink">
+                  {row.label}: {row.keptRate === null ? '-' : `${row.keptRate}%`} {row.total > 0 ? `(${row.total})` : ''}
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="rounded-2xl border border-line/60 bg-surface-raised p-6">

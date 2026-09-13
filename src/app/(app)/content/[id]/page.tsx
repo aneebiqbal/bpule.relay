@@ -36,6 +36,7 @@ export default async function PersonaPage({
       topicClusters={topicClusters}
       drafts={drafts}
       history={history}
+      feedback={feedback}
       initialDecision={initialDecision}
     />
   )
