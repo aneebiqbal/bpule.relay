@@ -6,12 +6,15 @@ import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
   ArrowLeft,
-  Award,
   Check,
   ChevronDown,
   ChevronUp,
   Copy,
   ExternalLink,
+  Flame,
+  Info,
+  Target,
+  Trophy,
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -27,8 +30,6 @@ import { cn } from 'cn'
 import type { LeadDetail } from '@/lib/store/types'
 import type { Profile, ProofItem, ScoreResult } from '@/lib/domain/types'
 import type { DraftResult, SelfCheck } from '@/lib/ai/draft'
-
-
 
 const ARTIFACTS = [
   { id: 'dm', label: 'DM', count: { kind: 'words', max: 55, label: 'words' } },
@@ -54,25 +55,7 @@ function countFor(kind: 'words' | 'chars', text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length
 }
 
-function verdictCall(verdict: ScoreResult['verdict']): string {
-  if (verdict === 'send') return 'Worth your next thirty seconds.'
-  if (verdict === 'research_more') return 'Promising but thin. More sources first.'
-  return 'Not enough here to act on.'
-}
 
-function researchWhy(lead: {
-  contactName?: string | null
-  url?: string | null
-  verbatimQuote?: string | null
-  tags?: string[]
-}): string | null {
-  const missing: string[] = []
-  if (!lead.url) missing.push('a source URL')
-  if (!lead.contactName) missing.push('a named contact')
-  if (!lead.verbatimQuote) missing.push('their own words')
-  if (!lead.tags || lead.tags.length === 0) missing.push('stack tags')
-  return missing.length > 0 ? missing.join(', ') : null
-}
 
 type DraftEvent =
   | { type: 'status'; message: string }
@@ -85,36 +68,35 @@ type DraftEvent =
   | { type: 'done'; draft: DraftResult; matchedProof: ProofItem | null }
   | { type: 'error'; message: string }
 
-function Chip({
-  tone = 'neutral',
-  children,
-}: {
-  tone?: 'neutral' | 'mono' | 'gold'
-  children: React.ReactNode
-}) {
-  return (
-    <span
-      className={cn(
-        'rounded-lg px-2.5 py-1 text-xs font-medium',
-        tone === 'mono'
-          ? 'bg-paper-tint font-mono text-ink'
-          : tone === 'gold'
-            ? 'bg-gold/10 text-gold'
-            : 'bg-paper-tint text-ink/80',
-      )}
-    >
-      {children}
-    </span>
-  )
-}
-
 function hostOf(url: string | null): string | null {
   if (!url) return null
-  try {
-    return new URL(url).host
-  } catch {
-    return null
-  }
+  try { return new URL(url).host } catch { return null }
+}
+
+function ScoreBreakdown({ score }: { score: ScoreResult }) {
+  return (
+    <div className="space-y-2.5">
+      {score.breakdown.map((item) => {
+        const frac = item.max > 0 ? item.points / item.max : 0
+        return (
+          <div key={item.category + item.label}>
+            <div className="flex items-baseline justify-between text-xs">
+              <span className="text-slate">{item.label}</span>
+              <span className="text-mono-medium text-ink">{item.points}/{item.max}</span>
+            </div>
+            <div className="mt-1 h-1 overflow-hidden rounded-full bg-paper-tint">
+              <div
+                className={cn('h-full rounded-full transition-all duration-700',
+                  frac >= 1 ? 'bg-status-send' : frac > 0.5 ? 'bg-gold' : frac > 0 ? 'bg-gold/60' : 'bg-line',
+                )}
+                style={{ width: `${Math.max(frac * 100, frac > 0 ? 8 : 0)}%` }}
+              />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 export function LeadWorkspace({
@@ -158,108 +140,66 @@ export function LeadWorkspace({
   const signal = signalById(lead.signalType)
   const hasReply = lead.outcomes.some((o) => o.stage === 'replied')
   const hasPriorSend = lead.messages.some((m) => m.sentText && m.sentAt)
-  const followupEligible =
-    (lead.status === 'contacted' || lead.status === 'followed_up') && hasPriorSend
+  const followupEligible = (lead.status === 'contacted' || lead.status === 'followed_up') && hasPriorSend
 
   const artifactDisabled: Record<ArtifactId, string | null> = {
     dm: null,
     connection: null,
     upwork: null,
-    followup: followupEligible
-      ? null
-      : lead.status === 'new'
-        ? 'Eligible once this lead is contacted.'
-        : 'Eligible once a first message has been sent.',
-    reply: hasReply
-      ? 'Reply text capture lands with the next pass. Drafting stops here so nothing gets written blind.'
-      : 'Appears when a reply is on file.',
+    followup: followupEligible ? null : lead.status === 'new' ? 'Eligible once this lead is contacted.' : 'Eligible once a first message has been sent.',
+    reply: hasReply ? 'Reply text capture lands with the next pass.' : 'Appears when a reply is on file.',
   }
 
   const activeProof = proofList.find((p) => p.id === matchedProofId) ?? proofList[0] ?? null
+  const chosenProfileId = profiles.some((p) => p.id === selectedProfileId) ? selectedProfileId : profiles[0]?.id ?? null
 
-  const chosenProfileId = profiles.some((p) => p.id === selectedProfileId)
-    ? selectedProfileId
-    : profiles[0]?.id ?? null
+  const editDraft = useCallback((text: string) => {
+    setDrafts((d) => ({ ...d, [artifact]: { result: d[artifact]?.result ?? null, text } }))
+  }, [artifact])
 
-  const editDraft = useCallback(
-    (text: string) => {
-      setDrafts((d) => ({ ...d, [artifact]: { result: d[artifact]?.result ?? null, text } }))
-    },
-    [artifact],
-  )
-
-  const generateDraft = useCallback(
-    async (proofId?: string) => {
-      const target = artifact
-      if (target === 'reply') return
-      if (locked) return
-      setDrafting(true)
-      setDraftError(null)
-      setDrafts((d) => ({ ...d, [target]: { result: null, text: '' } }))
+  const generateDraft = useCallback(async (proofId?: string) => {
+    const target = artifact
+    if (target === 'reply' || locked) return
+    setDrafting(true)
+    setDraftError(null)
+    setDrafts((d) => ({ ...d, [target]: { result: null, text: '' } }))
+    setStatusMessage(null)
+    setVariantDraft(null)
+    setShowVariant(false)
+    streamBuffer.current = ''
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: target, profileId: chosenProfileId, proofId: proofId ?? matchedProofId ?? undefined }),
+      })
+      await readSse<DraftEvent>(res, {
+        onEvent(event) {
+          if (event.type === 'status') { setStatusMessage(event.message); return }
+          if (event.type === 'proof') { setProofList(event.items); if (!proofId && event.items.length > 0) setMatchedProofId(event.items[0].id); return }
+          if (event.type === 'attempt') { if (event.attempt > 0) { streamBuffer.current = ''; setDrafts((d) => ({ ...d, [target]: { result: null, text: '' } })) } return }
+          if (event.type === 'draft') { streamBuffer.current += event.chunk; setDrafts((d) => ({ ...d, [target]: { result: d[target]?.result ?? null, text: streamBuffer.current } })); return }
+          if (event.type === 'variant') { setVariantDraft(event.draft); return }
+          if (event.type === 'error') { setDraftError(event.message); return }
+          if (event.type === 'done') { setDrafts((d) => ({ ...d, [target]: { result: event.draft, text: event.draft.draftText } })); if (event.matchedProof) setMatchedProofId(event.matchedProof.id); return }
+        },
+      })
+    } catch (err) {
+      setDraftError(err instanceof Error ? err.message : 'Drafting failed.')
+    } finally {
+      setDrafting(false)
       setStatusMessage(null)
-      setVariantDraft(null)
-      setShowVariant(false)
-      streamBuffer.current = ''
-      try {
-        const res = await fetch(`/api/leads/${lead.id}/draft`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: target,
-            profileId: chosenProfileId,
-            proofId: proofId ?? matchedProofId ?? undefined,
-          }),
-        })
-        await readSse<DraftEvent>(res, {
-          onEvent(event) {
-            if (event.type === 'status') { setStatusMessage(event.message); return }
-            if (event.type === 'proof') {
-              setProofList(event.items)
-              if (!proofId && event.items.length > 0) setMatchedProofId(event.items[0].id)
-              return
-            }
-            if (event.type === 'attempt') {
-              if (event.attempt > 0) {
-                streamBuffer.current = ''
-                setDrafts((d) => ({ ...d, [target]: { result: null, text: '' } }))
-              }
-              return
-            }
-            if (event.type === 'draft') {
-              streamBuffer.current += event.chunk
-              setDrafts((d) => ({ ...d, [target]: { result: d[target]?.result ?? null, text: streamBuffer.current } }))
-              return
-            }
-            if (event.type === 'variant') { setVariantDraft(event.draft); return }
-            if (event.type === 'error') { setDraftError(event.message); return }
-            if (event.type === 'done') {
-              setDrafts((d) => ({ ...d, [target]: { result: event.draft, text: event.draft.draftText } }))
-              if (event.matchedProof) setMatchedProofId(event.matchedProof.id)
-              return
-            }
-          },
-        })
-      } catch (err) {
-        setDraftError(err instanceof Error ? err.message : 'Drafting failed.')
-      } finally {
-        setDrafting(false)
-        setStatusMessage(null)
-      }
-    },
-    [artifact, locked, lead.id, chosenProfileId, matchedProofId],
-  )
+    }
+  }, [artifact, locked, lead.id, chosenProfileId, matchedProofId])
 
-  const onDraftProof = useCallback(
-    (proofId: string) => {
-      setMatchedProofId(proofId)
-      void generateDraft(proofId)
-    },
-    [generateDraft],
-  )
+  const onDraftProof = useCallback((proofId: string) => {
+    setMatchedProofId(proofId)
+    void generateDraft(proofId)
+  }, [generateDraft])
 
   const copyDraft = useCallback(async () => {
     if (!draftText) return
-    try { await navigator.clipboard.writeText(draftText) } catch { /* text is selectable */ }
+    try { await navigator.clipboard.writeText(draftText) } catch { /* selectable */ }
   }, [draftText])
 
   async function logSend() {
@@ -295,30 +235,10 @@ export function LeadWorkspace({
   const inPipeline = artifact === 'followup' ? !hasPriorSend : priorSameType
 
   const gates: Array<{ label: string; ok: boolean; why: string }> = [
-    {
-      label: 'Names the company',
-      ok: companyNamed,
-      why: companyNamed ? '' : `The message does not name ${lead.company}, so the reader cannot tell it is about them.`,
-    },
-    {
-      label: `Within the ${ARTIFACTS.find((a) => a.id === artifact)?.label.toLowerCase()} limit`,
-      ok: artifact === 'reply' || count <= countMax,
-      why: count > countMax
-        ? `Current text is ${count} ${countKind === 'chars' ? 'characters' : 'words'}; the limit is ${countMax}.`
-        : '',
-    },
-    {
-      label: 'Passed every draft check',
-      ok: Boolean(draft?.passed),
-      why: !draft?.passed ? (draft ? 'The draft flagged itself. Read the notes and fix.' : 'Generate a draft first.') : '',
-    },
-    {
-      label: artifact === 'followup' ? 'Continues an existing thread' : 'Not already sent on this line',
-      ok: artifact === 'followup' ? hasPriorSend : !inPipeline,
-      why: artifact === 'followup'
-        ? !hasPriorSend ? 'A follow-up needs a first message on file.' : ''
-        : inPipeline ? `A ${artifact} for ${lead.company} is already logged. Sending again looks like spam.` : '',
-    },
+    { label: 'Names the company', ok: companyNamed, why: companyNamed ? '' : `Doesn't name ${lead.company} — reader won't know it's about them.` },
+    { label: `Within the ${ARTIFACTS.find((a) => a.id === artifact)?.label.toLowerCase()} limit`, ok: artifact === 'reply' || count <= countMax, why: count > countMax ? `${count} ${countKind === 'chars' ? 'chars' : 'words'} — limit is ${countMax}.` : '' },
+    { label: 'Passed every draft check', ok: Boolean(draft?.passed), why: !draft?.passed ? (draft ? 'Draft flagged itself. Read notes below.' : 'Generate a draft first.') : '' },
+    { label: artifact === 'followup' ? 'Continues an existing thread' : 'Not already sent on this line', ok: artifact === 'followup' ? hasPriorSend : !inPipeline, why: artifact === 'followup' ? (!hasPriorSend ? 'A follow-up needs a first message.' : '') : (inPipeline ? `Already sent to ${lead.company} — looks like spam.` : '') },
   ]
   const allGreen = Boolean(draft || sentText) && textToCheck.length > 0 && gates.every((g) => g.ok)
   const needOverride = Boolean(draft || sentText) && textToCheck.length > 0 && !allGreen
@@ -330,52 +250,74 @@ export function LeadWorkspace({
   const host = hostOf(lead.url)
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
+
       {/* ═══ 1. WHERE THIS LEAD STANDS ═══ */}
-      <section className="reveal-up rounded-[1.75rem] border border-line/80 bg-surface-raised p-5 sm:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate transition-colors hover:bg-paper-tint hover:text-ink"
-            >
+      <section className="reveal-up rounded-2xl border border-line/80 bg-surface-raised overflow-hidden">
+        {/* Top bar with score */}
+        <div className="flex flex-col lg:flex-row">
+          {/* Lead info */}
+          <div className="flex-1 p-5 sm:p-6">
+            <Link href="/" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 -ml-2 text-sm text-slate transition-colors hover:bg-paper-tint hover:text-ink">
               <ArrowLeft className="size-4" aria-hidden="true" />
               Back to Today
             </Link>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <VerdictWord verdict={verdict} />
+              {lead.status !== 'new' && !hasReply && <StatusWord status={lead.status} />}
+              {hasReply && <StatusWord status="replied" />}
+            </div>
+
             <h1 className="mt-2 text-heading text-2xl text-ink sm:text-3xl">{lead.company}</h1>
             <p className="mt-0.5 text-sm text-slate">{contactLine}</p>
 
+            {/* Tags & meta */}
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              {signal ? <Chip tone="gold">{signal.short} signal</Chip> : null}
-              {lead.url ? (
+              {signal && (
+                <span className="inline-flex items-center gap-1 rounded-lg bg-gold/8 px-2 py-0.5 text-xs font-medium text-gold ring-1 ring-gold/10">
+                  <Flame className="size-3" /> {signal.short}
+                </span>
+              )}
+              {lead.url && (
                 <a href={lead.url} target="_blank" rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 rounded-lg bg-paper-tint px-2 py-0.5 text-xs text-ink transition-colors hover:bg-line">
-                  {host ?? 'Source'}
-                  <ExternalLink className="size-2.5 text-slate" aria-hidden="true" />
+                  {host ?? 'Source'} <ExternalLink className="size-2.5 text-slate" />
                 </a>
-              ) : null}
-              {(lead.tags ?? []).map((t) => <Chip key={t} tone="mono">{t}</Chip>)}
+              )}
+              {(lead.tags ?? []).map((t) => (
+                <span key={t} className="rounded-lg bg-paper-tint px-2 py-0.5 font-mono text-xs text-ink-soft">{t}</span>
+              ))}
             </div>
 
-            <dl className="mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-              <div><dt className="text-label">Why this matters now</dt><dd className="mt-0.5 text-sm leading-relaxed text-ink">{lead.signalEvidence ?? 'Not set'}</dd></div>
-              <div><dt className="text-label">Their words</dt><dd className="mt-0.5 text-sm leading-relaxed text-ink">{lead.verbatimQuote ?? 'No quote captured'}</dd></div>
-            </dl>
+            {/* Evidence */}
+            <div className="mt-4 space-y-2 rounded-xl bg-paper-tint/40 p-3">
+              <div className="flex gap-2">
+                <Target className="mt-0.5 size-3.5 shrink-0 text-gold" />
+                <p className="text-sm leading-relaxed text-ink">{lead.signalEvidence || 'No signal evidence captured.'}</p>
+              </div>
+              {lead.verbatimQuote && (
+                <p className="border-t border-line/40 pt-2 pl-5.5 text-sm italic text-slate">
+                  &ldquo;{lead.verbatimQuote}&rdquo;
+                </p>
+              )}
+            </div>
           </div>
 
-          {/* Score ring */}
-          <div className="flex shrink-0 flex-col items-center gap-2 lg:items-end">
-            <ScoreRing score={score.total} />
-            <div className="flex items-center gap-2 text-sm">
-              <VerdictWord verdict={verdict} />
-              {lead.status !== 'new' && !hasReply ? <StatusWord status={lead.status} /> : null}
-              {hasReply ? <StatusWord status="replied" /> : null}
+          {/* Score ring — right side on desktop */}
+          <div className="flex shrink-0 flex-col items-center justify-center gap-3 border-t border-line/40 bg-paper-tint/20 p-5 lg:border-t-0 lg:border-l lg:px-8">
+            <ScoreRing score={score.total} size={88} />
+            <div className="text-center">
+              <p className="text-mono-medium text-xs text-slate">out of 12</p>
+              <p className="text-xs font-medium text-ink">
+                {score.total >= 10 ? 'Strong lead' : score.total >= 7 ? 'Good lead' : score.total >= 4 ? 'Fair' : 'Weak'}
+              </p>
             </div>
             {profiles.length > 0 ? (
-              <label className="flex items-center gap-2 text-sm">
-                <span className="text-slate">Sending as</span>
-                <Select className="h-8 w-auto min-w-[8rem] py-0 text-sm" value={selectedProfileId ?? ''}
-                  onChange={(e) => setSelectedProfileId(e.target.value || null)} title="Profile written from">
+              <label className="flex items-center gap-2 text-xs">
+                <span className="text-slate">As</span>
+                <Select className="h-7 w-auto min-w-[7rem] py-0 text-xs" value={selectedProfileId ?? ''}
+                  onChange={(e) => setSelectedProfileId(e.target.value || null)}>
                   {profiles.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.platform === 'linkedin' ? 'LinkedIn' : 'Upwork'} · {p.label ?? p.headline ?? 'Unnamed'}
@@ -384,50 +326,51 @@ export function LeadWorkspace({
                 </Select>
               </label>
             ) : (
-              <Link href="/profiles" className="text-sm text-gold underline-offset-4 hover:underline">Add an identity</Link>
+              <Link href="/profiles" className="text-xs text-gold underline-offset-4 hover:underline">Add identity</Link>
             )}
           </div>
         </div>
 
-        {/* Verdict callout */}
-        <div className="mt-4 flex items-start gap-2 rounded-xl bg-paper-tint/40 px-4 py-3">
-          <Award className="mt-0.5 size-4 shrink-0 text-gold" aria-hidden="true" />
-          <div>
-            <p className="text-sm text-ink">{verdictCall(verdict)}</p>
-            {verdict === 'research_more' ? (
-              <p className="mt-0.5 text-xs text-status-research">
-                The record is missing {researchWhy(lead) ?? 'one more source'}. One more detail usually lifts this to a send.
-              </p>
-            ) : null}
-          </div>
+        {/* Score breakdown — collapsible */}
+        <div className="border-t border-line/40 px-5 py-4 sm:px-6">
+          <details className="group">
+            <summary className="flex cursor-pointer items-center gap-2 text-sm text-slate">
+              <Info className="size-3.5" />
+              <span>Why this score</span>
+              <ChevronDown className="ml-auto size-3.5 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="mt-3 max-w-md">
+              <ScoreBreakdown score={score} />
+            </div>
+          </details>
         </div>
       </section>
 
       {/* Locked / not eligible */}
-      {locked ? (
+      {locked && (
         <Alert variant="destructive">
           <AlertTitle>This lead is locked</AlertTitle>
           <AlertDescription>Marked {lead.status}. No drafts or sends for anyone.</AlertDescription>
         </Alert>
-      ) : null}
+      )}
 
-      {!canDraft && !locked ? (
+      {!canDraft && !locked && (
         <div className="flex items-start gap-3 rounded-xl border border-line bg-paper-tint/40 px-4 py-3">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-research" />
           <p className="text-sm leading-relaxed text-slate">
-            This lead scored {score.total}/12 and is not eligible for drafting. Go back, add more research, and it may cross the line.
+            Scored {score.total}/12 — not eligible for drafting. Add more research to push it over the line.
           </p>
         </div>
-      ) : null}
+      )}
 
-      {/* ═══ 2. PROOF MATCH (decision, not a tab) ═══ */}
+      {/* ═══ 2. PROOF MATCH ═══ */}
       {canDraft && !locked && activeProof && (
-        <section className="reveal-up stagger-1 rounded-2xl border border-line/60 bg-surface-raised p-5">
-          <div className="flex items-center justify-between gap-3">
+        <section className="reveal-up stagger-1 rounded-2xl border border-gold/15 bg-gradient-to-br from-gold/[0.04] to-transparent p-5">
+          <div className="flex items-center gap-2 text-gold">
+            <Trophy className="size-4" />
             <h2 className="text-heading text-sm text-ink">Proof to cite</h2>
-            <Link href="/profiles" className="text-xs text-gold underline-offset-4 hover:underline">Manage</Link>
           </div>
-          <div className="mt-3 rounded-xl border border-gold/15 bg-gold/[0.03] p-4">
+          <div className="mt-3 rounded-xl border border-gold/10 bg-paper/60 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-ink">
@@ -437,41 +380,41 @@ export function LeadWorkspace({
                   <p className="mt-1 text-xs italic text-slate">&ldquo;{activeProof.reviewQuote}&rdquo;</p>
                 )}
                 <p className="mt-1.5 text-xs leading-relaxed text-slate">{activeProof.projectSummary}</p>
+                {activeProof.tags.length > 0 && (
+                  <div className="mt-2.5 flex flex-wrap gap-1">
+                    {activeProof.tags.map((t) => {
+                      const matches = (lead.tags ?? []).some((lt) => lt.toLowerCase() === t.toLowerCase())
+                      return (
+                        <span key={t} className={cn('rounded-md px-1.5 py-0.5 font-mono text-[10px] ring-1',
+                          matches ? 'bg-gold/10 text-gold ring-gold/20' : 'bg-paper-tint text-slate ring-transparent')}>
+                          {t}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-              <Button variant="secondary" size="sm" onClick={() => onDraftProof(activeProof.id)} disabled={drafting}>
+              <Button variant="gold" size="sm" onClick={() => onDraftProof(activeProof.id)} disabled={drafting}>
                 Use this
               </Button>
             </div>
-            {activeProof.tags.length > 0 && (
-              <div className="mt-2.5 flex flex-wrap gap-1">
-                {activeProof.tags.map((t) => {
-                  const matches = (lead.tags ?? []).some((lt) => lt.toLowerCase() === t.toLowerCase())
-                  return (
-                    <span key={t} className={cn('rounded-md px-1.5 py-0.5 font-mono text-[10px]',
-                      matches ? 'bg-gold/10 text-gold' : 'bg-paper-tint text-slate')}>
-                      {t}
-                    </span>
-                  )
-                })}
-              </div>
-            )}
           </div>
         </section>
       )}
 
-      {/* ═══ 3. DRAFT (visual center) ═══ */}
+      {/* ═══ 3. DRAFT ═══ */}
       {canDraft && !locked && (
         <section className="reveal-up stagger-2 space-y-4">
           <div className="rounded-2xl border border-line/60 bg-surface-raised p-5">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-heading text-base text-ink">Draft</h2>
-              {draft ? (
+              {draft && (
                 <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
                   draft.passed ? 'bg-status-send/8 text-status-send' : 'bg-status-research/8 text-status-research')}>
                   {draft.passed ? <Check className="size-3" /> : <X className="size-3" />}
                   {draft.passed ? 'Ready to send' : 'Needs an edit'}
                 </span>
-              ) : null}
+              )}
             </div>
 
             {/* Artifact selector */}
@@ -522,7 +465,7 @@ export function LeadWorkspace({
                 )}
 
                 {drafting || draft || draftText ? (
-                  <div className="mt-4 rounded-xl border-2 border-ink/8 bg-paper-tint/20 p-3">
+                  <div className="mt-4 rounded-xl border-2 border-ink/8 bg-paper-tint/15 p-3">
                     <Textarea
                       value={showVariant && variantDraft ? variantDraft.draftText : draftText}
                       onChange={(e) => editDraft(e.target.value)}
@@ -531,7 +474,7 @@ export function LeadWorkspace({
                       aria-label="Draft text, editable"
                       placeholder="Your message appears here as it is written. Edit it freely."
                     />
-                    <div className="mt-2 flex items-center justify-between border-t border-line/60 pt-2">
+                    <div className="mt-2 flex items-center justify-between border-t border-line/50 pt-2">
                       <span className={cn('font-mono text-xs',
                         count > countMax ? 'text-status-no' : count >= countMax * 0.9 ? 'text-status-research' : 'text-status-send')}>
                         {count} {artifactCount(artifact).label} / {countMax}
@@ -545,19 +488,27 @@ export function LeadWorkspace({
                 ) : null}
 
                 {/* Self-check notes */}
-                {draft?.selfCheck && !draft.passed && (
+                {draft && !draft.passed && (
                   <div className="mt-3 space-y-1">
                     {!draft.selfCheck.test1ReplyOrDelete && (
-                      <p className="text-xs text-status-research">Test 1: Would likely be deleted, not replied to.</p>
+                      <p className="flex items-start gap-2 text-xs text-status-research">
+                        <X className="mt-0.5 size-3 shrink-0" /> Would likely be deleted, not replied to.
+                      </p>
                     )}
                     {!draft.selfCheck.test2NotGeneric && (
-                      <p className="text-xs text-status-research">Test 2: Too generic — would survive a company swap.</p>
+                      <p className="flex items-start gap-2 text-xs text-status-research">
+                        <X className="mt-0.5 size-3 shrink-0" /> Too generic — would survive a company swap.
+                      </p>
                     )}
                     {!draft.selfCheck.codeChecks.companyMentioned && (
-                      <p className="text-xs text-status-research">Does not name {lead.company}.</p>
+                      <p className="flex items-start gap-2 text-xs text-status-research">
+                        <X className="mt-0.5 size-3 shrink-0" /> Does not name {lead.company}.
+                      </p>
                     )}
                     {!draft.selfCheck.codeChecks.specificEvidenceMentioned && (
-                      <p className="text-xs text-status-research">No specific detail from the lead carried through.</p>
+                      <p className="flex items-start gap-2 text-xs text-status-research">
+                        <X className="mt-0.5 size-3 shrink-0" /> No specific detail from the lead carried through.
+                      </p>
                     )}
                   </div>
                 )}
@@ -565,7 +516,7 @@ export function LeadWorkspace({
             )}
           </div>
 
-          {/* ═══ 4. SEND (clearest action) ═══ */}
+          {/* ═══ 4. SEND ═══ */}
           <div className="rounded-2xl border border-line/60 bg-surface-raised p-5">
             <h2 className="text-heading text-base text-ink">Send it</h2>
             <p className="mt-1 text-sm text-slate">Relay never sends for you. Copy the message, send it yourself, then log what you sent.</p>
