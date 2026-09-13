@@ -23,7 +23,9 @@ import type {
   SignalId,
   StyleCard,
   StyleSampleSource,
+  TopicCluster,
   TrendingAngle,
+  ContentResearchFinding,
   UpworkJob,
   UpworkMessage,
   Verdict,
@@ -408,6 +410,7 @@ export interface ScoutStore {
   createContentDraft(input: {
     personaId: string
     pillarId: string | null
+    topicClusterId?: string | null
     sourceMaterial: string
     platform: ContentPlatform
     caption: string
@@ -415,6 +418,7 @@ export interface ScoutStore {
     hookFeedback?: string
     selfCheckPassed?: boolean
     selfCheckNote?: string
+    specificityHit?: boolean
     status?: ContentDraftStatus
   }): Promise<ContentDraft>
   listContentDrafts(personaId: string): Promise<ContentDraft[]>
@@ -423,6 +427,7 @@ export interface ScoutStore {
   logContentPosted(input: {
     personaId: string
     pillarId: string | null
+    topicClusterId?: string | null
     platform: ContentPlatform
     openingLine: string
   }): Promise<ContentHistoryEntry>
@@ -436,4 +441,28 @@ export interface ScoutStore {
   listTrendingAnglesByPillarIds(pillarIds: string[], opts?: { unusedOnly?: boolean }): Promise<TrendingAngle[]>
   markTrendingAngleUsed(angleId: string): Promise<TrendingAngle>
   countContentDraftsToday(personaId: string): Promise<number>
+  createTopicCluster(input: {
+    personaId: string
+    clusterName: string
+    description?: string
+    sourceType?: 'profile' | 'answer' | 'research' | 'system'
+    lastInputAt?: string | null
+    lastResearchAt?: string | null
+  }): Promise<TopicCluster>
+  listTopicClusters(personaId: string): Promise<TopicCluster[]>
+  touchTopicCluster(input: {
+    topicClusterId: string
+    lastInputAt?: string | null
+    lastResearchAt?: string | null
+  }): Promise<TopicCluster>
+  createResearchFinding(input: {
+    personaId: string
+    topicClusterId: string
+    finding: string
+    sourceLabel: string
+    sourceUrl: string
+    sourcePublishedAt?: string | null
+  }): Promise<ContentResearchFinding>
+  listResearchFindings(personaId: string, opts?: { unusedOnly?: boolean; limit?: number }): Promise<ContentResearchFinding[]>
+  markResearchFindingUsed(findingId: string): Promise<ContentResearchFinding>
 }

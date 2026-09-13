@@ -20,6 +20,8 @@ import type {
   PushSubscription,
   Rep,
   SignalId,
+  TopicCluster,
+  ContentResearchFinding,
   TrendingAngle,
   UpworkJob,
   UpworkMessage,
@@ -50,6 +52,16 @@ import { pickPlayForSignal } from '@/lib/score/plays'
 import { loadRulebook } from '@/lib/score/rulebook'
 
 type Row = Record<string, unknown>
+
+function normalizeStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v).trim()).filter(Boolean)
+  }
+  if (typeof value === 'string') {
+    return value.split(',').map((v) => v.trim()).filter(Boolean)
+  }
+  return []
+}
 
 function mapLead(r: Row): Lead {
   return {
@@ -1697,20 +1709,40 @@ export class SupabaseStore implements ScoutStore {
     valuesAndOpinions?: string[]
     admiredExamples?: string[]
   }): Promise<ContentPersona> {
-    const { data, error } = await this.client
+    const payload = {
+      organization_id: this.orgId,
+      rep_id: input.repId,
+      display_name: input.displayName,
+      platforms: input.platforms,
+      voice_profile_id: input.voiceProfileId ?? null,
+      humor_style: input.humorStyle ?? '',
+      values_and_opinions: input.valuesAndOpinions ?? [],
+      admired_examples: input.admiredExamples ?? [],
+    }
+
+    let { data, error } = await this.client
       .from('content_personas')
-      .insert({
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error && error.code === 'PGRST204') {
+      const minimalPayload = {
         organization_id: this.orgId,
         rep_id: input.repId,
         display_name: input.displayName,
         platforms: input.platforms,
         voice_profile_id: input.voiceProfileId ?? null,
-        humor_style: input.humorStyle ?? '',
-        values_and_opinions: input.valuesAndOpinions ?? [],
-        admired_examples: input.admiredExamples ?? [],
-      })
-      .select()
-      .single()
+      }
+      const retry = await this.client
+        .from('content_personas')
+        .insert(minimalPayload)
+        .select()
+        .single()
+      data = retry.data
+      error = retry.error
+    }
+
     if (error) throw error
     return mapContentPersona(data)
   }
@@ -1732,6 +1764,11 @@ export class SupabaseStore implements ScoutStore {
       .eq('id', input.personaId)
       .select()
       .single()
+    if (error && error.code === 'PGRST204') {
+      const fallback = await this.getContentPersona(input.personaId)
+      if (!fallback) throw error
+      return fallback
+    }
     if (error) throw error
     return mapContentPersona(data)
   }
@@ -1804,6 +1841,7 @@ export class SupabaseStore implements ScoutStore {
   async createContentDraft(input: {
     personaId: string
     pillarId: string | null
+    topicClusterId?: string | null
     sourceMaterial: string
     platform: ContentPlatform
     caption: string
@@ -1811,6 +1849,7 @@ export class SupabaseStore implements ScoutStore {
     hookFeedback?: string
     selfCheckPassed?: boolean
     selfCheckNote?: string
+    specificityHit?: boolean
     status?: ContentDraftStatus
   }): Promise<ContentDraft> {
     const { data, error } = await this.client
@@ -1819,6 +1858,7 @@ export class SupabaseStore implements ScoutStore {
         organization_id: this.orgId,
         persona_id: input.personaId,
         pillar_id: input.pillarId,
+        topic_cluster_id: input.topicClusterId ?? null,
         source_material: input.sourceMaterial,
         platform: input.platform,
         caption: input.caption,
@@ -1826,6 +1866,7 @@ export class SupabaseStore implements ScoutStore {
         hook_feedback: input.hookFeedback ?? '',
         self_check_passed: input.selfCheckPassed ?? false,
         self_check_note: input.selfCheckNote ?? '',
+        specificity_hit: input.specificityHit ?? false,
         status: input.status ?? 'draft',
       })
       .select()
@@ -1857,6 +1898,7 @@ export class SupabaseStore implements ScoutStore {
       await this.logContentPosted({
         personaId: draft.personaId,
         pillarId: draft.pillarId,
+        topicClusterId: draft.topicClusterId,
         platform: draft.platform,
         openingLine: draft.caption.split('\n')[0] ?? '',
       })
@@ -1879,6 +1921,7 @@ export class SupabaseStore implements ScoutStore {
   async logContentPosted(input: {
     personaId: string
     pillarId: string | null
+    topicClusterId?: string | null
     platform: ContentPlatform
     openingLine: string
   }): Promise<ContentHistoryEntry> {
@@ -1888,6 +1931,7 @@ export class SupabaseStore implements ScoutStore {
         organization_id: this.orgId,
         persona_id: input.personaId,
         pillar_id: input.pillarId,
+        topic_cluster_id: input.topicClusterId ?? null,
         platform: input.platform,
         opening_line: input.openingLine,
       })
@@ -1974,6 +2018,114 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
     return count ?? 0
   }
+
+  async createTopicCluster(input: {
+    personaId: string
+    clusterName: string
+    description?: string
+    sourceType?: 'profile' | 'answer' | 'research' | 'system'
+    lastInputAt?: string | null
+    lastResearchAt?: string | null
+  }): Promise<TopicCluster> {
+    const { data, error } = await this.client
+      .from('topic_clusters')
+      .insert({
+        organization_id: this.orgId,
+        persona_id: input.personaId,
+        cluster_name: input.clusterName,
+        description: input.description ?? '',
+        source_type: input.sourceType ?? 'system',
+        last_input_at: input.lastInputAt ?? null,
+        last_research_at: input.lastResearchAt ?? null,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapTopicCluster(data)
+  }
+
+  async listTopicClusters(personaId: string): Promise<TopicCluster[]> {
+    const { data, error } = await this.client
+      .from('topic_clusters')
+      .select('*')
+      .eq('persona_id', personaId)
+      .is('merged_into_id', null)
+      .order('updated_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map(mapTopicCluster)
+  }
+
+  async touchTopicCluster(input: {
+    topicClusterId: string
+    lastInputAt?: string | null
+    lastResearchAt?: string | null
+  }): Promise<TopicCluster> {
+    const patch: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    }
+    if (input.lastInputAt !== undefined) patch.last_input_at = input.lastInputAt
+    if (input.lastResearchAt !== undefined) patch.last_research_at = input.lastResearchAt
+
+    const { data, error } = await this.client
+      .from('topic_clusters')
+      .update(patch)
+      .eq('id', input.topicClusterId)
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapTopicCluster(data)
+  }
+
+  async createResearchFinding(input: {
+    personaId: string
+    topicClusterId: string
+    finding: string
+    sourceLabel: string
+    sourceUrl: string
+    sourcePublishedAt?: string | null
+  }): Promise<ContentResearchFinding> {
+    const { data, error } = await this.client
+      .from('content_research_findings')
+      .insert({
+        organization_id: this.orgId,
+        persona_id: input.personaId,
+        topic_cluster_id: input.topicClusterId,
+        finding: input.finding,
+        source_label: input.sourceLabel,
+        source_url: input.sourceUrl,
+        source_published_at: input.sourcePublishedAt ?? null,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapContentResearchFinding(data)
+  }
+
+  async listResearchFindings(personaId: string, opts?: { unusedOnly?: boolean; limit?: number }): Promise<ContentResearchFinding[]> {
+    let query = this.client
+      .from('content_research_findings')
+      .select('*')
+      .eq('persona_id', personaId)
+      .order('created_at', { ascending: false })
+
+    if (opts?.unusedOnly) query = query.eq('used', false)
+    if (opts?.limit) query = query.limit(opts.limit)
+
+    const { data, error } = await query
+    if (error) throw error
+    return (data ?? []).map(mapContentResearchFinding)
+  }
+
+  async markResearchFindingUsed(findingId: string): Promise<ContentResearchFinding> {
+    const { data, error } = await this.client
+      .from('content_research_findings')
+      .update({ used: true })
+      .eq('id', findingId)
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapContentResearchFinding(data)
+  }
 }
 
 function mapUpworkJob(r: Row): UpworkJob {
@@ -2027,8 +2179,8 @@ function mapContentPersona(r: Record<string, unknown>): ContentPersona {
     platforms: (r.platforms as ContentPlatform[]) ?? [],
     voiceProfileId: (r.voice_profile_id as string) ?? null,
     humorStyle: (r.humor_style as string) ?? '',
-    valuesAndOpinions: (r.values_and_opinions as string[]) ?? [],
-    admiredExamples: (r.admired_examples as string[]) ?? [],
+    valuesAndOpinions: normalizeStringArray(r.values_and_opinions),
+    admiredExamples: normalizeStringArray(r.admired_examples),
     createdAt: r.created_at as string,
   }
 }
@@ -2050,6 +2202,7 @@ function mapContentDraft(r: Record<string, unknown>): ContentDraft {
     organizationId: r.organization_id as string,
     personaId: r.persona_id as string,
     pillarId: (r.pillar_id as string) ?? null,
+    topicClusterId: (r.topic_cluster_id as string) ?? null,
     sourceMaterial: r.source_material as string,
     platform: r.platform as ContentPlatform,
     caption: (r.caption as string) ?? '',
@@ -2057,6 +2210,7 @@ function mapContentDraft(r: Record<string, unknown>): ContentDraft {
     hookFeedback: (r.hook_feedback as string) ?? '',
     selfCheckPassed: (r.self_check_passed as boolean) ?? false,
     selfCheckNote: (r.self_check_note as string) ?? '',
+    specificityHit: Boolean(r.specificity_hit),
     status: (r.status as ContentDraftStatus) ?? 'draft',
     createdAt: r.created_at as string,
   }
@@ -2068,6 +2222,7 @@ function mapContentHistory(r: Record<string, unknown>): ContentHistoryEntry {
     organizationId: r.organization_id as string,
     personaId: r.persona_id as string,
     pillarId: (r.pillar_id as string) ?? null,
+    topicClusterId: (r.topic_cluster_id as string) ?? null,
     platform: r.platform as ContentPlatform,
     openingLine: r.opening_line as string,
     postedAt: r.posted_at as string,
@@ -2079,10 +2234,43 @@ function mapTrendingAngle(r: Record<string, unknown>): TrendingAngle {
     id: r.id as string,
     organizationId: r.organization_id as string,
     pillarId: r.pillar_id as string,
+    topicClusterId: (r.topic_cluster_id as string) ?? null,
     angleDescription: r.angle_description as string,
     sourceNote: (r.source_note as string) ?? '',
+    sourceUrl: (r.source_url as string) ?? '',
     addedBy: (r.added_by as string) ?? null,
     addedAt: r.added_at as string,
+    used: Boolean(r.used),
+  }
+}
+
+function mapTopicCluster(r: Record<string, unknown>): TopicCluster {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    personaId: r.persona_id as string,
+    clusterName: r.cluster_name as string,
+    description: (r.description as string) ?? '',
+    sourceType: (r.source_type as TopicCluster['sourceType']) ?? 'system',
+    mergedIntoId: (r.merged_into_id as string) ?? null,
+    lastInputAt: (r.last_input_at as string) ?? null,
+    lastResearchAt: (r.last_research_at as string) ?? null,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  }
+}
+
+function mapContentResearchFinding(r: Record<string, unknown>): ContentResearchFinding {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    personaId: r.persona_id as string,
+    topicClusterId: r.topic_cluster_id as string,
+    finding: r.finding as string,
+    sourceLabel: r.source_label as string,
+    sourceUrl: r.source_url as string,
+    sourcePublishedAt: (r.source_published_at as string) ?? null,
+    createdAt: r.created_at as string,
     used: Boolean(r.used),
   }
 }

@@ -4,10 +4,10 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Plus, PenLine, ChevronRight } from 'lucide-react'
 import { cn } from 'cn'
-import type { ContentPersona, ContentPillar, ContentDraft } from '@/lib/domain/types'
+import type { ContentPersona, TopicCluster, ContentDraft } from '@/lib/domain/types'
 
 interface PersonaWithExtras extends ContentPersona {
-  pillars: ContentPillar[]
+  topicClusters: TopicCluster[]
   drafts: ContentDraft[]
 }
 
@@ -46,7 +46,7 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
             <div className="space-y-2">
               <p className="text-heading text-lg text-ink">No personas yet.</p>
               <p className="text-sm leading-relaxed text-slate">
-                Create a persona, calibrate their voice, pick their pillars, and start capturing real material.
+                Paste a profile or bio, run voice calibration, and capture real material. The topic model organizes itself.
               </p>
             </div>
           </div>
@@ -67,7 +67,7 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                   <div>
                     <h2 className="text-heading text-base text-ink">{persona.displayName}</h2>
                     <p className="text-xs text-slate">
-                      {persona.pillars.length} pillar{persona.pillars.length === 1 ? '' : 's'} &middot; {persona.platforms.join(', ')}
+                      {persona.topicClusters.length} topic{persona.topicClusters.length === 1 ? '' : 's'} &middot; {persona.platforms.join(', ')}
                     </p>
                   </div>
                 </div>
@@ -87,17 +87,17 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                 </div>
               </div>
 
-              {persona.pillars.length > 0 && (
+              {persona.topicClusters.length > 0 && (
                 <div className="border-t border-line/40 px-5 py-3">
                   <div className="flex flex-wrap gap-1.5">
-                    {persona.pillars.slice(0, 5).map((p) => (
+                    {persona.topicClusters.slice(0, 5).map((p) => (
                       <span key={p.id} className="rounded-lg bg-paper-tint/60 px-2 py-0.5 text-[11px] text-ink-soft">
-                        {p.pillarName}
+                        {p.clusterName}
                       </span>
                     ))}
-                    {persona.pillars.length > 5 && (
+                    {persona.topicClusters.length > 5 && (
                       <span className="rounded-lg bg-paper-tint/60 px-2 py-0.5 text-[11px] text-slate">
-                        +{persona.pillars.length - 5} more
+                        +{persona.topicClusters.length - 5} more
                       </span>
                     )}
                   </div>
@@ -114,9 +114,7 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
 function NewPersonaForm({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('')
   const [platforms, setPlatforms] = useState<string[]>([])
-  const [humorStyle, setHumorStyle] = useState('')
-  const [valuesAndOpinions, setValuesAndOpinions] = useState('')
-  const [admiredExamples, setAdmiredExamples] = useState('')
+  const [profileInput, setProfileInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -127,20 +125,17 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
   async function save() {
     if (!name.trim()) { setError('Give this persona a name.'); return }
     if (platforms.length === 0) { setError('Pick at least one platform.'); return }
+    if (!profileInput.trim()) { setError('Paste a LinkedIn URL or a short bio.'); return }
     setSaving(true)
     setError(null)
     try {
-      const values = valuesAndOpinions.split('\n').map((v) => v.trim()).filter(Boolean)
-      const examples = admiredExamples.split('\n').map((v) => v.trim()).filter(Boolean)
       const res = await fetch('/api/content/personas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           displayName: name.trim(),
           platforms,
-          humorStyle: humorStyle.trim(),
-          valuesAndOpinions: values,
-          admiredExamples: examples,
+          profileInput: profileInput.trim(),
         }),
       })
       const data = await res.json()
@@ -155,7 +150,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
   return (
     <section className="reveal-up rounded-2xl border border-line/60 bg-surface-raised p-6">
       <h2 className="text-heading text-base text-ink">New persona</h2>
-      <p className="mt-1 text-sm text-slate">Who is this content for? A person, a brand, a voice.</p>
+      <p className="mt-1 text-sm text-slate">Step 1: paste a profile. Step 2: run the existing voice calibration.</p>
 
       {error && (
         <p className="mt-3 text-sm text-status-no" role="alert">{error}</p>
@@ -194,36 +189,13 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="grid gap-1.5">
-          <label htmlFor="humor-style" className="text-sm font-medium text-ink-soft">Humor style (optional)</label>
-          <input
-            id="humor-style"
-            value={humorStyle}
-            onChange={(e) => setHumorStyle(e.target.value)}
-            placeholder="e.g. dry, blunt, self-deprecating"
-            className="h-9 w-full rounded-xl border border-line bg-paper-raised px-3 text-sm transition-all outline-none focus-visible:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/20"
-          />
-        </div>
-
-        <div className="grid gap-1.5">
-          <label htmlFor="values" className="text-sm font-medium text-ink-soft">Values and opinions (one per line)</label>
+          <label htmlFor="profile-input" className="text-sm font-medium text-ink-soft">LinkedIn URL or bio</label>
           <textarea
-            id="values"
-            value={valuesAndOpinions}
-            onChange={(e) => setValuesAndOpinions(e.target.value)}
+            id="profile-input"
+            value={profileInput}
+            onChange={(e) => setProfileInput(e.target.value)}
             rows={4}
-            placeholder="e.g. Most product delays are decision delays, not coding delays."
-            className="w-full rounded-xl border border-line bg-paper-raised px-3 py-2 text-sm transition-all outline-none focus-visible:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/20"
-          />
-        </div>
-
-        <div className="grid gap-1.5">
-          <label htmlFor="admired-examples" className="text-sm font-medium text-ink-soft">Admired examples (paraphrased, optional)</label>
-          <textarea
-            id="admired-examples"
-            value={admiredExamples}
-            onChange={(e) => setAdmiredExamples(e.target.value)}
-            rows={3}
-            placeholder="What worked in posts they liked, in your own words."
+            placeholder="Paste a LinkedIn profile URL, About section, or short bio."
             className="w-full rounded-xl border border-line bg-paper-raised px-3 py-2 text-sm transition-all outline-none focus-visible:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/20"
           />
         </div>

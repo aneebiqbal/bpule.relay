@@ -1,12 +1,12 @@
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import { ContentDashboard } from '@/components/content-dashboard'
-import type { ContentPersona, ContentPillar, ContentDraft } from '@/lib/domain/types'
+import type { ContentPersona, TopicCluster, ContentDraft } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
 
 interface PersonaWithExtras extends ContentPersona {
-  pillars: ContentPillar[]
+  topicClusters: TopicCluster[]
   drafts: ContentDraft[]
 }
 
@@ -22,7 +22,7 @@ export default async function ContentPage() {
     const resolved = await Promise.all(
       base.map(async (p) => ({
         ...p,
-        pillars: await store.listContentPillars(p.id),
+        topicClusters: await store.listTopicClusters(p.id),
         drafts: await store.listContentDrafts(p.id),
       })),
     )

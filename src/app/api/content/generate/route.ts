@@ -5,14 +5,14 @@ import { generateContent } from '@/lib/ai/content'
 import { sseStream } from '@/lib/sse/sse'
 import { injectStyleCard } from '@/lib/style/inject'
 import type { ContentGenerationInput } from '@/lib/ai/content'
-import type { TrendingAngle } from '@/lib/domain/types'
+import type { TrendingAngle, ContentResearchFinding } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * Generate a content draft.
  *
- * Body: { personaId, pillarId, sourceMaterial, platform }
+ * Body: { personaId, topicClusterId, sourceMaterial, platform }
  * Returns: SSE stream with { type: 'done', result: ContentGenerationResult }
  */
 export async function POST(req: NextRequest) {
@@ -22,13 +22,16 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
 
-  const { personaId, pillarId, sourceMaterial, platform, angleId, personalLine } = body as {
+  const { personaId, pillarId, topicClusterId, sourceMaterial, platform, angleId, personalLine, findingId, useStoredOpinion } = body as {
     personaId: string
     pillarId: string | null
+    topicClusterId?: string | null
     sourceMaterial?: string
     platform: 'linkedin' | 'x'
     angleId?: string | null
     personalLine?: string
+    findingId?: string | null
+    useStoredOpinion?: boolean
   }
 
   if (!personaId?.trim()) return NextResponse.json({ error: 'personaId is required' }, { status: 400 })
@@ -50,8 +53,19 @@ export async function POST(req: NextRequest) {
   }
 
   let angle: TrendingAngle | null = null
+  const clusters = await store.listTopicClusters(personaId)
 
-  // Resolve pillar
+  let resolvedTopicClusterId = topicClusterId?.trim() || null
+  let finding: ContentResearchFinding | null = null
+
+  if (findingId) {
+    const findings = await store.listResearchFindings(personaId, { unusedOnly: false, limit: 50 })
+    finding = findings.find((f) => f.id === findingId) ?? null
+    if (!finding) return NextResponse.json({ error: 'Research finding not found' }, { status: 404 })
+    resolvedTopicClusterId = finding.topicClusterId
+  }
+
+  // Backward compatibility path for v3 angle + pillar flow.
   let pillar = null
   if (angleId) {
     angle = await store.getTrendingAngle(angleId)
@@ -62,15 +76,23 @@ export async function POST(req: NextRequest) {
     if (!pillar) {
       return NextResponse.json({ error: 'Trending angle does not belong to this persona' }, { status: 400 })
     }
+    resolvedTopicClusterId = angle.topicClusterId ?? resolvedTopicClusterId
   } else if (pillarId) {
     const pillars = await store.listContentPillars(personaId)
     pillar = pillars.find((p) => p.id === pillarId) ?? null
   }
-  if (!pillar) {
-    // Use first pillar as default
+
+  const topicCluster = resolvedTopicClusterId
+    ? clusters.find((c) => c.id === resolvedTopicClusterId) ?? null
+    : (clusters[0] ?? null)
+
+  if (!pillar && !topicCluster) {
     const pillars = await store.listContentPillars(personaId)
-    if (pillars.length === 0) return NextResponse.json({ error: 'No pillars configured for this persona' }, { status: 400 })
-    pillar = pillars[0]
+    if (pillars.length > 0) {
+      pillar = pillars[0]
+    } else {
+      return NextResponse.json({ error: 'No topic context exists for this persona yet.' }, { status: 400 })
+    }
   }
 
   // Get voice profile
@@ -88,15 +110,15 @@ export async function POST(req: NextRequest) {
 
   const material = sourceMaterial?.trim() ?? ''
   const realLine = personalLine?.trim() ?? ''
-  const generationMode: 'personal' | 'opinion' = angle
-    ? (realLine ? 'personal' : 'opinion')
+  const generationMode: 'personal' | 'opinion' = (angle || finding || useStoredOpinion)
+    ? (realLine || material ? 'personal' : 'opinion')
     : 'personal'
 
-  if (!angle && !material) {
+  if (!angle && !finding && !useStoredOpinion && !material) {
     return NextResponse.json({ error: 'sourceMaterial is required - the system never invents a post' }, { status: 400 })
   }
 
-  if (angle && generationMode === 'opinion' && persona.valuesAndOpinions.length === 0) {
+  if ((angle || finding || useStoredOpinion) && generationMode === 'opinion' && persona.valuesAndOpinions.length === 0) {
     return NextResponse.json({
       error: 'No values/opinions stored for this persona yet. Add convictions first or provide one real line.',
     }, { status: 400 })
@@ -104,15 +126,32 @@ export async function POST(req: NextRequest) {
 
   const sourceForGeneration = angle
     ? buildSourceFromAngle({
-        angle: angle.angleDescription,
-        personalLine: realLine,
+      angle: angle.angleDescription,
+      personalLine: realLine || material,
+      valuesAndOpinions: persona.valuesAndOpinions,
+    })
+    : finding
+      ? buildSourceFromFinding({
+        finding: finding.finding,
+        sourceLabel: finding.sourceLabel,
+        sourceUrl: finding.sourceUrl,
+        personalLine: realLine || material,
         valuesAndOpinions: persona.valuesAndOpinions,
       })
-    : material
+      : (useStoredOpinion
+        ? buildSourceFromStoredOpinion({
+          topicName: topicCluster?.clusterName ?? pillar?.pillarName ?? 'Core theme',
+          valuesAndOpinions: persona.valuesAndOpinions,
+        })
+        : material)
 
   const input: ContentGenerationInput = {
     personaName: persona.displayName,
-    pillar,
+    topic: {
+      id: topicCluster?.id ?? pillar?.id ?? 'legacy-topic',
+      name: topicCluster?.clusterName ?? pillar?.pillarName ?? 'General',
+      description: topicCluster?.description ?? pillar?.description ?? '',
+    },
     sourceMaterial: sourceForGeneration,
     platform,
     styleCard,
@@ -120,35 +159,72 @@ export async function POST(req: NextRequest) {
     humorStyle: persona.humorStyle,
     valuesAndOpinions: persona.valuesAndOpinions,
     generationMode,
-    trendingAngle: angle?.angleDescription ?? null,
+    trendingAngle: angle?.angleDescription ?? finding?.finding ?? null,
   }
 
   return sseStream(async (emit) => {
     try {
       const result = await generateContent(input, (msg) => emit({ type: 'status', message: msg }))
-      const draft = await store.createContentDraft({
-        personaId,
-        pillarId: pillar.id,
-        sourceMaterial: sourceForGeneration,
-        platform,
-        caption: result.caption,
+        const draft = await store.createContentDraft({
+          personaId,
+          pillarId: pillar?.id ?? null,
+          topicClusterId: topicCluster?.id ?? finding?.topicClusterId ?? null,
+          sourceMaterial: sourceForGeneration,
+          platform,
+          caption: result.caption,
         hookScore: result.hookScore,
         hookFeedback: result.hookFeedback,
-        selfCheckPassed: result.selfCheckPassed,
-        selfCheckNote: result.selfCheckNote,
-        status: result.selfCheckPassed ? 'ready' : 'draft',
-      })
+          selfCheckPassed: result.selfCheckPassed,
+          selfCheckNote: result.selfCheckNote,
+          specificityHit: result.specificityHit,
+          status: result.selfCheckPassed ? 'ready' : 'draft',
+        })
 
-      if (angle && result.selfCheckPassed) {
-        await store.markTrendingAngleUsed(angle.id)
-      }
+        if (angle && result.selfCheckPassed) {
+          await store.markTrendingAngleUsed(angle.id)
+        }
+        if (finding && result.selfCheckPassed) {
+          await store.markResearchFindingUsed(finding.id)
+        }
+        if (topicCluster && material) {
+          await store.touchTopicCluster({ topicClusterId: topicCluster.id, lastInputAt: new Date().toISOString() })
+        }
 
-      emit({ type: 'done', result: { ...result, draftId: draft.id } })
+        emit({ type: 'done', result: { ...result, draftId: draft.id } })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Generation failed.'
       emit({ type: 'error', message })
     }
   })
+}
+
+function buildSourceFromFinding(input: {
+  finding: string
+  sourceLabel: string
+  sourceUrl: string
+  personalLine: string
+  valuesAndOpinions: string[]
+}): string {
+  if (input.personalLine) {
+    return `Research finding: ${input.finding}\nSource: ${input.sourceLabel} (${input.sourceUrl})\n\nReal reaction from today:\n${input.personalLine}`
+  }
+
+  const convictions = input.valuesAndOpinions.length > 0
+    ? input.valuesAndOpinions.map((v, i) => `${i + 1}. ${v}`).join('\n')
+    : 'None supplied.'
+
+  return `Research finding: ${input.finding}\nSource: ${input.sourceLabel} (${input.sourceUrl})\n\nOpinion mode: no personal anecdote supplied today. Build from real convictions only:\n${convictions}`
+}
+
+function buildSourceFromStoredOpinion(input: {
+  topicName: string
+  valuesAndOpinions: string[]
+}): string {
+  const convictions = input.valuesAndOpinions.length > 0
+    ? input.valuesAndOpinions.map((v, i) => `${i + 1}. ${v}`).join('\n')
+    : 'None supplied.'
+
+  return `Topic cluster: ${input.topicName}\n\nOpinion-only day. Build from stored real convictions only:\n${convictions}`
 }
 
 function buildSourceFromAngle(input: {

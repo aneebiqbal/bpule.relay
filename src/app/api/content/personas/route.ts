@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
+import { extractProfileTopics } from '@/lib/ai/content-profile'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,12 +26,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
 
-    const { displayName, platforms, humorStyle, valuesAndOpinions, admiredExamples } = body as {
+    const { displayName, platforms, humorStyle, valuesAndOpinions, admiredExamples, profileInput } = body as {
       displayName: string
       platforms: string[]
       humorStyle?: string
       valuesAndOpinions?: string[]
       admiredExamples?: string[]
+      profileInput?: string
     }
     if (!displayName?.trim()) return NextResponse.json({ error: 'displayName is required' }, { status: 400 })
     if (!Array.isArray(platforms) || platforms.length === 0) {
@@ -42,20 +44,40 @@ export async function POST(req: NextRequest) {
     if (filtered.length === 0) return NextResponse.json({ error: 'Invalid platform' }, { status: 400 })
 
     const store = await createScoutStore()
+    const profileText = typeof profileInput === 'string' ? profileInput.trim() : ''
+    const extracted = profileText.length > 0
+      ? await extractProfileTopics(profileText)
+      : { profileSummary: '', likelyTopics: [], valuesAndOpinions: [] }
+
+    const mergedValues = [
+      ...(Array.isArray(valuesAndOpinions)
+        ? valuesAndOpinions.map((v) => String(v).trim()).filter(Boolean)
+        : []),
+      ...extracted.valuesAndOpinions,
+    ]
+    const uniqueValues = [...new Set(mergedValues)]
+
     const persona = await store.createContentPersona({
       repId: user.rep.id,
       displayName: displayName.trim(),
       platforms: filtered as ('linkedin' | 'x')[],
       humorStyle: humorStyle?.trim() ?? '',
-      valuesAndOpinions: Array.isArray(valuesAndOpinions)
-        ? valuesAndOpinions.map((v) => String(v).trim()).filter(Boolean)
-        : [],
+      valuesAndOpinions: uniqueValues,
       admiredExamples: Array.isArray(admiredExamples)
         ? admiredExamples.map((v) => String(v).trim()).filter(Boolean)
         : [],
     })
 
-    return NextResponse.json({ persona })
+    for (const topic of extracted.likelyTopics.slice(0, 6)) {
+      await store.createTopicCluster({
+        personaId: persona.id,
+        clusterName: topic.name,
+        description: topic.description,
+        sourceType: 'profile',
+      })
+    }
+
+    return NextResponse.json({ persona, inferredTopics: extracted.likelyTopics, profileSummary: extracted.profileSummary })
   } catch (err: unknown) {
     // Supabase errors are objects with { message, code, details, hint }
     const e = err as { message?: string; code?: string; details?: unknown; hint?: unknown }

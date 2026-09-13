@@ -339,11 +339,39 @@ export interface ContentPillar {
   createdAt: string
 }
 
+export interface TopicCluster {
+  id: string
+  organizationId: string
+  personaId: string
+  clusterName: string
+  description: string
+  sourceType: 'profile' | 'answer' | 'research' | 'system'
+  mergedIntoId: string | null
+  lastInputAt: string | null
+  lastResearchAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ContentResearchFinding {
+  id: string
+  organizationId: string
+  personaId: string
+  topicClusterId: string
+  finding: string
+  sourceLabel: string
+  sourceUrl: string
+  sourcePublishedAt: string | null
+  createdAt: string
+  used: boolean
+}
+
 export interface ContentDraft {
   id: string
   organizationId: string
   personaId: string
   pillarId: string | null
+  topicClusterId: string | null
   sourceMaterial: string
   platform: ContentPlatform
   caption: string
@@ -351,6 +379,7 @@ export interface ContentDraft {
   hookFeedback: string
   selfCheckPassed: boolean
   selfCheckNote: string
+  specificityHit: boolean
   status: ContentDraftStatus
   createdAt: string
 }
@@ -360,6 +389,7 @@ export interface ContentHistoryEntry {
   organizationId: string
   personaId: string
   pillarId: string | null
+  topicClusterId: string | null
   platform: ContentPlatform
   openingLine: string
   postedAt: string
@@ -369,8 +399,10 @@ export interface TrendingAngle {
   id: string
   organizationId: string
   pillarId: string
+  topicClusterId: string | null
   angleDescription: string
   sourceNote: string
+  sourceUrl: string
   addedBy: string | null
   addedAt: string
   used: boolean

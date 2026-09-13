@@ -1,7 +1,7 @@
 import { pickDraftChain } from '@/lib/ai/routing'
 import { structuredJsonChain } from '@/lib/ai/provider'
 
-import type { ContentPillar, ContentPlatform } from '@/lib/domain/types'
+import type { ContentPlatform } from '@/lib/domain/types'
 
 /**
  * Content generation pipeline.
@@ -39,7 +39,11 @@ const BANNED_HOOK_PATTERNS = [
 
 export interface ContentGenerationInput {
   personaName: string
-  pillar: ContentPillar
+  topic: {
+    id: string
+    name: string
+    description?: string
+  }
   sourceMaterial: string
   platform: ContentPlatform
   styleCard: string | null
@@ -166,8 +170,8 @@ HOOK - the first 1-2 lines must contain a concrete, specific detail from the sou
 
 function buildContentUserPrompt(input: ContentGenerationInput): string {
   const mode = input.generationMode ?? 'personal'
-  return `PILLAR: ${input.pillar.pillarName}
-${input.pillar.description ? `(${input.pillar.description})` : ''}
+  return `TOPIC CLUSTER: ${input.topic.name}
+${input.topic.description ? `(${input.topic.description})` : ''}
 
 PLATFORM: ${input.platform}
 

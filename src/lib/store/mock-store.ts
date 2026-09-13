@@ -16,6 +16,8 @@ import type {
   ProofItem,
   PushSubscription,
   Rep,
+  TopicCluster,
+  ContentResearchFinding,
   TrendingAngle,
   UpworkJob,
   UpworkMessage,
@@ -412,9 +414,11 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   // content engine
   const contentPersonas: ContentPersona[] = []
   const contentPillars: ContentPillar[] = []
+  const topicClusters: TopicCluster[] = []
   const contentDrafts: ContentDraft[] = []
   const contentHistoryEntries: ContentHistoryEntry[] = []
   const trendingAngles: TrendingAngle[] = []
+  const researchFindings: ContentResearchFinding[] = []
   const extractionRuns: Array<{
     task: 'extract' | 'draft'
     success: boolean
@@ -1220,6 +1224,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         organizationId: DEMO_ORG_ID,
         personaId: input.personaId,
         pillarId: input.pillarId,
+        topicClusterId: input.topicClusterId ?? null,
         sourceMaterial: input.sourceMaterial,
         platform: input.platform,
         caption: input.caption,
@@ -1227,6 +1232,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         hookFeedback: input.hookFeedback ?? '',
         selfCheckPassed: input.selfCheckPassed ?? false,
         selfCheckNote: input.selfCheckNote ?? '',
+        specificityHit: input.specificityHit ?? false,
         status: input.status ?? 'draft',
         createdAt: new Date().toISOString(),
       }
@@ -1248,6 +1254,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
           organizationId: 'org-demo',
     personaId: draft.personaId,
           pillarId: draft.pillarId,
+          topicClusterId: draft.topicClusterId,
           platform: draft.platform,
           openingLine: draft.caption.split('\n')[0] ?? '',
           postedAt: new Date().toISOString(),
@@ -1267,6 +1274,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         organizationId: DEMO_ORG_ID,
         personaId: input.personaId,
         pillarId: input.pillarId,
+        topicClusterId: input.topicClusterId ?? null,
         platform: input.platform,
         openingLine: input.openingLine,
         postedAt: new Date().toISOString(),
@@ -1279,8 +1287,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         id: nextId('ta'),
         organizationId: DEMO_ORG_ID,
         pillarId: input.pillarId,
+        topicClusterId: null,
         angleDescription: input.angleDescription,
         sourceNote: input.sourceNote ?? '',
+        sourceUrl: '',
         addedBy: input.addedBy ?? null,
         addedAt: new Date().toISOString(),
         used: false,
@@ -1315,6 +1325,66 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
           return created >= start.getTime() && created <= end.getTime()
         })
         .length
+    },
+    async createTopicCluster(input) {
+      const now = new Date().toISOString()
+      const row: TopicCluster = {
+        id: nextId('tc'),
+        organizationId: DEMO_ORG_ID,
+        personaId: input.personaId,
+        clusterName: input.clusterName,
+        description: input.description ?? '',
+        sourceType: input.sourceType ?? 'system',
+        mergedIntoId: null,
+        lastInputAt: input.lastInputAt ?? null,
+        lastResearchAt: input.lastResearchAt ?? null,
+        createdAt: now,
+        updatedAt: now,
+      }
+      topicClusters.unshift(row)
+      return row
+    },
+    async listTopicClusters(personaId) {
+      return topicClusters
+        .filter((c) => c.personaId === personaId && !c.mergedIntoId)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    },
+    async touchTopicCluster(input) {
+      const row = topicClusters.find((c) => c.id === input.topicClusterId)
+      if (!row) throw new Error('Topic cluster not found')
+      if (input.lastInputAt !== undefined) row.lastInputAt = input.lastInputAt
+      if (input.lastResearchAt !== undefined) row.lastResearchAt = input.lastResearchAt
+      row.updatedAt = new Date().toISOString()
+      return row
+    },
+    async createResearchFinding(input) {
+      const finding: ContentResearchFinding = {
+        id: nextId('rf'),
+        organizationId: DEMO_ORG_ID,
+        personaId: input.personaId,
+        topicClusterId: input.topicClusterId,
+        finding: input.finding,
+        sourceLabel: input.sourceLabel,
+        sourceUrl: input.sourceUrl,
+        sourcePublishedAt: input.sourcePublishedAt ?? null,
+        used: false,
+        createdAt: new Date().toISOString(),
+      }
+      researchFindings.unshift(finding)
+      return finding
+    },
+    async listResearchFindings(personaId, opts) {
+      return researchFindings
+        .filter((f) => f.personaId === personaId)
+        .filter((f) => (opts?.unusedOnly ? !f.used : true))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, opts?.limit ?? researchFindings.length)
+    },
+    async markResearchFindingUsed(findingId) {
+      const finding = researchFindings.find((f) => f.id === findingId)
+      if (!finding) throw new Error('Finding not found')
+      finding.used = true
+      return finding
     },
   }
 }

@@ -21,16 +21,18 @@ export default async function PersonaPage({
   // Verify ownership
   if (persona.repId !== user.rep.id && user.rep.role !== 'admin') notFound()
 
-  const pillars = await store.listContentPillars(id)
+  const topicClusters = await store.listTopicClusters(id)
   const drafts = await store.listContentDrafts(id)
   const history = await store.listContentHistory(id, 10)
+  const findings = await store.listResearchFindings(id, { unusedOnly: false, limit: 20 })
 
   return (
     <PersonaWorkspace
       persona={persona}
-      pillars={pillars}
+      topicClusters={topicClusters}
       drafts={drafts}
       history={history}
+      findings={findings}
     />
   )
 }
