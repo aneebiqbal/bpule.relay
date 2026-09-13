@@ -82,6 +82,17 @@ export interface ModelCallLogInput {
   error?: string | null
 }
 
+export interface HostCallInput {
+  task: 'extract' | 'draft' | 'calibrate' | 'refine'
+  host: string
+  model?: string
+  costTier?: 'tier1' | 'tier2' | 'tier3' | 'tier4'
+  success: boolean
+  failureReason?: 'rate_limit' | 'insufficient_balance' | 'timeout' | 'auth' | 'other'
+  errorMessage?: string
+  latencyMs?: number
+}
+
 export interface CreateLeadResult {
   blocked: boolean
   reason?: string
@@ -322,6 +333,7 @@ export interface ScoutStore {
   getTeamStats(): Promise<TeamStats>
   getExtractionMetrics(): Promise<ExtractionMetrics>
   logExtractionRun(input: ModelCallLogInput): Promise<void>
+  logHostCall(input: HostCallInput): Promise<void>
   /** All leads a team lead can see; admin only in Supabase mode. */
   listAllLeadsAdmin(): Promise<Lead[]>
   // eval harness

@@ -166,27 +166,42 @@ function categorizeFailure(err: unknown): FailureReason {
   return 'other'
 }
 
+type HostAttemptLog = {
+  host: string
+  model: string
+  costTier: CostTier
+  success: boolean
+  failureReason: FailureReason | null
+  errorMessage: string
+  latencyMs: number
+}
+
 async function walkChain<T>(
   chain: ChainStep[],
   onStatus: ((message: string) => void) | undefined,
   attempt: (step: ChainStep) => Promise<T>,
+  onAttempt?: (log: HostAttemptLog) => void | Promise<void>,
 ): Promise<CallResult<T>> {
   if (chain.length === 0) {
     throw new Error('No provider host is configured for this call. Set at least one API key.')
   }
   const failures: Array<{ host: string; tier: CostTier; error: string; reason: FailureReason }> = []
   for (const step of chain) {
+    const start = Date.now()
     try {
       const data = await withHostRetry(`${step.costTier}:${step.host.id} (${step.host.model})`, onStatus, () =>
         attempt(step),
       )
+      const latency = Date.now() - start
       console.info(`[ai/host] served by ${step.host.id} (${step.costTier})`)
+      await onAttempt?.({ host: step.host.id, model: step.host.model, costTier: step.costTier, success: true, failureReason: null, errorMessage: '', latencyMs: latency })
       return { data, host: step.host.id, costTier: step.costTier, estimatedCostUsd: 0 }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       const reason = categorizeFailure(err)
       failures.push({ host: step.host.id, tier: step.costTier, error: message, reason })
       console.warn(`[ai/host] ${step.host.id} (${step.costTier}) failed: ${reason} — ${message}`)
+      await onAttempt?.({ host: step.host.id, model: step.host.model, costTier: step.costTier, success: false, failureReason: reason, errorMessage: message, latencyMs: Date.now() - start })
       onStatus?.(`${step.host.id} unavailable (${message}); trying next host`)
     }
   }
@@ -333,6 +348,7 @@ export async function structuredJson<T>(opts: JsonCallOptions): Promise<T> {
 export async function structuredJsonChain<T>(
   chain: ChainStep[],
   opts: Omit<JsonCallOptions, 'model' | 'responseMode' | 'strict'>,
+  onAttempt?: (log: HostAttemptLog) => void | Promise<void>,
 ): Promise<CallResult<T>> {
   const result = await walkChain(chain, opts.onStatus, async (step) => {
     const { value, inputTokens, outputTokens } = await structuredJsonOnHost<T>(
@@ -340,7 +356,7 @@ export async function structuredJsonChain<T>(
       { ...opts, responseMode: 'json_object' },
     )
     return { value, inputTokens, outputTokens }
-  })
+  }, onAttempt)
   const estimatedCostUsd = estimateCostUsd(
     result.costTier,
     result.data.inputTokens,

@@ -181,7 +181,13 @@ export async function POST(req: NextRequest) {
 
   return sseStream(async (emit) => {
     try {
-      const result = await generateContent(input, (msg) => emit({ type: 'status', message: msg }))
+      const result = await generateContent(input, (msg) => emit({ type: 'status', message: msg }), async (log) => {
+        try {
+          await store.logHostCall({ task: 'extract', host: log.host, model: log.model, costTier: log.costTier, success: log.success, failureReason: log.failureReason ?? undefined, errorMessage: log.errorMessage, latencyMs: log.latencyMs })
+        } catch {
+          // Logging must never break generation.
+        }
+      })
         const draft = await store.createContentDraft({
           personaId,
           pillarId: pillar?.id ?? null,

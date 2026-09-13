@@ -35,6 +35,7 @@ import type {
   DosageResult,
   ExtractionMetrics,
   FollowupDue,
+  HostCallInput,
   ModelCallLogInput,
   MyRank,
   NewLeadInput,
@@ -1116,6 +1117,21 @@ export class SupabaseStore implements ScoutStore {
       host: input.host ?? null,
       cost_usd: input.costUsd ?? null,
       error_message: input.error ?? null,
+    })
+    if (error) throw error
+  }
+
+  async logHostCall(input: HostCallInput): Promise<void> {
+    const { error } = await this.client.from('host_calls').insert({
+      organization_id: this.orgId,
+      task: input.task,
+      host: input.host,
+      model: input.model ?? '',
+      cost_tier: input.costTier ?? null,
+      success: input.success,
+      failure_reason: input.success ? null : (input.failureReason ?? 'other'),
+      error_message: input.errorMessage ?? '',
+      latency_ms: input.latencyMs ?? null,
     })
     if (error) throw error
   }

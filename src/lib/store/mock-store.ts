@@ -31,6 +31,7 @@ import type {
   DosageResult,
   ExtractionMetrics,
   FollowupDue,
+  HostCallInput,
   ModelCallLogInput,
   NewLeadInput,
   QueueData,
@@ -1020,6 +1021,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         .filter((row) => row.sent > 0 || row.replyRate !== null)
         .sort((a, b) => (a.play?.name ?? 'No play').localeCompare(b.play?.name ?? 'No play'))
       return { overall, perRep, perPlay }
+    },
+    async logHostCall(input: HostCallInput) {
+      // No-op in demo mode; this table is for production observability.
     },
     async logExtractionRun(input: ModelCallLogInput) {
       extractionRuns.push({

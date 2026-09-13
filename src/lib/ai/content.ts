@@ -84,6 +84,7 @@ interface ModelContentOutput {
 export async function generateContent(
   input: ContentGenerationInput,
   onStatus?: (msg: string) => void,
+  onHostAttempt?: (log: { host: string; model: string; costTier: 'tier1' | 'tier2' | 'tier3' | 'tier4'; success: boolean; failureReason: 'rate_limit' | 'insufficient_balance' | 'timeout' | 'auth' | 'other' | null; errorMessage: string; latencyMs: number }) => void | Promise<void>,
 ): Promise<ContentGenerationResult> {
   const chain = pickDraftChain()
   if (chain.length === 0) {
@@ -107,7 +108,7 @@ export async function generateContent(
       required: ['caption', 'hook_score', 'hook_feedback', 'self_check_passed', 'self_check_note'],
     },
     onStatus,
-  })
+  }, onHostAttempt)
 
   const caption = result.data.caption.trim()
   const hook = extractHook(caption)

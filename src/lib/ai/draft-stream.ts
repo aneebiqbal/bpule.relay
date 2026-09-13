@@ -230,6 +230,7 @@ export async function streamDraft(
     strippedNumbers: primary.strippedNumbers,
     hadEmDash: primary.hadEmDash,
     hadExclamation: primary.hadExclamation,
+    requestedCall: primary.requestedCall,
     variant: secondary
       ? {
           draftText: secondary.draftText,
@@ -256,7 +257,7 @@ function buildDeterministicFallback(input: DraftInput, callLog: DraftCallLog[]):
     evidence: input.extracted.signalEvidence,
   })
   const sanitized = sanitizeDraft(draftText, input.facts)
-  const passed = Boolean(codeChecks.companyMentioned && codeChecks.specificEvidenceMentioned && sanitized.strippedNumbers.length === 0)
+  const passed = Boolean(codeChecks.companyMentioned && codeChecks.specificEvidenceMentioned && sanitized.strippedNumbers.length === 0 && !sanitized.requestedCall)
 
   return {
     leadId: input.leadId,
@@ -277,6 +278,7 @@ function buildDeterministicFallback(input: DraftInput, callLog: DraftCallLog[]):
     strippedNumbers: sanitized.strippedNumbers,
     hadEmDash: sanitized.hadEmDash,
     hadExclamation: sanitized.hadExclamation,
+    requestedCall: sanitized.requestedCall,
     callLog,
   }
 }
@@ -343,6 +345,7 @@ function normalizeVariant(
   strippedNumbers: string[]
   hadEmDash: boolean
   hadExclamation: boolean
+  requestedCall: boolean
 } {
   const cleaned = (raw.draft ?? '').trim() || fallbackText(input)
   const codeChecks = deterministicChecks(cleaned, {
@@ -365,10 +368,11 @@ function normalizeVariant(
       test2Note: raw.test_2_note || '',
       codeChecks,
     },
-    passed: passed && sanitized.strippedNumbers.length === 0,
+    passed: passed && sanitized.strippedNumbers.length === 0 && !sanitized.requestedCall,
     strippedNumbers: sanitized.strippedNumbers,
     hadEmDash: sanitized.hadEmDash,
     hadExclamation: sanitized.hadExclamation,
+    requestedCall: sanitized.requestedCall,
   }
 }
 

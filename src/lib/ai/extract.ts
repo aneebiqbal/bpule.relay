@@ -30,6 +30,16 @@ interface ExtractionOutput {
 
 interface ExtractLeadOptions {
   onStatus?: (message: string) => void
+  onHostAttempt?: (log: {
+    host: string
+    model: string
+    costTier: 'tier1' | 'tier2' | 'tier3' | 'tier4'
+    success: boolean
+    failureReason: 'rate_limit' | 'insufficient_balance' | 'timeout' | 'auth' | 'other' | null
+    errorMessage: string
+    latencyMs: number
+  }) => void | Promise<void>
+  task?: 'extract' | 'draft' | 'calibrate' | 'refine'
 }
 
 export interface ExtractionBundle {
@@ -549,7 +559,7 @@ async function modelExtractOnChain(
       schema: EXTRACTION_SCHEMA,
       schemaName: 'lead_profile_extract',
       onStatus: opts.onStatus,
-    })
+    }, opts.onHostAttempt)
     callLog.push({ costTier: result.costTier, host: result.host, estimatedCostUsd: result.estimatedCostUsd })
 
     const parsed = validateOutput(result.data)

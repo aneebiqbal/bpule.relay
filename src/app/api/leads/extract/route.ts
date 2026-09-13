@@ -69,6 +69,14 @@ export async function POST(request: Request) {
         onStatus(message) {
           emit({ type: 'status', message })
         },
+        task: 'extract',
+        onHostAttempt: async (log) => {
+          try {
+            await store?.logHostCall({ task: 'extract', host: log.host, model: log.model, costTier: log.costTier, success: log.success, failureReason: log.failureReason ?? undefined, errorMessage: log.errorMessage, latencyMs: log.latencyMs })
+          } catch {
+            // Logging must never break extraction.
+          }
+        },
       })
       // One log entry per model call actually made (fast pass, plus an
       // escalation pass if one ran), so cost-by-tier reflects real spend.

@@ -63,6 +63,8 @@ export interface DraftResult {
   strippedNumbers: string[]
   hadEmDash: boolean
   hadExclamation: boolean
+  /** True if a call/meeting/chat was requested — always a failure; the offer is always the free Read. */
+  requestedCall: boolean
   /** The second variant, when best-of-two drafting is enabled. */
   variant?: DraftVariant
   /** Why the primary draft was picked over the variant. */
@@ -594,7 +596,7 @@ function finishDraft(
   callLog: DraftCallLog[],
 ): DraftResult {
   const sanitized = sanitizeDraft(result.output.draft, input.facts)
-  const passed = result.passed && sanitized.strippedNumbers.length === 0
+  const passed = result.passed && sanitized.strippedNumbers.length === 0 && !sanitized.requestedCall
 
   return {
     leadId: input.leadId,
@@ -613,6 +615,7 @@ function finishDraft(
     strippedNumbers: sanitized.strippedNumbers,
     hadEmDash: sanitized.hadEmDash,
     hadExclamation: sanitized.hadExclamation,
+    requestedCall: sanitized.requestedCall,
     callLog,
   }
 }
@@ -701,7 +704,7 @@ function demoDraft(input: DraftInput, userPrompt: string): DraftResult {
     `${input.styleCard?.greeting ?? 'Hey'} ${opener},`,
     '',
     body,
-    `${input.lead.company} looks like a strong fit for how I help teams ship faster, and I wanted to see if a quick intro call makes sense.${priceLine}`,
+    `${input.lead.company} looks like a strong fit for how I help teams ship faster. Happy to send over a free Read, a quick written take on what I'm seeing.${priceLine}`,
     close,
     input.styleCard?.sign_off ?? '',
   ]
@@ -724,12 +727,13 @@ function demoDraft(input: DraftInput, userPrompt: string): DraftResult {
         specificEvidenceMentioned: true,
       },
     },
-    passed: sanitized.strippedNumbers.length === 0,
+    passed: sanitized.strippedNumbers.length === 0 && !sanitized.requestedCall,
     modelUsed: 'demo-local-deterministic',
     attempts: 1,
     strippedNumbers: sanitized.strippedNumbers,
     hadEmDash: sanitized.hadEmDash,
     hadExclamation: sanitized.hadExclamation,
+    requestedCall: sanitized.requestedCall,
     callLog: [],
   }
 }

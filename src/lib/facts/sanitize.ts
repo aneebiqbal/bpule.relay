@@ -87,10 +87,21 @@ export function stripEmDashes(text: string): string {
   return text.replace(/[\u2014\u2013]/g, '-')
 }
 
+// The offer is always the free Read \u2014 a short written review. A draft must
+// never ask for a call, meeting, or chat; see baseDraftSystem's CTA rule.
+// Checked here in code because the prompt instruction alone is not
+// enforced anywhere once the model (or a fallback template) has responded.
+const CALL_REQUEST_RE = /\b(hop on|jump on|get on)\s+(a\s+)?(call|zoom|meeting)\b|\bquick\s+call\b|\bintro\s+call\b|\bschedule\s+a\s+(call|meeting)\b|\b(book|grab)\s+(a\s+)?(call|time|meeting)\b|\bcall\s+or\s+meeting\b/i
+
+/** True if the draft asks for a call, meeting, or similar live sync \u2014 always banned. */
+export function requestsCall(text: string): boolean {
+  return CALL_REQUEST_RE.test(text)
+}
+
 export function sanitizeDraft(
   draft: string,
   facts: Fact[],
-): { text: string; strippedNumbers: string[]; hadEmDash: boolean; hadExclamation: boolean } {
+): { text: string; strippedNumbers: string[]; hadEmDash: boolean; hadExclamation: boolean; requestedCall: boolean } {
   const before = draft
   const noDashes = stripEmDashes(draft)
   const { text: noNumbers, stripped } = stripUnauthorizedNumbers(noDashes, facts)
@@ -103,5 +114,6 @@ export function sanitizeDraft(
     strippedNumbers: stripped,
     hadEmDash: before !== noDashes,
     hadExclamation,
+    requestedCall: requestsCall(clean),
   }
 }
