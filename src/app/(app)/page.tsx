@@ -20,6 +20,7 @@ import { getCurrentUser } from '@/lib/auth/current'
 import { signalById } from '@/lib/score/signals'
 import { NotificationFeed, type NotificationItem } from '@/components/notification-feed'
 import { ScoreRing } from '@/components/score-ring'
+import { StudioMark } from '@/components/studio-brand'
 import { cn } from 'cn'
 import type { Lead } from '@/lib/domain/types'
 
@@ -129,8 +130,41 @@ export default async function TodayPage() {
       </header>
 
       {/* ═══════════════════════════════════════════════════════
-          PRIMARY ACTION AREA — replies, follow-ups, next lead
-          ═══════════════════════════════════════════════════════ */}
+           STUDIO ENTRY — a separate room for your writing
+           ═══════════════════════════════════════════════════════ */}
+      <Link
+        href="/content"
+        className="reveal-up group relative overflow-hidden rounded-2xl border border-studio/20 bg-gradient-to-br from-[#0e0c1a] via-[#1a1530] to-[#0e0c1a] p-6 transition-all duration-300 hover:border-studio/40 hover:shadow-[0_8px_40px_-12px_color-mix(in_srgb,var(--studio)_40%,transparent)]"
+      >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-60"
+          style={{
+            background:
+              'radial-gradient(ellipse at 20% 20%, color-mix(in srgb, var(--studio) 25%, transparent) 0%, transparent 50%), radial-gradient(ellipse at 85% 80%, color-mix(in srgb, var(--studio-light) 15%, transparent) 0%, transparent 40%)',
+          }}
+        />
+        <div className="relative z-10 flex items-center gap-5">
+          <div className="gold-breathe flex size-14 shrink-0 items-center justify-center rounded-2xl gradient-studio shadow-studio">
+            <StudioMark className="size-8 bg-transparent" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-label text-studio-light">Part of Relay</p>
+            <h2 className="text-display text-2xl text-paper">Studio</h2>
+            <p className="mt-1 text-sm text-paper/60">
+              Answer a few real questions, get one real post, decide what stays.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-xl bg-paper/10 px-4 py-2.5 text-sm font-medium text-paper backdrop-blur-sm transition-all group-hover:bg-paper/20">
+            Open
+            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+          </div>
+        </div>
+      </Link>
+
+      {/* ═══════════════════════════════════════════════════════
+           PRIMARY ACTION AREA — replies, follow-ups, next lead
+           ═══════════════════════════════════════════════════════ */}
       {(replyCount > 0 || followupCount > 0 || next) && (
         <div className="reveal-up stagger-1 grid gap-4 lg:grid-cols-3">
           {/* Replies waiting */}
