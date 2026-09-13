@@ -8,8 +8,12 @@ export const dynamic = 'force-dynamic'
 
 export default async function EvalPage() {
   const store = await createScoutStore()
-  const runs = await store.listEvalRuns()
-  const golden = await store.listGoldenSet()
+  const [runsRes, goldenRes] = await Promise.allSettled([
+    store.listEvalRuns(),
+    store.listGoldenSet(),
+  ])
+  const runs = runsRes.status === 'fulfilled' ? runsRes.value : []
+  const golden = goldenRes.status === 'fulfilled' ? goldenRes.value : []
 
   return (
     <div className="space-y-8">
@@ -31,6 +35,11 @@ export default async function EvalPage() {
         <p className="max-w-xl text-sm leading-relaxed text-slate">
           Every prompt change gets scored against the golden set before it ships.
         </p>
+        {runsRes.status === 'rejected' || goldenRes.status === 'rejected' ? (
+          <p className="text-xs text-status-research">
+            Some eval data is unavailable right now. Showing what could be loaded.
+          </p>
+        ) : null}
       </header>
 
       {/* Golden set */}
@@ -111,14 +120,6 @@ export default async function EvalPage() {
           <form
             action="/api/eval/run"
             method="POST"
-            onSubmit={async (e) => {
-              e.preventDefault()
-              const form = e.currentTarget
-              const btn = form.querySelector('button')
-              if (btn) btn.setAttribute('disabled', 'true')
-              await fetch('/api/eval/run', { method: 'POST', body: JSON.stringify({ promptVersion: 'manual' }) })
-              window.location.reload()
-            }}
           >
             <Button variant="gold" size="sm" type="submit">
               <Play className="mr-1.5 size-3.5" />
