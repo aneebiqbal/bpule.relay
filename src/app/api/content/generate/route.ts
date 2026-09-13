@@ -5,7 +5,7 @@ import { generateContent } from '@/lib/ai/content'
 import { sseStream } from '@/lib/sse/sse'
 import { injectStyleCard } from '@/lib/style/inject'
 import type { ContentGenerationInput } from '@/lib/ai/content'
-import type { TrendingAngle, ContentResearchFinding } from '@/lib/domain/types'
+import type { TrendingAngle, ContentResearchFinding, ContentDraftFeedback } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -110,6 +110,8 @@ export async function POST(req: NextRequest) {
 
   const material = sourceMaterial?.trim() ?? ''
   const realLine = personalLine?.trim() ?? ''
+  const feedback = await store.listContentDraftFeedback(personaId, 80)
+  const preferenceHints = derivePreferenceHints(feedback)
   const generationMode: 'personal' | 'opinion' = (angle || finding || useStoredOpinion)
     ? (realLine || material ? 'personal' : 'opinion')
     : 'personal'
@@ -160,6 +162,7 @@ export async function POST(req: NextRequest) {
     valuesAndOpinions: persona.valuesAndOpinions,
     generationMode,
     trendingAngle: angle?.angleDescription ?? finding?.finding ?? null,
+    preferenceHints,
   }
 
   return sseStream(async (emit) => {
@@ -169,6 +172,8 @@ export async function POST(req: NextRequest) {
           personaId,
           pillarId: pillar?.id ?? null,
           topicClusterId: topicCluster?.id ?? finding?.topicClusterId ?? null,
+          researchFindingId: finding?.id ?? null,
+          sourceKind: finding ? 'field_update' : (useStoredOpinion ? 'conviction' : 'answer'),
           sourceMaterial: sourceForGeneration,
           platform,
           caption: result.caption,
@@ -196,6 +201,31 @@ export async function POST(req: NextRequest) {
       emit({ type: 'error', message })
     }
   })
+}
+
+function derivePreferenceHints(feedback: ContentDraftFeedback[]): string[] {
+  if (!Array.isArray(feedback) || feedback.length === 0) return []
+  const accepted = feedback.filter((f) => f.reaction === 'posting' || f.reaction === 'posting_after_edit').length
+  const rejected = feedback.filter((f) => f.reaction === 'not_for_me').length
+  const edited = feedback.filter((f) => f.edited)
+  const signals = new Set<string>()
+
+  if (accepted > rejected) {
+    signals.add('Keep the overall style close to previously accepted drafts.')
+  }
+  if (rejected > accepted) {
+    signals.add('Avoid the patterns that feel generic or forced; keep it direct.')
+  }
+  if (edited.length > 0) {
+    const signalCounts = new Map<string, number>()
+    for (const row of edited) {
+      for (const s of row.editSignals) signalCounts.set(s, (signalCounts.get(s) ?? 0) + 1)
+    }
+    const top = [...signalCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([label]) => label)
+    for (const label of top) signals.add(`Frequent edit pattern: ${label}.`)
+  }
+
+  return [...signals].slice(0, 3)
 }
 
 function buildSourceFromFinding(input: {

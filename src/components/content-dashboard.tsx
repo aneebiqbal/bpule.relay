@@ -46,7 +46,7 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
             <div className="space-y-2">
               <p className="text-heading text-lg text-ink">No personas yet.</p>
               <p className="text-sm leading-relaxed text-slate">
-                Paste a profile or bio, run voice calibration, and capture real material. The topic model organizes itself.
+                Paste a profile or bio, run voice calibration, and capture real material. The app handles the organization in the background.
               </p>
             </div>
           </div>
@@ -67,7 +67,7 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                   <div>
                     <h2 className="text-heading text-base text-ink">{persona.displayName}</h2>
                     <p className="text-xs text-slate">
-                      {persona.topicClusters.length} topic{persona.topicClusters.length === 1 ? '' : 's'} &middot; {persona.platforms.join(', ')}
+                      {persona.topicClusters.length} subject{persona.topicClusters.length === 1 ? '' : 's'} &middot; {persona.platforms.join(', ')}
                     </p>
                   </div>
                 </div>

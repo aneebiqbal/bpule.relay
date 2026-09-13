@@ -366,12 +366,29 @@ export interface ContentResearchFinding {
   used: boolean
 }
 
+export type ContentDraftReaction = 'posting' | 'not_for_me' | 'posting_after_edit'
+
+export interface ContentDraftFeedback {
+  id: string
+  organizationId: string
+  personaId: string
+  draftId: string
+  topicClusterId: string | null
+  sourceKind: 'answer' | 'conviction' | 'field_update'
+  reaction: ContentDraftReaction
+  edited: boolean
+  editSignals: string[]
+  createdAt: string
+}
+
 export interface ContentDraft {
   id: string
   organizationId: string
   personaId: string
   pillarId: string | null
   topicClusterId: string | null
+  researchFindingId: string | null
+  sourceKind: 'answer' | 'conviction' | 'field_update'
   sourceMaterial: string
   platform: ContentPlatform
   caption: string

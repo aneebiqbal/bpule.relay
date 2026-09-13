@@ -52,6 +52,7 @@ export interface ContentGenerationInput {
   valuesAndOpinions?: string[]
   generationMode?: 'personal' | 'opinion'
   trendingAngle?: string | null
+  preferenceHints?: string[]
 }
 
 export interface ContentGenerationResult {
@@ -148,12 +149,16 @@ function buildContentSystemPrompt(input: ContentGenerationInput): string {
       ? `Real convictions: ${input.valuesAndOpinions.join(' | ')}`
       : '',
   ].filter(Boolean).join('\n')
+  const preferenceBlock = input.preferenceHints && input.preferenceHints.length > 0
+    ? `What this person tends to keep:\n- ${input.preferenceHints.join('\n- ')}`
+    : ''
   const mode = input.generationMode ?? 'personal'
 
   return `You write social media posts for ${input.personaName}. Your job is to turn their real observation into a post that sounds like them, not like a generic content engine.
 
 ${styleBlock}
 ${personalityBlock}
+${preferenceBlock}
 
 HARD RULES:
 1. NEVER use banned phrases: "unpopular opinion:", "here's the thing", "let that sink in", "thread 🧵", emoji as bullets.

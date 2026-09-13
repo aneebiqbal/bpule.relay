@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
   ContentDraft,
+  ContentDraftFeedback,
   ContentDraftStatus,
   ContentHistoryEntry,
   ContentPersona,
@@ -1842,6 +1843,8 @@ export class SupabaseStore implements ScoutStore {
     personaId: string
     pillarId: string | null
     topicClusterId?: string | null
+    researchFindingId?: string | null
+    sourceKind?: 'answer' | 'conviction' | 'field_update'
     sourceMaterial: string
     platform: ContentPlatform
     caption: string
@@ -1859,6 +1862,8 @@ export class SupabaseStore implements ScoutStore {
         persona_id: input.personaId,
         pillar_id: input.pillarId,
         topic_cluster_id: input.topicClusterId ?? null,
+        research_finding_id: input.researchFindingId ?? null,
+        source_kind: input.sourceKind ?? 'answer',
         source_material: input.sourceMaterial,
         platform: input.platform,
         caption: input.caption,
@@ -1883,6 +1888,28 @@ export class SupabaseStore implements ScoutStore {
       .order('created_at', { ascending: false })
     if (error) throw error
     return data.map(mapContentDraft)
+  }
+
+  async getContentDraft(draftId: string): Promise<ContentDraft | null> {
+    const { data, error } = await this.client
+      .from('content_drafts')
+      .select('*')
+      .eq('id', draftId)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return mapContentDraft(data)
+  }
+
+  async updateContentDraftCaption(draftId: string, caption: string): Promise<ContentDraft> {
+    const { data, error } = await this.client
+      .from('content_drafts')
+      .update({ caption })
+      .eq('id', draftId)
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapContentDraft(data)
   }
 
   async updateContentDraftStatus(draftId: string, status: ContentDraftStatus): Promise<ContentDraft> {
@@ -2126,6 +2153,44 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
     return mapContentResearchFinding(data)
   }
+
+  async createContentDraftFeedback(input: {
+    personaId: string
+    draftId: string
+    topicClusterId: string | null
+    sourceKind: 'answer' | 'conviction' | 'field_update'
+    reaction: 'posting' | 'not_for_me' | 'posting_after_edit'
+    edited: boolean
+    editSignals: string[]
+  }): Promise<ContentDraftFeedback> {
+    const { data, error } = await this.client
+      .from('content_draft_feedback')
+      .insert({
+        organization_id: this.orgId,
+        persona_id: input.personaId,
+        draft_id: input.draftId,
+        topic_cluster_id: input.topicClusterId,
+        source_kind: input.sourceKind,
+        reaction: input.reaction,
+        edited: input.edited,
+        edit_signals: input.editSignals,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapContentDraftFeedback(data)
+  }
+
+  async listContentDraftFeedback(personaId: string, limit = 60): Promise<ContentDraftFeedback[]> {
+    const { data, error } = await this.client
+      .from('content_draft_feedback')
+      .select('*')
+      .eq('persona_id', personaId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return (data ?? []).map(mapContentDraftFeedback)
+  }
 }
 
 function mapUpworkJob(r: Row): UpworkJob {
@@ -2203,6 +2268,8 @@ function mapContentDraft(r: Record<string, unknown>): ContentDraft {
     personaId: r.persona_id as string,
     pillarId: (r.pillar_id as string) ?? null,
     topicClusterId: (r.topic_cluster_id as string) ?? null,
+    researchFindingId: (r.research_finding_id as string) ?? null,
+    sourceKind: ((r.source_kind as ContentDraft['sourceKind']) ?? 'answer'),
     sourceMaterial: r.source_material as string,
     platform: r.platform as ContentPlatform,
     caption: (r.caption as string) ?? '',
@@ -2272,5 +2339,20 @@ function mapContentResearchFinding(r: Record<string, unknown>): ContentResearchF
     sourcePublishedAt: (r.source_published_at as string) ?? null,
     createdAt: r.created_at as string,
     used: Boolean(r.used),
+  }
+}
+
+function mapContentDraftFeedback(r: Record<string, unknown>): ContentDraftFeedback {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    personaId: r.persona_id as string,
+    draftId: r.draft_id as string,
+    topicClusterId: (r.topic_cluster_id as string) ?? null,
+    sourceKind: (r.source_kind as ContentDraftFeedback['sourceKind']) ?? 'answer',
+    reaction: (r.reaction as ContentDraftFeedback['reaction']) ?? 'not_for_me',
+    edited: Boolean(r.edited),
+    editSignals: normalizeStringArray(r.edit_signals),
+    createdAt: r.created_at as string,
   }
 }

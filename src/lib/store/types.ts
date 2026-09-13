@@ -1,5 +1,6 @@
 import type {
   ContentDraft,
+  ContentDraftFeedback,
   ContentDraftStatus,
   ContentHistoryEntry,
   ContentPersona,
@@ -411,6 +412,8 @@ export interface ScoutStore {
     personaId: string
     pillarId: string | null
     topicClusterId?: string | null
+    researchFindingId?: string | null
+    sourceKind?: 'answer' | 'conviction' | 'field_update'
     sourceMaterial: string
     platform: ContentPlatform
     caption: string
@@ -422,6 +425,8 @@ export interface ScoutStore {
     status?: ContentDraftStatus
   }): Promise<ContentDraft>
   listContentDrafts(personaId: string): Promise<ContentDraft[]>
+  getContentDraft(draftId: string): Promise<ContentDraft | null>
+  updateContentDraftCaption(draftId: string, caption: string): Promise<ContentDraft>
   updateContentDraftStatus(draftId: string, status: ContentDraftStatus): Promise<ContentDraft>
   listContentHistory(personaId: string, limit?: number): Promise<ContentHistoryEntry[]>
   logContentPosted(input: {
@@ -465,4 +470,14 @@ export interface ScoutStore {
   }): Promise<ContentResearchFinding>
   listResearchFindings(personaId: string, opts?: { unusedOnly?: boolean; limit?: number }): Promise<ContentResearchFinding[]>
   markResearchFindingUsed(findingId: string): Promise<ContentResearchFinding>
+  createContentDraftFeedback(input: {
+    personaId: string
+    draftId: string
+    topicClusterId: string | null
+    sourceKind: 'answer' | 'conviction' | 'field_update'
+    reaction: 'posting' | 'not_for_me' | 'posting_after_edit'
+    edited: boolean
+    editSignals: string[]
+  }): Promise<ContentDraftFeedback>
+  listContentDraftFeedback(personaId: string, limit?: number): Promise<ContentDraftFeedback[]>
 }

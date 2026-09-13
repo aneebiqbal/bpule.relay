@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import { PersonaWorkspace } from '@/components/persona-workspace'
+import { buildDailyDecision } from '@/lib/content/daily-decision'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +25,10 @@ export default async function PersonaPage({
   const topicClusters = await store.listTopicClusters(id)
   const drafts = await store.listContentDrafts(id)
   const history = await store.listContentHistory(id, 10)
-  const findings = await store.listResearchFindings(id, { unusedOnly: false, limit: 20 })
+  const findings = await store.listResearchFindings(id, { unusedOnly: true, limit: 10 })
+  const feedback = await store.listContentDraftFeedback(id, 100)
+  const generatedToday = await store.countContentDraftsToday(id)
+  const initialDecision = buildDailyDecision({ persona, clusters: topicClusters, findings, feedback, generatedToday })
 
   return (
     <PersonaWorkspace
@@ -32,7 +36,7 @@ export default async function PersonaPage({
       topicClusters={topicClusters}
       drafts={drafts}
       history={history}
-      findings={findings}
+      initialDecision={initialDecision}
     />
   )
 }

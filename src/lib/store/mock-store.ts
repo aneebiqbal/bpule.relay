@@ -1,5 +1,6 @@
 import type {
   ContentDraft,
+  ContentDraftFeedback,
   ContentHistoryEntry,
   ContentPersona,
   ContentPillar,
@@ -416,6 +417,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const contentPillars: ContentPillar[] = []
   const topicClusters: TopicCluster[] = []
   const contentDrafts: ContentDraft[] = []
+  const contentDraftFeedback: ContentDraftFeedback[] = []
   const contentHistoryEntries: ContentHistoryEntry[] = []
   const trendingAngles: TrendingAngle[] = []
   const researchFindings: ContentResearchFinding[] = []
@@ -1225,6 +1227,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         personaId: input.personaId,
         pillarId: input.pillarId,
         topicClusterId: input.topicClusterId ?? null,
+        researchFindingId: input.researchFindingId ?? null,
+        sourceKind: input.sourceKind ?? 'answer',
         sourceMaterial: input.sourceMaterial,
         platform: input.platform,
         caption: input.caption,
@@ -1243,6 +1247,15 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       return contentDrafts
         .filter((d) => d.personaId === personaId)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    },
+    async getContentDraft(draftId) {
+      return contentDrafts.find((d) => d.id === draftId) ?? null
+    },
+    async updateContentDraftCaption(draftId, caption) {
+      const draft = contentDrafts.find((d) => d.id === draftId)
+      if (!draft) throw new Error('Draft not found')
+      draft.caption = caption
+      return draft
     },
     async updateContentDraftStatus(draftId, status) {
       const draft = contentDrafts.find((d) => d.id === draftId)
@@ -1385,6 +1398,28 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       if (!finding) throw new Error('Finding not found')
       finding.used = true
       return finding
+    },
+    async createContentDraftFeedback(input) {
+      const row: ContentDraftFeedback = {
+        id: nextId('cdf'),
+        organizationId: DEMO_ORG_ID,
+        personaId: input.personaId,
+        draftId: input.draftId,
+        topicClusterId: input.topicClusterId,
+        sourceKind: input.sourceKind,
+        reaction: input.reaction,
+        edited: input.edited,
+        editSignals: input.editSignals,
+        createdAt: new Date().toISOString(),
+      }
+      contentDraftFeedback.unshift(row)
+      return row
+    },
+    async listContentDraftFeedback(personaId, limit = 60) {
+      return contentDraftFeedback
+        .filter((f) => f.personaId === personaId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, limit)
     },
   }
 }
