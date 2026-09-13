@@ -112,7 +112,8 @@ from (values
   ('70000000-0000-0000-0000-000000000018'::uuid, 'Aneeb'::text, 'upwork'::text, 'Bilal Chaudhry'::text,
    'PDR module integrated into an existing positioning framework, delivered in three days.'::text,
    array['mobile','indoor-positioning','pdr']::text[])
-) as v(id, rep_name, platform, client_name, summary, tags)
-join reps r on r.name = v.rep_name
-join profiles p on p.rep_id = r.id and p.platform = v.platform
-where not exists (select 1 from proof_items pi where pi.id = v.id);
+ ) as v(id, rep_name, platform, client_name, summary, tags)
+ join reps r on r.name = v.rep_name
+ join profiles p on p.rep_id = r.id and p.platform = v.platform
+ where not exists (select 1 from proof_items pi where pi.id = v.id)
+ on conflict (id) do nothing;

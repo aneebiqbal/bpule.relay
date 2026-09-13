@@ -28,7 +28,7 @@ interface TableResult {
 }
 
 async function main() {
-  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+  const admin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_KEY!, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
