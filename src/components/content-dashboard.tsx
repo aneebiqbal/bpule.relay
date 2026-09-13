@@ -16,12 +16,16 @@ interface PersonaWithExtras extends ContentPersona {
 export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }) {
   const [showNewPersona, setShowNewPersona] = useState(false)
 
+  const totalDrafts = personas.reduce((sum, p) => sum + p.drafts.filter((d) => d.status === 'draft' || d.status === 'ready').length, 0)
+  const totalSubjects = personas.reduce((sum, p) => sum + p.topicClusters.length, 0)
+
   return (
     <div className="space-y-8">
+      {/* ── Header ── */}
       <header className="reveal-up flex flex-wrap items-start justify-between gap-6">
         <div className="space-y-2">
           <StudioBrand />
-          <p className="text-[15px] text-slate">
+          <p className="max-w-md text-[15px] text-slate">
             Real material, shaped into your voice. Never invented, never generic.
           </p>
         </div>
@@ -34,80 +38,116 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
         </button>
       </header>
 
+      {/* ── New persona wizard ── */}
       {showNewPersona && (
         <NewPersonaForm onClose={() => setShowNewPersona(false)} />
       )}
 
-      {personas.length === 0 ? (
+      {/* ── Stats strip ── */}
+      {personas.length > 0 && (
+        <div className="reveal-up stagger-1 grid gap-px overflow-hidden rounded-2xl border border-line/60 bg-line/40 sm:grid-cols-3">
+          <Stat label="Personas" value={String(personas.length)} sub={personas.length === 1 ? 'voice profile' : 'voice profiles'} />
+          <Stat label="Subjects" value={String(totalSubjects)} sub={totalSubjects === 1 ? 'focus area' : 'focus areas'} />
+          <Stat label="Ready drafts" value={String(totalDrafts)} sub={totalDrafts === 1 ? 'waiting' : 'waiting'} />
+        </div>
+      )}
+
+      {/* ── Empty state ── */}
+      {personas.length === 0 && !showNewPersona && (
         <section className="reveal-up stagger-2 rounded-[1.75rem] border border-dashed border-line bg-surface-raised p-14 text-center">
           <div className="mx-auto max-w-sm space-y-4">
-            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-gold/12 to-gold/4 ring-1 ring-gold/10">
-              <PenLine className="size-6 text-gold" aria-hidden="true" />
+            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-studio/15 to-studio/5 ring-1 ring-studio/10">
+              <PenLine className="size-6 text-studio" aria-hidden="true" />
             </div>
             <div className="space-y-2">
               <p className="text-heading text-lg text-ink">No personas yet.</p>
               <p className="text-sm leading-relaxed text-slate">
-                Paste a profile or bio, run voice calibration, and capture real material. The app handles the organization in the background.
+                Paste a profile or bio. Studio will ask a few quick tap questions shaped to your field, then you are ready to draft.
               </p>
             </div>
+            <button
+              onClick={() => setShowNewPersona(true)}
+              className="inline-flex items-center gap-2 rounded-xl gradient-studio px-6 py-3 text-sm font-semibold text-paper transition-all hover:brightness-110"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              Create your first persona
+            </button>
           </div>
         </section>
-      ) : (
-        <div className="space-y-4">
-          {personas.map((persona, i) => (
-            <article
-              key={persona.id}
-              className="reveal-up slide-in-right overflow-hidden rounded-[1.25rem] border border-line/60 bg-surface-raised"
-              style={{ animationDelay: `${0.05 + i * 0.04}s` }}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-4 p-5">
-                <div className="flex items-center gap-4">
-                  <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-gold/15 to-gold/5">
-                    <PenLine className="size-5 text-gold" aria-hidden="true" />
-                  </div>
-                  <div>
-                    <h2 className="text-heading text-base text-ink">{persona.displayName}</h2>
-                    <p className="text-xs text-slate">
-                      {persona.topicClusters.length} subject{persona.topicClusters.length === 1 ? '' : 's'} &middot; {persona.platforms.join(', ')}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {persona.drafts.filter((d) => d.status === 'draft').length > 0 && (
-                    <span className="rounded-full bg-gold/10 px-2.5 py-1 text-mono-medium text-[10px] text-gold">
-                      {persona.drafts.filter((d) => d.status === 'draft').length} draft{persona.drafts.filter((d) => d.status === 'draft').length === 1 ? '' : 's'}
-                    </span>
-                  )}
-                  <Link
-                    href={`/content/${persona.id}`}
-                    className="group inline-flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-paper transition-all hover:bg-ink/90 hover:shadow-md active:scale-[0.97]"
-                  >
-                    Open
-                    <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                  </Link>
-                </div>
-              </div>
+      )}
 
-              {persona.topicClusters.length > 0 && (
-                <div className="border-t border-line/40 px-5 py-3">
-                  <div className="flex flex-wrap gap-1.5">
-                    {persona.topicClusters.slice(0, 5).map((p) => (
-                      <span key={p.id} className="rounded-lg bg-paper-tint/60 px-2 py-0.5 text-[11px] text-ink-soft">
-                        {p.clusterName}
-                      </span>
-                    ))}
-                    {persona.topicClusters.length > 5 && (
-                      <span className="rounded-lg bg-paper-tint/60 px-2 py-0.5 text-[11px] text-slate">
-                        +{persona.topicClusters.length - 5} more
+      {/* ── Persona list ── */}
+      {personas.length > 0 && (
+        <div className="space-y-4">
+          {personas.map((persona, i) => {
+            const readyDrafts = persona.drafts.filter((d) => d.status === 'draft' || d.status === 'ready').length
+            const subjects = persona.topicClusters.slice(0, 4)
+            return (
+              <article
+                key={persona.id}
+                className="reveal-up slide-in-right overflow-hidden rounded-[1.25rem] border border-line/60 bg-surface-raised transition-shadow hover:shadow-md"
+                style={{ animationDelay: `${0.05 + i * 0.04}s` }}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-4 p-5">
+                  <div className="flex items-center gap-4">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-studio/15 to-studio/5">
+                      <PenLine className="size-5 text-studio" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <h2 className="text-heading text-base text-ink">{persona.displayName}</h2>
+                      <p className="text-xs text-slate">
+                        {persona.topicClusters.length} subject{persona.topicClusters.length === 1 ? '' : 's'} &middot; {persona.platforms.join(', ')}
+                        {readyDrafts > 0 && ` &middot; ${readyDrafts} ready`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {readyDrafts > 0 && (
+                      <span className="rounded-full bg-studio/10 px-2.5 py-1 text-mono-medium text-[10px] text-studio">
+                        {readyDrafts} draft{readyDrafts === 1 ? '' : 's'}
                       </span>
                     )}
+                    <Link
+                      href={`/content/${persona.id}`}
+                      className="group inline-flex items-center gap-1.5 rounded-xl gradient-studio px-4 py-2 text-sm font-medium text-paper transition-all hover:brightness-110 active:scale-[0.97]"
+                    >
+                      Open
+                      <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                    </Link>
                   </div>
                 </div>
-              )}
-            </article>
-          ))}
+
+                {subjects.length > 0 && (
+                  <div className="border-t border-line/40 px-5 py-3">
+                    <div className="flex flex-wrap gap-1.5">
+                      {subjects.map((s) => (
+                        <span key={s.id} className="rounded-lg bg-paper-tint/60 px-2 py-0.5 text-[11px] text-ink-soft">
+                          {s.clusterName}
+                        </span>
+                      ))}
+                      {persona.topicClusters.length > 4 && (
+                        <span className="rounded-lg bg-paper-tint/60 px-2 py-0.5 text-[11px] text-slate">
+                          +{persona.topicClusters.length - 4} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </article>
+            )
+          })}
         </div>
       )}
+    </div>
+  )
+}
+
+function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <div className="flex flex-col gap-1 bg-paper px-4 py-3.5">
+      <span className="text-label text-slate">{label}</span>
+      <span className="font-mono text-xl font-medium tracking-tight text-ink">{value}</span>
+      <p className="text-[11px] text-slate">{sub}</p>
     </div>
   )
 }
