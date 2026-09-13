@@ -7,6 +7,7 @@ import { ArrowRight, Sparkles, Users, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { getBrowserSupabase } from '@/lib/supabase/client'
 import { cn } from 'cn'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -41,7 +42,19 @@ export default function SignupPage() {
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) throw new Error(data?.error ?? 'Signup failed.')
-      router.push('/login?signedUp=1')
+      // Auto-sign-in then go straight into onboarding — no blank login screen.
+      const supabase = getBrowserSupabase()
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      })
+      if (signInErr) {
+        // Fall back to login screen if auto-sign-in fails for any reason.
+        router.push('/login?signedUp=1')
+        return
+      }
+      router.push('/onboarding?new=1')
+      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed.')
       setBusy(false)
