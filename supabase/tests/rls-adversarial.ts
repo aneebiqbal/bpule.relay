@@ -11,7 +11,7 @@ import { createClient } from '@supabase/supabase-js'
  */
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 const TEST_ORG_ID = '99999999-9999-9999-9999-999999999999'
@@ -76,19 +76,20 @@ async function main() {
     'profiles', 'proof_items', 'golden_set', 'few_shot_wins', 'upwork_jobs',
     'upwork_messages', 'csv_imports', 'content_personas', 'content_pillars',
     'content_drafts', 'content_history', 'push_subscriptions', 'notification_log',
-    'eval_runs', 'extraction_runs', 'organization_rulebook', 'subscriptions',
+    'eval_runs', 'extraction_runs', 'organization_rulebooks', 'subscriptions',
   ]
 
   const results: TableResult[] = []
 
   for (const table of tables) {
-    const { data, error } = await testClient.from(table).select('id, organization_id')
+    const selectCols = table === 'organization_rulebooks' ? 'organization_id' : 'id, organization_id'
+    const { data, error } = await testClient.from(table).select(selectCols)
     if (error) {
       console.log(`   ⚠ ${table}: ERROR — ${error.message}`)
       results.push({ table, visibleRows: -1, leakedRows: [], pass: false })
       continue
     }
-    const rows = (data || []) as { id: string; organization_id?: string }[]
+    const rows = (data || []) as unknown as { id: string; organization_id?: string }[]
     const leaked = rows.filter((r) => r.organization_id === BPULSE_ORG_ID)
     const pass = leaked.length === 0
     results.push({ table, visibleRows: rows.length, leakedRows: leaked, pass })
