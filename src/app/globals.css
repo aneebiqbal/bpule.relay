@@ -31,6 +31,10 @@
   --color-status-no: var(--status-no);
   --color-status-replied: var(--status-replied);
 
+  --color-studio: var(--studio);
+  --color-studio-light: var(--studio-light);
+  --color-studio-dark: var(--studio-dark);
+
   --color-background: var(--paper);
   --color-foreground: var(--ink);
   --font-sans: var(--font-sans);
@@ -94,6 +98,10 @@
   --gold-dark: #9a6e2e;
   --gold-faint: #faf3e8;
 
+  --studio: #5b53d6;
+  --studio-light: #7a72e8;
+  --studio-dark: #443dab;
+
   --paper-tint: #f3f0ea;
   --status-send: #1f7a4d;
   --status-research: #9a6700;
@@ -135,6 +143,7 @@
   --shadow-lg: 0 8px 24px color-mix(in srgb, var(--ink) 5%, transparent), 0 2px 6px color-mix(in srgb, var(--ink) 3%, transparent);
   --shadow-xl: 0 16px 48px color-mix(in srgb, var(--ink) 6%, transparent), 0 4px 12px color-mix(in srgb, var(--ink) 3%, transparent);
   --shadow-gold: 0 8px 32px -8px color-mix(in srgb, var(--gold) 35%, transparent), 0 2px 8px color-mix(in srgb, var(--gold) 15%, transparent);
+  --shadow-studio: 0 8px 32px -8px color-mix(in srgb, var(--studio) 35%, transparent), 0 2px 8px color-mix(in srgb, var(--studio) 15%, transparent);
 }
 
 .dark {
@@ -152,6 +161,10 @@
   --gold-light: #dbb07a;
   --gold-dark: #a67a3e;
   --gold-faint: #1f1a14;
+
+  --studio: #8b83ec;
+  --studio-light: #a49cf2;
+  --studio-dark: #6d64cf;
 
   --paper-tint: #1e1d1b;
   --status-send: #4caf7e;
@@ -193,6 +206,7 @@
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
   --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.2);
   --shadow-gold: 0 8px 32px -8px color-mix(in srgb, var(--gold) 25%, transparent), 0 2px 8px color-mix(in srgb, var(--gold) 10%, transparent);
+  --shadow-studio: 0 8px 32px -8px color-mix(in srgb, var(--studio) 25%, transparent), 0 2px 8px color-mix(in srgb, var(--studio) 10%, transparent);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -452,6 +466,10 @@
   /* ── Gradients ── */
   .gradient-gold {
     background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+  }
+
+  .gradient-studio {
+    background: linear-gradient(135deg, var(--studio) 0%, var(--studio-light) 100%);
   }
 
   .gradient-gold-text {

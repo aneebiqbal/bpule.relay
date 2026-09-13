@@ -1271,6 +1271,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
           platform: draft.platform,
           openingLine: draft.caption.split('\n')[0] ?? '',
           postedAt: new Date().toISOString(),
+          ledToRealOutcome: false,
+          outcomeNotedAt: null,
         })
       }
       return draft
@@ -1291,8 +1293,20 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         platform: input.platform,
         openingLine: input.openingLine,
         postedAt: new Date().toISOString(),
+        ledToRealOutcome: false,
+        outcomeNotedAt: null,
       }
       contentHistoryEntries.push(entry)
+      return entry
+    },
+    async getContentHistoryEntry(historyId) {
+      return contentHistoryEntries.find((h) => h.id === historyId) ?? null
+    },
+    async markContentHistoryOutcome(historyId, ledToRealOutcome) {
+      const entry = contentHistoryEntries.find((h) => h.id === historyId)
+      if (!entry) throw new Error('History entry not found')
+      entry.ledToRealOutcome = ledToRealOutcome
+      entry.outcomeNotedAt = ledToRealOutcome ? new Date().toISOString() : null
       return entry
     },
     async createTrendingAngle(input) {

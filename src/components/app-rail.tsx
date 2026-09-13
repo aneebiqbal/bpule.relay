@@ -201,14 +201,19 @@ export function AppRail({
                 <Icon
                   className={cn(
                     'size-[18px] shrink-0 transition-colors',
-                    active ? 'text-gold' : 'text-slate group-hover:text-ink',
+                    active
+                      ? (href === '/content' ? 'text-studio' : 'text-gold')
+                      : 'text-slate group-hover:text-ink',
                   )}
                   aria-hidden="true"
                   strokeWidth={active ? 2.2 : 1.8}
                 />
                 <span>{label}</span>
+                {href === '/content' && !active && (
+                  <span className="ml-auto size-1.5 rounded-full bg-studio/60" aria-hidden="true" />
+                )}
                 {active && (
-                  <span className="absolute right-2.5 size-1.5 rounded-full bg-gold" />
+                  <span className={cn('absolute right-2.5 size-1.5 rounded-full', href === '/content' ? 'bg-studio' : 'bg-gold')} />
                 )}
               </Link>
             )

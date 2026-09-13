@@ -410,6 +410,8 @@ export interface ContentHistoryEntry {
   platform: ContentPlatform
   openingLine: string
   postedAt: string
+  ledToRealOutcome: boolean
+  outcomeNotedAt: string | null
 }
 
 export interface TrendingAngle {

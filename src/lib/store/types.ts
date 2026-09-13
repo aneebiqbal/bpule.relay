@@ -429,6 +429,7 @@ export interface ScoutStore {
   updateContentDraftCaption(draftId: string, caption: string): Promise<ContentDraft>
   updateContentDraftStatus(draftId: string, status: ContentDraftStatus): Promise<ContentDraft>
   listContentHistory(personaId: string, limit?: number): Promise<ContentHistoryEntry[]>
+  getContentHistoryEntry(historyId: string): Promise<ContentHistoryEntry | null>
   logContentPosted(input: {
     personaId: string
     pillarId: string | null
@@ -436,6 +437,7 @@ export interface ScoutStore {
     platform: ContentPlatform
     openingLine: string
   }): Promise<ContentHistoryEntry>
+  markContentHistoryOutcome(historyId: string, ledToRealOutcome: boolean): Promise<ContentHistoryEntry>
   createTrendingAngle(input: {
     pillarId: string
     angleDescription: string

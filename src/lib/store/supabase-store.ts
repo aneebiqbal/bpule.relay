@@ -1968,6 +1968,31 @@ export class SupabaseStore implements ScoutStore {
     return mapContentHistory(data)
   }
 
+  async getContentHistoryEntry(historyId: string): Promise<ContentHistoryEntry | null> {
+    const { data, error } = await this.client
+      .from('content_history')
+      .select('*')
+      .eq('id', historyId)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return mapContentHistory(data)
+  }
+
+  async markContentHistoryOutcome(historyId: string, ledToRealOutcome: boolean): Promise<ContentHistoryEntry> {
+    const { data, error } = await this.client
+      .from('content_history')
+      .update({
+        led_to_real_outcome: ledToRealOutcome,
+        outcome_noted_at: ledToRealOutcome ? new Date().toISOString() : null,
+      })
+      .eq('id', historyId)
+      .select()
+      .single()
+    if (error) throw error
+    return mapContentHistory(data)
+  }
+
   async createTrendingAngle(input: {
     pillarId: string
     angleDescription: string
@@ -2293,6 +2318,8 @@ function mapContentHistory(r: Record<string, unknown>): ContentHistoryEntry {
     platform: r.platform as ContentPlatform,
     openingLine: r.opening_line as string,
     postedAt: r.posted_at as string,
+    ledToRealOutcome: Boolean(r.led_to_real_outcome ?? false),
+    outcomeNotedAt: (r.outcome_noted_at as string) ?? null,
   }
 }
 

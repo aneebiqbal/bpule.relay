@@ -1,11 +1,12 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Copy, Check, RefreshCw, Sparkles } from 'lucide-react'
+import { ArrowLeft, Copy, Check, RefreshCw, Sparkles, Settings2 } from 'lucide-react'
 import { cn } from 'cn'
 import type { ContentPersona, TopicCluster, ContentDraft, ContentHistoryEntry, ContentDraftFeedback } from '@/lib/domain/types'
 import type { DailyDecision } from '@/lib/content/daily-decision'
+import { UnderstandingScreen } from '@/components/understanding-screen'
 
 export function PersonaWorkspace({
   persona,
@@ -37,8 +38,37 @@ export function PersonaWorkspace({
   const [copied, setCopied] = useState(false)
   const [reacting, setReacting] = useState(false)
   const [reactionMessage, setReactionMessage] = useState<string | null>(null)
+  const [historyRows, setHistoryRows] = useState(history)
+  const [taggingId, setTaggingId] = useState<string | null>(null)
+  const [showUnderstanding, setShowUnderstanding] = useState(false)
+  const [personaState, setPersonaState] = useState(persona)
+  const [refining, setRefining] = useState(false)
+  const [refineMessage, setRefineMessage] = useState<string | null>(null)
 
   const activeDrafts = drafts.filter((d) => d.status === 'draft' || d.status === 'ready')
+
+  const acceptedCount = feedback.filter((f) => f.reaction === 'posting' || f.reaction === 'posting_after_edit').length
+  const rejectedCount = feedback.filter((f) => f.reaction === 'not_for_me').length
+
+  const runRefinement = useCallback(async () => {
+    setRefining(true)
+    setRefineMessage(null)
+    try {
+      const res = await fetch(`/api/content/personas/${persona.id}/refine`, { method: 'POST' })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error ?? 'Refinement failed.')
+      if (data.refined) {
+        setPersonaState(data.persona)
+        setRefineMessage(data.focusShiftNote || 'Profile updated from your keep/skip patterns.')
+      } else {
+        setRefineMessage(data.reason || 'No update needed yet.')
+      }
+    } catch (err) {
+      setRefineMessage(err instanceof Error ? err.message : 'Refinement failed.')
+    } finally {
+      setRefining(false)
+    }
+  }, [persona.id])
 
   const metrics = useMemo(() => {
     const accepted = feedback.filter((f) => f.reaction === 'posting' || f.reaction === 'posting_after_edit').length
@@ -192,6 +222,23 @@ export function PersonaWorkspace({
     }
   }
 
+  async function toggleOutcome(historyId: string, next: boolean) {
+    setTaggingId(historyId)
+    try {
+      const res = await fetch(`/api/content/history/${historyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ledToRealOutcome: next }),
+      })
+      if (!res.ok) return
+      setHistoryRows((prev) =>
+        prev.map((h) => (h.id === historyId ? { ...h, ledToRealOutcome: next } : h)),
+      )
+    } finally {
+      setTaggingId(null)
+    }
+  }
+
   async function copyDraft() {
     if (!editableDraft) return
     try {
@@ -203,22 +250,66 @@ export function PersonaWorkspace({
     }
   }
 
+  // Trigger refinement after a batch of new accept/reject decisions.
+  const totalDecisions = acceptedCount + rejectedCount
+  const shouldRefine = totalDecisions >= 6 && totalDecisions % 5 === 0
+  const refineRunRef = useRef(false)
+  useEffect(() => {
+    if (shouldRefine && !refineRunRef.current && !refining) {
+      refineRunRef.current = true
+      void runRefinement()
+    }
+  }, [shouldRefine, refining, runRefinement])
+
   const askLine = decision?.prompt ?? decision?.reason ?? 'No question right now.'
   const canGenerate = Boolean(answer.trim()) || decision?.decisionType === 'ready' || decision?.decisionType === 'react'
 
   return (
     <div className="space-y-6">
       <header className="reveal-up space-y-2">
-        <button onClick={() => router.push('/content')} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate transition-colors hover:bg-paper-tint hover:text-ink">
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          Back to Content
-        </button>
-        <h1 className="text-heading text-2xl text-ink sm:text-3xl">{persona.displayName}</h1>
+        <div className="flex items-center justify-between">
+          <button onClick={() => router.push('/content')} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate transition-colors hover:bg-paper-tint hover:text-ink">
+            <ArrowLeft className="size-4" aria-hidden="true" />
+            Back to Content
+          </button>
+          <button
+            onClick={() => setShowUnderstanding((v) => !v)}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors',
+              showUnderstanding
+                ? 'border-studio/30 bg-studio/10 text-studio'
+                : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
+            )}
+          >
+            <Settings2 className="size-3.5" aria-hidden="true" />
+            About you
+          </button>
+        </div>
+        <h1 className="text-heading text-2xl text-ink sm:text-3xl">{personaState.displayName}</h1>
         <p className="text-sm text-slate">Simple loop: Ask, Draft, React.</p>
       </header>
 
-      <section className="rounded-2xl border border-line/60 bg-surface-raised p-5">
-        <p className="text-sm text-slate">Kept posts: {metrics.keptRate}%</p>
+      {showUnderstanding && (
+        <UnderstandingScreen
+          persona={personaState}
+          topicClusters={topicClusters}
+          onUpdated={(updated) => { setPersonaState(updated); setShowUnderstanding(false) }}
+        />
+      )}
+
+      <section className="rounded-2xl border border-line/60 bg-surface-raised p-5 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-slate">Kept posts: {metrics.keptRate}%</p>
+          <button
+            onClick={() => void runRefinement()}
+            disabled={refining || totalDecisions < 6}
+            className="rounded-lg border border-line px-2 py-1 text-xs text-slate transition-colors hover:bg-paper-tint disabled:opacity-40"
+            title={totalDecisions < 6 ? 'Need at least 6 keep/skip decisions' : 'Re-analyze from your keep/skip patterns'}
+          >
+            {refining ? 'Analyzing...' : 'Refresh profile'}
+          </button>
+        </div>
+        {refineMessage && <p className="text-xs text-slate">{refineMessage}</p>}
       </section>
 
       <section className="rounded-2xl border border-line/60 bg-surface-raised p-5">
@@ -308,7 +399,7 @@ export function PersonaWorkspace({
 
       <section className="rounded-2xl border border-line/60 bg-surface-raised p-6">
         <h2 className="text-heading text-base text-ink">3. React</h2>
-        <p className="mt-1 text-sm text-slate">Tell RELAY what you kept so tomorrow improves.</p>
+        <p className="mt-1 text-sm text-slate">What you pick shapes tomorrow&apos;s post.</p>
         <div className="mt-3 flex items-center gap-2">
           <button onClick={() => void reactToDraft('posting')} disabled={reacting || !draftId} className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-paper disabled:opacity-50">
             Posting this
@@ -320,14 +411,29 @@ export function PersonaWorkspace({
         {reactionMessage && <p className="mt-2 text-sm text-slate">{reactionMessage}</p>}
       </section>
 
-      {history.length > 0 && (
+      {historyRows.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-heading text-base text-ink">Recent posts</h2>
           <ul className="overflow-hidden rounded-2xl border border-line/60 bg-surface-raised divide-y divide-line/50">
-            {history.slice(0, 5).map((h) => (
-              <li key={h.id} className="px-5 py-3">
-                <p className="line-clamp-1 text-sm text-ink">{h.openingLine}</p>
-                <p className="mt-0.5 text-xs text-slate">{new Date(h.postedAt).toLocaleDateString()}</p>
+            {historyRows.slice(0, 5).map((h) => (
+              <li key={h.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                <div className="min-w-0">
+                  <p className="line-clamp-1 text-sm text-ink">{h.openingLine}</p>
+                  <p className="mt-0.5 text-xs text-slate">{new Date(h.postedAt).toLocaleDateString()}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void toggleOutcome(h.id, !h.ledToRealOutcome)}
+                  disabled={taggingId === h.id}
+                  className={cn(
+                    'shrink-0 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50',
+                    h.ledToRealOutcome
+                      ? 'border-status-send/30 bg-status-send/10 text-status-send'
+                      : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
+                  )}
+                >
+                  {h.ledToRealOutcome ? 'Led to something real' : 'This led to something real'}
+                </button>
               </li>
             ))}
           </ul>

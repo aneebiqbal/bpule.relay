@@ -1,6 +1,7 @@
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import { ContentDashboard } from '@/components/content-dashboard'
+import { StudioIntro } from '@/components/studio-intro'
 import type { ContentPersona, TopicCluster, ContentDraft } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
@@ -31,5 +32,9 @@ export default async function ContentPage() {
     // Migration 0018 not yet applied — render empty state
   }
 
-  return <ContentDashboard personas={personas} />
+  return (
+    <StudioIntro>
+      <ContentDashboard personas={personas} />
+    </StudioIntro>
+  )
 }
