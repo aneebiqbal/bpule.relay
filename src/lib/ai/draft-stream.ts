@@ -1,7 +1,7 @@
 import type { Profile, ProofItem } from '@/lib/domain/types'
 import type { SelfCheck, DraftResult, DraftInput, DraftVariant, DraftCallLog } from '@/lib/ai/draft'
 import { baseDraftSystem, buildCorrectiveFeedback, buildUserPrompt, generateDraft } from '@/lib/ai/draft'
-import { pickDraftChain, tier2Chain } from '@/lib/ai/routing'
+import { buildLongcatDraftChain, buildOpenaiDraftChain, pickDraftChain, tier2Chain } from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
 import { streamChatText, structuredJsonChain } from '@/lib/ai/provider'
 import { sanitizeDraft } from '@/lib/facts/sanitize'
@@ -80,27 +80,24 @@ export async function streamDraft(
 
   const system = baseDraftSystem(input.styleCard, input.facts)
   const user = buildUserPrompt(input)
-  const chain = pickDraftChain()
+  const longcatChain = buildLongcatDraftChain()
+  const openaiChain = buildOpenaiDraftChain()
   const callLog: DraftCallLog[] = []
 
-  emit({ type: 'status', message: 'Drafting two variants in parallel' })
-  emit({ type: 'attempt', attempt: 0, model: 'tier0', tier: 'cheap' })
+  emit({ type: 'status', message: 'Drafting two variants in parallel (LongCat + OpenAI)' })
+  emit({ type: 'attempt', attempt: 0, model: 'longcat+openai', tier: 'cheap' })
 
-  // Best-of-two: generate both variants in parallel starting on tier 0
-  // (Groq's free tier; a host that fails or exhausts its rate-limit budget
-  // falls through to DeepSeek, then OpenAI, before this call ever fails
-  // outright). Never strict json_schema mode — same reasoning as extraction:
-  // DeepSeek's own strict mode has an open bug returning malformed JSON on
-  // some calls, so the code-level checks below
-  // are the real gate, not a provider's schema-adherence claim.
+  // Best-of-two from two distinct model families. LongCat-2.0 is variant A,
+  // OpenAI is variant B. Each chain has Groq as a built-in fallback, so one
+  // provider's outage doesn't block the draft.
   const [rawA, rawB] = await Promise.all([
-    structuredJsonChain<RawVariant>(chain, { system, user, schema: DRAFT_SCHEMA })
+    structuredJsonChain<RawVariant>(longcatChain, { system, user, schema: DRAFT_SCHEMA })
       .then((r) => {
         callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
         return r.data
       })
       .catch(() => null),
-    structuredJsonChain<RawVariant>(chain, { system, user, schema: DRAFT_SCHEMA })
+    structuredJsonChain<RawVariant>(openaiChain, { system, user, schema: DRAFT_SCHEMA })
       .then((r) => {
         callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
         return r.data
@@ -171,7 +168,8 @@ export async function streamDraft(
     if (feedback) {
       try {
         emit({ type: 'status', message: 'Rewriting after a failed self-check' })
-        const retriedRaw = await structuredJsonChain<RawVariant>(chain, {
+        const groqChain = pickDraftChain()
+        const retriedRaw = await structuredJsonChain<RawVariant>(groqChain, {
           system,
           user: `${user}\n\n${feedback}`,
           schema: DRAFT_SCHEMA,

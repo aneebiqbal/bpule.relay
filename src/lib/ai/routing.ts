@@ -1,5 +1,34 @@
 import type { ProviderHost } from '@/lib/ai/config'
-import { cheapModel, strongModel, tier0Host, tier1Hosts, tier2Hosts, tier4Host } from '@/lib/ai/config'
+import { cheapModel, strongModel, longcatHost, tier0Host, tier1Hosts, tier2Hosts, tier4Host } from '@/lib/ai/config'
+
+// Re-export the host builders that drafting needs for its specialized chains.
+export { longcatHost, tier0Host, tier4Host } from '@/lib/ai/config'
+
+/**
+ * Build the LongCat-2.0 drafting chain with Groq fallback.
+ * LongCat is the primary; if it fails, Groq's strong tier takes over.
+ */
+export function buildLongcatDraftChain(): ChainStep[] {
+  const lc = longcatHost()
+  const groq = tier0Host('strong')
+  const chain: ChainStep[] = []
+  if (lc) chain.push({ costTier: 'tier1', host: lc })
+  if (groq) chain.push({ costTier: 'tier1', host: groq })
+  return chain
+}
+
+/**
+ * Build the OpenAI drafting chain with Groq fallback.
+ * OpenAI is the primary; if it fails, Groq's strong tier takes over.
+ */
+export function buildOpenaiDraftChain(): ChainStep[] {
+  const oai = tier4Host()
+  const groq = tier0Host('strong')
+  const chain: ChainStep[] = []
+  if (oai) chain.push({ costTier: 'tier4', host: oai })
+  if (groq) chain.push({ costTier: 'tier1', host: groq })
+  return chain
+}
 
 export type AiTask =
   /** One-time style-card calibration from quiz answers and pasted samples. */

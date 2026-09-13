@@ -9,7 +9,14 @@ import type {
   ScoreResult,
   StyleCard,
 } from '@/lib/domain/types'
-import { pickDraftChain, tier2Chain, type CostTierName } from '@/lib/ai/routing'
+import {
+  buildLongcatDraftChain,
+  buildOpenaiDraftChain,
+  pickDraftChain,
+  tier2Chain,
+  type ChainStep,
+  type CostTierName,
+} from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
 import { structuredJsonChain } from '@/lib/ai/provider'
 import { injectStyleCard } from '@/lib/style/inject'
@@ -294,18 +301,14 @@ function shouldEscalateDraft(score: ScoreResult, primaryPassed: boolean): boolea
 }
 
 /**
- * Generate an outreach draft for a lead: best-of-two starting on Groq's
- * free tier (escalating through DeepSeek then OpenAI only if Groq's own
- * hosts fail or exhaust their rate-limit budget), self-checked against the
- * two fixed tests, then escalating to DeepSeek V4 Pro specifically when the
- * lead scores 10+ or neither variant passes on the first pass. This is the
- * only per-lead spend in the pipeline.
+ * Generate an outreach draft for a lead: best-of-two from two distinct model
+ * families — LongCat-2.0 and OpenAI — running in parallel. Each side falls
+ * back to Groq's free tier if its primary provider fails or times out, so
+ * one provider's outage stalls neither draft. The stronger variant (by
+ * self-check + code checks) is primary; the other is the visible alternate.
  */
 export async function generateDraft(input: DraftInput): Promise<DraftResult> {
   if (input.type === 'reply') {
-    // TODO(followup-reply): inbound reply text is not captured yet, so a
-    // reply draft would have nothing to respond to. Route and schema are
-    // scaffolded; the logic lands with inbound capture.
     throw new Error(
       'Reply drafting needs the prospect reply text, which is not captured yet.',
     )
@@ -327,26 +330,53 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
 
   const callLog: DraftCallLog[] = []
 
-  // Best-of-two: generate two variants in parallel starting on Groq's free
-  // tier, self-check both, and return the stronger one as primary with the
-  // other as a variant. This catches the cases where the first draft is
-  // mediocre without paying for a bigger tier.
-  const chain = pickDraftChain()
-  const [variantA, variantB] = await Promise.all([
-    runDraftAttempt(chain, systemPrompt, userPrompt, callLog),
-    runDraftAttempt(chain, systemPrompt, userPrompt, callLog),
+  // Build the two candidate chains. LongCat-2.0 is candidate A, OpenAI is
+  // candidate B. Each falls back to Groq if its primary provider is down.
+  const longcatChain = buildLongcatDraftChain()
+  const openaiChain = buildOpenaiDraftChain()
+
+  // Generate both candidates in parallel. A failure on one side does not
+  // block the other — each catches its own errors and returns a fallback.
+  const [resultA, resultB] = await Promise.all([
+    runDraftAttemptWithFallback(longcatChain, 'longcat', systemPrompt, userPrompt, callLog)
+      .catch(() => null),
+    runDraftAttemptWithFallback(openaiChain, 'openai', systemPrompt, userPrompt, callLog)
+      .catch(() => null),
   ])
 
-  let { primary, secondary, pickReason } = pickBestVariant(variantA, variantB)
+  // If both failed, fall back to Groq best-of-two as last resort
+  if (!resultA && !resultB) {
+    const groqChain = pickDraftChain()
+    const [gA, gB] = await Promise.all([
+      runDraftAttemptWithFallback(groqChain, 'groq-fallback', systemPrompt, userPrompt, callLog),
+      runDraftAttemptWithFallback(groqChain, 'groq-fallback', systemPrompt, userPrompt, callLog),
+    ])
+    const picked = pickBestVariant(
+      gA ?? emptyResult('groq-fallback'),
+      gB ?? emptyResult('groq-fallback'),
+    )
+    const draft = finishDraft(input, picked.primary, ['groq-fallback'], 2, callLog)
+    return {
+      ...draft,
+      variant: picked.secondary ? { draftText: picked.secondary.output.draft, selfCheck: { test1ReplyOrDelete: Boolean(picked.secondary.output.test_1_reply_or_delete), test1Note: picked.secondary.output.test_1_note || '', test2NotGeneric: Boolean(picked.secondary.output.test_2_not_generic), test2Note: picked.secondary.output.test_2_note || '', codeChecks: picked.secondary.codeChecks }, passed: picked.secondary.passed } : undefined,
+      pickReason: 'Both LongCat and OpenAI failed; fell back to Groq best-of-two.',
+      fewShotReason: fewShotLabel(input.fewShotExamples),
+    }
+  }
+
+  // Pick the best from whatever came back
+  const candidates = [resultA, resultB].filter(Boolean) as NonNullable<typeof resultA>[]
+  let { primary, secondary, pickReason } = candidates.length === 2
+    ? pickBestVariant(candidates[0], candidates[1])
+    : { primary: candidates[0], secondary: null, pickReason: candidates[0]?.hostLabel === 'longcat' ? 'LongCat only (OpenAI unavailable).' : 'OpenAI only (LongCat unavailable).' }
+
   const modelsUsed = [primary.hostLabel]
 
+  // Escalate on high-value leads or when neither passed
   const tier2 = tier2Chain()
   if (shouldEscalateDraft(input.score, primary.passed) && tier2.length > 0) {
     try {
       const escalated = await runDraftAttempt(tier2, systemPrompt, userPrompt, callLog)
-      // Keep the escalated draft unless it's strictly worse than what the
-      // first pass already produced — escalation should only ever help,
-      // never regress a draft that was already passing both tests.
       const better =
         escalated.passed && !primary.passed
           ? true
@@ -355,30 +385,21 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
       if (better) {
         secondary = primary
         primary = escalated
-        pickReason = 'Escalated to the precision tier: the lead scored 10+ or the first pass did not clear both self-checks.'
+        pickReason = 'Escalated to precision tier: lead scored 10+ or first pass did not clear self-checks.'
         modelsUsed.push(escalated.hostLabel)
       }
     } catch {
-      // Keep the first-pass draft if the precision pass fails outright.
+      // Keep first-pass draft if precision pass fails
     }
   }
 
-  // Corrective retry: if the draft still fails after best-of-two (and any
-  // paid escalation), retry once more on the free tier with explicit
-  // feedback about exactly what failed. Without this, an environment with
-  // no paid tier configured (tier2Chain() empty) would ship a failing draft
-  // with zero attempt to fix it — best-of-two alone doesn't help here since
-  // both variants share the same prompt and tend to fail the same way.
+  // Corrective retry if still failing
   if (!primary.passed) {
     const feedback = buildCorrectiveFeedback(primary, input)
     if (feedback) {
       try {
-        const retried = await runDraftAttempt(
-          chain,
-          systemPrompt,
-          `${userPrompt}\n\n${feedback}`,
-          callLog,
-        )
+        const groqChain = pickDraftChain()
+        const retried = await runDraftAttempt(groqChain, systemPrompt, `${userPrompt}\n\n${feedback}`, callLog)
         const better =
           retried.passed && !primary.passed
             ? true
@@ -386,11 +407,11 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
         if (better) {
           secondary = primary
           primary = retried
-          pickReason = 'Rewritten after the first pass failed its own self-check, with the specific failure fed back in.'
+          pickReason = 'Rewritten after first pass failed self-check.'
           modelsUsed.push(retried.hostLabel)
         }
       } catch {
-        // Keep the best draft so far if the corrective retry fails outright.
+        // Keep best draft so far
       }
     }
   }
@@ -414,11 +435,38 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
     ...draft,
     variant: second,
     pickReason,
-    fewShotReason:
-      input.fewShotExamples && input.fewShotExamples.length > 0
-        ? `Informed by ${input.fewShotExamples.length} real win(s): ${input.fewShotExamples.map((e) => e.company).join(', ')}.`
-        : 'No few-shot examples matched this lead.',
+    fewShotReason: fewShotLabel(input.fewShotExamples),
   }
+}
+
+
+
+/** Run a single draft attempt with per-side fallback built into the chain. */
+async function runDraftAttemptWithFallback(
+  chain: ChainStep[],
+  label: string,
+  system: string,
+  userPrompt: string,
+  callLog: DraftCallLog[],
+): Promise<ReturnType<typeof runDraftAttempt> | null> {
+  if (chain.length === 0) return null
+  return runDraftAttempt(chain, system, userPrompt, callLog)
+}
+
+/** Empty result used when a candidate completely fails. */
+function emptyResult(hostLabel: string): { output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks']; hostLabel: string } {
+  return {
+    output: { draft: '', test_1_reply_or_delete: false, test_1_note: 'Candidate failed.', test_2_not_generic: false, test_2_note: 'Candidate failed.' },
+    passed: false,
+    codeChecks: { companyMentioned: false, specificEvidenceMentioned: false },
+    hostLabel,
+  }
+}
+
+function fewShotLabel(examples?: { company: string }[]): string {
+  return examples && examples.length > 0
+    ? `Informed by ${examples.length} real win(s): ${examples.map((e) => e.company).join(', ')}.`
+    : 'No few-shot examples matched this lead.'
 }
 
 function variantScore(v: { passed: boolean; output: DraftModelOutput; codeChecks: SelfCheck['codeChecks'] }): number {

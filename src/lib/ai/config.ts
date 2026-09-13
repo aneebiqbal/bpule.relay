@@ -157,10 +157,10 @@ export function tier2Hosts(): ProviderHost[] {
 }
 
 // ============================================================================
-// Tier 4 — OpenAI, final safety net. Fires only if tier 0 (Groq) and every
-// tier 1/2 (DeepSeek) host have failed. There is no prior OpenAI chat
-// fallback in this codebase to "restore" — this is new, added specifically
-// as the last-resort tier.
+// Tier 4 — OpenAI, final safety net and one of the two drafting sources.
+// Fires as a last-resort extraction fallback if tier 0 (Groq) and every
+// tier 1/2 (DeepSeek) host have failed. In drafting, it's one of the two
+// parallel candidate sources alongside LongCat-2.0.
 // ============================================================================
 
 export function openaiApiKey(): string | undefined {
@@ -182,6 +182,33 @@ export function tier4Host(): ProviderHost | null {
     apiKey: openaiApiKey(),
     baseUrl: openaiBaseUrl(),
     model: openaiModel(),
+  }
+}
+
+// ============================================================================
+// Drafting-specific: LongCat-2.0 (Meituan, MoE, 1.6T total / ~48B active,
+// MIT licensed, native 1M context). One of the two parallel drafting sources.
+// ============================================================================
+
+export function longcatApiKey(): string | undefined {
+  return process.env.LONGCAT_API_KEY
+}
+
+export function longcatBaseUrl(): string {
+  return process.env.LONGCAT_BASE_URL ?? 'https://api.longcat.chat/v1'
+}
+
+export function longcatModel(): string {
+  return process.env.LONGCAT_MODEL ?? 'LongCat-2.0'
+}
+
+export function longcatHost(): ProviderHost | null {
+  if (!longcatApiKey()) return null
+  return {
+    id: 'longcat',
+    apiKey: longcatApiKey(),
+    baseUrl: longcatBaseUrl(),
+    model: longcatModel(),
   }
 }
 
