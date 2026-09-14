@@ -315,7 +315,7 @@ function StepIdentity({ state, update }: { state: OnboardingState; update: (p: P
         <h2 className="text-xl font-semibold text-ink">What best describes you?</h2>
         <p className="mt-1 text-sm text-graphite">We&apos;ll adapt the rest of onboarding to your role.</p>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {ROLE_OPTIONS.map((role) => (
           <button
             key={role}
@@ -331,13 +331,17 @@ function StepIdentity({ state, update }: { state: OnboardingState; update: (p: P
         ))}
       </div>
       <div className="space-y-3">
-        <input
-          type="text"
-          value={state.displayName}
-          onChange={(e) => update({ displayName: e.target.value })}
-          placeholder="Your name (e.g. Sarah Chen)"
-          className="w-full rounded-lg border border-ink/15 px-3 py-2.5 text-sm focus:border-ink/30 focus:outline-none"
-        />
+        <div>
+          <input
+            type="text"
+            value={state.displayName}
+            onChange={(e) => update({ displayName: e.target.value })}
+            placeholder="Your name (e.g. Sarah Chen)"
+            aria-required="true"
+            className="w-full rounded-lg border border-ink/15 px-3 py-2.5 text-sm focus:border-ink/30 focus:outline-none"
+          />
+          <p className="mt-1 text-xs text-graphite">Required to continue.</p>
+        </div>
         <input
           type="text"
           value={state.personaCompany}
@@ -457,7 +461,7 @@ function StepGoals({ state, update }: { state: OnboardingState; update: (p: Part
         <h2 className="text-xl font-semibold text-ink">What should your content do for you?</h2>
         <p className="mt-1 text-sm text-graphite">Select all that apply.</p>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {GOAL_OPTIONS.map((goal) => {
           const selected = state.selectedGoals.includes(goal.id)
           return (
@@ -540,6 +544,7 @@ function StepAudience({ state, update }: { state: OnboardingState; update: (p: P
 
 function StepTerritories({ state, update }: { state: OnboardingState; update: (p: Partial<OnboardingState>) => void }) {
   const suggested = state.identity?.territories ?? []
+  const [custom, setCustom] = useState('')
 
   const toggleTerritory = (terr: string) => {
     const selected = state.selectedTerritories.includes(terr)
@@ -548,14 +553,26 @@ function StepTerritories({ state, update }: { state: OnboardingState; update: (p
     update({ selectedTerritories: selected })
   }
 
+  const addCustom = () => {
+    if (custom.trim() && !state.selectedTerritories.includes(custom.trim())) {
+      update({ selectedTerritories: [...state.selectedTerritories, custom.trim()] })
+      setCustom('')
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold text-ink">What do you want to become known for?</h2>
         <p className="mt-1 text-sm text-graphite">Select 3–6 topics.</p>
       </div>
+      {suggested.length === 0 && state.selectedTerritories.length === 0 && (
+        <p className="rounded-lg border border-dashed border-ink/20 p-4 text-sm text-graphite">
+          No suggestions yet — add at least 2 topics below to continue.
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
-        {suggested.map((terr) => (
+        {[...new Set([...suggested, ...state.selectedTerritories])].map((terr) => (
           <button
             key={terr}
             onClick={() => toggleTerritory(terr)}
@@ -568,6 +585,19 @@ function StepTerritories({ state, update }: { state: OnboardingState; update: (p
             {terr}
           </button>
         ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          placeholder="Add a topic..."
+          className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm focus:border-ink/30 focus:outline-none"
+          onKeyDown={(e) => { if (e.key === 'Enter') addCustom() }}
+        />
+        <button onClick={addCustom} className="rounded-lg border border-ink/15 px-3 py-2 text-sm hover:border-ink/30">
+          Add
+        </button>
       </div>
     </div>
   )

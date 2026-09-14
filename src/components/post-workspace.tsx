@@ -188,7 +188,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
     <div className="min-h-screen bg-bone">
       <div className="mx-auto max-w-6xl px-4 py-6 lg:px-6">
         {/* Header */}
-        <header className="mb-6 flex items-center justify-between">
+        <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <button onClick={() => router.back()} className="text-sm text-graphite hover:text-ink">
               ← Back
@@ -200,7 +200,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
               <SaveStatus status={saving} onRetry={() => autosave(caption)} />
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setShowFeedback(true)}
               className="rounded-lg border border-line px-3 py-1.5 text-xs hover:border-ink"
