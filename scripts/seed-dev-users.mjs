@@ -135,7 +135,7 @@ async function ensureVoiceProfile(repId) {
       rep_id: repId,
       organization_id: BPULSE_ORG_ID,
       style_card: '{}',
-      sample_source: 'onboarding',
+      sample_source: 'quiz',
       calibrated_at: new Date().toISOString(),
     })
 
