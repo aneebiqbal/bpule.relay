@@ -16,8 +16,10 @@ export default async function StudioJourneyPage({ params }: { params: Promise<{ 
 
   const journey = await store.listContentJourney?.(id, 50) ?? []
 
+  const safePersona = JSON.parse(JSON.stringify(persona)) as typeof persona
+
   return (
-    <StudioLayout persona={persona}>
+    <StudioLayout persona={safePersona}>
       <div className="mx-auto max-w-2xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
         <header>
           <h1 className="text-2xl font-semibold tracking-tight text-ink">Your Journey</h1>

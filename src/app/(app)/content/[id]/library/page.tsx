@@ -24,8 +24,10 @@ export default async function StudioLibraryPage({ params }: { params: Promise<{ 
     rejected: drafts.filter((d) => d.status === 'rejected'),
   }
 
+  const safePersona = JSON.parse(JSON.stringify(persona)) as typeof persona
+
   return (
-    <StudioLayout persona={persona}>
+    <StudioLayout persona={safePersona}>
       <div className="mx-auto max-w-3xl space-y-8 px-4 py-6 sm:px-6 sm:py-8">
         <header>
           <h1 className="text-2xl font-semibold tracking-tight text-ink">Library</h1>

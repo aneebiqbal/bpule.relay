@@ -16,8 +16,10 @@ export default async function StudioCreatePage({ params }: { params: Promise<{ i
   const persona = await store.getContentPersona(id)
   if (!persona) redirect('/content')
 
+  const safePersona = JSON.parse(JSON.stringify(persona)) as typeof persona
+
   return (
-    <StudioLayout persona={persona}>
+    <StudioLayout persona={safePersona}>
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
         <header>
           <h1 className="text-2xl font-semibold tracking-tight text-ink">Create</h1>

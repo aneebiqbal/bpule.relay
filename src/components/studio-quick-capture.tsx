@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import type { QuickCaptureAngle } from '@/lib/domain/types'
 
 interface StudioQuickCaptureProps {
@@ -9,6 +10,7 @@ interface StudioQuickCaptureProps {
 }
 
 export function StudioQuickCapture({ personaId, onSelectAngle }: StudioQuickCaptureProps) {
+  const router = useRouter()
   const [input, setInput] = useState('')
   const [angles, setAngles] = useState<QuickCaptureAngle[]>([])
   const [parsing, setParsing] = useState(false)
@@ -33,7 +35,7 @@ export function StudioQuickCapture({ personaId, onSelectAngle }: StudioQuickCapt
       })
       const data = await res.json()
       if (data.draftId) {
-        window.location.href = `/studio/drafts/${data.draftId}`
+        router.push(`/studio/drafts/${data.draftId}`)
       }
     } catch {
       // Silent fail
