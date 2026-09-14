@@ -202,6 +202,26 @@ export function discoverOpportunities(input: {
     }
   }
 
+  // ── Evergreen fallback ────────────────────────────────────────────────────
+  if (candidates.length === 0) {
+    candidates.push({
+      type: 'useful_explanation',
+      title: 'What I wish I knew earlier in my career',
+      description: 'Share a lesson that would have saved you time or frustration.',
+      trigger: 'Evergreen: career lesson',
+      confidence: 0.4,
+      sourceKind: 'system_inferred',
+    })
+    candidates.push({
+      type: 'useful_explanation',
+      title: 'A common mistake and how to avoid it',
+      description: 'Teach something practical that people can apply immediately.',
+      trigger: 'Evergreen: practical lesson',
+      confidence: 0.35,
+      sourceKind: 'system_inferred',
+    })
+  }
+
   // ── Dedup and rank ─────────────────────────────────────────────────────────
 
   return dedupAndRankOpportunities(candidates)
