@@ -441,6 +441,15 @@ export interface ScoutStore {
     valuesAndOpinions?: string[]
     admiredExamples?: string[]
   }): Promise<ContentPersona>
+  updateContentPersona(input: {
+    personaId: string
+    personaRole?: string
+    personaCompany?: string
+    personaLocation?: string
+    contentComfort?: string[]
+    onboardingStep?: string
+    onboardingCompleted?: boolean
+  }): Promise<ContentPersona>
   listContentPersonas(repId: string): Promise<ContentPersona[]>
   getContentPersona(personaId: string): Promise<ContentPersona | null>
   deleteContentPersona(personaId: string): Promise<void>

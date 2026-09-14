@@ -1844,6 +1844,38 @@ export class SupabaseStore implements ScoutStore {
     return mapContentPersona(data)
   }
 
+  async updateContentPersona(input: {
+    personaId: string
+    personaRole?: string
+    personaCompany?: string
+    personaLocation?: string
+    contentComfort?: string[]
+    onboardingStep?: string
+    onboardingCompleted?: boolean
+  }): Promise<ContentPersona> {
+    const patch: Record<string, unknown> = {}
+    if (typeof input.personaRole === 'string') patch.persona_role = input.personaRole
+    if (typeof input.personaCompany === 'string') patch.persona_company = input.personaCompany
+    if (typeof input.personaLocation === 'string') patch.persona_location = input.personaLocation
+    if (Array.isArray(input.contentComfort)) patch.content_comfort = input.contentComfort
+    if (typeof input.onboardingStep === 'string') patch.onboarding_step = input.onboardingStep
+    if (typeof input.onboardingCompleted === 'boolean') patch.onboarding_completed = input.onboardingCompleted
+
+    const { data, error } = await this.client
+      .from('content_personas')
+      .update(patch)
+      .eq('id', input.personaId)
+      .select()
+      .single()
+    if (error && error.code === 'PGRST204') {
+      const fallback = await this.getContentPersona(input.personaId)
+      if (!fallback) throw error
+      return fallback
+    }
+    if (error) throw error
+    return mapContentPersona(data)
+  }
+
   async listContentPersonas(repId: string): Promise<ContentPersona[]> {
     const { data, error } = await this.client
       .from('content_personas')

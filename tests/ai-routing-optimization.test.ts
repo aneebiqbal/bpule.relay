@@ -13,6 +13,9 @@ import { ContentCache } from '@/lib/ai/cache'
 import { deduplicated } from '@/lib/ai/dedup'
 import * as budget from '@/lib/ai/budget'
 import { constructIdeaGenome } from '@/lib/content/intelligence/genome'
+import { extractIdentityFromSource } from '@/lib/content/onboarding-extract'
+import { parseQuickCapture } from '@/lib/content/quick-capture'
+import { generateDailyIdeas } from '@/lib/content/daily-ideas'
 
 describe('DeepSeek removal', () => {
   beforeEach(() => {
@@ -351,5 +354,162 @@ describe('Genome deterministic default', () => {
     })
     expect(result.genome.topic).toBe('React performance')
     expect(result.qualification.qualified).toBe(true)
+  })
+})
+
+describe('Onboarding Extraction', () => {
+  it('extracts role from LinkedIn text', () => {
+    const identity = extractIdentityFromSource(
+      'Senior Software Engineer at Acme Corp. I build React applications and lead a team of 5 developers. Expert in TypeScript, Node.js, and AWS.'
+    )
+    expect(identity.role).toBe('Senior Software Engineer')
+    expect(identity.seniority).toBe('Senior')
+    expect(identity.technologies.length).toBeGreaterThan(0)
+  })
+
+  it('extracts industries', () => {
+    const identity = extractIdentityFromSource(
+      'Building fintech products for SaaS companies. Working on eCommerce platforms and healthcare applications.'
+    )
+    expect(identity.industries.length).toBeGreaterThan(0)
+    expect(identity.industries).toContain('FinTech')
+    expect(identity.industries).toContain('SaaS')
+  })
+
+  it('suggests audiences based on role', () => {
+    const identity = extractIdentityFromSource(
+      'Staff Engineer at a tech company. I work on React, TypeScript, and system architecture.'
+    )
+    expect(identity.audiences.length).toBeGreaterThan(0)
+  })
+
+  it('suggests territories based on expertise', () => {
+    const identity = extractIdentityFromSource(
+      'Engineering leader building Rails and React applications. Focused on team productivity and shipping.'
+    )
+    expect(identity.territories.length).toBeGreaterThan(0)
+  })
+
+  it('extracts opinions from text', () => {
+    const identity = extractIdentityFromSource(
+      'I think most startups over-engineer too early. I believe Rails is still the best framework for rapid development.'
+    )
+    expect(identity.opinions.length).toBeGreaterThan(0)
+  })
+
+  it('handles minimal input gracefully', () => {
+    const identity = extractIdentityFromSource('Developer')
+    expect(identity).toBeDefined()
+    expect(identity.role).toBe('Professional')
+  })
+})
+
+describe('Quick Capture', () => {
+  it('extracts technical lesson from debugging story', () => {
+    const angles = parseQuickCapture('Spent 4 hours debugging a weird Redis connection issue')
+    expect(angles.length).toBeGreaterThan(0)
+    expect(angles[0].type).toBe('technical_lesson')
+  })
+
+  it('extracts lesson from learning story', () => {
+    const angles = parseQuickCapture('Learned that microservices were the wrong choice for our team size')
+    expect(angles.length).toBeGreaterThan(0)
+  })
+
+  it('extracts opinion from belief statement', () => {
+    const angles = parseQuickCapture('I think AI coding assistants are overhyped')
+    expect(angles.length).toBeGreaterThan(0)
+    expect(angles[0].type).toBe('opinion')
+  })
+
+  it('provides fallback for unrecognized input', () => {
+    const angles = parseQuickCapture('Hello world')
+    expect(angles.length).toBeGreaterThan(0)
+  })
+
+  it('limits to 3 angles', () => {
+    const angles = parseQuickCapture(
+      'Spent all week debugging a race condition. Learned that testing is crucial. I think TDD is overrated. Client changed requirements again.'
+    )
+    expect(angles.length).toBeLessThanOrEqual(3)
+  })
+})
+
+describe('Daily Ideas Generation', () => {
+  it('generates ideas from expertise', () => {
+    const profile = {
+      id: 'p1', organizationId: 'org1', personaId: 'persona1',
+      role: 'Software Engineer', seniority: 'Senior', industries: ['SaaS'],
+      audience: 'engineers', expertise: [
+        { area: 'React', level: 'expert' as const, evidence: '10 years experience', updatedAt: '2024-01-01' },
+      ],
+      technologies: [], goals: [], topicsCared: [], topicsAvoided: [],
+      opinions: [], projects: [], experiences: [],
+      writingCharacteristics: {}, storytellingTendencies: [],
+      confidence: 0.5, lastLearnedAt: null, createdAt: '2024-01-01', updatedAt: '2024-01-01',
+    }
+    const ideas = generateDailyIdeas({
+      profile, clusters: [], history: [], memories: [], journey: [],
+      contentGoals: ['build_authority'], audiences: ['engineers'], territories: ['React'],
+    })
+    expect(ideas.length).toBeGreaterThan(0)
+    expect(ideas[0].title.toLowerCase()).toContain('react')
+  })
+
+  it('generates ideas from opinions', () => {
+    const profile = {
+      id: 'p1', organizationId: 'org1', personaId: 'persona1',
+      role: 'Engineer', seniority: 'Senior', industries: [],
+      audience: '', expertise: [],
+      technologies: [], goals: [], topicsCared: [], topicsAvoided: [],
+      opinions: [
+        { belief: 'TypeScript is overrated', strength: 'moderate' as const, evidence: '', source: 'inference' as const, updatedAt: '2024-01-01' },
+      ],
+      projects: [], experiences: [],
+      writingCharacteristics: {}, storytellingTendencies: [],
+      confidence: 0.5, lastLearnedAt: null, createdAt: '2024-01-01', updatedAt: '2024-01-01',
+    }
+    const ideas = generateDailyIdeas({
+      profile, clusters: [], history: [], memories: [], journey: [],
+      contentGoals: [], audiences: [], territories: [],
+    })
+    expect(ideas.some((i) => i.sourceKind === 'opinion')).toBe(true)
+  })
+
+  it('falls back to evergreen for sparse profiles', () => {
+    const ideas = generateDailyIdeas({
+      profile: null, clusters: [], history: [], memories: [], journey: [],
+      contentGoals: [], audiences: [], territories: [],
+    })
+    expect(ideas.length).toBeGreaterThan(0)
+    expect(ideas.every((i) => i.sourceKind === 'evergreen')).toBe(true)
+  })
+
+  it('diversifies territories', () => {
+    const profile = {
+      id: 'p1', organizationId: 'org1', personaId: 'persona1',
+      role: 'Engineer', seniority: 'Senior', industries: [],
+      audience: '', expertise: [
+        { area: 'React', level: 'expert' as const, evidence: '', updatedAt: '2024-01-01' },
+      ],
+      technologies: [], goals: [], topicsCared: [], topicsAvoided: [],
+      opinions: [
+        { belief: 'TDD is overrated', strength: 'moderate' as const, evidence: '', source: 'inference' as const, updatedAt: '2024-01-01' },
+      ],
+      projects: [
+        { name: 'Design System', description: '', role: '', outcome: 'Shipped', lessons: ['Reusable components save time'], updatedAt: '2024-01-01' },
+      ],
+      experiences: [
+        { type: 'mistake' as const, description: 'Deployed on Friday', lesson: 'Never deploy on Friday', date: null, updatedAt: '2024-01-01' },
+      ],
+      writingCharacteristics: {}, storytellingTendencies: [],
+      confidence: 0.5, lastLearnedAt: null, createdAt: '2024-01-01', updatedAt: '2024-01-01',
+    }
+    const ideas = generateDailyIdeas({
+      profile, clusters: [], history: [], memories: [], journey: [],
+      contentGoals: [], audiences: [], territories: [],
+    })
+    const territories = new Set(ideas.map((i) => i.territory))
+    expect(territories.size).toBeGreaterThan(1)
   })
 })

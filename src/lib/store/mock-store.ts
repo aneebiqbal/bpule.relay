@@ -1367,11 +1367,26 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     async updateContentPersonaProfile(input) {
       const persona = contentPersonas.find((p) => p.id === input.personaId)
-      if (!persona) throw new Error('Persona not found')
-      if (typeof input.humorStyle === 'string') persona.humorStyle = input.humorStyle
-      if (Array.isArray(input.valuesAndOpinions)) persona.valuesAndOpinions = input.valuesAndOpinions
-      if (Array.isArray(input.admiredExamples)) persona.admiredExamples = input.admiredExamples
-      return persona
+      if (persona) {
+        if (typeof input.humorStyle === 'string') persona.humorStyle = input.humorStyle
+        if (Array.isArray(input.valuesAndOpinions)) persona.valuesAndOpinions = input.valuesAndOpinions
+        if (Array.isArray(input.admiredExamples)) persona.admiredExamples = input.admiredExamples
+        return persona
+      }
+      throw new Error('Persona not found')
+    },
+    async updateContentPersona(input) {
+      const persona = contentPersonas.find((p) => p.id === input.personaId)
+      if (persona) {
+        if (typeof input.personaRole === 'string') persona.personaRole = input.personaRole
+        if (typeof input.personaCompany === 'string') persona.personaCompany = input.personaCompany
+        if (typeof input.personaLocation === 'string') persona.personaLocation = input.personaLocation
+        if (Array.isArray(input.contentComfort)) persona.contentComfort = input.contentComfort
+        if (typeof input.onboardingStep === 'string') persona.onboardingStep = input.onboardingStep
+        if (typeof input.onboardingCompleted === 'boolean') persona.onboardingCompleted = input.onboardingCompleted
+        return persona
+      }
+      throw new Error('Persona not found')
     },
     async listContentPersonas(repId) {
       return contentPersonas
