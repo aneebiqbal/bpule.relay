@@ -382,12 +382,29 @@ async function wipeExisting() {
 async function seedPersona(persona, repId) {
   console.log(`\nSeeding: ${persona.displayName} (${persona.role})`)
 
-  // Create content profile
+  // Create persona first (so profile can reference it)
+  const { data: personaRow, error: personaError } = await supabase
+    .from('content_personas')
+    .insert({
+      rep_id: repId,
+      organization_id: ORG_ID,
+      display_name: persona.displayName,
+      platforms: persona.platforms,
+      humor_style: persona.humorStyle,
+      values_and_opinions: persona.opinions.map((o) => o.belief),
+      admired_examples: [],
+      content_profile_id: null,
+    })
+    .select()
+    .single()
+  if (personaError) throw personaError
+
+  // Create content profile with persona_id
   const { data: profile, error: profileError } = await supabase
     .from('content_profiles')
     .insert({
       organization_id: ORG_ID,
-      persona_id: 'placeholder',
+      persona_id: personaRow.id,
       role: persona.role,
       seniority: persona.seniority,
       industries: persona.industries,
@@ -408,28 +425,12 @@ async function seedPersona(persona, repId) {
     .single()
   if (profileError) throw profileError
 
-  // Create persona
-  const { data: personaRow, error: personaError } = await supabase
+  // Link profile back to persona
+  const { error: linkError } = await supabase
     .from('content_personas')
-    .insert({
-      rep_id: repId,
-      organization_id: ORG_ID,
-      display_name: persona.displayName,
-      platforms: persona.platforms,
-      humor_style: persona.humorStyle,
-      values_and_opinions: persona.opinions.map((o) => o.belief),
-      admired_examples: [],
-      content_profile_id: profile.id,
-    })
-    .select()
-    .single()
-  if (personaError) throw personaError
-
-  // Update profile with correct persona_id
-  await supabase
-    .from('content_profiles')
-    .update({ persona_id: personaRow.id })
-    .eq('id', profile.id)
+    .update({ content_profile_id: profile.id })
+    .eq('id', personaRow.id)
+  if (linkError) throw linkError
 
   // Create topic clusters
   for (const clusterName of persona.topicClusters) {
