@@ -17,7 +17,9 @@ import type {
   ContentEvaluation,
   ContentInterviewSession,
   ContentInterviewAnswer,
+  ConversationState,
   CsvImport,
+  EditLearning,
   Fact,
   Lead,
   Message,
@@ -27,9 +29,12 @@ import type {
   Outcome,
   Play,
   Profile,
+  ProofCard,
   ProofItem,
   PushSubscription,
   Rep,
+  SalesMemory,
+  SalesMemoryType,
   TopicCluster,
   ContentResearchFinding,
   TrendingAngle,
@@ -493,8 +498,68 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const contentOpportunities: ContentOpportunity[] = []
   const contentIdeaGenomes: ContentIdeaGenome[] = []
   const contentEvaluations: ContentEvaluation[] = []
+  const contentTasteProfiles: Array<{
+    personaId: string
+    preferences: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
+    territoryAffinity: Record<string, number>
+    totalInteractions: number
+    lastSignalType: string | null
+    lastSignalAt: string | null
+    shortTerm: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
+    shortTermWeight: number
+  }> = []
   const interviewSessions: ContentInterviewSession[] = []
   const interviewAnswers: ContentInterviewAnswer[] = []
+  let proofCards: ProofCard[] = [
+    {
+      id: 'pc-hassan-web3',
+      organizationId: DEMO_ORG_ID,
+      profileId: 'profile-hassan-linkedin',
+      capability: 'Web3 / Solana transaction monitoring',
+      strength: 'strong',
+      safeClaim: 'Built a transaction monitoring dashboard for a Solana-based product',
+      sourceType: 'project',
+      sourceReference: 'Solana Anchor project',
+      tags: ['web3', 'solana', 'blockchain', 'dashboard', 'monitoring'],
+      verified: true,
+      forbiddenClaims: [],
+      createdAt: t(30),
+      updatedAt: t(30),
+    },
+    {
+      id: 'pc-hassan-nextjs',
+      organizationId: DEMO_ORG_ID,
+      profileId: 'profile-hassan-linkedin',
+      capability: 'Next.js operational dashboards',
+      strength: 'strong',
+      safeClaim: 'Built operational dashboards with Next.js for a fintech product',
+      sourceType: 'project',
+      sourceReference: 'Next.js dashboard',
+      tags: ['nextjs', 'react', 'dashboard', 'fintech'],
+      verified: true,
+      forbiddenClaims: [],
+      createdAt: t(25),
+      updatedAt: t(25),
+    },
+    {
+      id: 'pc-hassan-rails',
+      organizationId: DEMO_ORG_ID,
+      profileId: 'profile-hassan-upwork',
+      capability: 'Rails modernization',
+      strength: 'strong',
+      safeClaim: 'Modernized a legacy Rails commerce platform handling 50k daily transactions',
+      sourceType: 'project',
+      sourceReference: 'Rails commerce project',
+      tags: ['rails', 'ruby', 'ecommerce', 'modernization'],
+      verified: true,
+      forbiddenClaims: [],
+      createdAt: t(40),
+      updatedAt: t(40),
+    },
+  ]
+  const conversationStates: ConversationState[] = []
+  const salesMemories: SalesMemory[] = []
+  const editLearnings: EditLearning[] = []
   const extractionRuns: Array<{
     task: 'extract' | 'draft'
     success: boolean
@@ -701,8 +766,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }
 
       lead.status = type === 'followup' ? 'followed_up' : 'contacted'
+      const msgId = nextId('msg')
       messages.push({
-        id: nextId('msg'),
+        id: msgId,
         organizationId: DEMO_ORG_ID,
         leadId,
         repId: rep.id,
@@ -713,6 +779,37 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         modelUsed: null,
         createdAt: new Date().toISOString(),
       })
+
+      // Update conversation state
+      const existingState = conversationStates.find((s) => s.leadId === leadId)
+      if (existingState) {
+        existingState.stage = type === 'reply' ? 'replied' : 'contacted'
+        existingState.lastSentAt = new Date().toISOString()
+        existingState.lastSentMessageId = msgId
+        existingState.updatedAt = new Date().toISOString()
+      } else {
+        conversationStates.push({
+          id: nextId('cs'),
+          organizationId: DEMO_ORG_ID,
+          leadId,
+          stage: type === 'reply' ? 'replied' : 'contacted',
+          lastSentAt: new Date().toISOString(),
+          lastSentMessageId: msgId,
+          lastReplyAt: null,
+          senderProfileId: null,
+          lastStrategy: null,
+          lastAngle: null,
+          lastCta: null,
+          followupCount: 0,
+          nextFollowupAt: null,
+          wonAt: null,
+          lostAt: null,
+          lostReason: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+      }
+
       return { allowed: true, todaySends: todaySends + 1, limit }
     },
     async getVoiceProfile() {
@@ -1609,6 +1706,30 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const idx = contentProfiles.findIndex((p) => p.id === profileId)
       if (idx >= 0) contentProfiles.splice(idx, 1)
     },
+    // ── content taste profiles ──
+    async getTasteProfile(personaId) {
+      const existing = contentTasteProfiles.find((t) => t.personaId === personaId)
+      if (!existing) return null
+      return { ...existing }
+    },
+    async saveTasteProfile(personaId, profile) {
+      const idx = contentTasteProfiles.findIndex((t) => t.personaId === personaId)
+      const row = {
+        personaId,
+        preferences: { ...profile.preferences },
+        territoryAffinity: { ...profile.territoryAffinity },
+        totalInteractions: profile.totalInteractions,
+        lastSignalType: profile.lastSignalType ?? null,
+        lastSignalAt: new Date().toISOString(),
+        shortTerm: { ...profile.shortTerm },
+        shortTermWeight: profile.shortTermWeight,
+      }
+      if (idx >= 0) {
+        contentTasteProfiles[idx] = row
+      } else {
+        contentTasteProfiles.push(row)
+      }
+    },
     // ── content memories ──
     async createContentMemory(input) {
       const row: ContentMemory = {
@@ -1814,6 +1935,116 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       return interviewAnswers
         .filter((a) => a.sessionId === sessionId)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    },
+    // relay revenue intelligence (demo stubs)
+    async getAssignedProfiles() {
+      return profiles
+    },
+    async assignProfile(_profileId: string) { /* demo no-op */ },
+    async unassignProfile(_profileId: string) { /* demo no-op */ },
+    async listProofCards(profileId: string) {
+      return proofCards.filter((c) => c.profileId === profileId)
+    },
+    async upsertProofCard(input) {
+      const card: ProofCard = {
+        id: input.id ?? nextId('pc'),
+        organizationId: DEMO_ORG_ID,
+        profileId: input.profileId,
+        capability: input.capability,
+        strength: input.strength,
+        safeClaim: input.safeClaim,
+        sourceType: input.sourceType,
+        sourceReference: input.sourceReference ?? null,
+        tags: input.tags ?? [],
+        verified: input.verified ?? false,
+        forbiddenClaims: input.forbiddenClaims ?? [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      proofCards.push(card)
+      return card
+    },
+    async deleteProofCard(id: string) {
+      proofCards = proofCards.filter((c) => c.id !== id)
+    },
+    async getConversationState(leadId: string) {
+      return conversationStates.find((s) => s.leadId === leadId) ?? null
+    },
+    async upsertConversationState(input) {
+      const existing = conversationStates.find((s) => s.leadId === input.leadId)
+      const state: ConversationState = {
+        id: existing?.id ?? nextId('cs'),
+        organizationId: DEMO_ORG_ID,
+        leadId: input.leadId,
+        stage: input.stage ?? existing?.stage ?? 'new',
+        lastSentAt: existing?.lastSentAt ?? null,
+        lastSentMessageId: existing?.lastSentMessageId ?? null,
+        lastReplyAt: existing?.lastReplyAt ?? null,
+        senderProfileId: input.senderProfileId ?? existing?.senderProfileId ?? null,
+        lastStrategy: input.lastStrategy ?? existing?.lastStrategy ?? null,
+        lastAngle: input.lastAngle ?? existing?.lastAngle ?? null,
+        lastCta: input.lastCta ?? existing?.lastCta ?? null,
+        followupCount: input.followupCount ?? existing?.followupCount ?? 0,
+        nextFollowupAt: input.nextFollowupAt ?? existing?.nextFollowupAt ?? null,
+        wonAt: input.wonAt ?? existing?.wonAt ?? null,
+        lostAt: input.lostAt ?? existing?.lostAt ?? null,
+        lostReason: input.lostReason ?? existing?.lostReason ?? null,
+        createdAt: existing?.createdAt ?? new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      if (existing) Object.assign(existing, state)
+      else conversationStates.push(state)
+      return state
+    },
+    async addSalesMemory(input) {
+      const memory: SalesMemory = {
+        id: nextId('sm'),
+        organizationId: DEMO_ORG_ID,
+        memoryType: input.memoryType,
+        content: input.content,
+        leadId: input.leadId ?? null,
+        profileId: input.profileId ?? null,
+        industry: input.industry ?? null,
+        leadType: input.leadType ?? null,
+        channel: input.channel ?? null,
+        stage: input.stage ?? null,
+        outcome: input.outcome ?? null,
+        occurrenceCount: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      salesMemories.push(memory)
+      return memory
+    },
+    async listSalesMemory(opts) {
+      let results = salesMemories
+      if (opts?.memoryType) results = results.filter((m) => m.memoryType === opts.memoryType)
+      if (opts?.profileId) results = results.filter((m) => m.profileId === opts.profileId)
+      if (opts?.industry) results = results.filter((m) => m.industry === opts.industry)
+      return results.slice(0, opts?.limit ?? 50)
+    },
+    async logEditLearning(input) {
+      editLearnings.push({
+        id: nextId('el'),
+        organizationId: DEMO_ORG_ID,
+        repId: 'demo-rep',
+        messageId: input.messageId,
+        originalText: input.originalText,
+        editedText: input.editedText,
+        editDistance: input.editDistance,
+        lengthDelta: input.lengthDelta,
+        greetingChanged: input.greetingChanged,
+        ctaChanged: input.ctaChanged,
+        proofRemoved: input.proofRemoved,
+        madeShorter: input.madeShorter,
+        madeLonger: input.madeLonger,
+        formalityShift: input.formalityShift,
+        createdAt: new Date().toISOString(),
+      })
+    },
+    async updateLeadSenderProfile(leadId: string, senderProfileId: string | null) {
+      const lead = leads.find((l) => l.id === leadId)
+      if (lead) (lead as Lead & { senderProfileId?: string | null }).senderProfileId = senderProfileId
     },
   }
 }

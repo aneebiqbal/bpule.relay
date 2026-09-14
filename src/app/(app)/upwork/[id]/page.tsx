@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
 import { computeUpworkScore } from '@/lib/score/upwork-rubric'
-import { MessageCircle, DollarSign, Users, Tag } from 'lucide-react'
+import { MessageCircle, DollarSign, Users, Tag, FileText } from 'lucide-react'
 import { cn } from 'cn'
+import { UpworkJobActions } from '@/components/upwork-job-actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,8 @@ export default async function UpworkJobPage({
   const store = await createScoutStore()
   const job = await store.getUpworkJob(id)
   if (!job) notFound()
+
+  const profiles = await store.listProfiles()
 
   const score = computeUpworkScore({
     budgetMin: job.budgetMin,
@@ -192,6 +195,20 @@ export default async function UpworkJobPage({
           </ul>
         </section>
       ) : null}
+
+      {/* Proposal actions */}
+      <section className="reveal-up stagger-5 space-y-4">
+        <h2 className="flex items-center gap-2 text-sm font-medium text-ink">
+          <FileText className="size-3.5 text-cobalt" />
+          Proposal
+        </h2>
+        <UpworkJobActions
+          jobId={id}
+          jobTitle={job.title}
+          profiles={profiles}
+          matchedProofs={[]}
+        />
+      </section>
     </div>
   )
 }

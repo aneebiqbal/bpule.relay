@@ -674,3 +674,158 @@ export interface ContentInterviewAnswer {
   informationGain: number
   createdAt: string
 }
+
+// ── Relay Revenue Intelligence System ───────────────────────────────────────
+
+export interface ProfileAssignment {
+  id: string
+  repId: string
+  profileId: string
+  createdAt: string
+}
+
+export interface ProofCard {
+  id: string
+  organizationId: string
+  profileId: string
+  capability: string
+  strength: 'strong' | 'moderate' | 'weak'
+  safeClaim: string
+  sourceType: 'cv' | 'project' | 'portfolio' | 'case_study' | 'certification' | 'client_work' | 'approved_fact'
+  sourceReference: string | null
+  tags: string[]
+  verified: boolean
+  forbiddenClaims: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type ConversationStage =
+  | 'new'
+  | 'contacted'
+  | 'replied'
+  | 'qualifying'
+  | 'interested'
+  | 'meeting'
+  | 'proposal'
+  | 'negotiation'
+  | 'won'
+  | 'lost'
+
+export interface ConversationState {
+  id: string
+  organizationId: string
+  leadId: string
+  stage: ConversationStage
+  lastSentAt: string | null
+  lastSentMessageId: string | null
+  lastReplyAt: string | null
+  senderProfileId: string | null
+  lastStrategy: string | null
+  lastAngle: string | null
+  lastCta: string | null
+  followupCount: number
+  nextFollowupAt: string | null
+  wonAt: string | null
+  lostAt: string | null
+  lostReason: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type SalesMemoryType =
+  | 'angle_used'
+  | 'proof_used'
+  | 'cta_used'
+  | 'objection_seen'
+  | 'won_reason'
+  | 'lost_reason'
+  | 'edit_pattern'
+  | 'channel_preference'
+  | 'industry_fit'
+  | 'lead_type_fit'
+
+export interface SalesMemory {
+  id: string
+  organizationId: string
+  memoryType: SalesMemoryType
+  content: string
+  leadId: string | null
+  profileId: string | null
+  industry: string | null
+  leadType: string | null
+  channel: string | null
+  stage: string | null
+  outcome: 'positive' | 'negative' | 'neutral' | null
+  occurrenceCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EditLearning {
+  id: string
+  organizationId: string
+  repId: string
+  messageId: string | null
+  originalText: string
+  editedText: string
+  editDistance: number | null
+  lengthDelta: number | null
+  greetingChanged: boolean
+  ctaChanged: boolean
+  proofRemoved: boolean
+  madeShorter: boolean
+  madeLonger: boolean
+  formalityShift: 'more_formal' | 'less_formal' | 'same' | null
+  createdAt: string
+}
+
+// Fact safety classification
+export type FactSafety = 'VERIFIED_PUBLIC' | 'INFERRED' | 'WEAK_SIGNAL' | 'UNVERIFIED'
+
+export type ClaimSafety = 'VERIFIED_PROFILE_PROOF' | 'APPROVED_CLAIM' | 'INFERRED' | 'UNSUPPORTED'
+
+export interface SafeFact {
+  fact: string
+  safety: FactSafety
+  source: string
+  safeToMention: boolean
+}
+
+export interface MatchedProof {
+  proofCard: ProofCard
+  relevanceScore: number
+  matchingTags: string[]
+  safeClaim: string
+}
+
+// Outreach strategy
+export type MessageMode =
+  | 'observation_opener'
+  | 'relevant_question'
+  | 'useful_insight'
+  | 'proof_led'
+  | 'problem_recognition'
+  | 'offer_small_win'
+  | 'founder_to_founder'
+  | 'technical_peer'
+  | 'warm_conversational'
+  | 'direct_opportunity'
+  | 'referral_context'
+  | 'followup'
+  | 'reply'
+
+export interface OutreachStrategy {
+  leadContext: string
+  safeTrigger: string
+  probableNeed: string
+  sender: string
+  relevantProof: string[]
+  messageGoal: string
+  relationshipStage: string
+  channel: string
+  tone: string
+  risk: string
+  ctaStrategy: string
+  mode: MessageMode
+}

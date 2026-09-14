@@ -29,6 +29,8 @@ import type {
   ContentEvaluation,
   ContentInterviewSession,
   ContentInterviewAnswer,
+  ConversationState,
+  ConversationStage,
   CsvImport,
   Fact,
   OrganizationRulebook,
@@ -39,9 +41,12 @@ import type {
   Outcome,
   Play,
   Profile,
+  ProofCard,
   ProofItem,
   PushSubscription,
   Rep,
+  SalesMemory,
+  SalesMemoryType,
   SignalId,
   TopicCluster,
   ContentResearchFinding,
@@ -563,6 +568,19 @@ export class SupabaseStore implements ScoutStore {
       await this.client.from('messages').delete().eq('id', inserted.id)
       throw new Error('This lead became locked or unavailable while logging the send. Try again.')
     }
+
+    // Update conversation state
+    try {
+      const convState = await this.getConversationState(leadId)
+      await this.upsertConversationState({
+        leadId,
+        stage: type === 'reply' ? 'replied' : 'contacted',
+        followupCount: convState?.followupCount ?? 0,
+      })
+    } catch {
+      // Non-fatal: conversation state must not block the send
+    }
+
     return { allowed: true, todaySends: todaySends + 1, limit }
   }
 
@@ -1020,7 +1038,12 @@ export class SupabaseStore implements ScoutStore {
       const lastSent = lastSentByLead.get(lead.id)
       if (!lastSent) continue
       const daysSinceContact = businessDaysBetween(new Date(lastSent), now)
-      if (daysSinceContact >= FOLLOWUP_DUE_BUSINESS_DAYS) due.push({ lead, daysSinceContact })
+      if (daysSinceContact >= FOLLOWUP_DUE_BUSINESS_DAYS) {
+        // Use the follow-up engine for additional validation
+        const convState = await this.getConversationState(lead.id).catch(() => null)
+        if (convState && convState.followupCount >= 1) continue
+        due.push({ lead, daysSinceContact })
+      }
     }
     return due.sort((a, b) => b.daysSinceContact - a.daysSinceContact)
   }
@@ -2429,6 +2452,82 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
   }
 
+  // ── content taste profiles ──
+
+  async getTasteProfile(personaId: string): Promise<{
+    personaId: string
+    preferences: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
+    territoryAffinity: Record<string, number>
+    totalInteractions: number
+    lastSignalType: string | null
+    lastSignalAt: string | null
+    shortTerm: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
+    shortTermWeight: number
+  } | null> {
+    const { data, error } = await this.client
+      .from('content_taste_profiles')
+      .select('*')
+      .eq('persona_id', personaId)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    const r = data as Record<string, unknown>
+    const st = (r.short_term as Record<string, number>) ?? {}
+    return {
+      personaId: r.persona_id as string,
+      preferences: {
+        technicalVsHuman: (r.pref_technical_vs_human as number) ?? 0,
+        opinionVsEducational: (r.pref_opinion_vs_educational as number) ?? 0,
+        timelyVsEvergreen: (r.pref_timely_vs_evergreen as number) ?? 0,
+        shortVsDeep: (r.pref_short_vs_deep as number) ?? 0,
+        seriousVsPlayful: (r.pref_serious_vs_playful as number) ?? 0,
+        personalVsUniversal: (r.pref_personal_vs_universal as number) ?? 0,
+      },
+      territoryAffinity: (r.territory_affinity as Record<string, number>) ?? {},
+      totalInteractions: (r.total_interactions as number) ?? 0,
+      lastSignalType: (r.last_signal_type as string) ?? null,
+      lastSignalAt: (r.last_signal_at as string) ?? null,
+      shortTerm: {
+        technicalVsHuman: (st.technicalVsHuman as number) ?? 0,
+        opinionVsEducational: (st.opinionVsEducational as number) ?? 0,
+        timelyVsEvergreen: (st.timelyVsEvergreen as number) ?? 0,
+        shortVsDeep: (st.shortVsDeep as number) ?? 0,
+        seriousVsPlayful: (st.seriousVsPlayful as number) ?? 0,
+        personalVsUniversal: (st.personalVsUniversal as number) ?? 0,
+      },
+      shortTermWeight: (r.short_term_weight as number) ?? 0,
+    }
+  }
+
+  async saveTasteProfile(personaId: string, profile: {
+    preferences: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
+    territoryAffinity: Record<string, number>
+    totalInteractions: number
+    lastSignalType?: string | null
+    shortTerm: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
+    shortTermWeight: number
+  }): Promise<void> {
+    const { error } = await this.client
+      .from('content_taste_profiles')
+      .upsert({
+        organization_id: this.orgId,
+        persona_id: personaId,
+        pref_technical_vs_human: profile.preferences.technicalVsHuman,
+        pref_opinion_vs_educational: profile.preferences.opinionVsEducational,
+        pref_timely_vs_evergreen: profile.preferences.timelyVsEvergreen,
+        pref_short_vs_deep: profile.preferences.shortVsDeep,
+        pref_serious_vs_playful: profile.preferences.seriousVsPlayful,
+        pref_personal_vs_universal: profile.preferences.personalVsUniversal,
+        territory_affinity: profile.territoryAffinity,
+        total_interactions: profile.totalInteractions,
+        last_signal_type: profile.lastSignalType ?? null,
+        last_signal_at: new Date().toISOString(),
+        short_term: profile.shortTerm,
+        short_term_weight: profile.shortTermWeight,
+      }, { onConflict: 'persona_id' })
+    if (error) throw error
+  }
+
   // ── content memories ──
 
   async createContentMemory(input: {
@@ -2734,6 +2833,230 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client.from('content_interview_answers').select('*').eq('session_id', sessionId).order('created_at', { ascending: true })
     if (error) throw error
     return (data ?? []).map(mapContentInterviewAnswer)
+  }
+
+  // ── Relay Revenue Intelligence Methods ──────────────────────────────────────
+
+  async getAssignedProfiles(): Promise<Profile[]> {
+    const { data, error } = await this.client
+      .from('profile_assignments')
+      .select('profile_id')
+      .eq('rep_id', this.rep.id)
+    if (error) throw error
+    const profileIds = (data ?? []).map((r: { profile_id: string }) => r.profile_id)
+    if (profileIds.length === 0) return this.listProfiles()
+    const { data: profiles, error: pError } = await this.client
+      .from('profiles')
+      .select('*')
+      .in('id', profileIds)
+    if (pError) throw pError
+    return (profiles ?? []).map(mapProfile)
+  }
+
+  async assignProfile(profileId: string): Promise<void> {
+    const { error } = await this.client
+      .from('profile_assignments')
+      .upsert({ rep_id: this.rep.id, profile_id: profileId })
+    if (error) throw error
+  }
+
+  async unassignProfile(profileId: string): Promise<void> {
+    const { error } = await this.client
+      .from('profile_assignments')
+      .delete()
+      .eq('rep_id', this.rep.id)
+      .eq('profile_id', profileId)
+    if (error) throw error
+  }
+
+  async listProofCards(profileId: string): Promise<ProofCard[]> {
+    const { data, error } = await this.client
+      .from('proof_cards')
+      .select('*')
+      .eq('profile_id', profileId)
+    if (error) throw error
+    return (data ?? []).map(mapProofCard)
+  }
+
+  async upsertProofCard(input: {
+    id?: string
+    profileId: string
+    capability: string
+    strength: 'strong' | 'moderate' | 'weak'
+    safeClaim: string
+    sourceType: ProofCard['sourceType']
+    sourceReference?: string | null
+    tags?: string[]
+    verified?: boolean
+    forbiddenClaims?: string[]
+  }): Promise<ProofCard> {
+    const row = {
+      id: input.id,
+      organization_id: this.orgId,
+      profile_id: input.profileId,
+      capability: input.capability,
+      strength: input.strength,
+      safe_claim: input.safeClaim,
+      source_type: input.sourceType,
+      source_reference: input.sourceReference ?? null,
+      tags: input.tags ?? [],
+      verified: input.verified ?? false,
+      forbidden_claims: input.forbiddenClaims ?? [],
+      updated_at: new Date().toISOString(),
+    }
+    const { data, error } = await this.client
+      .from('proof_cards')
+      .upsert(row)
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapProofCard(data as Row)
+  }
+
+  async deleteProofCard(id: string): Promise<void> {
+    const { error } = await this.client.from('proof_cards').delete().eq('id', id)
+    if (error) throw error
+  }
+
+  async getConversationState(leadId: string): Promise<ConversationState | null> {
+    const { data, error } = await this.client
+      .from('conversation_states')
+      .select('*')
+      .eq('lead_id', leadId)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return mapConversationState(data as Row)
+  }
+
+  async upsertConversationState(input: {
+    leadId: string
+    stage?: ConversationStage
+    senderProfileId?: string | null
+    lastStrategy?: string | null
+    lastAngle?: string | null
+    lastCta?: string | null
+    followupCount?: number
+    nextFollowupAt?: string | null
+    wonAt?: string | null
+    lostAt?: string | null
+    lostReason?: string | null
+  }): Promise<ConversationState> {
+    const existing = await this.getConversationState(input.leadId)
+    const row = {
+      id: existing?.id,
+      organization_id: this.orgId,
+      lead_id: input.leadId,
+      stage: input.stage ?? existing?.stage ?? 'new',
+      sender_profile_id: input.senderProfileId ?? existing?.senderProfileId ?? null,
+      last_strategy: input.lastStrategy ?? existing?.lastStrategy ?? null,
+      last_angle: input.lastAngle ?? existing?.lastAngle ?? null,
+      last_cta: input.lastCta ?? existing?.lastCta ?? null,
+      followup_count: input.followupCount ?? existing?.followupCount ?? 0,
+      next_followup_at: input.nextFollowupAt ?? existing?.nextFollowupAt ?? null,
+      won_at: input.wonAt ?? existing?.wonAt ?? null,
+      lost_at: input.lostAt ?? existing?.lostAt ?? null,
+      lost_reason: input.lostReason ?? existing?.lostReason ?? null,
+      updated_at: new Date().toISOString(),
+    }
+    const { data, error } = await this.client
+      .from('conversation_states')
+      .upsert(row)
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapConversationState(data as Row)
+  }
+
+  async addSalesMemory(input: {
+    memoryType: SalesMemoryType
+    content: string
+    leadId?: string | null
+    profileId?: string | null
+    industry?: string | null
+    leadType?: string | null
+    channel?: string | null
+    stage?: string | null
+    outcome?: 'positive' | 'negative' | 'neutral' | null
+  }): Promise<SalesMemory> {
+    const { data, error } = await this.client
+      .from('sales_memory')
+      .insert({
+        organization_id: this.orgId,
+        memory_type: input.memoryType,
+        content: input.content,
+        lead_id: input.leadId ?? null,
+        profile_id: input.profileId ?? null,
+        industry: input.industry ?? null,
+        lead_type: input.leadType ?? null,
+        channel: input.channel ?? null,
+        stage: input.stage ?? null,
+        outcome: input.outcome ?? null,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapSalesMemory(data as Row)
+  }
+
+  async listSalesMemory(opts?: {
+    memoryType?: SalesMemoryType
+    profileId?: string | null
+    industry?: string | null
+    limit?: number
+  }): Promise<SalesMemory[]> {
+    let q = this.client
+      .from('sales_memory')
+      .select('*')
+      .eq('organization_id', this.orgId)
+      .order('created_at', { ascending: false })
+      .limit(opts?.limit ?? 50)
+    if (opts?.memoryType) q = q.eq('memory_type', opts.memoryType)
+    if (opts?.profileId) q = q.eq('profile_id', opts.profileId)
+    if (opts?.industry) q = q.eq('industry', opts.industry)
+    const { data, error } = await q
+    if (error) throw error
+    return (data ?? []).map(mapSalesMemory)
+  }
+
+  async logEditLearning(input: {
+    messageId: string | null
+    originalText: string
+    editedText: string
+    editDistance: number
+    lengthDelta: number
+    greetingChanged: boolean
+    ctaChanged: boolean
+    proofRemoved: boolean
+    madeShorter: boolean
+    madeLonger: boolean
+    formalityShift: 'more_formal' | 'less_formal' | 'same' | null
+  }): Promise<void> {
+    const { error } = await this.client.from('edit_learning').insert({
+      organization_id: this.orgId,
+      rep_id: this.rep.id,
+      message_id: input.messageId,
+      original_text: input.originalText,
+      edited_text: input.editedText,
+      edit_distance: input.editDistance,
+      length_delta: input.lengthDelta,
+      greeting_changed: input.greetingChanged,
+      cta_changed: input.ctaChanged,
+      proof_removed: input.proofRemoved,
+      made_shorter: input.madeShorter,
+      made_longer: input.madeLonger,
+      formality_shift: input.formalityShift,
+    })
+    if (error) throw error
+  }
+
+  async updateLeadSenderProfile(leadId: string, senderProfileId: string | null): Promise<void> {
+    const { error } = await this.client
+      .from('leads')
+      .update({ sender_profile_id: senderProfileId })
+      .eq('id', leadId)
+      .eq('owner_rep_id', this.rep.id)
+    if (error) throw error
   }
 }
 
@@ -3086,5 +3409,65 @@ function mapContentInterviewAnswer(r: Record<string, unknown>): ContentInterview
     answer: r.answer as string,
     informationGain: (r.information_gain as number) ?? 0,
     createdAt: r.created_at as string,
+  }
+}
+
+function mapProofCard(r: Row): ProofCard {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    profileId: r.profile_id as string,
+    capability: r.capability as string,
+    strength: r.strength as ProofCard['strength'],
+    safeClaim: r.safe_claim as string,
+    sourceType: r.source_type as ProofCard['sourceType'],
+    sourceReference: (r.source_reference as string) ?? null,
+    tags: (r.tags as string[]) ?? [],
+    verified: Boolean(r.verified),
+    forbiddenClaims: (r.forbidden_claims as string[]) ?? [],
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  }
+}
+
+function mapConversationState(r: Row): ConversationState {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    leadId: r.lead_id as string,
+    stage: r.stage as ConversationState['stage'],
+    lastSentAt: (r.last_sent_at as string) ?? null,
+    lastSentMessageId: (r.last_sent_message_id as string) ?? null,
+    lastReplyAt: (r.last_reply_at as string) ?? null,
+    senderProfileId: (r.sender_profile_id as string) ?? null,
+    lastStrategy: (r.last_strategy as string) ?? null,
+    lastAngle: (r.last_angle as string) ?? null,
+    lastCta: (r.last_cta as string) ?? null,
+    followupCount: (r.followup_count as number) ?? 0,
+    nextFollowupAt: (r.next_followup_at as string) ?? null,
+    wonAt: (r.won_at as string) ?? null,
+    lostAt: (r.lost_at as string) ?? null,
+    lostReason: (r.lost_reason as string) ?? null,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  }
+}
+
+function mapSalesMemory(r: Row): SalesMemory {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    memoryType: r.memory_type as SalesMemory['memoryType'],
+    content: r.content as string,
+    leadId: (r.lead_id as string) ?? null,
+    profileId: (r.profile_id as string) ?? null,
+    industry: (r.industry as string) ?? null,
+    leadType: (r.lead_type as string) ?? null,
+    channel: (r.channel as string) ?? null,
+    stage: (r.stage as string) ?? null,
+    outcome: (r.outcome as SalesMemory['outcome']) ?? null,
+    occurrenceCount: (r.occurrence_count as number) ?? 1,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
   }
 }

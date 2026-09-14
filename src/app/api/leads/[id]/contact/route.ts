@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import type { MessageType } from '@/lib/domain/types'
+import { computeEditDelta } from '@/lib/relay/edit-learning'
 
 const TYPES: MessageType[] = ['dm', 'connection', 'upwork', 'followup', 'reply']
 
@@ -10,7 +11,7 @@ export async function POST(
 ) {
   const { id } = await params
 
-  let body: { sentText?: string; type?: string }
+  let body: { sentText?: string; type?: string; originalDraft?: string }
   try {
     body = await request.json()
   } catch {
@@ -58,6 +59,43 @@ export async function POST(
         { status: 429 },
       )
     }
+
+    // Capture edit learning if original draft was provided
+    if (body.originalDraft && body.originalDraft !== sentText) {
+      try {
+        const delta = computeEditDelta(body.originalDraft, sentText)
+        await store.logEditLearning({
+          messageId: null,
+          originalText: body.originalDraft,
+          editedText: sentText,
+          editDistance: delta.editDistance,
+          lengthDelta: delta.lengthDelta,
+          greetingChanged: delta.greetingChanged,
+          ctaChanged: delta.ctaChanged,
+          proofRemoved: delta.proofRemoved,
+          madeShorter: delta.madeShorter,
+          madeLonger: delta.madeLonger,
+          formalityShift: delta.formalityShift === 'more_formal' ? 'more_formal' : delta.formalityShift === 'less_formal' ? 'less_formal' : delta.formalityShift === 'same' ? 'same' : null,
+        })
+      } catch {
+        // Non-fatal: learning must not break the send
+      }
+    }
+
+    // Record sales memory for this send
+    try {
+      await store.addSalesMemory({
+        memoryType: 'angle_used',
+        content: `Sent ${type} to ${lead.company}: ${sentText.slice(0, 120)}`,
+        leadId: id,
+        channel: type,
+        stage: lead.status,
+        outcome: null,
+      })
+    } catch {
+      // Non-fatal: memory must not break the send
+    }
+
     return NextResponse.json({
       ok: true,
       todaySends: result.todaySends,

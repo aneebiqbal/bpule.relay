@@ -3,6 +3,14 @@ import { buildLongcatDraftChain, buildOpenaiDraftChain, pickDraftChain } from '@
 import { structuredJsonChain } from '@/lib/ai/provider'
 import { checkHumanization, rewriteToHumanize } from '@/lib/ai/humanization'
 import { checkBannedPhrases, checkBadHook } from '@/lib/ai/content'
+import {
+  buildAntiSlopBlock,
+  buildOriginalityBlock,
+  type ContentStructure,
+  selectStructure,
+  structureToPrompt,
+} from '@/lib/writing/engine'
+import { generateVisualConcept } from '@/lib/writing/visual'
 
 /**
  * Content Forge — multi-agent generation pipeline.
@@ -25,6 +33,7 @@ export interface ForgeInput {
   genomeBlock: string
   memoryBlock: string
   recentOpenings: string[]
+  recentStructures?: ContentStructure[]
   generationMode: 'personal' | 'opinion'
   performanceBlock?: string
   researchBlock?: string
@@ -57,16 +66,25 @@ export interface ForgeResult {
     notes: string[]
   }
   platform: ContentPlatform
+  structure: import('@/lib/writing/engine').ContentStructure
+  visualConcept?: import('@/lib/writing/visual').VisualConcept
 }
 
 /**
  * Run the full Content Forge pipeline.
  */
 export async function runContentForge(input: ForgeInput): Promise<ForgeResult> {
+  // Select structure based on material, avoiding recent repeats
+  const structureSelection = selectStructure(
+    input.sourceMaterial,
+    input.recentStructures ?? [],
+    input.generationMode,
+  )
+
   // Generate two independent candidates in parallel
   const [candidateA, candidateB] = await Promise.all([
-    generateCandidate(input, 'A'),
-    generateCandidate(input, 'B'),
+    generateCandidate(input, 'A', structureSelection),
+    generateCandidate(input, 'B', structureSelection),
   ])
 
   // Evaluate both
@@ -78,10 +96,21 @@ export async function runContentForge(input: ForgeInput): Promise<ForgeResult> {
   const winningCandidate = winner === 'A' ? candidateA : candidateB
 
   // Apply anti-slop
-  const finalCaption = await applyAntiSlop(winningCandidate.caption, input)
+  const finalCaption = await applyAntiSlop(winningCandidate.caption)
 
   // Platform adaptation
   const platformCaption = adaptForPlatform(finalCaption, input.platform)
+
+  // Generate visual concept
+  const visualConcept = generateVisualConcept({
+    postText: platformCaption,
+    platform: input.platform,
+    angle: input.genomeBlock.slice(0, 100),
+    topic: input.genomeBlock.split('\n')[0] ?? '',
+    styleCard: input.styleCard,
+    coreDetail: extractCoreDetail(platformCaption, input.sourceMaterial),
+    tone: input.generationMode === 'personal' ? 'serious' : 'thoughtful',
+  })
 
   return {
     caption: platformCaption,
@@ -97,10 +126,12 @@ export async function runContentForge(input: ForgeInput): Promise<ForgeResult> {
       notes: [...evalA.notes, ...evalB.notes],
     },
     platform: input.platform,
+    structure: structureSelection.structure,
+    visualConcept,
   }
 }
 
-async function generateCandidate(input: ForgeInput, writer: 'A' | 'B'): Promise<ForgeCandidate> {
+async function generateCandidate(input: ForgeInput, writer: 'A' | 'B', structureSelection?: { structure: ContentStructure; reason: string }): Promise<ForgeCandidate> {
   const chain = writer === 'A' ? buildLongcatDraftChain() : buildOpenaiDraftChain()
   const fallbackChain = pickDraftChain()
   const activeChain = chain.length > 0 ? chain : fallbackChain
@@ -109,9 +140,13 @@ async function generateCandidate(input: ForgeInput, writer: 'A' | 'B'): Promise<
     return emptyCandidate(writer)
   }
 
+  const structureDirective = structureSelection
+    ? structureToPrompt(structureSelection.structure)
+    : 'Select the structure that best fits the material naturally.'
+
   const writerPersona = writer === 'A'
-    ? 'Write with a direct, personal voice. Lead with the specific detail. Keep sentences varied in length.'
-    : 'Write with a slightly more reflective voice. Connect the specific to the universal. Use natural rhythm.'
+    ? `Write with a direct, personal voice. Lead with the specific detail. Keep sentences varied in length. ${structureDirective}`
+    : `Write with a slightly more reflective voice. Connect the specific to the universal. Use natural rhythm. ${structureDirective}`
 
   const result = await structuredJsonChain<{
     caption: string
@@ -303,22 +338,47 @@ function evaluateCandidate(candidate: ForgeCandidate, input: ForgeInput): Candid
   return { quality, distribution, specificity, slop, totalScore, notes }
 }
 
-async function applyAntiSlop(caption: string, input: ForgeInput): Promise<string> {
+async function applyAntiSlop(caption: string): Promise<string> {
   let result = caption
 
-  // Remove excessive em dashes (AI tell)
-  const emDashCount = (result.match(/—/g) || []).length
-  if (emDashCount > 3) {
-    result = result.replace(/—/g, (match, offset) => offset < result.length * 0.5 ? '—' : '-')
-  }
+  // Remove ALL em dashes (AI tell — banned everywhere)
+  result = result.replace(/[\u2014\u2013]/g, (match, offset) => {
+    const before = result.slice(0, offset)
+    const dashesBefore = (before.match(/[\u2014\u2013]/g) || []).length
+    return dashesBefore === 0 ? '—' : '.'
+  })
 
-  // Remove "Thoughts?" / "Agree?" / "Am I right?"
-  result = result.replace(/\s*(Thoughts\?|Agree\?|Am I right\?|Who else\?)\s*$/gi, '')
+  // Remove "Thoughts?" / "Agree?" / "Am I right?" / "Who else?"
+  result = result.replace(/\s*(Thoughts\?|Agree\?|Am I right\?|Who else\?|What do you think\?|Let me know\?)\s*$/gi, '')
 
   // Remove empty conclusions
-  result = result.replace(/\s*(In conclusion|To summarize|The takeaway is)[^.!?]*[.!?]\s*$/gi, '')
+  result = result.replace(/\s*(In conclusion|To summarize|The takeaway is|In summary)[^.!?]*[.!?]\s*$/gi, '')
+
+  // Remove "In today's..." openings
+  result = result.replace(/^In today'?s[^,]*,\s*/i, '')
+
+  // Remove excessive exclamation marks
+  result = result.replace(/!{2,}/g, '.')
+  result = result.replace(/!(\s|$)/g, '.$1')
+
+  // Remove emoji-as-bullets
+  result = result.replace(/^\s*[^\w\s\-:]\s*/gm, '')
+
+  // Remove thread markers
+  result = result.replace(/^\d+\/\d+\s*/gm, '')
+  result = result.replace(/🧵\s*/g, '')
 
   return result.trim()
+}
+
+function extractCoreDetail(caption: string, sourceMaterial: string): string {
+  const sentences = caption.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 15)
+  for (const sentence of sentences) {
+    if (/\d/.test(sentence) || /specific|exactly|precisely|found|discovered|realized|noticed/i.test(sentence)) {
+      return sentence.trim().slice(0, 120)
+    }
+  }
+  return (sentences[0] ?? sourceMaterial.slice(0, 120)).trim()
 }
 
 function adaptForPlatform(caption: string, platform: ContentPlatform): string {

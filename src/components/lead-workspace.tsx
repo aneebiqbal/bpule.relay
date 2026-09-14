@@ -130,6 +130,7 @@ export function LeadWorkspace({
   const [variantDraft, setVariantDraft] = useState<import('@/lib/ai/draft').DraftVariant | null>(null)
   const [showVariant, setShowVariant] = useState(false)
   const [timelineOpen, setTimelineOpen] = useState(false)
+  const [capturedReplyText, setCapturedReplyText] = useState('')
 
   const streamBuffer = useRef('')
 
@@ -157,11 +158,13 @@ export function LeadWorkspace({
         : lead.status === 'new'
           ? 'Eligible once this lead is contacted.'
           : 'Eligible once a first message has been sent.',
-    reply: hasReply ? 'Reply text capture lands with the next pass.' : 'Appears when a reply is on file.',
+    reply: !hasReply ? 'Appears when a reply is on file.' : null,
   }
 
   const activeProof = proofList.find((p) => p.id === matchedProofId) ?? proofList[0] ?? null
   const chosenProfileId = profiles.some((p) => p.id === selectedProfileId) ? selectedProfileId : profiles[0]?.id ?? null
+  const lastReply = lead.messages.filter((m) => m.type === 'reply' && m.sentText).at(-1)
+  const prospectReplyText = capturedReplyText || lastReply?.sentText || ''
 
   const editDraft = useCallback((text: string) => {
     setDrafts((d) => ({ ...d, [artifact]: { result: d[artifact]?.result ?? null, text } }))
@@ -169,7 +172,8 @@ export function LeadWorkspace({
 
   const generateDraft = useCallback(async (proofId?: string) => {
     const target = artifact
-    if (target === 'reply' || locked) return
+    if (locked) return
+    if (target === 'reply' && !prospectReplyText) return
     setDrafting(true)
     setDraftError(null)
     setDrafts((d) => ({ ...d, [target]: { result: null, text: '' } }))
@@ -178,10 +182,14 @@ export function LeadWorkspace({
     setShowVariant(false)
     streamBuffer.current = ''
     try {
+      const body: Record<string, unknown> = { type: target, profileId: chosenProfileId, proofId: proofId ?? matchedProofId ?? undefined }
+      if (target === 'reply' && prospectReplyText) {
+        body.replyToMessageId = lastReply?.id ?? 'manual'
+      }
       const res = await fetch(`/api/leads/${lead.id}/draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: target, profileId: chosenProfileId, proofId: proofId ?? matchedProofId ?? undefined }),
+        body: JSON.stringify(body),
       })
       await readSse<DraftEvent>(res, {
         onEvent(event) {
@@ -200,7 +208,8 @@ export function LeadWorkspace({
       setDrafting(false)
       setStatusMessage(null)
     }
-  }, [artifact, locked, lead.id, chosenProfileId, matchedProofId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artifact, locked, lead.id, chosenProfileId, matchedProofId, prospectReplyText, lastReply])
 
   const onDraftProof = useCallback((proofId: string) => {
     setMatchedProofId(proofId)
@@ -446,12 +455,21 @@ export function LeadWorkspace({
               })}
             </div>
 
+            {artifact === 'reply' && hasReply && (
+              <div className="mt-4 rounded-xl border border-line/60 bg-bone/30 p-3">
+                <Label htmlFor="reply-text" className="text-xs text-graphite">Prospect&apos;s reply (paste what they wrote)</Label>
+                <Textarea id="reply-text" value={capturedReplyText} onChange={(e) => setCapturedReplyText(e.target.value)}
+                  rows={3} className="mt-1 border-0 bg-transparent px-0 py-1 text-sm shadow-none focus-visible:ring-0"
+                  placeholder="Paste the prospect's reply here..." />
+              </div>
+            )}
+
             {artifactDisabled[artifact] ? (
               <p className="mt-3 text-sm text-graphite">{artifactDisabled[artifact]}</p>
             ) : (
               <>
                 <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <Button variant="orange" onClick={() => void generateDraft()} disabled={drafting || locked} loading={drafting}>
+                  <Button variant="orange" onClick={() => void generateDraft()} disabled={drafting || locked || (artifact === 'reply' && !prospectReplyText)} loading={drafting}>
                     {drafting ? 'Drafting...' : draft ? 'Rewrite' : 'Generate draft'}
                   </Button>
                   {statusMessage ? (

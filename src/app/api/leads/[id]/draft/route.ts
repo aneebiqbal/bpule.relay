@@ -24,21 +24,20 @@ export async function POST(
   const profileId = body.profileId ?? null
   const proofId = body.proofId ?? null
 
-  if (type === 'reply') {
-    return new Response(
-      JSON.stringify({ error: 'Reply drafting is not available yet. Log the outcome and continue with follow-up flow.' }),
-      {
-        status: 409,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    )
-  }
-
-  if (!['dm', 'connection', 'upwork', 'followup'].includes(type)) {
+  if (!['dm', 'connection', 'upwork', 'followup', 'reply'].includes(type)) {
     return new Response(JSON.stringify({ error: 'Unknown message type.' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     })
+  }
+
+  // Reply requires the incoming message text
+  const bodyWithReply = body as { type?: string; profileId?: string; proofId?: string; replyToMessageId?: string }
+  if (type === 'reply' && !bodyWithReply.replyToMessageId) {
+    return new Response(
+      JSON.stringify({ error: 'replyToMessageId is required for reply drafting.' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    )
   }
 
   let store
@@ -123,6 +122,28 @@ export async function POST(
     // Few-shot injection from real wins.
     const fewShotSelection = selectFewShotExamples(fewShotPool, { leadId: detail.id, lead: detail, extracted, score, type: type as DraftMessageType, styleCard: voiceProfile?.styleCard ?? null, facts, plays, history: detail.messages, profile, matchedProof: matched[0] ?? null }, plays)
 
+    // Build conversation context for reply type
+    let conversationContext: string | undefined
+    if (type === 'reply' && bodyWithReply.replyToMessageId) {
+      const replyMessage = bodyWithReply.replyToMessageId !== 'manual'
+        ? detail.messages.find((m) => m.id === bodyWithReply.replyToMessageId)
+        : null
+      if (replyMessage) {
+        const priorMessages = detail.messages.filter((m) => m.sentAt && m.sentAt < (replyMessage.sentAt ?? ''))
+        conversationContext = [
+          `The prospect replied: "${replyMessage.sentText ?? replyMessage.draftText ?? ''}"`,
+          priorMessages.length > 0
+            ? `\nPrior conversation:\n${priorMessages.map((m) => `- [${m.type}] ${m.sentText ?? m.draftText ?? ''}`).join('\n')}`
+            : '',
+          `\nWrite a helpful, direct reply. Answer any questions. Advance the conversation naturally.`,
+        ].filter(Boolean).join('\n')
+      } else if (bodyWithReply.replyToMessageId === 'manual') {
+        // For manual reply text, the prospect's message is captured in the UI
+        // We still need to generate a reply without the specific message context
+        conversationContext = `Write a helpful, direct reply to the prospect. Answer any questions. Advance the conversation naturally. Reference your previous outreach if relevant.`
+      }
+    }
+
     const draftStarted = Date.now()
     const draftResult = await streamDraft(
       {
@@ -142,6 +163,7 @@ export async function POST(
           signalEvidence: e.signalEvidence ?? '',
           sentText: e.sentText,
         })),
+        conversationContext,
       },
       emit,
       matched[0] ?? null,

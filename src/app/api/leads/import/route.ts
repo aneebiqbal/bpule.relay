@@ -15,12 +15,37 @@ interface CsvRow {
 }
 
 function parseCsv(text: string): CsvRow[] {
-  const lines = text.trim().split(/\r?\n/)
+  const lines = text.trim().split(/\r?\n/).filter((l) => l.trim().length > 0)
   if (lines.length < 2) return []
-  const headers = lines[0].split(',').map((h) => h.trim().toLowerCase())
+
+  const parseLine = (line: string): string[] => {
+    const values: string[] = []
+    let current = ''
+    let inQuotes = false
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i]
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"'
+          i++
+        } else {
+          inQuotes = !inQuotes
+        }
+      } else if (char === ',' && !inQuotes) {
+        values.push(current.trim())
+        current = ''
+      } else {
+        current += char
+      }
+    }
+    values.push(current.trim())
+    return values
+  }
+
+  const headers = parseLine(lines[0]).map((h) => h.trim().toLowerCase())
   const rows: CsvRow[] = []
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',').map((v) => v.trim())
+    const values = parseLine(lines[i])
     const row: Record<string, string> = {}
     headers.forEach((h, idx) => {
       row[h] = values[idx] ?? ''

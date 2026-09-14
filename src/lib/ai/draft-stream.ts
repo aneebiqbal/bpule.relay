@@ -206,7 +206,19 @@ export async function streamDraft(
     }
   }
 
-  emit({ type: 'selfcheck', pass: primary.passed, selfCheck: primary.selfCheck })
+  // Run the hard quality gate evaluation
+  let qualityGatePassed = primary.passed
+  let qualityGateReasons: string[] = []
+  try {
+    const { evaluateMessage } = await import('@/lib/relay/message-forge')
+    const evaluation = evaluateMessage(primary.draftText, input.strategy ?? null, input.type === 'upwork' ? 'upwork' : input.type === 'connection' ? 'connection' : 'dm')
+    qualityGatePassed = primary.passed && evaluation.passed
+    qualityGateReasons = evaluation.reasons
+  } catch {
+    // If quality gate fails, fall back to the self-check result
+  }
+
+  emit({ type: 'selfcheck', pass: qualityGatePassed, selfCheck: { ...primary.selfCheck, qualityGateReasons } })
 
   if (secondary) {
     emit({
@@ -223,8 +235,8 @@ export async function streamDraft(
     leadId: input.leadId,
     type: input.type,
     draftText: primary.draftText,
-    selfCheck: primary.selfCheck,
-    passed: primary.passed,
+    selfCheck: { ...primary.selfCheck, qualityGateReasons },
+    passed: qualityGatePassed,
     modelUsed: callLog.map((c) => `${c.costTier}:${c.host}`).join(', ') || 'unknown',
     attempts: callLog.length,
     strippedNumbers: primary.strippedNumbers,

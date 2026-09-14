@@ -2,10 +2,13 @@ import type {
   ExtractedLead,
   Fact,
   Lead,
+  MatchedProof,
   Message,
+  OutreachStrategy,
   Play,
   Profile,
   ProofItem,
+  SafeFact,
   ScoreResult,
   StyleCard,
 } from '@/lib/domain/types'
@@ -24,6 +27,7 @@ import { signalById } from '@/lib/score/signals'
 import { pickPlayForSignal } from '@/lib/score/plays'
 import { sanitizeDraft, siteIsLive } from '@/lib/facts/sanitize'
 import { classifyRoleFromTitle, rolePromptGuidance } from '@/lib/leads/targeting'
+import { strategyToPromptBlock } from '@/lib/relay/outreach-strategy'
 
 /** One entry per model call made while producing one draft, for cost/tier reporting on the route. */
 export interface DraftCallLog {
@@ -44,6 +48,8 @@ export interface SelfCheck {
     companyMentioned: boolean
     specificEvidenceMentioned: boolean
   }
+  /** Quality gate reasons from the hard message quality evaluation. */
+  qualityGateReasons?: string[]
 }
 
 export interface DraftVariant {
@@ -92,6 +98,14 @@ export interface DraftInput {
   matchedProof?: ProofItem | null
   /** Few-shot examples from real wins to inject into the prompt. */
   fewShotExamples?: { company: string; signalEvidence: string; sentText: string }[]
+  /** Outreach strategy computed before message generation. */
+  strategy?: OutreachStrategy | null
+  /** Safe-to-mention facts about the lead. */
+  safeFacts?: SafeFact[]
+  /** Matched proof cards from the sender's profile. */
+  matchedProofCards?: MatchedProof[]
+  /** Conversation context for replies. */
+  conversationContext?: string | null
 }
 
 interface DraftModelOutput {
@@ -162,16 +176,22 @@ Test 2: Could this draft be sent to a different company unchanged? Pass only if 
 Write the draft first, then honestly run the tests on it, then the marker and the JSON. Do not weaken the tests to make them pass. No commentary before the draft or after the JSON.`
     : TWO_TESTS
   return [
-    'You write cold outreach messages for a sales rep at a software delivery agency. The message is copy-pasted by a human; you never send anything yourself.',
+    'You write cold outreach messages for a software consultant. The message is copy-pasted by a human; you never send anything yourself.',
     'Claim ONLY facts listed in the facts table. A number that is not in the facts table must not appear in the draft. If you are unsure, leave the number out.',
-    'Never fabricate a project, client, result, or credential. Never invent metrics.',
+    'Never fabricate a project, client, result, or credential. Never invent metrics. Never invent budgets, pain points, technologies, customers, revenue problems, project results, or relationships.',
     'When the message lists a matched past project, reference it specifically; that referencing is the personalization. Without a matched project, stay with the signal, never invent a case.',
     'Rule on client names: a client may only be named when the matched proof item explicitly says permission is on file. Otherwise describe the project by shape (a trading dashboard, an internal QA tool) and never name the client.',
     "Voice rule: the sender is ONE person. Write in first person singular. Never use 'we', 'our', or 'us' for the sender. Never mention a team, a headcount, or anyone else doing the work. A client's quoted words may keep their own 'we'.",
     'Do not use em dashes anywhere in the draft. Write plain sentences in the sender\'s voice.',
-    'Keep the message short enough for a first cold message: a greeting, a specific reason for reaching out based on their signal, one relevant fact or question, and a close.',
+    'No emojis. No exclamation marks.',
+    'Keep the message short: a greeting, a specific reason for reaching out based on their signal, one relevant fact or question, and a close. Do not pad.',
     'CTA rule: NEVER ask for a call, meeting, chat, or intro. The offer is ALWAYS a free Read — a short written review. Phrase it as "I can write up a quick read of your product" or similar. No exceptions.',
     'Specificity rule: the one verifiable, specific thing about this person MUST be the hook. Not a generic opener. If you cannot name something specific the reader would recognize as truly theirs, do not send.',
+    'Anti-AI rules: Do not use phrases like "I came across your", "I was immediately excited", "With X+ years of experience", "I am confident", "I\'d love the opportunity", "hope this finds you well", "I hope this message finds you", "I wanted to reach out", "I noticed your company", "You recently raised", "which likely gives you some budget". These are generic AI tells or surveillance language. Start from the lead\'s actual situation.',
+    'Sound like a real person who read their profile, not a template. Vary sentence length. Be direct, not corporate.',
+    'Opening rule: A greeting is usually appropriate (Hey Sarah, / Hi Robby,). Never open with scraped intelligence like "You recently raised..." or "You are currently building...". The first line should create context, not expose surveillance.',
+    'Do not pitch too early. Default first-touch goal: earn a reply, not sell the entire service. A first message often needs only: context, relevant observation, small credibility signal, useful question or offer.',
+    'Micro-value: determine whether you can offer a useful small next step. Do not repeatedly generate "I can write up a quick audit." Choose something genuinely appropriate.',
     siteBlock,
     styleBlock ? `SENDER VOICE (mandatory):\n${styleBlock}` : '',
     testsBlock,
@@ -273,9 +293,16 @@ export function buildUserPrompt(
 
   const fewShotBlock = buildFewShotBlock(input.fewShotExamples ?? [])
 
+  // Build strategy block if available — this is the distilled context approach
+  const strategyBlock = input.strategy
+    ? strategyToPromptBlock(input.strategy)
+    : ''
+
   return [
     `Message kind: ${messageKind(input)}`,
     '',
+    strategyBlock,
+    strategyBlock ? '' : null,
     factsBlock,
     '',
     playBlock,
@@ -292,10 +319,14 @@ export function buildUserPrompt(
     '',
     leadBlock,
     '',
+    input.conversationContext ?? '',
+    input.conversationContext ? '' : null,
     opts?.asPlainText
       ? 'End the draft, then put ---SELFCHECK--- on its own line and the self-check JSON object after it, exactly as the system message describes. The draft itself is only the message text.'
       : 'Return the JSON object described in the system message.',
-  ].join('\n')
+  ]
+    .filter((line) => line !== null)
+    .join('\n')
 }
 
 /** Escalate to tier 2 (DeepSeek V4 Pro) when the lead is a high-value send, or when neither best-of-two variant passed self-check. Mirrors the extraction escalation pattern, on the drafting side. */
@@ -313,7 +344,7 @@ function shouldEscalateDraft(score: ScoreResult, primaryPassed: boolean): boolea
  * self-check + code checks) is primary; the other is the visible alternate.
  */
 export async function generateDraft(input: DraftInput): Promise<DraftResult> {
-  if (input.type === 'reply') {
+  if (input.type === 'reply' && !input.conversationContext) {
     throw new Error(
       'Reply drafting needs the prospect reply text, which is not captured yet.',
     )
@@ -330,7 +361,8 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
   // evidence text, block generation. Drafting around a false signal premise
   // produces fabricated claims ("you're hiring aggressively") that get sent to
   // real people. Force a rescore instead.
-  if (!signalEvidenceMatch(input.extracted.signalType, input.extracted.signalEvidence)) {
+  // Skip this gate for replies — the original signal was already validated.
+  if (input.type !== 'reply' && !signalEvidenceMatch(input.extracted.signalType, input.extracted.signalEvidence)) {
     throw new Error(
       `Signal type ${input.extracted.signalType} is not supported by its evidence ("${input.extracted.signalEvidence}"). Rescore this lead before drafting.`,
     )

@@ -28,7 +28,10 @@ import type {
   ContentEvaluation,
   ContentInterviewSession,
   ContentInterviewAnswer,
+  ConversationStage,
+  ConversationState,
   CsvImport,
+  EditLearning,
   Fact,
   Lead,
   MarketRegion,
@@ -39,10 +42,14 @@ import type {
   Outcome,
   Play,
   Profile,
+  ProfileAssignment,
+  ProofCard,
   ProofItem,
   PushSubscription,
   Rep,
   RoleCategory,
+  SalesMemory,
+  SalesMemoryType,
   SignalId,
   StyleCard,
   StyleSampleSource,
@@ -555,6 +562,25 @@ export interface ScoutStore {
     confidence?: number
   }): Promise<ContentProfile>
   deleteContentProfile(profileId: string): Promise<void>
+  // content taste profiles
+  getTasteProfile(personaId: string): Promise<{
+    personaId: string
+    preferences: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
+    territoryAffinity: Record<string, number>
+    totalInteractions: number
+    lastSignalType: string | null
+    lastSignalAt: string | null
+    shortTerm: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
+    shortTermWeight: number
+  } | null>
+  saveTasteProfile(personaId: string, profile: {
+    preferences: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
+    territoryAffinity: Record<string, number>
+    totalInteractions: number
+    lastSignalType?: string | null
+    shortTerm: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
+    shortTermWeight: number
+  }): Promise<void>
   // content memories
   createContentMemory(input: {
     personaId: string
@@ -654,4 +680,67 @@ export interface ScoutStore {
     informationGain?: number
   }): Promise<ContentInterviewAnswer>
   listInterviewAnswers(sessionId: string): Promise<ContentInterviewAnswer[]>
+  // relay revenue intelligence
+  getAssignedProfiles(): Promise<Profile[]>
+  assignProfile(profileId: string): Promise<void>
+  unassignProfile(profileId: string): Promise<void>
+  listProofCards(profileId: string): Promise<ProofCard[]>
+  upsertProofCard(input: {
+    id?: string
+    profileId: string
+    capability: string
+    strength: 'strong' | 'moderate' | 'weak'
+    safeClaim: string
+    sourceType: 'cv' | 'project' | 'portfolio' | 'case_study' | 'certification' | 'client_work' | 'approved_fact'
+    sourceReference?: string | null
+    tags?: string[]
+    verified?: boolean
+    forbiddenClaims?: string[]
+  }): Promise<ProofCard>
+  deleteProofCard(id: string): Promise<void>
+  getConversationState(leadId: string): Promise<ConversationState | null>
+  upsertConversationState(input: {
+    leadId: string
+    stage?: ConversationStage
+    senderProfileId?: string | null
+    lastStrategy?: string | null
+    lastAngle?: string | null
+    lastCta?: string | null
+    followupCount?: number
+    nextFollowupAt?: string | null
+    wonAt?: string | null
+    lostAt?: string | null
+    lostReason?: string | null
+  }): Promise<ConversationState>
+  addSalesMemory(input: {
+    memoryType: SalesMemoryType
+    content: string
+    leadId?: string | null
+    profileId?: string | null
+    industry?: string | null
+    leadType?: string | null
+    channel?: string | null
+    stage?: string | null
+    outcome?: 'positive' | 'negative' | 'neutral' | null
+  }): Promise<SalesMemory>
+  listSalesMemory(opts?: {
+    memoryType?: SalesMemoryType
+    profileId?: string | null
+    industry?: string | null
+    limit?: number
+  }): Promise<SalesMemory[]>
+  logEditLearning(input: {
+    messageId: string | null
+    originalText: string
+    editedText: string
+    editDistance: number
+    lengthDelta: number
+    greetingChanged: boolean
+    ctaChanged: boolean
+    proofRemoved: boolean
+    madeShorter: boolean
+    madeLonger: boolean
+    formalityShift: 'more_formal' | 'less_formal' | 'same' | null
+  }): Promise<void>
+  updateLeadSenderProfile(leadId: string, senderProfileId: string | null): Promise<void>
 }
