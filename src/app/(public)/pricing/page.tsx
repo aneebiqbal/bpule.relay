@@ -1,11 +1,32 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { canonicalUrl, siteConfig } from "@/lib/site-config";
 
 export const metadata: Metadata = {
-  title: "Pricing — Relay",
+  title: `Pricing | ${siteConfig.name}`,
   description:
-    "Relay pricing. Start free with 10 prospect checks, 15 daily sends, and 3 Studio generations. Upgrade when you're ready.",
+    "Simple, honest pricing. Start free with 10 prospect checks, 15 daily sends, and 3 Studio generations per day. Upgrade when you're ready.",
+  alternates: { canonical: canonicalUrl("/pricing") },
+  openGraph: {
+    title: `Pricing | ${siteConfig.name}`,
+    description:
+      "Start free. 10 prospect checks, 15 daily sends, 3 Studio generations. No credit card.",
+    url: canonicalUrl("/pricing"),
+    images: [
+      {
+        url: canonicalUrl("/og?title=Pricing&subtitle=Start free, upgrade when ready"),
+        width: siteConfig.ogImage.width,
+        height: siteConfig.ogImage.height,
+        alt: `${siteConfig.name} Pricing`,
+      },
+    ],
+  },
+  twitter: {
+    title: `Pricing | ${siteConfig.name}`,
+    description: "Start free. No credit card required.",
+    images: [canonicalUrl("/og?title=Pricing&subtitle=Start free, upgrade when ready")],
+  },
 };
 
 const PLANS = [

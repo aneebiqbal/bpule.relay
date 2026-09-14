@@ -14,6 +14,7 @@ import {
   Users,
   Settings,
   LogOut,
+  TrendingUp,
 } from 'lucide-react'
 import { cn } from 'cn'
 import { RelayBrand } from '@/components/brand'
@@ -45,6 +46,7 @@ const ACCOUNT_NAV = [
 
 const ADMIN_EXTRA = [
   { href: '/manage-profiles', label: 'Manage', icon: IdCard, exact: false },
+  { href: '/admin/growth', label: 'Growth', icon: TrendingUp, exact: true },
 ]
 
 const ROLE_LABEL: Record<RepRole, string> = {

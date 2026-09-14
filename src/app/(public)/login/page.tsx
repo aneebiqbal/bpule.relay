@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, ArrowLeft } from "lucide-react";
 import { SupabaseSignIn } from "@/components/supabase-sign-in";
@@ -7,6 +8,11 @@ import { getCurrentUser } from "@/lib/auth/current";
 import { isDemoMode } from "@/lib/ai/config";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Sign in — Relay",
+  description: "Sign in to your Relay account.",
+};
 
 export default async function LoginPage() {
   const user = await getCurrentUser();

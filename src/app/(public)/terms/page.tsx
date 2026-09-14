@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { canonicalUrl, siteConfig } from "@/lib/site-config";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Relay",
-  description: "Relay's terms of service.",
+  title: `Terms of Service | ${siteConfig.name}`,
+  description: `${siteConfig.name}'s terms of service. By using our service you agree to these terms. You remain responsible for all messages sent and content published.`,
+  alternates: { canonical: canonicalUrl("/terms") },
+  robots: { index: true, follow: true },
 };
 
 export default function TermsPage() {
@@ -63,7 +66,7 @@ export default function TermsPage() {
         <section className="space-y-3">
           <h2 className="text-heading text-xl text-ink">Contact</h2>
           <p className="text-[14px] leading-relaxed text-graphite">
-            Questions? Contact us at legal@relay.app.
+            Questions? Contact us at legal@relay.bpulse.dev.
           </p>
         </section>
       </div>

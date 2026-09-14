@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { RelayBrand } from "@/components/brand";
 import { cn } from "cn";
+import { AnalyticsEvents } from "@/lib/analytics/events";
+import { track } from "@/lib/analytics/track";
 
 const NAV_ITEMS = [
   { href: "/#product", label: "Product" },
@@ -61,6 +63,7 @@ export function PublicNav() {
           </Link>
           <Link
             href="/signup"
+            onClick={() => track(AnalyticsEvents.START_FREE_CLICKED, { location: "nav" })}
             className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-orange px-3.5 text-[13px] font-medium text-bone transition-all hover:bg-orange-dark active:scale-[0.97]"
           >
             Start free

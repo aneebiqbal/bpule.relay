@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowRight, ArrowLeft, Mail, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,10 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RelayBrand } from "@/components/brand";
 import { cn } from "cn";
+import { AnalyticsEvents } from "@/lib/analytics/events";
+import { track, getAttribution } from "@/lib/analytics/track";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function SignupPage() {
+  useEffect(() => {
+    // Track signup page view (PostHog loaded via AnalyticsProvider)
+    track(AnalyticsEvents.SIGNUP_STARTED, getAttribution());
+  }, []);
   const [orgName, setOrgName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,6 +49,10 @@ export default function SignupPage() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error ?? "Signup failed.");
+      track(AnalyticsEvents.SIGNUP_COMPLETED, {
+        ...getAttribution(),
+        org_name: orgName.trim(),
+      });
       setConfirmationSent(true);
       setBusy(false);
     } catch (err) {

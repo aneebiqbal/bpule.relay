@@ -20,12 +20,34 @@ import {
 } from "lucide-react";
 import { SignalRelay } from "@/components/signal-node";
 import { ScoreRing } from "@/components/score-ring";
+import { RelayStructuredData } from "@/components/structured-data";
+import { canonicalUrl, siteConfig } from "@/lib/site-config";
 
 export const metadata: Metadata = {
-  title: "Relay — Know what to do next",
+  title: `${siteConfig.name} — ${siteConfig.tagline}`,
   description:
     "Relay tells you what deserves your attention — and helps you act on it. Find opportunities worth pursuing, qualify prospects, draft in your voice, and build authority with Studio.",
-  alternates: { canonical: "/" },
+  alternates: { canonical: canonicalUrl("/") },
+  openGraph: {
+    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    description:
+      "Relay finds opportunities worth your attention, helps you reach the right people, and turns your expertise into authority.",
+    url: canonicalUrl("/"),
+    images: [
+      {
+        url: canonicalUrl("/og"),
+        width: siteConfig.ogImage.width,
+        height: siteConfig.ogImage.height,
+        alt: `${siteConfig.name} — ${siteConfig.tagline}`,
+      },
+    ],
+  },
+  twitter: {
+    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    description:
+      "Relay finds opportunities worth your attention, helps you reach the right people, and turns your expertise into authority.",
+    images: [canonicalUrl("/og")],
+  },
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -1090,6 +1112,7 @@ function FinalCTASection() {
 export default function LandingPage() {
   return (
     <>
+      <RelayStructuredData />
       <HeroSection />
       <AudienceSection />
       <ProblemSection />

@@ -1,6 +1,12 @@
-import Link from "next/link"
-import { RelayBrand } from "@/components/brand"
-import { ArrowLeft } from "lucide-react"
+import type { Metadata } from "next";
+import Link from "next/link";
+import { RelayBrand } from "@/components/brand";
+import { ArrowLeft, Home } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Page not found | Relay",
+  robots: { index: false, follow: false },
+};
 
 export default function NotFound() {
   return (
@@ -10,19 +16,28 @@ export default function NotFound() {
         <RelayBrand />
         <div className="mt-8 max-w-sm space-y-3">
           <h1 className="text-heading text-2xl text-ink">That page is not here</h1>
-          <p className="text-sm leading-relaxed text-slate">
-            The lead may have been removed, or the address is wrong. Head back to
-            your queue and keep going.
+          <p className="text-sm leading-relaxed text-graphite">
+            The page may have moved, or the address is wrong. Head back to
+            Relay and keep going.
           </p>
         </div>
-        <Link
-          href="/dashboard"
-          className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-ink px-6 py-3 text-sm font-medium text-bone transition-all duration-300 hover:bg-ink/90 hover:shadow-lg active:scale-[0.97]"
-        >
-          <ArrowLeft className="size-4" />
-          Back to Today
-        </Link>
+        <div className="mt-6 flex items-center gap-3">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-bone transition-all hover:bg-ink/90 active:scale-[0.97]"
+          >
+            <Home className="size-4" />
+            Home
+          </Link>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 rounded-lg border border-line px-5 py-2.5 text-sm font-medium text-ink transition-all hover:bg-bone-raised"
+          >
+            <ArrowLeft className="size-4" />
+            Dashboard
+          </Link>
+        </div>
       </div>
     </div>
-  )
+  );
 }

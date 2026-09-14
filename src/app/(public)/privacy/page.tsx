@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { canonicalUrl, siteConfig } from "@/lib/site-config";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Relay",
-  description: "Relay's privacy policy.",
+  title: `Privacy Policy | ${siteConfig.name}`,
+  description: `How ${siteConfig.name} collects, uses, and protects your data. We never sell your data and only use it to provide our services.`,
+  alternates: { canonical: canonicalUrl("/privacy") },
+  robots: { index: true, follow: true },
 };
 
 export default function PrivacyPage() {
@@ -57,7 +60,7 @@ export default function PrivacyPage() {
         <section className="space-y-3">
           <h2 className="text-heading text-xl text-ink">Contact</h2>
           <p className="text-[14px] leading-relaxed text-graphite">
-            Questions about this policy? Contact us at privacy@relay.app.
+            Questions about this policy? Contact us at privacy@relay.bpulse.dev.
           </p>
         </section>
       </div>
