@@ -36,7 +36,7 @@ export default async function StudioCreatePage({ params }: { params: Promise<{ i
           </h2>
           <a
             href={`/content/${id}/today`}
-            className="inline-flex items-center gap-2 rounded-lg border border-ink/15 px-4 py-2.5 text-sm text-ink hover:border-ink/30"
+            className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2.5 text-sm text-ink hover:border-ink/30"
           >
             See today&apos;s ideas
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

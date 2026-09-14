@@ -200,13 +200,13 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowFeedback(true)}
-              className="rounded-lg border border-ink/15 px-3 py-1.5 text-xs hover:border-ink/30"
+              className="rounded-lg border border-line px-3 py-1.5 text-xs hover:border-ink"
             >
               Not for me
             </button>
             <button
               onClick={() => handleRegenerate('angle')}
-              className="rounded-lg border border-ink/15 px-3 py-1.5 text-xs hover:border-ink/30"
+              className="rounded-lg border border-line px-3 py-1.5 text-xs hover:border-ink"
             >
               Different angle
             </button>
@@ -227,7 +227,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
             <textarea
               value={caption}
               onChange={(e) => handleCaptionChange(e.target.value)}
-              className="min-h-[300px] w-full resize-none rounded-xl border border-ink/10 bg-white p-4 text-base leading-relaxed text-ink focus:border-ink/20 focus:outline-none lg:min-h-[400px]"
+              className="min-h-[300px] w-full resize-none rounded-xl border border-line bg-bone-raised p-4 text-base leading-relaxed text-ink focus:border-line focus:outline-none lg:min-h-[400px]"
               placeholder="Your post..."
             />
             <div className="flex items-center justify-between text-xs text-graphite">
@@ -243,7 +243,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
 
             {/* Feedback */}
             {showFeedback && !feedbackSent && (
-              <div className="rounded-lg border border-ink/10 bg-white p-3">
+              <div className="rounded-lg border border-line bg-bone-raised p-3">
                 <p className="text-xs font-medium text-ink">Why not?</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {['Too generic', 'Not my voice', 'Too basic', 'Wrong angle', "I wouldn't say this"].map((reason) => (
@@ -251,7 +251,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
                       key={reason}
                       onClick={() => submitFeedback(reason)}
                       className={`rounded-full border px-2.5 py-1 text-xs ${
-                        feedbackReason === reason ? 'border-ink bg-ink text-bone' : 'border-ink/15 hover:border-ink/30'
+                        feedbackReason === reason ? 'border-ink bg-ink text-bone' : 'border-line hover:border-ink'
                       }`}
                     >
                       {reason}
@@ -269,7 +269,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
           <div className="space-y-4">
             {/* Visual */}
             {visual && (
-              <div className="rounded-xl border border-ink/10 bg-white p-4">
+              <div className="rounded-xl border border-line bg-bone-raised p-4">
                 <h3 className="text-xs font-medium uppercase tracking-wider text-graphite">Visual Idea</h3>
                 <p className="mt-1.5 text-sm text-ink">{visual.idea}</p>
                 <button
@@ -279,7 +279,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
                   {showImagePrompt ? 'Hide' : 'Show'} Image Prompt
                 </button>
                 {showImagePrompt && (
-                  <div className="mt-2 rounded-lg bg-bone/50 p-2.5">
+                  <div className="mt-2 rounded-lg bg-bone p-2.5">
                     <p className="text-xs text-graphite leading-relaxed whitespace-pre-wrap">{visual.imagePrompt}</p>
                     <button
                       onClick={handleCopyImagePrompt}
@@ -293,7 +293,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
             )}
 
             {/* Quick Actions */}
-            <div className="rounded-xl border border-ink/10 bg-white p-4">
+            <div className="rounded-xl border border-line bg-bone-raised p-4">
               <h3 className="text-xs font-medium uppercase tracking-wider text-graphite">Adjust</h3>
               <div className="mt-2 grid grid-cols-2 gap-1.5">
                 <AdjustButton label="More Technical" onClick={() => handleRegenerate('technical')} />
@@ -304,7 +304,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
             </div>
 
             {/* Platform */}
-            <div className="rounded-xl border border-ink/10 bg-white p-4">
+            <div className="rounded-xl border border-line bg-bone-raised p-4">
               <h3 className="text-xs font-medium uppercase tracking-wider text-graphite">Platform</h3>
               <div className="mt-2 flex gap-1.5">
                 {['linkedin', 'x', 'instagram'].map((p) => (
@@ -337,7 +337,7 @@ function AdjustButton({ label, onClick }: { label: string; onClick: () => void }
   return (
     <button
       onClick={onClick}
-      className="rounded-lg border border-ink/10 px-2 py-1.5 text-xs text-graphite hover:border-ink/25 hover:text-ink"
+      className="rounded-lg border border-line px-2 py-1.5 text-xs text-graphite hover:border-line hover:text-ink"
     >
       {label}
     </button>

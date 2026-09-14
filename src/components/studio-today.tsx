@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import type { ContentIdeaCard, ContentPersona } from '@/lib/domain/types'
 
 interface StudioTodayProps {
@@ -55,7 +56,7 @@ export function StudioToday({ persona, initialPick, initialAlternatives }: Studi
           onError={setError}
         />
       ) : (
-        <div className="rounded-xl border border-dashed border-ink/20 p-8 text-center">
+        <div className="rounded-xl border border-dashed border-line p-8 text-center">
           <p className="text-sm text-graphite">
             {refreshing ? 'Finding your best ideas...' : 'Refresh to see today\'s opportunities.'}
           </p>
@@ -108,10 +109,13 @@ function IdeaCard({
   onRefresh?: () => void
   onError?: (msg: string) => void
 }) {
+  const router = useRouter()
   const [writing, setWriting] = useState(false)
+  const [unsavedCaption, setUnsavedCaption] = useState<string | null>(null)
 
   const handleWrite = async () => {
     setWriting(true)
+    setUnsavedCaption(null)
     try {
       const res = await fetch('/api/content/generate-draft', {
         method: 'POST',
@@ -130,23 +134,26 @@ function IdeaCard({
       })
       const data = await res.json()
       if (data.draftId) {
-        window.location.href = `/studio/drafts/${data.draftId}`
+        router.push(`/studio/drafts/${data.draftId}`)
+        return
       } else if (data.caption) {
-        // Persistence failed but content exists — show inline
-        window.location.href = `/studio/drafts/error?caption=${encodeURIComponent(data.caption)}`
+        // Persistence failed but content was generated — keep it visible
+        // rather than losing it or navigating to a page that can't exist
+        // (there is no persisted draft id to load).
+        setUnsavedCaption(data.caption)
+        onError?.(data.error || 'Could not save draft. Your content is preserved below.')
       } else {
         onError?.(data.error || 'Generation failed')
-        setWriting(false)
       }
     } catch {
       onError?.('Generation failed')
-      setWriting(false)
     }
+    setWriting(false)
   }
 
   if (variant === 'hero') {
     return (
-      <article className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+      <article className="rounded-2xl border border-line bg-bone-raised p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-3">
           <span
             className="inline-flex h-2 w-2 rounded-full"
@@ -162,7 +169,7 @@ function IdeaCard({
         <p className="mt-2 text-sm text-graphite leading-relaxed">
           {idea.angle}
         </p>
-        <div className="mt-4 space-y-2 rounded-lg bg-bone/50 p-3">
+        <div className="mt-4 space-y-2 rounded-lg bg-bone p-3">
           <p className="text-xs text-graphite">
             <span className="font-medium text-ink">Why you:</span> {idea.whyYou}
           </p>
@@ -185,12 +192,13 @@ function IdeaCard({
             Different idea
           </button>
         </div>
+        {unsavedCaption && <UnsavedDraft caption={unsavedCaption} />}
       </article>
     )
   }
 
   return (
-    <article className="rounded-xl border border-ink/10 bg-white p-4 hover:border-ink/20 transition-colors">
+    <article className="rounded-xl border border-line bg-bone-raised p-4 hover:border-line transition-colors">
       <div className="flex items-center gap-2 mb-2">
         <span
           className="inline-flex h-1.5 w-1.5 rounded-full"
@@ -212,7 +220,37 @@ function IdeaCard({
       >
         Write this
       </button>
+      {unsavedCaption && <UnsavedDraft caption={unsavedCaption} />}
     </article>
+  )
+}
+
+function UnsavedDraft({ caption }: { caption: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(caption)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard API unavailable — the caption is still visible to copy manually.
+    }
+  }
+
+  return (
+    <div className="mt-4 space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+      <p className="text-xs text-amber-800">
+        We couldn&apos;t save this draft, but your content wasn&apos;t lost — copy it below and try again in a moment.
+      </p>
+      <p className="whitespace-pre-wrap rounded-md bg-bone-raised p-3 text-sm text-ink">{caption}</p>
+      <button
+        onClick={copy}
+        className="rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-bone hover:bg-ink/90"
+      >
+        {copied ? 'Copied' : 'Copy text'}
+      </button>
+    </div>
   )
 }
 

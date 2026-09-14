@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import type { ContentProfile, ContentIdeaCard } from '@/lib/domain/types'
 import { generateDailyIdeas } from '@/lib/content/daily-ideas'
 
@@ -69,6 +70,7 @@ const VOICE_OPTIONS = [
 ]
 
 export function OnboardingWizard() {
+  const router = useRouter()
   const [step, setStep] = useState<OnboardingStep>('identity')
   const [state, setState] = useState<OnboardingState>({
     displayName: '',
@@ -171,7 +173,7 @@ export function OnboardingWizard() {
         setStep('complete')
         // Redirect after a brief pause
         setTimeout(() => {
-          window.location.href = data.redirectTo
+          router.push(data.redirectTo)
         }, 3000)
       } else {
         setError(data.error || 'Creation failed')

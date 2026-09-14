@@ -29,7 +29,7 @@ export default async function StudioJourneyPage({ params }: { params: Promise<{ 
         </header>
 
         {journey.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-ink/20 p-8 text-center">
+          <div className="rounded-xl border border-dashed border-line p-8 text-center">
             <p className="text-sm text-graphite">
               No journey entries yet. As you post and interact, your journey builds automatically.
             </p>
@@ -46,7 +46,7 @@ export default async function StudioJourneyPage({ params }: { params: Promise<{ 
                   <EventDot type={entry.eventType} />
                 </div>
                 {/* Content */}
-                <div className="flex-1 rounded-lg border border-ink/10 bg-white p-3">
+                <div className="flex-1 rounded-lg border border-line bg-bone-raised p-3">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium uppercase tracking-wider text-graphite">
                       {formatEventType(entry.eventType)}

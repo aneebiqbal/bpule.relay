@@ -41,7 +41,7 @@ export default async function StudioLibraryPage({ params }: { params: Promise<{ 
             </h2>
             <div className="space-y-2">
               {draftsByStatus.draft.map((draft) => (
-                <div key={draft.id} className="rounded-lg border border-ink/10 bg-white p-3">
+                <div key={draft.id} className="rounded-lg border border-line bg-bone-raised p-3">
                   <p className="text-sm text-ink line-clamp-2">{draft.caption?.slice(0, 150) || '(No caption)'}</p>
                   <div className="mt-1.5 flex items-center gap-2">
                     <StatusBadge status={draft.status} />
@@ -60,7 +60,7 @@ export default async function StudioLibraryPage({ params }: { params: Promise<{ 
             </h2>
             <div className="space-y-2">
               {draftsByStatus.posted.map((entry) => (
-                <div key={entry.id} className="rounded-lg border border-ink/10 bg-white p-3">
+                <div key={entry.id} className="rounded-lg border border-line bg-bone-raised p-3">
                   <p className="text-sm text-ink line-clamp-2">{entry.openingLine?.slice(0, 150)}</p>
                   <div className="mt-1.5 flex items-center gap-2">
                     <span className="rounded-full bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
@@ -78,7 +78,7 @@ export default async function StudioLibraryPage({ params }: { params: Promise<{ 
         )}
 
         {draftsByStatus.draft.length === 0 && draftsByStatus.posted.length === 0 && (
-          <div className="rounded-xl border border-dashed border-ink/20 p-8 text-center">
+          <div className="rounded-xl border border-dashed border-line p-8 text-center">
             <p className="text-sm text-graphite">
               No drafts or posts yet. Go to Today to create your first post.
             </p>

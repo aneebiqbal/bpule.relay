@@ -29,7 +29,7 @@ export default async function StudioIdentityPage({ params }: { params: Promise<{
         </header>
 
         {/* About */}
-        <section className="rounded-xl border border-ink/10 bg-white p-4">
+        <section className="rounded-xl border border-line bg-bone-raised p-4">
           <h2 className="text-sm font-medium text-ink">About</h2>
           <div className="mt-2 space-y-1">
             <p className="text-sm text-graphite"><span className="text-ink font-medium">Name:</span> {persona.displayName}</p>
@@ -43,7 +43,7 @@ export default async function StudioIdentityPage({ params }: { params: Promise<{
 
         {/* Known For */}
         {profile && profile.expertise.length > 0 && (
-          <section className="rounded-xl border border-ink/10 bg-white p-4">
+          <section className="rounded-xl border border-line bg-bone-raised p-4">
             <h2 className="text-sm font-medium text-ink">Known For</h2>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {profile.expertise.map((exp) => (
@@ -57,7 +57,7 @@ export default async function StudioIdentityPage({ params }: { params: Promise<{
 
         {/* Audiences */}
         {profile && profile.audiences && profile.audiences.length > 0 && (
-          <section className="rounded-xl border border-ink/10 bg-white p-4">
+          <section className="rounded-xl border border-line bg-bone-raised p-4">
             <h2 className="text-sm font-medium text-ink">Audience</h2>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {profile.audiences.map((aud) => (
@@ -71,7 +71,7 @@ export default async function StudioIdentityPage({ params }: { params: Promise<{
 
         {/* Territories */}
         {profile && profile.territories && profile.territories.length > 0 && (
-          <section className="rounded-xl border border-ink/10 bg-white p-4">
+          <section className="rounded-xl border border-line bg-bone-raised p-4">
             <h2 className="text-sm font-medium text-ink">Content Territories</h2>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {profile.territories.map((terr) => (
@@ -85,11 +85,11 @@ export default async function StudioIdentityPage({ params }: { params: Promise<{
 
         {/* Perspective / Opinions */}
         {profile && profile.opinions.length > 0 && (
-          <section className="rounded-xl border border-ink/10 bg-white p-4">
+          <section className="rounded-xl border border-line bg-bone-raised p-4">
             <h2 className="text-sm font-medium text-ink">Perspective</h2>
             <div className="mt-2 space-y-2">
               {profile.opinions.map((op) => (
-                <div key={op.belief.slice(0, 30)} className="rounded-lg bg-bone/50 p-2.5">
+                <div key={op.belief.slice(0, 30)} className="rounded-lg bg-bone p-2.5">
                   <p className="text-xs text-italic text-ink">&ldquo;{op.belief}&rdquo;</p>
                   <p className="mt-0.5 text-[10px] text-graphite">{op.strength} confidence</p>
                 </div>
@@ -100,7 +100,7 @@ export default async function StudioIdentityPage({ params }: { params: Promise<{
 
         {/* Journey summary */}
         {profile && profile.experiences.length > 0 && (
-          <section className="rounded-xl border border-ink/10 bg-white p-4">
+          <section className="rounded-xl border border-line bg-bone-raised p-4">
             <h2 className="text-sm font-medium text-ink">Key Experiences</h2>
             <div className="mt-2 space-y-1.5">
               {profile.experiences.map((exp) => (
@@ -114,7 +114,7 @@ export default async function StudioIdentityPage({ params }: { params: Promise<{
 
         {/* Voice */}
         {persona.humorStyle && (
-          <section className="rounded-xl border border-ink/10 bg-white p-4">
+          <section className="rounded-xl border border-line bg-bone-raised p-4">
             <h2 className="text-sm font-medium text-ink">Voice</h2>
             <p className="mt-1 text-sm text-graphite capitalize">{persona.humorStyle}</p>
           </section>
@@ -122,7 +122,7 @@ export default async function StudioIdentityPage({ params }: { params: Promise<{
 
         {/* Empty state */}
         {!profile && (
-          <div className="rounded-xl border border-dashed border-ink/20 p-8 text-center">
+          <div className="rounded-xl border border-dashed border-line p-8 text-center">
             <p className="text-sm text-graphite">
               Complete onboarding to build your Content Identity.
             </p>

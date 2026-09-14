@@ -65,7 +65,7 @@ export function StudioQuickCapture({ personaId, onSelectAngle }: StudioQuickCapt
     return (
       <button
         onClick={() => setShowInput(true)}
-        className="w-full rounded-xl border border-dashed border-ink/20 p-4 text-left hover:border-ink/30 transition-colors"
+        className="w-full rounded-xl border border-dashed border-line p-4 text-left hover:border-ink transition-colors"
       >
         <p className="text-sm font-medium text-ink">Tell Relay something</p>
         <p className="mt-0.5 text-xs text-graphite">
@@ -76,12 +76,12 @@ export function StudioQuickCapture({ personaId, onSelectAngle }: StudioQuickCapt
   }
 
   return (
-    <div className="rounded-xl border border-ink/10 bg-white p-4">
+    <div className="rounded-xl border border-line bg-bone-raised p-4">
       <textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
         placeholder="Spent 4 hours debugging a race condition in production..."
-        className="w-full resize-none rounded-lg border-0 bg-bone/50 p-3 text-sm text-ink placeholder:text-graphite/50 focus:outline-none focus:ring-1 focus:ring-ink/20"
+        className="w-full resize-none rounded-lg border-0 bg-bone p-3 text-sm text-ink placeholder:text-graphite/50 focus:outline-none focus:ring-1 focus:ring-ink"
         rows={3}
         autoFocus
         onKeyDown={(e) => {
@@ -119,7 +119,7 @@ export function StudioQuickCapture({ personaId, onSelectAngle }: StudioQuickCapt
               key={i}
               onClick={() => handleWriteAngle(angle)}
               disabled={generating}
-              className="w-full rounded-lg border border-ink/10 p-3 text-left hover:border-ink/25 hover:bg-bone/30 transition-colors"
+              className="w-full rounded-lg border border-line p-3 text-left hover:border-line hover:bg-bone transition-colors"
             >
               <p className="text-sm font-medium text-ink">{angle.title}</p>
               <p className="mt-1 text-xs text-graphite leading-relaxed">

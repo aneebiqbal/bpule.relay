@@ -82,11 +82,15 @@ export async function POST(request: Request) {
     })
   }
 
-  // 3. Create the auth user via the admin API.
+  // 3. Create the auth user via the admin API. email_confirm is false so
+  // Supabase sends a confirmation email and the account can't sign in until
+  // the address is verified — closes the impersonation risk of anyone
+  // registering (and getting an active admin account) with an email they
+  // don't own.
   const { data: authUser, error: authErr } = await service.auth.admin.createUser({
     email,
     password,
-    email_confirm: true,
+    email_confirm: false,
   })
 
   if (authErr || !authUser.user) {
@@ -120,7 +124,8 @@ export async function POST(request: Request) {
     {
       organizationId: org.id,
       userId: authUser.user.id,
-      message: 'Account created. Sign in with your email and password.',
+      requiresEmailConfirmation: true,
+      message: 'Account created. Check your email to confirm your address before signing in.',
     },
     { status: 201 },
   )

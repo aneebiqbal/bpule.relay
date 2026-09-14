@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ContentPersona } from '@/lib/domain/types'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 interface StudioLayoutProps {
   persona: ContentPersona
@@ -24,18 +25,21 @@ export function StudioLayout({ persona, children }: StudioLayoutProps) {
   return (
     <div className="flex min-h-screen flex-col bg-bone lg:flex-row">
       {/* Sidebar Navigation */}
-      <aside className="border-b border-ink/10 bg-white lg:w-56 lg:border-b-0 lg:border-r">
+      <aside className="border-b border-line bg-bone-raised lg:w-56 lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between px-4 py-3 lg:block lg:px-4 lg:py-5">
           <div>
             <p className="text-xs text-graphite">Studio</p>
             <p className="text-sm font-medium text-ink truncate">{persona.displayName}</p>
           </div>
-          <Link
-            href="/content"
-            className="rounded-lg border border-ink/15 px-2 py-1 text-xs text-graphite hover:border-ink/30 lg:hidden"
-          >
-            Switch
-          </Link>
+          <div className="flex items-center gap-1 lg:hidden">
+            <ThemeToggle />
+            <Link
+              href="/content"
+              className="rounded-lg border border-line px-2 py-1 text-xs text-graphite hover:border-ink"
+            >
+              Switch
+            </Link>
+          </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-2 pb-2 lg:flex-col lg:gap-0.5 lg:px-3 lg:pb-4">
           {NAV_ITEMS.map((item) => {
@@ -48,7 +52,7 @@ export function StudioLayout({ persona, children }: StudioLayoutProps) {
                 className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors ${
                   isActive
                     ? 'bg-ink text-bone'
-                    : 'text-graphite hover:bg-ink/5 hover:text-ink'
+                    : 'text-graphite hover:bg-bone hover:text-ink'
                 }`}
               >
                 <item.icon active={isActive} />
@@ -57,7 +61,7 @@ export function StudioLayout({ persona, children }: StudioLayoutProps) {
             )
           })}
         </nav>
-        <div className="hidden border-t border-ink/10 px-4 py-3 lg:block">
+        <div className="hidden border-t border-line px-4 py-3 lg:block">
           <Link href="/content" className="text-xs text-graphite hover:text-ink">
             ← All Personas
           </Link>
