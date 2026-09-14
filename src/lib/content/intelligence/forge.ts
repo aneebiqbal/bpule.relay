@@ -1,5 +1,5 @@
 import type { ContentPlatform } from '@/lib/domain/types'
-import { buildLongcatDraftChain, buildOpenaiDraftChain, pickDraftChain } from '@/lib/ai/routing'
+import { buildLongcatDraftChain, buildOpenaiDraftChain, pickDraftChain, shouldEscalateToPremium } from '@/lib/ai/routing'
 import { structuredJsonChain } from '@/lib/ai/provider'
 import { checkHumanization, rewriteToHumanize } from '@/lib/ai/humanization'
 import { checkBannedPhrases, checkBadHook } from '@/lib/ai/content'
@@ -37,6 +37,7 @@ export interface ForgeInput {
   generationMode: 'personal' | 'opinion'
   performanceBlock?: string
   researchBlock?: string
+  interviewAnswers?: string[]
 }
 
 export interface ForgeCandidate {
@@ -71,37 +72,94 @@ export interface ForgeResult {
 }
 
 /**
- * Run the full Content Forge pipeline.
+ * Run the full Content Forge pipeline with conditional single-generation.
+ *
+ * LongCat first → quality gates → PASS: return.
+ * FAIL: second candidate → GPT escalation only if needed.
  */
 export async function runContentForge(input: ForgeInput): Promise<ForgeResult> {
-  // Select structure based on material, avoiding recent repeats
   const structureSelection = selectStructure(
     input.sourceMaterial,
     input.recentStructures ?? [],
     input.generationMode,
   )
 
-  // Generate two independent candidates in parallel
-  const [candidateA, candidateB] = await Promise.all([
-    generateCandidate(input, 'A', structureSelection),
-    generateCandidate(input, 'B', structureSelection),
-  ])
-
-  // Evaluate both
+  // Attempt 1: LongCat candidate
+  const candidateA = await generateCandidate(input, 'A', structureSelection)
   const evalA = evaluateCandidate(candidateA, input)
+  const aPassed = candidateA.selfCheckPassed && candidateA.specificityHit && candidateA.humanizationPassed && candidateA.bannedHits.length === 0 && !candidateA.badHook
+
+  if (aPassed) {
+    return buildForgeResult(input, candidateA, null, evalA, null, structureSelection, 'A')
+  }
+
+  // Attempt 2: Groq strong retry with different persona
+  const escalation = shouldEscalateToPremium({
+    primaryPassed: aPassed,
+    primaryScore: evalA.totalScore,
+    isHighValue: false,
+    malformedOutput: false,
+    attemptCount: 1,
+  })
+
+  const candidateB = await generateCandidate(input, 'B', structureSelection)
   const evalB = evaluateCandidate(candidateB, input)
+  const bPassed = candidateB.selfCheckPassed && candidateB.specificityHit && candidateB.humanizationPassed && candidateB.bannedHits.length === 0 && !candidateB.badHook
 
-  // Pick winner
-  const winner = evalA.totalScore >= evalB.totalScore ? 'A' : 'B'
-  const winningCandidate = winner === 'A' ? candidateA : candidateB
+  if (bPassed) {
+    return buildForgeResult(input, candidateB, candidateA, evalB, evalA, structureSelection, 'B', escalation.reason)
+  }
 
-  // Apply anti-slop
-  const finalCaption = await applyAntiSlop(winningCandidate.caption)
+  // Attempt 3: GPT escalation
+  const openaiChain = buildOpenaiDraftChain()
+  let candidateC: ForgeCandidate | null = null
+  let evalC: ReturnType<typeof evaluateCandidate> | null = null
+  if (openaiChain.length > 0 && escalation.shouldEscalate) {
+    candidateC = await generateCandidateWithChain(input, 'B', structureSelection, openaiChain)
+    if (candidateC) {
+      evalC = evaluateCandidate(candidateC, input)
+    }
+  }
 
-  // Platform adaptation
+  // Pick best by total score
+  const candidates: Array<{ c: ForgeCandidate; e: ReturnType<typeof evaluateCandidate>; label: 'A' | 'B' | 'C' }> = [
+    { c: candidateA, e: evalA, label: 'A' },
+    { c: candidateB, e: evalB, label: 'B' },
+  ]
+  if (candidateC && evalC) {
+    candidates.push({ c: candidateC, e: evalC, label: 'C' })
+  }
+  candidates.sort((x, y) => y.e.totalScore - x.e.totalScore)
+  const winner = candidates[0]
+
+  const runnerUp = candidates[1] ?? null
+  const runnerUpEval = runnerUp?.e ?? null
+
+  return buildForgeResult(
+    input,
+    winner.c,
+    runnerUp?.c ?? null,
+    winner.e,
+    runnerUpEval,
+    structureSelection,
+    winner.label === 'C' ? 'synthesis' : winner.label,
+    escalation.reason,
+  )
+}
+
+async function buildForgeResult(
+  input: ForgeInput,
+  winning: ForgeCandidate,
+  other: ForgeCandidate | null,
+  winningEval: ReturnType<typeof evaluateCandidate>,
+  otherEval: ReturnType<typeof evaluateCandidate> | null,
+  structureSelection: { structure: ContentStructure; reason: string },
+  winner: 'A' | 'B' | 'synthesis',
+  escalationReason?: string,
+): Promise<ForgeResult> {
+  const finalCaption = await applyAntiSlop(winning.caption)
   const platformCaption = adaptForPlatform(finalCaption, input.platform)
 
-  // Generate visual concept
   const visualConcept = generateVisualConcept({
     postText: platformCaption,
     platform: input.platform,
@@ -112,6 +170,9 @@ export async function runContentForge(input: ForgeInput): Promise<ForgeResult> {
     tone: input.generationMode === 'personal' ? 'serious' : 'thoughtful',
   })
 
+  const candidateA = winner === 'A' ? winning : (other?.writer === 'A' ? other : winning)
+  const candidateB = winner === 'B' || winner === 'synthesis' ? winning : (other?.writer === 'B' ? other : winning)
+
   return {
     caption: platformCaption,
     hook: extractHook(platformCaption),
@@ -119,11 +180,11 @@ export async function runContentForge(input: ForgeInput): Promise<ForgeResult> {
     candidateA,
     candidateB,
     evaluation: {
-      quality: Math.round(Math.max(evalA.quality, evalB.quality) * 100) / 100,
-      distribution: Math.round(Math.max(evalA.distribution, evalB.distribution) * 100) / 100,
-      specificity: Math.round(Math.max(evalA.specificity, evalB.specificity) * 100) / 100,
-      slopScore: Math.round(Math.min(evalA.slop, evalB.slop) * 100) / 100,
-      notes: [...evalA.notes, ...evalB.notes],
+      quality: Math.round(Math.max(winningEval.quality, otherEval?.quality ?? 0) * 100) / 100,
+      distribution: Math.round(Math.max(winningEval.distribution, otherEval?.distribution ?? 0) * 100) / 100,
+      specificity: Math.round(Math.max(winningEval.specificity, otherEval?.specificity ?? 0) * 100) / 100,
+      slopScore: Math.round(Math.min(winningEval.slop, otherEval?.slop ?? 1) * 100) / 100,
+      notes: [...winningEval.notes, ...(otherEval?.notes ?? [])],
     },
     platform: input.platform,
     structure: structureSelection.structure,
@@ -131,10 +192,19 @@ export async function runContentForge(input: ForgeInput): Promise<ForgeResult> {
   }
 }
 
-async function generateCandidate(input: ForgeInput, writer: 'A' | 'B', structureSelection?: { structure: ContentStructure; reason: string }): Promise<ForgeCandidate> {
-  const chain = writer === 'A' ? buildLongcatDraftChain() : buildOpenaiDraftChain()
+async function generateCandidate(
+  input: ForgeInput,
+  writer: 'A' | 'B',
+  structureSelection: { structure: ContentStructure; reason: string } | undefined,
+  overrideChain?: ReturnType<typeof buildOpenaiDraftChain>,
+): Promise<ForgeCandidate> {
+  const defaultChain = writer === 'A' ? buildLongcatDraftChain() : buildOpenaiDraftChain()
   const fallbackChain = pickDraftChain()
-  const activeChain = chain.length > 0 ? chain : fallbackChain
+  const activeChain = overrideChain && overrideChain.length > 0
+    ? overrideChain
+    : defaultChain.length > 0
+      ? defaultChain
+      : fallbackChain
 
   if (activeChain.length === 0) {
     return emptyCandidate(writer)
@@ -217,6 +287,23 @@ async function generateCandidate(input: ForgeInput, writer: 'A' | 'B', structure
   }
 }
 
+/**
+ * Generate a candidate using a specific chain (for GPT escalation).
+ */
+async function generateCandidateWithChain(
+  input: ForgeInput,
+  writer: 'A' | 'B',
+  structureSelection: { structure: ContentStructure; reason: string } | undefined,
+  chain?: ReturnType<typeof buildOpenaiDraftChain>,
+): Promise<ForgeCandidate | null> {
+  if (!chain || chain.length === 0) return null
+  try {
+    return await generateCandidate(input, writer, structureSelection, chain)
+  } catch {
+    return null
+  }
+}
+
 function buildWriterSystemPrompt(input: ForgeInput, writerPersona: string): string {
   const parts = [
     `You write social media posts for ${input.personaName}.`,
@@ -237,12 +324,13 @@ function buildWriterSystemPrompt(input: ForgeInput, writerPersona: string): stri
     'HARD RULES:',
     '1. NEVER use banned phrases: "unpopular opinion:", "here\'s the thing", "let that sink in", "thread 🧵", emoji as bullets.',
     '2. NEVER start with a rhetorical question as the hook.',
-    '3. NEVER invent details. Everything must trace back to the source material.',
+    '3. NEVER invent details. Everything must trace back to the source material or interview answers below.',
     '4. NEVER use clickbait ("stop scrolling", "read that again").',
     '5. NEVER use corporate jargon.',
     `6. If mode is opinion, do not claim a specific personal incident happened to ${input.personaName}.`,
-    '7. The first 1-2 lines must contain a concrete, specific detail.',
+    '7. The first 1-2 lines must contain a concrete, specific detail from the interview answers or source material.',
     '8. Performance patterns are weak signals, not rules. Do not sacrifice authenticity for engagement.',
+    '9. Interview answers contain REAL personal experiences. Use them as the primary source of personal specificity.',
     '',
   ].filter(Boolean)
 
@@ -250,11 +338,18 @@ function buildWriterSystemPrompt(input: ForgeInput, writerPersona: string): stri
 }
 
 function buildWriterUserPrompt(input: ForgeInput): string {
+  const interviewBlock = input.interviewAnswers && input.interviewAnswers.length > 0
+    ? `\nPERSONAL EXPERIENCE (from interview — use as primary source of specificity):
+"""
+${input.interviewAnswers.join('\n\n')}
+"""\n`
+    : ''
+
   return `REAL MATERIAL:
 """
 ${input.sourceMaterial}
 """
-
+${interviewBlock}
 PLATFORM: ${input.platform}
 
 Write a post. Output JSON: { "caption": "...", "self_check_passed": boolean, "self_check_note": "why this would/wouldn't work" }`

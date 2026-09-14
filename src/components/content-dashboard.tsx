@@ -457,6 +457,10 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                 placeholder="Paste 2-3 real posts you've written before, from LinkedIn, X, wherever. Plain text — no connected account needed."
                 className="w-full rounded-xl border border-line bg-bone-raised px-3 py-2 text-sm transition-all outline-none focus-visible:border-cobalt/40 focus-visible:ring-2 focus-visible:ring-cobalt/20"
               />
+              <div className="rounded-lg border border-line/60 bg-bone/40 p-2.5">
+                <p className="text-[11px] font-medium text-graphite mb-1">Example post:</p>
+                <p className="text-[11px] leading-relaxed text-graphite italic">"Spent the weekend benchmarking our Rails app's N+1 queries. The fix was counterintuitive — removing a cache layer actually improved p99 latency by 300ms because the cache was the bottleneck. Sometimes the simplest solution is the right one."</p>
+              </div>
               <p className="text-xs text-graphite">This reads your own writing directly, so it seeds voice and topics more accurately than answers alone.</p>
             </div>
 

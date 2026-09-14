@@ -234,6 +234,10 @@ export function QuickCapture({
               className="w-full resize-none rounded-md border border-line bg-bone-raised px-3.5 py-2.5 text-sm outline-none transition-all focus-visible:border-cobalt/40 focus-visible:ring-2 focus-visible:ring-cobalt/20"
               autoFocus
             />
+            <div className="rounded-lg border border-line/60 bg-bone/40 p-2.5">
+              <p className="text-[11px] font-medium text-graphite mb-1">Try something like:</p>
+              <p className="text-[11px] leading-relaxed text-graphite italic">"We migrated our Rails monolith to a service-oriented architecture last quarter. The hardest part wasn't the technical work — it was keeping the team aligned while we decomposed the database. I learned that you need to agree on ownership boundaries BEFORE you start splitting code."</p>
+            </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-graphite">
                 Relay will ask if it needs more context

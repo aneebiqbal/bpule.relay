@@ -8,7 +8,10 @@ import type {
 } from '@/lib/domain/types'
 import { pickModelChain } from '@/lib/ai/routing'
 import { structuredJsonChain } from '@/lib/ai/provider'
+import { ContentCache } from '@/lib/ai/cache'
 import { classifyClaimProvenance } from '@/lib/content/intelligence/research'
+
+const genomeCache = new ContentCache<GenomeConstructionResult>({ maxSize: 100, ttlMs: 24 * 60 * 60 * 1000, version: 'genome-v2' })
 
 /**
  * Idea Genome + Opportunity Qualification.
@@ -53,13 +56,21 @@ export interface GenomeConstructionResult {
 /**
  * Construct an idea genome from material + context.
  *
- * Uses a model when available, falls back to deterministic construction.
+ * Default: deterministic construction (no model call). Set SCOUT_GENOME_AI=1
+ * to enable AI-assisted genome construction for ambiguous material.
  */
 export async function constructIdeaGenome(input: GenomeInput): Promise<GenomeConstructionResult> {
-  const chain = pickModelChain('extract')
+  const cacheKey = `${input.sourceMaterial.slice(0, 500)}|${input.topic}|${input.profile?.role ?? ''}|${input.interviewAnswers?.join('|') ?? ''}`
+  const cached = genomeCache.get(cacheKey)
+  if (cached) return cached
+
+  const useAi = process.env.SCOUT_GENOME_AI === '1'
+  const chain = useAi ? pickModelChain('extract') : []
 
   if (chain.length === 0) {
-    return constructGenomeDeterministic(input)
+    const result = constructGenomeDeterministic(input)
+    genomeCache.set(cacheKey, result)
+    return result
   }
 
   const profileSummary = input.profile
@@ -148,7 +159,7 @@ Construct the genome and qualify this idea.`,
   })
 
   const d = result.data
-  return {
+  const output = {
     genome: {
       source: validateSource(d.source),
       topic: (d.topic ?? input.topic ?? 'General').trim(),
@@ -171,6 +182,8 @@ Construct the genome and qualify this idea.`,
       rejectionReason: d.rejection_reason ?? '',
     },
   }
+  genomeCache.set(`${input.sourceMaterial.slice(0, 500)}|${input.topic}|${input.profile?.role ?? ''}|${input.interviewAnswers?.join('|') ?? ''}`, output)
+  return output
 }
 
 function constructGenomeDeterministic(input: GenomeInput): GenomeConstructionResult {
@@ -178,6 +191,19 @@ function constructGenomeDeterministic(input: GenomeInput): GenomeConstructionRes
   const archetype = classifyArchetype(input.sourceMaterial)
   const hasPersonalDetail = /\b(i|we|my|our|today|yesterday|last week|spent|built|shipped|fixed|debugged|learned|decided)\b/i.test(input.sourceMaterial)
   const hasEvidence = /\b\d|percent|%|x faster|saved|reduced|increased|measured|data|result/i.test(input.sourceMaterial)
+
+  // Include interview answers as personal evidence — they contain the user's
+  // specific experiences, decisions, and lessons that make content attributable.
+  const interviewEvidence = (input.interviewAnswers ?? [])
+    .filter((a) => a.trim().length > 10)
+    .map((a) => a.trim().slice(0, 200))
+
+  const allEvidence = [
+    ...(hasPersonalDetail ? [input.sourceMaterial.trim().slice(0, 200)] : []),
+    ...interviewEvidence,
+  ]
+
+  const combinedHasPersonal = hasPersonalDetail || interviewEvidence.length > 0
 
   return {
     genome: {
@@ -188,18 +214,18 @@ function constructGenomeDeterministic(input: GenomeInput): GenomeConstructionRes
       audience: input.profile?.audience ?? 'professionals',
       emotion: 'curiosity',
       valueType: 'practical',
-      supportingFacts: [],
-      personalEvidence: hasPersonalDetail ? [input.sourceMaterial.trim().slice(0, 200)] : [],
+      supportingFacts: interviewEvidence.slice(0, 3),
+      personalEvidence: allEvidence,
     },
     qualification: {
       novelty: 0.6,
       evidenceStrength: hasEvidence ? 0.7 : 0.3,
-      personalSpecificity: hasPersonalDetail ? 0.7 : 0.3,
+      personalSpecificity: combinedHasPersonal ? 0.7 : 0.3,
       relevance: 0.6,
       conversationPotential: 0.5,
-      scrollStopPotential: hasPersonalDetail ? 0.6 : 0.4,
-      qualified: hasPersonalDetail,
-      rejectionReason: hasPersonalDetail ? '' : 'No personal detail or experience found in source material.',
+      scrollStopPotential: combinedHasPersonal ? 0.6 : 0.4,
+      qualified: combinedHasPersonal,
+      rejectionReason: combinedHasPersonal ? '' : 'No personal detail or experience found in source material or interview answers.',
     },
   }
 }

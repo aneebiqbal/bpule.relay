@@ -145,14 +145,20 @@ export function InterviewFlow({
           </div>
         </div>
       </div>
-      <div className="flex items-center justify-between pl-11">
-        <button
-          onClick={skipQuestion}
-          className="inline-flex items-center gap-1.5 text-sm text-graphite transition-colors hover:text-ink"
-        >
-          <SkipForward className="size-3.5" aria-hidden="true" />
-          Generate now
-        </button>
+      <div className="flex items-start justify-between pl-11">
+        <div className="space-y-1.5">
+          <button
+            onClick={skipQuestion}
+            className="inline-flex items-center gap-1.5 text-sm text-graphite transition-colors hover:text-ink"
+          >
+            <SkipForward className="size-3.5" aria-hidden="true" />
+            Generate now
+          </button>
+          <div className="rounded-lg border border-line/60 bg-bone/40 p-2.5">
+            <p className="text-[11px] font-medium text-graphite mb-1">Example:</p>
+            <p className="text-[11px] leading-relaxed text-graphite italic">{getExampleForQuestion(currentQuestion ?? '')}</p>
+          </div>
+        </div>
         {questionsAsked > 0 && (
           <span className="text-xs text-graphite/60">
             {questionsAsked} answer{questionsAsked === 1 ? '' : 's'} so far
@@ -161,4 +167,21 @@ export function InterviewFlow({
       </div>
     </div>
   )
+}
+
+function getExampleForQuestion(question: string): string {
+  const lowerQuestion = question.toLowerCase()
+  if (lowerQuestion.includes('project') || lowerQuestion.includes('recent work')) {
+    return 'I recently shipped a CLI tool in Rust that cut deployment time 40% — learned a lot about caching and concurrency.'
+  }
+  if (lowerQuestion.includes('struggle') || lowerQuestion.includes('challenge') || lowerQuestion.includes('hardest')) {
+    return 'Our Rails monolith was hitting 3s response times under load — I led the move to split the hot path into a separate Rust service.'
+  }
+  if (lowerQuestion.includes('mistake') || lowerQuestion.includes('fail') || lowerQuestion.includes('wrong')) {
+    return 'I shipped a background job system without idempotency keys — once it retried a payment callback and charged a user twice. Taught me to always log the actual state transitions.'
+  }
+  if (lowerQuestion.includes('ops') || lowerQuestion.includes('deploy') || lowerQuestion.includes('ci')) {
+    return 'Migrated our CI from Jenkins on bare metal to GitHub Actions — cut build times from 12min to 3min and eliminated queue contention.'
+  }
+  return 'I learned the hard way that premature abstraction costs more than duplication — now I wait for the third instance before extracting.'
 }
