@@ -25,6 +25,12 @@ export async function POST(
   const draft = await store.getContentDraft(id)
   if (!draft) return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
 
+  const persona = await store.getContentPersona(draft.personaId)
+  if (!persona) return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+  if (persona.repId !== user.rep.id && user.rep.role !== 'admin') {
+    return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+  }
+
   try {
     await store.createContentDraftFeedback({
       personaId: draft.personaId,
