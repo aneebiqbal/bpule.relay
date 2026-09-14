@@ -121,14 +121,14 @@ describe('Post Radar: opportunity discovery', () => {
     expect(opportunities.some((o) => o.type === 'recent_work')).toBe(true)
   })
 
-  it('returns empty array for empty context', () => {
+  it('returns evergreen fallback for empty context', () => {
     const opportunities = discoverOpportunities({
       profile: null,
       clusters: [],
       history: [],
       memories: [],
     })
-    expect(opportunities).toEqual([])
+    expect(opportunities.length).toBeGreaterThan(0)
   })
 
   it('ranks opportunities by confidence', () => {

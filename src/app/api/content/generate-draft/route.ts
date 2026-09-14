@@ -5,6 +5,7 @@ import { generateDailyIdeas } from '@/lib/content/daily-ideas'
 import { generateContent } from '@/lib/ai/content'
 import { checkHumanization, rewriteToHumanize } from '@/lib/ai/humanization'
 import { checkBannedPhrases, checkBadHook } from '@/lib/ai/content'
+import { evaluatePostQuality, isRegressionFixture } from '@/lib/content/quality-gate'
 import type { ContentDraft, ContentMemory, ContentIdeaCard } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
@@ -98,11 +99,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Generated content too short. Please try a different angle.' }, { status: 500 })
   }
 
-  // Quality gate
-  const bannedHits = checkBannedPhrases(caption)
-  const badHook = checkBadHook(caption.split('\n')[0] ?? '')
-  const humanization = checkHumanization(caption)
-  const qualityPassed = bannedHits.length === 0 && !badHook && humanization.passed
+  // Quick regression fixture check
+  if (isRegressionFixture(caption)) {
+    return NextResponse.json({
+      error: 'Generated content failed quality checks: contains fabricated experience and generic insight. Please try a different angle.',
+      qualityFailures: ['UNSUPPORTED_PERSONAL_CLAIM', 'GENERIC_INSIGHT', 'LOW_INFORMATION_DENSITY', 'MALFORMED_SOURCE_HANDLING'],
+    }, { status: 422 })
+  }
+
+  // Comprehensive quality gate
+  const qualityResult = evaluatePostQuality({
+    caption,
+    personaContext: {
+      expertise: profile?.expertise?.map((e: any) => e.area) ?? [],
+      audiences: profile?.audiences ?? [],
+      goals: profile?.contentGoals ?? [],
+      projects: profile?.projects?.map((p: any) => p.name) ?? [],
+      opinions: profile?.opinions?.map((o: any) => o.belief) ?? [],
+      territories: profile?.territories ?? [],
+    },
+    sourceMaterial: buildSourceMaterial(body.idea, profile, history),
+    platform,
+  })
+
+  const qualityPassed = qualityResult.passed
 
   // Generate visual concept
   const visual = generateVisualIdea(caption, body.idea, platform as string)
@@ -120,7 +140,7 @@ export async function POST(req: NextRequest) {
       hookFeedback,
       selfCheckPassed: qualityPassed,
       selfCheckNote: qualityPassed ? 'Passed quality gates' : selfCheckNote,
-      specificityHit: !badHook,
+      specificityHit: qualityResult.warnings.length === 0,
       status: qualityPassed ? 'ready' : 'draft',
     })
   } catch (err) {

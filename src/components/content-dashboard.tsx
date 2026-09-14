@@ -1,12 +1,10 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
-import { Plus, PenLine, ChevronRight, ArrowRight, ArrowLeft, Check, Settings2 } from 'lucide-react'
+import { Plus, PenLine, ChevronRight } from 'lucide-react'
 import { cn } from 'cn'
 import { StudioBrand } from '@/components/studio-brand'
 import type { ContentPersona, ContentProfile, TopicCluster, ContentDraft, ContentHistoryEntry } from '@/lib/domain/types'
-import type { OnboardingQuestion } from '@/lib/ai/onboarding-questions'
 import type { DailyStatus } from '@/app/(app)/content/page'
 
 interface PersonaWithExtras extends ContentPersona {

@@ -16,6 +16,7 @@ import { constructIdeaGenome } from '@/lib/content/intelligence/genome'
 import { extractIdentityFromSource } from '@/lib/content/onboarding-extract'
 import { parseQuickCapture } from '@/lib/content/quick-capture'
 import { generateDailyIdeas } from '@/lib/content/daily-ideas'
+import { evaluatePostQuality, isRegressionFixture } from '@/lib/content/quality-gate'
 
 describe('DeepSeek removal', () => {
   beforeEach(() => {
@@ -511,5 +512,85 @@ describe('Daily Ideas Generation', () => {
     })
     const territories = new Set(ideas.map((i) => i.territory))
     expect(territories.size).toBeGreaterThan(1)
+  })
+})
+
+describe('Quality Gate', () => {
+  it('rejects the regression fixture', () => {
+    const badPost = "The devs handed me a basica checklist and muttered \"no nothinig.\" That single phrase reminded me how often we overcomplicate what's already simple. If you cut the noise and stick to the basics, progress happens"
+    expect(isRegressionFixture(badPost)).toBe(true)
+
+    const result = evaluatePostQuality({
+      caption: badPost,
+      personaContext: {
+        expertise: ['React', 'TypeScript'],
+        audiences: ['developers'],
+        goals: ['build_authority'],
+        projects: ['Design System'],
+        opinions: ['TypeScript is overrated'],
+        territories: ['Frontend Development'],
+      },
+      sourceMaterial: 'Topic: Keep it simple\nAngle: Focus on basics',
+      platform: 'linkedin',
+    })
+    expect(result.passed).toBe(false)
+    const failureCodes = result.failures.map((f) => f.code)
+    expect(failureCodes).toContain('UNSUPPORTED_PERSONAL_CLAIM')
+    expect(failureCodes).toContain('GENERIC_INSIGHT')
+    expect(failureCodes).toContain('LOW_INFORMATION_GAIN')
+  })
+
+  it('passes a high-quality post', () => {
+    const goodPost = "Most Rails apps I've seen spending 200ms on a page load aren't slow because of Rails. They're slow because of N+1 queries hidden inside a serialization loop. The fix isn't a faster framework. It's moving serialization out of the request cycle and into a background job that pre-computes the response."
+    const result = evaluatePostQuality({
+      caption: goodPost,
+      personaContext: {
+        expertise: ['Rails', 'Performance', 'Backend'],
+        audiences: ['developers', 'CTOs'],
+        goals: ['build_authority'],
+        projects: ['Performance Audit'],
+        opinions: ['Most performance issues are not framework issues'],
+        territories: ['Backend Performance'],
+      },
+      sourceMaterial: 'Topic: Rails performance\nAngle: Most slow Rails apps are slow because of query patterns, not the framework itself',
+      platform: 'linkedin',
+    })
+    expect(result.passed).toBe(true)
+  })
+
+  it('detects fabricated third-person experience', () => {
+    const post = "The developers handed me a broken build and asked me to fix it by Friday."
+    const result = evaluatePostQuality({
+      caption: post,
+      personaContext: {
+        expertise: ['React'],
+        audiences: ['developers'],
+        goals: ['build_authority'],
+        projects: [],
+        opinions: [],
+        territories: [],
+      },
+      sourceMaterial: 'Topic: Team collaboration',
+      platform: 'linkedin',
+    })
+    expect(result.failures.some((f) => f.code === 'UNSUPPORTED_PERSONAL_CLAIM')).toBe(true)
+  })
+
+  it('detects garbled source handling', () => {
+    const post = "The key is to not nothinig the basics and focus on what matters most."
+    const result = evaluatePostQuality({
+      caption: post,
+      personaContext: {
+        expertise: ['Engineering'],
+        audiences: ['developers'],
+        goals: ['build_authority'],
+        projects: [],
+        opinions: [],
+        territories: [],
+      },
+      sourceMaterial: 'Topic: Basics',
+      platform: 'linkedin',
+    })
+    expect(result.failures.some((f) => f.code === 'MALFORMED_SOURCE_HANDLING')).toBe(true)
   })
 })

@@ -347,13 +347,14 @@ describe('Discover Opportunities', () => {
     expect(opps[0].sourceKind).toBe('user_input')
   })
 
-  it('returns empty for empty profile with no clusters or input', () => {
+  it('returns evergreen fallback for empty profile with no clusters or input', () => {
     const opps = discoverOpportunities({ profile: makeProfile(), clusters: [], history: [], memories: [] })
-    expect(opps).toEqual([])
+    expect(opps.length).toBeGreaterThan(0)
+    expect(opps[0].sourceKind).toBe('system_inferred')
   })
 
-  it('handles null profile', () => {
+  it('handles null profile with evergreen fallback', () => {
     const opps = discoverOpportunities({ profile: null, clusters: [], history: [], memories: [] })
-    expect(opps).toEqual([])
+    expect(opps.length).toBeGreaterThan(0)
   })
 })
