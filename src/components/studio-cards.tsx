@@ -177,7 +177,7 @@ export function StudioGreeting({
           {greeting}, {name}.
         </h1>
         <p className="text-[15px] leading-relaxed text-graphite">
-          Nothing strong is standing out right now.
+          Here&apos;s what you could talk about today.
         </p>
       </div>
     )
@@ -236,7 +236,7 @@ export function QuickCapture({
             />
             <div className="rounded-lg border border-line/60 bg-bone/40 p-2.5">
               <p className="text-[11px] font-medium text-graphite mb-1">Try something like:</p>
-              <p className="text-[11px] leading-relaxed text-graphite italic">"We migrated our Rails monolith to a service-oriented architecture last quarter. The hardest part wasn't the technical work — it was keeping the team aligned while we decomposed the database. I learned that you need to agree on ownership boundaries BEFORE you start splitting code."</p>
+              <p className="text-[11px] leading-relaxed text-graphite italic">&ldquo;We migrated our Rails monolith to a service-oriented architecture last quarter. The hardest part wasn&apos;t the technical work — it was keeping the team aligned while we decomposed the database. I learned that you need to agree on ownership boundaries BEFORE you start splitting code.&rdquo;</p>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-graphite">

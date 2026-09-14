@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, type ReactNode } from 'react'
+import { useState, useCallback } from 'react'
 import type { ContentProfile, ContentIdeaCard } from '@/lib/domain/types'
 import { generateDailyIdeas } from '@/lib/content/daily-ideas'
 

@@ -2471,6 +2471,9 @@ export class SupabaseStore implements ScoutStore {
     writingCharacteristics?: ContentProfileWritingCharacteristics
     storytellingTendencies?: ContentProfileStorytellingTendency[]
     confidence?: number
+    audiences?: string[]
+    territories?: string[]
+    voiceSelection?: string
   }): Promise<ContentProfile> {
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
     if (patches.role !== undefined) patch.role = patches.role
@@ -2488,6 +2491,9 @@ export class SupabaseStore implements ScoutStore {
     if (patches.writingCharacteristics !== undefined) patch.writing_characteristics = JSON.stringify(patches.writingCharacteristics)
     if (patches.storytellingTendencies !== undefined) patch.storytelling_tendencies = JSON.stringify(patches.storytellingTendencies)
     if (patches.confidence !== undefined) patch.confidence = patches.confidence
+    if (patches.audiences !== undefined) patch.audiences = patches.audiences
+    if (patches.territories !== undefined) patch.territories = patches.territories
+    if (patches.voiceSelection !== undefined) patch.voice_selection = patches.voiceSelection
 
     const { data, error } = await this.client
       .from('content_profiles')

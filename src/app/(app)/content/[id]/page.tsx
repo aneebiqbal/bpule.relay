@@ -1,8 +1,6 @@
-import { notFound } from 'next/navigation'
-import { createScoutStore } from '@/lib/store'
+import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
-import { PersonaWorkspace } from '@/components/persona-workspace'
-import { buildDailyDecision } from '@/lib/content/daily-decision'
+import { createScoutStore } from '@/lib/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,37 +11,15 @@ export default async function PersonaPage({
 }) {
   const { id } = await params
   const user = await getCurrentUser()
-  if (!user) notFound()
+  if (!user) redirect('/login')
 
   const store = await createScoutStore()
   const persona = await store.getContentPersona(id)
-  if (!persona) notFound()
+  if (!persona) redirect('/content')
 
   // Verify ownership
-  if (persona.repId !== user.rep.id && user.rep.role !== 'admin') notFound()
+  if (persona.repId !== user.rep.id && user.rep.role !== 'admin') redirect('/content')
 
-  const topicClusters = await store.listTopicClusters(id)
-  const drafts = await store.listContentDrafts(id)
-  const history = await store.listContentHistory(id, 10)
-  const findings = await store.listResearchFindings(id, { unusedOnly: true, limit: 10 })
-  const feedback = await store.listContentDraftFeedback(id, 100)
-  const generatedToday = await store.countContentDraftsToday(id)
-  const initialDecision = buildDailyDecision({ persona, clusters: topicClusters, findings, feedback, generatedToday })
-  const contentProfile = persona.contentProfileId ? await store.getContentProfile(persona.contentProfileId) : null
-
-  // Fetch all personas for the switcher
-  const allPersonas = await store.listContentPersonas(user.rep.id)
-
-  return (
-    <PersonaWorkspace
-      persona={persona}
-      topicClusters={topicClusters}
-      drafts={drafts}
-      history={history}
-      feedback={feedback}
-      initialDecision={initialDecision}
-      contentProfile={contentProfile}
-      allPersonas={allPersonas}
-    />
-  )
+  // Redirect to Today — the proper Studio entry point
+  redirect(`/content/${id}/today`)
 }

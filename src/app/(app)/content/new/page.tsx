@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth/current'
 import { OnboardingWizard } from '@/components/onboarding-wizard'
 import { redirect } from 'next/navigation'
@@ -13,9 +14,9 @@ export default async function NewPersonaPage() {
       <header className="border-b border-ink/10 px-4 py-4">
         <div className="mx-auto max-w-xl flex items-center justify-between">
           <h1 className="text-lg font-semibold text-ink">Create Content Identity</h1>
-          <a href="/content" className="text-sm text-graphite hover:text-ink">
+          <Link href="/content" className="text-sm text-graphite hover:text-ink">
             Cancel
-          </a>
+          </Link>
         </div>
       </header>
       <OnboardingWizard />

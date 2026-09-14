@@ -592,6 +592,9 @@ export interface ScoutStore {
     writingCharacteristics?: ContentProfileWritingCharacteristics
     storytellingTendencies?: ContentProfileStorytellingTendency[]
     confidence?: number
+    audiences?: string[]
+    territories?: string[]
+    voiceSelection?: string
   }): Promise<ContentProfile>
   deleteContentProfile(profileId: string): Promise<void>
   // content taste profiles

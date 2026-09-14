@@ -1736,6 +1736,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       if (patches.writingCharacteristics !== undefined) profile.writingCharacteristics = patches.writingCharacteristics
       if (patches.storytellingTendencies !== undefined) profile.storytellingTendencies = patches.storytellingTendencies
       if (patches.confidence !== undefined) profile.confidence = patches.confidence
+      if (patches.audiences !== undefined) profile.audiences = patches.audiences
+      if (patches.territories !== undefined) profile.territories = patches.territories
+      if (patches.voiceSelection !== undefined) profile.voiceSelection = patches.voiceSelection
       profile.updatedAt = new Date().toISOString()
       profile.lastLearnedAt = new Date().toISOString()
       return profile

@@ -6,6 +6,10 @@ import { generateContent } from '@/lib/ai/content'
 import { checkHumanization, rewriteToHumanize } from '@/lib/ai/humanization'
 import { checkBannedPhrases, checkBadHook } from '@/lib/ai/content'
 import { evaluatePostQuality, isRegressionFixture } from '@/lib/content/quality-gate'
+import { buildPostPlan, validateCoreInsight } from '@/lib/content/post-plan'
+import { generateVisualConcept } from '@/lib/writing/visual'
+import { structuredJsonChain } from '@/lib/ai/provider'
+import { pickDraftChain, tier0Host } from '@/lib/ai/routing'
 import type { ContentDraft, ContentMemory, ContentIdeaCard } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
@@ -122,10 +126,37 @@ export async function POST(req: NextRequest) {
     platform,
   })
 
-  const qualityPassed = qualityResult.passed
+  let qualityPassed = qualityResult.passed
+  let finalCaption = caption
+
+  // Corrective retry on quality failure
+  if (!qualityPassed) {
+    const correctionResult = await attemptCorrectiveRetry(
+      caption,
+      qualityResult,
+      body,
+      profile,
+      persona,
+      usedHooks,
+      platform as string,
+    )
+    if (correctionResult && correctionResult.passed) {
+      finalCaption = correctionResult.caption
+      qualityPassed = true
+    }
+  }
+
+  caption = finalCaption
 
   // Generate visual concept
-  const visual = generateVisualIdea(caption, body.idea, platform as string)
+  const concept = generateVisualConcept({
+    postText: caption,
+    platform: platform as 'linkedin' | 'x',
+    angle: body.idea.angle,
+    topic: body.idea.title,
+    coreDetail: body.idea.angle.slice(0, 100),
+    tone: 'confident',
+  })
 
   // Persist the draft
   let draft: ContentDraft
@@ -149,8 +180,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       error: 'Could not save draft. Your content is preserved below.',
       caption,
-      visualIdea: visual.idea,
-      imagePrompt: visual.imagePrompt,
+      visualIdea: concept.visualIdea,
+      imagePrompt: concept.imagePrompt,
     }, { status: 500 })
   }
 
@@ -176,8 +207,8 @@ export async function POST(req: NextRequest) {
     caption,
     hookScore,
     selfCheckPassed: qualityPassed,
-    visualIdea: visual.idea,
-    imagePrompt: visual.imagePrompt,
+    visualIdea: concept.visualIdea,
+    imagePrompt: concept.imagePrompt,
     platform,
   })
 }
@@ -226,39 +257,143 @@ function buildDnaBlock(profile: any): string {
   return parts.join('\n')
 }
 
-function generateVisualIdea(caption: string, idea: GenerateBody['idea'], platform: string): { idea: string; imagePrompt: string } {
-  const firstLine = caption.split('\n')[0] ?? caption.slice(0, 60)
-  const territory = idea.territory ?? 'professional'
+/**
+ * Attempts corrective retry when quality gate fails.
+ * Uses Groq strong for corrective rewrite with targeted instructions.
+ */
+async function attemptCorrectiveRetry(
+  originalCaption: string,
+  qualityResult: { passed: boolean; failures: { code: string; message: string }[]; warnings: { code: string; message: string }[]; scores: any },
+  body: any,
+  profile: any,
+  persona: any,
+  usedHooks: string[],
+  platform: string,
+): Promise<{ caption: string; passed: boolean; retries: number } | null> {
+  // Build targeted correction instructions
+  const failureCodes = qualityResult.failures.map((f) => f.code)
+  const failureMessages = qualityResult.failures.map((f) => f.message)
 
-  let idea_text = ''
-  let imagePrompt = ''
+  const correctionInstructions = buildCorrectionPrompt(failureCodes, failureMessages, body.idea, profile)
 
-  // Choose visual strategy based on territory
-  if (territory === 'authority' || territory === 'education') {
-    idea_text = `Editorial illustration: ${firstLine.slice(0, 40)}`
-    imagePrompt = `Editorial illustration for a ${platform} post. Subject: ${firstLine.slice(0, 50)}. ` +
-      `Style: clean, modern, professional. Composition: centered subject with subtle geometric background. ` +
-      `Mood: confident, informative. Colors: muted blues and whites. No text overlay. ` +
-      `Aspect ratio: ${platform === 'instagram' ? '1:1' : '16:9'}.`
-  } else if (territory === 'journey' || territory === 'proof') {
-    idea_text = `Behind-the-scenes: real moment from experience`
-    imagePrompt = `Cinematic photograph style. Subject: ${firstLine.slice(0, 50)}. ` +
-      `Style: authentic, slightly desaturated, natural lighting. Composition: rule of thirds, environmental context. ` +
-      `Mood: reflective, honest. Aspect ratio: ${platform === 'instagram' ? '4:5' : '16:9'}.`
-  } else if (territory === 'perspective' || territory === 'conversation') {
-    idea_text = `Conceptual: ${firstLine.slice(0, 30)}`
-    imagePrompt = `Conceptual digital art. Visual metaphor for: ${firstLine.slice(0, 50)}. ` +
-      `Style: minimal, bold, symbolic. Composition: single striking element on clean background. ` +
-      `Mood: thought-provoking. Colors: monochrome with one accent color. ` +
-      `Aspect ratio: ${platform === 'instagram' ? '1:1' : '16:9'}.`
-  } else {
-    idea_text = `Minimal typography: "${firstLine.slice(0, 20)}"`
-    imagePrompt = `Minimal typography composition. Text: "${firstLine.slice(0, 30)}". ` +
-      `Style: bold serif font on solid background. Composition: centered, generous whitespace. ` +
-      `Mood: ${territory === 'human' ? 'warm, personal' : 'confident, direct'}. ` +
-      `Colors: black text on white or cream background. ` +
-      `Aspect ratio: ${platform === 'instagram' ? '1:1' : '16:9'}.`
+  // Try Groq strong for corrective rewrite
+  const groqHost = tier0Host('strong')
+  if (!groqHost) return null
+
+  try {
+    const result = await structuredJsonChain<{ caption: string }>(
+      [{ costTier: 'tier1', host: groqHost }],
+      {
+        system: buildCorrectionSystemPrompt(profile, body),
+        user: buildCorrectionUserPrompt(correctionInstructions, originalCaption, body.idea, platform),
+        schema: {
+          type: 'object',
+          properties: {
+            caption: { type: 'string', description: 'The rewritten post' },
+          },
+          required: ['caption'],
+        },
+      },
+    )
+
+    const newCaption = result.data.caption.trim()
+
+    // Re-evaluate
+    const newQuality = evaluatePostQuality({
+      caption: newCaption,
+      personaContext: {
+        expertise: profile?.expertise?.map((e: any) => e.area) ?? [],
+        audiences: profile?.audiences ?? [],
+        goals: profile?.contentGoals ?? [],
+        projects: profile?.projects?.map((p: any) => p.name) ?? [],
+        opinions: profile?.opinions?.map((o: any) => o.belief) ?? [],
+        territories: profile?.territories ?? [],
+      },
+      sourceMaterial: buildSourceMaterial(body.idea, profile, []),
+      platform,
+    })
+
+    return { caption: newCaption, passed: newQuality.passed, retries: 1 }
+  } catch {
+    return null
+  }
+}
+
+function buildCorrectionPrompt(failureCodes: string[], failureMessages: string[], idea: any, profile: any): string {
+  const parts: string[] = []
+
+  parts.push('The previous draft failed quality checks:')
+  parts.push('')
+
+  for (const code of failureCodes) {
+    switch (code) {
+      case 'UNSUPPORTED_PERSONAL_CLAIM':
+        parts.push('- REMOVE all invented personal anecdotes, team stories, or client interactions.')
+        parts.push('  Only use experiences explicitly confirmed in the Persona profile.')
+        break
+      case 'GENERIC_INSIGHT':
+        parts.push('- REMOVE generic motivational statements.')
+        parts.push('  Add a specific mechanism, tradeoff, or non-obvious distinction.')
+        break
+      case 'LOW_INFORMATION_DENSITY':
+        parts.push('- REMOVE repetitive statements. Each sentence should add new information.')
+        break
+      case 'LOW_INFORMATION_GAIN':
+        parts.push('- ADD substantive content: a specific mechanism, useful heuristic, concrete example, or meaningful tradeoff.')
+        break
+      case 'MALFORMED_SOURCE_HANDLING':
+        parts.push('- FIX garbled or misspelled words. Do not build insights around malformed text.')
+        break
+      case 'WEAK_PERSONA_FIT':
+        parts.push('- GROUND the post in the verified Persona expertise and experience.')
+        break
+    }
   }
 
-  return { idea: idea_text, imagePrompt }
+  parts.push('')
+  parts.push('REQUIREMENTS:')
+  parts.push('- Keep the original topic and angle.')
+  parts.push('- Do not invent personal experiences, client names, or team events.')
+  parts.push('- Use verified expertise from the Persona profile.')
+  parts.push('- Provide at least one specific, non-obvious insight.')
+  parts.push('- End naturally without forced inspirational conclusion.')
+
+  return parts.join('\n')
 }
+
+function buildCorrectionSystemPrompt(profile: any, body: any): string {
+  const parts: string[] = []
+  parts.push('You are a professional social media writer rewriting a post that failed quality checks.')
+  parts.push('')
+  if (profile) {
+    if (profile.role) parts.push(`Person: ${profile.role} (${profile.seniority})`)
+    if (profile.expertise?.length) {
+      parts.push(`Expertise: ${profile.expertise.slice(0, 5).map((e: any) => `${e.area} (${e.level})`).join(', ')}`)
+    }
+    if (profile.industries?.length) parts.push(`Industries: ${profile.industries.join(', ')}`)
+  }
+  parts.push('')
+  parts.push('HARD RULES:')
+  parts.push('- Never fabricate personal experiences, client interactions, or team events.')
+  parts.push('- Only claim what is explicitly supported by verified Persona context.')
+  parts.push('- No generic motivational conclusions.')
+  parts.push('- No unsupported first-person or third-person event claims.')
+  return parts.join('\n')
+}
+
+function buildCorrectionUserPrompt(instructions: string, originalCaption: string, idea: any, platform: string): string {
+  return `${instructions}
+
+ORIGINAL POST (failed):
+"""
+${originalCaption}
+"""
+
+TOPIC: ${idea.title}
+ANGLE: ${idea.angle}
+PLATFORM: ${platform}
+
+Rewrite the post to fix all listed issues. Output ONLY a JSON object with a "caption" field.`
+}
+
+

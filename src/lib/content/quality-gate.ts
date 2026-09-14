@@ -60,17 +60,28 @@ const GENERIC_INSIGHT_PATTERNS = [
 ]
 
 const FABRICATED_EXPERIENCE_PATTERNS = [
-  // First person
-  /\b(i|we)\s+(spent|debugged|shipped|fixed|met|saw|handled|dealt|worked|built|created|launched)\b/i,
-  /\b(today|yesterday|last week|this morning|last month)\b.{0,30}\b(i|we)\b/i,
-  /\bmy (team|client|boss|manager|colleague|coworker)\b.{0,30}\b(said|told|gave|asked|requested)\b/i,
-  // Third person fabricated
-  /\bthe (devs|developers|engineers|team|designers|manager|boss|client)\b.{0,30}\b(handed|gave|told|said|asked|requested|muttered)\b/i,
-  /\b(a (developer|engineer|designer|manager|client))\b.{0,30}\b(handed|gave|told|said|asked)\b/i,
-  /\b(i was (working|building|debugging|shipping|fixing))\b/i,
-  /\b(we (were|had been) (working|building|debugging|shipping))\b/i,
-  /\bmy (latest|current|recent) (project|client|work)\b/i,
-  /\b(i (noticed|realized|discovered|found))\b.{0,30}\b(when|while|after|during)\b/i,
+  // UNSUPPORTED FIRST-PERSON EVENT CLAIMS
+  // Pattern: [time] + [first-person] + [action verb]
+  /\b(today|yesterday|last week|this morning|last month|recently|lately)\b.{0,40}\b(i|we)\s+(spent|had|made|got|found|noticed|realized|discovered|learned|decided|started|began|finished|completed)\b/i,
+  // Pattern: [first-person] + [past-tense action] + [detail]
+  /\b(i|we)\s+(spent|debugged|shipped|fixed|built|created|launched|deployed|shipped|migrated|refactored|redesigned|restructured)\s+(a |the |my |our )?\w+/i,
+  // Pattern: [my/our] + [role/relation] + [communication verb]
+  /\bmy\s+(team|client|boss|manager|colleague|coworker|director|vp|ceo|cto)\b.{0,30}\b(said|told|gave|asked|requested|demanded|insisted|suggested|informed)\b/i,
+  // Pattern: [my/our] + [work item]
+  /\bmy\s+(latest|current|recent|new)\s+(project|client|work|engagement|initiative|launch|release)\b/i,
+
+  // UNSUPPORTED THIRD-PERSON EVENT CLAIMS
+  // Pattern: [the/a] + [role] + [transfer/communication verb]
+  /\bthe\s+(devs|developers|engineers|team|designers|design team|engineering team|product team|manager|boss|director|client|customer|founder|ceo|cto)\b.{0,40}\b(handed|gave|sent|told|said|asked|requested|presented|delivered|passed|shared|emailed|messaged|muttered|complained)\b/i,
+  // Pattern: [a/an] + [role] + [transfer/communication verb]
+  /\b(a|an)\s+(developer|engineer|designer|manager|client|customer|founder|consultant|agency|stakeholder)\b.{0,40}\b(handed|gave|sent|told|said|asked|requested|presented|delivered|passed|shared)\b/i,
+  // Pattern: [someone] + [action] + [for/with] + [persona]
+  /\b(he|she|they|someone|a colleague|a manager|a client|a founder)\s+(came to|approached|emailed|called|messaged|contacted|visited|brought)\s+(me|us)\b/i,
+
+  // UNSUPPORTED EVENT NARRATIVES
+  /\b(during|after|while|in)\s+(a |the )?(meeting|call|conversation|discussion|review|standup|retrospective|sprint)\b.{0,30}\b(i|we|my|the team)\b/i,
+  /\bwe\s+(were|had been|spent)\s+(working|building|debugging|shipping|trying|attempting|planning|discussing)\b/i,
+  /\bi\s+(was|had been)\s+(working|building|debugging|shipping|trying|attempting|planning)\s+(on|with|at)\b/i,
 ]
 
 const LOW_INFORMATION_PATTERNS = [
@@ -221,17 +232,40 @@ function findGarbledWords(text: string): string[] {
       garbled.push(word)
     }
     // Check for obvious misspellings of common words
-    const commonMisspellings: Record<string, string> = {
-      'basica': 'basic',
-      'nothinig': 'nothing',
-      'alread': 'already',
-      'overcomplicate': 'overcomplicate',
-    }
-    const lower = cleaned.toLowerCase()
-    if (commonMisspellings[lower]) {
-      garbled.push(word)
-    }
+const lower = cleaned.toLowerCase()
+
+  // Known technical vocabulary — NEVER flag as garbled
+  const knownTechnicalVocab = new Set([
+    'postgresql', 'supabase', 'meilisearch', 'nextjs', 'reactjs', 'nodejs',
+    'typescript', 'javascript', 'web3', 'solana', 'spree', 'longcat',
+    'graphql', 'restful', 'middleware', 'frontend', 'backend', 'fullstack',
+    'devops', 'kubernetes', 'docker', 'terraform', 'ansible', 'redis',
+    'mongodb', 'mysql', 'sqlite', 'elasticsearch', 'kafka', 'rabbitmq',
+    'aws', 'gcp', 'azure', 'vercel', 'netlify', 'heroku', 'cloudflare',
+    'github', 'gitlab', 'bitbucket', 'jira', 'confluence', 'figma', 'sketch',
+    'tailwind', 'bootstrap', 'materialui', 'chakra', 'styledcomponents',
+    'webpack', 'vite', 'rollup', 'babel', 'eslint', 'prettier', 'jest',
+    'cypress', 'playwright', 'storybook', 'prisma', 'drizzle', 'typeorm',
+    'hibernate', 'springboot', 'django', 'flask', 'fastapi', 'express',
+    'nestjs', 'graphql', 'apollo', 'urql', 'trpc', 'zod', 'yup',
+    'responder', 'serializer', 'normalizer', 'denormalized', 'indexable',
+    'optimistic', 'pessimistic', 'idempotency', 'backoff', 'circuitbreaker',
+    'ratelimiter', 'middleware', 'preloader', 'prefetch', 'lazyload',
+    'webpack', 'code splitting', 'treeshaking', 'hotreload',
+  ])
+  if (knownTechnicalVocab.has(lower)) continue
+
+  // Known misspellings that indicate garbled input
+  const knownMisspellings = new Set([
+    'basica', 'nothinig', 'alread', 'overcomplicate', 'somethign',
+    'anythign', 'nothign', 'whatevr', 'becuase', 'occured', 'recieve',
+    'seperate', 'definately', 'accomodate', 'occurence', 'independant',
+    'neccessary', 'succesful', 'enviroment', 'goverment', 'occassion',
+  ])
+  if (knownMisspellings.has(lower)) {
+    garbled.push(word)
   }
+}
   return garbled
 }
 
@@ -239,70 +273,124 @@ function calculatePersonaFit(
   lowerCaption: string,
   context: { expertise: string[]; audiences: string[]; goals: string[]; projects: string[]; opinions: string[]; territories: string[] },
 ): number {
-  let matches = 0
-  let totalFactors = 0
+  let score = 0
+  let maxScore = 0
 
-  // Expertise matches
+  // Expertise semantic fit (not just keyword match)
   for (const exp of context.expertise) {
-    totalFactors++
-    if (lowerCaption.includes(exp.toLowerCase())) matches++
+    maxScore += 1
+    const expLower = exp.toLowerCase()
+    // Direct mention
+    if (lowerCaption.includes(expLower)) {
+      score += 1
+    } else {
+      // Semantic association: check if related concepts appear
+      const relatedTerms = getRelatedTerms(expLower)
+      if (relatedTerms.some((t) => lowerCaption.includes(t))) {
+        score += 0.5
+      }
+    }
   }
 
-  // Project matches
-  for (const proj of context.projects) {
-    totalFactors++
-    if (lowerCaption.includes(proj.toLowerCase().split(' ')[0])) matches++
-  }
-
-  // Opinion matches
-  for (const op of context.opinions) {
-    totalFactors++
-    const opWords = op.toLowerCase().split(/\s+/).filter((w) => w.length > 4)
-    if (opWords.some((w) => lowerCaption.includes(w))) matches++
-  }
-
-  // Territory matches
+  // Territory alignment
   for (const terr of context.territories) {
-    totalFactors++
-    if (lowerCaption.includes(terr.toLowerCase().split(' ')[0])) matches++
+    maxScore += 0.5
+    const terrWords = terr.toLowerCase().split(/\s+/)
+    if (terrWords.some((w) => w.length > 3 && lowerCaption.includes(w))) {
+      score += 0.5
+    }
   }
 
-  if (totalFactors === 0) return 0.5 // No context to fit against
-  return matches / totalFactors
+  // Opinion alignment (semantic, not keyword)
+  for (const op of context.opinions) {
+    maxScore += 0.5
+    const opKeyWords = op.toLowerCase().split(/\s+/).filter((w) => w.length > 5)
+    if (opKeyWords.some((w) => lowerCaption.includes(w))) {
+      score += 0.5
+    }
+  }
+
+  // Project relevance
+  for (const proj of context.projects) {
+    maxScore += 0.5
+    const projWords = proj.toLowerCase().split(/\s+/).filter((w) => w.length > 3)
+    if (projWords.some((w) => lowerCaption.includes(w))) {
+      score += 0.5
+    }
+  }
+
+  if (maxScore === 0) return 0.5 // No context to fit against
+  return Math.min(1, score / maxScore)
+}
+
+function getRelatedTerms(expertise: string): string[] {
+  const termMap: Record<string, string[]> = {
+    'react': ['component', 'render', 'state', 'props', 'hook', 'virtual dom', 'jsx', 'frontend', 'ui'],
+    'typescript': ['type', 'interface', 'generic', 'compile', 'javascript', 'js', 'ts'],
+    'rails': ['ruby', 'mvc', 'active record', 'migration', 'controller', 'model', 'route'],
+    'node': ['javascript', 'event loop', 'async', 'promise', 'npm', 'backend', 'server'],
+    'python': ['django', 'flask', 'fastapi', 'pip', 'script', 'data'],
+    'aws': ['cloud', 'lambda', 's3', 'ec2', 'infrastructure', 'deploy'],
+    'architecture': ['system', 'design', 'pattern', 'structure', 'scale', 'microservice'],
+    'design': ['ui', 'ux', 'visual', 'typography', 'layout', 'color', 'brand', 'aesthetic'],
+    'product': ['feature', 'roadmap', 'user', 'customer', 'market', 'strategy', 'launch'],
+    'marketing': ['campaign', 'audience', 'brand', 'content', 'growth', 'reach', 'engagement'],
+    'sales': ['pipeline', 'prospect', 'deal', 'close', 'revenue', 'quota', 'outreach'],
+    'leadership': ['team', 'culture', 'hire', 'manage', 'mentor', 'delegate', 'vision'],
+    'consulting': ['client', 'engagement', 'advisory', 'recommend', 'assess', 'transform'],
+  }
+  return termMap[expertise] ?? []
 }
 
 function assessInformationGain(caption: string): number {
   const lower = caption.toLowerCase()
   let score = 0
 
-  // Specific technical terms
-  if (/\b(api|database|query|cache|server|client|frontend|backend|deploy|build|test|debug|refactor|architecture|pattern|framework|library|function|class|module|component|service|microservice|container|kubernetes|docker|aws|gcp)\b/.test(lower)) {
-    score += 0.3
+  // ANY of these substance indicators count — not just technical ones
+
+  // Specific mechanism / causal explanation
+  if (/\b(because|cause|reason|happens when|results in|leads to|creates|produces|means that|implies|therefore|consequently)\b/.test(lower)) {
+    score += 0.25
   }
 
-  // Numbers and metrics
-  if (/\b(\d+%|\d+x|\d+\s*(ms|sec|min|hours|days|weeks|users|requests|MB|GB))\b/i.test(lower)) {
+  // Non-obvious distinction / contrast
+  if (/\b(but|however|actually|in reality|the difference|unlike|instead|rather than|in contrast|on the other hand)\b/.test(lower)) {
     score += 0.2
   }
 
-  // Specific frameworks/tools
-  if (/\b(react|vue|angular|rails|django|node|typescript|python|rust|go|java|postgres|redis|mongodb|graphql|rest|grpc)\b/i.test(lower)) {
+  // Concrete example / illustration
+  if (/\b(for example|for instance|such as|like when|specifically|in practice|consider|imagine|picture|think about)\b/.test(lower)) {
     score += 0.2
   }
 
-  // Tradeoffs mentioned
-  if (/\b(tradeoff|cost|benefit|advantage|disadvantage|pros?|cons?|however|but|although|instead|rather|alternative)\b/i.test(lower)) {
+  // Useful heuristic / rule / principle
+  if (/\b(rule|principle|heuristic|pattern|approach|strategy|technique|method|framework|mental model)\b/.test(lower)) {
     score += 0.15
   }
 
-  // Specific patterns or frameworks
-  if (/\b(pattern|approach|strategy|technique|method|principle|rule|heuristic|framework)\b/i.test(lower)) {
+  // Tradeoff / consequence
+  if (/\b(tradeoff|cost|benefit|advantage|disadvantage|sacrifice|give up|at the expense|versus|vs|consequence|outcome)\b/.test(lower)) {
+    score += 0.2
+  }
+
+  // Specific professional observation
+  if (/\b(I'?ve? seen|I'?ve? noticed|observing|the data shows|evidence suggests|research shows|studies show|experience suggests)\b/.test(lower)) {
+    score += 0.2
+  }
+
+  // Numbers and metrics (any domain)
+  if (/\b(\d+%|\d+x|\d+\s*(ms|sec|min|hours|days|weeks|months|users|customers|people|times|dollars|percent))\b/i.test(lower)) {
     score += 0.15
   }
 
-  // Named concepts
-  if (/\b(solid|dry|kiss|yagni|mvc|mvp|ci[-/]cd|tdd|bdd|oop|functional)\b/i.test(lower)) {
-    score += 0.2
+  // Technical specificity (bonus, not required)
+  if (/\b(system|process|workflow|pipeline|infrastructure|platform|tool|platform|integration|interface|protocol|api|database|query|cache|server|client|component|service)\b/.test(lower)) {
+    score += 0.1
+  }
+
+  // Domain-specific vocabulary (business/design/marketing)
+  if (/\b(revenue|growth|retention|conversion|funnel|acquisition|engagement|usability|accessibility|brand|positioning|market|audience|customer|user)\b/.test(lower)) {
+    score += 0.1
   }
 
   return Math.min(1, score)

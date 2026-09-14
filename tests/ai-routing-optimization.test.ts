@@ -515,6 +515,43 @@ describe('Daily Ideas Generation', () => {
   })
 })
 
+describe('PostPlan', () => {
+  it('builds a plan from idea + profile', async () => {
+    const { buildPostPlan } = await import('@/lib/content/post-plan')
+    const plan = buildPostPlan({
+      idea: {
+        id: 'test', title: 'Rails performance', angle: 'Most slow Rails apps are slow because of query patterns',
+        territory: 'authority', sourceKind: 'expertise', whyYou: 'Senior Rails engineer', whyAudience: 'Developers facing performance issues',
+        confidence: 0.8,
+      },
+      profile: {
+        id: 'p1', organizationId: 'org1', personaId: 'persona1', role: 'Senior Rails Engineer', seniority: 'Senior',
+        industries: ['SaaS'], audience: 'engineers',
+        expertise: [{ area: 'Rails', level: 'expert', evidence: '', updatedAt: '2024-01-01' }],
+        technologies: [], goals: [], topicsCared: [], topicsAvoided: [],
+        opinions: [], projects: [], experiences: [],
+        writingCharacteristics: {}, storytellingTendencies: [],
+        confidence: 0.8, lastLearnedAt: null, sources: [],
+        audiences: ['Rails developers'], territories: ['Backend Performance'], contentGoals: ['build_authority'],
+        createdAt: '2024-01-01', updatedAt: '2024-01-01',
+      },
+      journey: [{ id: 'j1', organizationId: 'org1', personaId: 'persona1', eventType: 'milestone', title: 'Reduced page load by 60%', description: '', eventDate: null, source: 'user_entry', createdAt: '2024-01-01' }],
+      platform: 'linkedin',
+    })
+    expect(plan.coreInsight).toBeTruthy()
+    expect(plan.groundingMode).toBe('EXPERTISE')
+    expect(plan.allowedPersonalClaims.length).toBeGreaterThan(0)
+    expect(plan.forbiddenClaims.length).toBeGreaterThan(0)
+  })
+
+  it('validates core insight substance', async () => {
+    const { validateCoreInsight } = await import('@/lib/content/post-plan')
+    expect(validateCoreInsight('Keeping things simple helps teams make progress.').valid).toBe(false)
+    expect(validateCoreInsight('AI coding tools reduce implementation time faster than review time, so the bottleneck moves from writing code to validating decisions.').valid).toBe(true)
+    expect(validateCoreInsight('Most early Rails performance work should start with query shape before infrastructure.').valid).toBe(true)
+  })
+})
+
 describe('Quality Gate', () => {
   it('rejects the regression fixture', () => {
     const badPost = "The devs handed me a basica checklist and muttered \"no nothinig.\" That single phrase reminded me how often we overcomplicate what's already simple. If you cut the noise and stick to the basics, progress happens"
@@ -592,5 +629,77 @@ describe('Quality Gate', () => {
       platform: 'linkedin',
     })
     expect(result.failures.some((f) => f.code === 'MALFORMED_SOURCE_HANDLING')).toBe(true)
+  })
+
+  it('does not reject valid technical vocabulary', () => {
+    const post = "We migrated from PostgreSQL to Meilisearch for full-text search and saw latency drop significantly."
+    const result = evaluatePostQuality({
+      caption: post,
+      personaContext: {
+        expertise: ['Backend', 'Search'],
+        audiences: ['developers'],
+        goals: ['build_authority'],
+        projects: ['Search Migration'],
+        opinions: [],
+        territories: ['Backend Performance'],
+      },
+      sourceMaterial: 'Topic: Search migration',
+      platform: 'linkedin',
+    })
+    expect(result.failures.some((f) => f.code === 'MALFORMED_SOURCE_HANDLING')).toBe(false)
+  })
+
+  it('does not require technical terms for good non-technical posts', () => {
+    const post = "The best founders I know don't optimize for speed of execution. They optimize for speed of learning. That distinction changes which meetings you cancel and which metrics you track."
+    const result = evaluatePostQuality({
+      caption: post,
+      personaContext: {
+        expertise: ['Company Building', 'Strategy'],
+        audiences: ['founders'],
+        goals: ['build_authority'],
+        projects: [],
+        opinions: ['Speed of learning beats speed of execution'],
+        territories: ['Founder Strategy'],
+      },
+      sourceMaterial: 'Topic: Founder strategy\nAngle: Speed of learning vs execution',
+      platform: 'linkedin',
+    })
+    expect(result.passed).toBe(true)
+  })
+
+  it('rejects generic motivational posts', () => {
+    const post = "Consistency is what separates good from great. Show up every day, do the work, and progress will follow."
+    const result = evaluatePostQuality({
+      caption: post,
+      personaContext: {
+        expertise: ['Marketing'],
+        audiences: ['creators'],
+        goals: ['build_authority'],
+        projects: [],
+        opinions: [],
+        territories: ['Growth'],
+      },
+      sourceMaterial: 'Topic: Consistency',
+      platform: 'linkedin',
+    })
+    expect(result.passed).toBe(false)
+  })
+
+  it('passes strong technical posts', () => {
+    const post = "Most Rails apps spending 200ms on a page load aren't slow because of Rails. They're slow because of N+1 queries inside a serialization loop. The fix isn't a faster framework — it's moving serialization out of the request cycle."
+    const result = evaluatePostQuality({
+      caption: post,
+      personaContext: {
+        expertise: ['Rails', 'Performance'],
+        audiences: ['developers'],
+        goals: ['build_authority'],
+        projects: ['Performance Audit'],
+        opinions: ['Most performance issues are query issues'],
+        territories: ['Backend Performance'],
+      },
+      sourceMaterial: 'Topic: Rails performance',
+      platform: 'linkedin',
+    })
+    expect(result.passed).toBe(true)
   })
 })

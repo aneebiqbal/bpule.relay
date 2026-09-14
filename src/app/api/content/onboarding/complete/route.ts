@@ -14,6 +14,11 @@ interface CompleteOnboardingBody {
   contentComfort: string[]
   sourceText: string
   sourceType: string
+  selectedGoals: string[]
+  selectedAudiences: string[]
+  selectedTerritories: string[]
+  voiceSelection: string
+  humorStyle: string
   identity: {
     role: string
     seniority: string
@@ -27,8 +32,6 @@ interface CompleteOnboardingBody {
     territories: string[]
     contentGoals: string[]
   }
-  voiceSelection: string
-  humorStyle: string
 }
 
 /**
@@ -65,6 +68,21 @@ export async function POST(req: NextRequest) {
     audience: body.identity.audiences[0] ?? '',
   })
 
+  // Use selected territories from wizard, falling back to identity territories
+  const territories = body.selectedTerritories.length > 0
+    ? body.selectedTerritories
+    : body.identity.territories
+
+  // Use selected audiences from wizard, falling back to identity audiences
+  const audiences = body.selectedAudiences.length > 0
+    ? body.selectedAudiences
+    : body.identity.audiences
+
+  // Use selected goals from wizard, falling back to identity contentGoals
+  const goals = body.selectedGoals.length > 0
+    ? body.selectedGoals
+    : body.identity.contentGoals
+
   // Update profile with all extracted data
   await store.updateContentProfile(profile.id, {
     expertise: body.identity.expertise,
@@ -76,20 +94,23 @@ export async function POST(req: NextRequest) {
       proficiency: 'proficient' as const,
       context: '',
     })),
-    goals: body.identity.contentGoals.map((description) => ({
+    goals: goals.map((description) => ({
       description,
       type: 'authority' as const,
       updatedAt: now,
     })),
-    topicsCared: body.identity.territories.map((topic) => ({
+    topicsCared: territories.map((topic) => ({
       topic,
       intensity: 'interested' as const,
       source: 'onboarding' as const,
     })),
+    audiences,
+    territories,
+    voiceSelection: body.voiceSelection,
   })
 
   // Create topic clusters from territories
-  for (const territory of body.identity.territories.slice(0, 6)) {
+  for (const territory of territories.slice(0, 6)) {
     await store.createTopicCluster({
       personaId: persona.id,
       clusterName: territory,

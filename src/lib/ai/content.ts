@@ -203,6 +203,9 @@ HARD RULES:
 
 MODE: ${mode}
 
+PLATFORM GUIDANCE:
+${getPlatformGuidance(input.platform)}
+
 HOOK - the first 1-2 lines must contain a concrete, specific detail from the source material. Score it honestly 1-10.`
 }
 
@@ -222,6 +225,18 @@ ${input.sourceMaterial}
 """
 
 Write a post. Output JSON: { "caption": "...", "hook_score": 1-10, "hook_feedback": "one-line reason for the score", "self_check_passed": boolean, "self_check_note": "why this would/wouldn't work" }`
+}
+
+function getPlatformGuidance(platform: string): string {
+  switch (platform) {
+    case 'x':
+      return 'X/Twitter: Write tight, native observations. One clear insight. No threads unless justified. Under 280 chars. Lead with the strongest point.'
+    case 'instagram':
+      return 'Instagram: Visual-first thinking. Caption should complement an image. Shorter paragraphs. More personal tone. Relevant hashtags ok.'
+    case 'linkedin':
+    default:
+      return 'LinkedIn: Professional insight format. Can be longer-form. Lead with a specific observation or contrarian take. Include mechanism or tradeoff. End naturally without forced inspiration.'
+  }
 }
 
 // ── Checks ──────────────────────────────────────────────────────────────────

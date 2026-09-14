@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
-import { createScoutStore } from '@/lib/store'
 import { extractIdentityFromSource } from '@/lib/content/onboarding-extract'
 
 export const dynamic = 'force-dynamic'

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import type { ContentDraft, ContentIdeaCard } from '@/lib/domain/types'
+import type { ContentIdeaCard } from '@/lib/domain/types'
 
 interface DraftData {
   id: string
@@ -20,38 +20,41 @@ interface VisualData {
   imagePrompt: string
 }
 
-export function PostWorkspace() {
+export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: DraftData; initialVisual?: VisualData | null } = {}) {
   const params = useParams()
   const router = useRouter()
   const draftId = params.id as string
 
-  const [draft, setDraft] = useState<DraftData | null>(null)
-  const [caption, setCaption] = useState('')
-  const [visual, setVisual] = useState<VisualData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [draft, setDraft] = useState<DraftData | null>(initialDraft ?? null)
+  const [caption, setCaption] = useState(initialDraft?.caption ?? '')
+  const [visual, setVisual] = useState<VisualData | null>(initialVisual ?? null)
+  const [loading, setLoading] = useState(!initialDraft)
   const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState('')
   const [showImagePrompt, setShowImagePrompt] = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false)
+  const [feedbackSent, setFeedbackSent] = useState(false)
+  const [feedbackReason, setFeedbackReason] = useState('')
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Load draft
+  // Load draft if not provided initially
   useEffect(() => {
+    if (initialDraft) return
     fetch(`/api/content/drafts/${draftId}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.draft) {
           setDraft(data.draft)
           setCaption(data.draft.caption)
-          setVisual(data.visual)
         } else {
           setError('Draft not found')
         }
       })
       .catch(() => setError('Failed to load draft'))
       .finally(() => setLoading(false))
-  }, [draftId])
+  }, [draftId, initialDraft])
 
   // Autosave
   const autosave = useCallback((newCaption: string) => {
@@ -104,6 +107,22 @@ export function PostWorkspace() {
       setError('Failed to mark as posted')
     }
     setPosting(false)
+  }
+
+  const submitFeedback = async (reason: string) => {
+    setFeedbackReason(reason)
+    if (!draft) return
+    try {
+      await fetch(`/api/content/drafts/${draftId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason, reaction: 'not_for_me' }),
+      })
+    } catch {
+      // Silent
+    }
+    setFeedbackSent(true)
+    setShowFeedback(false)
   }
 
   const handleRegenerate = async (variant: string) => {
@@ -180,6 +199,12 @@ export function PostWorkspace() {
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setShowFeedback(true)}
+              className="rounded-lg border border-ink/15 px-3 py-1.5 text-xs hover:border-ink/30"
+            >
+              Not for me
+            </button>
+            <button
               onClick={() => handleRegenerate('angle')}
               className="rounded-lg border border-ink/15 px-3 py-1.5 text-xs hover:border-ink/30"
             >
@@ -215,6 +240,29 @@ export function PostWorkspace() {
             </div>
 
             {error && <p className="rounded-lg bg-red-50 p-2 text-xs text-red-600">{error}</p>}
+
+            {/* Feedback */}
+            {showFeedback && !feedbackSent && (
+              <div className="rounded-lg border border-ink/10 bg-white p-3">
+                <p className="text-xs font-medium text-ink">Why not?</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {['Too generic', 'Not my voice', 'Too basic', 'Wrong angle', "I wouldn't say this"].map((reason) => (
+                    <button
+                      key={reason}
+                      onClick={() => submitFeedback(reason)}
+                      className={`rounded-full border px-2.5 py-1 text-xs ${
+                        feedbackReason === reason ? 'border-ink bg-ink text-bone' : 'border-ink/15 hover:border-ink/30'
+                      }`}
+                    >
+                      {reason}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {feedbackSent && (
+              <p className="rounded-lg bg-green-50 p-2 text-xs text-green-600">Thanks! Relay will learn from this.</p>
+            )}
           </div>
 
           {/* Side Panel */}

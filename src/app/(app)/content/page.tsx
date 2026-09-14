@@ -57,8 +57,8 @@ export default async function ContentPage() {
       }),
     )
     personas = resolved
-  } catch {
-    // Migration 0018 not yet applied — render empty state
+  } catch (err) {
+    console.error('[content] Failed to load personas:', err)
   }
 
   return (

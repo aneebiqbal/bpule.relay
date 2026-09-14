@@ -364,7 +364,7 @@ export function PersonaWorkspace({
         <div className="space-y-8">
           <StudioGreeting
             name={personaState.displayName}
-            opportunityCount={0}
+            opportunityCount={topicClusters.length}
             hasPersona={topicClusters.length > 0}
           />
 
