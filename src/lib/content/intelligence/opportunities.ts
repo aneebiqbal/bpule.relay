@@ -89,14 +89,27 @@ export function discoverOpportunities(input: {
       }
     }
 
-    // Strong opinions
-    for (const opinion of input.profile.opinions.filter((o) => o.strength === 'strong')) {
+    // Opinions (strong or moderate — both are postable)
+    for (const opinion of input.profile.opinions) {
+      const confidence = opinion.strength === 'strong' ? 0.7 : 0.55
       candidates.push({
         type: 'contrarian_position',
-        title: `Your take: "${opinion.belief.slice(0, 60)}..."`,
-        description: `You hold a strong opinion: "${opinion.belief}". This could spark a meaningful discussion.`,
-        trigger: `Strong conviction in Content DNA`,
-        confidence: 0.7,
+        title: `Your take: "${opinion.belief.slice(0, 60)}${opinion.belief.length > 60 ? '...' : ''}"`,
+        description: `You hold an opinion: "${opinion.belief}". This could spark a meaningful discussion.`,
+        trigger: `${opinion.strength} conviction in Content DNA`,
+        confidence,
+        sourceKind: 'system_inferred',
+      })
+    }
+
+    // Topics they care about (from Content DNA)
+    for (const topic of input.profile.topicsCared ?? []) {
+      candidates.push({
+        type: 'useful_explanation',
+        title: `Your perspective on ${topic.topic}`,
+        description: `You listed "${topic.topic}" as a topic you care about. Share your unique take with your audience.`,
+        trigger: `Topic of interest: ${topic.topic}`,
+        confidence: 0.5,
         sourceKind: 'system_inferred',
       })
     }

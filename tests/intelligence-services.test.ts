@@ -4,7 +4,8 @@ import { detectOrgThemes, areIdeasTooSimilar } from '@/lib/content/intelligence/
 import { requiresResearch, generateConstraints, classifyClaimProvenance, noopResearchProvider, performResearch } from '@/lib/content/intelligence/research'
 import { findSimilarDeterministic, isDuplicate, areEmbeddingsEnabled } from '@/lib/content/intelligence/semantic'
 import { mergeDnaCandidates, extractDnaCandidatesFromAnswer, calculateProfileConfidence } from '@/lib/content/content-dna'
-import type { ContentHistoryEntry, ContentProfile, ContentMemory, ContentPersona, ContentProfileExperience, ContentProfileOpinion } from '@/lib/domain/types'
+import { discoverOpportunities } from '@/lib/content/intelligence/opportunities'
+import type { ContentHistoryEntry, ContentProfile, ContentMemory, ContentPersona, ContentProfileExperience, ContentProfileOpinion, TopicCluster } from '@/lib/domain/types'
 
 function makeHistoryEntry(overrides: Partial<ContentHistoryEntry> = {}): ContentHistoryEntry {
   return {
@@ -292,5 +293,67 @@ describe('DNA Merge', () => {
     const newProfile = { ...profile, experiences: [...profile.experiences, ...patches.experiences] }
     const newConfidence = calculateProfileConfidence(newProfile)
     expect(newConfidence).toBeGreaterThan(profile.confidence)
+  })
+})
+
+describe('Discover Opportunities', () => {
+  it('generates opportunities from moderate opinions', () => {
+    const profile = makeProfile({
+      opinions: [
+        { belief: 'TypeScript is overrated for small projects', strength: 'moderate', evidence: '', source: 'onboarding', updatedAt: '2024-01-01' },
+      ],
+    })
+    const opps = discoverOpportunities({ profile, clusters: [], history: [], memories: [] })
+    expect(opps.length).toBeGreaterThan(0)
+    expect(opps[0].type).toBe('contrarian_position')
+  })
+
+  it('generates opportunities from topicsCared', () => {
+    const profile = makeProfile({
+      topicsCared: [{ topic: 'Rust', intensity: 'passionate', source: 'onboarding' }],
+    })
+    const opps = discoverOpportunities({ profile, clusters: [], history: [], memories: [] })
+    expect(opps.length).toBeGreaterThan(0)
+    expect(opps.some((o) => o.title.includes('Rust'))).toBe(true)
+  })
+
+  it('generates opportunities from stale topic clusters', () => {
+    const clusters: TopicCluster[] = [
+      { id: 'c1', organizationId: 'org1', personaId: 'p1', clusterName: 'AI Safety', description: '', sourceType: 'profile', lastInputAt: '2024-01-01', lastResearchAt: null, mergedIntoId: null, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+    ]
+    const opps = discoverOpportunities({ profile: makeProfile(), clusters, history: [], memories: [] })
+    expect(opps.length).toBeGreaterThan(0)
+    expect(opps.some((o) => o.title.includes('AI Safety'))).toBe(true)
+  })
+
+  it('generates opportunities from topic clusters never posted', () => {
+    const clusters: TopicCluster[] = [
+      { id: 'c1', organizationId: 'org1', personaId: 'p1', clusterName: 'PostgreSQL', description: 'Database stuff', sourceType: 'profile', lastInputAt: null, lastResearchAt: null, mergedIntoId: null, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+    ]
+    const opps = discoverOpportunities({ profile: makeProfile(), clusters, history: [], memories: [] })
+    expect(opps.length).toBeGreaterThan(0)
+    expect(opps.some((o) => o.title.includes('PostgreSQL'))).toBe(true)
+  })
+
+  it('returns opportunities from recent user input', () => {
+    const opps = discoverOpportunities({
+      profile: makeProfile(),
+      clusters: [],
+      history: [],
+      memories: [],
+      recentUserInput: 'I spent all week debugging a race condition in production',
+    })
+    expect(opps.length).toBeGreaterThan(0)
+    expect(opps[0].sourceKind).toBe('user_input')
+  })
+
+  it('returns empty for empty profile with no clusters or input', () => {
+    const opps = discoverOpportunities({ profile: makeProfile(), clusters: [], history: [], memories: [] })
+    expect(opps).toEqual([])
+  })
+
+  it('handles null profile', () => {
+    const opps = discoverOpportunities({ profile: null, clusters: [], history: [], memories: [] })
+    expect(opps).toEqual([])
   })
 })
