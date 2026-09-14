@@ -19,10 +19,38 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Relay",
+  title: {
+    default: "Relay — Know what to do next",
+    template: "%s — Relay",
+  },
   description:
-    "Team lead operations: qualify leads, write in your voice, and track what actually works.",
-  robots: { index: false, follow: false },
+    "Relay tells you what deserves your attention — and helps you act on it. Find opportunities, qualify prospects, draft in your voice, and build authority with Studio.",
+  keywords: [
+    "sales outreach",
+    "lead qualification",
+    "content creation",
+    "AI assistant",
+    "voice-calibrated drafts",
+    "prospect scoring",
+  ],
+  authors: [{ name: "Relay" }],
+  creator: "Relay",
+  metadataBase: new URL("https://relay.app"),
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    siteName: "Relay",
+    title: "Relay — Know what to do next",
+    description:
+      "Relay tells you what deserves your attention — and helps you act on it.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Relay — Know what to do next",
+    description:
+      "Relay tells you what deserves your attention — and helps you act on it.",
+  },
+  robots: { index: true, follow: true },
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -38,7 +66,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
       lang="en"

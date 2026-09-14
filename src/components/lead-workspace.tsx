@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   Check,
   ChevronDown,
   ChevronUp,
@@ -95,6 +96,107 @@ function ScoreBreakdown({ score }: { score: ScoreResult }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function NextBestAction({
+  lead,
+  verdict,
+  hasReply,
+  hasPriorSend,
+  followupEligible,
+}: {
+  lead: LeadDetail
+  verdict: string
+  hasReply: boolean
+  hasPriorSend: boolean
+  followupEligible: boolean
+}) {
+  type Action = { label: string; description: string; cta: string; href?: string }
+  let action: Action
+
+  if (hasReply) {
+    action = {
+      label: 'Reply now',
+      description: 'They wrote back. Every hour you wait lowers your chances.',
+      cta: 'Draft a reply',
+    }
+  } else if (followupEligible) {
+    action = {
+      label: 'Follow up',
+      description: 'No response yet. One follow-up, then move on.',
+      cta: 'Generate follow-up',
+    }
+  } else if (lead.status === 'followed_up') {
+    action = {
+      label: 'Waiting',
+      description: 'Follow-up sent. No further action unless they reply.',
+      cta: 'Review lead',
+    }
+  } else if (hasPriorSend) {
+    action = {
+      label: 'Waiting',
+      description: 'First message sent. Waiting for a reply.',
+      cta: 'Review lead',
+    }
+  } else if (verdict === 'send') {
+    action = {
+      label: 'Send first message',
+      description: 'Strong lead. Reach out while the signal is fresh.',
+      cta: 'Generate draft',
+    }
+  } else if (verdict === 'research_more') {
+    action = {
+      label: 'Do more research',
+      description: 'Promising, but not enough evidence yet. Add proof or context.',
+      cta: 'Add research',
+    }
+  } else {
+    action = {
+      label: 'Not ready',
+      description: 'This lead scored low. Focus on stronger opportunities.',
+      cta: 'Find better leads',
+      href: '/prospect',
+    }
+  }
+
+  const isUrgent = hasReply || followupEligible || verdict === 'send'
+
+  return (
+    <div className={cn(
+      'rounded-xl border p-4',
+      isUrgent
+        ? 'border-orange/20 bg-orange/[0.04]'
+        : 'border-line bg-bone-raised',
+    )}>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-label text-stone">Next best action</p>
+          <p className="mt-1 text-[15px] font-medium text-ink">{action.label}</p>
+          <p className="mt-0.5 text-[13px] text-graphite">{action.description}</p>
+        </div>
+        <div className="shrink-0">
+          {action.href ? (
+            <a
+              href={action.href}
+              className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-[13px] font-medium text-ink transition-all hover:bg-bone active:scale-[0.97]"
+            >
+              {action.cta}
+            </a>
+          ) : (
+            <span className={cn(
+              'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-medium',
+              isUrgent
+                ? 'bg-orange text-bone'
+                : 'bg-ink text-bone',
+            )}>
+              {action.cta}
+              <ArrowRight className="size-3.5" />
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -280,7 +382,7 @@ export function LeadWorkspace({
         <div className="flex flex-col lg:flex-row">
           {/* Lead info */}
           <div className="flex-1 p-5 sm:p-6">
-            <Link href="/" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 -ml-2 text-sm text-graphite transition-colors hover:bg-bone hover:text-ink">
+            <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 -ml-2 text-sm text-graphite transition-colors hover:bg-bone hover:text-ink">
               <ArrowLeft className="size-4" aria-hidden="true" />
               Back to Today
             </Link>
@@ -421,6 +523,19 @@ export function LeadWorkspace({
               </Button>
             </div>
           </div>
+        </section>
+      )}
+
+      {/* ═══ NEXT BEST ACTION ═══ */}
+      {canDraft && !locked && (
+        <section className="reveal-up stagger-1">
+          <NextBestAction
+            lead={lead}
+            verdict={verdict}
+            hasReply={hasReply}
+            hasPriorSend={hasPriorSend}
+            followupEligible={followupEligible}
+          />
         </section>
       )}
 

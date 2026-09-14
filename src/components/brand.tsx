@@ -16,11 +16,16 @@ export function BrandMark({ className }: { className?: string }) {
   )
 }
 
-export function RelayBrand({ className }: { className?: string }) {
+export function RelayBrand({ className, light }: { className?: string; light?: boolean }) {
   return (
     <span className={cn('inline-flex items-center gap-1.5', className)}>
       <BrandMark />
-      <span className="text-[14px] font-semibold tracking-[-0.01em] text-ink">
+      <span
+        className={cn(
+          'text-[14px] font-semibold tracking-[-0.01em]',
+          light ? 'text-bone' : 'text-ink',
+        )}
+      >
         Relay
       </span>
     </span>

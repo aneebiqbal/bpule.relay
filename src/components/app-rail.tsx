@@ -4,19 +4,16 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  BookOpen,
   CalendarDays,
-  FileUp,
-  IdCard,
-  LogOut,
-  PenLine,
-  Plus,
-  Search,
-  ShieldCheck,
-  Sparkles,
-  Users,
+  Target,
   Briefcase,
-  Command,
+  PenLine,
+  IdCard,
+  BookOpen,
+  Search,
+  Users,
+  Settings,
+  LogOut,
 } from 'lucide-react'
 import { cn } from 'cn'
 import { RelayBrand } from '@/components/brand'
@@ -25,36 +22,80 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { APP_VERSION } from '@/lib/version'
 import type { RepRole } from '@/lib/domain/types'
 
-const RELAY_NAV = [
-  { href: '/', label: 'Today', icon: CalendarDays, exact: true },
-  { href: '/prospect', label: 'Prospect Check', icon: Search, exact: true },
-  { href: '/content', label: 'Content', icon: PenLine, exact: false, studio: true },
-  { href: '/leads/new', label: 'New lead', icon: Plus, exact: true },
-  { href: '/upwork', label: 'Upwork', icon: Briefcase, exact: false },
+const WORK_NAV = [
+  { href: '/dashboard', label: 'Today', icon: CalendarDays, exact: true },
+  { href: '/leads', label: 'Leads', icon: Target, exact: false },
+  { href: '/upwork', label: 'Jobs', icon: Briefcase, exact: false },
+]
+
+const CREATE_NAV = [
+  { href: '/content', label: 'Studio', icon: PenLine, exact: false, studio: true },
+]
+
+const INTELLIGENCE_NAV = [
+  { href: '/profiles', label: 'Profiles', icon: IdCard, exact: false },
+  { href: '/facts', label: 'Knowledge', icon: BookOpen, exact: false },
   { href: '/archive', label: 'Archive', icon: Search, exact: false },
 ]
 
-const SYSTEM_NAV = [
+const ACCOUNT_NAV = [
   { href: '/team', label: 'Team', icon: Users, exact: false },
-  { href: '/profiles', label: 'Knowledge', icon: IdCard, exact: false },
-  { href: '/facts', label: 'Facts', icon: BookOpen, exact: false },
+  { href: '/account', label: 'Settings', icon: Settings, exact: false },
 ]
 
-const SOURCER_EXTRA = [
-  { href: '/leads/import', label: 'Import', icon: FileUp, exact: false },
+const ADMIN_EXTRA = [
+  { href: '/manage-profiles', label: 'Manage', icon: IdCard, exact: false },
 ]
-
-const ADMIN_NAV = {
-  href: '/manage-profiles',
-  label: 'Manage',
-  icon: ShieldCheck,
-  exact: false,
-}
 
 const ROLE_LABEL: Record<RepRole, string> = {
   admin: 'Admin',
   rep: 'Rep',
   sourcer: 'Sourcer',
+}
+
+type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }>; exact: boolean; studio?: boolean }
+type NavSectionProps = { label: string; items: NavItem[]; isActive: (href: string, exact: boolean) => boolean; studio?: boolean }
+
+function NavSection({ label, items, isActive, studio }: NavSectionProps) {
+  return (
+    <div>
+      <div className="mb-1 px-2 pt-1">
+        <span className="text-label text-stone">{label}</span>
+      </div>
+      {items.map(({ href, label: itemLabel, icon: Icon, exact }) => {
+        const active = isActive(href, exact)
+        return (
+          <Link
+            key={href}
+            href={href}
+            aria-current={active ? 'page' : undefined}
+            className={cn(
+              'group relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150',
+              active
+                ? studio
+                  ? 'bg-cobalt text-bone'
+                  : 'bg-ink text-bone'
+                : 'text-graphite hover:bg-bone-raised hover:text-ink',
+            )}
+          >
+            <Icon
+              className={cn(
+                'size-4 shrink-0 transition-colors',
+                active
+                  ? 'text-bone'
+                  : studio
+                    ? 'text-cobalt/60 group-hover:text-cobalt'
+                    : 'text-stone group-hover:text-ink',
+              )}
+              aria-hidden="true"
+              strokeWidth={active ? 2 : 1.7}
+            />
+            <span>{itemLabel}</span>
+          </Link>
+        )
+      })}
+    </div>
+  )
 }
 
 export interface AppRailProps {
@@ -69,7 +110,6 @@ export interface AppRailProps {
 export function AppRail({
   repName,
   role,
-  calibrated,
   demo,
   todaySends,
   dailyLimit,
@@ -77,13 +117,6 @@ export function AppRail({
   const pathname = usePathname()
   const router = useRouter()
   const [sends, setSends] = useState(todaySends)
-
-  const NAV =
-    role === 'admin'
-      ? [...RELAY_NAV, ADMIN_NAV, ...SYSTEM_NAV]
-      : role === 'sourcer'
-        ? [...RELAY_NAV.slice(0, 2), ...SOURCER_EXTRA, ...RELAY_NAV.slice(2), ...SYSTEM_NAV]
-        : [...RELAY_NAV, ...SYSTEM_NAV]
 
   useEffect(() => {
     let cancelled = false
@@ -171,118 +204,26 @@ export function AppRail({
         </div>
 
         {/* Nav */}
-        <nav className="flex flex-1 flex-col gap-0.5 px-2.5 pb-3">
-          {/* Relay section */}
-          <div className="mb-1 px-2 pt-1">
-            <span className="text-label text-stone">Relay</span>
+        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-3">
+          <NavSection label="Work" items={WORK_NAV} isActive={isActive} />
+          <div className="mt-3">
+            <NavSection label="Create" items={CREATE_NAV} isActive={isActive} studio />
           </div>
-          {NAV.filter(n => !('studio' in n) && !SYSTEM_NAV.includes(n) && n.href !== '/manage-profiles').map(({ href, label, icon: Icon, exact }) => {
-            const active = isActive(href, exact)
-            return (
-              <Link
-                key={href}
-                href={href}
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'group relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150',
-                  active
-                    ? 'bg-ink text-bone'
-                    : 'text-graphite hover:bg-bone-raised hover:text-ink',
-                )}
-              >
-                <Icon
-                  className={cn(
-                    'size-4 shrink-0 transition-colors',
-                    active ? 'text-bone' : 'text-stone group-hover:text-ink',
-                  )}
-                  aria-hidden="true"
-                  strokeWidth={active ? 2 : 1.7}
-                />
-                <span>{label}</span>
-              </Link>
-            )
-          })}
-
-          {/* Content / Studio */}
-          <div className="mb-1 mt-4 px-2 pt-1">
-            <span className="text-label text-stone">Studio</span>
+          <div className="mt-3">
+            <NavSection label="Intelligence" items={INTELLIGENCE_NAV} isActive={isActive} />
           </div>
-          {NAV.filter(n => 'studio' in n).map(({ href, label, icon: Icon, exact }) => {
-            const active = isActive(href, exact)
-            return (
-              <Link
-                key={href}
-                href={href}
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'group relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150',
-                  active
-                    ? 'bg-cobalt text-bone'
-                    : 'text-graphite hover:bg-bone-raised hover:text-ink',
-                )}
-              >
-                <Icon
-                  className={cn(
-                    'size-4 shrink-0 transition-colors',
-                    active ? 'text-bone' : 'text-cobalt/60 group-hover:text-cobalt',
-                  )}
-                  aria-hidden="true"
-                  strokeWidth={active ? 2 : 1.7}
-                />
-                <span>{label}</span>
-              </Link>
-            )
-          })}
-
-          {/* System */}
-          <div className="mb-1 mt-4 px-2 pt-1">
-            <span className="text-label text-stone">System</span>
+          {role === 'admin' && (
+            <div className="mt-3">
+              <NavSection label="Admin" items={ADMIN_EXTRA} isActive={isActive} />
+            </div>
+          )}
+          <div className="mt-3">
+            <NavSection label="Account" items={ACCOUNT_NAV} isActive={isActive} />
           </div>
-          {NAV.filter(n => SYSTEM_NAV.includes(n) || n.href === '/manage-profiles').map(({ href, label, icon: Icon, exact }) => {
-            const active = isActive(href, exact)
-            return (
-              <Link
-                key={href}
-                href={href}
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'group relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150',
-                  active
-                    ? 'bg-ink text-bone'
-                    : 'text-graphite hover:bg-bone-raised hover:text-ink',
-                )}
-              >
-                <Icon
-                  className={cn(
-                    'size-4 shrink-0 transition-colors',
-                    active ? 'text-bone' : 'text-stone group-hover:text-ink',
-                  )}
-                  aria-hidden="true"
-                  strokeWidth={active ? 2 : 1.7}
-                />
-                <span>{label}</span>
-              </Link>
-            )
-          })}
         </nav>
 
         {/* Bottom */}
         <div className="border-t border-line px-3 py-3 space-y-2">
-          <Link
-            href="/onboarding"
-            className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors hover:bg-bone-raised"
-          >
-            <Sparkles className="size-4 shrink-0 text-orange" aria-hidden="true" />
-            <span className="flex-1 text-graphite">Your voice</span>
-            {calibrated ? (
-              <span className="text-label text-stone">saved</span>
-            ) : (
-              <span className="rounded bg-orange/10 px-1.5 py-0.5 text-label text-orange">
-                start
-              </span>
-            )}
-          </Link>
-
           <div className="flex items-center justify-between gap-2 px-1">
             <IdentityChip name={repName} subtitle={ROLE_LABEL[role]} />
             <button
@@ -309,24 +250,28 @@ export function AppRail({
         aria-label="Primary"
       >
         <div className="flex items-stretch">
-          {[...RELAY_NAV.slice(0, 4), SYSTEM_NAV[0]].map(({ href, label, icon: Icon, exact }) => {
+          {[
+            { href: '/dashboard', label: 'Today', icon: CalendarDays, exact: true },
+            { href: '/leads', label: 'Leads', icon: Target, exact: false },
+            { href: '/content', label: 'Studio', icon: PenLine, exact: false, studio: true },
+            { href: '/account', label: 'Account', icon: Settings, exact: false },
+          ].map(({ href, label, icon: Icon, exact, studio }) => {
             const active = isActive(href, exact)
-            const isStudio = 'studio' in { href } && href === '/content'
             return (
               <Link
                 key={href}
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors',
+                  'relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors',
                   active ? 'text-ink' : 'text-graphite hover:text-ink',
                 )}
               >
                 {active && (
-                  <span className={cn('absolute top-0 left-1/2 h-[2px] w-5 -translate-x-1/2 rounded-full', isStudio ? 'bg-cobalt' : 'bg-orange')} />
+                  <span className={cn('absolute top-0 left-1/2 h-[2px] w-5 -translate-x-1/2 rounded-full', studio ? 'bg-cobalt' : 'bg-orange')} />
                 )}
                 <Icon
-                  className={cn('size-4.5 transition-all', active ? (isStudio ? 'text-cobalt' : 'text-orange') : '')}
+                  className={cn('size-[18px] transition-all', active ? (studio ? 'text-cobalt' : 'text-orange') : '')}
                   aria-hidden="true"
                   strokeWidth={active ? 2 : 1.7}
                 />

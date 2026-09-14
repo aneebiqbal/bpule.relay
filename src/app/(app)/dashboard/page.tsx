@@ -4,7 +4,6 @@ import {
   MessageCircle,
   Plus,
   Clock,
-  ChevronRight,
   Search,
   Target,
   Sun,
@@ -23,19 +22,26 @@ import { generateDailyIdeas } from '@/lib/content/daily-ideas'
 
 export const dynamic = 'force-dynamic'
 
-function timeContext(): { icon: LucideIcon; sub: string } {
-  const h = new Date().getHours()
-  if (h < 5) return { icon: Moon, sub: 'The queue will be fresh in the morning.' }
-  if (h < 12) return { icon: Sun, sub: 'A fresh queue. Start at the top.' }
-  if (h < 17) return { icon: Sun, sub: 'Keep the momentum going.' }
-  if (h < 21) return { icon: Sunset, sub: 'Wrap up strong.' }
-  return { icon: Moon, sub: 'The queue will be fresh in the morning.' }
+function timeGreeting(icon: LucideIcon, sub: string) {
+  return { icon, sub }
 }
 
-type PriorityItem = {
+function getTimeContext(): { icon: LucideIcon; greeting: string; sub: string } {
+  const h = new Date().getHours()
+  if (h < 5) return { ...timeGreeting(Moon, 'The queue will be fresh in the morning.'), greeting: 'Good evening' }
+  if (h < 12) return { ...timeGreeting(Sun, 'A fresh queue. Start at the top.'), greeting: 'Good morning' }
+  if (h < 17) return { ...timeGreeting(Sun, 'Keep the momentum going.'), greeting: 'Good afternoon' }
+  if (h < 21) return { ...timeGreeting(Sunset, 'Wrap up strong.'), greeting: 'Good evening' }
+  return { ...timeGreeting(Moon, 'The queue will be fresh in the morning.'), greeting: 'Good evening' }
+}
+
+type ActionItem = {
+  id: string
   lead: Lead
-  reason: 'replied' | 'followup' | 'new'
-  detail: string
+  action: string
+  reason: string
+  priority: number
+  kind: 'reply' | 'followup' | 'new' | 'apply'
 }
 
 export default async function TodayPage() {
@@ -45,38 +51,50 @@ export default async function TodayPage() {
   const { mine, sendBudgets, notifications, followupsDue, team } = dash
 
   const firstName = user?.rep.name.split(' ')[0] ?? 'there'
-  const time = timeContext()
+  const time = getTimeContext()
 
   const coldQueue = [...mine.queue].sort(
     (a, b) => (b.score ?? 0) - (a.score ?? 0) || b.createdAt.localeCompare(a.createdAt),
   )
   const followupIds = new Set(followupsDue.map((f) => f.lead.id))
 
-  const priority: PriorityItem[] = [
-    ...mine.replies.map((lead) => ({
+  // Build prioritized action queue
+  const actions: ActionItem[] = [
+    ...mine.replies.map((lead, i) => ({
+      id: lead.id,
       lead,
-      reason: 'replied' as const,
-      detail: 'They wrote back. Answer them first.',
+      action: 'Reply',
+      reason: 'They wrote back',
+      priority: 100 - i,
+      kind: 'reply' as const,
     })),
-    ...followupsDue.map((f) => ({
+    ...followupsDue.map((f, i) => ({
+      id: f.lead.id,
       lead: f.lead,
-      reason: 'followup' as const,
-      detail: `Contacted ${f.daysSinceContact} days ago, no reply yet.`,
+      action: 'Follow up',
+      reason: `${f.daysSinceContact} days, no reply`,
+      priority: 80 - i,
+      kind: 'followup' as const,
     })),
     ...coldQueue
       .filter((lead) => !followupIds.has(lead.id))
-      .map((lead) => ({
+      .slice(0, 6)
+      .map((lead, i) => ({
+        id: lead.id,
         lead,
-        reason: 'new' as const,
-        detail: signalById(lead.signalType)?.description ?? 'Scored and ready to work.',
+        action: 'Contact',
+        reason: signalById(lead.signalType)?.description ?? 'Scored and ready',
+        priority: 50 - i,
+        kind: 'new' as const,
       })),
   ]
 
-  const [next, ...rest] = priority
+  const [topAction, ...queueRest] = actions
   const replyCount = mine.replies.length
   const followupCount = followupsDue.length
+  const totalActions = actions.length
 
-  const knownLeads = new Map(priority.map((p) => [p.lead.id, p.lead.company]))
+  const knownLeads = new Map(actions.map((a) => [a.lead.id, a.lead.company]))
   const notificationItems: NotificationItem[] = notifications.map((n) => {
     const leadId = typeof n.payload.lead_id === 'string' ? n.payload.lead_id : null
     return {
@@ -88,12 +106,13 @@ export default async function TodayPage() {
     }
   })
 
-  const sendsLeftToday = sendBudgets.reduce((sum, b) => sum + Math.max(0, b.limit - b.used), 0)
-  const atAnyCeiling = sendBudgets.some((b) => b.used >= b.limit)
-  const dailyLimit = sendBudgets.reduce((sum, b) => sum + b.limit, 0)
+  const totalLimit = sendBudgets.reduce((sum, b) => sum + b.limit, 0)
+  const totalUsed = sendBudgets.reduce((sum, b) => sum + b.used, 0)
+  const sendsLeftToday = totalLimit - totalUsed
+  const atAnyCeiling = totalUsed >= totalLimit
   const replyRatePct = team.replyRate !== null ? Math.round(team.replyRate * 100) : null
 
-  // Load content idea
+  // Load content idea for header
   let contentForToday = dash.contentForToday
   if (!contentForToday && user) {
     try {
@@ -126,13 +145,21 @@ export default async function TodayPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* ── Header ── */}
-      <header className="flex items-end justify-between">
+      <header className="reveal-up flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-label text-stone">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
-          <h1 className="text-display text-[28px] text-ink mt-1">{firstName}</h1>
-          <p className="text-[14px] text-graphite mt-1">{time.sub}</p>
+          <p className="text-label text-stone">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+          </p>
+          <h1 className="text-display text-[28px] text-ink mt-1">
+            {time.greeting}, {firstName}.
+          </h1>
+          <p className="text-[14px] text-graphite mt-1">
+            {totalActions > 0
+              ? `You have ${totalActions} ${totalActions === 1 ? 'opportunity' : 'opportunities'} worth acting on today.`
+              : time.sub}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Link
@@ -152,12 +179,44 @@ export default async function TodayPage() {
         </div>
       </header>
 
-      {/* ── Content for Today ── */}
+      {/* ── Signals — what needs attention ── */}
+      {(replyCount > 0 || followupCount > 0) && (
+        <section className="reveal-up stagger-1 grid gap-2 sm:grid-cols-2">
+          {replyCount > 0 && (
+            <Link
+              href={mine.replies[0] ? `/leads/${mine.replies[0].id}` : '/leads/new'}
+              className="group flex items-center gap-3 rounded-lg border border-status-success/15 bg-status-success/[0.04] px-4 py-3 transition-all hover:border-status-success/30"
+            >
+              <MessageCircle className="size-4 text-status-success" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-ink">{replyCount} {replyCount === 1 ? 'reply' : 'replies'} waiting</p>
+                <p className="text-[12px] text-graphite truncate">{mine.replies[0]?.company}</p>
+              </div>
+              <ArrowRight className="size-3.5 text-stone transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          )}
+          {followupCount > 0 && (
+            <Link
+              href={followupsDue[0] ? `/leads/${followupsDue[0].lead.id}` : '/leads/new'}
+              className="group flex items-center gap-3 rounded-lg border border-status-warning/15 bg-status-warning/[0.04] px-4 py-3 transition-all hover:border-status-warning/30"
+            >
+              <Clock className="size-4 text-status-warning" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-ink">{followupCount} follow-up{followupCount === 1 ? '' : 's'} due</p>
+                <p className="text-[12px] text-graphite truncate">{followupsDue[0]?.lead.company}</p>
+              </div>
+              <ArrowRight className="size-3.5 text-stone transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          )}
+        </section>
+      )}
+
+      {/* ── Today's Pick / Studio ── */}
       {contentForToday && (
-        <section className="rounded-xl border border-line bg-white p-4">
+        <section className="reveal-up stagger-2 rounded-xl border border-cobalt/15 bg-cobalt/[0.03] p-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-label text-stone">Content for Today</p>
+              <p className="text-label text-cobalt/70">Studio · Worth saying today</p>
               <h3 className="mt-1 text-[15px] font-medium text-ink leading-snug">{contentForToday.ideaTitle}</h3>
               <p className="mt-1 text-[12px] text-graphite line-clamp-2">{contentForToday.ideaReason}</p>
               <p className="mt-2 text-[11px] text-stone">
@@ -165,7 +224,7 @@ export default async function TodayPage() {
                 {contentForToday.draftId ? ' · Draft saved' : ''}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="shrink-0">
               {contentForToday.draftId ? (
                 <a
                   href={`/studio/drafts/${contentForToday.draftId}`}
@@ -176,7 +235,7 @@ export default async function TodayPage() {
               ) : (
                 <a
                   href={`/content/${contentForToday.personaId}/today`}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-orange px-3 py-1.5 text-[12px] font-medium text-bone hover:bg-orange-dark"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-cobalt px-3 py-1.5 text-[12px] font-medium text-bone hover:bg-cobalt-dark"
                 >
                   Write this
                 </a>
@@ -186,118 +245,86 @@ export default async function TodayPage() {
         </section>
       )}
 
-      {/* ── Signals — what needs attention ── */}
-      {(replyCount > 0 || followupCount > 0) && (
-        <section className="space-y-2">
-          <h2 className="text-label text-stone">Needs attention</h2>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {replyCount > 0 && (
-              <Link
-                href={mine.replies[0] ? `/leads/${mine.replies[0].id}` : '/leads/new'}
-                className="group flex items-center gap-3 rounded-lg border border-status-success/15 bg-status-success/[0.04] px-4 py-3 transition-all hover:border-status-success/30"
-              >
-                <MessageCircle className="size-4 text-status-success" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-ink">{replyCount} {replyCount === 1 ? 'reply' : 'replies'} waiting</p>
-                  <p className="text-[12px] text-graphite truncate">{mine.replies[0]?.company}</p>
-                </div>
-                <ArrowRight className="size-3.5 text-stone transition-transform group-hover:translate-x-0.5" />
-              </Link>
-            )}
-            {followupCount > 0 && (
-              <Link
-                href={followupsDue[0] ? `/leads/${followupsDue[0].lead.id}` : '/leads/new'}
-                className="group flex items-center gap-3 rounded-lg border border-status-warning/15 bg-status-warning/[0.04] px-4 py-3 transition-all hover:border-status-warning/30"
-              >
-                <Clock className="size-4 text-status-warning" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-ink">{followupCount} follow-up{followupCount === 1 ? '' : 's'} due</p>
-                  <p className="text-[12px] text-graphite truncate">{followupsDue[0]?.lead.company}</p>
-                </div>
-                <ArrowRight className="size-3.5 text-stone transition-transform group-hover:translate-x-0.5" />
-              </Link>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* ── Priority queue ── */}
-      {next && (
-        <section className="space-y-3">
+      {/* ── Action Queue ── */}
+      {topAction && (
+        <section className="reveal-up stagger-2 space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-label text-stone">Priority</h2>
-            {rest.length > 0 && (
-              <span className="text-mono-medium text-[11px] text-stone">{rest.length} more</span>
+            <h2 className="text-label text-stone">Your Relay</h2>
+            {queueRest.length > 0 && (
+              <span className="text-mono-medium text-[11px] text-stone">{queueRest.length} more</span>
             )}
           </div>
 
-          {/* Top priority */}
+          {/* Top priority — hero card */}
           <Link
-            href={`/leads/${next.lead.id}`}
-            className="group block rounded-lg border border-line bg-bone-raised p-4 transition-all hover:border-orange/30 hover:shadow-sm"
+            href={`/leads/${topAction.lead.id}`}
+            className="group block rounded-xl border border-orange/15 bg-orange/[0.03] p-5 transition-all hover:border-orange/30 hover:shadow-sm"
           >
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-4">
               <div className="shrink-0">
-                {next.lead.score !== null ? (
-                  <ScoreRing score={next.lead.score} size={44} />
+                {topAction.lead.score !== null ? (
+                  <ScoreRing score={topAction.lead.score} size={48} />
                 ) : (
-                  <div className="flex size-[44px] items-center justify-center rounded-full border border-dashed border-line">
+                  <div className="flex size-[48px] items-center justify-center rounded-full border border-dashed border-line">
                     <Target className="size-4 text-stone" />
                   </div>
                 )}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-[15px] font-medium text-ink">{next.lead.company}</span>
-                  {next.reason === 'replied' && (
-                    <span className="rounded bg-status-success/10 px-1.5 py-0.5 text-[10px] font-medium text-status-success">replied</span>
+                  <span className="rounded bg-orange/10 px-1.5 py-0.5 text-[10px] font-medium text-orange">
+                    {topAction.action}
+                  </span>
+                  {topAction.kind === 'reply' && (
+                    <span className="rounded bg-status-success/10 px-1.5 py-0.5 text-[10px] font-medium text-status-success">high intent</span>
                   )}
-                  {next.reason === 'followup' && (
-                    <span className="rounded bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-status-warning">follow-up</span>
+                  {topAction.kind === 'followup' && (
+                    <span className="rounded bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-status-warning">due</span>
                   )}
                 </div>
-                {next.lead.contactName && (
-                  <p className="text-[13px] text-graphite">{next.lead.contactName}</p>
+                <h3 className="mt-1.5 text-[16px] font-medium text-ink">{topAction.lead.company}</h3>
+                {topAction.lead.contactName && (
+                  <p className="text-[13px] text-graphite">{topAction.lead.contactName}</p>
                 )}
-                <p className="mt-1 text-[13px] leading-relaxed text-graphite">{next.detail}</p>
+                <p className="mt-1 text-[13px] text-graphite">{topAction.reason}</p>
               </div>
               <div className="shrink-0 self-center">
                 <span className="inline-flex items-center gap-1 text-[13px] font-medium text-orange opacity-0 transition-opacity group-hover:opacity-100">
-                  Open <ArrowRight className="size-3.5" />
+                  Open lead <ArrowRight className="size-3.5" />
                 </span>
               </div>
             </div>
           </Link>
 
           {/* Rest of queue */}
-          {rest.length > 0 && (
+          {queueRest.length > 0 && (
             <div className="overflow-hidden rounded-lg border border-line bg-bone-raised">
               <ul className="divide-y divide-line">
-                {rest.map(({ lead, reason, detail }) => (
-                  <li key={lead.id}>
+                {queueRest.map((item, i) => (
+                  <li key={item.id}>
                     <Link
-                      href={`/leads/${lead.id}`}
+                      href={`/leads/${item.lead.id}`}
                       className="group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-bone"
                     >
-                      {lead.score !== null ? (
-                        <ScoreRing score={lead.score} size={32} />
+                      <span className="w-5 text-mono-medium text-[11px] text-stone/50 tabular-nums">
+                        {String(i + 2).padStart(2, '0')}
+                      </span>
+                      {item.lead.score !== null ? (
+                        <ScoreRing score={item.lead.score} size={28} />
                       ) : (
-                        <div className="flex size-[32px] items-center justify-center">
+                        <div className="flex size-[28px] items-center justify-center">
                           <Target className="size-3 text-stone" />
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="truncate text-[13px] font-medium text-ink">{lead.company}</span>
-                          {reason === 'replied' && (
-                            <span className="shrink-0 rounded bg-status-success/10 px-1.5 py-0.5 text-[9px] font-medium text-status-success">replied</span>
-                          )}
-                          {reason === 'followup' && (
-                            <span className="shrink-0 rounded bg-status-warning/10 px-1.5 py-0.5 text-[9px] font-medium text-status-warning">due</span>
-                          )}
+                          <span className="truncate text-[13px] font-medium text-ink">{item.lead.company}</span>
                         </div>
+                        <p className="truncate text-[11px] text-stone">{item.reason}</p>
                       </div>
-                      <ChevronRight className="size-3.5 text-stone/50 transition-transform group-hover:translate-x-0.5" />
+                      <span className="shrink-0 rounded bg-bone px-2 py-0.5 text-[10px] font-medium text-graphite">
+                        {item.action}
+                      </span>
                     </Link>
                   </li>
                 ))}
@@ -309,24 +336,24 @@ export default async function TodayPage() {
 
       {/* ── Notifications ── */}
       {notificationItems.length > 0 && (
-        <section>
+        <section className="reveal-up stagger-3">
           <NotificationFeed initial={notificationItems} />
         </section>
       )}
 
       {/* ── Operating metrics ── */}
-      <section className="rounded-lg border border-line bg-bone-raised">
+      <section className="reveal-up stagger-3 rounded-lg border border-line bg-bone-raised">
         <div className="grid divide-line sm:grid-cols-3 sm:divide-x">
           <div className="flex flex-col gap-0.5 px-4 py-3">
             <span className="text-label text-stone">Sends left</span>
             <span className="text-mono-medium text-lg font-medium text-ink">
               {atAnyCeiling ? 'At limit' : sendsLeftToday}
             </span>
-            <span className="text-[11px] text-stone">{atAnyCeiling ? 'Resumes tomorrow' : `of ${dailyLimit} today`}</span>
+            <span className="text-[11px] text-stone">{atAnyCeiling ? 'Resumes tomorrow' : `of ${totalLimit} today`}</span>
           </div>
           <div className="flex flex-col gap-0.5 px-4 py-3">
             <span className="text-label text-stone">Queue</span>
-            <span className="text-mono-medium text-lg font-medium text-ink">{priority.length}</span>
+            <span className="text-mono-medium text-lg font-medium text-ink">{totalActions}</span>
             <span className="text-[11px] text-stone">{replyCount} hot · {followupCount} due</span>
           </div>
           <div className="flex flex-col gap-0.5 px-4 py-3">
@@ -340,10 +367,10 @@ export default async function TodayPage() {
       </section>
 
       {/* ── Empty state ── */}
-      {!next && rest.length === 0 && (
-        <section className="rounded-lg border border-dashed border-line py-12 text-center">
+      {!topAction && queueRest.length === 0 && (
+        <section className="reveal-up stagger-2 rounded-lg border border-dashed border-line py-12 text-center">
           <div className="mx-auto max-w-xs space-y-3">
-            <p className="text-[15px] font-medium text-ink">Nothing to work right now.</p>
+            <p className="text-[15px] font-medium text-ink">Nothing needs your attention right now.</p>
             <p className="text-[13px] leading-relaxed text-graphite">
               Paste a LinkedIn profile to check if they are worth pursuing.
             </p>

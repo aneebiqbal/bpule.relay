@@ -442,4 +442,50 @@
     stroke-dasharray: 4 4;
     animation: signal-line 1.5s linear infinite;
   }
+
+  @keyframes signal-flow {
+    to { stroke-dashoffset: -16; }
+  }
+
+  @keyframes signal-blink {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  @keyframes number-tick {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .signal-flow {
+    stroke-dasharray: 8 8;
+    animation: signal-flow 0.8s linear infinite;
+  }
+
+  .signal-blink {
+    animation: signal-blink 1.6s ease-in-out infinite;
+  }
+
+  .number-tick {
+    animation: number-tick 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* ── Gradient mesh for auth pages ── */
+  .gradient-mesh {
+    background-image:
+      radial-gradient(ellipse 600px 300px at 10% -5%, color-mix(in srgb, var(--orange) 3%, transparent) 0%, transparent 60%),
+      radial-gradient(ellipse 400px 200px at 90% 105%, color-mix(in srgb, var(--cobalt) 3%, transparent) 0%, transparent 60%);
+  }
+
+  /* ── Public section rhythm ── */
+  .section-padding {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+  @media (min-width: 640px) {
+    .section-padding { padding-left: 2rem; padding-right: 2rem; }
+  }
+  @media (min-width: 1024px) {
+    .section-padding { padding-left: 3rem; padding-right: 3rem; }
+  }
 }
