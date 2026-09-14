@@ -6,7 +6,7 @@ export { longcatHost, tier0Host, tier4Host } from '@/lib/ai/config'
 
 /**
  * Build the LongCat-2.0 drafting chain with Groq fallback.
- * LongCat is the primary; if it fails, Groq's strong tier takes over.
+ * LongCat is the primary writer; Groq strong is the fallback.
  */
 export function buildLongcatDraftChain(): ChainStep[] {
   const lc = longcatHost()
@@ -19,7 +19,7 @@ export function buildLongcatDraftChain(): ChainStep[] {
 
 /**
  * Build the OpenAI drafting chain with Groq fallback.
- * OpenAI is the primary; if it fails, Groq's strong tier takes over.
+ * GPT is escalation-only — used when LongCat fails quality gates.
  */
 export function buildOpenaiDraftChain(): ChainStep[] {
   const oai = tier4Host()
@@ -56,26 +56,12 @@ export interface ChainStep {
 }
 
 /**
- * The full tier chain for a task, in try-order: Groq's free tier (tier 0,
- * primary — no card required, generous rate limits, verified against
- * published limits) first, then DeepSeek V4 Flash across every configured
- * host (tier 1, first paid escalation), then DeepSeek V4 Pro across every
- * configured host (tier 2, escalation only — callers decide whether to
- * actually use it, this just says what's available if they do), then OpenAI
- * (tier 4, final safety net).
- *
- * Cost-tier labels ('tier1'..'tier4') are historical from the prior
- * architecture pass and kept as-is (matches the extraction_runs cost_tier
- * check constraint, migration 0016) rather than renumbered — Groq's step
- * below is logged as 'tier1' since it's now the first tier tried, DeepSeek
- * Flash as 'tier2', DeepSeek Pro escalation as 'tier3', OpenAI stays 'tier4'.
- * The Team page's tier labels are updated to match (Groq/free, DeepSeek
- * Flash, DeepSeek Pro, OpenAI) so the numbers on screen describe what's
- * actually running, not the old ordering.
+ * The full tier chain for a task, in try-order: Groq's free tier first
+ * (no card required), then OpenAI as escalation fallback. DeepSeek is
+ * excluded by default (SCOUT_DEEPSEEK_ENABLED=0).
  *
  * A host only appears if it has a configured API key, so an environment with
- * only GROQ_API_KEY set still works exactly as it always has — Groq-only is
- * the default, working state, not a degraded one.
+ * only GROQ_API_KEY set still works — Groq-only is the default, working state.
  */
 export function tier0Chain(kind: 'cheap' | 'strong'): ChainStep[] {
   const groq = tier0Host(kind)
@@ -97,28 +83,53 @@ export function fallbackChain(): ChainStep[] {
 
 /**
  * Full ordered chain for a structuring task (extraction, classification,
- * calibration): LongCat first (large token budget), then Groq free tier,
- * then DeepSeek tier 1 hosts, then OpenAI. DeepSeek Pro (tier2Chain()) is
- * escalation only and fetched separately by callers that decide to escalate.
+ * calibration): Groq free tier first (cheap/free), then LongCat for complex
+ * cases, then OpenAI as final fallback. DeepSeek excluded by default.
  */
 export function pickModelChain(task: 'extract' | 'classify' | 'calibrate'): ChainStep[] {
   void task
-  const lc = longcatHost()
-  const chain: ChainStep[] = []
-  if (lc) chain.push({ costTier: 'tier1', host: lc })
-  return [...chain, ...tier0Chain('cheap'), ...tier1Chain(), ...fallbackChain()]
+  return [...tier0Chain('cheap'), ...tier1Chain(), ...fallbackChain()]
 }
 
 /**
- * Full ordered chain for drafting: LongCat first (large token budget,
- * good for candidate diversity), then Groq free tier, then DeepSeek,
- * then OpenAI as final fallback.
+ * Full ordered chain for drafting: LongCat first (strong writer), then Groq
+ * strong, then OpenAI as escalation fallback. DeepSeek excluded by default.
  */
 export function pickDraftChain(): ChainStep[] {
   const lc = longcatHost()
   const chain: ChainStep[] = []
   if (lc) chain.push({ costTier: 'tier1', host: lc })
-  return [...chain, ...tier0Chain('strong'), ...tier1Chain(), ...fallbackChain()]
+  return [...chain, ...tier0Chain('strong'), ...fallbackChain()]
+}
+
+/**
+ * Centralized decision: should a result escalate to GPT (premium)?
+ * Returns the escalation reason, or null if GPT should NOT be called.
+ *
+ * GPT runs only when:
+ * - cheap/LongCat result fails deterministic quality gates, OR
+ * - structured output is malformed after retries, OR
+ * - a high-value generation cannot meet quality threshold.
+ *
+ * Never escalate merely because a cheaper model returned a valid result.
+ */
+export function shouldEscalateToPremium(reason: {
+  primaryPassed: boolean
+  primaryScore: number
+  isHighValue: boolean
+  malformedOutput: boolean
+  attemptCount: number
+}): { shouldEscalate: boolean; reason: string } {
+  if (reason.malformedOutput && reason.attemptCount >= 2) {
+    return { shouldEscalate: true, reason: 'malformed_output_retries_exhausted' }
+  }
+  if (!reason.primaryPassed && reason.isHighValue) {
+    return { shouldEscalate: true, reason: 'high_value_quality_failure' }
+  }
+  if (!reason.primaryPassed && reason.primaryScore < 4) {
+    return { shouldEscalate: true, reason: 'quality_gate_failure' }
+  }
+  return { shouldEscalate: false, reason: '' }
 }
 
 /**

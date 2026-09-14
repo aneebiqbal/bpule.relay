@@ -1,9 +1,9 @@
 /**
- * Per-tier cost estimation, in USD per token. Rates verified against public
- * pricing pages in the September 2026 research pass; off-peak/peak both
- * tracked since DeepSeek's off-peak discount is real and roughly halves the
- * rate. These are estimates for the cost-by-tier report, not billing-grade
- * figures — each provider's invoice remains the source of truth.
+ * Per-tier cost estimation, in USD per token. These are estimates for the
+ * cost-by-tier report, not billing-grade figures — each provider's invoice
+ * remains the source of truth.
+ *
+ * v2.2: DeepSeek rates kept for reference but unused when disabled.
  */
 import { isDeepseekPeakHour } from '@/lib/ai/config'
 
@@ -14,24 +14,26 @@ interface TokenRate {
   outputPerMillion: number
 }
 
-const TIER1_OFF_PEAK: TokenRate = { inputPerMillion: 0.22, outputPerMillion: 0.66 }
-const TIER1_PEAK: TokenRate = { inputPerMillion: 0.44, outputPerMillion: 1.32 }
-const TIER2_OFF_PEAK: TokenRate = { inputPerMillion: 0.66, outputPerMillion: 1.98 }
-const TIER2_PEAK: TokenRate = { inputPerMillion: 1.32, outputPerMillion: 3.96 }
-/** Groq gpt-oss pricing; flat, no peak/off-peak split. */
-const TIER3_RATE: TokenRate = { inputPerMillion: 0.1, outputPerMillion: 0.5 }
-/** OpenAI gpt-4o-mini; flat, no peak/off-peak split. */
+/** Groq gpt-oss pricing (now tier1 in extraction chain). */
+const TIER1_RATE: TokenRate = { inputPerMillion: 0.1, outputPerMillion: 0.5 }
+/** DeepSeek Flash — kept for reference when re-enabled. */
+const TIER2_OFF_PEAK: TokenRate = { inputPerMillion: 0.22, outputPerMillion: 0.66 }
+const TIER2_PEAK: TokenRate = { inputPerMillion: 0.44, outputPerMillion: 1.32 }
+/** DeepSeek Pro — kept for reference when re-enabled. */
+const TIER3_OFF_PEAK: TokenRate = { inputPerMillion: 0.66, outputPerMillion: 1.98 }
+const TIER3_PEAK: TokenRate = { inputPerMillion: 1.32, outputPerMillion: 3.96 }
+/** OpenAI gpt-4o-mini. */
 const TIER4_RATE: TokenRate = { inputPerMillion: 0.15, outputPerMillion: 0.6 }
 
 function rateFor(tier: CostTier, at: Date): TokenRate {
   const peak = isDeepseekPeakHour(at)
   switch (tier) {
     case 'tier1':
-      return peak ? TIER1_PEAK : TIER1_OFF_PEAK
+      return TIER1_RATE
     case 'tier2':
       return peak ? TIER2_PEAK : TIER2_OFF_PEAK
     case 'tier3':
-      return TIER3_RATE
+      return peak ? TIER3_PEAK : TIER3_OFF_PEAK
     case 'tier4':
       return TIER4_RATE
   }

@@ -17,6 +17,7 @@ import {
   buildOpenaiDraftChain,
   pickDraftChain,
   tier2Chain,
+  shouldEscalateToPremium,
   type ChainStep,
   type CostTierName,
 } from '@/lib/ai/routing'
@@ -28,6 +29,15 @@ import { pickPlayForSignal } from '@/lib/score/plays'
 import { sanitizeDraft, siteIsLive } from '@/lib/facts/sanitize'
 import { classifyRoleFromTitle, rolePromptGuidance } from '@/lib/leads/targeting'
 import { strategyToPromptBlock } from '@/lib/relay/outreach-strategy'
+import {
+  ANTI_AI_RULES,
+  FACTUALITY_RULES,
+  SURVEILLANCE_RULES,
+  CTA_RULES,
+  SPECIFICITY_RULES,
+  VOICE_RULES,
+  FORMATTING_RULES,
+} from '@/lib/ai/prompts'
 
 /** One entry per model call made while producing one draft, for cost/tier reporting on the route. */
 export interface DraftCallLog {
@@ -77,6 +87,8 @@ export interface DraftResult {
   pickReason?: string
   /** Which few-shot examples informed this draft. */
   fewShotReason?: string
+  /** Reason for GPT escalation, if applicable. */
+  escalationReason?: string
   /** Every model call made while producing this draft, for cost/tier reporting. */
   callLog: DraftCallLog[]
 }
@@ -177,21 +189,17 @@ Write the draft first, then honestly run the tests on it, then the marker and th
     : TWO_TESTS
   return [
     'You write cold outreach messages for a software consultant. The message is copy-pasted by a human; you never send anything yourself.',
-    'Claim ONLY facts listed in the facts table. A number that is not in the facts table must not appear in the draft. If you are unsure, leave the number out.',
-    'Never fabricate a project, client, result, or credential. Never invent metrics. Never invent budgets, pain points, technologies, customers, revenue problems, project results, or relationships.',
+    FACTUALITY_RULES,
     'When the message lists a matched past project, reference it specifically; that referencing is the personalization. Without a matched project, stay with the signal, never invent a case.',
     'Rule on client names: a client may only be named when the matched proof item explicitly says permission is on file. Otherwise describe the project by shape (a trading dashboard, an internal QA tool) and never name the client.',
-    "Voice rule: the sender is ONE person. Write in first person singular. Never use 'we', 'our', or 'us' for the sender. Never mention a team, a headcount, or anyone else doing the work. A client's quoted words may keep their own 'we'.",
-    'Do not use em dashes anywhere in the draft. Write plain sentences in the sender\'s voice.',
-    'No emojis. No exclamation marks.',
-    'Keep the message short: a greeting, a specific reason for reaching out based on their signal, one relevant fact or question, and a close. Do not pad.',
-    'CTA rule: NEVER ask for a call, meeting, chat, or intro. The offer is ALWAYS a free Read — a short written review. Phrase it as "I can write up a quick read of your product" or similar. No exceptions.',
-    'Specificity rule: the one verifiable, specific thing about this person MUST be the hook. Not a generic opener. If you cannot name something specific the reader would recognize as truly theirs, do not send.',
-    'Anti-AI rules: Do not use phrases like "I came across your", "I was immediately excited", "With X+ years of experience", "I am confident", "I\'d love the opportunity", "hope this finds you well", "I hope this message finds you", "I wanted to reach out", "I noticed your company", "You recently raised", "which likely gives you some budget". These are generic AI tells or surveillance language. Start from the lead\'s actual situation.',
-    'Sound like a real person who read their profile, not a template. Vary sentence length. Be direct, not corporate.',
-    'Opening rule: A greeting is usually appropriate (Hey Sarah, / Hi Robby,). Never open with scraped intelligence like "You recently raised..." or "You are currently building...". The first line should create context, not expose surveillance.',
-    'Do not pitch too early. Default first-touch goal: earn a reply, not sell the entire service. A first message often needs only: context, relevant observation, small credibility signal, useful question or offer.',
-    'Micro-value: determine whether you can offer a useful small next step. Do not repeatedly generate "I can write up a quick audit." Choose something genuinely appropriate.',
+    VOICE_RULES,
+    FORMATTING_RULES,
+    CTA_RULES,
+    SPECIFICITY_RULES,
+    ANTI_AI_RULES,
+    'Sound like a real person who read their profile, not a template. Vary sentence length.',
+    SURVEILLANCE_RULES,
+    'Do not pitch too early. Default first-touch goal: earn a reply, not sell the entire service.',
     siteBlock,
     styleBlock ? `SENDER VOICE (mandatory):\n${styleBlock}` : '',
     testsBlock,
@@ -329,19 +337,13 @@ export function buildUserPrompt(
     .join('\n')
 }
 
-/** Escalate to tier 2 (DeepSeek V4 Pro) when the lead is a high-value send, or when neither best-of-two variant passed self-check. Mirrors the extraction escalation pattern, on the drafting side. */
-function shouldEscalateDraft(score: ScoreResult, primaryPassed: boolean): boolean {
-  if (score.total >= 10) return true
-  if (!primaryPassed) return true
-  return false
-}
-
 /**
- * Generate an outreach draft for a lead: best-of-two from two distinct model
- * families — LongCat-2.0 and OpenAI — running in parallel. Each side falls
- * back to Groq's free tier if its primary provider fails or times out, so
- * one provider's outage stalls neither draft. The stronger variant (by
- * self-check + code checks) is primary; the other is the visible alternate.
+ * Generate an outreach draft for a lead using conditional single-generation.
+ *
+ * Pipeline: LongCat → deterministic quality gate → PASS: return immediately.
+ * On FAIL: second candidate (Groq strong or corrective retry) → GPT escalation.
+ *
+ * GPT is NOT a normal pipeline stage. Target: <5% of generations reach GPT.
  */
 export async function generateDraft(input: DraftInput): Promise<DraftResult> {
   if (input.type === 'reply' && !input.conversationContext) {
@@ -357,11 +359,6 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
     )
   }
 
-  // Signal-evidence gate: if the claimed signal isn't supported by the
-  // evidence text, block generation. Drafting around a false signal premise
-  // produces fabricated claims ("you're hiring aggressively") that get sent to
-  // real people. Force a rescore instead.
-  // Skip this gate for replies — the original signal was already validated.
   if (input.type !== 'reply' && !signalEvidenceMatch(input.extracted.signalType, input.extracted.signalEvidence)) {
     throw new Error(
       `Signal type ${input.extracted.signalType} is not supported by its evidence ("${input.extracted.signalEvidence}"). Rescore this lead before drafting.`,
@@ -376,113 +373,100 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
   }
 
   const callLog: DraftCallLog[] = []
+  const isHighValue = input.score.total >= 10
 
-  // Build the two candidate chains. LongCat-2.0 is candidate A, OpenAI is
-  // candidate B. Each falls back to Groq if its primary provider is down.
+  // Attempt 1: LongCat (primary writer)
   const longcatChain = buildLongcatDraftChain()
-  const openaiChain = buildOpenaiDraftChain()
+  const resultA = await runDraftAttemptWithFallback(longcatChain, 'longcat', systemPrompt, userPrompt, callLog)
+    .catch(() => null)
 
-  // Generate both candidates in parallel. A failure on one side does not
-  // block the other — each catches its own errors and returns a fallback.
-  const [resultA, resultB] = await Promise.all([
-    runDraftAttemptWithFallback(longcatChain, 'longcat', systemPrompt, userPrompt, callLog)
-      .catch(() => null),
-    runDraftAttemptWithFallback(openaiChain, 'openai', systemPrompt, userPrompt, callLog)
-      .catch(() => null),
-  ])
-
-  // If both failed, fall back to Groq best-of-two as last resort
-  if (!resultA && !resultB) {
-    const groqChain = pickDraftChain()
-    const [gA, gB] = await Promise.all([
-      runDraftAttemptWithFallback(groqChain, 'groq-fallback', systemPrompt, userPrompt, callLog),
-      runDraftAttemptWithFallback(groqChain, 'groq-fallback', systemPrompt, userPrompt, callLog),
-    ])
-    const picked = pickBestVariant(
-      gA ?? emptyResult('groq-fallback'),
-      gB ?? emptyResult('groq-fallback'),
-    )
-    const draft = finishDraft(input, picked.primary, ['groq-fallback'], 2, callLog)
+  if (resultA?.passed) {
+    const draft = finishDraft(input, resultA, [resultA.hostLabel], 1, callLog)
     return {
       ...draft,
-      variant: picked.secondary ? { draftText: picked.secondary.output.draft, selfCheck: { test1ReplyOrDelete: Boolean(picked.secondary.output.test_1_reply_or_delete), test1Note: picked.secondary.output.test_1_note || '', test2NotGeneric: Boolean(picked.secondary.output.test_2_not_generic), test2Note: picked.secondary.output.test_2_note || '', codeChecks: picked.secondary.codeChecks }, passed: picked.secondary.passed } : undefined,
-      pickReason: 'Both LongCat and OpenAI failed; fell back to Groq best-of-two.',
+      pickReason: 'LongCat passed quality gates on first attempt.',
       fewShotReason: fewShotLabel(input.fewShotExamples),
+      escalationReason: undefined,
     }
   }
 
-  // Pick the best from whatever came back
-  const candidates = [resultA, resultB].filter(Boolean) as NonNullable<typeof resultA>[]
-  let { primary, secondary, pickReason } = candidates.length === 2
-    ? pickBestVariant(candidates[0], candidates[1])
-    : { primary: candidates[0], secondary: null, pickReason: candidates[0]?.hostLabel === 'longcat' ? 'LongCat only (OpenAI unavailable).' : 'OpenAI only (LongCat unavailable).' }
+  // Attempt 2: corrective retry with Groq (feedback from first failure)
+  const escalationDecision = shouldEscalateToPremium({
+    primaryPassed: resultA?.passed ?? false,
+    primaryScore: resultA ? variantScore(resultA) : 0,
+    isHighValue,
+    malformedOutput: !resultA,
+    attemptCount: callLog.length,
+  })
 
-  const modelsUsed = [primary.hostLabel]
+  if (escalationDecision.shouldEscalate || isHighValue) {
+    const feedback = resultA ? buildCorrectiveFeedback(resultA, input) : null
+    const secondChain = pickDraftChain()
+    const resultB = await runDraftAttemptWithFallback(
+      secondChain,
+      'groq-retry',
+      systemPrompt,
+      feedback ? `${userPrompt}\n\n${feedback}` : userPrompt,
+      callLog,
+    ).catch(() => null)
 
-  // Escalate on high-value leads or when neither passed
-  const tier2 = tier2Chain()
-  if (shouldEscalateDraft(input.score, primary.passed) && tier2.length > 0) {
-    try {
-      const escalated = await runDraftAttempt(tier2, systemPrompt, userPrompt, callLog)
-      const better =
-        escalated.passed && !primary.passed
-          ? true
-          : escalated.passed === primary.passed &&
-            variantScore(escalated) > variantScore(primary)
-      if (better) {
-        secondary = primary
-        primary = escalated
-        pickReason = 'Escalated to precision tier: lead scored 10+ or first pass did not clear self-checks.'
-        modelsUsed.push(escalated.hostLabel)
+    if (resultB?.passed) {
+      const modelsUsed = [resultA?.hostLabel, resultB.hostLabel].filter((x): x is string => Boolean(x))
+      const draft = finishDraft(input, resultB, modelsUsed, 2, callLog)
+      return {
+        ...draft,
+        variant: resultA ? { draftText: resultA.output.draft, selfCheck: { test1ReplyOrDelete: Boolean(resultA.output.test_1_reply_or_delete), test1Note: resultA.output.test_1_note || '', test2NotGeneric: Boolean(resultA.output.test_2_not_generic), test2Note: resultA.output.test_2_note || '', codeChecks: resultA.codeChecks }, passed: resultA.passed } : undefined,
+        pickReason: resultA ? 'LongCat failed; Groq corrective retry passed.' : 'LongCat unavailable; Groq succeeded.',
+        fewShotReason: fewShotLabel(input.fewShotExamples),
+        escalationReason: escalationDecision.reason,
       }
-    } catch {
-      // Keep first-pass draft if precision pass fails
     }
-  }
 
-  // Corrective retry if still failing
-  if (!primary.passed) {
-    const feedback = buildCorrectiveFeedback(primary, input)
-    if (feedback) {
-      try {
-        const groqChain = pickDraftChain()
-        const retried = await runDraftAttempt(groqChain, systemPrompt, `${userPrompt}\n\n${feedback}`, callLog)
-        const better =
-          retried.passed && !primary.passed
-            ? true
-            : retried.passed === primary.passed && variantScore(retried) > variantScore(primary)
-        if (better) {
-          secondary = primary
-          primary = retried
-          pickReason = 'Rewritten after first pass failed self-check.'
-          modelsUsed.push(retried.hostLabel)
+    // Attempt 3: GPT escalation only
+    const openaiChain = buildOpenaiDraftChain()
+    if (openaiChain.length > 0 && escalationDecision.shouldEscalate) {
+      const lastAttempt = resultB ?? resultA
+      const gptFeedback = lastAttempt ? buildCorrectiveFeedback(lastAttempt, input) : null
+      const gptResult = await runDraftAttemptWithFallback(
+        openaiChain,
+        'gpt-escalation',
+        systemPrompt,
+        gptFeedback ? `${userPrompt}\n\n${gptFeedback}` : userPrompt,
+        callLog,
+      ).catch(() => null)
+
+      if (gptResult) {
+        const modelsUsed = [resultA?.hostLabel, resultB?.hostLabel, gptResult.hostLabel].filter((x): x is string => Boolean(x))
+        const draft = finishDraft(input, gptResult, modelsUsed, 3, callLog)
+        return {
+          ...draft,
+          variant: resultA ? { draftText: resultA.output.draft, selfCheck: { test1ReplyOrDelete: Boolean(resultA.output.test_1_reply_or_delete), test1Note: resultA.output.test_1_note || '', test2NotGeneric: Boolean(resultA.output.test_2_not_generic), test2Note: resultA.output.test_2_note || '', codeChecks: resultA.codeChecks }, passed: resultA.passed } : undefined,
+          pickReason: 'Escalated to GPT: cheaper tiers failed quality gates.',
+          fewShotReason: fewShotLabel(input.fewShotExamples),
+          escalationReason: escalationDecision.reason,
         }
-      } catch {
-        // Keep best draft so far
       }
     }
   }
 
-  const draft = finishDraft(input, primary, modelsUsed, modelsUsed.length, callLog)
-  const second: DraftVariant | undefined = secondary
-    ? {
-        draftText: secondary.output.draft,
-        selfCheck: {
-          test1ReplyOrDelete: Boolean(secondary.output.test_1_reply_or_delete),
-          test1Note: secondary.output.test_1_note || '',
-          test2NotGeneric: Boolean(secondary.output.test_2_not_generic),
-          test2Note: secondary.output.test_2_note || '',
-          codeChecks: secondary.codeChecks,
-        },
-        passed: secondary.passed,
-      }
-    : undefined
+  // Return best effort (even if not passing)
+  const best = resultA
+  if (!best) {
+    const draft = finishDraft(input, emptyResult('all-failed'), ['all-failed'], callLog.length, callLog)
+    return {
+      ...draft,
+      pickReason: 'All model attempts failed; returning best effort.',
+      fewShotReason: fewShotLabel(input.fewShotExamples),
+      escalationReason: escalationDecision.reason,
+    }
+  }
 
+  const draft = finishDraft(input, best, [best.hostLabel], callLog.length, callLog)
   return {
     ...draft,
-    variant: second,
-    pickReason,
+    pickReason: 'Best effort from available providers.',
     fewShotReason: fewShotLabel(input.fewShotExamples),
+    escalationReason: escalationDecision.reason,
   }
 }
 

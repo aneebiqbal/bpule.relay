@@ -1,5 +1,5 @@
 import type { ExtractedLead, RecentPostExtract, SignalId } from '@/lib/domain/types'
-import { pickModelChain, tier2Chain, type CostTierName } from '@/lib/ai/routing'
+import { pickModelChain, tier2Chain, shouldEscalateToPremium, type CostTierName } from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
 import { structuredJsonChain } from '@/lib/ai/provider'
 import { SIGNALS } from '@/lib/score/signals'
@@ -575,7 +575,7 @@ async function modelExtractOnChain(
   throw new Error("couldn't extract cleanly, try pasting again")
 }
 
-function shouldEscalate(out: ExtractionOutput, confidence: number): boolean {
+function shouldEscalateExtraction(out: ExtractionOutput, confidence: number): boolean {
   if (!ESCALATE_ENABLED) return false
   if (confidence < ESCALATE_BELOW_CONFIDENCE) return true
   const hasCompany = Boolean(empty(out.company))
@@ -600,7 +600,7 @@ async function extractSegment(
   let chosenConfidence = confidenceDetails(chosen, signal.signalConfidence)
 
   const tier2 = tier2Chain()
-  if (shouldEscalate(out, chosenConfidence.score) && tier2.length > 0) {
+  if (tier2.length > 0 && shouldEscalateExtraction(out, chosenConfidence.score)) {
     opts.onStatus?.('Running precision pass for higher-quality extraction')
     try {
       const upgraded = await modelExtractOnChain(rawText, tier2, opts, callLog, out)

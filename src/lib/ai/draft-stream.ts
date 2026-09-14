@@ -1,7 +1,7 @@
 import type { Profile, ProofItem } from '@/lib/domain/types'
 import type { SelfCheck, DraftResult, DraftInput, DraftVariant, DraftCallLog } from '@/lib/ai/draft'
 import { baseDraftSystem, buildCorrectiveFeedback, buildUserPrompt, generateDraft } from '@/lib/ai/draft'
-import { buildLongcatDraftChain, buildOpenaiDraftChain, pickDraftChain, tier2Chain } from '@/lib/ai/routing'
+import { buildLongcatDraftChain, buildOpenaiDraftChain, pickDraftChain, tier2Chain, shouldEscalateToPremium } from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
 import { streamChatText, structuredJsonChain } from '@/lib/ai/provider'
 import { sanitizeDraft } from '@/lib/facts/sanitize'
@@ -83,32 +83,105 @@ export async function streamDraft(
   const longcatChain = buildLongcatDraftChain()
   const openaiChain = buildOpenaiDraftChain()
   const callLog: DraftCallLog[] = []
+  const isHighValue = input.score.total >= 10
 
-  emit({ type: 'status', message: 'Drafting two variants in parallel (LongCat + OpenAI)' })
-  emit({ type: 'attempt', attempt: 0, model: 'longcat+openai', tier: 'cheap' })
+  emit({ type: 'status', message: 'Drafting in your voice...' })
+  emit({ type: 'attempt', attempt: 1, model: 'longcat', tier: 'strong' })
 
-  // Best-of-two from two distinct model families. LongCat-2.0 is variant A,
-  // OpenAI is variant B. Each chain has Groq as a built-in fallback, so one
-  // provider's outage doesn't block the draft.
-  const [rawA, rawB] = await Promise.all([
-    structuredJsonChain<RawVariant>(longcatChain, { system, user, schema: DRAFT_SCHEMA })
-      .then((r) => {
-        callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
-        return r.data
-      })
-      .catch(() => null),
-    structuredJsonChain<RawVariant>(openaiChain, { system, user, schema: DRAFT_SCHEMA })
-      .then((r) => {
-        callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
-        return r.data
-      })
-      .catch(() => null),
-  ])
+  // Attempt 1: LongCat (primary writer)
+  const rawA = await structuredJsonChain<RawVariant>(longcatChain, { system, user, schema: DRAFT_SCHEMA })
+    .then((r) => {
+      callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
+      return r.data
+    })
+    .catch(() => null)
 
   const variantA = rawA ? normalizeVariant(rawA, input) : null
-  const variantB = rawB ? normalizeVariant(rawB, input) : null
 
-  if (!variantA && !variantB) {
+  if (variantA?.passed) {
+    return await streamFinalDraft(input, emit, matchedProof, variantA, null, 'LongCat passed quality gates.', callLog)
+  }
+
+  // Attempt 2: corrective retry on Groq with feedback
+  const escalationDecision = shouldEscalateToPremium({
+    primaryPassed: variantA?.passed ?? false,
+    primaryScore: variantA ? variantScore(variantA) : 0,
+    isHighValue,
+    malformedOutput: !variantA,
+    attemptCount: callLog.length,
+  })
+
+  if (escalationDecision.shouldEscalate || isHighValue) {
+    emit({ type: 'status', message: 'Refining after first attempt...' })
+    emit({ type: 'attempt', attempt: 2, model: 'groq-retry', tier: 'cheap' })
+    const feedback = variantA ? buildCorrectiveFeedback(
+      {
+        output: {
+          draft: variantA.draftText,
+          test_1_reply_or_delete: variantA.selfCheck.test1ReplyOrDelete,
+          test_1_note: variantA.selfCheck.test1Note,
+          test_2_not_generic: variantA.selfCheck.test2NotGeneric,
+          test_2_note: variantA.selfCheck.test2Note,
+        },
+        codeChecks: variantA.selfCheck.codeChecks,
+      },
+      input,
+    ) : null
+    const secondChain = pickDraftChain()
+    const rawB = await structuredJsonChain<RawVariant>(secondChain, {
+      system,
+      user: feedback ? `${user}\n\n${feedback}` : user,
+      schema: DRAFT_SCHEMA,
+    })
+      .then((r) => {
+        callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
+        return r.data
+      })
+      .catch(() => null)
+
+    const variantB = rawB ? normalizeVariant(rawB, input) : null
+    if (variantB?.passed) {
+      return await streamFinalDraft(input, emit, matchedProof, variantB, variantA, 'Refined after first attempt failed self-check.', callLog, escalationDecision.reason)
+    }
+
+    // Attempt 3: GPT escalation
+    if (openaiChain.length > 0 && escalationDecision.shouldEscalate) {
+      emit({ type: 'status', message: 'Escalating to stronger model...' })
+      emit({ type: 'attempt', attempt: 3, model: 'gpt-escalation', tier: 'strong' })
+      const gptFeedback = (variantA || variantB) ? buildCorrectiveFeedback(
+        {
+          output: {
+            draft: (variantA ?? variantB)!.draftText,
+            test_1_reply_or_delete: (variantA ?? variantB)!.selfCheck.test1ReplyOrDelete,
+            test_1_note: (variantA ?? variantB)!.selfCheck.test1Note,
+            test_2_not_generic: (variantA ?? variantB)!.selfCheck.test2NotGeneric,
+            test_2_note: (variantA ?? variantB)!.selfCheck.test2Note,
+          },
+          codeChecks: (variantA ?? variantB)!.selfCheck.codeChecks,
+        },
+        input,
+      ) : null
+      const rawC = await structuredJsonChain<RawVariant>(openaiChain, {
+        system,
+        user: gptFeedback ? `${user}\n\n${gptFeedback}` : user,
+        schema: DRAFT_SCHEMA,
+      })
+        .then((r) => {
+          callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
+          return r.data
+        })
+        .catch(() => null)
+
+      const variantC = rawC ? normalizeVariant(rawC, input) : null
+      if (variantC) {
+        return await streamFinalDraft(input, emit, matchedProof, variantC, variantA ?? variantB, 'Escalated to GPT: cheaper tiers failed quality gates.', callLog, escalationDecision.reason)
+      }
+    }
+  }
+
+  // Return best effort
+  const best = variantA ?? null
+  if (!best) {
     emit({ type: 'status', message: 'Model output failed, using safe fallback draft' })
     const fallback = buildDeterministicFallback(input, callLog)
     emit({ type: 'draft', chunk: fallback.draftText })
@@ -117,84 +190,19 @@ export async function streamDraft(
     return fallback
   }
 
-  let { primary, secondary, pickReason } = pickBestVariant(variantA, variantB)
+  return await streamFinalDraft(input, emit, matchedProof, best, null, 'Best effort from available providers.', callLog, escalationDecision.reason)
+}
 
-  // Escalate to tier 2 (DeepSeek V4 Pro) when the lead is a high-value send
-  // (score 10+) or neither variant passed self-check — same trigger as
-  // extraction's precision pass, on the drafting side.
-  const tier2 = tier2Chain()
-  if ((input.score.total >= 10 || !primary.passed) && tier2.length > 0) {
-    try {
-      const escalatedRaw = await structuredJsonChain<RawVariant>(tier2, { system, user, schema: DRAFT_SCHEMA })
-      callLog.push({
-        costTier: escalatedRaw.costTier,
-        host: escalatedRaw.host,
-        estimatedCostUsd: escalatedRaw.estimatedCostUsd,
-      })
-      const escalated = normalizeVariant(escalatedRaw.data, input)
-      if (escalated.passed && !primary.passed) {
-        secondary = primary
-        primary = escalated
-        pickReason = 'Escalated to the precision tier: the lead scored 10+ or the first pass did not clear both self-checks.'
-      } else if (escalated.passed === primary.passed && variantScore(escalated) > variantScore(primary)) {
-        secondary = primary
-        primary = escalated
-        pickReason = 'Escalated to the precision tier: the lead scored 10+ or the first pass did not clear both self-checks.'
-      }
-    } catch {
-      // Keep the tier 1 draft if the precision pass fails outright.
-    }
-  }
-
-  // Corrective retry: if the draft still fails after best-of-two (and any
-  // paid escalation), retry once more on the free tier with explicit
-  // feedback about exactly what failed. Without this, an environment with
-  // no paid tier configured (tier2Chain() empty) would stream a failing
-  // draft to the rep with zero attempt to fix it.
-  if (!primary.passed) {
-    const feedback = buildCorrectiveFeedback(
-      {
-        output: {
-          draft: primary.draftText,
-          test_1_reply_or_delete: primary.selfCheck.test1ReplyOrDelete,
-          test_1_note: primary.selfCheck.test1Note,
-          test_2_not_generic: primary.selfCheck.test2NotGeneric,
-          test_2_note: primary.selfCheck.test2Note,
-        },
-        codeChecks: primary.selfCheck.codeChecks,
-      },
-      input,
-    )
-    if (feedback) {
-      try {
-        emit({ type: 'status', message: 'Rewriting after a failed self-check' })
-        const groqChain = pickDraftChain()
-        const retriedRaw = await structuredJsonChain<RawVariant>(groqChain, {
-          system,
-          user: `${user}\n\n${feedback}`,
-          schema: DRAFT_SCHEMA,
-        })
-        callLog.push({
-          costTier: retriedRaw.costTier,
-          host: retriedRaw.host,
-          estimatedCostUsd: retriedRaw.estimatedCostUsd,
-        })
-        const retried = normalizeVariant(retriedRaw.data, input)
-        const better =
-          retried.passed && !primary.passed
-            ? true
-            : retried.passed === primary.passed && variantScore(retried) > variantScore(primary)
-        if (better) {
-          secondary = primary
-          primary = retried
-          pickReason = 'Rewritten after the first pass failed its own self-check, with the specific failure fed back in.'
-        }
-      } catch {
-        // Keep the best draft so far if the corrective retry fails outright.
-      }
-    }
-  }
-
+async function streamFinalDraft(
+  input: DraftInput,
+  emit: (e: DraftStreamEvent) => void,
+  matchedProof: ProofItem | null,
+  primary: ReturnType<typeof normalizeVariant>,
+  secondary: ReturnType<typeof normalizeVariant> | null,
+  pickReason: string,
+  callLog: DraftCallLog[],
+  escalationReason?: string,
+): Promise<DraftResult> {
   // Stream the primary draft in chunks so the UI feels alive.
   const text = primary.draftText
   const chunkSize = 4
@@ -255,6 +263,7 @@ export async function streamDraft(
       input.fewShotExamples && input.fewShotExamples.length > 0
         ? `Informed by ${input.fewShotExamples.length} real win(s): ${input.fewShotExamples.map((e) => e.company).join(', ')}.`
         : 'No few-shot examples matched this lead.',
+    escalationReason,
     callLog,
   }
 

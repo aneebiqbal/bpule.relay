@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
-import { buildLongcatDraftChain, buildOpenaiDraftChain, pickDraftChain } from '@/lib/ai/routing'
+import { buildLongcatDraftChain, buildOpenaiDraftChain, pickDraftChain, shouldEscalateToPremium } from '@/lib/ai/routing'
 import { structuredJsonChain } from '@/lib/ai/provider'
 import { injectStyleCard } from '@/lib/style/inject'
 import { signalById } from '@/lib/score/signals'
@@ -109,11 +109,6 @@ export async function POST(
     'Output JSON: { "proposal": "the proposal text", "self_check_passed": boolean, "self_check_note": "why this would/wouldn\'t win the job" }',
   ].join('\n')
 
-  // Generate with best-of-two
-  const chainA = buildLongcatDraftChain()
-  const chainB = buildOpenaiDraftChain()
-  const fallback = pickDraftChain()
-
   const schema = {
     type: 'object',
     required: ['proposal', 'self_check_passed', 'self_check_note'],
@@ -124,26 +119,80 @@ export async function POST(
     },
   } as const
 
-  const [resultA, resultB] = await Promise.all([
-    chainA.length > 0
-      ? structuredJsonChain<{ proposal: string; self_check_passed: boolean; self_check_note: string }>(chainA, { system: systemPrompt, user: userPrompt, schema }).then((r) => r.data).catch(() : null => null)
-      : Promise.resolve<{ proposal: string; self_check_passed: boolean; self_check_note: string } | null>(null),
-    chainB.length > 0
-      ? structuredJsonChain<{ proposal: string; self_check_passed: boolean; self_check_note: string }>(chainB, { system: systemPrompt, user: userPrompt, schema }).then((r) => r.data).catch(() : null => null)
-      : Promise.resolve<{ proposal: string; self_check_passed: boolean; self_check_note: string } | null>(null),
-  ])
+  type ProposalResult = { proposal: string; self_check_passed: boolean; self_check_note: string }
 
-  // Pick the best result
-  const candidates = [resultA, resultB].filter(Boolean) as NonNullable<typeof resultA>[]
-  if (candidates.length === 0) {
-    // Fallback to any available chain
-    const fb = await structuredJsonChain<{ proposal: string; self_check_passed: boolean; self_check_note: string }>(fallback, { system: systemPrompt, user: userPrompt, schema }).then((r) => r.data).catch(() => null)
-    if (!fb) return NextResponse.json({ error: 'Generation failed. Please try again.' }, { status: 500 })
-    candidates.push(fb)
+  // Attempt 1: LongCat
+  const chainA = buildLongcatDraftChain()
+  let best: ProposalResult | null = null
+
+  if (chainA.length > 0) {
+    const resultA = await structuredJsonChain<ProposalResult>(chainA, { system: systemPrompt, user: userPrompt, schema }).then((r) => r.data).catch(() => null)
+    if (resultA?.self_check_passed) {
+      best = resultA
+    } else if (resultA) {
+      best = resultA
+    }
   }
 
-  // Pick the one that passed self-check, or the first one
-  const best = candidates.find((c) => c.self_check_passed) ?? candidates[0]
+  // If LongCat passed, return immediately
+  if (best?.self_check_passed) {
+    const proposal = best.proposal.trim()
+    const sanitized = sanitizeDraft(proposal, facts)
+    return NextResponse.json({
+      draft: {
+        text: sanitized.text,
+        selfCheckPassed: best.self_check_passed,
+        selfCheckNote: best.self_check_note,
+        matchedProof: matchedProof ? { id: matchedProof.id, projectSummary: matchedProof.projectSummary } : null,
+      },
+    })
+  }
+
+  // Attempt 2: Groq retry
+  const escalation = shouldEscalateToPremium({
+    primaryPassed: best?.self_check_passed ?? false,
+    primaryScore: best?.self_check_passed ? 8 : 2,
+    isHighValue: false,
+    malformedOutput: !best,
+    attemptCount: 1,
+  })
+
+  const fallback = pickDraftChain()
+  if (fallback.length > 0 && escalation.shouldEscalate) {
+    const resultB = await structuredJsonChain<ProposalResult>(fallback, { system: systemPrompt, user: userPrompt, schema }).then((r) => r.data).catch(() => null)
+    if (resultB?.self_check_passed) {
+      best = resultB
+    } else if (resultB && !best) {
+      best = resultB
+    }
+  }
+
+  if (best?.self_check_passed) {
+    const proposal = best.proposal.trim()
+    const sanitized = sanitizeDraft(proposal, facts)
+    return NextResponse.json({
+      draft: {
+        text: sanitized.text,
+        selfCheckPassed: best.self_check_passed,
+        selfCheckNote: best.self_check_note,
+        matchedProof: matchedProof ? { id: matchedProof.id, projectSummary: matchedProof.projectSummary } : null,
+      },
+    })
+  }
+
+  // Attempt 3: GPT escalation
+  const chainB = buildOpenaiDraftChain()
+  if (chainB.length > 0 && escalation.shouldEscalate) {
+    const resultC = await structuredJsonChain<ProposalResult>(chainB, { system: systemPrompt, user: userPrompt, schema }).then((r) => r.data).catch(() => null)
+    if (resultC) {
+      best = resultC
+    }
+  }
+
+  if (!best) {
+    return NextResponse.json({ error: 'Generation failed. Please try again.' }, { status: 500 })
+  }
+
   const proposal = best.proposal.trim()
 
   // Sanitize

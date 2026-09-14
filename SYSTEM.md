@@ -47,49 +47,36 @@ wrong behavior, not a valid alternate spec.
 ## The model tier chain, as it actually stands today
 
 Defined in `src/lib/ai/config.ts` and `src/lib/ai/routing.ts` — architecture
-**v2.1 (September 2026)**. Every host is optional; a host only enters a
+**v2.2 (September 2026)**. Every host is optional; a host only enters a
 chain if its API key is set, so an environment with only `GROQ_API_KEY`
-still works exactly as the default, intended state, not a degraded one.
+still works exactly as the default, intended state.
 
-**Structuring tasks** (extraction, classification, calibration) —
-`pickModelChain()` in `routing.ts`:
+**Core routing (production):**
 
-1. **Tier 0 — Groq** (free, primary, no card required). Models:
-   `SCOUT_TIER0_CHEAP_MODEL` / `SCOUT_TIER0_STRONG_MODEL`
-   (default `openai/gpt-oss-20b` / `openai/gpt-oss-120b`).
-2. **Tier 1 — DeepSeek V4 Flash**, multi-host: DeepSeek's own API
-   (`DEEPSEEK_API_KEY`) then Fireworks (`FIREWORKS_API_KEY`) — first paid
-   escalation, fires only once every tier-0 host has exhausted its own
-   retry budget.
-3. **Tier 4 — OpenAI** (`OPENAI_API_KEY`), final safety net if every tier
-   0/1 host has failed.
+1. **Groq free tier** (`GROQ_API_KEY`) — extraction, classification, fallback.
+   Models: `openai/gpt-oss-20b` (cheap) / `openai/gpt-oss-120b` (strong).
+2. **LongCat-2.0** (`LONGCAT_API_KEY`) — primary writer for drafts, posts,
+   proposals, emails, connection notes.
+3. **OpenAI** (`OPENAI_API_KEY`) — escalation only when cheaper tiers fail
+   deterministic quality gates. Target: <5% of generations reach GPT.
 
-Tier 2 (**DeepSeek V4 Pro**, same two hosts, `deepseek-reasoner` /
-`.../deepseek-v4-pro`) is **not** part of the automatic chain. It's fetched
-separately and only invoked on an explicit escalation trigger:
-- Extraction (`src/lib/ai/extract.ts`, `shouldEscalate`): confidence below
-  `SCOUT_EXTRACT_ESCALATE_BELOW` (default 62), or missing company/title, or
-  thin evidence.
-- Drafting (`src/lib/ai/draft.ts`, `shouldEscalateDraft`): the lead scored
-  10+, or the first draft pass failed its own self-check.
+**DeepSeek is disabled by default** (`SCOUT_DEEPSEEK_ENABLED=0`). Config
+functions remain for future restoration but return empty when disabled. No
+production workflow depends on DeepSeek.
 
-**Drafting** runs its own, different strategy in `generateDraft`
-(`draft.ts`): two parallel candidate chains — **LongCat-2.0**
-(`LONGCAT_API_KEY`, Meituan MoE, MIT licensed) as candidate A and **OpenAI**
-as candidate B, each falling back to Groq's strong tier if its primary host
-fails — then best-of-two picks the stronger self-check pass. If both
-candidates fail outright, a final Groq-vs-Groq best-of-two runs as the last
-resort.
+**Conditional generation** (draft.ts, draft-stream.ts, forge.ts):
+- LongCat → deterministic quality gate → PASS: return (1 call).
+- FAIL: Groq corrective retry → GPT escalation (rare).
+- GPT is NOT a normal pipeline stage.
 
-`hasProvider()` is true once *any* of Groq / DeepSeek / Fireworks / OpenAI
-has a key set — this is what takes the app out of the deterministic demo
-path (`demoExtract` / `demoDraft`). LongCat alone does **not** satisfy
-`hasProvider()`; it only ever participates as a drafting candidate.
+**Structuring tasks** — `pickModelChain()`: Groq cheap → OpenAI fallback.
+**Drafting** — `pickDraftChain()`: LongCat → Groq strong → OpenAI escalation.
 
-Off-peak scheduling (`deepseekPeakWindowsUtc`, `config.ts`): DeepSeek prices
-roughly double during **01:00-04:00 and 06:00-10:00 UTC**; batch-eligible
-jobs (the eval harness, few-shot pool refresh) are scheduled to avoid this
-window.
+**Deterministic by default:** genome construction, onboarding questions,
+proof tagging, persona refinement. Set `SCOUT_GENOME_AI=1` to enable AI-assisted
+genome.
+
+`hasProvider()` is true once *any* provider has a key set.
 
 ## Environment variables
 
@@ -118,18 +105,17 @@ optional ones marked below.
 **Model providers** (each optional; a host only joins its tier chain if its key is set)
 | Var | Tier | Default |
 |---|---|---|
-| `GROQ_API_KEY` / `GROQ_BASE_URL` | 0 | `https://api.groq.com/openai/v1` |
-| `SCOUT_TIER0_CHEAP_MODEL` / `SCOUT_TIER0_STRONG_MODEL` | 0 | `openai/gpt-oss-20b` / `openai/gpt-oss-120b` |
-| `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` | 1, 2 | `https://api.deepseek.com/v1` |
-| `FIREWORKS_API_KEY` / `FIREWORKS_BASE_URL` | 1, 2 | `https://api.fireworks.ai/inference/v1` |
-| `SCOUT_TIER1_MODEL` / `SCOUT_TIER1_FIREWORKS_MODEL` | 1 | `deepseek-chat` / `.../deepseek-v4-flash` |
-| `SCOUT_TIER2_MODEL` / `SCOUT_TIER2_FIREWORKS_MODEL` | 2 | `deepseek-reasoner` / `.../deepseek-v4-pro` |
-| `OPENAI_API_KEY` / `OPENAI_CHAT_BASE_URL` | 4 | `https://api.openai.com/v1` |
-| `SCOUT_TIER4_MODEL` | 4 | `gpt-4o-mini` |
-| `LONGCAT_API_KEY` / `LONGCAT_BASE_URL` / `LONGCAT_MODEL` | drafting candidate A only | `https://api.longcat.chat/v1` / `LongCat-2.0` |
-| `SCOUT_EXTRACT_ESCALATE` / `SCOUT_EXTRACT_ESCALATE_BELOW` | extraction tier-2 trigger | escalate below confidence `62` |
-| `SCOUT_ROLE_FALLBACK_MODEL` | role-classification fallback | — |
-| `SCOUT_CHEAP_MODEL` / `SCOUT_STRONG_MODEL` | **deprecated** legacy single-model accessors | falls back to the Groq tier-0 models |
+| `GROQ_API_KEY` / `GROQ_BASE_URL` | extraction/fallback | `https://api.groq.com/openai/v1` |
+| `SCOUT_TIER0_CHEAP_MODEL` / `SCOUT_TIER0_STRONG_MODEL` | Groq models | `openai/gpt-oss-20b` / `openai/gpt-oss-120b` |
+| `LONGCAT_API_KEY` / `LONGCAT_BASE_URL` / `LONGCAT_MODEL` | primary writer | `https://api.longcat.chat/v1` / `LongCat-2.0` |
+| `OPENAI_API_KEY` / `OPENAI_CHAT_BASE_URL` | escalation | `https://api.openai.com/v1` |
+| `SCOUT_TIER4_MODEL` | OpenAI model | `gpt-4o-mini` |
+| `SCOUT_DEEPSEEK_ENABLED` | restore DeepSeek tiers | `0` (disabled) |
+| `SCOUT_GENOME_AI` | AI-assisted genome | `0` (deterministic) |
+| `AI_DAILY_BUDGET` | soft daily budget USD | `50` |
+| `AI_GPT_DAILY_BUDGET` | GPT-specific budget USD | `10` |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` | disabled by default | `https://api.deepseek.com/v1` |
+| `SCOUT_CHEAP_MODEL` / `SCOUT_STRONG_MODEL` | **deprecated** | falls back to Groq |
 
 **Embeddings** (semantic proof matching — unrelated to the chat tiers above)
 | Var | Effect |

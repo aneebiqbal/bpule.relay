@@ -1,26 +1,18 @@
 /**
- * Scout model configuration — architecture v2.1 (September 2026).
+ * Scout model configuration — architecture v2.2 (September 2026).
  *
  * Every provider host and model id used anywhere in the app must be resolved
  * through this module, so a provider swap or a routing change stays a
  * one-line edit.
  *
- * Groq's free tier (no card required, 30 req/min, 14,400 req/day — verified
- * against Groq's published limits, not a trial) is tier 0 and primary for
- * extraction and standard drafting: it's free, and its rate limits are
- * generous enough that a five-person team is unlikely to hit them on a
- * normal day. DeepSeek V4 (multi-host) and OpenAI sit one level down as paid
- * escalation, unchanged in their own internal structure from the prior
- * architecture pass — they now fire only when Groq's own daily/per-minute
- * ceiling is actually hit, or the confidence gate/self-check fails on a Groq
- * response and the existing escalation trigger applies. An OpenRouter tier
- * was considered and deliberately dropped: OpenRouter's free tier requires a
- * one-time $10 real payment just to raise its daily cap from 50 to 1,000
- * requests, which is strictly worse than Groq's free tier for a team that
- * already has Groq working. If Groq's free tier is ever actually exhausted
- * in practice, the fix is adding a card to the existing Groq account (its
- * paid Developer tier is still a fraction of a cent per call), not adding a
- * third provider.
+ * Routing priority:
+ *   1. Groq free tier (no card required) — extraction, classification, fallback
+ *   2. LongCat-2.0 — primary writer for drafts, posts, proposals
+ *   3. OpenAI (gpt-4o-mini) — escalation only when cheaper tiers fail quality gates
+ *
+ * DeepSeek is disabled by default (SCOUT_DEEPSEEK_ENABLED=0). The provider
+ * config functions remain for future restoration but return null/empty when
+ * disabled — no production workflow depends on a DeepSeek credential.
  *
  * Every id is env-overridable so spend and provider choice stay a deployment
  * decision, not a code change.
@@ -33,6 +25,11 @@ export interface ProviderHost {
   baseUrl: string
   /** The model id as this specific host names it (hosts sometimes prefix/rename the same weights). */
   model: string
+}
+
+/** DeepSeek is disabled by default. Set SCOUT_DEEPSEEK_ENABLED=1 to restore. */
+export function isDeepseekEnabled(): boolean {
+  return process.env.SCOUT_DEEPSEEK_ENABLED === '1'
 }
 
 // ============================================================================
@@ -100,8 +97,13 @@ export function fireworksFlashModel(): string {
   return process.env.SCOUT_TIER1_FIREWORKS_MODEL ?? 'accounts/fireworks/models/deepseek-v4-flash'
 }
 
-/** Tier 1 hosts, in try-order. Only hosts with a configured key are considered live. */
+/**
+ * Tier 1 hosts (DeepSeek V4 Flash). Returns empty when DeepSeek is disabled
+ * via SCOUT_DEEPSEEK_ENABLED=0 (the default). Config functions remain for
+ * future restoration.
+ */
 export function tier1Hosts(): ProviderHost[] {
+  if (!isDeepseekEnabled()) return []
   const hosts: ProviderHost[] = []
   if (deepseekOfficialApiKey()) {
     hosts.push({
@@ -135,7 +137,12 @@ export function fireworksProModel(): string {
   return process.env.SCOUT_TIER2_FIREWORKS_MODEL ?? 'accounts/fireworks/models/deepseek-v4-pro'
 }
 
+/**
+ * Tier 2 hosts (DeepSeek V4 Pro). Returns empty when DeepSeek is disabled
+ * via SCOUT_DEEPSEEK_ENABLED=0 (the default).
+ */
 export function tier2Hosts(): ProviderHost[] {
+  if (!isDeepseekEnabled()) return []
   const hosts: ProviderHost[] = []
   if (deepseekOfficialApiKey()) {
     hosts.push({
@@ -218,7 +225,8 @@ export function hasProvider(): boolean {
     tier1Hosts().length > 0 ||
     tier2Hosts().length > 0 ||
     Boolean(groqApiKey()) ||
-    Boolean(openaiApiKey())
+    Boolean(openaiApiKey()) ||
+    Boolean(longcatApiKey())
   )
 }
 
