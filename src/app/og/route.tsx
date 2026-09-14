@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
   const isStudio = theme === "cobalt";
   const accent = isStudio ? "#3b5bdb" : "#d4652f";
-  const accentLight = isStudio ? "#eef2ff" : "#fdf3ed";
+  const accentFaint = isStudio ? "#eef2ff" : "#fdf3ed";
 
   return new ImageResponse(
     (
@@ -41,52 +41,29 @@ export async function GET(request: Request) {
           overflow: "hidden",
         }}
       >
-        {/* Subtle grid pattern */}
+        {/* Subtle dot grid */}
         <div
           style={{
             position: "absolute",
             inset: 0,
-            opacity: 0.03,
+            opacity: 0.04,
             backgroundImage: `radial-gradient(circle, ${accent} 0.75px, transparent 0.75px)`,
-            backgroundSize: "24px 24px",
+            backgroundSize: "20px 20px",
           }}
         />
 
-        {/* Accent corner */}
+        {/* Accent glow top-right */}
         <div
           style={{
             position: "absolute",
-            top: 0,
-            right: 0,
-            width: 320,
-            height: 320,
+            top: -80,
+            right: -80,
+            width: 400,
+            height: 400,
             borderRadius: "50%",
-            background: `radial-gradient(circle, ${accentLight} 0%, transparent 70%)`,
-            transform: "translate(30%, -30%)",
+            background: `radial-gradient(circle, ${accentFaint} 0%, transparent 70%)`,
           }}
         />
-
-        {/* Signal line */}
-        <svg
-          style={{
-            position: "absolute",
-            bottom: 60,
-            left: 60,
-            opacity: 0.15,
-          }}
-          width="200"
-          height="2"
-        >
-          <line
-            x1="0"
-            y1="1"
-            x2="200"
-            y2="1"
-            stroke={accent}
-            strokeWidth="2"
-            strokeDasharray="6 6"
-          />
-        </svg>
 
         {/* Content */}
         <div
@@ -98,36 +75,36 @@ export async function GET(request: Request) {
             justifyContent: "space-between",
           }}
         >
-          {/* Brand */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 10,
-                backgroundColor: accent,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <span
-                style={{
-                  color: "#f7f6f3",
-                  fontSize: 22,
-                  fontWeight: 700,
-                  fontFamily: '"IBM Plex Mono", monospace',
-                }}
-              >
-                R
-              </span>
-            </div>
+          {/* Brand mark */}
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {/* Signal mark */}
+            <svg width="48" height="48" viewBox="0 0 32 32" fill="none">
+              <path
+                d="M22 16C22 11.58 18.42 8 14 8"
+                stroke={accent}
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                opacity="0.4"
+              />
+              <path
+                d="M25 16C25 9.37 19.63 4 13 4"
+                stroke={accent}
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                opacity="0.2"
+              />
+              <path
+                d="M7 6H16C18.76 6 21 8.24 21 11C21 13.24 19.5 15.14 17.46 15.77L21.5 26H18.7L14.8 16H9.5V26H7V6ZM9.5 13.5H16C17.38 13.5 18.5 12.38 18.5 11C18.5 9.62 17.38 8.5 16 8.5H9.5V13.5Z"
+                fill="#1c1c1a"
+              />
+              <circle cx="9.5" cy="16" r="1.2" fill={accent} />
+            </svg>
             <span
               style={{
-                fontSize: 22,
+                fontSize: 24,
                 fontWeight: 600,
                 color: "#1c1c1a",
-                letterSpacing: "-0.01em",
+                letterSpacing: "-0.02em",
               }}
             >
               Relay
@@ -163,7 +140,7 @@ export async function GET(request: Request) {
             )}
           </div>
 
-          {/* Bottom */}
+          {/* Bottom tag */}
           <div
             style={{
               display: "flex",

@@ -1,19 +1,8 @@
 import { cn } from 'cn'
+import { RelayLogo, RelayMark } from '@/components/relay-logo'
 
 export function BrandMark({ className }: { className?: string }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex size-[22px] items-center justify-center rounded-[5px] bg-orange',
-        className,
-      )}
-      aria-hidden="true"
-    >
-      <span className="text-mono-medium text-[11px] font-bold leading-none text-bone">
-        R
-      </span>
-    </span>
-  )
+  return <RelayMark className={cn('size-[22px]', className)} />
 }
 
 export function RelayBrand({ className, light }: { className?: string; light?: boolean }) {
@@ -31,3 +20,5 @@ export function RelayBrand({ className, light }: { className?: string; light?: b
     </span>
   )
 }
+
+export { RelayLogo, RelayMark }
