@@ -50,6 +50,9 @@ import type {
   SignalId,
   TopicCluster,
   ContentResearchFinding,
+  ContentJourneyEntry,
+  ContentQuickCapture,
+  QuickCaptureAngle,
   TrendingAngle,
   UpworkJob,
   UpworkMessage,
@@ -3056,6 +3059,132 @@ export class SupabaseStore implements ScoutStore {
       .update({ sender_profile_id: senderProfileId })
       .eq('id', leadId)
       .eq('owner_rep_id', this.rep.id)
+    if (error) throw error
+  }
+
+  // ── content journey ──
+
+  async createContentJourneyEntry(input: {
+    personaId: string
+    eventType: string
+    title: string
+    description?: string
+    eventDate?: string | null
+    source?: string
+  }): Promise<ContentJourneyEntry> {
+    const { data, error } = await this.client
+      .from('content_journey')
+      .insert({
+        organization_id: this.orgId,
+        persona_id: input.personaId,
+        event_type: input.eventType,
+        title: input.title,
+        description: input.description ?? '',
+        event_date: input.eventDate ?? null,
+        source: input.source ?? 'user_entry',
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return {
+      id: data.id,
+      organizationId: data.organization_id,
+      personaId: data.persona_id,
+      eventType: data.event_type,
+      title: data.title,
+      description: data.description,
+      eventDate: data.event_date,
+      source: data.source,
+      createdAt: data.created_at,
+    }
+  }
+
+  async listContentJourney(personaId: string, limit = 30): Promise<ContentJourneyEntry[]> {
+    const { data, error } = await this.client
+      .from('content_journey')
+      .select('*')
+      .eq('persona_id', personaId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      organizationId: r.organization_id,
+      personaId: r.persona_id,
+      eventType: r.event_type,
+      title: r.title,
+      description: r.description,
+      eventDate: r.event_date,
+      source: r.source,
+      createdAt: r.created_at,
+    }))
+  }
+
+  async deleteContentJourneyEntry(entryId: string): Promise<void> {
+    const { error } = await this.client
+      .from('content_journey')
+      .delete()
+      .eq('id', entryId)
+      .eq('organization_id', this.orgId)
+    if (error) throw error
+  }
+
+  // ── quick capture ──
+
+  async createContentQuickCapture(input: {
+    personaId: string
+    rawInput: string
+    suggestedAngles: unknown[]
+    status?: string
+  }): Promise<ContentQuickCapture> {
+    const { data, error } = await this.client
+      .from('content_quick_captures')
+      .insert({
+        organization_id: this.orgId,
+        persona_id: input.personaId,
+        raw_input: input.rawInput,
+        suggested_angles: input.suggestedAngles,
+        status: input.status ?? 'pending',
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return {
+      id: data.id,
+      organizationId: data.organization_id,
+      personaId: data.persona_id,
+      rawInput: data.raw_input,
+      suggestedAngles: (data.suggested_angles as QuickCaptureAngle[]) ?? [],
+      status: data.status as 'pending' | 'used' | 'dismissed',
+      createdAt: data.created_at,
+    }
+  }
+
+  async listContentQuickCaptures(personaId: string, limit = 20): Promise<ContentQuickCapture[]> {
+    const { data, error } = await this.client
+      .from('content_quick_captures')
+      .select('*')
+      .eq('persona_id', personaId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      organizationId: r.organization_id,
+      personaId: r.persona_id,
+      rawInput: r.raw_input,
+      suggestedAngles: (r.suggested_angles as QuickCaptureAngle[]) ?? [],
+      status: r.status as 'pending' | 'used' | 'dismissed',
+      createdAt: r.created_at,
+    }))
+  }
+
+  async updateQuickCaptureStatus(captureId: string, status: string): Promise<void> {
+    const { error } = await this.client
+      .from('content_quick_captures')
+      .update({ status })
+      .eq('id', captureId)
+      .eq('organization_id', this.orgId)
     if (error) throw error
   }
 }

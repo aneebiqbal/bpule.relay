@@ -56,6 +56,8 @@ import type {
   TopicCluster,
   TrendingAngle,
   ContentResearchFinding,
+  ContentJourneyEntry,
+  ContentQuickCapture,
   UpworkJob,
   UpworkMessage,
   Verdict,
@@ -743,4 +745,24 @@ export interface ScoutStore {
     formalityShift: 'more_formal' | 'less_formal' | 'same' | null
   }): Promise<void>
   updateLeadSenderProfile(leadId: string, senderProfileId: string | null): Promise<void>
+  // content journey
+  createContentJourneyEntry(input: {
+    personaId: string
+    eventType: string
+    title: string
+    description?: string
+    eventDate?: string | null
+    source?: string
+  }): Promise<ContentJourneyEntry>
+  listContentJourney(personaId: string, limit?: number): Promise<ContentJourneyEntry[]>
+  deleteContentJourneyEntry(entryId: string): Promise<void>
+  // quick capture
+  createContentQuickCapture(input: {
+    personaId: string
+    rawInput: string
+    suggestedAngles: unknown[]
+    status?: string
+  }): Promise<ContentQuickCapture>
+  listContentQuickCaptures(personaId: string, limit?: number): Promise<ContentQuickCapture[]>
+  updateQuickCaptureStatus(captureId: string, status: string): Promise<void>
 }

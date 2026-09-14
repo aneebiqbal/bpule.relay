@@ -162,7 +162,7 @@ async function buildForgeResult(
 
   const visualConcept = generateVisualConcept({
     postText: platformCaption,
-    platform: input.platform,
+    platform: input.platform as 'linkedin' | 'x',
     angle: input.genomeBlock.slice(0, 100),
     topic: input.genomeBlock.split('\n')[0] ?? '',
     styleCard: input.styleCard,

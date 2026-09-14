@@ -7,6 +7,7 @@ import type { ContentPlatform } from '@/lib/domain/types'
 const TRUNCATION_CHARS: Record<ContentPlatform, number> = {
   linkedin: 210,
   x: 280,
+  instagram: 2200,
 }
 
 export interface TruncationPreview {

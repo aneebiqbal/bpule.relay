@@ -317,7 +317,70 @@ export interface ExtractedLead {
 
 // ── Content Engine (decoupled — no references to bpulse-specific tables) ──
 
-export type ContentPlatform = 'linkedin' | 'x'
+export type ContentPlatform = 'linkedin' | 'x' | 'instagram'
+
+export interface ContentSource {
+  type: 'linkedin' | 'resume' | 'website' | 'portfolio' | 'bio' | 'previous_posts' | 'manual'
+  label: string
+  content: string
+  parsedAt: string
+  provenance: 'user_confirmed' | 'imported' | 'ai_inference'
+}
+
+export interface VoiceSample {
+  label: string
+  text: string
+  style: string
+}
+
+export interface ContentJourneyEntry {
+  id: string
+  organizationId: string
+  personaId: string
+  eventType: 'joined' | 'shipped' | 'learned' | 'posted' | 'milestone' | 'project' | 'role_change' | 'other'
+  title: string
+  description: string
+  eventDate: string | null
+  source: 'user_entry' | 'imported' | 'ai_inferred' | 'confirmed'
+  createdAt: string
+}
+
+export interface QuickCaptureAngle {
+  angle: string
+  type: 'technical_lesson' | 'story' | 'opinion' | 'observation' | 'how_to'
+  title: string
+}
+
+export interface ContentQuickCapture {
+  id: string
+  organizationId: string
+  personaId: string
+  rawInput: string
+  suggestedAngles: QuickCaptureAngle[]
+  status: 'pending' | 'used' | 'dismissed'
+  createdAt: string
+}
+
+export interface DailyContentBrief {
+  personaId: string
+  date: string
+  pick: ContentIdeaCard | null
+  alternatives: ContentIdeaCard[]
+  timely: ContentIdeaCard | null
+  refreshReason: string
+}
+
+export interface ContentIdeaCard {
+  id: string
+  title: string
+  angle: string
+  whyYou: string
+  whyAudience: string
+  sourceKind: 'expertise' | 'journey' | 'opinion' | 'trend' | 'project' | 'audience_gap' | 'evergreen'
+  territory: string
+  confidence: number
+  territoryColor?: string
+}
 
 export type ContentDraftStatus = 'draft' | 'ready' | 'posted' | 'rejected'
 
@@ -332,6 +395,13 @@ export interface ContentPersona {
   valuesAndOpinions: string[]
   admiredExamples: string[]
   contentProfileId: string | null
+  personaRole?: string
+  personaCompany?: string
+  personaLocation?: string
+  contentComfort?: string[]
+  onboardingStep?: string
+  onboardingCompleted?: boolean
+  onboardingData?: Record<string, unknown>
   createdAt: string
 }
 
@@ -420,6 +490,12 @@ export interface ContentProfile {
   storytellingTendencies: ContentProfileStorytellingTendency[]
   confidence: number
   lastLearnedAt: string | null
+  sources?: ContentSource[]
+  audiences?: string[]
+  territories?: string[]
+  voiceSamples?: VoiceSample[]
+  voiceSelection?: string
+  contentGoals?: string[]
   createdAt: string
   updatedAt: string
 }

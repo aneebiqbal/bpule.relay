@@ -37,6 +37,9 @@ import type {
   SalesMemoryType,
   TopicCluster,
   ContentResearchFinding,
+  ContentJourneyEntry,
+  ContentQuickCapture,
+  QuickCaptureAngle,
   TrendingAngle,
   UpworkJob,
   UpworkMessage,
@@ -2054,5 +2057,41 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const lead = leads.find((l) => l.id === leadId)
       if (lead) (lead as Lead & { senderProfileId?: string | null }).senderProfileId = senderProfileId
     },
+    // content journey
+    async createContentJourneyEntry(input) {
+      const entry: ContentJourneyEntry = {
+        id: nextId('cj'),
+        organizationId: DEMO_ORG_ID,
+        personaId: input.personaId,
+        eventType: input.eventType as ContentJourneyEntry['eventType'],
+        title: input.title,
+        description: input.description ?? '',
+        eventDate: input.eventDate ?? null,
+        source: (input.source ?? 'user_entry') as ContentJourneyEntry['source'],
+        createdAt: new Date().toISOString(),
+      }
+      return entry
+    },
+    async listContentJourney(personaId, limit = 30) {
+      return []
+    },
+    async deleteContentJourneyEntry(entryId) {},
+    // quick capture
+    async createContentQuickCapture(input) {
+      const capture: ContentQuickCapture = {
+        id: nextId('qc'),
+        organizationId: DEMO_ORG_ID,
+        personaId: input.personaId,
+        rawInput: input.rawInput,
+        suggestedAngles: input.suggestedAngles as QuickCaptureAngle[],
+        status: (input.status ?? 'pending') as ContentQuickCapture['status'],
+        createdAt: new Date().toISOString(),
+      }
+      return capture
+    },
+    async listContentQuickCaptures(personaId, limit = 20) {
+      return []
+    },
+    async updateQuickCaptureStatus(captureId, status) {},
   }
 }
