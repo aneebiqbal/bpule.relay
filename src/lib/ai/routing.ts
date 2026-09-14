@@ -97,23 +97,28 @@ export function fallbackChain(): ChainStep[] {
 
 /**
  * Full ordered chain for a structuring task (extraction, classification,
- * calibration): Groq free tier, then DeepSeek tier 1 hosts, then OpenAI.
- * DeepSeek Pro (tier2Chain()) is escalation only and fetched separately by
- * callers that decide to escalate (extract.ts, draft.ts) on the existing
- * confidence-gate/self-check triggers — not tried automatically here.
+ * calibration): LongCat first (large token budget), then Groq free tier,
+ * then DeepSeek tier 1 hosts, then OpenAI. DeepSeek Pro (tier2Chain()) is
+ * escalation only and fetched separately by callers that decide to escalate.
  */
 export function pickModelChain(task: 'extract' | 'classify' | 'calibrate'): ChainStep[] {
   void task
-  return [...tier0Chain('cheap'), ...tier1Chain(), ...fallbackChain()]
+  const lc = longcatHost()
+  const chain: ChainStep[] = []
+  if (lc) chain.push({ costTier: 'tier1', host: lc })
+  return [...chain, ...tier0Chain('cheap'), ...tier1Chain(), ...fallbackChain()]
 }
 
 /**
- * Full ordered chain for drafting: Groq free tier runs the best-of-two pass;
- * escalation to DeepSeek Pro is a separate explicit step in draft.ts, not
- * part of this chain.
+ * Full ordered chain for drafting: LongCat first (large token budget,
+ * good for candidate diversity), then Groq free tier, then DeepSeek,
+ * then OpenAI as final fallback.
  */
 export function pickDraftChain(): ChainStep[] {
-  return [...tier0Chain('strong'), ...tier1Chain(), ...fallbackChain()]
+  const lc = longcatHost()
+  const chain: ChainStep[] = []
+  if (lc) chain.push({ costTier: 'tier1', host: lc })
+  return [...chain, ...tier0Chain('strong'), ...tier1Chain(), ...fallbackChain()]
 }
 
 /**

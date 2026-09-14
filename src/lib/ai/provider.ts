@@ -233,6 +233,9 @@ async function structuredJsonOnHost<T>(
   const api = clientFor(host.baseUrl, host.apiKey)
   let user = opts.user
   const responseMode = opts.responseMode ?? 'json_object'
+  if (responseMode === 'json_object' && !/json/i.test(user)) {
+    user = `Respond with JSON.\n\n${user}`
+  }
   const responseFormat =
     responseMode === 'json_schema'
       ? {
@@ -292,6 +295,9 @@ export async function structuredJson<T>(opts: JsonCallOptions): Promise<T> {
   return await withHostRetry(`Model call (${model})`, opts.onStatus, async () => {
     let user = opts.user
     const responseMode = opts.responseMode ?? 'json_object'
+    if (responseMode === 'json_object' && !/json/i.test(user)) {
+      user = `Respond with JSON.\n\n${user}`
+    }
     const responseFormat =
       responseMode === 'json_schema'
         ? {
