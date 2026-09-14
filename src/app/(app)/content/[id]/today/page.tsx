@@ -40,11 +40,14 @@ export default async function StudioTodayPage({ params }: { params: Promise<{ id
   const pick = ideas[0] ?? null
   const alternatives = ideas.slice(1, 4)
 
+  // Sanitize persona for Client Components (ensure serializable)
+  const safePersona = JSON.parse(JSON.stringify(persona)) as typeof persona
+
   return (
-    <StudioLayout persona={persona}>
+    <StudioLayout persona={safePersona}>
       <div className="mx-auto max-w-3xl space-y-8 px-4 py-6 sm:px-6 sm:py-8">
         <StudioToday
-          persona={persona}
+          persona={safePersona}
           initialPick={pick}
           initialAlternatives={alternatives}
         />
