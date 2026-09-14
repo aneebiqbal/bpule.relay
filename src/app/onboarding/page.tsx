@@ -1,24 +1,44 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ArrowRight, Sparkles, Check, PenLine } from 'lucide-react'
+import {
+  ArrowRight,
+  ArrowLeft,
+  Sparkles,
+  Check,
+  PenLine,
+  MessageSquare,
+  Target,
+  SkipForward,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { RelayBrand } from '@/components/brand'
-import {
-  DEFAULT_QUIZ,
-  QUIZ_QUESTIONS,
-  type QuizAnswers,
-} from '@/lib/style/quiz'
+import { DEFAULT_QUIZ, QUIZ_QUESTIONS, type QuizAnswers } from '@/lib/style/quiz'
 import type { StyleCard } from '@/lib/domain/types'
 import { cn } from 'cn'
 
-type Phase = 'form' | 'preview'
+type Phase = 'welcome' | 'quiz' | 'samples' | 'preview' | 'done'
 
-const TEXT_QUESTION_IDS = new Set(['greeting', 'signOff', 'neverWords', 'preferredWords'])
+const QUIZ_GROUPS = [
+  {
+    title: 'Your voice',
+    hint: 'How you come across',
+    ids: ['contractions', 'formality', 'sentenceLength'],
+  },
+  {
+    title: 'The details',
+    hint: 'Punctuation, openers, emoji',
+    ids: ['punctuation', 'openers', 'emoji'],
+  },
+  {
+    title: 'The personal touch',
+    hint: 'Greetings, sign-offs, words to avoid',
+    ids: ['greeting', 'signOff', 'neverWords', 'preferredWords'],
+  },
+]
 
 const QUESTION_WHY: Record<string, string> = {
   contractions: 'Sets how your drafts collapse or keep full forms.',
@@ -37,63 +57,69 @@ function sampleLine(card: StyleCard): string {
   const open =
     card.openers === 'question'
       ? 'Are you the right person for this?'
-      : 'I could help you ship faster.'
+      : 'I saw your post about scaling the team — quick thought.'
   const gr = card.greeting ? `${card.greeting} ` : ''
   const so = card.sign_off ? ` ${card.sign_off.replace(/[.!?]+$/, '')}.` : ''
-  return `${gr}${open}.${so}`
+  return `${gr}${open}${so}`
 }
 
 function plainSentences(card: StyleCard): string[] {
   const lines: string[] = []
-
-  if (card.formality <= 2) lines.push('You write casually.')
-  else if (card.formality >= 4) lines.push('You write formally.')
+  if (card.formality <= 2) lines.push('You write casually, like you talk.')
+  else if (card.formality >= 4) lines.push('You write with proper business formality.')
   else lines.push('You write in a neutral business tone.')
 
-  if (card.sentence_length === 'short') lines.push('You write short sentences, mostly under a dozen words.')
-  else if (card.sentence_length === 'medium') lines.push('You write medium-length sentences.')
-  else lines.push('You write long, flowing sentences.')
+  if (card.sentence_length === 'short') lines.push('Short sentences. Mostly under a dozen words.')
+  else if (card.sentence_length === 'medium') lines.push('Medium length — one idea per sentence.')
+  else lines.push('Long, flowing sentences that build an argument.')
 
-  if (card.contractions === 'mostly_yes') lines.push("You use contractions freely (I'm, we'll).")
-  else if (card.contractions === 'mostly_no') lines.push('You avoid contractions entirely.')
-  else lines.push('You mix contractions and full forms.')
+  if (card.contractions === 'mostly_yes') lines.push("You use contractions freely — I'm, we'll, can't.")
+  else if (card.contractions === 'mostly_no') lines.push('You keep full forms — I am, we will.')
+  else lines.push('You mix contractions and full forms naturally.')
 
-  if (card.punctuation === 'relaxed') lines.push('Your punctuation is relaxed, not fussy.')
-  else if (card.punctuation === 'heavy') lines.push('Your punctuation is complete everywhere.')
-  else lines.push('Your punctuation is standard.')
+  if (card.punctuation === 'relaxed') lines.push('Punctuation is relaxed — no periods, lowercase i.')
+  else if (card.punctuation === 'heavy') lines.push('Complete punctuation everywhere.')
+  else lines.push('Standard punctuation — correct but not fussy.')
 
-  if (card.openers === 'question') lines.push('You open with a question.')
-  else lines.push('You open with a statement.')
+  if (card.openers === 'question') lines.push('You open with a question to engage.')
+  else lines.push('You open with a statement or observation.')
 
-  if (card.emoji_use === 'none') lines.push('No emoji. Ever.')
-  else lines.push('Almost never an emoji, but fine either way.')
-
-  if (card.greeting) lines.push(`You greet with ${JSON.stringify(card.greeting)}.`)
-  if (card.sign_off) lines.push(`You close with ${JSON.stringify(card.sign_off)}.`)
-  if (card.never_words.length > 0) lines.push(`You never say: ${card.never_words.join(', ')}.`)
-  if (card.preferred_words.length > 0) lines.push(`You reach for: ${card.preferred_words.join(', ')}.`)
+  if (card.greeting) lines.push(`You greet with "${card.greeting}".`)
+  if (card.sign_off) lines.push(`You close with "${card.sign_off}".`)
+  if (card.never_words.length > 0) lines.push(`Never: ${card.never_words.join(', ')}.`)
+  if (card.preferred_words.length > 0) lines.push(`Often: ${card.preferred_words.join(', ')}.`)
 
   return lines
 }
 
-const STEPS = [
-  { label: 'How you write', hint: 'Six quick questions' },
-  { label: 'Real messages', hint: 'Optional proof' },
-  { label: 'Read back', hint: 'Confirm it is you' },
+const WRITING_SAMPLES = [
+  `Hey — saw you're hiring for a senior Rails role. I've spent the last six years shipping production Rails apps (including a billing rewrite that cut failed txns by 40%).
+
+Happy to share what worked if useful.
+
+Best,
+Alex`,
+  `Quick question — are you still looking for a frontend dev for the dashboard rewrite? I led a similar project last year (React + design system from scratch, 30% faster iteration).
+
+Would love to swap notes either way.
+
+Cheers`,
 ]
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const [phase, setPhase] = useState<Phase>('welcome')
   const [answers, setAnswers] = useState<QuizAnswers>(DEFAULT_QUIZ)
   const [samples, setSamples] = useState('')
-  const [phase, setPhase] = useState<Phase>('form')
-  const [step, setStep] = useState<1 | 2>(1)
   const [preview, setPreview] = useState<StyleCard | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [groupIndex, setGroupIndex] = useState(0)
 
-  const stepIndex = phase === 'preview' ? 2 : step - 1
-  const progress = ((stepIndex + 1) / STEPS.length) * 100
+  const currentGroup = QUIZ_GROUPS[groupIndex]
+  const groupQuestions = QUIZ_QUESTIONS.filter((q) => currentGroup!.ids.includes(q.id))
+  const totalGroups = QUIZ_GROUPS.length
+  const isLastGroup = groupIndex === totalGroups - 1
 
   function setQ<K extends keyof QuizAnswers>(key: K, value: QuizAnswers[K]) {
     setAnswers((a) => ({ ...a, [key]: value }))
@@ -111,7 +137,7 @@ export default function OnboardingPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Request failed.')
       if (save) {
-        router.replace('/')
+        router.replace('/dashboard')
         router.refresh()
         return
       }
@@ -125,203 +151,251 @@ export default function OnboardingPage() {
     }
   }
 
+  const goToNextGroup = useCallback(() => {
+    if (isLastGroup) {
+      setPhase('samples')
+    } else {
+      setGroupIndex((i) => i + 1)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [isLastGroup])
+
+  const goToPrevGroup = useCallback(() => {
+    if (groupIndex === 0) {
+      setPhase('welcome')
+    } else {
+      setGroupIndex((i) => i - 1)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [groupIndex])
+
   return (
-    <div className="min-h-dvh bg-paper">
-      <div className="mx-auto w-full max-w-2xl px-6 py-10 sm:py-14">
-        {/* Brand */}
-        <header className="mb-10 flex flex-col items-center gap-4 text-center">
+    <div className="min-h-dvh bg-bone">
+      <div className="mx-auto w-full max-w-2xl px-5 py-8 sm:px-6 sm:py-12">
+        {/* Brand header */}
+        <header className="mb-8 flex items-center justify-between">
           <RelayBrand />
-          <div className="space-y-2">
-            <h1 className="text-heading text-2xl text-ink sm:text-3xl">
-              Sound like you, on every message.
-            </h1>
-            <p className="mx-auto max-w-md text-sm leading-relaxed text-slate">
-              Relay writes in your voice, not a template. Spend five minutes now
-              and every draft from here on already reads like it came from you.
-            </p>
-          </div>
+          {phase !== 'welcome' && phase !== 'preview' ? (
+            <span className="text-mono-medium text-[11px] text-stone">
+              {phase === 'quiz'
+                ? `Style · ${groupIndex + 1} / ${totalGroups}`
+                : phase === 'samples'
+                  ? 'Real messages'
+                  : ''}
+            </span>
+          ) : null}
         </header>
 
-        {/* Error */}
         {error ? (
-          <Alert variant="destructive" className="mb-6">
-            <AlertTitle>Something failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <div className="mb-6 rounded-lg border border-status-danger/20 bg-status-danger/5 px-4 py-3">
+            <p className="text-sm text-status-danger">{error}</p>
+          </div>
         ) : null}
 
-        {phase === 'form' ? (
-          <div className="space-y-8">
+        {/* ── WELCOME ── */}
+        {phase === 'welcome' && (
+          <WelcomePhase onStart={() => setPhase('quiz')} onSkip={() => buildCard(true)} />
+        )}
+
+        {/* ── QUIZ ── */}
+        {phase === 'quiz' && (
+          <div className="space-y-6">
             {/* Progress */}
-            <div className="mx-auto max-w-md">
-              <div className="flex items-center justify-between">
-                {STEPS.map((s, i) => {
-                  const state = i < stepIndex ? 'done' : i === stepIndex ? 'active' : 'todo'
-                  return (
-                    <div key={s.label} className="flex flex-1 items-center gap-2 first:justify-start last:justify-end">
-                      <span
-                        className={cn(
-                          'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-all duration-300',
-                          state === 'active'
-                            ? 'bg-orange text-bone shadow-[0_2px_12px_-2px_color-mix(in_srgb,var(--orange)_50%,transparent)]'
-                            : state === 'done'
-                              ? 'bg-status-success text-bone'
-                              : 'border border-line text-slate',
-                        )}
-                      >
-                        {state === 'done' ? <Check className="size-3.5" /> : i + 1}
-                      </span>
-                      <span
-                        className={cn(
-                          'text-xs font-medium transition-colors',
-                          state === 'todo' ? 'text-slate' : 'text-ink',
-                        )}
-                      >
-                        {s.label}
-                      </span>
-                    </div>
-                  )
-                })}
+            <div className="space-y-2">
+              <div className="flex items-end justify-between">
+                <div>
+                  <p className="text-label text-stone">{currentGroup!.title}</p>
+                  <h2 className="mt-1 text-[20px] font-medium text-ink">
+                    {currentGroup!.hint}
+                  </h2>
+                </div>
+                <span className="text-mono-medium text-[12px] text-stone">
+                  {groupIndex + 1}/{totalGroups}
+                </span>
               </div>
-              <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-bone">
+              <div className="h-1 overflow-hidden rounded-full bg-line">
                 <div
-                  className="h-full rounded-full bg-orange transition-[width] duration-500 ease-out"
-                  style={{ width: `${progress}%` }}
+                  className="h-full rounded-full bg-orange transition-all duration-500 ease-out"
+                  style={{ width: `${((groupIndex + 1) / totalGroups) * 100}%` }}
                 />
               </div>
-              <p className="mt-2 text-center font-mono text-xs text-slate">
-                Step {stepIndex + 1} of {STEPS.length} — {STEPS[stepIndex].hint}
+            </div>
+
+            {/* Questions in this group */}
+            <div className="space-y-6">
+              {groupQuestions.map((q, qi) => (
+                <div key={q.id} className="reveal-up" style={{ animationDelay: `${qi * 0.05}s` }}>
+                  <p className="text-[15px] font-medium text-ink">{q.prompt}</p>
+                  <p className="mt-1 text-[12px] text-stone">{QUESTION_WHY[q.id]}</p>
+
+                  {q.id === 'greeting' || q.id === 'signOff' || q.id === 'neverWords' || q.id === 'preferredWords' ? (
+                    <Input
+                      className="mt-3"
+                      value={String(answers[q.id] ?? '')}
+                      placeholder={q.options[0]?.hint || 'Optional'}
+                      onChange={(e) => setQ(q.id as keyof QuizAnswers, e.target.value as never)}
+                    />
+                  ) : (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {q.options.map((opt) => {
+                        const checked = String(answers[q.id]) === String(opt.value)
+                        return (
+                          <button
+                            key={String(opt.value)}
+                            type="button"
+                            onClick={() => setQ(q.id as keyof QuizAnswers, opt.value as never)}
+                            aria-pressed={checked}
+                            className={cn(
+                              'rounded-xl border px-4 py-3 text-left transition-all duration-150',
+                              checked
+                                ? 'border-orange bg-orange/[0.06] ring-1 ring-orange/20'
+                                : 'border-line bg-bone-raised hover:border-line hover:bg-bone',
+                            )}
+                          >
+                            <span className={cn('block text-[13px] font-medium', checked ? 'text-ink' : 'text-ink/80')}>
+                              {String(opt.label)}
+                            </span>
+                            {opt.hint ? (
+                              <span className="mt-0.5 block text-[11px] text-stone">{opt.hint}</span>
+                            ) : null}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Navigation */}
+            <div className="flex items-center justify-between border-t border-line pt-5">
+              <Button variant="ghost" size="sm" onClick={goToPrevGroup}>
+                <ArrowLeft className="size-3.5 mr-1.5" aria-hidden="true" />
+                Back
+              </Button>
+              <Button onClick={goToNextGroup}>
+                {isLastGroup ? 'Continue' : 'Next'}
+                <ArrowRight className="size-3.5 ml-1.5" aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── SAMPLES ── */}
+        {phase === 'samples' && (
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <p className="text-label text-stone">Optional · strongest proof</p>
+              <h2 className="text-[20px] font-medium text-ink">
+                Paste real messages you have sent.
+              </h2>
+              <p className="text-[14px] leading-relaxed text-graphite">
+                Five messages with a blank line between each. Real samples beat any quiz — this is the strongest signal of how you actually write.
               </p>
             </div>
 
-            {step === 1 ? (
-              <>
-                <div className="divide-y divide-line">
-                  {QUIZ_QUESTIONS.map((q, qi) => (
-                    <fieldset
-                      key={q.id}
-                      className="reveal-up py-6 first:pt-0 last:pb-0"
-                      style={{ animationDelay: `${0.05 + qi * 0.04}s` }}
-                    >
-                      <legend className="text-[15px] font-medium text-ink">
-                        {q.prompt}
-                      </legend>
-                      <p className="mt-1 text-xs text-slate">{QUESTION_WHY[q.id]}</p>
+            {/* Example */}
+            <div className="rounded-xl border border-line bg-bone-raised p-4">
+              <p className="text-label text-stone mb-2">Example</p>
+              <pre className="overflow-x-auto text-[12px] leading-relaxed text-graphite whitespace-pre-wrap">
+                {WRITING_SAMPLES[0]}
+              </pre>
+            </div>
 
-                      {TEXT_QUESTION_IDS.has(q.id) ? (
-                        <Input
-                          className="mt-4"
-                          value={String(answers[q.id] ?? '')}
-                          placeholder={q.options[0]?.hint}
-                          onChange={(e) =>
-                            setQ(q.id as keyof QuizAnswers, e.target.value as never)
-                          }
-                        />
-                      ) : (
-                        <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
-                          {q.options.map((opt) => {
-                            const checked = String(answers[q.id]) === String(opt.value)
-                            return (
-                              <button
-                                key={String(opt.value)}
-                                type="button"
-                                onClick={() =>
-                                  setQ(q.id as keyof QuizAnswers, opt.value as never)
-                                }
-                                aria-pressed={checked}
-                                className={cn(
-                                  'group rounded-xl border px-4 py-3.5 text-left transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                                  checked
-                                    ? 'border-orange bg-orange/5 shadow-[0_2px_12px_-4px_color-mix(in_srgb,var(--orange)_30%,transparent)]'
-                                    : 'border-line bg-paper hover:border-line/80 hover:bg-bone/40',
-                                )}
-                              >
-                                <span
-                                  className={cn(
-                                    'block text-sm font-medium transition-colors',
-                                    checked ? 'text-ink' : 'text-ink/80',
-                                  )}
-                                >
-                                  {String(opt.label)}
-                                </span>
-                                {opt.hint ? (
-                                  <span className="mt-0.5 block text-xs text-slate">
-                                    {opt.hint}
-                                  </span>
-                                ) : null}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </fieldset>
-                  ))}
-                </div>
+            <Textarea
+              className="max-h-[20rem] overflow-y-auto font-mono text-[13px]"
+              value={samples}
+              onChange={(e) => setSamples(e.target.value)}
+              placeholder="Paste your messages here, separated by blank lines..."
+              rows={6}
+            />
 
-                <div className="flex items-center justify-between border-t border-line pt-5">
-                  <span className="text-xs text-slate">
-                    {QUIZ_QUESTIONS.length} questions · change any later
-                  </span>
-                  <Button size="lg" onClick={() => setStep(2)}>
-                    Continue
-                    <ArrowRight className="size-4" aria-hidden="true" />
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="reveal-up space-y-3">
-                  <div className="flex items-center gap-2">
-                    <PenLine className="size-4 text-orange" aria-hidden="true" />
-                    <h2 className="text-[15px] font-medium text-ink">
-                      Paste a few real messages (optional)
-                    </h2>
-                  </div>
-                  <p className="text-sm leading-relaxed text-slate">
-                    Five messages you have actually sent, with a blank line between
-                    each. Real samples beat any quiz — this is the strongest proof of
-                    how you actually write.
-                  </p>
-                  <Textarea
-                    className="mt-2 max-h-[24rem] overflow-y-auto font-mono text-[13px]"
-                    value={samples}
-                    onChange={(e) => setSamples(e.target.value)}
-                    placeholder={
-                      'Hey, quick thought on your product...\n\n(blank line between messages)'
-                    }
-                    rows={7}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between gap-3 border-t border-line pt-5">
-                  <Button variant="outline" size="lg" onClick={() => setStep(1)}>
-                    <ArrowLeft className="size-4" aria-hidden="true" />
-                    Back
-                  </Button>
-                  <Button
-                    variant="orange"
-                    size="lg"
-                    onClick={() => buildCard(false)}
-                    loading={loading}
-                  >
-                    <Sparkles className="mr-1.5 size-4" aria-hidden="true" />
-                    {loading ? 'Building your card' : 'Build my style card'}
-                  </Button>
-                </div>
-              </>
-            )}
+            <div className="flex items-center justify-between border-t border-line pt-5">
+              <Button variant="ghost" size="sm" onClick={() => setPhase('quiz')}>
+                <ArrowLeft className="size-3.5 mr-1.5" aria-hidden="true" />
+                Back
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => buildCard(false)} disabled={loading}>
+                  Skip this
+                </Button>
+                <Button variant="orange" onClick={() => buildCard(false)} loading={loading}>
+                  <Sparkles className="mr-1.5 size-3.5" aria-hidden="true" />
+                  {loading ? 'Building...' : 'Build my voice'}
+                </Button>
+              </div>
+            </div>
           </div>
-        ) : (
+        )}
+
+        {/* ── PREVIEW ── */}
+        {phase === 'preview' && (
           <PreviewPhase
             card={preview}
             onSave={() => buildCard(true)}
             onBack={() => {
-              setPhase('form')
-              setStep(1)
+              setPhase('samples')
             }}
             saving={loading}
           />
         )}
+      </div>
+    </div>
+  )
+}
+
+function WelcomePhase({ onStart, onSkip }: { onStart: () => void; onSkip: () => void }) {
+  return (
+    <div className="reveal-up space-y-8">
+      {/* Hero */}
+      <div className="text-center">
+        <div className="mx-auto mb-5 flex size-14 items-center justify-center rounded-2xl bg-orange/10">
+          <MessageSquare className="size-6 text-orange" aria-hidden="true" />
+        </div>
+        <h1 className="text-display text-[28px] text-ink sm:text-[32px]">
+          Sound like you,<br className="hidden sm:block" /> on every message.
+        </h1>
+        <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-graphite">
+          Relay writes outreach in your voice, not a template. This takes about three minutes.
+        </p>
+      </div>
+
+      {/* What it does */}
+      <div className="rounded-xl border border-line bg-bone-raised p-5">
+        <p className="text-label text-stone mb-3">What this calibrates</p>
+        <div className="space-y-3">
+          {[
+            { icon: Target, label: 'Tone & formality', desc: 'How casual or formal your drafts read' },
+            { icon: MessageSquare, label: 'Openers & sign-offs', desc: 'How you start and end messages' },
+            { icon: PenLine, label: 'Your word choices', desc: 'Words you use — and words you avoid' },
+          ].map(({ icon: Icon, label, desc }) => (
+            <div key={label} className="flex items-start gap-3">
+              <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-bone">
+                <Icon className="size-3.5 text-stone" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-[13px] font-medium text-ink">{label}</p>
+                <p className="text-[12px] text-stone">{desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Primary CTA */}
+      <div className="space-y-3">
+        <Button size="lg" className="w-full" onClick={onStart}>
+          Calibrate my voice
+          <ArrowRight className="size-4 ml-1.5" aria-hidden="true" />
+        </Button>
+        <button
+          type="button"
+          onClick={() => void onSkip()}
+          className="flex w-full items-center justify-center gap-1.5 text-[13px] text-graphite transition-colors hover:text-ink"
+        >
+          <SkipForward className="size-3.5" aria-hidden="true" />
+          Skip for now — use a default voice
+        </button>
       </div>
     </div>
   )
@@ -342,58 +416,52 @@ function PreviewPhase({
   const lines = plainSentences(card)
 
   return (
-    <div className="reveal-up space-y-8">
-      <header className="text-center">
+    <div className="reveal-up space-y-6">
+      <div className="text-center">
         <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-orange/10">
           <Sparkles className="size-5 text-orange" aria-hidden="true" />
         </div>
-        <h2 className="text-heading text-xl text-ink sm:text-2xl">
-          This is how you sound.
+        <h2 className="text-[20px] font-medium text-ink">
+          This is how Relay will write.
         </h2>
-        <p className="mt-2 text-sm text-slate">
-          Read it back. If it is you, save it and every draft inherits it.
+        <p className="mt-2 text-[14px] text-graphite">
+          Read it back. If it sounds like you, save it and every draft inherits it.
         </p>
-      </header>
+      </div>
 
       {/* Style sentences */}
-      <div className="rounded-2xl border border-line bg-paper p-6">
-        <ul className="space-y-3">
+      <div className="rounded-xl border border-line bg-bone-raised p-5">
+        <ul className="space-y-2.5">
           {lines.map((line, i) => (
             <li
               key={line}
-              className="slide-in-right flex items-start gap-3 text-[15px] text-ink"
+              className="slide-in-right flex items-start gap-3 text-[14px] text-ink"
               style={{ animationDelay: `${0.05 + i * 0.04}s` }}
             >
-              <span
-                className="mt-2 size-1.5 shrink-0 rounded-full bg-orange"
-                aria-hidden="true"
-              />
+              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-orange" aria-hidden="true" />
               <span>{line}</span>
             </li>
           ))}
         </ul>
       </div>
 
-      {/* Sample */}
-      <div className="space-y-3">
-        <p className="font-mono text-xs uppercase tracking-widest text-slate">
-          A sample draft in your voice
-        </p>
-        <blockquote className="rounded-2xl border-l-[3px] border-orange bg-bone/40 py-4 pl-5 pr-4 text-[15px] leading-relaxed text-ink italic">
-          {sampleLine(card)}
+      {/* Sample draft */}
+      <div className="space-y-2">
+        <p className="text-label text-stone">Sample draft in your voice</p>
+        <blockquote className="rounded-xl border-l-[3px] border-orange bg-bone-raised py-4 pl-5 pr-4 text-[14px] leading-relaxed text-ink italic">
+          &ldquo;{sampleLine(card)}&rdquo;
         </blockquote>
-        <p className="text-sm leading-relaxed text-slate">
-          {card.summary}
-        </p>
       </div>
 
       {/* Actions */}
-      <div className="flex flex-col-reverse gap-3 border-t border-line pt-6 sm:flex-row sm:justify-center">
-        <Button variant="outline" size="lg" onClick={onBack} disabled={saving}>
-          Rebuild it
+      <div className="flex flex-col-reverse gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <Button variant="outline" onClick={onBack} disabled={saving}>
+          <ArrowLeft className="size-3.5 mr-1.5" aria-hidden="true" />
+          Tweak it
         </Button>
-        <Button variant="orange" size="lg" onClick={onSave} loading={saving}>
-          {saving ? 'Saving your voice' : 'This sounds like me, save it'}
+        <Button variant="orange" onClick={onSave} loading={saving}>
+          {saving ? 'Saving...' : 'This sounds like me'}
+          {!saving && <Check className="size-3.5 ml-1.5" aria-hidden="true" />}
         </Button>
       </div>
     </div>
