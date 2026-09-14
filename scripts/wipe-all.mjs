@@ -2,7 +2,7 @@
 /**
  * Completely clear the public schema (all data, keep auth users).
  * Keeps auth.users and auth.identities intact so sign-ins still work.
- * Re-runs seed-dev-users.mjs first to ensure all 5 users exist.
+ * Re-runs seed-dev-users.mjs first to ensure all 7 users exist.
  *
  * Env: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
  *      SUPABASE_SERVICE_ROLE_KEY.
@@ -54,6 +54,24 @@ async function main() {
 
   // Order matters: child tables first, parent tables last.
   const tables = [
+    // Content Intelligence System (Studio 2.0)
+    'content_interview_answers',
+    'content_interview_sessions',
+    'content_evaluations',
+    'content_idea_genomes',
+    'content_opportunities',
+    'content_memories',
+    'content_draft_feedback',
+    'content_drafts',
+    'content_history',
+    'content_research_findings',
+    'topic_clusters',
+    'trending_angles',
+    'content_pillars',
+    'content_post_structures',
+    'content_engagement_events',
+    'content_profiles',
+    'content_personas',
     // Phase 8 / audit
     'notification_log',
     'csv_imports',
