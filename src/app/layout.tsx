@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { Providers } from "@/components/providers";
+import { siteConfig, canonicalUrl } from "@/lib/site-config";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -19,12 +20,12 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteConfig.origin),
   title: {
-    default: "Relay — Know what to do next",
-    template: "%s — Relay",
+    default: `${siteConfig.name} — ${siteConfig.tagline}`,
+    template: `%s | ${siteConfig.name}`,
   },
-  description:
-    "Relay tells you what deserves your attention — and helps you act on it. Find opportunities, qualify prospects, draft in your voice, and build authority with Studio.",
+  description: siteConfig.description,
   keywords: [
     "sales outreach",
     "lead qualification",
@@ -32,65 +33,77 @@ export const metadata: Metadata = {
     "AI assistant",
     "voice-calibrated drafts",
     "prospect scoring",
+    "business development",
+    "consultant client acquisition",
+    "LinkedIn content ideas",
+    "personal brand content",
   ],
-  authors: [{ name: "Relay" }],
-  creator: "Relay",
-  metadataBase: new URL("https://relay.app"),
+  authors: [{ name: siteConfig.name }],
+  creator: siteConfig.name,
+  alternates: {
+    canonical: canonicalUrl("/"),
+  },
   openGraph: {
     type: "website",
     locale: "en_US",
-    siteName: "Relay",
-    title: "Relay — Know what to do next",
-    description:
-      "Relay tells you what deserves your attention — and helps you act on it.",
+    url: canonicalUrl("/"),
+    siteName: siteConfig.name,
+    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    description: siteConfig.description,
+    images: [
+      {
+        url: canonicalUrl("/og"),
+        width: siteConfig.ogImage.width,
+        height: siteConfig.ogImage.height,
+        alt: `${siteConfig.name} — ${siteConfig.tagline}`,
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Relay — Know what to do next",
-    description:
-      "Relay tells you what deserves your attention — and helps you act on it.",
+    site: siteConfig.twitter,
+    creator: siteConfig.twitter,
+    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    description: siteConfig.description,
+    images: [canonicalUrl("/og")],
   },
   robots: { index: true, follow: true },
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Relay",
+    title: siteConfig.name,
+  },
+  other: {
+    "og:image:width": String(siteConfig.ogImage.width),
+    "og:image:height": String(siteConfig.ogImage.height),
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#fafaf8",
+  themeColor: "#f7f6f3",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
       lang="en"
       className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}
     >
       <head>
-        <link rel="apple-touch-icon" href="/icon-192x192.png" />
+        <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+        <link rel="apple-touch-icon" href="/icon.svg" />
       </head>
       <body className="min-h-full selection:bg-orange/25 selection:text-ink">
         <script
           dangerouslySetInnerHTML={{
             __html:
               "(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}})()",
-          }}
-        />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').catch(function() {});
-                });
-              }
-            `,
           }}
         />
         <Providers>{children}</Providers>

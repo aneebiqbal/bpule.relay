@@ -16,6 +16,7 @@ const PROTECTED_PREFIXES = [
   "/dashboard",
   "/prospect",
   "/settings",
+  "/admin",
 ];
 
 const AUTH_ROUTES = ["/login", "/signup", "/forgot-password", "/reset-password"];
@@ -60,11 +61,6 @@ export async function proxy(request: NextRequest) {
     // Session refresh failed — let the request through.
   }
 
-  // Authenticated users on root → redirect to dashboard
-  if (isAuthenticated && pathname === "/") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
   // Authenticated users on auth routes → redirect to dashboard
   if (isAuthenticated && AUTH_ROUTES.some((route) => pathname.startsWith(route))) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
@@ -84,5 +80,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/).*)"],
+  matcher: ["/((?!_next/static|_next/image|icon\\.svg|favicon|api/).*)"],
 };

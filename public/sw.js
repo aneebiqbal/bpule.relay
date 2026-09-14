@@ -57,8 +57,8 @@ self.addEventListener('push', (event) => {
   const title = data.title ?? 'Relay'
   const options = {
     body: data.body ?? 'Something needs your attention.',
-    icon: '/icon-192x192.png',
-    badge: '/icon-192x192.png',
+    icon: '/icon.svg',
+    badge: '/icon.svg',
     tag: data.tag ?? 'relay',
     renotify: true,
     data: data.payload ?? {},
