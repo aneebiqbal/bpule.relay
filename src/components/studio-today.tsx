@@ -13,6 +13,7 @@ export function StudioToday({ persona, initialPick, initialAlternatives }: Studi
   const [pick, setPick] = useState<ContentIdeaCard | null>(initialPick)
   const [alternatives, setAlternatives] = useState<ContentIdeaCard[]>(initialAlternatives)
   const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState('')
 
   const refreshIdeas = async () => {
     setRefreshing(true)
@@ -51,6 +52,7 @@ export function StudioToday({ persona, initialPick, initialAlternatives }: Studi
           variant="hero"
           personaId={persona.id}
           onRefresh={refreshIdeas}
+          onError={setError}
         />
       ) : (
         <div className="rounded-xl border border-dashed border-ink/20 p-8 text-center">
@@ -66,6 +68,10 @@ export function StudioToday({ persona, initialPick, initialAlternatives }: Studi
             </button>
           )}
         </div>
+      )}
+
+      {error && (
+        <p className="rounded-lg bg-red-50 p-3 text-xs text-red-600">{error}</p>
       )}
 
       {alternatives.length > 0 && (
@@ -94,17 +100,48 @@ function IdeaCard({
   variant,
   personaId,
   onRefresh,
+  onError,
 }: {
   idea: ContentIdeaCard
   variant: 'hero' | 'compact'
   personaId: string
   onRefresh?: () => void
+  onError?: (msg: string) => void
 }) {
   const [writing, setWriting] = useState(false)
 
-  const handleWrite = () => {
+  const handleWrite = async () => {
     setWriting(true)
-    window.location.href = `/content/${personaId}?action=write&title=${encodeURIComponent(idea.title)}&angle=${encodeURIComponent(idea.angle)}&territory=${encodeURIComponent(idea.territory)}`
+    try {
+      const res = await fetch('/api/content/generate-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personaId,
+          idea: {
+            title: idea.title,
+            angle: idea.angle,
+            territory: idea.territory,
+            sourceKind: idea.sourceKind,
+            whyYou: idea.whyYou,
+            whyAudience: idea.whyAudience,
+          },
+        }),
+      })
+      const data = await res.json()
+      if (data.draftId) {
+        window.location.href = `/studio/drafts/${data.draftId}`
+      } else if (data.caption) {
+        // Persistence failed but content exists — show inline
+        window.location.href = `/studio/drafts/error?caption=${encodeURIComponent(data.caption)}`
+      } else {
+        onError?.(data.error || 'Generation failed')
+        setWriting(false)
+      }
+    } catch {
+      onError?.('Generation failed')
+      setWriting(false)
+    }
   }
 
   if (variant === 'hero') {

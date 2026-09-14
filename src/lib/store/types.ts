@@ -205,6 +205,16 @@ export interface UpworkSnapshot {
   todayApplies: number
 }
 
+export interface ContentForToday {
+  personaId: string
+  personaName: string
+  ideaTitle: string
+  ideaAngle: string
+  ideaReason: string
+  draftId?: string
+  draftCaption?: string
+}
+
 export interface TodayDashboard {
   mine: QueueData
   team: RateMetric
@@ -213,6 +223,7 @@ export interface TodayDashboard {
   followupsDue: FollowupDue[]
   myRank: MyRank
   upwork: UpworkSnapshot
+  contentForToday?: ContentForToday | null
 }
 
 export interface DosageResult {
@@ -462,11 +473,11 @@ export interface ScoutStore {
   deleteContentPillar(pillarId: string): Promise<void>
   createContentDraft(input: {
     personaId: string
-    pillarId: string | null
+    pillarId?: string | null
     topicClusterId?: string | null
     researchFindingId?: string | null
     structureId?: string | null
-    sourceKind?: 'answer' | 'conviction' | 'field_update'
+    sourceKind?: 'answer' | 'conviction' | 'field_update' | 'idea'
     sourceMaterial: string
     platform: ContentPlatform
     caption: string
@@ -481,6 +492,16 @@ export interface ScoutStore {
   getContentDraft(draftId: string): Promise<ContentDraft | null>
   updateContentDraftCaption(draftId: string, caption: string): Promise<ContentDraft>
   updateContentDraftStatus(draftId: string, status: ContentDraftStatus): Promise<ContentDraft>
+  updateContentDraft(input: {
+    draftId: string
+    caption?: string
+    status?: ContentDraftStatus
+    hookScore?: number | null
+    hookFeedback?: string
+    selfCheckPassed?: boolean
+    selfCheckNote?: string
+    specificityHit?: boolean
+  }): Promise<ContentDraft>
   listContentHistory(personaId: string, limit?: number): Promise<ContentHistoryEntry[]>
   getContentHistoryEntry(historyId: string): Promise<ContentHistoryEntry | null>
   logContentPosted(input: {
@@ -539,7 +560,7 @@ export interface ScoutStore {
     personaId: string
     draftId: string
     topicClusterId: string | null
-    sourceKind: 'answer' | 'conviction' | 'field_update'
+    sourceKind: 'answer' | 'conviction' | 'field_update' | 'idea'
     reaction: 'posting' | 'not_for_me' | 'posting_after_edit'
     edited: boolean
     editSignals: string[]

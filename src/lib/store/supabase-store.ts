@@ -1947,7 +1947,7 @@ export class SupabaseStore implements ScoutStore {
     topicClusterId?: string | null
     researchFindingId?: string | null
     structureId?: string | null
-    sourceKind?: 'answer' | 'conviction' | 'field_update'
+    sourceKind?: 'answer' | 'conviction' | 'field_update' | 'idea'
     sourceMaterial: string
     platform: ContentPlatform
     caption: string
@@ -2050,6 +2050,35 @@ export class SupabaseStore implements ScoutStore {
       })
       return draft
     }
+    return mapContentDraft(data)
+  }
+
+  async updateContentDraft(input: {
+    draftId: string
+    caption?: string
+    status?: ContentDraftStatus
+    hookScore?: number | null
+    hookFeedback?: string
+    selfCheckPassed?: boolean
+    selfCheckNote?: string
+    specificityHit?: boolean
+  }): Promise<ContentDraft> {
+    const patch: Record<string, unknown> = {}
+    if (input.caption !== undefined) patch.caption = input.caption
+    if (input.status !== undefined) patch.status = input.status
+    if (input.hookScore !== undefined) patch.hook_score = input.hookScore
+    if (input.hookFeedback !== undefined) patch.hook_feedback = input.hookFeedback
+    if (input.selfCheckPassed !== undefined) patch.self_check_passed = input.selfCheckPassed
+    if (input.selfCheckNote !== undefined) patch.self_check_note = input.selfCheckNote
+    if (input.specificityHit !== undefined) patch.specificity_hit = input.specificityHit
+
+    const { data, error } = await this.client
+      .from('content_drafts')
+      .update(patch)
+      .eq('id', input.draftId)
+      .select()
+      .single()
+    if (error) throw error
     return mapContentDraft(data)
   }
 

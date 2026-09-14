@@ -1424,13 +1424,13 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async createContentDraft(input) {
       const draft: ContentDraft = {
         id: nextId('cd'),
-        organizationId: DEMO_ORG_ID,
+        organizationId: 'org-demo',
         personaId: input.personaId,
-        pillarId: input.pillarId,
+        pillarId: input.pillarId ?? null,
         topicClusterId: input.topicClusterId ?? null,
         researchFindingId: input.researchFindingId ?? null,
         structureId: input.structureId ?? null,
-        sourceKind: input.sourceKind ?? 'answer',
+        sourceKind: (input.sourceKind ?? 'answer') as ContentDraft['sourceKind'],
         sourceMaterial: input.sourceMaterial,
         platform: input.platform,
         caption: input.caption,
@@ -1485,6 +1485,18 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
           metricsLoggedAt: null,
         })
       }
+      return draft
+    },
+    async updateContentDraft(input) {
+      const draft = contentDrafts.find((d) => d.id === input.draftId)
+      if (!draft) throw new Error('Draft not found')
+      if (input.caption !== undefined) draft.caption = input.caption
+      if (input.status !== undefined) draft.status = input.status
+      if (input.hookScore !== undefined) draft.hookScore = input.hookScore
+      if (input.hookFeedback !== undefined) draft.hookFeedback = input.hookFeedback
+      if (input.selfCheckPassed !== undefined) draft.selfCheckPassed = input.selfCheckPassed
+      if (input.selfCheckNote !== undefined) draft.selfCheckNote = input.selfCheckNote
+      if (input.specificityHit !== undefined) draft.specificityHit = input.specificityHit
       return draft
     },
     async listContentHistory(personaId, limit = 20) {
@@ -1648,20 +1660,20 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       return finding
     },
     async createContentDraftFeedback(input) {
-      const row: ContentDraftFeedback = {
-        id: nextId('cdf'),
-        organizationId: DEMO_ORG_ID,
+      const fb = {
+        id: nextId('cf'),
+        organizationId: 'org-demo',
         personaId: input.personaId,
         draftId: input.draftId,
         topicClusterId: input.topicClusterId,
-        sourceKind: input.sourceKind,
+        sourceKind: input.sourceKind as 'answer' | 'conviction' | 'field_update' | 'idea',
         reaction: input.reaction,
         edited: input.edited,
         editSignals: input.editSignals,
         createdAt: new Date().toISOString(),
       }
-      contentDraftFeedback.unshift(row)
-      return row
+      contentDraftFeedback.push(fb)
+      return fb
     },
     async listContentDraftFeedback(personaId, limit = 60) {
       return contentDraftFeedback

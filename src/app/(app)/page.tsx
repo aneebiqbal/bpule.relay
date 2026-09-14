@@ -19,6 +19,7 @@ import { NotificationFeed, type NotificationItem } from '@/components/notificati
 import { ScoreRing } from '@/components/score-ring'
 import { cn } from 'cn'
 import type { Lead } from '@/lib/domain/types'
+import { generateDailyIdeas } from '@/lib/content/daily-ideas'
 
 export const dynamic = 'force-dynamic'
 
@@ -92,6 +93,38 @@ export default async function TodayPage() {
   const dailyLimit = sendBudgets.reduce((sum, b) => sum + b.limit, 0)
   const replyRatePct = team.replyRate !== null ? Math.round(team.replyRate * 100) : null
 
+  // Load content idea
+  let contentForToday = dash.contentForToday
+  if (!contentForToday && user) {
+    try {
+      const personas = await store.listContentPersonas(user.rep.id)
+      if (personas.length > 0) {
+        const persona = personas[0]
+        const profile = persona.contentProfileId ? await store.getContentProfile(persona.contentProfileId) : null
+        const clusters = await store.listTopicClusters(persona.id)
+        const memories = await store.listContentMemories(persona.id, { limit: 30 })
+        const journey = await store.listContentJourney?.(persona.id, 20) ?? []
+        const ideas = generateDailyIdeas({
+          profile, clusters, history: [], memories, journey,
+          contentGoals: profile?.contentGoals ?? [],
+          audiences: profile?.audiences ?? [],
+          territories: profile?.territories ?? [],
+        })
+        if (ideas[0]) {
+          contentForToday = {
+            personaId: persona.id,
+            personaName: persona.displayName,
+            ideaTitle: ideas[0].title,
+            ideaAngle: ideas[0].angle,
+            ideaReason: ideas[0].whyYou || 'Based on your Content Identity',
+          }
+        }
+      }
+    } catch {
+      // Silent
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
@@ -118,6 +151,40 @@ export default async function TodayPage() {
           </Link>
         </div>
       </header>
+
+      {/* ── Content for Today ── */}
+      {contentForToday && (
+        <section className="rounded-xl border border-line bg-white p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-label text-stone">Content for Today</p>
+              <h3 className="mt-1 text-[15px] font-medium text-ink leading-snug">{contentForToday.ideaTitle}</h3>
+              <p className="mt-1 text-[12px] text-graphite line-clamp-2">{contentForToday.ideaReason}</p>
+              <p className="mt-2 text-[11px] text-stone">
+                Persona: {contentForToday.personaName}
+                {contentForToday.draftId ? ' · Draft saved' : ''}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {contentForToday.draftId ? (
+                <a
+                  href={`/studio/drafts/${contentForToday.draftId}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[12px] font-medium text-ink hover:bg-bone"
+                >
+                  Continue
+                </a>
+              ) : (
+                <a
+                  href={`/content/${contentForToday.personaId}/today`}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-orange px-3 py-1.5 text-[12px] font-medium text-bone hover:bg-orange-dark"
+                >
+                  Write this
+                </a>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── Signals — what needs attention ── */}
       {(replyCount > 0 || followupCount > 0) && (

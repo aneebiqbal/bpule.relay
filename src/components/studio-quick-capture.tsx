@@ -9,10 +9,38 @@ interface StudioQuickCaptureProps {
 }
 
 export function StudioQuickCapture({ personaId, onSelectAngle }: StudioQuickCaptureProps) {
+  void onSelectAngle // Used indirectly via generation
   const [input, setInput] = useState('')
   const [angles, setAngles] = useState<QuickCaptureAngle[]>([])
   const [parsing, setParsing] = useState(false)
+  const [generating, setGenerating] = useState(false)
   const [showInput, setShowInput] = useState(false)
+
+  const handleWriteAngle = async (angle: QuickCaptureAngle) => {
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/content/generate-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personaId,
+          idea: {
+            title: angle.title,
+            angle: angle.angle,
+            territory: angle.type === 'opinion' ? 'perspective' : angle.type === 'technical_lesson' ? 'authority' : 'journey',
+            sourceKind: 'idea',
+          },
+        }),
+      })
+      const data = await res.json()
+      if (data.draftId) {
+        window.location.href = `/studio/drafts/${data.draftId}`
+      }
+    } catch {
+      // Silent fail
+    }
+    setGenerating(false)
+  }
 
   const handleSubmit = async () => {
     if (input.trim().length < 5) return
@@ -88,7 +116,8 @@ export function StudioQuickCapture({ personaId, onSelectAngle }: StudioQuickCapt
           {angles.map((angle, i) => (
             <button
               key={i}
-              onClick={() => onSelectAngle(angle)}
+              onClick={() => handleWriteAngle(angle)}
+              disabled={generating}
               className="w-full rounded-lg border border-ink/10 p-3 text-left hover:border-ink/25 hover:bg-bone/30 transition-colors"
             >
               <p className="text-sm font-medium text-ink">{angle.title}</p>

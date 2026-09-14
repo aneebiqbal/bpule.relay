@@ -48,7 +48,7 @@ export async function POST(
       topicClusterNames: clusters.map((c) => c.clusterName),
       recentFeedback: feedback.map((f) => ({
         topicClusterName: f.topicClusterId ? (clusterNames.get(f.topicClusterId) ?? null) : null,
-        sourceKind: f.sourceKind,
+        sourceKind: f.sourceKind as 'answer' | 'conviction' | 'field_update',
         reaction: f.reaction,
         edited: f.edited,
         editSignals: f.editSignals,

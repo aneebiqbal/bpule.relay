@@ -544,7 +544,7 @@ export interface ContentDraftFeedback {
   personaId: string
   draftId: string
   topicClusterId: string | null
-  sourceKind: 'answer' | 'conviction' | 'field_update'
+  sourceKind: 'answer' | 'conviction' | 'field_update' | 'idea'
   reaction: ContentDraftReaction
   edited: boolean
   editSignals: string[]
@@ -559,7 +559,7 @@ export interface ContentDraft {
   topicClusterId: string | null
   researchFindingId: string | null
   structureId: string | null
-  sourceKind: 'answer' | 'conviction' | 'field_update'
+  sourceKind: 'answer' | 'conviction' | 'field_update' | 'idea'
   sourceMaterial: string
   platform: ContentPlatform
   caption: string
@@ -570,6 +570,7 @@ export interface ContentDraft {
   specificityHit: boolean
   status: ContentDraftStatus
   createdAt: string
+  updatedAt?: string
 }
 
 /** A real, logged performance snapshot — always optional, always manual entry. */
