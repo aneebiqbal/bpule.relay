@@ -48,6 +48,7 @@ import type {
   UpworkSnapshot,
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey } from '@/lib/leads/normalize'
+import { businessDaysBetween, FOLLOWUP_DUE_BUSINESS_DAYS } from '@/lib/leads/followup'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
@@ -961,7 +962,12 @@ export class SupabaseStore implements ScoutStore {
     return matchProofItemsByTags(items, tags, limit)
   }
 
-  /** Contacted leads 3+ days past their last send with no reply — same threshold the followup_eligible DB trigger uses (migration 0009), computed here so the homepage can show the whole bucket at once. */
+  /**
+   * Contacted leads (never yet followed up) five working days past their
+   * last send with no reply. ONE follow-up ever: a lead already in
+   * 'followed_up' status is excluded here permanently, not just until its
+   * own window passes again — this is not a repeating reminder.
+   */
   private async fetchFollowupsDue(): Promise<FollowupDue[]> {
     const owned = await this.listOwnedLeads()
     const contacted = owned.filter((l) => l.status === 'contacted')
@@ -986,14 +992,14 @@ export class SupabaseStore implements ScoutStore {
       if (!existing || row.sent_at > existing) lastSentByLead.set(row.lead_id, row.sent_at)
     }
 
-    const now = Date.now()
+    const now = new Date()
     const due: FollowupDue[] = []
     for (const lead of contacted) {
       if (repliedLeadIds.has(lead.id)) continue
       const lastSent = lastSentByLead.get(lead.id)
       if (!lastSent) continue
-      const daysSinceContact = Math.floor((now - new Date(lastSent).getTime()) / 86_400_000)
-      if (daysSinceContact >= 3) due.push({ lead, daysSinceContact })
+      const daysSinceContact = businessDaysBetween(new Date(lastSent), now)
+      if (daysSinceContact >= FOLLOWUP_DUE_BUSINESS_DAYS) due.push({ lead, daysSinceContact })
     }
     return due.sort((a, b) => b.daysSinceContact - a.daysSinceContact)
   }

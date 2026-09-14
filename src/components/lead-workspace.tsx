@@ -140,13 +140,23 @@ export function LeadWorkspace({
   const signal = signalById(lead.signalType)
   const hasReply = lead.outcomes.some((o) => o.stage === 'replied')
   const hasPriorSend = lead.messages.some((m) => m.sentText && m.sentAt)
-  const followupEligible = (lead.status === 'contacted' || lead.status === 'followed_up') && hasPriorSend
+  // ONE follow-up, ever. A lead already in 'followed_up' status has used its
+  // one follow-up and is permanently locked out of another — status
+  // 'followed_up' is deliberately NOT in the eligible set below.
+  const followupAlreadyUsed = lead.status === 'followed_up'
+  const followupEligible = lead.status === 'contacted' && hasPriorSend && !followupAlreadyUsed
 
   const artifactDisabled: Record<ArtifactId, string | null> = {
     dm: null,
     connection: null,
     upwork: null,
-    followup: followupEligible ? null : lead.status === 'new' ? 'Eligible once this lead is contacted.' : 'Eligible once a first message has been sent.',
+    followup: followupEligible
+      ? null
+      : followupAlreadyUsed
+        ? 'A follow-up was already sent on this lead. Only one, ever.'
+        : lead.status === 'new'
+          ? 'Eligible once this lead is contacted.'
+          : 'Eligible once a first message has been sent.',
     reply: hasReply ? 'Reply text capture lands with the next pass.' : 'Appears when a reply is on file.',
   }
 

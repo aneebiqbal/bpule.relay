@@ -25,7 +25,7 @@ function loadEnv() {
     console.error('FAIL: missing .env.local')
     process.exit(1)
   }
-  const env: Record<string, string> = {}
+  const env = {}
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
     const m = line.match(/^([A-Z0-9_]+)="?([^"]*)"?$/)
     if (m) env[m[1]] = m[2]
@@ -45,7 +45,7 @@ if (!url || !anon || !serviceKey) {
 
 const stamp = `mt-${Date.now()}`
 
-async function signUp(orgName: string, email: string, password: string) {
+async function signUp(orgName, email, password) {
   const service = createClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
@@ -83,7 +83,7 @@ async function signUp(orgName: string, email: string, password: string) {
   return { orgId: org.id, email, password }
 }
 
-async function signIn(email: string, password: string) {
+async function signIn(email, password) {
   const sb = createClient(url, anon)
   const { error } = await sb.auth.signInWithPassword({ email, password })
   if (error) {
@@ -94,7 +94,7 @@ async function signIn(email: string, password: string) {
 }
 
 let failures = 0
-function assert(label: string, ok: boolean, detail = '') {
+function assert(label, ok, detail = '') {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? ` - ${detail}` : ''}`)
   if (!ok) failures += 1
 }
@@ -191,7 +191,7 @@ const tables = [
   { name: 'facts', filter: 'label', value: `${stamp}%` },
   { name: 'plays', filter: 'name', value: `${stamp}%` },
   { name: 'content_personas', filter: 'display_name', value: `${stamp}%` },
-] as const
+]
 
 for (const table of tables) {
   const { count: aSeesA } = await repA
@@ -224,14 +224,14 @@ for (const table of tables) {
 const { data: directLeadB } = await repA
   .from('leads')
   .select('id')
-  .eq('id', leadB!.id)
+  .eq('id', leadB.id)
   .maybeSingle()
 assert('A cannot read B\'s lead by ID', directLeadB === null)
 
 const { data: directFactB } = await repA
   .from('facts')
   .select('id')
-  .eq('id', factB!.id)
+  .eq('id', factB.id)
   .maybeSingle()
 assert('A cannot read B\'s fact by ID', directFactB === null)
 

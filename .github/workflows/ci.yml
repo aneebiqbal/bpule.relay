@@ -36,3 +36,72 @@ jobs:
           key: ${{ runner.os }}-nextjs-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
           restore-keys: |
             ${{ runner.os }}-nextjs-${{ hashFiles('**/pnpm-lock.yaml') }}-
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      # No AI provider keys or Supabase env are set here on purpose — the
+      # regression suite exercises the deterministic demo/no-provider code
+      # paths (demoExtract, demoDraft, runEval against local fixtures), so
+      # it needs no live credentials and makes no network calls.
+      - run: pnpm test
+
+  # Runs only when a migration file actually changes, so tenant isolation is
+  # re-verified automatically on the change most likely to break it, instead
+  # of depending on someone remembering to run this by hand.
+  rls-adversarial:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for migration changes
+        id: migration-check
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if git diff --name-only "$BASE" HEAD -- supabase/migrations | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.migration-check.outputs.changed == 'true'
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        if: steps.migration-check.outputs.changed == 'true'
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+        if: steps.migration-check.outputs.changed == 'true'
+
+      # Requires a real Supabase project's credentials, configured as repo
+      # secrets: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      # SUPABASE_SERVICE_ROLE_KEY. Runs against a real project, not a mock —
+      # this only proves anything against the actual RLS policies.
+      - name: Two-organization adversarial RLS test
+        if: steps.migration-check.outputs.changed == 'true'
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/rls-multitenant.mjs
