@@ -143,6 +143,10 @@ export interface UpworkJob {
   rawInput: string | null
   tags: string[]
   createdAt: string
+  postedAt?: string | null
+  remoteStatus?: string | null
+  clientName?: string | null
+  clientEmail?: string | null
 }
 
 export interface UpworkMessage {

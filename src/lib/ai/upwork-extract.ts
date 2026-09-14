@@ -14,6 +14,9 @@ interface UpworkExtractionOutput {
   required_skills: string[]
   urgency_signal: string | null
   tags: string[]
+  posted_at: string | null
+  remote_status: string | null
+  client_name: string | null
 }
 
 const UPWORK_EXTRACT_SYSTEM = `You structure raw Upwork job posts into fields. You never score, never judge, never write anything persuasive. You only structure. Respond with a single JSON object.
@@ -26,7 +29,10 @@ Rules:
 - proposal_count: number of existing proposals if shown. Null if not shown.
 - required_skills: array of skill names the client lists. Lowercase.
 - urgency_signal: exact text from the post suggesting urgency or a takeover (e.g. "previous developer left", "inherited codebase", "needs to be done ASAP"). Null if none.
-- tags: 2 to 6 short lowercase stack and domain keywords. No invented tech.`
+- tags: 2 to 6 short lowercase stack and domain keywords. No invented tech.
+- posted_at: the date/time the job was posted in ISO 8601 format (e.g. "2024-01-15T10:30:00Z"). Null if not shown. Use relative terms like "2 hours ago", "posted today", "yesterday" to derive the actual date where possible.
+- remote_status: "remote", "hybrid", "onsite", or null if unclear. Only "remote" if explicitly stated.
+- client_name: the client/company name if shown. Null if not shown.`
 
 const UPWORK_SCHEMA = {
   type: 'object',
@@ -54,6 +60,9 @@ const UPWORK_SCHEMA = {
     required_skills: { type: 'array', items: { type: 'string' } },
     urgency_signal: { type: ['string', 'null'] },
     tags: { type: 'array', items: { type: 'string' }, maxItems: 6 },
+    posted_at: { type: ['string', 'null'] },
+    remote_status: { type: ['string', 'null'] },
+    client_name: { type: ['string', 'null'] },
   },
 } as const
 
@@ -66,7 +75,7 @@ const empty = (v?: string | null): string | null => {
  * Extract structured fields from a raw Upwork job post paste.
  */
 export async function extractUpworkJob(rawText: string): Promise<
-  Omit<UpworkJob, 'id' | 'ownerRepId' | 'score' | 'verdict' | 'status' | 'extractedFields' | 'createdAt'>
+  Omit<UpworkJob, 'id' | 'ownerRepId' | 'score' | 'verdict' | 'status' | 'extractedFields' | 'createdAt' | 'clientEmail'>
 > {
   if (!rawText.trim()) {
     throw new Error('Paste the job post first.')
@@ -98,6 +107,9 @@ export async function extractUpworkJob(rawText: string): Promise<
     urgencySignal: empty(out.urgency_signal),
     rawInput: rawText,
     tags: (out.tags ?? []).slice(0, 6),
+    postedAt: empty(out.posted_at) ?? null,
+    remoteStatus: empty(out.remote_status) ?? null,
+    clientName: empty(out.client_name) ?? null,
   }
 }
 
@@ -141,6 +153,9 @@ function demoExtract(rawText: string): ReturnType<typeof extractUpworkJob> exten
     urgencySignal: urgency,
     rawInput: rawText,
     tags: demoTags(lower),
+    postedAt: new Date().toISOString(),
+    remoteStatus: 'remote',
+    clientName: null,
   }
 }
 

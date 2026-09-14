@@ -122,12 +122,12 @@ export function buildReplyStrategy(
   switch (analysis.intent) {
     case 'interested':
       return {
-        goal: 'Move toward concrete next step',
-        approach: `Respond to their interest and propose a light next step. ${analysis.questions.length > 0 ? 'Answer their questions directly first.' : ''}`,
+        goal: 'Acknowledge their interest and earn the next reply',
+        approach: `Thank them briefly, then either answer their specific question or offer one useful next step. ${analysis.questions.length > 0 ? 'Answer their questions directly first — do not defer them.' : 'Do not jump to a meeting ask. The goal is the next reply, not the close.'}`,
         tone: 'warm, direct, no pressure',
-        ctaStrategy: analysis.buyingSignal
-          ? 'Suggest a specific, low-friction next action (share a thought, send a one-pager, quick call)'
-          : 'Offer to share something useful, ask a clarifying question',
+        ctaStrategy: analysis.buyingSignal && analysis.questions.length === 0
+          ? 'Offer a low-friction next step: share a specific thought, example, or one-pager — not a meeting'
+          : 'Offer something useful or ask a clarifying question. No meeting pitch yet.',
       }
 
     case 'objection':
@@ -156,10 +156,10 @@ export function buildReplyStrategy(
 
     case 'question':
       return {
-        goal: 'Answer their questions directly',
-        approach: 'Address each question in order. Be specific. If a question is about capability, reference relevant proof.',
-        tone: 'helpful, specific',
-        ctaStrategy: 'After answering, ask a relevant follow-up question to keep the conversation moving',
+        goal: 'Answer their questions directly — before anything else',
+        approach: 'Lead with the answer to their actual question. Do not restart the sales pitch. If they asked about capabilities, answer with specifics. If they asked about pricing, give a range or framework. Only after fully answering should you consider a light next step.',
+        tone: 'helpful, specific, direct',
+        ctaStrategy: 'Answer first. Then, only if natural, ask a relevant follow-up question to keep the conversation moving. Do not answer a question about X with a pitch about Y.',
       }
 
     case 'not_interested':

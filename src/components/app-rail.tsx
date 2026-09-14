@@ -27,6 +27,7 @@ import type { RepRole } from '@/lib/domain/types'
 
 const RELAY_NAV = [
   { href: '/', label: 'Today', icon: CalendarDays, exact: true },
+  { href: '/prospect', label: 'Prospect Check', icon: Search, exact: true },
   { href: '/content', label: 'Content', icon: PenLine, exact: false, studio: true },
   { href: '/leads/new', label: 'New lead', icon: Plus, exact: true },
   { href: '/upwork', label: 'Upwork', icon: Briefcase, exact: false },

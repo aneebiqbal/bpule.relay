@@ -4,10 +4,8 @@ import {
   MessageCircle,
   Plus,
   Clock,
-  TrendingUp,
-  Zap,
-  Activity,
   ChevronRight,
+  Search,
   Target,
   Sun,
   Sunset,
@@ -103,13 +101,22 @@ export default async function TodayPage() {
           <h1 className="text-display text-[28px] text-ink mt-1">{firstName}</h1>
           <p className="text-[14px] text-graphite mt-1">{time.sub}</p>
         </div>
-        <Link
-          href="/leads/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-ink/90 active:scale-[0.97]"
-        >
-          <Plus className="size-4" aria-hidden="true" />
-          New lead
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/prospect"
+            className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-orange-dark active:scale-[0.97]"
+          >
+            <Search className="size-4" aria-hidden="true" />
+            Check a prospect
+          </Link>
+          <Link
+            href="/leads/new"
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-ink/90 active:scale-[0.97]"
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            New lead
+          </Link>
+        </div>
       </header>
 
       {/* ── Signals — what needs attention ── */}
@@ -271,15 +278,24 @@ export default async function TodayPage() {
           <div className="mx-auto max-w-xs space-y-3">
             <p className="text-[15px] font-medium text-ink">Nothing to work right now.</p>
             <p className="text-[13px] leading-relaxed text-graphite">
-              Paste research on a company you think needs delivery help.
+              Paste a LinkedIn profile to check if they are worth pursuing.
             </p>
-            <Link
-              href="/leads/new"
-              className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-orange-dark"
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              Add your first lead
-            </Link>
+            <div className="flex items-center justify-center gap-2">
+              <Link
+                href="/prospect"
+                className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-orange-dark"
+              >
+                <Search className="size-4" aria-hidden="true" />
+                Check a prospect
+              </Link>
+              <Link
+                href="/leads/new"
+                className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-ink/90"
+              >
+                <Plus className="size-4" aria-hidden="true" />
+                New lead
+              </Link>
+            </div>
           </div>
         </section>
       )}

@@ -3,4 +3,4 @@
  * team can answer "which version am I on" without guessing. Bump on each
  * release; keep it in sync with CHANGELOG.md.
  */
-export const APP_VERSION = "0.7.0"
+export const APP_VERSION = "0.8.0"

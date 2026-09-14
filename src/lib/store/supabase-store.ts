@@ -3082,6 +3082,10 @@ function mapUpworkJob(r: Row): UpworkJob {
     rawInput: (r.raw_input as string) ?? null,
     tags: (r.tags as string[]) ?? [],
     createdAt: r.created_at as string,
+    postedAt: (r.posted_at as string) ?? null,
+    remoteStatus: (r.remote_status as string) ?? null,
+    clientName: (r.client_name as string) ?? null,
+    clientEmail: (r.client_email as string) ?? null,
   }
 }
 
