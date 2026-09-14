@@ -52,7 +52,7 @@ export function MetricsLogForm({
   }
 
   return (
-    <div className="mt-3 rounded-xl border border-line/60 bg-paper-tint/30 p-3.5">
+    <div className="mt-3 rounded-xl border border-line/60 bg-bone/30 p-3.5">
       <p className="text-xs text-slate">Whatever your platform doesn&apos;t show you, leave blank.</p>
       <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {FIELDS.map((f) => (
@@ -64,17 +64,17 @@ export function MetricsLogForm({
               min={f.key === 'followerDelta' ? undefined : 0}
               value={values[f.key]}
               onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
-              className="h-8 w-full rounded-lg border border-line bg-paper-raised px-2 text-sm outline-none focus-visible:border-studio/40 focus-visible:ring-2 focus-visible:ring-studio/20"
+              className="h-8 w-full rounded-lg border border-line bg-bone-raised px-2 text-sm outline-none focus-visible:border-cobalt/40 focus-visible:ring-2 focus-visible:ring-cobalt/20"
             />
           </div>
         ))}
       </div>
-      {error && <p className="mt-2 text-xs text-status-no">{error}</p>}
+      {error && <p className="mt-2 text-xs text-status-danger">{error}</p>}
       <div className="mt-3 flex justify-end">
         <button
           onClick={() => void save()}
           disabled={saving}
-          className="rounded-lg gradient-studio px-3.5 py-1.5 text-xs font-semibold text-paper transition-all hover:brightness-110 disabled:opacity-50"
+          className="rounded-lg bg-cobalt px-3.5 py-1.5 text-xs font-semibold text-bone transition-all hover:brightness-110 disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save results'}
         </button>

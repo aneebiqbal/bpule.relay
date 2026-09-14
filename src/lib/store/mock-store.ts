@@ -5,6 +5,18 @@ import type {
   ContentPersona,
   ContentPillar,
   ContentPostStructure,
+  ContentProfile,
+  ContentMemory,
+  ContentMemoryType,
+  ContentOpportunity,
+  ContentOpportunityType,
+  ContentOpportunityQualification,
+  ContentIdeaGenome,
+  IdeaGenomeSource,
+  IdeaGenomeArchetype,
+  ContentEvaluation,
+  ContentInterviewSession,
+  ContentInterviewAnswer,
   CsvImport,
   Fact,
   Lead,
@@ -469,6 +481,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const csvImports: CsvImport[] = []
   // content engine
   const contentPersonas: ContentPersona[] = []
+  const contentProfiles: ContentProfile[] = []
   const contentPillars: ContentPillar[] = []
   const topicClusters: TopicCluster[] = []
   const contentDrafts: ContentDraft[] = []
@@ -476,6 +489,12 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const contentHistoryEntries: ContentHistoryEntry[] = []
   const trendingAngles: TrendingAngle[] = []
   const researchFindings: ContentResearchFinding[] = []
+  const contentMemories: ContentMemory[] = []
+  const contentOpportunities: ContentOpportunity[] = []
+  const contentIdeaGenomes: ContentIdeaGenome[] = []
+  const contentEvaluations: ContentEvaluation[] = []
+  const interviewSessions: ContentInterviewSession[] = []
+  const interviewAnswers: ContentInterviewAnswer[] = []
   const extractionRuns: Array<{
     task: 'extract' | 'draft'
     success: boolean
@@ -1225,13 +1244,14 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const persona: ContentPersona = {
         id: nextId('cp'),
         organizationId: 'org-demo',
-    repId: input.repId,
+        repId: input.repId,
         displayName: input.displayName,
         platforms: input.platforms,
         voiceProfileId: input.voiceProfileId ?? null,
         humorStyle: input.humorStyle ?? '',
         valuesAndOpinions: input.valuesAndOpinions ?? [],
         admiredExamples: input.admiredExamples ?? [],
+        contentProfileId: null,
         createdAt: new Date().toISOString(),
       }
       contentPersonas.push(persona)
@@ -1525,6 +1545,275 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         .filter((f) => f.personaId === personaId)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, limit)
+    },
+    // ── content profiles (Content DNA) ──
+    async createContentProfile(input) {
+      const now = new Date().toISOString()
+      const profile: ContentProfile = {
+        id: nextId('cdp'),
+        organizationId: DEMO_ORG_ID,
+        personaId: input.personaId,
+        role: input.role ?? '',
+        seniority: input.seniority ?? '',
+        industries: input.industries ?? [],
+        audience: input.audience ?? '',
+        expertise: [],
+        technologies: [],
+        goals: [],
+        topicsCared: [],
+        topicsAvoided: [],
+        opinions: [],
+        projects: [],
+        experiences: [],
+        writingCharacteristics: {},
+        storytellingTendencies: [],
+        confidence: 0,
+        lastLearnedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      }
+      contentProfiles.push(profile)
+      const persona = contentPersonas.find((p) => p.id === input.personaId)
+      if (persona) persona.contentProfileId = profile.id
+      return profile
+    },
+    async getContentProfile(profileId) {
+      return contentProfiles.find((p) => p.id === profileId) ?? null
+    },
+    async getContentProfileByPersona(personaId) {
+      return contentProfiles.find((p) => p.personaId === personaId) ?? null
+    },
+    async updateContentProfile(profileId, patches) {
+      const profile = contentProfiles.find((p) => p.id === profileId)
+      if (!profile) throw new Error('Content profile not found')
+      if (patches.role !== undefined) profile.role = patches.role
+      if (patches.seniority !== undefined) profile.seniority = patches.seniority
+      if (patches.industries !== undefined) profile.industries = patches.industries
+      if (patches.audience !== undefined) profile.audience = patches.audience
+      if (patches.expertise !== undefined) profile.expertise = patches.expertise
+      if (patches.technologies !== undefined) profile.technologies = patches.technologies
+      if (patches.goals !== undefined) profile.goals = patches.goals
+      if (patches.topicsCared !== undefined) profile.topicsCared = patches.topicsCared
+      if (patches.topicsAvoided !== undefined) profile.topicsAvoided = patches.topicsAvoided
+      if (patches.opinions !== undefined) profile.opinions = patches.opinions
+      if (patches.projects !== undefined) profile.projects = patches.projects
+      if (patches.experiences !== undefined) profile.experiences = patches.experiences
+      if (patches.writingCharacteristics !== undefined) profile.writingCharacteristics = patches.writingCharacteristics
+      if (patches.storytellingTendencies !== undefined) profile.storytellingTendencies = patches.storytellingTendencies
+      if (patches.confidence !== undefined) profile.confidence = patches.confidence
+      profile.updatedAt = new Date().toISOString()
+      profile.lastLearnedAt = new Date().toISOString()
+      return profile
+    },
+    async deleteContentProfile(profileId) {
+      const idx = contentProfiles.findIndex((p) => p.id === profileId)
+      if (idx >= 0) contentProfiles.splice(idx, 1)
+    },
+    // ── content memories ──
+    async createContentMemory(input) {
+      const row: ContentMemory = {
+        id: nextId('cm'),
+        organizationId: DEMO_ORG_ID,
+        personaId: input.personaId,
+        memoryType: input.memoryType,
+        content: input.content,
+        sourceDraftId: input.sourceDraftId ?? null,
+        sourceHistoryId: input.sourceHistoryId ?? null,
+        createdAt: new Date().toISOString(),
+      }
+      contentMemories.unshift(row)
+      return row
+    },
+    async listContentMemories(personaId, opts) {
+      return contentMemories
+        .filter((m) => m.personaId === personaId)
+        .filter((m) => (opts?.memoryType ? m.memoryType === opts.memoryType : true))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, opts?.limit ?? contentMemories.length)
+    },
+    async deleteContentMemory(memoryId) {
+      const idx = contentMemories.findIndex((m) => m.id === memoryId)
+      if (idx >= 0) contentMemories.splice(idx, 1)
+    },
+    // ── content opportunities ──
+    async createContentOpportunity(input) {
+      const row: ContentOpportunity = {
+        id: nextId('co'),
+        organizationId: DEMO_ORG_ID,
+        personaId: input.personaId,
+        opportunityType: input.opportunityType,
+        title: input.title,
+        description: input.description,
+        trigger: input.trigger,
+        qualification: {},
+        qualified: false,
+        sourceKind: input.sourceKind ?? null,
+        sourceReference: input.sourceReference ?? null,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        dismissedAt: null,
+        completedAt: null,
+      }
+      contentOpportunities.unshift(row)
+      return row
+    },
+    async listContentOpportunities(personaId, opts) {
+      return contentOpportunities
+        .filter((o) => o.personaId === personaId)
+        .filter((o) => (opts?.status ? o.status === opts.status : true))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, opts?.limit ?? contentOpportunities.length)
+    },
+    async getContentOpportunity(opportunityId) {
+      return contentOpportunities.find((o) => o.id === opportunityId) ?? null
+    },
+    async updateContentOpportunity(opportunityId, patches) {
+      const opp = contentOpportunities.find((o) => o.id === opportunityId)
+      if (!opp) throw new Error('Opportunity not found')
+      if (patches.qualification !== undefined) opp.qualification = patches.qualification
+      if (patches.qualified !== undefined) opp.qualified = patches.qualified
+      if (patches.status !== undefined) opp.status = patches.status as ContentOpportunity['status']
+      if (patches.dismissedAt !== undefined) opp.dismissedAt = patches.dismissedAt
+      if (patches.completedAt !== undefined) opp.completedAt = patches.completedAt
+      return opp
+    },
+    async deleteContentOpportunity(opportunityId) {
+      const idx = contentOpportunities.findIndex((o) => o.id === opportunityId)
+      if (idx >= 0) contentOpportunities.splice(idx, 1)
+    },
+    // ── idea genomes ──
+    async createIdeaGenome(input) {
+      const now = new Date().toISOString()
+      const row: ContentIdeaGenome = {
+        id: nextId('cig'),
+        organizationId: DEMO_ORG_ID,
+        personaId: input.personaId,
+        source: input.source,
+        topic: input.topic,
+        angle: input.angle,
+        archetype: input.archetype,
+        audience: input.audience,
+        emotion: input.emotion ?? null,
+        value_type: input.valueType ?? null,
+        novelty: 0,
+        evidenceStrength: 0,
+        personalSpecificity: 0,
+        relevance: 0,
+        conversationPotential: 0,
+        contentMemoryOverlap: [],
+        differentiationNote: '',
+        status: 'candidate',
+        rejectionReason: null,
+        opportunityId: input.opportunityId ?? null,
+        draftId: null,
+        createdAt: now,
+        updatedAt: now,
+      }
+      contentIdeaGenomes.unshift(row)
+      return row
+    },
+    async getIdeaGenome(genomeId) {
+      return contentIdeaGenomes.find((g) => g.id === genomeId) ?? null
+    },
+    async updateIdeaGenome(genomeId, patches) {
+      const genome = contentIdeaGenomes.find((g) => g.id === genomeId)
+      if (!genome) throw new Error('Genome not found')
+      if (patches.novelty !== undefined) genome.novelty = patches.novelty
+      if (patches.evidenceStrength !== undefined) genome.evidenceStrength = patches.evidenceStrength
+      if (patches.personalSpecificity !== undefined) genome.personalSpecificity = patches.personalSpecificity
+      if (patches.relevance !== undefined) genome.relevance = patches.relevance
+      if (patches.conversationPotential !== undefined) genome.conversationPotential = patches.conversationPotential
+      if (patches.contentMemoryOverlap !== undefined) genome.contentMemoryOverlap = patches.contentMemoryOverlap
+      if (patches.differentiationNote !== undefined) genome.differentiationNote = patches.differentiationNote
+      if (patches.status !== undefined) genome.status = patches.status as ContentIdeaGenome['status']
+      if (patches.rejectionReason !== undefined) genome.rejectionReason = patches.rejectionReason
+      if (patches.draftId !== undefined) genome.draftId = patches.draftId
+      genome.updatedAt = new Date().toISOString()
+      return genome
+    },
+    // ── evaluations ──
+    async createEvaluation(input) {
+      const row: ContentEvaluation = {
+        id: nextId('ce'),
+        draftId: input.draftId,
+        originality: input.originality ?? 0,
+        personalSpecificity: input.personalSpecificity ?? 0,
+        usefulness: input.usefulness ?? 0,
+        credibility: input.credibility ?? 0,
+        evidence: input.evidence ?? 0,
+        clarity: input.clarity ?? 0,
+        storytelling: input.storytelling ?? 0,
+        voiceMatch: input.voiceMatch ?? 0,
+        stopPotential: input.stopPotential ?? 0,
+        dwellPotential: input.dwellPotential ?? 0,
+        commentPotential: input.commentPotential ?? 0,
+        savePotential: input.savePotential ?? 0,
+        sharePotential: input.sharePotential ?? 0,
+        audienceRelevance: input.audienceRelevance ?? 0,
+        slopScore: input.slopScore ?? 0,
+        genericProbability: input.genericProbability ?? 0,
+        qualityNotes: input.qualityNotes ?? {},
+        distributionNotes: input.distributionNotes ?? {},
+        createdAt: new Date().toISOString(),
+      }
+      contentEvaluations.unshift(row)
+      return row
+    },
+    async getEvaluation(evaluationId) {
+      return contentEvaluations.find((e) => e.id === evaluationId) ?? null
+    },
+    // ── interview sessions ──
+    async createInterviewSession(input) {
+      const row: ContentInterviewSession = {
+        id: nextId('cis'),
+        organizationId: DEMO_ORG_ID,
+        personaId: input.personaId,
+        opportunityId: input.opportunityId ?? null,
+        sessionType: input.sessionType,
+        status: 'active',
+        questionsAsked: 0,
+        informationGain: 0,
+        createdAt: new Date().toISOString(),
+        completedAt: null,
+      }
+      interviewSessions.unshift(row)
+      return row
+    },
+    async getInterviewSession(sessionId) {
+      return interviewSessions.find((s) => s.id === sessionId) ?? null
+    },
+    async listInterviewSessions(personaId, opts) {
+      return interviewSessions
+        .filter((s) => s.personaId === personaId)
+        .filter((s) => (opts?.status ? s.status === opts.status : true))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, opts?.limit ?? interviewSessions.length)
+    },
+    async updateInterviewSession(sessionId, patches) {
+      const session = interviewSessions.find((s) => s.id === sessionId)
+      if (!session) throw new Error('Session not found')
+      if (patches.status !== undefined) session.status = patches.status as ContentInterviewSession['status']
+      if (patches.questionsAsked !== undefined) session.questionsAsked = patches.questionsAsked
+      if (patches.informationGain !== undefined) session.informationGain = patches.informationGain
+      if (patches.completedAt !== undefined) session.completedAt = patches.completedAt
+      return session
+    },
+    async createInterviewAnswer(input) {
+      const row: ContentInterviewAnswer = {
+        id: nextId('cia'),
+        sessionId: input.sessionId,
+        question: input.question,
+        answer: input.answer,
+        informationGain: input.informationGain ?? 0,
+        createdAt: new Date().toISOString(),
+      }
+      interviewAnswers.push(row)
+      return row
+    },
+    async listInterviewAnswers(sessionId) {
+      return interviewAnswers
+        .filter((a) => a.sessionId === sessionId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     },
   }
 }

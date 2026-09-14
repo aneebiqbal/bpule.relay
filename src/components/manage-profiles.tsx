@@ -279,11 +279,11 @@ export function ManageProfiles({
 
       <div className="space-y-6">
         {repsWithProfiles.map(({ rep, profiles: repProfiles }) => (
-          <section key={rep.id} className="rounded-2xl border border-line/60 bg-surface-raised">
-            <div className="flex items-center justify-between gap-3 border-b border-line bg-paper-tint/40 px-4 py-3">
+          <section key={rep.id} className="rounded-2xl border border-line/60 bg-bg-bone-raised">
+            <div className="flex items-center justify-between gap-3 border-b border-line bg-bone/40 px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-ink">{rep.name}</span>
-                <span className="rounded-md bg-paper-tint px-2 py-0.5 font-mono text-xs text-slate">
+                <span className="rounded-md bg-bone px-2 py-0.5 font-mono text-xs text-slate">
                   {rep.role}
                 </span>
               </div>
@@ -306,7 +306,7 @@ export function ManageProfiles({
                 <div className="p-4 text-sm leading-relaxed text-slate">
                   No profiles yet.
                   {rep.name === 'Fizza' ? (
-                    <span className="mt-1 block font-medium text-status-research">
+                    <span className="mt-1 block font-medium text-status-warning">
                       Fizza still has no project history in anything provided. Her profile
                       URL, headline, CV, and proof items need to be added here once the real
                       information is available.
@@ -363,7 +363,7 @@ export function ManageProfiles({
       </div>
 
       {isAdmin && profileDraft ? (
-        <section className="rounded-2xl border border-line/60 bg-surface-raised p-5">
+        <section className="rounded-2xl border border-line/60 bg-bg-bone-raised p-5">
           <h2 className="text-sm font-medium text-ink">
             {profileDraft.id ? 'Edit identity' : 'New identity'}
           </h2>
@@ -410,7 +410,7 @@ export function ManageProfiles({
               Cancel
             </Button>
             <Button
-              variant="gold"
+              variant="orange"
               onClick={() => void saveProfile()}
               disabled={saving === 'profile'}
             >
@@ -534,7 +534,7 @@ function ProfileCard({
                 href={profile.profileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-gold hover:underline"
+                className="text-xs text-orange hover:underline"
               >
                 {profile.profileUrl}
               </a>
@@ -574,7 +574,7 @@ function ProfileCard({
             <Button
               variant="outline"
               size="sm"
-              className="text-status-no hover:border-status-no/40"
+              className="text-status-danger hover:border-status-danger/40"
               onClick={onDelete}
               disabled={deleting}
             >
@@ -589,7 +589,7 @@ function ProfileCard({
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-ink">Proof items</h3>
             {isAdmin ? (
-              <Button variant="gold" size="sm" onClick={onProofStart}>
+              <Button variant="orange" size="sm" onClick={onProofStart}>
                 Add proof
               </Button>
             ) : null}
@@ -625,7 +625,7 @@ function ProfileCard({
                   {item.tags.length > 0 ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {item.tags.map((t) => (
-                        <span key={t} className="rounded-md bg-paper-tint px-2 py-0.5 font-mono text-xs text-ink">
+                        <span key={t} className="rounded-md bg-bone px-2 py-0.5 font-mono text-xs text-ink">
                           {t}
                         </span>
                       ))}
@@ -658,7 +658,7 @@ function ProofForm({
   const permission = draft.permissionOnFile
 
   return (
-    <section className="rounded-2xl border border-line/60 bg-surface-raised p-5">
+    <section className="rounded-2xl border border-line/60 bg-bg-bone-raised p-5">
       <h2 className="text-sm font-medium text-ink">{draft.id ? 'Edit proof item' : 'New proof item'}</h2>
       <p className="mt-1 text-xs leading-relaxed text-slate">
         Tags are what match this project to leads. Leave them blank and a single cheap
@@ -707,7 +707,7 @@ function ProofForm({
             />
           </div>
         ) : (
-          <div className="flex items-center gap-2 rounded-lg bg-paper-tint px-3 py-2 text-xs text-slate sm:col-span-2">
+          <div className="flex items-center gap-2 rounded-lg bg-bone px-3 py-2 text-xs text-slate sm:col-span-2">
             Client name field stays locked until permission is confirmed.
           </div>
         )}
@@ -740,7 +740,7 @@ function ProofForm({
               {draft.tags.map((t) => (
                 <span
                   key={t}
-                  className="flex items-center gap-1 rounded-md bg-paper-tint px-2 py-0.5 font-mono text-xs text-ink"
+                  className="flex items-center gap-1 rounded-md bg-bone px-2 py-0.5 font-mono text-xs text-ink"
                 >
                   {t}
                   <button
@@ -762,7 +762,7 @@ function ProofForm({
           Cancel
         </Button>
         <Button
-          variant="gold"
+          variant="orange"
           onClick={onSave}
           disabled={saving || !draft.projectSummary.trim()}
         >

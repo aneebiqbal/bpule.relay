@@ -22,7 +22,7 @@ export default async function AppLayout({
   const queue = await store.getQueue()
 
   return (
-    <div className="min-h-dvh bg-dot-grid lg:grid lg:grid-cols-[16rem_1fr]">
+    <div className="min-h-dvh bg-bone lg:grid lg:grid-cols-[16rem_1fr]">
       <AppRail
         repName={user.rep.name}
         role={user.rep.role}

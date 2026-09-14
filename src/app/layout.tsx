@@ -47,7 +47,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <link rel="apple-touch-icon" href="/icon-192x192.png" />
       </head>
-      <body className="min-h-full selection:bg-gold/25 selection:text-ink">
+      <body className="min-h-full selection:bg-orange/25 selection:text-ink">
         <script
           dangerouslySetInnerHTML={{
             __html:

@@ -4,6 +4,7 @@ import { createScoutStore } from '@/lib/store'
 import { generateContent } from '@/lib/ai/content'
 import { sseStream } from '@/lib/sse/sse'
 import { injectStyleCard } from '@/lib/style/inject'
+import { buildContentDnaPromptBlock } from '@/lib/content/content-dna'
 import type { ContentGenerationInput } from '@/lib/ai/content'
 import type { TrendingAngle, ContentResearchFinding, ContentDraftFeedback } from '@/lib/domain/types'
 
@@ -121,6 +122,15 @@ export async function POST(req: NextRequest) {
   const history = await store.listContentHistory(personaId, 10)
   const recentOpenings = history.map((h) => h.openingLine).filter(Boolean)
 
+  // Load Content DNA for persona-aware generation
+  let contentDnaBlock: string | null = null
+  if (persona.contentProfileId) {
+    const contentProfile = await store.getContentProfile(persona.contentProfileId)
+    if (contentProfile) {
+      contentDnaBlock = buildContentDnaPromptBlock(contentProfile)
+    }
+  }
+
   const material = sourceMaterial?.trim() ?? ''
   const realLine = personalLine?.trim() ?? ''
   const feedback = await store.listContentDraftFeedback(personaId, 80)
@@ -177,6 +187,7 @@ export async function POST(req: NextRequest) {
     trendingAngle: angle?.angleDescription ?? finding?.finding ?? null,
     preferenceHints,
     structure: structure ? { structureName: structure.structureName, shape: structure.shape } : null,
+    contentDnaBlock,
   }
 
   return sseStream(async (emit) => {

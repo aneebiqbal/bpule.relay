@@ -4,7 +4,7 @@ export default function Loading() {
   return (
     <div className="space-y-5">
       {/* Hero skeleton */}
-      <div className="reveal-up rounded-[1.75rem] border border-line/80 bg-surface-raised p-6 sm:p-8">
+      <div className="reveal-up rounded-[1.75rem] border border-line/80 bg-bg-bone-raised p-6 sm:p-8">
         <div className="flex items-center justify-between gap-6">
           <div className="flex items-center gap-5">
             <Skeleton className="size-14 rounded-2xl sm:size-16" />
@@ -26,7 +26,7 @@ export default function Loading() {
       </div>
 
       {/* Spotlight card skeleton */}
-      <div className="reveal-up stagger-2 rounded-[1.75rem] border border-gold/15 bg-surface-raised p-6 sm:p-8">
+      <div className="reveal-up stagger-2 rounded-[1.75rem] border border-orange/15 bg-bg-bone-raised p-6 sm:p-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:justify-between">
           <div className="flex-1 space-y-5">
             <Skeleton className="h-5 w-32 rounded-full" />
@@ -44,7 +44,7 @@ export default function Loading() {
       {/* Queue skeleton */}
       <div className="reveal-up stagger-4 space-y-4">
         <Skeleton className="h-3 w-28" />
-        <div className="overflow-hidden rounded-[1.25rem] border border-line/80 bg-surface-raised">
+        <div className="overflow-hidden rounded-[1.25rem] border border-line/80 bg-bg-bone-raised">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="flex items-center gap-4 border-b border-line/60 px-5 py-3.5">
               <Skeleton className="size-[44px] rounded-full" />

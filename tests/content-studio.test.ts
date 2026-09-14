@@ -14,6 +14,7 @@ function makePersona(overrides: Partial<ContentPersona> = {}): ContentPersona {
     humorStyle: '',
     valuesAndOpinions: [],
     admiredExamples: [],
+    contentProfileId: null,
     createdAt: new Date().toISOString(),
     ...overrides,
   }

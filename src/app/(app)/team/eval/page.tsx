@@ -25,7 +25,7 @@ export default async function EvalPage() {
       <div className="reveal-up">
         <Link
           href="/team"
-          className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-slate transition-colors hover:bg-paper-tint hover:text-ink"
+          className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-slate transition-colors hover:bg-bone hover:text-ink"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
           Back to Team
@@ -40,7 +40,7 @@ export default async function EvalPage() {
           Every prompt change gets scored against the golden set before it ships.
         </p>
         {runsRes.status === 'rejected' || goldenRes.status === 'rejected' ? (
-          <p className="text-xs text-status-research">
+          <p className="text-xs text-status-warning">
             Some eval data is unavailable right now. Showing what could be loaded.
           </p>
         ) : null}
@@ -50,8 +50,8 @@ export default async function EvalPage() {
       <section className="reveal-up stagger-2 rounded-2xl border border-line bg-paper p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-gold/10">
-              <Database className="size-4 text-gold" aria-hidden="true" />
+            <div className="flex size-9 items-center justify-center rounded-xl bg-orange/10">
+              <Database className="size-4 text-orange" aria-hidden="true" />
             </div>
             <div>
               <h2 className="text-base font-medium text-ink">Golden set</h2>
@@ -63,7 +63,7 @@ export default async function EvalPage() {
           <form action="/api/few-shot/refresh" method="POST">
             <button
               type="submit"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-paper px-3 text-[0.8rem] font-medium text-ink transition-colors hover:bg-paper-tint"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-paper px-3 text-[0.8rem] font-medium text-ink transition-colors hover:bg-bone"
             >
               <RefreshCw className="mr-1.5 size-3.5" />
               Refresh wins
@@ -95,8 +95,8 @@ export default async function EvalPage() {
                       className={cn(
                         'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium',
                         c.knownReplied
-                          ? 'bg-status-send/10 text-status-send'
-                          : 'bg-status-no/10 text-status-no',
+                          ? 'bg-status-success/10 text-status-success'
+                          : 'bg-status-danger/10 text-status-danger',
                       )}
                     >
                       {c.knownReplied ? 'Replied' : 'No reply'}
@@ -130,7 +130,7 @@ export default async function EvalPage() {
           >
             <button
               type="submit"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-gold px-3 text-[0.8rem] font-medium text-paper transition-colors hover:bg-gold/90"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-orange px-3 text-[0.8rem] font-medium text-bone transition-colors hover:bg-orange/90"
             >
               <Play className="mr-1.5 size-3.5" />
               Run eval now
@@ -162,12 +162,12 @@ export default async function EvalPage() {
                 {runs.map((r, i) => (
                   <tr
                     key={r.id}
-                    className="slide-in-right border-b border-line/40 transition-colors hover:bg-paper-tint/30"
+                    className="slide-in-right border-b border-line/40 transition-colors hover:bg-bone/30"
                     style={{ animationDelay: `${0.05 + i * 0.03}s` }}
                   >
                     <td className="py-3.5 pr-4 font-mono text-xs text-ink">{r.promptVersion}</td>
                     <td className="py-3.5 pr-4 text-ink">{r.goldenSetSize}</td>
-                    <td className="py-3.5 pr-4 font-medium text-gold">{r.overallScore}%</td>
+                    <td className="py-3.5 pr-4 font-medium text-orange">{r.overallScore}%</td>
                     <td className="py-3.5 pr-4 text-ink">{r.selfCheckPassRate}%</td>
                     <td className="py-3.5 pr-4 text-ink">{r.replyRateScore}%</td>
                     <td className="py-3.5 pr-4 text-ink">{r.companyMentionRate}%</td>

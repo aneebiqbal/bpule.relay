@@ -135,7 +135,7 @@ function FieldFlag({ notes, field }: { notes: string[]; field: keyof FormState }
   const note = notes.find((n) => noteField(n) === field)
   if (!note) return null
   return (
-    <span className="mt-1 flex items-start gap-1 text-xs text-status-research">
+    <span className="mt-1 flex items-start gap-1 text-xs text-status-warning">
       <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
       {note}
     </span>
@@ -380,7 +380,7 @@ export default function NewLeadPage() {
         <div className="lg:sticky lg:top-7 lg:self-start">
           <div className="rounded-2xl border border-line bg-paper p-5">
             <div className="flex items-center gap-2">
-              <Sparkles className="size-4 text-gold" aria-hidden="true" />
+              <Sparkles className="size-4 text-orange" aria-hidden="true" />
               <h2 className="text-sm font-medium text-ink">Paste the research</h2>
             </div>
             <p className="mt-1 text-xs leading-relaxed text-slate">
@@ -404,7 +404,7 @@ export default function NewLeadPage() {
             />
             <div className="mt-3 flex items-center justify-between gap-3">
               <span className="text-xs text-slate">Cmd / Ctrl + Enter</span>
-              <Button variant="gold" onClick={() => void extract()} loading={extracting}>
+              <Button variant="orange" onClick={() => void extract()} loading={extracting}>
                 <Wand2 className="size-4" aria-hidden="true" />
                 {extracting ? 'Reading it' : extracted ? 'Re-extract' : 'Extract'}
               </Button>
@@ -430,8 +430,8 @@ export default function NewLeadPage() {
                       className={cn(
                         'block w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors',
                         active
-                          ? 'border-gold bg-gold/10'
-                          : 'border-line bg-paper-tint/40 hover:bg-paper-tint',
+                          ? 'border-orange bg-orange/10'
+                          : 'border-line bg-bone/40 hover:bg-bone',
                       )}
                     >
                       <span className="block font-medium text-ink">
@@ -478,8 +478,8 @@ export default function NewLeadPage() {
                           className={cn(
                             'inline-flex items-center gap-1',
                             form.extractionConfidence >= 72
-                              ? 'text-status-send'
-                              : 'text-status-research',
+                              ? 'text-status-success'
+                              : 'text-status-warning',
                           )}
                         >
                           {form.extractionConfidence >= 72 ? (
@@ -495,7 +495,7 @@ export default function NewLeadPage() {
                     </div>
                   </div>
                   <Button
-                    variant="gold"
+                    variant="orange"
                     size="lg"
                     onClick={() => void save()}
                     disabled={saving || extracting || !hasContent}
@@ -520,11 +520,11 @@ export default function NewLeadPage() {
                             {item.points}/{item.max}
                           </span>
                         </div>
-                        <div className="h-1 overflow-hidden rounded-full bg-paper-tint">
+                        <div className="h-1 overflow-hidden rounded-full bg-bone">
                           <div
                             className={cn(
                               'h-full rounded-full',
-                              frac >= 1 ? 'bg-status-send' : frac > 0 ? 'bg-gold' : 'bg-line',
+                              frac >= 1 ? 'bg-status-success' : frac > 0 ? 'bg-orange' : 'bg-line',
                             )}
                             style={{ width: `${Math.max(frac * 100, frac > 0 ? 8 : 0)}%` }}
                           />
@@ -701,7 +701,7 @@ export default function NewLeadPage() {
               </div>
 
               {form.aboutSummary || form.experienceSummary ? (
-                <div className="rounded-2xl border border-line bg-paper-tint/40 p-5 sm:p-6">
+                <div className="rounded-2xl border border-line bg-bone/40 p-5 sm:p-6">
                   <p className="text-xs font-medium uppercase tracking-wide text-slate">
                     Extracted context — for your read, not scored
                   </p>

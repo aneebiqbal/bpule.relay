@@ -54,7 +54,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
       className={
         className ??
-        'rounded-lg p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink'
+        'rounded-md p-1.5 text-graphite transition-colors hover:bg-bone-raised hover:text-ink'
       }
     >
       {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}

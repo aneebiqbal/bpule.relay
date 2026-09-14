@@ -116,7 +116,7 @@ export default function SearchPage() {
         </div>
         <div className="flex items-center justify-between">
           <span className="text-xs text-slate">Press Enter to search</span>
-          <Button variant="gold" onClick={() => void search()} loading={loading} disabled={!query.trim()}>
+          <Button variant="orange" onClick={() => void search()} loading={loading} disabled={!query.trim()}>
             <Search className="mr-1.5 size-3.5" />
             {loading ? 'Searching...' : 'Search'}
           </Button>
@@ -125,7 +125,7 @@ export default function SearchPage() {
 
       {/* Error */}
       {error ? (
-        <div className="reveal-up flex items-center gap-2 rounded-xl bg-status-no/10 px-4 py-3 text-sm text-status-no">
+        <div className="reveal-up flex items-center gap-2 rounded-xl bg-status-danger/10 px-4 py-3 text-sm text-status-danger">
           <AlertCircle className="size-4 shrink-0" />
           {error}
         </div>
@@ -155,21 +155,21 @@ export default function SearchPage() {
                             ? `/upwork/${r.id}`
                             : '/profiles'
                       }
-                      className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-paper-tint/40"
+                      className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-bone/40"
                     >
                       {/* Icon */}
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-paper-tint text-slate">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-bone text-slate">
                         {ENTITY_ICONS[r.entityType] ?? <FileText className="size-4" />}
                       </div>
 
                       {/* Content */}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="truncate text-sm font-medium text-ink transition-colors group-hover:text-gold">
+                          <span className="truncate text-sm font-medium text-ink transition-colors group-hover:text-orange">
                             {r.title}
                           </span>
                           {r.status && (
-                            <span className="shrink-0 rounded-md bg-paper-tint px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate">
+                            <span className="shrink-0 rounded-md bg-bone px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate">
                               {r.status}
                             </span>
                           )}
@@ -178,7 +178,7 @@ export default function SearchPage() {
                       </div>
 
                       {/* Entity type badge */}
-                      <span className="shrink-0 rounded-md bg-gold/10 px-2 py-0.5 font-mono text-[10px] font-medium uppercase text-gold">
+                      <span className="shrink-0 rounded-md bg-orange/10 px-2 py-0.5 font-mono text-[10px] font-medium uppercase text-orange">
                         {r.entityType}
                       </span>
                     </Link>

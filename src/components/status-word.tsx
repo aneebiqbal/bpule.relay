@@ -2,8 +2,8 @@ import { cn } from 'cn'
 import type { LeadStatus, Verdict } from '@/lib/domain/types'
 
 const VERDICT_STYLES: Record<Verdict, { text: string; dot: string }> = {
-  send: { text: 'text-status-send', dot: 'bg-status-send' },
-  research_more: { text: 'text-status-research', dot: 'bg-status-research' },
+  send: { text: 'text-status-success', dot: 'bg-status-success' },
+  research_more: { text: 'text-status-warning', dot: 'bg-status-warning' },
   skip: { text: 'text-slate', dot: 'bg-slate' },
 }
 
@@ -11,8 +11,8 @@ const STATUS_STYLES: Record<LeadStatus, { text: string; dot: string }> = {
   new: { text: 'text-slate', dot: 'bg-slate' },
   contacted: { text: 'text-ink', dot: 'bg-ink/40' },
   followed_up: { text: 'text-ink', dot: 'bg-ink/40' },
-  replied: { text: 'text-status-replied', dot: 'bg-status-replied' },
-  no: { text: 'text-status-no', dot: 'bg-status-no' },
+  replied: { text: 'text-status-success', dot: 'bg-status-success' },
+  no: { text: 'text-status-danger', dot: 'bg-status-danger' },
   dead: { text: 'text-slate', dot: 'bg-slate' },
 }
 

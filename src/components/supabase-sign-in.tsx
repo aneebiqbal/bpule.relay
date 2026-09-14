@@ -96,7 +96,7 @@ export function SupabaseSignIn() {
         <button
           type="button"
           onClick={() => setSent(false)}
-          className="text-sm text-gold underline-offset-4 hover:underline"
+          className="text-sm text-orange underline-offset-4 hover:underline"
         >
           Use a password instead
         </button>
@@ -134,7 +134,7 @@ export function SupabaseSignIn() {
           placeholder="you@company.com"
         />
         {emailError ? (
-          <p id="email-error" className="text-xs text-status-no" role="alert">
+          <p id="email-error" className="text-xs text-status-danger" role="alert">
             {emailError}
           </p>
         ) : null}
@@ -156,7 +156,7 @@ export function SupabaseSignIn() {
 
       {mode === 'magic' ? (
         <>
-          <Button type="submit" variant="gold" className="w-full" size="lg" loading={busy}>
+          <Button type="submit" variant="orange" className="w-full" size="lg" loading={busy}>
             {busy ? 'Sending the link' : 'Email me a link'}
             {!busy && <Mail className="ml-1.5 size-4" />}
           </Button>
@@ -166,21 +166,21 @@ export function SupabaseSignIn() {
           <button
             type="button"
             onClick={() => setMode('password')}
-            className="w-full text-center text-sm text-gold underline-offset-4 hover:underline"
+            className="w-full text-center text-sm text-orange underline-offset-4 hover:underline"
           >
             Sign in with a password instead
           </button>
         </>
       ) : (
         <>
-          <Button type="submit" variant="gold" className="w-full" size="lg" loading={busy}>
+          <Button type="submit" variant="orange" className="w-full" size="lg" loading={busy}>
             {busy ? 'Signing in...' : 'Sign in'}
             {!busy && <ArrowRight className="ml-1.5 size-4" />}
           </Button>
           <button
             type="button"
             onClick={() => setMode('magic')}
-            className="w-full text-center text-sm text-gold underline-offset-4 hover:underline"
+            className="w-full text-center text-sm text-orange underline-offset-4 hover:underline"
           >
             Back to the magic link
           </button>

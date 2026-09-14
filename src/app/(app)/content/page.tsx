@@ -3,7 +3,7 @@ import { getCurrentUser } from '@/lib/auth/current'
 import { ContentDashboard } from '@/components/content-dashboard'
 import { StudioIntro } from '@/components/studio-intro'
 import { buildDailyDecision } from '@/lib/content/daily-decision'
-import type { ContentPersona, TopicCluster, ContentDraft, ContentHistoryEntry } from '@/lib/domain/types'
+import type { ContentPersona, ContentProfile, TopicCluster, ContentDraft, ContentHistoryEntry } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +14,7 @@ interface PersonaWithExtras extends ContentPersona {
   drafts: ContentDraft[]
   recentPosts: ContentHistoryEntry[]
   dailyStatus: DailyStatus
+  contentProfile: ContentProfile | null
 }
 
 export default async function ContentPage() {
@@ -30,6 +31,7 @@ export default async function ContentPage() {
         const topicClusters = await store.listTopicClusters(p.id)
         const drafts = await store.listContentDrafts(p.id)
         const history = await store.listContentHistory(p.id, 30)
+        const contentProfile = p.contentProfileId ? await store.getContentProfile(p.contentProfileId) : null
 
         const cutoff = new Date().getTime() - 14 * 86_400_000
         const recentPosts = history.filter((h) => new Date(h.postedAt).getTime() >= cutoff)
@@ -51,7 +53,7 @@ export default async function ContentPage() {
           dailyStatus = decision.decisionType === 'none' ? 'none' : 'asked'
         }
 
-        return { ...p, topicClusters, drafts, recentPosts, dailyStatus }
+        return { ...p, topicClusters, drafts, recentPosts, dailyStatus, contentProfile }
       }),
     )
     personas = resolved

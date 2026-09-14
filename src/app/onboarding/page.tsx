@@ -163,9 +163,9 @@ export default function OnboardingPage() {
                         className={cn(
                           'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-all duration-300',
                           state === 'active'
-                            ? 'bg-gold text-paper shadow-[0_2px_12px_-2px_color-mix(in_srgb,var(--gold)_50%,transparent)]'
+                            ? 'bg-orange text-bone shadow-[0_2px_12px_-2px_color-mix(in_srgb,var(--orange)_50%,transparent)]'
                             : state === 'done'
-                              ? 'bg-status-send text-paper'
+                              ? 'bg-status-success text-bone'
                               : 'border border-line text-slate',
                         )}
                       >
@@ -183,9 +183,9 @@ export default function OnboardingPage() {
                   )
                 })}
               </div>
-              <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-paper-tint">
+              <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-bone">
                 <div
-                  className="h-full rounded-full bg-gold transition-[width] duration-500 ease-out"
+                  className="h-full rounded-full bg-orange transition-[width] duration-500 ease-out"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -232,8 +232,8 @@ export default function OnboardingPage() {
                                 className={cn(
                                   'group rounded-xl border px-4 py-3.5 text-left transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                                   checked
-                                    ? 'border-gold bg-gold/5 shadow-[0_2px_12px_-4px_color-mix(in_srgb,var(--gold)_30%,transparent)]'
-                                    : 'border-line bg-paper hover:border-line/80 hover:bg-paper-tint/40',
+                                    ? 'border-orange bg-orange/5 shadow-[0_2px_12px_-4px_color-mix(in_srgb,var(--orange)_30%,transparent)]'
+                                    : 'border-line bg-paper hover:border-line/80 hover:bg-bone/40',
                                 )}
                               >
                                 <span
@@ -272,7 +272,7 @@ export default function OnboardingPage() {
               <>
                 <div className="reveal-up space-y-3">
                   <div className="flex items-center gap-2">
-                    <PenLine className="size-4 text-gold" aria-hidden="true" />
+                    <PenLine className="size-4 text-orange" aria-hidden="true" />
                     <h2 className="text-[15px] font-medium text-ink">
                       Paste a few real messages (optional)
                     </h2>
@@ -299,7 +299,7 @@ export default function OnboardingPage() {
                     Back
                   </Button>
                   <Button
-                    variant="gold"
+                    variant="orange"
                     size="lg"
                     onClick={() => buildCard(false)}
                     loading={loading}
@@ -344,8 +344,8 @@ function PreviewPhase({
   return (
     <div className="reveal-up space-y-8">
       <header className="text-center">
-        <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-gold/10">
-          <Sparkles className="size-5 text-gold" aria-hidden="true" />
+        <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-orange/10">
+          <Sparkles className="size-5 text-orange" aria-hidden="true" />
         </div>
         <h2 className="text-heading text-xl text-ink sm:text-2xl">
           This is how you sound.
@@ -365,7 +365,7 @@ function PreviewPhase({
               style={{ animationDelay: `${0.05 + i * 0.04}s` }}
             >
               <span
-                className="mt-2 size-1.5 shrink-0 rounded-full bg-gold"
+                className="mt-2 size-1.5 shrink-0 rounded-full bg-orange"
                 aria-hidden="true"
               />
               <span>{line}</span>
@@ -379,7 +379,7 @@ function PreviewPhase({
         <p className="font-mono text-xs uppercase tracking-widest text-slate">
           A sample draft in your voice
         </p>
-        <blockquote className="rounded-2xl border-l-[3px] border-gold bg-paper-tint/40 py-4 pl-5 pr-4 text-[15px] leading-relaxed text-ink italic">
+        <blockquote className="rounded-2xl border-l-[3px] border-orange bg-bone/40 py-4 pl-5 pr-4 text-[15px] leading-relaxed text-ink italic">
           {sampleLine(card)}
         </blockquote>
         <p className="text-sm leading-relaxed text-slate">
@@ -392,7 +392,7 @@ function PreviewPhase({
         <Button variant="outline" size="lg" onClick={onBack} disabled={saving}>
           Rebuild it
         </Button>
-        <Button variant="gold" size="lg" onClick={onSave} loading={saving}>
+        <Button variant="orange" size="lg" onClick={onSave} loading={saving}>
           {saving ? 'Saving your voice' : 'This sounds like me, save it'}
         </Button>
       </div>

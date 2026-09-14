@@ -29,6 +29,10 @@ export default async function PersonaPage({
   const feedback = await store.listContentDraftFeedback(id, 100)
   const generatedToday = await store.countContentDraftsToday(id)
   const initialDecision = buildDailyDecision({ persona, clusters: topicClusters, findings, feedback, generatedToday })
+  const contentProfile = persona.contentProfileId ? await store.getContentProfile(persona.contentProfileId) : null
+
+  // Fetch all personas for the switcher
+  const allPersonas = await store.listContentPersonas(user.rep.id)
 
   return (
     <PersonaWorkspace
@@ -38,6 +42,8 @@ export default async function PersonaPage({
       history={history}
       feedback={feedback}
       initialDecision={initialDecision}
+      contentProfile={contentProfile}
+      allPersonas={allPersonas}
     />
   )
 }

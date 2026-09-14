@@ -84,7 +84,7 @@ export function FactsManager({
       ) : null}
 
       {!isAdmin ? (
-        <div className="flex items-start gap-3 rounded-2xl border border-line/60 bg-paper-tint/30 px-4 py-3">
+        <div className="flex items-start gap-3 rounded-2xl border border-line/60 bg-bone/30 px-4 py-3">
           <Eye className="mt-0.5 size-4 shrink-0 text-slate" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-ink">Read-only</p>
@@ -94,9 +94,9 @@ export function FactsManager({
       ) : null}
 
       {isAdmin ? (
-        <section className="reveal-up rounded-2xl border border-line/60 bg-surface-raised p-6">
+        <section className="reveal-up rounded-2xl border border-line/60 bg-bg-bone-raised p-6">
           <div className="flex items-center gap-2">
-            <Plus className="size-4 text-gold" aria-hidden="true" />
+            <Plus className="size-4 text-orange" aria-hidden="true" />
             <h2 className="text-heading text-base text-ink">Add a fact</h2>
           </div>
           <form onSubmit={save} className="mt-4 grid gap-3">
@@ -132,7 +132,7 @@ export function FactsManager({
             </div>
             <div>
               <Button
-                variant="gold"
+                variant="orange"
                 type="submit"
                 disabled={busy || !label.trim() || !value.trim()}
                 loading={busy}
@@ -156,12 +156,12 @@ export function FactsManager({
                 <Badge variant="outline" className="text-label">{type}</Badge>
                 <span className="text-mono-medium text-xs text-slate">{typeFacts.length}</span>
               </div>
-              <div className="overflow-hidden rounded-2xl border border-line/60 bg-surface-raised">
+              <div className="overflow-hidden rounded-2xl border border-line/60 bg-bg-bone-raised">
                 <ul className="divide-y divide-line/50">
                   {typeFacts.map((f, i) => (
                     <li
                       key={f.id}
-                      className="slide-in-right flex items-start justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-paper-tint/20"
+                      className="slide-in-right flex items-start justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-bone/20"
                       style={{ animationDelay: `${0.03 + i * 0.02}s` }}
                     >
                       <div className="min-w-0 flex-1">
@@ -172,7 +172,7 @@ export function FactsManager({
                         <button
                           onClick={() => remove(f.id)}
                           disabled={busy}
-                          className="flex size-7 shrink-0 items-center justify-center rounded-lg text-slate transition-colors hover:bg-status-no/8 hover:text-status-no disabled:opacity-50"
+                          className="flex size-7 shrink-0 items-center justify-center rounded-lg text-slate transition-colors hover:bg-status-danger/8 hover:text-status-danger disabled:opacity-50"
                           aria-label={`Delete ${f.label}`}
                         >
                           <X className="size-3.5" />

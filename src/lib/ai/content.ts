@@ -3,6 +3,7 @@ import { structuredJsonChain } from '@/lib/ai/provider'
 
 import type { ContentPlatform } from '@/lib/domain/types'
 import { checkHumanization, rewriteToHumanize } from '@/lib/ai/humanization'
+import { stripEmDashes } from '@/lib/facts/sanitize'
 
 /**
  * Content generation pipeline.
@@ -56,6 +57,8 @@ export interface ContentGenerationInput {
   preferenceHints?: string[]
   /** A curated post shape used as scaffolding only — never a claim about how the post will perform. */
   structure?: { structureName: string; shape: string } | null
+  /** Assembled Content DNA block — persona expertise, experience, convictions. */
+  contentDnaBlock?: string | null
 }
 
 export interface ContentGenerationResult {
@@ -179,9 +182,11 @@ function buildContentSystemPrompt(input: ContentGenerationInput): string {
   const structureBlock = input.structure
     ? `SUGGESTED SHAPE (scaffolding only, not a rule you must force — drop it if the real material doesn't fit): ${input.structure.structureName}. ${input.structure.shape}`
     : ''
+  const dnaBlock = input.contentDnaBlock ?? ''
 
   return `You write social media posts for ${input.personaName}. Your job is to turn their real observation into a post that sounds like them, not like a generic content engine.
 
+${dnaBlock}
 ${styleBlock}
 ${personalityBlock}
 ${preferenceBlock}
@@ -226,12 +231,12 @@ function extractHook(caption: string): string {
   return lines.slice(0, 2).join('\n').trim()
 }
 
-function checkBannedPhrases(text: string): string[] {
+export function checkBannedPhrases(text: string): string[] {
   const lower = text.toLowerCase()
   return BANNED_PHRASES.filter((phrase) => lower.includes(phrase.toLowerCase()))
 }
 
-function checkBadHook(hook: string): boolean {
+export function checkBadHook(hook: string): boolean {
   return BANNED_HOOK_PATTERNS.some((re) => re.test(hook.trim()))
 }
 

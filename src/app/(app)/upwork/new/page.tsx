@@ -194,7 +194,7 @@ export default function NewUpworkJobPage() {
           />
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <span className="text-xs text-slate">Cmd / Ctrl + Enter to extract</span>
-          <Button variant="gold" size="lg" onClick={() => void extract()} loading={extracting}>
+          <Button variant="orange" size="lg" onClick={() => void extract()} loading={extracting}>
             {extracting ? 'Extracting' : 'Extract'}
           </Button>
         </div>
@@ -255,7 +255,7 @@ export default function NewUpworkJobPage() {
             <p className="mt-1 text-sm font-medium text-ink">{score.verdict.replace(/_/g, ' ')}</p>
             <p className="mt-0.5 max-w-xs text-sm leading-relaxed text-ink">{verdictCall(score.verdict)}</p>
             {score.total >= 3 && score.total < 6 ? (
-              <p className="mt-1 text-xs text-status-research">
+              <p className="mt-1 text-xs text-status-warning">
                 Only apply if you are not low on Connects this week.
               </p>
             ) : null}
@@ -269,11 +269,11 @@ export default function NewUpworkJobPage() {
                     <span className="text-slate">{item.label}</span>
                     <span className="font-mono text-xs text-ink">{item.points}/{item.max}</span>
                   </div>
-                  <div className="h-1 overflow-hidden rounded-full bg-paper-tint">
+                  <div className="h-1 overflow-hidden rounded-full bg-bone">
                     <div
                       className={cn(
                         'h-full rounded-full',
-                        frac >= 1 ? 'bg-status-send' : frac > 0 ? 'bg-gold' : 'bg-line',
+                        frac >= 1 ? 'bg-status-success' : frac > 0 ? 'bg-orange' : 'bg-line',
                       )}
                       style={{ width: `${Math.max(frac * 100, frac > 0 ? 8 : 0)}%` }}
                     />
@@ -286,7 +286,7 @@ export default function NewUpworkJobPage() {
 
         <div className="mt-6 flex items-center justify-end border-t border-line pt-5">
           <Button
-            variant="gold"
+            variant="orange"
             size="lg"
             onClick={() => void save()}
             disabled={saving || extracting || !form.title.trim()}

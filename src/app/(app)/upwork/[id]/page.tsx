@@ -7,9 +7,9 @@ import { cn } from 'cn'
 export const dynamic = 'force-dynamic'
 
 const VERDICT_STYLE: Record<string, { bg: string; text: string; label: string }> = {
-  apply: { bg: 'bg-status-send/10', text: 'text-status-send', label: 'Apply' },
-  apply_if_connects: { bg: 'bg-status-research/10', text: 'text-status-research', label: 'If Connects' },
-  skip: { bg: 'bg-paper-tint', text: 'text-slate', label: 'Skip' },
+  apply: { bg: 'bg-status-success/10', text: 'text-status-success', label: 'Apply' },
+  apply_if_connects: { bg: 'bg-status-warning/10', text: 'text-status-warning', label: 'If Connects' },
+  skip: { bg: 'bg-bone', text: 'text-slate', label: 'Skip' },
 }
 
 export default async function UpworkJobPage({
@@ -109,11 +109,11 @@ export default async function UpworkJobPage({
                       {item.points}/{item.max}
                     </span>
                   </div>
-                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-paper-tint">
+                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-bone">
                     <div
                       className={cn(
                         'h-full rounded-full transition-all duration-500',
-                        frac >= 1 ? 'bg-status-send' : frac > 0 ? 'bg-gold' : 'bg-line',
+                        frac >= 1 ? 'bg-status-success' : frac > 0 ? 'bg-orange' : 'bg-line',
                       )}
                       style={{ width: `${Math.max(frac * 100, frac > 0 ? 8 : 0)}%` }}
                     />
@@ -136,7 +136,7 @@ export default async function UpworkJobPage({
         {job.urgencySignal ? (
           <div className="rounded-2xl border border-line bg-paper p-5">
             <h2 className="flex items-center gap-2 text-sm font-medium text-ink">
-              <MessageCircle className="size-3.5 text-status-research" />
+              <MessageCircle className="size-3.5 text-status-warning" />
               Urgency signal
             </h2>
             <p className="mt-2 text-sm text-ink/80">{job.urgencySignal}</p>
@@ -153,7 +153,7 @@ export default async function UpworkJobPage({
               {job.requiredSkills.map((s) => (
                 <span
                   key={s}
-                  className="rounded-lg bg-paper-tint px-2.5 py-1 font-mono text-xs text-ink"
+                  className="rounded-lg bg-bone px-2.5 py-1 font-mono text-xs text-ink"
                 >
                   {s}
                 </span>
@@ -202,14 +202,14 @@ function ScoreRing({ score, size = 64, max = 10 }: { score: number; size?: numbe
   const c = 2 * Math.PI * r
   const color =
     pct >= 0.7
-      ? 'var(--status-send)'
+      ? 'var(--status-success)'
       : pct >= 0.4
-        ? 'var(--status-research)'
-        : 'var(--slate)'
+        ? 'var(--status-warning)'
+        : 'var(--graphite)'
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--paper-tint)" strokeWidth="5" />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--line)" strokeWidth="5" />
         <circle
           cx={size / 2}
           cy={size / 2}

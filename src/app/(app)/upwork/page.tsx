@@ -7,9 +7,9 @@ import { cn } from 'cn'
 export const dynamic = 'force-dynamic'
 
 const VERDICT_STYLE: Record<string, { bg: string; text: string; label: string }> = {
-  apply: { bg: 'bg-status-send/10', text: 'text-status-send', label: 'Apply' },
-  apply_if_connects: { bg: 'bg-status-research/10', text: 'text-status-research', label: 'If Connects' },
-  skip: { bg: 'bg-paper-tint', text: 'text-slate', label: 'Skip' },
+  apply: { bg: 'bg-status-success/10', text: 'text-status-success', label: 'Apply' },
+  apply_if_connects: { bg: 'bg-status-warning/10', text: 'text-status-warning', label: 'If Connects' },
+  skip: { bg: 'bg-bone', text: 'text-slate', label: 'Skip' },
 }
 
 export default async function UpworkListPage() {
@@ -32,7 +32,7 @@ export default async function UpworkListPage() {
         </div>
         <Link
           href="/upwork/new"
-          className="group inline-flex items-center gap-2.5 rounded-2xl bg-gold px-5 py-3 text-sm font-medium text-paper transition-all duration-300 hover:bg-gold/90 hover:shadow-[0_8px_32px_-8px_color-mix(in_srgb,var(--gold)_40%,transparent)] active:scale-[0.98]"
+          className="group inline-flex items-center gap-2.5 rounded-2xl bg-orange px-5 py-3 text-sm font-medium text-bone transition-all duration-300 hover:bg-orange/90 hover:shadow-[0_8px_32px_-8px_color-mix(in_srgb,var(--orange)_40%,transparent)] active:scale-[0.98]"
         >
           <Plus className="size-4 transition-transform duration-300 group-hover:rotate-90" aria-hidden="true" />
           New job
@@ -54,7 +54,7 @@ export default async function UpworkListPage() {
               <Users className="size-3.5" />
               <span className="font-mono text-[10px] uppercase tracking-widest">Worth applying</span>
             </div>
-            <p className="mt-2 font-mono text-2xl font-medium text-status-send">{applyCount}</p>
+            <p className="mt-2 font-mono text-2xl font-medium text-status-success">{applyCount}</p>
           </div>
           <div className="rounded-2xl border border-line bg-paper p-4">
             <div className="flex items-center gap-2 text-slate">
@@ -70,8 +70,8 @@ export default async function UpworkListPage() {
       {jobs.length === 0 ? (
         <section className="reveal-up stagger-2 rounded-3xl border border-dashed border-line bg-paper/50 p-12 text-center">
           <div className="mx-auto max-w-sm space-y-4">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-paper-tint">
-              <Briefcase className="size-5 text-gold" aria-hidden="true" />
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-bone">
+              <Briefcase className="size-5 text-orange" aria-hidden="true" />
             </div>
             <div>
               <p className="text-base font-medium text-ink">No Upwork jobs yet.</p>
@@ -81,7 +81,7 @@ export default async function UpworkListPage() {
             </div>
             <Link
               href="/upwork/new"
-              className="inline-flex items-center gap-2 rounded-2xl bg-gold px-5 py-2.5 text-sm font-medium text-paper transition-all duration-300 hover:bg-gold/90"
+              className="inline-flex items-center gap-2 rounded-2xl bg-orange px-5 py-2.5 text-sm font-medium text-bone transition-all duration-300 hover:bg-orange/90"
             >
               <Plus className="size-4" aria-hidden="true" />
               Add the first job
@@ -101,7 +101,7 @@ export default async function UpworkListPage() {
                 >
                   <Link
                     href={`/upwork/${job.id}`}
-                    className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-paper-tint/40"
+                    className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-bone/40"
                   >
                     {/* Score */}
                     <div
@@ -117,7 +117,7 @@ export default async function UpworkListPage() {
                     {/* Content */}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-medium text-ink transition-colors group-hover:text-gold">
+                        <span className="truncate text-sm font-medium text-ink transition-colors group-hover:text-orange">
                           {job.title}
                         </span>
                       </div>
@@ -147,7 +147,7 @@ export default async function UpworkListPage() {
                       {verdict.label}
                     </span>
                     <ArrowRight
-                      className="size-4 shrink-0 text-line transition-all duration-200 group-hover:text-gold group-hover:translate-x-0.5"
+                      className="size-4 shrink-0 text-line transition-all duration-200 group-hover:text-orange group-hover:translate-x-0.5"
                       aria-hidden="true"
                     />
                   </Link>

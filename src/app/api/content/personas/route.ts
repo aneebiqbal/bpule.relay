@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
 import { extractProfileTopics, extractFromPastPosts } from '@/lib/ai/content-profile'
+import { buildInitialDnaFromPersona } from '@/lib/content/content-dna'
 
 export const dynamic = 'force-dynamic'
 
@@ -100,7 +101,28 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    return NextResponse.json({ persona, inferredTopics: uniqueTopics, profileSummary, seededFromPastPosts: Boolean(pastPostsExtracted) })
+    const initialDna = buildInitialDnaFromPersona({
+      profileSummary,
+      humorStyle: resolvedHumorStyle,
+      admiredExamples: Array.isArray(admiredExamples) ? admiredExamples : [],
+      valuesAndOpinions: uniqueValues,
+      topics: uniqueTopics,
+    })
+
+    const profile = await store.createContentProfile({
+      personaId: persona.id,
+    })
+
+    await store.updateContentProfile(profile.id, {
+      opinions: initialDna.opinions,
+      topicsCared: initialDna.topicsCared,
+      writingCharacteristics: initialDna.writingCharacteristics,
+      confidence: initialDna.opinions.length > 0 || initialDna.topicsCared.length > 0 ? 0.2 : 0.05,
+    })
+
+    const updatedPersona = await store.getContentPersona(persona.id)
+
+    return NextResponse.json({ persona: updatedPersona, inferredTopics: uniqueTopics, profileSummary, seededFromPastPosts: Boolean(pastPostsExtracted) })
   } catch (err: unknown) {
     // Supabase errors are objects with { message, code, details, hint }
     const e = err as { message?: string; code?: string; details?: unknown; hint?: unknown }

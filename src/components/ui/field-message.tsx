@@ -11,7 +11,7 @@ export function FieldError({
   children: React.ReactNode
 }) {
   return (
-    <p id={id} role="alert" className={cn("flex items-start gap-1.5 text-xs text-status-no", className)}>
+    <p id={id} role="alert" className={cn("flex items-start gap-1.5 text-xs text-status-danger", className)}>
       <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
       <span>{children}</span>
     </p>

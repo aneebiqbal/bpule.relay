@@ -7,6 +7,27 @@ import type {
   ContentPillar,
   ContentPlatform,
   ContentPostStructure,
+  ContentProfile,
+  ContentProfileExpertise,
+  ContentProfileTechnology,
+  ContentProfileGoal,
+  ContentProfileTopic,
+  ContentProfileOpinion,
+  ContentProfileProject,
+  ContentProfileExperience,
+  ContentProfileWritingCharacteristics,
+  ContentProfileStorytellingTendency,
+  ContentMemory,
+  ContentMemoryType,
+  ContentOpportunity,
+  ContentOpportunityType,
+  ContentOpportunityQualification,
+  ContentIdeaGenome,
+  IdeaGenomeSource,
+  IdeaGenomeArchetype,
+  ContentEvaluation,
+  ContentInterviewSession,
+  ContentInterviewAnswer,
   CsvImport,
   Fact,
   Lead,
@@ -506,4 +527,131 @@ export interface ScoutStore {
     editSignals: string[]
   }): Promise<ContentDraftFeedback>
   listContentDraftFeedback(personaId: string, limit?: number): Promise<ContentDraftFeedback[]>
+  // content profiles (Content DNA)
+  createContentProfile(input: {
+    personaId: string
+    role?: string
+    seniority?: string
+    industries?: string[]
+    audience?: string
+  }): Promise<ContentProfile>
+  getContentProfile(profileId: string): Promise<ContentProfile | null>
+  getContentProfileByPersona(personaId: string): Promise<ContentProfile | null>
+  updateContentProfile(profileId: string, patches: {
+    role?: string
+    seniority?: string
+    industries?: string[]
+    audience?: string
+    expertise?: ContentProfileExpertise[]
+    technologies?: ContentProfileTechnology[]
+    goals?: ContentProfileGoal[]
+    topicsCared?: ContentProfileTopic[]
+    topicsAvoided?: ContentProfileTopic[]
+    opinions?: ContentProfileOpinion[]
+    projects?: ContentProfileProject[]
+    experiences?: ContentProfileExperience[]
+    writingCharacteristics?: ContentProfileWritingCharacteristics
+    storytellingTendencies?: ContentProfileStorytellingTendency[]
+    confidence?: number
+  }): Promise<ContentProfile>
+  deleteContentProfile(profileId: string): Promise<void>
+  // content memories
+  createContentMemory(input: {
+    personaId: string
+    memoryType: ContentMemoryType
+    content: string
+    sourceDraftId?: string | null
+    sourceHistoryId?: string | null
+  }): Promise<ContentMemory>
+  listContentMemories(personaId: string, opts?: { memoryType?: ContentMemoryType; limit?: number }): Promise<ContentMemory[]>
+  deleteContentMemory(memoryId: string): Promise<void>
+  // content opportunities
+  createContentOpportunity(input: {
+    personaId: string
+    opportunityType: ContentOpportunityType
+    title: string
+    description: string
+    trigger: string
+    sourceKind?: 'user_input' | 'interview' | 'research' | 'system_inferred' | 'history_pattern' | null
+    sourceReference?: string | null
+  }): Promise<ContentOpportunity>
+  listContentOpportunities(personaId: string, opts?: { status?: string; limit?: number }): Promise<ContentOpportunity[]>
+  getContentOpportunity(opportunityId: string): Promise<ContentOpportunity | null>
+  updateContentOpportunity(opportunityId: string, patches: {
+    qualification?: ContentOpportunityQualification
+    qualified?: boolean
+    status?: string
+    dismissedAt?: string | null
+    completedAt?: string | null
+  }): Promise<ContentOpportunity>
+  deleteContentOpportunity(opportunityId: string): Promise<void>
+  // idea genomes
+  createIdeaGenome(input: {
+    personaId: string
+    source: IdeaGenomeSource
+    topic: string
+    angle: string
+    archetype: IdeaGenomeArchetype
+    audience: string
+    emotion?: string | null
+    valueType?: 'practical' | 'emotional' | 'intellectual' | 'social' | null
+    opportunityId?: string | null
+  }): Promise<ContentIdeaGenome>
+  getIdeaGenome(genomeId: string): Promise<ContentIdeaGenome | null>
+  updateIdeaGenome(genomeId: string, patches: {
+    novelty?: number
+    evidenceStrength?: number
+    personalSpecificity?: number
+    relevance?: number
+    conversationPotential?: number
+    contentMemoryOverlap?: string[]
+    differentiationNote?: string
+    status?: string
+    rejectionReason?: string | null
+    draftId?: string | null
+  }): Promise<ContentIdeaGenome>
+  // evaluations
+  createEvaluation(input: {
+    draftId: string
+    originality?: number
+    personalSpecificity?: number
+    usefulness?: number
+    credibility?: number
+    evidence?: number
+    clarity?: number
+    storytelling?: number
+    voiceMatch?: number
+    stopPotential?: number
+    dwellPotential?: number
+    commentPotential?: number
+    savePotential?: number
+    sharePotential?: number
+    audienceRelevance?: number
+    slopScore?: number
+    genericProbability?: number
+    qualityNotes?: Record<string, string>
+    distributionNotes?: Record<string, string>
+  }): Promise<ContentEvaluation>
+  getEvaluation(evaluationId: string): Promise<ContentEvaluation | null>
+  // interview sessions
+  createInterviewSession(input: {
+    personaId: string
+    opportunityId?: string | null
+    sessionType: 'onboarding' | 'opportunity_exploration' | 'post_qualification'
+  }): Promise<ContentInterviewSession>
+  getInterviewSession(sessionId: string): Promise<ContentInterviewSession | null>
+  listInterviewSessions(personaId: string, opts?: { status?: string; limit?: number }): Promise<ContentInterviewSession[]>
+  updateInterviewSession(sessionId: string, patches: {
+    status?: string
+    questionsAsked?: number
+    informationGain?: number
+    completedAt?: string | null
+  }): Promise<ContentInterviewSession>
+  createInterviewAnswer(input: {
+    sessionId: string
+    question: string
+    answer: string
+    informationGain?: number
+  }): Promise<ContentInterviewAnswer>
+  listInterviewAnswers(sessionId: string): Promise<ContentInterviewAnswer[]>
 }

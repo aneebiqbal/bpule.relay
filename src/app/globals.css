@@ -5,37 +5,56 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Relay — Premium Design System
+ * Relay — Design System v2
  *
  * Palette philosophy:
- *   paper  → warm off-white canvas, the "desk surface"
- *   ink    → near-black with warm undertone, primary text
- *   slate  → muted secondary text, timestamps, labels
- *   line   → hairline dividers, borders
- *   gold   → the one accent. used sparingly for CTAs and highlights
+ *   bone    → warm mineral canvas, the "desk surface"
+ *   ink     → near-black graphite, primary text
+ *   graphite → secondary text, metadata
+ *   stone   → muted tertiary text
+ *   line    → hairline dividers
+ *   orange  → Relay signal. the one accent for actions and highlights
+ *   cobalt  → Studio intelligence. deep, premium
  *
- * Status words keep a small consistent tint, but the word is always
- * printed next to the color. There is never a bare colored dot.
+ * The product sits between:
+ *   a technical notebook
+ *   an editorial publication
+ *   a precision instrument
+ *
+ * Restraint over decoration. Typography over containers. Signal over noise.
  */
 
 @theme inline {
-  --color-paper: var(--paper);
+  --color-bone: var(--bone);
+  --color-bone-raised: var(--bone-raised);
   --color-ink: var(--ink);
-  --color-slate: var(--slate);
+  --color-ink-soft: var(--ink-soft);
+  --color-graphite: var(--graphite);
+  --color-stone: var(--stone);
+  --color-stone-light: var(--stone-light);
   --color-line: var(--line);
-  --color-gold: var(--gold);
-  --color-gold-light: var(--gold-light);
-  --color-gold-dark: var(--gold-dark);
-  --color-status-send: var(--status-send);
-  --color-status-research: var(--status-research);
-  --color-status-no: var(--status-no);
-  --color-status-replied: var(--status-replied);
+  --color-line-soft: var(--line-soft);
 
-  --color-studio: var(--studio);
-  --color-studio-light: var(--studio-light);
-  --color-studio-dark: var(--studio-dark);
+  --color-orange: var(--orange);
+  --color-orange-light: var(--orange-light);
+  --color-orange-dark: var(--orange-dark);
+  --color-orange-faint: var(--orange-faint);
 
-  --color-background: var(--paper);
+  --color-cobalt: var(--cobalt);
+  --color-cobalt-light: var(--cobalt-light);
+  --color-cobalt-dark: var(--cobalt-dark);
+  --color-cobalt-faint: var(--cobalt-faint);
+
+  --color-success: var(--status-success);
+  --color-warning: var(--status-warning);
+  --color-danger: var(--status-danger);
+  --color-info: var(--status-info);
+
+  --color-surface: var(--bone);
+  --color-surface-raised: var(--bone-raised);
+  --color-surface-elevated: var(--bone-raised);
+
+  --color-background: var(--bone);
   --color-foreground: var(--ink);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
@@ -44,169 +63,169 @@
   --color-sidebar-ring: var(--ring);
   --color-sidebar-border: var(--line);
   --color-sidebar-accent-foreground: var(--ink);
-  --color-sidebar-accent: var(--paper-tint);
-  --color-sidebar-primary-foreground: var(--paper);
+  --color-sidebar-accent: var(--bone-raised);
+  --color-sidebar-primary-foreground: var(--bone);
   --color-sidebar-primary: var(--ink);
-  --color-sidebar-foreground: var(--slate);
-  --color-sidebar: var(--paper);
+  --color-sidebar-foreground: var(--graphite);
+  --color-sidebar: var(--bone);
 
-  --color-chart-5: var(--gold);
-  --color-chart-4: var(--slate);
+  --color-chart-5: var(--orange);
+  --color-chart-4: var(--stone);
   --color-chart-3: var(--line);
-  --color-chart-2: var(--status-send);
+  --color-chart-2: var(--status-success);
   --color-chart-1: var(--ink);
 
   --color-ring: var(--ring);
   --color-input: var(--line);
   --color-border: var(--line);
-  --color-destructive: var(--status-no);
+  --color-destructive: var(--status-danger);
   --color-accent-foreground: var(--ink);
-  --color-accent: var(--paper-tint);
-  --color-muted-foreground: var(--slate);
-  --color-muted: var(--paper-tint);
+  --color-accent: var(--orange-faint);
+  --color-muted-foreground: var(--stone);
+  --color-muted: var(--bone-raised);
   --color-secondary-foreground: var(--ink);
-  --color-secondary: var(--paper-tint);
-  --color-primary-foreground: var(--paper);
+  --color-secondary: var(--bone-raised);
+  --color-primary-foreground: var(--bone);
   --color-primary: var(--ink);
   --color-popover-foreground: var(--ink);
-  --color-popover: var(--paper);
+  --color-popover: var(--bone-raised);
   --color-card-foreground: var(--ink);
-  --color-card: var(--paper);
+  --color-card: var(--bone-raised);
 
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+  --radius-3xl: 16px;
+  --radius-4xl: 20px;
 }
 
 :root {
   /* ── Light mode ── */
-  --paper: #faf9f7;
-  --paper-raised: #ffffff;
-  --ink: #1a1917;
+  --bone: #f7f6f3;
+  --bone-raised: #ffffff;
+  --ink: #1c1c1a;
   --ink-soft: #3d3c39;
-  --slate: #787774;
-  --slate-light: #a3a29e;
-  --line: #e8e4dd;
-  --line-soft: #f0ece6;
+  --graphite: #5c5b57;
+  --stone: #8a8984;
+  --stone-light: #b0afa9;
+  --line: #e0ddd6;
+  --line-organic: #d4d1c9;
 
-  --gold: #b8863f;
-  --gold-light: #d4a85c;
-  --gold-dark: #9a6e2e;
-  --gold-faint: #faf3e8;
+  --orange: #d4652f;
+  --orange-light: #e8844e;
+  --orange-dark: #b8531f;
+  --orange-faint: #fdf3ed;
 
-  --studio: #5b53d6;
-  --studio-light: #7a72e8;
-  --studio-dark: #443dab;
+  --cobalt: #3b5bdb;
+  --cobalt-light: #5c7afa;
+  --cobalt-dark: #2f48b8;
+  --cobalt-faint: #eef2ff;
 
-  --paper-tint: #f3f0ea;
-  --status-send: #1f7a4d;
-  --status-research: #9a6700;
-  --status-no: #b4442e;
-  --status-replied: #12663c;
+  --status-success: #1a7f4b;
+  --status-warning: #b8860b;
+  --status-danger: #c43d2f;
+  --status-info: #3b6cb5;
 
-  --background: var(--paper);
+  --background: var(--bone);
   --foreground: var(--ink);
-  --card: var(--paper-raised);
+  --card: var(--bone-raised);
   --card-foreground: var(--ink);
-  --popover: var(--paper-raised);
+  --popover: var(--bone-raised);
   --popover-foreground: var(--ink);
   --primary: var(--ink);
-  --primary-foreground: var(--paper);
-  --secondary: var(--paper-tint);
+  --primary-foreground: var(--bone);
+  --secondary: var(--bone-raised);
   --secondary-foreground: var(--ink);
-  --muted: var(--paper-tint);
-  --muted-foreground: var(--slate);
-  --accent: var(--gold-faint);
+  --muted: var(--bone-raised);
+  --muted-foreground: var(--stone);
+  --accent: var(--orange-faint);
   --accent-foreground: var(--ink);
-  --destructive: var(--status-no);
+  --destructive: var(--status-danger);
   --border: var(--line);
   --input: var(--line);
-  --ring: color-mix(in srgb, var(--gold) 35%, transparent);
-  --radius: 0.625rem;
+  --ring: color-mix(in srgb, var(--orange) 30%, transparent);
+  --radius: 8px;
 
-  --sidebar: var(--paper);
-  --sidebar-foreground: var(--slate);
+  --sidebar: var(--bone);
+  --sidebar-foreground: var(--graphite);
   --sidebar-primary: var(--ink);
-  --sidebar-primary-foreground: var(--paper);
-  --sidebar-accent: var(--paper-tint);
+  --sidebar-primary-foreground: var(--bone);
+  --sidebar-accent: var(--bone-raised);
   --sidebar-accent-foreground: var(--ink);
   --sidebar-border: var(--line);
   --sidebar-ring: var(--ring);
 
-  /* Elevation shadows */
-  --shadow-sm: 0 1px 2px color-mix(in srgb, var(--ink) 3%, transparent);
-  --shadow-md: 0 2px 8px color-mix(in srgb, var(--ink) 4%, transparent), 0 1px 2px color-mix(in srgb, var(--ink) 2%, transparent);
-  --shadow-lg: 0 8px 24px color-mix(in srgb, var(--ink) 5%, transparent), 0 2px 6px color-mix(in srgb, var(--ink) 3%, transparent);
-  --shadow-xl: 0 16px 48px color-mix(in srgb, var(--ink) 6%, transparent), 0 4px 12px color-mix(in srgb, var(--ink) 3%, transparent);
-  --shadow-gold: 0 8px 32px -8px color-mix(in srgb, var(--gold) 35%, transparent), 0 2px 8px color-mix(in srgb, var(--gold) 15%, transparent);
-  --shadow-studio: 0 8px 32px -8px color-mix(in srgb, var(--studio) 35%, transparent), 0 2px 8px color-mix(in srgb, var(--studio) 15%, transparent);
+  /* Elevation */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, var(--ink) 4%, transparent);
+  --shadow-md: 0 2px 8px color-mix(in srgb, var(--ink) 5%, transparent), 0 1px 2px color-mix(in srgb, var(--ink) 3%, transparent);
+  --shadow-lg: 0 8px 24px color-mix(in srgb, var(--ink) 6%, transparent), 0 2px 6px color-mix(in srgb, var(--ink) 3%, transparent);
+  --shadow-orange: 0 4px 16px -4px color-mix(in srgb, var(--orange) 25%, transparent);
+  --shadow-cobalt: 0 4px 16px -4px color-mix(in srgb, var(--cobalt) 25%, transparent);
 }
 
 .dark {
   /* ── Dark mode ── */
-  --paper: #141312;
-  --paper-raised: #1c1b19;
+  --bone: #141312;
+  --bone-raised: #1c1b19;
   --ink: #ece9e3;
   --ink-soft: #b8b5ad;
-  --slate: #8c8982;
-  --slate-light: #6b6964;
+  --graphite: #8c8982;
+  --stone: #6b6964;
+  --stone-light: #4a4945;
   --line: #282624;
   --line-soft: #1f1d1c;
 
-  --gold: #c8955a;
-  --gold-light: #dbb07a;
-  --gold-dark: #a67a3e;
-  --gold-faint: #1f1a14;
+  --orange: #e8844e;
+  --orange-light: #f0a06e;
+  --orange-dark: #d4652f;
+  --orange-faint: #1f1a14;
 
-  --studio: #8b83ec;
-  --studio-light: #a49cf2;
-  --studio-dark: #6d64cf;
+  --cobalt: #7c9aff;
+  --cobalt-light: #a4b8ff;
+  --cobalt-dark: #5c7afa;
+  --cobalt-faint: #1a1f30;
 
-  --paper-tint: #1e1d1b;
-  --status-send: #4caf7e;
-  --status-research: #d6a13c;
-  --status-no: #ef7d63;
-  --status-replied: #57c98c;
+  --status-success: #4caf7e;
+  --status-warning: #d6a13c;
+  --status-danger: #ef7d63;
+  --status-info: #6b9ae8;
 
-  --background: var(--paper);
+  --background: var(--bone);
   --foreground: var(--ink);
-  --card: var(--paper-raised);
+  --card: var(--bone-raised);
   --card-foreground: var(--ink);
-  --popover: var(--paper-raised);
+  --popover: var(--bone-raised);
   --popover-foreground: var(--ink);
   --primary: var(--ink);
-  --primary-foreground: var(--paper);
-  --secondary: var(--paper-tint);
+  --primary-foreground: var(--bone);
+  --secondary: var(--bone-raised);
   --secondary-foreground: var(--ink);
-  --muted: var(--paper-tint);
-  --muted-foreground: var(--slate);
-  --accent: var(--gold-faint);
+  --muted: var(--bone-raised);
+  --muted-foreground: var(--stone);
+  --accent: var(--orange-faint);
   --accent-foreground: var(--ink);
-  --destructive: var(--status-no);
+  --destructive: var(--status-danger);
   --border: var(--line);
   --input: var(--line);
-  --ring: color-mix(in srgb, var(--gold) 40%, transparent);
-  --radius: 0.625rem;
+  --ring: color-mix(in srgb, var(--orange) 35%, transparent);
+  --radius: 8px;
 
-  --sidebar: var(--paper);
-  --sidebar-foreground: var(--slate);
+  --sidebar: var(--bone);
+  --sidebar-foreground: var(--graphite);
   --sidebar-primary: var(--ink);
-  --sidebar-primary-foreground: var(--paper);
-  --sidebar-accent: var(--paper-tint);
+  --sidebar-primary-foreground: var(--bone);
+  --sidebar-accent: var(--bone-raised);
   --sidebar-accent-foreground: var(--ink);
   --sidebar-border: var(--line);
   --sidebar-ring: var(--ring);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
-  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.2);
-  --shadow-gold: 0 8px 32px -8px color-mix(in srgb, var(--gold) 25%, transparent), 0 2px 8px color-mix(in srgb, var(--gold) 10%, transparent);
-  --shadow-studio: 0 8px 32px -8px color-mix(in srgb, var(--studio) 25%, transparent), 0 2px 8px color-mix(in srgb, var(--studio) 10%, transparent);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --shadow-orange: 0 4px 16px -4px color-mix(in srgb, var(--orange) 20%, transparent);
+  --shadow-cobalt: 0 4px 16px -4px color-mix(in srgb, var(--cobalt) 20%, transparent);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -234,16 +253,14 @@
     line-height: 1.6;
   }
 
-  /* Selection */
   ::selection {
-    background-color: color-mix(in srgb, var(--gold) 22%, transparent);
+    background-color: color-mix(in srgb, var(--orange) 20%, transparent);
     color: var(--ink);
   }
 
-  /* Scrollbar */
   ::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
@@ -253,17 +270,15 @@
     border-radius: 99px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--slate-light);
+    background: var(--stone-light);
   }
 
-  /* Focus visible */
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
     border-radius: 4px;
   }
 
-  /* Reduced motion */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -277,68 +292,49 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Animations
+   Animations — restrained, purposeful
    ═══════════════════════════════════════════════════════════ */
 @layer utilities {
-  /* ── Entrance animations ── */
   @keyframes fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
   }
 
   @keyframes reveal-up {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   @keyframes reveal-down {
-    from {
-      opacity: 0;
-      transform: translateY(-6px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   @keyframes slide-in-right {
-    from {
-      opacity: 0;
-      transform: translateX(16px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
+    from { opacity: 0; transform: translateX(12px); }
+    to { opacity: 1; transform: translateX(0); }
   }
 
   @keyframes scale-in {
-    from {
-      opacity: 0;
-      transform: scale(0.96);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
+    from { opacity: 0; transform: scale(0.97); }
+    to { opacity: 1; transform: scale(1); }
   }
 
-  /* ── Ambient animations ── */
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-6px); }
+  /* Relay signal — a pulse traveling along a path */
+  @keyframes signal-pulse {
+    0% { stroke-dashoffset: 24; opacity: 0.4; }
+    50% { opacity: 1; }
+    100% { stroke-dashoffset: 0; opacity: 0.4; }
+  }
+
+  @keyframes signal-line {
+    from { stroke-dashoffset: 40; }
+    to { stroke-dashoffset: 0; }
   }
 
   @keyframes gentle-pulse {
-    0%, 100% { opacity: 0.5; }
-    50% { opacity: 1; }
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.8; }
   }
 
   @keyframes shimmer {
@@ -346,153 +342,39 @@
     100% { background-position: 200% 0; }
   }
 
-  @keyframes gold-breathe {
-    0%, 100% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 0%, transparent);
-    }
-    50% {
-      box-shadow: 0 0 24px 4px color-mix(in srgb, var(--gold) 12%, transparent);
-    }
-  }
-
-  @keyframes spin-slow {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-
-  @keyframes progress-bar {
-    from { width: 0%; }
-  }
-
-  /* ── Animation utilities ── */
-  .fade-in {
-    animation: fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-
-  .reveal-up {
-    animation: reveal-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-
-  .reveal-down {
-    animation: reveal-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-
-  .slide-in-right {
-    animation: slide-in-right 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-
-  .scale-in {
-    animation: scale-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-
-  .float {
-    animation: float 5s ease-in-out infinite;
-  }
-
-  .gentle-pulse {
-    animation: gentle-pulse 2s ease-in-out infinite;
-  }
-
-  .gold-breathe {
-    animation: gold-breathe 3s ease-in-out infinite;
-  }
+  .fade-in { animation: fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .reveal-up { animation: reveal-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .reveal-down { animation: reveal-down 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .slide-in-right { animation: slide-in-right 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .scale-in { animation: scale-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .gentle-pulse { animation: gentle-pulse 2s ease-in-out infinite; }
 
   .shimmer {
-    background: linear-gradient(
-      90deg,
-      var(--paper-tint) 25%,
-      color-mix(in srgb, var(--paper-tint) 80%, white) 50%,
-      var(--paper-tint) 75%
-    );
+    background: linear-gradient(90deg, var(--bone-raised) 25%, color-mix(in srgb, var(--bone-raised) 90%, white) 50%, var(--bone-raised) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.5s ease-in-out infinite;
   }
 
   /* Stagger delays */
-  .stagger-1 { animation-delay: 0.05s; }
-  .stagger-2 { animation-delay: 0.1s; }
-  .stagger-3 { animation-delay: 0.15s; }
-  .stagger-4 { animation-delay: 0.2s; }
-  .stagger-5 { animation-delay: 0.25s; }
+  .stagger-1 { animation-delay: 0.04s; }
+  .stagger-2 { animation-delay: 0.08s; }
+  .stagger-3 { animation-delay: 0.12s; }
+  .stagger-4 { animation-delay: 0.16s; }
 
   /* ── Surfaces ── */
-  .surface-glass {
-    backdrop-filter: blur(16px) saturate(1.15);
-    background: color-mix(in srgb, var(--paper) 80%, transparent);
-    border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-  }
-
-  .surface-frosted {
-    backdrop-filter: blur(20px) saturate(1.3);
-    background: color-mix(in srgb, var(--paper) 60%, transparent);
-    border: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
-  }
-
   .surface-raised {
-    background: linear-gradient(
-      145deg,
-      var(--paper-raised) 0%,
-      var(--paper) 100%
-    );
+    background: var(--bone-raised);
+  }
+
+  .surface-elevated {
+    background: var(--bone-raised);
+    box-shadow: var(--shadow-md);
   }
 
   /* ── Elevation ── */
-  .elevate-1 {
-    box-shadow: var(--shadow-sm);
-  }
-
-  .elevate-2 {
-    box-shadow: var(--shadow-md);
-    transition: box-shadow 0.3s ease, transform 0.3s ease;
-  }
-  .elevate-2:hover {
-    box-shadow: var(--shadow-lg);
-    transform: translateY(-1px);
-  }
-
-  .elevate-3 {
-    box-shadow: var(--shadow-lg);
-    transition: box-shadow 0.3s ease, transform 0.3s ease;
-  }
-  .elevate-3:hover {
-    box-shadow: var(--shadow-xl);
-    transform: translateY(-2px);
-  }
-
-  .gold-glow {
-    box-shadow: var(--shadow-gold);
-  }
-
-  .shadow-gold {
-    box-shadow: var(--shadow-gold);
-  }
-
-  .shadow-studio {
-    box-shadow: var(--shadow-studio);
-  }
-
-  /* ── Gradients ── */
-  .gradient-gold {
-    background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
-  }
-
-  .gradient-studio {
-    background: linear-gradient(135deg, var(--studio) 0%, var(--studio-light) 100%);
-  }
-
-  .gradient-gold-text {
-    background: linear-gradient(135deg, var(--gold-dark) 0%, var(--gold-light) 50%, var(--gold-dark) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  .gradient-mesh {
-    background:
-      radial-gradient(ellipse at 20% 0%, color-mix(in srgb, var(--gold) 8%, transparent) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 100%, color-mix(in srgb, var(--gold) 5%, transparent) 0%, transparent 40%),
-      var(--paper);
-  }
+  .elevate-1 { box-shadow: var(--shadow-sm); }
+  .elevate-2 { box-shadow: var(--shadow-md); transition: box-shadow 0.2s ease; }
+  .elevate-3 { box-shadow: var(--shadow-lg); transition: box-shadow 0.2s ease; }
 
   /* ── Typography ── */
   .text-display {
@@ -511,9 +393,9 @@
     font-family: var(--font-mono);
     font-size: 0.625rem;
     font-weight: 500;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--slate);
+    color: var(--stone);
   }
 
   .text-mono-medium {
@@ -522,35 +404,24 @@
     font-feature-settings: "tnum" 1;
   }
 
+  .text-mono-regular {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    font-feature-settings: "tnum" 1;
+  }
+
   /* ── Backgrounds ── */
-  .bg-dot-grid {
-    background-image: radial-gradient(circle, var(--line) 0.75px, transparent 0.75px);
-    background-size: 20px 20px;
-  }
-
-  /* Studio's own room: a quiet violet wash instead of the base app's dot
-     grid, so stepping from Today into Content reads as a different space. */
   .bg-studio-wash {
-    background-color: var(--paper);
+    background-color: var(--bone);
     background-image:
-      radial-gradient(ellipse 900px 500px at 8% -10%, color-mix(in srgb, var(--studio) 7%, transparent) 0%, transparent 60%),
-      radial-gradient(circle, color-mix(in srgb, var(--studio) 12%, var(--line)) 0.75px, transparent 0.75px);
-    background-size: auto, 22px 22px;
-  }
-
-  .bg-noise::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    opacity: 0.015;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 0;
+      radial-gradient(ellipse 800px 400px at 8% -10%, color-mix(in srgb, var(--cobalt) 5%, transparent) 0%, transparent 60%),
+      radial-gradient(circle, color-mix(in srgb, var(--cobalt) 8%, var(--line)) 0.75px, transparent 0.75px);
+    background-size: auto, 20px 20px;
   }
 
   /* ── Interactive ── */
   .interactive {
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
     cursor: pointer;
   }
   .interactive:hover {
@@ -563,12 +434,12 @@
   /* ── Dividers ── */
   .divider-subtle {
     height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      var(--line) 20%,
-      var(--line) 80%,
-      transparent 100%
-    );
+    background: linear-gradient(90deg, transparent 0%, var(--line) 20%, var(--line) 80%, transparent 100%);
+  }
+
+  /* ── Relay signal motif ── */
+  .relay-signal {
+    stroke-dasharray: 4 4;
+    animation: signal-line 1.5s linear infinite;
   }
 }

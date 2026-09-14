@@ -54,12 +54,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   className={cn(
                     "pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl border px-4 py-3.5 scale-in",
                     t.variant === "destructive"
-                      ? "border-status-no/20 bg-paper-raised/95 text-ink shadow-lg"
+                      ? "border-status-danger/20 bg-bone-raised/95 text-ink shadow-lg"
                       : t.variant === "success"
-                        ? "border-status-send/20 bg-paper-raised/95 text-ink shadow-lg"
+                        ? "border-status-success/20 bg-bone-raised/95 text-ink shadow-lg"
                         : t.variant === "info"
-                          ? "border-gold/20 bg-paper-raised/95 text-ink shadow-lg"
-                          : "border-line/60 bg-paper-raised/95 text-ink shadow-lg",
+                          ? "border-orange/20 bg-bone-raised/95 text-ink shadow-lg"
+                          : "border-line/60 bg-bone-raised/95 text-ink shadow-lg",
                   )}
                   style={{ backdropFilter: "blur(16px)" }}
                   role="status"
@@ -67,11 +67,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 >
                   <div className="mt-0.5 shrink-0">
                     {t.variant === "destructive" ? (
-                      <AlertTriangle className="size-4 text-status-no" />
+                      <AlertTriangle className="size-4 text-status-danger" />
                     ) : t.variant === "success" ? (
-                      <CheckCircle2 className="size-4 text-status-send" />
+                      <CheckCircle2 className="size-4 text-status-success" />
                     ) : t.variant === "info" ? (
-                      <Info className="size-4 text-gold" />
+                      <Info className="size-4 text-orange" />
                     ) : (
                       <Info className="size-4 text-slate" />
                     )}
@@ -88,7 +88,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     type="button"
                     onClick={() => dismiss(t.id)}
                     aria-label="Dismiss notification"
-                    className="rounded-lg p-1 text-slate transition-colors hover:bg-paper-tint hover:text-ink"
+                    className="rounded-lg p-1 text-slate transition-colors hover:bg-bone hover:text-ink"
                   >
                     <X className="size-3.5" />
                   </button>

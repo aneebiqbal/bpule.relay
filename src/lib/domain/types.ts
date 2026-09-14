@@ -327,7 +327,97 @@ export interface ContentPersona {
   humorStyle: string
   valuesAndOpinions: string[]
   admiredExamples: string[]
+  contentProfileId: string | null
   createdAt: string
+}
+
+export interface ContentProfileExpertise {
+  area: string
+  level: 'beginner' | 'intermediate' | 'advanced' | 'expert'
+  evidence: string
+  updatedAt: string
+}
+
+export interface ContentProfileTechnology {
+  name: string
+  proficiency: 'learning' | 'using' | 'proficient' | 'expert'
+  context: string
+}
+
+export interface ContentProfileGoal {
+  description: string
+  type: 'audience' | 'growth' | 'authority' | 'sales' | 'career' | 'other'
+  updatedAt: string
+}
+
+export interface ContentProfileTopic {
+  topic: string
+  intensity: 'casual' | 'interested' | 'passionate'
+  source: 'onboarding' | 'answer' | 'inference' | 'research'
+}
+
+export interface ContentProfileOpinion {
+  belief: string
+  strength: 'mild' | 'moderate' | 'strong'
+  evidence: string
+  source: 'onboarding' | 'answer' | 'inference'
+  updatedAt: string
+}
+
+export interface ContentProfileProject {
+  name: string
+  description: string
+  role: string
+  outcome: string
+  lessons: string[]
+  updatedAt: string
+}
+
+export interface ContentProfileExperience {
+  type: 'project' | 'mistake' | 'success' | 'decision' | 'lesson' | 'career'
+  description: string
+  lesson: string
+  date: string | null
+  updatedAt: string
+}
+
+export interface ContentProfileWritingCharacteristics {
+  sentenceRhythm?: string
+  vocabularyLevel?: string
+  preferredLength?: string
+  questionFrequency?: 'rare' | 'occasional' | 'frequent'
+  dataUsage?: 'none' | 'light' | 'heavy'
+  storyPreference?: 'abstract' | 'concrete' | 'mixed'
+}
+
+export interface ContentProfileStorytellingTendency {
+  pattern: string
+  frequency: 'rare' | 'occasional' | 'common'
+  example: string
+}
+
+export interface ContentProfile {
+  id: string
+  organizationId: string
+  personaId: string
+  role: string
+  seniority: string
+  industries: string[]
+  audience: string
+  expertise: ContentProfileExpertise[]
+  technologies: ContentProfileTechnology[]
+  goals: ContentProfileGoal[]
+  topicsCared: ContentProfileTopic[]
+  topicsAvoided: ContentProfileTopic[]
+  opinions: ContentProfileOpinion[]
+  projects: ContentProfileProject[]
+  experiences: ContentProfileExperience[]
+  writingCharacteristics: ContentProfileWritingCharacteristics
+  storytellingTendencies: ContentProfileStorytellingTendency[]
+  confidence: number
+  lastLearnedAt: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export interface ContentPillar {
@@ -450,4 +540,137 @@ export interface TrendingAngle {
   addedBy: string | null
   addedAt: string
   used: boolean
+}
+
+// ── Content Intelligence System types ──
+
+export type ContentMemoryType =
+  | 'topic_covered' | 'angle_used' | 'hook_used' | 'story_used'
+  | 'claim_made' | 'opinion_expressed' | 'example_used' | 'archetype_used'
+
+export interface ContentMemory {
+  id: string
+  organizationId: string
+  personaId: string
+  memoryType: ContentMemoryType
+  content: string
+  sourceDraftId: string | null
+  sourceHistoryId: string | null
+  createdAt: string
+}
+
+export type ContentOpportunityType =
+  | 'recent_work' | 'production_lesson' | 'mistake_or_failure'
+  | 'technical_decision' | 'changed_opinion' | 'useful_explanation'
+  | 'industry_development' | 'contrarian_position' | 'behind_the_build'
+  | 'customer_lesson' | 'career_lesson' | 'experiment' | 'unexpected_result'
+  | 'timely_discussion'
+
+export interface ContentOpportunityQualification {
+  novelty?: number
+  evidenceStrength?: number
+  personalSpecificity?: number
+  relevance?: number
+  audienceFit?: number
+  scrollStopPotential?: number
+}
+
+export interface ContentOpportunity {
+  id: string
+  organizationId: string
+  personaId: string
+  opportunityType: ContentOpportunityType
+  title: string
+  description: string
+  trigger: string
+  qualification: ContentOpportunityQualification
+  qualified: boolean
+  sourceKind: 'user_input' | 'interview' | 'research' | 'system_inferred' | 'history_pattern' | null
+  sourceReference: string | null
+  status: 'pending' | 'exploring' | 'interviewing' | 'qualifying' | 'in_forge' | 'completed' | 'dismissed'
+  createdAt: string
+  dismissedAt: string | null
+  completedAt: string | null
+}
+
+export type IdeaGenomeSource =
+  | 'personal_experience' | 'professional_expertise' | 'opinion'
+  | 'industry_observation' | 'contrarian_take' | 'lesson_learned'
+  | 'behind_the_build' | 'customer_insight' | 'experiment_result'
+
+export type IdeaGenomeArchetype =
+  | 'story_to_lesson' | 'lesson_direct' | 'contrarian_stand'
+  | 'how_to' | 'behind_the_scenes' | 'hot_take' | 'data_driven'
+  | 'question_engagement' | 'mistake_to_wins' | 'career_lesson'
+
+export interface ContentIdeaGenome {
+  id: string
+  organizationId: string
+  personaId: string
+  source: IdeaGenomeSource
+  topic: string
+  angle: string
+  archetype: IdeaGenomeArchetype
+  audience: string
+  emotion: string | null
+  value_type: 'practical' | 'emotional' | 'intellectual' | 'social' | null
+  novelty: number
+  evidenceStrength: number
+  personalSpecificity: number
+  relevance: number
+  conversationPotential: number
+  contentMemoryOverlap: string[]
+  differentiationNote: string
+  status: 'candidate' | 'qualified' | 'rejected' | 'in_forge' | 'published' | 'archived'
+  rejectionReason: string | null
+  opportunityId: string | null
+  draftId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ContentEvaluation {
+  id: string
+  draftId: string
+  originality: number
+  personalSpecificity: number
+  usefulness: number
+  credibility: number
+  evidence: number
+  clarity: number
+  storytelling: number
+  voiceMatch: number
+  stopPotential: number
+  dwellPotential: number
+  commentPotential: number
+  savePotential: number
+  sharePotential: number
+  audienceRelevance: number
+  slopScore: number
+  genericProbability: number
+  qualityNotes: Record<string, string>
+  distributionNotes: Record<string, string>
+  createdAt: string
+}
+
+export interface ContentInterviewSession {
+  id: string
+  organizationId: string
+  personaId: string
+  opportunityId: string | null
+  sessionType: 'onboarding' | 'opportunity_exploration' | 'post_qualification'
+  status: 'active' | 'completed' | 'abandoned'
+  questionsAsked: number
+  informationGain: number
+  createdAt: string
+  completedAt: string | null
+}
+
+export interface ContentInterviewAnswer {
+  id: string
+  sessionId: string
+  question: string
+  answer: string
+  informationGain: number
+  createdAt: string
 }

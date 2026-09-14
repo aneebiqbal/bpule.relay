@@ -45,15 +45,15 @@ export function NotificationFeed({ initial }: { initial: NotificationItem[] }) {
   if (items.length === 0) return null
 
   return (
-    <section className="overflow-hidden rounded-[1.25rem] border border-line/80 bg-surface-raised">
+    <section className="overflow-hidden rounded-[1.25rem] border border-line/80 bg-bg-bone-raised">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-line/60 bg-paper-tint/30 px-5 py-3">
+      <div className="flex items-center gap-3 border-b border-line/60 bg-bone/30 px-5 py-3">
         <div className="relative">
-          <Bell className="size-4 text-gold" aria-hidden="true" />
-          <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-gold gentle-pulse" />
+          <Bell className="size-4 text-orange" aria-hidden="true" />
+          <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-orange gentle-pulse" />
         </div>
         <h2 className="text-sm font-medium text-ink">Since you last checked</h2>
-        <span className="ml-auto rounded-full bg-gold/10 px-2 py-0.5 text-mono-medium text-[10px] font-medium text-gold">
+        <span className="ml-auto rounded-full bg-orange/10 px-2 py-0.5 text-mono-medium text-[10px] font-medium text-orange">
           {items.length}
         </span>
       </div>
@@ -64,7 +64,7 @@ export function NotificationFeed({ initial }: { initial: NotificationItem[] }) {
           <li
             key={n.id}
             className={cn(
-              'reveal-up flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-paper-tint/30',
+              'reveal-up flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-bone/30',
               dismissing === n.id && 'opacity-40',
             )}
             style={{ animationDelay: `${i * 0.05}s` }}
@@ -74,8 +74,8 @@ export function NotificationFeed({ initial }: { initial: NotificationItem[] }) {
               className={cn(
                 'flex size-8 shrink-0 items-center justify-center rounded-xl',
                 n.type === 'reply'
-                  ? 'bg-status-send/8 text-status-send'
-                  : 'bg-status-research/8 text-status-research',
+                  ? 'bg-status-success/8 text-status-success'
+                  : 'bg-status-warning/8 text-status-warning',
               )}
             >
               <MessageCircle className="size-3.5" aria-hidden="true" />
@@ -86,7 +86,7 @@ export function NotificationFeed({ initial }: { initial: NotificationItem[] }) {
               {n.leadId ? (
                 <Link
                   href={`/leads/${n.leadId}`}
-                  className="text-sm text-ink transition-colors hover:text-gold"
+                  className="text-sm text-ink transition-colors hover:text-orange"
                 >
                   {n.type === 'reply'
                     ? `${n.company ?? 'A lead'} replied`
@@ -105,7 +105,7 @@ export function NotificationFeed({ initial }: { initial: NotificationItem[] }) {
               type="button"
               onClick={() => void dismiss(n.id)}
               disabled={dismissing === n.id}
-              className="flex size-7 shrink-0 items-center justify-center rounded-lg text-slate transition-all duration-200 hover:bg-paper-tint hover:text-ink disabled:opacity-50"
+              className="flex size-7 shrink-0 items-center justify-center rounded-lg text-slate transition-all duration-200 hover:bg-bone hover:text-ink disabled:opacity-50"
               title="Mark as read"
             >
               <X className="size-3.5" aria-hidden="true" />

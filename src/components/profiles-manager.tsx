@@ -351,7 +351,7 @@ export function ProfilesManager({ initialProfiles }: { initialProfiles: Profile[
               Cancel
             </Button>
             <Button
-              variant="gold"
+              variant="orange"
               onClick={() => void saveProfile()}
               disabled={saving === 'profile'}
             >
@@ -513,7 +513,7 @@ function ProfileCard({
           <Button
             variant="outline"
             size="sm"
-            className="text-status-no hover:border-status-no/40 hover:bg-status-no/5"
+            className="text-status-danger hover:border-status-danger/40 hover:bg-status-danger/5"
             onClick={onDelete}
             disabled={deleting}
           >
@@ -523,10 +523,10 @@ function ProfileCard({
       </div>
 
       {expanded ? (
-        <div className="border-t border-line bg-paper-tint/20 p-4">
+        <div className="border-t border-line bg-bone/20 p-4">
           <div className="flex items-center justify-between">
             <h3 className="text-heading text-sm text-ink">Proof items</h3>
-            <Button variant="gold" size="sm" onClick={onProofStart}>
+            <Button variant="orange" size="sm" onClick={onProofStart}>
               <Plus className="mr-1 size-3" aria-hidden="true" />
               Add proof
             </Button>
@@ -558,7 +558,7 @@ function ProfileCard({
                     </div>
                     <button
                       onClick={() => onDeleteProof(item.id)}
-                      className="flex size-7 shrink-0 items-center justify-center rounded-lg text-slate transition-colors hover:bg-status-no/10 hover:text-status-no"
+                      className="flex size-7 shrink-0 items-center justify-center rounded-lg text-slate transition-colors hover:bg-status-danger/10 hover:text-status-danger"
                       aria-label="Remove proof"
                     >
                       <Trash2 className="size-3" />
@@ -569,7 +569,7 @@ function ProfileCard({
                       {item.tags.map((t) => (
                         <span
                           key={t}
-                          className="rounded-md bg-paper-tint px-2 py-0.5 font-mono text-[11px] text-ink"
+                          className="rounded-md bg-bone px-2 py-0.5 font-mono text-[11px] text-ink"
                         >
                           {t}
                         </span>
@@ -654,7 +654,7 @@ function ProofForm({
             />
           </div>
         ) : (
-          <div className="flex items-center gap-2 rounded-xl bg-paper-tint/60 px-3 py-2.5 text-xs text-slate sm:col-span-2">
+          <div className="flex items-center gap-2 rounded-xl bg-bone/60 px-3 py-2.5 text-xs text-slate sm:col-span-2">
             <Lock className="size-3 shrink-0" />
             Client name field stays locked until permission is confirmed.
           </div>
@@ -688,7 +688,7 @@ function ProofForm({
               {draft.tags.map((t) => (
                 <span
                   key={t}
-                  className="flex items-center gap-1 rounded-md bg-paper-tint px-2 py-0.5 font-mono text-xs text-ink"
+                  className="flex items-center gap-1 rounded-md bg-bone px-2 py-0.5 font-mono text-xs text-ink"
                 >
                   {t}
                   <button
@@ -712,7 +712,7 @@ function ProofForm({
           Cancel
         </Button>
         <Button
-          variant="gold"
+          variant="orange"
           onClick={onSave}
           disabled={saving || !draft.projectSummary.trim()}
         >

@@ -15,11 +15,11 @@ function Input({
       data-slot="input"
       aria-invalid={error ? true : ariaInvalid}
       className={cn(
-        "h-9 w-full min-w-0 rounded-xl border border-line bg-paper-raised px-3 py-2 text-sm transition-all duration-200 outline-none",
-        "placeholder:text-slate/60",
-        "focus-visible:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/20",
-        "disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-paper-tint disabled:opacity-50",
-        "aria-invalid:border-status-no/40 aria-invalid:ring-2 aria-invalid:ring-status-no/20",
+        "h-8 w-full min-w-0 rounded-md border border-line bg-bone-raised px-2.5 py-1.5 text-[13px] transition-all duration-150 outline-none",
+        "placeholder:text-stone/50",
+        "focus-visible:border-orange/40 focus-visible:ring-2 focus-visible:ring-orange/15",
+        "disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-bone disabled:opacity-50",
+        "aria-invalid:border-status-danger/40 aria-invalid:ring-2 aria-invalid:ring-status-danger/15",
         className
       )}
       {...props}

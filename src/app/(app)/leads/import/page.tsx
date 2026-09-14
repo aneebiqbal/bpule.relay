@@ -61,7 +61,7 @@ export default function ImportPage() {
         </Alert>
       ) : null}
 
-      <section className="reveal-up stagger-1 rounded-2xl border border-line/60 bg-surface-raised p-6">
+      <section className="reveal-up stagger-1 rounded-2xl border border-line/60 bg-bg-bone-raised p-6">
         <Textarea
           value={csv}
           onChange={(e) => setCsv(e.target.value)}
@@ -73,7 +73,7 @@ export default function ImportPage() {
           <span className="text-xs text-slate">
             Required: company, signalType (1-7), signalEvidence.
           </span>
-          <Button variant="gold" onClick={() => void upload()} loading={loading}>
+          <Button variant="orange" onClick={() => void upload()} loading={loading}>
             <FileUp className="mr-1.5 size-3.5" />
             {loading ? 'Importing...' : 'Import rows'}
           </Button>
@@ -81,7 +81,7 @@ export default function ImportPage() {
       </section>
 
       {result ? (
-        <section className="reveal-up stagger-2 rounded-2xl border border-line/60 bg-surface-raised p-6">
+        <section className="reveal-up stagger-2 rounded-2xl border border-line/60 bg-bg-bone-raised p-6">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <ImportStat label="Imported" value={result.imported} icon={<CheckCircle2 className="size-4" />} tone="good" />
             <ImportStat label="Duplicates" value={result.duplicates} icon={<AlertTriangle className="size-4" />} tone="warn" />
@@ -101,17 +101,17 @@ export default function ImportPage() {
                 </thead>
                 <tbody>
                   {result.results.map((r) => (
-                    <tr key={r.row} className="border-b border-line/30 transition-colors hover:bg-paper-tint/20">
+                    <tr key={r.row} className="border-b border-line/30 transition-colors hover:bg-bone/20">
                       <td className="py-2.5 pr-4 text-mono-medium text-xs text-ink">{r.row}</td>
                       <td className="py-2.5 pr-4">
                         <span
                           className={cn(
                             'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium',
                             r.status === 'imported'
-                              ? 'bg-status-send/8 text-status-send'
+                              ? 'bg-status-success/8 text-status-success'
                               : r.status === 'duplicate'
-                                ? 'bg-status-research/8 text-status-research'
-                                : 'bg-status-no/8 text-status-no',
+                                ? 'bg-status-warning/8 text-status-warning'
+                                : 'bg-status-danger/8 text-status-danger',
                           )}
                         >
                           {r.status === 'imported' ? <CheckCircle2 className="size-3" /> : null}
@@ -137,14 +137,14 @@ export default function ImportPage() {
 
 function ImportStat({ label, value, icon, tone = 'default' }: { label: string; value: number; icon?: React.ReactNode; tone?: 'good' | 'warn' | 'bad' | 'default' }) {
   const valueColor = {
-    good: 'text-status-send',
-    warn: 'text-status-research',
-    bad: 'text-status-no',
+    good: 'text-status-success',
+    warn: 'text-status-warning',
+    bad: 'text-status-danger',
     default: 'text-ink',
   }[tone]
 
   return (
-    <div className="rounded-xl bg-paper-tint/40 px-4 py-3">
+    <div className="rounded-xl bg-bone/40 px-4 py-3">
       <div className="flex items-center gap-1.5">
         {icon && <span className={cn('opacity-60', valueColor)}>{icon}</span>}
         <span className="text-label">{label}</span>

@@ -9,9 +9,9 @@ import type { BestTimeResult } from '@/lib/content/best-time'
  */
 export function BestTimeCard({ result }: { result: BestTimeResult }) {
   return (
-    <section className="rounded-2xl border border-line/60 bg-surface-raised p-5">
+    <section className="rounded-2xl border border-line/60 bg-bg-bone-raised p-5">
       <div className="flex items-center gap-2">
-        <Clock className="size-4 text-studio" aria-hidden="true" />
+        <Clock className="size-4 text-cobalt" aria-hidden="true" />
         <h2 className="text-heading text-base text-ink">Your best time to post</h2>
       </div>
 

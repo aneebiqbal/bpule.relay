@@ -57,7 +57,7 @@ export function Dialog({
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
         className={cn(
-          "relative w-full max-w-md rounded-2xl bg-paper-raised/95 p-6 shadow-xl ring-1 ring-line/60 outline-none scale-in",
+          "relative w-full max-w-md rounded-2xl bg-bone-raised/95 p-6 shadow-xl ring-1 ring-line/60 outline-none scale-in",
           className,
         )}
         style={{ backdropFilter: "blur(20px)" }}
@@ -73,7 +73,7 @@ export function Dialog({
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="rounded-lg p-1.5 text-slate transition-colors hover:bg-paper-tint hover:text-ink"
+            className="rounded-lg p-1.5 text-slate transition-colors hover:bg-bone hover:text-ink"
           >
             <X className="size-4" />
           </button>

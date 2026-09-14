@@ -17,17 +17,17 @@ export function IdentityChip({
   className?: string
 }) {
   return (
-    <span className={cn("flex items-center gap-2.5", className)}>
+    <span className={cn("flex items-center gap-2", className)}>
       <span
         aria-hidden="true"
-        className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold/15 to-gold/5 text-[11px] font-semibold text-gold ring-1 ring-gold/10"
+        className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange/10 text-[10px] font-semibold text-orange"
       >
         {initials(name)}
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-sm font-medium text-ink">{name}</span>
+        <span className="block truncate text-[13px] font-medium text-ink">{name}</span>
         {subtitle ? (
-          <span className="block truncate text-xs text-slate">{subtitle}</span>
+          <span className="block truncate text-[11px] text-graphite">{subtitle}</span>
         ) : null}
       </span>
     </span>

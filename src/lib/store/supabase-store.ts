@@ -8,6 +8,27 @@ import type {
   ContentPillar,
   ContentPlatform,
   ContentPostStructure,
+  ContentProfile,
+  ContentProfileExpertise,
+  ContentProfileTechnology,
+  ContentProfileGoal,
+  ContentProfileTopic,
+  ContentProfileOpinion,
+  ContentProfileProject,
+  ContentProfileExperience,
+  ContentProfileWritingCharacteristics,
+  ContentProfileStorytellingTendency,
+  ContentMemory,
+  ContentMemoryType,
+  ContentOpportunity,
+  ContentOpportunityType,
+  ContentOpportunityQualification,
+  ContentIdeaGenome,
+  IdeaGenomeSource,
+  IdeaGenomeArchetype,
+  ContentEvaluation,
+  ContentInterviewSession,
+  ContentInterviewAnswer,
   CsvImport,
   Fact,
   OrganizationRulebook,
@@ -2293,6 +2314,427 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
     return (data ?? []).map(mapContentDraftFeedback)
   }
+
+  // ── content profiles (Content DNA) ──
+
+  async createContentProfile(input: {
+    personaId: string
+    role?: string
+    seniority?: string
+    industries?: string[]
+    audience?: string
+  }): Promise<ContentProfile> {
+    const { data, error } = await this.client
+      .from('content_profiles')
+      .insert({
+        organization_id: this.orgId,
+        persona_id: input.personaId,
+        role: input.role ?? '',
+        seniority: input.seniority ?? '',
+        industries: input.industries ?? [],
+        audience: input.audience ?? '',
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+
+    await this.client
+      .from('content_personas')
+      .update({ content_profile_id: data.id })
+      .eq('id', input.personaId)
+
+    return mapContentProfile(data)
+  }
+
+  async getContentProfile(profileId: string): Promise<ContentProfile | null> {
+    const { data, error } = await this.client
+      .from('content_profiles')
+      .select('*')
+      .eq('id', profileId)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return mapContentProfile(data)
+  }
+
+  async getContentProfileByPersona(personaId: string): Promise<ContentProfile | null> {
+    const { data, error } = await this.client
+      .from('content_profiles')
+      .select('*')
+      .eq('persona_id', personaId)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return mapContentProfile(data)
+  }
+
+  async updateContentProfile(profileId: string, patches: {
+    role?: string
+    seniority?: string
+    industries?: string[]
+    audience?: string
+    expertise?: ContentProfileExpertise[]
+    technologies?: ContentProfileTechnology[]
+    goals?: ContentProfileGoal[]
+    topicsCared?: ContentProfileTopic[]
+    topicsAvoided?: ContentProfileTopic[]
+    opinions?: ContentProfileOpinion[]
+    projects?: ContentProfileProject[]
+    experiences?: ContentProfileExperience[]
+    writingCharacteristics?: ContentProfileWritingCharacteristics
+    storytellingTendencies?: ContentProfileStorytellingTendency[]
+    confidence?: number
+  }): Promise<ContentProfile> {
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (patches.role !== undefined) patch.role = patches.role
+    if (patches.seniority !== undefined) patch.seniority = patches.seniority
+    if (patches.industries !== undefined) patch.industries = patches.industries
+    if (patches.audience !== undefined) patch.audience = patches.audience
+    if (patches.expertise !== undefined) patch.expertise = JSON.stringify(patches.expertise)
+    if (patches.technologies !== undefined) patch.technologies = JSON.stringify(patches.technologies)
+    if (patches.goals !== undefined) patch.goals = JSON.stringify(patches.goals)
+    if (patches.topicsCared !== undefined) patch.topics_cared = JSON.stringify(patches.topicsCared)
+    if (patches.topicsAvoided !== undefined) patch.topics_avoided = JSON.stringify(patches.topicsAvoided)
+    if (patches.opinions !== undefined) patch.opinions = JSON.stringify(patches.opinions)
+    if (patches.projects !== undefined) patch.projects = JSON.stringify(patches.projects)
+    if (patches.experiences !== undefined) patch.experiences = JSON.stringify(patches.experiences)
+    if (patches.writingCharacteristics !== undefined) patch.writing_characteristics = JSON.stringify(patches.writingCharacteristics)
+    if (patches.storytellingTendencies !== undefined) patch.storytelling_tendencies = JSON.stringify(patches.storytellingTendencies)
+    if (patches.confidence !== undefined) patch.confidence = patches.confidence
+
+    const { data, error } = await this.client
+      .from('content_profiles')
+      .update(patch)
+      .eq('id', profileId)
+      .select('*')
+      .single()
+    if (error) throw error
+
+    const profile = mapContentProfile(data)
+    if (patches.confidence === undefined) {
+      await this.client
+        .from('content_profiles')
+        .update({ last_learned_at: new Date().toISOString() })
+        .eq('id', profileId)
+      profile.lastLearnedAt = new Date().toISOString()
+    }
+    return profile
+  }
+
+  async deleteContentProfile(profileId: string): Promise<void> {
+    const { error } = await this.client
+      .from('content_profiles')
+      .delete()
+      .eq('id', profileId)
+    if (error) throw error
+  }
+
+  // ── content memories ──
+
+  async createContentMemory(input: {
+    personaId: string
+    memoryType: ContentMemoryType
+    content: string
+    sourceDraftId?: string | null
+    sourceHistoryId?: string | null
+  }): Promise<ContentMemory> {
+    const { data, error } = await this.client
+      .from('content_memories')
+      .insert({
+        organization_id: this.orgId,
+        persona_id: input.personaId,
+        memory_type: input.memoryType,
+        content: input.content,
+        source_draft_id: input.sourceDraftId ?? null,
+        source_history_id: input.sourceHistoryId ?? null,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapContentMemory(data)
+  }
+
+  async listContentMemories(personaId: string, opts?: { memoryType?: ContentMemoryType; limit?: number }): Promise<ContentMemory[]> {
+    let query = this.client.from('content_memories').select('*').eq('persona_id', personaId).order('created_at', { ascending: false })
+    if (opts?.memoryType) query = query.eq('memory_type', opts.memoryType)
+    if (opts?.limit) query = query.limit(opts.limit)
+    const { data, error } = await query
+    if (error) throw error
+    return (data ?? []).map(mapContentMemory)
+  }
+
+  async deleteContentMemory(memoryId: string): Promise<void> {
+    await this.client.from('content_memories').delete().eq('id', memoryId)
+  }
+
+  // ── content opportunities ──
+
+  async createContentOpportunity(input: {
+    personaId: string
+    opportunityType: ContentOpportunityType
+    title: string
+    description: string
+    trigger: string
+    sourceKind?: 'user_input' | 'interview' | 'research' | 'system_inferred' | 'history_pattern' | null
+    sourceReference?: string | null
+  }): Promise<ContentOpportunity> {
+    const { data, error } = await this.client
+      .from('content_opportunities')
+      .insert({
+        organization_id: this.orgId,
+        persona_id: input.personaId,
+        opportunity_type: input.opportunityType,
+        title: input.title,
+        description: input.description,
+        trigger: input.trigger,
+        source_kind: input.sourceKind ?? null,
+        source_reference: input.sourceReference ?? null,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapContentOpportunity(data)
+  }
+
+  async listContentOpportunities(personaId: string, opts?: { status?: string; limit?: number }): Promise<ContentOpportunity[]> {
+    let query = this.client.from('content_opportunities').select('*').eq('persona_id', personaId).order('created_at', { ascending: false })
+    if (opts?.status) query = query.eq('status', opts.status)
+    if (opts?.limit) query = query.limit(opts.limit)
+    const { data, error } = await query
+    if (error) throw error
+    return (data ?? []).map(mapContentOpportunity)
+  }
+
+  async getContentOpportunity(opportunityId: string): Promise<ContentOpportunity | null> {
+    const { data, error } = await this.client.from('content_opportunities').select('*').eq('id', opportunityId).maybeSingle()
+    if (error) throw error
+    return data ? mapContentOpportunity(data) : null
+  }
+
+  async updateContentOpportunity(opportunityId: string, patches: {
+    qualification?: ContentOpportunityQualification
+    qualified?: boolean
+    status?: string
+    dismissedAt?: string | null
+    completedAt?: string | null
+  }): Promise<ContentOpportunity> {
+    const patch: Record<string, unknown> = {}
+    if (patches.qualification !== undefined) patch.qualification = JSON.stringify(patches.qualification)
+    if (patches.qualified !== undefined) patch.qualified = patches.qualified
+    if (patches.status !== undefined) patch.status = patches.status
+    if (patches.dismissedAt !== undefined) patch.dismissed_at = patches.dismissedAt
+    if (patches.completedAt !== undefined) patch.completed_at = patches.completedAt
+    const { data, error } = await this.client.from('content_opportunities').update(patch).eq('id', opportunityId).select('*').single()
+    if (error) throw error
+    return mapContentOpportunity(data)
+  }
+
+  async deleteContentOpportunity(opportunityId: string): Promise<void> {
+    await this.client.from('content_opportunities').delete().eq('id', opportunityId)
+  }
+
+  // ── idea genomes ──
+
+  async createIdeaGenome(input: {
+    personaId: string
+    source: IdeaGenomeSource
+    topic: string
+    angle: string
+    archetype: IdeaGenomeArchetype
+    audience: string
+    emotion?: string | null
+    valueType?: 'practical' | 'emotional' | 'intellectual' | 'social' | null
+    opportunityId?: string | null
+  }): Promise<ContentIdeaGenome> {
+    const { data, error } = await this.client
+      .from('content_idea_genomes')
+      .insert({
+        organization_id: this.orgId,
+        persona_id: input.personaId,
+        source: input.source,
+        topic: input.topic,
+        angle: input.angle,
+        archetype: input.archetype,
+        audience: input.audience,
+        emotion: input.emotion ?? null,
+        value_type: input.valueType ?? null,
+        opportunity_id: input.opportunityId ?? null,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapContentIdeaGenome(data)
+  }
+
+  async getIdeaGenome(genomeId: string): Promise<ContentIdeaGenome | null> {
+    const { data, error } = await this.client.from('content_idea_genomes').select('*').eq('id', genomeId).maybeSingle()
+    if (error) throw error
+    return data ? mapContentIdeaGenome(data) : null
+  }
+
+  async updateIdeaGenome(genomeId: string, patches: {
+    novelty?: number
+    evidenceStrength?: number
+    personalSpecificity?: number
+    relevance?: number
+    conversationPotential?: number
+    contentMemoryOverlap?: string[]
+    differentiationNote?: string
+    status?: string
+    rejectionReason?: string | null
+    draftId?: string | null
+  }): Promise<ContentIdeaGenome> {
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (patches.novelty !== undefined) patch.novelty = patches.novelty
+    if (patches.evidenceStrength !== undefined) patch.evidence_strength = patches.evidenceStrength
+    if (patches.personalSpecificity !== undefined) patch.personal_specificity = patches.personalSpecificity
+    if (patches.relevance !== undefined) patch.relevance = patches.relevance
+    if (patches.conversationPotential !== undefined) patch.conversation_potential = patches.conversationPotential
+    if (patches.contentMemoryOverlap !== undefined) patch.content_memory_overlap = JSON.stringify(patches.contentMemoryOverlap)
+    if (patches.differentiationNote !== undefined) patch.differentiation_note = patches.differentiationNote
+    if (patches.status !== undefined) patch.status = patches.status
+    if (patches.rejectionReason !== undefined) patch.rejection_reason = patches.rejectionReason
+    if (patches.draftId !== undefined) patch.draft_id = patches.draftId
+    const { data, error } = await this.client.from('content_idea_genomes').update(patch).eq('id', genomeId).select('*').single()
+    if (error) throw error
+    return mapContentIdeaGenome(data)
+  }
+
+  // ── evaluations ──
+
+  async createEvaluation(input: {
+    draftId: string
+    originality?: number
+    personalSpecificity?: number
+    usefulness?: number
+    credibility?: number
+    evidence?: number
+    clarity?: number
+    storytelling?: number
+    voiceMatch?: number
+    stopPotential?: number
+    dwellPotential?: number
+    commentPotential?: number
+    savePotential?: number
+    sharePotential?: number
+    audienceRelevance?: number
+    slopScore?: number
+    genericProbability?: number
+    qualityNotes?: Record<string, string>
+    distributionNotes?: Record<string, string>
+  }): Promise<ContentEvaluation> {
+    const { data, error } = await this.client
+      .from('content_evaluations')
+      .insert({
+        draft_id: input.draftId,
+        originality: input.originality ?? 0,
+        personal_specificity: input.personalSpecificity ?? 0,
+        usefulness: input.usefulness ?? 0,
+        credibility: input.credibility ?? 0,
+        evidence: input.evidence ?? 0,
+        clarity: input.clarity ?? 0,
+        storytelling: input.storytelling ?? 0,
+        voice_match: input.voiceMatch ?? 0,
+        stop_potential: input.stopPotential ?? 0,
+        dwell_potential: input.dwellPotential ?? 0,
+        comment_potential: input.commentPotential ?? 0,
+        save_potential: input.savePotential ?? 0,
+        share_potential: input.sharePotential ?? 0,
+        audience_relevance: input.audienceRelevance ?? 0,
+        slop_score: input.slopScore ?? 0,
+        generic_probability: input.genericProbability ?? 0,
+        quality_notes: JSON.stringify(input.qualityNotes ?? {}),
+        distribution_notes: JSON.stringify(input.distributionNotes ?? {}),
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapContentEvaluation(data)
+  }
+
+  async getEvaluation(evaluationId: string): Promise<ContentEvaluation | null> {
+    const { data, error } = await this.client.from('content_evaluations').select('*').eq('id', evaluationId).maybeSingle()
+    if (error) throw error
+    return data ? mapContentEvaluation(data) : null
+  }
+
+  // ── interview sessions ──
+
+  async createInterviewSession(input: {
+    personaId: string
+    opportunityId?: string | null
+    sessionType: 'onboarding' | 'opportunity_exploration' | 'post_qualification'
+  }): Promise<ContentInterviewSession> {
+    const { data, error } = await this.client
+      .from('content_interview_sessions')
+      .insert({
+        organization_id: this.orgId,
+        persona_id: input.personaId,
+        opportunity_id: input.opportunityId ?? null,
+        session_type: input.sessionType,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapContentInterviewSession(data)
+  }
+
+  async getInterviewSession(sessionId: string): Promise<ContentInterviewSession | null> {
+    const { data, error } = await this.client.from('content_interview_sessions').select('*').eq('id', sessionId).maybeSingle()
+    if (error) throw error
+    return data ? mapContentInterviewSession(data) : null
+  }
+
+  async listInterviewSessions(personaId: string, opts?: { status?: string; limit?: number }): Promise<ContentInterviewSession[]> {
+    let query = this.client.from('content_interview_sessions').select('*').eq('persona_id', personaId).order('created_at', { ascending: false })
+    if (opts?.status) query = query.eq('status', opts.status)
+    if (opts?.limit) query = query.limit(opts.limit)
+    const { data, error } = await query
+    if (error) throw error
+    return (data ?? []).map(mapContentInterviewSession)
+  }
+
+  async updateInterviewSession(sessionId: string, patches: {
+    status?: string
+    questionsAsked?: number
+    informationGain?: number
+    completedAt?: string | null
+  }): Promise<ContentInterviewSession> {
+    const patch: Record<string, unknown> = {}
+    if (patches.status !== undefined) patch.status = patches.status
+    if (patches.questionsAsked !== undefined) patch.questions_asked = patches.questionsAsked
+    if (patches.informationGain !== undefined) patch.information_gain = patches.informationGain
+    if (patches.completedAt !== undefined) patch.completed_at = patches.completedAt
+    const { data, error } = await this.client.from('content_interview_sessions').update(patch).eq('id', sessionId).select('*').single()
+    if (error) throw error
+    return mapContentInterviewSession(data)
+  }
+
+  async createInterviewAnswer(input: {
+    sessionId: string
+    question: string
+    answer: string
+    informationGain?: number
+  }): Promise<ContentInterviewAnswer> {
+    const { data, error } = await this.client
+      .from('content_interview_answers')
+      .insert({
+        session_id: input.sessionId,
+        question: input.question,
+        answer: input.answer,
+        information_gain: input.informationGain ?? 0,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapContentInterviewAnswer(data)
+  }
+
+  async listInterviewAnswers(sessionId: string): Promise<ContentInterviewAnswer[]> {
+    const { data, error } = await this.client.from('content_interview_answers').select('*').eq('session_id', sessionId).order('created_at', { ascending: true })
+    if (error) throw error
+    return (data ?? []).map(mapContentInterviewAnswer)
+  }
 }
 
 function mapUpworkJob(r: Row): UpworkJob {
@@ -2348,6 +2790,7 @@ function mapContentPersona(r: Record<string, unknown>): ContentPersona {
     humorStyle: (r.humor_style as string) ?? '',
     valuesAndOpinions: normalizeStringArray(r.values_and_opinions),
     admiredExamples: normalizeStringArray(r.admired_examples),
+    contentProfileId: (r.content_profile_id as string) ?? null,
     createdAt: r.created_at as string,
   }
 }
@@ -2477,6 +2920,171 @@ function mapContentDraftFeedback(r: Record<string, unknown>): ContentDraftFeedba
     reaction: (r.reaction as ContentDraftFeedback['reaction']) ?? 'not_for_me',
     edited: Boolean(r.edited),
     editSignals: normalizeStringArray(r.edit_signals),
+    createdAt: r.created_at as string,
+  }
+}
+
+function parseJsonArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : [] } catch { return [] }
+  }
+  return []
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) return value as Record<string, unknown>
+  if (typeof value === 'string') {
+    try { const parsed = JSON.parse(value); return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed : {} } catch { return {} }
+  }
+  return {}
+}
+
+function mapContentProfile(r: Record<string, unknown>): ContentProfile {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    personaId: r.persona_id as string,
+    role: (r.role as string) ?? '',
+    seniority: (r.seniority as string) ?? '',
+    industries: normalizeStringArray(r.industries),
+    audience: (r.audience as string) ?? '',
+    expertise: parseJsonArray(r.expertise) as ContentProfile['expertise'],
+    technologies: parseJsonArray(r.technologies) as ContentProfile['technologies'],
+    goals: parseJsonArray(r.goals) as ContentProfile['goals'],
+    topicsCared: parseJsonArray(r.topics_cared) as ContentProfile['topicsCared'],
+    topicsAvoided: parseJsonArray(r.topics_avoided) as ContentProfile['topicsAvoided'],
+    opinions: parseJsonArray(r.opinions) as ContentProfile['opinions'],
+    projects: parseJsonArray(r.projects) as ContentProfile['projects'],
+    experiences: parseJsonArray(r.experiences) as ContentProfile['experiences'],
+    writingCharacteristics: parseJsonObject(r.writing_characteristics) as ContentProfile['writingCharacteristics'],
+    storytellingTendencies: parseJsonArray(r.storytelling_tendencies) as ContentProfile['storytellingTendencies'],
+    confidence: (r.confidence as number) ?? 0,
+    lastLearnedAt: (r.last_learned_at as string) ?? null,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  }
+}
+
+function mapContentMemory(r: Record<string, unknown>): ContentMemory {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    personaId: r.persona_id as string,
+    memoryType: r.memory_type as ContentMemoryType,
+    content: r.content as string,
+    sourceDraftId: (r.source_draft_id as string) ?? null,
+    sourceHistoryId: (r.source_history_id as string) ?? null,
+    createdAt: r.created_at as string,
+  }
+}
+
+function mapContentOpportunity(r: Record<string, unknown>): ContentOpportunity {
+  const qual = parseJsonObject(r.qualification) as Record<string, unknown>
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    personaId: r.persona_id as string,
+    opportunityType: r.opportunity_type as ContentOpportunityType,
+    title: r.title as string,
+    description: r.description as string,
+    trigger: r.trigger as string,
+    qualification: {
+      novelty: (qual.novelty as number) ?? undefined,
+      evidenceStrength: (qual.evidence_strength as number) ?? undefined,
+      personalSpecificity: (qual.personal_specificity as number) ?? undefined,
+      relevance: (qual.relevance as number) ?? undefined,
+      audienceFit: (qual.audience_fit as number) ?? undefined,
+      scrollStopPotential: (qual.scroll_stop_potential as number) ?? undefined,
+    },
+    qualified: Boolean(r.qualified),
+    sourceKind: (r.source_kind as ContentOpportunity['sourceKind']) ?? null,
+    sourceReference: (r.source_reference as string) ?? null,
+    status: (r.status as ContentOpportunity['status']) ?? 'pending',
+    createdAt: r.created_at as string,
+    dismissedAt: (r.dismissed_at as string) ?? null,
+    completedAt: (r.completed_at as string) ?? null,
+  }
+}
+
+function mapContentIdeaGenome(r: Record<string, unknown>): ContentIdeaGenome {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    personaId: r.persona_id as string,
+    source: r.source as IdeaGenomeSource,
+    topic: r.topic as string,
+    angle: r.angle as string,
+    archetype: r.archetype as IdeaGenomeArchetype,
+    audience: r.audience as string,
+    emotion: (r.emotion as string) ?? null,
+    value_type: (r.value_type as ContentIdeaGenome['value_type']) ?? null,
+    novelty: (r.novelty as number) ?? 0,
+    evidenceStrength: (r.evidence_strength as number) ?? 0,
+    personalSpecificity: (r.personal_specificity as number) ?? 0,
+    relevance: (r.relevance as number) ?? 0,
+    conversationPotential: (r.conversation_potential as number) ?? 0,
+    contentMemoryOverlap: parseJsonArray(r.content_memory_overlap) as string[],
+    differentiationNote: (r.differentiation_note as string) ?? '',
+    status: (r.status as ContentIdeaGenome['status']) ?? 'candidate',
+    rejectionReason: (r.rejection_reason as string) ?? null,
+    opportunityId: (r.opportunity_id as string) ?? null,
+    draftId: (r.draft_id as string) ?? null,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  }
+}
+
+function mapContentEvaluation(r: Record<string, unknown>): ContentEvaluation {
+  const qNotes = parseJsonObject(r.quality_notes) as Record<string, string>
+  const dNotes = parseJsonObject(r.distribution_notes) as Record<string, string>
+  return {
+    id: r.id as string,
+    draftId: r.draft_id as string,
+    originality: (r.originality as number) ?? 0,
+    personalSpecificity: (r.personal_specificity as number) ?? 0,
+    usefulness: (r.usefulness as number) ?? 0,
+    credibility: (r.credibility as number) ?? 0,
+    evidence: (r.evidence as number) ?? 0,
+    clarity: (r.clarity as number) ?? 0,
+    storytelling: (r.storytelling as number) ?? 0,
+    voiceMatch: (r.voice_match as number) ?? 0,
+    stopPotential: (r.stop_potential as number) ?? 0,
+    dwellPotential: (r.dwell_potential as number) ?? 0,
+    commentPotential: (r.comment_potential as number) ?? 0,
+    savePotential: (r.save_potential as number) ?? 0,
+    sharePotential: (r.share_potential as number) ?? 0,
+    audienceRelevance: (r.audience_relevance as number) ?? 0,
+    slopScore: (r.slop_score as number) ?? 0,
+    genericProbability: (r.generic_probability as number) ?? 0,
+    qualityNotes: qNotes,
+    distributionNotes: dNotes,
+    createdAt: r.created_at as string,
+  }
+}
+
+function mapContentInterviewSession(r: Record<string, unknown>): ContentInterviewSession {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    personaId: r.persona_id as string,
+    opportunityId: (r.opportunity_id as string) ?? null,
+    sessionType: r.session_type as ContentInterviewSession['sessionType'],
+    status: (r.status as ContentInterviewSession['status']) ?? 'active',
+    questionsAsked: (r.questions_asked as number) ?? 0,
+    informationGain: (r.information_gain as number) ?? 0,
+    createdAt: r.created_at as string,
+    completedAt: (r.completed_at as string) ?? null,
+  }
+}
+
+function mapContentInterviewAnswer(r: Record<string, unknown>): ContentInterviewAnswer {
+  return {
+    id: r.id as string,
+    sessionId: r.session_id as string,
+    question: r.question as string,
+    answer: r.answer as string,
+    informationGain: (r.information_gain as number) ?? 0,
     createdAt: r.created_at as string,
   }
 }

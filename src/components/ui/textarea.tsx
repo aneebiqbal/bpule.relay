@@ -12,11 +12,11 @@ function Textarea({
       data-slot="textarea"
       aria-invalid={error ? true : ariaInvalid}
       className={cn(
-        "flex field-sizing-content min-h-16 w-full rounded-xl border border-line bg-paper-raised px-3.5 py-2.5 text-sm transition-all duration-200 outline-none",
-        "placeholder:text-slate/60",
-        "focus-visible:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/20",
-        "disabled:cursor-not-allowed disabled:bg-paper-tint disabled:opacity-50",
-        "aria-invalid:border-status-no/40 aria-invalid:ring-2 aria-invalid:ring-status-no/20",
+        "flex field-sizing-content min-h-14 w-full rounded-md border border-line bg-bone-raised px-3 py-2 text-[13px] transition-all duration-150 outline-none",
+        "placeholder:text-stone/50",
+        "focus-visible:border-orange/40 focus-visible:ring-2 focus-visible:ring-orange/15",
+        "disabled:cursor-not-allowed disabled:bg-bone disabled:opacity-50",
+        "aria-invalid:border-status-danger/40 aria-invalid:ring-2 aria-invalid:ring-status-danger/15",
         className
       )}
       {...props}

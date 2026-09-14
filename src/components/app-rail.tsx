@@ -16,6 +16,7 @@ import {
   Sparkles,
   Users,
   Briefcase,
+  Command,
 } from 'lucide-react'
 import { cn } from 'cn'
 import { RelayBrand } from '@/components/brand'
@@ -24,34 +25,29 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { APP_VERSION } from '@/lib/version'
 import type { RepRole } from '@/lib/domain/types'
 
-const BASE_NAV = [
-  { href: '/', label: 'Today', icon: CalendarDays, exact: true, accent: 'gold' as const },
-  { href: '/content', label: 'Content', icon: PenLine, exact: false, accent: 'studio' as const },
-  { href: '/leads/new', label: 'New lead', icon: Plus, exact: true, accent: 'gold' as const },
-  { href: '/upwork', label: 'Upwork', icon: Briefcase, exact: false, accent: 'gold' as const },
-  { href: '/archive', label: 'Archive', icon: Search, exact: false, accent: 'gold' as const },
-  { href: '/team', label: 'Team', icon: Users, exact: false, accent: 'gold' as const },
-  { href: '/profiles', label: 'Profiles', icon: IdCard, exact: false, accent: 'gold' as const },
-  { href: '/facts', label: 'Facts', icon: BookOpen, exact: false, accent: 'gold' as const },
+const RELAY_NAV = [
+  { href: '/', label: 'Today', icon: CalendarDays, exact: true },
+  { href: '/content', label: 'Content', icon: PenLine, exact: false, studio: true },
+  { href: '/leads/new', label: 'New lead', icon: Plus, exact: true },
+  { href: '/upwork', label: 'Upwork', icon: Briefcase, exact: false },
+  { href: '/archive', label: 'Archive', icon: Search, exact: false },
 ]
 
-const SOURCER_NAV = [
-  { href: '/', label: 'Today', icon: CalendarDays, exact: true, accent: 'gold' as const },
-  { href: '/content', label: 'Content', icon: PenLine, exact: false, accent: 'studio' as const },
-  { href: '/leads/new', label: 'New lead', icon: Plus, exact: true, accent: 'gold' as const },
-  { href: '/leads/import', label: 'Import', icon: FileUp, exact: false, accent: 'gold' as const },
-  { href: '/archive', label: 'Archive', icon: Search, exact: false, accent: 'gold' as const },
-  { href: '/team', label: 'Team', icon: Users, exact: false, accent: 'gold' as const },
-  { href: '/profiles', label: 'Profiles', icon: IdCard, exact: false, accent: 'gold' as const },
-  { href: '/facts', label: 'Facts', icon: BookOpen, exact: false, accent: 'gold' as const },
+const SYSTEM_NAV = [
+  { href: '/team', label: 'Team', icon: Users, exact: false },
+  { href: '/profiles', label: 'Knowledge', icon: IdCard, exact: false },
+  { href: '/facts', label: 'Facts', icon: BookOpen, exact: false },
 ]
 
-const ADMIN_NAV_ITEM = {
+const SOURCER_EXTRA = [
+  { href: '/leads/import', label: 'Import', icon: FileUp, exact: false },
+]
+
+const ADMIN_NAV = {
   href: '/manage-profiles',
-  label: 'Manage Profiles',
+  label: 'Manage',
   icon: ShieldCheck,
   exact: false,
-  accent: 'gold' as const,
 }
 
 const ROLE_LABEL: Record<RepRole, string> = {
@@ -83,10 +79,10 @@ export function AppRail({
 
   const NAV =
     role === 'admin'
-      ? [...BASE_NAV, ADMIN_NAV_ITEM]
+      ? [...RELAY_NAV, ADMIN_NAV, ...SYSTEM_NAV]
       : role === 'sourcer'
-        ? SOURCER_NAV
-        : BASE_NAV
+        ? [...RELAY_NAV.slice(0, 2), ...SOURCER_EXTRA, ...RELAY_NAV.slice(2), ...SYSTEM_NAV]
+        : [...RELAY_NAV, ...SYSTEM_NAV]
 
   useEffect(() => {
     let cancelled = false
@@ -98,9 +94,7 @@ export function AppRail({
         }
       })
       .catch(() => {})
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [pathname])
 
   const atCeiling = sends >= dailyLimit
@@ -120,54 +114,46 @@ export function AppRail({
   }
 
   const sendPct = Math.min(sends / dailyLimit, 1)
-  const circumference = 2 * Math.PI * 13
+  const circumference = 2 * Math.PI * 11
 
   const sendCounter = (
-    <div className="flex items-center gap-2.5" title={`${sends} of ${dailyLimit} sends used today`}>
-      <div className="relative size-8">
-        <svg className="size-8 -rotate-90" viewBox="0 0 32 32">
-          <circle cx="16" cy="16" r="13" fill="none" stroke="var(--line)" strokeWidth="2.5" />
+    <div className="flex items-center gap-2" title={`${sends} of ${dailyLimit} sends used today`}>
+      <div className="relative size-7">
+        <svg className="size-7 -rotate-90" viewBox="0 0 28 28">
+          <circle cx="14" cy="14" r="11" fill="none" stroke="var(--line)" strokeWidth="2" />
           <circle
-            cx="16"
-            cy="16"
-            r="13"
+            cx="14"
+            cy="14"
+            r="11"
             fill="none"
-            stroke={atCeiling ? 'var(--status-research)' : 'var(--gold)'}
-            strokeWidth="2.5"
+            stroke={atCeiling ? 'var(--status-warning)' : 'var(--orange)'}
+            strokeWidth="2"
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={circumference * (1 - sendPct)}
-            className="transition-all duration-700 ease-out"
+            className="transition-all duration-500 ease-out"
           />
         </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-mono-medium text-[8px] font-medium text-ink">
+        <span className="absolute inset-0 flex items-center justify-center text-mono-medium text-[7px] font-medium text-ink">
           {sends}
         </span>
       </div>
-      {atCeiling && <span className="text-label text-status-research">Ceiling</span>}
     </div>
   )
 
   return (
     <>
       {/* Mobile top bar */}
-      <header className="sticky top-0 z-40 border-b border-line/60 surface-glass lg:hidden">
-        <div className="flex items-center justify-between px-4 py-3">
+      <header className="sticky top-0 z-40 border-b border-line bg-bone/95 backdrop-blur-sm lg:hidden">
+        <div className="flex items-center justify-between px-4 py-2.5">
           <RelayBrand />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {sendCounter}
-            <Link
-              href="/onboarding"
-              className="rounded-lg p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink"
-              title="Your voice"
-            >
-              <Sparkles className="size-4" />
-            </Link>
             <ThemeToggle />
             <button
               type="button"
               onClick={() => void signOut()}
-              className="rounded-lg p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink"
+              className="rounded-md p-1.5 text-graphite transition-colors hover:bg-bone-raised hover:text-ink"
               title="Sign out"
             >
               <LogOut className="size-4" />
@@ -177,63 +163,120 @@ export function AppRail({
       </header>
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-64 lg:flex-col lg:border-r lg:border-line/60">
+      <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-56 lg:flex-col lg:border-r lg:border-line">
         {/* Brand */}
-        <div className="flex items-center justify-between px-5 py-5">
+        <div className="flex items-center justify-between px-4 py-4">
           <RelayBrand />
         </div>
 
         {/* Nav */}
-        <nav className="flex flex-1 flex-col gap-0.5 px-3 pb-4">
-          {NAV.map(({ href, label, icon: Icon, exact, accent }) => {
+        <nav className="flex flex-1 flex-col gap-0.5 px-2.5 pb-3">
+          {/* Relay section */}
+          <div className="mb-1 px-2 pt-1">
+            <span className="text-label text-stone">Relay</span>
+          </div>
+          {NAV.filter(n => !('studio' in n) && !SYSTEM_NAV.includes(n) && n.href !== '/manage-profiles').map(({ href, label, icon: Icon, exact }) => {
             const active = isActive(href, exact)
-            const isStudio = accent === 'studio'
             return (
               <Link
                 key={href}
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200',
+                  'group relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150',
                   active
-                    ? 'bg-ink text-paper shadow-sm'
-                    : 'text-slate hover:bg-muted/50 hover:text-ink',
+                    ? 'bg-ink text-bone'
+                    : 'text-graphite hover:bg-bone-raised hover:text-ink',
                 )}
               >
                 <Icon
                   className={cn(
-                    'size-[18px] shrink-0 transition-colors',
-                    active
-                      ? (isStudio ? 'text-studio' : 'text-gold')
-                      : 'text-slate group-hover:text-ink',
+                    'size-4 shrink-0 transition-colors',
+                    active ? 'text-bone' : 'text-stone group-hover:text-ink',
                   )}
                   aria-hidden="true"
-                  strokeWidth={active ? 2.2 : 1.8}
+                  strokeWidth={active ? 2 : 1.7}
                 />
                 <span>{label}</span>
-                {isStudio && !active && (
-                  <span className="ml-auto size-1.5 rounded-full bg-studio/60" aria-hidden="true" />
+              </Link>
+            )
+          })}
+
+          {/* Content / Studio */}
+          <div className="mb-1 mt-4 px-2 pt-1">
+            <span className="text-label text-stone">Studio</span>
+          </div>
+          {NAV.filter(n => 'studio' in n).map(({ href, label, icon: Icon, exact }) => {
+            const active = isActive(href, exact)
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'group relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150',
+                  active
+                    ? 'bg-cobalt text-bone'
+                    : 'text-graphite hover:bg-bone-raised hover:text-ink',
                 )}
-                {active && (
-                  <span className={cn('absolute right-2.5 size-1.5 rounded-full', isStudio ? 'bg-studio' : 'bg-gold')} />
+              >
+                <Icon
+                  className={cn(
+                    'size-4 shrink-0 transition-colors',
+                    active ? 'text-bone' : 'text-cobalt/60 group-hover:text-cobalt',
+                  )}
+                  aria-hidden="true"
+                  strokeWidth={active ? 2 : 1.7}
+                />
+                <span>{label}</span>
+              </Link>
+            )
+          })}
+
+          {/* System */}
+          <div className="mb-1 mt-4 px-2 pt-1">
+            <span className="text-label text-stone">System</span>
+          </div>
+          {NAV.filter(n => SYSTEM_NAV.includes(n) || n.href === '/manage-profiles').map(({ href, label, icon: Icon, exact }) => {
+            const active = isActive(href, exact)
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'group relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150',
+                  active
+                    ? 'bg-ink text-bone'
+                    : 'text-graphite hover:bg-bone-raised hover:text-ink',
                 )}
+              >
+                <Icon
+                  className={cn(
+                    'size-4 shrink-0 transition-colors',
+                    active ? 'text-bone' : 'text-stone group-hover:text-ink',
+                  )}
+                  aria-hidden="true"
+                  strokeWidth={active ? 2 : 1.7}
+                />
+                <span>{label}</span>
               </Link>
             )
           })}
         </nav>
 
         {/* Bottom */}
-        <div className="border-t border-line/60 px-4 py-4 space-y-3">
+        <div className="border-t border-line px-3 py-3 space-y-2">
           <Link
             href="/onboarding"
-            className="flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] transition-colors hover:bg-muted"
+            className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors hover:bg-bone-raised"
           >
-            <Sparkles className="size-[18px] shrink-0 text-gold" aria-hidden="true" />
-            <span className="flex-1 text-slate">Your voice</span>
+            <Sparkles className="size-4 shrink-0 text-orange" aria-hidden="true" />
+            <span className="flex-1 text-graphite">Your voice</span>
             {calibrated ? (
-              <span className="text-label text-slate">saved</span>
+              <span className="text-label text-stone">saved</span>
             ) : (
-              <span className="rounded-full bg-gold/10 px-2 py-0.5 text-label text-gold">
+              <span className="rounded bg-orange/10 px-1.5 py-0.5 text-label text-orange">
                 start
               </span>
             )}
@@ -244,49 +287,47 @@ export function AppRail({
             <button
               type="button"
               onClick={() => void signOut()}
-              className="rounded-lg p-1.5 text-slate transition-colors hover:bg-muted hover:text-ink"
+              className="rounded-md p-1.5 text-graphite transition-colors hover:bg-bone-raised hover:text-ink"
               title="Sign out"
             >
-              <LogOut className="size-4" />
+              <LogOut className="size-3.5" />
             </button>
           </div>
 
           <div className="flex items-center justify-between gap-2 px-1">
             {sendCounter}
-            <div className="flex items-center gap-2">
-              <ThemeToggle className="rounded-lg p-1 text-slate transition-colors hover:bg-muted hover:text-ink" />
-              <span className="text-mono-medium text-[10px] text-slate/50">v{APP_VERSION}</span>
-            </div>
+            <ThemeToggle className="rounded-md p-1 text-graphite transition-colors hover:bg-bone-raised hover:text-ink" />
+            <span className="text-mono-medium text-[9px] text-stone/50">v{APP_VERSION}</span>
           </div>
         </div>
       </aside>
 
       {/* Mobile bottom nav */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-line/60 surface-glass pb-[env(safe-area-inset-bottom)] lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-bone/95 backdrop-blur-sm pb-[env(safe-area-inset-bottom)] lg:hidden"
         aria-label="Primary"
       >
         <div className="flex items-stretch">
-          {NAV.slice(0, 5).map(({ href, label, icon: Icon, exact, accent }) => {
+          {[...RELAY_NAV.slice(0, 4), SYSTEM_NAV[0]].map(({ href, label, icon: Icon, exact }) => {
             const active = isActive(href, exact)
-            const isStudio = accent === 'studio'
+            const isStudio = 'studio' in { href } && href === '/content'
             return (
               <Link
                 key={href}
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition-colors',
-                  active ? 'text-ink' : 'text-slate hover:text-ink',
+                  'relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors',
+                  active ? 'text-ink' : 'text-graphite hover:text-ink',
                 )}
               >
                 {active && (
-                  <span className={cn('absolute top-0 left-1/2 h-[2px] w-6 -translate-x-1/2 rounded-full', isStudio ? 'bg-studio' : 'bg-gold')} />
+                  <span className={cn('absolute top-0 left-1/2 h-[2px] w-5 -translate-x-1/2 rounded-full', isStudio ? 'bg-cobalt' : 'bg-orange')} />
                 )}
                 <Icon
-                  className={cn('size-5 transition-all', active ? (isStudio ? 'text-studio' : 'text-gold') : '')}
+                  className={cn('size-4.5 transition-all', active ? (isStudio ? 'text-cobalt' : 'text-orange') : '')}
                   aria-hidden="true"
-                  strokeWidth={active ? 2.2 : 1.8}
+                  strokeWidth={active ? 2 : 1.7}
                 />
                 {label}
               </Link>

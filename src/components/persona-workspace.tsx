@@ -2,16 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Copy, Check, RefreshCw, Sparkles, Settings2, MessageCircleQuestion, PenSquare, ThumbsUp, Bold, Italic, Eye, BarChart3 } from 'lucide-react'
+import { ArrowLeft, Copy, Check, RefreshCw, Bold, Italic, ThumbsUp, ChevronDown } from 'lucide-react'
 import { cn } from 'cn'
-import type { ContentPersona, TopicCluster, ContentDraft, ContentHistoryEntry, ContentDraftFeedback, ContentPostStructure } from '@/lib/domain/types'
+import type { ContentPersona, ContentProfile, TopicCluster, ContentDraft, ContentHistoryEntry, ContentDraftFeedback } from '@/lib/domain/types'
 import type { DailyDecision } from '@/lib/content/daily-decision'
 import { UnderstandingScreen } from '@/components/understanding-screen'
+import { PostRadar } from '@/components/post-radar'
+import { InterviewFlow } from '@/components/interview-flow'
+import { StudioGreeting, QuickCapture, GenerationProgress, OpportunityData } from '@/components/studio-cards'
 import { toBoldUnicode, toItalicUnicode } from '@/lib/content/unicode-format'
 import { previewTruncation } from '@/lib/content/truncation'
-import { computeBestTime } from '@/lib/content/best-time'
-import { BestTimeCard } from '@/components/best-time-card'
-import { MetricsLogForm } from '@/components/metrics-log-form'
+
 
 export function PersonaWorkspace({
   persona,
@@ -20,6 +21,8 @@ export function PersonaWorkspace({
   history,
   feedback,
   initialDecision,
+  contentProfile,
+  allPersonas,
 }: {
   persona: ContentPersona
   topicClusters: TopicCluster[]
@@ -27,12 +30,19 @@ export function PersonaWorkspace({
   history: ContentHistoryEntry[]
   feedback: ContentDraftFeedback[]
   initialDecision: DailyDecision
+  contentProfile: ContentProfile | null
+  allPersonas?: ContentPersona[]
 }) {
   const router = useRouter()
   const [platform, setPlatform] = useState<'linkedin' | 'x'>('linkedin')
-  const [answer, setAnswer] = useState('')
-  const [decision, setDecision] = useState<DailyDecision | null>(initialDecision)
-  const [loadingDecision, setLoadingDecision] = useState(false)
+  const [personaState, setPersonaState] = useState(persona)
+  const [showUnderstanding, setShowUnderstanding] = useState(false)
+  const [showPersonaSwitcher, setShowPersonaSwitcher] = useState(false)
+
+  const [flow, setFlow] = useState<'home' | 'interview' | 'generating' | 'result'>('home')
+  const [sourceMaterial, setSourceMaterial] = useState('')
+  const [selectedOpportunity, setSelectedOpportunity] = useState<OpportunityData | null>(null)
+  const [interviewAnswers, setInterviewAnswers] = useState<string[]>([])
 
   const [generating, setGenerating] = useState(false)
   const [draftError, setDraftError] = useState<string | null>(null)
@@ -40,36 +50,24 @@ export function PersonaWorkspace({
   const [draftId, setDraftId] = useState<string | null>(null)
   const [draftText, setDraftText] = useState('')
   const [editableDraft, setEditableDraft] = useState('')
+  const [evaluation, setEvaluation] = useState<{ quality: number; distribution: number; specificity: number; slopScore: number } | null>(null)
+  const [genomeInfo, setGenomeInfo] = useState<{ topic: string; angle: string; archetype: string } | null>(null)
   const [copied, setCopied] = useState(false)
   const [reacting, setReacting] = useState(false)
   const [reactionMessage, setReactionMessage] = useState<string | null>(null)
   const [historyRows, setHistoryRows] = useState(history)
-  const [taggingId, setTaggingId] = useState<string | null>(null)
-  const [showUnderstanding, setShowUnderstanding] = useState(false)
-  const [personaState, setPersonaState] = useState(persona)
+  const [showTruncationPreview, setShowTruncationPreview] = useState(false)
+  const [notForMeReasons, setNotForMeReasons] = useState(false)
+
   const [refining, setRefining] = useState(false)
   const [refineMessage, setRefineMessage] = useState<string | null>(null)
-  const [structures, setStructures] = useState<ContentPostStructure[]>([])
-  const [structureId, setStructureId] = useState<string | null>(null)
-  const [showTruncationPreview, setShowTruncationPreview] = useState(false)
+
+
   const [metricsHistoryId, setMetricsHistoryId] = useState<string | null>(null)
+  const [taggingId, setTaggingId] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/content/post-structures')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!cancelled && Array.isArray(d?.structures)) setStructures(d.structures)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
-  const bestTime = useMemo(() => computeBestTime(historyRows), [historyRows])
 
-  const activeDrafts = drafts.filter((d) => d.status === 'draft' || d.status === 'ready')
 
   const acceptedCount = feedback.filter((f) => f.reaction === 'posting' || f.reaction === 'posting_after_edit').length
   const rejectedCount = feedback.filter((f) => f.reaction === 'not_for_me').length
@@ -94,135 +92,116 @@ export function PersonaWorkspace({
     }
   }, [persona.id])
 
-  const metrics = useMemo(() => {
-    const accepted = feedback.filter((f) => f.reaction === 'posting' || f.reaction === 'posting_after_edit').length
-    const rejected = feedback.filter((f) => f.reaction === 'not_for_me').length
-    const keptRate = accepted + rejected > 0 ? Math.round((accepted / (accepted + rejected)) * 100) : 0
-    return { keptRate }
-  }, [feedback])
-
-  const learningReport = useMemo(() => {
-    const bySubject = new Map<string, { kept: number; skipped: number }>()
-    const bySource = new Map<'answer' | 'conviction' | 'field_update', { kept: number; skipped: number }>([
-      ['answer', { kept: 0, skipped: 0 }],
-      ['conviction', { kept: 0, skipped: 0 }],
-      ['field_update', { kept: 0, skipped: 0 }],
-    ])
-    const names = new Map(topicClusters.map((c) => [c.id, c.clusterName]))
-
-    for (const row of feedback) {
-      const kept = row.reaction === 'posting' || row.reaction === 'posting_after_edit'
-      if (row.topicClusterId) {
-        const label = names.get(row.topicClusterId) ?? 'Other'
-        const current = bySubject.get(label) ?? { kept: 0, skipped: 0 }
-        if (kept) current.kept += 1
-        else current.skipped += 1
-        bySubject.set(label, current)
-      }
-      const source = bySource.get(row.sourceKind) ?? { kept: 0, skipped: 0 }
-      if (kept) source.kept += 1
-      else source.skipped += 1
-      bySource.set(row.sourceKind, source)
+  const totalDecisions = acceptedCount + rejectedCount
+  const shouldRefine = totalDecisions >= 6 && totalDecisions % 5 === 0
+  const refineRunRef = useRef(false)
+  useEffect(() => {
+    if (shouldRefine && !refineRunRef.current && !refining) {
+      refineRunRef.current = true
+      void runRefinement()
     }
+  }, [shouldRefine, refining, runRefinement])
 
-    const subjects = [...bySubject.entries()]
-      .map(([label, counts]) => ({ label, ...counts, total: counts.kept + counts.skipped }))
-      .filter((item) => item.total > 0)
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 4)
+  const handleOpportunitySelect = (opp: OpportunityData) => {
+    setSelectedOpportunity(opp)
+    setSourceMaterial(opp.description)
+    setFlow('interview')
+    setDraftError(null)
+  }
 
-    const sourceRows = ([
-      ['answer', 'From your answer'],
-      ['conviction', 'From saved opinions'],
-      ['field_update', 'From field updates'],
-    ] as const).map(([key, label]) => {
-      const counts = bySource.get(key) ?? { kept: 0, skipped: 0 }
-      const total = counts.kept + counts.skipped
-      const keptRate = total > 0 ? Math.round((counts.kept / total) * 100) : null
-      return { label, keptRate, total }
-    })
+  const handleQuickCapture = (text: string) => {
+    setSelectedOpportunity(null)
+    setSourceMaterial(text)
+    setFlow('interview')
+    setDraftError(null)
+  }
 
-    return { subjects, sourceRows }
-  }, [feedback, topicClusters])
-
-  const loadDecision = useCallback(async () => {
-    setLoadingDecision(true)
-    try {
-      const res = await fetch(`/api/content/daily?personaId=${persona.id}`)
-      const data = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(data?.error ?? 'Failed to load question.')
-      setDecision(data as DailyDecision)
-    } catch {
-      setDecision({ decisionType: 'none', reason: 'No question worth asking right now.' })
-    } finally {
-      setLoadingDecision(false)
-    }
-  }, [persona.id])
-
-  const generateDraft = useCallback(async () => {
+  const generateFromIntelligence = async (interviewAns: string[]) => {
     setGenerating(true)
     setDraftError(null)
-    setStatusMessage('Generating...')
+    setStatusMessage('Finding the strongest angle...')
     setDraftText('')
     setEditableDraft('')
     setDraftId(null)
+    setEvaluation(null)
+    setGenomeInfo(null)
     setReactionMessage(null)
+    setNotForMeReasons(false)
 
     try {
-      const payload: Record<string, unknown> = {
-        personaId: persona.id,
-        topicClusterId: decision?.contextId || topicClusters[0]?.id || null,
-        sourceMaterial: answer.trim(),
-        platform,
-        structureId,
-      }
-      if (decision?.decisionType === 'react' && decision.fieldUpdate?.id) payload.findingId = decision.fieldUpdate.id
-      if (decision?.decisionType === 'ready' && !answer.trim()) payload.useStoredOpinion = true
+      const material = interviewAns.length > 0
+        ? `${sourceMaterial}\n\n${interviewAns.join('\n')}`
+        : sourceMaterial
 
-      const res = await fetch('/api/content/generate', {
+      const res = await fetch('/api/content/intelligence/forge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          personaId: persona.id,
+          sourceMaterial: material,
+          platform,
+          opportunityId: null,
+          interviewAnswers: interviewAns,
+        }),
       })
 
       if (!res.ok) {
         const data = await res.json().catch(() => null)
+        if (res.status === 422) {
+          setDraftError(data?.reason || 'This idea needs more specific material.')
+          setFlow('interview')
+          return
+        }
         throw new Error(data?.error ?? 'Generation failed.')
       }
 
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('No response stream.')
-
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let finalResult: Record<string, unknown> | null = null
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const frames = buffer.split('\n\n')
-        buffer = frames.pop() ?? ''
-        for (const frame of frames) {
-          if (!frame.startsWith('data: ')) continue
-          const event = JSON.parse(frame.slice(6)) as { type: string; message?: string; result?: Record<string, unknown> }
-          if (event.type === 'status') setStatusMessage(event.message ?? null)
-          if (event.type === 'done') finalResult = event.result ?? null
-          if (event.type === 'error') throw new Error(event.message ?? 'Generation failed.')
-        }
-      }
-
-      if (!finalResult) throw new Error('No draft generated.')
-      const caption = String(finalResult.caption ?? '').trim()
-      setDraftText(caption)
-      setEditableDraft(caption)
-      setDraftId(String(finalResult.draftId ?? ''))
+      const data = await res.json()
+      setDraftText(data.draft.caption)
+      setEditableDraft(data.draft.caption)
+      setDraftId(data.draft.id)
+      setEvaluation(data.draft.evaluation)
+      setGenomeInfo(data.draft.genome)
+      setFlow('result')
     } catch (err) {
       setDraftError(err instanceof Error ? err.message : 'Generation failed.')
+      setFlow('home')
     } finally {
       setGenerating(false)
       setStatusMessage(null)
     }
-  }, [persona.id, decision, answer, platform, topicClusters, structureId])
+  }
+
+  const handleInterviewComplete = async (answers: string[]) => {
+    setInterviewAnswers(answers)
+    setFlow('generating')
+    await generateFromIntelligence(answers)
+  }
+
+  const handleSkipInterview = () => {
+    setFlow('generating')
+    generateFromIntelligence([])
+  }
+
+  const startOver = () => {
+    setFlow('home')
+    setSourceMaterial('')
+    setSelectedOpportunity(null)
+    setInterviewAnswers([])
+    setDraftText('')
+    setEditableDraft('')
+    setDraftId(null)
+    setEvaluation(null)
+    setGenomeInfo(null)
+    setDraftError(null)
+    setNotForMeReasons(false)
+  }
+
+  const regenerateWithAngle = (angle: string) => {
+    const angleMaterial = `${sourceMaterial}\n\nTry this direction: ${angle}`
+    setSourceMaterial(angleMaterial)
+    setFlow('generating')
+    generateFromIntelligence([...interviewAnswers, angle])
+  }
 
   function applyFormatting(kind: 'bold' | 'italic') {
     const el = document.getElementById('draft-editor') as HTMLTextAreaElement | null
@@ -234,10 +213,7 @@ export function PersonaWorkspace({
     const styled = kind === 'bold' ? toBoldUnicode(selected) : toItalicUnicode(selected)
     const next = editableDraft.slice(0, start) + styled + editableDraft.slice(end)
     setEditableDraft(next)
-    requestAnimationFrame(() => {
-      el.focus()
-      el.setSelectionRange(start, start + styled.length)
-    })
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(start, start + styled.length) })
   }
 
   async function reactToDraft(action: 'posting' | 'not_for_me') {
@@ -248,16 +224,34 @@ export function PersonaWorkspace({
       const res = await fetch(`/api/content/drafts/${draftId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action,
-          editedCaption: editableDraft,
-        }),
+        body: JSON.stringify({ action, editedCaption: editableDraft }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) throw new Error(data?.error ?? 'Failed to save reaction.')
-      setReactionMessage(action === 'posting' ? 'Saved as posted.' : 'Saved as not for me.')
+      if (action === 'posting') {
+        setReactionMessage('Saved.')
+        setTimeout(startOver, 800)
+      } else {
+        setNotForMeReasons(true)
+      }
     } catch (err) {
-      setReactionMessage(err instanceof Error ? err.message : 'Failed to save reaction.')
+      setReactionMessage(err instanceof Error ? err.message : 'Failed to save.')
+    } finally {
+      setReacting(false)
+    }
+  }
+
+  async function submitNotForMeReason(_reason: string) {
+    if (!draftId) return
+    setReacting(true)
+    try {
+      await fetch(`/api/content/drafts/${draftId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'not_for_me', editedCaption: editableDraft }),
+      })
+      setNotForMeReasons(false)
+      startOver()
     } finally {
       setReacting(false)
     }
@@ -272,9 +266,7 @@ export function PersonaWorkspace({
         body: JSON.stringify({ ledToRealOutcome: next }),
       })
       if (!res.ok) return
-      setHistoryRows((prev) =>
-        prev.map((h) => (h.id === historyId ? { ...h, ledToRealOutcome: next } : h)),
-      )
+      setHistoryRows((prev) => prev.map((h) => (h.id === historyId ? { ...h, ledToRealOutcome: next } : h)))
     } finally {
       setTaggingId(null)
     }
@@ -282,357 +274,372 @@ export function PersonaWorkspace({
 
   async function copyDraft() {
     if (!editableDraft) return
-    try {
-      await navigator.clipboard.writeText(editableDraft)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // no-op
-    }
+    try { await navigator.clipboard.writeText(editableDraft); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* no-op */ }
   }
 
-  // Trigger refinement after a batch of new accept/reject decisions.
-  const totalDecisions = acceptedCount + rejectedCount
-  const shouldRefine = totalDecisions >= 6 && totalDecisions % 5 === 0
-  const refineRunRef = useRef(false)
-  useEffect(() => {
-    if (shouldRefine && !refineRunRef.current && !refining) {
-      refineRunRef.current = true
-      void runRefinement()
-    }
-  }, [shouldRefine, refining, runRefinement])
+  const qualityIndicators = useMemo(() => {
+    if (!evaluation) return null
+    const items: Array<{ label: string; positive: boolean }> = []
+    if (evaluation.specificity >= 0.7) items.push({ label: 'Strong detail', positive: true })
+    if (evaluation.quality >= 0.7) items.push({ label: 'Specific to your experience', positive: true })
+    if (evaluation.distribution >= 0.6) items.push({ label: 'Useful to your audience', positive: true })
+    if (evaluation.slopScore > 0.4) items.push({ label: 'Could be more specific', positive: false })
+    return items
+  }, [evaluation])
 
-  const askLine = decision?.uncertainPrompt ?? decision?.prompt ?? decision?.reason ?? 'No question right now.'
-  const canGenerate = Boolean(answer.trim()) || decision?.decisionType === 'ready' || decision?.decisionType === 'react' || decision?.decisionType === 'ask_uncertain'
+  const angleOptions = useMemo(() => {
+    if (!genomeInfo) return ['More technical', 'More personal', 'Shorter', 'Sharper opening', 'Turn it into an opinion']
+    const base = [genomeInfo.angle]
+    if (genomeInfo.archetype?.includes('technical') || genomeInfo.topic?.includes('engineer')) {
+      base.push('More technical', 'Focus on the mistake', 'Turn it into an opinion')
+    } else {
+      base.push('More personal', 'Focus on the lesson', 'Make it a short observation')
+    }
+    return [...new Set(base)].slice(0, 5)
+  }, [genomeInfo])
+
+  const otherPersonas = allPersonas?.filter((p) => p.id !== persona.id) ?? []
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* ── Header ── */}
       <header className="space-y-4">
         <div className="flex items-center justify-between">
-          <button onClick={() => router.push('/content')} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate transition-colors hover:bg-paper-tint hover:text-ink">
-            <ArrowLeft className="size-4" aria-hidden="true" />
-            Back to Content
-          </button>
           <button
-            onClick={() => setShowUnderstanding((v) => !v)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors',
-              showUnderstanding
-                ? 'border-studio/30 bg-studio/10 text-studio'
-                : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
-            )}
+            onClick={() => router.push('/content')}
+            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-graphite transition-colors hover:bg-bone hover:text-ink"
           >
-            <Settings2 className="size-3.5" aria-hidden="true" />
-            About you
+            <ArrowLeft className="size-4" aria-hidden="true" />
+            All personas
           </button>
-        </div>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-1.5">
-            <p className="text-label text-studio">Studio persona</p>
-            <h1 className="text-heading text-2xl text-ink sm:text-3xl">{personaState.displayName}</h1>
-            <p className="text-sm text-slate">Ask, draft, react — what you keep shapes what comes next.</p>
-          </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-line/60 bg-surface-raised px-5 py-3">
-            <div className="text-right">
-              <p className="font-mono text-xl font-medium tracking-tight text-ink">{metrics.keptRate}%</p>
-              <p className="text-[11px] text-slate">kept</p>
-            </div>
+          <div className="flex items-center gap-2">
+            {otherPersonas.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowPersonaSwitcher((v) => !v)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm text-graphite transition-colors hover:bg-bone hover:text-ink"
+                >
+                  {personaState.displayName}
+                  <ChevronDown className={cn('size-3.5 transition-transform', showPersonaSwitcher && 'rotate-180')} aria-hidden="true" />
+                </button>
+                {showPersonaSwitcher && (
+                  <div className="absolute right-0 top-full z-20 mt-1 w-48 rounded-xl border border-line bg-bone-raised py-1 shadow-lg">
+                    {otherPersonas.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => { router.push(`/content/${p.id}`); setShowPersonaSwitcher(false) }}
+                        className="w-full px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-bone"
+                      >
+                        {p.displayName}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <button
-              onClick={() => void runRefinement()}
-              disabled={refining || totalDecisions < 6}
-              className="rounded-lg border border-line px-2.5 py-1.5 text-xs text-slate transition-colors hover:bg-paper-tint disabled:opacity-40"
-              title={totalDecisions < 6 ? 'Need at least 6 keep/skip decisions' : 'Re-analyze from your keep/skip patterns'}
+              onClick={() => setShowUnderstanding((v) => !v)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors',
+                showUnderstanding ? 'border-cobalt/30 bg-cobalt/10 text-cobalt' : 'border-line text-graphite hover:bg-bone hover:text-ink',
+              )}
             >
-              {refining ? 'Analyzing...' : 'Refresh profile'}
+              About me
             </button>
           </div>
         </div>
-        {refineMessage && <p className="text-xs text-slate">{refineMessage}</p>}
       </header>
 
       {showUnderstanding && (
         <UnderstandingScreen
           persona={personaState}
           topicClusters={topicClusters}
+          contentProfile={contentProfile}
           onUpdated={(updated) => { setPersonaState(updated); setShowUnderstanding(false) }}
         />
       )}
 
-      <section className="rounded-2xl border border-line/60 bg-surface-raised p-5">
-        <h2 className="text-heading text-base text-ink">What you keep</h2>
-        <div className="mt-3 grid gap-4 sm:grid-cols-2">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate">By subject</p>
-            {learningReport.subjects.length === 0 ? (
-              <p className="mt-2 text-sm text-slate">No keep/skip data yet.</p>
-            ) : (
-              <div className="mt-2 space-y-1.5">
-                {learningReport.subjects.map((row) => {
-                  const rate = Math.round((row.kept / row.total) * 100)
-                  return (
-                    <p key={row.label} className="text-sm text-ink">
-                      {row.label}: {rate}% kept ({row.kept}/{row.total})
-                    </p>
-                  )
-                })}
+      {/* ── Home: Intelligence-first ── */}
+      {flow === 'home' && (
+        <div className="space-y-8">
+          <StudioGreeting
+            name={personaState.displayName}
+            opportunityCount={0}
+            hasPersona={topicClusters.length > 0}
+          />
+
+          <PostRadar
+            persona={persona}
+            topicClusters={topicClusters}
+            contentProfile={contentProfile}
+            onGenerateOpportunity={handleOpportunitySelect}
+            onDismissOpportunity={() => {}}
+          />
+
+          <QuickCapture onSubmit={handleQuickCapture} />
+
+          {/* ── Recent posts ── */}
+          {historyRows.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-heading text-base text-ink">Recently talked about</h2>
+              <div className="rounded-2xl border border-line/60 bg-bone-raised">
+                <ul className="divide-y divide-line/50">
+                  {historyRows.slice(0, 5).map((h) => (
+                    <li key={h.id} className="px-5 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="line-clamp-1 text-sm text-ink">{h.openingLine}</p>
+                          <p className="mt-0.5 text-xs text-graphite">
+                            {new Date(h.postedAt).toLocaleDateString()}
+                            {h.platform && ` · ${h.platform}`}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void toggleOutcome(h.id, !h.ledToRealOutcome)}
+                          disabled={taggingId === h.id}
+                          className={cn(
+                            'shrink-0 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50',
+                            h.ledToRealOutcome
+                              ? 'border-status-success/30 bg-status-success/10 text-status-success'
+                              : 'border-line text-graphite hover:bg-bone hover:text-ink',
+                          )}
+                        >
+                          {h.ledToRealOutcome ? 'Led to something real' : 'This led somewhere'}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
-            )}
+            </section>
+          )}
+
+          {/* ── Learning ── */}
+          {totalDecisions >= 4 && (
+            <section className="rounded-2xl border border-line/60 bg-bone-raised p-5 space-y-3">
+              <h2 className="text-heading text-base text-ink">How Studio is learning</h2>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-graphite">Posts kept</span>
+                  <span className="text-ink">{acceptedCount} of {totalDecisions}</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-line/60">
+                  <div
+                    className="h-full rounded-full bg-cobalt transition-all duration-500"
+                    style={{ width: `${totalDecisions > 0 ? (acceptedCount / totalDecisions) * 100 : 0}%` }}
+                  />
+                </div>
+                {acceptedCount >= 3 && (
+                  <p className="text-xs text-graphite">
+                    Relay is learning what you keep and skip to get better at spotting ideas worth your time.
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
+      {/* ── Interview ── */}
+      {flow === 'interview' && (
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <button onClick={startOver} className="inline-flex items-center gap-1 text-sm text-graphite transition-colors hover:text-ink">
+              <ArrowLeft className="size-3.5" aria-hidden="true" />
+              Back
+            </button>
           </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate">By draft type</p>
-            <div className="mt-2 space-y-1.5">
-              {learningReport.sourceRows.map((row) => (
-                <p key={row.label} className="text-sm text-ink">
-                  {row.label}: {row.keptRate === null ? '-' : `${row.keptRate}%`} {row.total > 0 ? `(${row.total})` : ''}
-                </p>
+          {selectedOpportunity && (
+            <div className="rounded-2xl border border-line/60 bg-bone-raised p-5">
+              <p className="text-label text-cobalt">{selectedOpportunity.type.replace(/_/g, ' ')}</p>
+              <p className="mt-1 text-[15px] font-medium text-ink">{selectedOpportunity.title}</p>
+            </div>
+          )}
+          <InterviewFlow
+            personaId={persona.id}
+            sourceMaterial={sourceMaterial}
+            onComplete={handleInterviewComplete}
+            onSkip={handleSkipInterview}
+            opportunityTitle={selectedOpportunity?.title}
+          />
+          {draftError && <p className="text-sm text-status-danger">{draftError}</p>}
+        </section>
+      )}
+
+      {/* ── Generating ── */}
+      {flow === 'generating' && (
+        <GenerationProgress statusMessage={statusMessage} />
+      )}
+
+      {/* ── Result / Editor ── */}
+      {flow === 'result' && draftText && (
+        <section className="space-y-5">
+          <div className="flex items-center justify-between">
+            <button onClick={startOver} className="inline-flex items-center gap-1 text-sm text-graphite transition-colors hover:text-ink">
+              <ArrowLeft className="size-3.5" aria-hidden="true" />
+              Back
+            </button>
+            <div className="flex items-center gap-1 rounded-lg border border-line/60 bg-bone-raised p-0.5">
+              {(['linkedin', 'x'] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPlatform(p)}
+                  className={cn(
+                    'rounded-md px-3 py-1 text-sm font-medium transition-all',
+                    platform === p ? 'bg-ink text-bone' : 'text-graphite hover:text-ink',
+                  )}
+                >
+                  {p}
+                </button>
               ))}
             </div>
           </div>
-        </div>
-      </section>
 
-      <section className="rounded-2xl border border-line/60 bg-surface-raised p-6">
-        <StepHeader icon={MessageCircleQuestion} step={1} title="Ask" />
-        <p className="mt-3 text-sm text-ink">{askLine}</p>
-        {decision?.fieldUpdate && (
-          <p className="mt-2 text-xs text-slate">
-            Source: {decision.fieldUpdate.sourceLabel} - {decision.fieldUpdate.sourceUrl}
-          </p>
-        )}
-        <textarea
-          value={answer}
-          onChange={(e) => setAnswer(e.target.value)}
-          placeholder="Add one real line. If it is a no-input day, leave blank and continue only when prompted."
-          rows={3}
-          className="mt-4 w-full rounded-xl border border-line bg-paper-raised px-3.5 py-2.5 text-sm outline-none focus-visible:border-studio/40 focus-visible:ring-2 focus-visible:ring-studio/20"
-        />
-        <div className="mt-3 flex items-center gap-2">
-          {(['linkedin', 'x'] as const).map((p) => (
-            <button key={p} type="button" onClick={() => setPlatform(p)} className={cn('rounded-lg px-3 py-1 text-sm font-medium', platform === p ? 'bg-ink text-paper' : 'bg-paper-tint text-slate hover:text-ink')}>
-              {p}
-            </button>
-          ))}
-          <button onClick={() => void loadDecision()} disabled={loadingDecision} className="ml-auto rounded-lg border border-line px-3 py-1 text-sm text-slate hover:bg-paper-tint">
-            {loadingDecision ? 'Refreshing...' : 'New question'}
-          </button>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-line/60 bg-surface-raised p-6">
-        <StepHeader icon={PenSquare} step={2} title="Draft" />
-
-        {structures.length > 0 && (
-          <div className="mt-4 space-y-1.5">
-            <p className="text-xs text-slate">Scaffolding, optional — shapes how this gets built, never a claim about how it performs.</p>
-            <div className="flex flex-wrap gap-1.5">
+          {/* Draft editor — the hero */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => setStructureId(null)}
-                className={cn(
-                  'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
-                  structureId === null ? 'border-studio/30 bg-studio/10 text-studio' : 'border-line text-slate hover:bg-paper-tint',
-                )}
+                onClick={() => applyFormatting('bold')}
+                title="Bold selected text"
+                className="inline-flex items-center rounded-lg border border-line p-1.5 text-graphite transition-colors hover:bg-bone hover:text-ink"
               >
-                No structure
+                <Bold className="size-3.5" aria-hidden="true" />
               </button>
-              {structures.map((s) => (
+              <button
+                type="button"
+                onClick={() => applyFormatting('italic')}
+                title="Italicize selected text"
+                className="inline-flex items-center rounded-lg border border-line p-1.5 text-graphite transition-colors hover:bg-bone hover:text-ink"
+              >
+                <Italic className="size-3.5" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowTruncationPreview((v) => !v)}
+                className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1.5 text-xs text-graphite transition-colors hover:bg-bone hover:text-ink"
+              >
+                Preview
+              </button>
+              <div className="ml-auto">
                 <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setStructureId(s.id)}
-                  title={s.shape}
-                  className={cn(
-                    'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
-                    structureId === s.id ? 'border-studio/30 bg-studio/10 text-studio' : 'border-line text-slate hover:bg-paper-tint',
-                  )}
+                  onClick={() => void copyDraft()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm text-ink transition-colors hover:bg-bone"
                 >
-                  {s.structureName}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <button onClick={() => void generateDraft()} disabled={generating || !canGenerate} className="mt-4 inline-flex items-center gap-2 rounded-xl gradient-studio px-5 py-2.5 text-sm font-semibold text-paper shadow-studio disabled:opacity-50">
-          {generating ? <RefreshCw className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-          {generating ? (statusMessage ?? 'Generating...') : 'Generate'}
-        </button>
-        {draftError && <p className="mt-2 text-sm text-status-no">{draftError}</p>}
-        {draftText && (
-          <div className="mt-4 space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => applyFormatting('bold')}
-                  title="Bold selected text (Unicode)"
-                  className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs text-slate transition-colors hover:bg-paper-tint hover:text-ink"
-                >
-                  <Bold className="size-3.5" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyFormatting('italic')}
-                  title="Italicize selected text (Unicode)"
-                  className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs text-slate transition-colors hover:bg-paper-tint hover:text-ink"
-                >
-                  <Italic className="size-3.5" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowTruncationPreview((v) => !v)}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors',
-                    showTruncationPreview ? 'border-studio/30 bg-studio/10 text-studio' : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
-                  )}
-                >
-                  <Eye className="size-3.5" aria-hidden="true" />
-                  See more preview
+                  {copied ? <Check className="size-3.5 text-status-success" /> : <Copy className="size-3.5" />}
+                  {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
-              <button onClick={() => void copyDraft()} className="inline-flex items-center gap-1.5 rounded-lg bg-paper-tint px-3 py-1.5 text-sm text-ink hover:bg-line">
-                {copied ? <Check className="size-3.5 text-status-send" /> : <Copy className="size-3.5" />}
-                {copied ? 'Copied' : 'Copy'}
-              </button>
             </div>
             <textarea
               id="draft-editor"
               value={editableDraft}
               onChange={(e) => setEditableDraft(e.target.value)}
-              rows={8}
-              className="w-full rounded-xl border border-line bg-paper-raised px-3.5 py-2.5 text-sm outline-none focus-visible:border-studio/40 focus-visible:ring-2 focus-visible:ring-studio/20"
+              rows={12}
+              className="w-full rounded-2xl border border-line/60 bg-bone-raised px-5 py-4 text-[15px] leading-relaxed outline-none transition-all focus-visible:border-cobalt/40 focus-visible:ring-2 focus-visible:ring-cobalt/20"
             />
             {showTruncationPreview && (() => {
               const preview = previewTruncation(editableDraft, platform)
               return (
-                <div className="rounded-xl border border-line/60 bg-paper-tint/40 p-3.5 text-sm">
-                  <p className="whitespace-pre-wrap text-ink">{preview.visible}</p>
+                <div className="rounded-xl border border-line/50 bg-bone/30 p-4">
+                  <p className="text-xs uppercase tracking-wide text-graphite">Preview</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{preview.visible}</p>
                   {preview.truncated && (
-                    <>
-                      <span className="text-slate">... </span>
-                      <span className="text-xs font-medium text-studio">see more</span>
-                      <p className="mt-2 whitespace-pre-wrap text-slate/50">{preview.hidden}</p>
-                      <p className="mt-2 text-xs text-slate">Everything above the divider is what shows before a reader taps &quot;see more&quot; on {platform}.</p>
-                    </>
-                  )}
-                  {!preview.truncated && (
-                    <p className="mt-2 text-xs text-status-send">Fits within the visible preview — no truncation on {platform}.</p>
+                    <p className="mt-1 text-xs text-graphite">+{preview.hidden.length} characters hidden</p>
                   )}
                 </div>
               )
             })()}
           </div>
-        )}
-      </section>
 
-      <section className="rounded-2xl border border-line/60 bg-surface-raised p-6">
-        <StepHeader icon={ThumbsUp} step={3} title="React" />
-        <p className="mt-2 text-sm text-slate">What you pick shapes tomorrow&apos;s post.</p>
-        <div className="mt-3 flex items-center gap-2">
-          <button onClick={() => void reactToDraft('posting')} disabled={reacting || !draftId} className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-paper disabled:opacity-50">
-            Posting this
-          </button>
-          <button onClick={() => void reactToDraft('not_for_me')} disabled={reacting || !draftId} className="rounded-lg border border-line px-4 py-2 text-sm text-slate hover:bg-paper-tint disabled:opacity-50">
-            Not for me
-          </button>
-        </div>
-        {reactionMessage && <p className="mt-2 text-sm text-slate">{reactionMessage}</p>}
-      </section>
+          {/* Quality — subtle */}
+          {qualityIndicators && qualityIndicators.length > 0 && (
+            <div className="rounded-xl border border-line/50 bg-bone-raised p-4">
+              <p className="text-xs uppercase tracking-wide text-graphite">
+                {qualityIndicators.some((i) => !i.positive) ? 'Could be stronger' : 'Why this works'}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {qualityIndicators.map((item, i) => (
+                  <span
+                    key={i}
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs',
+                      item.positive ? 'bg-status-success/8 text-status-success' : 'bg-status-danger/8 text-status-danger',
+                    )}
+                  >
+                    {item.positive ? '✓' : '·'} {item.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
-      {historyRows.length > 0 && (
-        <>
-          <BestTimeCard result={bestTime} />
+          {/* Actions */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => void reactToDraft('posting')}
+              disabled={reacting || !draftId}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-bone transition-all hover:bg-ink/90 active:scale-[0.97] disabled:opacity-50"
+            >
+              <ThumbsUp className="size-4" aria-hidden="true" />
+              Posting this
+            </button>
+            <button
+              onClick={() => void reactToDraft('not_for_me')}
+              disabled={reacting || !draftId}
+              className="rounded-xl border border-line px-4 py-2.5 text-sm text-graphite transition-colors hover:bg-bone disabled:opacity-50"
+            >
+              Not for me
+            </button>
+            <button
+              onClick={() => void generateFromIntelligence(interviewAnswers)}
+              disabled={generating}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2.5 text-sm text-graphite transition-colors hover:bg-bone disabled:opacity-50"
+            >
+              <RefreshCw className="size-3.5" aria-hidden="true" />
+              Regenerate
+            </button>
+          </div>
 
-          <section className="space-y-2">
-            <h2 className="text-heading text-base text-ink">Recent posts</h2>
-            <ul className="overflow-hidden rounded-2xl border border-line/60 bg-surface-raised divide-y divide-line/50">
-              {historyRows.slice(0, 5).map((h) => (
-                <li key={h.id} className="px-5 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="line-clamp-1 text-sm text-ink">{h.openingLine}</p>
-                      <p className="mt-0.5 text-xs text-slate">
-                        {new Date(h.postedAt).toLocaleDateString()}
-                        {h.metricsLoggedAt && ` · ${[h.likes, h.reach, h.comments].filter((v) => v !== null).length} metrics logged`}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setMetricsHistoryId((prev) => (prev === h.id ? null : h.id))}
-                        className={cn(
-                          'inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
-                          metricsHistoryId === h.id ? 'border-studio/30 bg-studio/10 text-studio' : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
-                        )}
-                      >
-                        <BarChart3 className="size-3.5" aria-hidden="true" />
-                        Log results
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void toggleOutcome(h.id, !h.ledToRealOutcome)}
-                        disabled={taggingId === h.id}
-                        className={cn(
-                          'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50',
-                          h.ledToRealOutcome
-                            ? 'border-status-send/30 bg-status-send/10 text-status-send'
-                            : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
-                        )}
-                      >
-                        {h.ledToRealOutcome ? 'Led to something real' : 'This led to something real'}
-                      </button>
-                    </div>
-                  </div>
-                  {metricsHistoryId === h.id && (
-                    <MetricsLogForm
-                      entry={h}
-                      onSaved={(updated) => {
-                        setHistoryRows((prev) => prev.map((row) => (row.id === updated.id ? updated : row)))
-                        setMetricsHistoryId(null)
-                      }}
-                    />
-                  )}
-                </li>
+          {/* Not for me reasons */}
+          {notForMeReasons && (
+            <div className="rounded-xl border border-line/50 bg-bone-raised p-4 space-y-2">
+              <p className="text-sm text-graphite">Quick reason (optional):</p>
+              <div className="flex flex-wrap gap-2">
+                {['Too generic', "Doesn't sound like me", 'Wrong angle', 'Already said this', 'Not useful'].map((reason) => (
+                  <button
+                    key={reason}
+                    onClick={() => void submitNotForMeReason(reason)}
+                    className="rounded-lg border border-line px-3 py-1.5 text-sm text-graphite transition-colors hover:bg-bone hover:text-ink"
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Try another angle */}
+          <div className="rounded-xl border border-line/50 bg-bone-raised p-4 space-y-3">
+            <p className="text-sm text-graphite">Try a different angle:</p>
+            <div className="flex flex-wrap gap-2">
+              {angleOptions.map((angle) => (
+                <button
+                  key={angle}
+                  onClick={() => regenerateWithAngle(angle)}
+                  className="rounded-lg border border-cobalt/20 bg-cobalt/[0.04] px-3 py-1.5 text-sm text-cobalt transition-colors hover:bg-cobalt/10"
+                >
+                  {angle}
+                </button>
               ))}
-            </ul>
-          </section>
-        </>
-      )}
+            </div>
+          </div>
 
-      {activeDrafts.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-heading text-base text-ink">Saved drafts</h2>
-          <ul className="overflow-hidden rounded-2xl border border-line/60 bg-surface-raised divide-y divide-line/50">
-            {activeDrafts.slice(0, 3).map((d) => (
-              <li key={d.id} className="px-5 py-3">
-                <p className="line-clamp-2 text-sm text-ink">{d.caption}</p>
-              </li>
-            ))}
-          </ul>
+          {reactionMessage && <p className="text-sm text-graphite">{reactionMessage}</p>}
         </section>
       )}
-    </div>
-  )
-}
-
-function StepHeader({
-  icon: Icon,
-  step,
-  title,
-}: {
-  icon: typeof MessageCircleQuestion
-  step: number
-  title: string
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-studio/15 to-studio/5">
-        <Icon className="size-4 text-studio" aria-hidden="true" />
-      </div>
-      <div className="flex items-baseline gap-2">
-        <span className="text-label text-studio">Step {step}</span>
-        <h2 className="text-heading text-base text-ink">{title}</h2>
-      </div>
     </div>
   )
 }

@@ -2,20 +2,19 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Plus, PenLine, ChevronRight, Check, ArrowRight, ArrowLeft, Settings2, TrendingUp } from 'lucide-react'
+import { Plus, PenLine, ChevronRight, ArrowRight, ArrowLeft, Check, Settings2 } from 'lucide-react'
 import { cn } from 'cn'
 import { StudioBrand } from '@/components/studio-brand'
-import { UnderstandingScreen } from '@/components/understanding-screen'
-import type { ContentPersona, TopicCluster, ContentDraft, ContentHistoryEntry } from '@/lib/domain/types'
+import type { ContentPersona, ContentProfile, TopicCluster, ContentDraft, ContentHistoryEntry } from '@/lib/domain/types'
 import type { OnboardingQuestion } from '@/lib/ai/onboarding-questions'
 import type { DailyStatus } from '@/app/(app)/content/page'
 
 interface PersonaWithExtras extends ContentPersona {
   topicClusters: TopicCluster[]
   drafts: ContentDraft[]
-  /** Already filtered to the last 14 days, server-side, so the client never needs "now". */
   recentPosts: ContentHistoryEntry[]
   dailyStatus: DailyStatus
+  contentProfile: ContentProfile | null
 }
 
 const DAILY_STATUS_LABEL: Record<DailyStatus, string> = {
@@ -25,40 +24,50 @@ const DAILY_STATUS_LABEL: Record<DailyStatus, string> = {
   none: 'Nothing surfaced today',
 }
 
+function getTimeBasedGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Good morning'
+  if (hour < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
 export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }) {
   const [showNewPersona, setShowNewPersona] = useState(false)
-  const [understandingFor, setUnderstandingFor] = useState<string | null>(null)
 
   const totalDrafts = personas.reduce((sum, p) => sum + p.drafts.filter((d) => d.status === 'draft' || d.status === 'ready').length, 0)
-  const totalSubjects = personas.reduce((sum, p) => sum + p.topicClusters.length, 0)
+  const totalSubjects = personas.reduce((sum, p) => sum + p.topicClusters.filter((c) => c.clusterName.trim()).length, 0)
 
   const postedLast14Days = personas.flatMap((p) => p.recentPosts)
   const withOutcome = postedLast14Days.filter((h) => h.ledToRealOutcome).length
-  const withMetrics = postedLast14Days.filter((h) => h.metricsLoggedAt).length
 
   const readyByPersona = new Map(
     personas.map((p) => [p.id, p.drafts.filter((d) => d.status === 'draft' || d.status === 'ready').length]),
   )
   const topWaitingPersona = [...personas].sort((a, b) => (readyByPersona.get(b.id) ?? 0) - (readyByPersona.get(a.id) ?? 0))[0]
 
-  // Action-first ordering: personas with drafts waiting surface first (most
-  // waiting first), then everything else keeps its natural order.
   const sortedPersonas = [...personas].sort((a, b) => (readyByPersona.get(b.id) ?? 0) - (readyByPersona.get(a.id) ?? 0))
+
+  const displayName = personas.length > 0 ? personas[0].displayName : 'there'
+  const greeting = getTimeBasedGreeting()
 
   return (
     <div className="space-y-8">
       {/* ── Header ── */}
       <header className="flex flex-wrap items-start justify-between gap-6">
-        <div className="space-y-2">
+        <div className="space-y-3">
           <StudioBrand />
-          <p className="max-w-md text-[15px] text-slate">
-            Real material, shaped into your voice. Never invented, never generic.
-          </p>
+          {personas.length > 0 && (
+            <p className="text-[15px] text-graphite">
+              {personas.length === 1
+                ? `${greeting}, ${displayName}.`
+                : `${greeting}, ${displayName}. You have ${personas.length} personas.`}
+            </p>
+          )}
         </div>
         {personas.length > 0 && (
           <button
             onClick={() => setShowNewPersona(true)}
-            className="group inline-flex items-center gap-2.5 rounded-2xl gradient-studio px-5 py-3 text-sm font-semibold text-paper shadow-studio transition-all duration-300 hover:brightness-110 active:scale-[0.97]"
+            className="group inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-ink transition-all hover:bg-bone active:scale-[0.97]"
           >
             <Plus className="size-4 transition-transform duration-300 group-hover:rotate-90" aria-hidden="true" />
             New persona
@@ -71,69 +80,54 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
         <NewPersonaForm onClose={() => setShowNewPersona(false)} />
       )}
 
-      {/* ── Stats strip ── */}
-      {personas.length > 0 && (
-        <div className="grid gap-px overflow-hidden rounded-2xl border border-line/60 bg-line/40 sm:grid-cols-3">
-          <Stat label="Personas" value={String(personas.length)} sub={personas.length === 1 ? 'voice profile' : 'voice profiles'} />
-          <Stat label="Subjects" value={String(totalSubjects)} sub={totalSubjects === 1 ? 'focus area' : 'focus areas'} />
-          {totalDrafts > 0 && topWaitingPersona ? (
-            <Link
-              href={`/content/${topWaitingPersona.id}`}
-              className="flex flex-col gap-1 bg-paper px-4 py-3.5 transition-colors hover:bg-studio/[0.04]"
-            >
-              <span className="text-label text-studio">Ready drafts</span>
-              <span className="font-mono text-xl font-medium tracking-tight text-ink">{totalDrafts}</span>
-              <p className="text-[11px] text-studio">waiting on {topWaitingPersona.displayName} &rarr;</p>
-            </Link>
-          ) : (
-            <Stat label="Ready drafts" value={String(totalDrafts)} sub="waiting" />
+      {/* ── Quick stats — subtle ── */}
+      {personas.length > 0 && (totalSubjects > 0 || totalDrafts > 0 || postedLast14Days.length > 0) && (
+        <div className="flex flex-wrap items-center gap-4 text-sm text-graphite">
+          {totalSubjects > 0 && (
+            <span>{totalSubjects} subject{totalSubjects === 1 ? '' : 's'}</span>
           )}
-        </div>
-      )}
-
-      {/* ── Performance trend, from real logged data only ── */}
-      {postedLast14Days.length > 0 && (
-        <div className="flex items-center gap-2 border-y border-line/50 py-3 text-sm text-slate">
-          <TrendingUp className="size-4 shrink-0 text-slate" aria-hidden="true" />
-          <span>
-            Last 14 days: <span className="font-medium text-ink">{postedLast14Days.length}</span> posted,{' '}
-            <span className="font-medium text-ink">{withMetrics}</span> with results logged,{' '}
-            <span className="font-medium text-ink">{withOutcome}</span> led to something real.
-          </span>
+          {totalDrafts > 0 && (
+            <span>{totalDrafts} draft{totalDrafts === 1 ? '' : 's'} waiting</span>
+          )}
+          {postedLast14Days.length > 0 && (
+            <span>{postedLast14Days.length} posted · {withOutcome} led somewhere</span>
+          )}
         </div>
       )}
 
       {/* ── Empty state ── */}
       {personas.length === 0 && !showNewPersona && (
-        <section className="rounded-[1.75rem] border border-dashed border-line bg-surface-raised p-14 text-center">
+        <section className="rounded-2xl border border-dashed border-line bg-bone-raised p-10 text-center">
           <div className="mx-auto max-w-sm space-y-4">
-            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-paper-tint">
-              <PenLine className="size-6 text-slate" aria-hidden="true" />
+            <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-cobalt/[0.07]">
+              <PenLine className="size-5 text-cobalt" aria-hidden="true" />
             </div>
             <div className="space-y-2">
-              <p className="text-heading text-lg text-ink">No personas yet.</p>
-              <p className="text-sm leading-relaxed text-slate">
-                Paste a profile or bio. Studio will ask a few quick tap questions shaped to your field, then you are ready to draft.
+              <p className="text-heading text-lg text-ink">No personas yet</p>
+              <p className="text-sm leading-relaxed text-graphite">
+                Paste a profile or a few real past posts. Studio asks a few quick questions tailored to your field, then you are ready to draft.
               </p>
             </div>
             <button
               onClick={() => setShowNewPersona(true)}
-              className="inline-flex items-center gap-2 rounded-xl gradient-studio px-6 py-3 text-sm font-semibold text-paper transition-all hover:brightness-110"
+              className="inline-flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-bone transition-all hover:bg-ink/90"
             >
-              <Plus className="size-4" aria-hidden="true" />
               Create your first persona
             </button>
           </div>
         </section>
       )}
 
-      {/* ── Persona list — action-first: waiting drafts surface first, unset-up personas read as unset-up ── */}
+      {/* ── Persona list ── */}
       {personas.length > 0 && (
-        <div className="space-y-4">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-heading text-base text-ink">Your personas</h2>
+          </div>
           {sortedPersonas.map((persona) => {
             const readyDrafts = persona.drafts.filter((d) => d.status === 'draft' || d.status === 'ready').length
             const namedClusters = persona.topicClusters.filter((c) => c.clusterName.trim().length > 0)
-            const subjects = namedClusters.slice(0, 4)
+            const subjects = namedClusters.slice(0, 3)
             const needsSetup = namedClusters.length === 0
             const hasWaiting = readyDrafts > 0
 
@@ -141,27 +135,25 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
               <article
                 key={persona.id}
                 className={cn(
-                  'overflow-hidden rounded-[1.25rem] transition-shadow',
+                  'overflow-hidden rounded-2xl transition-shadow',
                   hasWaiting
-                    ? 'border-2 border-studio/40 bg-surface-raised shadow-studio hover:shadow-md'
+                    ? 'border-2 border-cobalt/30 bg-bone-raised shadow-cobalt hover:shadow-md'
                     : needsSetup
-                      ? 'border border-dashed border-line bg-paper-tint/30'
-                      : 'border border-line/60 bg-surface-raised hover:shadow-md',
+                      ? 'border border-dashed border-line bg-bone/30'
+                      : 'border border-line/60 bg-bone-raised hover:shadow-sm',
                 )}
               >
                 <div className="flex flex-wrap items-center justify-between gap-4 p-5">
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={cn(
-                        'flex size-11 shrink-0 items-center justify-center rounded-xl',
-                        hasWaiting ? 'bg-gradient-to-br from-studio/20 to-studio/5' : 'bg-paper-tint',
-                      )}
-                    >
-                      <PenLine className={cn('size-5', hasWaiting ? 'text-studio' : 'text-slate')} aria-hidden="true" />
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'flex size-10 shrink-0 items-center justify-center rounded-xl',
+                      hasWaiting ? 'bg-gradient-to-br from-studio/15 to-studio/5' : 'bg-bone',
+                    )}>
+                      <PenLine className={cn('size-[18px]', hasWaiting ? 'text-cobalt' : 'text-graphite')} aria-hidden="true" />
                     </div>
                     <div>
-                      <h2 className="text-heading text-base text-ink">{persona.displayName}</h2>
-                      <p className="text-xs text-slate">
+                      <h3 className="text-heading text-[15px] text-ink">{persona.displayName}</h3>
+                      <p className="text-xs text-graphite">
                         {[
                           `${namedClusters.length} subject${namedClusters.length === 1 ? '' : 's'}`,
                           persona.platforms.join(', '),
@@ -171,35 +163,21 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                   </div>
                   <div className="flex items-center gap-2">
                     {hasWaiting ? (
-                      <span className="rounded-full bg-studio px-2.5 py-1 text-mono-medium text-[10px] text-paper">
+                      <span className="rounded-full bg-cobalt px-2.5 py-1 text-mono-medium text-[10px] text-bone">
                         {readyDrafts} draft{readyDrafts === 1 ? '' : 's'} waiting
                       </span>
                     ) : (
-                      <span
-                        className={cn(
-                          'rounded-full px-2.5 py-1 text-mono-medium text-[10px]',
-                          persona.dailyStatus === 'posted' ? 'bg-status-send/10 text-status-send' : 'bg-paper-tint text-slate',
-                        )}
-                      >
+                      <span className={cn(
+                        'rounded-full px-2.5 py-1 text-mono-medium text-[10px]',
+                        persona.dailyStatus === 'posted' ? 'bg-status-success/10 text-status-success' : 'bg-bone text-graphite',
+                      )}>
                         {DAILY_STATUS_LABEL[persona.dailyStatus]}
                       </span>
                     )}
-                    <button
-                      onClick={() => setUnderstandingFor((prev) => (prev === persona.id ? null : persona.id))}
-                      className={cn(
-                        'inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition-colors',
-                        understandingFor === persona.id
-                          ? 'border-ink/30 bg-paper-tint text-ink'
-                          : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
-                      )}
-                    >
-                      <Settings2 className="size-3.5" aria-hidden="true" />
-                      About you
-                    </button>
                     {needsSetup ? (
                       <Link
                         href={`/content/${persona.id}`}
-                        className="group inline-flex items-center gap-1.5 rounded-xl gradient-studio px-4 py-2 text-sm font-medium text-paper transition-all hover:brightness-110 active:scale-[0.97]"
+                        className="group inline-flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-bone transition-all hover:bg-ink/90 active:scale-[0.97]"
                       >
                         Finish setup
                         <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
@@ -210,8 +188,8 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                         className={cn(
                           'group inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-all active:scale-[0.97]',
                           hasWaiting
-                            ? 'gradient-studio text-paper hover:brightness-110'
-                            : 'bg-ink text-paper hover:bg-ink/90',
+                            ? 'bg-ink text-bone hover:bg-ink/90'
+                            : 'border border-line text-ink hover:bg-bone',
                         )}
                       >
                         Open
@@ -221,36 +199,28 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                   </div>
                 </div>
 
-                {understandingFor === persona.id && (
-                  <div className="border-t border-line/40 p-5">
-                    <UnderstandingScreen
-                      persona={persona}
-                      topicClusters={persona.topicClusters}
-                      onUpdated={() => setUnderstandingFor(null)}
-                    />
-                  </div>
-                )}
-
-                {needsSetup ? (
-                  <div className="border-t border-line/40 px-5 py-3">
-                    <p className="text-xs text-slate">
-                      No subjects yet — nothing to draft from. Open this persona and answer the first question to get started.
-                    </p>
-                  </div>
-                ) : subjects.length > 0 && (
+                {subjects.length > 0 && (
                   <div className="border-t border-line/40 px-5 py-3">
                     <div className="flex flex-wrap gap-1.5">
                       {subjects.map((s) => (
-                        <span key={s.id} className="rounded-lg bg-paper-tint/60 px-2 py-0.5 text-[11px] text-ink-soft">
+                        <span key={s.id} className="rounded-lg bg-bone/60 px-2 py-0.5 text-[11px] text-ink-soft">
                           {s.clusterName}
                         </span>
                       ))}
-                      {namedClusters.length > 4 && (
-                        <span className="rounded-lg bg-paper-tint/60 px-2 py-0.5 text-[11px] text-slate">
-                          +{namedClusters.length - 4} more
+                      {namedClusters.length > 3 && (
+                        <span className="rounded-lg bg-bone/60 px-2 py-0.5 text-[11px] text-graphite">
+                          +{namedClusters.length - 3} more
                         </span>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {needsSetup && (
+                  <div className="border-t border-line/40 px-5 py-3">
+                    <p className="text-xs text-graphite">
+                      No subjects yet — answer the first question to get started.
+                    </p>
                   </div>
                 )}
               </article>
@@ -258,16 +228,6 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
           })}
         </div>
       )}
-    </div>
-  )
-}
-
-function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return (
-    <div className="flex flex-col gap-1 bg-paper px-4 py-3.5">
-      <span className="text-label text-slate">{label}</span>
-      <span className="font-mono text-xl font-medium tracking-tight text-ink">{value}</span>
-      <p className="text-[11px] text-slate">{sub}</p>
     </div>
   )
 }
@@ -326,7 +286,6 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
     setError(null)
     setStep('loading-questions')
 
-    // Cold-start: no past posts to lean on → use adaptive branching questions.
     const hasPastedPosts = pastPostsInput.trim().split(/\s+/).length >= 30
     if (!hasPastedPosts) {
       await loadColdStartQuestion([], 0)
@@ -444,15 +403,15 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <section className="reveal-up rounded-2xl border border-studio/25 bg-surface-raised p-6 shadow-studio">
+    <section className="reveal-up rounded-2xl border border-cobalt/25 bg-bone-raised p-6 shadow-cobalt">
       {error && (
-        <p className="mb-3 text-sm text-status-no" role="alert">{error}</p>
+        <p className="mb-3 text-sm text-status-danger" role="alert">{error}</p>
       )}
 
       {step === 'profile' && (
         <>
           <h2 className="text-heading text-base text-ink">New persona</h2>
-          <p className="mt-1 text-sm text-slate">Paste a profile, or a few real past posts. Studio asks a few quick tap questions next, tailored to what it finds.</p>
+          <p className="mt-1 text-sm text-graphite">Paste a profile, or a few real past posts. Studio asks a few quick questions next, tailored to what it finds.</p>
 
           <div className="mt-4 grid gap-4">
             <div className="grid gap-1.5">
@@ -462,7 +421,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Madiha, Hassan"
-                className="h-9 w-full rounded-xl border border-line bg-paper-raised px-3 text-sm transition-all outline-none focus-visible:border-studio/40 focus-visible:ring-2 focus-visible:ring-studio/20"
+                className="h-9 w-full rounded-xl border border-line bg-bone-raised px-3 text-sm transition-all outline-none focus-visible:border-cobalt/40 focus-visible:ring-2 focus-visible:ring-cobalt/20"
               />
             </div>
             <div className="grid gap-1.5">
@@ -476,8 +435,8 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                     className={cn(
                       'rounded-xl border px-4 py-2 text-sm font-medium transition-all',
                       platforms.includes(p)
-                        ? 'border-studio/30 bg-studio/8 text-studio'
-                        : 'border-line bg-paper-raised text-slate hover:bg-paper-tint',
+                        ? 'border-cobalt/30 bg-cobalt/8 text-cobalt'
+                        : 'border-line bg-bone-raised text-graphite hover:bg-bone',
                     )}
                   >
                     {p}
@@ -486,9 +445,9 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            <div className="grid gap-1.5 rounded-xl border border-studio/20 bg-studio/[0.03] p-3.5">
+            <div className="grid gap-1.5 rounded-xl border border-cobalt/20 bg-cobalt/[0.03] p-3.5">
               <label htmlFor="past-posts-input" className="text-sm font-medium text-ink-soft">
-                Paste a few of your real past posts <span className="font-normal text-slate">(fastest, most accurate)</span>
+                Paste a few of your real past posts <span className="font-normal text-graphite">(fastest, most accurate)</span>
               </label>
               <textarea
                 id="past-posts-input"
@@ -496,15 +455,15 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                 onChange={(e) => setPastPostsInput(e.target.value)}
                 rows={5}
                 placeholder="Paste 2-3 real posts you've written before, from LinkedIn, X, wherever. Plain text — no connected account needed."
-                className="w-full rounded-xl border border-line bg-paper-raised px-3 py-2 text-sm transition-all outline-none focus-visible:border-studio/40 focus-visible:ring-2 focus-visible:ring-studio/20"
+                className="w-full rounded-xl border border-line bg-bone-raised px-3 py-2 text-sm transition-all outline-none focus-visible:border-cobalt/40 focus-visible:ring-2 focus-visible:ring-cobalt/20"
               />
-              <p className="text-xs text-slate">This reads your own writing directly, so it seeds voice and topics more accurately than answers alone.</p>
+              <p className="text-xs text-graphite">This reads your own writing directly, so it seeds voice and topics more accurately than answers alone.</p>
             </div>
 
             {(showPastPosts || profileInput.trim().length > 0 || pastPostsInput.trim().length === 0) && (
               <div className="grid gap-1.5">
                 <label htmlFor="profile-input" className="text-sm font-medium text-ink-soft">
-                  LinkedIn URL or bio <span className="font-normal text-slate">(optional if you pasted posts above)</span>
+                  LinkedIn URL or bio <span className="font-normal text-graphite">(optional if you pasted posts above)</span>
                 </label>
                 <textarea
                   id="profile-input"
@@ -512,7 +471,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                   onChange={(e) => setProfileInput(e.target.value)}
                   rows={4}
                   placeholder="Paste a LinkedIn profile URL, About section, or short bio."
-                  className="w-full rounded-xl border border-line bg-paper-raised px-3 py-2 text-sm transition-all outline-none focus-visible:border-studio/40 focus-visible:ring-2 focus-visible:ring-studio/20"
+                  className="w-full rounded-xl border border-line bg-bone-raised px-3 py-2 text-sm transition-all outline-none focus-visible:border-cobalt/40 focus-visible:ring-2 focus-visible:ring-cobalt/20"
                 />
               </div>
             )}
@@ -520,7 +479,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
               <button
                 type="button"
                 onClick={() => setShowPastPosts(true)}
-                className="justify-self-start text-xs text-studio hover:underline"
+                className="justify-self-start text-xs text-cobalt hover:underline"
               >
                 Also add a bio (optional)
               </button>
@@ -528,12 +487,12 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="mt-5 flex items-center justify-end gap-3">
-            <button onClick={onClose} className="rounded-xl border border-line px-4 py-2 text-sm text-slate transition-colors hover:bg-paper-tint">
+            <button onClick={onClose} className="rounded-xl border border-line px-4 py-2 text-sm text-graphite transition-colors hover:bg-bone">
               Cancel
             </button>
             <button
               onClick={() => void goToQuestions()}
-              className="inline-flex items-center gap-2 rounded-xl gradient-studio px-5 py-2 text-sm font-semibold text-paper transition-all hover:brightness-110"
+              className="inline-flex items-center gap-2 rounded-xl bg-ink px-5 py-2 text-sm font-medium text-bone transition-all hover:bg-ink/90"
             >
               Continue
               <ArrowRight className="size-3.5" aria-hidden="true" />
@@ -544,8 +503,8 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
 
       {step === 'loading-questions' && (
         <div className="flex flex-col items-center gap-3 py-10 text-center">
-          <div className="size-8 animate-spin rounded-full border-2 border-studio/20 border-t-studio" />
-          <p className="text-sm text-slate">Reading the profile, shaping a few questions...</p>
+          <div className="size-8 animate-spin rounded-full border-2 border-cobalt/20 border-t-studio" />
+          <p className="text-sm text-graphite">Reading the profile, shaping a few questions...</p>
         </div>
       )}
 
@@ -554,11 +513,10 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
         const q = questions[idx]
         return (
           <>
-            {/* Progress indicator */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-studio-light">Generated for you</span>
-                <span className="text-xs text-slate">{idx + 1} of {questions.length}</span>
+                <span className="text-xs text-cobalt-light">Generated for you</span>
+                <span className="text-xs text-graphite">{idx + 1} of {questions.length}</span>
               </div>
               <div className="flex gap-1">
                 {questions.map((_, i) => (
@@ -566,7 +524,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                     key={i}
                     className={cn(
                       'h-1 flex-1 rounded-full transition-colors',
-                      i < idx ? 'bg-studio/40' : i === idx ? 'bg-studio' : 'bg-line/60',
+                      i < idx ? 'bg-cobalt/40' : i === idx ? 'bg-cobalt' : 'bg-line/60',
                     )}
                   />
                 ))}
@@ -584,8 +542,8 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                     className={cn(
                       'flex items-center gap-2 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-all',
                       answers[q.id] === opt
-                        ? 'border-studio/30 bg-studio/10 text-studio'
-                        : 'border-line bg-paper-raised text-slate hover:bg-paper-tint hover:text-ink',
+                        ? 'border-cobalt/30 bg-cobalt/10 text-cobalt'
+                        : 'border-line bg-bone-raised text-graphite hover:bg-bone hover:text-ink',
                     )}
                   >
                     {answers[q.id] === opt && <Check className="size-4 shrink-0" aria-hidden="true" />}
@@ -599,13 +557,13 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                     onChange={(e) => pick(q.id, e.target.value)}
                     onBlur={() => { if (answers[q.id]?.trim() && idx < questions.length - 1) setCurrentQuestion(idx + 1) }}
                     placeholder="Type your own answer"
-                    className="h-12 w-full rounded-xl border border-studio/30 bg-paper-raised px-4 text-sm outline-none focus-visible:border-studio/40 focus-visible:ring-2 focus-visible:ring-studio/20"
+                    className="h-12 w-full rounded-xl border border-cobalt/30 bg-bone-raised px-4 text-sm outline-none focus-visible:border-cobalt/40 focus-visible:ring-2 focus-visible:ring-cobalt/20"
                   />
                 ) : (
                   <button
                     type="button"
                     onClick={() => setOtherOpen((prev) => ({ ...prev, [q.id]: true }))}
-                    className="rounded-xl border border-dashed border-line px-4 py-3 text-left text-sm text-slate transition-colors hover:border-studio/40 hover:text-studio"
+                    className="rounded-xl border border-dashed border-line px-4 py-3 text-left text-sm text-graphite transition-colors hover:border-cobalt/40 hover:text-cobalt"
                   >
                     Other, let me type it
                   </button>
@@ -616,7 +574,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
             <div className="mt-6 flex items-center justify-between gap-3">
               <button
                 onClick={() => idx === 0 ? setStep('profile') : setCurrentQuestion(idx - 1)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2 text-sm text-slate transition-colors hover:bg-paper-tint"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2 text-sm text-graphite transition-colors hover:bg-bone"
               >
                 <ArrowLeft className="size-3.5" aria-hidden="true" />
                 {idx === 0 ? 'Back' : 'Previous'}
@@ -624,7 +582,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
               {idx < questions.length - 1 ? (
                 <button
                   onClick={() => setCurrentQuestion(idx + 1)}
-                  className="inline-flex items-center gap-2 rounded-xl gradient-studio px-5 py-2 text-sm font-semibold text-paper transition-all hover:brightness-110"
+                  className="inline-flex items-center gap-2 rounded-xl bg-ink px-5 py-2 text-sm font-medium text-bone transition-all hover:bg-ink/90"
                 >
                   Next
                   <ArrowRight className="size-3.5" aria-hidden="true" />
@@ -632,7 +590,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
               ) : (
                 <button
                   onClick={finishQuestions}
-                  className="rounded-xl gradient-studio px-5 py-2 text-sm font-semibold text-paper transition-all hover:brightness-110"
+                  className="rounded-xl bg-ink px-5 py-2 text-sm font-medium text-bone transition-all hover:bg-ink/90"
                 >
                   Continue
                 </button>
@@ -646,12 +604,12 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
         <>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-studio-light">Tailored to you</span>
-              <span className="text-xs text-slate">Q{coldDepth + 1}</span>
+              <span className="text-xs text-cobalt-light">Tailored to you</span>
+              <span className="text-xs text-graphite">Q{coldDepth + 1}</span>
             </div>
             <div className="flex gap-1">
               {Array.from({ length: Math.min(coldDepth + 1, 6) }).map((_, i) => (
-                <span key={i} className={cn('h-1 flex-1 rounded-full', i <= coldDepth ? 'bg-studio' : 'bg-line/60')} />
+                <span key={i} className={cn('h-1 flex-1 rounded-full', i <= coldDepth ? 'bg-cobalt' : 'bg-line/60')} />
               ))}
             </div>
           </div>
@@ -664,7 +622,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                   key={opt}
                   type="button"
                   onClick={() => pickColdStart(opt)}
-                  className="flex items-center gap-2 rounded-xl border border-line bg-paper-raised px-4 py-3 text-left text-sm text-slate transition-all hover:border-studio/30 hover:bg-studio/10 hover:text-studio"
+                  className="flex items-center gap-2 rounded-xl border border-line bg-bone-raised px-4 py-3 text-left text-sm text-graphite transition-all hover:border-cobalt/30 hover:bg-cobalt/10 hover:text-cobalt"
                 >
                   {opt}
                 </button>
@@ -675,7 +633,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                   const typed = prompt('Type your answer:')
                   if (typed?.trim()) pickColdStart(typed.trim())
                 }}
-                className="rounded-xl border border-dashed border-line px-4 py-3 text-left text-sm text-slate transition-colors hover:border-studio/40 hover:text-studio"
+                className="rounded-xl border border-dashed border-line px-4 py-3 text-left text-sm text-graphite transition-colors hover:border-cobalt/40 hover:text-cobalt"
               >
                 Other, let me type it
               </button>
@@ -690,7 +648,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                   setColdAnswers(prev)
                   loadColdStartQuestion(prev, coldDepth - 1)
                 }}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2 text-sm text-slate transition-colors hover:bg-paper-tint"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2 text-sm text-graphite transition-colors hover:bg-bone"
               >
                 <ArrowLeft className="size-3.5" aria-hidden="true" />
                 Previous
@@ -703,7 +661,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
       {step === 'voice' && (
         <>
           <h2 className="text-heading text-base text-ink">A couple more taps</h2>
-          <p className="mt-1 text-sm text-slate">This shapes tone. Skip anything that doesn&apos;t fit.</p>
+          <p className="mt-1 text-sm text-graphite">This shapes tone. Skip anything that doesn&apos;t fit.</p>
 
           <div className="mt-4 space-y-5">
             <div className="space-y-2">
@@ -717,8 +675,8 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                     className={cn(
                       'inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-sm font-medium transition-all',
                       humorStyle === style
-                        ? 'border-studio/30 bg-studio/10 text-studio'
-                        : 'border-line bg-paper-raised text-slate hover:bg-paper-tint hover:text-ink',
+                        ? 'border-cobalt/30 bg-cobalt/10 text-cobalt'
+                        : 'border-line bg-bone-raised text-graphite hover:bg-bone hover:text-ink',
                     )}
                   >
                     {humorStyle === style && <Check className="size-3.5" aria-hidden="true" />}
@@ -730,7 +688,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                   onClick={() => setHumorOtherOpen((prev) => !prev)}
                   className={cn(
                     'inline-flex items-center gap-1.5 rounded-xl border border-dashed px-3.5 py-2 text-sm font-medium transition-all',
-                    humorOtherOpen ? 'border-studio/40 text-studio' : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
+                    humorOtherOpen ? 'border-cobalt/40 text-cobalt' : 'border-line text-graphite hover:bg-bone hover:text-ink',
                   )}
                 >
                   Other, let me type it
@@ -742,7 +700,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                   value={!HUMOR_STYLES.includes(humorStyle) ? humorStyle : ''}
                   onChange={(e) => setHumorStyle(e.target.value)}
                   placeholder="Describe it in a few words"
-                  className="w-full rounded-xl border border-line bg-paper-raised px-3 py-2 text-sm outline-none focus-visible:border-studio/40 focus-visible:ring-2 focus-visible:ring-studio/20"
+                  className="w-full rounded-xl border border-line bg-bone-raised px-3 py-2 text-sm outline-none focus-visible:border-cobalt/40 focus-visible:ring-2 focus-visible:ring-cobalt/20"
                 />
               )}
             </div>
@@ -758,8 +716,8 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                     className={cn(
                       'inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-sm font-medium transition-all',
                       admiredStyles.includes(style)
-                        ? 'border-studio/30 bg-studio/10 text-studio'
-                        : 'border-line bg-paper-raised text-slate hover:bg-paper-tint hover:text-ink',
+                        ? 'border-cobalt/30 bg-cobalt/10 text-cobalt'
+                        : 'border-line bg-bone-raised text-graphite hover:bg-bone hover:text-ink',
                     )}
                   >
                     {admiredStyles.includes(style) && <Check className="size-3.5" aria-hidden="true" />}
@@ -771,7 +729,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                   onClick={() => setAdmiredOtherOpen((prev) => !prev)}
                   className={cn(
                     'inline-flex items-center gap-1.5 rounded-xl border border-dashed px-3.5 py-2 text-sm font-medium transition-all',
-                    admiredOtherOpen ? 'border-studio/40 text-studio' : 'border-line text-slate hover:bg-paper-tint hover:text-ink',
+                    admiredOtherOpen ? 'border-cobalt/40 text-cobalt' : 'border-line text-graphite hover:bg-bone hover:text-ink',
                   )}
                 >
                   Other, let me type it
@@ -783,7 +741,7 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
                   value={admiredOther}
                   onChange={(e) => setAdmiredOther(e.target.value)}
                   placeholder="Describe it in a few words"
-                  className="w-full rounded-xl border border-line bg-paper-raised px-3 py-2 text-sm outline-none focus-visible:border-studio/40 focus-visible:ring-2 focus-visible:ring-studio/20"
+                  className="w-full rounded-xl border border-line bg-bone-raised px-3 py-2 text-sm outline-none focus-visible:border-cobalt/40 focus-visible:ring-2 focus-visible:ring-cobalt/20"
                 />
               )}
             </div>
@@ -792,14 +750,14 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
           <div className="mt-6 flex items-center justify-between gap-3">
             <button
               onClick={() => setStep(questions.length > 0 ? 'questions' : 'profile')}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2 text-sm text-slate transition-colors hover:bg-paper-tint"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2 text-sm text-graphite transition-colors hover:bg-bone"
             >
               <ArrowLeft className="size-3.5" aria-hidden="true" />
               Back
             </button>
             <button
               onClick={finishVoice}
-              className="rounded-xl gradient-studio px-5 py-2 text-sm font-semibold text-paper transition-all hover:brightness-110"
+              className="rounded-xl bg-ink px-5 py-2 text-sm font-medium text-bone transition-all hover:bg-ink/90"
             >
               Create persona
             </button>
@@ -809,8 +767,8 @@ function NewPersonaForm({ onClose }: { onClose: () => void }) {
 
       {step === 'creating' && (
         <div className="flex flex-col items-center gap-3 py-10 text-center">
-          <div className="size-8 animate-spin rounded-full border-2 border-studio/20 border-t-studio" />
-          <p className="text-sm text-slate">Setting things up...</p>
+          <div className="size-8 animate-spin rounded-full border-2 border-cobalt/20 border-t-studio" />
+          <p className="text-sm text-graphite">Setting things up...</p>
         </div>
       )}
     </section>
