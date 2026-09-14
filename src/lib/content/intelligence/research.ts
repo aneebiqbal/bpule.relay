@@ -52,6 +52,8 @@ export function requiresResearch(input: {
     { pattern: /\b(compared\s+to|vs\.?\s+|versus|benchmark|performance\s+test)\b/i, reason: 'Technology comparison made' },
     { pattern: /\b(industry|market|survey|report|study\s+found)\b/i, reason: 'Industry claim referenced' },
     { pattern: /\b(new\s+version|v\d+\.\d+|update\s+dropped|just\s+shipped)\b/i, reason: 'Software version/release referenced' },
+    { pattern: /\b(Rails|React|Next\.js|Django|Spring|Angular|Vue|Svelte|Node|Express|FastAPI|Flask)\s+\d+\.\d+/i, reason: 'Framework version-specific claim' },
+    { pattern: /\b(changed|adds?|removes?|introduces?|deprecates?)\s+(how|the|support|feature|behavior|API)\b/i, reason: 'Framework behavior change claimed' },
   ]
 
   for (const trigger of researchTriggers) {

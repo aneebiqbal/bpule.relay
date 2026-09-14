@@ -209,6 +209,11 @@ export function extractDnaCandidatesFromAnswer(
     /\bhot take\b/i,
     /\bcontroversial take\b/i,
     /\bstrongly believe\b/i,
+    /\bmost (startups?|teams?|companies?|engineers?)\s+\w+\s+\w+\s+(way too|too|should|shouldn't|need to)\b/i,
+    /\bmost (startups?|teams?|companies?|engineers?)\s+(introduce|adopt|use|need|should|shouldn't)\b/i,
+    /\boverrated\b/i,
+    /\bunderrated\b/i,
+    /\b(should|shouldn't|need to|must|never|always)\s+\w+\s+(it|them|this|that|earlier|sooner|later|immediately)\b/i,
   ]
 
   for (const regex of opinionPatterns) {

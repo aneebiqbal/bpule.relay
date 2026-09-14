@@ -109,7 +109,30 @@ function computeSimilarity(a: string, b: string): number {
     if (bWords.has(word)) intersection++
   }
   const union = aWords.size + bWords.size - intersection
-  return union === 0 ? 0 : intersection / union
+  const jaccard = union === 0 ? 0 : intersection / union
+
+  // Key-phrase overlap: check if important bigrams overlap
+  // Use containment (what fraction of the shorter text's bigrams appear in the longer)
+  const aBigrams = getKeyGrams(a, 2)
+  const bBigrams = getKeyGrams(b, 2)
+  const [shorter, longer] = aBigrams.size <= bBigrams.size ? [aBigrams, bBigrams] : [bBigrams, aBigrams]
+  let bigramIntersection = 0
+  for (const bg of shorter) {
+    if (longer.has(bg)) bigramIntersection++
+  }
+  const bigramContainment = shorter.size === 0 ? 0 : bigramIntersection / shorter.size
+
+  // Use the higher of word-level Jaccard and phrase-level containment
+  return Math.max(jaccard, bigramContainment)
+}
+
+function getKeyGrams(text: string, n: number): Set<string> {
+  const words = text.split(' ').filter((w) => w.length > 2)
+  const grams = new Set<string>()
+  for (let i = 0; i <= words.length - n; i++) {
+    grams.add(words.slice(i, i + n).join(' '))
+  }
+  return grams
 }
 
 /**

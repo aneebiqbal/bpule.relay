@@ -46,22 +46,27 @@ export function decideIfInterviewNeeded(input: {
     missingDimensions.push('basic professional context')
   }
 
-  const hasSpecificDetail = input.sourceMaterial.trim().length > 20 &&
-    /\b(i|we|my|our|today|yesterday|last week|this morning|spent|built|shipped|fixed|debugged|learned|decided)\b/i.test(input.sourceMaterial)
+  const hasStrongAction = /\b(spent|built|shipped|debugged|fixed|learned|decided|chose|realized|discovered|found out|turns out|deployed|migrated|refactored|optimized|reduced|increased|cut|dropped|stopped|checked|changed|updated|removed|added)\b/i.test(input.sourceMaterial)
+
+  const hasConcreteDetail = input.sourceMaterial.trim().length > 30 &&
+    /\b(i|we|my|our|today|yesterday|last week|this morning|the|a|our|my)\b/i.test(input.sourceMaterial) &&
+    /\b(system|server|API|endpoint|query|index|cache|queue|migration|build|deploy|config|environment|database|CI|pipeline|production|codebase|infrastructure|Docker|Kubernetes|Rails|React|Postgres|Redis|Python|TypeScript|JavaScript|Go|Rust|microservices?|monolith|architecture|framework|platform|stack|tooling)\b/i.test(input.sourceMaterial)
+
+  const hasSpecificDetail = hasStrongAction && hasConcreteDetail
 
   if (!hasSpecificDetail) {
     missingDimensions.push('specific personal detail or experience')
   }
 
   const hasOpinionOrAngle = input.sourceMaterial.trim().length > 10 &&
-    /\b(think|believe|opinion|take|learned|lesson|realized|found out|discovered|turns out)\b/i.test(input.sourceMaterial)
+    /\b(think|believe|opinion|take|learned|lesson|realized|found out|discovered|turns out|should|shouldn't|overrated|underrated|better|worse|prefer|recommend)\b/i.test(input.sourceMaterial)
 
   if (!hasOpinionOrAngle) {
     missingDimensions.push('opinion, lesson, or angle')
   }
 
-  // If the profile has strong material already, we may not need to interview
-  if (input.profile && input.profile.confidence >= 0.5 && hasSpecificDetail) {
+  // Only skip interview if profile is confident AND input has strong action + concrete detail
+  if (input.profile && input.profile.confidence >= 0.5 && hasSpecificDetail && hasOpinionOrAngle) {
     return { shouldInterview: false, reason: 'Enough context exists from Content DNA and source material.', missingDimensions: [] }
   }
 
@@ -190,11 +195,21 @@ export function assessAnswerQuality(answer: string, existingContext: string): 'h
   const len = answer.trim().length
   if (len < 10) return 'low'
 
-  const hasSpecific = /\b(spent|built|shipped|debugged|fixed|learned|decided|chose|realized|discovered|found out|turns out|the lesson|the hardest|the surprising|the mistake|was reading|instead of|by adding|the actual|stopped looking|checked the|was stale|convinced|I've become|I stopped|eventually|turned out)\b/i.test(answer)
-  const hasDetail = /\b\d|today|yesterday|last (week|month)|this (morning|afternoon|week)|my (team|manager|customer|client)|our (product|system|codebase|infrastructure)|\.env|deploy|config|pipeline|production|stale|environment|release|build|logs?/i.test(answer)
+  // Strong action/lesson verbs — indicate the user actually did something or learned something
+  const hasStrongAction = /\b(spent|built|shipped|debugged|fixed|learned|decided|chose|realized|discovered|found out|found it|turns out|stopped looking|checked the|was stale|was reading|convinced|I've become|I stopped|eventually|turned out|deployed|migrated|refactored|optimized|reduced|increased|cut|dropped|by adding|instead of|the actual)\b/i.test(answer)
 
-  if (hasSpecific && hasDetail && len > 30) return 'high'
-  if (hasSpecific || (hasDetail && len > 20)) return 'medium'
+  // Weak temporal markers alone don't indicate quality
+  const hasWeakTemporal = /\b(today|yesterday|last week|last month|this morning|this week)\b/i.test(answer)
+
+  // Concrete details — technologies, systems, metrics, outcomes
+  const hasConcreteDetail = /\b\d|my (team|manager|customer|client)|our (product|system|codebase|infrastructure)|\.env|deploy|config|pipeline|production|stale|environment|release|build|logs?|CI|database|server|API|endpoint|query|index|cache|queue|migration/i.test(answer)
+
+  // A complete story needs action + detail + sufficient length
+  if (hasStrongAction && hasConcreteDetail && len > 50) return 'high'
+  // Medium requires either strong action OR (concrete detail + sufficient length + not just a statement of fact)
+  if (hasStrongAction && len > 20) return 'medium'
+  if (hasConcreteDetail && len > 60 && hasStrongAction) return 'medium'
+  // Short inputs with only factual statements (no action) are low quality
   return 'low'
 }
 
