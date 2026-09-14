@@ -7,7 +7,7 @@
 CREATE TABLE IF NOT EXISTS content_taste_profiles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  persona_id uuid NOT NULL REFERENCES content_personas(id) ON DELETE UNIQUE,
+  persona_id uuid NOT NULL REFERENCES content_personas(id) ON DELETE CASCADE,
 
   -- Dimensional preferences (-1 to 1)
   pref_technical_vs_human real NOT NULL DEFAULT 0,
