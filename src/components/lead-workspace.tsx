@@ -185,6 +185,9 @@ export function LeadWorkspace({
       const body: Record<string, unknown> = { type: target, profileId: chosenProfileId, proofId: proofId ?? matchedProofId ?? undefined }
       if (target === 'reply' && prospectReplyText) {
         body.replyToMessageId = lastReply?.id ?? 'manual'
+        if (capturedReplyText) {
+          body.replyText = capturedReplyText
+        }
       }
       const res = await fetch(`/api/leads/${lead.id}/draft`, {
         method: 'POST',

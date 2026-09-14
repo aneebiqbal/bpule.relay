@@ -1,4 +1,4 @@
-import type { ExtractedLead } from '@/lib/domain/types'
+import type { ExtractedLead, OutreachStrategy, SafeFact, MatchedProof } from '@/lib/domain/types'
 import { computeScore } from '@/lib/score/rubric'
 import { streamDraft } from '@/lib/ai/draft-stream'
 import type { DraftMessageType } from '@/lib/ai/draft'
@@ -7,6 +7,9 @@ import { embedText } from '@/lib/ai/embed'
 import { mergeProofMatches } from '@/lib/ai/proof-match'
 import { createScoutStore } from '@/lib/store'
 import { sseStream } from '@/lib/sse/sse'
+import { buildProfileIntelligence, matchProofToLead, classifyLeadFact } from '@/lib/relay/profile-intelligence'
+import { createOutreachStrategy } from '@/lib/relay/outreach-strategy'
+import { analyzeReply, buildReplyStrategy, buildConversationContext } from '@/lib/relay/conversation-engine'
 
 export async function POST(
   request: Request,
@@ -14,7 +17,7 @@ export async function POST(
 ) {
   const { id } = await params
 
-  let body: { type?: string; profileId?: string; proofId?: string }
+  let body: { type?: string; profileId?: string; proofId?: string; replyToMessageId?: string; replyText?: string }
   try {
     body = await request.json()
   } catch {
@@ -31,11 +34,10 @@ export async function POST(
     })
   }
 
-  // Reply requires the incoming message text
-  const bodyWithReply = body as { type?: string; profileId?: string; proofId?: string; replyToMessageId?: string }
-  if (type === 'reply' && !bodyWithReply.replyToMessageId) {
+  // Reply requires either a message ID to reply to or explicit reply text
+  if (type === 'reply' && !body.replyToMessageId && !body.replyText?.trim()) {
     return new Response(
-      JSON.stringify({ error: 'replyToMessageId is required for reply drafting.' }),
+      JSON.stringify({ error: 'Reply drafting requires replyToMessageId or replyText.' }),
       { status: 400, headers: { 'Content-Type': 'application/json' } },
     )
   }
@@ -122,25 +124,75 @@ export async function POST(
     // Few-shot injection from real wins.
     const fewShotSelection = selectFewShotExamples(fewShotPool, { leadId: detail.id, lead: detail, extracted, score, type: type as DraftMessageType, styleCard: voiceProfile?.styleCard ?? null, facts, plays, history: detail.messages, profile, matchedProof: matched[0] ?? null }, plays)
 
-    // Build conversation context for reply type
-    let conversationContext: string | undefined
-    if (type === 'reply' && bodyWithReply.replyToMessageId) {
-      const replyMessage = bodyWithReply.replyToMessageId !== 'manual'
-        ? detail.messages.find((m) => m.id === bodyWithReply.replyToMessageId)
-        : null
-      if (replyMessage) {
-        const priorMessages = detail.messages.filter((m) => m.sentAt && m.sentAt < (replyMessage.sentAt ?? ''))
-        conversationContext = [
-          `The prospect replied: "${replyMessage.sentText ?? replyMessage.draftText ?? ''}"`,
-          priorMessages.length > 0
-            ? `\nPrior conversation:\n${priorMessages.map((m) => `- [${m.type}] ${m.sentText ?? m.draftText ?? ''}`).join('\n')}`
-            : '',
-          `\nWrite a helpful, direct reply. Answer any questions. Advance the conversation naturally.`,
-        ].filter(Boolean).join('\n')
-      } else if (bodyWithReply.replyToMessageId === 'manual') {
-        // For manual reply text, the prospect's message is captured in the UI
-        // We still need to generate a reply without the specific message context
-        conversationContext = `Write a helpful, direct reply to the prospect. Answer any questions. Advance the conversation naturally. Reference your previous outreach if relevant.`
+    // Build outreach strategy using Revenue Intelligence
+    let strategy: OutreachStrategy | null = null
+    let safeFacts: SafeFact[] = []
+    let matchedProofCards: MatchedProof[] = []
+    let conversationContext: string | null = null
+
+    if (profile) {
+      const profileIntelligence = buildProfileIntelligence(profile, [])
+      matchedProofCards = matchProofToLead(profileIntelligence, detail.tags ?? [], 3)
+      safeFacts = [classifyLeadFact(detail.signalEvidence ?? '', detail.signalEvidence ?? '', detail.signalType ?? null)]
+      void profileIntelligence
+
+      if (type === 'reply') {
+        // For replies: analyze the prospect's message and build a reply strategy
+        const prospectReplyMsg = body.replyToMessageId && body.replyToMessageId !== 'manual'
+          ? detail.messages.find((m) => m.id === body.replyToMessageId)
+          : null
+        const prospectReply = body.replyText?.trim() || prospectReplyMsg?.sentText || prospectReplyMsg?.draftText || ''
+
+        if (prospectReply) {
+          const priorMessages = detail.messages.filter((m) => m.sentAt && m.sentAt < (prospectReplyMsg?.sentAt ?? ''))
+          const convStage = detail.status === 'followed_up' ? 'contacted' : detail.status === 'new' ? 'new' : detail.status === 'contacted' ? 'contacted' : detail.status === 'replied' ? 'replied' : detail.status === 'no' ? 'lost' : detail.status === 'dead' ? 'lost' : 'contacted'
+          const replyAnalysis = analyzeReply(prospectReply, {
+            leadId: detail.id,
+            leadCompany: detail.company,
+            contactName: detail.contactName,
+            replyText: prospectReply,
+            priorMessages,
+            conversationStage: convStage,
+            senderProfileId: profile.id,
+          })
+          const replyStrategy = buildReplyStrategy(replyAnalysis, {
+            leadId: detail.id,
+            leadCompany: detail.company,
+            contactName: detail.contactName,
+            replyText: prospectReply,
+            priorMessages,
+            conversationStage: convStage,
+            senderProfileId: profile.id,
+          }, null)
+          conversationContext = buildConversationContext({
+            leadId: detail.id,
+            leadCompany: detail.company,
+            contactName: detail.contactName,
+            replyText: prospectReply,
+            priorMessages,
+            conversationStage: convStage,
+            senderProfileId: profile.id,
+          }, replyAnalysis)
+          void replyStrategy
+        } else {
+          conversationContext = `Write a helpful, direct reply to the prospect. Answer any questions. Advance the conversation naturally.`
+        }
+      } else {
+        // For first-touch and followups: use the standard outreach strategy
+        strategy = createOutreachStrategy({
+          leadCompany: detail.company,
+          contactName: detail.contactName,
+          contactTitle: detail.contactTitle,
+          signalType: detail.signalType ?? null,
+          signalEvidence: detail.signalEvidence ?? '',
+          verbatimQuote: detail.verbatimQuote,
+          tags: detail.tags ?? [],
+          safeFacts,
+          senderProfile: profile,
+          matchedProof: matchedProofCards,
+          channel: type === 'upwork' ? 'upwork' : type === 'connection' ? 'connection' : 'dm',
+          relationshipStage: type === 'followup' ? 'followup' : 'first_touch',
+        })
       }
     }
 
@@ -163,7 +215,10 @@ export async function POST(
           signalEvidence: e.signalEvidence ?? '',
           sentText: e.sentText,
         })),
-        conversationContext,
+        strategy,
+        safeFacts,
+        matchedProofCards,
+        conversationContext: conversationContext ?? undefined,
       },
       emit,
       matched[0] ?? null,
@@ -176,6 +231,15 @@ export async function POST(
       draftText: draftResult.draftText,
       modelUsed: draftResult.modelUsed,
     })
+
+    // Persist sender profile on the lead
+    if (profile) {
+      try {
+        await store.updateLeadSenderProfile(detail.id, profile.id)
+      } catch {
+        // Non-fatal: profile persistence must not break drafting
+      }
+    }
 
     // Log one entry per model call actually made (best-of-two, plus an
     // escalation pass if one ran), so cost-by-tier reflects real spend.
