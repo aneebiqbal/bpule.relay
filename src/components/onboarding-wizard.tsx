@@ -123,17 +123,21 @@ export function OnboardingWizard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sourceText: state.sourceText, sourceType: state.sourceType }),
       })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || `Request failed (${res.status})`)
+      }
       const data = await res.json()
       if (data.identity) {
         update({
           identity: data.identity,
-          selectedGoals: data.identity.contentGoals.slice(0, 3),
-          selectedAudiences: data.identity.audiences.slice(0, 4),
-          selectedTerritories: data.identity.territories.slice(0, 5),
+          selectedGoals: data.identity.contentGoals?.slice(0, 3) ?? [],
+          selectedAudiences: data.identity.audiences?.slice(0, 4) ?? [],
+          selectedTerritories: data.identity.territories?.slice(0, 5) ?? [],
         })
       }
-    } catch {
-      setError('Could not parse source. Please try again or skip.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not parse source. Please try again or skip.')
     }
     setExtracting(false)
     setStep('understanding')

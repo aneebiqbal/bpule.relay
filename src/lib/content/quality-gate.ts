@@ -70,7 +70,7 @@ const FABRICATED_EXPERIENCE_PATTERNS = [
   // Pattern: [my/our] + [work item]
   /\bmy\s+(latest|current|recent|new)\s+(project|client|work|engagement|initiative|launch|release)\b/i,
 
-  // UNSUPPORTED THIRD-PERSON EVENT CLAIMS
+  // UNSUPPORTED THIRD-PERSON EVENT CLAIMS (general patterns, not phrase-specific)
   // Pattern: [the/a] + [role] + [transfer/communication verb]
   /\bthe\s+(devs|developers|engineers|team|designers|design team|engineering team|product team|manager|boss|director|client|customer|founder|ceo|cto)\b.{0,40}\b(handed|gave|sent|told|said|asked|requested|presented|delivered|passed|shared|emailed|messaged|muttered|complained)\b/i,
   // Pattern: [a/an] + [role] + [transfer/communication verb]
@@ -78,10 +78,14 @@ const FABRICATED_EXPERIENCE_PATTERNS = [
   // Pattern: [someone] + [action] + [for/with] + [persona]
   /\b(he|she|they|someone|a colleague|a manager|a client|a founder)\s+(came to|approached|emailed|called|messaged|contacted|visited|brought)\s+(me|us)\b/i,
 
-  // UNSUPPORTED EVENT NARRATIVES
+  // UNSUPPORTED EVENT NARRATIVES (general: any unsupported event description)
   /\b(during|after|while|in)\s+(a |the )?(meeting|call|conversation|discussion|review|standup|retrospective|sprint)\b.{0,30}\b(i|we|my|the team)\b/i,
   /\bwe\s+(were|had been|spent)\s+(working|building|debugging|shipping|trying|attempting|planning|discussing)\b/i,
   /\bi\s+(was|had been)\s+(working|building|debugging|shipping|trying|attempting|planning)\s+(on|with|at)\b/i,
+  // GENERAL THIRD-PERSON CLAIM: [person/role] + [action verb] + [object]
+  /\b(a |the |my |our )?(client|customer|founder|ceo|cto|manager|team|developer|engineer|designer|stakeholder)\s+(told|informed|asked|requested|needed|wanted|said|mentioned|reported|explained|shared|gave|sent|emailed|called|approached)\s+(me|us|that)/i,
+  // UNSUPPORTED EVENT: "we spent [time] [doing]"
+  /\bwe\s+(spent|invested|devoted|dedicated)\s+(\d+|a |several |many )\s+(hours?|days?|weeks?|months?)\s+(working|building|trying|debugging|fixing|developing|creating|designing|testing|planning|writing)/i,
 ]
 
 const LOW_INFORMATION_PATTERNS = [
@@ -110,6 +114,7 @@ export function evaluatePostQuality(input: {
     projects: string[]
     opinions: string[]
     territories: string[]
+    role?: string
   }
   sourceMaterial: string
   platform: string
@@ -151,6 +156,25 @@ export function evaluatePostQuality(input: {
     })
   }
 
+  // ── 3b. Keyword stuffing detection ────────────────────────────────────
+  // Check if the same short set of words dominates the post
+  const wordFrequency = new Map<string, number>()
+  for (const word of words) {
+    const w = word.toLowerCase().replace(/[^a-z]/g, '')
+    if (w.length < 3) continue
+    wordFrequency.set(w, (wordFrequency.get(w) ?? 0) + 1)
+  }
+  const sortedFreq = [...wordFrequency.entries()].sort((a, b) => b[1] - a[1])
+  const top3Count = sortedFreq.slice(0, 3).reduce((sum, [, count]) => sum + count, 0)
+  const top3Ratio = top3Count / Math.max(words.length, 1)
+  if (words.length > 20 && top3Ratio > 0.4) {
+    failures.push({
+      code: 'LOW_INFORMATION_DENSITY',
+      message: `Post appears keyword-stuffed (top 3 words make up ${Math.round(top3Ratio * 100)}% of content).`,
+      severity: top3Ratio > 0.35 ? 'critical' : 'major',
+    })
+  }
+
   // ── 4. Generic conclusion ────────────────────────────────────────────
   const genericConclusion = GENERIC_CONCLUSION_PATTERNS.some((p) => p.test(lower))
   if (genericConclusion) {
@@ -172,7 +196,10 @@ export function evaluatePostQuality(input: {
 
   // ── 6. Persona specificity ───────────────────────────────────────────
   const personaFit = calculatePersonaFit(lower, input.personaContext)
-  if (input.personaContext.expertise.length > 0 && personaFit < 0.15) {
+  // Threshold: 0.1 for technical roles, 0.05 for non-technical (founder, designer, BD, etc.)
+  const isNonTechnical = isNonTechnicalRole(input.personaContext.role)
+  const personaFitThreshold = isNonTechnical ? 0.05 : 0.1
+  if (input.personaContext.expertise.length > 0 && personaFit < personaFitThreshold) {
     failures.push({
       code: 'WEAK_PERSONA_FIT',
       message: 'Post has no meaningful connection to Persona expertise, projects, or opinions.',
@@ -394,6 +421,25 @@ function assessInformationGain(caption: string): number {
   }
 
   return Math.min(1, score)
+}
+
+/**
+ * Determines if a persona role is non-technical (lower persona fit threshold).
+ * Founders, designers, BD, sales, marketing, consultants may write strong posts
+ * without repeating technical keywords.
+ */
+function isNonTechnicalRole(role?: string): boolean {
+  if (!role) return false
+  const lower = role.toLowerCase()
+  const nonTechnical = [
+    'founder', 'ceo', 'cto', 'coo', 'chief',
+    'designer', 'ux', 'ui', 'product designer',
+    'sales', 'business development', 'bd',
+    'marketing', 'growth',
+    'consultant', 'advisor',
+    'product manager', 'project manager',
+  ]
+  return nonTechnical.some((term) => lower.includes(term))
 }
 
 /**

@@ -21,7 +21,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'sourceText required (min 20 chars)' }, { status: 400 })
   }
 
-  const identity = extractIdentityFromSource(sourceText)
+  let identity
+  try {
+    identity = extractIdentityFromSource(sourceText)
+  } catch (err) {
+    console.error('[onboarding/extract] extraction failed:', err)
+    return NextResponse.json({ error: 'Failed to extract identity from source. Please try shorter or simpler text.' }, { status: 422 })
+  }
 
   return NextResponse.json({
     identity,

@@ -170,6 +170,9 @@ function buildForbiddenClaims(allowedClaims: string[], groundingMode: GroundingM
 }
 
 function chooseStructure(territory: string, grounding: GroundingMode, platform: 'linkedin' | 'x' | 'instagram'): PostStructure {
+  // Platform-first for X and Instagram (they have strong native formats)
+  if (platform === 'x') return 'observation'
+  if (platform === 'instagram') return 'short_insight'
   if (territory === 'authority' || territory === 'proof') {
     return grounding === 'PROJECT_GROUNDED' ? 'mini_case_study' : 'technical_breakdown'
   }
@@ -177,8 +180,6 @@ function chooseStructure(territory: string, grounding: GroundingMode, platform: 
   if (territory === 'education') return 'tradeoff_analysis'
   if (territory === 'journey') return 'narrative'
   if (territory === 'conversation') return 'short_insight'
-  if (platform === 'x') return 'observation'
-  if (platform === 'instagram') return 'short_insight'
   return 'observation'
 }
 

@@ -4,6 +4,7 @@ import { structuredJsonChain } from '@/lib/ai/provider'
 import type { ContentPlatform } from '@/lib/domain/types'
 import { checkHumanization, rewriteToHumanize } from '@/lib/ai/humanization'
 import { stripEmDashes } from '@/lib/facts/sanitize'
+import type { PostPlan } from '@/lib/content/post-plan'
 
 /**
  * Content generation pipeline.
@@ -59,6 +60,8 @@ export interface ContentGenerationInput {
   structure?: { structureName: string; shape: string } | null
   /** Assembled Content DNA block — persona expertise, experience, convictions. */
   contentDnaBlock?: string | null
+  /** Structured PostPlan — core insight, claim ledger, grounding mode. */
+  postPlan?: PostPlan | null
 }
 
 export interface ContentGenerationResult {
@@ -183,6 +186,7 @@ function buildContentSystemPrompt(input: ContentGenerationInput): string {
     ? `SUGGESTED SHAPE (scaffolding only, not a rule you must force — drop it if the real material doesn't fit): ${input.structure.structureName}. ${input.structure.shape}`
     : ''
   const dnaBlock = input.contentDnaBlock ?? ''
+  const postPlanBlock = input.postPlan ? buildPostPlanBlock(input.postPlan, input.personaName) : ''
 
   return `You write social media posts for ${input.personaName}. Your job is to turn their real observation into a post that sounds like them, not like a generic content engine.
 
@@ -191,6 +195,7 @@ ${styleBlock}
 ${personalityBlock}
 ${preferenceBlock}
 ${structureBlock}
+${postPlanBlock}
 
 HARD RULES:
 1. NEVER use banned phrases: "unpopular opinion:", "here's the thing", "let that sink in", "thread 🧵", emoji as bullets.
@@ -200,6 +205,7 @@ HARD RULES:
 5. NEVER use corporate jargon.
 6. If mode is opinion, do not claim a specific personal incident happened to ${input.personaName}.
 7. The suggested shape above, if given, is structural scaffolding only. Never let it override rule 3 — do not invent a moment, a number, or a quote just to fit the shape.
+8. ONLY make personal claims that are explicitly ALLOWED below. Never invent team events, client conversations, or specific meetings.
 
 MODE: ${mode}
 
@@ -237,6 +243,43 @@ function getPlatformGuidance(platform: string): string {
     default:
       return 'LinkedIn: Professional insight format. Can be longer-form. Lead with a specific observation or contrarian take. Include mechanism or tradeoff. End naturally without forced inspiration.'
   }
+}
+
+function buildPostPlanBlock(postPlan: PostPlan, personaName: string): string {
+  const parts: string[] = []
+  parts.push('')
+  parts.push('POST PLAN:')
+  parts.push(`Core insight: ${postPlan.coreInsight}`)
+  parts.push(`Why ${personaName}: ${postPlan.whyThisPerson}`)
+  parts.push(`Audience value: ${postPlan.audienceValue}`)
+  parts.push(`Grounding: ${postPlan.groundingMode}`)
+  if (postPlan.structure) parts.push(`Structure: ${postPlan.structure}`)
+
+  if (postPlan.allowedPersonalClaims.length > 0) {
+    parts.push('')
+    parts.push('ALLOWED personal claims (safe to use):')
+    for (const claim of postPlan.allowedPersonalClaims) {
+      parts.push(`- ${claim}`)
+    }
+  }
+
+  if (postPlan.forbiddenClaims.length > 0) {
+    parts.push('')
+    parts.push('FORBIDDEN (do NOT include):')
+    for (const claim of postPlan.forbiddenClaims) {
+      parts.push(`- ${claim}`)
+    }
+  }
+
+  if (postPlan.supportingPoints.length > 0) {
+    parts.push('')
+    parts.push('Supporting context:')
+    for (const point of postPlan.supportingPoints) {
+      parts.push(`- ${point}`)
+    }
+  }
+
+  return parts.join('\n')
 }
 
 // ── Checks ──────────────────────────────────────────────────────────────────

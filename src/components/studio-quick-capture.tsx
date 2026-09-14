@@ -5,11 +5,10 @@ import type { QuickCaptureAngle } from '@/lib/domain/types'
 
 interface StudioQuickCaptureProps {
   personaId: string
-  onSelectAngle: (angle: QuickCaptureAngle) => void
+  onSelectAngle?: (angle: QuickCaptureAngle) => void
 }
 
 export function StudioQuickCapture({ personaId, onSelectAngle }: StudioQuickCaptureProps) {
-  void onSelectAngle // Used indirectly via generation
   const [input, setInput] = useState('')
   const [angles, setAngles] = useState<QuickCaptureAngle[]>([])
   const [parsing, setParsing] = useState(false)

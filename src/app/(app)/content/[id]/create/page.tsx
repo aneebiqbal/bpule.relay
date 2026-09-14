@@ -26,7 +26,7 @@ export default async function StudioCreatePage({ params }: { params: Promise<{ i
           </p>
         </header>
 
-        <StudioQuickCapture personaId={id} onSelectAngle={(() => {}) as (angle: QuickCaptureAngle) => void} />
+        <StudioQuickCapture personaId={id} />
 
         <section>
           <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-graphite">

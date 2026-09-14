@@ -9,7 +9,7 @@ import { evaluatePostQuality, isRegressionFixture } from '@/lib/content/quality-
 import { buildPostPlan, validateCoreInsight } from '@/lib/content/post-plan'
 import { generateVisualConcept } from '@/lib/writing/visual'
 import { structuredJsonChain } from '@/lib/ai/provider'
-import { pickDraftChain, tier0Host } from '@/lib/ai/routing'
+import { pickDraftChain, tier0Host, shouldEscalateToPremium } from '@/lib/ai/routing'
 import type { ContentDraft, ContentMemory, ContentIdeaCard } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
@@ -50,19 +50,45 @@ export async function POST(req: NextRequest) {
   const profile = persona.contentProfileId ? await store.getContentProfile(persona.contentProfileId) : null
   const memories = await store.listContentMemories(body.personaId, { limit: 50 })
   const history = await store.listContentHistory(body.personaId, 20)
+  const journey = await store.listContentJourney?.(body.personaId, 10) ?? []
 
-  // Build the prompt context
   const platform = body.platform ?? persona.platforms[0] ?? 'linkedin'
 
   // Check memory for similar topics
-  const usedTopics = memories
-    .filter((m) => m.memoryType === 'topic_covered')
-    .map((m) => m.content)
   const usedHooks = memories
     .filter((m) => m.memoryType === 'hook_used')
     .map((m) => m.content)
 
-  // Generate the post
+  // ── Step 1: Build PostPlan ────────────────────────────────────────────
+  const idea: ContentIdeaCard = {
+    id: `idea-${Date.now()}`,
+    title: body.idea.title,
+    angle: body.idea.angle,
+    territory: body.idea.territory,
+    sourceKind: body.idea.sourceKind as ContentIdeaCard['sourceKind'],
+    whyYou: body.idea.whyYou ?? '',
+    whyAudience: body.idea.whyAudience ?? '',
+    confidence: 0.7,
+  }
+
+  const postPlan = buildPostPlan({
+    idea,
+    profile,
+    journey,
+    platform: platform as 'linkedin' | 'x' | 'instagram',
+  })
+
+  // ── Step 2: Validate Core Insight ─────────────────────────────────────
+  const insightCheck = validateCoreInsight(postPlan.coreInsight)
+  if (!insightCheck.valid) {
+    return NextResponse.json({
+      error: `This idea needs a stronger core insight. ${insightCheck.reason}. Try a more specific angle.`,
+      coreInsight: postPlan.coreInsight,
+      suggestion: 'Add a specific mechanism, tradeoff, non-obvious distinction, or concrete example.',
+    }, { status: 422 })
+  }
+
+  // ── Step 3: Generate with PostPlan context ────────────────────────────
   let caption = ''
   let selfCheckPassed = false
   let selfCheckNote = ''
@@ -75,12 +101,13 @@ export async function POST(req: NextRequest) {
       topic: { id: body.idea.territory, name: body.idea.title, description: body.idea.angle },
       sourceMaterial: buildSourceMaterial(body.idea, profile, history),
       platform: platform as 'linkedin' | 'x',
-      styleCard: profile ? buildStyleCard(profile, persona) : null,
+      styleCard: buildEnhancedStyleCard(profile, persona, postPlan),
       recentOpenings: usedHooks.slice(0, 5),
       humorStyle: persona.humorStyle || undefined,
       valuesAndOpinions: profile?.opinions?.map((o) => o.belief) || [],
       generationMode: 'personal',
-      contentDnaBlock: profile ? buildDnaBlock(profile) : null,
+      contentDnaBlock: buildEnhancedDnaBlock(profile, postPlan),
+      postPlan,
     })
 
     caption = result.caption.trim()
@@ -89,7 +116,6 @@ export async function POST(req: NextRequest) {
     selfCheckPassed = result.selfCheckPassed
     selfCheckNote = result.selfCheckNote
 
-    // Apply humanization fixes if needed
     if (!result.humanizationPassed) {
       const rewritten = rewriteToHumanize(caption, result.humanizationTells)
       if (rewritten !== caption) caption = rewritten
@@ -121,6 +147,7 @@ export async function POST(req: NextRequest) {
       projects: profile?.projects?.map((p: any) => p.name) ?? [],
       opinions: profile?.opinions?.map((o: any) => o.belief) ?? [],
       territories: profile?.territories ?? [],
+      role: profile?.role ?? '',
     },
     sourceMaterial: buildSourceMaterial(body.idea, profile, history),
     platform,
@@ -128,6 +155,7 @@ export async function POST(req: NextRequest) {
 
   let qualityPassed = qualityResult.passed
   let finalCaption = caption
+  let retryStats = { longcatFirstPass: qualityResult.passed ? 1 : 0, groqRetry: 0, gptEscalation: 0 }
 
   // Corrective retry on quality failure
   if (!qualityPassed) {
@@ -139,14 +167,28 @@ export async function POST(req: NextRequest) {
       persona,
       usedHooks,
       platform as string,
+      postPlan,
     )
     if (correctionResult && correctionResult.passed) {
       finalCaption = correctionResult.caption
       qualityPassed = true
+      if (correctionResult.method === 'groq') retryStats.groqRetry = 1
+      if (correctionResult.method === 'gpt') retryStats.gptEscalation = 1
     }
   }
 
   caption = finalCaption
+
+  // NEVER persist a draft that failed quality gates
+  if (!qualityPassed) {
+    return NextResponse.json({
+      error: 'Generated content did not meet quality standards after retry. Please try a different angle.',
+      qualityFailures: qualityResult.failures.map((f) => f.code),
+      qualityWarnings: qualityResult.warnings.map((w) => w.code),
+      scores: qualityResult.scores,
+      retryStats,
+    }, { status: 422 })
+  }
 
   // Generate visual concept
   const concept = generateVisualConcept({
@@ -210,6 +252,7 @@ export async function POST(req: NextRequest) {
     visualIdea: concept.visualIdea,
     imagePrompt: concept.imagePrompt,
     platform,
+    retryStats,
   })
 }
 
@@ -257,9 +300,39 @@ function buildDnaBlock(profile: any): string {
   return parts.join('\n')
 }
 
+function buildEnhancedStyleCard(profile: any, persona: any, postPlan: any): string {
+  const parts: string[] = []
+  if (persona.humorStyle) parts.push(`Voice: ${persona.humorStyle}`)
+  if (profile?.role) parts.push(`Writing as: ${profile.role}`)
+  if (postPlan.voice) parts.push(`Rhythm: ${postPlan.voice}`)
+  if (postPlan.structure) parts.push(`Structure: ${postPlan.structure}`)
+  return parts.join('. ')
+}
+
+function buildEnhancedDnaBlock(profile: any, postPlan: any): string {
+  const parts: string[] = []
+  if (profile) {
+    if (profile.role) parts.push(`Role: ${profile.role} (${profile.seniority})`)
+    if (profile.industries?.length) parts.push(`Industries: ${profile.industries.join(', ')}`)
+    if (profile.expertise?.length) {
+      parts.push(`Verified expertise: ${profile.expertise.slice(0, 5).map((e: any) => `${e.area} (${e.level})`).join(', ')}`)
+    }
+  }
+  if (postPlan.coreInsight) parts.push(`Core insight: ${postPlan.coreInsight}`)
+  if (postPlan.groundingMode) parts.push(`Grounding: ${postPlan.groundingMode}`)
+  if (postPlan.allowedPersonalClaims.length > 0) {
+    parts.push(`ALLOWED personal claims:\n- ${postPlan.allowedPersonalClaims.join('\n- ')}`)
+  }
+  if (postPlan.forbiddenClaims.length > 0) {
+    parts.push(`FORBIDDEN claims:\n- ${postPlan.forbiddenClaims.join('\n- ')}`)
+  }
+  return parts.join('\n')
+}
+
 /**
  * Attempts corrective retry when quality gate fails.
- * Uses Groq strong for corrective rewrite with targeted instructions.
+ * LongCat → Groq strong corrective rewrite → GPT escalation (rare).
+ * Returns the corrected caption with method used, or null if all attempts fail.
  */
 async function attemptCorrectiveRetry(
   originalCaption: string,
@@ -269,57 +342,107 @@ async function attemptCorrectiveRetry(
   persona: any,
   usedHooks: string[],
   platform: string,
-): Promise<{ caption: string; passed: boolean; retries: number } | null> {
-  // Build targeted correction instructions
+  postPlan: any,
+): Promise<{ caption: string; passed: boolean; method: 'groq' | 'gpt' } | null> {
   const failureCodes = qualityResult.failures.map((f) => f.code)
-  const failureMessages = qualityResult.failures.map((f) => f.message)
+  const correctionInstructions = buildCorrectionPrompt(failureCodes, qualityResult.failures.map((f) => f.message), body.idea, profile, postPlan)
 
-  const correctionInstructions = buildCorrectionPrompt(failureCodes, failureMessages, body.idea, profile)
-
-  // Try Groq strong for corrective rewrite
+  // Attempt 1: Groq strong corrective rewrite
   const groqHost = tier0Host('strong')
-  if (!groqHost) return null
-
-  try {
-    const result = await structuredJsonChain<{ caption: string }>(
-      [{ costTier: 'tier1', host: groqHost }],
-      {
-        system: buildCorrectionSystemPrompt(profile, body),
-        user: buildCorrectionUserPrompt(correctionInstructions, originalCaption, body.idea, platform),
-        schema: {
-          type: 'object',
-          properties: {
-            caption: { type: 'string', description: 'The rewritten post' },
+  if (groqHost) {
+    try {
+      const result = await structuredJsonChain<{ caption: string }>(
+        [{ costTier: 'tier1', host: groqHost }],
+        {
+          system: buildCorrectionSystemPrompt(profile, body, postPlan),
+          user: buildCorrectionUserPrompt(correctionInstructions, originalCaption, body.idea, platform),
+          schema: {
+            type: 'object',
+            properties: {
+              caption: { type: 'string', description: 'The rewritten post' },
+            },
+            required: ['caption'],
           },
-          required: ['caption'],
         },
-      },
-    )
+      )
 
-    const newCaption = result.data.caption.trim()
+      const newCaption = result.data.caption.trim()
+      const newQuality = evaluatePostQuality({
+        caption: newCaption,
+        personaContext: {
+          expertise: profile?.expertise?.map((e: any) => e.area) ?? [],
+          audiences: profile?.audiences ?? [],
+          goals: profile?.contentGoals ?? [],
+          projects: profile?.projects?.map((p: any) => p.name) ?? [],
+          opinions: profile?.opinions?.map((o: any) => o.belief) ?? [],
+          territories: profile?.territories ?? [],
+          role: profile?.role ?? '',
+        },
+        sourceMaterial: buildSourceMaterial(body.idea, profile, []),
+        platform,
+      })
 
-    // Re-evaluate
-    const newQuality = evaluatePostQuality({
-      caption: newCaption,
-      personaContext: {
-        expertise: profile?.expertise?.map((e: any) => e.area) ?? [],
-        audiences: profile?.audiences ?? [],
-        goals: profile?.contentGoals ?? [],
-        projects: profile?.projects?.map((p: any) => p.name) ?? [],
-        opinions: profile?.opinions?.map((o: any) => o.belief) ?? [],
-        territories: profile?.territories ?? [],
-      },
-      sourceMaterial: buildSourceMaterial(body.idea, profile, []),
-      platform,
-    })
-
-    return { caption: newCaption, passed: newQuality.passed, retries: 1 }
-  } catch {
-    return null
+      if (newQuality.passed) {
+        return { caption: newCaption, passed: true, method: 'groq' }
+      }
+    } catch {
+      // Groq failed, try GPT escalation
+    }
   }
+
+  // Attempt 2: GPT escalation (only when cheaper tiers fail)
+  const gptHost = tier0Host('strong') // placeholder; real escalation uses tier4
+  if (gptHost && shouldEscalateToPremium({
+    primaryPassed: false,
+    primaryScore: qualityResult.scores?.insightDepth ?? 0,
+    isHighValue: true,
+    malformedOutput: false,
+    attemptCount: 1,
+  }).shouldEscalate) {
+    try {
+      const result = await structuredJsonChain<{ caption: string }>(
+        [{ costTier: 'tier4', host: gptHost }],
+        {
+          system: buildCorrectionSystemPrompt(profile, body, postPlan),
+          user: buildCorrectionUserPrompt(correctionInstructions, originalCaption, body.idea, platform),
+          schema: {
+            type: 'object',
+            properties: {
+              caption: { type: 'string', description: 'The rewritten post' },
+            },
+            required: ['caption'],
+          },
+        },
+      )
+
+      const newCaption = result.data.caption.trim()
+      const newQuality = evaluatePostQuality({
+        caption: newCaption,
+        personaContext: {
+          expertise: profile?.expertise?.map((e: any) => e.area) ?? [],
+          audiences: profile?.audiences ?? [],
+          goals: profile?.contentGoals ?? [],
+          projects: profile?.projects?.map((p: any) => p.name) ?? [],
+          opinions: profile?.opinions?.map((o: any) => o.belief) ?? [],
+          territories: profile?.territories ?? [],
+          role: profile?.role ?? '',
+        },
+        sourceMaterial: buildSourceMaterial(body.idea, profile, []),
+        platform,
+      })
+
+      if (newQuality.passed) {
+        return { caption: newCaption, passed: true, method: 'gpt' }
+      }
+    } catch {
+      // GPT also failed
+    }
+  }
+
+  return null
 }
 
-function buildCorrectionPrompt(failureCodes: string[], failureMessages: string[], idea: any, profile: any): string {
+function buildCorrectionPrompt(failureCodes: string[], failureMessages: string[], idea: any, profile: any, postPlan: any): string {
   const parts: string[] = []
 
   parts.push('The previous draft failed quality checks:')
@@ -330,6 +453,9 @@ function buildCorrectionPrompt(failureCodes: string[], failureMessages: string[]
       case 'UNSUPPORTED_PERSONAL_CLAIM':
         parts.push('- REMOVE all invented personal anecdotes, team stories, or client interactions.')
         parts.push('  Only use experiences explicitly confirmed in the Persona profile.')
+        if (postPlan?.allowedPersonalClaims?.length > 0) {
+          parts.push(`  Allowed claims: ${postPlan.allowedPersonalClaims.slice(0, 5).join(', ')}`)
+        }
         break
       case 'GENERIC_INSIGHT':
         parts.push('- REMOVE generic motivational statements.')
@@ -340,12 +466,18 @@ function buildCorrectionPrompt(failureCodes: string[], failureMessages: string[]
         break
       case 'LOW_INFORMATION_GAIN':
         parts.push('- ADD substantive content: a specific mechanism, useful heuristic, concrete example, or meaningful tradeoff.')
+        if (postPlan?.coreInsight) {
+          parts.push(`  Target insight: ${postPlan.coreInsight}`)
+        }
         break
       case 'MALFORMED_SOURCE_HANDLING':
         parts.push('- FIX garbled or misspelled words. Do not build insights around malformed text.')
         break
       case 'WEAK_PERSONA_FIT':
         parts.push('- GROUND the post in the verified Persona expertise and experience.')
+        if (postPlan?.whyThisPerson) {
+          parts.push(`  Why this person: ${postPlan.whyThisPerson}`)
+        }
         break
     }
   }
@@ -357,20 +489,34 @@ function buildCorrectionPrompt(failureCodes: string[], failureMessages: string[]
   parts.push('- Use verified expertise from the Persona profile.')
   parts.push('- Provide at least one specific, non-obvious insight.')
   parts.push('- End naturally without forced inspirational conclusion.')
+  if (postPlan?.structure) {
+    parts.push(`- Preferred structure: ${postPlan.structure}`)
+  }
 
   return parts.join('\n')
 }
 
-function buildCorrectionSystemPrompt(profile: any, body: any): string {
+function buildCorrectionSystemPrompt(profile: any, body: any, postPlan: any): string {
   const parts: string[] = []
   parts.push('You are a professional social media writer rewriting a post that failed quality checks.')
   parts.push('')
   if (profile) {
     if (profile.role) parts.push(`Person: ${profile.role} (${profile.seniority})`)
     if (profile.expertise?.length) {
-      parts.push(`Expertise: ${profile.expertise.slice(0, 5).map((e: any) => `${e.area} (${e.level})`).join(', ')}`)
+      parts.push(`Verified expertise: ${profile.expertise.slice(0, 5).map((e: any) => `${e.area} (${e.level})`).join(', ')}`)
     }
     if (profile.industries?.length) parts.push(`Industries: ${profile.industries.join(', ')}`)
+  }
+  if (postPlan) {
+    if (postPlan.coreInsight) parts.push(`Core insight to preserve: ${postPlan.coreInsight}`)
+    if (postPlan.audienceValue) parts.push(`Audience value: ${postPlan.audienceValue}`)
+    if (postPlan.groundingMode) parts.push(`Grounding mode: ${postPlan.groundingMode}`)
+    if (postPlan.allowedPersonalClaims?.length > 0) {
+      parts.push(`ALLOWED personal claims:\n- ${postPlan.allowedPersonalClaims.join('\n- ')}`)
+    }
+    if (postPlan.forbiddenClaims?.length > 0) {
+      parts.push(`FORBIDDEN:\n- ${postPlan.forbiddenClaims.join('\n- ')}`)
+    }
   }
   parts.push('')
   parts.push('HARD RULES:')

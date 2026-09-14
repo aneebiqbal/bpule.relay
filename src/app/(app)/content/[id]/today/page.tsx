@@ -41,8 +41,8 @@ export default async function StudioTodayPage({ params }: { params: Promise<{ id
   const pick = ideas[0] ?? null
   const alternatives = ideas.slice(1, 4)
 
-  const handleAngleSelect = (angle: QuickCaptureAngle) => {
-    // Client-side navigation handled in component
+  const handleAngleSelect = (_angle: QuickCaptureAngle) => {
+    // Client-side navigation handled in StudioQuickCapture component
   }
 
   return (
