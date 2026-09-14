@@ -33,61 +33,65 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     return { rep: DEMO_REP, organization: DEMO_ORG, profile }
   }
 
-  const supabase = await createServerSupabase()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    const supabase = await createServerSupabase()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) return null
+    if (!user) return null
 
-  const { data: repRows } = await supabase
-    .from('reps')
-    .select('id, name, role, organization_id, created_at')
-    .eq('auth_user_id', user.id)
-    .maybeSingle()
+    const { data: repRows } = await supabase
+      .from('reps')
+      .select('id, name, role, organization_id, created_at')
+      .eq('auth_user_id', user.id)
+      .maybeSingle()
 
-  if (!repRows) return null
+    if (!repRows) return null
 
-  const rep: Rep = {
-    id: repRows.id,
-    name: repRows.name,
-    role: repRows.role,
-    organizationId: repRows.organization_id,
-    createdAt: repRows.created_at,
+    const rep: Rep = {
+      id: repRows.id,
+      name: repRows.name,
+      role: repRows.role,
+      organizationId: repRows.organization_id,
+      createdAt: repRows.created_at,
+    }
+
+    const { data: orgRows } = await supabase
+      .from('organizations')
+      .select('id, name, plan, billing_customer_id, created_at')
+      .eq('id', rep.organizationId)
+      .maybeSingle()
+
+    if (!orgRows) return null
+
+    const organization: Organization = {
+      id: orgRows.id,
+      name: orgRows.name,
+      plan: orgRows.plan,
+      billingCustomerId: orgRows.billing_customer_id,
+      createdAt: orgRows.created_at,
+    }
+
+    const { data: vp } = await supabase
+      .from('voice_profiles')
+      .select('id, rep_id, organization_id, style_card, sample_source, calibrated_at')
+      .eq('rep_id', rep.id)
+      .maybeSingle()
+
+    const profile: VoiceProfile | null = vp
+      ? {
+          id: vp.id,
+          repId: vp.rep_id,
+          organizationId: vp.organization_id,
+          styleCard: vp.style_card,
+          sampleSource: vp.sample_source,
+          calibratedAt: vp.calibrated_at,
+        }
+      : null
+
+    return { rep, organization, profile }
+  } catch {
+    return null
   }
-
-  const { data: orgRows } = await supabase
-    .from('organizations')
-    .select('id, name, plan, billing_customer_id, created_at')
-    .eq('id', rep.organizationId)
-    .maybeSingle()
-
-  if (!orgRows) return null
-
-  const organization: Organization = {
-    id: orgRows.id,
-    name: orgRows.name,
-    plan: orgRows.plan,
-    billingCustomerId: orgRows.billing_customer_id,
-    createdAt: orgRows.created_at,
-  }
-
-  const { data: vp } = await supabase
-    .from('voice_profiles')
-    .select('id, rep_id, organization_id, style_card, sample_source, calibrated_at')
-    .eq('rep_id', rep.id)
-    .maybeSingle()
-
-  const profile: VoiceProfile | null = vp
-    ? {
-        id: vp.id,
-        repId: vp.rep_id,
-        organizationId: vp.organization_id,
-        styleCard: vp.style_card,
-        sampleSource: vp.sample_source,
-        calibratedAt: vp.calibrated_at,
-      }
-    : null
-
-  return { rep, organization, profile }
 }

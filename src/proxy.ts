@@ -32,7 +32,12 @@ export async function proxy(request: NextRequest) {
     },
   })
 
-  await supabase.auth.getUser()
+  try {
+    await supabase.auth.getUser()
+  } catch {
+    // Session refresh failed — let the request through. The page will handle
+    // unauthenticated state (redirect to login) rather than crashing.
+  }
 
   return response
 }
