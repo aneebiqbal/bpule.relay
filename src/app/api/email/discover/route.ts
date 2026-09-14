@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server'
+import { getCurrentUser } from '@/lib/auth/current'
 import { noopProvider, extractDomain } from '@/lib/bd/email-engine'
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
   let body: { leadId?: string; name?: string; company?: string; domain?: string; linkedinUrl?: string }
   try {
     body = await request.json()

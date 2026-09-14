@@ -49,6 +49,15 @@ export async function PATCH(
 
   const store = await createScoutStore()
 
+  const existing = await store.getContentDraft(id)
+  if (!existing) return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+  if (existing.personaId) {
+    const persona = await store.getContentPersona(existing.personaId)
+    if (persona && persona.repId !== user.rep.id && user.rep.role !== 'admin') {
+      return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    }
+  }
+
   try {
     const draft = await store.updateContentDraft({ draftId: id, caption })
     return NextResponse.json({ draft })

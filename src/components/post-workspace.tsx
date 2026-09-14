@@ -29,7 +29,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
   const [caption, setCaption] = useState(initialDraft?.caption ?? '')
   const [visual, setVisual] = useState<VisualData | null>(initialVisual ?? null)
   const [loading, setLoading] = useState(!initialDraft)
-  const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [saving, setSaving] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState('')
   const [showImagePrompt, setShowImagePrompt] = useState(false)
@@ -66,8 +66,11 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ caption: newCaption }),
       })
-        .then(() => setSaving('saved'))
-        .catch(() => setSaving('idle'))
+        .then((res) => {
+          if (!res.ok) throw new Error('Save failed')
+          setSaving('saved')
+        })
+        .catch(() => setSaving('error'))
     }, 800)
   }, [draftId])
 
@@ -194,7 +197,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
               <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs font-medium uppercase">
                 {draft.platform}
               </span>
-              <SaveStatus status={saving} />
+              <SaveStatus status={saving} onRetry={() => autosave(caption)} />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -327,9 +330,19 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
   )
 }
 
-function SaveStatus({ status }: { status: 'idle' | 'saving' | 'saved' }) {
+function SaveStatus({ status, onRetry }: { status: 'idle' | 'saving' | 'saved' | 'error'; onRetry: () => void }) {
   if (status === 'saving') return <span className="text-xs text-amber-600">Saving…</span>
   if (status === 'saved') return <span className="text-xs text-green-600">Saved</span>
+  if (status === 'error') {
+    return (
+      <span className="text-xs text-red-600">
+        Couldn&apos;t save your edit —{' '}
+        <button type="button" onClick={onRetry} className="underline underline-offset-2 hover:text-red-700">
+          retry
+        </button>
+      </span>
+    )
+  }
   return null
 }
 

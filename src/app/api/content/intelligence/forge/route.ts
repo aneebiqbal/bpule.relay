@@ -52,6 +52,9 @@ export async function POST(req: NextRequest) {
   const profile = persona.contentProfileId ? await store.getContentProfile(persona.contentProfileId) : null
   const memories = await store.listContentMemories(personaId, { limit: 50 })
   const opportunity = opportunityId ? await store.getContentOpportunity(opportunityId) : null
+  if (opportunity && opportunity.personaId !== personaId) {
+    return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+  }
 
   const contentDnaBlock = buildContentDnaPromptBlock(profile)
   const memoryBlock = buildMemoryPromptBlock(memories)

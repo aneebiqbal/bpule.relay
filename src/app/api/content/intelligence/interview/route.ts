@@ -37,6 +37,9 @@ export async function POST(req: NextRequest) {
     const profile = persona.contentProfileId ? await store.getContentProfile(persona.contentProfileId) : null
     const memories = await store.listContentMemories(personaId, { limit: 50 })
     let opportunity = opportunityId ? await store.getContentOpportunity(opportunityId) : null
+    if (opportunity && opportunity.personaId !== personaId) {
+      return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    }
 
     if (!opportunity && sourceMaterial) {
       opportunity = await store.createContentOpportunity({
@@ -50,6 +53,9 @@ export async function POST(req: NextRequest) {
     }
 
     let session = sessionId ? await store.getInterviewSession(sessionId) : null
+    if (session && session.personaId !== personaId) {
+      return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    }
     if (!session) {
       session = await store.createInterviewSession({
         personaId,
