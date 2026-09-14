@@ -18,23 +18,24 @@ export const dynamic = 'force-dynamic'
  * Returns: { draft: { ... } }
  */
 export async function POST(req: NextRequest) {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  try {
+    const user = await getCurrentUser()
+    if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
-  const body = await req.json().catch(() => null)
-  if (!body) return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
+    const body = await req.json().catch(() => null)
+    if (!body) return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
 
-  const { personaId, sourceMaterial, platform, opportunityId, interviewAnswers } = body as {
-    personaId: string
-    sourceMaterial: string
-    platform: 'linkedin' | 'x'
-    opportunityId?: string | null
-    interviewAnswers?: string[]
-  }
+    const { personaId, sourceMaterial, platform, opportunityId, interviewAnswers } = body as {
+      personaId: string
+      sourceMaterial: string
+      platform: 'linkedin' | 'x'
+      opportunityId?: string | null
+      interviewAnswers?: string[]
+    }
 
-  if (!sourceMaterial?.trim()) {
-    return NextResponse.json({ error: 'sourceMaterial is required' }, { status: 400 })
-  }
+    if (!sourceMaterial?.trim()) {
+      return NextResponse.json({ error: 'sourceMaterial is required' }, { status: 400 })
+    }
 
   const store = await createScoutStore()
   const persona = await store.getContentPersona(personaId)
@@ -266,4 +267,9 @@ export async function POST(req: NextRequest) {
       qualityNotes: forgeResult.evaluation.notes,
     },
   })
+  } catch (err) {
+    console.error('[content/intelligence/forge] failed:', err)
+    const message = err instanceof Error ? err.message : 'Generation failed.'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }
