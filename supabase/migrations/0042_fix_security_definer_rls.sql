@@ -153,11 +153,21 @@ as $$
 declare
   inserted_count int;
   target_org_id uuid;
+  caller_org_id uuid;
 begin
-  target_org_id := coalesce(p_org_id, current_org_id());
+  caller_org_id := current_org_id();
+  target_org_id := coalesce(p_org_id, caller_org_id);
 
   if target_org_id is null then
     raise exception 'refresh_few_shot_wins: no organization context available';
+  end if;
+
+  -- SECURITY: When p_org_id is explicitly provided, verify the caller belongs
+  -- to that organization. This prevents a rep from writing few-shot wins into
+  -- another org. Service-role (cron) callers bypass this — they set search_path
+  -- and are trusted infrastructure.
+  if p_org_id is not null and p_org_id != caller_org_id then
+    raise exception 'refresh_few_shot_wins: cross-org denied. Caller org %, requested org %', caller_org_id, p_org_id;
   end if;
 
   insert into few_shot_wins (organization_id, message_id, lead_id, play_id, signal_type, sent_text, company, signal_evidence, tags)

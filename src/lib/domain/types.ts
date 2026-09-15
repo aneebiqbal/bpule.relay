@@ -54,6 +54,9 @@ export type LeadStatus =
   | 'no'
   | 'dead'
 
+export type LeadDirection = 'inbound' | 'outbound'
+export type LeadSource = 'linkedin' | 'upwork' | 'email' | 'referral' | 'other'
+
 export interface Lead {
   id: string
   organizationId: string
@@ -78,6 +81,10 @@ export interface Lead {
   status: LeadStatus
   playId: string | null
   tags: string[]
+  direction?: LeadDirection
+  source?: LeadSource | null
+  inboundMessage?: string | null
+  inboundRaw?: Record<string, unknown> | null
   createdAt: string
 }
 
@@ -923,6 +930,7 @@ export type RelayTaskKind =
   | 'lead_going_cold'
   | 'content_opportunity'
   | 'admin_review'
+  | 'inbound_opportunity'
 
 export type RelayTaskPriority = 'urgent' | 'high' | 'medium' | 'low'
 
@@ -977,4 +985,47 @@ export interface RelayQueue {
     urgent: number
     byKind: Record<RelayTaskKind, number>
   }
+}
+
+// ── Inbound Client Flow ─────────────────────────────────────────────────────
+
+export interface InboundInput {
+  message: string
+  source: LeadSource
+  company?: string | null
+  contactName?: string | null
+  contactTitle?: string | null
+  url?: string | null
+  profileInfo?: string | null
+  jobInfo?: string | null
+  context?: string | null
+}
+
+export interface InboundIntelligence {
+  wants: string
+  intent: string
+  fitScore: number
+  fitRelevance: string
+  opportunityQuality: 'high' | 'medium' | 'low'
+  recommendedIdentity: Profile | null
+  identityFitReason: string
+  matchingSkills: string[]
+  strongestProof: ProofItem[]
+  missingInfo: string[]
+  recommendedAction: string
+  canGenerateResume: boolean
+}
+
+export interface InboundLeadInput {
+  company: string
+  contactName?: string | null
+  contactTitle?: string | null
+  url?: string | null
+  message: string
+  source: LeadSource
+  direction: 'inbound'
+  profileInfo?: string | null
+  jobInfo?: string | null
+  context?: string | null
+  assignedProfileId?: string | null
 }

@@ -78,14 +78,19 @@ export interface NewLeadInput {
   locationRaw?: string | null
   url?: string | null
   rawInput?: string | null
-  signalType: SignalId
-  signalEvidence: string
+  signalType?: SignalId | null
+  signalEvidence?: string | null
   verbatimQuote?: string | null
   tags?: string[]
   roleCategory?: RoleCategory
   marketRegion?: MarketRegion
   extractionConfidence?: number
   extractionProfile?: Record<string, unknown>
+  direction?: 'inbound' | 'outbound'
+  source?: 'linkedin' | 'upwork' | 'email' | 'referral' | 'other' | null
+  inboundMessage?: string | null
+  inboundRaw?: Record<string, unknown> | null
+  assignedProfileId?: string | null
 }
 
 export interface ExtractionMetrics {
@@ -283,9 +288,11 @@ export interface ScoutStore {
   updateLeadTags(id: string, tags: string[]): Promise<void>
   getLead(id: string): Promise<LeadDetail | null>
   listOwnedLeads(): Promise<Lead[]>
+  fetchLeadsAll(): Promise<Lead[]>
   getQueue(): Promise<QueueData>
   // messages
   saveDraft(input: SaveDraftInput): Promise<Message>
+  listMessages(leadId: string): Promise<Message[]>
   /** Marks a lead contacted after a human sends the message externally. */
   markContacted(leadId: string, sentText: string, messageType?: MessageType): Promise<DosageResult>
   // voice profiles
@@ -326,6 +333,8 @@ export interface ScoutStore {
   listProofItems(profileId: string): Promise<ProofItem[]>
   /** Admin only: proof items for a profile with client_name unredacted, for the edit view. */
   listProofItemsAdmin(profileId: string): Promise<ProofItem[]>
+  /** All proof items across all profiles in the organization. */
+  listAllProofItems(): Promise<ProofItem[]>
   upsertProofItem(input: {
     id?: string
     profileId: string
@@ -353,9 +362,9 @@ export interface ScoutStore {
   /** Admin only: delete any proof item. */
   deleteProofItemAdmin(id: string): Promise<void>
   /** Find proof items whose tags overlap with the given tags, ranked by overlap count. */
-  matchProofItems(tags: string[], limit?: number): Promise<ProofItem[]>
+  matchProofItems(tags: string[], limit?: number, profileId?: string | null): Promise<ProofItem[]>
   /** Semantic proof matching via pgvector embedding search. */
-  matchProofItemsByEmbedding(embedding: number[], limit?: number): Promise<Array<{ item: ProofItem; similarity: number }>>
+  matchProofItemsByEmbedding(embedding: number[], limit?: number, profileId?: string | null): Promise<Array<{ item: ProofItem; similarity: number }>>
   // facts
   listFacts(): Promise<Fact[]>
   upsertFact(input: {

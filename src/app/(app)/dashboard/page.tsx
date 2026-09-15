@@ -171,6 +171,13 @@ export default async function TodayPage() {
             Relay
           </Link>
           <Link
+            href="/inbound"
+            className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-[13px] font-medium text-ink transition-all hover:bg-bone active:scale-[0.97]"
+          >
+            <MessageCircle className="size-4" aria-hidden="true" />
+            Add Inbound
+          </Link>
+          <Link
             href="/prospect"
             className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-orange-dark active:scale-[0.97]"
           >

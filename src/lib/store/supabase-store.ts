@@ -121,6 +121,10 @@ function mapLead(r: Row): Lead {
     status: (r.status as Lead['status']) ?? 'new',
     playId: (r.play_id as string) ?? null,
     tags: (r.tags as string[]) ?? [],
+    direction: (r.direction as Lead['direction']) ?? 'outbound',
+    source: (r.source as Lead['source']) ?? null,
+    inboundMessage: (r.inbound_message as string) ?? null,
+    inboundRaw: (r.inbound_raw as Record<string, unknown>) ?? null,
     createdAt: r.created_at as string,
   }
 }
@@ -252,7 +256,7 @@ export class SupabaseStore implements ScoutStore {
     return loadRulebook(this.client, this.orgId)
   }
 
-  private async fetchLeadsAll(): Promise<Lead[]> {
+  async fetchLeadsAll(): Promise<Lead[]> {
     const { data, error } = await this.client
       .from('leads')
       .select('*')
@@ -374,17 +378,22 @@ export class SupabaseStore implements ScoutStore {
       contact_title: input.contactTitle?.trim() || null,
       url: input.url?.trim() || null,
       raw_input: input.rawInput?.trim() || null,
-      signal_type: input.signalType,
-      signal_evidence: input.signalEvidence.trim(),
+      signal_type: input.signalType ?? null,
+      signal_evidence: input.signalEvidence?.trim() || null,
       verbatim_quote: input.verbatimQuote?.trim() || null,
       tags: input.tags ?? [],
-      play_id: (await this.playForSignal(input.signalType))?.id ?? null,
+      play_id: input.signalType ? (await this.playForSignal(input.signalType))?.id ?? null : null,
       title_raw: input.titleRaw?.trim() || null,
       location_raw: input.locationRaw?.trim() || null,
       role_category: input.roleCategory ?? null,
       market_region: input.marketRegion ?? null,
       extraction_confidence: input.extractionConfidence ?? null,
       extraction_profile: input.extractionProfile ?? null,
+      direction: input.direction ?? 'outbound',
+      source: input.source ?? null,
+      inbound_message: input.inboundMessage ?? null,
+      inbound_raw: input.inboundRaw ?? null,
+      sender_profile_id: input.assignedProfileId ?? null,
     }
 
     const row = await this.client.from('leads').insert(insertRow).select('*').single()
@@ -885,6 +894,25 @@ export class SupabaseStore implements ScoutStore {
     return (data ?? []).map(mapProofItemUnredacted)
   }
 
+  async listAllProofItems(): Promise<ProofItem[]> {
+    const { data, error } = await this.client
+      .from('proof_items')
+      .select('*')
+      .eq('organization_id', this.orgId)
+    if (error) throw error
+    return (data ?? []).map(mapProofItem)
+  }
+
+  async listMessages(leadId: string): Promise<Message[]> {
+    const { data, error } = await this.client
+      .from('messages')
+      .select('*')
+      .eq('lead_id', leadId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map(mapMessage)
+  }
+
   async upsertProofItem(input: {
     id?: string
     profileId: string
@@ -996,8 +1024,10 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
   }
 
-  async matchProofItems(tags: string[], limit = 2): Promise<ProofItem[]> {
-    const profiles = await this.listAllProfiles()
+  async matchProofItems(tags: string[], limit = 2, profileId: string | null = null): Promise<ProofItem[]> {
+    const profiles = profileId
+      ? (await this.listAllProfiles()).filter((p) => p.id === profileId)
+      : await this.listAllProfiles()
     const items = (
       await Promise.all(profiles.map((p) => this.listProofItems(p.id)))
     ).flat()
@@ -1277,6 +1307,7 @@ export class SupabaseStore implements ScoutStore {
   async matchProofItemsByEmbedding(
     embedding: number[],
     limit = 2,
+    profileId: string | null = null,
   ): Promise<Array<{ item: ProofItem; similarity: number }>> {
     const { data, error } = await this.client.rpc('match_proofs_by_embedding', {
       query_embedding: embedding,
@@ -1284,10 +1315,14 @@ export class SupabaseStore implements ScoutStore {
       match_count: limit,
     })
     if (error) throw error
-    return (data ?? []).map((r: Row) => ({
+    let results: Array<{ item: ProofItem; similarity: number }> = (data ?? []).map((r: Row) => ({
       item: mapProofItem(r),
       similarity: (r.similarity as number) ?? 0,
     }))
+    if (profileId) {
+      results = results.filter((r) => r.item.profileId === profileId)
+    }
+    return results
   }
 
   // ==========================================================================

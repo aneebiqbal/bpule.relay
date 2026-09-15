@@ -665,14 +665,18 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         marketRegion: input.marketRegion ?? null,
         extractionConfidence: input.extractionConfidence ?? null,
         extractionProfile: input.extractionProfile ?? null,
-        signalType: input.signalType,
-        signalEvidence: input.signalEvidence.trim(),
+        signalType: input.signalType ?? null,
+        signalEvidence: input.signalEvidence?.trim() ?? null,
         verbatimQuote: input.verbatimQuote?.trim() || null,
         score: null,
         verdict: null,
         status: 'new',
-        playId: pickPlayForSignal(plays, input.signalType)?.id ?? null,
+        playId: input.signalType ? pickPlayForSignal(plays, input.signalType)?.id ?? null : null,
         tags: input.tags ?? ['FAKE', 'demo'],
+        direction: input.direction ?? 'outbound',
+        source: input.source ?? null,
+        inboundMessage: input.inboundMessage ?? null,
+        inboundRaw: input.inboundRaw ?? null,
         createdAt: new Date().toISOString(),
       }
       leads.unshift(lead)
@@ -704,6 +708,17 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       return leads
         .filter((l) => l.ownerRepId === rep.id)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map((l) => ({ ...l, direction: l.direction ?? 'outbound', source: l.source ?? null, inboundMessage: l.inboundMessage ?? null, inboundRaw: l.inboundRaw ?? null }))
+    },
+    async fetchLeadsAll() {
+      return leads
+        .map((l) => ({ ...l, direction: l.direction ?? 'outbound', source: l.source ?? null, inboundMessage: l.inboundMessage ?? null, inboundRaw: l.inboundRaw ?? null }))
+    },
+    async listMessages(leadId: string) {
+      return messages.filter((m) => m.leadId === leadId)
+    },
+    async listAllProofItems() {
+      return proofItems
     },
     async getQueue(): Promise<QueueData> {
       const owned = leads.filter((l) => l.ownerRepId === rep.id)

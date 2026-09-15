@@ -51,6 +51,7 @@ const KIND_PRIORITY_BASE: Record<RelayTaskKind, number> = {
   lead_going_cold: 40,
   content_opportunity: 30,
   admin_review: 75,
+  inbound_opportunity: 95,
 }
 
 function priorityFromScore(score: number): RelayTaskPriority {
@@ -74,17 +75,26 @@ function freshnessPenalty(createdAt: string): number {
 export function buildRelayQueue(input: QueueInput): RelayQueue {
   const tasks: RelayTask[] = []
 
-  // 1. Reply needed
+  // 1. Inbound opportunities (highest priority — client contacted us first)
+  if (input.allLeads) {
+    for (const lead of input.allLeads) {
+      if (lead.direction === 'inbound' && lead.status === 'new') {
+        tasks.push(buildInboundTask(lead, input))
+      }
+    }
+  }
+
+  // 2. Reply needed
   for (const lead of input.queueData.replies) {
     tasks.push(buildReplyTask(lead, input))
   }
 
-  // 2. Follow-up due
+  // 3. Follow-up due
   for (const f of input.followupsDue) {
     tasks.push(buildFollowupTask(f.lead, f.daysSinceContact, input))
   }
 
-  // 3. High-fit leads (scored 'send' but not yet contacted)
+  // 4. High-fit leads (scored 'send' but not yet contacted)
   for (const lead of input.queueData.queue) {
     if (lead.verdict === 'send' && lead.status === 'new') {
       tasks.push(buildHighFitTask(lead, input))
@@ -229,6 +239,71 @@ function buildReplyTask(lead: Lead, input: QueueInput): RelayTask {
     humanAction: 'Review their message, craft your reply, send manually',
     stale: false,
     stalenessNote: null,
+    createdAt: lead.createdAt,
+  }
+}
+
+function buildInboundTask(lead: Lead, input: QueueInput): RelayTask {
+  const convo = input.conversations.get(lead.id)
+  const age = (Date.now() - new Date(lead.createdAt).getTime()) / (1000 * 60 * 60)
+
+  const evidence: RelayEvidence[] = [
+    {
+      source: lead.source ?? 'inbound',
+      detail: lead.inboundMessage
+        ? `Client message: "${lead.inboundMessage.slice(0, 150)}"`
+        : 'Inbound request received',
+      timestamp: lead.createdAt,
+      verified: true,
+    },
+  ]
+
+  if (convo?.senderProfileId) {
+    const profile = input.assignedProfiles.find((p) => p.id === convo.senderProfileId)
+    if (profile) {
+      evidence.push({
+        source: 'identity',
+        detail: `Assigned identity: ${profile.label ?? profile.platform}`,
+        timestamp: null,
+        verified: true,
+      })
+    }
+  }
+
+  const rec: RelayRecommendation = {
+    action: 'Review inbound request and generate a reply',
+    preparedOutput: null,
+    evidence,
+    confidence: 0.9,
+    forbidsImpersonation: true,
+  }
+
+  let title = `New inbound — ${lead.company}`
+  if (lead.contactName) title = `New inbound — ${lead.contactName} (${lead.company})`
+
+  const subtitle = age < 1
+    ? 'Reply needed'
+    : age < 4
+      ? `Waiting ${Math.round(age)}h — needs attention`
+      : `Waiting ${Math.round(age)}h — high priority`
+
+  return {
+    id: `inbound-${lead.id}`,
+    kind: 'inbound_opportunity',
+    priority: age < 4 ? 'urgent' : 'high',
+    priorityScore: KIND_PRIORITY_BASE.inbound_opportunity - Math.round(age),
+    title,
+    subtitle,
+    entityType: 'lead',
+    entityId: lead.id,
+    whatHappened: lead.inboundMessage
+      ? `Client contacted you: "${lead.inboundMessage.slice(0, 80)}..."`
+      : 'Client contacted you first',
+    whyItMatters: 'Inbound leads convert at higher rates. Respond quickly.',
+    recommendation: rec,
+    humanAction: 'Review, generate reply, send manually',
+    stale: age > 24,
+    stalenessNote: age > 24 ? `Inbound waiting ${Math.round(age)}h — risk of losing them` : null,
     createdAt: lead.createdAt,
   }
 }

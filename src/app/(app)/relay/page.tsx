@@ -34,6 +34,7 @@ function kindLabel(kind: RelayTaskKind): string {
     case 'lead_going_cold': return 'Going cold'
     case 'content_opportunity': return 'Content'
     case 'admin_review': return 'Admin'
+    case 'inbound_opportunity': return 'Inbound'
   }
 }
 
@@ -71,6 +72,7 @@ const KIND_ICON_MAP: Record<RelayTaskKind, ComponentType<{ className?: string }>
   lead_going_cold: Snowflake,
   content_opportunity: PenLine,
   admin_review: Shield,
+  inbound_opportunity: MessageCircle,
 }
 
 function TaskIcon({ kind, size = 'md', priority }: { kind: RelayTaskKind; size?: 'sm' | 'md'; priority: RelayTask['priority'] }) {
@@ -201,9 +203,10 @@ export default async function RelayPage() {
   const store = await createScoutStore()
   const roleContext = buildRoleContext(user.rep, user.organization)
 
-  const [dash, relayData] = await Promise.all([
+  const [dash, relayData, allLeads] = await Promise.all([
     store.getTodayDashboard(),
     store.getRelayQueueData(),
+    store.fetchLeadsAll(),
   ])
 
   const queue = buildRelayQueue({
@@ -215,6 +218,7 @@ export default async function RelayPage() {
     messagesByLead: relayData.messagesByLead,
     messagesByJob: relayData.messagesByJob,
     assignedProfiles: relayData.assignedProfiles,
+    allLeads,
   })
 
   const visibleTasks = filterQueueByRole(queue, roleContext.role)

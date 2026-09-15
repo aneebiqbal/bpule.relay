@@ -109,7 +109,10 @@ export async function POST(
     const score = computeScore(extracted, rulebook!)
 
     // Proof matching: tag overlap first (fast), then semantic in background.
-    const tagMatches = await store.matchProofItems(detail.tags ?? [], 8)
+    // When a sender profile is selected, scope proof matching to that identity
+    // so proof from another Revenue Identity is never used.
+    const tagMatches = await store.matchProofItems(detail.tags ?? [], 8, profile?.id ?? null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let matched = tagMatches
 
     if (proofId) {
@@ -122,7 +125,7 @@ export async function POST(
     const embedTextPromise = embedText(
       `${detail.company} ${detail.signalEvidence ?? ''} ${detail.tags.join(' ')}`,
     ).then(async (leadEmbedding) => {
-      const semanticMatches = await store.matchProofItemsByEmbedding(leadEmbedding, 8)
+      const semanticMatches = await store.matchProofItemsByEmbedding(leadEmbedding, 8, profile?.id ?? null)
       const merged = mergeProofMatches(semanticMatches, tagMatches, 8)
       emit({ type: 'proof', items: merged })
     }).catch(() => {})
