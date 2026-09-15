@@ -202,7 +202,7 @@ export function longcatApiKey(): string | undefined {
 }
 
 export function longcatBaseUrl(): string {
-  return process.env.LONGCAT_BASE_URL ?? 'https://api.longcat.chat/v1'
+  return process.env.LONGCAT_BASE_URL ?? 'https://api.longcat.chat/openai/v1'
 }
 
 export function longcatModel(): string {
