@@ -209,9 +209,7 @@ export default function TrustCenterPage() {
               <div>
                 <strong className="text-ink">Secrets handling.</strong> API keys are stored as
                 environment variables, never in the database or exposed to the browser. The
-                service role key (which bypasses RLS) is only used by cron-triggered routes
-                protected by a <code className="rounded bg-bone-raised px-1 text-[12px]">CRON_SECRET</code>,
-                never by routes serving browser requests.
+                service role key (which bypasses RLS) is used by: cron-triggered routes (protected by <code className="rounded bg-bone-raised px-1 text-[12px]">CRON_SECRET</code>), the public signup endpoint (to create organizations before any admin exists), and offline scripts. It is never used for authenticated user data access.
               </div>
             </li>
             <li className="flex gap-2">

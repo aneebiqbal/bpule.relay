@@ -1,5 +1,4 @@
 import type { Lead, Message, Profile, ProofItem, InboundIntelligence } from '@/lib/domain/types'
-import { scanForSecrets } from '@/lib/ai/secrets'
 
 export interface InboundReplyInput {
   lead: Lead

@@ -57,6 +57,13 @@ export default function AIPolicyPage() {
             </li>
           </ul>
           <p className="text-[14px] leading-relaxed text-graphite">
+            For semantic proof matching, lead and proof text is also sent to an embedding
+            provider (OpenAI text-embedding-3-small by default) to generate vector
+            representations. This means company names, project summaries, and client names
+            are processed by the embedding provider. Embeddings are not used for model
+            training by OpenAI.
+          </p>
+          <p className="text-[14px] leading-relaxed text-graphite">
             Relay does <strong className="text-ink">not</strong> send passwords, API keys,
             session tokens, or analytics IDs to AI providers.
           </p>

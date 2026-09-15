@@ -164,7 +164,7 @@ export default function InboundPage() {
       {/* Input form */}
       <div className="rounded-xl border border-line bg-bone-raised p-5 space-y-4">
         <div>
-          <label className="text-label text-stone">Client's message *</label>
+          <label className="text-label text-stone">Client&apos;s message *</label>
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}

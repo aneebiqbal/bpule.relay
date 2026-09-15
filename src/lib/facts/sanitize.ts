@@ -118,9 +118,20 @@ export function sanitizeDraft(
   }
 }
 
-export function sanitizeContentCaption(caption: string): string {
+/**
+ * Normalizes typography in content captions: em dashes → hyphens,
+ * exclamation marks → periods. This is style normalization, NOT
+ * factual grounding. Factual accuracy (no invented numbers/claims) is
+ * enforced separately via `stripUnauthorizedNumbers` + fact table.
+ */
+export function normalizeCaptionTypography(caption: string): string {
   let text = stripEmDashes(caption)
   text = text.replace(/!/g, '.')
   text = text.replace(/  +/g, ' ').trim()
   return text
+}
+
+/** @deprecated Use normalizeCaptionTypography instead. Kept for backwards compatibility. */
+export function sanitizeContentCaption(caption: string): string {
+  return normalizeCaptionTypography(caption)
 }

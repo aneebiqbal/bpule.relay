@@ -20,35 +20,6 @@ export interface RawInboundAnalysis {
   extracted_url: string | null
 }
 
-const ANALYSIS_SCHEMA = {
-  type: 'object',
-  properties: {
-    wants: { type: 'string', description: 'What the client wants in one sentence' },
-    intent: { type: 'string', description: 'Primary intent: hiring, partnership, inquiry, support, sales, other' },
-    fit_score: { type: 'number', description: 'Fit score 0-100 based on capabilities match' },
-    fit_relevance: { type: 'string', description: 'Brief explanation of fit relevance' },
-    opportunity_quality: { type: 'string', enum: ['high', 'medium', 'low'] },
-    recommended_profile_index: { type: 'number', description: 'Index of best matching profile in the provided array, or -1 if none' },
-    identity_fit_reason: { type: 'string', description: 'Why this identity fits the opportunity' },
-    matching_skills: { type: 'array', items: { type: 'string' } },
-    strongest_proof_indexes: { type: 'array', items: { type: 'number' }, description: 'Indexes of strongest proof items' },
-    missing_info: { type: 'array', items: { type: 'string' } },
-    recommended_action: { type: 'string', description: 'Recommended next action' },
-    can_generate_resume: { type: 'boolean' },
-    extracted_company: { type: ['string', 'null'] },
-    extracted_contact: { type: ['string', 'null'] },
-    extracted_title: { type: ['string', 'null'] },
-    extracted_url: { type: ['string', 'null'] },
-  },
-  required: [
-    'wants', 'intent', 'fit_score', 'fit_relevance', 'opportunity_quality',
-    'recommended_profile_index', 'identity_fit_reason', 'matching_skills',
-    'strongest_proof_indexes', 'missing_info', 'recommended_action',
-    'can_generate_resume', 'extracted_company', 'extracted_contact',
-    'extracted_title', 'extracted_url',
-  ],
-} as const
-
 export function buildInboundSystemPrompt(
   profiles: Profile[],
   proofItems: ProofItem[],

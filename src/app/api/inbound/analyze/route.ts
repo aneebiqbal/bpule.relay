@@ -9,7 +9,7 @@ import {
   validateInboundInput,
   mapRawToIntelligence,
 } from '@/lib/inbound/intelligence'
-import type { InboundInput, Profile, ProofItem } from '@/lib/domain/types'
+import type { InboundInput } from '@/lib/domain/types'
 
 export async function POST(req: NextRequest) {
   const store = await createScoutStore().catch(() => null)

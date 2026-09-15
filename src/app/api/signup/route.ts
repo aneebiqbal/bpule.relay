@@ -6,21 +6,55 @@ const BPULSE_ORG_ID = '11111111-1111-1111-1111-111111111111'
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_ATTEMPTS = 5
 
-const attempts = new Map<string, number[]>()
-
 function rateLimitKey(headers: Headers): string {
   const fwd = headers.get('x-forwarded-for')
   if (fwd) return fwd.split(',')[0].trim()
   return headers.get('x-real-ip') ?? 'unknown'
 }
 
-function isRateLimited(key: string): boolean {
+/**
+ * Distributed rate limiter backed by Supabase (no in-memory state).
+ * Works across Vercel serverless instances. Uses a dedicated table
+ * `rate_limits` with automatic cleanup of expired entries.
+ */
+async function isRateLimited(
+  supabase: ReturnType<typeof createClient>,
+  key: string,
+): Promise<boolean> {
   const now = Date.now()
-  const window = now - RATE_LIMIT_WINDOW_MS
-  const timestamps = (attempts.get(key) ?? []).filter((t) => t > window)
-  attempts.set(key, timestamps)
-  if (timestamps.length >= RATE_LIMIT_MAX_ATTEMPTS) return true
-  timestamps.push(now)
+  const windowStart = new Date(now - RATE_LIMIT_WINDOW_MS).toISOString()
+
+  // Clean up expired entries (best-effort, don't block on failure)
+  try {
+    await supabase.from('rate_limits').delete().lt('created_at', windowStart)
+  } catch {
+    // Ignore cleanup errors
+  }
+
+  // Count attempts in current window
+  const { count, error } = await supabase
+    .from('rate_limits')
+    .select('id', { count: 'exact', head: true })
+    .eq('key', key)
+    .gte('created_at', windowStart)
+
+  if (error) {
+    // Fail open on DB error — don't block signups if rate limit table is unreachable
+    return false
+  }
+
+  if ((count ?? 0) >= RATE_LIMIT_MAX_ATTEMPTS) {
+    return true
+  }
+
+  // Record this attempt (fire-and-forget, unique constraint prevents duplicates)
+  try {
+    await (supabase as unknown as { from: (t: string) => { insert: (r: Record<string, unknown>) => Promise<unknown> } })
+      .from('rate_limits')
+      .insert({ key, action: 'signup' })
+  } catch {
+    // Ignore duplicate key errors (unique constraint) and DB errors
+  }
   return false
 }
 
@@ -31,13 +65,6 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: 'Service is temporarily unavailable.' },
       { status: 503 },
-    )
-  }
-
-  if (isRateLimited(rateLimitKey(request.headers))) {
-    return NextResponse.json(
-      { error: 'Too many attempts. Please try again later.' },
-      { status: 429 },
     )
   }
 
@@ -62,6 +89,14 @@ export async function POST(request: Request) {
   const service = createClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
+
+  // Distributed rate limit check (works across serverless instances)
+  if (await isRateLimited(service as unknown as ReturnType<typeof createClient>, rateLimitKey(request.headers))) {
+    return NextResponse.json(
+      { error: 'Too many attempts. Please try again later.' },
+      { status: 429 },
+    )
+  }
 
   const { data: org, error: orgErr } = await service
     .from('organizations')
