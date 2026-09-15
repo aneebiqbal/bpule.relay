@@ -24,12 +24,14 @@ export async function POST(
 ) {
   const { id } = await params
 
-  let body: { profileId?: string; proofId?: string }
+  let body: { profileId?: string; proofId?: string; generationMode?: 'standard' | 'premium' }
   try {
     body = await request.json()
   } catch {
     body = {}
   }
+
+  const generationMode = body.generationMode === 'premium' ? 'premium' : 'standard'
 
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
@@ -121,8 +123,8 @@ export async function POST(
 
   type ProposalResult = { proposal: string; self_check_passed: boolean; self_check_note: string }
 
-  // Attempt 1: LongCat
-  const chainA = buildLongcatDraftChain()
+  // Attempt 1: Primary writer based on mode
+  const chainA = generationMode === 'premium' ? buildOpenaiDraftChain() : buildLongcatDraftChain()
   let best: ProposalResult | null = null
 
   if (chainA.length > 0) {

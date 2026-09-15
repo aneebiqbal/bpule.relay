@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { streamChatTextChain } from '@/lib/ai/provider'
-import { pickDraftChain } from '@/lib/ai/routing'
+import { pickDraftChain, buildOpenaiDraftChain } from '@/lib/ai/routing'
 import {
   buildInboundReplyUserPrompt,
   validateInboundReply,
@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
     leadId: string
     intelligence?: unknown
     profileId?: string | null
+    generationMode?: 'standard' | 'premium'
   }
 
   try {
@@ -60,7 +61,9 @@ export async function POST(req: NextRequest) {
     }
 
     const userPrompt = buildInboundReplyUserPrompt(input)
-    const chain = pickDraftChain()
+    // LongCat-first for inbound replies (standard mode default)
+    const generationMode = body.generationMode === 'premium' ? 'premium' : 'standard'
+    const chain = generationMode === 'premium' ? buildOpenaiDraftChain() : pickDraftChain()
 
     let text = ''
     for (let attempt = 0; attempt < 3; attempt++) {

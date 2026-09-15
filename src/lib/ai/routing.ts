@@ -4,9 +4,13 @@ import { cheapModel, strongModel, longcatHost, tier0Hosts, tier1Hosts, tier2Host
 // Re-export the host builders that drafting needs for its specialized chains.
 export { longcatHost, tier0Hosts, tier4Host } from '@/lib/ai/config'
 
+export type { GenerationMode } from '@/lib/ai/generate'
+
 /**
  * Build the LongCat-2.0 drafting chain with Groq fallback.
  * LongCat is the primary writer; Groq strong is the fallback.
+ *
+ * Order: LongCat → Groq strong (both keys) → OpenAI escalation.
  */
 export function buildLongcatDraftChain(): ChainStep[] {
   const lc = longcatHost()
@@ -14,17 +18,23 @@ export function buildLongcatDraftChain(): ChainStep[] {
   if (lc) chain.push({ costTier: 'tier1', host: lc })
   // Add both Groq keys (if configured) for double quota
   chain.push(...tier0Hosts('strong').map((host) => ({ costTier: 'tier1' as const, host })))
+  // OpenAI escalation only
+  const oai = tier4Host()
+  if (oai) chain.push({ costTier: 'tier4', host: oai })
   return chain
 }
 
 /**
- * Build the OpenAI drafting chain with Groq fallback.
- * GPT is escalation-only — used when LongCat fails quality gates.
+ * Build the OpenAI drafting chain with LongCat fallback.
+ * Used in Premium mode: GPT first, then LongCat, then Groq.
  */
 export function buildOpenaiDraftChain(): ChainStep[] {
   const oai = tier4Host()
   const chain: ChainStep[] = []
   if (oai) chain.push({ costTier: 'tier4', host: oai })
+  // LongCat as fallback for premium mode
+  const lc = longcatHost()
+  if (lc) chain.push({ costTier: 'tier1', host: lc })
   chain.push(...tier0Hosts('strong').map((host) => ({ costTier: 'tier1' as const, host })))
   return chain
 }

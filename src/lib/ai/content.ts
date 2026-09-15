@@ -1,4 +1,4 @@
-import { pickDraftChain } from '@/lib/ai/routing'
+import { pickDraftChain, buildOpenaiDraftChain } from '@/lib/ai/routing'
 import { structuredJsonChain } from '@/lib/ai/provider'
 
 import type { ContentPlatform } from '@/lib/domain/types'
@@ -91,8 +91,9 @@ export async function generateContent(
   input: ContentGenerationInput,
   onStatus?: (msg: string) => void,
   onHostAttempt?: (log: { host: string; model: string; costTier: 'tier1' | 'tier2' | 'tier3' | 'tier4'; success: boolean; failureReason: 'rate_limit' | 'insufficient_balance' | 'timeout' | 'auth' | 'other' | null; errorMessage: string; latencyMs: number }) => void | Promise<void>,
+  generationMode: 'standard' | 'premium' = 'standard',
 ): Promise<ContentGenerationResult> {
-  const chain = pickDraftChain()
+  const chain = generationMode === 'premium' ? buildOpenaiDraftChain() : pickDraftChain()
   if (chain.length === 0) {
     throw new Error('No AI provider configured. Set GROQ_API_KEY to generate content.')
   }

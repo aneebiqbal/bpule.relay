@@ -23,7 +23,7 @@ export async function POST(
 ) {
   const { id } = await params
 
-  let body: { type?: string; profileId?: string; proofId?: string; replyToMessageId?: string; replyText?: string }
+  let body: { type?: string; profileId?: string; proofId?: string; replyToMessageId?: string; replyText?: string; generationMode?: 'standard' | 'premium' }
   try {
     body = await request.json()
   } catch {
@@ -32,6 +32,7 @@ export async function POST(
   const type = body.type ?? 'dm'
   const profileId = body.profileId ?? null
   const proofId = body.proofId ?? null
+  const generationMode = body.generationMode === 'premium' ? 'premium' : 'standard'
 
   if (!['dm', 'connection', 'upwork', 'followup', 'reply'].includes(type)) {
     return new Response(JSON.stringify({ error: 'Unknown message type.' }), {
@@ -232,6 +233,7 @@ export async function POST(
       emit,
       matched[0] ?? null,
       profile ?? null,
+      generationMode,
     )
 
     await store.saveDraft({

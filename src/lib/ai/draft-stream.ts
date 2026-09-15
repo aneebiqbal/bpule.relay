@@ -65,6 +65,7 @@ export async function streamDraft(
   emit: (e: DraftStreamEvent) => void,
   matchedProof: ProofItem | null,
   profile: Profile | null,
+  generationMode: 'standard' | 'premium' = 'standard',
 ): Promise<DraftResult> {
   emit({ type: 'status', message: 'Reading the profile' })
   emit({ type: 'profile', profile })
@@ -87,17 +88,22 @@ export async function streamDraft(
 
   const system = baseDraftSystem(input.styleCard, input.facts)
   const user = buildUserPrompt(input)
-  const longcatChain = buildLongcatDraftChain()
-  const openaiChain = buildOpenaiDraftChain()
   const callLog: DraftCallLog[] = []
   const isHighValue = input.score.total >= 10
 
-  emit({ type: 'status', message: 'Drafting in your voice...' })
-  emit({ type: 'attempt', attempt: 1, model: 'longcat', tier: 'strong' })
+  // Chain selection based on generation mode:
+  // - Standard: LongCat first → Groq fallback → GPT escalation only on quality failure
+  // - Premium: GPT first → LongCat fallback → Groq fallback
+  const primaryChain = generationMode === 'premium' ? buildOpenaiDraftChain() : buildLongcatDraftChain()
+  const escalationChain = generationMode === 'premium' ? buildLongcatDraftChain() : buildOpenaiDraftChain()
+  const fallbackChain = pickDraftChain()
 
-  // Attempt 1: LongCat (primary writer) — timeout depends on remaining time.
+  emit({ type: 'status', message: 'Drafting in your voice...' })
+  emit({ type: 'attempt', attempt: 1, model: generationMode === 'premium' ? 'openai' : 'longcat', tier: 'strong' })
+
+  // Attempt 1: Primary writer — timeout depends on remaining time.
   const attempt1Timeout = Math.min(8_000, Math.max(3_000, msRemaining() - 2_000))
-  const rawA = await structuredJsonChain<RawVariant>(longcatChain, { system, user, schema: DRAFT_SCHEMA }, undefined, attempt1Timeout)
+  const rawA = await structuredJsonChain<RawVariant>(primaryChain, { system, user, schema: DRAFT_SCHEMA }, undefined, attempt1Timeout)
     .then((r) => {
       callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
       return r.data
@@ -141,8 +147,7 @@ export async function streamDraft(
       },
       input,
     ) : null
-    const secondChain = pickDraftChain()
-    const rawB = await structuredJsonChain<RawVariant>(secondChain, {
+    const rawB = await structuredJsonChain<RawVariant>(fallbackChain, {
       system,
       user: feedback ? `${user}\n\n${feedback}` : user,
       schema: DRAFT_SCHEMA,
@@ -158,8 +163,8 @@ export async function streamDraft(
       return await streamFinalDraft(input, emit, matchedProof, variantB, variantA, 'Refined after first attempt failed self-check.', callLog, escalationDecision.reason)
     }
 
-    // Attempt 3: GPT escalation
-    if (openaiChain.length > 0 && escalationDecision.shouldEscalate) {
+    // Attempt 3: Escalation to the other chain
+    if (escalationChain.length > 0 && (escalationDecision.shouldEscalate || generationMode === 'premium')) {
       emit({ type: 'status', message: 'Escalating to stronger model...' })
       emit({ type: 'attempt', attempt: 3, model: 'gpt-escalation', tier: 'strong' })
       const gptFeedback = (variantA || variantB) ? buildCorrectiveFeedback(
@@ -175,7 +180,7 @@ export async function streamDraft(
         },
         input,
       ) : null
-      const rawC = await structuredJsonChain<RawVariant>(openaiChain, {
+      const rawC = await structuredJsonChain<RawVariant>(escalationChain, {
         system,
         user: gptFeedback ? `${user}\n\n${gptFeedback}` : user,
         schema: DRAFT_SCHEMA,

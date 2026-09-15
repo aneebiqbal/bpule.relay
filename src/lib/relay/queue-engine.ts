@@ -42,7 +42,7 @@ export interface QueueInput {
 }
 
 const KIND_PRIORITY_BASE: Record<RelayTaskKind, number> = {
-  reply_needed: 90,
+  reply_needed: 100,
   followup_due: 70,
   high_fit_lead: 55,
   new_opportunity: 50,

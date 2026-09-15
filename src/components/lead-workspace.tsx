@@ -31,6 +31,8 @@ import { cn } from 'cn'
 import type { LeadDetail } from '@/lib/store/types'
 import type { Profile, ProofItem, ScoreResult } from '@/lib/domain/types'
 import type { DraftResult, SelfCheck } from '@/lib/ai/draft'
+import type { GenerationMode } from '@/lib/ai/generate'
+import { GenerationModeSelector } from '@/components/generation-mode-selector'
 
 const ARTIFACTS = [
   { id: 'dm', label: 'DM', count: { kind: 'words', max: 55, label: 'words' } },
@@ -237,6 +239,7 @@ export function LeadWorkspace({
   const [matchedProofId, setMatchedProofId] = useState<string | null>(null)
   const [variantDraft, setVariantDraft] = useState<import('@/lib/ai/draft').DraftVariant | null>(null)
   const [showVariant, setShowVariant] = useState(false)
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('standard')
   const [timelineOpen, setTimelineOpen] = useState(false)
   const [capturedReplyText, setCapturedReplyText] = useState('')
 
@@ -290,7 +293,7 @@ export function LeadWorkspace({
     setShowVariant(false)
     streamBuffer.current = ''
     try {
-      const body: Record<string, unknown> = { type: target, profileId: chosenProfileId, proofId: proofId ?? matchedProofId ?? undefined }
+      const body: Record<string, unknown> = { type: target, profileId: chosenProfileId, proofId: proofId ?? matchedProofId ?? undefined, generationMode }
       if (target === 'reply' && prospectReplyText) {
         body.replyToMessageId = lastReply?.id ?? 'manual'
         if (capturedReplyText) {
@@ -593,10 +596,11 @@ export function LeadWorkspace({
               <p className="mt-3 text-sm text-graphite">{artifactDisabled[artifact]}</p>
             ) : (
               <>
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <Button variant="orange" onClick={() => void generateDraft()} disabled={drafting || locked || (artifact === 'reply' && !prospectReplyText)} loading={drafting}>
-                    {drafting ? 'Drafting...' : draft ? 'Rewrite' : 'Generate draft'}
-                  </Button>
+                 <div className="mt-4 flex flex-wrap items-center gap-3">
+                   <Button variant="orange" onClick={() => void generateDraft()} disabled={drafting || locked || (artifact === 'reply' && !prospectReplyText)} loading={drafting}>
+                     {drafting ? 'Drafting...' : draft ? 'Rewrite' : 'Generate draft'}
+                   </Button>
+                   <GenerationModeSelector value={generationMode} onChange={setGenerationMode} compact />
                   {statusMessage ? (
                     <span className="flex items-center gap-2 text-sm text-graphite">
                       <span className="size-1.5 rounded-full bg-orange gentle-pulse" />
