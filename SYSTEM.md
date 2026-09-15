@@ -95,7 +95,7 @@ optional ones marked below.
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Project URL. |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anon key, RLS-enforced. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Bypasses RLS. Only used by cron-triggered routes (`/api/eval/cron-run`, `/api/few-shot/refresh`'s GET) and offline `scripts/*.mjs` — never by a route serving a browser request. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Bypasses RLS. Used by: cron-triggered routes (`/api/eval/cron-run`, `/api/few-shot/refresh`'s GET, both gated by `CRON_SECRET`), the public `/api/signup` POST (creates org + auth user before any admin exists), and offline `scripts/*.mjs`. Never used by authenticated user-facing routes for data access. |
 
 **Cron**
 | Var | Effect |
@@ -168,6 +168,18 @@ history worth knowing before trusting any of their output:
 Don't assume a script that exists means it has actually been run
 successfully — check its git history and, for anything `.mjs`, run
 `node --check` on it before trusting its coverage.
+
+### SECURITY DEFINER functions
+
+Three `SECURITY DEFINER` functions bypass RLS and **must** filter by
+`current_org_id()` internally or they leak cross-tenant data:
+
+- `archive_search` — full-text search across leads, proof_items, upwork_jobs
+- `match_proofs_by_embedding` — pgvector similarity match on proof_items
+- `refresh_few_shot_wins` — rebuilds the few-shot pool from messages + outcomes
+
+Adversarial RPC isolation test: `supabase/tests/rpc-isolation-adversarial.ts`
+(creates Org A + Org B, verifies zero cross-org leaks in all three RPCs).
 
 ## Known naming things to watch for
 

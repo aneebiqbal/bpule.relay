@@ -7,6 +7,7 @@ import { injectStyleCard } from '@/lib/style/inject'
 import { buildContentDnaPromptBlock } from '@/lib/content/content-dna'
 import type { ContentGenerationInput } from '@/lib/ai/content'
 import type { TrendingAngle, ContentResearchFinding, ContentDraftFeedback } from '@/lib/domain/types'
+import { sanitizeContentCaption } from '@/lib/facts/sanitize'
 
 export const dynamic = 'force-dynamic'
 
@@ -199,7 +200,7 @@ export async function POST(req: NextRequest) {
           // Logging must never break generation.
         }
       })
-        const draft = await store.createContentDraft({
+           const draft = await store.createContentDraft({
           personaId,
           pillarId: pillar?.id ?? null,
           topicClusterId: topicCluster?.id ?? finding?.topicClusterId ?? null,
@@ -208,7 +209,7 @@ export async function POST(req: NextRequest) {
           sourceKind: finding ? 'field_update' : (useStoredOpinion ? 'conviction' : 'answer'),
           sourceMaterial: sourceForGeneration,
           platform,
-          caption: result.caption,
+          caption: sanitizeContentCaption(result.caption),
         hookScore: result.hookScore,
         hookFeedback: result.hookFeedback,
           selfCheckPassed: result.selfCheckPassed,

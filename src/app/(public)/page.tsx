@@ -1106,6 +1106,198 @@ function FinalCTASection() {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   AI DOES THE PREPARATION
+   ═══════════════════════════════════════════════════════════ */
+
+function AIDoesPreparationSection() {
+  return (
+    <section className="border-t border-line">
+      <div className="mx-auto max-w-6xl section-padding py-20 lg:py-28">
+        <div className="mx-auto max-w-2xl text-center">
+          <SectionEyebrow>HOW RELAY WORKS</SectionEyebrow>
+          <h2 className="mt-4 text-display text-3xl text-ink sm:text-4xl">
+            AI does the preparation. People make the move.
+          </h2>
+          <p className="mt-6 text-[16px] leading-relaxed text-graphite">
+            Relay researches, scores, drafts, and recommends. It never sends a message
+            or posts content on your behalf. Every action that leaves your organization
+            is taken by a human who had full context and made a deliberate choice.
+          </p>
+        </div>
+
+        <div className="mx-auto mt-14 grid max-w-3xl gap-6 md:grid-cols-2">
+          <div className="rounded-xl border border-orange/20 bg-orange/5 p-6">
+            <p className="text-label text-orange">Relay does</p>
+            <ul className="mt-4 space-y-2.5 text-[14px] text-graphite">
+              <li className="flex gap-2">
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-status-success" />
+                <span>Surface opportunities from noise</span>
+              </li>
+              <li className="flex gap-2">
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-status-success" />
+                <span>Score fit against your rubric</span>
+              </li>
+              <li className="flex gap-2">
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-status-success" />
+                <span>Draft in each rep&apos;s calibrated voice</span>
+              </li>
+              <li className="flex gap-2">
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-status-success" />
+                <span>Recommend the next-best action</span>
+              </li>
+            </ul>
+          </div>
+          <div className="rounded-xl border border-line bg-bone-raised p-6">
+            <p className="text-label text-stone">You do</p>
+            <ul className="mt-4 space-y-2.5 text-[14px] text-graphite">
+              <li className="flex gap-2">
+                <Users className="mt-0.5 size-4 shrink-0 text-orange" />
+                <span>Review and edit every draft</span>
+              </li>
+              <li className="flex gap-2">
+                <Users className="mt-0.5 size-4 shrink-0 text-orange" />
+                <span>Send every message yourself</span>
+              </li>
+              <li className="flex gap-2">
+                <Users className="mt-0.5 size-4 shrink-0 text-orange" />
+                <span>Decide who to contact and when</span>
+              </li>
+              <li className="flex gap-2">
+                <Users className="mt-0.5 size-4 shrink-0 text-orange" />
+                <span>Take responsibility for outcomes</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BUILT FOR TEAMS
+   ═══════════════════════════════════════════════════════════ */
+
+function BuiltForTeamsSection() {
+  return (
+    <section className="border-t border-line bg-bone-raised">
+      <div className="mx-auto max-w-6xl section-padding py-20 lg:py-28">
+        <div className="grid gap-16 lg:grid-cols-2 lg:gap-20">
+          <div className="space-y-6">
+            <SectionEyebrow color="cobalt">TEAM MODEL</SectionEyebrow>
+            <SectionHeading>Built for teams, controlled by admins.</SectionHeading>
+            <p className="text-[16px] leading-relaxed text-graphite">
+              Relay gives founders and admins oversight across every rep&apos;s pipeline. Who
+              was contacted. What was sent. What came back. Reps get the leverage of a
+              calibrated drafting engine; admins get the visibility to coach and govern.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-xl border border-line bg-bone p-5">
+              <p className="text-[14px] font-medium text-ink">Admin controls</p>
+              <ul className="mt-3 space-y-2 text-[13px] text-graphite">
+                <li className="flex gap-2">
+                  <span className="mt-1 size-1.5 shrink-0 rounded-full bg-cobalt" />
+                  <span>Configure scoring rubrics and daily limits</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-1 size-1.5 shrink-0 rounded-full bg-cobalt" />
+                  <span>Invite, assign, and remove reps</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-1 size-1.5 shrink-0 rounded-full bg-cobalt" />
+                  <span>Manage shared facts, proof, and profiles</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-1 size-1.5 shrink-0 rounded-full bg-cobalt" />
+                  <span>View team analytics and extraction metrics</span>
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-xl border border-line bg-bone p-5">
+              <p className="text-[14px] font-medium text-ink">Rep workflow</p>
+              <ul className="mt-3 space-y-2 text-[13px] text-graphite">
+                <li className="flex gap-2">
+                  <span className="mt-1 size-1.5 shrink-0 rounded-full bg-orange" />
+                  <span>Work the queue with AI-drafted outreach</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-1 size-1.5 shrink-0 rounded-full bg-orange" />
+                  <span>Log outcomes and replies</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-1 size-1.5 shrink-0 rounded-full bg-orange" />
+                  <span>Build authority with Studio content</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COMPANY KNOWLEDGE GOVERNED
+   ═══════════════════════════════════════════════════════════ */
+
+function GovernedKnowledgeSection() {
+  return (
+    <section className="border-t border-line">
+      <div className="mx-auto max-w-6xl section-padding py-20 lg:py-28">
+        <div className="mx-auto max-w-2xl text-center">
+          <SectionEyebrow>DATA GOVERNANCE</SectionEyebrow>
+          <h2 className="mt-4 text-display text-3xl text-ink sm:text-4xl">
+            Your company knowledge stays governed.
+          </h2>
+          <p className="mt-6 text-[16px] leading-relaxed text-graphite">
+            Every organization&apos;s data is isolated at the database level. We never sell
+            your data, never use it to train models, and never share it across tenants.
+            Your leads, facts, proof, and conversations stay within your organization —
+            controlled by your admin, accessible only to your team.
+          </p>
+        </div>
+
+        <div className="mx-auto mt-14 grid max-w-3xl gap-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-line bg-bone-raised p-5">
+            <p className="text-[14px] font-medium text-ink">Isolated</p>
+            <p className="mt-2 text-[13px] leading-relaxed text-graphite">
+              Row Level Security enforces tenant isolation at the database, not just the
+              application.
+            </p>
+          </div>
+          <div className="rounded-xl border border-line bg-bone-raised p-5">
+            <p className="text-[14px] font-medium text-ink">Yours</p>
+            <p className="mt-2 text-[13px] leading-relaxed text-graphite">
+              Your data is never sold, never used for advertising, and never shared with
+              other organizations.
+            </p>
+          </div>
+          <div className="rounded-xl border border-line bg-bone-raised p-5">
+            <p className="text-[14px] font-medium text-ink">Deletable</p>
+            <p className="mt-2 text-[13px] leading-relaxed text-graphite">
+              Request deletion of your data at any time. Organization data is deleted when
+              the org is removed.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-10 text-center">
+          <Link
+            href="/trust"
+            className="text-[14px] font-medium text-orange underline-offset-4 hover:underline"
+          >
+            Read our Trust Center for the full breakdown
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
    PAGE ASSEMBLY
    ═══════════════════════════════════════════════════════════ */
 
@@ -1124,6 +1316,9 @@ export default function LandingPage() {
       <ContentIdentitySection />
       <TwoSystemsSection />
       <TrustSection />
+      <AIDoesPreparationSection />
+      <BuiltForTeamsSection />
+      <GovernedKnowledgeSection />
       <PricingPreviewSection />
       <FinalCTASection />
     </>

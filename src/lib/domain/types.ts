@@ -910,3 +910,71 @@ export interface OutreachStrategy {
   ctaStrategy: string
   mode: MessageMode
 }
+
+// ── Relay Agentic Workspace ────────────────────────────────────────────────
+
+export type RelayTaskKind =
+  | 'reply_needed'
+  | 'followup_due'
+  | 'high_fit_lead'
+  | 'new_opportunity'
+  | 'job_worth_apply'
+  | 'proposal_ready'
+  | 'lead_going_cold'
+  | 'content_opportunity'
+  | 'admin_review'
+
+export type RelayTaskPriority = 'urgent' | 'high' | 'medium' | 'low'
+
+export interface RelayEvidence {
+  source: string
+  detail: string
+  timestamp: string | null
+  verified: boolean
+}
+
+export interface RelayRecommendation {
+  action: string
+  preparedOutput: string | null
+  evidence: RelayEvidence[]
+  confidence: number
+  forbidsImpersonation: boolean
+}
+
+export interface RelayTask {
+  id: string
+  kind: RelayTaskKind
+  priority: RelayTaskPriority
+  priorityScore: number
+  title: string
+  subtitle: string
+  entityType: 'lead' | 'job' | 'content' | 'admin'
+  entityId: string
+  whatHappened: string
+  whyItMatters: string
+  recommendation: RelayRecommendation
+  humanAction: string
+  stale: boolean
+  stalenessNote: string | null
+  createdAt: string
+}
+
+export type RelayRole = 'admin' | 'bd'
+
+export interface RelayRoleContext {
+  role: RelayRole
+  rep: Rep
+  organization: Organization
+}
+
+export interface RelayQueue {
+  tasks: RelayTask[]
+  roleContext: RelayRoleContext
+  generatedAt: string
+  stale: boolean
+  summary: {
+    total: number
+    urgent: number
+    byKind: Record<RelayTaskKind, number>
+  }
+}

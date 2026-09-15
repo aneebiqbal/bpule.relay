@@ -798,4 +798,11 @@ export interface ScoutStore {
   }): Promise<ContentQuickCapture>
   listContentQuickCaptures(personaId: string, limit?: number): Promise<ContentQuickCapture[]>
   updateQuickCaptureStatus(captureId: string, status: string): Promise<void>
+  // relay queue
+  getRelayQueueData(): Promise<{
+    conversations: Map<string, import('@/lib/domain/types').ConversationState>
+    messagesByLead: Map<string, import('@/lib/domain/types').Message[]>
+    messagesByJob: Map<string, import('@/lib/domain/types').UpworkMessage[]>
+    assignedProfiles: import('@/lib/domain/types').Profile[]
+  }>
 }

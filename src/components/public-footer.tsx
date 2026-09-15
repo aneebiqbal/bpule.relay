@@ -6,6 +6,7 @@ const PRODUCT_LINKS = [
   { href: "/#studio", label: "Studio" },
   { href: "/#how-it-works", label: "How it works" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/docs", label: "Docs" },
 ];
 
 const COMPANY_LINKS = [
@@ -16,13 +17,20 @@ const COMPANY_LINKS = [
 const LEGAL_LINKS = [
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
+  { href: "/acceptable-use", label: "Acceptable Use" },
+  { href: "/ai-policy", label: "AI Policy" },
+  { href: "/security", label: "Security" },
+];
+
+const TRUST_LINKS = [
+  { href: "/trust", label: "Trust Center" },
 ];
 
 export function PublicFooter() {
   return (
     <footer className="border-t border-line bg-bone">
       <div className="mx-auto max-w-6xl section-padding py-16">
-        <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-5">
           {/* Brand column */}
           <div className="space-y-4">
             <RelayBrand />
@@ -53,6 +61,23 @@ export function PublicFooter() {
             <h3 className="text-label text-stone">Get started</h3>
             <ul className="mt-4 space-y-2.5">
               {COMPANY_LINKS.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="text-[13px] text-graphite transition-colors hover:text-ink"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Trust */}
+          <div>
+            <h3 className="text-label text-stone">Trust</h3>
+            <ul className="mt-4 space-y-2.5">
+              {TRUST_LINKS.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}

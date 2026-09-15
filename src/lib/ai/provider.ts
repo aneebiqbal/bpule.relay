@@ -4,6 +4,7 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import { groqApiKey, groqBaseUrl } from '@/lib/ai/config'
 import type { ChainStep } from '@/lib/ai/routing'
 import { estimateCostUsd, estimateTokens, type CostTier } from '@/lib/ai/cost'
+import { scanForSecrets } from '@/lib/ai/secrets'
 
 /**
  * Multi-host, multi-tier model provider (architecture v2.1, September 2026).
@@ -201,12 +202,11 @@ async function walkChain<T>(
       await onAttempt?.({ host: step.host.id, model: step.host.model, costTier: step.costTier, success: true, failureReason: null, errorMessage: '', latencyMs: latency })
       return { data, host: step.host.id, costTier: step.costTier, estimatedCostUsd: 0 }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
       const reason = categorizeFailure(err)
-      failures.push({ host: step.host.id, tier: step.costTier, error: message, reason })
-      console.warn(`[ai/host] ${step.host.id} (${step.costTier}) failed: ${reason} — ${message}`)
-      await onAttempt?.({ host: step.host.id, model: step.host.model, costTier: step.costTier, success: false, failureReason: reason, errorMessage: message, latencyMs: Date.now() - start })
-      onStatus?.(`${step.host.id} unavailable (${message}); trying next host`)
+      failures.push({ host: step.host.id, tier: step.costTier, error: reason, reason })
+      console.warn(`[ai/host] ${step.host.id} (${step.costTier}) failed: ${reason}`)
+      await onAttempt?.({ host: step.host.id, model: step.host.model, costTier: step.costTier, success: false, failureReason: reason, errorMessage: reason, latencyMs: Date.now() - start })
+      onStatus?.(`${step.host.id} unavailable (${reason}); trying next host}`)
     }
   }
   throw new AllTiersFailedError(failures.map(({ host, tier, error }) => ({ host, tier, error })))
@@ -235,6 +235,10 @@ async function structuredJsonOnHost<T>(
   timeoutMs?: number,
 ): Promise<{ value: T; inputTokens: number; outputTokens: number }> {
   if (!host.apiKey) throw new Error(`Host has no API key configured.`)
+  const sysScan = scanForSecrets(opts.system)
+  if (sysScan.blocked) throw new Error(`System prompt blocked: ${sysScan.reason}`)
+  const userScan = scanForSecrets(opts.user)
+  if (userScan.blocked) throw new Error(`Prompt blocked: ${userScan.reason}`)
   const api = clientFor(host.baseUrl, host.apiKey)
   if (timeoutMs) api.timeout = timeoutMs
   let user = opts.user
@@ -395,6 +399,10 @@ export async function streamChatText(opts: {
 }): Promise<string> {
   const model = opts.model
   if (!model) throw new Error('streamChatText requires a model id (legacy path).')
+  const sysScan = scanForSecrets(opts.system)
+  if (sysScan.blocked) throw new Error(`System prompt blocked: ${sysScan.reason}`)
+  const userScan = scanForSecrets(opts.user)
+  if (userScan.blocked) throw new Error(`Prompt blocked: ${userScan.reason}`)
   const api = getClient()
 
   return await withHostRetry(`Draft (${model})`, opts.onStatus, async () => {
@@ -431,6 +439,10 @@ export async function streamChatTextChain(
     onStatus?: (message: string) => void
   },
 ): Promise<CallResult<string>> {
+  const sysScan = scanForSecrets(opts.system)
+  if (sysScan.blocked) throw new Error(`System prompt blocked: ${sysScan.reason}`)
+  const userScan = scanForSecrets(opts.user)
+  if (userScan.blocked) throw new Error(`Prompt blocked: ${userScan.reason}`)
   const result = await walkChain(chain, opts.onStatus, async (step) => {
     if (!step.host.apiKey) throw new Error('Host has no API key configured.')
     const api = clientFor(step.host.baseUrl, step.host.apiKey)

@@ -111,6 +111,56 @@ open a PR, and have it reviewed in the preview deployment before merging again.
 
 ---
 
+## Incident Response
+
+### Classification
+
+| Severity | Examples | Response time |
+|----------|----------|---------------|
+| **Critical** | Active data breach, cross-org data leak, service role key exposure | Immediate (< 1 hour) |
+| **High** | Auth bypass, unauthorized admin access, credential leak to AI provider | < 4 hours |
+| **Medium** | Rate limit failure, degraded AI provider, analytics misconfiguration | < 24 hours |
+| **Low** | UI bug, non-sensitive log leakage, documentation inaccuracy | Next sprint |
+
+### Breach response procedure
+
+1. **Contain**: If a key or credential is exposed, rotate it immediately in Supabase dashboard and Vercel environment variables. If a database vulnerability is suspected, revoke the service role key and rotate the anon key.
+
+2. **Assess**: Determine scope — which organizations, users, or data types are affected. Check Supabase logs (Dashboard → Logs → Postgres) for unauthorized queries. Check Vercel function logs for suspicious API calls.
+
+3. **Notify**: Contact affected organizations within 72 hours if personal data may be compromised. Email template:
+
+   > We recently identified a security incident that may have affected your Relay organization's data. [Describe scope.] We have [taken these steps] to contain it. We recommend [specific action]. Contact security@relay.bpulse.dev with questions.
+
+4. **Remediate**: Apply the fix, verify with the adversarial RLS test (`supabase/tests/rls-adversarial.ts` and `supabase/tests/rpc-isolation-adversarial.ts`), deploy.
+
+5. **Post-incident**: Document the incident, root cause, and remediation within 48 hours. Update this runbook if gaps were found.
+
+### Key rotation
+
+```bash
+# Rotate service role key:
+# 1. Generate new key in Supabase → Settings → API
+# 2. Update SUPABASE_SERVICE_ROLE_KEY in Vercel environment
+# 3. Redeploy
+# 4. Old key is automatically invalidated
+
+# Rotate anon key:
+# 1. Regenerate in Supabase → Settings → API
+# 2. Update NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel
+# 3. Redeploy
+```
+
+### Data deletion requests
+
+When a user or organization requests data deletion:
+
+1. **Individual user**: Use the self-service `/api/account/delete` endpoint. This removes the user's auth account and rep row. If they are the last member, the organization and all its data are also deleted.
+2. **Organization**: An admin can use `/api/organization/delete`. This cascades to all org data (leads, messages, facts, proof, content, etc.) and removes all member auth accounts.
+3. **Manual/backup**: After deletion, data may persist in Supabase automated backups until those rotate out (typically 7 days). For immediate purging from backups, restore to a temporary project, manually delete, and re-backup.
+
+---
+
 ## Environment Variables
 
 | Variable | Required | Purpose |

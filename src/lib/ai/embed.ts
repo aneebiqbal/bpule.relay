@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { embeddingApiKey, embeddingBaseUrl, embeddingModel, hasEmbeddingProvider } from '@/lib/ai/config'
+import { scanForSecrets } from '@/lib/ai/secrets'
 
 /**
  * Lightweight embedding layer for semantic proof matching.
@@ -41,6 +42,8 @@ export async function embedText(text: string): Promise<number[]> {
   if (!hasEmbeddingProvider()) {
     return fallbackEmbedding(text)
   }
+  const scan = scanForSecrets(text)
+  if (scan.blocked) throw new Error(`Embedding input blocked: ${scan.reason}`)
   const api = getClient()
   const res = await api.embeddings.create({
     model: embeddingModel(),
@@ -60,6 +63,10 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return []
   if (!hasEmbeddingProvider()) {
     return texts.map((t) => fallbackEmbedding(t))
+  }
+  for (const text of texts) {
+    const scan = scanForSecrets(text)
+    if (scan.blocked) throw new Error(`Embedding input blocked: ${scan.reason}`)
   }
   const api = getClient()
   const res = await api.embeddings.create({

@@ -117,3 +117,10 @@ export function sanitizeDraft(
     requestedCall: requestsCall(clean),
   }
 }
+
+export function sanitizeContentCaption(caption: string): string {
+  let text = stripEmDashes(caption)
+  text = text.replace(/!/g, '.')
+  text = text.replace(/  +/g, ' ').trim()
+  return text
+}

@@ -9,6 +9,7 @@ import {
   Sun,
   Sunset,
   Moon,
+  Zap,
   type LucideIcon,
 } from 'lucide-react'
 import { createScoutStore } from '@/lib/store'
@@ -162,6 +163,13 @@ export default async function TodayPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/relay"
+            className="inline-flex items-center gap-2 rounded-lg border border-orange/30 px-4 py-2 text-[13px] font-medium text-orange transition-all hover:bg-orange/[0.06] active:scale-[0.97]"
+          >
+            <Zap className="size-4" aria-hidden="true" />
+            Relay
+          </Link>
           <Link
             href="/prospect"
             className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-orange-dark active:scale-[0.97]"
@@ -331,6 +339,27 @@ export default async function TodayPage() {
               </ul>
             </div>
           )}
+        </section>
+      )}
+
+      {/* ── Relay CTA ── */}
+      {totalActions > 0 && (
+        <section className="reveal-up stagger-2">
+          <Link
+            href="/relay"
+            className="group flex items-center gap-3 rounded-xl border border-line bg-bone-raised p-4 transition-all hover:border-orange/30 hover:bg-orange/[0.02]"
+          >
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-orange/10">
+              <Zap className="size-5 text-orange" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-medium text-ink">Open Relay — your full agentic workspace</p>
+              <p className="text-[12px] text-graphite">
+                See every prepared recommendation with evidence, context, and everything you need to act.
+              </p>
+            </div>
+            <ArrowRight className="size-4 shrink-0 text-stone transition-transform group-hover:translate-x-0.5" />
+          </Link>
         </section>
       )}
 

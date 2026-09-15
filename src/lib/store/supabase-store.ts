@@ -1435,7 +1435,9 @@ export class SupabaseStore implements ScoutStore {
 
   async refreshFewShotWins(): Promise<number> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
-    const { data, error } = await this.client.rpc('refresh_few_shot_wins')
+    const { data, error } = await this.client.rpc('refresh_few_shot_wins', {
+      p_org_id: this.rep.organizationId,
+    })
     if (error) throw error
     return (data as number) ?? 0
   }
@@ -3253,6 +3255,64 @@ export class SupabaseStore implements ScoutStore {
       .eq('id', captureId)
       .eq('organization_id', this.orgId)
     if (error) throw error
+  }
+
+  // ==========================================================================
+  // Relay Queue
+  // ==========================================================================
+
+  async getRelayQueueData() {
+    const [owned, jobMessages, profiles] = await Promise.all([
+      this.fetchLeadsWithMessages(),
+      this.fetchUpworkMessagesForRep(),
+      this.getAssignedProfiles(),
+    ])
+
+    const conversations = new Map<string, ConversationState>()
+    const messagesByLead = new Map<string, Message[]>()
+
+    for (const lead of owned) {
+      const msgs = lead._messages ?? []
+      messagesByLead.set(lead.id, msgs)
+      if (lead._conversation) {
+        conversations.set(lead.id, lead._conversation)
+      }
+    }
+
+    const messagesByJob = new Map<string, UpworkMessage[]>()
+    for (const msg of jobMessages) {
+      const arr = messagesByJob.get(msg.jobId) ?? []
+      arr.push(msg)
+      messagesByJob.set(msg.jobId, arr)
+    }
+
+    return { conversations, messagesByLead, messagesByJob, assignedProfiles: profiles }
+  }
+
+  private async fetchLeadsWithMessages(): Promise<Array<Lead & { _messages: Message[]; _conversation: ConversationState | null }>> {
+    const { data, error } = await this.client
+      .from('leads')
+      .select('*, messages(*), conversations(*)')
+      .eq('owner_rep_id', this.rep.id)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r: Row) => ({
+      ...mapLead(r),
+      _messages: ((r.messages as Row[]) ?? []).map(mapMessage),
+      _conversation: (r.conversations as Row[])?.[0]
+        ? mapConversationState((r.conversations as Row[])[0])
+        : null,
+    }))
+  }
+
+  private async fetchUpworkMessagesForRep(): Promise<UpworkMessage[]> {
+    const { data, error } = await this.client
+      .from('upwork_messages')
+      .select('*')
+      .eq('rep_id', this.rep.id)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map(mapUpworkMessage)
   }
 }
 

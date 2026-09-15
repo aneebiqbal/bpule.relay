@@ -2123,5 +2123,13 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       return []
     },
     async updateQuickCaptureStatus(captureId, status) {},
+    async getRelayQueueData() {
+      return {
+        conversations: new Map(),
+        messagesByLead: new Map(),
+        messagesByJob: new Map(),
+        assignedProfiles: [],
+      }
+    },
   }
 }

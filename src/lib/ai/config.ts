@@ -289,6 +289,11 @@ export function dbMode(): 'supabase' | 'demo' {
   ) {
     return 'supabase'
   }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required in production. The app will not start in demo mode.',
+    )
+  }
   return 'demo'
 }
 

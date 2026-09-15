@@ -39,9 +39,20 @@ export async function GET(request: Request) {
 
   try {
     const client = createServiceSupabase()
-    const { data, error } = await client.rpc('refresh_few_shot_wins')
-    if (error) throw error
-    return NextResponse.json({ refreshed: (data as number) ?? 0 })
+    const { data: orgs, error: orgsErr } = await client
+      .from('organizations')
+      .select('id')
+    if (orgsErr) throw orgsErr
+
+    let total = 0
+    for (const org of orgs ?? []) {
+      const { data, error } = await client.rpc('refresh_few_shot_wins', {
+        p_org_id: org.id,
+      })
+      if (error) throw error
+      total += ((data as number) ?? 0)
+    }
+    return NextResponse.json({ refreshed: total, organizations: orgs?.length ?? 0 })
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Refresh failed.' },
