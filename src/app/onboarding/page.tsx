@@ -388,14 +388,14 @@ function WelcomePhase({ onStart, onSkip }: { onStart: () => void; onSkip: () => 
           Calibrate my voice
           <ArrowRight className="size-4 ml-1.5" aria-hidden="true" />
         </Button>
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="lg"
+          className="w-full"
           onClick={() => void onSkip()}
-          className="flex w-full items-center justify-center gap-1.5 text-[13px] text-graphite transition-colors hover:text-ink"
         >
-          <SkipForward className="size-3.5" aria-hidden="true" />
-          Skip for now — use a default voice
-        </button>
+          Skip — use default voice
+        </Button>
       </div>
     </div>
   )

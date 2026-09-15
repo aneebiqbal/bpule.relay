@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 /**
  * Admin Growth Dashboard API.
  *
- * Returns behavioral metrics for the growth dashboard:
- * - Funnel: visitors → signups → activations → product usage
+ * Returns behavioral metrics:
+ * - Funnel: signups → activation → activity
  * - Retention indicators
  * - Per-customer activity + activation state
  *
@@ -31,60 +31,43 @@ export async function GET() {
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   try {
-    // Fetch all organizations with their related data
-    const { data: orgs } = await db
-      .from("organizations")
-      .select(
-        `
-        id,
-        name,
-        plan,
-        created_at,
-        reps:id (
-          id,
-          name,
-          role,
-          created_at
-        )
-      `,
-      )
-      .order("created_at", { ascending: false })
-      .limit(100);
-
-    if (!orgs) {
-      return NextResponse.json({
-        funnel: emptyFunnel(),
-        customers: [],
-        retention: { d1: 0, d7: 0, d30: 0 },
-      });
-    }
-
-    const orgIds = orgs.map((o) => o.id);
-
-    // Aggregate product usage per organization
-    const [leadsResult, draftsResult, jobsResult, messagesResult] =
+    // Fetch tables separately to avoid FK relationship issues with service role
+    const [orgsResult, repsResult, leadsResult, draftsResult, jobsResult, messagesResult] =
       await Promise.all([
+        db
+          .from("organizations")
+          .select("id, name, plan, created_at")
+          .order("created_at", { ascending: false })
+          .limit(100),
+        db
+          .from("reps")
+          .select("id, name, role, organization_id, created_at")
+          .order("created_at", { ascending: false })
+          .limit(200),
         db
           .from("leads")
           .select("id, organization_id, status, created_at")
-          .in("organization_id", orgIds)
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
+          .limit(500),
         db
           .from("content_drafts")
-          .select("id, status, created_at, posted_at"),
+          .select("id, status, created_at, posted_at")
+          .order("created_at", { ascending: false })
+          .limit(500),
         db
           .from("upwork_jobs")
           .select("id, organization_id, verdict, created_at")
-          .in("organization_id", orgIds)
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
+          .limit(200),
         db
           .from("messages")
           .select("id, organization_id, created_at")
-          .in("organization_id", orgIds)
           .order("created_at", { ascending: false })
           .limit(1000),
       ]);
 
+    const orgs = orgsResult.data ?? [];
+    const allReps = repsResult.data ?? [];
     const allLeads = leadsResult.data ?? [];
     const allDrafts = draftsResult.data ?? [];
     const allJobs = jobsResult.data ?? [];
@@ -92,17 +75,17 @@ export async function GET() {
 
     // Build per-customer profiles
     const customers = orgs.map((org) => {
+      const orgReps = allReps.filter((r) => r.organization_id === org.id);
       const orgLeads = allLeads.filter((l) => l.organization_id === org.id);
       const orgJobs = allJobs.filter((j) => j.organization_id === org.id);
-      const orgMessages = allMessages.filter(
-        (m) => m.organization_id === org.id,
-      );
+      const orgMessages = allMessages.filter((m) => m.organization_id === org.id);
 
-      // Derive activation: has at least one lead with outreach OR one draft
+      // Activation: has at least one lead with outreach OR one draft OR one job
       const hasLeadAction = orgLeads.length > 0;
       const hasOutreach = orgMessages.length > 0;
-      const hasDraft = allDrafts.length > 0; // Approximate (persona join would be needed for exact)
-      const isActivated = hasLeadAction || hasOutreach || hasDraft;
+      const hasDraft = allDrafts.length > 0; // Approximate without persona join
+      const hasJobs = orgJobs.length > 0;
+      const isActivated = hasLeadAction || hasOutreach || hasDraft || hasJobs;
 
       // Last active: most recent activity across all surfaces
       const allTimestamps = [
@@ -115,7 +98,7 @@ export async function GET() {
         ? allTimestamps.sort().reverse()[0]
         : org.created_at;
 
-      // Retention: had activity in last 7 days
+      // Retention: had activity in last 7/30 days
       const lastActiveDate = new Date(lastActive);
       const isWeeklyActive = lastActiveDate >= sevenDaysAgo;
       const isMonthlyActive = lastActiveDate >= thirtyDaysAgo;
@@ -132,7 +115,7 @@ export async function GET() {
         name: org.name,
         plan: org.plan,
         joinedAt: org.created_at,
-        repCount: org.reps?.length ?? 0,
+        repCount: orgReps.length,
         leadCount: orgLeads.length,
         messageCount: orgMessages.length,
         draftCount: hasDraft ? allDrafts.length : 0,
@@ -169,7 +152,8 @@ export async function GET() {
       funnel: {
         totalOrganizations: totalOrgs,
         activatedOrganizations: activatedOrgs,
-        activationRate: totalOrgs > 0 ? Math.round((activatedOrgs / totalOrgs) * 100) : 0,
+        activationRate:
+          totalOrgs > 0 ? Math.round((activatedOrgs / totalOrgs) * 100) : 0,
         weeklyActive: weeklyActiveOrgs,
         monthlyActive: monthlyActiveOrgs,
         totalLeads: allLeads.length,
@@ -178,8 +162,8 @@ export async function GET() {
         totalJobs: allJobs.length,
       },
       weeklySignups,
-      customers: customers.sort((a, b) =>
-        new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime(),
+      customers: customers.sort(
+        (a, b) => new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime(),
       ),
       retention: {
         d1: customers.filter((c) => {
@@ -197,18 +181,4 @@ export async function GET() {
       { status: 500 },
     );
   }
-}
-
-function emptyFunnel() {
-  return {
-    totalOrganizations: 0,
-    activatedOrganizations: 0,
-    activationRate: 0,
-    weeklyActive: 0,
-    monthlyActive: 0,
-    totalLeads: 0,
-    totalDrafts: 0,
-    totalMessages: 0,
-    totalJobs: 0,
-  };
 }
