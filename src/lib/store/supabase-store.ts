@@ -3292,15 +3292,15 @@ export class SupabaseStore implements ScoutStore {
   private async fetchLeadsWithMessages(): Promise<Array<Lead & { _messages: Message[]; _conversation: ConversationState | null }>> {
     const { data, error } = await this.client
       .from('leads')
-      .select('*, messages(*), conversations(*)')
+      .select('*, messages(*), conversation_states(*)')
       .eq('owner_rep_id', this.rep.id)
       .order('created_at', { ascending: false })
     if (error) throw error
     return (data ?? []).map((r: Row) => ({
       ...mapLead(r),
       _messages: ((r.messages as Row[]) ?? []).map(mapMessage),
-      _conversation: (r.conversations as Row[])?.[0]
-        ? mapConversationState((r.conversations as Row[])[0])
+      _conversation: (r.conversation_states as Row[])?.[0]
+        ? mapConversationState((r.conversation_states as Row[])[0])
         : null,
     }))
   }
