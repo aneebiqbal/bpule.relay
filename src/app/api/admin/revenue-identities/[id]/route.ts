@@ -1,0 +1,130 @@
+import { NextResponse } from 'next/server'
+import { createServerSupabase } from '@/lib/supabase/server'
+import { getCurrentUser } from '@/lib/auth/current'
+import { safeErrorResponse } from '@/lib/errors'
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+
+  const supabase = await createServerSupabase()
+  const { data, error } = await supabase
+    .from('revenue_identities')
+    .select('*')
+    .eq('id', id)
+    .eq('organization_id', user.organization.id)
+    .maybeSingle()
+
+  if (error) return safeErrorResponse(error, 500, 'Failed to load identity.', 'admin/revenue-identities/[id]')
+  if (!data) return NextResponse.json({ error: 'Not found.' }, { status: 404 })
+
+  return NextResponse.json({ identity: data })
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+
+  let body: Record<string, unknown>
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
+  }
+
+  const supabase = await createServerSupabase()
+
+  // Verify ownership
+  const { data: existing } = await supabase
+    .from('revenue_identities')
+    .select('id')
+    .eq('id', id)
+    .eq('organization_id', user.organization.id)
+    .maybeSingle()
+
+  if (!existing) return NextResponse.json({ error: 'Not found.' }, { status: 404 })
+
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  const fields = [
+    'identityName', 'title', 'positioning', 'profileUrl', 'skills', 'expertise',
+    'industries', 'technologies', 'allowedFirstPersonClaims', 'forbiddenClaims',
+    'channelRules', 'voiceTone', 'preferredOpportunityTypes', 'proposalPositioning',
+    'status', 'slug',
+  ] as const
+  const dbFields: Record<string, string> = {
+    identityName: 'identity_name',
+    profileUrl: 'profile_url',
+    allowedFirstPersonClaims: 'allowed_first_person_claims',
+    forbiddenClaims: 'forbidden_claims',
+    channelRules: 'channel_rules',
+    voiceTone: 'voice_tone',
+    preferredOpportunityTypes: 'preferred_opportunity_types',
+    proposalPositioning: 'proposal_positioning',
+  }
+
+  for (const field of fields) {
+    if (body[field] !== undefined) {
+      const dbField = dbFields[field] ?? field
+      update[dbField] = body[field]
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('revenue_identities')
+    .update(update)
+    .eq('id', id)
+    .select('*')
+    .single()
+
+  if (error) return safeErrorResponse(error, 500, 'Failed to update identity.', 'admin/revenue-identities/[id]')
+
+  await supabase.from('accountability_audit_log').insert({
+    organization_id: user.organization.id,
+    rep_id: user.rep.id,
+    revenue_identity_id: id,
+    event_type: 'identity_edited',
+    detail: { fields: Object.keys(update) },
+  })
+
+  return NextResponse.json({ identity: data })
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+
+  const supabase = await createServerSupabase()
+
+  const { error } = await supabase
+    .from('revenue_identities')
+    .delete()
+    .eq('id', id)
+    .eq('organization_id', user.organization.id)
+
+  if (error) return safeErrorResponse(error, 500, 'Failed to delete identity.', 'admin/revenue-identities/[id]')
+
+  await supabase.from('accountability_audit_log').insert({
+    organization_id: user.organization.id,
+    rep_id: user.rep.id,
+    revenue_identity_id: id,
+    event_type: 'identity_deleted',
+    detail: {},
+  })
+
+  return NextResponse.json({ ok: true })
+}
