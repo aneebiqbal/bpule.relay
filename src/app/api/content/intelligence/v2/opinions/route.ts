@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { safeErrorResponse } from '@/lib/errors'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
 import { generateOpinionChoices, getDirectionChoices, type OpinionChoice } from '@/lib/content/intelligence/v2/opinions'
@@ -48,7 +49,6 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     console.error('[content/intelligence/v2/opinions] failed:', err)
-    const message = err instanceof Error ? err.message : 'Opinion generation failed.'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return safeErrorResponse(err, 500, 'Opinion generation failed.', 'content/intelligence/v2/opinions')
   }
 }

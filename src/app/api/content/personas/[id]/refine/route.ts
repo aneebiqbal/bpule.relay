@@ -73,7 +73,6 @@ export async function POST(
 
     return NextResponse.json({ refined: true, persona: updated, focusShiftNote: refinement.focusShiftNote, totalDecisions })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Refinement failed.'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: 'Refinement failed.' }, { status: 500 })
   }
 }

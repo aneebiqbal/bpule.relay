@@ -230,8 +230,7 @@ export async function POST(req: NextRequest) {
 
         emit({ type: 'done', result: { ...result, draftId: draft.id } })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Generation failed.'
-      emit({ type: 'error', message })
+      emit({ type: 'error', message: 'Generation failed.' })
     }
   })
 }

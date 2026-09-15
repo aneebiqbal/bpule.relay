@@ -102,12 +102,11 @@ export async function POST(request: Request) {
         demoMode: !hasProvider(),
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Extraction failed.'
       void safeLog({
         success: false,
         latencyMs: Date.now() - started,
         model: 'n/a',
-        error: message,
+        error: 'Extraction failed.',
       })
       throw err
     }

@@ -50,8 +50,7 @@ export async function POST(
   const voiceProfile = await store.getVoiceProfile()
   const styleCard = injectStyleCard(voiceProfile?.styleCard)
 
-  // Proof matching based on job skills
-  const tagMatches = await store.matchProofItems(job.requiredSkills ?? [], 8)
+  const tagMatches = await store.matchProofItems(job.requiredSkills ?? [], 8, profile?.id ?? null)
   let matched = tagMatches
   if (body.proofId) {
     const explicit = matched.find((p) => p.id === body.proofId) ?? null

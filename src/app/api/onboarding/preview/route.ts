@@ -65,8 +65,7 @@ export async function POST(request: Request) {
       sampleSource: result.sampleSource,
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to build style card.'
-    console.error('[onboarding/preview] error:', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[onboarding/preview] error:', err)
+    return NextResponse.json({ error: 'Failed to build style card.' }, { status: 500 })
   }
 }

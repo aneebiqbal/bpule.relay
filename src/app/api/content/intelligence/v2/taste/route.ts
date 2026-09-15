@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
+import { safeErrorResponse } from '@/lib/errors'
 import { createTasteProfile, applyTasteSignal, type TasteSignal } from '@/lib/content/intelligence/v2/taste'
 
 export const dynamic = 'force-dynamic'
@@ -72,7 +73,6 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     console.error('[content/intelligence/v2/taste] failed:', err)
-    const message = err instanceof Error ? err.message : 'Signal recording failed.'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return safeErrorResponse(err, 500, 'Signal recording failed.', 'content/intelligence/v2/taste')
   }
 }

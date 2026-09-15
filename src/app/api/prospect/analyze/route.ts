@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       })
       extracted = bundle.primary
     } catch (err) {
-      emit({ type: 'error', message: err instanceof Error ? err.message : 'Extraction failed.' })
+      emit({ type: 'error', message: 'Extraction failed.' })
       return
     }
 
@@ -239,11 +239,11 @@ export async function POST(request: Request) {
     let matchedProofItem: import('@/lib/domain/types').ProofItem | null = null
     try {
       if (store) {
-        const tagMatches = await store.matchProofItems(extracted.tags ?? [], 5)
+        const tagMatches = await store.matchProofItems(extracted.tags ?? [], 5, bestSender?.id ?? null)
         const leadEmbedding = await embedTextSafe(`${extracted.company} ${extracted.signalEvidence} ${(extracted.tags ?? []).join(' ')}`)
         let semanticMatches: Array<{ item: Parameters<typeof mergeProofMatches>[1][0]; similarity: number }> = []
         if (leadEmbedding) {
-          semanticMatches = await store.matchProofItemsByEmbedding(leadEmbedding, 5) as typeof semanticMatches
+          semanticMatches = await store.matchProofItemsByEmbedding(leadEmbedding, 5, bestSender?.id ?? null) as typeof semanticMatches
         }
         const merged = mergeProofMatches(semanticMatches, tagMatches, 5)
         matchedProofItem = merged[0] ?? null

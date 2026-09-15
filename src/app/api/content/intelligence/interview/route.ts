@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
+import { safeErrorResponse } from '@/lib/errors'
 import { decideIfInterviewNeeded, generateInterviewQuestion, shouldStopInterview, assessAnswerQuality, MAX_INTERVIEW_QUESTIONS } from '@/lib/content/intelligence/interview'
 
 export const dynamic = 'force-dynamic'
@@ -126,7 +127,6 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     console.error('[content/intelligence/interview] failed:', err)
-    const message = err instanceof Error ? err.message : 'Interview failed.'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return safeErrorResponse(err, 500, 'Interview failed.', 'content/intelligence/interview')
   }
 }

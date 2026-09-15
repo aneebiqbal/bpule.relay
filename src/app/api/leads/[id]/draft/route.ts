@@ -55,7 +55,7 @@ export async function POST(
   } catch (err) {
     return new Response(
       JSON.stringify({
-        error: err instanceof Error ? err.message : 'Not signed in.',
+        error: 'Not signed in.',
       }),
       { status: 401, headers: { 'Content-Type': 'application/json' } },
     )

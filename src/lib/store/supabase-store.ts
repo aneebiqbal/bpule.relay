@@ -58,6 +58,19 @@ import type {
   UpworkMessage,
   Verdict,
   VoiceProfile,
+  RevenueIdentity,
+  RevenueIdentityChannel,
+  RevenueIdentityStatus,
+  IdentityAssignment,
+  RevenueIdentityWithAssignment,
+  ActivityType,
+  DailyTarget,
+  AccountabilityStatus,
+  DailyAccountability,
+  AppNotification,
+  AuditLogEntry,
+  TeamAccountabilityView,
+  CommandCenterView,
 } from '@/lib/domain/types'
 import type {
   CreateLeadResult,
@@ -726,7 +739,7 @@ export class SupabaseStore implements ScoutStore {
   async listAllReps(): Promise<Rep[]> {
     const { data, error } = await this.client
       .from('reps')
-      .select('id, name, role, organization_id, created_at')
+      .select('id, name, role, organization_id, created_at, timezone')
       .order('name', { ascending: true })
     if (error) throw error
     return (data ?? []).map((row: Row) => ({
@@ -735,6 +748,7 @@ export class SupabaseStore implements ScoutStore {
       role: row.role as Rep['role'],
       organizationId: row.organization_id as string,
       createdAt: row.created_at as string,
+      timezone: (row.timezone as string) ?? 'UTC',
     }))
   }
 
@@ -1025,9 +1039,9 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async matchProofItems(tags: string[], limit = 2, profileId: string | null = null): Promise<ProofItem[]> {
-    const profiles = profileId
-      ? (await this.listAllProfiles()).filter((p) => p.id === profileId)
-      : await this.listAllProfiles()
+    if (!profileId) return []
+    const profiles = (await this.listProfiles()).filter((p) => p.id === profileId)
+    if (profiles.length === 0) return []
     const items = (
       await Promise.all(profiles.map((p) => this.listProofItems(p.id)))
     ).flat()
@@ -1142,7 +1156,7 @@ export class SupabaseStore implements ScoutStore {
       this.fetchRates(),
       this.client
         .from('reps')
-        .select('id, name, role, organization_id, created_at')
+        .select('id, name, role, organization_id, created_at, timezone')
         .then((r) => {
           if (r.error) throw r.error
           return (r.data ?? []).map((row: Row) => ({
@@ -1151,6 +1165,7 @@ export class SupabaseStore implements ScoutStore {
             role: row.role as Rep['role'],
             organizationId: row.organization_id as string,
             createdAt: row.created_at as string,
+            timezone: (row.timezone as string) ?? 'UTC',
           }))
         }),
     ])
@@ -1309,19 +1324,19 @@ export class SupabaseStore implements ScoutStore {
     limit = 2,
     profileId: string | null = null,
   ): Promise<Array<{ item: ProofItem; similarity: number }>> {
+    if (!profileId) return []
     const { data, error } = await this.client.rpc('match_proofs_by_embedding', {
       query_embedding: embedding,
       match_threshold: 0.72,
       match_count: limit,
     })
     if (error) throw error
-    let results: Array<{ item: ProofItem; similarity: number }> = (data ?? []).map((r: Row) => ({
-      item: mapProofItem(r),
-      similarity: (r.similarity as number) ?? 0,
-    }))
-    if (profileId) {
-      results = results.filter((r) => r.item.profileId === profileId)
-    }
+    const results: Array<{ item: ProofItem; similarity: number }> = (data ?? [])
+      .filter((r: Row) => r.profile_id === profileId)
+      .map((r: Row) => ({
+        item: mapProofItem(r),
+        similarity: (r.similarity as number) ?? 0,
+      }))
     return results
   }
 
@@ -3348,6 +3363,375 @@ export class SupabaseStore implements ScoutStore {
       .order('created_at', { ascending: false })
     if (error) throw error
     return (data ?? []).map(mapUpworkMessage)
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Revenue Identity OS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  private mapRevenueIdentity(r: Record<string, unknown>): RevenueIdentity {
+    return {
+      id: r.id as string,
+      organizationId: r.organization_id as string,
+      slug: r.slug as string,
+      identityName: r.identity_name as string,
+      title: (r.title as string) ?? null,
+      positioning: (r.positioning as string) ?? null,
+      profileUrl: (r.profile_url as string) ?? null,
+      skills: Array.isArray(r.skills) ? (r.skills as string[]) : [],
+      expertise: Array.isArray(r.expertise) ? (r.expertise as string[]) : [],
+      industries: Array.isArray(r.industries) ? (r.industries as string[]) : [],
+      technologies: Array.isArray(r.technologies) ? (r.technologies as string[]) : [],
+      allowedFirstPersonClaims: Array.isArray(r.allowed_first_person_claims) ? (r.allowed_first_person_claims as string[]) : [],
+      forbiddenClaims: Array.isArray(r.forbidden_claims) ? (r.forbidden_claims as string[]) : [],
+      channelRules: (r.channel_rules as Record<string, unknown>) ?? {},
+      voiceTone: (r.voice_tone as Record<string, unknown>) ?? {},
+      preferredOpportunityTypes: Array.isArray(r.preferred_opportunity_types) ? (r.preferred_opportunity_types as string[]) : [],
+      proposalPositioning: (r.proposal_positioning as string) ?? null,
+      profileId: (r.profile_id as string) ?? null,
+      channel: this.inferChannel(r.slug as string),
+      status: (r.status as RevenueIdentityStatus) ?? 'active',
+      sourceKind: (r.source_kind as string) ?? 'manual',
+      createdAt: r.created_at as string,
+      updatedAt: r.updated_at as string,
+    }
+  }
+
+  private inferChannel(slug: string): RevenueIdentityChannel {
+    const s = slug.toLowerCase()
+    if (s.includes('upwork')) return 'upwork'
+    if (s.includes('linkedin')) return 'linkedin'
+    return 'other'
+  }
+
+  async listRevenueIdentitiesAdmin(): Promise<RevenueIdentity[]> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('revenue_identities').select('*').eq('organization_id', this.orgId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => this.mapRevenueIdentity(r as Record<string, unknown>))
+  }
+
+  async getRevenueIdentityAdmin(id: string): Promise<RevenueIdentity | null> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('revenue_identities').select('*').eq('id', id).eq('organization_id', this.orgId).maybeSingle()
+    if (error) throw error
+    return data ? this.mapRevenueIdentity(data as Record<string, unknown>) : null
+  }
+
+  async createRevenueIdentityAdmin(input: {
+    slug: string; identityName: string; title?: string | null; positioning?: string | null;
+    profileUrl?: string | null; skills?: string[]; expertise?: string[]; industries?: string[];
+    technologies?: string[]; allowedFirstPersonClaims?: string[]; forbiddenClaims?: string[];
+    channelRules?: Record<string, unknown>; voiceTone?: Record<string, unknown>;
+    preferredOpportunityTypes?: string[]; proposalPositioning?: string | null;
+    channel: RevenueIdentityChannel; profileId?: string | null;
+  }): Promise<RevenueIdentity> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('revenue_identities')
+      .insert({
+        organization_id: this.orgId, slug: input.slug, identity_name: input.identityName,
+        title: input.title ?? null, positioning: input.positioning ?? null, profile_url: input.profileUrl ?? null,
+        skills: input.skills ?? [], expertise: input.expertise ?? [], industries: input.industries ?? [],
+        technologies: input.technologies ?? [], allowed_first_person_claims: input.allowedFirstPersonClaims ?? [],
+        forbidden_claims: input.forbiddenClaims ?? [], channel_rules: input.channelRules ?? {},
+        voice_tone: input.voiceTone ?? {}, preferred_opportunity_types: input.preferredOpportunityTypes ?? [],
+        proposal_positioning: input.proposalPositioning ?? null, profile_id: input.profileId ?? null,
+        status: 'active', source_kind: 'manual',
+      })
+      .select('*').single()
+    if (error) throw error
+    await this.client.from('accountability_audit_log').insert({
+      organization_id: this.orgId, rep_id: this.rep.id, revenue_identity_id: data.id,
+      event_type: 'identity_created', detail: { identity_name: input.identityName, slug: input.slug },
+    })
+    return this.mapRevenueIdentity(data as Record<string, unknown>)
+  }
+
+  async updateRevenueIdentityAdmin(id: string, patches: Record<string, unknown>): Promise<RevenueIdentity> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    const fMap: Record<string, string> = {
+      slug: 'slug', identityName: 'identity_name', title: 'title', positioning: 'positioning',
+      profileUrl: 'profile_url', skills: 'skills', expertise: 'expertise', industries: 'industries',
+      technologies: 'technologies', allowedFirstPersonClaims: 'allowed_first_person_claims',
+      forbiddenClaims: 'forbidden_claims', channelRules: 'channel_rules', voiceTone: 'voice_tone',
+      preferredOpportunityTypes: 'preferred_opportunity_types', proposalPositioning: 'proposal_positioning', status: 'status',
+    }
+    for (const [key, dbField] of Object.entries(fMap)) {
+      if (patches[key] !== undefined) update[dbField] = patches[key]
+    }
+    const { data, error } = await this.client
+      .from('revenue_identities').update(update).eq('id', id).eq('organization_id', this.orgId).select('*').single()
+    if (error) throw error
+    await this.client.from('accountability_audit_log').insert({
+      organization_id: this.orgId, rep_id: this.rep.id, revenue_identity_id: id,
+      event_type: 'identity_edited', detail: { fields: Object.keys(patches) },
+    })
+    return this.mapRevenueIdentity(data as Record<string, unknown>)
+  }
+
+  async archiveRevenueIdentityAdmin(id: string): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { error } = await this.client
+      .from('revenue_identities').update({ status: 'archived', updated_at: new Date().toISOString() })
+      .eq('id', id).eq('organization_id', this.orgId)
+    if (error) throw error
+    await this.client.from('accountability_audit_log').insert({
+      organization_id: this.orgId, rep_id: this.rep.id, revenue_identity_id: id,
+      event_type: 'identity_archived', detail: {},
+    })
+  }
+
+  async listIdentityAssignmentsAdmin(): Promise<IdentityAssignment[]> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('identity_assignments').select('*').eq('organization_id', this.orgId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id as string, organizationId: r.organization_id as string,
+      revenueIdentityId: r.revenue_identity_id as string, repId: r.rep_id as string,
+      assignedBy: (r.assigned_by as string) ?? null, createdAt: r.created_at as string,
+    }))
+  }
+
+  async assignIdentityAdmin(identityId: string, repId: string): Promise<IdentityAssignment> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('identity_assignments')
+      .upsert({ organization_id: this.orgId, revenue_identity_id: identityId, rep_id: repId, assigned_by: this.rep.id }, { onConflict: 'revenue_identity_id,rep_id' })
+      .select('*').single()
+    if (error) throw error
+    await this.client.from('accountability_audit_log').insert({
+      organization_id: this.orgId, rep_id: this.rep.id, revenue_identity_id: identityId,
+      event_type: 'identity_assigned', detail: { rep_id: repId },
+    })
+    return { id: data.id as string, organizationId: data.organization_id as string, revenueIdentityId: data.revenue_identity_id as string, repId: data.rep_id as string, assignedBy: (data.assigned_by as string) ?? null, createdAt: data.created_at as string }
+  }
+
+  async unassignIdentityAdmin(identityId: string, repId: string): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { error } = await this.client
+      .from('identity_assignments').delete()
+      .eq('revenue_identity_id', identityId).eq('rep_id', repId).eq('organization_id', this.orgId)
+    if (error) throw error
+    await this.client.from('accountability_audit_log').insert({
+      organization_id: this.orgId, rep_id: this.rep.id, revenue_identity_id: identityId,
+      event_type: 'identity_unassigned', detail: { rep_id: repId },
+    })
+  }
+
+  async listDailyTargetsAdmin(): Promise<DailyTarget[]> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('daily_targets').select('*').eq('organization_id', this.orgId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id as string, organizationId: r.organization_id as string, repId: r.rep_id as string,
+      revenueIdentityId: r.revenue_identity_id as string, activityType: r.activity_type as ActivityType,
+      targetCount: r.target_count as number, active: r.active as boolean,
+      createdBy: (r.created_by as string) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+    }))
+  }
+
+  async createDailyTargetAdmin(input: { repId: string; revenueIdentityId: string; activityType: ActivityType; targetCount: number }): Promise<DailyTarget> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('daily_targets')
+      .upsert({ organization_id: this.orgId, rep_id: input.repId, revenue_identity_id: input.revenueIdentityId, activity_type: input.activityType, target_count: input.targetCount, active: true, created_by: this.rep.id }, { onConflict: 'rep_id,revenue_identity_id,activity_type' })
+      .select('*').single()
+    if (error) throw error
+    await this.client.from('accountability_audit_log').insert({
+      organization_id: this.orgId, rep_id: this.rep.id, revenue_identity_id: input.revenueIdentityId,
+      event_type: 'target_created', detail: { rep_id: input.repId, activity_type: input.activityType, target_count: input.targetCount },
+    })
+    return { id: data.id as string, organizationId: data.organization_id as string, repId: data.rep_id as string, revenueIdentityId: data.revenue_identity_id as string, activityType: data.activity_type as ActivityType, targetCount: data.target_count as number, active: data.active as boolean, createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string }
+  }
+
+  async updateDailyTargetAdmin(id: string, patches: { targetCount?: number; active?: boolean }): Promise<DailyTarget> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (patches.targetCount !== undefined) update.target_count = patches.targetCount
+    if (patches.active !== undefined) update.active = patches.active
+    const { data, error } = await this.client
+      .from('daily_targets').update(update).eq('id', id).eq('organization_id', this.orgId)
+      .select('*').single()
+    if (error) throw error
+    await this.client.from('accountability_audit_log').insert({
+      organization_id: this.orgId, rep_id: this.rep.id, event_type: 'target_changed',
+      detail: { target_id: id, changes: update },
+    })
+    return { id: data.id as string, organizationId: data.organization_id as string, repId: data.rep_id as string, revenueIdentityId: data.revenue_identity_id as string, activityType: data.activity_type as ActivityType, targetCount: data.target_count as number, active: data.active as boolean, createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string }
+  }
+
+  async deleteDailyTargetAdmin(id: string): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { error } = await this.client.from('daily_targets').delete().eq('id', id).eq('organization_id', this.orgId)
+    if (error) throw error
+    await this.client.from('accountability_audit_log').insert({
+      organization_id: this.orgId, rep_id: this.rep.id, event_type: 'target_deleted', detail: { target_id: id },
+    })
+  }
+
+  async getTeamAccountabilityAdmin(date?: string): Promise<TeamAccountabilityView> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const targetDate = date ?? new Date().toISOString().slice(0, 10)
+    const { data: accountability } = await this.client
+      .from('daily_accountability').select('*').eq('organization_id', this.orgId).eq('target_date', targetDate)
+    const items = (accountability ?? []) as Record<string, unknown>[]
+    const { data: repRows } = await this.client.from('reps').select('id, name').eq('organization_id', this.orgId)
+    const repMap = new Map((repRows ?? []).map((r) => [r.id as string, r.name as string]))
+    const byRep = new Map<string, DailyAccountability[]>()
+    for (const a of items) {
+      const list = byRep.get(a.rep_id as string) ?? []
+      list.push({
+        id: a.id as string, organizationId: a.organization_id as string, repId: a.rep_id as string,
+        revenueIdentityId: a.revenue_identity_id as string, activityType: a.activity_type as ActivityType,
+        targetDate: a.target_date as string, targetCount: a.target_count as number,
+        completedCount: a.completed_count as number, status: a.status as AccountabilityStatus,
+        closed: a.closed as boolean, createdAt: a.created_at as string, updatedAt: a.updated_at as string,
+      })
+      byRep.set(a.rep_id as string, list)
+    }
+    const summaries = []
+    for (const [repId, accs] of byRep.entries()) {
+      const totalTarget = accs.reduce((s, a) => s + a.targetCount, 0)
+      const totalCompleted = accs.reduce((s, a) => s + a.completedCount, 0)
+      summaries.push({
+        repId, repName: repMap.get(repId) ?? 'Unknown', totalTarget, totalCompleted,
+        remaining: Math.max(0, totalTarget - totalCompleted),
+        status: (totalCompleted >= totalTarget ? 'completed' : (accs.some((a) => a.status === 'at_risk') ? 'at_risk' : 'on_track')) as AccountabilityStatus,
+        byIdentity: accs.map((a) => ({
+          identityId: a.revenueIdentityId, identityName: '', channel: 'other' as RevenueIdentityChannel,
+           activityType: a.activityType, target: a.targetCount, completed: a.completedCount,
+           remaining: Math.max(0, a.targetCount - a.completedCount), status: a.status as AccountabilityStatus,
+        })),
+      })
+    }
+    return { date: targetDate, isWorkingDay: true, summaries, consecutiveMisses: [], requiresAttention: [] }
+  }
+
+  async getCommandCenterAdmin(): Promise<CommandCenterView> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: targets } = await this.client.from('daily_targets').select('*').eq('organization_id', this.orgId).eq('active', true)
+    const { data: accountability } = await this.client.from('daily_accountability').select('*').eq('organization_id', this.orgId).eq('target_date', today)
+    const { data: identities } = await this.client.from('revenue_identities').select('id, identity_name, status').eq('organization_id', this.orgId).eq('status', 'active')
+    const { data: reps } = await this.client.from('reps').select('id, name').eq('organization_id', this.orgId)
+    const targetList = (targets ?? []) as Record<string, unknown>[]
+    const accList = (accountability ?? []) as Record<string, unknown>[]
+    const accMap = new Map(accList.map((a) => [`${a.rep_id}:${a.revenue_identity_id}:${a.activity_type}`, a]))
+    let totalTargets = 0, totalCompleted = 0, onTrack = 0, behind = 0, completed = 0
+    for (const rep of reps ?? []) {
+      const repTargets = targetList.filter((t) => t.rep_id === rep.id)
+      if (repTargets.length === 0) continue
+      let repTotal = 0, repDone = 0
+      for (const t of repTargets) {
+        const key = `${rep.id}:${t.revenue_identity_id}:${t.activity_type}`
+        const acc = accMap.get(key)
+        repTotal += t.target_count as number
+        repDone += (acc?.completed_count as number) ?? 0
+      }
+      totalTargets += repTotal
+      totalCompleted += repDone
+      if (repDone >= repTotal) completed++
+      else if (repDone > 0) behind++
+      else onTrack++
+    }
+    return {
+      date: today, isWorkingDay: true, totalReps: (reps ?? []).length,
+      onTrackReps: onTrack, behindReps: behind, completedReps: completed, missedReps: 0,
+      activeIdentities: (identities ?? []).length, totalTargetsToday: totalTargets, totalCompletedToday: totalCompleted,
+      consecutiveMisses: [], attentionItems: [],
+      identityPerformance: (identities ?? []).map((i) => ({
+        identityId: i.id as string, identityName: i.identity_name as string,
+        channel: 'other' as RevenueIdentityChannel, status: 'active' as const,
+        assignedReps: [], totalTarget: 0, totalCompleted: accList.filter((a) => a.revenue_identity_id === i.id).reduce((s, a) => s + (a.completed_count as number), 0),
+      })),
+    }
+  }
+
+  async listMyAssignedIdentities(): Promise<RevenueIdentityWithAssignment[]> {
+    const { data, error } = await this.client
+      .from('identity_assignments').select('id, assigned_by, created_at, identity:revenue_identities(*)')
+      .eq('rep_id', this.rep.id).eq('organization_id', this.orgId).order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((a) => {
+      const identity = a.identity as unknown as Record<string, unknown>
+      return { ...this.mapRevenueIdentity(identity), assignmentId: a.id as string, assignedBy: (a.assigned_by as string) ?? null, assignedAt: a.created_at as string }
+    })
+  }
+
+  async getMyTodayAccountability(): Promise<import('@/lib/domain/types').RepTodayView> {
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: assignments } = await this.client
+      .from('identity_assignments').select('id, revenue_identity_id, assigned_by, created_at')
+      .eq('rep_id', this.rep.id).eq('organization_id', this.orgId)
+    if (!assignments || assignments.length === 0) {
+      return { repId: this.rep.id, repName: this.rep.name, timezone: this.rep.timezone ?? 'UTC', isWorkingDay: true, totalTarget: 0, totalCompleted: 0, totalRemaining: 0, overallStatus: 'on_track', assignedIdentities: [], notifications: [] }
+    }
+    const identityIds = assignments.map((a) => a.revenue_identity_id as string)
+    const { data: targets } = await this.client.from('daily_targets').select('*').eq('rep_id', this.rep.id).in('revenue_identity_id', identityIds).eq('active', true)
+    const { data: accountability } = await this.client.from('daily_accountability').select('*').eq('rep_id', this.rep.id).eq('target_date', today).eq('organization_id', this.orgId)
+    const targetList = (targets ?? []) as Record<string, unknown>[]
+    const accMap = new Map(((accountability ?? []) as Record<string, unknown>[]).map((a) => [`${a.revenue_identity_id}:${a.activity_type}`, a]))
+    let totalTarget = 0, totalCompleted = 0
+    const identityViews = await Promise.all(assignments.map(async (a) => {
+      const idTargets = targetList.filter((t) => t.revenue_identity_id === a.revenue_identity_id)
+      const { data: identityRows } = await this.client.from('revenue_identities').select('*').eq('id', a.revenue_identity_id).maybeSingle()
+      const identity = identityRows ? this.mapRevenueIdentity(identityRows as Record<string, unknown>) : null
+      const targetViews = idTargets.map((t) => {
+        const key = `${t.revenue_identity_id}:${t.activity_type}`
+        const acc = accMap.get(key)
+        const completed = (acc?.completed_count as number) ?? 0
+        totalTarget += t.target_count as number
+        totalCompleted += completed
+        return { targetId: t.id as string, activityType: t.activity_type as ActivityType, targetCount: t.target_count as number, completedCount: completed, remaining: Math.max(0, (t.target_count as number) - completed), status: ((acc?.status as AccountabilityStatus) ?? 'on_track'), accountabilityId: (acc?.id as string) ?? null }
+      })
+      return { assignmentId: a.id as string, identity: identity!, targets: targetViews }
+    }))
+    return {
+      repId: this.rep.id, repName: this.rep.name, timezone: this.rep.timezone ?? 'UTC', isWorkingDay: true,
+      totalTarget, totalCompleted, totalRemaining: Math.max(0, totalTarget - totalCompleted),
+      overallStatus: totalCompleted >= totalTarget ? 'completed' : 'on_track',
+      assignedIdentities: identityViews, notifications: [],
+    }
+  }
+
+  async listAccountabilityNotifications(): Promise<AppNotification[]> {
+    const { data, error } = await this.client
+      .from('notifications').select('*').eq('recipient_id', this.rep.id).eq('organization_id', this.orgId)
+      .order('created_at', { ascending: false }).limit(50)
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id as string, organizationId: r.organization_id as string, recipientId: r.recipient_id as string,
+      notificationType: r.notification_type as AppNotification['notificationType'], title: r.title as string,
+      body: r.body as string, link: (r.link as string) ?? null, dedupeKey: r.dedupe_key as string,
+      read: r.read as boolean, createdAt: r.created_at as string,
+    }))
+  }
+
+  async markAccountabilityNotificationRead(id: string): Promise<void> {
+    const { error } = await this.client.from('notifications').update({ read: true }).eq('id', id).eq('recipient_id', this.rep.id)
+    if (error) throw error
+  }
+
+  async listAuditLogAdmin(limit = 100): Promise<AuditLogEntry[]> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('accountability_audit_log').select('*').eq('organization_id', this.orgId)
+      .order('created_at', { ascending: false }).limit(limit)
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id as string, organizationId: r.organization_id as string, repId: (r.rep_id as string) ?? null,
+      revenueIdentityId: (r.revenue_identity_id as string) ?? null, eventType: r.event_type as string,
+      detail: (r.detail as Record<string, unknown>) ?? {}, createdAt: r.created_at as string,
+    }))
   }
 }
 

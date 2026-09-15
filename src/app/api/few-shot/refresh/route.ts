@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { createServiceSupabase, requireCronSecret } from '@/lib/supabase/service'
+import { safeErrorResponse } from '@/lib/errors'
 
 export async function POST() {
   let store
   try {
     store = await createScoutStore()
-  } catch (err) {
+  } catch {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }
@@ -17,10 +18,7 @@ export async function POST() {
     const count = await store.refreshFewShotWins()
     return NextResponse.json({ refreshed: count })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Refresh failed.' },
-      { status: 500 },
-    )
+    return safeErrorResponse(err, 500, 'Refresh failed.', 'few-shot/refresh')
   }
 }
 
@@ -54,9 +52,6 @@ export async function GET(request: Request) {
     }
     return NextResponse.json({ refreshed: total, organizations: orgs?.length ?? 0 })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Refresh failed.' },
-      { status: 500 },
-    )
+    return safeErrorResponse(err, 500, 'Refresh failed.', 'few-shot/refresh')
   }
 }

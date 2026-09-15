@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { safeErrorResponse } from '@/lib/errors'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
 import { buildContentDnaPromptBlock, extractDnaCandidatesFromAnswer, mergeDnaCandidates, calculateProfileConfidence } from '@/lib/content/content-dna'
@@ -272,7 +273,6 @@ export async function POST(req: NextRequest) {
   })
   } catch (err) {
     console.error('[content/intelligence/forge] failed:', err)
-    const message = err instanceof Error ? err.message : 'Generation failed.'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return safeErrorResponse(err, 500, 'Generation failed.', 'content/intelligence/forge')
   }
 }

@@ -14,9 +14,9 @@ export async function GET() {
       todaySends: queue.todaySends,
       dailyLimit: queue.dailyLimit,
     })
-  } catch (err) {
+  } catch {
     return Response.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }

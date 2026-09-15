@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { safeErrorResponse } from '@/lib/errors'
 import { computeScore } from '@/lib/score/rubric'
 import type { ExtractedLead, SignalId } from '@/lib/domain/types'
 import { createScoutStore } from '@/lib/store'
@@ -114,9 +115,9 @@ export async function POST(request: Request) {
   let store
   try {
     store = await createScoutStore()
-  } catch (err) {
+  } catch {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }

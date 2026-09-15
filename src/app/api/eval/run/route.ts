@@ -29,7 +29,7 @@ export async function GET() {
     store = await createScoutStore()
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }
@@ -39,7 +39,7 @@ export async function GET() {
     return NextResponse.json({ runs })
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to load eval runs.' },
+      { error: 'Failed to load eval runs.' },
       { status: 500 },
     )
   }
@@ -79,7 +79,7 @@ export async function runEvalHarness(store: ScoutStore, promptVersion: string) {
         tags: lead.tags ?? [],
       }
       const score = computeScore(extracted, rulebook)
-      const matched = await store.matchProofItems(lead.tags ?? [], 2)
+      const matched = await store.matchProofItems(lead.tags ?? [], 2, profile?.id ?? null)
 
       const input: DraftInput = {
         leadId: lead.id,
@@ -153,7 +153,7 @@ export async function POST(request: Request) {
     store = await createScoutStore()
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }

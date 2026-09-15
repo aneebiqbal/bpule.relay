@@ -25,9 +25,9 @@ export async function POST(request: Request) {
   let store
   try {
     store = await createScoutStore()
-  } catch (err) {
+  } catch {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }
@@ -51,9 +51,9 @@ export async function DELETE() {
   let store
   try {
     store = await createScoutStore()
-  } catch (err) {
+  } catch {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }

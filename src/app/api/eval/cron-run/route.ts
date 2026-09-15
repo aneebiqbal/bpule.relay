@@ -3,12 +3,16 @@ import { SupabaseStore } from '@/lib/store/supabase-store'
 import { createServiceSupabase, requireCronSecret } from '@/lib/supabase/service'
 import { runEvalHarness } from '@/app/api/eval/run/route'
 import type { Organization, Rep } from '@/lib/domain/types'
+import { safeErrorResponse } from '@/lib/errors'
 
 const CRON_SYSTEM_ORG: Organization = {
   id: '00000000-0000-0000-0000-000000000000',
   name: 'System',
   plan: 'active',
   billingCustomerId: null,
+  timezone: 'UTC',
+  workingDays: [1, 2, 3, 4, 5],
+  holidays: [],
   createdAt: new Date(0).toISOString(),
 }
 
@@ -18,6 +22,7 @@ const CRON_SYSTEM_REP: Rep = {
   role: 'admin',
   organizationId: CRON_SYSTEM_ORG.id,
   createdAt: new Date(0).toISOString(),
+  timezone: 'UTC',
 }
 
 /**
@@ -40,9 +45,6 @@ export async function GET(request: Request) {
     const { run, result } = await runEvalHarness(store, 'scheduled')
     return NextResponse.json({ run, result })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Eval run failed.' },
-      { status: 500 },
-    )
+    return safeErrorResponse(err, 500, 'Eval run failed.', 'eval/cron-run')
   }
 }

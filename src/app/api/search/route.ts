@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
+import { safeErrorResponse } from '@/lib/errors'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
     store = await createScoutStore()
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }
@@ -41,9 +42,6 @@ export async function GET(request: Request) {
     })
     return NextResponse.json({ results })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Search failed.' },
-      { status: 500 },
-    )
+    return safeErrorResponse(err, 500, 'Search failed.', 'search')
   }
 }

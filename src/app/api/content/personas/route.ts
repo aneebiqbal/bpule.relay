@@ -124,18 +124,17 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ persona: updatedPersona, inferredTopics: uniqueTopics, profileSummary, seededFromPastPosts: Boolean(pastPostsExtracted) })
   } catch (err: unknown) {
-    // Supabase errors are objects with { message, code, details, hint }
     const e = err as { message?: string; code?: string; details?: unknown; hint?: unknown }
     const message = e?.message ?? (err instanceof Error ? err.message : JSON.stringify(err))
     console.error('[content/api] POST /personas failed:', { message, code: e?.code, details: e?.details, raw: err })
     if (message?.includes('does not exist') || message?.includes('relation')) {
       return NextResponse.json(
-        { error: 'Content tables not yet created.', detail: message, migration: '0018_personal_content_engine.sql' },
+        { error: 'Content tables not yet created.' },
         { status: 503 },
       )
     }
     return NextResponse.json(
-      { error: 'Failed to create persona', detail: message, code: e?.code, details: e?.details },
+      { error: 'Failed to create persona' },
       { status: 500 },
     )
   }

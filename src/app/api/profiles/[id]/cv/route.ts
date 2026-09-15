@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth/current'
+import { safeErrorResponse } from '@/lib/errors'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const ALLOWED: Record<string, string> = {
@@ -38,7 +39,7 @@ export async function GET(
     store = await createScoutStore()
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }
@@ -81,7 +82,7 @@ export async function POST(
     store = await createScoutStore()
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }
@@ -135,10 +136,7 @@ export async function POST(
     .from('proof-cvs')
     .upload(path, file, { cacheControl: '3600', upsert: false })
   if (uploadError) {
-    return NextResponse.json(
-      { error: `Upload failed: ${uploadError.message}` },
-      { status: 500 },
-    )
+    return safeErrorResponse(uploadError, 500, 'Upload failed. Please try again.', 'profiles/[id]/cv')
   }
 
   const updated = admin

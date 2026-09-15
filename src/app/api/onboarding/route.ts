@@ -68,8 +68,7 @@ export async function POST(request: Request) {
       },
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to save voice profile.'
-    console.error('[onboarding] error:', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[onboarding] error:', err)
+    return NextResponse.json({ error: 'Failed to save voice profile.' }, { status: 500 })
   }
 }

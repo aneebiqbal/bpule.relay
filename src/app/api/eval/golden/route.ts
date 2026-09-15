@@ -7,7 +7,7 @@ export async function GET() {
     store = await createScoutStore()
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }
@@ -17,7 +17,7 @@ export async function GET() {
     return NextResponse.json({ cases })
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to load golden set.' },
+      { error: 'Failed to load golden set.' },
       { status: 500 },
     )
   }
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     store = await createScoutStore()
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ case: c })
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to add golden case.' },
+      { error: 'Failed to add golden case.' },
       { status: 500 },
     )
   }

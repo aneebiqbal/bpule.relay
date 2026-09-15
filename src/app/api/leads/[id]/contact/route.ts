@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import type { MessageType } from '@/lib/domain/types'
 import { computeEditDelta } from '@/lib/relay/edit-learning'
+import { safeErrorResponse } from '@/lib/errors'
 
 const TYPES: MessageType[] = ['dm', 'connection', 'upwork', 'followup', 'reply']
 
@@ -35,7 +36,7 @@ export async function POST(
     store = await createScoutStore()
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }
@@ -102,13 +103,9 @@ export async function POST(
       type,
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to log send.'
-    if (/locked|owner|unavailable/i.test(message)) {
-      return NextResponse.json({ error: message }, { status: 409 })
+    if (err instanceof Error && /locked|owner|unavailable/i.test(err.message)) {
+      return NextResponse.json({ error: 'This lead is locked or not assigned to you.' }, { status: 409 })
     }
-    return NextResponse.json(
-      { error: message },
-      { status: 500 },
-    )
+    return safeErrorResponse(err, 500, 'Failed to log send.', 'leads/[id]/contact')
   }
 }
