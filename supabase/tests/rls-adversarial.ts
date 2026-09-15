@@ -77,6 +77,8 @@ async function main() {
     'upwork_messages', 'csv_imports', 'content_personas', 'content_pillars',
     'content_drafts', 'content_history', 'push_subscriptions', 'notification_log',
     'eval_runs', 'extraction_runs', 'organization_rulebooks', 'subscriptions',
+    'revenue_identities', 'identity_assignments', 'daily_targets',
+    'daily_accountability', 'accountability_audit_log', 'notifications',
   ]
 
   const results: TableResult[] = []

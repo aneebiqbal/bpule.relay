@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     store = await createScoutStore()
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     store = await createScoutStore()
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Not signed in.' },
+      { error: 'Not signed in.' },
       { status: 401 },
     )
   }

@@ -7,6 +7,9 @@ export interface Organization {
   name: string
   plan: OrganizationPlan
   billingCustomerId: string | null
+  timezone: string
+  workingDays: number[]
+  holidays: Array<{ date: string; label?: string }>
   createdAt: string
 }
 
@@ -40,6 +43,7 @@ export interface Rep {
   role: RepRole
   organizationId: string
   createdAt: string
+  timezone: string
 }
 
 export type SignalId = number
@@ -1028,4 +1032,220 @@ export interface InboundLeadInput {
   jobInfo?: string | null
   context?: string | null
   assignedProfileId?: string | null
+}
+
+// ── Revenue Identity OS ─────────────────────────────────────────────────────
+
+export type RevenueIdentityChannel = 'linkedin' | 'upwork' | 'other'
+export type RevenueIdentityStatus = 'active' | 'archived'
+
+export interface RevenueIdentity {
+  id: string
+  organizationId: string
+  slug: string
+  identityName: string
+  title: string | null
+  positioning: string | null
+  profileUrl: string | null
+  skills: string[]
+  expertise: string[]
+  industries: string[]
+  technologies: string[]
+  allowedFirstPersonClaims: string[]
+  forbiddenClaims: string[]
+  channelRules: Record<string, unknown>
+  voiceTone: Record<string, unknown>
+  preferredOpportunityTypes: string[]
+  proposalPositioning: string | null
+  profileId: string | null
+  channel: RevenueIdentityChannel
+  status: RevenueIdentityStatus
+  sourceKind: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface IdentityAssignment {
+  id: string
+  organizationId: string
+  revenueIdentityId: string
+  repId: string
+  assignedBy: string | null
+  createdAt: string
+}
+
+export interface RevenueIdentityWithAssignment extends RevenueIdentity {
+  assignmentId: string
+  assignedBy: string | null
+  assignedAt: string
+}
+
+export type ActivityType = 'dm' | 'connection_request' | 'followup' | 'application' | 'proposal' | 'other'
+
+export interface DailyTarget {
+  id: string
+  organizationId: string
+  repId: string
+  revenueIdentityId: string
+  activityType: ActivityType
+  targetCount: number
+  active: boolean
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type AccountabilityStatus = 'on_track' | 'at_risk' | 'completed' | 'missed'
+
+export interface DailyAccountability {
+  id: string
+  organizationId: string
+  repId: string
+  revenueIdentityId: string
+  activityType: ActivityType
+  targetDate: string
+  targetCount: number
+  completedCount: number
+  status: AccountabilityStatus
+  closed: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AccountabilitySummary {
+  repId: string
+  repName: string
+  totalTarget: number
+  totalCompleted: number
+  remaining: number
+  status: AccountabilityStatus
+  byIdentity: IdentityAccountabilityDetail[]
+}
+
+export interface IdentityAccountabilityDetail {
+  identityId: string
+  identityName: string
+  channel: RevenueIdentityChannel
+  activityType: ActivityType
+  target: number
+  completed: number
+  remaining: number
+  status: AccountabilityStatus
+}
+
+export interface ConsecutiveMisses {
+  repId: string
+  repName: string
+  identityId: string
+  identityName: string
+  activityType: ActivityType
+  streakDays: number
+  dates: string[]
+}
+
+export type NotificationType =
+  | 'target_behind'
+  | 'target_missed'
+  | 'target_completed'
+  | 'consecutive_miss'
+  | 'identity_assigned'
+  | 'identity_unassigned'
+  | 'admin_behind'
+  | 'admin_missed'
+  | 'admin_consecutive_miss'
+
+export interface AppNotification {
+  id: string
+  organizationId: string
+  recipientId: string
+  notificationType: NotificationType
+  title: string
+  body: string
+  link: string | null
+  dedupeKey: string
+  read: boolean
+  createdAt: string
+}
+
+export interface AuditLogEntry {
+  id: string
+  organizationId: string
+  repId: string | null
+  revenueIdentityId: string | null
+  eventType: string
+  detail: Record<string, unknown>
+  createdAt: string
+}
+
+export interface RepTodayView {
+  repId: string
+  repName: string
+  timezone: string
+  isWorkingDay: boolean
+  totalTarget: number
+  totalCompleted: number
+  totalRemaining: number
+  overallStatus: AccountabilityStatus
+  assignedIdentities: RepAssignedIdentityView[]
+  notifications: AppNotification[]
+}
+
+export interface RepAssignedIdentityView {
+  assignmentId: string
+  identity: RevenueIdentity
+  targets: TargetProgressView[]
+}
+
+export interface TargetProgressView {
+  targetId: string
+  activityType: ActivityType
+  targetCount: number
+  completedCount: number
+  remaining: number
+  status: AccountabilityStatus
+  accountabilityId: string | null
+}
+
+export interface TeamAccountabilityView {
+  date: string
+  isWorkingDay: boolean
+  summaries: AccountabilitySummary[]
+  consecutiveMisses: ConsecutiveMisses[]
+  requiresAttention: AttentionItem[]
+}
+
+export interface AttentionItem {
+  repId: string
+  repName: string
+  identityId: string
+  identityName: string
+  activityType: ActivityType
+  message: string
+  severity: 'warning' | 'critical'
+}
+
+export interface CommandCenterView {
+  date: string
+  isWorkingDay: boolean
+  totalReps: number
+  onTrackReps: number
+  behindReps: number
+  completedReps: number
+  missedReps: number
+  activeIdentities: number
+  totalTargetsToday: number
+  totalCompletedToday: number
+  consecutiveMisses: ConsecutiveMisses[]
+  attentionItems: AttentionItem[]
+  identityPerformance: IdentityPerformanceView[]
+}
+
+export interface IdentityPerformanceView {
+  identityId: string
+  identityName: string
+  channel: RevenueIdentityChannel
+  status: RevenueIdentityStatus
+  assignedReps: string[]
+  totalTarget: number
+  totalCompleted: number
 }

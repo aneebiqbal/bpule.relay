@@ -814,4 +814,37 @@ export interface ScoutStore {
     messagesByJob: Map<string, import('@/lib/domain/types').UpworkMessage[]>
     assignedProfiles: import('@/lib/domain/types').Profile[]
   }>
+  // revenue identity OS (Admin-only)
+  listRevenueIdentitiesAdmin(): Promise<import('@/lib/domain/types').RevenueIdentity[]>
+  getRevenueIdentityAdmin(id: string): Promise<import('@/lib/domain/types').RevenueIdentity | null>
+  createRevenueIdentityAdmin(input: {
+    slug: string
+    identityName: string
+    channel: string
+    title?: string | null
+  }): Promise<import('@/lib/domain/types').RevenueIdentity>
+  updateRevenueIdentityAdmin(id: string, patches: Record<string, unknown>): Promise<import('@/lib/domain/types').RevenueIdentity>
+  archiveRevenueIdentityAdmin(id: string): Promise<void>
+  // assignments (Admin-only)
+  listIdentityAssignmentsAdmin(): Promise<import('@/lib/domain/types').IdentityAssignment[]>
+  assignIdentityAdmin(identityId: string, repId: string): Promise<import('@/lib/domain/types').IdentityAssignment>
+  unassignIdentityAdmin(identityId: string, repId: string): Promise<void>
+  // targets (Admin-only)
+  listDailyTargetsAdmin(): Promise<import('@/lib/domain/types').DailyTarget[]>
+  createDailyTargetAdmin(input: {
+    repId: string
+    revenueIdentityId: string
+    activityType: import('@/lib/domain/types').ActivityType
+    targetCount: number
+  }): Promise<import('@/lib/domain/types').DailyTarget>
+  updateDailyTargetAdmin(id: string, patches: { targetCount?: number; active?: boolean }): Promise<import('@/lib/domain/types').DailyTarget>
+  deleteDailyTargetAdmin(id: string): Promise<void>
+  // accountability
+  getTeamAccountabilityAdmin(date?: string): Promise<import('@/lib/domain/types').TeamAccountabilityView>
+  getCommandCenterAdmin(): Promise<import('@/lib/domain/types').CommandCenterView>
+  listMyAssignedIdentities(): Promise<import('@/lib/domain/types').RevenueIdentityWithAssignment[]>
+  getMyTodayAccountability(): Promise<import('@/lib/domain/types').RepTodayView>
+  listAccountabilityNotifications(): Promise<import('@/lib/domain/types').AppNotification[]>
+  markAccountabilityNotificationRead(id: string): Promise<void>
+  listAuditLogAdmin(limit?: number): Promise<import('@/lib/domain/types').AuditLogEntry[]>
 }

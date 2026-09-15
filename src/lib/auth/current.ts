@@ -16,6 +16,9 @@ const DEMO_ORG: Organization = {
   name: 'bpulse',
   plan: 'active',
   billingCustomerId: null,
+  timezone: 'UTC',
+  workingDays: [1, 2, 3, 4, 5],
+  holidays: [],
   createdAt: new Date().toISOString(),
 }
 
@@ -25,6 +28,7 @@ const DEMO_REP: Rep = {
   role: 'admin',
   organizationId: BPULSE_ORG_ID,
   createdAt: new Date().toISOString(),
+  timezone: 'UTC',
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
@@ -43,7 +47,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
     const { data: repRows } = await supabase
       .from('reps')
-      .select('id, name, role, organization_id, created_at')
+      .select('id, name, role, organization_id, created_at, timezone')
       .eq('auth_user_id', user.id)
       .maybeSingle()
 
@@ -55,11 +59,12 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       role: repRows.role,
       organizationId: repRows.organization_id,
       createdAt: repRows.created_at,
+      timezone: (repRows.timezone as string) ?? 'UTC',
     }
 
     const { data: orgRows } = await supabase
       .from('organizations')
-      .select('id, name, plan, billing_customer_id, created_at')
+      .select('id, name, plan, billing_customer_id, timezone, working_days, holidays, created_at')
       .eq('id', rep.organizationId)
       .maybeSingle()
 
@@ -70,6 +75,9 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       name: orgRows.name,
       plan: orgRows.plan,
       billingCustomerId: orgRows.billing_customer_id,
+      timezone: (orgRows.timezone as string) ?? 'UTC',
+      workingDays: Array.isArray(orgRows.working_days) ? (orgRows.working_days as number[]) : [1, 2, 3, 4, 5],
+      holidays: Array.isArray(orgRows.holidays) ? (orgRows.holidays as Array<{ date: string; label?: string }>) : [],
       createdAt: orgRows.created_at,
     }
 

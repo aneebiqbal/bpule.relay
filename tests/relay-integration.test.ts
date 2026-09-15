@@ -23,7 +23,7 @@ import { computeEditDelta } from '@/lib/relay/edit-learning'
  */
 
 function makeRep(id: string, name: string): Rep {
-  return { id, name, role: 'admin', organizationId: 'org-demo', createdAt: '2024-01-01' }
+  return { id, name, role: 'admin', organizationId: 'org-demo', createdAt: '2024-01-01', timezone: 'UTC' }
 }
 
 function makeContext(rep: Rep): StoreContext {

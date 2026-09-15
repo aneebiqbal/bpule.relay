@@ -45,6 +45,16 @@ import type {
   UpworkMessage,
   Verdict,
   VoiceProfile,
+  RevenueIdentity,
+  RevenueIdentityChannel,
+  IdentityAssignment,
+  RevenueIdentityWithAssignment,
+  ActivityType,
+  DailyTarget,
+  DailyAccountability,
+  AccountabilityStatus,
+  AppNotification,
+  AuditLogEntry,
 } from '@/lib/domain/types'
 import type {
   CreateLeadResult,
@@ -144,10 +154,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const rep = ctx.rep
 
   const reps: Rep[] = [
-    { id: 'rep-hassan', name: 'Hassan (demo)', role: 'admin', organizationId: 'org-demo', createdAt: t(60) },
-    { id: 'rep-ahmed', name: 'Ahmed (demo)', role: 'rep', organizationId: 'org-demo', createdAt: t(50) },
-    { id: 'rep-nadia', name: 'Nadia (demo)', role: 'rep', organizationId: 'org-demo', createdAt: t(40) },
-    { id: 'rep-samir', name: 'Samir (demo)', role: 'sourcer', organizationId: 'org-demo', createdAt: t(12) },
+    { id: 'rep-hassan', name: 'Hassan (demo)', role: 'admin', organizationId: 'org-demo', createdAt: t(60), timezone: 'UTC' },
+    { id: 'rep-ahmed', name: 'Ahmed (demo)', role: 'rep', organizationId: 'org-demo', createdAt: t(50), timezone: 'UTC' },
+    { id: 'rep-nadia', name: 'Nadia (demo)', role: 'rep', organizationId: 'org-demo', createdAt: t(40), timezone: 'UTC' },
+    { id: 'rep-samir', name: 'Samir (demo)', role: 'sourcer', organizationId: 'org-demo', createdAt: t(12), timezone: 'UTC' },
   ]
 
   const voiceProfiles: VoiceProfile[] = [
@@ -571,6 +581,42 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const conversationStates: ConversationState[] = []
   const salesMemories: SalesMemory[] = []
   const editLearnings: EditLearning[] = []
+  // Revenue Identity OS demo data
+  const demoRevenueIdentities: RevenueIdentity[] = [
+    {
+      id: 'ri-demo-linkedin', organizationId: 'org-demo', slug: 'mehak-linkedin', identityName: 'Mehak',
+      title: 'Senior Engineer & AI Specialist', positioning: 'AI/ML, cloud security, mobile, automation.',
+      profileUrl: 'https://linkedin.com/in/mehak-demo', skills: ['React', 'Next.js', 'Node.js', 'AWS', 'Python'],
+      expertise: ['AI/ML', 'Cloud security', 'Mobile'], industries: ['Cloud Security', 'AI/ML', 'HealthTech'],
+      technologies: ['React', 'Next.js', 'Node.js', 'AWS Lambda', 'Python'], allowedFirstPersonClaims: ['Built AI content systems'],
+      forbiddenClaims: [], channelRules: {}, voiceTone: { formality: 2, tone: 'precise' },
+      preferredOpportunityTypes: ['AI/ML', 'Cloud security'], proposalPositioning: 'Engineer bridging dev and AI.',
+      profileId: null, channel: 'linkedin', status: 'active', sourceKind: 'manual', createdAt: t(30), updatedAt: t(5),
+    },
+    {
+      id: 'ri-demo-upwork', organizationId: 'org-demo', slug: 'hassan-upwork', identityName: 'Hassan',
+      title: 'Senior DevOps & Full Stack', positioning: 'Cloud, compliance, production systems.',
+      profileUrl: 'https://upwork.com/users/hassan-demo', skills: ['AWS', 'Terraform', 'Kubernetes', 'Next.js'],
+      expertise: ['Cloud infrastructure', 'Compliance', 'DevOps'], industries: ['Cloud', 'HealthTech', 'FinTech'],
+      technologies: ['AWS', 'Terraform', 'Kubernetes', 'Docker'], allowedFirstPersonClaims: ['Hardened compliance systems'],
+      forbiddenClaims: [], channelRules: {}, voiceTone: { formality: 2, tone: 'thorough' },
+      preferredOpportunityTypes: ['DevOps', 'Compliance'], proposalPositioning: 'DevOps engineer.',
+      profileId: null, channel: 'upwork', status: 'active', sourceKind: 'manual', createdAt: t(25), updatedAt: t(3),
+    },
+  ]
+  let demoIdentityAssignments: IdentityAssignment[] = [
+    { id: 'ia-demo-1', organizationId: 'org-demo', revenueIdentityId: 'ri-demo-linkedin', repId: 'rep-hassan', assignedBy: 'rep-hassan', createdAt: t(10) },
+    { id: 'ia-demo-2', organizationId: 'org-demo', revenueIdentityId: 'ri-demo-upwork', repId: 'rep-hassan', assignedBy: 'rep-hassan', createdAt: t(8) },
+  ]
+  let demoDailyTargets: DailyTarget[] = [
+    { id: 'dt-demo-1', organizationId: 'org-demo', repId: 'rep-hassan', revenueIdentityId: 'ri-demo-linkedin', activityType: 'dm', targetCount: 35, active: true, createdBy: 'rep-hassan', createdAt: t(7), updatedAt: t(7) },
+    { id: 'dt-demo-2', organizationId: 'org-demo', repId: 'rep-hassan', revenueIdentityId: 'ri-demo-linkedin', activityType: 'connection_request', targetCount: 20, active: true, createdBy: 'rep-hassan', createdAt: t(7), updatedAt: t(7) },
+    { id: 'dt-demo-3', organizationId: 'org-demo', repId: 'rep-hassan', revenueIdentityId: 'ri-demo-upwork', activityType: 'application', targetCount: 10, active: true, createdBy: 'rep-hassan', createdAt: t(7), updatedAt: t(7) },
+  ]
+  const demoAccountabilityNotifications: AppNotification[] = []
+  const demoAuditLog: AuditLogEntry[] = [
+    { id: 'audit-demo-1', organizationId: 'org-demo', repId: 'rep-hassan', revenueIdentityId: 'ri-demo-linkedin', eventType: 'identity_created', detail: { source: 'demo' }, createdAt: t(30) },
+  ]
   const extractionRuns: Array<{
     task: 'extract' | 'draft'
     success: boolean
@@ -2145,6 +2191,143 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         messagesByJob: new Map(),
         assignedProfiles: [],
       }
+    },
+    // ── Revenue Identity OS ─────────────────────────────────────────────────
+    async listRevenueIdentitiesAdmin() {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      return demoRevenueIdentities
+    },
+    async getRevenueIdentityAdmin(id: string) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      return demoRevenueIdentities.find((r) => r.id === id) ?? null
+    },
+    async createRevenueIdentityAdmin(input: { slug: string; identityName: string; channel: string; title?: string | null }) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      const ri: RevenueIdentity = {
+        id: `ri-${Date.now()}`, organizationId: 'org-demo', slug: input.slug, identityName: input.identityName,
+        title: input.title ?? null, positioning: null, profileUrl: null, skills: [], expertise: [], industries: [],
+        technologies: [], allowedFirstPersonClaims: [], forbiddenClaims: [], channelRules: {}, voiceTone: {},
+        preferredOpportunityTypes: [], proposalPositioning: null, profileId: null,
+        channel: input.channel as RevenueIdentityChannel, status: 'active', sourceKind: 'manual',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      }
+      demoRevenueIdentities.unshift(ri)
+      return ri
+    },
+    async updateRevenueIdentityAdmin(id: string, patches: Record<string, unknown>) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      const idx = demoRevenueIdentities.findIndex((r) => r.id === id)
+      if (idx === -1) throw new Error('Not found')
+      const updated = { ...demoRevenueIdentities[idx], ...patches, updatedAt: new Date().toISOString() }
+      demoRevenueIdentities[idx] = updated
+      return updated as RevenueIdentity
+    },
+    async archiveRevenueIdentityAdmin(id: string) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      const ri = demoRevenueIdentities.find((r) => r.id === id)
+      if (ri) { ri.status = 'archived'; ri.updatedAt = new Date().toISOString() }
+    },
+    async listIdentityAssignmentsAdmin() {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      return demoIdentityAssignments
+    },
+    async assignIdentityAdmin(identityId: string, repId: string) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      const existing = demoIdentityAssignments.find((a) => a.revenueIdentityId === identityId && a.repId === repId)
+      if (existing) return existing
+      const ia: IdentityAssignment = { id: `ia-${Date.now()}`, organizationId: 'org-demo', revenueIdentityId: identityId, repId, assignedBy: rep.id, createdAt: new Date().toISOString() }
+      demoIdentityAssignments.push(ia)
+      return ia
+    },
+    async unassignIdentityAdmin(identityId: string, repId: string) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      demoIdentityAssignments = demoIdentityAssignments.filter((a) => !(a.revenueIdentityId === identityId && a.repId === repId))
+    },
+    async listDailyTargetsAdmin() {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      return demoDailyTargets
+    },
+    async createDailyTargetAdmin(input: { repId: string; revenueIdentityId: string; activityType: ActivityType; targetCount: number }) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      const existing = demoDailyTargets.find((t) => t.repId === input.repId && t.revenueIdentityId === input.revenueIdentityId && t.activityType === input.activityType)
+      if (existing) { existing.targetCount = input.targetCount; existing.active = true; existing.updatedAt = new Date().toISOString(); return existing }
+      const dt: DailyTarget = { id: `dt-${Date.now()}`, organizationId: 'org-demo', ...input, active: true, createdBy: rep.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      demoDailyTargets.push(dt)
+      return dt
+    },
+    async updateDailyTargetAdmin(id: string, patches: { targetCount?: number; active?: boolean }) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      const dt = demoDailyTargets.find((t) => t.id === id)
+      if (!dt) throw new Error('Not found')
+      if (patches.targetCount !== undefined) dt.targetCount = patches.targetCount
+      if (patches.active !== undefined) dt.active = patches.active
+      dt.updatedAt = new Date().toISOString()
+      return dt
+    },
+    async deleteDailyTargetAdmin(id: string) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      demoDailyTargets = demoDailyTargets.filter((t) => t.id !== id)
+    },
+    async getTeamAccountabilityAdmin(date?: string) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      return { date: date ?? new Date().toISOString().slice(0, 10), isWorkingDay: true, summaries: [], consecutiveMisses: [], requiresAttention: [] }
+    },
+    async getCommandCenterAdmin() {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      const activeIdentities = demoRevenueIdentities.filter((r) => r.status === 'active')
+      return {
+        date: new Date().toISOString().slice(0, 10), isWorkingDay: true, totalReps: 1, onTrackReps: 1, behindReps: 0,
+        completedReps: 0, missedReps: 0, activeIdentities: activeIdentities.length,
+        totalTargetsToday: demoDailyTargets.filter((t) => t.active).reduce((s, t) => s + t.targetCount, 0),
+        totalCompletedToday: 0, consecutiveMisses: [], attentionItems: [],
+        identityPerformance: activeIdentities.map((i) => ({
+          identityId: i.id, identityName: i.identityName, channel: i.channel, status: i.status,
+          assignedReps: [], totalTarget: 0, totalCompleted: 0,
+        })),
+      }
+    },
+    async listMyAssignedIdentities() {
+      return demoIdentityAssignments
+        .filter((a) => a.repId === rep.id)
+        .map((a) => {
+          const identity = demoRevenueIdentities.find((r) => r.id === a.revenueIdentityId)
+          if (!identity) return null
+          return { ...identity, assignmentId: a.id, assignedBy: a.assignedBy, assignedAt: a.createdAt }
+        })
+        .filter((x): x is RevenueIdentityWithAssignment => x !== null)
+    },
+    async getMyTodayAccountability() {
+      const myAssignments = demoIdentityAssignments.filter((a) => a.repId === rep.id)
+      const myTargets = demoDailyTargets.filter((t) => t.repId === rep.id && t.active)
+      let totalTarget = 0, totalCompleted = 0
+      const assignedIdentities = myAssignments.map((a) => {
+        const identity = demoRevenueIdentities.find((r) => r.id === a.revenueIdentityId)
+        const identityTargets = myTargets.filter((t) => t.revenueIdentityId === a.revenueIdentityId)
+        const targets = identityTargets.map((t) => {
+          const completed = t.activityType === 'dm' ? 22 : t.activityType === 'connection_request' ? 14 : 6
+          totalTarget += t.targetCount
+          totalCompleted += completed
+          return { targetId: t.id, activityType: t.activityType, targetCount: t.targetCount, completedCount: completed, remaining: Math.max(0, t.targetCount - completed), status: 'on_track' as const, accountabilityId: null }
+        })
+        return { assignmentId: a.id, identity: identity!, targets }
+      })
+      return {
+        repId: rep.id, repName: rep.name, timezone: rep.timezone ?? 'UTC', isWorkingDay: true,
+        totalTarget, totalCompleted, totalRemaining: Math.max(0, totalTarget - totalCompleted),
+        overallStatus: totalCompleted >= totalTarget ? 'completed' : 'on_track',
+        assignedIdentities, notifications: [],
+      }
+    },
+    async listAccountabilityNotifications() {
+      return demoAccountabilityNotifications.filter((n) => n.recipientId === rep.id && !n.read)
+    },
+    async markAccountabilityNotificationRead(id: string) {
+      const n = demoAccountabilityNotifications.find((x) => x.id === id && x.recipientId === rep.id)
+      if (n) n.read = true
+    },
+    async listAuditLogAdmin(limit = 100) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      return demoAuditLog.slice(0, limit)
     },
   }
 }
