@@ -27,7 +27,11 @@ function clientFor(baseUrl: string, apiKey: string): OpenAI {
   const key = `${baseUrl}|${apiKey}`
   let c = clients.get(key)
   if (!c) {
-    c = new OpenAI({ apiKey, baseURL: baseUrl })
+    c = new OpenAI({
+      apiKey,
+      baseURL: baseUrl,
+      timeout: 30_000, // 30s max — fail fast and fall back to next host
+    })
     clients.set(key, c)
   }
   return c
