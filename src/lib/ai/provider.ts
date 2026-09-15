@@ -232,9 +232,11 @@ function isJsonObjectOut(obj: unknown): obj is Record<string, unknown> {
 async function structuredJsonOnHost<T>(
   host: { apiKey: string | undefined; baseUrl: string; model: string },
   opts: Omit<JsonCallOptions, 'model'>,
+  timeoutMs?: number,
 ): Promise<{ value: T; inputTokens: number; outputTokens: number }> {
   if (!host.apiKey) throw new Error(`Host has no API key configured.`)
   const api = clientFor(host.baseUrl, host.apiKey)
+  if (timeoutMs) api.timeout = timeoutMs
   let user = opts.user
   const responseMode = opts.responseMode ?? 'json_object'
   if (responseMode === 'json_object' && !/json/i.test(user)) {
@@ -359,11 +361,13 @@ export async function structuredJsonChain<T>(
   chain: ChainStep[],
   opts: Omit<JsonCallOptions, 'model' | 'responseMode' | 'strict'>,
   onAttempt?: (log: HostAttemptLog) => void | Promise<void>,
+  timeoutMs?: number,
 ): Promise<CallResult<T>> {
   const result = await walkChain(chain, opts.onStatus, async (step) => {
     const { value, inputTokens, outputTokens } = await structuredJsonOnHost<T>(
       { apiKey: step.host.apiKey, baseUrl: step.host.baseUrl, model: step.host.model },
       { ...opts, responseMode: 'json_object' },
+      timeoutMs,
     )
     return { value, inputTokens, outputTokens }
   }, onAttempt)

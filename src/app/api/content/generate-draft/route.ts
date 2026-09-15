@@ -13,6 +13,7 @@ import { pickDraftChain, tier0Host, shouldEscalateToPremium } from '@/lib/ai/rou
 import type { ContentDraft, ContentMemory, ContentIdeaCard } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 120
 
 interface GenerateBody {
   personaId: string

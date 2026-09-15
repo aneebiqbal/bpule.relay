@@ -53,6 +53,13 @@ const DRAFT_SCHEMA = {
  * is streamed to the client token-by-token; the weaker one is emitted as a
  * 'variant' event so the UI can show a one-click swap.
  */
+// Vercel Hobby plan caps serverless functions at 10s. Track elapsed time
+// and skip attempts that won't finish before the timeout.
+const VERCEL_HOBBY_TIMEOUT_MS = 9_500 // leave 500ms buffer
+const streamStart = Date.now()
+const msRemaining = () => VERCEL_HOBBY_TIMEOUT_MS - (Date.now() - streamStart)
+const hasTimeForAttempt = (minMs: number) => msRemaining() > minMs
+
 export async function streamDraft(
   input: DraftInput,
   emit: (e: DraftStreamEvent) => void,
@@ -88,8 +95,9 @@ export async function streamDraft(
   emit({ type: 'status', message: 'Drafting in your voice...' })
   emit({ type: 'attempt', attempt: 1, model: 'longcat', tier: 'strong' })
 
-  // Attempt 1: LongCat (primary writer)
-  const rawA = await structuredJsonChain<RawVariant>(longcatChain, { system, user, schema: DRAFT_SCHEMA })
+  // Attempt 1: LongCat (primary writer) — timeout depends on remaining time.
+  const attempt1Timeout = Math.min(8_000, Math.max(3_000, msRemaining() - 2_000))
+  const rawA = await structuredJsonChain<RawVariant>(longcatChain, { system, user, schema: DRAFT_SCHEMA }, undefined, attempt1Timeout)
     .then((r) => {
       callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
       return r.data
@@ -102,7 +110,13 @@ export async function streamDraft(
     return await streamFinalDraft(input, emit, matchedProof, variantA, null, 'LongCat passed quality gates.', callLog)
   }
 
-  // Attempt 2: corrective retry on Groq with feedback
+  // Attempt 2: corrective retry on Groq with feedback — skip if running low on time
+  if (!hasTimeForAttempt(4_000)) {
+    emit({ type: 'status', message: 'Finalizing with best effort...' })
+    const best = variantA ?? null
+    if (best) return await streamFinalDraft(input, emit, matchedProof, best, null, 'Best effort (time budget exhausted).', callLog)
+  }
+
   const escalationDecision = shouldEscalateToPremium({
     primaryPassed: variantA?.passed ?? false,
     primaryScore: variantA ? variantScore(variantA) : 0,

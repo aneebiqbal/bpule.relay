@@ -11,6 +11,12 @@ import { buildProfileIntelligence, matchProofToLead, classifyLeadFact } from '@/
 import { createOutreachStrategy } from '@/lib/relay/outreach-strategy'
 import { analyzeReply, buildReplyStrategy, buildConversationContext } from '@/lib/relay/conversation-engine'
 
+// Draft generation involves multiple AI calls (embedding, scoring, drafting
+// with quality gates). Allow up to 2 minutes on Pro plan; on Hobby plan
+// Vercel's 10s limit applies — the 30s SDK timeout + fast fallback chain
+// usually complete within that.
+export const maxDuration = 120
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -102,24 +108,24 @@ export async function POST(
 
     const score = computeScore(extracted, rulebook!)
 
-    // Proof matching: tag overlap + semantic embedding merge.
+    // Proof matching: tag overlap first (fast), then semantic in background.
     const tagMatches = await store.matchProofItems(detail.tags ?? [], 8)
-    let semanticMatches: Array<{ item: import('@/lib/domain/types').ProofItem; similarity: number }> = []
-    try {
-      const leadEmbedding = await embedText(
-        `${detail.company} ${detail.signalEvidence ?? ''} ${detail.tags.join(' ')}`,
-      )
-      semanticMatches = await store.matchProofItemsByEmbedding(leadEmbedding, 8)
-    } catch {
-      // If embedding fails, fall back to tag-only matching.
-    }
-    let matched = mergeProofMatches(semanticMatches, tagMatches, 8)
+    let matched = tagMatches
 
     if (proofId) {
       const explicit = matched.find((p) => p.id === proofId) ?? null
       if (explicit) matched = [explicit, ...matched.filter((p) => p.id !== proofId)]
     }
     if (matched.length > 0) emit({ type: 'proof', items: matched })
+
+    // Semantic matching in background — updates proof list if it completes in time.
+    const embedTextPromise = embedText(
+      `${detail.company} ${detail.signalEvidence ?? ''} ${detail.tags.join(' ')}`,
+    ).then(async (leadEmbedding) => {
+      const semanticMatches = await store.matchProofItemsByEmbedding(leadEmbedding, 8)
+      const merged = mergeProofMatches(semanticMatches, tagMatches, 8)
+      emit({ type: 'proof', items: merged })
+    }).catch(() => {})
 
     // Few-shot injection from real wins.
     const fewShotSelection = selectFewShotExamples(fewShotPool, { leadId: detail.id, lead: detail, extracted, score, type: type as DraftMessageType, styleCard: voiceProfile?.styleCard ?? null, facts, plays, history: detail.messages, profile, matchedProof: matched[0] ?? null }, plays)
