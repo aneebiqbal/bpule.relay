@@ -54,14 +54,29 @@ export function groqStrongModel(): string {
   return process.env.SCOUT_TIER0_STRONG_MODEL ?? process.env.SCOUT_TIER3_STRONG_MODEL ?? 'openai/gpt-oss-120b'
 }
 
-export function tier0Host(kind: 'cheap' | 'strong'): ProviderHost | null {
-  if (!groqApiKey()) return null
-  return {
-    id: 'groq',
-    apiKey: groqApiKey(),
-    baseUrl: groqBaseUrl(),
-    model: kind === 'strong' ? groqStrongModel() : groqCheapModel(),
+export function groqApiKey2(): string | undefined {
+  return process.env.GROQ_API_KEY_2
+}
+
+/**
+ * Tier 0 hosts — Groq free tier. Supports two keys for double quota.
+ * Each key is a separate host; the retry chain walks them sequentially.
+ */
+export function tier0Hosts(kind: 'cheap' | 'strong'): ProviderHost[] {
+  const hosts: ProviderHost[] = []
+  const model = kind === 'strong' ? groqStrongModel() : groqCheapModel()
+  if (groqApiKey()) {
+    hosts.push({ id: 'groq', apiKey: groqApiKey(), baseUrl: groqBaseUrl(), model })
   }
+  if (groqApiKey2()) {
+    hosts.push({ id: 'groq-2', apiKey: groqApiKey2(), baseUrl: groqBaseUrl(), model })
+  }
+  return hosts
+}
+
+/** @deprecated Use tier0Hosts */
+export function tier0Host(kind: 'cheap' | 'strong'): ProviderHost | null {
+  return tier0Hosts(kind)[0] ?? null
 }
 
 // ============================================================================
@@ -222,9 +237,9 @@ export function longcatHost(): ProviderHost | null {
 /** True once at least one tier has a usable key; false only in demo mode. */
 export function hasProvider(): boolean {
   return (
+    tier0Hosts('cheap').length > 0 ||
     tier1Hosts().length > 0 ||
     tier2Hosts().length > 0 ||
-    Boolean(groqApiKey()) ||
     Boolean(openaiApiKey()) ||
     Boolean(longcatApiKey())
   )

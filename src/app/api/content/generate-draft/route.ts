@@ -9,7 +9,7 @@ import { evaluatePostQuality, isRegressionFixture } from '@/lib/content/quality-
 import { buildPostPlan, validateCoreInsight } from '@/lib/content/post-plan'
 import { generateVisualConcept } from '@/lib/writing/visual'
 import { structuredJsonChain } from '@/lib/ai/provider'
-import { pickDraftChain, tier0Host, shouldEscalateToPremium } from '@/lib/ai/routing'
+import { pickDraftChain, tier0Hosts, tier4Host, shouldEscalateToPremium } from '@/lib/ai/routing'
 import type { ContentDraft, ContentMemory, ContentIdeaCard } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
@@ -348,12 +348,12 @@ async function attemptCorrectiveRetry(
   const failureCodes = qualityResult.failures.map((f) => f.code)
   const correctionInstructions = buildCorrectionPrompt(failureCodes, qualityResult.failures.map((f) => f.message), body.idea, profile, postPlan)
 
-  // Attempt 1: Groq strong corrective rewrite
-  const groqHost = tier0Host('strong')
-  if (groqHost) {
+  // Attempt 1: Groq strong corrective rewrite (tries both keys if available)
+  const groqHosts = tier0Hosts('strong')
+  if (groqHosts.length > 0) {
     try {
       const result = await structuredJsonChain<{ caption: string }>(
-        [{ costTier: 'tier1', host: groqHost }],
+        groqHosts.map((host) => ({ costTier: 'tier1', host })),
         {
           system: buildCorrectionSystemPrompt(profile, body, postPlan),
           user: buildCorrectionUserPrompt(correctionInstructions, originalCaption, body.idea, platform),
@@ -392,7 +392,7 @@ async function attemptCorrectiveRetry(
   }
 
   // Attempt 2: GPT escalation (only when cheaper tiers fail)
-  const gptHost = tier0Host('strong') // placeholder; real escalation uses tier4
+  const gptHost = tier4Host()
   if (gptHost && shouldEscalateToPremium({
     primaryPassed: false,
     primaryScore: qualityResult.scores?.insightDepth ?? 0,

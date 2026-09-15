@@ -1,8 +1,8 @@
 import type { ProviderHost } from '@/lib/ai/config'
-import { cheapModel, strongModel, longcatHost, tier0Host, tier1Hosts, tier2Hosts, tier4Host } from '@/lib/ai/config'
+import { cheapModel, strongModel, longcatHost, tier0Hosts, tier1Hosts, tier2Hosts, tier4Host } from '@/lib/ai/config'
 
 // Re-export the host builders that drafting needs for its specialized chains.
-export { longcatHost, tier0Host, tier4Host } from '@/lib/ai/config'
+export { longcatHost, tier0Hosts, tier4Host } from '@/lib/ai/config'
 
 /**
  * Build the LongCat-2.0 drafting chain with Groq fallback.
@@ -10,10 +10,10 @@ export { longcatHost, tier0Host, tier4Host } from '@/lib/ai/config'
  */
 export function buildLongcatDraftChain(): ChainStep[] {
   const lc = longcatHost()
-  const groq = tier0Host('strong')
   const chain: ChainStep[] = []
   if (lc) chain.push({ costTier: 'tier1', host: lc })
-  if (groq) chain.push({ costTier: 'tier1', host: groq })
+  // Add both Groq keys (if configured) for double quota
+  chain.push(...tier0Hosts('strong').map((host) => ({ costTier: 'tier1' as const, host })))
   return chain
 }
 
@@ -23,10 +23,9 @@ export function buildLongcatDraftChain(): ChainStep[] {
  */
 export function buildOpenaiDraftChain(): ChainStep[] {
   const oai = tier4Host()
-  const groq = tier0Host('strong')
   const chain: ChainStep[] = []
   if (oai) chain.push({ costTier: 'tier4', host: oai })
-  if (groq) chain.push({ costTier: 'tier1', host: groq })
+  chain.push(...tier0Hosts('strong').map((host) => ({ costTier: 'tier1' as const, host })))
   return chain
 }
 
@@ -64,8 +63,7 @@ export interface ChainStep {
  * only GROQ_API_KEY set still works — Groq-only is the default, working state.
  */
 export function tier0Chain(kind: 'cheap' | 'strong'): ChainStep[] {
-  const groq = tier0Host(kind)
-  return groq ? [{ costTier: 'tier1', host: groq }] : []
+  return tier0Hosts(kind).map((host) => ({ costTier: 'tier1', host }))
 }
 
 export function tier1Chain(): ChainStep[] {
