@@ -106,6 +106,13 @@ export default function RootLayout({
               "(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}})()",
           }}
         />
+        {process.env.NEXT_POSTHOG_KEY && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `window.__POSTHOG_KEY__=${JSON.stringify(process.env.NEXT_POSTHOG_KEY)};window.__POSTHOG_HOST__=${JSON.stringify(process.env.NEXT_POSTHOG_HOST || "https://us.i.posthog.com")};`,
+            }}
+          />
+        )}
         <Providers>{children}</Providers>
       </body>
     </html>

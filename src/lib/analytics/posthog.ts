@@ -39,7 +39,9 @@ export function ensurePostHog(): Promise<void> {
   if (loadPromise) return loadPromise;
   if (typeof window === "undefined") return Promise.resolve();
 
-  const apiKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+  // Key is injected by server layout via window.__POSTHOG_KEY__
+  const apiKey = (window as unknown as Record<string, string>).__POSTHOG_KEY__;
+  const apiHost = (window as unknown as Record<string, string>).__POSTHOG_HOST__;
   if (!apiKey) return Promise.resolve();
 
   if (loaded && window.posthog?.__loaded) return Promise.resolve();
@@ -52,9 +54,9 @@ export function ensurePostHog(): Promise<void> {
     bootScript.textContent = bootstrap;
     document.head.appendChild(bootScript);
 
-    // Step 2: Init with project config
+    // Step 2: Init with project config (key from server-injected global)
     const init = `window.posthog.init(${JSON.stringify(apiKey)}, {
-      api_host: ${JSON.stringify(process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com")},
+      api_host: ${JSON.stringify(apiHost || "https://us.i.posthog.com")},
       defaults: '2026-05-30',
       person_profiles: 'identified_only',
       capture_pageview: true,
