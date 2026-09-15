@@ -1,25 +1,24 @@
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
-import { RevenueIdentitiesManager } from '@/components/admin/revenue-os/identities-manager'
+import { RevenueIdentityManager } from '@/components/revenue-identity-manager'
 
 export const dynamic = 'force-dynamic'
 
 export default async function RevenueIdentitiesPage() {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
-  if (user.rep.role !== 'admin') redirect('/')
+  if (user.rep.role !== 'admin') redirect('/dashboard')
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-1">
-        <p className="text-label text-stone">Revenue Operations</p>
-        <h1 className="text-display text-2xl text-ink">Revenue Identities</h1>
-        <p className="text-[13px] text-graphite max-w-xl">
-          Create and manage company-controlled revenue identities. Assign them to reps and set daily targets.
-          Reps can only see identities you explicitly assign to them.
+    <div className="space-y-8">
+      <header className="reveal-up space-y-2">
+        <p className="font-mono text-xs uppercase tracking-widest text-slate">Administration</p>
+        <h1 className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">Revenue Identities</h1>
+        <p className="max-w-xl text-sm leading-relaxed text-slate">
+          Company-owned identities that reps execute from. Admins create, edit, and assign. Reps can only use what is assigned to them.
         </p>
       </header>
-      <RevenueIdentitiesManager />
+      <RevenueIdentityManager />
     </div>
   )
 }
