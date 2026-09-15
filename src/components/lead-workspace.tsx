@@ -106,12 +106,14 @@ function NextBestAction({
   hasReply,
   hasPriorSend,
   followupEligible,
+  onAction,
 }: {
   lead: LeadDetail
   verdict: string
   hasReply: boolean
   hasPriorSend: boolean
   followupEligible: boolean
+  onAction?: () => void
 }) {
   type Action = { label: string; description: string; cta: string; href?: string }
   let action: Action
@@ -185,15 +187,19 @@ function NextBestAction({
               {action.cta}
             </a>
           ) : (
-            <span className={cn(
-              'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-medium',
-              isUrgent
-                ? 'bg-orange text-bone'
-                : 'bg-ink text-bone',
-            )}>
+            <button
+              type="button"
+              onClick={onAction}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-medium transition-all active:scale-[0.97]',
+                isUrgent
+                  ? 'bg-orange text-bone hover:bg-orange-dark'
+                  : 'bg-ink text-bone hover:bg-ink/90',
+              )}
+            >
               {action.cta}
               <ArrowRight className="size-3.5" />
-            </span>
+            </button>
           )}
         </div>
       </div>
@@ -535,6 +541,7 @@ export function LeadWorkspace({
             hasReply={hasReply}
             hasPriorSend={hasPriorSend}
             followupEligible={followupEligible}
+            onAction={() => void generateDraft()}
           />
         </section>
       )}
