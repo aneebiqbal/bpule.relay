@@ -382,20 +382,19 @@ function WelcomePhase({ onStart, onSkip }: { onStart: () => void; onSkip: () => 
         </div>
       </div>
 
-      {/* Primary CTA */}
+      {/* Options */}
       <div className="space-y-3">
-        <Button size="lg" className="w-full" onClick={onStart}>
+        <Button variant="orange" size="lg" className="w-full" onClick={onStart}>
           Calibrate my voice
           <ArrowRight className="size-4 ml-1.5" aria-hidden="true" />
         </Button>
-        <Button
-          variant="outline"
-          size="lg"
-          className="w-full"
+        <button
+          type="button"
           onClick={() => void onSkip()}
+          className="w-full rounded-lg border border-line px-4 py-2.5 text-[14px] font-medium text-graphite transition-colors hover:bg-bone-raised hover:text-ink"
         >
-          Skip — use default voice
-        </Button>
+          Skip for now — use a default voice
+        </button>
       </div>
     </div>
   )
