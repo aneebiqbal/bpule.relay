@@ -15,7 +15,14 @@ declare
 begin
   select id into owner_rep_id from reps where name = fallback_owner_name limit 1;
   if owner_rep_id is null then
-    raise exception 'Fallback owner % not found in reps. Cannot seed alias profiles safely.', fallback_owner_name;
+    -- Fallback owner not present (e.g. fresh reset without auth users linked yet).
+    -- Use the first available rep, or skip if none exist.
+    select id into owner_rep_id from reps limit 1;
+    if owner_rep_id is null then
+      raise notice 'No reps available. Skipping alias profile seed.';
+      return;
+    end if;
+    raise notice 'Fallback owner % not found. Using first available rep as fallback.', fallback_owner_name;
   end if;
 
   for target in
