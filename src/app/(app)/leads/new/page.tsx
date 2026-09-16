@@ -338,15 +338,34 @@ export default function NewLeadPage() {
     }
   }
 
+  const quickVerdict = extracted ? score.verdict.replace(/_/g, ' ') : 'awaiting extract'
+  const confidenceLabel = extracted ? `${form.extractionConfidence}/100` : '—'
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <header>
-        <h1 className="text-2xl font-medium tracking-tight text-ink sm:text-3xl">New lead</h1>
-        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate">
-          Paste what you found. Relay reads it, fills in every field, and tells you on the spot
-          whether it is worth your next thirty seconds.
+    <div className="mx-auto max-w-6xl space-y-5">
+      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Intake / Lead Qualification</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+          Convert raw research into a qualified lead.
+        </h1>
+        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+          Relay extracts signals and scores fit. You verify evidence and decide whether to save.
         </p>
-      </header>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+            <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">Extraction</p>
+            <p className="mt-1 text-[18px] font-medium text-[color:var(--console-text)]">{extracted ? 'Ready' : 'Waiting'}</p>
+          </div>
+          <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+            <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">Confidence</p>
+            <p className="mt-1 text-[18px] font-medium text-[color:var(--console-text)]">{confidenceLabel}</p>
+          </div>
+          <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+            <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">Current Verdict</p>
+            <p className="mt-1 text-[18px] font-medium capitalize text-[color:var(--console-text)]">{quickVerdict}</p>
+          </div>
+        </div>
+      </section>
 
       {error ? (
         <Alert variant="destructive">
@@ -378,7 +397,7 @@ export default function NewLeadPage() {
       <div className="grid gap-6 lg:grid-cols-[22rem_1fr] xl:grid-cols-[26rem_1fr]">
         {/* Left: paste, always in view */}
         <div className="lg:sticky lg:top-7 lg:self-start">
-          <div className="rounded-2xl border border-line bg-paper p-5">
+          <div className="srf-proof px-4 py-4 sm:px-5">
             <div className="flex items-center gap-2">
               <Sparkles className="size-4 text-orange" aria-hidden="true" />
               <h2 className="text-sm font-medium text-ink">Paste the research</h2>
@@ -412,7 +431,7 @@ export default function NewLeadPage() {
           </div>
 
           {candidates.length > 1 ? (
-            <div className="mt-4 rounded-2xl border border-line bg-paper p-5">
+            <div className="mt-4 srf-proof px-4 py-4 sm:px-5">
               <h3 className="text-sm font-medium text-ink">
                 {candidates.length} profiles in this paste
               </h3>

@@ -76,8 +76,21 @@ export function TargetsManager() {
 
   if (loading) return <div className="text-sm text-slate">Loading targets…</div>
 
+  const activeTargets = targets.filter((target) => target.active)
+  const repsCovered = new Set(activeTargets.map((target) => target.repId).filter(Boolean)).size
+  const identityCoverage = new Set(activeTargets.map((target) => target.revenueIdentityId)).size
+  const totalDailyActions = activeTargets.reduce((sum, target) => sum + target.targetCount, 0)
+
+  const identityLanes = identities
+    .filter((identity) => identity.status === 'active')
+    .map((identity) => ({
+      identity,
+      targets: activeTargets.filter((target) => target.revenueIdentityId === identity.id),
+    }))
+    .filter((lane) => lane.targets.length > 0)
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="size-4" />
@@ -86,15 +99,34 @@ export function TargetsManager() {
         </Alert>
       )}
 
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate">{targets.length} target{targets.length !== 1 ? 's' : ''}</p>
-        <Button onClick={() => setShowForm(!showForm)} size="sm">
-          <Plus className="size-3.5 mr-1.5" /> Set Target
-        </Button>
-      </div>
+      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Admin / Accountability Design</p>
+        <h2 className="mt-2 text-[24px] leading-[1.08] tracking-[-0.03em] text-[color:var(--console-text)]">
+          Set execution expectations per identity.
+        </h2>
+        <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">
+          Targets define what a rep must complete today. Relay measures progress and flags risk.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <AdminMetric label="Active targets" value={activeTargets.length} />
+          <AdminMetric label="Reps covered" value={repsCovered} />
+          <AdminMetric label="Identity lanes" value={identityCoverage} />
+          <AdminMetric label="Total actions/day" value={totalDailyActions} />
+        </div>
+        <div className="mt-4">
+          <Button onClick={() => setShowForm(!showForm)} size="sm" variant="orange">
+            <Plus className="size-3.5 mr-1.5" />
+            {showForm ? 'Hide target form' : 'Define target'}
+          </Button>
+        </div>
+      </section>
 
       {showForm && (
-        <div className="rounded-xl border border-line bg-bone-raised p-5 space-y-4">
+        <section className="srf-proof space-y-4 px-4 py-4 sm:px-5">
+          <div>
+            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">New Target Rule</p>
+            <p className="mt-1 text-[13px] text-graphite">Attach a daily count to one identity and one activity type.</p>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>Rep</Label>
@@ -128,53 +160,82 @@ export function TargetsManager() {
               Save
             </Button>
           </div>
-        </div>
+        </section>
       )}
 
-      <div className="rounded-xl border border-line overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-line bg-bone-raised">
-              <th className="px-3 py-2 text-left text-label text-stone">Rep</th>
-              <th className="px-3 py-2 text-left text-label text-stone">Identity</th>
-              <th className="px-3 py-2 text-left text-label text-stone">Activity</th>
-              <th className="px-3 py-2 text-right text-label text-stone">Target</th>
-              <th className="px-3 py-2 text-right text-label text-stone">Status</th>
-              <th className="px-3 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {targets.map((t) => {
-              const identity = identities.find((i) => i.id === t.revenueIdentityId)
-              const rep = reps.find((r) => r.id === t.repId)
-              return (
-                <tr key={t.id} className="border-b border-line/50">
-                  <td className="px-3 py-2 text-graphite">{rep?.name ?? '—'}</td>
-                  <td className="px-3 py-2 font-medium text-ink">{identity?.identityName ?? '—'}</td>
-                  <td className="px-3 py-2 text-graphite">{activityLabel(t.activityType)}</td>
-                  <td className="px-3 py-2 text-right text-mono-medium text-ink">{t.targetCount}</td>
-                  <td className="px-3 py-2 text-right">
-                    <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium',
-                      t.active ? 'bg-status-success/10 text-status-success' : 'bg-stone/20 text-slate'
-                    )}>{t.active ? 'active' : 'paused'}</span>
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <button onClick={() => void deleteTarget(t.id)} className="rounded p-1 text-slate hover:text-red-500 hover:bg-bone">
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-            {targets.length === 0 && (
-              <tr><td colSpan={6} className="px-3 py-8 text-center">
-                <Target className="mx-auto size-6 text-slate mb-2" />
-                <p className="text-sm text-slate">No targets set. Define daily expectations per identity and activity.</p>
-              </td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {identityLanes.length > 0 ? (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Identity Lanes</p>
+            <span className="text-[12px] text-graphite">{activeTargets.length} active assignments</span>
+          </div>
+          <div className="space-y-3">
+            {identityLanes.map((lane) => (
+              <article key={lane.identity.id} className="overflow-hidden rounded border border-line bg-bone-raised">
+                <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+                  <div>
+                    <p className="text-[14px] font-medium text-ink">{lane.identity.identityName}</p>
+                    <p className="text-[12px] text-graphite">{lane.identity.channel.toUpperCase()} · {lane.identity.title || 'No title set'}</p>
+                  </div>
+                  <span className="rounded bg-bone px-2 py-1 text-mono-medium text-[10px] uppercase tracking-[0.1em] text-stone">
+                    {lane.targets.length} target{lane.targets.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <ul className="divide-y divide-line/60">
+                  {lane.targets.map((target) => {
+                    const rep = reps.find((row) => row.id === target.repId)
+                    return (
+                      <li key={target.id} className="flex items-center gap-3 px-4 py-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[13px] font-medium text-ink">{activityLabel(target.activityType)}</span>
+                            <span className="rounded bg-bone px-1.5 py-0.5 text-mono-medium text-[10px] text-stone">
+                              {rep?.name ?? 'All assigned reps'}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-[12px] text-graphite">{target.targetCount} required actions per day</p>
+                        </div>
+
+                        <span
+                          className={cn(
+                            'rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+                            target.active ? 'bg-status-success/10 text-status-success' : 'bg-stone/20 text-slate',
+                          )}
+                        >
+                          {target.active ? 'Active' : 'Paused'}
+                        </span>
+
+                        <button
+                          onClick={() => void deleteTarget(target.id)}
+                          className="rounded p-1 text-slate transition-colors hover:bg-bone hover:text-status-danger"
+                          aria-label={`Delete ${lane.identity.identityName} ${activityLabel(target.activityType)} target`}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <section className="rounded-xl border border-dashed border-line py-10 text-center">
+          <Target className="mx-auto mb-2 size-6 text-slate" />
+          <p className="text-sm font-medium text-ink">No targets set yet</p>
+          <p className="mt-1 text-xs text-slate">Define daily expectations per identity and activity.</p>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function AdminMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <p className="mt-1 text-[20px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }

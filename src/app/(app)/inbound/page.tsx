@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import {
-  ArrowLeft,
   MessageCircle,
   User,
   Building2,
@@ -38,8 +37,6 @@ export default function InboundPage() {
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [leadId, setLeadId] = useState<string | null>(null)
-
-  const [isPending, startTransition] = useTransition()
 
   function reset() {
     setAnalysisState('idle')
@@ -135,34 +132,37 @@ export default function InboundPage() {
     return 'text-stone'
   }
 
-  function qualityColor(q: string): string {
-    if (q === 'high') return 'bg-status-success/10 text-status-success'
-    if (q === 'medium') return 'bg-orange/10 text-orange'
-    return 'bg-stone/10 text-stone'
-  }
+  const intakeState = analysisState === 'done' ? 'Ready' : analysisState === 'analyzing' ? 'Analyzing' : 'Waiting'
+  const fitLabel = intelligence ? `${intelligence.fitScore}%` : '—'
+  const actionLabel = intelligence ? 'Review recommendation' : 'Awaiting analysis'
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard"
-            className="flex size-9 items-center justify-center rounded-lg border border-line transition-colors hover:bg-bone"
-          >
-            <ArrowLeft className="size-4" />
-          </Link>
-          <div>
-            <h1 className="text-display text-[24px] text-ink">Add Inbound</h1>
-            <p className="text-[13px] text-graphite">
-              A client contacted you first. Relay will analyze and prepare a response.
-            </p>
-          </div>
+    <div className="mx-auto max-w-4xl space-y-5">
+      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Intake / Inbound Opportunity</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+          Convert inbound messages into action-ready leads.
+        </h1>
+        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+          Relay extracts intent, selects the best assigned identity, and surfaces proof-backed next action.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <InboundSignal label="Intake state" value={intakeState} />
+          <InboundSignal label="Fit score" value={fitLabel} />
+          <InboundSignal label="Next action" value={actionLabel} />
         </div>
-      </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded border border-orange/30 bg-orange/10 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-text)]">
+            Return to Relay Today
+          </Link>
+          <Link href="/leads/new" className="inline-flex items-center gap-1.5 rounded border border-line/30 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-mute)] hover:text-[color:var(--console-text)]">
+            Open manual lead intake
+          </Link>
+        </div>
+      </section>
 
       {/* Input form */}
-      <div className="rounded-xl border border-line bg-bone-raised p-5 space-y-4">
+      <div className="srf-proof space-y-4 px-4 py-4 sm:px-5">
         <div>
           <label className="text-label text-stone">Client&apos;s message *</label>
           <textarea
@@ -303,7 +303,7 @@ export default function InboundPage() {
 
       {/* Intelligence display */}
       {intelligence && (
-        <div className="rounded-xl border border-line bg-bone-raised p-5 space-y-5">
+        <div className="rounded border border-line bg-bone-raised p-5 space-y-5">
           <div className="flex items-center gap-2">
             <Sparkles className="size-4 text-orange" />
             <h2 className="text-heading text-lg text-ink">Inbound Intelligence</h2>
@@ -438,6 +438,15 @@ export default function InboundPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function InboundSignal({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <p className="mt-1 text-[14px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }

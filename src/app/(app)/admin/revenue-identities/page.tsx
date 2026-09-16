@@ -10,14 +10,16 @@ export default async function RevenueIdentitiesPage() {
   if (user.rep.role !== 'admin') redirect('/dashboard')
 
   return (
-    <div className="space-y-8">
-      <header className="reveal-up space-y-2">
-        <p className="font-mono text-xs uppercase tracking-widest text-slate">Administration</p>
-        <h1 className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">Revenue Identities</h1>
-        <p className="max-w-xl text-sm leading-relaxed text-slate">
-          Company-owned identities that reps execute from. Admins create, edit, and assign. Reps can only use what is assigned to them.
+    <div className="space-y-5">
+      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Admin / Revenue Identities</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+          Define company-owned identities once.
+        </h1>
+        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+          Admin owns identity truth and assignment. Reps execute only from the identities mapped to them.
         </p>
-      </header>
+      </section>
       <RevenueIdentityManager />
     </div>
   )

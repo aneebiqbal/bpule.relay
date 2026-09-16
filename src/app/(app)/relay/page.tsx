@@ -191,6 +191,15 @@ function TaskCard({ task, featured = false }: { task: RelayTask; featured?: bool
   )
 }
 
+function RelayMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <p className="mt-1 text-[20px] font-medium text-[color:var(--console-text)]">{value}</p>
+    </div>
+  )
+}
+
 export default async function RelayPage() {
   const user = await getCurrentUser()
   if (!user) {
@@ -223,31 +232,44 @@ export default async function RelayPage() {
 
   const visibleTasks = filterQueueByRole(queue, roleContext.role)
   const [topAction, ...restQueue] = visibleTasks
+  const highCount = visibleTasks.filter((task) => task.priority === 'high').length
+  const mediumLowCount = visibleTasks.filter((task) => task.priority === 'medium' || task.priority === 'low').length
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <header className="reveal-up flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-label text-stone">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-          </p>
-          <h1 className="text-display text-[28px] text-ink mt-1">
-            Relay
-          </h1>
-          <p className="text-[14px] text-graphite mt-1">
-            {queue.summary.total > 0
-              ? `${queue.summary.total} ${queue.summary.total === 1 ? 'item' : 'items'} prepared for you${queue.summary.urgent > 0 ? ` · ${queue.summary.urgent} urgent` : ''}.`
-              : 'Nothing needs your attention.'}
-          </p>
+      <header className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">
+          Queue / Relay Priority Engine
+        </p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+          Full action queue across your operating system.
+        </h1>
+        <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">
+          {queue.summary.total > 0
+            ? `${queue.summary.total} items prepared${queue.summary.urgent > 0 ? `, ${queue.summary.urgent} urgent` : ''}.`
+            : 'No active queue items right now.'}
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <RelayMetric label="Queue total" value={queue.summary.total} />
+          <RelayMetric label="Urgent" value={queue.summary.urgent} />
+          <RelayMetric label="High" value={highCount} />
+          <RelayMetric label="Medium/Low" value={mediumLowCount} />
         </div>
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-[13px] font-medium text-ink transition-all hover:bg-bone"
-        >
-          <ArrowRight className="size-4 rotate-180" />
-          Back to Today
-        </Link>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 rounded border border-orange/30 bg-orange/10 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-text)]"
+          >
+            <ArrowRight className="size-3.5 rotate-180" />
+            Back to Today
+          </Link>
+          <Link
+            href="/prospect"
+            className="inline-flex items-center gap-2 rounded border border-line/30 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-mute)] hover:text-[color:var(--console-text)]"
+          >
+            Prospect new opportunities
+          </Link>
+        </div>
       </header>
 
       {/* Top Action Hero */}
@@ -261,7 +283,7 @@ export default async function RelayPage() {
       {restQueue.length > 0 && (
         <section className="reveal-up stagger-2 space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-label text-stone">Queue</h2>
+            <h2 className="text-label text-stone">Action Queue</h2>
             <span className="text-mono-medium text-[11px] text-stone">
               {restQueue.length} more
             </span>
@@ -276,7 +298,7 @@ export default async function RelayPage() {
 
       {/* Empty state */}
       {!topAction && restQueue.length === 0 && (
-        <section className="reveal-up stagger-2 rounded-lg border border-dashed border-line py-12 text-center">
+        <section className="reveal-up stagger-2 rounded border border-dashed border-line py-12 text-center">
           <div className="mx-auto max-w-sm space-y-3">
             <p className="text-[15px] font-medium text-ink">
               Relay has nothing prepared right now.
@@ -306,7 +328,7 @@ export default async function RelayPage() {
       )}
 
       {/* Principle reminder */}
-      <section className="reveal-up stagger-3 rounded-lg border border-line bg-bone-raised p-4">
+      <section className="reveal-up stagger-3 srf-proof px-4 py-4">
         <div className="flex items-start gap-3">
           <Shield className="size-5 shrink-0 text-stone mt-0.5" />
           <div>

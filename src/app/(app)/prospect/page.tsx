@@ -249,17 +249,25 @@ export default function ProspectCheckPage() {
   }
 
   const recMeta = result?.score ? RECOMMENDATION_META[result.score.recommendation] : null
+  const confidence = result?.score ? `${result.score.evidenceConfidence}/100` : '—'
+  const recommendation = recMeta?.label ?? 'Awaiting analysis'
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <header className="flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-medium tracking-tight text-ink sm:text-3xl">Prospect Check</h1>
-          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate">
-            Paste a LinkedIn profile. Relay will tell you if they are worth pursuing and draft the connection note.
-          </p>
+    <div className="mx-auto max-w-5xl space-y-5">
+      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Intake / Prospect Check</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+          Decide if this prospect is worth your next outreach.
+        </h1>
+        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+          Relay scores fit, suggests the best sender profile, and prepares a connection note you can review.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <SignalChip label="Analysis" value={result ? 'Ready' : analyzing ? 'Running' : 'Waiting'} />
+          <SignalChip label="Recommendation" value={recommendation} />
+          <SignalChip label="Evidence confidence" value={confidence} />
         </div>
-      </header>
+      </section>
 
       {error ? (
         <Alert variant="destructive">
@@ -269,7 +277,7 @@ export default function ProspectCheckPage() {
       ) : null}
 
       {/* ── Input area ── */}
-      <div className="rounded-2xl border border-line bg-paper p-5">
+      <div className="srf-proof px-4 py-4 sm:px-5">
         <div className="flex items-center gap-2">
           <Search className="size-4 text-orange" aria-hidden="true" />
           <h2 className="text-sm font-medium text-ink">Paste a LinkedIn profile</h2>
@@ -310,7 +318,7 @@ export default function ProspectCheckPage() {
 
       {/* ── Loading state ── */}
       {analyzing && !result && (
-        <div className="flex min-h-[12rem] flex-col items-center justify-center rounded-2xl border border-dashed border-line px-6 text-center">
+        <div className="flex min-h-[12rem] flex-col items-center justify-center rounded border border-dashed border-line px-6 text-center">
           <RefreshCw className="size-5 animate-spin text-orange" aria-hidden="true" />
           <p className="mt-3 text-sm font-medium text-ink">{status ?? 'Analyzing...'}</p>
           <p className="mt-1 text-xs text-slate">This usually takes a few seconds.</p>
@@ -538,6 +546,15 @@ export default function ProspectCheckPage() {
 
       {/* Mobile spacer */}
       <div className="h-4 lg:hidden" />
+    </div>
+  )
+}
+
+function SignalChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <p className="mt-1 text-[14px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }

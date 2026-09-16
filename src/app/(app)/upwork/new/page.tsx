@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -165,15 +166,33 @@ export default function NewUpworkJobPage() {
     }
   }
 
+  const connectsPreview = form.connectsCost ? Number(form.connectsCost) : 0
+  const proposalsPreview = form.proposalCount ? Number(form.proposalCount) : 0
+
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <header>
-        <h1 className="text-2xl font-medium tracking-tight text-ink sm:text-3xl">New Upwork job</h1>
-        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate">
-          Paste the full job post. Relay extracts budget, competition, skills, and urgency signals,
-          then scores it on the Upwork rubric (out of 10) so you know whether it is worth the Connects.
+    <div className="mx-auto max-w-4xl space-y-5">
+      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Intake / Upwork Opportunity</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+          Qualify job posts before spending Connects.
+        </h1>
+        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+          Relay extracts budget and urgency, scores the job with rubric math, and keeps the apply decision explicit.
         </p>
-      </header>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <UpworkSignal label="Current score" value={`${score.total}/10`} />
+          <UpworkSignal label="Connects cost" value={String(connectsPreview)} />
+          <UpworkSignal label="Observed proposals" value={proposalsPreview > 0 ? String(proposalsPreview) : 'Unknown'} />
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link href="/upwork" className="inline-flex items-center gap-1.5 rounded border border-orange/30 bg-orange/10 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-text)]">
+            Back to job lanes
+          </Link>
+          <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded border border-line/30 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-mute)] hover:text-[color:var(--console-text)]">
+            Return to Relay Today
+          </Link>
+        </div>
+      </section>
 
       {error ? (
         <Alert variant="destructive">
@@ -182,7 +201,7 @@ export default function NewUpworkJobPage() {
         </Alert>
       ) : null}
 
-      <div>
+      <div className="space-y-5">
       <Step n={1} title="Paste the job post" hint="Title, description, budget, and any skills listed.">
           <Textarea
             ref={rawRef}
@@ -297,6 +316,15 @@ export default function NewUpworkJobPage() {
         </div>
       </Step>
       </div>
+    </div>
+  )
+}
+
+function UpworkSignal({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <p className="mt-1 text-[14px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }

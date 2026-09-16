@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Shield, ExternalLink, CheckCircle2, AlertTriangle } from 'lucide-react'
+import Link from 'next/link'
+import { Shield, ExternalLink, CheckCircle2, AlertTriangle, ArrowRight, Bell } from 'lucide-react'
 import { cn } from 'cn'
 import type { RepTodayView, TargetProgressView, ActivityType } from '@/lib/domain/types'
 
@@ -10,7 +11,7 @@ function StatusBadge({ status }: { status: string }) {
     completed: 'bg-status-success/10 text-status-success',
     on_track: 'bg-cobalt/10 text-cobalt',
     at_risk: 'bg-status-warning/10 text-status-warning',
-    missed: 'bg-red-100 text-red-600',
+    missed: 'bg-status-danger/10 text-status-danger',
   }
   const labels: Record<string, string> = {
     completed: 'Complete',
@@ -47,37 +48,101 @@ export function AssignedProfilesView() {
   if (error) return <div className="text-sm text-red-500">{error}</div>
   if (!data) return null
 
-  return (
-    <div className="space-y-6">
-      {/* Overall summary */}
-      <div className="rounded-xl border border-line bg-bone-raised p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium text-ink">Today&apos;s Summary</h2>
-          <StatusBadge status={data.overallStatus} />
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <p className="text-label text-stone">Target</p>
-            <p className="text-mono-medium text-xl font-medium text-ink">{data.totalTarget}</p>
-          </div>
-          <div>
-            <p className="text-label text-stone">Completed</p>
-            <p className="text-mono-medium text-xl font-medium text-ink">{data.totalCompleted}</p>
-          </div>
-          <div>
-            <p className="text-label text-stone">Remaining</p>
-            <p className={cn('text-mono-medium text-xl font-medium', data.totalRemaining > 0 ? 'text-orange' : 'text-status-success')}>
-              {data.totalRemaining}
-            </p>
-          </div>
-        </div>
-      </div>
+  const completionPct = data.totalTarget > 0
+    ? Math.min(100, Math.round((data.totalCompleted / data.totalTarget) * 100))
+    : 100
+  const urgentTargets = data.assignedIdentities
+    .flatMap((ai) => ai.targets.map((target) => ({ identityName: ai.identity.identityName, target })))
+    .filter((row) => row.target.status === 'at_risk' || row.target.status === 'missed')
 
-      {/* Per-identity breakdown */}
+  const nextAction =
+    urgentTargets[0]?.target.status === 'missed'
+      ? 'Recover missed targets first. Relay can reprioritize your queue on Today.'
+      : urgentTargets.length > 0
+        ? 'You have targets at risk. Clear those before adding new work.'
+        : 'You are on track. Keep executing from Today and close remaining actions.'
+
+  return (
+    <div className="space-y-5">
+      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Execution / Assigned Identities</p>
+        <h2 className="mt-2 text-[24px] leading-[1.08] tracking-[-0.03em] text-[color:var(--console-text)]">
+          {data.repName}, work from assigned identities only.
+        </h2>
+        <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">{nextAction}</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <Metric label="Overall" value={<StatusBadge status={data.overallStatus} />} />
+          <Metric label="Target" value={<span className="text-[20px] font-medium text-[color:var(--console-text)]">{data.totalTarget}</span>} />
+          <Metric label="Completed" value={<span className="text-[20px] font-medium text-[color:var(--console-text)]">{data.totalCompleted}</span>} />
+          <Metric
+            label="Remaining"
+            value={
+              <span
+                className={cn(
+                  'text-[20px] font-medium',
+                  data.totalRemaining > 0 ? 'text-orange-light' : 'text-status-success',
+                )}
+              >
+                {data.totalRemaining}
+              </span>
+            }
+          />
+        </div>
+        <div className="mt-4">
+          <div className="h-1.5 overflow-hidden rounded bg-line/30">
+            <div
+              className={cn(
+                'h-full rounded transition-all',
+                completionPct >= 100 ? 'bg-status-success' : 'bg-orange',
+              )}
+              style={{ width: `${Math.max(4, completionPct)}%` }}
+            />
+          </div>
+          <p className="mt-2 text-[12px] text-[color:var(--console-mute)]">{completionPct}% complete</p>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 rounded border border-orange/30 bg-orange/10 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-text)]"
+          >
+            Open Relay Today
+            <ArrowRight className="size-3.5" />
+          </Link>
+          <Link
+            href="/usage"
+            className="inline-flex items-center gap-1.5 rounded border border-line/30 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-mute)] hover:text-[color:var(--console-text)]"
+          >
+            Check usage budget
+          </Link>
+        </div>
+      </section>
+
+      {data.notifications.length > 0 ? (
+        <section className="srf-proof px-4 py-3">
+          <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
+            <Bell className="size-3.5 text-orange" />
+            Recent accountability signals
+          </div>
+          <ul className="mt-2 space-y-1">
+            {data.notifications.slice(0, 3).map((note) => (
+              <li key={note.id} className="text-[12px] text-graphite">
+                {note.title}: {note.body}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Identity Lanes</p>
+          <span className="text-[12px] text-graphite">{data.assignedIdentities.length} assigned</span>
+        </div>
       {data.assignedIdentities.map((ai) => (
-        <div key={ai.assignmentId} className="rounded-xl border border-line bg-bone-raised overflow-hidden">
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-line">
-            <div className={cn('flex size-9 items-center justify-center rounded-lg text-xs font-medium',
+        <article key={ai.assignmentId} className="overflow-hidden rounded border border-line bg-bone-raised">
+          <div className="flex items-center gap-3 border-b border-line px-4 py-3">
+            <div className={cn('flex size-9 items-center justify-center rounded text-xs font-medium',
               ai.identity.channel === 'linkedin' ? 'bg-[#0a66c2]/10 text-[#0a66c2]' :
               ai.identity.channel === 'upwork' ? 'bg-[#14a800]/10 text-[#14a800]' : 'bg-graphite/10 text-graphite'
             )}>
@@ -86,9 +151,9 @@ export function AssignedProfilesView() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-ink">{ai.identity.identityName}</span>
-                <span className="text-xs text-slate">— {ai.identity.channel}</span>
+                <span className="text-xs uppercase tracking-wide text-slate">{ai.identity.channel}</span>
               </div>
-              <p className="text-xs text-slate">{ai.identity.title}</p>
+              <p className="text-xs text-slate">{ai.identity.title || 'No title set'}</p>
             </div>
             {ai.identity.profileUrl && (
               <a href={ai.identity.profileUrl} target="_blank" rel="noopener" className="rounded p-1.5 text-slate hover:text-ink">
@@ -129,16 +194,26 @@ export function AssignedProfilesView() {
           ) : (
             <div className="px-4 py-3 text-xs text-slate">No targets set for this identity today.</div>
           )}
-        </div>
+        </article>
       ))}
+      </section>
 
       {data.assignedIdentities.length === 0 && (
-        <div className="rounded-xl border border-dashed border-line py-12 text-center">
+        <section className="rounded-xl border border-dashed border-line py-12 text-center">
           <Shield className="mx-auto size-8 text-slate mb-3" />
           <p className="text-sm font-medium text-ink mb-1">No profiles assigned</p>
           <p className="text-xs text-slate max-w-xs mx-auto">An admin hasn&apos;t assigned any revenue identities to you yet. Assigned identities will appear here with your daily targets.</p>
-        </div>
+        </section>
       )}
+    </div>
+  )
+}
+
+function Metric({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <div className="mt-1">{value}</div>
     </div>
   )
 }

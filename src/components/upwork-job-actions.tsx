@@ -25,6 +25,7 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
   const [copied, setCopied] = useState(false)
   const [selfCheckNote, setSelfCheckNote] = useState<string | null>(null)
   const [applied, setApplied] = useState(false)
+  const proofHint = matchedProofs[0]?.projectSummary ?? null
 
   const generate = useCallback(async () => {
     if (!selectedProfileId) {
@@ -108,14 +109,24 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
 
   return (
     <div className="space-y-4">
+      <div className="srf-proof px-4 py-3">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Proposal Workspace</p>
+        <p className="mt-1 text-[13px] text-graphite">
+          Generate from an assigned profile, then edit and mark applied after human review.
+        </p>
+        {proofHint && (
+          <p className="mt-2 text-[12px] text-ink">Relevant proof: {proofHint}</p>
+        )}
+      </div>
+
       {/* Profile selector */}
       {profiles.length > 0 && (
-        <div className="flex items-center gap-3">
-          <label className="text-sm text-graphite">Proposal as</label>
+        <div className="flex flex-wrap items-center gap-3 rounded border border-line bg-bone p-3">
+          <label className="text-[12px] font-medium text-graphite">Proposal as</label>
           <select
             value={selectedProfileId}
             onChange={(e) => setSelectedProfileId(e.target.value)}
-            className="rounded-lg border border-line bg-bone-raised px-3 py-1.5 text-sm text-ink"
+            className="rounded border border-line bg-bone-raised px-3 py-1.5 text-sm text-ink"
           >
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
@@ -131,7 +142,7 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
         <button
           onClick={() => void generate()}
           disabled={generating || !selectedProfileId}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-bone transition-all hover:bg-ink/90 active:scale-[0.97] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded bg-orange px-4 py-2 text-sm font-medium text-bone transition-all hover:bg-orange-dark active:scale-[0.97] disabled:opacity-50"
         >
           {generating ? (
             <>
@@ -146,7 +157,7 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
           <button
             onClick={() => void generate()}
             disabled={generating}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-line px-4 py-2.5 text-sm text-graphite transition-colors hover:bg-bone"
+            className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-2 text-sm text-graphite transition-colors hover:bg-bone"
           >
             <RefreshCw className="size-3.5" />
             Regenerate
@@ -164,7 +175,7 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
       {/* Proposal editor */}
       {proposal && (
         <div className="space-y-2">
-          <div className="rounded-xl border border-line/60 bg-bone-raised p-4">
+          <div className="rounded border border-line/60 bg-bone-raised p-4">
             <Textarea
               value={proposal}
               onChange={(e) => { setProposal(e.target.value); setEditing(true) }}
@@ -195,7 +206,7 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
               onClick={() => void markApplied()}
               disabled={applied}
               className={cn(
-                'ml-auto inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-all',
+                'ml-auto inline-flex items-center gap-1.5 rounded px-4 py-2 text-sm font-medium transition-all',
                 applied
                   ? 'bg-status-success/10 text-status-success'
                   : 'bg-status-success text-bone hover:bg-status-success/90',

@@ -19,16 +19,26 @@ export default async function ManageProfilesPage() {
   ])
 
   return (
-    <div className="space-y-8">
-      <header className="reveal-up space-y-2">
-        <p className="font-mono text-xs uppercase tracking-widest text-slate">Administration</p>
-        <h1 className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">Manage Profiles</h1>
-        <p className="max-w-xl text-sm leading-relaxed text-slate">
+    <div className="space-y-5">
+      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Admin / Profile Directory</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+          Centralize identity and proof records.
+        </h1>
+        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
           {isAdmin
-            ? 'Every rep\'s identities and proof items in one place. Real client names, CVs, and project history are shared business data, edited here deliberately rather than by whoever is logged in.'
-            : 'A read-only view of every rep\'s identities and proof items, for reference. Only an admin can add, edit, or remove this data.'}
+            ? 'Real client names, CVs, and project history are shared business assets. Edit them deliberately from this workspace.'
+            : 'This workspace is read-only for non-admin roles. Admin controls all profile and proof changes.'}
         </p>
-      </header>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <span className="rounded border border-orange/20 bg-orange/5 px-3 py-2 text-[12px] text-[color:var(--console-text)]">
+            {reps.length} reps in directory
+          </span>
+          <span className="rounded border border-orange/20 bg-orange/5 px-3 py-2 text-[12px] text-[color:var(--console-text)]">
+            {profiles.length} profiles tracked
+          </span>
+        </div>
+      </section>
 
       <ManageProfiles
         initialReps={reps}

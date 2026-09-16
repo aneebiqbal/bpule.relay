@@ -35,6 +35,10 @@ export default function SearchPage() {
   const [error, setError] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
 
+  const resultLabel = hasSearched ? `${results.length}` : '—'
+  const scopeLabel = entity === 'all' ? 'All records' : entity
+  const statusLabel = status || 'Any'
+
   async function search() {
     if (!query.trim()) return
     setLoading(true)
@@ -57,18 +61,24 @@ export default function SearchPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8">
-      {/* Header */}
-      <header className="reveal-up space-y-2">
-        <p className="font-mono text-xs uppercase tracking-widest text-slate">Global search</p>
-        <h1 className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">Archive</h1>
-        <p className="max-w-xl text-sm leading-relaxed text-slate">
-          Search across leads, proof items, and Upwork jobs.
+    <div className="mx-auto max-w-4xl space-y-5">
+      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Archive / Evidence Retrieval</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+          Search the operating record.
+        </h1>
+        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+          Find leads, jobs, and proof traces by keyword before deciding the next human action.
         </p>
-      </header>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <ArchiveSignal label="Results" value={resultLabel} />
+          <ArchiveSignal label="Scope" value={scopeLabel} />
+          <ArchiveSignal label="Status filter" value={statusLabel} />
+        </div>
+      </section>
 
       {/* Search controls */}
-      <div className="reveal-up stagger-1 space-y-4 rounded-2xl border border-line bg-paper p-5 sm:p-6">
+      <div className="reveal-up stagger-1 srf-proof space-y-4 px-4 py-4 sm:px-5">
         <div className="flex items-center gap-2 text-slate">
           <Search className="size-4" />
           <span className="font-mono text-xs uppercase tracking-widest">Search</span>
@@ -193,6 +203,15 @@ export default function SearchPage() {
           )}
         </section>
       ) : null}
+    </div>
+  )
+}
+
+function ArchiveSignal({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <p className="mt-1 text-[14px] font-medium capitalize text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { createScoutStore } from '@/lib/store'
 import { computeUpworkScore } from '@/lib/score/upwork-rubric'
 import { MessageCircle, DollarSign, Users, Tag, FileText } from 'lucide-react'
@@ -39,22 +40,39 @@ export default async function UpworkJobPage({
   const verdict = score.verdict ? VERDICT_STYLE[score.verdict] : VERDICT_STYLE.skip
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      {/* Header */}
-      <header className="reveal-up space-y-3">
-        <div className="flex items-center gap-3">
-          <span
-            className={cn(
-              'inline-flex items-center rounded-full px-3 py-1 text-xs font-medium',
-              verdict.bg,
-              verdict.text,
-            )}
-          >
-            {verdict.label}
-          </span>
-          <span className="font-mono text-xs text-slate">{job.connectsCost} Connects</span>
+    <div className="mx-auto max-w-4xl space-y-5">
+      <header className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Opportunity / Job Dossier</p>
+        <h1 className="mt-2 text-[30px] font-medium leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">{job.title}</h1>
+        <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">
+          Relay prepared a score and proposal lane. You decide whether to apply and when to spend Connects.
+        </p>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <HeroMetric label="Verdict" value={<span className={cn('rounded px-2 py-0.5 text-[11px] font-medium', verdict.bg, verdict.text)}>{verdict.label}</span>} />
+          <HeroMetric label="Score" value={<span className="text-[18px] font-medium text-[color:var(--console-text)]">{score.total} / 10</span>} />
+          <HeroMetric label="Connects" value={<span className="text-[18px] font-medium text-[color:var(--console-text)]">{job.connectsCost}</span>} />
         </div>
-        <h1 className="text-2xl font-medium tracking-tight text-ink sm:text-3xl">{job.title}</h1>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link href="/upwork" className="inline-flex items-center gap-1.5 rounded border border-orange/30 bg-orange/10 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-text)]">
+            Back to job lanes
+          </Link>
+          <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded border border-line/30 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-mute)] hover:text-[color:var(--console-text)]">
+            Return to Relay Today
+          </Link>
+        </div>
+
+        <div className="mt-4 flex items-center gap-3 text-[12px] text-[color:var(--console-mute)]">
+          <span>{job.messages.length} message{job.messages.length === 1 ? '' : 's'} logged</span>
+          <span>·</span>
+          <span>{job.proposalCount !== null ? `${job.proposalCount} proposals observed` : 'proposal count unknown'}</span>
+        </div>
+
+      </header>
+
+      <section className="reveal-up space-y-2">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Opportunity Snapshot</p>
         <div className="flex flex-wrap items-center gap-3 text-sm text-slate">
           {job.budgetMin && job.budgetMax ? (
             <span className="flex items-center gap-1">
@@ -75,10 +93,10 @@ export default async function UpworkJobPage({
             {job.proposalCount !== null ? `${job.proposalCount} proposals` : 'proposals unknown'}
           </span>
         </div>
-      </header>
+      </section>
 
       {/* Score card */}
-      <section className="reveal-up stagger-1 rounded-2xl border border-line bg-paper p-6">
+      <section className="reveal-up stagger-1 rounded border border-line bg-bone-raised p-6">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-5">
             <div className="relative flex size-16 items-center justify-center">
@@ -129,7 +147,7 @@ export default async function UpworkJobPage({
       </section>
 
       {/* Description */}
-      <section className="reveal-up stagger-2 rounded-2xl border border-line bg-paper p-6">
+      <section className="reveal-up stagger-2 rounded border border-line bg-bone-raised p-6">
         <h2 className="text-sm font-medium text-ink">Description</h2>
         <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink/80">{job.description}</p>
       </section>
@@ -137,7 +155,7 @@ export default async function UpworkJobPage({
       {/* Urgency + Skills side by side */}
       <div className="reveal-up stagger-3 grid gap-4 sm:grid-cols-2">
         {job.urgencySignal ? (
-          <div className="rounded-2xl border border-line bg-paper p-5">
+           <div className="rounded border border-line bg-bone-raised p-5">
             <h2 className="flex items-center gap-2 text-sm font-medium text-ink">
               <MessageCircle className="size-3.5 text-status-warning" />
               Urgency signal
@@ -147,7 +165,7 @@ export default async function UpworkJobPage({
         ) : null}
 
         {job.requiredSkills.length > 0 ? (
-          <div className="rounded-2xl border border-line bg-paper p-5">
+           <div className="rounded border border-line bg-bone-raised p-5">
             <h2 className="flex items-center gap-2 text-sm font-medium text-ink">
               <Tag className="size-3.5 text-slate" />
               Required skills
@@ -168,7 +186,7 @@ export default async function UpworkJobPage({
 
       {/* Messages */}
       {job.messages.length > 0 ? (
-        <section className="reveal-up stagger-4 rounded-2xl border border-line bg-paper p-6">
+        <section className="reveal-up stagger-4 rounded border border-line bg-bone-raised p-6">
           <h2 className="text-sm font-medium text-ink">Messages</h2>
           <ul className="mt-4 divide-y divide-line">
             {job.messages.map((m) => (
@@ -197,7 +215,7 @@ export default async function UpworkJobPage({
       ) : null}
 
       {/* Proposal actions */}
-      <section className="reveal-up stagger-5 space-y-4">
+      <section className="reveal-up stagger-5 space-y-4 rounded border border-line bg-bone-raised p-5">
         <h2 className="flex items-center gap-2 text-sm font-medium text-ink">
           <FileText className="size-3.5 text-cobalt" />
           Proposal
@@ -209,6 +227,15 @@ export default async function UpworkJobPage({
           matchedProofs={[]}
         />
       </section>
+    </div>
+  )
+}
+
+function HeroMetric({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <div className="mt-1">{value}</div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { createScoutStore } from '@/lib/store'
-import { Plus, Briefcase, ArrowRight, Clock, Users } from 'lucide-react'
+import { Plus, Briefcase, ArrowRight, Clock, Users, CheckCircle2 } from 'lucide-react'
 import { cn } from 'cn'
 
 
@@ -17,54 +17,35 @@ export default async function UpworkListPage() {
   const jobs = await store.listUpworkJobs()
 
   const applyCount = jobs.filter((j) => j.verdict === 'apply').length
+  const ifConnectsCount = jobs.filter((j) => j.verdict === 'apply_if_connects').length
   const totalConnects = jobs.reduce((sum, j) => sum + j.connectsCost, 0)
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <header className="reveal-up flex flex-wrap items-start justify-between gap-6">
-        <div className="space-y-2">
-          <p className="font-mono text-xs uppercase tracking-widest text-slate">Job pipeline</p>
-          <h1 className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">Upwork</h1>
-          <p className="text-sm text-slate">
-            Scored on budget, competition, skill match, and urgency.
-          </p>
+    <div className="space-y-5">
+      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <div className="flex flex-wrap items-start justify-between gap-6">
+          <div className="space-y-2">
+            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Opportunity / Upwork Lanes</p>
+            <h1 className="text-[30px] font-medium leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">Spend Connects where win probability is real.</h1>
+            <p className="max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+              Relay scores each job by fit, competition, and urgency so reps focus on high-return applications.
+            </p>
+          </div>
+          <Link
+            href="/upwork/new"
+            className="group inline-flex items-center gap-2.5 rounded-md bg-orange px-4 py-2 text-sm font-medium text-bone transition-all hover:bg-orange/90"
+          >
+            <Plus className="size-4 transition-transform duration-300 group-hover:rotate-90" aria-hidden="true" />
+            New job
+          </Link>
         </div>
-        <Link
-          href="/upwork/new"
-          className="group inline-flex items-center gap-2.5 rounded-2xl bg-orange px-5 py-3 text-sm font-medium text-bone transition-all duration-300 hover:bg-orange/90 hover:shadow-[0_8px_32px_-8px_color-mix(in_srgb,var(--orange)_40%,transparent)] active:scale-[0.98]"
-        >
-          <Plus className="size-4 transition-transform duration-300 group-hover:rotate-90" aria-hidden="true" />
-          New job
-        </Link>
-      </header>
-
-      {/* Quick stats */}
-      {jobs.length > 0 && (
-        <div className="reveal-up stagger-1 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-line bg-paper p-4">
-            <div className="flex items-center gap-2 text-slate">
-              <Briefcase className="size-3.5" />
-              <span className="font-mono text-[10px] uppercase tracking-widest">Total jobs</span>
-            </div>
-            <p className="mt-2 font-mono text-2xl font-medium text-ink">{jobs.length}</p>
-          </div>
-          <div className="rounded-2xl border border-line bg-paper p-4">
-            <div className="flex items-center gap-2 text-slate">
-              <Users className="size-3.5" />
-              <span className="font-mono text-[10px] uppercase tracking-widest">Worth applying</span>
-            </div>
-            <p className="mt-2 font-mono text-2xl font-medium text-status-success">{applyCount}</p>
-          </div>
-          <div className="rounded-2xl border border-line bg-paper p-4">
-            <div className="flex items-center gap-2 text-slate">
-              <Clock className="size-3.5" />
-              <span className="font-mono text-[10px] uppercase tracking-widest">Connects budget</span>
-            </div>
-            <p className="mt-2 font-mono text-2xl font-medium text-ink">{totalConnects}</p>
-          </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <ConsoleMetric icon={<Briefcase className="size-3.5" />} label="Total jobs" value={jobs.length} />
+          <ConsoleMetric icon={<CheckCircle2 className="size-3.5" />} label="Apply now" value={applyCount} />
+          <ConsoleMetric icon={<Users className="size-3.5" />} label="Apply if connects" value={ifConnectsCount} />
+          <ConsoleMetric icon={<Clock className="size-3.5" />} label="Connects at stake" value={totalConnects} />
         </div>
-      )}
+      </section>
 
       {/* Job list */}
       {jobs.length === 0 ? (
@@ -157,6 +138,26 @@ export default async function UpworkListPage() {
           </ul>
         </div>
       )}
+    </div>
+  )
+}
+
+function ConsoleMetric({
+  label,
+  value,
+  icon,
+}: {
+  label: string
+  value: number
+  icon: React.ReactNode
+}) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <div className="flex items-center gap-1.5 text-orange-light/80">
+        {icon}
+        <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em]">{label}</p>
+      </div>
+      <p className="mt-1 text-[20px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }

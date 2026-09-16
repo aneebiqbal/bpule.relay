@@ -7,19 +7,35 @@ export const dynamic = 'force-dynamic'
 export default async function ProfilesPage() {
   const store = await createScoutStore()
   const profiles = await store.listProfiles()
+  const linkedinCount = profiles.filter((profile) => profile.platform === 'linkedin').length
+  const upworkCount = profiles.filter((profile) => profile.platform === 'upwork').length
 
   return (
-    <div className="space-y-8">
-      <header className="reveal-up space-y-2">
-        <p className="font-mono text-xs uppercase tracking-widest text-slate">Identities</p>
-        <h1 className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">Profiles</h1>
-        <p className="max-w-xl text-sm leading-relaxed text-slate">
-          The identities you write from, per platform, plus the past projects each one can cite.
-          Proof items are matched to leads by tag overlap in code, never by a model call at draft
-          time. A client name only surfaces when permission is on file.
+    <div className="space-y-5">
+      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Identity / Execution Profiles</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+          Manage who your team writes as.
+        </h1>
+        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+          Profiles define sender voice and proof eligibility. Client names surface only when permission is on file.
         </p>
-      </header>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <Stat label="Total profiles" value={profiles.length} />
+          <Stat label="LinkedIn" value={linkedinCount} />
+          <Stat label="Upwork" value={upworkCount} />
+        </div>
+      </section>
       <ProfilesManager initialProfiles={profiles} />
+    </div>
+  )
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <p className="mt-1 text-[20px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }
