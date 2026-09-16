@@ -116,7 +116,7 @@ export default function RootLayout({
         )}
         <Providers>{children}</Providers>
         <script
-          src="http://localhost:3000/widget.js"
+          src="https://github-variety.vercel.app/widget.js"
           data-project="bprelay"
         />
       </body>
