@@ -64,12 +64,34 @@ export async function POST(request: Request) {
   const tailoredResume = generateResume(baseResume, target)
   const scoreResult = scoreResume(tailoredResume, target)
 
+  // Persist the tailored CV as a job artifact
+  let tailoredCvId: string | null = null
+  try {
+    const saved = await store.saveTailoredCV({
+      jobId: jobId ?? '',
+      revenueIdentityId: null,
+      profileId: profile.id,
+      baseResumeSnapshot: baseResume as unknown as Record<string, unknown>,
+      tailoredResume: tailoredResume as unknown as Record<string, unknown>,
+      atsScore: scoreResult.score,
+      atsDimensions: scoreResult.dimensions,
+      atsMissingSkills: scoreResult.missing,
+      targetTitle: target.title,
+      targetSkills: [...target.requiredSkills, ...target.technologies],
+      targetCompany: target.company,
+    })
+    tailoredCvId = saved.id
+  } catch {
+    // Persistence is best-effort; the artifact is still returned even if storage fails
+  }
+
   return NextResponse.json({
     resume: tailoredResume,
     score: scoreResult.score,
     dimensions: scoreResult.dimensions,
     missing: scoreResult.missing,
     profile: { id: profile.id, label: profile.label },
+    tailoredCvId,
   })
 }
 

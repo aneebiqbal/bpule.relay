@@ -422,6 +422,7 @@ describe('Conversation Engine', () => {
       { leadId: 'l1', leadCompany: 'Acme', contactName: 'Alex', replyText: 'This sounds interesting!', priorMessages: [{ id: 'm1', organizationId: 'org1', leadId: 'l1', repId: 'r1', type: 'dm', draftText: 'Original message', sentText: 'Original message', sentAt: '2024-01-01', modelUsed: null, createdAt: '2024-01-01' }], conversationStage: 'contacted', senderProfileId: null },
       analyzeReply('This sounds interesting!', { leadId: 'l1', leadCompany: 'Acme', contactName: 'Alex', replyText: 'This sounds interesting!', priorMessages: [], conversationStage: 'contacted', senderProfileId: null }),
     )
+    expect(context).toContain('Deterministic conversation summary')
     expect(context).toContain('Acme')
     expect(context).toContain('Original message')
   })

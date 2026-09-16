@@ -53,23 +53,26 @@ export async function POST(req: NextRequest) {
 
     const input: InboundReplyInput = {
       lead,
-      intelligence: body.intelligence as InboundReplyInput['intelligence'],
+      intelligence: body.intelligence && typeof body.intelligence === 'object'
+        ? (body.intelligence as InboundReplyInput['intelligence'])
+        : null,
       profile,
       proofItems,
       history: messages.filter((m: { sentText: string | null }) => m.sentText),
       styleCard,
     }
 
-    const userPrompt = buildInboundReplyUserPrompt(input)
+    const basePrompt = buildInboundReplyUserPrompt(input)
     // LongCat-first for inbound replies (standard mode default)
     const generationMode = body.generationMode === 'premium' ? 'premium' : 'standard'
     const chain = generationMode === 'premium' ? buildOpenaiDraftChain() : pickDraftChain()
 
     let text = ''
+    let attemptPrompt = basePrompt
     for (let attempt = 0; attempt < 3; attempt++) {
       text = await streamChatTextChain(chain, {
         system: INBOUND_REPLY_SYSTEM,
-        user: userPrompt,
+        user: attemptPrompt,
         temperature: 0.7,
         onChunk: () => {},
         onStatus: () => {},
@@ -77,18 +80,29 @@ export async function POST(req: NextRequest) {
 
       text = sanitizeInboundReply(text)
 
-      const check = validateInboundReply(text)
+      const check = validateInboundReply(text, input)
       if (check.valid) break
 
-      userPrompt.concat(`\n\nPREVIOUS ATTEMPT REJECTED: ${check.note}\nRewrite without this issue.`)
+      attemptPrompt = `${basePrompt}\n\nPREVIOUS ATTEMPT REJECTED: ${check.note}\nRewrite without this issue. Keep the reply grounded in selected identity/proof and answer any direct question first.`
     }
 
-    const finalCheck = validateInboundReply(text)
+    const finalCheck = validateInboundReply(text, input)
+
+    if (!finalCheck.valid) {
+      return NextResponse.json(
+        {
+          error: 'Reply failed quality gate.',
+          selfCheckPassed: false,
+          selfCheckNote: finalCheck.note,
+        },
+        { status: 422 },
+      )
+    }
 
     return NextResponse.json({
       text,
-      selfCheckPassed: finalCheck.valid,
-      selfCheckNote: finalCheck.note || null,
+      selfCheckPassed: true,
+      selfCheckNote: null,
     })
   } catch (err) {
     console.error('[inbound/reply] failed:', err)

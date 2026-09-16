@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { safeErrorResponse } from '@/lib/errors'
 import { computeScore } from '@/lib/score/rubric'
 import type { ExtractedLead, SignalId } from '@/lib/domain/types'
 import { createScoutStore } from '@/lib/store'
 import { classifyRoleFromTitle, mapLocationToRegion } from '@/lib/leads/targeting'
+import { evaluateProspectQualification } from '@/lib/prospect/qualification-gate'
 
 export async function POST(request: Request) {
   let body: Record<string, unknown>
@@ -21,13 +21,14 @@ export async function POST(request: Request) {
     )
   }
 
-  const signalType = body.signalType as SignalId
-  if (!signalType || signalType < 1 || signalType > 7) {
+  const signalTypeRaw = Number(body.signalType)
+  if (!Number.isInteger(signalTypeRaw) || signalTypeRaw < 1 || signalTypeRaw > 7) {
     return NextResponse.json(
       { error: 'signalType is required and must be 1 to 7.' },
       { status: 400 },
     )
   }
+  const signalType = signalTypeRaw as SignalId
 
   const signalEvidence =
     typeof body.signalEvidence === 'string' ? body.signalEvidence.trim() : ''
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
     signalType,
     signalEvidence,
     extractionConfidence:
-      typeof body.extractionConfidence === 'number'
+      typeof body.extractionConfidence === 'number' && Number.isFinite(body.extractionConfidence)
         ? Math.max(0, Math.min(100, Math.round(body.extractionConfidence)))
         : 50,
     confidenceNotes: Array.isArray(body.confidenceNotes)
@@ -111,6 +112,25 @@ export async function POST(request: Request) {
       ? (body.tags as unknown[]).filter((t): t is string => typeof t === 'string')
       : [],
   }
+
+  const qualification = evaluateProspectQualification({
+    extracted,
+    rawText:
+      typeof body.rawInput === 'string' && body.rawInput.trim()
+        ? body.rawInput.trim()
+        : null,
+  })
+  if (!qualification.qualificationEligibility) {
+    return NextResponse.json(
+      {
+        error: 'NOT ENOUGH INFORMATION. Add richer person, company, and opportunity context before saving this lead.',
+        qualification,
+      },
+      { status: 422 },
+    )
+  }
+
+  const allowPotentialDuplicate = body.allowPotentialDuplicate === true
 
   let store
   try {
@@ -142,6 +162,8 @@ export async function POST(request: Request) {
     signalEvidence,
     verbatimQuote: extracted.verbatimQuote,
     tags: extracted.tags,
+    score: score.total,
+    verdict: score.verdict,
     titleRaw: extracted.titleRaw ?? extracted.title,
     locationRaw: extracted.locationRaw ?? null,
     roleCategory: extracted.roleCategory ?? classifyRoleFromTitle(extracted.title),
@@ -153,24 +175,37 @@ export async function POST(request: Request) {
       recentPosts: extracted.recentPosts ?? [],
       confidenceNotes: extracted.confidenceNotes ?? [],
     },
+    allowPotentialDuplicate,
   })
 
   if (result.blocked) {
+    const duplicateKind = result.duplicateKind ?? 'hard'
     return NextResponse.json(
       {
         blocked: true,
+        duplicate: true,
+        duplicateKind,
         reason: result.reason,
         existingOwnerName: result.existingOwnerName,
+        existingLeadId: result.lead?.id ?? null,
+        existingLeadCompany: result.lead?.company ?? null,
+        canCreateSeparate: duplicateKind === 'potential',
       },
       { status: 409 },
     )
   }
 
   const lead = result.lead!
-  await store.updateLeadScore(lead.id, score)
 
   return NextResponse.json(
-    { lead: { ...lead, score: score.total, verdict: score.verdict }, score },
+    {
+      lead: {
+        ...lead,
+        score: lead.score ?? score.total,
+        verdict: lead.verdict ?? score.verdict,
+      },
+      score,
+    },
     { status: 201 },
   )
 }

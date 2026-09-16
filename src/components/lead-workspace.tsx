@@ -240,7 +240,7 @@ export function LeadWorkspace({
   const [variantDraft, setVariantDraft] = useState<import('@/lib/ai/draft').DraftVariant | null>(null)
   const [showVariant, setShowVariant] = useState(false)
   const [generationMode, setGenerationMode] = useState<GenerationMode>('standard')
-  const [timelineOpen, setTimelineOpen] = useState(false)
+  const [timelineOpen, setTimelineOpen] = useState(true)
   const [capturedReplyText, setCapturedReplyText] = useState('')
 
   const streamBuffer = useRef('')
@@ -250,13 +250,17 @@ export function LeadWorkspace({
   const draftText = currentDraft.text
 
   const signal = signalById(lead.signalType)
-  const hasReply = lead.outcomes.some((o) => o.stage === 'replied')
+  const hasReply = lead.messages.some((m) => m.type === 'reply' && m.sentText) || lead.outcomes.some((o) => o.stage === 'replied')
   const hasPriorSend = lead.messages.some((m) => m.sentText && m.sentAt)
   // ONE follow-up, ever. A lead already in 'followed_up' status has used its
   // one follow-up and is permanently locked out of another — status
   // 'followed_up' is deliberately NOT in the eligible set below.
   const followupAlreadyUsed = lead.status === 'followed_up'
   const followupEligible = lead.status === 'contacted' && hasPriorSend && !followupAlreadyUsed
+
+  // Reply is available when: a reply outcome exists, user pasted reply text,
+  // or this is an inbound-first lead (client contacted us)
+  const replyAvailable = hasReply || Boolean(capturedReplyText) || lead.direction === 'inbound'
 
   const artifactDisabled: Record<ArtifactId, string | null> = {
     dm: null,
@@ -269,7 +273,7 @@ export function LeadWorkspace({
         : lead.status === 'new'
           ? 'Eligible once this lead is contacted.'
           : 'Eligible once a first message has been sent.',
-    reply: !hasReply ? 'Appears when a reply is on file.' : null,
+    reply: !replyAvailable ? 'Paste the client reply above to enable.' : null,
   }
 
   const activeProof = proofList.find((p) => p.id === matchedProofId) ?? proofList[0] ?? null
@@ -583,7 +587,7 @@ export function LeadWorkspace({
               })}
             </div>
 
-            {artifact === 'reply' && hasReply && (
+            {artifact === 'reply' && (
               <div className="mt-4 rounded-xl border border-line/60 bg-bone/30 p-3">
                 <Label htmlFor="reply-text" className="text-xs text-graphite">Prospect&apos;s reply (paste what they wrote)</Label>
                 <Textarea id="reply-text" value={capturedReplyText} onChange={(e) => setCapturedReplyText(e.target.value)}
@@ -742,52 +746,84 @@ export function LeadWorkspace({
   )
 }
 
+function dateDayLabel(isoString: string): string {
+  const d = new Date(isoString)
+  const now = new Date()
+  const dDay = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const diffMs = nowDay.getTime() - dDay.getTime()
+  const diffDays = Math.round(diffMs / 86_400_000)
+  const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  if (diffDays === 0) return `Today · ${timeStr}`
+  if (diffDays === 1) return `Yesterday · ${timeStr}`
+  if (diffDays < 7) return `${d.toLocaleDateString([], { weekday: 'long' })} · ${timeStr}`
+  return `${d.toLocaleDateString()} · ${timeStr}`
+}
+
+type TimelineEvent = { id: string; kind: 'outcome' | 'message'; date: string; sortKey: string; label: string; detail?: string }
+
+function groupByDate(events: TimelineEvent[]): Array<{ label: string; events: TimelineEvent[] }> {
+  const groups: Array<{ label: string; events: TimelineEvent[] }> = []
+  let currentLabel = ''
+  for (const e of events) {
+    const d = new Date(e.date)
+    const now = new Date()
+    const dDay = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const diffDays = Math.round((nowDay.getTime() - dDay.getTime()) / 86_400_000)
+    let label: string
+    if (diffDays === 0) label = 'Today'
+    else if (diffDays === 1) label = 'Yesterday'
+    else if (diffDays < 7) label = d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })
+    else label = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+    if (label !== currentLabel) {
+      groups.push({ label, events: [e] })
+      currentLabel = label
+    } else {
+      groups[groups.length - 1].events.push(e)
+    }
+  }
+  return groups
+}
+
 const Timeline = memo(function Timeline({ lead }: { lead: LeadDetail }) {
+  const events: TimelineEvent[] = [
+    ...lead.outcomes.map((o) => ({ id: o.id, kind: 'outcome' as const, date: o.occurredAt, sortKey: o.occurredAt, label: o.stage, detail: undefined })),
+    ...lead.messages.map((m) => ({ id: m.id, kind: 'message' as const, date: m.sentAt ?? m.createdAt, sortKey: m.sentAt ?? m.createdAt, label: m.type, detail: m.sentText ?? m.draftText ?? undefined })),
+  ].sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+
+  const groups = groupByDate(events)
+
   return (
     <div>
       <h2 className="text-sm font-medium text-ink">Timeline</h2>
-      {lead.messages.length === 0 && lead.outcomes.length === 0 ? (
+      {events.length === 0 ? (
         <p className="mt-2 text-sm text-graphite">Nothing here yet.</p>
       ) : (
-        <ul className="mt-3 space-y-0">
-          {[...lead.outcomes]
-            .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
-            .map((o) => (
-              <li key={o.id} className="relative flex items-start gap-3 py-3">
-                <div className="flex flex-col items-center">
-                  <span className="size-2 rounded-full bg-orange" aria-hidden="true" />
-                  <div className="w-px flex-1 bg-line" />
-                </div>
-                <div className="pb-3">
-                  <span className="text-sm text-ink">{o.stage}</span>
-                  <span className="ml-2 text-mono-medium text-xs text-graphite">
-                    {new Date(o.occurredAt).toLocaleDateString()}{' '}
-                    {new Date(o.occurredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-              </li>
-            ))}
-          {[...lead.messages]
-            .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-            .map((m) => (
-              <li key={m.id} className="relative flex items-start gap-3 py-3">
-                <div className="flex flex-col items-center">
-                  <span className="size-2 rounded-full bg-ink/20" aria-hidden="true" />
-                  <div className="w-px flex-1 bg-line" />
-                </div>
-                <div className="pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-ink">{m.type}</span>
-                    <span className="text-mono-medium text-xs text-graphite">
-                      {m.sentAt ? `sent ${new Date(m.sentAt).toLocaleDateString()}` : `drafted ${new Date(m.createdAt).toLocaleDateString()}`}
-                    </span>
-                  </div>
-                  {m.sentText ? <p className="mt-1 text-xs leading-relaxed text-graphite">{m.sentText}</p>
-                    : m.draftText ? <p className="mt-1 text-xs leading-relaxed text-graphite">{m.draftText}</p> : null}
-                </div>
-              </li>
-            ))}
-        </ul>
+        <div className="mt-3 space-y-4">
+          {groups.map((group) => (
+            <div key={group.label}>
+              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">{group.label}</p>
+              <ul className="mt-1 space-y-0">
+                {group.events.map((e) => (
+                  <li key={e.id} className="relative flex items-start gap-3 py-2">
+                    <div className="flex flex-col items-center">
+                      <span className={cn('size-2 rounded-full', e.kind === 'outcome' ? 'bg-orange' : 'bg-ink/20')} aria-hidden="true" />
+                      <div className="w-px flex-1 bg-line" />
+                    </div>
+                    <div className="pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm capitalize text-ink">{e.label}</span>
+                        <span className="text-mono-medium text-xs text-graphite">{dateDayLabel(e.date)}</span>
+                      </div>
+                      {e.detail && <p className="mt-1 text-xs leading-relaxed text-graphite">{e.detail}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )

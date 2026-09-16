@@ -1354,3 +1354,31 @@ export interface NextAction {
   entityId: string
   blockedReason: string | null
 }
+
+// ── Tailored CV persistence ────────────────────────────────────────────────
+
+export type TailoredCVStatus = 'generated' | 'applied' | 'archived'
+
+export interface TailoredCV {
+  id: string
+  organizationId: string
+  jobId: string
+  revenueIdentityId: string | null
+  profileId: string | null
+  baseCvPath: string | null
+  baseResumeSnapshot: Record<string, unknown>
+  tailoredResume: Record<string, unknown>
+  tailoredCvPath: string | null
+  atsScore: number
+  atsDimensions: Array<{ label: string; score: number; max: number; note: string }>
+  atsMissingSkills: string[]
+  targetTitle: string | null
+  targetSkills: string[]
+  targetCompany: string | null
+  status: TailoredCVStatus
+  proposalText: string | null
+  generatedAt: string
+  appliedAt: string | null
+  createdAt: string
+  updatedAt: string
+}

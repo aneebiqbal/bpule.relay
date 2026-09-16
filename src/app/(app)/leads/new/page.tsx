@@ -24,6 +24,7 @@ import { ScoreRing } from '@/components/score-ring'
 import { signalById, SIGNALS } from '@/lib/score/signals'
 import { computeScore } from '@/lib/score/rubric'
 import type { OrganizationRulebook } from '@/lib/domain/types'
+import { evaluateProspectQualification } from '@/lib/prospect/qualification-gate'
 
 const DEFAULT_RULEBOOK: OrganizationRulebook = {
   organizationId: '',
@@ -152,8 +153,16 @@ export default function NewLeadPage() {
   const [candidates, setCandidates] = useState<ExtractedLead[]>([])
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<{ company?: string; signalEvidence?: string }>({})
-  const [blocked, setBlocked] = useState<{ reason?: string; existingOwnerName?: string } | null>(null)
+  const [blocked, setBlocked] = useState<{
+    duplicateKind?: 'hard' | 'potential'
+    reason?: string
+    existingOwnerName?: string
+    existingLeadId?: string | null
+    existingLeadCompany?: string | null
+    canCreateSeparate?: boolean
+  } | null>(null)
   const rawRef = useRef<HTMLTextAreaElement | null>(null)
+  const saveInFlightRef = useRef(false)
 
   const liveRegion = useMemo(
     () => mapLocationToRegion(form.locationRaw.trim() || null),
@@ -170,12 +179,11 @@ export default function NewLeadPage() {
 
   const activeRulebook = orgRulebook ?? DEFAULT_RULEBOOK
 
-  const score = useMemo(() => {
-    const lead: ExtractedLead = {
+  const extractedLead = useMemo<ExtractedLead>(() => ({
       name: form.contactName.trim() || null,
       title: form.contactTitle.trim() || null,
       titleRaw: form.titleRaw.trim() || null,
-      company: form.company.trim() || 'Unnamed company',
+      company: form.company.trim() || 'Unknown company',
       url: form.url.trim() || null,
       locationRaw: form.locationRaw.trim() || null,
       aboutSummary: form.aboutSummary.trim() || null,
@@ -189,11 +197,17 @@ export default function NewLeadPage() {
       confidenceNotes: form.confidenceNotes,
       verbatimQuote: form.verbatimQuote.trim() || null,
       tags: form.tags,
-    }
-    return computeScore(lead, activeRulebook)
-  }, [form, liveRegion, activeRulebook])
+    }), [form, liveRegion])
+
+  const qualification = useMemo(
+    () => evaluateProspectQualification({ extracted: extractedLead, rawText: form.rawInput.trim() || null }),
+    [extractedLead, form.rawInput],
+  )
+
+  const score = useMemo(() => computeScore(extractedLead, activeRulebook), [extractedLead, activeRulebook])
 
   const hasContent = Boolean(form.signalEvidence.trim() || form.company.trim())
+  const canSaveLead = hasContent && qualification.qualificationEligibility
   const weakFields = new Set(form.confidenceNotes.map(noteField).filter(Boolean))
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -292,10 +306,16 @@ export default function NewLeadPage() {
     }
   }
 
-  async function save() {
+  async function save(allowPotentialDuplicate = false) {
+    if (saving || saveInFlightRef.current) return
+    if (!qualification.qualificationEligibility) {
+      setError('NOT ENOUGH INFORMATION. Add richer person, company, and opportunity context before saving this lead.')
+      return
+    }
     const companyOk = validateField('company')
     const evidenceOk = validateField('signalEvidence')
     if (!companyOk || !evidenceOk) return
+    saveInFlightRef.current = true
     setSaving(true)
     setError(null)
     setBlocked(null)
@@ -321,11 +341,20 @@ export default function NewLeadPage() {
           signalEvidence: form.signalEvidence.trim(),
           verbatimQuote: form.verbatimQuote.trim() || null,
           tags: form.tags,
+          rawInput: form.rawInput.trim() || null,
+          allowPotentialDuplicate,
         }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (res.status === 409) {
-        setBlocked({ reason: data.reason, existingOwnerName: data.existingOwnerName })
+        setBlocked({
+          duplicateKind: data.duplicateKind === 'potential' ? 'potential' : 'hard',
+          reason: data.reason,
+          existingOwnerName: data.existingOwnerName,
+          existingLeadId: data.existingLeadId ?? null,
+          existingLeadCompany: data.existingLeadCompany ?? null,
+          canCreateSeparate: Boolean(data.canCreateSeparate),
+        })
         return
       }
       if (!res.ok) throw new Error(data.error ?? 'Failed to save lead.')
@@ -334,11 +363,16 @@ export default function NewLeadPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save lead.')
     } finally {
+      saveInFlightRef.current = false
       setSaving(false)
     }
   }
 
-  const quickVerdict = extracted ? score.verdict.replace(/_/g, ' ') : 'awaiting extract'
+  const quickVerdict = extracted
+    ? qualification.qualificationEligibility
+      ? score.verdict.replace(/_/g, ' ')
+      : 'not enough info'
+    : 'awaiting extract'
   const confidenceLabel = extracted ? `${form.extractionConfidence}/100` : '—'
 
   return (
@@ -375,11 +409,27 @@ export default function NewLeadPage() {
       ) : null}
 
       {blocked ? (
-        <Alert variant="destructive">
-          <AlertTitle>Duplicate blocked by the dedupe gate</AlertTitle>
+        <Alert variant={blocked.duplicateKind === 'potential' ? 'default' : 'destructive'}>
+          <AlertTitle>
+            {blocked.duplicateKind === 'potential'
+              ? 'Potential duplicate found'
+              : 'Hard duplicate blocked'}
+          </AlertTitle>
           <AlertDescription>
             {blocked.reason}{' '}
             {blocked.existingOwnerName ? `Owner on file: ${blocked.existingOwnerName}.` : ''}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {blocked.existingLeadId ? (
+                <Button variant="secondary" size="sm" onClick={() => router.push(`/leads/${blocked.existingLeadId}`)}>
+                  View existing
+                </Button>
+              ) : null}
+              {blocked.canCreateSeparate ? (
+                <Button variant="outline" size="sm" onClick={() => void save(true)} disabled={saving}>
+                  Create separate
+                </Button>
+              ) : null}
+            </div>
           </AlertDescription>
         </Alert>
       ) : null}
@@ -486,12 +536,23 @@ export default function NewLeadPage() {
               <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-4">
-                    <ScoreRing score={score.total} size={72} />
+                    {qualification.qualificationEligibility ? <ScoreRing score={score.total} size={72} /> : null}
                     <div>
-                      <VerdictWord verdict={score.verdict} />
-                      <p className="mt-1 max-w-sm text-sm leading-relaxed text-ink">
-                        {verdictCall(score.verdict)}
-                      </p>
+                      {qualification.qualificationEligibility ? (
+                        <>
+                          <VerdictWord verdict={score.verdict} />
+                          <p className="mt-1 max-w-sm text-sm leading-relaxed text-ink">
+                            {verdictCall(score.verdict)}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium text-status-warning">Not enough information to score this lead.</p>
+                          <p className="mt-1 max-w-sm text-sm leading-relaxed text-ink">
+                            Add meaningful person, company, and opportunity evidence before saving.
+                          </p>
+                        </>
+                      )}
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate">
                         <span
                           className={cn(
@@ -511,52 +572,68 @@ export default function NewLeadPage() {
                         <span>{ROLE_LABELS[form.roleCategory]}</span>
                         <span>{REGION_LABELS[liveRegion]}</span>
                       </div>
+                      {!qualification.qualificationEligibility ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-status-warning">
+                          <span>Input quality {qualification.inputQuality}/100</span>
+                          <span>Extractability {qualification.extractability}/100</span>
+                          <span>Evidence {qualification.evidenceCoverage}/100</span>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                   <Button
                     variant="orange"
                     size="lg"
                     onClick={() => void save()}
-                    disabled={saving || extracting || !hasContent}
+                    disabled={saving || extracting || !canSaveLead}
                     loading={saving}
                     className="w-full sm:w-auto"
                   >
-                    {saving ? 'Saving' : 'Save lead'}
+                    {saving ? 'Saving' : canSaveLead ? 'Save lead' : 'Lead not eligible'}
                     {!saving ? <ArrowRight className="size-4" aria-hidden="true" /> : null}
                   </Button>
                 </div>
 
-                <ul className="mt-5 grid gap-x-6 gap-y-2 border-t border-line pt-4 sm:grid-cols-2">
-                  {score.breakdown.map((item) => {
-                    const frac = item.max > 0 ? item.points / item.max : 0
-                    return (
-                      <li key={item.category + item.label} className="space-y-1">
-                        <div className="flex items-baseline justify-between gap-3 text-sm">
-                          <span className={cn(frac <= 0 ? 'text-ink' : 'text-slate')}>
-                            {item.label}
-                          </span>
-                          <span className="font-mono text-xs text-ink">
-                            {item.points}/{item.max}
-                          </span>
-                        </div>
-                        <div className="h-1 overflow-hidden rounded-full bg-bone">
-                          <div
-                            className={cn(
-                              'h-full rounded-full',
-                              frac >= 1 ? 'bg-status-success' : frac > 0 ? 'bg-orange' : 'bg-line',
-                            )}
-                            style={{ width: `${Math.max(frac * 100, frac > 0 ? 8 : 0)}%` }}
-                          />
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
+                {qualification.qualificationEligibility ? (
+                  <ul className="mt-5 grid gap-x-6 gap-y-2 border-t border-line pt-4 sm:grid-cols-2">
+                    {score.breakdown.map((item) => {
+                      const frac = item.max > 0 ? item.points / item.max : 0
+                      return (
+                        <li key={item.category + item.label} className="space-y-1">
+                          <div className="flex items-baseline justify-between gap-3 text-sm">
+                            <span className={cn(frac <= 0 ? 'text-ink' : 'text-slate')}>
+                              {item.label}
+                            </span>
+                            <span className="font-mono text-xs text-ink">
+                              {item.points}/{item.max}
+                            </span>
+                          </div>
+                          <div className="h-1 overflow-hidden rounded-full bg-bone">
+                            <div
+                              className={cn(
+                                'h-full rounded-full',
+                                frac >= 1 ? 'bg-status-success' : frac > 0 ? 'bg-orange' : 'bg-line',
+                              )}
+                              style={{ width: `${Math.max(frac * 100, frac > 0 ? 8 : 0)}%` }}
+                            />
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                ) : null}
 
                 {score.gates && score.gates.length > 0 ? (
                   <Alert className="mt-4">
                     <AlertTitle>Quality gate applied</AlertTitle>
                     <AlertDescription>{score.gates.join(' ')}</AlertDescription>
+                  </Alert>
+                ) : null}
+
+                {!qualification.qualificationEligibility && qualification.reasons.length > 0 ? (
+                  <Alert className="mt-4" variant="destructive">
+                    <AlertTitle>Qualification blocked</AlertTitle>
+                    <AlertDescription>{qualification.reasons.slice(0, 3).join(' ')}</AlertDescription>
                   </Alert>
                 ) : null}
 

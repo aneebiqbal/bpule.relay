@@ -25,11 +25,18 @@ export function StudioQuickCapture({
   const [angles, setAngles] = useState<QuickCaptureAngle[]>([])
   const [parsing, setParsing] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [writingAngleKey, setWritingAngleKey] = useState<string | null>(null)
   const [showInput, setShowInput] = useState(initiallyOpen)
+  const [error, setError] = useState('')
+
+  const actionsLocked = parsing || generating
 
   const handleWriteAngle = async (angle: QuickCaptureAngle) => {
+    if (actionsLocked) return
     onSelectAngle?.(angle)
     setGenerating(true)
+    setWritingAngleKey(`${angle.title}-${angle.angle}`)
+    setError('')
     try {
       const res = await fetch('/api/content/generate-draft', {
         method: 'POST',
@@ -44,29 +51,46 @@ export function StudioQuickCapture({
           },
         }),
       })
-      const data = await res.json()
-      if (data.draftId) {
-        router.push(`/studio/drafts/${data.draftId}`)
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.error || `Could not create draft (${res.status})`)
       }
-    } catch {
-      // Keep UI stable if request fails.
+      if (data?.draftId) {
+        router.push(`/studio/drafts/${data.draftId}`)
+        return
+      }
+      throw new Error(data?.error || 'Could not create draft from this angle.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create draft from this angle.')
     }
     setGenerating(false)
+    setWritingAngleKey(null)
   }
 
   const handleSubmit = async () => {
-    if (input.trim().length < 5) return
+    if (input.trim().length < 5 || actionsLocked) return
     setParsing(true)
+    setError('')
     try {
       const res = await fetch('/api/content/intelligence/v2/quick-capture', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ personaId, input: input.trim() }),
       })
-      const data = await res.json()
-      setAngles(data.angles ?? [])
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.error || `Could not analyze this note (${res.status})`)
+      }
+      const nextAngles = Array.isArray(data?.angles) ? data.angles : []
+      if (nextAngles.length === 0) {
+        setAngles(parseLocal(input.trim()))
+        setError('No clear angles found yet. Showing fallback suggestions.')
+      } else {
+        setAngles(nextAngles)
+      }
     } catch {
       setAngles(parseLocal(input.trim()))
+      setError('Could not analyze right now. Showing local fallback angles.')
     }
     setParsing(false)
   }
@@ -98,7 +122,9 @@ export function StudioQuickCapture({
             setShowInput(false)
             setInput('')
             setAngles([])
+            setError('')
           }}
+          disabled={actionsLocked}
           className="rounded border border-line px-2 py-1 text-[11px] text-graphite hover:text-ink"
         >
           Close
@@ -123,7 +149,7 @@ export function StudioQuickCapture({
         <button
           type="button"
           onClick={() => void handleSubmit()}
-          disabled={input.trim().length < 5 || parsing}
+          disabled={input.trim().length < 5 || actionsLocked}
           className="inline-flex items-center gap-1 rounded bg-cobalt px-3 py-1.5 text-[12px] font-medium text-bone disabled:opacity-50"
         >
           <Sparkles className="size-3.5" />
@@ -141,10 +167,12 @@ export function StudioQuickCapture({
               <button
                 type="button"
                 onClick={() => void handleWriteAngle(angle)}
-                disabled={generating}
+                disabled={actionsLocked}
                 className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-cobalt"
               >
-                Write {String(index + 1).padStart(2, '0')}
+                {generating && writingAngleKey === `${angle.title}-${angle.angle}`
+                  ? 'Starting...'
+                  : `Write ${String(index + 1).padStart(2, '0')}`}
                 <ArrowRight className="size-3" />
               </button>
             </div>
@@ -153,11 +181,16 @@ export function StudioQuickCapture({
           <button
             type="button"
             onClick={() => setAngles([])}
+            disabled={actionsLocked}
             className="text-[11px] text-graphite underline underline-offset-2"
           >
             Something different
           </button>
         </div>
+      )}
+
+      {error && (
+        <p className="mt-3 rounded border border-status-danger/30 bg-status-danger/5 px-3 py-2 text-[11px] text-status-danger">{error}</p>
       )}
     </div>
   )

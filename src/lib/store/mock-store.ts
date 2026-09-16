@@ -40,6 +40,7 @@ import type {
   ContentJourneyEntry,
   ContentQuickCapture,
   QuickCaptureAngle,
+  TailoredCV,
   TrendingAngle,
   UpworkJob,
   UpworkMessage,
@@ -497,6 +498,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
   ]
   const upworkMessages: UpworkMessage[] = []
+  const tailoredCvs: TailoredCV[] = []
   const pushSubs: PushSubscription[] = []
   const notifications: NotificationLogEntry[] = [
     {
@@ -1401,6 +1403,49 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         modelUsed: null,
         createdAt: new Date().toISOString(),
       })
+    },
+    async saveTailoredCV(input) {
+      const cv: TailoredCV = {
+        id: nextId('tcv'),
+        organizationId: DEMO_ORG_ID,
+        jobId: input.jobId,
+        revenueIdentityId: input.revenueIdentityId ?? null,
+        profileId: input.profileId ?? null,
+        baseCvPath: input.baseCvPath ?? null,
+        baseResumeSnapshot: input.baseResumeSnapshot ?? {},
+        tailoredResume: input.tailoredResume,
+        tailoredCvPath: null,
+        atsScore: input.atsScore,
+        atsDimensions: input.atsDimensions ?? [],
+        atsMissingSkills: input.atsMissingSkills ?? [],
+        targetTitle: input.targetTitle ?? null,
+        targetSkills: input.targetSkills ?? [],
+        targetCompany: input.targetCompany ?? null,
+        status: 'generated',
+        proposalText: input.proposalText ?? null,
+        generatedAt: new Date().toISOString(),
+        appliedAt: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      tailoredCvs.unshift(cv)
+      return cv
+    },
+    async getTailoredCV(id) {
+      return tailoredCvs.find((c) => c.id === id) ?? null
+    },
+    async listTailoredCVsForJob(jobId) {
+      return tailoredCvs
+        .filter((c) => c.jobId === jobId)
+        .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))
+    },
+    async markTailoredCVApplied(id) {
+      const cv = tailoredCvs.find((c) => c.id === id)
+      if (cv) {
+        cv.status = 'applied'
+        cv.appliedAt = new Date().toISOString()
+        cv.updatedAt = new Date().toISOString()
+      }
     },
     async logCsvImport(input) {
       const imp: CsvImport = {

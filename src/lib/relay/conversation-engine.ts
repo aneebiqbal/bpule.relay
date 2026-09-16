@@ -27,6 +27,44 @@ export interface ReplyAnalysis {
   nextBestAction: string
 }
 
+export function buildDeterministicConversationSummary(context: ReplyContext): string {
+  const prior = [...context.priorMessages]
+    .filter((m) => m.sentText)
+    .sort((a, b) => (a.sentAt ?? a.createdAt).localeCompare(b.sentAt ?? b.createdAt))
+  const lastOutbound = prior.at(-1)?.sentText?.trim() ?? ''
+  const questions = (context.replyText.match(/[^?\n]+\?/g) ?? [])
+    .map((q) => q.trim())
+    .filter((q) => q.length > 4)
+    .slice(0, 3)
+  const establishedFacts = Array.from(
+    new Set(
+      prior
+        .flatMap((m) => splitSentences(m.sentText ?? ''))
+        .filter((s) => /\b(i|we)\b/i.test(s))
+        .filter((s) => /\b(experience|years|worked|built|shipped|portfolio|project)\b/i.test(s))
+        .map((s) => clipSentence(s, 140)),
+    ),
+  ).slice(0, 3)
+
+  const lines = [
+    `- Stage now: ${context.conversationStage}`,
+    `- Prior outbound count: ${prior.length}`,
+    `- Direct questions in latest message: ${questions.length}`,
+  ]
+
+  if (lastOutbound) {
+    lines.push(`- Last outbound message: ${clipSentence(lastOutbound, 160)}`)
+  }
+  if (questions.length > 0) {
+    lines.push(`- Questions to answer first: ${questions.join(' | ')}`)
+  }
+  if (establishedFacts.length > 0) {
+    lines.push(`- Already shared bio/proof facts: ${establishedFacts.join(' | ')}`)
+  }
+
+  return lines.join('\n')
+}
+
 /**
  * Analyze an incoming reply from a prospect.
  */
@@ -190,6 +228,10 @@ export function buildConversationContext(
 ): string {
   const parts: string[] = []
 
+  parts.push(`## Deterministic conversation summary (pre-generation)`)
+  parts.push(buildDeterministicConversationSummary(context))
+  parts.push(``)
+
   parts.push(`## Conversation Context`)
   parts.push(`Company: ${context.leadCompany}`)
   if (context.contactName) parts.push(`Contact: ${context.contactName}`)
@@ -228,4 +270,16 @@ export function buildConversationContext(
   }
 
   return parts.join('\n')
+}
+
+function splitSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+}
+
+function clipSentence(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text
+  return `${text.slice(0, maxLen - 1).trim()}...`
 }

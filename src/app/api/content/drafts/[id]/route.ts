@@ -45,7 +45,7 @@ export async function PATCH(
   const body = await req.json().catch(() => null)
   const caption = body?.caption as string | undefined
 
-  if (!caption) return NextResponse.json({ error: 'caption required' }, { status: 400 })
+  if (typeof caption !== 'string') return NextResponse.json({ error: 'caption must be a string' }, { status: 400 })
 
   const store = await createScoutStore()
 

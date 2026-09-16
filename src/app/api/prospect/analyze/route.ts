@@ -12,7 +12,8 @@ import { mergeProofMatches } from '@/lib/ai/proof-match'
 import { classifyLeadFact } from '@/lib/relay/profile-intelligence'
 import { scoreProspect } from '@/lib/prospect/intelligence'
 import { buildConnectionNoteStrategy } from '@/lib/prospect/strategy'
-import { validateAndRepair, CONNECTION_NOTE_MAX_CHARS } from '@/lib/prospect/connection-note'
+import { validateAndRepair, normalizeGreeting, CONNECTION_NOTE_MAX_CHARS } from '@/lib/prospect/connection-note'
+import { evaluateProspectQualification } from '@/lib/prospect/qualification-gate'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
 
 /**
@@ -52,7 +53,34 @@ export async function POST(request: Request) {
 
   const explicitProfileId = body.profileId ?? null
 
+  const minimumExtracted: ExtractedLead = {
+    name: null,
+    title: null,
+    titleRaw: null,
+    company: 'Unknown company',
+    url: null,
+    locationRaw: null,
+    aboutSummary: null,
+    experienceSummary: null,
+    recentPosts: [],
+    roleCategory: 'other',
+    marketRegion: 'unknown',
+    signalType: 7,
+    signalEvidence: rawText,
+    extractionConfidence: 0,
+    confidenceNotes: [],
+    verbatimQuote: null,
+    tags: [],
+  }
+  const precheck = evaluateProspectQualification({ rawText, extracted: minimumExtracted })
+
   return sseStream(async (emit) => {
+    if (precheck.inputHardFail) {
+      emit({ type: 'status', message: 'Not enough context for a reliable qualification score.' })
+      emitInsufficientDone(emit, minimumExtracted, precheck)
+      return
+    }
+
     let store = null
     try {
       store = await createScoutStore()
@@ -83,6 +111,13 @@ export async function POST(request: Request) {
     }
 
     // ── Step 2: Load profiles + match best sender ──
+    const qualification = evaluateProspectQualification({ rawText, extracted })
+    if (!qualification.qualificationEligibility) {
+      emit({ type: 'status', message: 'Not enough context for a reliable qualification score.' })
+      emitInsufficientDone(emit, extracted, qualification)
+      return
+    }
+
     emit({ type: 'status', message: 'Matching sender profiles' })
     let profiles: Profile[] = []
     let fewShotPool: Array<{ id: string; messageId: string; leadId: string; playId: string | null; signalType: number | null; sentText: string; company: string; signalEvidence: string | null; tags: string[]; createdAt: string }> = []
@@ -316,6 +351,15 @@ export async function POST(request: Request) {
       matchedProof: bestSenderProof,
     })
 
+    // Normalize greeting to use first name consistently
+    if (qualityResult.text) {
+      qualityResult = {
+        ...qualityResult,
+        text: normalizeGreeting(qualityResult.text, extracted.name),
+        charCount: normalizeGreeting(qualityResult.text, extracted.name).length,
+      }
+    }
+
     // ── Emit final result ──
     emit({
       type: 'done',
@@ -347,7 +391,40 @@ export async function POST(request: Request) {
           matchScore: pm.totalScore,
           topProof: pm.matchedProof[0]?.safeClaim ?? null,
         })),
+      qualification,
     })
+  })
+}
+
+function emitInsufficientDone(
+  emit: (event: any) => void,
+  extracted: ExtractedLead,
+  qualification: ReturnType<typeof evaluateProspectQualification>,
+): void {
+  emit({
+    type: 'done',
+    extracted,
+    score: null,
+    bestSender: null,
+    bestSenderProof: [],
+    connectionNote: '',
+    charCount: 0,
+    maxChars: CONNECTION_NOTE_MAX_CHARS,
+    quality: {
+      passed: false,
+      failures: ['qualification_blocked'],
+      wasRepaired: false,
+    },
+    strategy: {
+      whyConnect: '',
+      relevantObservation: '',
+      forbidden: [],
+      candidateAngles: [],
+    },
+    draftFailed: false,
+    demoMode: !hasProvider(),
+    alternativeSenders: [],
+    qualification,
   })
 }
 

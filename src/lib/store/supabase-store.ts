@@ -48,6 +48,7 @@ import type {
   SalesMemory,
   SalesMemoryType,
   SignalId,
+  TailoredCV,
   TopicCluster,
   ContentResearchFinding,
   ContentJourneyEntry,
@@ -1738,6 +1739,147 @@ export class SupabaseStore implements ScoutStore {
         sent_at: new Date().toISOString(),
       }),
     ])
+  }
+
+  // ==========================================================================
+  // Tailored CV persistence
+  // ==========================================================================
+
+  async saveTailoredCV(input: {
+    jobId: string
+    revenueIdentityId?: string | null
+    profileId?: string | null
+    baseCvPath?: string | null
+    baseResumeSnapshot?: Record<string, unknown>
+    tailoredResume: Record<string, unknown>
+    atsScore: number
+    atsDimensions?: Array<{ label: string; score: number; max: number; note: string }>
+    atsMissingSkills?: string[]
+    targetTitle?: string | null
+    targetSkills?: string[]
+    targetCompany?: string | null
+    proposalText?: string | null
+  }): Promise<TailoredCV> {
+    const { data, error } = await this.client
+      .from('tailored_cvs')
+      .insert({
+        organization_id: this.orgId,
+        job_id: input.jobId,
+        revenue_identity_id: input.revenueIdentityId ?? null,
+        profile_id: input.profileId ?? null,
+        base_cv_path: input.baseCvPath ?? null,
+        base_resume_snapshot: input.baseResumeSnapshot ?? {},
+        tailored_resume: input.tailoredResume,
+        ats_score: input.atsScore,
+        ats_dimensions: JSON.stringify(input.atsDimensions ?? []),
+        ats_missing_skills: input.atsMissingSkills ?? [],
+        target_title: input.targetTitle ?? null,
+        target_skills: input.targetSkills ?? [],
+        target_company: input.targetCompany ?? null,
+        proposal_text: input.proposalText ?? null,
+        status: 'generated',
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    const r = data as Record<string, unknown>
+    return {
+      id: r.id as string,
+      organizationId: r.organization_id as string,
+      jobId: r.job_id as string,
+      revenueIdentityId: r.revenue_identity_id as string | null,
+      profileId: r.profile_id as string | null,
+      baseCvPath: r.base_cv_path as string | null,
+      baseResumeSnapshot: (r.base_resume_snapshot as Record<string, unknown>) ?? {},
+      tailoredResume: (r.tailored_resume as Record<string, unknown>) ?? {},
+      tailoredCvPath: r.tailored_cv_path as string | null,
+      atsScore: r.ats_score as number,
+      atsDimensions: ((r.ats_dimensions as unknown as Array<{ label: string; score: number; max: number; note: string }>) ?? []),
+      atsMissingSkills: (r.ats_missing_skills as string[]) ?? [],
+      targetTitle: r.target_title as string | null,
+      targetSkills: (r.target_skills as string[]) ?? [],
+      targetCompany: r.target_company as string | null,
+      status: r.status as TailoredCV['status'],
+      proposalText: r.proposal_text as string | null,
+      generatedAt: r.generated_at as string,
+      appliedAt: r.applied_at as string | null,
+      createdAt: r.created_at as string,
+      updatedAt: r.updated_at as string,
+    }
+  }
+
+  async getTailoredCV(id: string): Promise<TailoredCV | null> {
+    const { data, error } = await this.client
+      .from('tailored_cvs')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    const r = data as Record<string, unknown>
+    return {
+      id: r.id as string,
+      organizationId: r.organization_id as string,
+      jobId: r.job_id as string,
+      revenueIdentityId: r.revenue_identity_id as string | null,
+      profileId: r.profile_id as string | null,
+      baseCvPath: r.base_cv_path as string | null,
+      baseResumeSnapshot: (r.base_resume_snapshot as Record<string, unknown>) ?? {},
+      tailoredResume: (r.tailored_resume as Record<string, unknown>) ?? {},
+      tailoredCvPath: r.tailored_cv_path as string | null,
+      atsScore: r.ats_score as number,
+      atsDimensions: ((r.ats_dimensions as unknown as Array<{ label: string; score: number; max: number; note: string }>) ?? []),
+      atsMissingSkills: (r.ats_missing_skills as string[]) ?? [],
+      targetTitle: r.target_title as string | null,
+      targetSkills: (r.target_skills as string[]) ?? [],
+      targetCompany: r.target_company as string | null,
+      status: r.status as TailoredCV['status'],
+      proposalText: r.proposal_text as string | null,
+      generatedAt: r.generated_at as string,
+      appliedAt: r.applied_at as string | null,
+      createdAt: r.created_at as string,
+      updatedAt: r.updated_at as string,
+    }
+  }
+
+  async listTailoredCVsForJob(jobId: string): Promise<TailoredCV[]> {
+    const { data, error } = await this.client
+      .from('tailored_cvs')
+      .select('*')
+      .eq('job_id', jobId)
+      .order('generated_at', { ascending: false })
+    if (error) throw error
+    return (data as Array<Record<string, unknown>>).map((r) => ({
+      id: r.id as string,
+      organizationId: r.organization_id as string,
+      jobId: r.job_id as string,
+      revenueIdentityId: r.revenue_identity_id as string | null,
+      profileId: r.profile_id as string | null,
+      baseCvPath: r.base_cv_path as string | null,
+      baseResumeSnapshot: (r.base_resume_snapshot as Record<string, unknown>) ?? {},
+      tailoredResume: (r.tailored_resume as Record<string, unknown>) ?? {},
+      tailoredCvPath: r.tailored_cv_path as string | null,
+      atsScore: r.ats_score as number,
+      atsDimensions: ((r.ats_dimensions as unknown as Array<{ label: string; score: number; max: number; note: string }>) ?? []),
+      atsMissingSkills: (r.ats_missing_skills as string[]) ?? [],
+      targetTitle: r.target_title as string | null,
+      targetSkills: (r.target_skills as string[]) ?? [],
+      targetCompany: r.target_company as string | null,
+      status: r.status as TailoredCV['status'],
+      proposalText: r.proposal_text as string | null,
+      generatedAt: r.generated_at as string,
+      appliedAt: r.applied_at as string | null,
+      createdAt: r.created_at as string,
+      updatedAt: r.updated_at as string,
+    }))
+  }
+
+  async markTailoredCVApplied(id: string): Promise<void> {
+    const { error } = await this.client
+      .from('tailored_cvs')
+      .update({ status: 'applied', applied_at: new Date().toISOString() })
+      .eq('id', id)
+    if (error) throw error
   }
 
   // ==========================================================================

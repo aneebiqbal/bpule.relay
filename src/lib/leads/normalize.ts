@@ -50,3 +50,22 @@ export function companyFuzzyKey(company: string): string {
   }
   return key
 }
+
+export function normalizeLeadUrl(url: string | null | undefined): string | null {
+  const raw = (url ?? '').trim()
+  if (!raw) return null
+  try {
+    const parsed = new URL(raw)
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '')
+    const path = parsed.pathname.replace(/\/+$/, '')
+    const normalized = `${host}${path}`.toLowerCase()
+    return normalized.length > 0 ? normalized : null
+  } catch {
+    return raw.toLowerCase()
+  }
+}
+
+export function contactKey(name: string | null | undefined): string | null {
+  const key = (name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  return key.length > 0 ? key : null
+}

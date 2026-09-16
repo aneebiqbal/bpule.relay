@@ -2,10 +2,20 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { safeErrorResponse } from '@/lib/errors'
 
+const ENTITY_FILTERS = new Set([
+  'all',
+  'lead',
+  'proof',
+  'upwork',
+  'conversation',
+  'identity',
+  'studio',
+] as const)
+
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const query = url.searchParams.get('q') ?? ''
-  if (!query.trim()) {
+  const query = (url.searchParams.get('q') ?? '').trim()
+  if (!query) {
     return NextResponse.json({ results: [] })
   }
 
@@ -19,7 +29,10 @@ export async function GET(request: Request) {
     )
   }
 
-  const entityFilter = url.searchParams.get('entity') as 'lead' | 'proof' | 'upwork' | 'all' | null
+  const entityParam = url.searchParams.get('entity')
+  const entityFilter = entityParam && ENTITY_FILTERS.has(entityParam as (typeof ENTITY_FILTERS extends Set<infer T> ? T : never))
+    ? entityParam
+    : 'all'
   const statusFilter = url.searchParams.getAll('status')
   const signalFilter = url.searchParams.getAll('signal').map(Number).filter((n) => !Number.isNaN(n))
   const playFilter = url.searchParams.getAll('play')
@@ -31,7 +44,7 @@ export async function GET(request: Request) {
   try {
     const results = await store.archiveSearch({
       query,
-      entityFilter: entityFilter ?? 'all',
+      entityFilter: entityFilter as 'all' | 'lead' | 'proof' | 'upwork' | 'conversation' | 'identity' | 'studio',
       statusFilter: statusFilter.length > 0 ? statusFilter : undefined,
       signalFilter: signalFilter.length > 0 ? signalFilter : undefined,
       playFilter: playFilter.length > 0 ? playFilter : undefined,

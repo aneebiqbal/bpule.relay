@@ -58,6 +58,7 @@ import type {
   ContentResearchFinding,
   ContentJourneyEntry,
   ContentQuickCapture,
+  TailoredCV,
   UpworkJob,
   UpworkMessage,
   Verdict,
@@ -916,4 +917,28 @@ export interface ScoutStore {
    * List active Relay Runs for an entity.
    */
   listActiveRunsForEntity(entityType: string, entityId: string): Promise<import('@/lib/domain/types').RelayRun[]>
+
+  // ── Tailored CV persistence ────────────────────────────────────────────────
+
+  saveTailoredCV(input: {
+    jobId: string
+    revenueIdentityId?: string | null
+    profileId?: string | null
+    baseCvPath?: string | null
+    baseResumeSnapshot?: Record<string, unknown>
+    tailoredResume: Record<string, unknown>
+    atsScore: number
+    atsDimensions?: Array<{ label: string; score: number; max: number; note: string }>
+    atsMissingSkills?: string[]
+    targetTitle?: string | null
+    targetSkills?: string[]
+    targetCompany?: string | null
+    proposalText?: string | null
+  }): Promise<import('@/lib/domain/types').TailoredCV>
+
+  getTailoredCV(id: string): Promise<import('@/lib/domain/types').TailoredCV | null>
+
+  listTailoredCVsForJob(jobId: string): Promise<import('@/lib/domain/types').TailoredCV[]>
+
+  markTailoredCVApplied(id: string): Promise<void>
 }

@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
+  // Allow Playwright WebKit to load dev resources from 127.0.0.1
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
+
   // Optimize package imports for smaller bundles
   experimental: {
     optimizePackageImports: ["lucide-react", "date-fns"],

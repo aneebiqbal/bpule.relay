@@ -31,17 +31,35 @@ export async function POST(
     return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
   }
 
+  if (draft.status === 'posted') {
+    return NextResponse.json({ success: true, alreadyPosted: true })
+  }
+
+  const edited = typeof caption === 'string' && caption !== draft.caption
+  const finalCaption = typeof caption === 'string' ? caption : draft.caption
+
   // Update caption if provided
-  if (caption && caption !== draft.caption) {
-    await store.updateContentDraft({ draftId: id, caption })
+  if (edited) {
+    await store.updateContentDraft({ draftId: id, caption: finalCaption })
   }
 
   // Mark as posted
   try {
     await store.updateContentDraftStatus(id, 'posted')
 
+    const openingLine = finalCaption.split('\n')[0]?.trim() || finalCaption.slice(0, 220)
+    if (openingLine) {
+      await store.logContentPosted({
+        personaId: draft.personaId,
+        pillarId: draft.pillarId,
+        topicClusterId: draft.topicClusterId,
+        platform: draft.platform,
+        openingLine: openingLine.slice(0, 220),
+      }).catch(() => {})
+    }
+
     // Record memories
-    const hook = caption?.split('\n')[0]?.slice(0, 80) ?? draft.caption.split('\n')[0]?.slice(0, 80) ?? ''
+    const hook = finalCaption.split('\n')[0]?.slice(0, 80) ?? ''
     const topics = draft.sourceMaterial?.slice(0, 80) ?? ''
 
     if (topics) {
@@ -68,7 +86,7 @@ export async function POST(
       topicClusterId: draft.topicClusterId,
       sourceKind: draft.sourceKind ?? 'field_update',
       reaction: 'posting',
-      edited: caption ? caption !== draft.caption : false,
+      edited,
       editSignals: [],
     }).catch(() => {})
 

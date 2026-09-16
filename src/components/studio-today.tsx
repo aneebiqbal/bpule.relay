@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, RefreshCw } from 'lucide-react'
@@ -44,13 +44,39 @@ export function StudioToday({
   const [alternatives, setAlternatives] = useState<ContentIdeaCard[]>(initialAlternatives)
   const [refreshing, setRefreshing] = useState(false)
   const [loadingIdeaId, setLoadingIdeaId] = useState<string | null>(null)
+  const [dismissingIdeaId, setDismissingIdeaId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [journeyState, setJourneyState] = useState<'idle' | 'remembered' | 'dismissed'>('idle')
+  const [savingJourneyChoice, setSavingJourneyChoice] = useState(false)
+
+  const journeyStateKey = useMemo(() => {
+    if (!journeySuggestion) return null
+    return `studio:journey-state:${persona.id}:${journeySuggestion.title}`
+  }, [journeySuggestion, persona.id])
+
+  const actionsLocked = refreshing || Boolean(loadingIdeaId) || Boolean(dismissingIdeaId)
 
   const allIdeas = useMemo(
     () => [pick, ...alternatives].filter((idea): idea is ContentIdeaCard => Boolean(idea)),
     [pick, alternatives],
   )
+
+  useEffect(() => {
+    if (!journeyStateKey) {
+      setJourneyState('idle')
+      return
+    }
+    try {
+      const saved = localStorage.getItem(journeyStateKey)
+      if (saved === 'remembered' || saved === 'dismissed') {
+        setJourneyState(saved)
+        return
+      }
+    } catch {
+      // Ignore storage failures.
+    }
+    setJourneyState('idle')
+  }, [journeyStateKey])
 
   async function refreshIdeas(signalType: 'regeneration' | 'surprise_me' = 'regeneration') {
     setRefreshing(true)
@@ -61,23 +87,27 @@ export function StudioToday({
           type: signalType,
           territory: pick.territory,
           metadata: { wasOpinion: pick.sourceKind === 'opinion', wasTechnical: isTechnicalIdea(pick) },
-        })
+        }).catch(() => null)
       }
       const res = await fetch('/api/content/intelligence/v2/daily', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ personaId: persona.id }),
       })
-      const data = await res.json()
-      setPick(data.pick ?? null)
-      setAlternatives(data.alternatives ?? [])
-    } catch {
-      setError('Could not refresh ideas right now.')
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.error || `Could not refresh ideas (${res.status})`)
+      }
+      setPick(data?.pick ?? null)
+      setAlternatives(Array.isArray(data?.alternatives) ? data.alternatives.slice(0, 3) : [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not refresh ideas right now.')
     }
     setRefreshing(false)
   }
 
   async function writeIdea(idea: ContentIdeaCard) {
+    if (actionsLocked) return
     setLoadingIdeaId(idea.id)
     setError('')
     try {
@@ -85,7 +115,7 @@ export function StudioToday({
         type: 'write_this',
         territory: idea.territory,
         metadata: { wasOpinion: idea.sourceKind === 'opinion', wasTechnical: isTechnicalIdea(idea) },
-      })
+      }).catch(() => null)
 
       const res = await fetch('/api/content/generate-draft', {
         method: 'POST',
@@ -103,32 +133,57 @@ export function StudioToday({
         }),
       })
 
-      const data = await res.json()
-      if (data.draftId) {
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.error || `Draft generation failed (${res.status})`)
+      }
+      if (data?.draftId) {
         router.push(`/studio/drafts/${data.draftId}`)
         return
       }
 
-      setError(data.error || 'Draft generation failed.')
-    } catch {
-      setError('Draft generation failed.')
+      throw new Error(data?.error || 'Draft generation failed.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Draft generation failed.')
     }
     setLoadingIdeaId(null)
   }
 
   async function notForMe(idea: ContentIdeaCard) {
-    await recordTasteSignal(persona.id, {
-      type: 'not_for_me',
-      territory: idea.territory,
-      metadata: { wasOpinion: idea.sourceKind === 'opinion', wasTechnical: isTechnicalIdea(idea) },
-    })
+    if (actionsLocked) return
+    setDismissingIdeaId(idea.id)
+    setError('')
+    try {
+      await recordTasteSignal(persona.id, {
+        type: 'not_for_me',
+        territory: idea.territory,
+        metadata: { wasOpinion: idea.sourceKind === 'opinion', wasTechnical: isTechnicalIdea(idea) },
+      })
 
-    const remaining = allIdeas.filter((candidate) => candidate.id !== idea.id)
-    setPick(remaining[0] ?? null)
-    setAlternatives(remaining.slice(1, 4))
-    if (remaining.length === 0) {
-      void refreshIdeas('surprise_me')
+      const remaining = allIdeas.filter((candidate) => candidate.id !== idea.id)
+      setPick(remaining[0] ?? null)
+      setAlternatives(remaining.slice(1, 4))
+      if (remaining.length === 0) {
+        await refreshIdeas('surprise_me')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save your preference. Try again.')
+    } finally {
+      setDismissingIdeaId(null)
     }
+  }
+
+  async function saveJourneyChoice(next: 'remembered' | 'dismissed') {
+    if (!journeyStateKey) return
+    setSavingJourneyChoice(true)
+    setError('')
+    try {
+      localStorage.setItem(journeyStateKey, next)
+      setJourneyState(next)
+    } catch {
+      setError('Could not save this journey choice in your browser.')
+    }
+    setSavingJourneyChoice(false)
   }
 
   return (
@@ -148,7 +203,7 @@ export function StudioToday({
                 type="button"
                 onClick={() => void refreshIdeas('regeneration')}
                 className="inline-flex items-center gap-1 rounded border border-line px-2 py-1 text-[11px] text-graphite hover:text-ink"
-                disabled={refreshing}
+                disabled={actionsLocked}
               >
                 <RefreshCw className="size-3" />
                 {refreshing ? 'Refreshing' : 'Different angle'}
@@ -170,7 +225,7 @@ export function StudioToday({
               <button
                 type="button"
                 onClick={() => void writeIdea(pick)}
-                disabled={loadingIdeaId === pick.id}
+                disabled={actionsLocked}
                 className="inline-flex items-center gap-2 rounded bg-ink px-4 py-2 text-[12px] font-medium text-bone hover:bg-ink/90 disabled:opacity-60"
               >
                 {loadingIdeaId === pick.id ? 'Starting...' : 'Write this'}
@@ -179,16 +234,18 @@ export function StudioToday({
               <button
                 type="button"
                 onClick={() => void refreshIdeas('surprise_me')}
+                disabled={actionsLocked}
                 className="rounded border border-line px-3 py-2 text-[12px] text-graphite hover:text-ink"
               >
-                Different angle
+                {refreshing ? 'Refreshing...' : 'Different angle'}
               </button>
               <button
                 type="button"
                 onClick={() => void notForMe(pick)}
+                disabled={actionsLocked}
                 className="rounded border border-line px-3 py-2 text-[12px] text-graphite hover:text-ink"
               >
-                Not for me
+                {dismissingIdeaId === pick.id ? 'Saving...' : 'Not for me'}
               </button>
             </div>
           </article>
@@ -200,7 +257,8 @@ export function StudioToday({
           <button
             type="button"
             onClick={() => void refreshIdeas('surprise_me')}
-            className="mt-3 rounded bg-cobalt px-3 py-2 text-[12px] font-medium text-bone"
+            disabled={actionsLocked}
+            className="mt-3 rounded bg-cobalt px-3 py-2 text-[12px] font-medium text-bone disabled:opacity-60"
           >
             Find directions
           </button>
@@ -232,15 +290,16 @@ export function StudioToday({
                       <button
                         type="button"
                         onClick={() => void writeIdea(idea)}
-                        disabled={loadingIdeaId === idea.id}
+                        disabled={actionsLocked}
                         className="inline-flex items-center gap-1 text-[12px] font-medium text-ink"
                       >
-                        Write this
+                        {loadingIdeaId === idea.id ? 'Starting...' : 'Write this'}
                         <ArrowRight className="size-3" />
                       </button>
                       <button
                         type="button"
                         onClick={() => void refreshIdeas('regeneration')}
+                        disabled={actionsLocked}
                         className="text-[11px] text-graphite underline underline-offset-2"
                       >
                         Different angle
@@ -248,9 +307,10 @@ export function StudioToday({
                       <button
                         type="button"
                         onClick={() => void notForMe(idea)}
+                        disabled={actionsLocked}
                         className="text-[11px] text-graphite underline underline-offset-2"
                       >
-                        Not for me
+                        {dismissingIdeaId === idea.id ? 'Saving...' : 'Not for me'}
                       </button>
                     </div>
                   </article>
@@ -291,13 +351,13 @@ export function StudioToday({
 
               {journeyState === 'idle' ? (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => setJourneyState('remembered')} className="rounded border border-line px-2.5 py-1.5 text-[11px] text-ink">
-                    Remember
+                  <button type="button" onClick={() => void saveJourneyChoice('remembered')} disabled={savingJourneyChoice} className="rounded border border-line px-2.5 py-1.5 text-[11px] text-ink disabled:opacity-60">
+                    {savingJourneyChoice ? 'Saving...' : 'Remember'}
                   </button>
-                  <button type="button" onClick={() => setJourneyState('dismissed')} className="rounded border border-line px-2.5 py-1.5 text-[11px] text-graphite">
-                    Don&apos;t save
+                  <button type="button" onClick={() => void saveJourneyChoice('dismissed')} disabled={savingJourneyChoice} className="rounded border border-line px-2.5 py-1.5 text-[11px] text-graphite disabled:opacity-60">
+                    {savingJourneyChoice ? 'Saving...' : 'Don&apos;t save'}
                   </button>
-                  <button type="button" onClick={() => void refreshIdeas('surprise_me')} className="rounded bg-cobalt px-2.5 py-1.5 text-[11px] font-medium text-bone">
+                  <button type="button" onClick={() => void refreshIdeas('surprise_me')} disabled={actionsLocked} className="rounded bg-cobalt px-2.5 py-1.5 text-[11px] font-medium text-bone disabled:opacity-60">
                     Turn into idea
                   </button>
                 </div>
@@ -380,13 +440,13 @@ function isTechnicalIdea(idea: ContentIdeaCard): boolean {
 }
 
 async function recordTasteSignal(personaId: string, signal: Record<string, unknown>) {
-  try {
-    await fetch('/api/content/intelligence/v2/taste', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ personaId, signal }),
-    })
-  } catch {
-    // Keep UX uninterrupted if taste logging fails.
+  const res = await fetch('/api/content/intelligence/v2/taste', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ personaId, signal }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    throw new Error(data?.error || `Could not save preference (${res.status})`)
   }
 }

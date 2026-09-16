@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ContentProfile, ContentIdeaCard } from '@/lib/domain/types'
 import { generateDailyIdeas } from '@/lib/content/daily-ideas'
@@ -69,8 +69,12 @@ const VOICE_OPTIONS = [
   { id: 'educational', label: 'Educational', example: 'Teaching something useful.' },
 ]
 
+const ONBOARDING_STORAGE_KEY = 'studio-onboarding-v1'
+
 export function OnboardingWizard() {
   const router = useRouter()
+  const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hydratedRef = useRef(false)
   const [step, setStep] = useState<OnboardingStep>('identity')
   const [state, setState] = useState<OnboardingState>({
     displayName: '',
@@ -90,6 +94,42 @@ export function OnboardingWizard() {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [suggestedIdeas, setSuggestedIdeas] = useState<ContentIdeaCard[]>([])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ONBOARDING_STORAGE_KEY)
+      if (!raw) {
+        hydratedRef.current = true
+        return
+      }
+      const parsed = JSON.parse(raw) as { step?: OnboardingStep; state?: OnboardingState }
+      if (parsed.step && STEPS.includes(parsed.step)) {
+        setStep(parsed.step)
+      }
+      if (parsed.state) {
+        setState(parsed.state)
+      }
+    } catch {
+      // Ignore malformed local data and continue with defaults.
+    } finally {
+      hydratedRef.current = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!hydratedRef.current || step === 'complete') return
+    try {
+      localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify({ step, state }))
+    } catch {
+      // Ignore storage failures.
+    }
+  }, [state, step])
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current)
+    }
+  }, [])
 
   const currentStepIndex = STEPS.indexOf(step)
 
@@ -154,7 +194,11 @@ export function OnboardingWizard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(state),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.error || `Setup failed (${res.status})`)
+      }
+
       if (data.redirectTo) {
         // Generate initial ideas
         if (data.profile) {
@@ -170,16 +214,23 @@ export function OnboardingWizard() {
           })
           setSuggestedIdeas(ideas.slice(0, 5))
         }
+
+        try {
+          localStorage.removeItem(ONBOARDING_STORAGE_KEY)
+        } catch {
+          // Ignore storage failures.
+        }
+
         setStep('complete')
         // Redirect after a brief pause
-        setTimeout(() => {
+        redirectTimeoutRef.current = setTimeout(() => {
           router.push(data.redirectTo)
         }, 3000)
       } else {
-        setError(data.error || 'Creation failed')
+        setError(data?.error || 'Creation failed')
       }
-    } catch {
-      setError('Creation failed. Please try again.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Creation failed. Please try again.')
     }
     setCreating(false)
   }

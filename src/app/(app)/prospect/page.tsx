@@ -22,6 +22,7 @@ import { readSse } from '@/lib/sse/client'
 import { cn } from 'cn'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
 import type { ProspectScore, Recommendation } from '@/lib/prospect/intelligence'
+import type { ProspectQualificationAssessment } from '@/lib/prospect/qualification-gate'
 
 type AnalyzeEvent =
   | { type: 'status'; message: string }
@@ -29,7 +30,7 @@ type AnalyzeEvent =
   | {
       type: 'done'
       extracted: ExtractedLead
-      score: ProspectScore
+      score: ProspectScore | null
       bestSender: Profile | null
       bestSenderProof: MatchedProof[]
       connectionNote: string
@@ -40,6 +41,7 @@ type AnalyzeEvent =
       draftFailed: boolean
       demoMode: boolean
       alternativeSenders: Array<{ profile: Profile; matchScore: number; topProof: string | null }>
+      qualification: ProspectQualificationAssessment
     }
 
 interface AnalysisState {
@@ -55,6 +57,7 @@ interface AnalysisState {
   alternativeSenders: Array<{ profile: Profile; matchScore: number; topProof: string | null }>
   draftFailed: boolean
   demoMode: boolean
+  qualification: ProspectQualificationAssessment
 }
 
 const RECOMMENDATION_META: Record<Recommendation, { label: string; color: string; bg: string }> = {
@@ -85,8 +88,16 @@ export default function ProspectCheckPage() {
   const [saving, setSaving] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
   const [showSenders, setShowSenders] = useState(false)
+  const [duplicateConflict, setDuplicateConflict] = useState<{
+    existingLeadId: string
+    existingLeadCompany: string
+    duplicateKind: 'hard' | 'potential'
+    canCreateSeparate: boolean
+    reason?: string
+  } | null>(null)
   const rawRef = useRef<HTMLTextAreaElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const saveInFlightRef = useRef(false)
 
   // Preserve sender preference across re-analyses
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
@@ -104,6 +115,7 @@ export default function ProspectCheckPage() {
     setCopied(false)
     setShowDetails(false)
     setShowSenders(false)
+    setDuplicateConflict(null)
   }, [])
 
   async function analyze() {
@@ -150,6 +162,7 @@ export default function ProspectCheckPage() {
               alternativeSenders: event.alternativeSenders,
               draftFailed: event.draftFailed,
               demoMode: event.demoMode,
+              qualification: event.qualification,
             })
             if (event.bestSender) {
               setSelectedProfileId(event.bestSender.id)
@@ -181,10 +194,17 @@ export default function ProspectCheckPage() {
     }
   }
 
-  async function saveAsLead() {
+  async function saveAsLead(allowPotentialDuplicate = false) {
+    if (saving || saveInFlightRef.current) return
     if (!result?.extracted) return
+    if (!result.qualification.qualificationEligibility) {
+      setError('Lead was not created: not enough context to save a reliable lead.')
+      return
+    }
+    saveInFlightRef.current = true
     setSaving(true)
     setError(null)
+    setDuplicateConflict(null)
     try {
       const res = await fetch('/api/prospect/save', {
         method: 'POST',
@@ -211,16 +231,25 @@ export default function ProspectCheckPage() {
           connectionNote: result.connectionNote,
           prospectScore: result.score?.total ?? null,
           prospectDimensions: result.score?.dimensions ?? null,
+          rawInput,
+          allowPotentialDuplicate,
         }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (res.status === 409) {
-        if (data.existingLeadId) {
-          setError(`This company already exists as a lead (${data.existingLeadCompany}).`)
-          // Could offer navigation
-        } else {
-          setError(data.reason ?? 'Duplicate blocked.')
-        }
+        setDuplicateConflict({
+          existingLeadId:
+            typeof data.existingLeadId === 'string' && data.existingLeadId.trim().length > 0
+              ? data.existingLeadId
+              : '',
+          existingLeadCompany:
+            typeof data.existingLeadCompany === 'string' && data.existingLeadCompany.trim().length > 0
+              ? data.existingLeadCompany
+              : 'Existing lead',
+          duplicateKind: data.duplicateKind === 'potential' ? 'potential' : 'hard',
+          canCreateSeparate: Boolean(data.canCreateSeparate),
+          reason: typeof data.reason === 'string' ? data.reason : undefined,
+        })
         return
       }
       if (!res.ok) throw new Error(data.error ?? 'Failed to save lead.')
@@ -229,6 +258,7 @@ export default function ProspectCheckPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save lead.')
     } finally {
+      saveInFlightRef.current = false
       setSaving(false)
     }
   }
@@ -250,7 +280,12 @@ export default function ProspectCheckPage() {
 
   const recMeta = result?.score ? RECOMMENDATION_META[result.score.recommendation] : null
   const confidence = result?.score ? `${result.score.evidenceConfidence}/100` : '—'
-  const recommendation = recMeta?.label ?? 'Awaiting analysis'
+  const recommendation = result
+    ? result.score
+      ? recMeta?.label ?? 'Awaiting analysis'
+      : 'Not enough information'
+    : 'Awaiting analysis'
+  const canSaveLead = Boolean(result?.extracted && result.qualification.qualificationEligibility)
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -273,6 +308,31 @@ export default function ProspectCheckPage() {
         <Alert variant="destructive">
           <AlertTitle>Something failed</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {duplicateConflict ? (
+        <Alert>
+          <AlertTitle>
+            {duplicateConflict.duplicateKind === 'potential'
+              ? 'Potential duplicate found'
+              : 'Hard duplicate blocked'}
+          </AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>{duplicateConflict.reason ?? `${duplicateConflict.existingLeadCompany} already exists as a lead.`}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {duplicateConflict.existingLeadId ? (
+                <Button variant="secondary" size="sm" onClick={() => router.push(`/leads/${duplicateConflict.existingLeadId}`)}>
+                  View existing
+                </Button>
+              ) : null}
+              {duplicateConflict.canCreateSeparate ? (
+                <Button variant="outline" size="sm" onClick={() => void saveAsLead(true)} disabled={saving}>
+                  Create separate
+                </Button>
+              ) : null}
+            </div>
+          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -326,103 +386,129 @@ export default function ProspectCheckPage() {
       )}
 
       {/* ── Results ── */}
-      {result && result.score && result.extracted && (
+      {result && result.extracted && (
         <div className="space-y-5">
-          {/* Score + recommendation */}
-          <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-start gap-4">
-                <ProspectScoreRing score={result.score.total} />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[15px] font-medium text-ink">
-                      {result.extracted.name ?? 'Unnamed prospect'}
-                    </span>
-                  </div>
-                  <p className="text-[13px] text-graphite">
-                    {result.extracted.titleRaw ?? result.extracted.title ?? 'No title'} {result.extracted.company ? `· ${result.extracted.company}` : ''}
-                  </p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className={cn('rounded px-2 py-0.5 text-[11px] font-medium', recMeta?.bg, recMeta?.color)}>
-                      {recMeta?.label}
-                    </span>
-                    <span className="text-[12px] text-stone">
-                      {result.score.evidenceConfidence}/100 evidence confidence
-                    </span>
+          {result.score ? (
+            <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-4">
+                  <ProspectScoreRing score={result.score.total} />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[15px] font-medium text-ink">
+                        {result.extracted.name ?? 'Unnamed prospect'}
+                      </span>
+                    </div>
+                    <p className="text-[13px] text-graphite">
+                      {result.extracted.titleRaw ?? result.extracted.title ?? 'No title'} {result.extracted.company ? `· ${result.extracted.company}` : ''}
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className={cn('rounded px-2 py-0.5 text-[11px] font-medium', recMeta?.bg, recMeta?.color)}>
+                        {recMeta?.label}
+                      </span>
+                      <span className="text-[12px] text-stone">
+                        {result.score.evidenceConfidence}/100 evidence confidence
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
+
+              {result.score.why.length > 0 && (
+                <div className="mt-4 space-y-1.5">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-stone">Why</p>
+                  <ul className="space-y-1">
+                    {result.score.why.map((w, i) => (
+                      <li key={i} className="flex items-start gap-2 text-[13px] text-ink">
+                        <Check className="mt-0.5 size-3.5 shrink-0 text-status-success" aria-hidden="true" />
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {result.score.watchOut.length > 0 && (
+                <div className="mt-3 space-y-1.5">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-stone">Watch out</p>
+                  <ul className="space-y-1">
+                    {result.score.watchOut.map((w, i) => (
+                      <li key={i} className="flex items-start gap-2 text-[13px] text-graphite">
+                        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" />
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowDetails(!showDetails)}
+                className="mt-3 flex items-center gap-1 text-[12px] text-stone hover:text-ink"
+              >
+                <ChevronDown className={cn('size-3.5 transition-transform', showDetails && 'rotate-180')} aria-hidden="true" />
+                {showDetails ? 'Hide' : 'Show'} scoring details
+              </button>
+
+              {showDetails && (
+                <div className="mt-3 space-y-2 border-t border-line pt-3">
+                  {result.score.dimensions.map((dim) => {
+                    const frac = dim.max > 0 ? dim.points / dim.max : 0
+                    return (
+                      <div key={dim.key} className="space-y-1">
+                        <div className="flex items-baseline justify-between gap-3 text-[12px]">
+                          <span className="text-ink">{dim.label}</span>
+                          <span className="font-mono text-[11px] text-stone">{dim.points}/{dim.max}</span>
+                        </div>
+                        <div className="h-1 overflow-hidden rounded-full bg-bone">
+                          <div
+                            className={cn(
+                              'h-full rounded-full transition-all',
+                              frac >= 0.7 ? 'bg-status-success' : frac > 0.3 ? 'bg-orange' : 'bg-line',
+                            )}
+                            style={{ width: `${Math.max(frac * 100, frac > 0 ? 8 : 0)}%` }}
+                          />
+                        </div>
+                        <p className="text-[11px] text-stone">{dim.note}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
-
-            {/* Why */}
-            {result.score.why.length > 0 && (
-              <div className="mt-4 space-y-1.5">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-stone">Why</p>
-                <ul className="space-y-1">
-                  {result.score.why.map((w, i) => (
-                    <li key={i} className="flex items-start gap-2 text-[13px] text-ink">
-                      <Check className="mt-0.5 size-3.5 shrink-0 text-status-success" aria-hidden="true" />
-                      {w}
-                    </li>
-                  ))}
-                </ul>
+          ) : (
+            <div className="rounded-2xl border border-status-warning/50 bg-status-warning/5 p-5 sm:p-6">
+              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-status-warning">Not enough information</p>
+              <h3 className="mt-2 text-[18px] font-medium text-ink">Relay could not verify enough evidence to score this prospect.</h3>
+              <p className="mt-2 text-sm text-graphite">Add richer person, company, and opportunity context, then analyze again.</p>
+              <div className="mt-4 grid gap-2 text-xs text-graphite sm:grid-cols-3">
+                <span className="rounded border border-line bg-paper px-2 py-1">Input quality: {result.qualification.inputQuality}/100</span>
+                <span className="rounded border border-line bg-paper px-2 py-1">Extractability: {result.qualification.extractability}/100</span>
+                <span className="rounded border border-line bg-paper px-2 py-1">Evidence coverage: {result.qualification.evidenceCoverage}/100</span>
               </div>
-            )}
-
-            {/* Watch out */}
-            {result.score.watchOut.length > 0 && (
-              <div className="mt-3 space-y-1.5">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-stone">Watch out</p>
+              {(result.qualification.reasons.length > 0 || result.qualification.missingCritical.length > 0) && (
                 <ul className="space-y-1">
-                  {result.score.watchOut.map((w, i) => (
-                    <li key={i} className="flex items-start gap-2 text-[13px] text-graphite">
+                  {result.qualification.reasons.slice(0, 3).map((w, i) => (
+                    <li key={i} className="mt-3 flex items-start gap-2 text-[13px] text-graphite">
                       <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" />
                       {w}
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
-
-            {/* Expandable details */}
-            <button
-              type="button"
-              onClick={() => setShowDetails(!showDetails)}
-              className="mt-3 flex items-center gap-1 text-[12px] text-stone hover:text-ink"
-            >
-              <ChevronDown className={cn('size-3.5 transition-transform', showDetails && 'rotate-180')} aria-hidden="true" />
-              {showDetails ? 'Hide' : 'Show'} scoring details
-            </button>
-
-            {showDetails && (
-              <div className="mt-3 space-y-2 border-t border-line pt-3">
-                {result.score.dimensions.map((dim) => {
-                  const frac = dim.max > 0 ? dim.points / dim.max : 0
-                  return (
-                    <div key={dim.key} className="space-y-1">
-                      <div className="flex items-baseline justify-between gap-3 text-[12px]">
-                        <span className="text-ink">{dim.label}</span>
-                        <span className="font-mono text-[11px] text-stone">{dim.points}/{dim.max}</span>
-                      </div>
-                      <div className="h-1 overflow-hidden rounded-full bg-bone">
-                        <div
-                          className={cn(
-                            'h-full rounded-full transition-all',
-                            frac >= 0.7 ? 'bg-status-success' : frac > 0.3 ? 'bg-orange' : 'bg-line',
-                          )}
-                          style={{ width: `${Math.max(frac * 100, frac > 0 ? 8 : 0)}%` }}
-                        />
-                      </div>
-                      <p className="text-[11px] text-stone">{dim.note}</p>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+              )}
+              {result.qualification.suggestions.length > 0 && (
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-graphite">
+                  {result.qualification.suggestions.map((suggestion) => (
+                    <li key={suggestion}>{suggestion}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {/* Best sender */}
-          {result.bestSender && (
+          {result.score && result.bestSender && (
             <div className="rounded-2xl border border-line bg-paper p-5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -485,7 +571,7 @@ export default function ProspectCheckPage() {
             </div>
             <div className="mt-3 rounded-lg border border-line bg-bone/40 p-4">
               <p className="text-[14px] leading-relaxed text-ink whitespace-pre-wrap">
-                {result.connectionNote || 'No note generated.'}
+                {result.connectionNote || (result.score ? 'No note generated.' : 'Qualification blocked until you add enough context.')}
               </p>
             </div>
 
@@ -508,7 +594,7 @@ export default function ProspectCheckPage() {
 
             {/* Actions */}
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Button variant="orange" size="sm" onClick={() => void copyNote()}>
+              <Button variant="orange" size="sm" onClick={() => void copyNote()} disabled={!result.score || !result.connectionNote}>
                 {copied ? <Check className="size-3.5" aria-hidden="true" /> : <Copy className="size-3.5" aria-hidden="true" />}
                 {copied ? 'Copied' : 'Copy note'}
               </Button>
@@ -516,10 +602,10 @@ export default function ProspectCheckPage() {
                 <RefreshCw className="size-3.5" aria-hidden="true" />
                 Try another angle
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => void saveAsLead()} disabled={saving}>
-                {saving ? 'Saving...' : (
+              <Button variant="secondary" size="sm" onClick={() => void saveAsLead()} disabled={saving || !canSaveLead}>
+                {saving ? 'Creating...' : (
                   <>
-                    Save as lead
+                    {canSaveLead ? 'Create lead' : 'Lead not eligible'}
                     <ArrowRight className="size-3.5" aria-hidden="true" />
                   </>
                 )}

@@ -26,6 +26,7 @@ import type { RepRole } from '@/lib/domain/types'
 const WORK_NAV = [
   { href: '/dashboard', label: 'Today', icon: CalendarDays, exact: true },
   { href: '/leads', label: 'Leads', icon: Target, exact: false },
+  { href: '/inbound', label: 'Inbound', icon: MessageSquare, exact: false },
   { href: '/upwork', label: 'Jobs', icon: Briefcase, exact: false },
   { href: '/relay', label: 'Conversations', icon: MessageSquare, exact: false },
 ]

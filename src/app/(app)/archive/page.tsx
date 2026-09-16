@@ -1,20 +1,42 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
-import { Search, FileText, Briefcase, Award, AlertCircle } from 'lucide-react'
+import { Search, FileText, Briefcase, Award, AlertCircle, MessageCircle, Shield, LibraryBig } from 'lucide-react'
 
+type EntityType = 'all' | 'lead' | 'proof' | 'upwork' | 'conversation' | 'identity' | 'studio'
 
-type EntityType = 'all' | 'lead' | 'proof' | 'upwork'
+const ENTITY_LABEL: Record<EntityType, string> = {
+  all: 'All records',
+  lead: 'Leads',
+  proof: 'Proof',
+  upwork: 'Jobs',
+  conversation: 'Conversations',
+  identity: 'Revenue identities',
+  studio: 'Studio library',
+}
+
+const STATUS_OPTIONS: Record<EntityType, string[]> = {
+  all: ['new', 'contacted', 'followed_up', 'replied', 'no', 'dead', 'drafted', 'applied', 'qualifying', 'interested', 'meeting', 'proposal', 'negotiation', 'won', 'lost', 'active', 'archived', 'draft', 'ready', 'posted', 'rejected'],
+  lead: ['new', 'contacted', 'followed_up', 'replied', 'no', 'dead'],
+  proof: [],
+  upwork: ['new', 'drafted', 'applied', 'replied', 'no', 'dead'],
+  conversation: ['new', 'contacted', 'replied', 'qualifying', 'interested', 'meeting', 'proposal', 'negotiation', 'won', 'lost'],
+  identity: ['active', 'archived'],
+  studio: ['draft', 'ready', 'posted', 'rejected'],
+}
 
 const ENTITY_ICONS: Record<string, React.ReactNode> = {
   lead: <FileText className="size-4" />,
   proof: <Award className="size-4" />,
   upwork: <Briefcase className="size-4" />,
+  conversation: <MessageCircle className="size-4" />,
+  identity: <Shield className="size-4" />,
+  studio: <LibraryBig className="size-4" />,
 }
 
 export default function SearchPage() {
@@ -30,23 +52,45 @@ export default function SearchPage() {
       subtitle: string
       status: string | null
       createdAt: string
+      href?: string
     }>
   >([])
   const [error, setError] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
+  const lastFiltersRef = useRef<{ entity: EntityType; status: string }>({
+    entity: 'all',
+    status: '',
+  })
 
   const resultLabel = hasSearched ? `${results.length}` : '—'
-  const scopeLabel = entity === 'all' ? 'All records' : entity
+  const scopeLabel = ENTITY_LABEL[entity]
   const statusLabel = status || 'Any'
+  const statusOptions = useMemo(() => STATUS_OPTIONS[entity], [entity])
+
+  useEffect(() => {
+    if (!status) return
+    if (!statusOptions.includes(status)) setStatus('')
+  }, [status, statusOptions])
+
+  useEffect(() => {
+    if (!hasSearched || !query.trim()) return
+    const prev = lastFiltersRef.current
+    if (prev.entity === entity && prev.status === status) return
+    lastFiltersRef.current = { entity, status }
+    void search()
+  }, [entity, status, hasSearched, query])
 
   async function search() {
-    if (!query.trim()) return
+    const trimmed = query.trim()
+    if (!trimmed) return
+
     setLoading(true)
     setError(null)
     setHasSearched(true)
+    lastFiltersRef.current = { entity, status }
     try {
       const params = new URLSearchParams()
-      params.set('q', query)
+      params.set('q', trimmed)
       if (entity !== 'all') params.set('entity', entity)
       if (status) params.set('status', status)
       const res = await fetch(`/api/search?${params.toString()}`)
@@ -60,6 +104,27 @@ export default function SearchPage() {
     }
   }
 
+  function clearSearch() {
+    setQuery('')
+    setEntity('all')
+    setStatus('')
+    setResults([])
+    setError(null)
+    setHasSearched(false)
+    setLoading(false)
+    lastFiltersRef.current = { entity: 'all', status: '' }
+  }
+
+  function resultHref(result: { entityType: string; id: string; href?: string }) {
+    if (result.href) return result.href
+    if (result.entityType === 'lead') return `/leads/${result.id}`
+    if (result.entityType === 'upwork') return `/upwork/${result.id}`
+    if (result.entityType === 'conversation') return `/leads/${result.id}`
+    if (result.entityType === 'identity') return '/admin/revenue-identities'
+    if (result.entityType === 'studio') return '/content'
+    return '/profiles'
+  }
+
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
@@ -68,7 +133,7 @@ export default function SearchPage() {
           Search the operating record.
         </h1>
         <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
-          Find leads, jobs, and proof traces by keyword before deciding the next human action.
+          Find leads, jobs, conversations, proof traces, identities, and studio entries before deciding the next human action.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <ArchiveSignal label="Results" value={resultLabel} />
@@ -77,7 +142,6 @@ export default function SearchPage() {
         </div>
       </section>
 
-      {/* Search controls */}
       <div className="reveal-up stagger-1 srf-proof space-y-4 px-4 py-4 sm:px-5">
         <div className="flex items-center gap-2 text-slate">
           <Search className="size-4" />
@@ -93,47 +157,50 @@ export default function SearchPage() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void search()
               }}
-              placeholder="company name, skill, quote..."
+              placeholder="company, conversation detail, identity, draft..."
               className="h-11"
             />
           </div>
           <div className="flex gap-3">
-            <div className="sm:w-36">
+            <div className="sm:w-40">
               <Label htmlFor="entity" className="sr-only">Type</Label>
-              <Select
-                id="entity"
-                value={entity}
-                onChange={(e) => setEntity(e.target.value as EntityType)}
-              >
+              <Select id="entity" value={entity} onChange={(e) => setEntity(e.target.value as EntityType)}>
                 <option value="all">All types</option>
                 <option value="lead">Leads</option>
+                <option value="upwork">Jobs</option>
+                <option value="conversation">Conversations</option>
+                <option value="identity">Revenue identities</option>
                 <option value="proof">Proof</option>
-                <option value="upwork">Upwork</option>
+                <option value="studio">Studio library</option>
               </Select>
             </div>
-            <div className="sm:w-32">
+            <div className="sm:w-36">
               <Label htmlFor="status" className="sr-only">Status</Label>
-              <Select id="status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <Select id="status" value={status} onChange={(e) => setStatus(e.target.value)} disabled={statusOptions.length === 0}>
                 <option value="">Any</option>
-                <option value="new">new</option>
-                <option value="contacted">contacted</option>
-                <option value="replied">replied</option>
-                <option value="no">no</option>
-                <option value="dead">dead</option>
+                {statusOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
               </Select>
             </div>
           </div>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-slate">Press Enter to search</span>
-          <Button variant="orange" onClick={() => void search()} loading={loading} disabled={!query.trim()}>
-            <Search className="mr-1.5 size-3.5" />
-            {loading ? 'Searching...' : 'Search'}
-          </Button>
+          <span className="text-xs text-slate">Press Enter to search. Filters auto-apply after first search.</span>
+          <div className="flex items-center gap-2">
+            {(hasSearched || query || entity !== 'all' || status) ? (
+              <Button variant="outline" onClick={clearSearch} disabled={loading}>
+                Clear
+              </Button>
+            ) : null}
+            <Button variant="orange" onClick={() => void search()} loading={loading} disabled={!query.trim()}>
+              <Search className="mr-1.5 size-3.5" />
+              {loading ? 'Searching...' : 'Search'}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Error */}
       {error ? (
         <div className="reveal-up flex items-center gap-2 rounded-xl bg-status-danger/10 px-4 py-3 text-sm text-status-danger">
           <AlertCircle className="size-4 shrink-0" />
@@ -141,11 +208,10 @@ export default function SearchPage() {
         </div>
       ) : null}
 
-      {/* Results */}
       {hasSearched && !loading ? (
         <section className="reveal-up stagger-2 space-y-3">
           <p className="font-mono text-xs text-slate">
-            {results.length} result{results.length === 1 ? '' : 's'} for &ldquo;{query}&rdquo;
+            {results.length} result{results.length === 1 ? '' : 's'} for &ldquo;{query.trim()}&rdquo;
           </p>
 
           {results.length > 0 ? (
@@ -158,21 +224,13 @@ export default function SearchPage() {
                     style={{ animationDelay: `${0.03 + i * 0.03}s` }}
                   >
                     <Link
-                      href={
-                        r.entityType === 'lead'
-                          ? `/leads/${r.id}`
-                          : r.entityType === 'upwork'
-                            ? `/upwork/${r.id}`
-                            : '/profiles'
-                      }
+                      href={resultHref(r)}
                       className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-bone/40"
                     >
-                      {/* Icon */}
                       <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-bone text-slate">
                         {ENTITY_ICONS[r.entityType] ?? <FileText className="size-4" />}
                       </div>
 
-                      {/* Content */}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="truncate text-sm font-medium text-ink transition-colors group-hover:text-orange">
@@ -187,7 +245,6 @@ export default function SearchPage() {
                         <p className="mt-0.5 truncate text-xs text-slate">{r.subtitle}</p>
                       </div>
 
-                      {/* Entity type badge */}
                       <span className="shrink-0 rounded-md bg-orange/10 px-2 py-0.5 font-mono text-[10px] font-medium uppercase text-orange">
                         {r.entityType}
                       </span>
@@ -198,7 +255,8 @@ export default function SearchPage() {
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-line py-12 text-center">
-              <p className="text-sm text-slate">No results found. Try a different query.</p>
+              <p className="text-sm text-slate">No matches for &ldquo;{query.trim()}&rdquo; in {scopeLabel.toLowerCase()}.</p>
+              <p className="mt-1 text-xs text-slate">Try a broader term, remove status filters, or clear search.</p>
             </div>
           )}
         </section>

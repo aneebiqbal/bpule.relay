@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import type { ContentIdeaCard } from '@/lib/domain/types'
+import { buildRegenerateRequest, draftBufferStorageKey, normalizeDraftWorkspacePlatform } from '@/lib/content/draft-workspace'
 
 interface DraftData {
   id: string
@@ -31,23 +32,87 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
   const [loading, setLoading] = useState(!initialDraft)
   const [saving, setSaving] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [posting, setPosting] = useState(false)
+  const [regenerating, setRegenerating] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+  const [copyPromptState, setCopyPromptState] = useState<'idle' | 'copied' | 'error'>('idle')
   const [showImagePrompt, setShowImagePrompt] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackSent, setFeedbackSent] = useState(false)
   const [feedbackReason, setFeedbackReason] = useState('')
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveInFlightRef = useRef(false)
+  const pendingSaveCaptionRef = useRef<string | null>(null)
+  const lastSavedCaptionRef = useRef(initialDraft?.caption ?? '')
+
+  const storageKey = draftBufferStorageKey(draftId)
+  const actionsLocked = posting || Boolean(regenerating)
+
+  const processPendingSave = useCallback(async () => {
+    if (saveInFlightRef.current) return
+    const nextCaption = pendingSaveCaptionRef.current
+    if (nextCaption === null) return
+    if (nextCaption === lastSavedCaptionRef.current) {
+      pendingSaveCaptionRef.current = null
+      setSaving('saved')
+      return
+    }
+
+    pendingSaveCaptionRef.current = null
+    saveInFlightRef.current = true
+    setSaving('saving')
+
+    try {
+      const res = await fetch(`/api/content/drafts/${draftId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caption: nextCaption }),
+      })
+      if (!res.ok) throw new Error('Save failed')
+      lastSavedCaptionRef.current = nextCaption
+      setSaving('saved')
+    } catch {
+      pendingSaveCaptionRef.current = nextCaption
+      setSaving('error')
+    } finally {
+      saveInFlightRef.current = false
+      if (pendingSaveCaptionRef.current !== null && pendingSaveCaptionRef.current !== lastSavedCaptionRef.current) {
+        void processPendingSave()
+      }
+    }
+  }, [draftId])
+
+  const autosave = useCallback((newCaption: string, immediate = false) => {
+    pendingSaveCaptionRef.current = newCaption
+    if (newCaption === lastSavedCaptionRef.current) {
+      setSaving('saved')
+      return
+    }
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    if (immediate) {
+      void processPendingSave()
+      return
+    }
+    setSaving('saving')
+    saveTimeoutRef.current = setTimeout(() => {
+      void processPendingSave()
+    }, 800)
+  }, [processPendingSave])
 
   // Load draft if not provided initially
   useEffect(() => {
-    if (initialDraft) return
+    if (initialDraft) {
+      lastSavedCaptionRef.current = initialDraft.caption
+      return
+    }
     fetch(`/api/content/drafts/${draftId}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.draft) {
           setDraft(data.draft)
           setCaption(data.draft.caption)
+          lastSavedCaptionRef.current = data.draft.caption
         } else {
           setError('Draft not found')
         }
@@ -56,23 +121,32 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
       .finally(() => setLoading(false))
   }, [draftId, initialDraft])
 
-  // Autosave
-  const autosave = useCallback((newCaption: string) => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-    setSaving('saving')
-    saveTimeoutRef.current = setTimeout(() => {
-      fetch(`/api/content/drafts/${draftId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ caption: newCaption }),
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error('Save failed')
-          setSaving('saved')
-        })
-        .catch(() => setSaving('error'))
-    }, 800)
-  }, [draftId])
+  useEffect(() => {
+    if (!draft) return
+    try {
+      const buffered = localStorage.getItem(storageKey)
+      if (typeof buffered === 'string' && buffered !== draft.caption) {
+        setCaption(buffered)
+        autosave(buffered, true)
+      }
+    } catch {
+      // Ignore local storage failures.
+    }
+  }, [autosave, draft, storageKey])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, caption)
+    } catch {
+      // Ignore local storage failures.
+    }
+  }, [caption, storageKey])
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    }
+  }, [])
 
   const handleCaptionChange = (newCaption: string) => {
     setCaption(newCaption)
@@ -80,18 +154,32 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
   }
 
   // Actions
-  const handleCopy = () => {
-    navigator.clipboard.writeText(caption)
+  const handleCopy = async () => {
+    setCopyState('idle')
+    try {
+      await navigator.clipboard.writeText(caption)
+      setCopyState('copied')
+      setTimeout(() => setCopyState('idle'), 1500)
+    } catch {
+      setCopyState('error')
+    }
   }
 
-  const handleCopyImagePrompt = () => {
+  const handleCopyImagePrompt = async () => {
     if (visual?.imagePrompt) {
-      navigator.clipboard.writeText(visual.imagePrompt)
+      setCopyPromptState('idle')
+      try {
+        await navigator.clipboard.writeText(visual.imagePrompt)
+        setCopyPromptState('copied')
+        setTimeout(() => setCopyPromptState('idle'), 1500)
+      } catch {
+        setCopyPromptState('error')
+      }
     }
   }
 
   const handlePosting = async () => {
-    if (!draft) return
+    if (!draft || actionsLocked) return
     setPosting(true)
     setError('')
     try {
@@ -100,37 +188,59 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ caption }),
       })
-      const data = await res.json()
-      if (data.success) {
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.error || `Failed to mark as posted (${res.status})`)
+      }
+      if (data?.success) {
+        try {
+          localStorage.removeItem(storageKey)
+        } catch {
+          // Ignore local storage failures.
+        }
         router.push(`/content/${draft.personaId}/library?posted=${draftId}`)
       } else {
-        setError(data.error || 'Failed to mark as posted')
+        setError(data?.error || 'Failed to mark as posted')
       }
-    } catch {
-      setError('Failed to mark as posted')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to mark as posted')
     }
     setPosting(false)
   }
 
   const submitFeedback = async (reason: string) => {
     setFeedbackReason(reason)
-    if (!draft) return
+    if (!draft || actionsLocked) return
     try {
-      await fetch(`/api/content/drafts/${draftId}/feedback`, {
+      const res = await fetch(`/api/content/drafts/${draftId}/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason, reaction: 'not_for_me' }),
       })
-    } catch {
-      // Silent
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || `Failed to save feedback (${res.status})`)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save feedback')
+      return
     }
     setFeedbackSent(true)
     setShowFeedback(false)
   }
 
   const handleRegenerate = async (variant: string) => {
-    if (!draft) return
-    setLoading(true)
+    if (!draft || actionsLocked) return
+    let regenerateRequest: { angle: string; platform: 'linkedin' | 'x' }
+    try {
+      regenerateRequest = buildRegenerateRequest(variant, draft.platform)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Regeneration failed')
+      return
+    }
+
+    setRegenerating(variant)
+    setError('')
     try {
       const res = await fetch('/api/content/generate-draft', {
         method: 'POST',
@@ -139,26 +249,35 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
           personaId: draft.personaId,
           idea: {
             title: variant === 'hook' ? `Different hook for: ${draft.sourceMaterial}` : draft.sourceMaterial,
-            angle: variant,
+            angle: regenerateRequest.angle,
             territory: 'authority',
             sourceKind: 'idea',
           },
-          platform: draft.platform as 'linkedin' | 'x',
+          platform: regenerateRequest.platform,
         }),
       })
-      const data = await res.json()
-      if (data.draftId) {
-        router.push(`/studio/drafts/${data.draftId}`)
-      } else if (data.caption) {
-        setCaption(data.caption)
-        autosave(data.caption)
-      } else {
-        setError(data.error || 'Regeneration failed')
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.error || `Regeneration failed (${res.status})`)
       }
-    } catch {
-      setError('Regeneration failed')
+      if (data?.draftId) {
+        try {
+          localStorage.removeItem(storageKey)
+        } catch {
+          // Ignore local storage failures.
+        }
+        router.push(`/studio/drafts/${data.draftId}`)
+      } else if (data?.caption) {
+        setCaption(data.caption)
+        setDraft((prev) => prev ? { ...prev, platform: regenerateRequest.platform } : prev)
+        autosave(data.caption, true)
+      } else {
+        setError(data?.error || 'Regeneration failed')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Regeneration failed')
     }
-    setLoading(false)
+    setRegenerating(null)
   }
 
   if (loading) {
@@ -197,25 +316,27 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
               <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs font-medium uppercase">
                 {draft.platform}
               </span>
-              <SaveStatus status={saving} onRetry={() => autosave(caption)} />
+              <SaveStatus status={saving} onRetry={() => autosave(caption, true)} />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setShowFeedback(true)}
+              disabled={actionsLocked}
               className="rounded-lg border border-line px-3 py-1.5 text-xs hover:border-ink"
             >
               Not for me
             </button>
             <button
               onClick={() => handleRegenerate('angle')}
+              disabled={actionsLocked}
               className="rounded-lg border border-line px-3 py-1.5 text-xs hover:border-ink"
             >
-              Different angle
+              {regenerating === 'angle' ? 'Regenerating...' : 'Different angle'}
             </button>
             <button
               onClick={handlePosting}
-              disabled={posting || caption.length < 10}
+              disabled={posting || caption.length < 10 || Boolean(regenerating)}
               className="rounded-lg bg-ink px-4 py-1.5 text-xs font-medium text-bone hover:bg-ink/90 disabled:opacity-50"
             >
               {posting ? 'Posting...' : 'Posting this'}
@@ -236,9 +357,15 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
             <div className="flex items-center justify-between text-xs text-graphite">
               <span>{caption.length} characters</span>
               <div className="flex gap-3">
-                <button onClick={handleCopy} className="hover:text-ink">Copy</button>
-                <button onClick={() => handleRegenerate('hook')} className="hover:text-ink">Different hook</button>
-                <button onClick={() => handleRegenerate('shorter')} className="hover:text-ink">Shorter</button>
+                <button onClick={() => void handleCopy()} className="hover:text-ink">
+                  {copyState === 'copied' ? 'Copied' : copyState === 'error' ? 'Copy failed' : 'Copy'}
+                </button>
+                <button onClick={() => void handleRegenerate('hook')} disabled={actionsLocked} className="hover:text-ink disabled:opacity-50">
+                  {regenerating === 'hook' ? 'Regenerating...' : 'Different hook'}
+                </button>
+                <button onClick={() => void handleRegenerate('shorter')} disabled={actionsLocked} className="hover:text-ink disabled:opacity-50">
+                  {regenerating === 'shorter' ? 'Regenerating...' : 'Shorter'}
+                </button>
               </div>
             </div>
 
@@ -252,7 +379,8 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
                   {['Too generic', 'Not my voice', 'Too basic', 'Wrong angle', "I wouldn't say this"].map((reason) => (
                     <button
                       key={reason}
-                      onClick={() => submitFeedback(reason)}
+                      onClick={() => void submitFeedback(reason)}
+                      disabled={actionsLocked}
                       className={`rounded-full border px-2.5 py-1 text-xs ${
                         feedbackReason === reason ? 'border-ink bg-ink text-bone' : 'border-line hover:border-ink'
                       }`}
@@ -285,10 +413,10 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
                   <div className="mt-2 rounded-lg bg-bone p-2.5">
                     <p className="text-xs text-graphite leading-relaxed whitespace-pre-wrap">{visual.imagePrompt}</p>
                     <button
-                      onClick={handleCopyImagePrompt}
+                      onClick={() => void handleCopyImagePrompt()}
                       className="mt-1.5 text-[10px] font-medium text-ink hover:text-ink/70"
                     >
-                      Copy prompt
+                      {copyPromptState === 'copied' ? 'Copied prompt' : copyPromptState === 'error' ? 'Copy failed' : 'Copy prompt'}
                     </button>
                   </div>
                 )}
@@ -299,10 +427,10 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
             <div className="rounded-xl border border-line bg-bone-raised p-4">
               <h3 className="text-xs font-medium uppercase tracking-wider text-graphite">Adjust</h3>
               <div className="mt-2 grid grid-cols-2 gap-1.5">
-                <AdjustButton label="More Technical" onClick={() => handleRegenerate('technical')} />
-                <AdjustButton label="More Personal" onClick={() => handleRegenerate('personal')} />
-                <AdjustButton label="Shorter" onClick={() => handleRegenerate('shorter')} />
-                <AdjustButton label="Longer" onClick={() => handleRegenerate('longer')} />
+                <AdjustButton label="More Technical" onClick={() => void handleRegenerate('technical')} disabled={actionsLocked} active={regenerating === 'technical'} />
+                <AdjustButton label="More Personal" onClick={() => void handleRegenerate('personal')} disabled={actionsLocked} active={regenerating === 'personal'} />
+                <AdjustButton label="Shorter" onClick={() => void handleRegenerate('shorter')} disabled={actionsLocked} active={regenerating === 'shorter'} />
+                <AdjustButton label="Longer" onClick={() => void handleRegenerate('longer')} disabled={actionsLocked} active={regenerating === 'longer'} />
               </div>
             </div>
 
@@ -310,18 +438,30 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
             <div className="rounded-xl border border-line bg-bone-raised p-4">
               <h3 className="text-xs font-medium uppercase tracking-wider text-graphite">Platform</h3>
               <div className="mt-2 flex gap-1.5">
-                {['linkedin', 'x', 'instagram'].map((p) => (
+                {[
+                  { id: 'linkedin', enabled: true },
+                  { id: 'x', enabled: true },
+                  { id: 'instagram', enabled: false, reason: 'Instagram draft generation is not available yet.' },
+                ].map((p) => (
                   <button
-                    key={p}
-                    onClick={() => handleRegenerate(`platform:${p}`)}
+                    key={p.id}
+                    onClick={() => {
+                      if (!p.enabled) return
+                      void handleRegenerate(`platform:${p.id}`)
+                    }}
+                    disabled={actionsLocked || !p.enabled}
+                    title={p.reason}
                     className={`flex-1 rounded-lg px-2 py-1.5 text-xs capitalize ${
-                      draft.platform === p ? 'bg-ink text-bone' : 'bg-ink/5 text-graphite hover:bg-ink/10'
+                      normalizeDraftWorkspacePlatform(draft.platform) === p.id
+                        ? 'bg-ink text-bone'
+                        : 'bg-ink/5 text-graphite hover:bg-ink/10'
                     }`}
                   >
-                    {p}
+                    {p.id}
                   </button>
                 ))}
               </div>
+              <p className="mt-2 text-[11px] text-graphite">Instagram draft regeneration is disabled until platform-specific generation is available.</p>
             </div>
           </div>
         </div>
@@ -346,13 +486,18 @@ function SaveStatus({ status, onRetry }: { status: 'idle' | 'saving' | 'saved' |
   return null
 }
 
-function AdjustButton({ label, onClick }: { label: string; onClick: () => void }) {
+function AdjustButton({ label, onClick, disabled = false, active = false }: { label: string; onClick: () => void; disabled?: boolean; active?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className="rounded-lg border border-line px-2 py-1.5 text-xs text-graphite hover:border-line hover:text-ink"
+      disabled={disabled}
+      className={`rounded-lg border px-2 py-1.5 text-xs disabled:opacity-50 ${
+        active
+          ? 'border-ink bg-ink text-bone'
+          : 'border-line text-graphite hover:border-line hover:text-ink'
+      }`}
     >
-      {label}
+      {active ? 'Regenerating...' : label}
     </button>
   )
 }

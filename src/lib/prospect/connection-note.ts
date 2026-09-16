@@ -315,6 +315,63 @@ function couldSendTo100Prospects(text: string, company: string | null): boolean 
 }
 
 /**
+ * Normalize greeting to use first name consistently.
+ * - "Hi Sarah Chen," → "Hi Sarah,"
+ * - "Hey Sarah," → "Hey Sarah," (unchanged)
+ * - No greeting + name available → "Hi {firstName},"
+ * - No name available → leave as-is (don't fabricate)
+ */
+export function normalizeGreeting(text: string, prospectName: string | null): string {
+  if (!text) return text
+
+  const firstName = extractFirstName(prospectName)
+  const trimmed = text.trim()
+
+  // Already has a natural first-name greeting
+  if (firstName) {
+    const greetingPatterns = [
+      /^(hi|hey|hello)\s+,/i,
+      /^(hi|hey|hello)\s+there,?\s*/i,
+    ]
+    for (const pattern of greetingPatterns) {
+      if (pattern.test(trimmed)) {
+        return trimmed.replace(pattern, `${RegExp.$1} ${firstName}, `)
+      }
+    }
+
+    // Greeting with full name → replace with first name
+    const fullNameGreeting = new RegExp(`^(hi|hey|hello)\\s+${firstName}\\s+\\w+,?\\s*`, 'i')
+    if (fullNameGreeting.test(trimmed)) {
+      return trimmed.replace(fullNameGreeting, `${RegExp.$1} ${firstName}, `)
+    }
+
+    // No greeting at all but name available → prepend
+    if (!/^(hi|hey|hello)\s/i.test(trimmed) && firstName) {
+      return `Hi ${firstName}, ${trimmed.charAt(0).toLowerCase()}${trimmed.slice(1)}`
+    }
+  }
+
+  return text
+}
+
+/**
+ * Extract first name from a full name string.
+ * Returns null if name is unreliable (too short, too long, no spaces).
+ */
+export function extractFirstName(name: string | null): string | null {
+  if (!name) return null
+  const trimmed = name.trim()
+  if (trimmed.length < 2 || trimmed.length > 40) return null
+  // Must have at least one space (first + last) or be a single reasonable name
+  const parts = trimmed.split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return null
+  const first = parts[0]
+  // Basic filter: must be alphabetic, 2-20 chars
+  if (!/^[A-Za-z][A-Za-z'-]{1,19}$/.test(first)) return null
+  return first
+}
+
+/**
  * Validate character count and auto-repair if needed.
  */
 export function validateAndRepair(input: ConnectionNoteInput): ConnectionNoteResult {

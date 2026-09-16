@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
 import type { ContentPersona, ContentProfile } from '@/lib/domain/types'
+import { normalizeOnboardingPayload } from '@/lib/content/onboarding-normalize'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,7 @@ interface CompleteOnboardingBody {
   selectedTerritories: string[]
   voiceSelection: string
   humorStyle: string
-  identity: {
+  identity?: {
     role: string
     seniority: string
     industries: string[]
@@ -31,7 +32,7 @@ interface CompleteOnboardingBody {
     audiences: string[]
     territories: string[]
     contentGoals: string[]
-  }
+  } | null
 }
 
 /**
@@ -42,9 +43,17 @@ export async function POST(req: NextRequest) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
-  const body: CompleteOnboardingBody = await req.json().catch(() => null)
-  if (!body?.displayName) {
+  const body: CompleteOnboardingBody | null = await req.json().catch(() => null)
+  if (!body) {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+
+  const normalized = normalizeOnboardingPayload(body)
+  if (!normalized.displayName) {
     return NextResponse.json({ error: 'displayName required' }, { status: 400 })
+  }
+  if (normalized.selectedTerritories.length < 2) {
+    return NextResponse.json({ error: 'Select at least 2 territories to complete onboarding' }, { status: 422 })
   }
 
   const store = await createScoutStore()
@@ -53,43 +62,32 @@ export async function POST(req: NextRequest) {
   // Create the persona
   const persona = await store.createContentPersona({
     repId: user.rep.id,
-    displayName: body.displayName,
-    platforms: (body.platforms ?? ['linkedin']) as ContentPersona['platforms'],
-    humorStyle: body.humorStyle ?? (body.identity.role.includes('Founder') ? 'conversational' : 'professional'),
-    valuesAndOpinions: body.identity.opinions.map((o) => o.belief),
+    displayName: normalized.displayName,
+    platforms: normalized.platforms as ContentPersona['platforms'],
+    humorStyle: normalized.humorStyle,
+    valuesAndOpinions: normalized.identity.opinions.map((o) => o.belief),
   })
 
   // Create the Content Profile with full identity
   const profile = await store.createContentProfile({
     personaId: persona.id,
-    role: body.identity.role,
-    seniority: body.identity.seniority,
-    industries: body.identity.industries,
-    audience: body.identity.audiences[0] ?? '',
+    role: normalized.identity.role,
+    seniority: normalized.identity.seniority,
+    industries: normalized.identity.industries,
+    audience: normalized.selectedAudiences[0] ?? normalized.identity.audiences[0] ?? '',
   })
 
-  // Use selected territories from wizard, falling back to identity territories
-  const territories = body.selectedTerritories.length > 0
-    ? body.selectedTerritories
-    : body.identity.territories
-
-  // Use selected audiences from wizard, falling back to identity audiences
-  const audiences = body.selectedAudiences.length > 0
-    ? body.selectedAudiences
-    : body.identity.audiences
-
-  // Use selected goals from wizard, falling back to identity contentGoals
-  const goals = body.selectedGoals.length > 0
-    ? body.selectedGoals
-    : body.identity.contentGoals
+  const territories = normalized.selectedTerritories
+  const audiences = normalized.selectedAudiences
+  const goals = normalized.selectedGoals
 
   // Update profile with all extracted data
   await store.updateContentProfile(profile.id, {
-    expertise: body.identity.expertise,
-    opinions: body.identity.opinions,
-    projects: body.identity.projects,
-    experiences: body.identity.experiences,
-    technologies: body.identity.technologies.map((name) => ({
+    expertise: normalized.identity.expertise,
+    opinions: normalized.identity.opinions,
+    projects: normalized.identity.projects,
+    experiences: normalized.identity.experiences,
+    technologies: normalized.identity.technologies.map((name) => ({
       name,
       proficiency: 'proficient' as const,
       context: '',
@@ -106,7 +104,7 @@ export async function POST(req: NextRequest) {
     })),
     audiences,
     territories,
-    voiceSelection: body.voiceSelection,
+    voiceSelection: normalized.voiceSelection,
   })
 
   // Create topic clusters from territories
@@ -120,7 +118,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Create journey entries from experiences
-  for (const exp of body.identity.experiences.slice(0, 4)) {
+  for (const exp of normalized.identity.experiences.slice(0, 4)) {
     await store.createContentJourneyEntry({
       personaId: persona.id,
       eventType: exp.type === 'success' ? 'milestone' : exp.type === 'mistake' ? 'learned' : 'project',
@@ -134,10 +132,10 @@ export async function POST(req: NextRequest) {
   // Update persona with onboarding data
   await store.updateContentPersona({
     personaId: persona.id,
-    personaRole: body.personaRole || body.identity.role,
-    personaCompany: body.personaCompany,
-    personaLocation: body.personaLocation,
-    contentComfort: body.contentComfort,
+    personaRole: normalized.personaRole || normalized.identity.role,
+    personaCompany: normalized.personaCompany,
+    personaLocation: normalized.personaLocation,
+    contentComfort: normalized.contentComfort,
     onboardingStep: 'complete',
     onboardingCompleted: true,
   })

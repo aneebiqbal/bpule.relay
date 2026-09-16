@@ -9,7 +9,12 @@ import { createScoutStore } from '@/lib/store'
 import { sseStream } from '@/lib/sse/sse'
 import { buildProfileIntelligence, matchProofToLead, classifyLeadFact } from '@/lib/relay/profile-intelligence'
 import { createOutreachStrategy } from '@/lib/relay/outreach-strategy'
-import { analyzeReply, buildReplyStrategy, buildConversationContext } from '@/lib/relay/conversation-engine'
+import {
+  analyzeReply,
+  buildReplyStrategy,
+  buildConversationContext,
+  buildDeterministicConversationSummary,
+} from '@/lib/relay/conversation-engine'
 
 // Draft generation involves multiple AI calls (embedding, scoring, drafting
 // with quality gates). Allow up to 2 minutes on Pro plan; on Hobby plan
@@ -185,7 +190,23 @@ export async function POST(
           }, replyAnalysis)
           void replyStrategy
         } else {
-          conversationContext = `Write a helpful, direct reply to the prospect. Answer any questions. Advance the conversation naturally.`
+          const priorMessages = detail.messages.filter((m) => m.sentText)
+          const convStage = detail.status === 'followed_up' ? 'contacted' : detail.status === 'new' ? 'new' : detail.status === 'contacted' ? 'contacted' : detail.status === 'replied' ? 'replied' : detail.status === 'no' ? 'lost' : detail.status === 'dead' ? 'lost' : 'contacted'
+          const summary = buildDeterministicConversationSummary({
+            leadId: detail.id,
+            leadCompany: detail.company,
+            contactName: detail.contactName,
+            replyText: '',
+            priorMessages,
+            conversationStage: convStage,
+            senderProfileId: profile.id,
+          })
+          conversationContext = [
+            '## Deterministic conversation summary (pre-generation)',
+            summary,
+            '',
+            'Write a helpful, direct reply to the prospect. Answer any open question first. Do not repeat bio/proof facts already sent unless they asked again.',
+          ].join('\n')
         }
       } else {
         // For first-touch and followups: use the standard outreach strategy

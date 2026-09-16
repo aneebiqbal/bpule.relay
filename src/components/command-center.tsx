@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock, User, Target } from 'lucide-react'
 import { cn } from 'cn'
 
 interface CommandCenterData {
@@ -33,8 +33,18 @@ interface CommandCenterData {
   }>
 }
 
+interface DailyActivity {
+  repId: string
+  repName: string
+  leadsSaved: number
+  outreachRecorded: number
+  repliesHandled: number
+  lastActivityAt: string | null
+}
+
 export function CommandCenter() {
   const [data, setData] = useState<CommandCenterData | null>(null)
+  const [activity, setActivity] = useState<DailyActivity[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -44,6 +54,10 @@ export function CommandCenter() {
       .then((payload) => setData(payload))
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load command center.'))
       .finally(() => setLoading(false))
+    fetch('/api/admin/daily-activity')
+      .then((response) => (response.ok ? response.json() : []))
+      .then((payload) => setActivity(payload))
+      .catch(() => {})
   }, [])
 
   const teamRows = useMemo(
@@ -62,17 +76,22 @@ export function CommandCenter() {
   if (!data) return null
 
   const needsYou = data.attentionItems.slice(0, 5)
-  const activeConversationsGuess = data.totalCompletedToday
   const highIntentGuess = data.attentionItems.filter((item) => item.activityType === 'reply').length
+  const dateObj = new Date(data.date + 'T00:00:00')
+  const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'long' })
+  const dateDisplay = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
   return (
     <div className="space-y-5">
       <section className="rounded border border-line bg-bone-raised px-4 py-4">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Founder command / today</p>
+        <div className="flex items-center justify-between">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Founder command / today</p>
+          <span className="text-mono-medium text-[10px] text-stone">{dayOfWeek} · {dateDisplay}</span>
+        </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Metric title="Attention" value={String(data.attentionItems.length).padStart(2, '0')} tone={data.attentionItems.length > 0 ? 'warn' : 'good'} />
           <Metric title="Team" value={`${data.onTrackReps + data.completedReps} / ${data.totalReps} on track`} tone="good" />
-          <Metric title="Active conversations" value={String(activeConversationsGuess)} tone="neutral" />
+          <Metric title="Active identities" value={String(data.activeIdentities)} tone="neutral" />
           <Metric title="High-intent" value={String(highIntentGuess)} tone="warn" />
         </div>
       </section>
@@ -148,6 +167,50 @@ export function CommandCenter() {
           </div>
         ) : (
           <p className="mt-3 text-[12px] text-graphite">No active team targets configured today.</p>
+        )}
+      </section>
+
+      {/* Daily Activity Feed */}
+      <section className="rounded border border-line bg-bone-raised px-4 py-4">
+        <div className="flex items-center justify-between">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Today's work</p>
+          <span className="text-mono-medium text-[10px] text-stone">{dayOfWeek} · {dateDisplay}</span>
+        </div>
+        {activity.length > 0 ? (
+          <div className="mt-3 space-y-2">
+            {activity.map((rep) => (
+              <div key={rep.repId} className="rounded border border-line/70 bg-bone px-3 py-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <User className="size-3.5 text-graphite" />
+                    <p className="text-[13px] font-medium text-ink">{rep.repName}</p>
+                  </div>
+                  {rep.lastActivityAt && (
+                    <span className="flex items-center gap-1 text-[11px] text-stone">
+                      <Clock className="size-3" />
+                      {new Date(rep.lastActivityAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-3 text-[12px] text-graphite">
+                  {rep.leadsSaved > 0 && (
+                    <span className="flex items-center gap-1"><Target className="size-3 text-orange" />{rep.leadsSaved} leads saved</span>
+                  )}
+                  {rep.outreachRecorded > 0 && (
+                    <span className="flex items-center gap-1"><ArrowRight className="size-3 text-orange" />{rep.outreachRecorded} outreach</span>
+                  )}
+                  {rep.repliesHandled > 0 && (
+                    <span className="flex items-center gap-1"><CheckCircle2 className="size-3 text-status-success" />{rep.repliesHandled} replies</span>
+                  )}
+                  {rep.leadsSaved === 0 && rep.outreachRecorded === 0 && rep.repliesHandled === 0 && (
+                    <span className="text-stone">No activity yet</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-[12px] text-graphite">No rep activity recorded today yet.</p>
         )}
       </section>
 
