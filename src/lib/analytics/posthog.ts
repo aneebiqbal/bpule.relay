@@ -47,34 +47,41 @@ export function ensurePostHog(): Promise<void> {
   if (loaded && window.posthog?.__loaded) return Promise.resolve();
 
   loadPromise = new Promise<void>((resolve) => {
-    // Step 1: Bootstrapping snippet (queues calls before SDK loads)
-    const bootstrap = `!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}p||((p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",p.onerror=function(){p=null},(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r));var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);`;
+    const host = apiHost || "https://us.i.posthog.com";
+    if (!window.posthog) {
+      const stub = [] as unknown as PostHogWindow;
+      stub._i = [];
+      stub.init = ((key: string, options?: Record<string, unknown>) => {
+        (stub._i as unknown[]).push([key, options, "posthog"]);
+      }) as PostHogWindow["init"];
+      window.posthog = stub;
+    }
+    const script = document.createElement("script");
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.src = `${host.replace(".i.posthog.com", "-assets.i.posthog.com")}/static/array.js`;
+    script.onerror = () => resolve();
+    script.onload = () => {
+      try {
+        window.posthog?.init?.(apiKey, {
+          api_host: host,
+          defaults: "2026-05-30",
+          person_profiles: "identified_only",
+          capture_pageview: true,
+          capture_pageleave: true,
+          autocapture: false,
+          disable_session_recording: true,
+          respect_dnt: true,
+          capture_performance: true,
+          loaded: () => {
+            if (window.posthog) window.posthog.__loaded = true;
+          },
+        });
+      } catch {
+        resolve();
+        return;
+      }
 
-    const bootScript = document.createElement("script");
-    bootScript.textContent = bootstrap;
-    document.head.appendChild(bootScript);
-
-    // Step 2: Init with project config (key from server-injected global)
-    const init = `window.posthog.init(${JSON.stringify(apiKey)}, {
-      api_host: ${JSON.stringify(apiHost || "https://us.i.posthog.com")},
-      defaults: '2026-05-30',
-      person_profiles: 'identified_only',
-      capture_pageview: true,
-      capture_pageleave: true,
-      autocapture: false,
-      disable_session_recording: true,
-      respect_dnt: true,
-      capture_performance: true,
-      loaded: function() { window.posthog.__loaded = true; }
-    });`;
-
-    const initScript = document.createElement("script");
-    initScript.textContent = init;
-
-    bootScript.onload = () => {
-      document.head.appendChild(initScript);
-
-      // Poll for ready
       const check = setInterval(() => {
         if (window.posthog?.__loaded) {
           clearInterval(check);
@@ -82,11 +89,12 @@ export function ensurePostHog(): Promise<void> {
           resolve();
         }
       }, 100);
-
-      setTimeout(() => { clearInterval(check); resolve(); }, 5000);
+      setTimeout(() => {
+        clearInterval(check);
+        resolve();
+      }, 5000);
     };
-
-    bootScript.onerror = () => resolve();
+    document.head.appendChild(script);
   });
 
   return loadPromise;

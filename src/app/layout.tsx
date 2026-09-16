@@ -93,13 +93,14 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}
     >
       <head>
         <link rel="icon" type="image/svg+xml" href="/icon.svg" />
         <link rel="apple-touch-icon" href="/icon.svg" />
       </head>
-      <body className="min-h-full selection:bg-orange/25 selection:text-ink">
+      <body suppressHydrationWarning className="min-h-full selection:bg-orange/25 selection:text-ink">
         <script
           dangerouslySetInnerHTML={{
             __html:

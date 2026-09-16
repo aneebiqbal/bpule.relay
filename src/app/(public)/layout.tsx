@@ -5,10 +5,10 @@ import { AnalyticsProvider } from "@/components/analytics-provider";
 
 export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-bone">
+    <div className="public-canvas flex min-h-dvh flex-col bg-bone">
       <AnalyticsProvider />
       <PublicNav />
-      <main className="flex-1 pt-14">{children}</main>
+      <main className="flex-1 pt-[4.5rem]">{children}</main>
       <PublicFooter />
     </div>
   );

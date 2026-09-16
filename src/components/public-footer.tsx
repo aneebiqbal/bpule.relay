@@ -5,6 +5,7 @@ const PRODUCT_LINKS = [
   { href: "/#product", label: "Product" },
   { href: "/#studio", label: "Studio" },
   { href: "/#how-it-works", label: "How it works" },
+  { href: "/#teams", label: "For teams" },
   { href: "/pricing", label: "Pricing" },
   { href: "/docs", label: "Docs" },
 ];

@@ -228,6 +228,90 @@
   --shadow-cobalt: 0 4px 16px -4px color-mix(in srgb, var(--cobalt) 20%, transparent);
 }
 
+/*
+ * Marketing pages stay on the light editorial palette even when
+ * the OS / saved theme is dark. Otherwise text-ink becomes cream
+ * on a cream canvas and the page looks blank.
+ */
+.public-canvas {
+  color-scheme: light;
+  --bone: #f7f6f3;
+  --bone-raised: #ffffff;
+  --ink: #1c1c1a;
+  --ink-soft: #3d3c39;
+  --graphite: #5c5b57;
+  --stone: #8a8984;
+  --stone-light: #b0afa9;
+  --line: #e0ddd6;
+  --line-organic: #d4d1c9;
+  --line-soft: #ebe8e1;
+  --orange: #d4652f;
+  --orange-light: #e8844e;
+  --orange-dark: #b8531f;
+  --orange-faint: #fdf3ed;
+  --cobalt: #3b5bdb;
+  --cobalt-light: #5c7afa;
+  --cobalt-dark: #2f48b8;
+  --cobalt-faint: #eef2ff;
+  --background: #f7f6f3;
+  --foreground: #1c1c1a;
+  --color-bone: #f7f6f3;
+  --color-bone-raised: #ffffff;
+  --color-ink: #1c1c1a;
+  --color-ink-soft: #3d3c39;
+  --color-graphite: #5c5b57;
+  --color-stone: #8a8984;
+  --color-stone-light: #b0afa9;
+  --color-line: #e0ddd6;
+  --color-orange: #d4652f;
+  --color-orange-light: #e8844e;
+  --color-orange-dark: #b8531f;
+  --color-cobalt: #3b5bdb;
+  --color-background: #f7f6f3;
+  --color-foreground: #1c1c1a;
+  background: #f7f6f3;
+  color: #1c1c1a;
+
+  /* Landing-page extended material system — defined here (not just on
+     .landing-page) so chrome that renders outside the page body, like the
+     fixed nav, can see the same tokens. */
+  --bone-000: #fdfbf6;
+  --bone-050: #f6f1e6;
+  --bone-100: #ece3d0;
+  --bone-200: #d9cdb4;
+  --bone-300: #c2b494;
+
+  --ink-950: #100f0d;
+  --ink-900: #1a1916;
+  --ink-800: #262420;
+  --ink-700: #3c3a35;
+
+  --console: #131210;
+  --console-raised: #1c1a17;
+  --console-line: rgba(237, 233, 225, 0.1);
+  --console-text: #f1ede4;
+  --console-mute: #9a9488;
+
+  --orange-strong: #b8531f;
+  --orange-signal: #d4652f;
+  --orange-muted: #c47a4f;
+  --orange-wash: #f4e4d6;
+  --orange-surface: #fbf1e9;
+  --orange-line: color-mix(in srgb, var(--orange-signal) 45%, var(--bone-200));
+
+  --cobalt-strong: #2a3f96;
+  --cobalt-signal: #3b5bdb;
+  --cobalt-muted: #5a6fc4;
+  --cobalt-wash: #e2e7f7;
+  --cobalt-surface: #f1f3fc;
+  --cobalt-line: color-mix(in srgb, var(--cobalt-signal) 45%, var(--bone-200));
+
+  --r-chip: 2px;
+  --r-object: 3px;
+  --r-module: 4px;
+  --r-canvas: 6px;
+}
+
 /* ═══════════════════════════════════════════════════════════
    Base layer
    ═══════════════════════════════════════════════════════════ */
@@ -488,4 +572,359 @@
   @media (min-width: 1024px) {
     .section-padding { padding-left: 3rem; padding-right: 3rem; }
   }
+
+  /* ── Landing spatial system ── */
+  .landing-shell {
+    width: 100%;
+    max-width: var(--page-max);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
+
+  .landing-shell-wide {
+    width: 100%;
+    max-width: var(--page-wide);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
+
+  .landing-measure {
+    max-width: var(--measure);
+  }
+
+  .landing-section {
+    padding-block: var(--section-y);
+  }
+
+  .landing-section-lg {
+    padding-block: var(--section-y-lg);
+  }
+
+  .text-hero {
+    font-weight: 300;
+    letter-spacing: -0.035em;
+    line-height: 1.02;
+    font-size: var(--text-hero);
+  }
+
+  .text-chapter {
+    font-weight: 300;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+    font-size: var(--text-chapter);
+  }
+
+  .text-body {
+    font-size: var(--text-body);
+    line-height: 1.6;
+    color: var(--graphite);
+  }
+
+  .text-meta {
+    font-family: var(--font-mono);
+    font-size: var(--text-meta);
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    font-feature-settings: "tnum" 1;
+    color: var(--stone);
+  }
+
+  /* Bone material — restrained grain, no glass */
+  .landing-grain {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    opacity: 0.035;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.11 0 0 0 0 0.11 0 0 0 0 0.10 0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  .dark .landing-grain {
+    mix-blend-mode: overlay;
+    opacity: 0.05;
+  }
+
+  .nav-pill {
+    background: var(--bone-000);
+    border: 1px solid var(--bone-200);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.72),
+      0 10px 28px -18px rgba(18, 17, 16, 0.38);
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+  }
+  .nav-pill.is-scrolled {
+    border-color: color-mix(in srgb, var(--ink) 12%, var(--bone-200));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.72),
+      0 16px 36px -18px rgba(18, 17, 16, 0.46);
+  }
+  .nav-pill .relay-cta {
+    border-radius: 999px;
+    min-height: 2rem;
+    height: 2rem;
+    padding: 0 0.9rem;
+  }
+
+  /* Relay CTA — pulse travels through the button */
+  .relay-cta {
+    position: relative;
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--orange);
+    padding: 0 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--bone);
+    transition: background 0.2s ease, transform 0.15s ease;
+  }
+  .relay-cta:hover { background: var(--orange-dark); }
+  .relay-cta:active { transform: scale(0.98); }
+  .relay-cta:disabled,
+  .relay-cta[aria-disabled="true"] {
+    pointer-events: none;
+    opacity: 0.45;
+  }
+  .relay-cta .relay-cta-pulse {
+    position: absolute;
+    left: -20%;
+    top: 50%;
+    width: 28%;
+    height: 140%;
+    transform: translateY(-50%) skewX(-18deg);
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--bone) 28%, transparent), transparent);
+    opacity: 0;
+  }
+  .relay-cta:hover .relay-cta-pulse,
+  .relay-cta:focus-visible .relay-cta-pulse {
+    animation: cta-travel 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .relay-cta .relay-cta-arrow {
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .relay-cta:hover .relay-cta-arrow,
+  .relay-cta:focus-visible .relay-cta-arrow {
+    transform: translateX(3px);
+  }
+
+  .relay-cta-quiet {
+    position: relative;
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+    border-radius: 4px;
+    background: transparent;
+    padding: 0 1.15rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ink);
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+  .relay-cta-quiet:hover {
+    background: color-mix(in srgb, var(--ink) 3%, transparent);
+    border-color: color-mix(in srgb, var(--ink) 22%, transparent);
+  }
+  .relay-cta-quiet:active { transform: scale(0.98); }
+
+  @keyframes cta-travel {
+    0% { left: -24%; opacity: 0; }
+    25% { opacity: 1; }
+    100% { left: 110%; opacity: 0; }
+  }
+
+  @keyframes thread-pulse {
+    0% { offset-distance: 0%; opacity: 0; }
+    8% { opacity: 1; }
+    92% { opacity: 1; }
+    100% { offset-distance: 100%; opacity: 0; }
+  }
+
+  @keyframes signal-scan {
+    0% { transform: translate(-8px, -8px); opacity: 0.2; }
+    50% { opacity: 1; }
+    100% { transform: translate(8px, 8px); opacity: 0.2; }
+  }
+
+  @keyframes cobalt-bloom {
+    0% { transform: scale(0.4); opacity: 0; }
+    40% { opacity: 0.55; }
+    100% { transform: scale(1.8); opacity: 0; }
+  }
+
+  .signal-scan { animation: signal-scan 2.8s ease-in-out infinite; }
+  .cobalt-bloom { animation: cobalt-bloom 3.6s ease-out infinite; }
+
+  .chapter-sleep {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 720px;
+  }
+
+  /* ── Relay surface language ──
+     A layered material system: PAGE → CHAPTER → CANVAS → MODULE → OBJECT →
+     ACTIVE OBJECT → ARTIFACT → METADATA. Each layer gets its own tone, never
+     the same plane twice in a row. */
+  .landing-page {
+    /* Token definitions live on .public-canvas (the ancestor that also
+       wraps the fixed nav/footer); this class only sets the page's own
+       background against that shared system. */
+    background: var(--bone-050);
+  }
+
+  /* ── CANVAS: the console — Relay's dark operational material ── */
+  .srf-console {
+    background: var(--console);
+    color: var(--console-text);
+    border-radius: var(--r-canvas);
+    box-shadow:
+      0 24px 56px -26px rgba(16, 15, 13, 0.5),
+      0 0 0 1px rgba(212, 101, 47, 0.24);
+  }
+
+  .srf-console-edge {
+    box-shadow:
+      inset 4px 0 0 var(--orange-signal),
+      0 24px 56px -26px rgba(16, 15, 13, 0.5),
+      0 0 0 1px rgba(212, 101, 47, 0.24);
+  }
+
+  /* Hero's signature console — breathes with a slow orange glow along its
+     edge, distinct from the still Priority Console further down the page. */
+  @keyframes hero-console-breathe {
+    0%, 100% {
+      box-shadow:
+        inset 4px 0 0 var(--orange-signal),
+        0 24px 56px -26px rgba(16, 15, 13, 0.5),
+        0 0 0 1px rgba(212, 101, 47, 0.24);
+    }
+    50% {
+      box-shadow:
+        inset 4px 0 0 var(--orange-signal),
+        0 28px 64px -24px rgba(16, 15, 13, 0.56),
+        0 0 0 1px rgba(212, 101, 47, 0.4);
+    }
+  }
+  .hero-console-pulse {
+    animation: hero-console-breathe 4.5s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-console-pulse {
+      animation: none;
+      box-shadow:
+        inset 4px 0 0 var(--orange-signal),
+        0 24px 56px -26px rgba(16, 15, 13, 0.5),
+        0 0 0 1px rgba(212, 101, 47, 0.24);
+    }
+  }
+
+  /* Inset row inside a console — the METADATA layer sitting one level
+     below the console's own surface. */
+  .srf-console-inset {
+    background: var(--console-raised);
+    box-shadow: inset 0 1px 0 var(--console-line), inset 0 -1px 0 var(--console-line);
+  }
+
+  /* ── CANVAS: the editorial sheet — Studio's paper material ── */
+  .srf-sheet {
+    background: var(--bone-000);
+    border-radius: 0;
+    box-shadow:
+      10px 10px 0 0 var(--cobalt-wash),
+      0 1px 0 var(--bone-200);
+    border-top: 2px solid var(--cobalt-signal);
+  }
+
+  /* ── MODULE: dossier card — offset shadow reads as a stacked object ── */
+  .srf-dossier {
+    background: var(--bone-000);
+    border: 1px solid var(--bone-200);
+    border-radius: var(--r-object);
+    box-shadow: 6px 6px 0 0 var(--bone-100);
+  }
+
+  .srf-dossier-on {
+    background: var(--console);
+    color: var(--console-text);
+    border-color: color-mix(in srgb, var(--orange-signal) 55%, transparent);
+    box-shadow: 8px 8px 0 0 color-mix(in srgb, var(--orange-signal) 20%, transparent);
+  }
+
+  /* ── ARTIFACT: proof slip, attached evidence ── */
+  .srf-proof {
+    background: var(--bone-000);
+    border: 1px solid var(--bone-200);
+    border-radius: var(--r-chip);
+    box-shadow: 4px 4px 0 0 var(--bone-100);
+  }
+
+  .srf-proof-cobalt {
+    background: var(--bone-000);
+    border: 1px solid var(--cobalt-line);
+    border-radius: var(--r-chip);
+    box-shadow: 4px 4px 0 0 var(--cobalt-wash);
+  }
+
+  /* ── METADATA: the smallest unit — a chip ── */
+  .srf-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid var(--bone-200);
+    border-radius: var(--r-chip);
+    background: var(--bone-000);
+    padding: 0.2rem 0.45rem;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .srf-rule {
+    height: 1px;
+    background: var(--console-line);
+  }
+
+  .mark-corners {
+    position: relative;
+  }
+  .mark-corners::before,
+  .mark-corners::after {
+    content: "";
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-color: color-mix(in srgb, var(--ink) 22%, transparent);
+    border-style: solid;
+    pointer-events: none;
+  }
+  .mark-corners::before {
+    top: -1px;
+    left: -1px;
+    border-width: 1px 0 0 1px;
+  }
+  .mark-corners::after {
+    right: -1px;
+    bottom: -1px;
+    border-width: 0 1px 1px 0;
+  }
+}
+
+:root {
+  --page-max: 1280px;
+  --page-wide: 1320px;
+  --gutter: clamp(1.25rem, 5vw, 4.5rem);
+  --section-y: clamp(5.5rem, 11vw, 11.25rem);
+  --section-y-lg: clamp(6.5rem, 14vw, 13.75rem);
+  --text-hero: clamp(2.35rem, 5.4vw, 4.35rem);
+  --text-chapter: clamp(1.7rem, 3.1vw, 2.75rem);
+  --text-body: 1.0625rem;
+  --text-meta: 0.75rem;
+  --measure: 36rem;
 }
