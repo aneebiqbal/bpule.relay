@@ -625,7 +625,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     { id: 'audit-demo-1', organizationId: 'org-demo', repId: 'rep-hassan', revenueIdentityId: 'ri-demo-linkedin', eventType: 'identity_created', detail: { source: 'demo' }, createdAt: t(30) },
   ]
   const demoRelayEvents: import('@/lib/domain/types').RelayEvent[] = []
-  let demoRelayRuns: import('@/lib/domain/types').RelayRun[] = []
+  const demoRelayRuns: import('@/lib/domain/types').RelayRun[] = []
   const extractionRuns: Array<{
     task: 'extract' | 'draft'
     success: boolean

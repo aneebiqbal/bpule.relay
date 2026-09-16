@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
 
   let qualityPassed = qualityResult.passed
   let finalCaption = caption
-  let retryStats = { longcatFirstPass: qualityResult.passed ? 1 : 0, groqRetry: 0, gptEscalation: 0 }
+  const retryStats = { longcatFirstPass: qualityResult.passed ? 1 : 0, groqRetry: 0, gptEscalation: 0 }
 
   // Corrective retry on quality failure
   if (!qualityPassed) {

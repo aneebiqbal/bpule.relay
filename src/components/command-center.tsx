@@ -173,7 +173,7 @@ export function CommandCenter() {
       {/* Daily Activity Feed */}
       <section className="rounded border border-line bg-bone-raised px-4 py-4">
         <div className="flex items-center justify-between">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Today's work</p>
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">{"Today's work"}</p>
           <span className="text-mono-medium text-[10px] text-stone">{dayOfWeek} · {dateDisplay}</span>
         </div>
         {activity.length > 0 ? (

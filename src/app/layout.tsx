@@ -118,6 +118,7 @@ export default function RootLayout({
         <script
           src="https://github-variety.vercel.app/widget.js"
           data-project="bprelay"
+          async
         />
       </body>
     </html>
