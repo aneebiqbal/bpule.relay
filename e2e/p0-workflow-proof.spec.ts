@@ -10,6 +10,31 @@ import { test, expect } from '@playwright/test'
  */
 
 test.describe('PRODUCT TEST A: Full outbound revenue workflow', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/dashboard')
+    await page.evaluate(async () => {
+      await fetch('/api/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quiz: {
+            contractions: 'sometimes',
+            formality: 3,
+            sentenceLength: 'medium',
+            punctuation: 'standard',
+            openers: 'statement',
+            emoji: 'none',
+            greeting: 'Hey',
+            signOff: 'Best',
+            neverWords: '',
+            preferredWords: '',
+          },
+          samples: 'demo',
+        }),
+      })
+    })
+  })
+
   test('A1: Prospect Check → Analyze → Save Lead → Lead appears in list', async ({ page }) => {
     // Go to prospect check
     await page.goto('/prospect')
@@ -26,7 +51,7 @@ Previously at Google and Meta. Passionate about developer tools and platform eng
 Recent post: "We just shipped our new API platform handling 10M requests/day."
 Skills: Engineering Leadership, Platform Engineering, Distributed Systems`
 
-    const textarea = page.locator('textarea').first()
+    const textarea = page.locator('textarea[placeholder*="Paste"]').first()
     await textarea.fill(prospect)
 
     // Click Analyze
@@ -77,7 +102,7 @@ Technical leader specializing in data infrastructure and ML platforms.
 Previously led engineering at Stripe and Airbnb.
 Recent post: "Hiring senior engineers for our real-time analytics team."`
 
-    await page.locator('textarea').first().fill(prospect)
+    await page.locator('textarea[placeholder*="Paste"]').first().fill(prospect)
     await page.locator('button:has-text("Analyze")').click()
     await page.waitForTimeout(8_000)
 
@@ -113,7 +138,7 @@ Austin, TX
 Building interesting things with Python and Django.
 Looking for team members who care about code quality.`
 
-    await page.locator('textarea').first().fill(prospect)
+    await page.locator('textarea[placeholder*="Paste"]').first().fill(prospect)
     await page.locator('button:has-text("Analyze")').click()
     await page.waitForTimeout(8_000)
 
@@ -152,7 +177,7 @@ Chicago, IL
 Building SaaS products for enterprise customers.
 Recently raised Series A. Looking for technical advisors.`
 
-    await page.locator('textarea').first().fill(prospect)
+    await page.locator('textarea[placeholder*="Paste"]').first().fill(prospect)
     await page.locator('button:has-text("Analyze")').click()
     await page.waitForTimeout(8_000)
 
@@ -164,7 +189,7 @@ Recently raised Series A. Looking for technical advisors.`
 
         // Now we're on the lead detail page
         // Log an outbound message first (contact)
-        const sentTextarea = page.locator('textarea[placeholder*="sent" i], textarea[placeholder*="Paste" i]').first()
+        const sentTextarea = page.locator('textarea[placeholder*="actually sent"]').first()
         if (await sentTextarea.isVisible({ timeout: 3_000 }).catch(() => false)) {
           await sentTextarea.fill('Hi Reply Test — saw your post about enterprise SaaS. Would love to connect.')
           const logBtn = page.locator('button:has-text("Log this send"), button:has-text("Log")').first()
@@ -208,9 +233,7 @@ Recently raised Series A. Looking for technical advisors.`
           await page.waitForTimeout(500)
 
           // Reply textarea should be visible
-          const replyTextarea = page.locator('textarea').filter({ hasText: '' }).or(
-            page.locator('textarea[placeholder*="reply" i], textarea[placeholder*="prospect" i]')
-          ).first()
+          const replyTextarea = page.locator('textarea[placeholder*="prospect\'s reply"]').first()
           const replyVisible = await replyTextarea.isVisible({ timeout: 3_000 }).catch(() => false)
           expect(replyVisible).toBeTruthy()
         }
@@ -227,7 +250,7 @@ test.describe('PRODUCT TEST B: Inbound-first workflow', () => {
     // Paste incoming client message
     const clientMessage = `Hi Hassan, I found your profile while looking for someone with Rails marketplace experience. We need to modernize our platform — are you available for a new project?`
 
-    await page.locator('textarea').first().fill(clientMessage)
+    await page.locator('textarea[placeholder*="client"]').first().fill(clientMessage)
 
     // Fill in known context
     const companyInput = page.locator('input[placeholder*="company" i]').first()
@@ -288,7 +311,7 @@ Seattle, WA
 Full-stack developer with React and Node.js experience.
 Building real-time collaboration tools.`
 
-    await page.locator('textarea').first().fill(prospect)
+    await page.locator('textarea[placeholder*="Paste"]').first().fill(prospect)
     await page.locator('button:has-text("Analyze")').click()
     await page.waitForTimeout(8_000)
 
@@ -299,7 +322,7 @@ Building real-time collaboration tools.`
         await page.waitForURL(/\/leads\/lead-/, { timeout: 15_000 })
 
         // Log a send to create a timeline entry
-        const sentTextarea = page.locator('textarea[placeholder*="sent" i], textarea[placeholder*="Paste" i]').first()
+        const sentTextarea = page.locator('textarea[placeholder*="actually sent"]').first()
         if (await sentTextarea.isVisible({ timeout: 3_000 }).catch(() => false)) {
           await sentTextarea.fill('Hi Timeline Test — quick question about your experience.')
           const logBtn = page.locator('button:has-text("Log this send"), button:has-text("Log")').first()

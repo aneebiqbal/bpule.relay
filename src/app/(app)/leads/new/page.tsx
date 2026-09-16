@@ -359,7 +359,6 @@ export default function NewLeadPage() {
       }
       if (!res.ok) throw new Error(data.error ?? 'Failed to save lead.')
       router.push(`/leads/${data.lead.id}`)
-      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save lead.')
     } finally {

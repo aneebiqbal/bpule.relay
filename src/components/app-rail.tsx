@@ -152,18 +152,28 @@ export function AppRail({
 
   const activeIdentity = revenueIdentities.find((identity) => identity.id === activeIdentityId) ?? revenueIdentities[0] ?? null
 
+  // Poll send count on focus and every 30s (not on every nav)
   useEffect(() => {
     let cancelled = false
-    fetch('/api/me/status')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!cancelled && d && typeof d.todaySends === 'number') {
-          setSends(d.todaySends)
-        }
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [pathname])
+    const fetchStatus = () => {
+      fetch('/api/me/status')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!cancelled && d && typeof d.todaySends === 'number') {
+            setSends(d.todaySends)
+          }
+        })
+        .catch(() => {})
+    }
+    fetchStatus()
+    const interval = setInterval(fetchStatus, 30_000)
+    window.addEventListener('focus', fetchStatus)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      window.removeEventListener('focus', fetchStatus)
+    }
+  }, [])
 
   const atCeiling = sends >= dailyLimit
 

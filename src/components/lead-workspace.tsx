@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useCallback, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -221,8 +221,15 @@ export function LeadWorkspace({
   matchedProofs: ProofItem[]
 }) {
   const router = useRouter()
-  const locked = lead.status === 'no' || lead.status === 'dead'
-  const verdict = lead.verdict ?? score.verdict
+  // Incremented after mutations to trigger lightweight lead re-fetch
+  const [leadVersion, setLeadVersion] = useState(0)
+  // Local override of lead data for optimistic/targeted updates
+  const [leadOverride, setLeadOverride] = useState<LeadDetail | null>(null)
+  // Use override when available, otherwise server prop
+  const currentLead = leadOverride || lead
+
+  const locked = currentLead.status === 'no' || currentLead.status === 'dead'
+  const verdict = currentLead.verdict ?? score.verdict
   const canDraft = verdict === 'send' || verdict === 'research_more'
 
   const [artifact, setArtifact] = useState<ArtifactId>('dm')
@@ -249,18 +256,18 @@ export function LeadWorkspace({
   const draft = currentDraft.result
   const draftText = currentDraft.text
 
-  const signal = signalById(lead.signalType)
-  const hasReply = lead.messages.some((m) => m.type === 'reply' && m.sentText) || lead.outcomes.some((o) => o.stage === 'replied')
-  const hasPriorSend = lead.messages.some((m) => m.sentText && m.sentAt)
+  const signal = signalById(currentLead.signalType)
+  const hasReply = currentLead.messages.some((m) => m.type === 'reply' && m.sentText) || currentLead.outcomes.some((o) => o.stage === 'replied')
+  const hasPriorSend = currentLead.messages.some((m) => m.sentText && m.sentAt)
   // ONE follow-up, ever. A lead already in 'followed_up' status has used its
   // one follow-up and is permanently locked out of another — status
   // 'followed_up' is deliberately NOT in the eligible set below.
-  const followupAlreadyUsed = lead.status === 'followed_up'
-  const followupEligible = lead.status === 'contacted' && hasPriorSend && !followupAlreadyUsed
+  const followupAlreadyUsed = currentLead.status === 'followed_up'
+  const followupEligible = currentLead.status === 'contacted' && hasPriorSend && !followupAlreadyUsed
 
   // Reply is available when: a reply outcome exists, user pasted reply text,
   // or this is an inbound-first lead (client contacted us)
-  const replyAvailable = hasReply || Boolean(capturedReplyText) || lead.direction === 'inbound'
+  const replyAvailable = hasReply || Boolean(capturedReplyText) || currentLead.direction === 'inbound'
 
   const artifactDisabled: Record<ArtifactId, string | null> = {
     dm: null,
@@ -270,7 +277,7 @@ export function LeadWorkspace({
       ? null
       : followupAlreadyUsed
         ? 'A follow-up was already sent on this lead. Only one, ever.'
-        : lead.status === 'new'
+        : currentLead.status === 'new'
           ? 'Eligible once this lead is contacted.'
           : 'Eligible once a first message has been sent.',
     reply: !replyAvailable ? 'Paste the client reply above to enable.' : null,
@@ -278,7 +285,7 @@ export function LeadWorkspace({
 
   const activeProof = proofList.find((p) => p.id === matchedProofId) ?? proofList[0] ?? null
   const chosenProfileId = profiles.some((p) => p.id === selectedProfileId) ? selectedProfileId : profiles[0]?.id ?? null
-  const lastReply = lead.messages.filter((m) => m.type === 'reply' && m.sentText).at(-1)
+  const lastReply = currentLead.messages.filter((m) => m.type === 'reply' && m.sentText).at(-1)
   const prospectReplyText = capturedReplyText || lastReply?.sentText || ''
 
   const editDraft = useCallback((text: string) => {
@@ -354,7 +361,8 @@ export function LeadWorkspace({
       if (!res.ok) throw new Error(data.error ?? 'Failed to log send.')
       setSentOk({ todaySends: data.todaySends })
       setSentText('')
-      router.refresh()
+      // Refresh lead data to update timeline, status, next action
+      setLeadVersion((v) => v + 1)
     } catch (err) {
       setSendError(err instanceof Error ? err.message : 'Failed to log send.')
     } finally {
@@ -362,29 +370,44 @@ export function LeadWorkspace({
     }
   }
 
+  // Re-fetch lead data after mutations (targeted, not full page reload)
+  useEffect(() => {
+    if (leadVersion === 0) return
+    let cancelled = false
+    fetch(`/api/leads/${lead.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.lead) {
+          setLeadOverride(data.lead)
+        }
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [leadVersion, lead.id])
+
   const textToCheck = sentText.trim() || draftText
   const { kind: countKind, max: countMax } = artifactCount(artifact)
   const count = textToCheck ? countFor(countKind, textToCheck) : 0
 
   const lower = textToCheck.toLowerCase()
-  const companyNamed = lead.company.length > 0 && lower.includes(lead.company.toLowerCase())
-  const priorSameType = lead.messages.some((m) => m.sentText && m.sentAt && m.type === artifact)
+  const companyNamed = currentLead.company.length > 0 && lower.includes(currentLead.company.toLowerCase())
+  const priorSameType = currentLead.messages.some((m) => m.sentText && m.sentAt && m.type === artifact)
   const inPipeline = artifact === 'followup' ? !hasPriorSend : priorSameType
 
   const gates: Array<{ label: string; ok: boolean; why: string }> = [
-    { label: 'Names the company', ok: companyNamed, why: companyNamed ? '' : `Doesn't name ${lead.company} — reader won't know it's about them.` },
+    { label: 'Names the company', ok: companyNamed, why: companyNamed ? '' : `Doesn't name ${currentLead.company} — reader won't know it's about them.` },
     { label: `Within the ${ARTIFACTS.find((a) => a.id === artifact)?.label.toLowerCase()} limit`, ok: artifact === 'reply' || count <= countMax, why: count > countMax ? `${count} ${countKind === 'chars' ? 'chars' : 'words'} — limit is ${countMax}.` : '' },
     { label: 'Passed every draft check', ok: Boolean(draft?.passed), why: !draft?.passed ? (draft ? 'Draft flagged itself. Read notes below.' : 'Generate a draft first.') : '' },
-    { label: artifact === 'followup' ? 'Continues an existing thread' : 'Not already sent on this line', ok: artifact === 'followup' ? hasPriorSend : !inPipeline, why: artifact === 'followup' ? (!hasPriorSend ? 'A follow-up needs a first message.' : '') : (inPipeline ? `Already sent to ${lead.company} — looks like spam.` : '') },
+    { label: artifact === 'followup' ? 'Continues an existing thread' : 'Not already sent on this line', ok: artifact === 'followup' ? hasPriorSend : !inPipeline, why: artifact === 'followup' ? (!hasPriorSend ? 'A follow-up needs a first message.' : '') : (inPipeline ? `Already sent to ${currentLead.company} — looks like spam.` : '') },
   ]
   const allGreen = Boolean(draft || sentText) && textToCheck.length > 0 && gates.every((g) => g.ok)
   const needOverride = Boolean(draft || sentText) && textToCheck.length > 0 && !allGreen
   const [overrideCheck, setOverrideCheck] = useState(false)
 
-  const contactLine = lead.contactName
-    ? `${lead.contactName}${lead.contactTitle ? ` · ${lead.contactTitle}` : ''}`
+  const contactLine = currentLead.contactName
+    ? `${currentLead.contactName}${currentLead.contactTitle ? ` · ${currentLead.contactTitle}` : ''}`
     : 'No contact named yet'
-  const host = hostOf(lead.url)
+  const host = hostOf(currentLead.url)
 
   return (
     <div className="space-y-4">
@@ -402,11 +425,11 @@ export function LeadWorkspace({
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <VerdictWord verdict={verdict} />
-              {lead.status !== 'new' && !hasReply && <StatusWord status={lead.status} />}
+              {currentLead.status !== 'new' && !hasReply && <StatusWord status={currentLead.status} />}
               {hasReply && <StatusWord status="replied" />}
             </div>
 
-            <h1 className="mt-2 text-heading text-2xl text-ink sm:text-3xl">{lead.company}</h1>
+            <h1 className="mt-2 text-heading text-2xl text-ink sm:text-3xl">{currentLead.company}</h1>
             <p className="mt-0.5 text-sm text-graphite">{contactLine}</p>
 
             {/* Tags & meta */}
@@ -416,13 +439,13 @@ export function LeadWorkspace({
                   <Flame className="size-3" /> {signal.short}
                 </span>
               )}
-              {lead.url && (
-                <a href={lead.url} target="_blank" rel="noopener noreferrer"
+              {currentLead.url && (
+                <a href={currentLead.url} target="_blank" rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 rounded-lg bg-bone px-2 py-0.5 text-xs text-ink transition-colors hover:bg-line">
                   {host ?? 'Source'} <ExternalLink className="size-2.5 text-graphite" />
                 </a>
               )}
-              {(lead.tags ?? []).map((t) => (
+              {(currentLead.tags ?? []).map((t) => (
                 <span key={t} className="rounded-lg bg-bone px-2 py-0.5 font-mono text-xs text-ink-soft">{t}</span>
               ))}
             </div>
@@ -487,7 +510,7 @@ export function LeadWorkspace({
       {locked && (
         <Alert variant="destructive">
           <AlertTitle>This lead is locked</AlertTitle>
-          <AlertDescription>Marked {lead.status}. No drafts or sends for anyone.</AlertDescription>
+          <AlertDescription>Marked {currentLead.status}. No drafts or sends for anyone.</AlertDescription>
         </Alert>
       )}
 
@@ -520,7 +543,7 @@ export function LeadWorkspace({
                 {activeProof.tags.length > 0 && (
                   <div className="mt-2.5 flex flex-wrap gap-1">
                     {activeProof.tags.map((t) => {
-                      const matches = (lead.tags ?? []).some((lt) => lt.toLowerCase() === t.toLowerCase())
+                      const matches = (currentLead.tags ?? []).some((lt) => lt.toLowerCase() === t.toLowerCase())
                       return (
                         <span key={t} className={cn('rounded-md px-1.5 py-0.5 font-mono text-[10px] ring-1',
                           matches ? 'bg-orange/10 text-orange ring-orange/20' : 'bg-bone text-graphite ring-transparent')}>
@@ -543,7 +566,7 @@ export function LeadWorkspace({
       {canDraft && !locked && (
         <section className="reveal-up stagger-1">
           <NextBestAction
-            lead={lead}
+            lead={currentLead}
             verdict={verdict}
             hasReply={hasReply}
             hasPriorSend={hasPriorSend}
@@ -663,7 +686,7 @@ export function LeadWorkspace({
                     )}
                     {!draft.selfCheck.codeChecks.companyMentioned && (
                       <p className="flex items-start gap-2 text-xs text-status-warning">
-                        <X className="mt-0.5 size-3 shrink-0" /> Does not name {lead.company}.
+                        <X className="mt-0.5 size-3 shrink-0" /> Does not name {currentLead.company}.
                       </p>
                     )}
                     {!draft.selfCheck.codeChecks.specificEvidenceMentioned && (
@@ -737,7 +760,7 @@ export function LeadWorkspace({
           </button>
           {timelineOpen && (
             <div className="mt-2 rounded-xl border border-line/60 bg-bone-raised p-5">
-              <Timeline lead={lead} />
+              <Timeline lead={currentLead} />
             </div>
           )}
         </section>

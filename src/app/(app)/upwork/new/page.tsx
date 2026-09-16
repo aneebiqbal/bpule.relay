@@ -158,7 +158,6 @@ export default function NewUpworkJobPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to save job.')
       router.push(`/upwork/${data.job.id}`)
-      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save job.')
     } finally {

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { Check, Copy, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -16,7 +15,6 @@ interface UpworkJobActionsProps {
 }
 
 export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: UpworkJobActionsProps) {
-  const router = useRouter()
   const [selectedProfileId, setSelectedProfileId] = useState(profiles[0]?.id ?? '')
   const [proposal, setProposal] = useState('')
   const [editing, setEditing] = useState(false)
@@ -79,11 +77,10 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
         throw new Error(data?.error || 'Failed to save draft.')
       }
       setEditing(false)
-      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save.')
     }
-  }, [jobId, proposal, router])
+  }, [jobId, proposal])
 
   const markApplied = useCallback(async () => {
     if (!proposal.trim()) {
@@ -101,11 +98,10 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
         throw new Error(data?.error || 'Failed to mark as applied.')
       }
       setApplied(true)
-      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to mark as applied.')
     }
-  }, [jobId, proposal, router])
+  }, [jobId, proposal])
 
   return (
     <div className="space-y-4">

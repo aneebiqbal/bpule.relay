@@ -254,7 +254,6 @@ export default function ProspectCheckPage() {
       }
       if (!res.ok) throw new Error(data.error ?? 'Failed to save lead.')
       router.push(`/leads/${data.leadId}`)
-      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save lead.')
     } finally {

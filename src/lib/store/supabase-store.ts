@@ -287,32 +287,35 @@ export class SupabaseStore implements ScoutStore {
     return this.organization.id
   }
 
+  private _rulebookCache: OrganizationRulebook | null | undefined = undefined
+
   async getRulebook(): Promise<OrganizationRulebook | null> {
-    return loadRulebook(this.client, this.orgId)
+    if (this._rulebookCache !== undefined) return this._rulebookCache
+    this._rulebookCache = await loadRulebook(this.client, this.orgId)
+    return this._rulebookCache
   }
 
-  async fetchLeadsAll(): Promise<Lead[]> {
-    const { data, error } = await this.client
-      .from('leads')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (error) throw error
-    return (data ?? []).map(mapLead)
-  }
+  private _ratesCache: RateBucket[] | undefined = undefined
 
   private async fetchRates(): Promise<RateBucket[]> {
+    if (this._ratesCache) return this._ratesCache
+    this._ratesCache = await this._fetchRatesUncached()
+    return this._ratesCache
+  }
+
+  private async _fetchRatesUncached(): Promise<RateBucket[]> {
     const [leads, messages, outcomes] = await Promise.all([
       this.fetchLeadsAll(),
       this.client
         .from('messages')
-        .select('*')
+        .select('id, lead_id, type, sent_at, sent_text')
         .then((r) => {
           if (r.error) throw r.error
           return (r.data ?? []).map(mapMessage)
         }),
       this.client
         .from('outcomes')
-        .select('*')
+        .select('id, lead_id, stage, occurred_at')
         .then((r) => {
           if (r.error) throw r.error
           return (r.data ?? []).map(mapOutcome)
@@ -323,6 +326,15 @@ export class SupabaseStore implements ScoutStore {
       sentMessages: messages.filter((m) => m.leadId === lead.id),
       outcomes: outcomes.filter((o) => o.leadId === lead.id),
     }))
+  }
+
+  async fetchLeadsAll(): Promise<Lead[]> {
+    const { data, error } = await this.client
+      .from('leads')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map(mapLead)
   }
 
   private async countTodaysSends(type?: string): Promise<number> {
@@ -1199,6 +1211,16 @@ export class SupabaseStore implements ScoutStore {
       if (!existing || row.sent_at > existing) lastSentByLead.set(row.lead_id, row.sent_at)
     }
 
+    // Bulk-fetch conversation states to avoid N+1
+    const { data: convStates } = await this.client
+      .from('conversation_states')
+      .select('lead_id, followup_count')
+      .in('lead_id', leadIds)
+    const followupCountByLead = new Map<string, number>()
+    for (const row of (convStates ?? []) as Array<{ lead_id: string; followup_count: number }>) {
+      followupCountByLead.set(row.lead_id, row.followup_count)
+    }
+
     const now = new Date()
     const due: FollowupDue[] = []
     for (const lead of contacted) {
@@ -1207,9 +1229,8 @@ export class SupabaseStore implements ScoutStore {
       if (!lastSent) continue
       const daysSinceContact = businessDaysBetween(new Date(lastSent), now)
       if (daysSinceContact >= FOLLOWUP_DUE_BUSINESS_DAYS) {
-        // Use the follow-up engine for additional validation
-        const convState = await this.getConversationState(lead.id).catch(() => null)
-        if (convState && convState.followupCount >= 1) continue
+        const followupCount = followupCountByLead.get(lead.id) ?? 0
+        if (followupCount >= 1) continue
         due.push({ lead, daysSinceContact })
       }
     }
