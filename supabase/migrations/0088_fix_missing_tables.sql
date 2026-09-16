@@ -58,34 +58,75 @@ create table if not exists style_cards (
   created_at timestamptz default now()
 );
 
--- From 0085: daily_targets (use targets for simplicity)
-create table if not exists targets (
+-- From 0085: daily_targets (canonical schema)
+create table if not exists daily_targets (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete cascade,
-  rep_id uuid references reps(id) on delete cascade,
-  revenue_identity_id uuid references revenue_identities(id) on delete cascade,
-  period_start date not null,
-  period_end date not null,
-  metric text not null,
-  target_value integer not null default 0,
-  current_value integer not null default 0,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  rep_id uuid not null references reps(id) on delete cascade,
+  revenue_identity_id uuid not null references revenue_identities(id) on delete cascade,
+  activity_type text not null,
+  target_count int not null check (target_count > 0),
+  active boolean not null default true,
+  created_by uuid references reps(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (rep_id, revenue_identity_id, activity_type)
 );
 
-alter table targets rename to daily_targets;
+create index if not exists dt_org_idx on daily_targets(organization_id);
+create index if not exists dt_rep_idx on daily_targets(rep_id);
+create index if not exists dt_identity_idx on daily_targets(revenue_identity_id);
+
+alter table daily_targets enable row level security;
+
+create policy "dt_select" on daily_targets
+  for select to authenticated using (organization_id = current_org_id());
+
+create policy "dt_insert" on daily_targets
+  for insert to authenticated with check (organization_id = current_org_id() and is_org_admin());
+
+create policy "dt_update" on daily_targets
+  for update to authenticated
+  using (organization_id = current_org_id() and is_org_admin())
+  with check (organization_id = current_org_id() and is_org_admin());
+
+create policy "dt_delete" on daily_targets
+  for delete to authenticated
+  using (organization_id = current_org_id() and is_org_admin());
 
 -- From 0085: daily_accountability
 create table if not exists daily_accountability (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete cascade,
   rep_id uuid not null references reps(id) on delete cascade,
-  activity_date date not null,
-  metric text not null,
-  value integer not null default 0,
-  source_event_id uuid,
-  created_at timestamptz default now()
+  revenue_identity_id uuid not null references revenue_identities(id) on delete cascade,
+  activity_type text not null,
+  target_date date not null,
+  target_count int not null default 0,
+  completed_count int not null default 0,
+  status text not null default 'on_track' check (status in ('on_track', 'at_risk', 'completed', 'missed')),
+  closed boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (rep_id, revenue_identity_id, activity_type, target_date)
 );
+
+create index if not exists da_org_idx on daily_accountability(organization_id);
+create index if not exists da_rep_idx on daily_accountability(rep_id);
+create index if not exists da_date_idx on daily_accountability(target_date);
+
+alter table daily_accountability enable row level security;
+
+create policy "da_select" on daily_accountability
+  for select to authenticated using (organization_id = current_org_id());
+
+create policy "da_insert" on daily_accountability
+  for insert to authenticated with check (organization_id = current_org_id() and is_org_admin());
+
+create policy "da_update" on daily_accountability
+  for update to authenticated
+  using (organization_id = current_org_id() and is_org_admin())
+  with check (organization_id = current_org_id() and is_org_admin());
 
 -- From 0085: accountability_audit_log
 create table if not exists accountability_audit_log (

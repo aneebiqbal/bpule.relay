@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 import type { DailyTarget, RevenueIdentity, Rep, ActivityType } from '@/lib/domain/types'
 
 const ACTIVITY_OPTIONS: { value: ActivityType; label: string }[] = [
