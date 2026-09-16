@@ -14,14 +14,19 @@ export async function createServerSupabase(): Promise<SupabaseClient> {
     throw new Error('Supabase env vars are not configured (see .env.local.example)')
   }
 
+  const store = await cookies()
+
   return createServerClient(url, anonKey, {
+    cookieOptions: {
+      path: '/',
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    },
     cookies: {
-      async getAll() {
-        const store = await cookies()
+      getAll() {
         return store.getAll()
       },
-      async setAll(cookieList) {
-        const store = await cookies()
+      setAll(cookieList) {
         try {
           for (const { name, value, options } of cookieList) {
             store.set(name, value, options)

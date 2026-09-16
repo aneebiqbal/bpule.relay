@@ -12,10 +12,10 @@ export default async function CommandCenterPage() {
   return (
     <div className="space-y-8">
       <header className="reveal-up space-y-2">
-        <p className="font-mono text-xs uppercase tracking-widest text-slate">Administration</p>
-        <h1 className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">Command Center</h1>
+        <p className="font-mono text-xs uppercase tracking-widest text-slate">Founder command</p>
+        <h1 className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">Where the team needs attention</h1>
         <p className="max-w-xl text-sm leading-relaxed text-slate">
-          Who is on track. Who is behind. What needs attention. All identities, all reps, today.
+          Exceptions first. Accountability next. Resolve what is blocking revenue execution today.
         </p>
       </header>
       <CommandCenter />

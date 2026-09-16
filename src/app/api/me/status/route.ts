@@ -1,4 +1,5 @@
 import { createScoutStore } from '@/lib/store'
+import { createServerSupabase } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,9 +16,18 @@ export async function GET() {
       dailyLimit: queue.dailyLimit,
     })
   } catch {
-    return Response.json(
-      { error: 'Not signed in.' },
-      { status: 401 },
-    )
+    try {
+      const supabase = await createServerSupabase()
+      const { data: auth } = await supabase.auth.getUser()
+      if (!auth.user) {
+        return Response.json({ error: 'Not signed in.' }, { status: 401 })
+      }
+      return Response.json(
+        { error: 'Signed in, but no Relay workspace mapping was found for this account.' },
+        { status: 409 },
+      )
+    } catch {
+      return Response.json({ error: 'Not signed in.' }, { status: 401 })
+    }
   }
 }

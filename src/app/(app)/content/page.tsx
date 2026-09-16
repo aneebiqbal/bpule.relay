@@ -4,6 +4,7 @@ import { ContentDashboard } from '@/components/content-dashboard'
 import { StudioIntro } from '@/components/studio-intro'
 import { buildDailyDecision } from '@/lib/content/daily-decision'
 import type { ContentPersona, ContentProfile, TopicCluster, ContentDraft, ContentHistoryEntry } from '@/lib/domain/types'
+import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +18,12 @@ interface PersonaWithExtras extends ContentPersona {
   contentProfile: ContentProfile | null
 }
 
-export default async function ContentPage() {
+export default async function ContentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ manage?: string }>
+}) {
+  const params = await searchParams
   const user = await getCurrentUser()
   if (!user) return null
 
@@ -59,6 +65,19 @@ export default async function ContentPage() {
     personas = resolved
   } catch (err) {
     console.error('[content] Failed to load personas:', err)
+  }
+
+  if (personas.length > 0 && params.manage !== '1') {
+    const ordered = [...personas].sort((a, b) => {
+      const score = (persona: PersonaWithExtras) => {
+        if (persona.dailyStatus === 'asked') return 3
+        if (persona.dailyStatus === 'drafted') return 2
+        if (persona.dailyStatus === 'none') return 1
+        return 0
+      }
+      return score(b) - score(a)
+    })
+    redirect(`/content/${ordered[0].id}/today`)
   }
 
   return (

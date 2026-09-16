@@ -3,21 +3,32 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { QuickCaptureAngle } from '@/lib/domain/types'
+import { ArrowRight, Sparkles } from 'lucide-react'
 
 interface StudioQuickCaptureProps {
   personaId: string
   onSelectAngle?: (angle: QuickCaptureAngle) => void
+  initiallyOpen?: boolean
+  title?: string
+  subtitle?: string
 }
 
-export function StudioQuickCapture({ personaId, onSelectAngle }: StudioQuickCaptureProps) {
+export function StudioQuickCapture({
+  personaId,
+  onSelectAngle,
+  initiallyOpen = false,
+  title = 'Tell Relay something',
+  subtitle = 'A rough thought, a lesson, or a work moment. Studio will find the angles.',
+}: StudioQuickCaptureProps) {
   const router = useRouter()
   const [input, setInput] = useState('')
   const [angles, setAngles] = useState<QuickCaptureAngle[]>([])
   const [parsing, setParsing] = useState(false)
   const [generating, setGenerating] = useState(false)
-  const [showInput, setShowInput] = useState(false)
+  const [showInput, setShowInput] = useState(initiallyOpen)
 
   const handleWriteAngle = async (angle: QuickCaptureAngle) => {
+    onSelectAngle?.(angle)
     setGenerating(true)
     try {
       const res = await fetch('/api/content/generate-draft', {
@@ -38,7 +49,7 @@ export function StudioQuickCapture({ personaId, onSelectAngle }: StudioQuickCapt
         router.push(`/studio/drafts/${data.draftId}`)
       }
     } catch {
-      // Silent fail
+      // Keep UI stable if request fails.
     }
     setGenerating(false)
   }
@@ -55,7 +66,6 @@ export function StudioQuickCapture({ personaId, onSelectAngle }: StudioQuickCapt
       const data = await res.json()
       setAngles(data.angles ?? [])
     } catch {
-      // Parse locally as fallback
       setAngles(parseLocal(input.trim()))
     }
     setParsing(false)
@@ -64,69 +74,89 @@ export function StudioQuickCapture({ personaId, onSelectAngle }: StudioQuickCapt
   if (!showInput) {
     return (
       <button
+        type="button"
         onClick={() => setShowInput(true)}
-        className="w-full rounded-xl border border-dashed border-line p-4 text-left hover:border-ink transition-colors"
+        className="w-full rounded border border-dashed border-line bg-bone-raised px-4 py-4 text-left transition-colors hover:border-cobalt/40"
       >
-        <p className="text-sm font-medium text-ink">Tell Relay something</p>
-        <p className="mt-0.5 text-xs text-graphite">
-          A work moment, a thought, a lesson — Relay will find the angles.
-        </p>
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-cobalt">Quick capture</p>
+        <p className="mt-1 text-[14px] font-medium text-ink">{title}</p>
+        <p className="mt-1 text-[12px] text-graphite">{subtitle}</p>
       </button>
     )
   }
 
   return (
-    <div className="rounded-xl border border-line bg-bone-raised p-4">
+    <div className="rounded border border-line bg-bone-raised px-4 py-4">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-cobalt">Tell Relay something</p>
+          <p className="text-[12px] text-graphite">Messy is fine. Studio does the organization.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setShowInput(false)
+            setInput('')
+            setAngles([])
+          }}
+          className="rounded border border-line px-2 py-1 text-[11px] text-graphite hover:text-ink"
+        >
+          Close
+        </button>
+      </div>
+
       <textarea
         value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder="Spent 4 hours debugging a race condition in production..."
-        className="w-full resize-none rounded-lg border-0 bg-bone p-3 text-sm text-ink placeholder:text-graphite/50 focus:outline-none focus:ring-1 focus:ring-ink"
-        rows={3}
-        autoFocus
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit()
+        onChange={(event) => setInput(event.target.value)}
+        placeholder="today realized our old rails upgrade got easier after deleting half the abstraction"
+        className="mt-3 min-h-[100px] w-full resize-y rounded border border-line bg-bone p-3 text-[13px] leading-relaxed text-ink placeholder:text-stone/70 outline-none focus:border-cobalt/40"
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault()
+            void handleSubmit()
+          }
         }}
       />
-      {angles.length === 0 ? (
-        <div className="mt-3 flex items-center justify-between">
-          <span className="text-xs text-graphite">
-            ⌘+Enter to analyze
-          </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => { setShowInput(false); setInput(''); setAngles([]) }}
-              className="rounded-lg px-3 py-1.5 text-xs text-graphite hover:text-ink"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={input.trim().length < 5 || parsing}
-              className="rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-bone hover:bg-ink/90 disabled:opacity-50"
-            >
-              {parsing ? 'Analyzing...' : 'Find angles'}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-4 space-y-3">
-          <p className="text-xs font-medium uppercase tracking-wider text-graphite">
-            This could become:
-          </p>
-          {angles.map((angle, i) => (
-            <button
-              key={i}
-              onClick={() => handleWriteAngle(angle)}
-              disabled={generating}
-              className="w-full rounded-lg border border-line p-3 text-left hover:border-line hover:bg-bone transition-colors"
-            >
-              <p className="text-sm font-medium text-ink">{angle.title}</p>
-              <p className="mt-1 text-xs text-graphite leading-relaxed">
-                {angle.angle}
-              </p>
-            </button>
+
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <span className="text-[11px] text-stone">{angles.length === 0 ? 'Cmd/Ctrl + Enter to analyze' : 'Pick an angle below'}</span>
+        <button
+          type="button"
+          onClick={() => void handleSubmit()}
+          disabled={input.trim().length < 5 || parsing}
+          className="inline-flex items-center gap-1 rounded bg-cobalt px-3 py-1.5 text-[12px] font-medium text-bone disabled:opacity-50"
+        >
+          <Sparkles className="size-3.5" />
+          {parsing ? 'Finding...' : 'Find angles'}
+        </button>
+      </div>
+
+      {angles.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {angles.map((angle, index) => (
+            <div key={`${angle.title}-${index}`} className="rounded border border-cobalt/25 bg-cobalt/[0.03] px-3 py-2.5">
+              <p className="text-mono-medium text-[10px] uppercase tracking-[0.12em] text-cobalt">Angle {String(index + 1).padStart(2, '0')}</p>
+              <p className="mt-1 text-[13px] font-medium text-ink">{angle.title}</p>
+              <p className="mt-1 text-[12px] text-graphite">{angle.angle}</p>
+              <button
+                type="button"
+                onClick={() => void handleWriteAngle(angle)}
+                disabled={generating}
+                className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-cobalt"
+              >
+                Write {String(index + 1).padStart(2, '0')}
+                <ArrowRight className="size-3" />
+              </button>
+            </div>
           ))}
+
+          <button
+            type="button"
+            onClick={() => setAngles([])}
+            className="text-[11px] text-graphite underline underline-offset-2"
+          >
+            Something different
+          </button>
         </div>
       )}
     </div>
@@ -137,33 +167,33 @@ function parseLocal(input: string): QuickCaptureAngle[] {
   const lower = input.toLowerCase()
   const angles: QuickCaptureAngle[] = []
 
-  if (/\b(spent|debugged|fixed|built|shipped|deployed)\b/.test(lower)) {
+  if (/\b(spent|debugged|fixed|built|shipped|deployed|deleted)\b/.test(lower)) {
     angles.push({
-      angle: 'Turn this into a technical lesson.',
+      angle: 'Make this a practical engineering lesson.',
       type: 'technical_lesson',
-      title: 'The problem that took hours to solve',
+      title: 'The work that changed my approach',
     })
   }
   if (/\b(learned|lesson|mistake|failed|wrong|realized)\b/.test(lower)) {
     angles.push({
-      angle: 'Share this as a lesson.',
+      angle: 'Frame this as a lesson learned under pressure.',
       type: 'technical_lesson',
-      title: 'The lesson I learned the hard way',
+      title: 'The lesson I had to learn twice',
     })
   }
   if (/\b(i think|i believe|in my opinion|honestly)\b/.test(lower)) {
     angles.push({
-      angle: 'Share this opinion.',
+      angle: 'Publish this as a direct professional opinion.',
       type: 'opinion',
-      title: 'My honest take on this',
+      title: 'An opinion I can defend with experience',
     })
   }
 
   if (angles.length === 0) {
     angles.push({
-      angle: "What's the lesson here?",
-      type: 'how_to',
-      title: 'What this experience taught me',
+      angle: 'Pull out one concrete observation and its practical implication.',
+      type: 'observation',
+      title: 'One thing this experience made obvious',
     })
   }
 

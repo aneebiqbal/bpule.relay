@@ -45,30 +45,74 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
     if (!user) return null
 
-    const { data: repRows } = await supabase
+    const { data: repRows, error: repError } = await supabase
       .from('reps')
       .select('id, name, role, organization_id, created_at, timezone')
       .eq('auth_user_id', user.id)
-      .maybeSingle()
+      .order('created_at', { ascending: true })
+      .limit(2)
 
-    if (!repRows) return null
-
-    const rep: Rep = {
-      id: repRows.id,
-      name: repRows.name,
-      role: repRows.role,
-      organizationId: repRows.organization_id,
-      createdAt: repRows.created_at,
-      timezone: (repRows.timezone as string) ?? 'UTC',
+    if (repError) {
+      console.warn('[auth/current] rep lookup failed', {
+        userId: user.id,
+        email: user.email ?? null,
+        code: (repError as { code?: string }).code ?? null,
+        message: repError.message,
+      })
+      return null
     }
 
-    const { data: orgRows } = await supabase
+    const repRow = repRows?.[0] ?? null
+
+    if (repRows && repRows.length > 1) {
+      console.warn('[auth/current] multiple rep rows for auth user; using oldest', {
+        userId: user.id,
+        repCount: repRows.length,
+      })
+    }
+
+    if (!repRow) {
+      console.warn('[auth/current] no rep mapped to auth user', {
+        userId: user.id,
+        email: user.email ?? null,
+      })
+      return null
+    }
+
+    const rep: Rep = {
+      id: repRow.id,
+      name: repRow.name,
+      role: repRow.role,
+      organizationId: repRow.organization_id,
+      createdAt: repRow.created_at,
+      timezone: (repRow.timezone as string) ?? 'UTC',
+    }
+
+    const { data: orgRows, error: orgError } = await supabase
       .from('organizations')
       .select('id, name, plan, billing_customer_id, timezone, working_days, holidays, created_at')
       .eq('id', rep.organizationId)
       .maybeSingle()
 
-    if (!orgRows) return null
+    if (orgError) {
+      console.warn('[auth/current] org lookup failed', {
+        userId: user.id,
+        repId: rep.id,
+        organizationId: rep.organizationId,
+        code: (orgError as { code?: string }).code ?? null,
+        message: orgError.message,
+      })
+      return null
+    }
+
+    if (!orgRows) {
+      console.warn('[auth/current] rep mapped to missing org', {
+        userId: user.id,
+        repId: rep.id,
+        organizationId: rep.organizationId,
+      })
+      return null
+    }
 
     const organization: Organization = {
       id: orgRows.id,
@@ -99,7 +143,10 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       : null
 
     return { rep, organization, profile }
-  } catch {
+  } catch (error) {
+    console.warn('[auth/current] unexpected auth resolution error', {
+      message: error instanceof Error ? error.message : 'unknown error',
+    })
     return null
   }
 }

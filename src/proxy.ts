@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { isDemoMode } from "@/lib/ai/config";
 
 const PROTECTED_PREFIXES = [
+  "/onboarding",
   "/leads",
   "/content",
   "/upwork",
@@ -18,8 +19,6 @@ const PROTECTED_PREFIXES = [
   "/settings",
   "/admin",
 ];
-
-const AUTH_ROUTES = ["/login", "/signup", "/forgot-password", "/reset-password"];
 
 /**
  * Next.js 16 proxy: refreshes the Supabase session cookie and handles
@@ -41,6 +40,11 @@ export async function proxy(request: NextRequest) {
   const response = NextResponse.next({ request });
 
   const supabase = createServerClient(url, anonKey, {
+    cookieOptions: {
+      path: '/',
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    },
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -59,11 +63,6 @@ export async function proxy(request: NextRequest) {
     isAuthenticated = Boolean(data.user);
   } catch {
     // Session refresh failed — let the request through.
-  }
-
-  // Authenticated users on auth routes → redirect to dashboard
-  if (isAuthenticated && AUTH_ROUTES.some((route) => pathname.startsWith(route))) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   // Unauthenticated users on protected routes → redirect to login

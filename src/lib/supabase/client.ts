@@ -10,6 +10,14 @@ export function getBrowserSupabase(): SupabaseClient {
   if (!url || !anonKey) {
     throw new Error('Supabase env vars are not configured (see .env.local.example)')
   }
-  if (!browser) browser = createBrowserClient(url, anonKey)
+  if (!browser) {
+    browser = createBrowserClient(url, anonKey, {
+      cookieOptions: {
+        path: '/',
+        sameSite: 'lax',
+        secure: typeof window !== 'undefined' ? window.location.protocol === 'https:' : process.env.NODE_ENV === 'production',
+      },
+    })
+  }
   return browser
 }

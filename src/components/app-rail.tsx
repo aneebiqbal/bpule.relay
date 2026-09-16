@@ -7,14 +7,14 @@ import {
   CalendarDays,
   Target,
   Briefcase,
+  MessageSquare,
   PenLine,
-  IdCard,
-  BookOpen,
-  Search,
-  Users,
+  UserCircle2,
+  Shield,
   Settings,
   LogOut,
-  TrendingUp,
+  ChevronDown,
+  Command,
 } from 'lucide-react'
 import { cn } from 'cn'
 import { RelayBrand } from '@/components/brand'
@@ -25,9 +25,9 @@ import type { RepRole } from '@/lib/domain/types'
 
 const WORK_NAV = [
   { href: '/dashboard', label: 'Today', icon: CalendarDays, exact: true },
-  { href: '/prospect', label: 'Prospect Check', icon: Search, exact: true },
   { href: '/leads', label: 'Leads', icon: Target, exact: false },
   { href: '/upwork', label: 'Jobs', icon: Briefcase, exact: false },
+  { href: '/relay', label: 'Conversations', icon: MessageSquare, exact: false },
 ]
 
 const CREATE_NAV = [
@@ -35,19 +35,19 @@ const CREATE_NAV = [
 ]
 
 const INTELLIGENCE_NAV = [
-  { href: '/profiles', label: 'Profiles', icon: IdCard, exact: false },
-  { href: '/facts', label: 'Knowledge', icon: BookOpen, exact: false },
-  { href: '/archive', label: 'Archive', icon: Search, exact: false },
+  { href: '/profiles', label: 'Profiles', icon: UserCircle2, exact: false },
+  { href: '/facts', label: 'Proof', icon: Shield, exact: false },
 ]
 
 const ACCOUNT_NAV = [
-  { href: '/team', label: 'Team', icon: Users, exact: false },
+  { href: '/usage', label: 'Usage', icon: Target, exact: false },
   { href: '/account', label: 'Settings', icon: Settings, exact: false },
 ]
 
 const ADMIN_EXTRA = [
-  { href: '/manage-profiles', label: 'Manage', icon: IdCard, exact: false },
-  { href: '/admin/growth', label: 'Growth', icon: TrendingUp, exact: true },
+  { href: '/admin/command-center', label: 'Command', icon: Shield, exact: true },
+  { href: '/admin/revenue-identities', label: 'Identities', icon: UserCircle2, exact: true },
+  { href: '/admin/targets', label: 'Targets', icon: Target, exact: true },
 ]
 
 const ROLE_LABEL: Record<RepRole, string> = {
@@ -73,17 +73,17 @@ function NavSection({ label, items, isActive, studio }: NavSectionProps) {
             href={href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'group relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150',
+              'group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150',
               active
                 ? studio
-                  ? 'bg-cobalt text-bone'
+                  ? 'bg-cobalt text-bone shadow-cobalt'
                   : 'bg-ink text-bone'
                 : 'text-graphite hover:bg-bone-raised hover:text-ink',
             )}
           >
             <Icon
               className={cn(
-                'size-4 shrink-0 transition-colors',
+                'size-3.5 shrink-0 transition-colors',
                 active
                   ? 'text-bone'
                   : studio
@@ -103,23 +103,53 @@ function NavSection({ label, items, isActive, studio }: NavSectionProps) {
 
 export interface AppRailProps {
   repName: string
+  organizationName: string
   role: RepRole
   calibrated: boolean
   demo: boolean
   todaySends: number
   dailyLimit: number
+  revenueIdentities: Array<{
+    id: string
+    identityName: string
+    title: string | null
+    channel: string
+  }>
 }
 
 export function AppRail({
   repName,
+  organizationName,
   role,
   demo,
   todaySends,
   dailyLimit,
+  revenueIdentities,
 }: AppRailProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [sends, setSends] = useState(todaySends)
+  const [identityOpen, setIdentityOpen] = useState(false)
+  const [activeIdentityId, setActiveIdentityId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const key = 'relay-active-identity'
+    try {
+      const saved = localStorage.getItem(key)
+      if (saved && revenueIdentities.some((identity) => identity.id === saved)) {
+        setActiveIdentityId(saved)
+        return
+      }
+    } catch {
+      // Ignore local storage failures.
+    }
+
+    if (revenueIdentities[0]) {
+      setActiveIdentityId(revenueIdentities[0].id)
+    }
+  }, [revenueIdentities])
+
+  const activeIdentity = revenueIdentities.find((identity) => identity.id === activeIdentityId) ?? revenueIdentities[0] ?? null
 
   useEffect(() => {
     let cancelled = false
@@ -153,6 +183,16 @@ export function AppRail({
   const sendPct = Math.min(sends / dailyLimit, 1)
   const circumference = 2 * Math.PI * 11
 
+  function selectIdentity(identityId: string) {
+    setActiveIdentityId(identityId)
+    setIdentityOpen(false)
+    try {
+      localStorage.setItem('relay-active-identity', identityId)
+    } catch {
+      // Ignore local storage failures.
+    }
+  }
+
   const sendCounter = (
     <div className="flex items-center gap-2" title={`${sends} of ${dailyLimit} sends used today`}>
       <div className="relative size-7">
@@ -182,28 +222,44 @@ export function AppRail({
     <>
       {/* Mobile top bar */}
       <header className="sticky top-0 z-40 border-b border-line bg-bone/95 backdrop-blur-sm lg:hidden">
-        <div className="flex items-center justify-between px-4 py-2.5">
-          <RelayBrand />
-          <div className="flex items-center gap-1.5">
-            {sendCounter}
-            <ThemeToggle />
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className="rounded-md p-1.5 text-graphite transition-colors hover:bg-bone-raised hover:text-ink"
-              title="Sign out"
-            >
-              <LogOut className="size-4" />
-            </button>
+        <div className="space-y-1 px-4 py-2.5">
+          <div className="flex items-center justify-between">
+            <div>
+              <RelayBrand />
+              <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Capture + Create</p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {sendCounter}
+              <ThemeToggle />
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="rounded-md p-1.5 text-graphite transition-colors hover:bg-bone-raised hover:text-ink"
+                title="Sign out"
+              >
+                <LogOut className="size-4" />
+              </button>
+            </div>
           </div>
+          {activeIdentity && (
+            <p className="truncate text-mono-medium text-[9px] uppercase tracking-[0.12em] text-stone">
+              Working as {activeIdentity.identityName} / {activeIdentity.channel.toUpperCase()}
+            </p>
+          )}
         </div>
       </header>
 
       {/* Desktop sidebar */}
       <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-56 lg:flex-col lg:border-r lg:border-line">
         {/* Brand */}
-        <div className="flex items-center justify-between px-4 py-4">
-          <RelayBrand />
+        <div className="space-y-1 px-4 py-4">
+          <div className="flex items-center justify-between">
+            <RelayBrand />
+            <kbd className="inline-flex items-center gap-1 rounded border border-line px-1.5 py-0.5 text-mono-medium text-[9px] text-stone">
+              <Command className="size-2.5" />K
+            </kbd>
+          </div>
+          <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Relay / Capture</p>
         </div>
 
         {/* Nav */}
@@ -227,8 +283,73 @@ export function AppRail({
 
         {/* Bottom */}
         <div className="border-t border-line px-3 py-3 space-y-2">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIdentityOpen((open) => !open)}
+              className="group flex w-full items-center justify-between rounded-md border border-line bg-bone-raised px-2 py-2 text-left hover:border-orange/30"
+            >
+              <div className="min-w-0">
+                <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Working as</p>
+                {activeIdentity ? (
+                  <>
+                    <p className="truncate text-[12px] font-medium text-ink">{activeIdentity.identityName}</p>
+                    <p className="truncate text-[10px] text-graphite">
+                      {[activeIdentity.title, activeIdentity.channel.toUpperCase()].filter(Boolean).join(' / ')}
+                    </p>
+                  </>
+                ) : (
+                  <p className="truncate text-[11px] text-graphite">No identity assigned</p>
+                )}
+              </div>
+              <ChevronDown className={cn('size-3.5 shrink-0 text-stone transition-transform', identityOpen && 'rotate-180')} />
+            </button>
+
+            {identityOpen && (
+              <div className="absolute right-0 bottom-[calc(100%+0.4rem)] z-20 w-full rounded-md border border-line bg-bone-raised p-1.5 shadow-lg">
+                {revenueIdentities.length === 0 ? (
+                  <p className="px-2 py-1 text-[11px] text-graphite">
+                    {role === 'admin' ? 'No active identities yet.' : 'No assigned identities yet.'}
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {revenueIdentities.map((identity) => {
+                      const selected = identity.id === activeIdentity?.id
+                      return (
+                        <button
+                          key={identity.id}
+                          type="button"
+                          onClick={() => selectIdentity(identity.id)}
+                          className={cn(
+                            'w-full rounded px-2 py-1.5 text-left transition-colors',
+                            selected ? 'bg-ink text-bone' : 'hover:bg-bone',
+                          )}
+                        >
+                          <p className="truncate text-[12px] font-medium">{identity.identityName}</p>
+                          <p className={cn('truncate text-[10px]', selected ? 'text-bone/70' : 'text-graphite')}>
+                            {[identity.title, identity.channel.toUpperCase()].filter(Boolean).join(' / ')}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {role === 'admin' && (
+                  <Link
+                    href="/admin/revenue-identities"
+                    onClick={() => setIdentityOpen(false)}
+                    className="mt-1.5 block rounded border border-line px-2 py-1 text-center text-[11px] font-medium text-ink hover:bg-bone"
+                  >
+                    Manage identities
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center justify-between gap-2 px-1">
-            <IdentityChip name={repName} subtitle={ROLE_LABEL[role]} />
+            <IdentityChip name={repName} subtitle={`${ROLE_LABEL[role]} · ${organizationName}`} />
             <button
               type="button"
               onClick={() => void signOut()}
