@@ -60,11 +60,14 @@ Budget: $80/hr. Ongoing project with long-term potential.`
     if (await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await expect(saveBtn).toBeEnabled({ timeout: 10_000 })
       await saveBtn.click()
-      await page.waitForURL(/\/upwork\/[a-z]+/, { timeout: 15_000 })
+      // Wait for navigation to job detail (NOT /upwork/new)
+      await page.waitForURL(/\/upwork\/[a-z][a-z0-9-]+[a-z0-9]/, { timeout: 15_000 })
     }
 
     const jobUrl = page.url()
     const jobId = jobUrl.split('/upwork/')[1]
+    // Ensure we didn't stay on /upwork/new
+    expect(jobId).not.toBe('new')
 
     // Navigate to resume generation for this job
     await page.goto(`/resume/generate?jobId=${jobId}`)
@@ -119,11 +122,12 @@ Experience with HIPAA compliance preferred.`
     if (await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await expect(saveBtn).toBeEnabled({ timeout: 10_000 })
       await saveBtn.click()
-      await page.waitForURL(/\/upwork\/[a-z]+/, { timeout: 15_000 })
+      await page.waitForURL(/\/upwork\/[a-z][a-z0-9-]+[a-z0-9]/, { timeout: 15_000 })
     }
 
     const jobUrl = page.url()
     const jobId = jobUrl.split('/upwork/')[1]
+    expect(jobId).not.toBe('new')
 
     // Generate CV
     await page.goto(`/resume/generate?jobId=${jobId}`)
