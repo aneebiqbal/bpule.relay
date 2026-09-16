@@ -73,11 +73,16 @@ import type {
   TodayDashboard,
   UpworkSnapshot,
 } from '@/lib/store/types'
-import { companyFuzzyKey, companyKey } from '@/lib/leads/normalize'
+import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
 import { pickPlayForSignal } from '@/lib/score/plays'
+import {
+  rankArchiveResults,
+  type ArchiveEntityFilter,
+  type ArchiveSearchCandidate,
+} from '@/lib/search/archive-search'
 
 let seq = 0
 const nextId = (prefix: string) => `${prefix}-${(++seq).toString(36)}`
@@ -617,6 +622,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   const demoAuditLog: AuditLogEntry[] = [
     { id: 'audit-demo-1', organizationId: 'org-demo', repId: 'rep-hassan', revenueIdentityId: 'ri-demo-linkedin', eventType: 'identity_created', detail: { source: 'demo' }, createdAt: t(30) },
   ]
+  const demoRelayEvents: import('@/lib/domain/types').RelayEvent[] = []
+  let demoRelayRuns: import('@/lib/domain/types').RelayRun[] = []
   const extractionRuns: Array<{
     task: 'extract' | 'draft'
     success: boolean
@@ -638,9 +645,11 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }))
   }
 
-  function dedupe(company: string): CreateLeadResult | null {
-    const key = companyKey(company)
-    const fuzzy = companyFuzzyKey(company)
+  function dedupe(input: NewLeadInput): CreateLeadResult | null {
+    const key = companyKey(input.company)
+    const fuzzy = companyFuzzyKey(input.company)
+    const normalizedUrl = normalizeLeadUrl(input.url ?? null)
+    const normalizedContact = contactKey(input.contactName ?? null)
 
     const priorNo = leads.find(
       (l) =>
@@ -653,18 +662,38 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         blocked: true,
         reason: 'This company was already flagged no by the team. It is locked for everyone.',
         existingOwnerName: owner?.name ?? 'another rep',
+        lead: priorNo,
+        duplicateKind: 'hard',
       }
     }
 
-    const existing = leads.find((l) => l.companyKey === key && l.status !== 'dead')
+    const urlHit = normalizedUrl
+      ? leads.find((l) => normalizeLeadUrl(l.url) === normalizedUrl && l.status !== 'dead')
+      : null
+    const contactHit = normalizedContact
+      ? leads.find((l) => l.companyKey === key && contactKey(l.contactName) === normalizedContact && l.status !== 'dead')
+      : null
+    const exact = leads.find((l) => l.companyKey === key && l.status !== 'dead')
     const fuzzyMatch = leads.find((l) => l.companyKey !== key && companyFuzzyKey(l.company) === fuzzy && l.status !== 'dead')
-    const hit = existing ?? fuzzyMatch
+    const hit = urlHit ?? contactHit ?? exact ?? fuzzyMatch
     if (hit) {
+      const duplicateKind: 'hard' | 'potential' = fuzzyMatch && !urlHit && !contactHit && !exact ? 'potential' : 'hard'
+      if (duplicateKind === 'potential' && input.allowPotentialDuplicate === true) {
+        return null
+      }
       const owner = reps.find((r) => r.id === hit.ownerRepId)
       return {
         blocked: true,
-        reason: `This company already exists on the board.`,
+        reason: urlHit
+          ? 'This profile URL already exists as a lead.'
+          : contactHit
+            ? 'This contact already exists under this company.'
+            : duplicateKind === 'potential'
+              ? 'Potential duplicate: this company name is very similar to an existing lead.'
+              : 'This company already exists on the board.',
         existingOwnerName: owner?.name ?? 'another rep',
+        lead: hit,
+        duplicateKind,
       }
     }
     return null
@@ -693,14 +722,14 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       return demoRulebook
     },
     async createLead(input: NewLeadInput): Promise<CreateLeadResult> {
-      const blocked = dedupe(input.company)
+      const blocked = dedupe(input)
       if (blocked) return blocked
       const lead: Lead = {
         id: nextId('lead'),
         organizationId: DEMO_ORG_ID,
         ownerRepId: rep.id,
         company: input.company.trim(),
-    companyKey: companyKey(input.company),
+        companyKey: companyKey(input.company),
         contactName: input.contactName?.trim() || null,
         contactTitle: input.contactTitle?.trim() || null,
         titleRaw: input.titleRaw?.trim() || null,
@@ -714,8 +743,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         signalType: input.signalType ?? null,
         signalEvidence: input.signalEvidence?.trim() ?? null,
         verbatimQuote: input.verbatimQuote?.trim() || null,
-        score: null,
-        verdict: null,
+        score: input.score ?? null,
+        verdict: input.verdict ?? null,
         status: 'new',
         playId: input.signalType ? pickPlayForSignal(plays, input.signalType)?.id ?? null : null,
         tags: input.tags ?? ['FAKE', 'demo'],
@@ -723,6 +752,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         source: input.source ?? null,
         inboundMessage: input.inboundMessage ?? null,
         inboundRaw: input.inboundRaw ?? null,
+        senderProfileId: input.assignedProfileId ?? null,
         createdAt: new Date().toISOString(),
       }
       leads.unshift(lead)
@@ -837,7 +867,19 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         }
       }
 
-      lead.status = type === 'followup' ? 'followed_up' : 'contacted'
+      // When a client replies, mark the lead as replied and create an outcome
+      if (type === 'reply') {
+        lead.status = 'replied'
+        outcomes.push({
+          id: nextId('out'),
+          organizationId: DEMO_ORG_ID,
+          leadId,
+          stage: 'replied',
+          occurredAt: new Date().toISOString(),
+        })
+      } else {
+        lead.status = type === 'followup' ? 'followed_up' : 'contacted'
+      }
       const msgId = nextId('msg')
       messages.push({
         id: msgId,
@@ -858,6 +900,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         existingState.stage = type === 'reply' ? 'replied' : 'contacted'
         existingState.lastSentAt = new Date().toISOString()
         existingState.lastSentMessageId = msgId
+        if (type === 'reply') {
+          existingState.lastReplyAt = new Date().toISOString()
+        }
         existingState.updatedAt = new Date().toISOString()
       } else {
         conversationStates.push({
@@ -867,7 +912,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
           stage: type === 'reply' ? 'replied' : 'contacted',
           lastSentAt: new Date().toISOString(),
           lastSentMessageId: msgId,
-          lastReplyAt: null,
+          lastReplyAt: type === 'reply' ? new Date().toISOString() : null,
           senderProfileId: null,
           lastStrategy: null,
           lastAngle: null,
@@ -1376,8 +1421,197 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async listCsvImports() {
       return csvImports.filter((c) => c.repId === rep.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     },
-    async archiveSearch() {
-      return []
+    async archiveSearch(opts) {
+      const query = opts.query.trim()
+      if (!query) return []
+
+      const entityFilter = (opts.entityFilter ?? 'all') as ArchiveEntityFilter
+      const limit = Number.isFinite(opts.limit) && (opts.limit ?? 0) > 0 ? Number(opts.limit) : 20
+      const repFilter = new Set((opts.repFilter ?? []).map((value) => value.trim()).filter(Boolean))
+      const signalFilter = new Set((opts.signalFilter ?? []).filter((value) => Number.isFinite(value)))
+      const playFilter = new Set((opts.playFilter ?? []).map((value) => value.trim()).filter(Boolean))
+
+      const dateFrom = opts.dateFrom ? new Date(opts.dateFrom).getTime() : null
+      const dateTo = opts.dateTo ? new Date(opts.dateTo).getTime() : null
+      const inDateRange = (rawDate: string | null | undefined): boolean => {
+        if (!rawDate) return false
+        const value = new Date(rawDate).getTime()
+        if (!Number.isFinite(value)) return false
+        if (dateFrom !== null && value < dateFrom) return false
+        if (dateTo !== null && value > dateTo) return false
+        return true
+      }
+
+      const candidates: ArchiveSearchCandidate[] = []
+      const profileById = new Map(profiles.map((profile) => [profile.id, profile]))
+
+      const filteredLeads = leads.filter((lead) => {
+        if (repFilter.size > 0 && (!lead.ownerRepId || !repFilter.has(lead.ownerRepId))) return false
+        if (signalFilter.size > 0 && (!lead.signalType || !signalFilter.has(lead.signalType))) return false
+        if (playFilter.size > 0 && (!lead.playId || !playFilter.has(lead.playId))) return false
+        if ((dateFrom !== null || dateTo !== null) && !inDateRange(lead.createdAt)) return false
+        return true
+      })
+
+      if (entityFilter === 'all' || entityFilter === 'lead') {
+        for (const lead of filteredLeads) {
+          candidates.push({
+            entityType: 'lead',
+            id: lead.id,
+            title: lead.company,
+            subtitle: [lead.contactName, lead.contactTitle].filter(Boolean).join(' · '),
+            status: lead.status,
+            createdAt: lead.createdAt,
+            href: `/leads/${lead.id}`,
+            body: [lead.signalEvidence, lead.rawInput, lead.verbatimQuote].filter(Boolean).join(' '),
+            searchText: [lead.url ?? '', ...lead.tags],
+          })
+        }
+      }
+
+      if (entityFilter === 'all' || entityFilter === 'conversation') {
+        const leadMap = new Map(filteredLeads.map((lead) => [lead.id, lead]))
+        const latestMessageByLead = new Map<string, string>()
+        for (const message of [...messages].sort((a, b) => b.createdAt.localeCompare(a.createdAt))) {
+          if (latestMessageByLead.has(message.leadId)) continue
+          const body = (message.sentText ?? message.draftText ?? '').trim()
+          if (!body) continue
+          latestMessageByLead.set(message.leadId, body)
+        }
+
+        for (const state of conversationStates) {
+          const lead = leadMap.get(state.leadId)
+          if (!lead) continue
+          const createdAt = state.updatedAt || state.lastReplyAt || state.lastSentAt || lead.createdAt
+          if ((dateFrom !== null || dateTo !== null) && !inDateRange(createdAt)) continue
+          candidates.push({
+            entityType: 'conversation',
+            id: state.leadId,
+            title: lead.company,
+            subtitle: [lead.contactName, state.stage].filter(Boolean).join(' · '),
+            status: state.stage,
+            createdAt,
+            href: `/leads/${state.leadId}`,
+            body: [state.lastStrategy, state.lastAngle, state.lastCta, latestMessageByLead.get(state.leadId)].filter(Boolean).join(' '),
+          })
+        }
+      }
+
+      if (entityFilter === 'all' || entityFilter === 'upwork') {
+        for (const job of upworkJobs) {
+          if (repFilter.size > 0 && (!job.ownerRepId || !repFilter.has(job.ownerRepId))) continue
+          if ((dateFrom !== null || dateTo !== null) && !inDateRange(job.createdAt)) continue
+          candidates.push({
+            entityType: 'upwork',
+            id: job.id,
+            title: job.title,
+            subtitle: job.clientName ?? 'Upwork job',
+            status: job.status,
+            createdAt: job.createdAt,
+            href: `/upwork/${job.id}`,
+            body: [job.description, job.urgencySignal].filter(Boolean).join(' '),
+            searchText: [...job.requiredSkills, ...job.tags],
+          })
+        }
+      }
+
+      if (entityFilter === 'all' || entityFilter === 'proof') {
+        for (const item of proofItems) {
+          if ((dateFrom !== null || dateTo !== null) && !inDateRange(item.createdAt)) continue
+          const profile = profileById.get(item.profileId)
+          if (repFilter.size > 0 && (!profile || !repFilter.has(profile.repId))) continue
+          candidates.push({
+            entityType: 'proof',
+            id: item.id,
+            title: item.projectSummary,
+            subtitle: item.clientName ?? profile?.label ?? 'Proof item',
+            status: null,
+            createdAt: item.createdAt,
+            href: `/profiles?profileId=${encodeURIComponent(item.profileId)}`,
+            body: item.reviewQuote,
+            searchText: item.tags,
+          })
+        }
+      }
+
+      if ((entityFilter === 'all' || entityFilter === 'identity') && rep.role === 'admin') {
+        let allowedIdentityIds: Set<string> | null = null
+        if (repFilter.size > 0) {
+          allowedIdentityIds = new Set(
+            demoIdentityAssignments
+              .filter((assignment) => repFilter.has(assignment.repId))
+              .map((assignment) => assignment.revenueIdentityId),
+          )
+        }
+
+        for (const identity of demoRevenueIdentities) {
+          if ((dateFrom !== null || dateTo !== null) && !inDateRange(identity.updatedAt || identity.createdAt)) continue
+          if (allowedIdentityIds && !allowedIdentityIds.has(identity.id)) continue
+          candidates.push({
+            entityType: 'identity',
+            id: identity.id,
+            title: identity.identityName,
+            subtitle: [identity.title, identity.slug].filter(Boolean).join(' · '),
+            status: identity.status,
+            createdAt: identity.updatedAt || identity.createdAt,
+            href: `/admin/revenue-identities#${identity.id}`,
+            body: identity.positioning,
+            searchText: [
+              ...identity.skills,
+              ...identity.expertise,
+              ...identity.industries,
+              ...identity.technologies,
+            ],
+          })
+        }
+      }
+
+      if (entityFilter === 'all' || entityFilter === 'studio') {
+        const allowedPersonaIds = new Set(
+          contentPersonas
+            .filter((persona) => repFilter.size === 0 || repFilter.has(persona.repId))
+            .map((persona) => persona.id),
+        )
+        const personaById = new Map(contentPersonas.map((persona) => [persona.id, persona]))
+
+        for (const draft of contentDrafts) {
+          if (repFilter.size > 0 && !allowedPersonaIds.has(draft.personaId)) continue
+          if ((dateFrom !== null || dateTo !== null) && !inDateRange(draft.createdAt)) continue
+          const persona = personaById.get(draft.personaId)
+          candidates.push({
+            entityType: 'studio',
+            id: draft.id,
+            title: draft.caption.trim() || '(No caption)',
+            subtitle: `${persona?.displayName ?? 'Studio'} · ${draft.platform} draft`,
+            status: draft.status,
+            createdAt: draft.createdAt,
+            href: `/studio/drafts/${draft.id}`,
+            body: draft.sourceMaterial,
+          })
+        }
+
+        for (const post of contentHistoryEntries) {
+          if (repFilter.size > 0 && !allowedPersonaIds.has(post.personaId)) continue
+          if ((dateFrom !== null || dateTo !== null) && !inDateRange(post.postedAt)) continue
+          const persona = personaById.get(post.personaId)
+          candidates.push({
+            entityType: 'studio',
+            id: `history:${post.id}`,
+            title: post.openingLine.trim() || '(No opening line)',
+            subtitle: `${persona?.displayName ?? 'Studio'} · ${post.platform} posted`,
+            status: 'posted',
+            createdAt: post.postedAt,
+            href: `/content/${post.personaId}/library`,
+          })
+        }
+      }
+
+      return rankArchiveResults(candidates, {
+        query,
+        entityFilter,
+        statusFilter: opts.statusFilter,
+        limit,
+      })
     },
     async savePushSubscription(sub) {
       const existing = pushSubs.find((s) => s.repId === sub.repId)
@@ -2328,6 +2562,161 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async listAuditLogAdmin(limit = 100) {
       if (rep.role !== 'admin') throw new Error('Admin only')
       return demoAuditLog.slice(0, limit)
+    },
+
+    // ============================================================================
+    // ORCHESTRATION — Event Ledger + Relay Runs (Sprint 1)
+    // ============================================================================
+
+    async emitRelayEvent(input: {
+      eventType: import('@/lib/domain/types').RelayEventType
+      entityType: string
+      entityId?: string | null
+      actorType?: import('@/lib/domain/types').RelayActorType
+      actorId?: string | null
+      revenueIdentityId?: string | null
+      source?: string
+      sourceEventId?: string | null
+      correlationId?: string | null
+      causationId?: string | null
+      relayRunId?: string | null
+      payload?: Record<string, unknown>
+      metadata?: Record<string, unknown>
+      occurredAt?: string
+    }): Promise<string | null> {
+      const id = `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const event: import('@/lib/domain/types').RelayEvent = {
+        id,
+        organizationId: 'org-demo',
+        eventType: input.eventType,
+        entityType: input.entityType,
+        entityId: input.entityId ?? null,
+        actorType: input.actorType ?? 'system',
+        actorId: input.actorId ?? null,
+        revenueIdentityId: input.revenueIdentityId ?? null,
+        source: input.source ?? 'app',
+        sourceEventId: input.sourceEventId ?? null,
+        correlationId: input.correlationId ?? null,
+        causationId: input.causationId ?? null,
+        relayRunId: input.relayRunId ?? null,
+        payload: input.payload ?? {},
+        metadata: input.metadata ?? {},
+        occurredAt: input.occurredAt ?? new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      }
+      demoRelayEvents.push(event)
+      return id
+    },
+
+    async getRelayRunEvents(runId: string): Promise<import('@/lib/domain/types').RelayEvent[]> {
+      return demoRelayEvents.filter((e) => e.relayRunId === runId)
+    },
+
+    async createRelayRun(input: {
+      runType?: import('@/lib/domain/types').RelayRunType
+      primaryEntityType?: string
+      primaryEntityId?: string | null
+      assignedRepId?: string | null
+      revenueIdentityId?: string | null
+      correlationId?: string | null
+      context?: Record<string, unknown>
+    }): Promise<string | null> {
+      const existing = demoRelayRuns.find(
+        (r) => r.primaryEntityId === input.primaryEntityId &&
+          r.primaryEntityType === (input.primaryEntityType ?? 'lead') &&
+          !['completed', 'failed', 'cancelled', 'rejected'].includes(r.status)
+      )
+      if (existing) return existing.id
+
+      const id = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const run: import('@/lib/domain/types').RelayRun = {
+        id,
+        organizationId: 'org-demo',
+        runType: input.runType ?? 'outbound',
+        primaryEntityType: input.primaryEntityType ?? 'lead',
+        primaryEntityId: input.primaryEntityId ?? null,
+        status: 'detected',
+        currentStep: 'detect',
+        assignedRepId: input.assignedRepId ?? null,
+        revenueIdentityId: input.revenueIdentityId ?? null,
+        correlationId: input.correlationId ?? id,
+        startedAt: new Date().toISOString(),
+        waitingUntil: null,
+        completedAt: null,
+        failedAt: null,
+        failureCategory: null,
+        failureReason: null,
+        context: input.context ?? {},
+        metadata: {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      demoRelayRuns.push(run)
+      return id
+    },
+
+    async transitionRelayRun(input: {
+      runId: string
+      newStatus: import('@/lib/domain/types').RelayRunStatus
+      newStep?: string | null
+      eventId?: string | null
+      metadata?: Record<string, unknown>
+    }): Promise<{ previousStatus: string; newStatus: string; step: string } | null> {
+      const run = demoRelayRuns.find((r) => r.id === input.runId)
+      if (!run) return null
+
+      const previousStatus = run.status
+      const step = input.newStep ?? input.newStatus
+
+      // Validate transition
+      const validTransitions: Record<string, string[]> = {
+        detected: ['qualifying', 'rejected', 'cancelled'],
+        qualifying: ['qualified', 'rejected', 'cancelled'],
+        qualified: ['routing', 'preparing', 'cancelled'],
+        routing: ['preparing', 'cancelled'],
+        preparing: ['awaiting_human', 'cancelled'],
+        awaiting_human: ['action_recorded', 'cancelled'],
+        action_recorded: ['waiting', 'cancelled'],
+        waiting: ['followup_due', 'response_received', 'conversation', 'cancelled'],
+        followup_due: ['followup_preparing', 'cancelled'],
+        followup_preparing: ['awaiting_human', 'cancelled'],
+        response_received: ['conversation', 'cancelled'],
+        conversation: ['completed', 'cancelled'],
+        rejected: [],
+        completed: [],
+        failed: [],
+        cancelled: [],
+      }
+
+      if (!validTransitions[previousStatus]?.includes(input.newStatus)) {
+        return null
+      }
+
+      run.status = input.newStatus
+      run.currentStep = step
+      run.metadata = { ...run.metadata, ...(input.metadata ?? {}) }
+      run.updatedAt = new Date().toISOString()
+
+      if (['completed', 'rejected'].includes(input.newStatus)) {
+        run.completedAt = new Date().toISOString()
+      }
+      if (input.newStatus === 'failed') {
+        run.failedAt = new Date().toISOString()
+      }
+
+      return { previousStatus, newStatus: input.newStatus, step }
+    },
+
+    async getRelayRun(runId: string): Promise<import('@/lib/domain/types').RelayRun | null> {
+      return demoRelayRuns.find((r) => r.id === runId) ?? null
+    },
+
+    async listActiveRunsForEntity(entityType: string, entityId: string): Promise<import('@/lib/domain/types').RelayRun[]> {
+      return demoRelayRuns.filter(
+        (r) => r.primaryEntityType === entityType &&
+          r.primaryEntityId === entityId &&
+          !['completed', 'failed', 'cancelled', 'rejected'].includes(r.status)
+      )
     },
   }
 }

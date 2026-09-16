@@ -89,15 +89,21 @@ import type {
   TodayDashboard,
   UpworkSnapshot,
 } from '@/lib/store/types'
-import { companyFuzzyKey, companyKey } from '@/lib/leads/normalize'
+import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
 import { businessDaysBetween, FOLLOWUP_DUE_BUSINESS_DAYS } from '@/lib/leads/followup'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
 import { pickPlayForSignal } from '@/lib/score/plays'
 import { loadRulebook } from '@/lib/score/rulebook'
+import {
+  rankArchiveResults,
+  type ArchiveEntityFilter,
+  type ArchiveSearchCandidate,
+} from '@/lib/search/archive-search'
 
 type Row = Record<string, unknown>
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function normalizeStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -107,6 +113,21 @@ function normalizeStringArray(value: unknown): string[] {
     return value.split(',').map((v) => v.trim()).filter(Boolean)
   }
   return []
+}
+
+function isUuid(value: string): boolean {
+  return UUID_RE.test(value)
+}
+
+function isOptionalSearchError(err: unknown): boolean {
+  const code = (err as { code?: string }).code ?? ''
+  const message = (err as { message?: string }).message ?? ''
+  return (
+    code === '42P01' ||
+    code === '42703' ||
+    code === 'PGRST204' ||
+    /does not exist|not found in the schema cache|could not find the table|Could not find a relationship/i.test(message)
+  )
 }
 
 function mapLead(r: Row): Lead {
@@ -357,6 +378,8 @@ export class SupabaseStore implements ScoutStore {
   async createLead(input: NewLeadInput): Promise<CreateLeadResult> {
     const key = companyKey(input.company)
     const fuzzy = companyFuzzyKey(input.company)
+    const normalizedUrl = normalizeLeadUrl(input.url ?? null)
+    const normalizedContact = contactKey(input.contactName ?? null)
     const all = await this.fetchLeadsAll()
 
     const priorNo = all.find(
@@ -367,19 +390,39 @@ export class SupabaseStore implements ScoutStore {
         blocked: true,
         reason: 'This company was already flagged no by the team. It is locked for everyone.',
         existingOwnerName: await this.repName(priorNo.ownerRepId),
+        lead: priorNo,
+        duplicateKind: 'hard',
       }
     }
 
     const exact = all.find((l) => l.companyKey === key && l.status !== 'dead')
+    const urlHit = normalizedUrl
+      ? all.find((l) => normalizeLeadUrl(l.url ?? null) === normalizedUrl && l.status !== 'dead')
+      : null
+    const contactHit = normalizedContact
+      ? all.find((l) => l.companyKey === key && contactKey(l.contactName) === normalizedContact && l.status !== 'dead')
+      : null
     const fuzzyHit = all.find(
       (l) => l.companyKey !== key && companyFuzzyKey(l.company) === fuzzy && l.status !== 'dead',
     )
-    const hit = exact ?? fuzzyHit
+    const hit = urlHit ?? contactHit ?? exact ?? fuzzyHit
     if (hit) {
-      return {
-        blocked: true,
-        reason: 'This company already exists on the board.',
-        existingOwnerName: await this.repName(hit.ownerRepId),
+      const duplicateKind: 'hard' | 'potential' = fuzzyHit && !urlHit && !contactHit && !exact ? 'potential' : 'hard'
+      if (duplicateKind !== 'potential' || input.allowPotentialDuplicate !== true) {
+        const reason = urlHit
+          ? 'This profile URL already exists as a lead.'
+          : contactHit
+            ? 'This contact already exists under this company.'
+            : duplicateKind === 'potential'
+              ? 'Potential duplicate: this company name is very similar to an existing lead.'
+              : 'This company already exists on the board.'
+        return {
+          blocked: true,
+          reason,
+          existingOwnerName: await this.repName(hit.ownerRepId),
+          lead: hit,
+          duplicateKind,
+        }
       }
     }
 
@@ -394,6 +437,8 @@ export class SupabaseStore implements ScoutStore {
       signal_type: input.signalType ?? null,
       signal_evidence: input.signalEvidence?.trim() || null,
       verbatim_quote: input.verbatimQuote?.trim() || null,
+      score: input.score ?? null,
+      verdict: input.verdict ?? null,
       tags: input.tags ?? [],
       play_id: input.signalType ? (await this.playForSignal(input.signalType))?.id ?? null : null,
       title_raw: input.titleRaw?.trim() || null,
@@ -411,12 +456,26 @@ export class SupabaseStore implements ScoutStore {
 
     const row = await this.client.from('leads').insert(insertRow).select('*').single()
     if (row.error) {
+      const code = (row.error as { code?: string }).code
+      if (code === '23505') {
+        const existing = (await this.fetchLeadsAll()).find(
+          (lead) => lead.companyKey === key && lead.status !== 'dead',
+        )
+        return {
+          blocked: true,
+          reason: 'This company already exists on the board.',
+          existingOwnerName: existing ? await this.repName(existing.ownerRepId) : undefined,
+          lead: existing,
+          duplicateKind: 'hard',
+        }
+      }
+
       // Never silently drop the extraction fields (title/location/role/region/
       // confidence): a lead saved without them looks fine but is missing the
       // data a rep would need to trust it later. Fail loudly instead so
       // whoever operates this environment applies migration 0015, rather than
       // BD discovering thin leads after the fact.
-      if ((row.error as { code?: string }).code === '42703') {
+      if (code === '42703') {
         throw new Error(
           'This environment is missing the extraction-fields migration (0015_extraction_schema_and_metrics.sql). ' +
             'Apply it before saving leads, so title, location, role, region, and confidence are never silently dropped.',
@@ -424,7 +483,31 @@ export class SupabaseStore implements ScoutStore {
       }
       throw row.error
     }
-    return { blocked: false, lead: mapLead(row.data as Row) }
+    const lead = mapLead(row.data as Row)
+
+    // Emit LEAD_CREATED event (non-fatal — must not break lead creation)
+    try {
+      await this.emitRelayEvent({
+        eventType: 'LEAD_CREATED',
+        entityType: 'lead',
+        entityId: lead.id,
+        actorType: 'rep',
+        actorId: this.rep.id,
+        payload: {
+          company: lead.company,
+          signalType: lead.signalType,
+          score: lead.score,
+          verdict: lead.verdict,
+          direction: lead.direction ?? 'outbound',
+        },
+        source: 'app',
+        sourceEventId: `lead_created:${lead.id}`,
+      })
+    } catch {
+      // Event emission must never break domain operations
+    }
+
+    return { blocked: false, lead }
   }
 
   private async playForSignal(signalType: SignalId): Promise<Play | null> {
@@ -574,9 +657,11 @@ export class SupabaseStore implements ScoutStore {
       .single()
     if (insertError) throw insertError
 
+    // When a client replies, mark lead as replied and create an outcome
+    const leadStatus = type === 'reply' ? 'replied' : type === 'followup' ? 'followed_up' : 'contacted'
     const { data: updatedRows, error: updateError } = await this.client
       .from('leads')
-      .update({ status: type === 'followup' ? 'followed_up' : 'contacted' })
+      .update({ status: leadStatus })
       .eq('id', leadId)
       .eq('owner_rep_id', this.rep.id)
       .neq('status', 'no')
@@ -594,6 +679,22 @@ export class SupabaseStore implements ScoutStore {
       throw new Error('This lead became locked or unavailable while logging the send. Try again.')
     }
 
+    // When a client replies, create an outcome so the Reply CTA activates
+    if (type === 'reply') {
+      try {
+        await this.client
+          .from('outcomes')
+          .insert({
+            organization_id: this.orgId,
+            lead_id: leadId,
+            stage: 'replied',
+            occurred_at: new Date().toISOString(),
+          })
+      } catch {
+        // Non-fatal: outcome creation must not block the send
+      }
+    }
+
     // Update conversation state
     try {
       const convState = await this.getConversationState(leadId)
@@ -604,6 +705,25 @@ export class SupabaseStore implements ScoutStore {
       })
     } catch {
       // Non-fatal: conversation state must not block the send
+    }
+
+    // Emit OUTREACH_RECORDED event (non-fatal)
+    try {
+      await this.emitRelayEvent({
+        eventType: 'OUTREACH_RECORDED',
+        entityType: 'lead',
+        entityId: leadId,
+        actorType: 'rep',
+        actorId: this.rep.id,
+        payload: {
+          messageType: type,
+          sentTextLength: sentText.length,
+        },
+        source: 'app',
+        sourceEventId: `outreach_recorded:${leadId}:${Date.now()}`,
+      })
+    } catch {
+      // Event emission must never break domain operations
     }
 
     return { allowed: true, todaySends: todaySends + 1, limit }
@@ -1684,7 +1804,7 @@ export class SupabaseStore implements ScoutStore {
 
   async archiveSearch(opts: {
     query: string
-    entityFilter?: 'lead' | 'proof' | 'upwork' | 'all'
+    entityFilter?: 'lead' | 'proof' | 'upwork' | 'conversation' | 'identity' | 'studio' | 'all'
     statusFilter?: string[]
     signalFilter?: number[]
     playFilter?: string[]
@@ -1694,36 +1814,419 @@ export class SupabaseStore implements ScoutStore {
     limit?: number
   }): Promise<
     Array<{
-      entityType: string
+      entityType: 'lead' | 'proof' | 'upwork' | 'conversation' | 'identity' | 'studio'
       id: string
       title: string
       subtitle: string
       status: string | null
       createdAt: string
+      href?: string
       rank: number
     }>
   > {
-    const { data, error } = await this.client.rpc('archive_search', {
-      query: opts.query,
-      entity_filter: opts.entityFilter ?? 'all',
-      status_filter: opts.statusFilter ?? [],
-      signal_filter: opts.signalFilter ?? [],
-      play_filter: opts.playFilter ?? [],
-      rep_filter: opts.repFilter ?? [],
-      date_from: opts.dateFrom ?? null,
-      date_to: opts.dateTo ?? null,
-      result_limit: opts.limit ?? 20,
+    const query = opts.query.trim()
+    if (!query) return []
+
+    const entityFilter = (opts.entityFilter ?? 'all') as ArchiveEntityFilter
+    const limit = Number.isFinite(opts.limit) && (opts.limit ?? 0) > 0 ? Number(opts.limit) : 20
+    const candidateLimit = Math.max(limit * 5, 80)
+
+    const repFilter = (opts.repFilter ?? []).map((v) => v.trim()).filter(Boolean)
+    const playFilter = (opts.playFilter ?? []).map((v) => v.trim()).filter(Boolean)
+    const signalFilter = (opts.signalFilter ?? []).filter((n) => Number.isFinite(n))
+    const repUuidFilter = repFilter.filter(isUuid)
+    const playUuidFilter = playFilter.filter(isUuid)
+
+    if ((repFilter.length > 0 && repUuidFilter.length === 0) || (playFilter.length > 0 && playUuidFilter.length === 0)) {
+      return []
+    }
+
+    const wantsLead = entityFilter === 'all' || entityFilter === 'lead'
+    const wantsProof = entityFilter === 'all' || entityFilter === 'proof'
+    const wantsUpwork = entityFilter === 'all' || entityFilter === 'upwork'
+    const wantsConversation = entityFilter === 'all' || entityFilter === 'conversation'
+    const wantsIdentity = (entityFilter === 'all' || entityFilter === 'identity') && this.rep.role === 'admin'
+    const wantsStudio = entityFilter === 'all' || entityFilter === 'studio'
+
+    const candidates: ArchiveSearchCandidate[] = []
+    let leadRows: Row[] = []
+
+    if (wantsLead || wantsConversation) {
+      let leadQuery = this.client
+        .from('leads')
+        .select('id, company, contact_name, contact_title, status, created_at, signal_evidence, raw_input, url, tags, owner_rep_id, signal_type, play_id')
+        .order('created_at', { ascending: false })
+        .limit(candidateLimit)
+
+      if (signalFilter.length > 0) leadQuery = leadQuery.in('signal_type', signalFilter)
+      if (playUuidFilter.length > 0) leadQuery = leadQuery.in('play_id', playUuidFilter)
+      if (repUuidFilter.length > 0) leadQuery = leadQuery.in('owner_rep_id', repUuidFilter)
+      if (opts.dateFrom) leadQuery = leadQuery.gte('created_at', opts.dateFrom)
+      if (opts.dateTo) leadQuery = leadQuery.lte('created_at', opts.dateTo)
+
+      const { data, error } = await leadQuery
+      if (error) throw error
+      leadRows = (data ?? []) as Row[]
+    }
+
+    if (wantsLead) {
+      for (const row of leadRows) {
+        const id = row.id as string
+        candidates.push({
+          entityType: 'lead',
+          id,
+          title: (row.company as string) ?? 'Untitled lead',
+          subtitle: [row.contact_name as string, row.contact_title as string].filter(Boolean).join(' · '),
+          status: (row.status as string) ?? null,
+          createdAt: (row.created_at as string) ?? new Date(0).toISOString(),
+          href: `/leads/${id}`,
+          body: [row.signal_evidence as string, row.raw_input as string].filter(Boolean).join(' '),
+          searchText: [row.url as string, ...(Array.isArray(row.tags) ? (row.tags as string[]) : [])],
+        })
+      }
+    }
+
+    if (wantsConversation && leadRows.length > 0) {
+      const leadMap = new Map(leadRows.map((row) => [row.id as string, row]))
+      const leadIds = [...leadMap.keys()]
+      if (leadIds.length > 0) {
+        let stateQuery = this.client
+          .from('conversation_states')
+          .select('lead_id, stage, updated_at, last_strategy, last_angle, last_cta, last_reply_at, last_sent_at')
+          .in('lead_id', leadIds)
+          .order('updated_at', { ascending: false })
+          .limit(candidateLimit)
+        if (opts.dateFrom) stateQuery = stateQuery.gte('updated_at', opts.dateFrom)
+        if (opts.dateTo) stateQuery = stateQuery.lte('updated_at', opts.dateTo)
+
+        const { data: stateData, error: stateError } = await stateQuery
+        if (stateError) {
+          if (!isOptionalSearchError(stateError)) throw stateError
+        } else {
+          const stateRows = (stateData ?? []) as Row[]
+          const stateLeadIds = [...new Set(stateRows.map((row) => row.lead_id as string).filter(Boolean))]
+
+          const latestMessageByLead = new Map<string, string>()
+          if (stateLeadIds.length > 0) {
+            const { data: messageData, error: messageError } = await this.client
+              .from('messages')
+              .select('lead_id, sent_text, draft_text, created_at, type')
+              .in('lead_id', stateLeadIds)
+              .order('created_at', { ascending: false })
+              .limit(candidateLimit * 3)
+            if (messageError) throw messageError
+
+            for (const row of (messageData ?? []) as Row[]) {
+              const leadId = row.lead_id as string
+              if (!leadId || latestMessageByLead.has(leadId)) continue
+              const text = ((row.sent_text as string) ?? (row.draft_text as string) ?? '').trim()
+              if (!text) continue
+              latestMessageByLead.set(leadId, text)
+            }
+          }
+
+          for (const row of stateRows) {
+            const leadId = row.lead_id as string
+            const lead = leadMap.get(leadId)
+            if (!lead) continue
+            const createdAt =
+              (row.updated_at as string) ??
+              (row.last_reply_at as string) ??
+              (row.last_sent_at as string) ??
+              (lead.created_at as string) ??
+              new Date(0).toISOString()
+            candidates.push({
+              entityType: 'conversation',
+              id: leadId,
+              title: (lead.company as string) ?? 'Conversation',
+              subtitle: [lead.contact_name as string, row.stage as string].filter(Boolean).join(' · '),
+              status: (row.stage as string) ?? null,
+              createdAt,
+              href: `/leads/${leadId}`,
+              body: [
+                row.last_strategy as string,
+                row.last_angle as string,
+                row.last_cta as string,
+                latestMessageByLead.get(leadId),
+              ]
+                .filter(Boolean)
+                .join(' '),
+            })
+          }
+        }
+      }
+    }
+
+    if (wantsUpwork) {
+      let upworkQuery = this.client
+        .from('upwork_jobs')
+        .select('id, title, description, urgency_signal, required_skills, tags, status, created_at, owner_rep_id, client_name')
+        .order('created_at', { ascending: false })
+        .limit(candidateLimit)
+
+      if (repUuidFilter.length > 0) upworkQuery = upworkQuery.in('owner_rep_id', repUuidFilter)
+      if (opts.dateFrom) upworkQuery = upworkQuery.gte('created_at', opts.dateFrom)
+      if (opts.dateTo) upworkQuery = upworkQuery.lte('created_at', opts.dateTo)
+
+      const { data, error } = await upworkQuery
+      if (error) throw error
+      for (const row of (data ?? []) as Row[]) {
+        const id = row.id as string
+        candidates.push({
+          entityType: 'upwork',
+          id,
+          title: (row.title as string) ?? 'Untitled job',
+          subtitle: ((row.client_name as string) ?? '').trim() || 'Upwork job',
+          status: (row.status as string) ?? null,
+          createdAt: (row.created_at as string) ?? new Date(0).toISOString(),
+          href: `/upwork/${id}`,
+          body: [row.description as string, row.urgency_signal as string].filter(Boolean).join(' '),
+          searchText: [
+            ...(Array.isArray(row.required_skills) ? (row.required_skills as string[]) : []),
+            ...(Array.isArray(row.tags) ? (row.tags as string[]) : []),
+          ],
+        })
+      }
+    }
+
+    if (wantsProof) {
+      let proofQuery = this.client
+        .from('proof_items')
+        .select('id, profile_id, project_summary, review_quote, client_name, permission_on_file, tags, created_at')
+        .order('created_at', { ascending: false })
+        .limit(candidateLimit)
+      if (opts.dateFrom) proofQuery = proofQuery.gte('created_at', opts.dateFrom)
+      if (opts.dateTo) proofQuery = proofQuery.lte('created_at', opts.dateTo)
+
+      const { data, error } = await proofQuery
+      if (error) throw error
+      const proofRows = (data ?? []) as Row[]
+
+      const profileIds = [...new Set(proofRows.map((row) => row.profile_id as string).filter(Boolean))]
+      const profileMap = new Map<string, { label: string; repId: string | null }>()
+      if (profileIds.length > 0) {
+        const { data: profileRows, error: profileError } = await this.client
+          .from('profiles')
+          .select('id, label, rep_id')
+          .in('id', profileIds)
+        if (profileError) throw profileError
+        for (const row of (profileRows ?? []) as Row[]) {
+          profileMap.set(row.id as string, {
+            label: ((row.label as string) ?? '').trim(),
+            repId: (row.rep_id as string) ?? null,
+          })
+        }
+      }
+
+      for (const row of proofRows) {
+        const profileId = row.profile_id as string
+        const profile = profileMap.get(profileId)
+        if (repUuidFilter.length > 0 && (!profile?.repId || !repUuidFilter.includes(profile.repId))) {
+          continue
+        }
+        const id = row.id as string
+        const permissionOnFile = Boolean(row.permission_on_file)
+        const clientName = permissionOnFile ? ((row.client_name as string) ?? '').trim() : ''
+        candidates.push({
+          entityType: 'proof',
+          id,
+          title: (row.project_summary as string) ?? 'Proof item',
+          subtitle: clientName || profile?.label || 'Proof item',
+          status: null,
+          createdAt: (row.created_at as string) ?? new Date(0).toISOString(),
+          href: `/profiles?profileId=${encodeURIComponent(profileId)}`,
+          body: (row.review_quote as string) ?? null,
+          searchText: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+        })
+      }
+    }
+
+    if (wantsIdentity) {
+      const { data: identityData, error: identityError } = await this.client
+        .from('revenue_identities')
+        .select('id, identity_name, slug, title, positioning, status, skills, expertise, industries, technologies, created_at, updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(candidateLimit)
+
+      if (identityError) {
+        if (!isOptionalSearchError(identityError)) throw identityError
+      } else {
+        let allowedIdentityIds: Set<string> | null = null
+        if (repUuidFilter.length > 0) {
+          const { data: assignmentData, error: assignmentError } = await this.client
+            .from('identity_assignments')
+            .select('revenue_identity_id')
+            .in('rep_id', repUuidFilter)
+          if (assignmentError) {
+            if (!isOptionalSearchError(assignmentError)) throw assignmentError
+          } else {
+            allowedIdentityIds = new Set(
+              ((assignmentData ?? []) as Row[])
+                .map((row) => row.revenue_identity_id as string)
+                .filter(Boolean),
+            )
+          }
+        }
+
+        for (const row of (identityData ?? []) as Row[]) {
+          const id = row.id as string
+          if (allowedIdentityIds && !allowedIdentityIds.has(id)) continue
+          candidates.push({
+            entityType: 'identity',
+            id,
+            title: (row.identity_name as string) ?? 'Revenue identity',
+            subtitle: [row.title as string, row.slug as string].filter(Boolean).join(' · '),
+            status: (row.status as string) ?? 'active',
+            createdAt: ((row.updated_at as string) ?? (row.created_at as string)) ?? new Date(0).toISOString(),
+            href: `/admin/revenue-identities#${id}`,
+            body: (row.positioning as string) ?? null,
+            searchText: [
+              ...normalizeStringArray(row.skills),
+              ...normalizeStringArray(row.expertise),
+              ...normalizeStringArray(row.industries),
+              ...normalizeStringArray(row.technologies),
+            ],
+          })
+        }
+      }
+    }
+
+    if (wantsStudio) {
+      let draftRows: Row[] = []
+      let historyRows: Row[] = []
+
+      let draftQuery = this.client
+        .from('content_drafts')
+        .select('id, persona_id, platform, status, caption, source_material, created_at')
+        .order('created_at', { ascending: false })
+        .limit(candidateLimit)
+      if (opts.dateFrom) draftQuery = draftQuery.gte('created_at', opts.dateFrom)
+      if (opts.dateTo) draftQuery = draftQuery.lte('created_at', opts.dateTo)
+
+      const { data: draftData, error: draftError } = await draftQuery
+      if (draftError) {
+        if (!isOptionalSearchError(draftError)) throw draftError
+      } else {
+        draftRows = (draftData ?? []) as Row[]
+      }
+
+      let historyQuery = this.client
+        .from('content_history')
+        .select('id, persona_id, platform, opening_line, posted_at')
+        .order('posted_at', { ascending: false })
+        .limit(candidateLimit)
+      if (opts.dateFrom) historyQuery = historyQuery.gte('posted_at', opts.dateFrom)
+      if (opts.dateTo) historyQuery = historyQuery.lte('posted_at', opts.dateTo)
+
+      const { data: historyData, error: historyError } = await historyQuery
+      if (historyError) {
+        if (!isOptionalSearchError(historyError)) throw historyError
+      } else {
+        historyRows = (historyData ?? []) as Row[]
+      }
+
+      const personaIds = [
+        ...new Set(
+          [...draftRows, ...historyRows]
+            .map((row) => row.persona_id as string)
+            .filter(Boolean),
+        ),
+      ]
+      const personaMap = new Map<string, { name: string; repId: string | null }>()
+      if (personaIds.length > 0) {
+        let personaQuery = this.client
+          .from('content_personas')
+          .select('id, display_name, rep_id')
+          .in('id', personaIds)
+        if (repUuidFilter.length > 0) personaQuery = personaQuery.in('rep_id', repUuidFilter)
+
+        const { data: personaData, error: personaError } = await personaQuery
+        if (personaError) {
+          if (!isOptionalSearchError(personaError)) throw personaError
+        } else {
+          for (const row of (personaData ?? []) as Row[]) {
+            personaMap.set(row.id as string, {
+              name: ((row.display_name as string) ?? '').trim() || 'Studio',
+              repId: (row.rep_id as string) ?? null,
+            })
+          }
+        }
+      }
+
+      for (const row of draftRows) {
+        const personaId = row.persona_id as string
+        if (repUuidFilter.length > 0 && !personaMap.has(personaId)) continue
+        const persona = personaMap.get(personaId)
+        const id = row.id as string
+        const caption = ((row.caption as string) ?? '').trim()
+        candidates.push({
+          entityType: 'studio',
+          id,
+          title: caption || '(No caption)',
+          subtitle: `${persona?.name ?? 'Studio'} · ${(row.platform as string) ?? 'post'} draft`,
+          status: (row.status as string) ?? 'draft',
+          createdAt: (row.created_at as string) ?? new Date(0).toISOString(),
+          href: `/studio/drafts/${id}`,
+          body: (row.source_material as string) ?? null,
+        })
+      }
+
+      for (const row of historyRows) {
+        const personaId = row.persona_id as string
+        if (repUuidFilter.length > 0 && !personaMap.has(personaId)) continue
+        const persona = personaMap.get(personaId)
+        const id = `history:${row.id as string}`
+        candidates.push({
+          entityType: 'studio',
+          id,
+          title: ((row.opening_line as string) ?? '').trim() || '(No opening line)',
+          subtitle: `${persona?.name ?? 'Studio'} · ${(row.platform as string) ?? 'post'} posted`,
+          status: 'posted',
+          createdAt: (row.posted_at as string) ?? new Date(0).toISOString(),
+          href: `/content/${personaId}/library`,
+        })
+      }
+    }
+
+    const needsRpc = entityFilter === 'all' || entityFilter === 'lead' || entityFilter === 'proof' || entityFilter === 'upwork'
+    if (needsRpc) {
+      const { data, error } = await this.client.rpc('archive_search', {
+        query,
+        entity_filter: entityFilter,
+        status_filter: opts.statusFilter ?? [],
+        signal_filter: signalFilter,
+        play_filter: playUuidFilter,
+        rep_filter: repUuidFilter,
+        date_from: opts.dateFrom ?? null,
+        date_to: opts.dateTo ?? null,
+        result_limit: candidateLimit,
+      })
+      if (error) {
+        if (!isOptionalSearchError(error)) throw error
+      } else {
+        for (const row of (data ?? []) as Row[]) {
+          const type = row.entity_type as 'lead' | 'proof' | 'upwork'
+          const id = row.id as string
+          candidates.push({
+            entityType: type,
+            id,
+            title: (row.title as string) ?? '',
+            subtitle: (row.subtitle as string) ?? '',
+            status: (row.status as string) ?? null,
+            createdAt: (row.created_at as string) ?? new Date(0).toISOString(),
+            href: type === 'lead' ? `/leads/${id}` : type === 'upwork' ? `/upwork/${id}` : '/profiles',
+            rankHint: Math.max(0, Number(row.rank ?? 0)) * 220,
+          })
+        }
+      }
+    }
+
+    return rankArchiveResults(candidates, {
+      query,
+      entityFilter,
+      statusFilter: opts.statusFilter,
+      limit,
     })
-    if (error) throw error
-    return (data ?? []).map((r: Row) => ({
-      entityType: r.entity_type as string,
-      id: r.id as string,
-      title: r.title as string,
-      subtitle: r.subtitle as string,
-      status: (r.status as string) ?? null,
-      createdAt: r.created_at as string,
-      rank: (r.rank as number) ?? 0,
-    }))
   }
 
   // ==========================================================================
@@ -1943,6 +2446,7 @@ export class SupabaseStore implements ScoutStore {
       .from('content_personas')
       .select('*')
       .eq('id', personaId)
+      .eq('organization_id', this.orgId)
       .single()
     if (error) return null
     return mapContentPersona(data)
@@ -3065,6 +3569,7 @@ export class SupabaseStore implements ScoutStore {
     lostReason?: string | null
   }): Promise<ConversationState> {
     const existing = await this.getConversationState(input.leadId)
+    const previousStage = existing?.stage ?? 'new'
     const row = {
       id: existing?.id,
       organization_id: this.orgId,
@@ -3087,7 +3592,30 @@ export class SupabaseStore implements ScoutStore {
       .select('*')
       .single()
     if (error) throw error
-    return mapConversationState(data as Row)
+
+    const newState = mapConversationState(data as Row)
+
+    // Emit CLIENT_REPLIED when stage transitions to 'replied' for the first time
+    if (input.stage === 'replied' && previousStage !== 'replied') {
+      try {
+        await this.emitRelayEvent({
+          eventType: 'CLIENT_REPLIED',
+          entityType: 'lead',
+          entityId: input.leadId,
+          actorType: 'system',
+          payload: {
+            previousStage,
+            newStage: 'replied',
+          },
+          source: 'app',
+          sourceEventId: `client_replied:${input.leadId}`,
+        })
+      } catch {
+        // Event emission must never break domain operations
+      }
+    }
+
+    return newState
   }
 
   async addSalesMemory(input: {
@@ -3732,6 +4260,178 @@ export class SupabaseStore implements ScoutStore {
       revenueIdentityId: (r.revenue_identity_id as string) ?? null, eventType: r.event_type as string,
       detail: (r.detail as Record<string, unknown>) ?? {}, createdAt: r.created_at as string,
     }))
+  }
+
+  // ============================================================================
+  // ORCHESTRATION — Event Ledger + Relay Runs (Sprint 1)
+  // ============================================================================
+
+  async emitRelayEvent(input: {
+    eventType: import('@/lib/domain/types').RelayEventType
+    entityType: string
+    entityId?: string | null
+    actorType?: import('@/lib/domain/types').RelayActorType
+    actorId?: string | null
+    revenueIdentityId?: string | null
+    source?: string
+    sourceEventId?: string | null
+    correlationId?: string | null
+    causationId?: string | null
+    relayRunId?: string | null
+    payload?: Record<string, unknown>
+    metadata?: Record<string, unknown>
+    occurredAt?: string
+  }): Promise<string | null> {
+    const { data, error } = await this.client.rpc('emit_relay_event', {
+      p_org_id: this.orgId,
+      p_event_type: input.eventType,
+      p_entity_type: input.entityType,
+      p_entity_id: input.entityId ?? null,
+      p_actor_type: input.actorType ?? 'system',
+      p_actor_id: input.actorId ?? null,
+      p_revenue_identity_id: input.revenueIdentityId ?? null,
+      p_source: input.source ?? 'app',
+      p_source_event_id: input.sourceEventId ?? null,
+      p_correlation_id: input.correlationId ?? null,
+      p_causation_id: input.causationId ?? null,
+      p_relay_run_id: input.relayRunId ?? null,
+      p_payload: JSON.parse(JSON.stringify(input.payload ?? {})),
+      p_metadata: JSON.parse(JSON.stringify(input.metadata ?? {})),
+      p_occurred_at: input.occurredAt ?? new Date().toISOString(),
+    })
+    if (error) {
+      // Event emission must never break the calling operation
+      console.error('[orchestration] emit_relay_event failed:', error.message)
+      return null
+    }
+    return data as string | null
+  }
+
+  async getRelayRunEvents(runId: string): Promise<import('@/lib/domain/types').RelayEvent[]> {
+    const { data, error } = await this.client
+      .from('relay_events')
+      .select('*')
+      .eq('relay_run_id', runId)
+      .order('occurred_at', { ascending: true })
+    if (error) throw error
+    return (data ?? []).map((r) => mapRelayEvent(r as Record<string, unknown>))
+  }
+
+  async createRelayRun(input: {
+    runType?: import('@/lib/domain/types').RelayRunType
+    primaryEntityType?: string
+    primaryEntityId?: string | null
+    assignedRepId?: string | null
+    revenueIdentityId?: string | null
+    correlationId?: string | null
+    context?: Record<string, unknown>
+  }): Promise<string | null> {
+    const { data, error } = await this.client.rpc('create_relay_run', {
+      p_org_id: this.orgId,
+      p_run_type: input.runType ?? 'outbound',
+      p_primary_entity_type: input.primaryEntityType ?? 'lead',
+      p_primary_entity_id: input.primaryEntityId ?? null,
+      p_assigned_rep_id: input.assignedRepId ?? null,
+      p_revenue_identity_id: input.revenueIdentityId ?? null,
+      p_correlation_id: input.correlationId ?? null,
+      p_context: JSON.parse(JSON.stringify(input.context ?? {})),
+    })
+    if (error) {
+      console.error('[orchestration] create_relay_run failed:', error.message)
+      return null
+    }
+    return data as string | null
+  }
+
+  async transitionRelayRun(input: {
+    runId: string
+    newStatus: import('@/lib/domain/types').RelayRunStatus
+    newStep?: string | null
+    eventId?: string | null
+    metadata?: Record<string, unknown>
+  }): Promise<{ previousStatus: string; newStatus: string; step: string } | null> {
+    const { data, error } = await this.client.rpc('transition_relay_run', {
+      p_run_id: input.runId,
+      p_org_id: this.orgId,
+      p_new_status: input.newStatus,
+      p_new_step: input.newStep ?? null,
+      p_event_id: input.eventId ?? null,
+      p_metadata: JSON.parse(JSON.stringify(input.metadata ?? {})),
+    })
+    if (error) {
+      console.error('[orchestration] transition_relay_run failed:', error.message)
+      return null
+    }
+    return data as { previousStatus: string; newStatus: string; step: string }
+  }
+
+  async getRelayRun(runId: string): Promise<import('@/lib/domain/types').RelayRun | null> {
+    const { data, error } = await this.client
+      .from('relay_runs')
+      .select('*')
+      .eq('id', runId)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return mapRelayRun(data as Record<string, unknown>)
+  }
+
+  async listActiveRunsForEntity(entityType: string, entityId: string): Promise<import('@/lib/domain/types').RelayRun[]> {
+    const { data, error } = await this.client
+      .from('relay_runs')
+      .select('*')
+      .eq('primary_entity_type', entityType)
+      .eq('primary_entity_id', entityId)
+      .in('status', ['detected', 'qualifying', 'qualified', 'routing', 'preparing', 'awaiting_human', 'action_recorded', 'waiting', 'followup_due', 'followup_preparing', 'response_received', 'conversation'])
+    if (error) throw error
+    return (data ?? []).map((r) => mapRelayRun(r as Record<string, unknown>))
+  }
+}
+
+function mapRelayEvent(r: Record<string, unknown>): import('@/lib/domain/types').RelayEvent {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    eventType: r.event_type as import('@/lib/domain/types').RelayEventType,
+    entityType: r.entity_type as string,
+    entityId: (r.entity_id as string) ?? null,
+    actorType: (r.actor_type as import('@/lib/domain/types').RelayActorType) ?? 'system',
+    actorId: (r.actor_id as string) ?? null,
+    revenueIdentityId: (r.revenue_identity_id as string) ?? null,
+    source: (r.source as string) ?? 'app',
+    sourceEventId: (r.source_event_id as string) ?? null,
+    correlationId: (r.correlation_id as string) ?? null,
+    causationId: (r.causation_id as string) ?? null,
+    relayRunId: (r.relay_run_id as string) ?? null,
+    payload: (r.payload as Record<string, unknown>) ?? {},
+    metadata: (r.metadata as Record<string, unknown>) ?? {},
+    occurredAt: r.occurred_at as string,
+    createdAt: r.created_at as string,
+  }
+}
+
+function mapRelayRun(r: Record<string, unknown>): import('@/lib/domain/types').RelayRun {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    runType: (r.run_type as import('@/lib/domain/types').RelayRunType) ?? 'outbound',
+    primaryEntityType: (r.primary_entity_type as string) ?? 'lead',
+    primaryEntityId: (r.primary_entity_id as string) ?? null,
+    status: r.status as import('@/lib/domain/types').RelayRunStatus,
+    currentStep: (r.current_step as string) ?? (r.status as string),
+    assignedRepId: (r.assigned_rep_id as string) ?? null,
+    revenueIdentityId: (r.revenue_identity_id as string) ?? null,
+    correlationId: (r.correlation_id as string) ?? (r.id as string),
+    startedAt: r.started_at as string,
+    waitingUntil: (r.waiting_until as string) ?? null,
+    completedAt: (r.completed_at as string) ?? null,
+    failedAt: (r.failed_at as string) ?? null,
+    failureCategory: (r.failure_category as string) ?? null,
+    failureReason: (r.failure_reason as string) ?? null,
+    context: (r.context as Record<string, unknown>) ?? {},
+    metadata: (r.metadata as Record<string, unknown>) ?? {},
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
   }
 }
 

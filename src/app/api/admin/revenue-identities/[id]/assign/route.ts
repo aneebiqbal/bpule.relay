@@ -70,6 +70,25 @@ export async function POST(
     detail: { rep_id: repId, rep_name: rep.name },
   })
 
+  // Emit WORK_ASSIGNED event (non-fatal)
+  try {
+    await supabase.rpc('emit_relay_event', {
+      p_org_id: user.organization.id,
+      p_event_type: 'WORK_ASSIGNED',
+      p_entity_type: 'revenue_identity',
+      p_entity_id: id,
+      p_actor_type: 'admin',
+      p_actor_id: user.rep.id,
+      p_revenue_identity_id: id,
+      p_source: 'app',
+      p_source_event_id: `work_assigned:${repId}:${id}`,
+      p_payload: { rep_id: repId, rep_name: rep.name, identity_name: identity.identity_name },
+      p_metadata: {},
+    })
+  } catch {
+    // Event emission must never break the assignment operation
+  }
+
   // Notify the rep
   await supabase.from('notifications').insert({
     organization_id: user.organization.id,

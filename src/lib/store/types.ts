@@ -82,6 +82,8 @@ export interface NewLeadInput {
   signalEvidence?: string | null
   verbatimQuote?: string | null
   tags?: string[]
+  score?: number | null
+  verdict?: Verdict | null
   roleCategory?: RoleCategory
   marketRegion?: MarketRegion
   extractionConfidence?: number
@@ -91,6 +93,7 @@ export interface NewLeadInput {
   inboundMessage?: string | null
   inboundRaw?: Record<string, unknown> | null
   assignedProfileId?: string | null
+  allowPotentialDuplicate?: boolean
 }
 
 export interface ExtractionMetrics {
@@ -133,6 +136,7 @@ export interface CreateLeadResult {
   reason?: string
   existingOwnerName?: string
   lead?: Lead
+  duplicateKind?: 'hard' | 'potential'
 }
 
 export interface SaveDraftInput {
@@ -421,7 +425,7 @@ export interface ScoutStore {
   // archive search
   archiveSearch(opts: {
     query: string
-    entityFilter?: 'lead' | 'proof' | 'upwork' | 'all'
+    entityFilter?: 'lead' | 'proof' | 'upwork' | 'conversation' | 'identity' | 'studio' | 'all'
     statusFilter?: string[]
     signalFilter?: number[]
     playFilter?: string[]
@@ -430,12 +434,13 @@ export interface ScoutStore {
     dateTo?: string | null
     limit?: number
   }): Promise<Array<{
-    entityType: string
+    entityType: 'lead' | 'proof' | 'upwork' | 'conversation' | 'identity' | 'studio'
     id: string
     title: string
     subtitle: string
     status: string | null
     createdAt: string
+    href?: string
     rank: number
   }>>
   // push subscriptions
@@ -847,4 +852,68 @@ export interface ScoutStore {
   listAccountabilityNotifications(): Promise<import('@/lib/domain/types').AppNotification[]>
   markAccountabilityNotificationRead(id: string): Promise<void>
   listAuditLogAdmin(limit?: number): Promise<import('@/lib/domain/types').AuditLogEntry[]>
+
+  // ============================================================================
+  // ORCHESTRATION — Event Ledger + Relay Runs (Sprint 1)
+  // ============================================================================
+
+  /**
+   * Emit an event to the relay_events ledger.
+   * Centralized, idempotent, append-only.
+   */
+  emitRelayEvent(input: {
+    eventType: import('@/lib/domain/types').RelayEventType
+    entityType: string
+    entityId?: string | null
+    actorType?: import('@/lib/domain/types').RelayActorType
+    actorId?: string | null
+    revenueIdentityId?: string | null
+    source?: string
+    sourceEventId?: string | null
+    correlationId?: string | null
+    causationId?: string | null
+    relayRunId?: string | null
+    payload?: Record<string, unknown>
+    metadata?: Record<string, unknown>
+    occurredAt?: string
+  }): Promise<string | null>
+
+  /**
+   * Get the full event history for a relay run.
+   */
+  getRelayRunEvents(runId: string): Promise<import('@/lib/domain/types').RelayEvent[]>
+
+  /**
+   * Create a new Relay Run. Enforces one-active-run-per-entity.
+   */
+  createRelayRun(input: {
+    runType?: import('@/lib/domain/types').RelayRunType
+    primaryEntityType?: string
+    primaryEntityId?: string | null
+    assignedRepId?: string | null
+    revenueIdentityId?: string | null
+    correlationId?: string | null
+    context?: Record<string, unknown>
+  }): Promise<string | null>
+
+  /**
+   * Transition a Relay Run to a new status. Deterministic validation.
+   */
+  transitionRelayRun(input: {
+    runId: string
+    newStatus: import('@/lib/domain/types').RelayRunStatus
+    newStep?: string | null
+    eventId?: string | null
+    metadata?: Record<string, unknown>
+  }): Promise<{ previousStatus: string; newStatus: string; step: string } | null>
+
+  /**
+   * Get a Relay Run by ID.
+   */
+  getRelayRun(runId: string): Promise<import('@/lib/domain/types').RelayRun | null>
+
+  /**
+   * List active Relay Runs for an entity.
+   */
+  listActiveRunsForEntity(entityType: string, entityId: string): Promise<import('@/lib/domain/types').RelayRun[]>
 }

@@ -1,0 +1,243 @@
+import type {
+  RelayRun,
+  NextAction,
+  Lead,
+  ConversationState,
+} from '@/lib/domain/types'
+
+export interface NextActionContext {
+  run: RelayRun
+  lead: Lead | null
+  conversationState: ConversationState | null
+  followupCount: number
+  followupLimitReached: boolean
+  hasOutboundMessage: boolean
+  hasReply: boolean
+  identityAssigned: boolean
+  proofMatched: boolean
+}
+
+/**
+ * Deterministic Next Action projection.
+ *
+ * Answers: "What should happen next for this run?"
+ * Uses only current domain state + run status. No AI.
+ */
+export function projectNextAction(ctx: NextActionContext): NextAction | null {
+  const { run, lead, followupCount, followupLimitReached, hasReply, identityAssigned, proofMatched } = ctx
+
+  if (!lead) {
+    return {
+      actionType: 'NO_LEAD',
+      priority: 'low',
+      reason: 'No lead associated with this run.',
+      executionPolicy: 'MANUAL',
+      entityType: 'lead',
+      entityId: '',
+      blockedReason: 'Lead not found.',
+    }
+  }
+
+  switch (run.status) {
+    case 'detected':
+    case 'qualifying':
+      return {
+        actionType: 'QUALIFY_LEAD',
+        priority: 'medium',
+        reason: `Lead "${lead.company}" was detected and needs qualification.`,
+        executionPolicy: 'AUTO',
+        entityType: 'lead',
+        entityId: lead.id,
+        blockedReason: null,
+      }
+
+    case 'qualified':
+    case 'routing':
+      if (!identityAssigned) {
+        return {
+          actionType: 'ASSIGN_IDENTITY',
+          priority: 'high',
+          reason: `Lead "${lead.company}" is qualified but has no revenue identity assigned.`,
+          executionPolicy: 'REVIEW_REQUIRED',
+          entityType: 'lead',
+          entityId: lead.id,
+          blockedReason: null,
+        }
+      }
+      return {
+        actionType: 'PREPARE_OUTREACH',
+        priority: 'high',
+        reason: `Lead "${lead.company}" is qualified. Outreach can be prepared.`,
+        executionPolicy: 'AUTO',
+        entityType: 'lead',
+        entityId: lead.id,
+        blockedReason: null,
+      }
+
+    case 'preparing':
+      return {
+        actionType: 'PREPARE_OUTREACH',
+        priority: 'high',
+        reason: `Outreach is being prepared for "${lead.company}".`,
+        executionPolicy: 'AUTO',
+        entityType: 'lead',
+        entityId: lead.id,
+        blockedReason: null,
+      }
+
+    case 'awaiting_human':
+      return {
+        actionType: 'SEND_OUTREACH',
+        priority: 'urgent',
+        reason: `Outreach prepared for "${lead.company}". Awaiting human approval to send.`,
+        executionPolicy: 'REVIEW_REQUIRED',
+        entityType: 'lead',
+        entityId: lead.id,
+        blockedReason: null,
+      }
+
+    case 'action_recorded':
+    case 'waiting':
+      if (hasReply) {
+        return {
+          actionType: 'REPLY_NEEDED',
+          priority: 'urgent',
+          reason: `Client replied to outreach for "${lead.company}". Response needed.`,
+          executionPolicy: 'REVIEW_REQUIRED',
+          entityType: 'lead',
+          entityId: lead.id,
+          blockedReason: null,
+        }
+      }
+      if (!proofMatched && identityAssigned) {
+        return {
+          actionType: 'MATCH_PROOF',
+          priority: 'medium',
+          reason: `No proof matched yet for "${lead.company}". Consider adding relevant proof.`,
+          executionPolicy: 'AUTO',
+          entityType: 'lead',
+          entityId: lead.id,
+          blockedReason: null,
+        }
+      }
+      return {
+        actionType: 'WAIT',
+        priority: 'low',
+        reason: `Waiting for client response from "${lead.company}".`,
+        executionPolicy: 'AUTO',
+        entityType: 'lead',
+        entityId: lead.id,
+        blockedReason: null,
+      }
+
+    case 'followup_due':
+      if (followupLimitReached) {
+        return {
+          actionType: 'NO_FURTHER_FOLLOWUP',
+          priority: 'low',
+          reason: `Follow-up limit reached for "${lead.company}". No further follow-up allowed.`,
+          executionPolicy: 'AUTO',
+          entityType: 'lead',
+          entityId: lead.id,
+          blockedReason: 'Permanent follow-up limit reached.',
+        }
+      }
+      return {
+        actionType: 'PREPARE_FOLLOWUP',
+        priority: 'high',
+        reason: `Follow-up is due for "${lead.company}" (${followupCount} previous follow-ups).`,
+        executionPolicy: 'AUTO',
+        entityType: 'lead',
+        entityId: lead.id,
+        blockedReason: null,
+      }
+
+    case 'followup_preparing':
+      return {
+        actionType: 'SEND_FOLLOWUP',
+        priority: 'urgent',
+        reason: `Follow-up prepared for "${lead.company}". Awaiting human approval to send.`,
+        executionPolicy: 'REVIEW_REQUIRED',
+        entityType: 'lead',
+        entityId: lead.id,
+        blockedReason: null,
+      }
+
+    case 'response_received':
+      return {
+        actionType: 'REPLY_NEEDED',
+        priority: 'urgent',
+        reason: `Client responded to "${lead.company}". Reply needed.`,
+        executionPolicy: 'REVIEW_REQUIRED',
+        entityType: 'lead',
+        entityId: lead.id,
+        blockedReason: null,
+      }
+
+    case 'conversation':
+      return {
+        actionType: 'CONTINUE_CONVERSATION',
+        priority: 'medium',
+        reason: `Active conversation with "${lead.company}". Continue engaging.`,
+        executionPolicy: 'REVIEW_REQUIRED',
+        entityType: 'lead',
+        entityId: lead.id,
+        blockedReason: null,
+      }
+
+    case 'completed':
+    case 'rejected':
+    case 'cancelled':
+    case 'failed':
+      return null
+
+    default:
+      return null
+  }
+}
+
+/**
+ * Projects next actions for all active runs for a given lead.
+ */
+export function projectNextActionForLead(
+  runs: RelayRun[],
+  lead: Lead,
+  conversationState: ConversationState | null,
+  followupCount: number,
+  followupLimitReached: boolean,
+): NextAction[] {
+  const hasOutboundMessage = lead.status !== 'new'
+  const hasReply = lead.status === 'replied'
+  const identityAssigned = !!lead.senderProfileId || !!lead.ownerRepId
+
+  const actions: NextAction[] = []
+  for (const run of runs) {
+    const action = projectNextAction({
+      run,
+      lead,
+      conversationState,
+      followupCount,
+      followupLimitReached,
+      hasOutboundMessage,
+      hasReply,
+      identityAssigned,
+      proofMatched: false,
+    })
+    if (action) actions.push(action)
+  }
+
+  // If no active runs and lead is qualified but not contacted, suggest starting one
+  if (actions.length === 0 && lead.status === 'new' && lead.score !== null && lead.score >= 10) {
+    actions.push({
+      actionType: 'START_OUTBOUND',
+      priority: lead.score >= 10 ? 'high' : 'medium',
+      reason: `Qualified lead "${lead.company}" (score: ${lead.score}) has no active outbound run.`,
+      executionPolicy: 'AUTO',
+      entityType: 'lead',
+      entityId: lead.id,
+      blockedReason: null,
+    })
+  }
+
+  return actions
+}

@@ -89,6 +89,7 @@ export interface Lead {
   source?: LeadSource | null
   inboundMessage?: string | null
   inboundRaw?: Record<string, unknown> | null
+  senderProfileId?: string | null
   createdAt: string
 }
 
@@ -1248,4 +1249,108 @@ export interface IdentityPerformanceView {
   assignedReps: string[]
   totalTarget: number
   totalCompleted: number
+}
+
+// ============================================================================
+// ORCHESTRATION — Event Ledger + Relay Runs (Sprint 1)
+// ============================================================================
+
+export type RelayEventType =
+  | 'LEAD_CREATED'
+  | 'LEAD_QUALIFIED'
+  | 'WORK_ASSIGNED'
+  | 'OUTREACH_PREPARED'
+  | 'OUTREACH_RECORDED'
+  | 'FOLLOWUP_DUE'
+  | 'FOLLOWUP_PREPARED'
+  | 'FOLLOWUP_RECORDED'
+  | 'CLIENT_REPLIED'
+  | 'INTENT_DETECTED'
+  | 'PROOF_MATCHED'
+  | 'REPLY_PREPARED'
+  | 'HUMAN_ACTION_REQUIRED'
+  | 'CONVERSATION_ADVANCED'
+  | 'OUTCOME_RECORDED'
+  | 'RUN_STARTED'
+  | 'RUN_TRANSITIONED'
+  | 'RUN_COMPLETED'
+  | 'RUN_FAILED'
+  | 'RECONCILIATION_DETECTED'
+  | 'RECONCILIATION_APPLIED'
+
+export type RelayActorType = 'rep' | 'admin' | 'system' | 'integration'
+
+export type RelayRunType = 'outbound' | 'inbound' | 'job'
+
+export type RelayRunStatus =
+  | 'detected'
+  | 'qualifying'
+  | 'rejected'
+  | 'qualified'
+  | 'routing'
+  | 'preparing'
+  | 'awaiting_human'
+  | 'action_recorded'
+  | 'waiting'
+  | 'followup_due'
+  | 'followup_preparing'
+  | 'response_received'
+  | 'conversation'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
+export type ExecutionPolicy = 'AUTO' | 'REVIEW_REQUIRED' | 'MANUAL' | 'PROHIBITED'
+
+export interface RelayEvent {
+  id: string
+  organizationId: string
+  eventType: RelayEventType
+  entityType: string
+  entityId: string | null
+  actorType: RelayActorType
+  actorId: string | null
+  revenueIdentityId: string | null
+  source: string
+  sourceEventId: string | null
+  correlationId: string | null
+  causationId: string | null
+  relayRunId: string | null
+  payload: Record<string, unknown>
+  metadata: Record<string, unknown>
+  occurredAt: string
+  createdAt: string
+}
+
+export interface RelayRun {
+  id: string
+  organizationId: string
+  runType: RelayRunType
+  primaryEntityType: string
+  primaryEntityId: string | null
+  status: RelayRunStatus
+  currentStep: string
+  assignedRepId: string | null
+  revenueIdentityId: string | null
+  correlationId: string
+  startedAt: string
+  waitingUntil: string | null
+  completedAt: string | null
+  failedAt: string | null
+  failureCategory: string | null
+  failureReason: string | null
+  context: Record<string, unknown>
+  metadata: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface NextAction {
+  actionType: string
+  priority: 'urgent' | 'high' | 'medium' | 'low'
+  reason: string
+  executionPolicy: ExecutionPolicy
+  entityType: string
+  entityId: string
+  blockedReason: string | null
 }
