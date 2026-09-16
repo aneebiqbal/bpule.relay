@@ -115,6 +115,10 @@ export default function RootLayout({
           />
         )}
         <Providers>{children}</Providers>
+        <script
+          src="http://localhost:3000/widget.js"
+          data-project="bprelay"
+        />
       </body>
     </html>
   );
