@@ -46,48 +46,41 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
   const greeting = getTimeBasedGreeting()
 
   return (
-    <div className="space-y-8">
-      {/* ── Header ── */}
-      <header className="flex flex-wrap items-start justify-between gap-6">
-        <div className="space-y-3">
-          <StudioBrand />
+    <div className="space-y-5">
+      <header className="srf-sheet mark-corners relative px-5 py-6 sm:px-7">
+        <div className="flex flex-wrap items-start justify-between gap-6">
+          <div className="space-y-2">
+            <StudioBrand />
+            {personas.length > 0 && (
+              <p className="text-[15px] text-graphite">
+                {personas.length === 1
+                  ? `${greeting}, ${displayName}.`
+                  : `${greeting}, ${displayName}. You have ${personas.length} personas.`}
+              </p>
+            )}
+          </div>
           {personas.length > 0 && (
-            <p className="text-[15px] text-graphite">
-              {personas.length === 1
-                ? `${greeting}, ${displayName}.`
-                : `${greeting}, ${displayName}. You have ${personas.length} personas.`}
-            </p>
+            <Link
+              href="/content/new"
+              className="group inline-flex items-center gap-2 rounded border border-line px-4 py-2.5 text-sm font-medium text-ink transition-all hover:bg-bone active:scale-[0.97]"
+            >
+              <Plus className="size-4 transition-transform duration-300 group-hover:rotate-90" aria-hidden="true" />
+              New persona
+            </Link>
           )}
         </div>
-        {personas.length > 0 && (
-          <Link
-            href="/content/new"
-            className="group inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-ink transition-all hover:bg-bone active:scale-[0.97]"
-          >
-            <Plus className="size-4 transition-transform duration-300 group-hover:rotate-90" aria-hidden="true" />
-            New persona
-          </Link>
+        {personas.length > 0 && (totalSubjects > 0 || totalDrafts > 0 || postedLast14Days.length > 0) && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-graphite">
+            {totalSubjects > 0 && <span className="rounded bg-cobalt/10 px-2 py-0.5 text-[11px] text-cobalt-dark">{totalSubjects} subjects</span>}
+            {totalDrafts > 0 && <span className="rounded bg-orange/10 px-2 py-0.5 text-[11px] text-orange-dark">{totalDrafts} drafts waiting</span>}
+            {postedLast14Days.length > 0 && <span className="rounded bg-status-success/10 px-2 py-0.5 text-[11px] text-status-success">{postedLast14Days.length} posted · {withOutcome} outcomes</span>}
+          </div>
         )}
       </header>
 
-      {/* ── Quick stats — subtle ── */}
-      {personas.length > 0 && (totalSubjects > 0 || totalDrafts > 0 || postedLast14Days.length > 0) && (
-        <div className="flex flex-wrap items-center gap-4 text-sm text-graphite">
-          {totalSubjects > 0 && (
-            <span>{totalSubjects} subject{totalSubjects === 1 ? '' : 's'}</span>
-          )}
-          {totalDrafts > 0 && (
-            <span>{totalDrafts} draft{totalDrafts === 1 ? '' : 's'} waiting</span>
-          )}
-          {postedLast14Days.length > 0 && (
-            <span>{postedLast14Days.length} posted · {withOutcome} led somewhere</span>
-          )}
-        </div>
-      )}
-
       {/* ── Empty state ── */}
       {personas.length === 0 && (
-        <section className="rounded-2xl border border-dashed border-line bg-bone-raised p-10 text-center">
+        <section className="rounded border border-dashed border-line bg-bone-raised p-10 text-center">
           <div className="mx-auto max-w-sm space-y-4">
             <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-cobalt/[0.07]">
               <PenLine className="size-5 text-cobalt" aria-hidden="true" />
@@ -100,7 +93,7 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
             </div>
             <Link
               href="/content/new"
-              className="inline-flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-bone transition-all hover:bg-ink/90"
+              className="inline-flex items-center gap-2 rounded bg-ink px-5 py-2.5 text-sm font-medium text-bone transition-all hover:bg-ink/90"
             >
               Create your first persona
             </Link>
@@ -125,7 +118,7 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
               <article
                 key={persona.id}
                 className={cn(
-                  'overflow-hidden rounded-2xl transition-shadow',
+                  'overflow-hidden rounded transition-shadow',
                   hasWaiting
                     ? 'border-2 border-cobalt/30 bg-bone-raised shadow-cobalt hover:shadow-md'
                     : needsSetup
@@ -167,7 +160,7 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                     {needsSetup ? (
                       <Link
                         href={`/content/${persona.id}`}
-                        className="group inline-flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-bone transition-all hover:bg-ink/90 active:scale-[0.97]"
+                        className="group inline-flex items-center gap-1.5 rounded bg-ink px-4 py-2 text-sm font-medium text-bone transition-all hover:bg-ink/90 active:scale-[0.97]"
                       >
                         Finish setup
                         <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />

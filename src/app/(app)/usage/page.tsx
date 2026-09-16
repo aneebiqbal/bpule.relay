@@ -18,11 +18,16 @@ export default async function UsagePage() {
   const pct = totalLimit > 0 ? Math.round((totalUsed / totalLimit) * 100) : 0
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
-      <header className="space-y-1">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Account / usage</p>
-        <h1 className="text-[30px] font-medium tracking-[-0.03em] text-ink">Today&apos;s operating usage</h1>
-        <p className="text-[13px] text-graphite">Keep execution inside your daily limits while moving meaningful work forward.</p>
+    <div className="mx-auto max-w-3xl space-y-5">
+      <header className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Account / Usage</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">Track send capacity before you execute.</h1>
+        <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">Daily budgets reset at midnight. Prioritize high-intent actions first.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <UsageSignal label="Used" value={totalUsed} />
+          <UsageSignal label="Limit" value={totalLimit} />
+          <UsageSignal label="Remaining" value={remaining} />
+        </div>
       </header>
 
       <section className="rounded border border-line bg-bone-raised px-4 py-4">
@@ -43,9 +48,18 @@ export default async function UsagePage() {
         </div>
       </section>
 
-      <Link href="/account" className="inline-flex items-center gap-2 text-[12px] font-medium text-ink">
+      <Link href="/account" className="inline-flex items-center gap-2 rounded border border-line px-3 py-1.5 text-[12px] font-medium text-ink hover:bg-bone">
         Open full account settings
       </Link>
+    </div>
+  )
+}
+
+function UsageSignal({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <p className="mt-1 text-[20px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }

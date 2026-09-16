@@ -20,34 +20,38 @@ export default async function EvalPage() {
   const golden = goldenRes.status === 'fulfilled' ? goldenRes.value : []
 
   return (
-    <div className="space-y-8">
-      {/* Back nav */}
-      <div className="reveal-up">
-        <Link
-          href="/team"
-          className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-slate transition-colors hover:bg-bone hover:text-ink"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          Back to Team
-        </Link>
-      </div>
-
-      {/* Header */}
-      <header className="reveal-up stagger-1 space-y-2">
-        <p className="font-mono text-xs uppercase tracking-widest text-slate">Quality assurance</p>
-        <h1 className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">Eval harness</h1>
-        <p className="max-w-xl text-sm leading-relaxed text-slate">
-          Every prompt change gets scored against the golden set before it ships.
-        </p>
+    <div className="space-y-5">
+      <header className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Quality / Eval Harness</p>
+            <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">Ship prompt changes only after measured evaluation.</h1>
+            <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+              Golden cases represent known outcomes from real execution. Every run compares quality before rollout.
+            </p>
+          </div>
+          <Link
+            href="/team"
+            className="inline-flex items-center gap-2 rounded border border-orange/30 bg-orange/10 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-text)]"
+          >
+            <ArrowLeft className="size-3.5" aria-hidden="true" />
+            Back to Team
+          </Link>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <EvalSignal label="Golden cases" value={golden.length} />
+          <EvalSignal label="Recorded runs" value={runs.length} />
+          <EvalSignal label="Data status" value={runsRes.status === 'rejected' || goldenRes.status === 'rejected' ? 'Partial' : 'Healthy'} />
+        </div>
         {runsRes.status === 'rejected' || goldenRes.status === 'rejected' ? (
-          <p className="text-xs text-status-warning">
+          <p className="mt-3 text-xs text-status-warning">
             Some eval data is unavailable right now. Showing what could be loaded.
           </p>
         ) : null}
       </header>
 
       {/* Golden set */}
-      <section className="reveal-up stagger-2 rounded-2xl border border-line bg-paper p-6">
+      <section className="reveal-up stagger-2 rounded border border-line bg-bone-raised p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-xl bg-orange/10">
@@ -111,7 +115,7 @@ export default async function EvalPage() {
       </section>
 
       {/* Eval runs */}
-      <section className="reveal-up stagger-3 rounded-2xl border border-line bg-paper p-6">
+      <section className="reveal-up stagger-3 rounded border border-line bg-bone-raised p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-xl bg-ink/5">
@@ -179,6 +183,15 @@ export default async function EvalPage() {
           </div>
         )}
       </section>
+    </div>
+  )
+}
+
+function EvalSignal({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <p className="mt-1 text-[16px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }

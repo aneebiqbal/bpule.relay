@@ -23,27 +23,36 @@ export default async function LeadsPage() {
   const { replies, active, followedUp, closed } = leadsToGroups(leads)
 
   return (
-    <div className="space-y-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-display text-[28px] text-ink">Leads</h1>
-          <p className="text-[14px] text-graphite mt-1">
-            {leads.length === 0
-              ? 'No leads yet.'
-              : `${leads.length} lead${leads.length === 1 ? '' : 's'} · ${replies.length} replying · ${active.length} active`}
-          </p>
+    <div className="space-y-5">
+      <header className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Pipeline / Lead Lanes</p>
+            <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">Work the highest-intent leads first.</h1>
+            <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">
+              {leads.length === 0
+                ? 'No active leads yet. Start by qualifying your first prospect.'
+                : `${leads.length} leads total, ${replies.length} replying, ${active.length} active.`}
+            </p>
+          </div>
+          <Link
+            href="/leads/new"
+            className="inline-flex items-center gap-2 rounded bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-orange-dark active:scale-[0.97]"
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            New lead
+          </Link>
         </div>
-        <Link
-          href="/leads/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-orange-dark active:scale-[0.97]"
-        >
-          <Plus className="size-4" aria-hidden="true" />
-          New lead
-        </Link>
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <LeadMetric label="Total" value={leads.length} />
+          <LeadMetric label="Replying" value={replies.length} />
+          <LeadMetric label="In Progress" value={active.length} />
+          <LeadMetric label="Followed Up" value={followedUp.length} />
+        </div>
       </header>
 
       {leads.length === 0 ? (
-        <section className="rounded-lg border border-dashed border-line py-16 text-center">
+        <section className="rounded border border-dashed border-line py-16 text-center">
           <div className="mx-auto max-w-sm space-y-3">
             <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-orange/[0.07]">
               <Target className="size-5 text-orange" aria-hidden="true" />
@@ -98,7 +107,7 @@ function LeadGroup({
         <h2 className="text-label text-stone">{title}</h2>
         <span className={cn('text-mono-medium text-[10px]', accentColor)}>{leads.length}</span>
       </div>
-      <div className="overflow-hidden rounded-lg border border-line bg-bone-raised">
+      <div className="overflow-hidden rounded border border-line bg-bone-raised">
         <ul className="divide-y divide-line">
           {leads.map((lead) => {
             const signal = signalById(lead.signalType)
@@ -135,5 +144,14 @@ function LeadGroup({
         </ul>
       </div>
     </section>
+  )
+}
+
+function LeadMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <p className="mt-1 text-[20px] font-medium text-[color:var(--console-text)]">{value}</p>
+    </div>
   )
 }

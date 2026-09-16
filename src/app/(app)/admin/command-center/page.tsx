@@ -10,11 +10,11 @@ export default async function CommandCenterPage() {
   if (user.rep.role !== 'admin') redirect('/dashboard')
 
   return (
-    <div className="space-y-8">
-      <header className="reveal-up space-y-2">
-        <p className="font-mono text-xs uppercase tracking-widest text-slate">Founder command</p>
-        <h1 className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">Where the team needs attention</h1>
-        <p className="max-w-xl text-sm leading-relaxed text-slate">
+    <div className="space-y-5">
+      <header className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Founder / Command Center</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">Where the team needs attention</h1>
+        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
           Exceptions first. Accountability next. Resolve what is blocking revenue execution today.
         </p>
       </header>

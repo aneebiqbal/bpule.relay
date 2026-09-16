@@ -18,6 +18,9 @@ export default function ImportPage() {
     results: Array<{ row: number; status: string; reason?: string; leadId?: string }>
   } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const imported = result?.imported ?? 0
+  const duplicates = result?.duplicates ?? 0
+  const invalid = result?.invalid ?? 0
 
   async function upload() {
     if (!csv.trim()) {
@@ -44,15 +47,19 @@ export default function ImportPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8">
-      <header className="reveal-up space-y-2">
-        <p className="text-label">Bulk operations</p>
-        <h1 className="text-heading text-3xl text-ink sm:text-4xl">Import leads</h1>
-        <p className="max-w-xl text-[15px] leading-relaxed text-slate">
-          Paste a CSV with columns: company, contactName, contactTitle, url, signalType,
-          signalEvidence, verbatimQuote, tags. Every row is validated and deduped before import.
+    <div className="mx-auto max-w-4xl space-y-5">
+      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Bulk Intake / CSV Import</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">Import lead rows with validation gates.</h1>
+        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+          Relay validates required fields, checks duplicates, and writes only safe rows.
         </p>
-      </header>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <ImportSignal label="Imported" value={imported} />
+          <ImportSignal label="Duplicates" value={duplicates} />
+          <ImportSignal label="Invalid" value={invalid} />
+        </div>
+      </section>
 
       {error ? (
         <Alert variant="destructive">
@@ -61,7 +68,7 @@ export default function ImportPage() {
         </Alert>
       ) : null}
 
-      <section className="reveal-up stagger-1 rounded-2xl border border-line/60 bg-bg-bone-raised p-6">
+      <section className="reveal-up stagger-1 srf-proof px-4 py-4 sm:px-5">
         <Textarea
           value={csv}
           onChange={(e) => setCsv(e.target.value)}
@@ -81,7 +88,7 @@ export default function ImportPage() {
       </section>
 
       {result ? (
-        <section className="reveal-up stagger-2 rounded-2xl border border-line/60 bg-bg-bone-raised p-6">
+        <section className="reveal-up stagger-2 rounded border border-line/60 bg-bone-raised p-6">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <ImportStat label="Imported" value={result.imported} icon={<CheckCircle2 className="size-4" />} tone="good" />
             <ImportStat label="Duplicates" value={result.duplicates} icon={<AlertTriangle className="size-4" />} tone="warn" />
@@ -131,6 +138,15 @@ export default function ImportPage() {
           ) : null}
         </section>
       ) : null}
+    </div>
+  )
+}
+
+function ImportSignal({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <p className="mt-1 text-[20px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }

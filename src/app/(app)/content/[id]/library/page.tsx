@@ -2,7 +2,6 @@ import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import { StudioLayout } from '@/components/studio-layout'
 import { redirect } from 'next/navigation'
-import type { ContentDraftStatus } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,9 +27,10 @@ export default async function StudioLibraryPage({ params }: { params: Promise<{ 
 
   return (
     <StudioLayout persona={safePersona}>
-      <div className="mx-auto max-w-3xl space-y-8 px-4 py-6 sm:px-6 sm:py-8">
-        <header>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">Library</h1>
+      <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:px-6 sm:py-8">
+        <header className="srf-sheet mark-corners relative px-5 py-6 sm:px-7">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-cobalt">Studio / Library</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">Library</h1>
           <p className="mt-1 text-sm text-graphite">Your drafts and published posts.</p>
         </header>
 
@@ -41,7 +41,7 @@ export default async function StudioLibraryPage({ params }: { params: Promise<{ 
             </h2>
             <div className="space-y-2">
               {draftsByStatus.draft.map((draft) => (
-                <div key={draft.id} className="rounded-lg border border-line bg-bone-raised p-3">
+                <div key={draft.id} className="rounded border border-line bg-bone-raised p-3">
                   <p className="text-sm text-ink line-clamp-2">{draft.caption?.slice(0, 150) || '(No caption)'}</p>
                   <div className="mt-1.5 flex items-center gap-2">
                     <StatusBadge status={draft.status} />
@@ -60,10 +60,10 @@ export default async function StudioLibraryPage({ params }: { params: Promise<{ 
             </h2>
             <div className="space-y-2">
               {draftsByStatus.posted.map((entry) => (
-                <div key={entry.id} className="rounded-lg border border-line bg-bone-raised p-3">
+                <div key={entry.id} className="rounded border border-line bg-bone-raised p-3">
                   <p className="text-sm text-ink line-clamp-2">{entry.openingLine?.slice(0, 150)}</p>
                   <div className="mt-1.5 flex items-center gap-2">
-                    <span className="rounded-full bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                    <span className="rounded-full bg-status-success/10 px-1.5 py-0.5 text-[10px] font-medium text-status-success">
                       Posted
                     </span>
                     <span className="text-[10px] text-graphite">{entry.platform}</span>
@@ -78,7 +78,7 @@ export default async function StudioLibraryPage({ params }: { params: Promise<{ 
         )}
 
         {draftsByStatus.draft.length === 0 && draftsByStatus.posted.length === 0 && (
-          <div className="rounded-xl border border-dashed border-line p-8 text-center">
+          <div className="rounded border border-dashed border-line p-8 text-center">
             <p className="text-sm text-graphite">
               No drafts or posts yet. Go to Today to create your first post.
             </p>
@@ -91,10 +91,10 @@ export default async function StudioLibraryPage({ params }: { params: Promise<{ 
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-600',
-    ready: 'bg-blue-50 text-blue-700',
-    posted: 'bg-green-50 text-green-700',
-    rejected: 'bg-red-50 text-red-600',
+    draft: 'bg-bone text-graphite',
+    ready: 'bg-cobalt/10 text-cobalt-dark',
+    posted: 'bg-status-success/10 text-status-success',
+    rejected: 'bg-status-danger/10 text-status-danger',
   }
   return (
     <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${styles[status] ?? styles.draft}`}>

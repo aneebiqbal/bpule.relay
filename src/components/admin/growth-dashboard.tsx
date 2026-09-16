@@ -1,66 +1,65 @@
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react'
 import {
   Users,
   Target,
-  PenLine,
   Briefcase,
   Activity,
   Zap,
   TrendingUp,
   Calendar,
-} from "lucide-react";
+} from 'lucide-react'
 
 interface OrganizationData {
-  id: string;
-  name: string;
-  plan: string;
-  joinedAt: string;
-  lastActive: string;
-  repCount: number;
-  leadCount: number;
-  messageCount: number;
-  jobCount: number;
+  id: string
+  name: string
+  plan: string
+  joinedAt: string
+  lastActive: string
+  repCount: number
+  leadCount: number
+  messageCount: number
+  jobCount: number
 }
 
 interface FunnelData {
-  totalReps: number;
-  totalLeads: number;
-  totalMessages: number;
-  totalJobs: number;
-  activated: boolean;
-  weeklyActive: boolean;
-  monthlyActive: boolean;
+  totalReps: number
+  totalLeads: number
+  totalMessages: number
+  totalJobs: number
+  activated: boolean
+  weeklyActive: boolean
+  monthlyActive: boolean
 }
 
 interface GrowthResponse {
-  funnel: FunnelData;
-  organization: OrganizationData;
+  funnel: FunnelData
+  organization: OrganizationData
 }
 
 export function GrowthDashboard() {
-  const [data, setData] = useState<GrowthResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<GrowthResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch("/api/admin/growth")
-      .then((r) => {
-        if (!r.ok) throw new Error("Failed to load");
-        return r.json();
+    fetch('/api/admin/growth')
+      .then((response) => {
+        if (!response.ok) throw new Error('Failed to load growth data.')
+        return response.json()
       })
       .then(setData)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, []);
+      .catch((loadError: Error) => setError(loadError.message))
+      .finally(() => setLoading(false))
+  }, [])
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="srf-console srf-console-edge flex items-center justify-center py-20">
         <div className="size-6 animate-spin rounded-full border-2 border-line border-t-orange" />
       </div>
-    );
+    )
   }
 
   if (error) {
@@ -68,37 +67,32 @@ export function GrowthDashboard() {
       <div className="rounded-xl border border-status-danger/30 bg-status-danger/5 p-6 text-center">
         <p className="text-sm text-status-danger">{error}</p>
       </div>
-    );
+    )
   }
 
-  if (!data) return null;
+  if (!data) return null
 
-  const { funnel, organization } = data;
+  const { funnel, organization } = data
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-heading text-2xl text-ink">Organization Overview</h1>
-          <p className="mt-1 text-[14px] text-graphite">
-            {organization.name} · {organization.plan} plan
-          </p>
+    <div className="space-y-5">
+      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Admin / Growth Intelligence</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+          {organization.name}
+        </h1>
+        <p className="mt-1 text-[13px] text-[color:var(--console-mute)]">
+          {organization.plan} plan · {funnel.weeklyActive ? 'active this week' : 'inactive this week'}
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <HeaderMetric label="Reps" value={funnel.totalReps} />
+          <HeaderMetric label="Leads" value={funnel.totalLeads} />
+          <HeaderMetric label="Messages" value={funnel.totalMessages} />
+          <HeaderMetric label="Jobs" value={funnel.totalJobs} />
         </div>
-        <div className="flex items-center gap-2 rounded-full bg-bone-raised px-3 py-1">
-          <span
-            className={`size-1.5 rounded-full ${
-              funnel.weeklyActive ? "bg-status-success" : "bg-stone"
-            }`}
-          />
-          <span className="text-mono-regular text-[11px] text-stone">
-            {funnel.weeklyActive ? "Active this week" : "Inactive this week"}
-          </span>
-        </div>
-      </div>
+      </section>
 
-      {/* Status cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           icon={Users}
           label="Team Members"
@@ -123,41 +117,39 @@ export function GrowthDashboard() {
           value={funnel.totalJobs}
           sub={`${organization.jobCount} evaluated`}
         />
-      </div>
+      </section>
 
-      {/* Activity status */}
-      <div className="rounded-xl border border-line bg-bone-raised p-5">
+      <section className="rounded border border-line bg-bone-raised p-5">
         <h2 className="text-[13px] font-medium text-ink">Activity Status</h2>
         <div className="mt-4 grid grid-cols-3 gap-4">
           <StatusItem
             label="Activation"
             active={funnel.activated}
-            description={funnel.activated ? "Has activity" : "No activity yet"}
+            description={funnel.activated ? 'Has activity' : 'No activity yet'}
           />
           <StatusItem
             label="Weekly Active"
             active={funnel.weeklyActive}
-            description={funnel.weeklyActive ? "Active this week" : "Inactive"}
+            description={funnel.weeklyActive ? 'Active this week' : 'Inactive'}
           />
           <StatusItem
             label="Monthly Active"
             active={funnel.monthlyActive}
-            description={funnel.monthlyActive ? "Active this month" : "Inactive"}
+            description={funnel.monthlyActive ? 'Active this month' : 'Inactive'}
           />
         </div>
-      </div>
+      </section>
 
-      {/* Organization details */}
-      <div className="rounded-xl border border-line bg-bone-raised p-5">
+      <section className="srf-proof px-4 py-4 sm:px-5">
         <h2 className="text-[13px] font-medium text-ink">Organization Details</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <DetailItem
             icon={Calendar}
             label="Joined"
-            value={new Date(organization.joinedAt).toLocaleDateString("en-US", {
-              month: "long",
-              day: "numeric",
-              year: "numeric",
+            value={new Date(organization.joinedAt).toLocaleDateString('en-US', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
             })}
           />
           <DetailItem
@@ -173,14 +165,21 @@ export function GrowthDashboard() {
           <DetailItem
             icon={Zap}
             label="Total Actions"
-            value={String(
-              funnel.totalLeads + funnel.totalMessages + funnel.totalJobs,
-            )}
+            value={String(funnel.totalLeads + funnel.totalMessages + funnel.totalJobs)}
           />
         </div>
-      </div>
+      </section>
     </div>
-  );
+  )
+}
+
+function HeaderMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <p className="mt-1 text-[20px] font-medium text-[color:var(--console-text)]">{value.toLocaleString()}</p>
+    </div>
+  )
 }
 
 function MetricCard({
@@ -189,13 +188,13 @@ function MetricCard({
   value,
   sub,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: number;
-  sub: string;
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: number
+  sub: string
 }) {
   return (
-    <div className="rounded-xl border border-line bg-bone-raised p-4">
+    <article className="rounded border border-line bg-bone-raised p-4">
       <div className="flex items-center gap-2">
         <Icon className="size-4 text-stone" />
         <span className="text-label text-stone">{label}</span>
@@ -204,8 +203,8 @@ function MetricCard({
         {value.toLocaleString()}
       </p>
       <p className="text-[11px] text-stone">{sub}</p>
-    </div>
-  );
+    </article>
+  )
 }
 
 function StatusItem({
@@ -213,21 +212,17 @@ function StatusItem({
   active,
   description,
 }: {
-  label: string;
-  active: boolean;
-  description: string;
+  label: string
+  active: boolean
+  description: string
 }) {
   return (
     <div className="flex flex-col items-center gap-1 text-center">
-      <span
-        className={`size-3 rounded-full ${
-          active ? "bg-status-success" : "bg-stone"
-        }`}
-      />
+      <span className={`size-3 rounded-full ${active ? 'bg-status-success' : 'bg-stone'}`} />
       <span className="text-[12px] font-medium text-ink">{label}</span>
       <span className="text-[11px] text-stone">{description}</span>
     </div>
-  );
+  )
 }
 
 function DetailItem({
@@ -235,9 +230,9 @@ function DetailItem({
   label,
   value,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: string
 }) {
   return (
     <div className="flex items-center gap-3">
@@ -247,15 +242,15 @@ function DetailItem({
         <p className="text-[13px] font-medium text-ink">{value}</p>
       </div>
     </div>
-  );
+  )
 }
 
 function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const days = Math.floor(diff / (24 * 60 * 60 * 1000));
-  if (days === 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return `${Math.floor(days / 30)}mo ago`;
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const days = Math.floor(diff / (24 * 60 * 60 * 1000))
+  if (days === 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days}d ago`
+  if (days < 30) return `${Math.floor(days / 7)}w ago`
+  return `${Math.floor(days / 30)}mo ago`
 }

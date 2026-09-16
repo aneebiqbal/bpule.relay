@@ -67,10 +67,18 @@ export default async function TeamPage() {
   return (
     <div className="space-y-5">
 
-      {/* ═══ HEADER ═══ */}
-      <header className="reveal-up space-y-1">
-        <p className="text-label">Team performance</p>
-        <h1 className="text-display text-3xl text-ink sm:text-4xl">Team</h1>
+      <header className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Team / Performance Console</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">Measure execution quality, not activity theater.</h1>
+        <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">
+          Relay tracks reply quality, read-to-check conversion, and extraction reliability across reps.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <HeroStat label="Reply target" value={pct(REPLY_RATE_TARGET)} />
+          <HeroStat label="Read-to-check target" value={pct(READ_TO_CHECK_TARGET)} />
+          <HeroStat label="Extraction failure" value={pct(extraction.failureRate)} />
+          <HeroStat label="Model spend (7d)" value={`$${extraction.totalCostUsd.toFixed(2)}`} />
+        </div>
       </header>
 
       {/* ═══ PRIMARY METRICS ═══ */}
@@ -264,7 +272,7 @@ export default async function TeamPage() {
       )}
 
       {/* ═══ TARGET REFERENCE ═══ */}
-      <div className="reveal-up stagger-4 flex flex-wrap items-center gap-4 rounded-xl bg-bone/30 px-5 py-3 text-xs text-graphite">
+      <div className="reveal-up stagger-4 srf-proof flex flex-wrap items-center gap-4 px-4 py-3 text-xs text-graphite">
         <span className="flex items-center gap-1.5"><Award className="size-3 text-orange" /> Targets</span>
         <span>Reply rate &ge; {pct(REPLY_RATE_TARGET)}</span>
         <span className="text-line">·</span>
@@ -274,6 +282,15 @@ export default async function TeamPage() {
         <span className="text-line">·</span>
         <span>Failure rate &le; 8%</span>
       </div>
+    </div>
+  )
+}
+
+function HeroStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
+      <p className="mt-1 text-[16px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }
