@@ -100,6 +100,7 @@ export default async function StudioTodayPage({ params }: { params: Promise<{ id
     <StudioLayout persona={safePersona}>
       <div className="mx-auto max-w-5xl space-y-8 px-1 py-1">
         <StudioToday
+          key={`${id}:${pick?.id ?? 'none'}:${alternatives.map((idea) => idea.id).join(',')}`}
           persona={safePersona}
           initialPick={pick}
           initialAlternatives={alternatives}

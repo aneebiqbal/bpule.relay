@@ -1,8 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
+import { generateVisualConcept } from '@/lib/writing/visual'
+import { normalizeDraftWorkspacePlatform } from '@/lib/content/draft-workspace'
 
 export const dynamic = 'force-dynamic'
+
+function buildDraftVisual(caption: string, sourceMaterial: string, platform: string): {
+  visual: { idea: string; imagePrompt: string; platform: 'linkedin' | 'x' } | null
+  visualError: string | null
+} {
+  try {
+    const normalizedPlatform = normalizeDraftWorkspacePlatform(platform)
+    const concept = generateVisualConcept({
+      postText: caption,
+      platform: normalizedPlatform,
+      angle: sourceMaterial,
+      topic: sourceMaterial,
+      coreDetail: caption.slice(0, 140),
+      tone: 'confident',
+    })
+
+    return {
+      visual: {
+        idea: concept.visualIdea,
+        imagePrompt: concept.imagePrompt,
+        platform: normalizedPlatform,
+      },
+      visualError: null,
+    }
+  } catch {
+    return {
+      visual: null,
+      visualError: 'Visual generation failed. Refresh from post inside workspace to retry.',
+    }
+  }
+}
 
 /**
  * GET /api/content/drafts/[id]
@@ -27,7 +60,8 @@ export async function GET(
     }
   }
 
-  return NextResponse.json({ draft })
+  const { visual, visualError } = buildDraftVisual(draft.caption, draft.sourceMaterial, draft.platform)
+  return NextResponse.json({ draft, visual, visualError })
 }
 
 /**
@@ -61,7 +95,7 @@ export async function PATCH(
   try {
     const draft = await store.updateContentDraft({ draftId: id, caption })
     return NextResponse.json({ draft })
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: 'Failed to save' }, { status: 500 })
   }
 }

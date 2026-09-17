@@ -10,6 +10,7 @@ import { buildPostPlan, validateCoreInsight } from '@/lib/content/post-plan'
 import { generateVisualConcept } from '@/lib/writing/visual'
 import { structuredJsonChain } from '@/lib/ai/provider'
 import { pickDraftChain, tier0Hosts, tier4Host, shouldEscalateToPremium } from '@/lib/ai/routing'
+import { normalizeDraftWorkspacePlatform } from '@/lib/content/draft-workspace'
 import type { ContentDraft, ContentMemory, ContentIdeaCard } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest) {
   const journey = await store.listContentJourney?.(body.personaId, 10) ?? []
 
   const platform = body.platform ?? persona.platforms[0] ?? 'linkedin'
+  const workspacePlatform = normalizeDraftWorkspacePlatform(platform)
 
   // Check memory for similar topics
   const usedHooks = memories
@@ -76,7 +78,7 @@ export async function POST(req: NextRequest) {
     idea,
     profile,
     journey,
-    platform: platform as 'linkedin' | 'x' | 'instagram',
+    platform,
   })
 
   // ── Step 2: Validate Core Insight ─────────────────────────────────────
@@ -101,7 +103,7 @@ export async function POST(req: NextRequest) {
       personaName: persona.displayName,
       topic: { id: body.idea.territory, name: body.idea.title, description: body.idea.angle },
       sourceMaterial: buildSourceMaterial(body.idea, profile, history),
-      platform: platform as 'linkedin' | 'x',
+      platform,
       styleCard: buildEnhancedStyleCard(profile, persona, postPlan),
       recentOpenings: usedHooks.slice(0, 5),
       humorStyle: persona.humorStyle || undefined,
@@ -192,23 +194,39 @@ export async function POST(req: NextRequest) {
   }
 
   // Generate visual concept
-  const concept = generateVisualConcept({
-    postText: caption,
-    platform: platform as 'linkedin' | 'x',
-    angle: body.idea.angle,
-    topic: body.idea.title,
-    coreDetail: body.idea.angle.slice(0, 100),
-    tone: 'confident',
-  })
+  let concept: ReturnType<typeof generateVisualConcept> | null = null
+  let visualError: string | null = null
+  try {
+    concept = generateVisualConcept({
+      postText: caption,
+      platform: workspacePlatform,
+      angle: body.idea.angle,
+      topic: body.idea.title,
+      coreDetail: body.idea.angle.slice(0, 100),
+      tone: 'confident',
+    })
+  } catch (err) {
+    console.error('[generate-draft] visual generation failed:', err)
+    visualError = 'Visual package was not generated. You can refresh visual from post in workspace.'
+  }
+
+  const visual = concept
+    ? {
+        idea: concept.visualIdea,
+        imagePrompt: concept.imagePrompt,
+        platform: workspacePlatform,
+      }
+    : null
 
   // Persist the draft
   let draft: ContentDraft
   try {
     draft = await store.createContentDraft({
       personaId: body.personaId,
-      platform: platform as 'linkedin' | 'x',
+      pillarId: null,
+      platform,
       sourceKind: 'idea',
-      sourceMaterial: body.idea.title,
+      sourceMaterial: buildDraftSourceMaterial(body.idea),
       caption,
       hookScore,
       hookFeedback,
@@ -223,8 +241,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       error: 'Could not save draft. Your content is preserved below.',
       caption,
-      visualIdea: concept.visualIdea,
-      imagePrompt: concept.imagePrompt,
+      visual,
+      visualIdea: concept?.visualIdea ?? null,
+      imagePrompt: concept?.imagePrompt ?? null,
+      visualError,
     }, { status: 500 })
   }
 
@@ -250,8 +270,10 @@ export async function POST(req: NextRequest) {
     caption,
     hookScore,
     selfCheckPassed: qualityPassed,
-    visualIdea: concept.visualIdea,
-    imagePrompt: concept.imagePrompt,
+    visual,
+    visualIdea: concept?.visualIdea ?? null,
+    imagePrompt: concept?.imagePrompt ?? null,
+    visualError,
     platform,
     retryStats,
   })
@@ -272,6 +294,17 @@ function buildSourceMaterial(idea: GenerateBody['idea'], profile: any, history: 
   }
 
   return parts.join('\n')
+}
+
+function buildDraftSourceMaterial(idea: GenerateBody['idea']): string {
+  const title = idea.title.trim()
+  const angle = idea.angle.trim()
+
+  if (!angle) return title
+  if (!title) return angle
+  if (title === angle) return title
+
+  return `${title} - ${angle}`
 }
 
 function buildStyleCard(profile: any, persona: any): string {
@@ -542,5 +575,3 @@ PLATFORM: ${platform}
 
 Rewrite the post to fix all listed issues. Output ONLY a JSON object with a "caption" field.`
 }
-
-

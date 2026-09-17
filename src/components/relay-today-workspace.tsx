@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   ArrowRight,
   CheckCircle2,
@@ -25,6 +26,25 @@ type ActionKind =
   | 'content_opportunity'
   | 'admin_review'
   | 'inbound_opportunity'
+
+type StudioIdeaSeed = {
+  title: string
+  angle: string
+  territory: string
+  sourceKind: 'expertise' | 'journey' | 'opinion' | 'trend' | 'project' | 'audience_gap' | 'evergreen'
+  whyYou: string
+  whyAudience: string
+}
+
+export interface StudioOpportunityCard {
+  title: string
+  whyYou: string
+  href: string
+  personaId: string
+  draftId: string | null
+  platform: 'linkedin' | 'x'
+  idea: StudioIdeaSeed | null
+}
 
 export interface RelayTodayAction {
   id: string
@@ -77,11 +97,7 @@ export interface RelayTodayWorkspaceProps {
     why: string[]
     href: string
   }>
-  studioOpportunity: {
-    title: string
-    whyYou: string
-    href: string
-  } | null
+  studioOpportunity: StudioOpportunityCard | null
   targetProgress: {
     completed: number
     total: number
@@ -410,14 +426,14 @@ export function RelayTodayWorkspace({
               <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-cobalt">Studio / opportunity</p>
               <p className="mt-2 text-[16px] font-medium text-ink">{studioOpportunity.title}</p>
               <p className="mt-1 text-[12px] text-graphite">{studioOpportunity.whyYou}</p>
-              <div className="mt-3 flex items-center gap-2">
-                <Link href={studioOpportunity.href} className="inline-flex items-center gap-1 rounded-md bg-cobalt px-3 py-1.5 text-[12px] font-medium text-bone">
-                  Write this
-                  <ArrowRight className="size-3" />
+              {studioOpportunity.idea?.angle ? (
+                <p className="mt-2 text-[11px] text-graphite">Angle: {studioOpportunity.idea.angle}</p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <StudioWriteThisButton opportunity={studioOpportunity} />
+                <Link href={studioOpportunity.href} className="rounded-md border border-cobalt/30 px-3 py-1.5 text-[12px] text-cobalt">
+                  Open in Studio
                 </Link>
-                <button type="button" className="rounded-md border border-cobalt/30 px-3 py-1.5 text-[12px] text-cobalt">
-                  Not today
-                </button>
               </div>
             </div>
           )}
@@ -627,6 +643,117 @@ function ActionDrawer({
           </div>
         </div>
       </aside>
+    </div>
+  )
+}
+
+function StudioWriteThisButton({ opportunity }: { opportunity: StudioOpportunityCard }) {
+  const router = useRouter()
+  const [state, setState] = useState<'idle' | 'writing' | 'opening' | 'error'>('idle')
+  const [error, setError] = useState<string | null>(null)
+  const [manualHref, setManualHref] = useState<string | null>(null)
+  const [visualWarning, setVisualWarning] = useState<string | null>(null)
+
+  async function openWorkspace(draftId: string) {
+    const href = `/studio/drafts/${draftId}`
+    const check = await fetch(`/api/content/drafts/${draftId}`, { method: 'GET' })
+    if (!check.ok) {
+      throw new Error('Draft was created, but workspace did not load. Open Studio manually.')
+    }
+    router.push(href)
+  }
+
+  async function handleWriteThis() {
+    setError(null)
+    setVisualWarning(null)
+
+    if (opportunity.draftId) {
+      setState('opening')
+      try {
+        await openWorkspace(opportunity.draftId)
+      } catch (err) {
+        setState('error')
+        setManualHref(`/studio/drafts/${opportunity.draftId}`)
+        setError(err instanceof Error ? err.message : 'Could not open Studio draft.')
+      }
+      return
+    }
+
+    if (!opportunity.idea) {
+      router.push(opportunity.href)
+      return
+    }
+
+    setState('writing')
+    let createdDraftId: string | null = null
+    try {
+      const res = await fetch('/api/content/generate-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personaId: opportunity.personaId,
+          idea: {
+            title: opportunity.idea.title,
+            angle: opportunity.idea.angle,
+            territory: opportunity.idea.territory,
+            sourceKind: opportunity.idea.sourceKind,
+            whyYou: opportunity.idea.whyYou,
+            whyAudience: opportunity.idea.whyAudience,
+          },
+          platform: opportunity.platform,
+        }),
+      })
+
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.error || `Draft generation failed (${res.status})`)
+      }
+      if (!data?.draftId || typeof data.draftId !== 'string') {
+        throw new Error('Draft generation succeeded but returned no draft ID.')
+      }
+
+      createdDraftId = data.draftId
+      const hasVisualIdea = typeof data.visualIdea === 'string' && data.visualIdea.trim().length > 0
+      const hasImagePrompt = typeof data.imagePrompt === 'string' && data.imagePrompt.trim().length > 0
+      if (!hasVisualIdea || !hasImagePrompt) {
+        setVisualWarning('Visual package was not returned immediately. Refresh visual inside workspace.')
+      }
+
+      setState('opening')
+      await openWorkspace(data.draftId)
+    } catch (err) {
+      setState('error')
+      if (createdDraftId) {
+        setManualHref(`/studio/drafts/${createdDraftId}`)
+      }
+      setError(err instanceof Error ? err.message : 'Could not create your draft right now.')
+    }
+  }
+
+  const label = state === 'writing'
+    ? 'Writing...'
+    : state === 'opening'
+      ? 'Opening workspace...'
+      : 'Write this'
+
+  return (
+    <div className="space-y-1.5">
+      <button
+        type="button"
+        onClick={() => void handleWriteThis()}
+        disabled={state === 'writing' || state === 'opening'}
+        className="inline-flex items-center gap-1 rounded-md bg-cobalt px-3 py-1.5 text-[12px] font-medium text-bone disabled:opacity-60"
+      >
+        {label}
+        <ArrowRight className="size-3" />
+      </button>
+      {visualWarning ? <p className="text-[11px] text-amber-700">{visualWarning}</p> : null}
+      {error ? <p className="text-[11px] text-status-danger">{error}</p> : null}
+      {manualHref ? (
+        <Link href={manualHref} className="inline-flex items-center gap-1 text-[11px] font-medium text-cobalt underline underline-offset-2">
+          Open draft manually
+        </Link>
+      ) : null}
     </div>
   )
 }

@@ -11,6 +11,7 @@ import {
 } from "react";
 import { cn } from "cn";
 import { RelayCta } from "@/components/landing/relay-cta";
+import { IntelligenceBenchmarkProofSection } from "@/components/landing/intelligence-benchmark-proof";
 import { usePrefersReducedMotion } from "@/lib/landing-motion";
 
 type Tone = "orange" | "cobalt" | "ink";
@@ -1877,6 +1878,7 @@ export function RelayLaunchPage() {
       <ProspectCheckSection />
       <RevenueIdentitySection />
       <ProofSection />
+      <IntelligenceBenchmarkProofSection />
       <HumanGateSection />
       <StudioRevealSection />
       <StudioHeroSection />
