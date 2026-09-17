@@ -90,7 +90,7 @@ export default async function StudioIdentityPage({ params }: { params: Promise<{
             <h2 className="text-sm font-medium text-ink">Perspective</h2>
             <div className="mt-2 space-y-2">
               {profile.opinions.map((op) => (
-                <div key={op.belief.slice(0, 30)} className="rounded-lg bg-bone p-2.5">
+                <div key={op.belief?.slice(0, 30) ?? 'unknown'} className="rounded-lg bg-bone p-2.5">
                   <p className="text-xs italic text-ink">&ldquo;{op.belief}&rdquo;</p>
                   <p className="mt-0.5 text-[10px] text-graphite">{op.strength} confidence</p>
                 </div>
@@ -105,8 +105,8 @@ export default async function StudioIdentityPage({ params }: { params: Promise<{
             <h2 className="text-sm font-medium text-ink">Key Experiences</h2>
             <div className="mt-2 space-y-1.5">
               {profile.experiences.map((exp) => (
-                <div key={exp.description.slice(0, 30)} className="text-xs text-graphite">
-                  <span className="font-medium text-ink capitalize">{exp.type}:</span> {exp.description.slice(0, 80)}
+                <div key={exp.description?.slice(0, 30) ?? 'unknown'} className="text-xs text-graphite">
+                  <span className="font-medium text-ink capitalize">{exp.type}:</span> {exp.description?.slice(0, 80)}
                 </div>
               ))}
             </div>

@@ -207,7 +207,7 @@ function ResumeGenerateInner() {
               <p className="mt-2 text-sm text-ink">{result.resume.summary}</p>
             </div>
 
-            {result.resume.skills.length > 0 && (
+            {Array.isArray(result.resume.skills) && result.resume.skills.length > 0 && (
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-wide text-stone">Skills</p>
                 <div className="mt-1 flex flex-wrap gap-1">
@@ -218,7 +218,7 @@ function ResumeGenerateInner() {
               </div>
             )}
 
-            {result.resume.experience.length > 0 && (
+            {Array.isArray(result.resume.experience) && result.resume.experience.length > 0 && (
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-wide text-stone">Experience</p>
                 <div className="mt-2 space-y-3">
@@ -234,7 +234,7 @@ function ResumeGenerateInner() {
               </div>
             )}
 
-            {result.resume.projects.length > 0 && (
+            {Array.isArray(result.resume.projects) && result.resume.projects.length > 0 && (
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-wide text-stone">Projects</p>
                 <div className="mt-2 space-y-2">

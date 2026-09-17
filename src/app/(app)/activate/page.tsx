@@ -55,7 +55,7 @@ export default async function ActivatePage() {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
 
-  const firstName = user.rep.name.split(' ')[0]
+  const firstName = user.rep.name?.split(' ')[0] ?? 'there'
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">

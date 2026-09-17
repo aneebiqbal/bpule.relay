@@ -435,7 +435,7 @@ export default function ProspectCheckPage() {
                 </div>
               </div>
 
-              {result.score.reasons.length > 0 && (
+              {Array.isArray(result.score.reasons) && result.score.reasons.length > 0 && (
                 <div className="mt-4 space-y-1.5">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-stone">Why</p>
                   <ul className="space-y-1">
@@ -449,7 +449,7 @@ export default function ProspectCheckPage() {
                 </div>
               )}
 
-              {result.score.watchOut.length > 0 && (
+              {Array.isArray(result.score.watchOut) && result.score.watchOut.length > 0 && (
                 <div className="mt-3 space-y-1.5">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-stone">Watch out</p>
                   <ul className="space-y-1">
@@ -508,9 +508,9 @@ export default function ProspectCheckPage() {
                 <span className="rounded border border-line bg-paper px-2 py-1">Extractability: {result.qualification.extractability}/100</span>
                 <span className="rounded border border-line bg-paper px-2 py-1">Evidence coverage: {result.qualification.evidenceCoverage}/100</span>
               </div>
-              {(result.qualification.reasons.length > 0 || result.qualification.missingCritical.length > 0) && (
+              {((Array.isArray(result.qualification.reasons) && result.qualification.reasons.length > 0) || (Array.isArray(result.qualification.missingCritical) && result.qualification.missingCritical.length > 0)) && (
                 <ul className="space-y-1">
-                  {result.qualification.reasons.slice(0, 3).map((w, i) => (
+                  {Array.isArray(result.qualification.reasons) && result.qualification.reasons.slice(0, 3).map((w, i) => (
                     <li key={i} className="mt-3 flex items-start gap-2 text-[13px] text-graphite">
                       <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" />
                       {w}
@@ -518,7 +518,7 @@ export default function ProspectCheckPage() {
                   ))}
                 </ul>
               )}
-              {result.qualification.suggestions.length > 0 && (
+              {Array.isArray(result.qualification.suggestions) && result.qualification.suggestions.length > 0 && (
                 <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-graphite">
                   {result.qualification.suggestions.map((suggestion) => (
                     <li key={suggestion}>{suggestion}</li>
@@ -597,7 +597,7 @@ export default function ProspectCheckPage() {
             </div>
 
             {/* Quality indicators */}
-            {!result.quality.passed && result.quality.failures.length > 0 && (
+            {!result.quality.passed && Array.isArray(result.quality.failures) && result.quality.failures.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {result.quality.failures.slice(0, 3).map((f, i) => (
                   <span key={i} className="rounded bg-status-warning/10 px-1.5 py-0.5 text-[10px] text-status-warning">

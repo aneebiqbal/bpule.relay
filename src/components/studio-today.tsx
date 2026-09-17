@@ -366,9 +366,9 @@ export function StudioToday({
         <div className="space-y-4">
           <div className="rounded border border-line bg-bone-raised px-4 py-4">
             <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Content identity</p>
-            <IdentityRow label="Known for" value={identitySummary.knownFor.join(' · ') || 'Still learning your strongest themes'} />
-            <IdentityRow label="Territories" value={identitySummary.territories.join(' · ') || 'No territories mapped yet'} />
-            <IdentityRow label="Audience" value={identitySummary.audience.join(' · ') || 'Audience not set yet'} />
+            <IdentityRow label="Known for" value={(identitySummary.knownFor ?? []).join(' · ') || 'Still learning your strongest themes'} />
+            <IdentityRow label="Territories" value={(identitySummary.territories ?? []).join(' · ') || 'No territories mapped yet'} />
+            <IdentityRow label="Audience" value={(identitySummary.audience ?? []).join(' · ') || 'Audience not set yet'} />
             <IdentityRow label="Recently used" value={identitySummary.recentlyUsed} />
             <IdentityRow label="Underused" value={identitySummary.underused} />
             <Link href={`/content/${persona.id}/identity`} className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-cobalt">

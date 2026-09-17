@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
       hookScore: Math.round(forgeResult.evaluation.quality * 10),
       hookFeedback: `Winner: ${forgeResult.winner}, Quality: ${forgeResult.evaluation.quality}`,
       selfCheckPassed: forgeResult.evaluation.slopScore < 0.5,
-      selfCheckNote: forgeResult.evaluation.notes.join('; '),
+      selfCheckNote: (forgeResult.evaluation.notes ?? []).join('; '),
       specificityHit: forgeResult.evaluation.specificity > 0.5,
       status: forgeResult.evaluation.quality > 0.5 && forgeResult.evaluation.slopScore < 0.5 ? 'ready' : 'draft',
     })

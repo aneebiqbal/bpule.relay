@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       identity_fit_reason: bestMatch
         ? `Best proof match: ${bestMatch.matchedProof[0]?.safeClaim ?? 'General capability'}`
         : 'No profiles available',
-      matching_skills: canonical.intelligence.content.technicalSignals.slice(0, 5),
+      matching_skills: (canonical.intelligence.content.technicalSignals ?? []).slice(0, 5),
       strongest_proof_indexes: bestMatch?.matchedProof.map((_, i) => i) ?? [],
       missing_info: canonical.scoreBreakdown.missingInfo,
       recommended_action: canonical.canonicalScore >= 70 ? 'reply' : canonical.canonicalScore >= 50 ? 'research_more' : 'skip',

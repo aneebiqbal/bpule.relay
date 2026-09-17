@@ -86,7 +86,7 @@ function generateSubject(input: EmailTemplateInput): string {
 
 function generateEmailBody(input: EmailTemplateInput): string {
   const { prospectName, prospectCompany, senderName, relevantProof, context, strategy } = input
-  const firstName = prospectName.split(' ')[0]
+  const firstName = prospectName?.split(' ')[0] ?? 'there'
 
   let opening: string
   switch (strategy) {

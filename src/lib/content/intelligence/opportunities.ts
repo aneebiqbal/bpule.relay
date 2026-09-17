@@ -78,9 +78,9 @@ export function discoverOpportunities(input: {
           : 'career_lesson'
         candidates.push({
           type,
-          title: exp.type === 'mistake' ? `The mistake that taught you about ${exp.description.split(' ')[0]}`
-            : exp.type === 'decision' ? `Why you decided to ${exp.description.split(' ').slice(0, 6).join(' ')}`
-            : `Lesson: ${exp.lesson.slice(0, 50)}`,
+          title: exp.type === 'mistake' ? `The mistake that taught you about ${exp.description?.split(' ')[0] ?? 'this'}`
+            : exp.type === 'decision' ? `Why you decided to ${exp.description?.split(' ').slice(0, 6).join(' ') ?? ''}`
+            : `Lesson: ${exp.lesson?.slice(0, 50) ?? ''}`,
           description: exp.lesson,
           trigger: `${exp.type} recorded in Content DNA`,
           confidence: 0.75,
