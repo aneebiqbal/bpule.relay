@@ -66,7 +66,7 @@ export async function produceCanonicalIntelligence(
   const trace: Array<{ stage: string; ms: number; provider?: string }> = []
   const t0 = Date.now()
 
-  opts.onStatus?.('Starting intelligence pipeline')
+  opts.onStatus?.('Analyzing prospect')
 
   // Step 1: Run multi-pass extraction pipeline
   const tPipeline = Date.now()
@@ -77,7 +77,7 @@ export async function produceCanonicalIntelligence(
   }
 
   // Step 2: Assess extraction completeness
-  opts.onStatus?.('Validating extraction completeness')
+  opts.onStatus?.('Validating intelligence')
   const tComplete = Date.now()
   let completeness = assessExtractionCompleteness({
     intelligence: pipelineResult.intelligence,
@@ -95,7 +95,7 @@ export async function produceCanonicalIntelligence(
   let intelligence = pipelineResult.intelligence
 
   if (autoRepair && (!gateDecision.canProceed || completeness.score < 40)) {
-    opts.onStatus?.('Running extraction repair')
+    opts.onStatus?.('Improving intelligence')
     repairAttempted = true
     const tRepair = Date.now()
 

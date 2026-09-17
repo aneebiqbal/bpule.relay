@@ -14,8 +14,8 @@ interface GenerationModeSelectorProps {
 /**
  * Standard / Premium generation mode selector.
  *
- * Standard (default): uses LongCat-2.0 for generation.
- * Premium: uses OpenAI GPT for extra-important generations.
+ * Standard (default): fast generation for everyday outreach.
+ * Premium: stronger generation for important leads.
  */
 export function GenerationModeSelector({
   value,
@@ -34,7 +34,7 @@ export function GenerationModeSelector({
             ? 'bg-orange/10 text-orange'
             : 'bg-bone-raised text-graphite hover:bg-bone-raised/80'
         }`}
-        title={value === 'premium' ? 'Using GPT — click to switch to Standard' : 'Using LongCat — click to switch to Premium'}
+        title={value === 'premium' ? 'Premium mode — click for Standard' : 'Standard mode — click for Premium'}
       >
         <span className={`size-1.5 rounded-full ${value === 'premium' ? 'bg-orange' : 'bg-stone'}`} />
         {value === 'premium' ? 'Premium' : 'Standard'}
@@ -55,7 +55,7 @@ export function GenerationModeSelector({
         }`}
       >
         <div className="text-[13px] font-medium">Standard</div>
-        <div className="text-[11px] opacity-70">LongCat · fast · recommended</div>
+        <div className="text-[11px] opacity-70">Fast · recommended</div>
       </button>
       <button
         type="button"
@@ -68,7 +68,7 @@ export function GenerationModeSelector({
         }`}
       >
         <div className="text-[13px] font-medium">Premium</div>
-        <div className="text-[11px] opacity-70">GPT · extra-important</div>
+        <div className="text-[11px] opacity-70">Stronger · important leads</div>
       </button>
     </div>
   )

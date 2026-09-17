@@ -401,8 +401,8 @@ export default function ProspectCheckPage() {
       {analyzing && !result && (
         <div className="flex min-h-[12rem] flex-col items-center justify-center rounded border border-dashed border-line px-6 text-center">
           <RefreshCw className="size-5 animate-spin text-orange" aria-hidden="true" />
-          <p className="mt-3 text-sm font-medium text-ink">{status ?? 'Analyzing...'}</p>
-          <p className="mt-1 text-xs text-slate">This usually takes a few seconds.</p>
+          <p className="mt-3 text-sm font-medium text-ink">Analyzing prospect…</p>
+          <p className="mt-1 text-xs text-slate">Usually a few seconds.</p>
         </div>
       )}
 
@@ -643,8 +643,7 @@ export default function ProspectCheckPage() {
             <Alert>
               <AlertTitle>Demo mode</AlertTitle>
               <AlertDescription>
-                No AI provider configured. Using deterministic demo extraction and a template note.
-                Set GROQ_API_KEY for full intelligence.
+                Using demo extraction. Connect an AI provider in settings for full intelligence.
               </AlertDescription>
             </Alert>
           )}

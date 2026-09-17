@@ -328,7 +328,9 @@ export function LeadWorkspace({
         },
       })
     } catch (err) {
-      setDraftError(err instanceof Error ? err.message : 'Drafting failed.')
+      const msg = err instanceof Error ? err.message : 'Drafting failed.'
+      // Don't expose raw provider errors to users
+      setDraftError(msg.includes('provider') || msg.includes('API key') ? 'Couldn\'t generate draft right now.' : msg)
     } finally {
       setDrafting(false)
       setStatusMessage(null)
@@ -641,10 +643,10 @@ export function LeadWorkspace({
                 {draftError && (
                   <div className="mt-3 space-y-2">
                     <Alert variant="destructive">
-                      <AlertTitle>Draft failed</AlertTitle>
+                      <AlertTitle>Couldn&apos;t generate draft</AlertTitle>
                       <AlertDescription>{draftError}</AlertDescription>
                     </Alert>
-                    <Button variant="outline" size="sm" onClick={() => void generateDraft()}>Try again</Button>
+                    <Button variant="outline" size="sm" onClick={() => void generateDraft()}>Retry</Button>
                   </div>
                 )}
 

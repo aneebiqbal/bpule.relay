@@ -293,7 +293,7 @@ async function runPassA(
     return demoPassA(rawText)
   }
 
-  onStatus?.('Pass A: Extracting factual entities')
+  onStatus?.('Analyzing prospect')
   const startTime = Date.now()
 
   try {
@@ -832,7 +832,7 @@ async function runPassC(
     return deterministicPassC
   }
 
-  onStatus?.('Pass C: Analyzing opportunity')
+  onStatus?.('Finalizing intelligence')
   const startTime = Date.now()
 
   try {
