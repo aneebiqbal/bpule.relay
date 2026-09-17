@@ -370,6 +370,9 @@ export async function structuredJson<T>(opts: JsonCallOptions): Promise<T> {
  * exactly the mistake this app has avoided since the first model-layer pass.
  * The existing client-side validateOutput() check downstream of this
  * function is what actually catches shape drift, on every tier, unconditionally.
+ *
+ * @deprecated Routes through runtime.generate() for health-aware routing and telemetry.
+ *             New code should use runtime.generate() directly.
  */
 export async function structuredJsonChain<T>(
   chain: ChainStep[],
@@ -377,6 +380,36 @@ export async function structuredJsonChain<T>(
   onAttempt?: (log: HostAttemptLog) => void | Promise<void>,
   timeoutMs?: number,
 ): Promise<CallResult<T>> {
+  // If the chain uses buildFastStructuredChain (Groq → GPT), route through runtime
+  // for health-aware routing, circuit breaking, and telemetry
+  const isFastChain = chain.length > 0 && chain[0].host.id.startsWith('groq')
+
+  if (isFastChain) {
+    try {
+      const { generate } = await import('./runtime')
+      const result = await generate<T & Record<string, unknown>>({
+        task: 'FAST_STRUCTURED',
+        system: opts.system,
+        user: opts.user,
+        schema: opts.schema,
+        schemaName: opts.schemaName,
+        onStatus: opts.onStatus,
+        maxTokens: 1024,
+      })
+      const host = result.trace.provider
+      const tier = host === 'openai' ? 'tier4' : host === 'groq' ? 'tier1' : 'tier1'
+      return {
+        data: result.data as T,
+        host,
+        costTier: tier as import('./cost').CostTier,
+        estimatedCostUsd: result.trace.estimatedCostUsd,
+      }
+    } catch {
+      // Fall through to legacy path if runtime fails
+    }
+  }
+
+  // Legacy path (for non-fast chains or runtime failures)
   const result = await walkChain(chain, opts.onStatus, async (step) => {
     const { value, inputTokens, outputTokens } = await structuredJsonOnHost<T>(
       { apiKey: step.host.apiKey, baseUrl: step.host.baseUrl, model: step.host.model },
