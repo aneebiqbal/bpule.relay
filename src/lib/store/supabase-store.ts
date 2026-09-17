@@ -4074,6 +4074,19 @@ export class SupabaseStore implements ScoutStore {
     revenueIdentityId: string | null
     senderProfileId: string | null
   }): Promise<CapturedProspect> {
+    const existing = await this.client
+      .from('captured_prospects')
+      .select('*')
+      .eq('organization_id', this.orgId)
+      .eq('owner_rep_id', this.rep.id)
+      .eq('raw_input', input.rawInput)
+      .eq('status', 'captured')
+      .maybeSingle()
+
+    if (existing.data) {
+      return this.mapCapturedProspect(existing.data as Row)
+    }
+
     const { data, error } = await this.client
       .from('captured_prospects')
       .insert({
