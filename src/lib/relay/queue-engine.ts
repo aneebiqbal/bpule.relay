@@ -178,7 +178,7 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
 function buildReplyTask(lead: Lead, input: QueueInput): RelayTask {
   const messages = input.messagesByLead.get(lead.id) ?? []
   const convo = input.conversations.get(lead.id)
-  const lastReply = messages.filter((m) => m.sentText === null && m.draftText).at(-1)
+  const lastReply = messages.filter((m) => m.type === 'reply' && m.sentText).at(-1)
 
   const analysis = lastReply
     ? analyzeReply(lastReply.draftText ?? '', {
