@@ -15,6 +15,7 @@ import { validateAndRepair, normalizeGreeting, CONNECTION_NOTE_MAX_CHARS } from 
 import { evaluateProspectQualification } from '@/lib/prospect/qualification-gate'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
 import { produceCanonicalIntelligence, getDisplayScore } from '@/lib/intelligence-v2/orchestrator'
+import { resolveTimezoneFromLocation } from '@/lib/timezone/resolve'
 
 /**
  * Prospect Analyze API — Intelligence V2
