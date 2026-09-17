@@ -22,6 +22,7 @@ const STATE_BY_SECTION: Record<string, { label: string; tone: "orange" | "cobalt
   "prospect-check": { label: "RELAY / CAPTURE", tone: "orange" },
   identities: { label: "RELAY / CAPTURE", tone: "orange" },
   proof: { label: "RELAY / CAPTURE", tone: "orange" },
+  "benchmark-proof": { label: "RELAY / CAPTURE", tone: "orange" },
   "human-gate": { label: "RELAY / CAPTURE", tone: "orange" },
   studio: { label: "STUDIO / CREATE", tone: "cobalt" },
   "studio-identity": { label: "STUDIO / CREATE", tone: "cobalt" },

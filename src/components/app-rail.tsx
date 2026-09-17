@@ -38,6 +38,7 @@ const CREATE_NAV = [
 const INTELLIGENCE_NAV = [
   { href: '/profiles', label: 'Profiles', icon: UserCircle2, exact: false },
   { href: '/facts', label: 'Proof', icon: Shield, exact: false },
+  { href: '/relay/benchmark', label: 'Benchmark', icon: Shield, exact: true },
 ]
 
 const ACCOUNT_NAV = [

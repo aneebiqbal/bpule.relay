@@ -1,0 +1,96 @@
+{
+  "version": "1.0.0",
+  "description": "Extraction torture tests — messy, realistic inputs that test normalization resilience. Each case is designed to break naive extraction while preserving the key facts a good pipeline should recover.",
+  "cases": [
+    {
+      "id": "torture-001",
+      "name": "Copied LinkedIn profile with navigation garbage",
+      "raw_input": "Home\nMy Network\nJobs\nMessaging\nNotifications\n\n Stefan Richter\nCEO at Mythos Archive\nBerlin, Germany\n About\nMythos Archive is building an AI-powered mythology discovery platform. We just closed our seed round and are scaling the team.\n\n Experience\nCEO at Mythos Archive — Present\n\n Posts\n\"We're looking for a senior Next.js developer to rebuild our auth layer. Must know OIDC.\"\n\n 1,234 connections\n\n Send message\nConnect\nMore\n\n https://www.linkedin.com/in/stefan-richter-mythos",
+      "source_urls": ["https://www.linkedin.com/in/stefan-richter-mythos"],
+      "must_preserve_fields": ["Stefan Richter", "Mythos Archive", "Berlin, Germany", "OIDC", "Next.js"],
+      "must_not_invent": ["connections_count", "messaging_status"],
+      "notes": "Navigation menu items ('Home', 'My Network', 'Jobs', 'Messaging', 'Notifications') and UI elements ('Send message', 'Connect', 'More') must be stripped. Key facts must survive."
+    },
+    {
+      "id": "torture-002",
+      "name": "Profile with two posts — one signal, one noise",
+      "raw_input": "Craig Donaghue\nFounder at BrandFlow\nSydney, Australia\n\nAbout\nBrandFlow is a consumer brand content agency. We need an AI content generation system.\n\nPosts\nPost 1 (2 days ago):\n\"We're drowning in content requests. Looking for someone to build us an agentic content pipeline.\"\n\nPost 5 (irrelevant):\n\"Great to be at the Sydney startup meetup tonight! Love this community.\"\n\nhttps://linkedin.com/in/craig-donaghue-brandflow",
+      "source_urls": ["https://linkedin.com/in/craig-donaghue-brandflow"],
+      "must_preserve_fields": ["Craig Donaghue", "BrandFlow", "Sydney, Australia", "content", "agentic"],
+      "must_not_invent": ["meetup_details", "startup_community"],
+      "notes": "Two posts: one with strong pain signal ('drowning in content requests'), one unrelated social post ('startup meetup'). Extraction must capture the signal post and ignore the noise. Real WON case (Aneeb)."
+    },
+    {
+      "id": "torture-003",
+      "name": "Job description + company text with duplicate URLs",
+      "raw_input": "Job: Senior React Developer\nCompany: NomadTools\n\nDescription:\nWe are a fully remote company spanning 12 countries. Looking for a senior React/Next.js developer for our productivity platform.\n\nApply at: https://nomadtools.io/careers/react-dev\nAlso posted: https://nomadtools.io/careers/react-dev\n\nAbout NomadTools:\nWe build productivity software for remote teams. Our team spans 12 countries across all timezones.\n\nhttps://nomadtools.io\nhttps://nomadtools.io",
+      "source_urls": ["https://nomadtools.io/careers/react-dev", "https://nomadtools.io"],
+      "must_preserve_fields": ["NomadTools", "React", "Next.js", "remote"],
+      "must_not_invent": ["exact_country_count", "team_size"],
+      "notes": "Duplicate URLs must be deduplicated. Job description + company about text combined. Remote eligibility should be worldwide."
+    },
+    {
+      "id": "torture-004",
+      "name": "Shortened URLs",
+      "raw_input": "Ryan Carter\nCTO at chainClear\nLondon, UK\n\nBuilding non-custodial settlement layer with conversational AI. Need specialist.\n\nhttps://t.co/abc123\nhttps://tinyurl.com/ryan-carter\nhttps://www.linkedin.com/in/ryan-carter-chainclear",
+      "source_urls": ["https://www.linkedin.com/in/ryan-carter-chainclear"],
+      "must_preserve_fields": ["Ryan Carter", "chainClear", "London, UK"],
+      "must_not_invent": ["twitter_handle", "shortened_url_target"],
+      "notes": "Contains shortened URLs (t.co, tinyurl) alongside the real LinkedIn URL. Pipeline must preserve the real URL or at least not lose the domain/path of the actual source."
+    },
+    {
+      "id": "torture-005",
+      "name": "Missing company — person only",
+      "raw_input": "Elliot Drummond\nIndependent Tech Architect\nEdinburgh, UK\n\nAbout\nI help startups with technical architecture. Discovery sprints, database design, auth systems.\n\nPosts\n\"Available for architecture sprints in Q4. OWASP-compliant auth, scalable database design, phased roadmap. DM me.\"\n\nhttps://linkedin.com/in/elliot-drummond-finarch",
+      "source_urls": ["https://linkedin.com/in/elliot-drummond-finarch"],
+      "must_preserve_fields": ["Elliot Drummond", "Edinburgh, UK", "architecture", "OWASP"],
+      "must_not_invent": ["company_name", "client_list", "revenue"],
+      "notes": "No explicit company — person is independent/freelancer themselves. Pipeline must not invent a company. Still a strong opportunity (real WON case, Aneeb)."
+    },
+    {
+      "id": "torture-006",
+      "name": "Conflicting title mentions",
+      "raw_input": "Kevin Marsh\nFounder & CEO at Dental Content Co\nAlso: Advisor at HealthTech Partners\nChicago, IL, USA\n\nAbout\nDental Content Co runs a dental hygiene content platform. Also advising HealthTech startups.\n\nPosts\n\"One-day paid trial available for our Langflow content engine project. Need architecture documentation.\"\n\nhttps://linkedin.com/in/kevin-marsh-dcc",
+      "source_urls": ["https://linkedin.com/in/kevin-marsh-dcc"],
+      "must_preserve_fields": ["Kevin Marsh", "Dental Content Co", "Chicago, IL", "Langflow"],
+      "must_not_invent": ["advisor_healthtech_details", "partnership_terms"],
+      "notes": "Two titles/roles listed ('Founder & CEO' + 'Advisor'). Pipeline should extract the primary role (Founder) and primary company (Dental Content Co). Real WON case (Mehak)."
+    },
+    {
+      "id": "torture-007",
+      "name": "Post containing hiring signal with unrelated recent post",
+      "raw_input": "Sarah Chen\nVP Engineering at ScaleAI Inc\nSan Francisco, CA, USA\n\nAbout\nScaleAI Inc is an AI data labeling platform.\n\nRecent Posts:\n\nPost 1 (1 hour ago):\n\"Just had amazing tacos for lunch! 🌮 #SanFrancisco\"\n\nPost 2 (3 days ago):\n\"We have 4 open senior engineering roles. Team growing fast but shipping slowing down. Looking for contractors.\"\n\nPost 3 (1 week ago):\n\"Excited to speak at the AI Conference next month!\"\n\nhttps://linkedin.com/in/sarah-chen-scaleai",
+      "source_urls": ["https://linkedin.com/in/sarah-chen-scaleai"],
+      "must_preserve_fields": ["Sarah Chen", "ScaleAI", "San Francisco", "hiring", "engineering roles"],
+      "must_not_invent": ["taco_restaurant", "conference_name"],
+      "notes": "Recent post is irrelevant (tacos). Hiring signal is in older post (3 days ago). Pipeline must look beyond the most recent post for signals."
+    },
+    {
+      "id": "torture-008",
+      "name": "Copied formatting with unicode and special characters",
+      "raw_input": "Bilal Chaudhry — CTO at IndoorNav — Karachi, Pakistan\n\nAbout:\nIndoorNav builds indoor positioning systems. We need a PDR module integrated.\n\nExperience:\n• CTO at IndoorNav (2022–Present)\n• Senior Developer at NavTech (2019–2022)\n• MSc Computer Science — NUST\n\nPosts:\n“We have a positioning app that needs PDR integration. Deliverable in three days.”\n\n🔗 https://linkedin.com/in/bilal-chaudhry-indoornav\n📍 Karachi, Pakistan\n",
+      "source_urls": ["https://linkedin.com/in/bilal-chaudhry-indoornav"],
+      "must_preserve_fields": ["Bilal Chaudhry", "IndoorNav", "Karachi, Pakistan", "PDR", "positioning"],
+      "must_not_invent": ["navtech_details", "msc_thesis_topic"],
+      "notes": "Contains unicode quotes (“”), emoji (🔗📍), bullet points (•), and dash separators (—). Key facts must survive normalization. Real WON case (Aneeb)."
+    },
+    {
+      "id": "torture-009",
+      "name": "Multiple people mentioned in post",
+      "raw_input": "Daniel Kowalski\nCTO at Sourcetools.io\nWarsaw, Poland\n\nAbout\nSourcetools.io builds LinkedIn sourcing extensions.\n\nPosts\n\"Thanks to Sarah from Product and James from Engineering for the great sprint. Also big shoutout to our investors at VC Partners for the support. Now we need new integrations and reworked search logic for our extension.\"\n\nhttps://linkedin.com/in/daniel-kowalski-sourcetools",
+      "source_urls": ["https://linkedin.com/in/daniel-kowalski-sourcetools"],
+      "must_preserve_fields": ["Daniel Kowalski", "Sourcetools", "Warsaw, Poland", "extension", "search logic"],
+      "must_not_invent": ["sarah_role", "james_role", "vc_partners_details"],
+      "notes": "Post mentions multiple people (Sarah, James) and investors (VC Partners). Pipeline must not confuse these with the primary contact. Real WON case (Hassan)."
+    },
+    {
+      "id": "torture-010",
+      "name": "Company and person sharing similar names",
+      "raw_input": "Jose Marchant\nCEO at Marchant Labs\nToronto, Canada\n\nAbout\nMarchant Labs is a product studio. We need CSS work and no-code migration.\n\nPosts\n\"We have Figma designs that need pixel-perfect CSS. Also consolidating a Base44 build.\"\n\nhttps://linkedin.com/in/jose-marchant-marchantlabs",
+      "source_urls": ["https://linkedin.com/in/jose-marchant-marchantlabs"],
+      "must_preserve_fields": ["Jose Marchant", "Marchant Labs", "Toronto, Canada", "CSS", "Figma"],
+      "must_not_invent": ["company_named_after_founder_confirmed", "company_age"],
+      "notes": "Company name (Marchant Labs) is derived from person name (Jose Marchant). Pipeline must correctly distinguish person from company. Real WON case (Zaira)."
+    }
+  ]
+}

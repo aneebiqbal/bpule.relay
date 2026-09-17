@@ -1,0 +1,742 @@
+{
+  "version": "1.1.0",
+  "description": "Relay Intelligence Benchmark — Golden Dataset. Derived from real bpulse business history. See KNOWN-WINS.md for methodology.",
+  "methodology": "Every WON case is evidenced by client_contracts or proof_items in supabase/migrations/. Every STRONG case is evidenced by portfolio project or signal pattern. UNKNOWN outcomes are marked. Nothing is invented.",
+  "cases": [
+    {
+      "id": "won-000",
+      "type": "linkedin_profile",
+      "raw_input": "Abdulhakim\nFounder at Tayo360\nRemote\n\nAbout\nTayo360 is hiring a Full Stack Developer to build and own product features end-to-end for our SaaS platform.\n\nPosts\n\"We're hiring a Full Stack Developer at Tayo360. Stack: React, Next.js, TypeScript, Node.js, Express, PostgreSQL, AWS. You should have SaaS product ownership experience, startup execution mindset, and solid API/cloud experience. This is remote. Apply directly via LinkedIn or email careers@tayo360.com with your resume, GitHub, and portfolio.\"\n\nhttps://www.linkedin.com/in/abdulhakim-tayo360\nhttps://www.linkedin.com/company/tayo360/",
+      "source_urls": ["https://www.linkedin.com/in/abdulhakim-tayo360", "https://www.linkedin.com/company/tayo360/"],
+      "known_outcome": "WON",
+      "KNOWN_OUTCOME": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "Tayo360",
+        "person": "Abdulhakim",
+        "role": "Founder",
+        "location": "Remote",
+        "signal": "hiring",
+        "signal_evidence": "hiring a Full Stack Developer and direct LinkedIn/email application route",
+        "tech_stack": ["React", "Next.js", "TypeScript", "Node.js", "Express", "PostgreSQL", "AWS"],
+        "requirements": ["SaaS product ownership", "startup execution", "API/cloud experience"],
+        "application_route": ["LinkedIn", "careers@tayo360.com"],
+        "requested_assets": ["resume", "GitHub", "portfolio"]
+      },
+      "must_preserve_fields": ["Abdulhakim", "Tayo360", "Full Stack Developer", "React", "Next.js", "TypeScript", "Node.js", "Express", "PostgreSQL", "AWS", "careers@tayo360.com", "GitHub", "portfolio", "remote"],
+      "must_not_invent": ["post_contact_conversation", "deal_outcome_details", "budget", "funding_amount", "team_size", "revenue"],
+      "expected_actionability": "high_priority_actionable_unless_evidence_backed_reason",
+      "scoring_scope": "PRE_CONTACT_ONLY",
+      "notes": "GOLDEN calibration case. Evaluate ONLY pre-contact LinkedIn/job-signal evidence. KNOWN_OUTCOME is stored for calibration evidence only and must not be used as extraction/scoring input."
+    },
+    {
+      "id": "won-001",
+      "type": "linkedin_profile",
+      "raw_input": "Stefan Richter\nCEO at Mythos Archive\nBerlin, Germany\n\nAbout\nMythos Archive is building an AI-powered mythology discovery platform. We just closed our seed round and are scaling the team.\n\nExperience\nCEO at Mythos Archive — Present\n\nPosts\n\"We're looking for a senior Next.js developer to rebuild our auth layer. Must know OIDC. 10-week engagement. DM me.\"\n\nhttps://www.linkedin.com/in/stefan-richter-mythos",
+      "source_urls": ["https://www.linkedin.com/in/stefan-richter-mythos"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "Mythos Archive",
+        "person": "Stefan Richter",
+        "role": "CEO",
+        "location": "Berlin, Germany",
+        "signal": "asking",
+        "signal_evidence": "looking for senior Next.js developer to rebuild auth layer",
+        "tech_stack": ["Next.js", "OIDC", "authentication"],
+        "engagement_length_weeks": 10
+      },
+      "must_preserve_fields": ["Stefan Richter", "Mythos Archive", "Berlin, Germany", "OIDC", "Next.js"],
+      "must_not_invent": ["revenue", "team_size", "funding_amount", "previous developers"],
+      "notes": "Evidenced by migration 0007 (proof_item 70000000-0000-0000-0000-000000000016) and migration 0079 (contract c4000000-0000-0000-0000-000000000005). Client feedback: 'Fast work.' Profile: Aneeb. OIDC overhaul ran ~10 weeks."
+    },
+    {
+      "id": "won-002",
+      "type": "linkedin_profile",
+      "raw_input": "Nasser Al-Fahad\nFounder at WearMeOut\nDubai, UAE\n\nAbout\nWearMeOut.ai — AI fashion platform. Backend needsFirebase, AI image generation, payments integration.\n\nPosts\n\"We need a Firebase backend developer who can take full ownership. React + Firebase + payments. Ongoing work.\"\n\nhttps://linkedin.com/in/nasser-alfahad-wmo",
+      "source_urls": ["https://linkedin.com/in/nasser-alfahad-wmo"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "WearMeOut",
+        "person": "Nasser Al-Fahad",
+        "role": "Founder",
+        "location": "Dubai, UAE",
+        "signal": "asking",
+        "signal_evidence": "need Firebase backend developer who can take full ownership",
+        "tech_stack": ["Firebase", "React", "payments", "AI"],
+        "project": "AI fashion e-commerce"
+      },
+      "must_preserve_fields": ["Nasser Al-Fahad", "WearMeOut", "Dubai, UAE", "Firebase", "React"],
+      "must_not_invent": ["revenue", "funding_stage", "team_size"],
+      "notes": "Evidenced by migration 0007 (proof_item 70000000-0000-0000-0000-000000000014), migration 0079 (contract c4000000-0000-0000-0000-000000000003 $3,100). Client feedback: 'Only dev we use.' Profile: Aneeb."
+    },
+    {
+      "id": "won-003",
+      "type": "linkedin_profile",
+      "raw_input": "Ryan Carter\nCTO at chainClear\nLondon, UK\n\nAbout\nBuilding non-custodial settlement layer with conversational AI interface. Need someone who understands both blockchain and chat systems.\n\nPosts\n\"After 6 months of our team struggling with the chat + blockchain integration, we need a specialist. Node.js, NestJS, PostgreSQL, OpenAI API. This is complex.\"\n\nhttps://linkedin.com/in/ryan-carter-chainclear",
+      "source_urls": ["https://linkedin.com/in/ryan-carter-chainclear"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "chainClear",
+        "person": "Ryan Carter",
+        "role": "CTO",
+        "location": "London, UK",
+        "signal": "pain",
+        "signal_evidence": "6 months of team struggling with chat + blockchain integration",
+        "tech_stack": ["Node.js", "NestJS", "PostgreSQL", "OpenAI", "blockchain"],
+        "duration_months": 6
+      },
+      "must_preserve_fields": ["Ryan Carter", "chainClear", "London, UK", "Node.js", "NestJS", "blockchain"],
+      "must_not_invent": ["funding", "team_size", "specific_blockchain_protocol"],
+      "notes": "Evidenced by migration 0007 (proof_item 70000000-0000-0000-0000-000000000007, Zaira) and migration 0010 (proof_item, Hassan). Contract c5000000-0000-0000-0000-000000000002. Client feedback: 'Complex build.' Multiple reps delivered on this."
+    },
+    {
+      "id": "won-004",
+      "type": "linkedin_profile",
+      "raw_input": "James Whitmore\nCEO at RegShield Ltd\nLondon, UK\n\nAbout\nRegShield helps SMEs with GDPR, NIS2, DORA, CSRD compliance. Production platform needs hardening.\n\nPosts\n\"We have a live compliance platform that needs RLS, tenant isolation, auth fixes, and a clean admin panel. If you've done compliance SaaS before, reach out.\"\n\nhttps://linkedin.com/in/james-whitmore-regshield",
+      "source_urls": ["https://linkedin.com/in/james-whitmore-regshield"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "RegShield",
+        "person": "James Whitmore",
+        "role": "CEO",
+        "location": "London, UK",
+        "signal": "asking",
+        "signal_evidence": "compliance platform needs RLS, tenant isolation, auth fixes, admin panel",
+        "tech_stack": ["RLS", "tenant-isolation", "GDPR", "NIS2", "DORA", "CSRD"],
+        "domain": "compliance"
+      },
+      "must_preserve_fields": ["James Whitmore", "RegShield", "London, UK", "RLS", "GDPR", "tenant isolation"],
+      "must_not_invent": ["number_of_customers", "revenue", "funding_round"],
+      "notes": "Evidenced by migration 0007 (Zaira proof_item 70000000-0000-0000-0000-000000000006), migration 0010 (Hassan proof_item). Contract c5000000-0000-0000-0000-000000000001. Client feedback: 'Ship it.'"
+    },
+    {
+      "id": "won-005",
+      "type": "upwork_job",
+      "raw_input": "Job: Deploy Python Trading Bot to Railway\nClient: Samuel Osei\nBudget: $640 (hourly)\n\nDescription:\nWe have a Python 3.11 Flask trading bot currently running on Replit. Need it migrated to Railway. It uses the Kalshi API with RSA-PSS authentication. Also need Discord webhook alerts and bug fixes. Dual web/worker processes.\n\nSkills: Python, Flask, Railway, API Integration\nPosted: 2 weeks ago\nProposals: 12\n\nhttps://www.upwork.com/jobs/deploy-python-trading-bot",
+      "source_urls": ["https://www.upwork.com/jobs/deploy-python-trading-bot"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "project": "Python trading bot deployment",
+        "client": "Samuel Osei",
+        "budget": 640,
+        "signal": "asking",
+        "signal_evidence": "need migration from Replit to Railway",
+        "tech_stack": ["Python", "Flask", "Railway", "Kalshi API", "RSA-PSS", "Discord"],
+        "task_type": "DevOps migration"
+      },
+      "must_preserve_fields": ["Samuel Osei", "Python", "Flask", "Railway", "Kalshi", "RSA-PSS"],
+      "must_not_invent": ["bot_profitability", "trading_volume", "exchange_details"],
+      "notes": "Evidenced by migration 0007 (Zaira proof_item 70000000-0000-0000-0000-000000000011), migration 0010 (Hassan proof_item). Contract c5000000-0000-0000-0000-000000000006 $640. Client feedback: 'Found bugs.'"
+    },
+    {
+      "id": "won-006",
+      "type": "linkedin_profile",
+      "raw_input": "Craig Donaghue\nFounder at BrandFlow\nSydney, Australia\n\nAbout\nBrandFlow is a consumer brand content agency. We need an AI content generation system — multi-persona, trend research, image generation, multi-format output.\n\nPosts\n\"We're drowning in content requests. Looking for someone to build us an agentic content pipeline. Langflow experience a plus.\"\n\nhttps://linkedin.com/in/craig-donaghue-brandflow",
+      "source_urls": ["https://linkedin.com/in/craig-donaghue-brandflow"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "BrandFlow",
+        "person": "Craig Donaghue",
+        "role": "Founder",
+        "location": "Sydney, Australia",
+        "signal": "pain",
+        "signal_evidence": "drowning in content requests",
+        "tech_stack": ["Langflow", "AI", "content-automation"],
+        "project": "multi-persona content generation"
+      },
+      "must_preserve_fields": ["Craig Donaghue", "BrandFlow", "Sydney, Australia", "Langflow", "content"],
+      "must_not_invent": ["agency_clients", "monthly_content_volume", "revenue"],
+      "notes": "Evidenced by migration 0007 (Aneeb proof_item 70000000-0000-0000-0000-000000000017). Contract c4000000-0000-0000-0000-000000000006. Client feedback: 'Gets both sides.'"
+    },
+    {
+      "id": "won-007",
+      "type": "linkedin_profile",
+      "raw_input": "Chris Harmon\nCTO at Appranker\nSan Francisco, CA, USA\n\nAbout\nAppranker is a visual search engine. We have Figma designs that need pixel-precise CSS implementation. We also have a Base44 no-code build that needs consolidation with our live production site.\n\nPosts\n\"We shipped a no-code MVP but it's not production ready. Need someone who can match our Figma designs exactly and consolidate both codebases. On time delivery critical.\"\n\nhttps://linkedin.com/in/chris-harmon-appranker",
+      "source_urls": ["https://linkedin.com/in/chris-harmon-appranker"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "Appranker",
+        "person": "Chris Harmon",
+        "role": "CTO",
+        "location": "San Francisco, CA, USA",
+        "signal": "asking",
+        "signal_evidence": "shipped no-code MVP but not production ready, need Figma CSS and consolidation",
+        "tech_stack": ["CSS", "Figma", "Base44", "React", "no-code-migration"],
+        "urgency": "on time delivery critical"
+      },
+      "must_preserve_fields": ["Chris Harmon", "Appranker", "San Francisco", "Figma", "CSS", "Base44"],
+      "must_not_invent": ["funding", "team_size", "no-code_platform_details"],
+      "notes": "Evidenced by migration 0007 (Zaira proof_item 70000000-0000-0000-0000-000000000010), migration 0010 (Hassan proof_item). Contract c5000000-0000-0000-0000-000000000005. Client feedback: 'On time.' Two separate engagements with same client."
+    },
+    {
+      "id": "won-008",
+      "type": "linkedin_profile",
+      "raw_input": "Marcus Webb\nCEO at Zerish\nDubai, UAE\n\nAbout\nZerish is building a bilingual, role-based brand asset portal. Needs CDN-backed storage and headless CMS backend.\n\nPosts\n\"Looking for a full-stack developer for our digital asset management portal. Bilingual (English/Arabic), role-based access, Cloudflare R2 for storage. React/Next.js frontend preferred.\"\n\nhttps://linkedin.com/in/marcus-webb-zerish",
+      "source_urls": ["https://linkedin.com/in/marcus-webb-zerish"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "Zerish",
+        "person": "Marcus Webb",
+        "role": "CEO",
+        "location": "Dubai, UAE",
+        "signal": "asking",
+        "signal_evidence": "looking for full-stack developer for DAM portal",
+        "tech_stack": ["Cloudflare R2", "headless CMS", "React", "Next.js", "DAM"],
+        "requirements": ["bilingual", "role-based"]
+      },
+      "must_preserve_fields": ["Marcus Webb", "Zerish", "Dubai, UAE", "CDN", "headless CMS", "React", "R2"],
+      "must_not_invent": ["asset_count", "team_size", "current_CMS"],
+      "notes": "Evidenced by migration 0007 (Zaira proof_item 70000000-0000-0000-0000-000000000008), migration 0010 (Hassan proof_item). Contract c5000000-0000-0000-0000-000000000003. Client feedback: 'No hand holding.'"
+    },
+    {
+      "id": "won-009",
+      "type": "upwork_job",
+      "raw_input": "Job: React Firebase AI E-Commerce Backend\nClient: Muhammad Behsas\nBudget: $3,100 fixed\n\nDescription:\nBuild the backend for an AI fashion e-commerce platform. Firebase for auth and DB, AI image generation for product visualization, payment processing. Full ownership expected.\n\nSkills: React, Firebase, AI, Payments\nPosted: 1 week ago\nProposals: 8\n\nhttps://upwork.com/jobs/react-firebase-ai-ecommerce",
+      "source_urls": ["https://upwork.com/jobs/react-firebase-ai-ecommerce"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "project": "AI fashion e-commerce backend",
+        "client": "Muhammad Behsas",
+        "budget": 3100,
+        "signal": "asking",
+        "signal_evidence": "build backend for AI fashion e-commerce, full ownership expected",
+        "tech_stack": ["React", "Firebase", "AI image generation", "payments"],
+        "ownership": "full"
+      },
+      "must_preserve_fields": ["Muhammad Behsas", "Firebase", "React", "AI", "payments"],
+      "must_not_invent": ["revenue", "product_count", "AI_model_details"],
+      "notes": "Evidenced by migration 0079 contract c1000000-0000-0000-0000-000000000002 $3,100. Client feedback: '5.0 stars. Full ownership, reliable.' Profile: Fizza."
+    },
+    {
+      "id": "won-010",
+      "type": "linkedin_profile",
+      "raw_input": "David Okafor\nEngineering Manager at Avenue Store\nToronto, Canada\n\nAbout\nAvenue Store runs on Rails with Avenue CMS. We need Yotpo review widgets integrated into individual product pages.\n\nPosts\n\"Simple task but our team doesn't have time. Need Yotpo review widgets on product pages. Rails stack. Should be quick if you know Yotpo.\"\n\nhttps://linkedin.com/in/david-okafor-avenue",
+      "source_urls": ["https://linkedin.com/in/david-okafor-avenue"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "Avenue Store",
+        "person": "David Okafor",
+        "role": "Engineering Manager",
+        "location": "Toronto, Canada",
+        "signal": "asking",
+        "signal_evidence": "need Yotpo review widgets on product pages, team doesn't have time",
+        "tech_stack": ["Rails", "Yotpo", "Avenue CMS", "e-commerce"],
+        "scope": "simple, quick"
+      },
+      "must_preserve_fields": ["David Okafor", "Avenue", "Toronto, Canada", "Yotpo", "Rails"],
+      "must_not_invent": ["store_revenue", "product_count", "team_size"],
+      "notes": "Evidenced by migration 0010 (Hassan proof_item). Contract c5000000-0000-0000-0000-000000000008. Client feedback: 'First try.'"
+    },
+    {
+      "id": "won-011",
+      "type": "linkedin_profile",
+      "raw_input": "Liam Fogarty\nFounder at TrackReach\nDublin, Ireland\n\nAbout\nTrackReach is a LinkedIn sourcing tool. We have a WXT/Svelte/TypeScript browser extension with a Rails 8 API backend. Need feature work.\n\nPosts\n\"Our extension needs new integrations and search logic improvements. Svelte + TypeScript + WXT. Rails 8 backend. If you've built browser extensions before, let's talk.\"\n\nhttps://linkedin.com/in/liam-fogarty-trackreach",
+      "source_urls": ["https://linkedin.com/in/liam-fogarty-trackreach"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "TrackReach",
+        "person": "Liam Fogarty",
+        "role": "Founder",
+        "location": "Dublin, Ireland",
+        "signal": "asking",
+        "signal_evidence": "extension needs new integrations and search logic improvements",
+        "tech_stack": ["WXT", "Svelte", "TypeScript", "Rails 8", "browser-extension"],
+        "project": "LinkedIn sourcing tool"
+      },
+      "must_preserve_fields": ["Liam Fogarty", "TrackReach", "Dublin, Ireland", "WXT", "Svelte", "Rails 8"],
+      "must_not_invent": ["user_count", "revenue", "funding"],
+      "notes": "Evidenced by migration 0007 (Aneeb proof_item 70000000-0000-0000-0000-000000000015). Contract c4000000-0000-0000-0000-000000000004. Client feedback: 'Fast pickup.'"
+    },
+    {
+      "id": "won-012",
+      "type": "linkedin_profile",
+      "raw_input": "Andre Beaumont\nCTO at Voyage AI\nAustin, TX, USA\n\nAbout\nVoyage AI builds trip planning tools. We have a React/Vite app with a bug causing blank screen on user search.\n\nPosts\n\"URGENT: Our trip planner shows a blank screen when users search. React/Vite frontend, Node.js backend. Need this fixed fast. Three-day project.\"\n\nhttps://linkedin.com/in/andre-beaumont-voyage",
+      "source_urls": ["https://linkedin.com/in/andre-beaumont-voyage"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "Voyage AI",
+        "person": "Andre Beaumont",
+        "role": "CTO",
+        "location": "Austin, TX, USA",
+        "signal": "pain",
+        "signal_evidence": "trip planner shows blank screen when users search, need fixed fast",
+        "tech_stack": ["React", "Vite", "Node.js"],
+        "urgency": "urgent",
+        "project_duration": "three-day"
+      },
+      "must_preserve_fields": ["Andre Beaumont", "Voyage", "Austin, TX", "React", "Vite", "blank screen"],
+      "must_not_invent": ["user_count", "revenue", "funding"],
+      "notes": "Evidenced by migration 0007 (Mehak proof_item 70000000-0000-0000-0000-000000000004), migration 0079 (contract c3000000-0000-0000-0000-000000000004). Client feedback: 'Fast fix.' Same-day fix, three-day project."
+    },
+    {
+      "id": "won-013",
+      "type": "linkedin_profile",
+      "raw_input": "Kevin Marsh\nFounder at Dental Content Co\nChicago, IL, USA\n\nAbout\nWe run a dental hygiene content platform powered by Langflow and Node.js. Need help with a social content engine prototype.\n\nPosts\n\"We improved our prototype but need a full architecture map in plain language for non-technical stakeholders. One-day paid trial to start.\"\n\nhttps://linkedin.com/in/kevin-marsh-dcc",
+      "source_urls": ["https://linkedin.com/in/kevin-marsh-dcc"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "Dental Content Co",
+        "person": "Kevin Marsh",
+        "role": "Founder",
+        "location": "Chicago, IL, USA",
+        "signal": "asking",
+        "signal_evidence": "one-day paid trial, need architecture map",
+        "tech_stack": ["Langflow", "Node.js", "agentic"],
+        "project_type": "trial"
+      },
+      "must_preserve_fields": ["Kevin Marsh", "Langflow", "Node.js", "architecture"],
+      "must_not_invent": ["content_volume", "team_size", "revenue"],
+      "notes": "Evidenced by migration 0007 (Mehak proof_item 70000000-0000-0000-0000-000000000005). Contract c3000000-0000-0000-0000-000000000005. Client feedback: 'Standout.'"
+    },
+    {
+      "id": "won-014",
+      "type": "linkedin_profile",
+      "raw_input": "Pontus\nFounder at CompliAI\nStockholm, Sweden\n\nAbout\nWe have a Lovable-built MVP for AI compliance (GDPR workflows). Need it production-ready.\n\nPosts\n\"Our AI compliance MVP was built in Lovable. It covers GDPR but needs row-level security, tenant isolation, and admin panel. Looking for someone who can take it to production.\"\n\nhttps://linkedin.com/in/pontus-compli-ai",
+      "source_urls": ["https://linkedin.com/in/pontus-compli-ai"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "CompliAI",
+        "person": "Pontus",
+        "role": "Founder",
+        "location": "Stockholm, Sweden",
+        "signal": "asking",
+        "signal_evidence": "Lovable-built MVP needs RLS, tenant isolation, admin panel, take to production",
+        "tech_stack": ["GDPR", "RLS", "tenant-isolation", "Lovable", "compliance"],
+        "stage": "MVP to production"
+      },
+      "must_preserve_fields": ["Pontus", "CompliAI", "Stockholm, Sweden", "GDPR", "RLS", "tenant isolation", "Lovable"],
+      "must_not_invent": ["revenue", "funding", "customer_count"],
+      "notes": "Evidenced by migration 0079 contract c2000000-0000-0000-0000-000000000002 $1,660. Client feedback: '5.0 stars. Production ready.' Profile: Zaira."
+    },
+    {
+      "id": "won-015",
+      "type": "upwork_job",
+      "raw_input": "Job: Chrome Extension Developer (WXT Svelte)\nClient: Rory G\nBudget: $3,979.17 (hourly)\n\nDescription:\nBuild a LinkedIn sourcing browser extension using WXT framework, Svelte, and TypeScript. Must integrate with LinkedIn profiles, extract contact data, and export to CSV.\n\nSkills: WXT, Svelte, TypeScript, Browser Extensions, LinkedIn API\nPosted: 3 days ago\nProposals: 15\n\nhttps://upwork.com/jobs/chrome-extension-wxt-svelte-linkedin",
+      "source_urls": ["https://upwork.com/jobs/chrome-extension-wxt-svelte-linkedin"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "project": "LinkedIn sourcing browser extension",
+        "client": "Rory G",
+        "budget": 3979.17,
+        "signal": "asking",
+        "signal_evidence": "build LinkedIn sourcing browser extension",
+        "tech_stack": ["WXT", "Svelte", "TypeScript", "browser-extension", "LinkedIn"],
+        "deliverable": "extract contact data, export to CSV"
+      },
+      "must_preserve_fields": ["Rory G", "WXT", "Svelte", "TypeScript", "LinkedIn", "extension"],
+      "must_not_invent": ["LinkedIn_API_access", "monthly_users", "funding"],
+      "notes": "Evidenced by migration 0079 contract c1000000-0000-0000-0000-000000000004 $3,979.17. Client feedback: '5.0 stars. Took initiative.' Profile: Fizza."
+    },
+    {
+      "id": "won-016",
+      "type": "linkedin_profile",
+      "raw_input": "Scott Hendricks\nMarketing Director at GlowCare\nLos Angeles, CA, USA\n\nAbout\nGlowCare is a personal care brand. We need an agentic content system — Langflow orchestration, GitHub version control, ChatGPT in the pipeline.\n\nPosts\n\"We're spending 20+ hours/week on content that could be automated. Looking for someone to build our AI content pipeline. Must understand marketing workflows.\"\n\nhttps://linkedin.com/in/Scott-hendricks-glowcare",
+      "source_urls": ["https://linkedin.com/in/Scott-hendricks-glowcare"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "GlowCare",
+        "person": "Scott Hendricks",
+        "role": "Marketing Director",
+        "location": "Los Angeles, CA, USA",
+        "signal": "pain",
+        "signal_evidence": "spending 20+ hours/week on content that could be automated",
+        "tech_stack": ["Langflow", "GitHub", "ChatGPT", "agentic", "content-automation"],
+        "hours_per_week": 20
+      },
+      "must_preserve_fields": ["Scott Hendricks", "GlowCare", "Los Angeles", "Langflow", "ChatGPT", "content"],
+      "must_not_invent": ["brand_revenue", "marketing_team_size", "content_types"],
+      "notes": "Evidenced by migration 0007 (Mehak proof_item 70000000-0000-0000-0000-000000000003). Contract c3000000-0000-0000-0000-000000000003. Client feedback: 'Exceptional.'"
+    },
+    {
+      "id": "won-017",
+      "type": "linkedin_profile",
+      "raw_input": "Daniel Kowalski\nCTO at Sourcetools.io\nWarsaw, Poland\n\nAbout\nSourcetools.io builds LinkedIn sourcing extensions. WXT/Vite/Svelte/TypeScript with Rails 8 API backend.\n\nPosts\n\"Our extension needs new integrations, notifications, and reworked search logic. Complex build. Must know both browser extensions and Rails APIs.\"\n\nhttps://linkedin.com/in/daniel-kowalski-sourcetools",
+      "source_urls": ["https://linkedin.com/in/daniel-kowalski-sourcetools"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "Sourcetools.io",
+        "person": "Daniel Kowalski",
+        "role": "CTO",
+        "location": "Warsaw, Poland",
+        "signal": "asking",
+        "signal_evidence": "extension needs new integrations, notifications, reworked search logic",
+        "tech_stack": ["WXT", "Vite", "Svelte", "TypeScript", "Rails 8", "browser-extension"],
+        "complexity": "complex"
+      },
+      "must_preserve_fields": ["Daniel Kowalski", "Sourcetools", "Warsaw, Poland", "WXT", "Svelte", "Rails 8"],
+      "must_not_invent": ["user_count", "revenue", "funding"],
+      "notes": "Evidenced by migration 0010 (Hassan proof_item). Contract c5000000-0000-0000-0000-000000000004. Client feedback: 'Improved unasked.'"
+    },
+    {
+      "id": "won-018",
+      "type": "upwork_job",
+      "raw_input": "Job: SBA 504 Lead Gen Website Build\nClient: Shohel Ahmed\nBudget: $2,450 fixed\n\nDescription:\nBuild an SBA 504 loan educational and lead-routing website. Use Astro with 11ty templates. Must include lead capture forms with spam filtering.\n\nSkills: Astro, 11ty, Lead Generation, SEO, Forms\nPosted: 1 week ago\nProposals: 6\n\nhttps://upwork.com/jobs/sba-504-lead-gen-website",
+      "source_urls": ["https://upwork.com/jobs/sba-504-lead-gen-website"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "project": "SBA 504 loan lead generation website",
+        "client": "Shohel Ahmed",
+        "budget": 2450,
+        "signal": "asking",
+        "signal_evidence": "build SBA 504 loan educational and lead-routing website",
+        "tech_stack": ["Astro", "11ty", "lead-gen", "SEO"],
+        "domain": "SBA 504 financing"
+      },
+      "must_preserve_fields": ["Shohel Ahmed", "Astro", "SBA 504", "lead generation", "SEO"],
+      "must_not_invent": ["loan_volume", "revenue_model", "partner_lenders"],
+      "notes": "Evidenced by migration 0079 contract c1000000-0000-0000-0000-000000000001 $2,450. Client feedback: '5.0 stars. Built and deployed with exceptional support.' Profile: Fizza."
+    },
+    {
+      "id": "won-019",
+      "type": "linkedin_profile",
+      "raw_input": "Bilal Chaudhry\nCTO at IndoorNav\nKarachi, Pakistan\n\nAbout\nIndoorNav builds indoor positioning systems. We need a PDR (Pedestrian Dead Reckoning) module integrated into our existing positioning framework.\n\nPosts\n\"We have a positioning app that needs PDR integration. Sensor data from accelerometer and gyroscope. Should be deliverable in three days if you know the domain.\"\n\nhttps://linkedin.com/in/bilal-chaudhry-indoornav",
+      "source_urls": ["https://linkedin.com/in/bilal-chaudhry-indoornav"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "IndoorNav",
+        "person": "Bilal Chaudhry",
+        "role": "CTO",
+        "location": "Karachi, Pakistan",
+        "signal": "asking",
+        "signal_evidence": "positioning app needs PDR integration, deliverable in three days",
+        "tech_stack": ["PDR", "indoor-positioning", "sensors", "mobile"],
+        "domain": "indoor positioning"
+      },
+      "must_preserve_fields": ["Bilal Chaudhry", "IndoorNav", "Karachi, Pakistan", "PDR", "positioning"],
+      "must_not_invent": ["app_downloads", "funding", "sensor_hardware"],
+      "notes": "Evidenced by migration 0007 (Aneeb proof_item 70000000-0000-0000-0000-000000000018), migration 0079 (contract c4000000-0000-0000-0000-000000000007). Client feedback: 'First try.'"
+    },
+    {
+      "id": "won-020",
+      "type": "linkedin_profile",
+      "raw_input": "Elliot Drummond\nCTO at FinArch Labs\nEdinburgh, UK\n\nAbout\nFinArch Labs needs a discovery and architecture sprint. We're starting a new financial platform and need frontend, backend, database, auth, API design, scaling plan, and phased roadmap.\n\nPosts\n\"We're kicking off a new platform and need a technical architect for a discovery sprint. OWASP-compliant auth, scalable database design, phased roadmap. One to two weeks.\"\n\nhttps://linkedin.com/in/elliot-drummond-finarch",
+      "source_urls": ["https://linkedin.com/in/elliot-drummond-finarch"],
+      "known_outcome": "WON",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "FinArch Labs",
+        "person": "Elliot Drummond",
+        "role": "CTO",
+        "location": "Edinburgh, UK",
+        "signal": "asking",
+        "signal_evidence": "need technical architect for discovery sprint, OWASP-compliant auth, scalable database",
+        "tech_stack": ["OWASP", "database-design", "auth", "architecture", "API-design"],
+        "project_type": "discovery sprint"
+      },
+      "must_preserve_fields": ["Elliot Drummond", "FinArch", "Edinburgh, UK", "architecture", "OWASP", "database"],
+      "must_not_invent": ["funding", "team_size", "existing_tech_stack"],
+      "notes": "Evidenced by migration 0007 (Aneeb proof_item 70000000-0000-0000-0000-000000000013). Contract c4000000-0000-0000-0000-000000000002. Client feedback: 'Useful.'"
+    },
+    {
+      "id": "strong-001",
+      "type": "linkedin_profile",
+      "raw_input": "Sarah Chen\nVP Engineering at ScaleAI Inc\nSan Francisco, CA, USA\n\nAbout\nScaleAI Inc is an AI data labeling platform. We just raised our Series B and are hiring across engineering.\n\nExperience\nVP Engineering at ScaleAI Inc — 2 years\n\nPosts\n\"We have 4 open senior engineering roles. Team is growing fast but shipping is slowing down. Looking for contractors who can hit the ground running.\"\n\nhttps://linkedin.com/in/sarah-chen-scaleai",
+      "source_urls": ["https://linkedin.com/in/sarah-chen-scaleai"],
+      "known_outcome": "STRONG_OPPORTUNITY",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "ScaleAI Inc",
+        "person": "Sarah Chen",
+        "role": "VP Engineering",
+        "location": "San Francisco, CA, USA",
+        "signal": "hiring",
+        "signal_evidence": "4 open senior engineering roles",
+        "secondary_signal": "funding",
+        "tertiary_signal": "pain"
+      },
+      "must_preserve_fields": ["Sarah Chen", "ScaleAI", "San Francisco", "hiring", "Series B"],
+      "must_not_invent": ["specific_roles", "funding_amount", "revenue"],
+      "notes": "Synthetic case based on common signal pattern. Funding + hiring + pain = very strong signal combination. No specific outcome data."
+    },
+    {
+      "id": "strong-002",
+      "type": "upwork_job",
+      "raw_input": "Job: Full-Stack Developer for HealthTech Platform\nBudget: $4,500 fixed\n\nDescription:\nWe are a healthcare startup building a provider-facing platform for supplement plans, adherence tracking, and patient follow-through. Need Ruby on Rails with GraphQL API. Must be HIPAA-aware.\n\nSkills: Ruby on Rails, GraphQL, Healthcare, HIPAA\nPosted: 2 days ago\nProposals: 4\n\nhttps://upwork.com/jobs/fullstack-healthcare-rails-graphql",
+      "source_urls": ["https://upwork.com/jobs/fullstack-healthcare-rails-graphql"],
+      "known_outcome": "STRONG_OPPORTUNITY",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "project": "HealthTech provider platform",
+        "budget": 4500,
+        "signal": "asking",
+        "signal_evidence": "building healthcare platform for supplement plans and adherence",
+        "tech_stack": ["Ruby on Rails", "GraphQL", "HIPAA"],
+        "domain": "HealthTech"
+      },
+      "must_preserve_fields": ["Rails", "GraphQL", "HIPAA", "healthcare", "supplement"],
+      "must_not_invent": ["client_name", "funding_stage", "patient_count"],
+      "notes": "Pattern match for Fullscript project (bpulse portfolio 0013). Real Fullscript work done by Mehak, Zaira, Fizza. HealthTech + Rails + GraphQL = proven winning pattern."
+    },
+    {
+      "id": "strong-003",
+      "type": "linkedin_profile",
+      "raw_input": "Tom Richards\nSolo Founder at CloudMigrate\nManchester, UK\n\nAbout\nCloudMigrate helps companies move from legacy infrastructure to AWS. It's just me — I handle sales and architecture but need help with implementation.\n\nExperience\nFounder at CloudMigrate — 3 years\n\nPosts\n\"I'm one person trying to do everything. Just closed 3 enterprise deals but can't deliver fast enough. Looking for a reliable dev partner.\"\n\nhttps://linkedin.com/in/tom-richards-cloudmigrate",
+      "source_urls": ["https://linkedin.com/in/tom-richards-cloudmigrate"],
+      "known_outcome": "STRONG_OPPORTUNITY",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "CloudMigrate",
+        "person": "Tom Richards",
+        "role": "Solo Founder",
+        "location": "Manchester, UK",
+        "signal": "understaffed",
+        "secondary_signal": "pain",
+        "signal_evidence": "one person trying to do everything, closed 3 enterprise deals but can't deliver"
+      },
+      "must_preserve_fields": ["Tom Richards", "CloudMigrate", "Manchester, UK", "solo", "enterprise"],
+      "must_not_invent": ["revenue", "specific_clients", "team_size"],
+      "notes": "Classic understaffed + pain signal. Solo founder who closed deals but can't deliver = ideal bpulse customer. Pattern matches multiple real wins."
+    },
+    {
+      "id": "strong-004",
+      "type": "linkedin_profile",
+      "raw_input": "Priya Sharma\nCEO at EduTech Global\nBangalore, India\n\nAbout\nEduTech Global is an online learning platform with 50,000 students. Our app hasn't been updated in 14 months and users are complaining.\n\nPosts\n\"We raised $2M seed round last year but our technical co-founder left. Need someone to take over the mobile app. React Native.\"\n\nhttps://linkedin.com/in/priya-sharma-edutech",
+      "source_urls": ["https://linkedin.com/in/priya-sharma-edutech"],
+      "known_outcome": "STRONG_OPPORTUNITY",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "EduTech Global",
+        "person": "Priya Sharma",
+        "role": "CEO",
+        "location": "Bangalore, India",
+        "signal": "stale",
+        "secondary_signal": "funding",
+        "signal_evidence": "app hasn't been updated in 14 months, users complaining",
+        "tech_stack": ["React Native"]
+      },
+      "must_preserve_fields": ["Priya Sharma", "EduTech", "Bangalore, India", "React Native", "seed"],
+      "must_not_invent": ["student_count", "MRR", "co_founder_reason"],
+      "notes": "Stale product + funding + understaffed = strong opportunity. Note: company is in India (outside core market for scoring) but remote eligibility should be worldwide since they need a remote developer."
+    },
+    {
+      "id": "strong-005",
+      "type": "upwork_job",
+      "raw_input": "Job: AI Chatbot with Blockchain Settlement Layer\nBudget: $5,000 fixed\n\nDescription:\nBuild a conversational AI interface that connects to a non-custodial blockchain settlement module. OpenAI API for chat, custom blockchain integration. Node.js backend, React frontend.\n\nSkills: OpenAI API, Blockchain, Node.js, React, NLP\nPosted: 5 days ago\nProposals: 7\n\nhttps://upwork.com/jobs/ai-chatbot-blockchain-settlement",
+      "source_urls": ["https://upwork.com/jobs/ai-chatbot-blockchain-settlement"],
+      "known_outcome": "STRONG_OPPORTUNITY",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "project": "AI chatbot with blockchain settlement",
+        "budget": 5000,
+        "signal": "asking",
+        "signal_evidence": "build conversational AI with blockchain settlement",
+        "tech_stack": ["OpenAI API", "blockchain", "Node.js", "React"]
+      },
+      "must_preserve_fields": ["OpenAI", "blockchain", "Node.js", "React", "settlement"],
+      "must_not_invent": ["client_name", "blockchain_protocol", "use_case_details"],
+      "notes": "Pattern match for real win: chainClear (Ryan Carter, Hassan proof) and AI Chat Blockchain (Zaira contract). Chat + blockchain + OpenAI is a proven bpulse sweet spot."
+    },
+    {
+      "id": "bad-001",
+      "type": "linkedin_profile",
+      "raw_input": "John Smith\nSenior Software Engineer at Google\nMountain View, CA, USA\n\nAbout\nWorking on cloud infrastructure at Google. 10+ years of experience in distributed systems.\n\nExperience\nSenior Software Engineer at Google — 5 years\nSoftware Engineer at Microsoft — 3 years\n\nPosts\n\"Excited to announce I've been promoted to Staff Engineer!\"\n\nhttps://linkedin.com/in/john-smith-google",
+      "source_urls": ["https://linkedin.com/in/john-smith-google"],
+      "known_outcome": "BAD_PROSPECT",
+      "expected_remote_eligibility": "not_applicable",
+      "expected_key_facts": {
+        "company": "Google",
+        "person": "John Smith",
+        "role": "Senior Software Engineer",
+        "location": "Mountain View, CA, USA",
+        "signal": "none"
+      },
+      "must_preserve_fields": ["John Smith", "Google", "Mountain View"],
+      "must_not_invent": ["hiring_intent", "pain_points", "project_needs"],
+      "notes": "No hiring signal, no pain, no asking. Senior engineer at FAANG with no indication of needing outside help. Should be skipped or deprioritized."
+    },
+    {
+      "id": "bad-002",
+      "type": "upwork_job",
+      "raw_input": "Job: Build a clone of Uber\nBudget: $50 fixed\n\nDescription:\nI want an app exactly like Uber. Drivers, riders, payments, maps, everything. Need it done in 2 weeks.\n\nSkills: Mobile App, Web App\nPosted: 1 day ago\nProposals: 47\n\nhttps://upwork.com/jobs/build-uber-clone-50-dollars",
+      "source_urls": ["https://upwork.com/jobs/build-uber-clone-50-dollars"],
+      "known_outcome": "BAD_PROSPECT",
+      "expected_remote_eligibility": "not_applicable",
+      "expected_key_facts": {
+        "project": "Uber clone",
+        "budget": 50,
+        "signal": "none",
+        "red_flags": ["unrealistic_scope", "low_budget", "high_proposals"]
+      },
+      "must_preserve_fields": ["Uber clone", "$50", "2 weeks"],
+      "must_not_invent": ["client_background", "existing_team", "technical_requirements"],
+      "notes": "Classic bad job: unrealistic scope, budget too low, high competition. 47 proposals signals race-to-bottom pricing. No skilled developer should touch this."
+    },
+    {
+      "id": "bad-003",
+      "type": "linkedin_profile",
+      "raw_input": "Alex Johnson\nHR Coordinator at Midwest Manufacturing Co\nCincinnati, OH, USA\n\nAbout\nMidwest Manufacturing makes industrial parts. I handle hiring for the factory floor.\n\nExperience\nHR Coordinator — 2 years\n\nPosts\n\"Great day at the company picnic! So proud of our team.\"\n\nhttps://linkedin.com/in/alex-johnson-mwmanufacturing",
+      "source_urls": ["https://linkedin.com/in/alex-johnson-mwmanufacturing"],
+      "known_outcome": "BAD_PROSPECT",
+      "expected_remote_eligibility": "not_applicable",
+      "expected_key_facts": {
+        "company": "Midwest Manufacturing",
+        "person": "Alex Johnson",
+        "role": "HR Coordinator",
+        "location": "Cincinnati, OH, USA",
+        "signal": "none"
+      },
+      "must_preserve_fields": ["Alex Johnson", "Midwest Manufacturing", "Cincinnati"],
+      "must_not_invent": ["hiring_needs", "tech_initiatives", "budget"],
+      "notes": "HR coordinator at industrial manufacturer. No technical buying authority, no engineering needs, no pain signal. Completely wrong target for bpulse's services."
+    },
+    {
+      "id": "bad-004",
+      "type": "upwork_job",
+      "raw_input": "Job: Need a developer to finish my project\nBudget: $200 fixed\n\nDescription:\nThe previous developer did some work but disappeared. Need someone to finish. It's a React app with Node.js backend. I don't have the full requirements doc.\n\nSkills: React, Node.js\nPosted: 3 weeks ago\nProposals: 23\n\nhttps://upwork.com/jobs/finish-my-project-200",
+      "source_urls": ["https://upwork.com/jobs/finish-my-project-200"],
+      "known_outcome": "BAD_PROSPECT",
+      "expected_remote_eligibility": "unknown",
+      "expected_key_facts": {
+        "project": "unfinished project handoff",
+        "budget": 200,
+        "signal": "pain",
+        "red_flags": ["incomplete_requirements", "abandoned_project", "low_budget", "high_proposals"]
+      },
+      "must_preserve_fields": ["React", "Node.js", "$200", "previous developer"],
+      "must_not_invent": ["original_scope", "what_was_delivered", "client_availability"],
+      "notes": "Abandoned project + incomplete requirements + low budget + stale posting = nightmare client. High proposal count confirms desperate/attracting low-quality matches."
+    },
+    {
+      "id": "bad-005",
+      "type": "linkedin_profile",
+      "raw_input": "Michael Brown\nDirector of Engineering at Fortune 500 Corp\nNew York, NY, USA\n\nAbout\nLeading a team of 200+ engineers. We have dedicated vendors and established processes.\n\nExperience\nDirector of Engineering — 8 years\n\nPosts\n\"We're proud to be named a top employer for the 5th year running.\"\n\nhttps://linkedin.com/in/michael-brown-fortune500",
+      "source_urls": ["https://linkedin.com/in/michael-brown-fortune500"],
+      "known_outcome": "BAD_PROSPECT",
+      "expected_remote_eligibility": "not_applicable",
+      "expected_key_facts": {
+        "company": "Fortune 500 Corp",
+        "person": "Michael Brown",
+        "role": "Director of Engineering",
+        "location": "New York, NY, USA",
+        "signal": "none",
+        "red_flags": ["large_team", "established_vendors", "no_urgency"]
+      },
+      "must_preserve_fields": ["Michael Brown", "Fortune 500", "New York", "200+ engineers"],
+      "must_not_invent": ["hiring_needs", "contractor_opportunities", "pain_points"],
+      "notes": "Large established team with dedicated vendors. No urgency, no pain, no hiring signal. This is NOT bpulse's target customer."
+    },
+    {
+      "id": "remote-worldwide-001",
+      "type": "linkedin_profile",
+      "raw_input": "Emma Wilson\nFounder at NomadTools\nRemote (Worldwide)\n\nAbout\nNomadTools builds productivity software for remote teams. Our team spans 12 countries. We need a React/Next.js developer.\n\nPosts\n\"Hiring a senior React developer. Fully remote — we don't care where you live. Async-friendly. Competitive pay.\"\n\nhttps://linkedin.com/in/emma-wilson-nomadtools",
+      "source_urls": ["https://linkedin.com/in/emma-wilson-nomadtools"],
+      "known_outcome": "STRONG_OPPORTUNITY",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "company": "NomadTools",
+        "remote_policy": "worldwide",
+        "location": "Remote",
+        "signal": "asking"
+      },
+      "must_preserve_fields": ["NomadTools", "Remote", "worldwide", "React", "Next.js"],
+      "must_not_invent": ["specific_countries", "timezone_requirements"],
+      "notes": "Explicit worldwide remote. Company location is 'Remote (Worldwide)'. A Pakistan-based developer IS eligible. This is the operating model bpulse targets."
+    },
+    {
+      "id": "remote-worldwide-002",
+      "type": "upwork_job",
+      "raw_input": "Job: Senior Full-Stack Developer Needed\nBudget: $6,000 fixed\n\nDescription:\nLooking for an experienced full-stack developer to build a SaaS platform. React, Node.js, PostgreSQL. Project lasts 3-4 months. Work from anywhere.\n\nSkills: React, Node.js, PostgreSQL, SaaS\nPosted: 1 week ago\nProposals: 9\n\nhttps://upwork.com/jobs/senior-fullstack-saas-remote",
+      "source_urls": ["https://upwork.com/jobs/senior-fullstack-saas-remote"],
+      "known_outcome": "STRONG_OPPORTUNITY",
+      "expected_remote_eligibility": "worldwide",
+      "expected_key_facts": {
+        "project": "SaaS platform build",
+        "budget": 6000,
+        "signal": "asking",
+        "remote_policy": "work_from_anywhere"
+      },
+      "must_preserve_fields": ["SaaS", "React", "Node.js", "PostgreSQL", "work from anywhere"],
+      "must_not_invent": ["client_location", "specific_timezone"],
+      "notes": "No location specified on job + 'work from anywhere' = worldwide remote. Upwork jobs are inherently remote-friendly for international freelancers."
+    },
+    {
+      "id": "remote-restricted-001",
+      "type": "linkedin_profile",
+      "raw_input": "Robert Kim\nCTO at DataFlow Inc\nSan Francisco, CA, USA\n\nAbout\nDataFlow Inc provides real-time analytics. We need a backend developer for our platform.\n\nPosts\n\"Looking for a senior Golang developer. Must be based in the US due to data compliance requirements. Remote within US only.\"\n\nhttps://linkedin.com/in/robert-kim-dataflow",
+      "source_urls": ["https://linkedin.com/in/robert-kim-dataflow"],
+      "known_outcome": "INELIGIBLE",
+      "expected_remote_eligibility": "us_only",
+      "expected_key_facts": {
+        "company": "DataFlow Inc",
+        "location": "San Francisco, CA, USA",
+        "signal": "asking",
+        "restriction": "US_only_compliance",
+        "ineligible_reason": "data compliance requires US-based workers"
+      },
+      "must_preserve_fields": ["DataFlow", "San Francisco", "US only", "compliance", "Golang"],
+      "must_not_invent": ["specific_regulations", "data_types"],
+      "notes": "Explicit US-only due to compliance. Pakistan-based worker is NOT eligible. System must recognize this restriction, not flag as worldwide remote."
+    },
+    {
+      "id": "remote-restricted-002",
+      "type": "upwork_job",
+      "raw_input": "Job: Frontend Developer for EU Fintech\nBudget: €3,500 fixed\n\nDescription:\nWe are a Berlin-based fintech startup. Need a React developer. Must be located in EU/EEA due to GDPR data handling requirements.\n\nSkills: React, TypeScript, Fintech\nPosted: 4 days ago\nProposals: 11\n\nhttps://upwork.com/jobs/frontend-developer-eu-fintech",
+      "source_urls": ["https://upwork.com/jobs/frontend-developer-eu-fintech"],
+      "known_outcome": "INELIGIBLE",
+      "expected_remote_eligibility": "eu_only",
+      "expected_key_facts": {
+        "project": "EU fintech frontend",
+        "location": "Berlin, Germany",
+        "signal": "asking",
+        "restriction": "EU_EEA_only"
+      },
+      "must_preserve_fields": ["Berlin", "EU/EEA", "GDPR", "React", "fintech"],
+      "must_not_invent": ["specific_GDPR_articles", "company_registration"],
+      "notes": "EU-only restriction due to GDPR. Pakistan-based worker is NOT eligible despite company being in Europe. Company location (Berlin) != worker eligibility (EU-only)."
+    },
+    {
+      "id": "remote-hybrid-001",
+      "type": "linkedin_profile",
+      "raw_input": "Jennifer Lee\nVP Product at HealthBridge\nLondon, UK\n\nAbout\nHealthBridge connects patients with healthcare providers. We're building a new patient portal.\n\nPosts\n\"Hiring a senior full-stack developer. Hybrid role — 2 days/week in our London office, 3 days remote. UK-based candidates preferred.\"\n\nhttps://linkedin.com/in/jennifer-lee-healthbridge",
+      "source_urls": ["https://linkedin.com/in/jennifer-lee-healthbridge"],
+      "known_outcome": "INELIGIBLE",
+      "expected_remote_eligibility": "hybrid_london",
+      "expected_key_facts": {
+        "company": "HealthBridge",
+        "location": "London, UK",
+        "signal": "asking",
+        "restriction": "hybrid_london_office",
+        "office_days": 2
+      },
+      "must_preserve_fields": ["HealthBridge", "London, UK", "hybrid", "2 days/week", "office"],
+      "must_not_invent": ["salary", "specific_office_address"],
+      "notes": "Hybrid role with office requirement in London. NOT fully remote. Pakistan-based worker cannot commute to London 2 days/week. System must distinguish this from fully remote."
+    },
+    {
+      "id": "remote-onsite-001",
+      "type": "linkedin_profile",
+      "raw_input": "David Park\nCTO at FinServ Corp\nNew York, NY, USA\n\nAbout\nFinServ Corp processes financial transactions. Building a new trading dashboard.\n\nPosts\n\"Looking for a senior TypeScript developer. On-site in Manhattan. No remote work. Competitive salary + benefits.\"\n\nhttps://linkedin.com/in/david-park-finserv",
+      "source_urls": ["https://linkedin.com/in/david-park-finserv"],
+      "known_outcome": "INELIGIBLE",
+      "expected_remote_eligibility": "onsite_manhattan",
+      "expected_key_facts": {
+        "company": "FinServ Corp",
+        "location": "New York, NY, USA",
+        "signal": "asking",
+        "restriction": "onsite_only"
+      },
+      "must_preserve_fields": ["FinServ", "New York", "Manhattan", "on-site", "no remote"],
+      "must_not_invent": ["salary", "visa_sponsorship"],
+      "notes": "Explicitly on-site in Manhattan. NOT a remote opportunity. System must NOT treat this as a normal remote opportunity for a Pakistan-based worker."
+    }
+  ]
+}
