@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
       } : createTasteProfile(personaId)
       const updated = applyTasteSignal(tp, {
         type: 'write_this',
-        territory: genomeResult.genome.topic.toLowerCase().includes('ai') ? 'ai' : undefined,
+        territory: territoryFromContentType(contentType, groundingType),
         contentType: contentType as 'technical' | 'opinion' | 'human' | 'educational' | 'timely' | 'observation',
         metadata: {
           wasTechnical: contentType === 'technical',
@@ -213,6 +213,7 @@ export async function POST(req: NextRequest) {
           wasTimely: contentType === 'timely',
           wasPersonal: groundingType === 'personal_grounded',
         },
+        idempotencyKey: `generate:${personaId}:${genomeResult.genome.topic.slice(0, 40)}`,
       })
       await store.saveTasteProfile(personaId, {
         preferences: updated.preferences,
@@ -221,6 +222,7 @@ export async function POST(req: NextRequest) {
         shortTerm: updated.shortTerm,
         shortTermWeight: updated.shortTermWeight,
         lastSignalType: 'write_this',
+        lastSignalKey: `generate:${personaId}:${genomeResult.genome.topic.slice(0, 40)}`,
       })
     } catch {
       // Taste recording is best-effort; don't fail the request
@@ -308,4 +310,15 @@ function buildSourceMaterial(params: {
   }
 
   return parts.join('\n')
+}
+
+function territoryFromContentType(contentType: string, groundingType: string): string | undefined {
+  if (contentType === 'technical') return 'core_expertise'
+  if (contentType === 'opinion') return 'opinions'
+  if (contentType === 'human') return 'human_observations'
+  if (contentType === 'educational') return 'learning'
+  if (contentType === 'timely') return 'timely_developments'
+  if (contentType === 'observation') return 'curiosity'
+  if (groundingType === 'personal_grounded') return 'learning'
+  return undefined
 }

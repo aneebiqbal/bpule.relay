@@ -533,6 +533,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     totalInteractions: number
     lastSignalType: string | null
     lastSignalAt: string | null
+    lastSignalKey: string | null
     shortTerm: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
     shortTermWeight: number
   }> = []
@@ -2101,6 +2102,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         territoryAffinity: { ...profile.territoryAffinity },
         totalInteractions: profile.totalInteractions,
         lastSignalType: profile.lastSignalType ?? null,
+        lastSignalKey: profile.lastSignalKey ?? null,
         lastSignalAt: new Date().toISOString(),
         shortTerm: { ...profile.shortTerm },
         shortTermWeight: profile.shortTermWeight,

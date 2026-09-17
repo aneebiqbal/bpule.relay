@@ -51,15 +51,29 @@ export async function POST(req: NextRequest) {
       shortTermWeight: stored.shortTermWeight,
     } : createTasteProfile(personaId)
 
+    // Idempotency: skip if this exact signal was already applied
+    const signalKey = signal.idempotencyKey
+    if (signalKey && stored?.lastSignalKey === signalKey) {
+      return NextResponse.json({
+        updated: false,
+        skipped: 'duplicate',
+        profile: {
+          totalInteractions: tasteProfile.totalInteractions,
+          preferences: tasteProfile.preferences,
+        },
+      })
+    }
+
     // Apply the signal
     const updated = applyTasteSignal(tasteProfile, signal)
 
-    // Persist
+    // Persist with signal key for deduplication
     await store.saveTasteProfile(personaId, {
       preferences: updated.preferences,
       territoryAffinity: updated.territoryAffinity,
       totalInteractions: updated.totalInteractions,
       lastSignalType: signal.type,
+      lastSignalKey: signalKey,
       shortTerm: updated.shortTerm,
       shortTermWeight: updated.shortTermWeight,
     })

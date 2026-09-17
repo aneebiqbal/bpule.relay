@@ -138,10 +138,10 @@ function isOptionalSearchError(err: unknown): boolean {
  * drops it for list, queue and rate queries that never read it.
  */
 const LEAD_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, created_at'
 
 const LEAD_LIST_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, created_at'
 
 function mapLead(r: Row): Lead {
   return {
@@ -172,6 +172,15 @@ function mapLead(r: Row): Lead {
     source: (r.source as Lead['source']) ?? null,
     inboundMessage: (r.inbound_message as string) ?? null,
     inboundRaw: (r.inbound_raw as Record<string, unknown>) ?? null,
+    canonicalScore: (r.canonical_score as number) ?? null,
+    scoreVersion: (r.score_version as string) ?? null,
+    scoredAt: (r.scored_at as string) ?? null,
+    canonicalIntelligence: (r.canonical_intelligence as Record<string, unknown>) ?? null,
+    rawSourceData: (r.raw_source_data as Record<string, unknown>) ?? null,
+    scoreBreakdown: (r.score_breakdown as Record<string, unknown>) ?? null,
+    remoteEligibility: (r.remote_eligibility as Record<string, unknown>) ?? null,
+    evidenceLedger: (r.evidence_ledger as Record<string, unknown>) ?? null,
+    extractionCompleteness: (r.extraction_completeness as Record<string, unknown>) ?? null,
     createdAt: r.created_at as string,
   }
 }
@@ -477,6 +486,16 @@ export class SupabaseStore implements ScoutStore {
       inbound_message: input.inboundMessage ?? null,
       inbound_raw: input.inboundRaw ?? null,
       sender_profile_id: input.assignedProfileId ?? null,
+      // Intelligence V2
+      canonical_score: input.canonicalScore ?? null,
+      score_version: input.scoreVersion ?? null,
+      scored_at: input.scoredAt ?? null,
+      canonical_intelligence: input.canonicalIntelligence ?? null,
+      raw_source_data: input.rawSourceData ?? null,
+      score_breakdown: input.scoreBreakdown ?? null,
+      remote_eligibility: input.remoteEligibility ?? null,
+      evidence_ledger: input.evidenceLedger ?? null,
+      extraction_completeness: input.extractionCompleteness ?? null,
     }
 
     const row = await this.client.from('leads').insert(insertRow).select(LEAD_COLUMNS).single()
@@ -559,6 +578,58 @@ export class SupabaseStore implements ScoutStore {
       .eq('id', id)
       .eq('owner_rep_id', this.rep.id)
     if (error) throw error
+  }
+
+  /**
+   * Update canonical score with a rescore event.
+   * Appends to the rescore_events array for provenance.
+   */
+  async updateCanonicalScore(
+    id: string,
+    update: {
+      canonicalScore: number
+      scoreVersion: string
+      scoreBreakdown: Record<string, unknown>
+      rescoreEvent: {
+        fromScore: number
+        toScore: number
+        reason: string
+        version: string
+        timestamp: string
+        trigger: string
+      }
+    },
+  ): Promise<void> {
+    const { error } = await this.client
+      .rpc('append_rescore_event', {
+        p_lead_id: id,
+        p_canonical_score: update.canonicalScore,
+        p_score_version: update.scoreVersion,
+        p_score_breakdown: update.scoreBreakdown,
+        p_rescore_event: update.rescoreEvent,
+      })
+    if (error) {
+      // Fallback: read current events, append, update
+      const { data: current } = await this.client
+        .from('leads')
+        .select('rescore_events')
+        .eq('id', id)
+        .eq('owner_rep_id', this.rep.id)
+        .maybeSingle()
+      const events = (current?.rescore_events as unknown[]) ?? []
+      const { error: updateError } = await this.client
+        .from('leads')
+        .update({
+          canonical_score: update.canonicalScore,
+          score_version: update.scoreVersion,
+          scored_at: new Date().toISOString(),
+          score_breakdown: update.scoreBreakdown,
+          rescore_events: [...events, update.rescoreEvent],
+        })
+        .eq('id', id)
+        .eq('owner_rep_id', this.rep.id)
+      if (updateError) throw updateError
+    }
   }
 
   async updateLeadTags(id: string, tags: string[]): Promise<void> {
@@ -3294,6 +3365,7 @@ export class SupabaseStore implements ScoutStore {
     totalInteractions: number
     lastSignalType: string | null
     lastSignalAt: string | null
+    lastSignalKey: string | null
     shortTerm: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
     shortTermWeight: number
   } | null> {
@@ -3320,6 +3392,7 @@ export class SupabaseStore implements ScoutStore {
       totalInteractions: (r.total_interactions as number) ?? 0,
       lastSignalType: (r.last_signal_type as string) ?? null,
       lastSignalAt: (r.last_signal_at as string) ?? null,
+      lastSignalKey: (r.last_signal_key as string) ?? null,
       shortTerm: {
         technicalVsHuman: (st.technicalVsHuman as number) ?? 0,
         opinionVsEducational: (st.opinionVsEducational as number) ?? 0,
@@ -3337,6 +3410,7 @@ export class SupabaseStore implements ScoutStore {
     territoryAffinity: Record<string, number>
     totalInteractions: number
     lastSignalType?: string | null
+    lastSignalKey?: string | null
     shortTerm: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
     shortTermWeight: number
   }): Promise<void> {
@@ -3354,6 +3428,7 @@ export class SupabaseStore implements ScoutStore {
         territory_affinity: profile.territoryAffinity,
         total_interactions: profile.totalInteractions,
         last_signal_type: profile.lastSignalType ?? null,
+        last_signal_key: profile.lastSignalKey ?? null,
         last_signal_at: new Date().toISOString(),
         short_term: profile.shortTerm,
         short_term_weight: profile.shortTermWeight,

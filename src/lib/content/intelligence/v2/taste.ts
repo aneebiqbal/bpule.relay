@@ -44,6 +44,7 @@ export interface TasteSignal {
     wasOpinion?: boolean
     wasTechnical?: boolean
   }
+  idempotencyKey?: string
 }
 
 const DEFAULT_DIM: TasteDimensions = {
@@ -94,9 +95,10 @@ export function applyTasteSignal(profile: TasteProfile, signal: TasteSignal): Ta
     applyDimensionalSignal(next.preferences, signal, strength, llr)
     applyDimensionalSignal(next.shortTerm, signal, strength, SHORT_TERM_LR)
 
-    if (signal.territory) {
-      const current = next.territoryAffinity[signal.territory] ?? 0.5
-      next.territoryAffinity[signal.territory] = clamp01(current + strength * llr * 0.3)
+    const territory = signal.territory ? normalizeTerritory(signal.territory) : undefined
+    if (territory) {
+      const current = next.territoryAffinity[territory] ?? 0.5
+      next.territoryAffinity[territory] = clamp01(current + strength * llr * 0.3)
     }
   }
 
@@ -199,4 +201,13 @@ function clamp(n: number, min: number, max: number): number {
 
 function clamp01(n: number): number {
   return clamp(n, 0, 1)
+}
+
+export function normalizeTerritory(territory: string): string {
+  return territory.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+}
+
+export function computeSignalIdempotencyKey(signal: TasteSignal): string | undefined {
+  if (signal.idempotencyKey) return signal.idempotencyKey
+  return undefined
 }

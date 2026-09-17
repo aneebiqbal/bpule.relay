@@ -95,6 +95,16 @@ export interface NewLeadInput {
   inboundRaw?: Record<string, unknown> | null
   assignedProfileId?: string | null
   allowPotentialDuplicate?: boolean
+  // ── Intelligence V2 ─────────────────────────────────────────────────
+  canonicalScore?: number | null
+  scoreVersion?: string | null
+  scoredAt?: string | null
+  canonicalIntelligence?: Record<string, unknown> | null
+  rawSourceData?: Record<string, unknown> | null
+  scoreBreakdown?: Record<string, unknown> | null
+  remoteEligibility?: Record<string, unknown> | null
+  evidenceLedger?: Record<string, unknown> | null
+  extractionCompleteness?: Record<string, unknown> | null
 }
 
 export interface ExtractionMetrics {
@@ -620,6 +630,7 @@ export interface ScoutStore {
     totalInteractions: number
     lastSignalType: string | null
     lastSignalAt: string | null
+    lastSignalKey: string | null
     shortTerm: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
     shortTermWeight: number
   } | null>
@@ -628,6 +639,7 @@ export interface ScoutStore {
     territoryAffinity: Record<string, number>
     totalInteractions: number
     lastSignalType?: string | null
+    lastSignalKey?: string | null
     shortTerm: { technicalVsHuman: number; opinionVsEducational: number; timelyVsEvergreen: number; shortVsDeep: number; seriousVsPlayful: number; personalVsUniversal: number }
     shortTermWeight: number
   }): Promise<void>
