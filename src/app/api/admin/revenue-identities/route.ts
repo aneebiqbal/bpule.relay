@@ -39,6 +39,10 @@ export async function POST(request: Request) {
 
   const supabase = await createServerSupabase()
 
+  const channel = typeof body.channel === 'string' && ['linkedin', 'upwork', 'other'].includes(body.channel)
+    ? body.channel
+    : 'other'
+
   const row: Record<string, unknown> = {
     organization_id: user.organization.id,
     slug,
@@ -56,6 +60,7 @@ export async function POST(request: Request) {
     voice_tone: body.voiceTone && typeof body.voiceTone === 'object' ? body.voiceTone : {},
     preferred_opportunity_types: Array.isArray(body.preferredOpportunityTypes) ? body.preferredOpportunityTypes : [],
     proposal_positioning: typeof body.proposalPositioning === 'string' ? body.proposalPositioning : null,
+    channel,
     status: 'active',
     source_kind: 'manual',
   }

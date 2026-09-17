@@ -131,6 +131,18 @@ function isOptionalSearchError(err: unknown): boolean {
   )
 }
 
+/**
+ * Column lists for `leads`. `select('*')` drags the generated `search_vector`
+ * tsvector (and `raw_input`) on every row, which dominated list payloads.
+ * LEAD_COLUMNS keeps raw_input for detail/draft callers; LEAD_LIST_COLUMNS
+ * drops it for list, queue and rate queries that never read it.
+ */
+const LEAD_COLUMNS =
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, created_at'
+
+const LEAD_LIST_COLUMNS =
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, created_at'
+
 function mapLead(r: Row): Lead {
   return {
     id: r.id as string,
@@ -331,7 +343,7 @@ export class SupabaseStore implements ScoutStore {
   async fetchLeadsAll(): Promise<Lead[]> {
     const { data, error } = await this.client
       .from('leads')
-      .select('*')
+      .select(LEAD_LIST_COLUMNS)
       .order('created_at', { ascending: false })
     if (error) throw error
     return (data ?? []).map(mapLead)
@@ -467,7 +479,7 @@ export class SupabaseStore implements ScoutStore {
       sender_profile_id: input.assignedProfileId ?? null,
     }
 
-    const row = await this.client.from('leads').insert(insertRow).select('*').single()
+    const row = await this.client.from('leads').insert(insertRow).select(LEAD_COLUMNS).single()
     if (row.error) {
       const code = (row.error as { code?: string }).code
       if (code === '23505') {
@@ -561,7 +573,7 @@ export class SupabaseStore implements ScoutStore {
   async getLead(id: string) {
     const { data, error } = await this.client
       .from('leads')
-      .select('*')
+      .select(LEAD_COLUMNS)
       .eq('id', id)
       .maybeSingle()
     if (error) throw error
@@ -593,7 +605,7 @@ export class SupabaseStore implements ScoutStore {
   async listOwnedLeads(): Promise<Lead[]> {
     const { data, error } = await this.client
       .from('leads')
-      .select('*')
+      .select(LEAD_LIST_COLUMNS)
       .eq('owner_rep_id', this.rep.id)
       .order('created_at', { ascending: false })
     if (error) throw error
@@ -601,10 +613,12 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getQueue(): Promise<QueueData> {
-    const owned = await this.listOwnedLeads()
+    const [owned, todaySends] = await Promise.all([
+      this.listOwnedLeads(),
+      this.countTodaysSends(),
+    ])
     const queue = owned.filter((l) => l.status === 'new' || l.status === 'contacted')
     const replies = owned.filter((l) => l.status === 'replied')
-    const todaySends = await this.countTodaysSends()
     return { todaySends, dailyLimit: dailySendLimit(), queue, replies }
   }
 
@@ -4033,7 +4047,7 @@ export class SupabaseStore implements ScoutStore {
   private async fetchLeadsWithMessages(): Promise<Array<Lead & { _messages: Message[]; _conversation: ConversationState | null }>> {
     const { data, error } = await this.client
       .from('leads')
-      .select('*, messages(*), conversation_states(*)')
+      .select(`${LEAD_LIST_COLUMNS}, messages(*), conversation_states(*)`)
       .eq('owner_rep_id', this.rep.id)
       .order('created_at', { ascending: false })
     if (error) throw error
@@ -4080,7 +4094,7 @@ export class SupabaseStore implements ScoutStore {
       preferredOpportunityTypes: Array.isArray(r.preferred_opportunity_types) ? (r.preferred_opportunity_types as string[]) : [],
       proposalPositioning: (r.proposal_positioning as string) ?? null,
       profileId: (r.profile_id as string) ?? null,
-      channel: this.inferChannel(r.slug as string),
+      channel: (r.channel as RevenueIdentityChannel) ?? this.inferChannel(r.slug as string),
       status: (r.status as RevenueIdentityStatus) ?? 'active',
       sourceKind: (r.source_kind as string) ?? 'manual',
       createdAt: r.created_at as string,
