@@ -2429,6 +2429,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const lead = leads.find((l) => l.id === leadId)
       if (lead) (lead as Lead & { senderProfileId?: string | null }).senderProfileId = senderProfileId
     },
+    async updateLeadStatus(leadId: string, status: 'won' | 'lost') {
+      const lead = leads.find((l) => l.id === leadId)
+      if (lead) lead.status = status
+    },
     // content journey
     async createContentJourneyEntry(input) {
       const entry: ContentJourneyEntry = {

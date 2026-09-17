@@ -830,7 +830,7 @@ export class SupabaseStore implements ScoutStore {
       await this.upsertConversationState({
         leadId,
         stage: type === 'reply' ? 'replied' : 'contacted',
-        followupCount: convState?.followupCount ?? 0,
+        followupCount: type === 'followup' ? (convState?.followupCount ?? 0) + 1 : (convState?.followupCount ?? 0),
       })
     } catch {
       // Non-fatal: conversation state must not block the send
@@ -4054,6 +4054,15 @@ export class SupabaseStore implements ScoutStore {
     const { error } = await this.client
       .from('leads')
       .update({ sender_profile_id: senderProfileId })
+      .eq('id', leadId)
+      .eq('owner_rep_id', this.rep.id)
+    if (error) throw error
+  }
+
+  async updateLeadStatus(leadId: string, status: 'won' | 'lost'): Promise<void> {
+    const { error } = await this.client
+      .from('leads')
+      .update({ status })
       .eq('id', leadId)
       .eq('owner_rep_id', this.rep.id)
     if (error) throw error

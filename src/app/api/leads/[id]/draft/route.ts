@@ -191,7 +191,7 @@ export async function POST(
             conversationStage: convStage,
             senderProfileId: profile.id,
           }, null)
-          conversationContext = buildConversationContext({
+          const replyContext = buildConversationContext({
             leadId: detail.id,
             leadCompany: detail.company,
             contactName: detail.contactName,
@@ -200,7 +200,16 @@ export async function POST(
             conversationStage: convStage,
             senderProfileId: profile.id,
           }, replyAnalysis)
-          void replyStrategy
+          conversationContext = [
+            `## Reply Strategy`,
+            ``,
+            `**Goal:** ${replyStrategy.goal}`,
+            `**Approach:** ${replyStrategy.approach}`,
+            `**Tone:** ${replyStrategy.tone}`,
+            `**CTA:** ${replyStrategy.ctaStrategy}`,
+            ``,
+            replyContext,
+          ].join('\n')
         } else {
           const priorMessages = detail.messages.filter((m) => m.sentText)
           const convStage = detail.status === 'followed_up' ? 'contacted' : detail.status === 'new' ? 'new' : detail.status === 'contacted' ? 'contacted' : detail.status === 'replied' ? 'replied' : detail.status === 'no' ? 'lost' : detail.status === 'dead' ? 'lost' : 'contacted'

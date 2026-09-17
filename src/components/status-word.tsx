@@ -12,6 +12,8 @@ const STATUS_STYLES: Record<LeadStatus, { text: string; dot: string }> = {
   contacted: { text: 'text-ink', dot: 'bg-ink/40' },
   followed_up: { text: 'text-ink', dot: 'bg-ink/40' },
   replied: { text: 'text-status-success', dot: 'bg-status-success' },
+  won: { text: 'text-status-success', dot: 'bg-status-success' },
+  lost: { text: 'text-status-danger', dot: 'bg-status-danger' },
   no: { text: 'text-status-danger', dot: 'bg-status-danger' },
   dead: { text: 'text-slate', dot: 'bg-slate' },
 }

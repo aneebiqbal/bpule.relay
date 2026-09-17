@@ -55,6 +55,8 @@ export type LeadStatus =
   | 'contacted'
   | 'followed_up'
   | 'replied'
+  | 'won'
+  | 'lost'
   | 'no'
   | 'dead'
 

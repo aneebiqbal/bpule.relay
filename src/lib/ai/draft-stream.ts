@@ -56,9 +56,6 @@ const DRAFT_SCHEMA = {
 // Vercel Hobby plan caps serverless functions at 10s. Track elapsed time
 // and skip attempts that won't finish before the timeout.
 const VERCEL_HOBBY_TIMEOUT_MS = 9_500 // leave 500ms buffer
-const streamStart = Date.now()
-const msRemaining = () => VERCEL_HOBBY_TIMEOUT_MS - (Date.now() - streamStart)
-const hasTimeForAttempt = (minMs: number) => msRemaining() > minMs
 
 export async function streamDraft(
   input: DraftInput,
@@ -67,6 +64,10 @@ export async function streamDraft(
   profile: Profile | null,
   generationMode: 'standard' | 'premium' = 'standard',
 ): Promise<DraftResult> {
+  const streamStart = Date.now()
+  const msRemaining = () => VERCEL_HOBBY_TIMEOUT_MS - (Date.now() - streamStart)
+  const hasTimeForAttempt = (minMs: number) => msRemaining() > minMs
+
   emit({ type: 'status', message: 'Reading the profile' })
   emit({ type: 'profile', profile })
 
