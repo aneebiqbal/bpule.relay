@@ -4,6 +4,8 @@ import type {
   Lead,
   ConversationState,
 } from '@/lib/domain/types'
+import { calculateContactWindow } from '@/lib/relay/timing-engine'
+import type { TimingOutput } from '@/lib/relay/timing-engine'
 
 export interface NextActionContext {
   run: RelayRun
@@ -242,4 +244,40 @@ export function projectNextActionForLead(
   }
 
   return actions
+}
+
+export interface NextActionWithTiming extends NextAction {
+  timing: TimingOutput | null
+}
+
+export function projectNextActionWithTiming(
+  ctx: NextActionContext & {
+    prospectTimezone?: string | null
+    repTimezone?: string
+  },
+): NextActionWithTiming | null {
+  const { prospectTimezone, repTimezone, ...baseCtx } = ctx
+  const action = projectNextAction(baseCtx)
+
+  if (!action || !baseCtx.lead) {
+    return action ? { ...action, timing: null } : null
+  }
+
+  const timing = calculateContactWindow({
+    channel: (baseCtx.lead.direction === 'inbound' ? 'dm' : 'dm') as 'dm',
+    prospectTimezone: prospectTimezone ?? null,
+    repTimezone: repTimezone ?? 'UTC',
+    lastMeaningfulActionAt: baseCtx.lead.createdAt,
+    conversationStage: baseCtx.conversationState?.stage ?? 'new',
+    connectionAccepted: false,
+    replyReceived: baseCtx.hasReply,
+    followupCount: ctx.followupCount,
+    workingDay: true,
+    workingHoursStart: 9,
+    workingHoursEnd: 17,
+    lastReplyAt: ctx.hasReply ? baseCtx.lead.createdAt : null,
+    lastFollowupAt: ctx.followupLimitReached ? baseCtx.lead.createdAt : null,
+  })
+
+  return { ...action, timing }
 }

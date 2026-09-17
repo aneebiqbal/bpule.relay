@@ -1,5 +1,6 @@
+import type { ConversationStage } from '@/lib/domain/types'
+
 export type ChannelType = 'dm' | 'connection' | 'upwork' | 'email'
-export type ConversationStage = 'new' | 'contacted' | 'replied' | 'followed_up' | 'won' | 'lost'
 
 export interface TimingInput {
   channel: ChannelType
