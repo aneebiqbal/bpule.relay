@@ -11,6 +11,8 @@ import {
 import type { ProofItem } from '@/lib/domain/types'
 import type { InboundReplyInput } from '@/lib/inbound/reply'
 
+export const maxDuration = 60
+
 export async function POST(req: NextRequest) {
   const store = await createScoutStore().catch(() => null)
   if (!store) {

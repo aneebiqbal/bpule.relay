@@ -616,6 +616,8 @@ function buildAdminTasks(input: QueueInput): RelayTask[] {
 
   for (const rep of allReps) {
     if (rep.role === 'sourcer') continue
+    const repAgeDays = (now - new Date(rep.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+    if (repAgeDays < 14) continue
     const repLeads = leadsByRep.get(rep.id) ?? []
     const recentSent = repLeads.filter((l) => {
       const age = (now - new Date(l.createdAt).getTime()) / (1000 * 60 * 60 * 24)
