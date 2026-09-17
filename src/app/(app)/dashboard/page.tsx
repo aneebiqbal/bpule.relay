@@ -135,6 +135,32 @@ async function loadDashboardData(): Promise<RelayTodayWorkspaceProps> {
       }
     })
 
+  const { calculateContactWindow } = await import('@/lib/relay/timing-engine')
+  const timingEnrichedLeads = allLeads.map((lead) => {
+    const timing = calculateContactWindow({
+      channel: (lead.direction === 'inbound' ? 'dm' : 'dm') as 'dm',
+      prospectTimezone: null,
+      repTimezone: user.organization.timezone ?? 'UTC',
+      lastMeaningfulActionAt: lead.createdAt,
+      conversationStage: (relayData.conversations.get(lead.id)?.stage ?? 'new') as 'new',
+      connectionAccepted: false,
+      replyReceived: lead.status === 'replied',
+      followupCount: lead.status === 'followed_up' ? 1 : 0,
+      workingDay: true,
+      workingHoursStart: 9,
+      workingHoursEnd: 17,
+      lastReplyAt: lead.status === 'replied' ? lead.createdAt : null,
+      lastFollowupAt: lead.status === 'followed_up' ? lead.createdAt : null,
+    })
+    return {
+      ...lead,
+      timingStatus: timing.status,
+      timingReason: timing.reason,
+      nextActionType: timing.nextActionType,
+      recommendedActionAt: timing.recommendedActionAt,
+    }
+  })
+
   const activeConversations = Array.from(relayData.conversations.values())
     .filter((conversation) => !['won', 'lost'].includes(conversation.stage)).length
 
