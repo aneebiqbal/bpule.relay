@@ -44,8 +44,11 @@ export function StudioToday({
   const [alternatives, setAlternatives] = useState<ContentIdeaCard[]>(initialAlternatives)
   const [refreshing, setRefreshing] = useState(false)
   const [loadingIdeaId, setLoadingIdeaId] = useState<string | null>(null)
+  const [openingDraftIdeaId, setOpeningDraftIdeaId] = useState<string | null>(null)
   const [dismissingIdeaId, setDismissingIdeaId] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [redirectFallbackHref, setRedirectFallbackHref] = useState<string | null>(null)
+  const [visualWarning, setVisualWarning] = useState('')
   const [journeyState, setJourneyState] = useState<'idle' | 'remembered' | 'dismissed'>('idle')
   const [savingJourneyChoice, setSavingJourneyChoice] = useState(false)
 
@@ -54,7 +57,7 @@ export function StudioToday({
     return `studio:journey-state:${persona.id}:${journeySuggestion.title}`
   }, [journeySuggestion, persona.id])
 
-  const actionsLocked = refreshing || Boolean(loadingIdeaId) || Boolean(dismissingIdeaId)
+  const actionsLocked = refreshing || Boolean(loadingIdeaId) || Boolean(openingDraftIdeaId) || Boolean(dismissingIdeaId)
 
   const allIdeas = useMemo(
     () => [pick, ...alternatives].filter((idea): idea is ContentIdeaCard => Boolean(idea)),
@@ -109,14 +112,11 @@ export function StudioToday({
   async function writeIdea(idea: ContentIdeaCard) {
     if (actionsLocked) return
     setLoadingIdeaId(idea.id)
+    setOpeningDraftIdeaId(null)
+    setRedirectFallbackHref(null)
+    setVisualWarning('')
     setError('')
     try {
-      await recordTasteSignal(persona.id, {
-        type: 'write_this',
-        territory: idea.territory,
-        metadata: { wasOpinion: idea.sourceKind === 'opinion', wasTechnical: isTechnicalIdea(idea) },
-      }).catch(() => null)
-
       const res = await fetch('/api/content/generate-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -137,7 +137,31 @@ export function StudioToday({
       if (!res.ok) {
         throw new Error(data?.error || `Draft generation failed (${res.status})`)
       }
+
+      // Record taste signal only AFTER successful generation to avoid
+      // learning from failed/abandoned generation attempts
+      await recordTasteSignal(persona.id, {
+        type: 'write_this',
+        territory: idea.territory || undefined,
+        contentType: idea.sourceKind === 'opinion' ? 'opinion' : idea.sourceKind === 'trend' ? 'timely' : undefined,
+        metadata: { wasOpinion: idea.sourceKind === 'opinion', wasTechnical: isTechnicalIdea(idea) },
+        idempotencyKey: `write_this:${idea.id}`,
+      }).catch(() => null)
+
       if (data?.draftId) {
+        const hasVisualIdea = typeof data.visualIdea === 'string' && data.visualIdea.trim().length > 0
+        const hasImagePrompt = typeof data.imagePrompt === 'string' && data.imagePrompt.trim().length > 0
+        if (!hasVisualIdea || !hasImagePrompt) {
+          setVisualWarning('Draft created. Visual package will be regenerated in workspace from your final post.')
+        }
+
+        setOpeningDraftIdeaId(idea.id)
+        const check = await fetch(`/api/content/drafts/${data.draftId}`, { method: 'GET' })
+        if (!check.ok) {
+          setRedirectFallbackHref(`/studio/drafts/${data.draftId}`)
+          throw new Error('Draft was created, but workspace did not open automatically. Use the manual link below.')
+        }
+
         router.push(`/studio/drafts/${data.draftId}`)
         return
       }
@@ -147,6 +171,7 @@ export function StudioToday({
       setError(err instanceof Error ? err.message : 'Draft generation failed.')
     }
     setLoadingIdeaId(null)
+    setOpeningDraftIdeaId(null)
   }
 
   async function notForMe(idea: ContentIdeaCard) {
@@ -158,6 +183,7 @@ export function StudioToday({
         type: 'not_for_me',
         territory: idea.territory,
         metadata: { wasOpinion: idea.sourceKind === 'opinion', wasTechnical: isTechnicalIdea(idea) },
+        idempotencyKey: `not_for_me:${idea.id}`,
       })
 
       const remaining = allIdeas.filter((candidate) => candidate.id !== idea.id)
@@ -228,7 +254,7 @@ export function StudioToday({
                 disabled={actionsLocked}
                 className="inline-flex items-center gap-2 rounded bg-ink px-4 py-2 text-[12px] font-medium text-bone hover:bg-ink/90 disabled:opacity-60"
               >
-                {loadingIdeaId === pick.id ? 'Starting...' : 'Write this'}
+                {openingDraftIdeaId === pick.id ? 'Opening workspace...' : loadingIdeaId === pick.id ? 'Writing...' : 'Write this'}
                 <ArrowRight className="size-3.5" />
               </button>
               <button
@@ -268,6 +294,14 @@ export function StudioToday({
       {error && (
         <p className="rounded border border-status-danger/30 bg-status-danger/5 px-3 py-2 text-[12px] text-status-danger">{error}</p>
       )}
+      {redirectFallbackHref && (
+        <Link href={redirectFallbackHref} className="inline-flex text-[12px] font-medium text-cobalt underline underline-offset-2">
+          Open the created draft manually
+        </Link>
+      )}
+      {visualWarning && (
+        <p className="rounded border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-[12px] text-status-warning">{visualWarning}</p>
+      )}
 
       <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-4">
@@ -293,7 +327,7 @@ export function StudioToday({
                         disabled={actionsLocked}
                         className="inline-flex items-center gap-1 text-[12px] font-medium text-ink"
                       >
-                        {loadingIdeaId === idea.id ? 'Starting...' : 'Write this'}
+                        {openingDraftIdeaId === idea.id ? 'Opening workspace...' : loadingIdeaId === idea.id ? 'Writing...' : 'Write this'}
                         <ArrowRight className="size-3" />
                       </button>
                       <button
