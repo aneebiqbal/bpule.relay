@@ -1,8 +1,29 @@
 import type { ProviderHost } from '@/lib/ai/config'
-import { cheapModel, strongModel, longcatHost, tier0Hosts, tier1Hosts, tier2Hosts, tier4Host } from '@/lib/ai/config'
+import { cheapModel, strongModel, longcatHost, tier0Host, tier0Hosts, tier1Hosts, tier2Hosts, tier4Host } from '@/lib/ai/config'
 
 // Re-export the host builders that drafting needs for its specialized chains.
-export { longcatHost, tier0Hosts, tier4Host } from '@/lib/ai/config'
+export { longcatHost, tier0Host, tier0Hosts, tier4Host } from '@/lib/ai/config'
+
+/**
+ * Task categories determine provider routing.
+ *
+ * Evidence from direct benchmarking (scripts/benchmark-fast.mjs):
+ *   - Groq 120b: p50=2006ms, quality=20% on extraction
+ *   - GPT-4o-mini: p50=3333ms, quality=7%, reliable
+ *   - LongCat: p50=32462ms, quality=10%, EMPTY OUTPUT (reasoning model)
+ *
+ * FAST_STRUCTURED: extraction, classification, normalization
+ *   Route: Groq 120b → GPT-4o-mini
+ *   (LongCat is 15-25x slower and produces no usable structured output)
+ *
+ * STANDARD_GENERATION: drafts, replies, DMs, connection notes
+ *   Route: LongCat → Groq 120b → GPT-4o-mini
+ *   (LongCat excels at writing but needs streaming + fallback)
+ *
+ * DEEP_GENERATION: proposals, deep research, complex analysis
+ *   Route: LongCat with extended timeout
+ */
+export type AiTaskCategory = 'FAST_STRUCTURED' | 'STANDARD_GENERATION' | 'DEEP_GENERATION'
 
 export type { GenerationMode } from '@/lib/ai/generate'
 
@@ -90,13 +111,30 @@ export function fallbackChain(): ChainStep[] {
 }
 
 /**
+ * Fast structured chain for extraction/classification tasks.
+ * Evidence-based: Groq 120b (2s p50) → GPT-4o-mini (3.3s p50) fallback.
+ * LongCat excluded — it's 15-25x slower and produces empty structured output.
+ * Only the first Groq key is used — the second key returns a different schema format.
+ */
+export function buildFastStructuredChain(): ChainStep[] {
+  const chain: ChainStep[] = []
+  // Groq 120b first — fastest structured extraction in benchmarks
+  const groq = tier0Host('strong')
+  if (groq) chain.push({ costTier: 'tier1', host: groq })
+  // GPT-4o-mini fallback — reliable, reasonably fast
+  const gpt = tier4Host()
+  if (gpt) chain.push({ costTier: 'tier4', host: gpt })
+  return chain
+}
+
+/**
  * Full ordered chain for a structuring task (extraction, classification,
- * calibration): Groq free tier first (cheap/free), then LongCat for complex
- * cases, then OpenAI as final fallback. DeepSeek excluded by default.
+ * calibration): Groq strong first, then GPT fallback.
+ * DeepSeek excluded by default.
  */
 export function pickModelChain(task: 'extract' | 'classify' | 'calibrate'): ChainStep[] {
   void task
-  return [...tier0Chain('cheap'), ...tier1Chain(), ...fallbackChain()]
+  return buildFastStructuredChain()
 }
 
 /**

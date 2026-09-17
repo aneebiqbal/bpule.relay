@@ -226,6 +226,8 @@ export interface JsonCallOptions {
   responseMode?: 'json_object' | 'json_schema'
   schemaName?: string
   strict?: boolean
+  /** Max output tokens — prevents wasted generation and reduces latency. */
+  maxTokens?: number
   /** Emitted during rate-limit backoff and host fallback so the UI can show the queue/fallback state. */
   onStatus?: (message: string) => void
 }
@@ -273,6 +275,7 @@ async function structuredJsonOnHost<T>(
         { role: 'user', content: user },
       ] satisfies ChatCompletionMessageParam[],
       response_format: responseFormat,
+      ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
     })
     const raw = completion.choices[0]?.message?.content
     const inputTokens = completion.usage?.prompt_tokens ?? estimateTokens(opts.system + user)

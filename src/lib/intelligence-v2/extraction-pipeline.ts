@@ -26,7 +26,7 @@ import type {
   OpportunitySignal,
 } from './types'
 import { assessRemoteEligibility, type RemoteEligibilityInput } from './remote-eligibility'
-import { longcatHost, tier4Host, type ChainStep } from '@/lib/ai/routing'
+import { buildFastStructuredChain } from '@/lib/ai/routing'
 import { structuredJsonChain } from '@/lib/ai/provider'
 
 // ── Pipeline Options ───────────────────────────────────────────────────────
@@ -159,7 +159,8 @@ interface PassAOutput {
   }
 }
 
-const LONGCAT_EXTRACTION_TIMEOUT_MS = 45_000
+// Fast structured extraction timeout: Groq 120b p95=3.1s, GPT p95=4.9s → 8s budget
+const FAST_STRUCTURED_TIMEOUT_MS = 8_000
 
 const PASS_A_SYSTEM = `You are a precise factual extraction engine. Extract ONLY what is explicitly stated in the text. Return a single JSON object.
 
@@ -275,11 +276,8 @@ async function runPassA(
   onStatus?: (msg: string) => void,
   strictLiveMode?: boolean,
 ): Promise<PassAOutput> {
-  const lc = longcatHost()
-  const gpt = tier4Host()
-  const chain: ChainStep[] = []
-  if (lc) chain.push({ costTier: 'tier1', host: lc })
-  if (gpt) chain.push({ costTier: 'tier4', host: gpt })
+  // Fast structured chain: Groq 120b → GPT (LongCat excluded — 15-25x slower for extraction)
+  const chain = buildFastStructuredChain()
 
   if (chain.length === 0) {
     if (strictLiveMode) {
@@ -304,7 +302,8 @@ async function runPassA(
       user: buildPassAUserPrompt(rawText, sourceUrls),
       schema: PASS_A_SCHEMA,
       schemaName: 'intelligence_pass_a',
-    }, undefined, LONGCAT_EXTRACTION_TIMEOUT_MS)
+      maxTokens: 1024,
+    }, undefined, FAST_STRUCTURED_TIMEOUT_MS)
 
     callLog.push({
       provider: result.host,
@@ -463,83 +462,108 @@ function validatePassA(raw: unknown): PassAOutput {
   if (!raw || typeof raw !== 'object') return defaultOut
   const r = raw as Record<string, unknown>
 
+  // Coerce provider quirks: "null" string → null, "" → null
+  const s = (v: unknown): string | null => {
+    if (v === 'null' || v === 'NULL' || v === 'None' || v === '') return null
+    return typeof v === 'string' ? v : null
+  }
+  const a = (v: unknown): string[] => {
+    if (v === 'null' || v === 'NULL' || v === 'None' || v === '') return []
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+  }
+  // Case-insensitive key lookup (GPT returns PERSON, COMPANY; Groq returns person, company)
+  const getKey = (obj: Record<string, unknown> | undefined, key: string): unknown => {
+    if (!obj) return undefined
+    if (key in obj) return obj[key]
+    const lower = key.toLowerCase()
+    for (const k of Object.keys(obj)) {
+      if (k.toLowerCase() === lower) return obj[k]
+    }
+    return undefined
+  }
+
   // Person
-  const person = r.person as Record<string, unknown> | undefined
+  const person = getKey(r, 'person') as Record<string, unknown> | undefined
   defaultOut.person = {
-    fullName: typeof person?.fullName === 'string' ? person.fullName : null,
-    firstName: typeof person?.firstName === 'string' ? person.firstName : null,
-    title: typeof person?.title === 'string' ? person.title : null,
-    seniority: typeof person?.seniority === 'string' ? person.seniority : null,
-    location: typeof person?.location === 'string' ? person.location : null,
-    linkedinUrl: typeof person?.linkedinUrl === 'string' ? person.linkedinUrl : null,
-    otherUrls: Array.isArray(person?.otherUrls) ? person.otherUrls.filter((u): u is string => typeof u === 'string') : [],
+    fullName: s(getKey(person, 'fullName')),
+    firstName: s(getKey(person, 'firstName')),
+    title: s(getKey(person, 'title')),
+    seniority: s(getKey(person, 'seniority')),
+    location: s(getKey(person, 'location')),
+    linkedinUrl: s(getKey(person, 'linkedinUrl')),
+    otherUrls: a(getKey(person, 'otherUrls')),
   }
 
   // Company
-  const company = r.company as Record<string, unknown> | undefined
+  const company = getKey(r, 'company') as Record<string, unknown> | undefined
   defaultOut.company = {
-    name: typeof company?.name === 'string' ? company.name : null,
-    domain: typeof company?.domain === 'string' ? company.domain : null,
-    linkedinUrl: typeof company?.linkedinUrl === 'string' ? company.linkedinUrl : null,
-    industry: typeof company?.industry === 'string' ? company.industry : null,
-    size: typeof company?.size === 'string' ? company.size : null,
-    sizeEvidence: typeof company?.sizeEvidence === 'string' ? company.sizeEvidence : null,
-    product: typeof company?.product === 'string' ? company.product : null,
-    stage: typeof company?.stage === 'string' ? company.stage : null,
-    stageEvidence: typeof company?.stageEvidence === 'string' ? company.stageEvidence : null,
+    name: s(getKey(company, 'name')),
+    domain: s(getKey(company, 'domain')),
+    linkedinUrl: s(getKey(company, 'linkedinUrl')),
+    industry: s(getKey(company, 'industry')),
+    size: s(getKey(company, 'size')),
+    sizeEvidence: s(getKey(company, 'sizeEvidence')),
+    product: s(getKey(company, 'product')),
+    stage: s(getKey(company, 'stage')),
+    stageEvidence: s(getKey(company, 'stageEvidence')),
   }
 
   // Opportunity
-  const opportunity = r.opportunity as Record<string, unknown> | undefined
+  const opportunity = getKey(r, 'opportunity') as Record<string, unknown> | undefined
   defaultOut.opportunity = {
-    signals: Array.isArray(opportunity?.signals) ? opportunity.signals.filter((s): s is string => typeof s === 'string') : [],
-    primarySignal: typeof opportunity?.primarySignal === 'string' ? opportunity.primarySignal : null,
-    description: typeof opportunity?.description === 'string' ? opportunity.description : null,
-    urgency: ['immediate', 'near_term', 'future', 'unknown'].includes(String(opportunity?.urgency))
-      ? String(opportunity?.urgency) as PassAOutput['opportunity']['urgency']
+    signals: a(getKey(opportunity, 'signals')),
+    primarySignal: s(getKey(opportunity, 'primarySignal')),
+    description: s(getKey(opportunity, 'description')),
+    urgency: ['immediate', 'near_term', 'future', 'unknown'].includes(String(getKey(opportunity, 'urgency')))
+      ? String(getKey(opportunity, 'urgency')) as PassAOutput['opportunity']['urgency']
       : 'unknown',
   }
 
   // Job (optional)
-  if (r.job && typeof r.job === 'object') {
-    const job = r.job as Record<string, unknown>
+  const jobRaw = getKey(r, 'job')
+  if (jobRaw && typeof jobRaw === 'object') {
+    const job = jobRaw as Record<string, unknown>
     defaultOut.job = {
-      title: typeof job.title === 'string' ? job.title : null,
-      employmentType: ['full_time', 'part_time', 'contract', 'freelance', 'unknown'].includes(String(job.employmentType))
-        ? String(job.employmentType) as 'full_time' | 'part_time' | 'contract' | 'freelance' | 'unknown'
+      title: s(getKey(job, 'title')),
+      employmentType: ['full_time', 'part_time', 'contract', 'freelance', 'unknown'].includes(String(getKey(job, 'employmentType')))
+        ? String(getKey(job, 'employmentType')) as 'full_time' | 'part_time' | 'contract' | 'freelance' | 'unknown'
         : 'unknown',
-      workplaceType: ['REMOTE', 'HYBRID', 'ONSITE', 'UNKNOWN'].includes(String(job.workplaceType))
-        ? String(job.workplaceType) as 'REMOTE' | 'HYBRID' | 'ONSITE' | 'UNKNOWN'
+      workplaceType: ['REMOTE', 'HYBRID', 'ONSITE', 'UNKNOWN'].includes(String(getKey(job, 'workplaceType')))
+        ? String(getKey(job, 'workplaceType')) as 'REMOTE' | 'HYBRID' | 'ONSITE' | 'UNKNOWN'
         : 'UNKNOWN',
-      allowedGeography: typeof job.allowedGeography === 'string' ? job.allowedGeography : null,
-      timezone: typeof job.timezone === 'string' ? job.timezone : null,
-      compensation: typeof job.compensation === 'string' ? job.compensation : null,
-      skills: Array.isArray(job.skills) ? job.skills.filter((s): s is string => typeof s === 'string') : [],
-      seniority: typeof job.seniority === 'string' ? job.seniority : null,
-      source: typeof job.source === 'string' ? job.source : null,
-      postedDate: typeof job.postedDate === 'string' ? job.postedDate : null,
+      allowedGeography: s(getKey(job, 'allowedGeography')),
+      timezone: s(getKey(job, 'timezone')),
+      compensation: s(getKey(job, 'compensation')),
+      skills: a(getKey(job, 'skills')),
+      seniority: s(getKey(job, 'seniority')),
+      source: s(getKey(job, 'source')),
+      postedDate: s(getKey(job, 'postedDate')),
     }
   }
 
   // Content
-  const content = r.content as Record<string, unknown> | undefined
+  const content = getKey(r, 'content') as Record<string, unknown> | undefined
   defaultOut.content = {
-    recentPosts: Array.isArray(content?.recentPosts)
-      ? content.recentPosts.filter((p): p is { paraphrase: string; verbatimQuote: string | null; topics: string[]; signals: string[] } =>
-          typeof p === 'object' && p !== null && typeof (p as Record<string, unknown>).paraphrase === 'string'
-        ).map((p) => ({
-          paraphrase: p.paraphrase,
-          verbatimQuote: typeof p.verbatimQuote === 'string' ? p.verbatimQuote : null,
-          topics: Array.isArray(p.topics) ? p.topics.filter((t): t is string => typeof t === 'string') : [],
-          signals: Array.isArray(p.signals) ? p.signals.filter((s): s is string => typeof s === 'string') : [],
-        }))
-      : [],
-    topics: Array.isArray(content?.topics) ? content.topics.filter((t): t is string => typeof t === 'string') : [],
-    explicitProblems: Array.isArray(content?.explicitProblems) ? content.explicitProblems.filter((p): p is string => typeof p === 'string') : [],
-    initiatives: Array.isArray(content?.initiatives) ? content.initiatives.filter((i): i is string => typeof i === 'string') : [],
-    launches: Array.isArray(content?.launches) ? content.launches.filter((l): l is string => typeof l === 'string') : [],
-    technicalSignals: Array.isArray(content?.technicalSignals) ? content.technicalSignals.filter((t): t is string => typeof t === 'string') : [],
-    hiringSignals: Array.isArray(content?.hiringSignals) ? content.hiringSignals.filter((h): h is string => typeof h === 'string') : [],
+    recentPosts: (() => {
+      const rp = getKey(content, 'recentPosts')
+      if (rp === 'null' || rp === 'None' || rp === '') return []
+      return Array.isArray(rp)
+        ? rp.filter((p): p is { paraphrase: string; verbatimQuote: string | null; topics: string[]; signals: string[] } =>
+            typeof p === 'object' && p !== null && typeof (p as Record<string, unknown>).paraphrase === 'string'
+          ).map((p) => ({
+            paraphrase: p.paraphrase,
+            verbatimQuote: s(p.verbatimQuote),
+            topics: a(p.topics),
+            signals: a(p.signals),
+          }))
+        : []
+    })(),
+    topics: a(getKey(content, 'topics')),
+    explicitProblems: a(getKey(content, 'explicitProblems')),
+    initiatives: a(getKey(content, 'initiatives')),
+    launches: a(getKey(content, 'launches')),
+    technicalSignals: a(getKey(content, 'technicalSignals')),
+    hiringSignals: a(getKey(content, 'hiringSignals')),
   }
 
   return defaultOut
@@ -771,11 +795,8 @@ async function runPassC(
   onStatus?: (msg: string) => void,
   strictLiveMode?: boolean,
 ): Promise<Pick<NormalizedIntelligence, 'probableNeed' | 'opportunityTrigger' | 'timingSignal' | 'risks' | 'unknowns'>> {
-  const lc = longcatHost()
-  const gpt = tier4Host()
-  const chain: ChainStep[] = []
-  if (lc) chain.push({ costTier: 'tier1', host: lc })
-  if (gpt) chain.push({ costTier: 'tier4', host: gpt })
+  // Fast structured chain: Groq 120b → GPT (LongCat excluded — 15-25x slower for extraction)
+  const chain = buildFastStructuredChain()
 
   if (chain.length === 0) {
     if (strictLiveMode) {
@@ -820,7 +841,8 @@ async function runPassC(
       user: buildPassCPrompt(passA, intelligence),
       schema: PASS_C_SCHEMA,
       schemaName: 'intelligence_pass_c',
-    }, undefined, LONGCAT_EXTRACTION_TIMEOUT_MS)
+      maxTokens: 512,
+    }, undefined, FAST_STRUCTURED_TIMEOUT_MS)
 
     callLog.push({
       provider: result.host,

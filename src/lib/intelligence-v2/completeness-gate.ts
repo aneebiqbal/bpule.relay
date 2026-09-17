@@ -13,10 +13,10 @@ import type {
   NormalizedIntelligence,
   RawSourceData,
 } from './types'
-import { longcatHost, tier4Host, type ChainStep } from '@/lib/ai/routing'
+import { buildFastStructuredChain } from '@/lib/ai/routing'
 import { structuredJsonChain } from '@/lib/ai/provider'
 
-const LONGCAT_REPAIR_TIMEOUT_MS = 45_000
+const LONGCAT_REPAIR_TIMEOUT_MS = 8_000
 
 // ── Completeness Assessment ────────────────────────────────────────────────
 
@@ -169,11 +169,8 @@ export async function repairExtraction(
   completeness: ExtractionCompleteness
   repairNotes: string[]
 }> {
-  const lc = longcatHost()
-  const gpt = tier4Host()
-  const chain: ChainStep[] = []
-  if (lc) chain.push({ costTier: 'tier1', host: lc })
-  if (gpt) chain.push({ costTier: 'tier4', host: gpt })
+  // Fast structured chain: Groq 120b → GPT (LongCat excluded — too slow for repair)
+  const chain = buildFastStructuredChain()
 
   if (chain.length === 0) {
     return { repaired: false, intelligence: currentIntelligence, completeness, repairNotes: ['No AI provider for repair'] }
