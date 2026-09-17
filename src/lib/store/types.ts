@@ -94,6 +94,8 @@ export interface NewLeadInput {
   inboundMessage?: string | null
   inboundRaw?: Record<string, unknown> | null
   assignedProfileId?: string | null
+  senderProfileId?: string | null
+  revenueIdentityId?: string | null
   allowPotentialDuplicate?: boolean
   // ── Intelligence V2 ─────────────────────────────────────────────────
   canonicalScore?: number | null

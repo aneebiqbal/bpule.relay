@@ -1,0 +1,103 @@
+{
+  "generatedAt": "2026-09-17T16:45:38.250Z",
+  "baselineFile": "benchmark-results/dogfood-persona-fixtures-2026-09-17T15-11-43-068Z.json",
+  "baselinePostSummary": {
+    "total": 6,
+    "good": 5,
+    "lightEdit": 1,
+    "bad": 0,
+    "unsafe": 0,
+    "blockedProvider": 0
+  },
+  "summary": {
+    "total": 6,
+    "goodVisual": 6,
+    "goodPrompt": 6,
+    "uniqueCompositions": [
+      "technical-diagram",
+      "object-composition",
+      "minimal-data",
+      "typographic"
+    ]
+  },
+  "rows": [
+    {
+      "persona": "Sarah Chen",
+      "postRating": "GOOD",
+      "beforeVisualIdea": "Technical diagram showing: Teach a counterintuitive lesson or common misconception in distributed systems t",
+      "beforeImagePrompt": "Clean technical diagram: Teach a counterintuitive lesson or common misconception in distributed systems that only someone wit. Precise lines, clear relationships, functional aesthetic. Muted technical palette with one signal color for the key insight. White or near-white background. Annotated sparingly. Engineering documentation quality, not decorative. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Technical reference aesthetic. LinkedIn landscape composition (1.91:1).",
+      "beforeVisualQuality": "LIGHT_EDIT",
+      "beforeImagePromptQuality": "LIGHT_EDIT",
+      "afterVisualIdea": "Technical diagram of: a request-retry loop with a dedupe key ledger blocking duplicate writes",
+      "afterImagePrompt": "Clean technical diagram of a request-retry loop with a dedupe key ledger blocking duplicate writes. Supporting detail: I've seen more payment processing failures caused by missing idempotency keys than by network partitions. Precise lines, clear relationships, functional aesthetic. Muted technical palette with one signal color for the key insight. White or near-white background. Annotated sparingly with labels only where needed. Engineering documentation quality, not decorative. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Technical reference aesthetic. LinkedIn landscape composition (1.91:1).",
+      "afterVisualQuality": "GOOD",
+      "afterImagePromptQuality": "GOOD",
+      "composition": "technical-diagram"
+    },
+    {
+      "persona": "Marcus Rivera",
+      "postRating": "GOOD",
+      "beforeVisualIdea": "Visual metaphor for: Teach a counterintuitive lesson or common misconception in Kubernetes orchestrat",
+      "beforeImagePrompt": "Conceptual visual metaphor: Teach a counterintuitive lesson or common misconception in Kubernetes orchestration that only someon. Single clear metaphor, not literal illustration. Restrained color palette, one focal element. Negative space used deliberately. Thoughtful composition that rewards a second look. Editorial quality, not commercial stock. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Conceptual art direction. LinkedIn landscape composition (1.91:1).",
+      "beforeVisualQuality": "LIGHT_EDIT",
+      "beforeImagePromptQuality": "LIGHT_EDIT",
+      "afterVisualIdea": "Object composition representing this tradeoff: a stack of tooling layers with excess layers removed to reveal a stable core",
+      "afterImagePrompt": "Carefully composed still life showing a stack of tooling layers with excess layers removed to reveal a stable core. Supporting context: Here's the counterintuitive part: Kubernetes already does 90% of what you need. Intentional arrangement, clean lighting, editorial quality. Muted tones, one accent. The composition itself communicates the idea without text. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Product photography quality. LinkedIn landscape composition (1.91:1).",
+      "afterVisualQuality": "GOOD",
+      "afterImagePromptQuality": "GOOD",
+      "composition": "object-composition"
+    },
+    {
+      "persona": "Priya Sharma",
+      "postRating": "GOOD",
+      "beforeVisualIdea": "Typographic concept expressing: Share the reasoning behind this belief. Explain what experiences led you here an",
+      "beforeImagePrompt": "Typography-driven composition: one key phrase from \"Share the reasoning behind this belief. Explain what experiences led you here and why others should\" as the visual focal point. Thoughtful type choice, deliberate scale relationships. Minimal imagery — the type IS the image. Restrained palette, editorial layout quality. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Editorial design aesthetic. LinkedIn landscape composition (1.91:1).",
+      "beforeVisualQuality": "LIGHT_EDIT",
+      "beforeImagePromptQuality": "LIGHT_EDIT",
+      "afterVisualIdea": "Minimal data visualization of this relationship: context quality vs hallucination rate as a single two-axis relationship",
+      "afterImagePrompt": "Minimal data visualization of context quality vs hallucination rate as a single two-axis relationship, grounded in \"A mediocre embedding with good chunking will outperform a great embedding with poor chunking, because the latter send...\". Clean typography, generous white space, single chart or comparison. Muted palette with one accent color for the key data point. Information design quality, not dashboard UI. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Data journalism aesthetic. LinkedIn landscape composition (1.91:1).",
+      "afterVisualQuality": "GOOD",
+      "afterImagePromptQuality": "GOOD",
+      "composition": "minimal-data"
+    },
+    {
+      "persona": "Jake Morrison",
+      "postRating": "GOOD",
+      "beforeVisualIdea": "Visual metaphor for: Teach a counterintuitive lesson or common misconception in AI workflow implement",
+      "beforeImagePrompt": "Conceptual visual metaphor: Teach a counterintuitive lesson or common misconception in AI workflow implementation that only some. Single clear metaphor, not literal illustration. Restrained color palette, one focal element. Negative space used deliberately. Thoughtful composition that rewards a second look. Editorial quality, not commercial stock. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Conceptual art direction. LinkedIn landscape composition (1.91:1).",
+      "beforeVisualQuality": "LIGHT_EDIT",
+      "beforeImagePromptQuality": "LIGHT_EDIT",
+      "afterVisualIdea": "Technical diagram of: a decision tree with confidence gate and explicit human fallback branch",
+      "afterImagePrompt": "Clean technical diagram of a decision tree with confidence gate and explicit human fallback branch. Supporting detail: **Graceful fallback is non‑negotiable** A hand‑off to a human isn’t a failure; it’s the safety net that builds trust. Precise lines, clear relationships, functional aesthetic. Muted technical palette with one signal color for the key insight. White or near-white background. Annotated sparingly with labels only where needed. Engineering documentation quality, not decorative. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Technical reference aesthetic. LinkedIn landscape composition (1.91:1).",
+      "afterVisualQuality": "GOOD",
+      "afterImagePromptQuality": "GOOD",
+      "composition": "technical-diagram"
+    },
+    {
+      "persona": "Aisha Patel",
+      "postRating": "LIGHT_EDIT",
+      "beforeVisualIdea": "Visual metaphor for: Teach a counterintuitive lesson or common misconception in React performance tha",
+      "beforeImagePrompt": "Conceptual visual metaphor: Teach a counterintuitive lesson or common misconception in React performance that only someone with. Single clear metaphor, not literal illustration. Restrained color palette, one focal element. Negative space used deliberately. Thoughtful composition that rewards a second look. Editorial quality, not commercial stock. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Conceptual art direction. LinkedIn landscape composition (1.91:1).",
+      "beforeVisualQuality": "LIGHT_EDIT",
+      "beforeImagePromptQuality": "LIGHT_EDIT",
+      "afterVisualIdea": "Minimal data visualization of this relationship: one measurable relationship showing cause and effect",
+      "afterImagePrompt": "Minimal data visualization of one measurable relationship showing cause and effect, grounded in \"The cost is invisible in the profiler because it happens outside React’s render timing\". Clean typography, generous white space, single chart or comparison. Muted palette with one accent color for the key data point. Information design quality, not dashboard UI. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Data journalism aesthetic. LinkedIn landscape composition (1.91:1).",
+      "afterVisualQuality": "GOOD",
+      "afterImagePromptQuality": "GOOD",
+      "composition": "minimal-data"
+    },
+    {
+      "persona": "David Park",
+      "postRating": "GOOD",
+      "beforeVisualIdea": "Visual metaphor for: Teach a counterintuitive lesson or common misconception in engineering team lead",
+      "beforeImagePrompt": "Conceptual visual metaphor: Teach a counterintuitive lesson or common misconception in engineering team leadership that only som. Single clear metaphor, not literal illustration. Restrained color palette, one focal element. Negative space used deliberately. Thoughtful composition that rewards a second look. Editorial quality, not commercial stock. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Conceptual art direction. LinkedIn landscape composition (1.91:1).",
+      "beforeVisualQuality": "LIGHT_EDIT",
+      "beforeImagePromptQuality": "LIGHT_EDIT",
+      "afterVisualIdea": "Typographic concept expressing this contrast: the contrast between hiring fast and hiring well",
+      "afterImagePrompt": "Typography-driven composition expressing the contrast between hiring fast and hiring well. Pull one short phrase from \"In practice, the bigger debt is prioritization debt: we ship features on a schedule that never allows time to fix the...\" as the visual focal point. Thoughtful type choice, deliberate scale relationships. Minimal imagery; type carries the argument. Restrained palette, editorial layout quality. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Editorial design aesthetic. LinkedIn landscape composition (1.91:1).",
+      "afterVisualQuality": "GOOD",
+      "afterImagePromptQuality": "GOOD",
+      "composition": "typographic"
+    }
+  ]
+}

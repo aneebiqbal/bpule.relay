@@ -1,0 +1,156 @@
+{
+  "generatedAt": "2026-09-17T16:26:36.871Z",
+  "fixtureSource": {
+    "benchmarkFixtureCount": 8,
+    "seededFixtureCount": 6,
+    "runCount": 6,
+    "runPolicy": "real_seeded_only_no_synthetic",
+    "runNames": [
+      "Sarah Chen",
+      "Marcus Rivera",
+      "Priya Sharma",
+      "Jake Morrison",
+      "Aisha Patel",
+      "David Park"
+    ],
+    "skippedBenchmarkNames": [
+      "Elena",
+      "Frank"
+    ]
+  },
+  "providerState": {
+    "pickDraftChain": 4,
+    "longcatDraftChain": 4,
+    "openaiDraftChain": 4,
+    "chainOrder": [
+      "longcat:LongCat-2.0",
+      "groq:openai/gpt-oss-120b",
+      "groq-2:openai/gpt-oss-120b",
+      "openai:gpt-4o-mini"
+    ]
+  },
+  "summary": {
+    "total": 6,
+    "good": 3,
+    "lightEdit": 1,
+    "bad": 0,
+    "unsafe": 2,
+    "blockedProvider": 0
+  },
+  "rows": [
+    {
+      "persona": "Sarah Chen",
+      "opportunityQuality": "GOOD",
+      "postRating": "UNSAFE",
+      "visualQuality": "GOOD",
+      "imagePromptQuality": "GOOD",
+      "providerPath": "longcat:ok",
+      "ideaTitle": "Something most people get wrong about distributed systems",
+      "captionPreview": "Most distributed systems advice focuses on consistency models. The thing that actually bites you is idempotency.\n\nHere is what I mean.\n\nIn payment processing, network retries are not failures. They are expected behavior.",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: MALFORMED_SOURCE_HANDLING",
+        "Visual: Visual concept is specific and non-generic.",
+        "Prompt: Platform-aware and constrained prompt with original framing."
+      ],
+      "fullCaption": "Most distributed systems advice focuses on consistency models. The thing that actually bites you is idempotency.\n\nHere is what I mean.\n\nIn payment processing, network retries are not failures. They are expected behavior. A downstream service times out. Your system retries. The first request actually succeeded. If you have not designed for this, you just double-charged someone.\n\nThe counterintuitive part: the hard problems in distributed systems are not the ones people talk about. Nobody tweets about 'I forgot to make my API idempotent.' They tweet about CRDTs and Raft consensus. But idempotency is where production incidents come from.\n\nThree things worth thinking about:\n\n1. Idempotency keys are not a nice-to-have. They are a baseline requirement for any system that mutates state. If you do not have them, your system is not production-ready.\n\n2. The failure mode is not the edge case. Timeouts, retries, partial failures — this is the steady state of distributed systems. Design for the normal case, not the happy path.\n\n3. Most teams skip this because it feels simple. An idempotency key. A deduplication table. Done. But the implementation details matter. How long do you store keys? What is your TTL strategy? What happens when your deduplication store goes down?\n\nThe thing that separates a system that works from a system that works in production is not the algorithmic sophistication. It is the boring infrastructure around the edges. Idempotency. Backpressure. Timeouts. Retries with jitter.\n\nThe hard problems are the simple ones done consistently.",
+      "visualIdea": "Technical diagram of: a request-retry loop with a dedupe key ledger blocking duplicate writes",
+      "imagePrompt": "Clean technical diagram of a request-retry loop with a dedupe key ledger blocking duplicate writes. Supporting detail: The thing that actually bites you is idempotency. Precise lines, clear relationships, functional aesthetic. Muted technical palette with one signal color for the key insight. White or near-white background. Annotated sparingly with labels only where needed. Engineering documentation quality, not decorative. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Technical reference aesthetic. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "Marcus Rivera",
+      "opportunityQuality": "GOOD",
+      "postRating": "UNSAFE",
+      "visualQuality": "GOOD",
+      "imagePromptQuality": "GOOD",
+      "providerPath": "longcat:timeout -> groq:rate_limit -> groq-2:ok",
+      "ideaTitle": "Something most people get wrong about Kubernetes orchestration",
+      "captionPreview": "In the 200‑node Kubernetes cluster I manage, the biggest source of chaos isn’t the scheduler – it’s the layers we add ourselves.\n\n**What people call “best practice” actually hurts:**\n- **Custom operators for every tiny f",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: MALFORMED_SOURCE_HANDLING",
+        "Visual: Visual concept is specific and non-generic.",
+        "Prompt: Platform-aware and constrained prompt with original framing."
+      ],
+      "fullCaption": "In the 200‑node Kubernetes cluster I manage, the biggest source of chaos isn’t the scheduler – it’s the layers we add ourselves.\n\n**What people call “best practice” actually hurts:**\n- **Custom operators for every tiny feature.** Most can be replaced by native Deployments + ConfigMaps. The extra CRDs add version‑drift and debugging overhead.\n- **Service mesh before you need it.** If you have fewer than ~50 services, the mesh adds latency, complexity, and a new failure surface. Stick to Ingress and plain Service objects until you truly need inter‑service policies.\n- **Over‑reliance on Helm charts for dynamic configs.** Helm templating obscures what’s really running. Use Kustomize or plain manifests for things that change per‑environment.\n\n**The trade‑off:** You sacrifice a bit of “fancy” for faster CI pipelines and easier troubleshooting. When builds finish in minutes instead of tens of minutes, engineers stay, and incidents drop.\n\n**Bottom line:** Cut the self‑inflicted bloat, let Kubernetes do what it was built to do, and watch reliability—and developer happiness—skyrocket.",
+      "visualIdea": "Object composition representing this tradeoff: a stack of tooling layers with excess layers removed to reveal a stable core",
+      "imagePrompt": "Carefully composed still life showing a stack of tooling layers with excess layers removed to reveal a stable core. Supporting context: In the 200‑node Kubernetes cluster I manage, the biggest source of chaos isn’t the scheduler it’s the layers we add o.... Intentional arrangement, clean lighting, editorial quality. Muted tones, one accent. The composition itself communicates the idea without text. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Product photography quality. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "Priya Sharma",
+      "opportunityQuality": "LIGHT_EDIT",
+      "postRating": "GOOD",
+      "visualQuality": "GOOD",
+      "imagePromptQuality": "GOOD",
+      "providerPath": "longcat:timeout -> groq:rate_limit -> groq-2:ok",
+      "ideaTitle": "Why you believe: \"Most LLM failures are context window problems, not...\"",
+      "captionPreview": "When we reduced the prompt context from 8 k tokens to 2 k, hallucinations fell dramatically. This pattern repeated across dozens of internal benchmarks, suggesting that the bottleneck is often the window that feeds the m",
+      "reasons": [
+        "Opportunity: Usable idea but not strongly differentiated.",
+        "Post: QUALITY_GATE_PASS",
+        "Visual: Visual concept is specific and non-generic.",
+        "Prompt: Platform-aware and constrained prompt with original framing."
+      ],
+      "fullCaption": "When we reduced the prompt context from 8 k tokens to 2 k, hallucinations fell dramatically. This pattern repeated across dozens of internal benchmarks, suggesting that the bottleneck is often the window that feeds the model, not the model itself.\n\nHaving delivered an LLM Evaluation Framework, I can point to a clear correlation: as the effective context shrinks, the measured hallucination rate drops, even when the underlying model remains unchanged. In RAG pipelines, the same story appears – a well‑designed chunking strategy recovers more relevant signal than swapping to a larger model.\n\nWhy does this matter? If we treat every failure as a model‑capacity issue, we end up fine‑tuning or scaling up, which adds latency and cost. Instead, focusing on prompt engineering, optimal chunking, and context management yields immediate reliability gains.\n\nEval‑driven development makes this trade‑off visible. Automated evaluations catch systematic context‑window failures that manual checks miss, and they force us to quantify the real impact of each token.\n\nSo before you reach for a bigger model or a costly fine‑tune, ask: is the context window starving the model of the information it needs? In many cases, the answer is yes, and the solution is simply to restructure the input.",
+      "visualIdea": "Minimal data visualization of this relationship: context quality vs hallucination rate as a single two-axis relationship",
+      "imagePrompt": "Minimal data visualization of context quality vs hallucination rate as a single two-axis relationship, grounded in \"This pattern repeated across dozens of internal benchmarks, suggesting that the bottleneck is often the window that f...\". Clean typography, generous white space, single chart or comparison. Muted palette with one accent color for the key data point. Information design quality, not dashboard UI. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Data journalism aesthetic. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "Jake Morrison",
+      "opportunityQuality": "GOOD",
+      "postRating": "GOOD",
+      "visualQuality": "GOOD",
+      "imagePromptQuality": "GOOD",
+      "providerPath": "longcat:ok",
+      "ideaTitle": "Something most people get wrong about AI workflow implementation",
+      "captionPreview": "The biggest misconception in AI workflow implementation: that every step should live inside the model.\n\nAfter years of deploying production AI systems, I've watched this fail exactly the same way. Teams wrap entire decis",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: QUALITY_GATE_PASS",
+        "Visual: Visual concept is specific and non-generic.",
+        "Prompt: Platform-aware and constrained prompt with original framing."
+      ],
+      "fullCaption": "The biggest misconception in AI workflow implementation: that every step should live inside the model.\n\nAfter years of deploying production AI systems, I've watched this fail exactly the same way. Teams wrap entire decision trees in prompt logic — classification, routing, extraction, escalation — and deploy confidently because the demo asked perfect questions. The next week, a customer adds a column, changes a date format, or types something colloquial. The pipeline doesn't error. It hallucinates.\n\nThe architecturally sound pattern: reserve prompts for tasks holding genuine variation — natural language, interpretation, reasoning. Anything with a deterministic condition should be code, not language. Not \"model classifies,\" but \"if this field is null, branch B.\" Prompts are probabilistic. Code is not.\n\nSame principle with scope — the instinct is to build an agent handling every variation. Start with the happy path only. Add edge cases when production reveals them. This isn't lazy; it's epistemic humility — you don't know which failure modes matter until real data exposes them.\n\nEvery agent also needs structured fallbacks modeled explicitly. Agents should classify confidence: certainty routes to execution, ambiguity routes to humans, triggers full review. Customers trust agents more when they know when to escalate, not because they appear superhuman.\n\nProduction AI isn't about maximum autonomy. It's architecting which decisions belong to models and which belong to systems.",
+      "visualIdea": "Technical diagram of: a decision tree with confidence gate and explicit human fallback branch",
+      "imagePrompt": "Clean technical diagram of a decision tree with confidence gate and explicit human fallback branch. Supporting detail: Customers trust agents more when they know when to escalate, not because they appear superhuman. Precise lines, clear relationships, functional aesthetic. Muted technical palette with one signal color for the key insight. White or near-white background. Annotated sparingly with labels only where needed. Engineering documentation quality, not decorative. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Technical reference aesthetic. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "Aisha Patel",
+      "opportunityQuality": "GOOD",
+      "postRating": "GOOD",
+      "visualQuality": "GOOD",
+      "imagePromptQuality": "GOOD",
+      "providerPath": "longcat:ok",
+      "ideaTitle": "Something most people get wrong about React performance",
+      "captionPreview": "Reduced our React bundle by 60% mostly by doing one thing people keep getting wrong.\n\nReact.memo looks like a quick \"wrap component, move on\" win. In real pages, it can cost you CPU instead of saving it.\n\nIf you pass a d",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: QUALITY_GATE_PASS",
+        "Visual: Visual concept is specific and non-generic.",
+        "Prompt: Platform-aware and constrained prompt with original framing."
+      ],
+      "fullCaption": "Reduced our React bundle by 60% mostly by doing one thing people keep getting wrong.\n\nReact.memo looks like a quick \"wrap component, move on\" win. In real pages, it can cost you CPU instead of saving it.\n\nIf you pass a deeply nested value as a prop (cart contents, product metadata), memo needs to deeply compare it each render. That comparison is real Javascript time. A simple state update in the parent can trigger it even when the value barely changed.\n\nThe counterintuitive part:\nSometimes it is faster to let a component re-render normally. React's reconciler is fast. A deep comparison on big objects is not.\n\nThis is why a good performance culture asks: what is the actual cost? Does this component live near the top of the tree? Are props primitives or huge structures? Do we ship them lazily?\n\nA quick win that is usually safe:\n- code splitting by route\n- avoiding heavy libraries in the main chunk\n- not importing everything from a shared UI package\n\nBe more careful with:\n- wrapping everything in React.memo\n- thinking shallow props mean shallow work\n- assuming a visual bug is a layout issue when it is just a selector re-render tax\n\nThe fastest React code I have seen is not the most optimized. It is the most intentionally scoped.",
+      "visualIdea": "Technical diagram of: a render pipeline where side-effects are moved out of the render path",
+      "imagePrompt": "Clean technical diagram of a render pipeline where side-effects are moved out of the render path. Supporting detail: In real pages, it can cost you CPU instead of saving it. Precise lines, clear relationships, functional aesthetic. Muted technical palette with one signal color for the key insight. White or near-white background. Annotated sparingly with labels only where needed. Engineering documentation quality, not decorative. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Technical reference aesthetic. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "David Park",
+      "opportunityQuality": "GOOD",
+      "postRating": "LIGHT_EDIT",
+      "visualQuality": "GOOD",
+      "imagePromptQuality": "GOOD",
+      "providerPath": "longcat:timeout -> groq:rate_limit -> groq-2:rate_limit -> openai:ok",
+      "ideaTitle": "Something most people get wrong about engineering team leadership",
+      "captionPreview": "A common misconception in engineering leadership is that larger teams are more effective due to their ability to tackle complex problems from multiple angles. In my experience, this couldn't be further from the truth. Sm",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: GENERIC_CONCLUSION",
+        "Visual: Visual concept is specific and non-generic.",
+        "Prompt: Platform-aware and constrained prompt with original framing."
+      ],
+      "fullCaption": "A common misconception in engineering leadership is that larger teams are more effective due to their ability to tackle complex problems from multiple angles. In my experience, this couldn't be further from the truth. Smaller teams, with clear ownership and focused objectives, consistently outperform larger teams. This isn't merely a matter of efficiency; it's about accountability and clear communication. When engineers have well-defined responsibilities, they can innovate and execute with greater agility, resulting in faster and higher-quality deliverables. It's crucial to recognize that restructuring around business domains rather than technical layers can significantly enhance team performance. By prioritizing clear ownership within smaller teams, engineering leaders can create a more agile and cohesive operational environment.",
+      "visualIdea": "Typographic concept expressing this contrast: the contrast between hiring fast and hiring well",
+      "imagePrompt": "Typography-driven composition expressing the contrast between hiring fast and hiring well. Pull one short phrase from \"It's crucial to recognize that restructuring around business domains rather than technical layers can significantly e...\" as the visual focal point. Thoughtful type choice, deliberate scale relationships. Minimal imagery; type carries the argument. Restrained palette, editorial layout quality. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Editorial design aesthetic. LinkedIn landscape composition (1.91:1)."
+    }
+  ]
+}

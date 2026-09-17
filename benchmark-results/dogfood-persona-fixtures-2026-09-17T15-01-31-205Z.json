@@ -1,0 +1,126 @@
+{
+  "generatedAt": "2026-09-17T15:01:31.188Z",
+  "fixtureSource": {
+    "benchmarkFixtureCount": 8,
+    "seededFixtureCount": 6,
+    "used": [
+      {
+        "name": "Sarah Chen",
+        "source": "seeded"
+      },
+      {
+        "name": "Marcus Rivera",
+        "source": "seeded"
+      },
+      {
+        "name": "Priya Sharma",
+        "source": "seeded"
+      },
+      {
+        "name": "Jake Morrison",
+        "source": "seeded"
+      },
+      {
+        "name": "Aisha Patel",
+        "source": "seeded"
+      },
+      {
+        "name": "David Park",
+        "source": "seeded"
+      },
+      {
+        "name": "Elena Fixture",
+        "source": "synthetic"
+      },
+      {
+        "name": "Frank Fixture",
+        "source": "synthetic"
+      }
+    ]
+  },
+  "providerState": {
+    "pickDraftChain": 0,
+    "longcatDraftChain": 0,
+    "openaiDraftChain": 0
+  },
+  "summary": {
+    "total": 8,
+    "pass": 0,
+    "warn": 0,
+    "fail": 8
+  },
+  "rows": [
+    {
+      "persona": "Sarah Chen",
+      "opportunityQuality": "Strong (6)",
+      "postQuality": "Fail",
+      "visualQuality": "Fail",
+      "imagePromptQuality": "Fail",
+      "verdict": "Fail",
+      "notes": "Write this failed: No AI provider configured. Set GROQ_API_KEY to generate content."
+    },
+    {
+      "persona": "Marcus Rivera",
+      "opportunityQuality": "Strong (6)",
+      "postQuality": "Fail",
+      "visualQuality": "Fail",
+      "imagePromptQuality": "Fail",
+      "verdict": "Fail",
+      "notes": "Write this failed: No AI provider configured. Set GROQ_API_KEY to generate content."
+    },
+    {
+      "persona": "Priya Sharma",
+      "opportunityQuality": "Okay (4)",
+      "postQuality": "Fail",
+      "visualQuality": "Fail",
+      "imagePromptQuality": "Fail",
+      "verdict": "Fail",
+      "notes": "Write this failed: No AI provider configured. Set GROQ_API_KEY to generate content."
+    },
+    {
+      "persona": "Jake Morrison",
+      "opportunityQuality": "Strong (6)",
+      "postQuality": "Fail",
+      "visualQuality": "Fail",
+      "imagePromptQuality": "Fail",
+      "verdict": "Fail",
+      "notes": "Write this failed: No AI provider configured. Set GROQ_API_KEY to generate content."
+    },
+    {
+      "persona": "Aisha Patel",
+      "opportunityQuality": "Strong (6)",
+      "postQuality": "Fail",
+      "visualQuality": "Fail",
+      "imagePromptQuality": "Fail",
+      "verdict": "Fail",
+      "notes": "Write this failed: No AI provider configured. Set GROQ_API_KEY to generate content."
+    },
+    {
+      "persona": "David Park",
+      "opportunityQuality": "Strong (6)",
+      "postQuality": "Fail",
+      "visualQuality": "Fail",
+      "imagePromptQuality": "Fail",
+      "verdict": "Fail",
+      "notes": "Write this failed: No AI provider configured. Set GROQ_API_KEY to generate content."
+    },
+    {
+      "persona": "Elena Fixture",
+      "opportunityQuality": "Strong (6)",
+      "postQuality": "Fail",
+      "visualQuality": "Fail",
+      "imagePromptQuality": "Fail",
+      "verdict": "Fail",
+      "notes": "Write this failed: No AI provider configured. Set GROQ_API_KEY to generate content."
+    },
+    {
+      "persona": "Frank Fixture",
+      "opportunityQuality": "Strong (6)",
+      "postQuality": "Fail",
+      "visualQuality": "Fail",
+      "imagePromptQuality": "Fail",
+      "verdict": "Fail",
+      "notes": "Write this failed: No AI provider configured. Set GROQ_API_KEY to generate content."
+    }
+  ]
+}

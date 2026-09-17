@@ -1,0 +1,156 @@
+{
+  "generatedAt": "2026-09-17T15:04:58.366Z",
+  "fixtureSource": {
+    "benchmarkFixtureCount": 8,
+    "seededFixtureCount": 6,
+    "runCount": 6,
+    "runPolicy": "real_seeded_only_no_synthetic",
+    "runNames": [
+      "Sarah Chen",
+      "Marcus Rivera",
+      "Priya Sharma",
+      "Jake Morrison",
+      "Aisha Patel",
+      "David Park"
+    ],
+    "skippedBenchmarkNames": [
+      "Elena",
+      "Frank"
+    ]
+  },
+  "providerState": {
+    "pickDraftChain": 4,
+    "longcatDraftChain": 4,
+    "openaiDraftChain": 4,
+    "chainOrder": [
+      "longcat:LongCat-2.0",
+      "groq:openai/gpt-oss-120b",
+      "groq-2:openai/gpt-oss-120b",
+      "openai:gpt-4o-mini"
+    ]
+  },
+  "summary": {
+    "total": 6,
+    "good": 5,
+    "lightEdit": 1,
+    "bad": 0,
+    "unsafe": 0,
+    "blockedProvider": 0
+  },
+  "rows": [
+    {
+      "persona": "Sarah Chen",
+      "opportunityQuality": "GOOD",
+      "postRating": "GOOD",
+      "visualQuality": "LIGHT_EDIT",
+      "imagePromptQuality": "LIGHT_EDIT",
+      "providerPath": "longcat:ok",
+      "ideaTitle": "Something most people get wrong about distributed systems",
+      "captionPreview": "I've seen more payment processing failures caused by missing idempotency keys than by network partitions.\n\nThe common misconception about distributed systems is that the hard part is consensus. Paxos, Raft, leader electi",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: QUALITY_GATE_PASS",
+        "Visual: Prompt falls into overused visual patterns.",
+        "Prompt: Prompt includes overused imagery cues."
+      ],
+      "fullCaption": "I've seen more payment processing failures caused by missing idempotency keys than by network partitions.\n\nThe common misconception about distributed systems is that the hard part is consensus. Paxos, Raft, leader election — the papers are out there, the implementations are documented. That's tractable.\n\nThe part that quietly breaks production is retry semantics.\n\nYou send a request. The connection drops before the response arrives. Your system retries. The original request was actually processed. Now you've charged the customer twice.\n\nIdempotency keys solve this, but only if every endpoint in your critical path enforces them. One gap — one service that assumes the caller will handle deduplication — and you have silent duplicate writes.\n\nIn payment processing, I learned this lesson. Not from a textbook. From incident retrospectives.\n\nThe fix is unglamorous: define your idempotency contract at the API boundary, store processed keys with a TTL, and treat every external mutation as a candidate for retry. Then verify with database constraints what tests won't catch.\n\nDistributed systems fail at the seams between services. Not in the coordination protocols.",
+      "visualIdea": "Technical diagram showing: Teach a counterintuitive lesson or common misconception in distributed systems t",
+      "imagePrompt": "Clean technical diagram: Teach a counterintuitive lesson or common misconception in distributed systems that only someone wit. Precise lines, clear relationships, functional aesthetic. Muted technical palette with one signal color for the key insight. White or near-white background. Annotated sparingly. Engineering documentation quality, not decorative. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Technical reference aesthetic. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "Marcus Rivera",
+      "opportunityQuality": "GOOD",
+      "postRating": "GOOD",
+      "visualQuality": "LIGHT_EDIT",
+      "imagePromptQuality": "LIGHT_EDIT",
+      "providerPath": "longcat:ok",
+      "ideaTitle": "Something most people get wrong about Kubernetes orchestration",
+      "captionPreview": "Half the teams I meet running K8s have more 'essential' tooling than they have actual production services.\n\nI've managed clusters past 200 nodes where we ripped out service mesh, removed five custom operators, and droppe",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: QUALITY_GATE_PASS",
+        "Visual: Prompt falls into overused visual patterns.",
+        "Prompt: Prompt includes overused imagery cues."
+      ],
+      "fullCaption": "Half the teams I meet running K8s have more 'essential' tooling than they have actual production services.\n\nI've managed clusters past 200 nodes where we ripped out service mesh, removed five custom operators, and dropped three 'mandatory' Helm charts. Reliability went UP.\n\nHere's the counterintuitive part: Kubernetes already does 90% of what you need. Pod scheduling, health checks, rolling updates, resource limits. That's not the hard part.\n\nThe hard part is resisting the urge to bolt on a sidecar for every problem.\n\nService mesh is the clearest example. You don't need it until you have 50+ services doing east-west mTLS with strict compliance requirements. Before that, you're running Envoy proxies consuming 200-400MB per pod for a problem that doesn't exist yet.\n\nSame pattern with custom operators. Most of them are solving lifecycle problems that a well-configured Deployment already handles.\n\nThe teams with the most stable clusters I've seen have the smallest add-on footprint. They treat Kubernetes like a platform, not a base to be rebuilt.\n\nComplexity is not sophistication. It's debt with a YAML extension.",
+      "visualIdea": "Visual metaphor for: Teach a counterintuitive lesson or common misconception in Kubernetes orchestrat",
+      "imagePrompt": "Conceptual visual metaphor: Teach a counterintuitive lesson or common misconception in Kubernetes orchestration that only someon. Single clear metaphor, not literal illustration. Restrained color palette, one focal element. Negative space used deliberately. Thoughtful composition that rewards a second look. Editorial quality, not commercial stock. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Conceptual art direction. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "Priya Sharma",
+      "opportunityQuality": "LIGHT_EDIT",
+      "postRating": "GOOD",
+      "visualQuality": "LIGHT_EDIT",
+      "imagePromptQuality": "LIGHT_EDIT",
+      "providerPath": "longcat:ok",
+      "ideaTitle": "Why you believe: \"Most LLM failures are context window problems, not...\"",
+      "captionPreview": "When an LLM hallucinates, we blame the model. After building evaluation frameworks and RAG pipelines, I've come to believe most of these failures aren't capability problems — they're context window problems.\n\nThe mechani",
+      "reasons": [
+        "Opportunity: Usable idea but not strongly differentiated.",
+        "Post: QUALITY_GATE_PASS",
+        "Visual: Prompt falls into overused visual patterns.",
+        "Prompt: Prompt includes overused imagery cues."
+      ],
+      "fullCaption": "When an LLM hallucinates, we blame the model. After building evaluation frameworks and RAG pipelines, I've come to believe most of these failures aren't capability problems — they're context window problems.\n\nThe mechanism is straightforward: the model often has the knowledge, but the right information isn't in the context, or it's buried under irrelevant text, or it got truncated. The capability exists. The access doesn't.\n\nThis is why chunking strategy matters more than embedding model quality. A mediocre embedding with good chunking will outperform a great embedding with poor chunking, because the latter sends the model fragments it can't reason over.\n\nIt's also why you should always measure hallucination rate separately from accuracy. Hallucinations spike when the context is incomplete — the model fills gaps with plausible-sounding fabrications. That's not a reasoning failure. That's a context failure.\n\nAutomated evals catch what manual review misses here, because humans tend to blame the model when the output looks wrong, without checking whether the input context was sufficient.\n\nBefore you fine-tune or switch models, audit what's actually in the context window. The fix is often retrieval, not training.",
+      "visualIdea": "Typographic concept expressing: Share the reasoning behind this belief. Explain what experiences led you here an",
+      "imagePrompt": "Typography-driven composition: one key phrase from \"Share the reasoning behind this belief. Explain what experiences led you here and why others should\" as the visual focal point. Thoughtful type choice, deliberate scale relationships. Minimal imagery — the type IS the image. Restrained palette, editorial layout quality. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Editorial design aesthetic. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "Jake Morrison",
+      "opportunityQuality": "GOOD",
+      "postRating": "GOOD",
+      "visualQuality": "LIGHT_EDIT",
+      "imagePromptQuality": "LIGHT_EDIT",
+      "providerPath": "longcat:timeout -> groq:rate_limit -> groq-2:ok",
+      "ideaTitle": "Something most people get wrong about AI workflow implementation",
+      "captionPreview": "In my last 30+ AI agent deployments, the one mistake that keeps showing up isn’t about the model at all…\n\nMost teams assume that a sophisticated model alone will handle the edge cases. In reality, the workflow is the bot",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: QUALITY_GATE_PASS",
+        "Visual: Prompt falls into overused visual patterns.",
+        "Prompt: Prompt includes overused imagery cues."
+      ],
+      "fullCaption": "In my last 30+ AI agent deployments, the one mistake that keeps showing up isn’t about the model at all…\n\nMost teams assume that a sophisticated model alone will handle the edge cases. In reality, the workflow is the bottleneck. Here’s why:\n\n1. **Happy‑path first, edge cases later** – I start by mapping the exact problem the customer wants solved. The model is then wrapped in a thin orchestration layer that routes obvious requests straight to the model and flags the rest for review.\n2. **Graceful fallback is non‑negotiable** – A hand‑off to a human isn’t a failure; it’s the safety net that builds trust. When the agent can’t answer with confidence, it should surface the request to a human with full context.\n3. **Log every decision** – Production debugging becomes impossible without a trace of why the agent chose a path. Structured logs let you replay a session and spot the missing rule.\n4. **Don’t overpromise the model’s capability** – The biggest failure mode I see is promising “the AI will understand everything.” The reality is that the model is a tool, not the solution. The workflow determines whether the tool is used correctly.\n\nBottom line: focus on the surrounding workflow, not just the model. When the orchestration, fallback, and observability are solid, the AI does what the customer actually needs – solve their problem, not just look smart.",
+      "visualIdea": "Visual metaphor for: Teach a counterintuitive lesson or common misconception in AI workflow implement",
+      "imagePrompt": "Conceptual visual metaphor: Teach a counterintuitive lesson or common misconception in AI workflow implementation that only some. Single clear metaphor, not literal illustration. Restrained color palette, one focal element. Negative space used deliberately. Thoughtful composition that rewards a second look. Editorial quality, not commercial stock. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Conceptual art direction. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "Aisha Patel",
+      "opportunityQuality": "GOOD",
+      "postRating": "LIGHT_EDIT",
+      "visualQuality": "LIGHT_EDIT",
+      "imagePromptQuality": "LIGHT_EDIT",
+      "providerPath": "longcat:timeout -> groq:ok",
+      "ideaTitle": "Something most people get wrong about React performance",
+      "captionPreview": "When I trimmed the bundle size of our e‑commerce app by 60%, the biggest win wasn't the bytes—it was the mental model we changed.\n\nMost teams treat React performance as a checklist: memoize everything, add useCallback, s",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: GENERIC_CONCLUSION",
+        "Visual: Prompt falls into overused visual patterns.",
+        "Prompt: Prompt includes overused imagery cues."
+      ],
+      "fullCaption": "When I trimmed the bundle size of our e‑commerce app by 60%, the biggest win wasn't the bytes—it was the mental model we changed.\n\nMost teams treat React performance as a checklist: memoize everything, add useCallback, split code wherever possible. That works up to a point, but the real bottleneck often hides behind a single, overlooked pattern: render‑side effects.\n\nWhat most get wrong\nThey assume that a component that re‑renders quickly is harmless. In reality, any side‑effect (data fetch, DOM mutation, analytics) that runs during render forces React to wait for the effect to finish before it can reconcile the next update. The cost is invisible in the profiler because it happens outside React’s render timing.\n\nWhy it matters\nOn a page with dozens of product cards, a stray fetch() inside the component body adds latency for every scroll, multiplying the delay by the number of instances. The bundle size stays low, but the perceived performance collapses.\n\nThe counterintuitive fix\nMove all side‑effects out of the render path before you start optimizing memoization. Use useEffect or external data hooks, and keep the render pure. Once the render is pure, memoization actually buys you time, and code‑splitting becomes the real performance lever.\n\nPractical steps\n1. Scan for functions that aren’t pure (network calls, console logs, mutable globals).\n2. Wrap them in useEffect with appropriate dependencies.\n3. Run a real‑user‑metric audit (e.g., Core Web Vitals) to confirm the improvement—lab profilers will still show low render time, but users will feel the speed.\n\nI learned this while delivering a performance overhaul for a design system that powers thousands of product pages. The lesson? Bundle size is a feature, but a pure render is the foundation that lets that feature shine.\n\n#React #Performance #DesignSystems #WebAccessibility",
+      "visualIdea": "Visual metaphor for: Teach a counterintuitive lesson or common misconception in React performance tha",
+      "imagePrompt": "Conceptual visual metaphor: Teach a counterintuitive lesson or common misconception in React performance that only someone with. Single clear metaphor, not literal illustration. Restrained color palette, one focal element. Negative space used deliberately. Thoughtful composition that rewards a second look. Editorial quality, not commercial stock. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Conceptual art direction. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "David Park",
+      "opportunityQuality": "GOOD",
+      "postRating": "GOOD",
+      "visualQuality": "LIGHT_EDIT",
+      "imagePromptQuality": "LIGHT_EDIT",
+      "providerPath": "longcat:timeout -> groq:rate_limit -> groq-2:ok",
+      "ideaTitle": "Something most people get wrong about engineering team leadership",
+      "captionPreview": "I’ve led engineering teams of 8 to 25 engineers across multiple fintech products. \n\nMost leaders treat hiring as a race: fill the bench as quickly as possible. The reality is the opposite—hiring slowly is the highest‑lev",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: QUALITY_GATE_PASS",
+        "Visual: Prompt falls into overused visual patterns.",
+        "Prompt: Prompt includes overused imagery cues."
+      ],
+      "fullCaption": "I’ve led engineering teams of 8 to 25 engineers across multiple fintech products. \n\nMost leaders treat hiring as a race: fill the bench as quickly as possible. The reality is the opposite—hiring slowly is the highest‑leverage activity a manager can do. When you spend weeks vetting each candidate, you surface hidden biases, raise the bar for collaboration, and send a signal about team health that ripples through retention and performance.\n\nAt the same time, we hear \"technical debt is killing us\" and focus on refactoring. In practice, the bigger debt is prioritization debt: we ship features on a schedule that never allows time to fix the underlying design flaws. The symptom looks like broken code, but the cause is a backlog that prioritizes delivery over long‑term stability.\n\n**What works:**\n- Build a structured interview framework that measures problem‑solving, communication, and cultural fit. Run it consistently; it reduces bias more than any training session.\n- Treat hiring as a quarterly cadence, not a weekly sprint. Allocate time for deep reference checks and realistic‑job‑preview assignments.\n- Align the roadmap around business domains, not technical layers. Give each small team clear ownership, then let them decide the technical debt they address in each cycle.\n\n**Trade‑offs:** Slower hiring means short‑term capacity dips, but the payoff is higher velocity later. Prioritization debt reduction requires deliberate planning buffers, which can shrink release cadence temporarily but improves reliability and reduces firefighting.\n\nThe real lever for a manager isn’t shouting about “speed” or “clean code” – it’s shaping the tempo at which the team grows and decides what to fix.",
+      "visualIdea": "Visual metaphor for: Teach a counterintuitive lesson or common misconception in engineering team lead",
+      "imagePrompt": "Conceptual visual metaphor: Teach a counterintuitive lesson or common misconception in engineering team leadership that only som. Single clear metaphor, not literal illustration. Restrained color palette, one focal element. Negative space used deliberately. Thoughtful composition that rewards a second look. Editorial quality, not commercial stock. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Conceptual art direction. LinkedIn landscape composition (1.91:1)."
+    }
+  ]
+}

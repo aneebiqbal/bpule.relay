@@ -1,4 +1,4 @@
-import type { ExtractedLead, OutreachStrategy, SafeFact, MatchedProof } from '@/lib/domain/types'
+import type { ExtractedLead, OutreachStrategy, SafeFact, MatchedProof, ScoreBreakdownItem, Profile } from '@/lib/domain/types'
 import { computeScore } from '@/lib/score/rubric'
 import { streamDraft } from '@/lib/ai/draft-stream'
 import type { DraftMessageType } from '@/lib/ai/draft'
@@ -16,10 +16,6 @@ import {
   buildDeterministicConversationSummary,
 } from '@/lib/relay/conversation-engine'
 
-// Draft generation involves multiple AI calls (embedding, scoring, drafting
-// with quality gates). Allow up to 2 minutes on Pro plan; on Hobby plan
-// Vercel's 10s limit applies — the 30s SDK timeout + fast fallback chain
-// usually complete within that.
 export const maxDuration = 120
 
 export async function POST(
@@ -46,7 +42,6 @@ export async function POST(
     })
   }
 
-  // Reply requires either a message ID to reply to or explicit reply text
   if (type === 'reply' && !body.replyToMessageId && !body.replyText?.trim()) {
     return new Response(
       JSON.stringify({ error: 'Reply drafting requires replyToMessageId or replyText.' }),
@@ -89,8 +84,23 @@ export async function POST(
       store.listProfiles(),
       store.listFewShotWins(50),
     ])
-    const profile =
-      profiles.find((p) => p.id === profileId) ?? profiles[0] ?? null
+
+    const leadRevenueIdentityId = detail.revenueIdentityId ?? null
+    let selectedProfile = profiles.find((p) => p.id === profileId) ?? profiles[0] ?? null
+
+    if (leadRevenueIdentityId && !profileId) {
+      const identityProfile = profiles.find((p) => (p as Profile & { revenueIdentityId?: string }).revenueIdentityId === leadRevenueIdentityId)
+      if (identityProfile) selectedProfile = identityProfile
+    }
+
+    if (profileId && leadRevenueIdentityId && selectedProfile) {
+      const profileRevenueIdentity = (selectedProfile as Profile & { revenueIdentityId?: string }).revenueIdentityId
+      if (profileRevenueIdentity && profileRevenueIdentity !== leadRevenueIdentityId) {
+        emit({ type: 'status', message: 'Warning: selected profile belongs to a different Revenue Identity than this lead.' })
+      }
+    }
+
+    const profile = selectedProfile
     const voiceProfile = await store.getVoiceProfile()
 
     const extracted: ExtractedLead = {
@@ -112,13 +122,19 @@ export async function POST(
       tags: detail.tags ?? [],
     }
 
-    const score = computeScore(extracted, rulebook!)
+    const canonicalScore = detail.canonicalScore ?? null
+    const legacyScore = computeScore(extracted, rulebook!)
+    const score = canonicalScore !== null
+      ? {
+          total: canonicalScore,
+          verdict: detail.verdict ?? legacyScore.verdict ?? 'research_more',
+          baseVerdict: detail.verdict ?? 'research_more',
+          breakdown: (detail.scoreBreakdown as ScoreBreakdownItem[] | null) ?? legacyScore.breakdown ?? [],
+          gates: detail.canonicalScore ? ['Canonical Intelligence V2 score in use.'] : legacyScore.gates ?? [],
+        }
+      : legacyScore
 
-    // Proof matching: tag overlap first (fast), then semantic in background.
-    // When a sender profile is selected, scope proof matching to that identity
-    // so proof from another Revenue Identity is never used.
     const tagMatches = await store.matchProofItems(detail.tags ?? [], 8, profile?.id ?? null)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let matched = tagMatches
 
     if (proofId) {
@@ -127,7 +143,6 @@ export async function POST(
     }
     if (matched.length > 0) emit({ type: 'proof', items: matched })
 
-    // Semantic matching in background — updates proof list if it completes in time.
     const embedTextPromise = embedText(
       `${detail.company} ${detail.signalEvidence ?? ''} ${detail.tags.join(' ')}`,
     ).then(async (leadEmbedding) => {
@@ -136,10 +151,8 @@ export async function POST(
       emit({ type: 'proof', items: merged })
     }).catch(() => {})
 
-    // Few-shot injection from real wins.
     const fewShotSelection = selectFewShotExamples(fewShotPool, { leadId: detail.id, lead: detail, extracted, score, type: type as DraftMessageType, styleCard: voiceProfile?.styleCard ?? null, facts, plays, history: detail.messages, profile, matchedProof: matched[0] ?? null }, plays)
 
-    // Build outreach strategy using Revenue Intelligence
     let strategy: OutreachStrategy | null = null
     let safeFacts: SafeFact[] = []
     let matchedProofCards: MatchedProof[] = []
@@ -152,7 +165,6 @@ export async function POST(
       void profileIntelligence
 
       if (type === 'reply') {
-        // For replies: analyze the prospect's message and build a reply strategy
         const prospectReplyMsg = body.replyToMessageId && body.replyToMessageId !== 'manual'
           ? detail.messages.find((m) => m.id === body.replyToMessageId)
           : null
@@ -209,7 +221,6 @@ export async function POST(
           ].join('\n')
         }
       } else {
-        // For first-touch and followups: use the standard outreach strategy
         strategy = createOutreachStrategy({
           leadCompany: detail.company,
           contactName: detail.contactName,
@@ -264,17 +275,14 @@ export async function POST(
       modelUsed: draftResult.modelUsed,
     })
 
-    // Persist sender profile on the lead
     if (profile) {
       try {
         await store.updateLeadSenderProfile(detail.id, profile.id)
       } catch {
-        // Non-fatal: profile persistence must not break drafting
+        // Non-fatal
       }
     }
 
-    // Log one entry per model call actually made (best-of-two, plus an
-    // escalation pass if one ran), so cost-by-tier reflects real spend.
     const draftLatencyMs = Date.now() - draftStarted
     for (const call of draftResult.callLog) {
       try {

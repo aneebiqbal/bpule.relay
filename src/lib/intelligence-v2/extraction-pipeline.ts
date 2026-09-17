@@ -171,6 +171,7 @@ CRITICAL RULES:
 - Keep all values concise and factual.
 - COMPANY LOCATION ≠ WORKER LOCATION. A company based in San Francisco offering remote work is NOT "US-only". Only mark workplaceType as ONSITE or geography as restricted if the text EXPLICITLY states a worker location requirement (e.g., "must be based in the US", "on-site in New York").
 - "Remote OK", "Remote-friendly", "work from anywhere" = REMOTE. Do not downgrade to ONSITE or geography-restricted merely because the company has a headquarters city.
+- COMPANY NAME: If the title contains "at CompanyName" or "of CompanyName" (e.g., "CEO of Starke Marketing"), extract "Starke Marketing" as the company name. Do NOT leave company.name null when the company is clearly mentioned in the title or text.
 
 Extract these entities:
 1. PERSON: fullName, firstName, title, seniority, location, linkedinUrl, otherUrls

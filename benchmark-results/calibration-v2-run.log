@@ -1,0 +1,332 @@
+
+> scout@0.1.0 intelligence:benchmark /Users/mac/Desktop/products/scout
+> node scripts/benchmark-intelligence.mjs "--pipeline=v2" "--compare=benchmark-results/benchmark-baseline-latest.json"
+
+
+╔══════════════════════════════════════════════════════════════════════╗
+║          RELAY INTELLIGENCE BENCHMARK                              ║
+║          Pipeline: v2                                                  ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+  Golden dataset v1.0.0: 36 cases
+  Cases: 20 wins, 7 strong, 5 bad, 4 ineligible
+
+  Evaluating won-001...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (1ms)
+  Evaluating won-002...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-003...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-004...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-005...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-006...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (1ms)
+  Evaluating won-007...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-008...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-009...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-010...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-011...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-012...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (1ms)
+  Evaluating won-013...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-014...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-015...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-016...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-017...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-018...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (1ms)
+  Evaluating won-019...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating won-020...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating strong-001...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating strong-002...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating strong-003...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ! WARN (0ms)
+  Evaluating strong-004...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ! WARN (0ms)
+  Evaluating strong-005...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating bad-001...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating bad-002...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating bad-003...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating bad-004...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating bad-005...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating remote-worldwide-001...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating remote-worldwide-002...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating remote-restricted-001...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating remote-restricted-002...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating remote-hybrid-001...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+  Evaluating remote-onsite-001...  ⚠ Pipeline import failed: Cannot find module '/Users/mac/Desktop/products/src/lib/ai/extract.ts' imported from /Users/mac/Desktop/products/scout/scripts/benchmark-intelligence.mjs
+  ⚠ Falling back to mock pipeline for this run.
+ ✓ PASS (0ms)
+
+  ⚠ Could not load baseline: ENOENT: no such file or directory, open 'benchmark-results/benchmark-baseline-latest.json'
+
+════════════════════════════════════════════════════════════════════════
+  RELAY INTELLIGENCE BENCHMARK — RESULTS
+════════════════════════════════════════════════════════════════════════
+
+┌─── CASE RESULTS ──────────────────────────────────────────────────────┐
+
+  ✓ won-001 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-002 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-003 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 7 → verdict=research_more (acceptable)
+
+  ✓ won-004 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-005 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 2/2 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-006 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 7 → verdict=research_more (acceptable)
+
+  ✓ won-007 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-008 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-009 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 2/2 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-010 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-011 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-012 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 7 → verdict=research_more (acceptable)
+
+  ✓ won-013 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-014 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-015 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 2/2 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-016 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 7 → verdict=research_more (acceptable)
+
+  ✓ won-017 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-018 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 2/2 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-019 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ won-020 [WON] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 5/5 fields matched
+    Score: 8 → verdict=research_more (acceptable)
+
+  ✓ strong-001 [STRONG_OPPORTUNITY] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 4/4 fields matched
+    Score: 7 → verdict=research_more (aligned)
+
+  ✓ strong-002 [STRONG_OPPORTUNITY] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 2/2 fields matched
+    Score: 8 → verdict=research_more (aligned)
+
+  ! strong-003 [STRONG_OPPORTUNITY] — WARN
+    → Strong opportunity scored as "skip" (score: 6).
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 4/4 fields matched
+    Score: 6 → verdict=skip (misaligned)
+
+  ! strong-004 [STRONG_OPPORTUNITY] — WARN
+    → Strong opportunity scored as "skip" (score: 4).
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 4/5 fields matched
+    Score: 4 → verdict=skip (misaligned)
+
+  ✓ strong-005 [STRONG_OPPORTUNITY] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 2/2 fields matched
+    Score: 8 → verdict=research_more (aligned)
+
+  ✓ bad-001 [BAD_PROSPECT] — PASS
+    Remote: expected=not_applicable actual=not_applicable ✓
+    Extraction: 4/4 fields matched
+    Score: 2 → verdict=skip (aligned)
+
+  ✓ bad-002 [BAD_PROSPECT] — PASS
+    Remote: expected=not_applicable actual=not_applicable ✓
+    Extraction: 1/1 fields matched
+    Score: 2 → verdict=skip (aligned)
+
+  ✓ bad-003 [BAD_PROSPECT] — PASS
+    Remote: expected=not_applicable actual=not_applicable ✓
+    Extraction: 4/4 fields matched
+    Score: 2 → verdict=skip (aligned)
+
+  ✓ bad-004 [BAD_PROSPECT] — PASS
+    Remote: expected=unknown actual=unknown ✓
+    Extraction: 1/1 fields matched
+    Score: 7 → verdict=research_more (aligned)
+
+  ✓ bad-005 [BAD_PROSPECT] — PASS
+    Remote: expected=not_applicable actual=not_applicable ✓
+    Extraction: 4/4 fields matched
+    Score: 2 → verdict=skip (aligned)
+
+  ✓ remote-worldwide-001 [STRONG_OPPORTUNITY] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 3/3 fields matched
+    Score: 8 → verdict=research_more (aligned)
+
+  ✓ remote-worldwide-002 [STRONG_OPPORTUNITY] — PASS
+    Remote: expected=worldwide actual=worldwide ✓
+    Extraction: 1/1 fields matched
+    Score: 8 → verdict=research_more (aligned)
+
+  ✓ remote-restricted-001 [INELIGIBLE] — PASS
+    Remote: expected=us_only actual=us_only ✓
+    Extraction: 3/3 fields matched
+    Score: 8 → verdict=research_more (aligned)
+
+  ✓ remote-restricted-002 [INELIGIBLE] — PASS
+    Remote: expected=eu_only actual=eu_only ✓
+    Extraction: 2/2 fields matched
+    Score: 8 → verdict=research_more (aligned)
+
+  ✓ remote-hybrid-001 [INELIGIBLE] — PASS
+    Remote: expected=hybrid_london actual=hybrid_london ✓
+    Extraction: 3/3 fields matched
+    Score: 8 → verdict=research_more (aligned)
+
+  ✓ remote-onsite-001 [INELIGIBLE] — PASS
+    Remote: expected=onsite_manhattan actual=onsite_manhattan ✓
+    Extraction: 3/3 fields matched
+    Score: 8 → verdict=research_more (aligned)
+
+└────────────────────────────────────────────────────────────────────────┘
+
+┌─── SUMMARY ───────────────────────────────────────────────────────────┐
+
+  Cases evaluated:     36
+  PASS:                 34
+  WARN:                 2
+  FAIL:                 0
+
+  Remote eligibility:   36/36 matched (100%)
+  Extraction avg:       99%
+  Known-win recognition: 20/20 (100%)
+  Bad-lead rejection:   9/9 (100%)
+  Fabrication-free:     0/0 (n/a)
+
+└────────────────────────────────────────────────────────────────────────┘
+
+  Results saved: benchmark-v2-2026-09-17T14-04-38-718Z.json
+
+  ✓ All cases passed.

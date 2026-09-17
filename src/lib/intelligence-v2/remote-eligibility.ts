@@ -18,7 +18,7 @@ import type {
 // ── Workplace Type Detection ───────────────────────────────────────────────
 
 const REMOTE_FULL = /\b(remote|work from home|work from anywhere|fully remote|100% remote|location independent|distributed team|distributed workforce|fully distributed)\b/i
-const REMOTE_US_ANYWHERE = /\b(us[- ]?wide|united states|anywhere in the us|anywhere in the usa|continental us|contiguous us|48 states|lower 48)\b/i
+const REMOTE_US_ANYWHERE = /\b(us[- ]?wide|united states[- ]only|anywhere in the us|anywhere in the usa|continental us|contiguous us|48 states|lower 48|us only|usa only|american[- ]only)\b/i
 const REMOTE_UK_ANYWHERE = /\b(uk[- ]?wide|united kingdom|anywhere in the uk|anywhere in england)\b/i
 const REMOTE_EU_ONLY = /\b(eu only|european union only|eea only|eu\/eea|europe only)\b/i
 const REMOTE_COUNTRY_RESTRICTED = /\b((?:only|must be (?:in|based in|located in|resident in))\s+(?:the\s+)?(?:us|usa|united states|uk|united kingdom|canada|australia|germany|netherlands|switzerland|singapore|uae))\b/i

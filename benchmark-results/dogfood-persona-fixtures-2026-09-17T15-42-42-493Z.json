@@ -1,0 +1,120 @@
+{
+  "generatedAt": "2026-09-17T15:35:11.482Z",
+  "fixtureSource": {
+    "benchmarkFixtureCount": 8,
+    "seededFixtureCount": 6,
+    "runCount": 6,
+    "runPolicy": "real_seeded_only_no_synthetic",
+    "runNames": [
+      "Sarah Chen",
+      "Marcus Rivera",
+      "Priya Sharma",
+      "Jake Morrison",
+      "Aisha Patel",
+      "David Park"
+    ],
+    "skippedBenchmarkNames": [
+      "Elena",
+      "Frank"
+    ]
+  },
+  "providerState": {
+    "pickDraftChain": 4,
+    "longcatDraftChain": 4,
+    "openaiDraftChain": 4,
+    "chainOrder": [
+      "longcat:LongCat-2.0",
+      "groq:openai/gpt-oss-120b",
+      "groq-2:openai/gpt-oss-120b",
+      "openai:gpt-4o-mini"
+    ]
+  },
+  "summary": {
+    "total": 6,
+    "good": 0,
+    "lightEdit": 0,
+    "bad": 0,
+    "unsafe": 0,
+    "blockedProvider": 6
+  },
+  "rows": [
+    {
+      "persona": "Sarah Chen",
+      "opportunityQuality": "GOOD",
+      "postRating": "BLOCKED_PROVIDER",
+      "visualQuality": "BLOCKED_PROVIDER",
+      "imagePromptQuality": "BLOCKED_PROVIDER",
+      "providerPath": "longcat:other -> groq:other -> groq-2:other -> openai:other",
+      "ideaTitle": "Something most people get wrong about distributed systems",
+      "captionPreview": null,
+      "reasons": [
+        "Write this failed: Every configured host failed: longcat (tier1): other; groq (tier1): other; groq-2 (tier1): other; openai (tier4): other."
+      ]
+    },
+    {
+      "persona": "Marcus Rivera",
+      "opportunityQuality": "GOOD",
+      "postRating": "BLOCKED_PROVIDER",
+      "visualQuality": "BLOCKED_PROVIDER",
+      "imagePromptQuality": "BLOCKED_PROVIDER",
+      "providerPath": "longcat:other -> groq:other -> groq-2:other -> openai:other",
+      "ideaTitle": "Something most people get wrong about Kubernetes orchestration",
+      "captionPreview": null,
+      "reasons": [
+        "Write this failed: Every configured host failed: longcat (tier1): other; groq (tier1): other; groq-2 (tier1): other; openai (tier4): other."
+      ]
+    },
+    {
+      "persona": "Priya Sharma",
+      "opportunityQuality": "LIGHT_EDIT",
+      "postRating": "BLOCKED_PROVIDER",
+      "visualQuality": "BLOCKED_PROVIDER",
+      "imagePromptQuality": "BLOCKED_PROVIDER",
+      "providerPath": "longcat:other -> groq:other -> groq-2:other -> openai:other",
+      "ideaTitle": "Why you believe: \"Most LLM failures are context window problems, not...\"",
+      "captionPreview": null,
+      "reasons": [
+        "Write this failed: Every configured host failed: longcat (tier1): other; groq (tier1): other; groq-2 (tier1): other; openai (tier4): other."
+      ]
+    },
+    {
+      "persona": "Jake Morrison",
+      "opportunityQuality": "GOOD",
+      "postRating": "BLOCKED_PROVIDER",
+      "visualQuality": "BLOCKED_PROVIDER",
+      "imagePromptQuality": "BLOCKED_PROVIDER",
+      "providerPath": "longcat:other -> groq:other -> groq-2:other -> openai:other",
+      "ideaTitle": "Something most people get wrong about AI workflow implementation",
+      "captionPreview": null,
+      "reasons": [
+        "Write this failed: Every configured host failed: longcat (tier1): other; groq (tier1): other; groq-2 (tier1): other; openai (tier4): other."
+      ]
+    },
+    {
+      "persona": "Aisha Patel",
+      "opportunityQuality": "GOOD",
+      "postRating": "BLOCKED_PROVIDER",
+      "visualQuality": "BLOCKED_PROVIDER",
+      "imagePromptQuality": "BLOCKED_PROVIDER",
+      "providerPath": "longcat:other -> groq:other -> groq-2:other -> openai:other",
+      "ideaTitle": "Something most people get wrong about React performance",
+      "captionPreview": null,
+      "reasons": [
+        "Write this failed: Every configured host failed: longcat (tier1): other; groq (tier1): other; groq-2 (tier1): other; openai (tier4): other."
+      ]
+    },
+    {
+      "persona": "David Park",
+      "opportunityQuality": "GOOD",
+      "postRating": "BLOCKED_PROVIDER",
+      "visualQuality": "BLOCKED_PROVIDER",
+      "imagePromptQuality": "BLOCKED_PROVIDER",
+      "providerPath": "longcat:other -> groq:other -> groq-2:other -> openai:other",
+      "ideaTitle": "Something most people get wrong about engineering team leadership",
+      "captionPreview": null,
+      "reasons": [
+        "Write this failed: Every configured host failed: longcat (tier1): other; groq (tier1): other; groq-2 (tier1): other; openai (tier4): other."
+      ]
+    }
+  ]
+}

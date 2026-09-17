@@ -1,0 +1,156 @@
+{
+  "generatedAt": "2026-09-17T15:26:13.447Z",
+  "fixtureSource": {
+    "benchmarkFixtureCount": 8,
+    "seededFixtureCount": 6,
+    "runCount": 6,
+    "runPolicy": "real_seeded_only_no_synthetic",
+    "runNames": [
+      "Sarah Chen",
+      "Marcus Rivera",
+      "Priya Sharma",
+      "Jake Morrison",
+      "Aisha Patel",
+      "David Park"
+    ],
+    "skippedBenchmarkNames": [
+      "Elena",
+      "Frank"
+    ]
+  },
+  "providerState": {
+    "pickDraftChain": 4,
+    "longcatDraftChain": 4,
+    "openaiDraftChain": 4,
+    "chainOrder": [
+      "longcat:LongCat-2.0",
+      "groq:openai/gpt-oss-120b",
+      "groq-2:openai/gpt-oss-120b",
+      "openai:gpt-4o-mini"
+    ]
+  },
+  "summary": {
+    "total": 6,
+    "good": 5,
+    "lightEdit": 0,
+    "bad": 0,
+    "unsafe": 1,
+    "blockedProvider": 0
+  },
+  "rows": [
+    {
+      "persona": "Sarah Chen",
+      "opportunityQuality": "GOOD",
+      "postRating": "GOOD",
+      "visualQuality": "GOOD",
+      "imagePromptQuality": "GOOD",
+      "providerPath": "longcat:ok",
+      "ideaTitle": "Something most people get wrong about distributed systems",
+      "captionPreview": "The most dangerous failure mode in a payment system isn't a race condition. It's a retry.\n\nA downstream service times out. The caller retries. The first request actually succeeded — the response just got lost in transit.",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: QUALITY_GATE_PASS",
+        "Visual: Visual concept is specific and non-generic.",
+        "Prompt: Platform-aware and constrained prompt with original framing."
+      ],
+      "fullCaption": "The most dangerous failure mode in a payment system isn't a race condition. It's a retry.\n\nA downstream service times out. The caller retries. The first request actually succeeded — the response just got lost in transit. Result: double charge.\n\nThis is the thing about distributed systems that tutorials skip: network failures don't look like failures. They look like slow responses. And your retry logic, the thing that's supposed to make your system more resilient, becomes the thing that breaks correctness.\n\nThe fix is straightforward. Every mutating operation needs an idempotency key. The key gets stored atomically with the result. You handle the case where the key exists but the response was lost.\n\nNone of this is novel. But almost every system I've worked with treats idempotency as a nice-to-have — something to add after the first incident. By then you're retrofitting constraints into a system that was built assuming requests are processed exactly once.\n\nThey're not. They're processed at least once. Design for that from the start.",
+      "visualIdea": "Technical diagram of: a request-retry loop with a dedupe key ledger blocking duplicate writes",
+      "imagePrompt": "Clean technical diagram of a request-retry loop with a dedupe key ledger blocking duplicate writes. Supporting detail: And your retry logic, the thing that's supposed to make your system more resilient, becomes the thing that breaks cor.... Precise lines, clear relationships, functional aesthetic. Muted technical palette with one signal color for the key insight. White or near-white background. Annotated sparingly with labels only where needed. Engineering documentation quality, not decorative. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Technical reference aesthetic. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "Marcus Rivera",
+      "opportunityQuality": "GOOD",
+      "postRating": "GOOD",
+      "visualQuality": "GOOD",
+      "imagePromptQuality": "GOOD",
+      "providerPath": "longcat:timeout -> groq:ok",
+      "ideaTitle": "Something most people get wrong about Kubernetes orchestration",
+      "captionPreview": "I’ve spent years scaling a 200‑node Kubernetes cluster on AWS.\n\nMost teams treat the service mesh as a prerequisite, not a consequence. The reality: you add a mesh *after* you’ve got 50+ services, not before. Early mesh ",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: QUALITY_GATE_PASS",
+        "Visual: Visual concept is specific and non-generic.",
+        "Prompt: Platform-aware and constrained prompt with original framing."
+      ],
+      "fullCaption": "I’ve spent years scaling a 200‑node Kubernetes cluster on AWS.\n\nMost teams treat the service mesh as a prerequisite, not a consequence. The reality: you add a mesh *after* you’ve got 50+ services, not before. Early mesh adoption inflates your control plane, creates obscure latency, and turns debugging into a treasure hunt.\n\nTechnical breakdown:\n1. **Control‑plane bloat** – Each sidecar adds CPU/memory pressure. In a 200‑node farm that’s wasted capacity you could be using for actual workloads.\n2. **Observability noise** – Mesh telemetry drowns out the signals you actually need. You end up chasing phantom latency spikes.\n3. **Operational overhead** – Upgrading the mesh version is a separate release cadence. Miss it, and you’re stuck with security patches you can’t apply.\n\nThe counterintuitive fix? Keep the data plane simple. Use native Kubernetes primitives (Ingress, NetworkPolicy, Service) until your service count justifies the complexity. Then, if you still need fine‑grained traffic control, introduce the mesh with a clear migration plan.\n\nResult: faster deployments, lower cost, and a CI pipeline that actually finishes before engineers start looking for new jobs.",
+      "visualIdea": "Object composition representing this tradeoff: a stack of tooling layers with excess layers removed to reveal a stable core",
+      "imagePrompt": "Carefully composed still life showing a stack of tooling layers with excess layers removed to reveal a stable core. Supporting context: I’ve spent years scaling a 200‑node Kubernetes cluster on AWS. Intentional arrangement, clean lighting, editorial quality. Muted tones, one accent. The composition itself communicates the idea without text. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Product photography quality. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "Priya Sharma",
+      "opportunityQuality": "LIGHT_EDIT",
+      "postRating": "GOOD",
+      "visualQuality": "GOOD",
+      "imagePromptQuality": "GOOD",
+      "providerPath": "longcat:ok",
+      "ideaTitle": "Why you believe: \"Most LLM failures are context window problems, not...\"",
+      "captionPreview": "The most common diagnosis I hear when an LLM feature breaks: \"The model isn't good enough.\"\n\nThe actual fix, almost every time: fix the context.\n\nIn my work on LLM evaluation frameworks and RAG systems, the same pattern ",
+      "reasons": [
+        "Opportunity: Usable idea but not strongly differentiated.",
+        "Post: QUALITY_GATE_PASS",
+        "Visual: Visual concept is specific and non-generic.",
+        "Prompt: Platform-aware and constrained prompt with original framing."
+      ],
+      "fullCaption": "The most common diagnosis I hear when an LLM feature breaks: \"The model isn't good enough.\"\n\nThe actual fix, almost every time: fix the context.\n\nIn my work on LLM evaluation frameworks and RAG systems, the same pattern repeats. The model contradicts itself halfway through a long document — that's not the model getting tired, that's lost context. It ignores the most relevant piece of information — that's not a reasoning failure, that's a retrieval failure. It hallucinates a fact that happens to be somewhere in the prompt but buried under noise — that's a context window problem, not a capability ceiling.\n\nEval-driven development makes this visible. Once you start measuring hallucination rates and consistency across different context configurations, you get a triage path that almost never starts with \"upgrade the model.\" It starts with chunking strategy, retrieval relevance, ordering, deduplication, and whether you're sending redundant or contradictory information.\n\nA well-managed context window on a smaller model frequently outperforms a poorly managed context window on a larger one. Prompt engineering and RAG architecture are where you should invest first. Fine-tuning is rarely the answer for retrieval-quality problems.\n\nThe instinct to reach for a bigger model is understandable. It's also expensive and often misdirected.\n\nBefore you blame the model, audit your context pipeline. Then measure what changes.",
+      "visualIdea": "Minimal data visualization of this relationship: context quality vs hallucination rate as a single two-axis relationship",
+      "imagePrompt": "Minimal data visualization of context quality vs hallucination rate as a single two-axis relationship, grounded in \"It ignores the most relevant piece of information that's not a reasoning failure, that's a retrieval failure\". Clean typography, generous white space, single chart or comparison. Muted palette with one accent color for the key data point. Information design quality, not dashboard UI. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Data journalism aesthetic. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "Jake Morrison",
+      "opportunityQuality": "GOOD",
+      "postRating": "UNSAFE",
+      "visualQuality": "GOOD",
+      "imagePromptQuality": "GOOD",
+      "providerPath": "longcat:timeout -> groq:rate_limit -> groq-2:rate_limit -> openai:ok",
+      "ideaTitle": "Something most people get wrong about AI workflow implementation",
+      "captionPreview": "One of the biggest misconceptions in AI workflow implementation is that the technology itself is the core of the solution. In reality, it's about context, integration, and understanding your customer's pain points. Most ",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: UNSUPPORTED_PERSONAL_CLAIM",
+        "Visual: Visual concept is specific and non-generic.",
+        "Prompt: Platform-aware and constrained prompt with original framing."
+      ],
+      "fullCaption": "One of the biggest misconceptions in AI workflow implementation is that the technology itself is the core of the solution. In reality, it's about context, integration, and understanding your customer's pain points. Most clients don’t want AI just for the sake of having it; they want it to resolve specific problems effecively. When I deployed over 30 AI agents, I learned that starting with the 'happy path' and adding edge cases later is crucial. It’s all about incremental improvement.\n\nIf you overpromise what your AI model can do, you risk setting up your customers—and yourself—for disappointment. Also, I can’t stress enough the importance of building in graceful fallbacks for human review. It’s not just about efficiency; it’s about trust. Customers lean more towards solutions that know when to escalate issues to a human. Integration isn’t just about tech stacks; it’s about creating a trustworthy experience. \n\nWhen an AI agent can seamlessly hand off to a human, it not only boosts trust but also clarifies ownership, making your customers feel secure in the process. Logging every decision also helps in debugging—so when things don’t work as planned, you can trace back the path taken. Remember, it’s all about solving the problem effectively—not just deploying AI for the sake of it. \n\nIn the end, your success in AI implementation hinges not just on the tech, but on thoughtful design and humble expectations. That’s the art of blending AI with customer integration.",
+      "visualIdea": "Visual metaphor for this tension: a single metaphor showing mechanism, tension, and consequence",
+      "imagePrompt": "Conceptual visual metaphor centered on a single metaphor showing mechanism, tension, and consequence. Context: One of the biggest misconceptions in AI workflow implementation is that the technology itself is the core of the solu.... Single clear metaphor, not literal illustration. Restrained color palette, one focal element. Negative space used deliberately. Thoughtful composition that rewards a second look. Editorial quality, not commercial stock. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Conceptual art direction. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "Aisha Patel",
+      "opportunityQuality": "GOOD",
+      "postRating": "GOOD",
+      "visualQuality": "GOOD",
+      "imagePromptQuality": "GOOD",
+      "providerPath": "longcat:timeout -> groq:rate_limit -> groq-2:rate_limit -> openai:ok",
+      "ideaTitle": "Something most people get wrong about React performance",
+      "captionPreview": "When it comes to optimizing React performance, many of us tend to focus on the low-hanging fruit: reducing component re-renders, memoizing values, and implementing lazy loading. While these strategies certainly have thei",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: QUALITY_GATE_PASS",
+        "Visual: Visual concept is specific and non-generic.",
+        "Prompt: Platform-aware and constrained prompt with original framing."
+      ],
+      "fullCaption": "When it comes to optimizing React performance, many of us tend to focus on the low-hanging fruit: reducing component re-renders, memoizing values, and implementing lazy loading. While these strategies certainly have their merits, there's a more profound misconception at play: assuming that bigger bundle sizes are only associated with the quality of the code. In reality, bundle size directly impacts user experience, and every kilobyte you add is a potential hurdle for users on slower connections. Reducing my own bundle size by 60% taught me that efficiency isn't just a technical requirement—it's a user-centric necessity. Always measure real user metrics, not lab scores, and remember: code splitting is not optional at scale. Let's prioritize performance for a smoother experience that every user deserves.",
+      "visualIdea": "Visual metaphor for this tension: a single metaphor showing mechanism, tension, and consequence",
+      "imagePrompt": "Conceptual visual metaphor centered on a single metaphor showing mechanism, tension, and consequence. Context: In reality, bundle size directly impacts user experience, and every kilobyte you add is a potential hurdle for users .... Single clear metaphor, not literal illustration. Restrained color palette, one focal element. Negative space used deliberately. Thoughtful composition that rewards a second look. Editorial quality, not commercial stock. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Conceptual art direction. LinkedIn landscape composition (1.91:1)."
+    },
+    {
+      "persona": "David Park",
+      "opportunityQuality": "GOOD",
+      "postRating": "GOOD",
+      "visualQuality": "GOOD",
+      "imagePromptQuality": "GOOD",
+      "providerPath": "longcat:timeout -> groq:ok",
+      "ideaTitle": "Something most people get wrong about engineering team leadership",
+      "captionPreview": "When I managed engineering teams of 8‑25 engineers, I saw a pattern most skip: we equate hiring speed with progress. The reality is the opposite – hiring slowly is the highest‑leverage activity for a manager.\n\n**Misconce",
+      "reasons": [
+        "Opportunity: Specific and persona-aligned opportunity.",
+        "Post: QUALITY_GATE_PASS",
+        "Visual: Visual concept is specific and non-generic.",
+        "Prompt: Platform-aware and constrained prompt with original framing."
+      ],
+      "fullCaption": "When I managed engineering teams of 8‑25 engineers, I saw a pattern most skip: we equate hiring speed with progress. The reality is the opposite – hiring slowly is the highest‑leverage activity for a manager.\n\n**Misconception**: Faster hiring = faster delivery.\n**Why it feels right**: Pressure to staff up appears to remove bottlenecks instantly.\n**What’s really happening**: Each new hire introduces onboarding cost, cultural friction, and decision‑making overhead. If you hire without rigor, you amplify coordination debt and dilute ownership.\n\n**The counter‑intuitive fix**:\n1. **Set a deliberate cadence** – limit hires to what the current team can absorb without sacrificing velocity.\n2. **Structure interviews for signal, not speed** – use consistent rubrics that surface bias early; the process itself becomes a health check for the team.\n3. **Treat candidate experience as a metric of team health** – a smooth interview reflects clear ownership and shared values.\n\n**Result**: Teams that grow deliberately maintain clear ownership, reduce prioritization debt, and deliver more predictably. Hiring is not a race; it’s a strategic lever that shapes the long‑term performance of the whole organization.\n\nIf you’re measuring success by headcount alone, you’re likely mis‑prioritizing. Shift the focus to the quality of each addition, and watch the team’s output become steadier and stronger.",
+      "visualIdea": "Minimal data visualization of this relationship: one measurable relationship showing cause and effect",
+      "imagePrompt": "Minimal data visualization of one measurable relationship showing cause and effect, grounded in \"**Result**: Teams that grow deliberately maintain clear ownership, reduce prioritization debt, and deliver more predi...\". Clean typography, generous white space, single chart or comparison. Muted palette with one accent color for the key data point. Information design quality, not dashboard UI. No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables. Data journalism aesthetic. LinkedIn landscape composition (1.91:1)."
+    }
+  ]
+}

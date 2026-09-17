@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
-import { structuredJsonChain } from '@/lib/ai/provider'
-import { pickModelChain } from '@/lib/ai/routing'
 import { scanForSecrets } from '@/lib/ai/secrets'
-import {
-  buildInboundSystemPrompt,
-  buildInboundUserPrompt,
-  validateInboundInput,
-  mapRawToIntelligence,
-} from '@/lib/inbound/intelligence'
+import { produceCanonicalIntelligence } from '@/lib/intelligence-v2/orchestrator'
+import { buildProfileIntelligence, matchProofToLead } from '@/lib/relay/profile-intelligence'
+import { hasProvider } from '@/lib/ai/config'
 import type { InboundInput } from '@/lib/domain/types'
+
+export const maxDuration = 120
 
 export async function POST(req: NextRequest) {
   const store = await createScoutStore().catch(() => null)
@@ -26,9 +23,8 @@ export async function POST(req: NextRequest) {
 
   body.source = body.source ?? 'other'
 
-  const validation = validateInboundInput(body)
-  if (!validation.ok) {
-    return NextResponse.json({ error: validation.error }, { status: 400 })
+  if (!body.message?.trim()) {
+    return NextResponse.json({ error: 'Message is required.' }, { status: 400 })
   }
 
   const secretScan = scanForSecrets(body.message)
@@ -42,70 +38,66 @@ export async function POST(req: NextRequest) {
       store.listAllProofItems(),
     ])
 
-    const system = buildInboundSystemPrompt(profiles, proofItems)
-    const user = buildInboundUserPrompt(body)
-    const chain = pickModelChain('extract')
-
-    const result = await structuredJsonChain<Record<string, unknown>>(chain, {
-      system,
-      user,
-      schema: {
-        type: 'object',
-        properties: {
-          wants: { type: 'string' },
-          intent: { type: 'string' },
-          fit_score: { type: 'number' },
-          fit_relevance: { type: 'string' },
-          opportunity_quality: { type: 'string', enum: ['high', 'medium', 'low'] },
-          recommended_profile_index: { type: 'number' },
-          identity_fit_reason: { type: 'string' },
-          matching_skills: { type: 'array', items: { type: 'string' } },
-          strongest_proof_indexes: { type: 'array', items: { type: 'number' } },
-          missing_info: { type: 'array', items: { type: 'string' } },
-          recommended_action: { type: 'string' },
-          can_generate_resume: { type: 'boolean' },
-          extracted_company: { type: ['string', 'null'] },
-          extracted_contact: { type: ['string', 'null'] },
-          extracted_title: { type: ['string', 'null'] },
-          extracted_url: { type: ['string', 'null'] },
-        },
-        required: ['wants', 'intent', 'fit_score', 'fit_relevance', 'opportunity_quality', 'recommended_profile_index', 'identity_fit_reason', 'matching_skills', 'strongest_proof_indexes', 'missing_info', 'recommended_action', 'can_generate_resume', 'extracted_company', 'extracted_contact', 'extracted_title', 'extracted_url'],
-      },
+    const canonicalResult = await produceCanonicalIntelligence(body.message, {
+      onStatus: () => {},
     })
+    const canonical = canonicalResult.intelligence
 
-    const raw = result.data as Record<string, unknown>
+    const tagsForMatching = [
+      ...canonical.intelligence.content.topics,
+      ...canonical.intelligence.content.technicalSignals,
+      ...(canonical.intelligence.company.industry ? [canonical.intelligence.company.industry] : []),
+    ]
 
-    const intelligence = mapRawToIntelligence(
-      {
-        wants: raw.wants as string,
-        intent: raw.intent as string,
-        fit_score: raw.fit_score as number,
-        fit_relevance: raw.fit_relevance as string,
-        opportunity_quality: raw.opportunity_quality as 'high' | 'medium' | 'low',
-        recommended_profile_index: raw.recommended_profile_index as number,
-        identity_fit_reason: raw.identity_fit_reason as string,
-        matching_skills: raw.matching_skills as string[],
-        strongest_proof_indexes: raw.strongest_proof_indexes as number[],
-        missing_info: raw.missing_info as string[],
-        recommended_action: raw.recommended_action as string,
-        can_generate_resume: raw.can_generate_resume as boolean,
-        extracted_company: raw.extracted_company as string | null,
-        extracted_contact: raw.extracted_contact as string | null,
-        extracted_title: raw.extracted_title as string | null,
-        extracted_url: raw.extracted_url as string | null,
-      },
-      profiles,
-      proofItems,
-    )
+    const profileMatches: Array<{ profile: (typeof profiles)[0]; matchedProof: ReturnType<typeof matchProofToLead>; totalScore: number }> = []
+    for (const profile of profiles) {
+      const intelligence = buildProfileIntelligence(profile, proofItems)
+      const matched = matchProofToLead(intelligence, tagsForMatching, 3)
+      const totalScore = matched.reduce((s, m) => s + m.relevanceScore, 0)
+      profileMatches.push({ profile, matchedProof: matched, totalScore })
+    }
+    profileMatches.sort((a, b) => b.totalScore - a.totalScore)
+
+    const bestMatch = profileMatches[0] ?? null
+
+    const intelligence = {
+      wants: canonical.intelligence.opportunity.description ?? 'Unknown',
+      intent: canonical.intelligence.opportunityTrigger ?? 'Unknown',
+      fit_score: canonical.canonicalScore,
+      fit_relevance: canonical.qualification,
+      opportunity_quality: canonical.canonicalScore >= 70 ? 'high' as const : canonical.canonicalScore >= 50 ? 'medium' as const : 'low' as const,
+      recommended_profile_index: bestMatch ? profiles.indexOf(bestMatch.profile) : 0,
+      identity_fit_reason: bestMatch
+        ? `Best proof match: ${bestMatch.matchedProof[0]?.safeClaim ?? 'General capability'}`
+        : 'No profiles available',
+      matching_skills: canonical.intelligence.content.technicalSignals.slice(0, 5),
+      strongest_proof_indexes: bestMatch?.matchedProof.map((_, i) => i) ?? [],
+      missing_info: canonical.scoreBreakdown.missingInfo,
+      recommended_action: canonical.canonicalScore >= 70 ? 'reply' : canonical.canonicalScore >= 50 ? 'research_more' : 'skip',
+      can_generate_resume: canonical.intelligence.content.technicalSignals.length >= 2,
+      extracted_company: canonical.intelligence.company.name,
+      extracted_contact: canonical.intelligence.person.fullName,
+      extracted_title: canonical.intelligence.person.title,
+      extracted_url: canonical.intelligence.person.linkedinUrl ?? canonical.rawSource.sourceUrl,
+    }
 
     return NextResponse.json({
       intelligence,
       extracted: {
-        company: intelligence.recommendedIdentity ? (raw.extracted_company as string | null) : null,
-        contactName: raw.extracted_contact as string | null,
-        contactTitle: raw.extracted_title as string | null,
-        url: raw.extracted_url as string | null,
+        company: intelligence.extracted_company,
+        contactName: intelligence.extracted_contact,
+        contactTitle: intelligence.extracted_title,
+        url: intelligence.extracted_url,
       },
+      canonical,
+      profiles: profiles.map((p) => ({
+        id: p.id,
+        label: p.label ?? p.headline ?? 'Unknown',
+        matchScore: profileMatches.find((pm) => pm.profile.id === p.id)?.totalScore ?? 0,
+        topProof: profileMatches.find((pm) => pm.profile.id === p.id)?.matchedProof[0]?.safeClaim ?? null,
+      })),
+      bestProfileId: bestMatch?.profile.id ?? null,
+      demoMode: !hasProvider(),
     })
   } catch (err) {
     console.error('[inbound/analyze] failed:', err)

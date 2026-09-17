@@ -138,10 +138,10 @@ function isOptionalSearchError(err: unknown): boolean {
  * drops it for list, queue and rate queries that never read it.
  */
 const LEAD_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, created_at'
 
 const LEAD_LIST_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, created_at'
 
 function mapLead(r: Row): Lead {
   return {
@@ -172,6 +172,8 @@ function mapLead(r: Row): Lead {
     source: (r.source as Lead['source']) ?? null,
     inboundMessage: (r.inbound_message as string) ?? null,
     inboundRaw: (r.inbound_raw as Record<string, unknown>) ?? null,
+    senderProfileId: (r.sender_profile_id as string) ?? null,
+    revenueIdentityId: (r.revenue_identity_id as string) ?? null,
     canonicalScore: (r.canonical_score as number) ?? null,
     scoreVersion: (r.score_version as string) ?? null,
     scoredAt: (r.scored_at as string) ?? null,
@@ -485,7 +487,8 @@ export class SupabaseStore implements ScoutStore {
       source: input.source ?? null,
       inbound_message: input.inboundMessage ?? null,
       inbound_raw: input.inboundRaw ?? null,
-      sender_profile_id: input.assignedProfileId ?? null,
+      sender_profile_id: input.senderProfileId ?? input.assignedProfileId ?? null,
+      revenue_identity_id: input.revenueIdentityId ?? null,
       // Intelligence V2
       canonical_score: input.canonicalScore ?? null,
       score_version: input.scoreVersion ?? null,

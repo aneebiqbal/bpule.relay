@@ -209,6 +209,8 @@ export async function POST(request: Request) {
       confidenceNotes: extracted.confidenceNotes ?? [],
     },
     allowPotentialDuplicate,
+    senderProfileId: typeof body.senderProfileId === 'string' ? body.senderProfileId : null,
+    revenueIdentityId: typeof body.revenueIdentityId === 'string' ? body.revenueIdentityId : null,
     // Intelligence V2 fields
     canonicalScore: canonical?.canonicalScore ?? null,
     scoreVersion: canonical?.scoreVersion ?? null,
