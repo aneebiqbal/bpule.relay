@@ -1,14 +1,12 @@
+import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
 import { buildRoleContext } from '@/lib/relay/role-intelligence'
 import { buildRelayQueue, filterQueueByRole } from '@/lib/relay/queue-engine'
 import type { Lead, RelayTask, RevenueIdentity, RevenueIdentityWithAssignment } from '@/lib/domain/types'
-import {
-  RelayTodayWorkspace,
-  type RelayTodayAction,
-  type RelayTodayWorkspaceProps,
-} from '@/components/relay-today-workspace'
+import { RelayTodayWorkspaceAsync } from '@/components/relay-today-workspace-async'
+import type { RelayTodayAction, RelayTodayWorkspaceProps } from '@/components/relay-today-workspace'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,27 +18,36 @@ type IdentityRef = {
   profileId: string | null
 }
 
-export default async function TodayPage() {
+async function loadDashboardData(): Promise<RelayTodayWorkspaceProps> {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
 
   const store = await createScoutStore()
   const roleContext = buildRoleContext(user.rep, user.organization)
+  const isAdmin = user.rep.role === 'admin'
 
-  const [dash, relayData, allLeads] = await Promise.all([
+  const [
+    dash,
+    relayData,
+    allLeads,
+    allReps,
+    revenueIdentities,
+    todayAccountability,
+    teamAccountability,
+  ] = await Promise.all([
     store.getTodayDashboard(),
     store.getRelayQueueData(),
     store.fetchLeadsAll(),
+    isAdmin ? store.listAllReps().catch(() => undefined) : Promise.resolve(undefined),
+    (isAdmin
+      ? store.listRevenueIdentitiesAdmin().then((identities) =>
+          identities.filter((identity) => identity.status === 'active').map(mapIdentity),
+        )
+      : store.listMyAssignedIdentities().then((identities) => identities.map(mapAssignedIdentity))
+    ).catch((): IdentityRef[] => []),
+    store.getMyTodayAccountability().catch(() => null),
+    isAdmin ? store.getTeamAccountabilityAdmin().catch(() => null) : Promise.resolve(null),
   ])
-
-  let allReps: Awaited<ReturnType<typeof store.listAllReps>> | undefined
-  if (user.rep.role === 'admin') {
-    try {
-      allReps = await store.listAllReps()
-    } catch {
-      allReps = undefined
-    }
-  }
 
   const queue = buildRelayQueue({
     roleContext,
@@ -56,21 +63,6 @@ export default async function TodayPage() {
   })
 
   const visibleTasks = filterQueueByRole(queue, roleContext.role)
-
-  let revenueIdentities: IdentityRef[] = []
-  try {
-    if (user.rep.role === 'admin') {
-      const identities = await store.listRevenueIdentitiesAdmin()
-      revenueIdentities = identities
-        .filter((identity) => identity.status === 'active')
-        .map(mapIdentity)
-    } else {
-      const identities = await store.listMyAssignedIdentities()
-      revenueIdentities = identities.map(mapAssignedIdentity)
-    }
-  } catch {
-    revenueIdentities = []
-  }
 
   const leadMap = new Map(allLeads.map((lead) => [lead.id, lead]))
   const identityByProfile = new Map(
@@ -155,25 +147,21 @@ export default async function TodayPage() {
 
   let targetProgress: RelayTodayWorkspaceProps['targetProgress']
   targetProgress = null
-  try {
-    const today = await store.getMyTodayAccountability()
-    if (today.totalTarget > 0) {
-      targetProgress = {
-        completed: today.totalCompleted,
-        total: today.totalTarget,
-        remaining: today.totalRemaining,
-        status: today.overallStatus,
-      }
+  if (todayAccountability && todayAccountability.totalTarget > 0) {
+    targetProgress = {
+      completed: todayAccountability.totalCompleted,
+      total: todayAccountability.totalTarget,
+      remaining: todayAccountability.totalRemaining,
+      status: todayAccountability.overallStatus,
     }
-  } catch {
-    targetProgress = null
   }
 
   let adminSummary: RelayTodayWorkspaceProps['adminSummary']
   adminSummary = null
-  if (user.rep.role === 'admin') {
+  if (isAdmin) {
     try {
-      const team = await store.getTeamAccountabilityAdmin()
+      if (!teamAccountability) throw new Error('team accountability unavailable')
+      const team = teamAccountability
       const teamRows = team.summaries
         .map((summary) => ({
           id: summary.repId,
@@ -211,26 +199,66 @@ export default async function TodayPage() {
     }
   }
 
+  return {
+    generatedAt: queue.generatedAt,
+    role: user.rep.role,
+    actions,
+    system: {
+      conversationsActive: activeConversations,
+      conversationsNeedReply: actions.filter((action) => action.kind === 'reply_needed' || action.kind === 'inbound_opportunity').length,
+      opportunitiesQualified: actions.filter((action) => opportunityTaskKinds.has(action.kind)).length,
+      opportunitiesStrong: actions.filter((action) => action.kind === 'high_fit_lead' || action.kind === 'inbound_opportunity').length,
+      followupsDue: dash.followupsDue.length,
+      jobsWorthReview: actions.filter((action) => action.kind === 'job_worth_apply' || action.kind === 'proposal_ready').length,
+      studioIdeasReady: studioOpportunity ? 1 : 0,
+    },
+    conversationsMoving,
+    opportunities,
+    studioOpportunity,
+    targetProgress,
+    adminSummary,
+  }
+}
+
+export default function TodayPage() {
+  const dataPromise = loadDashboardData()
+
   return (
-    <RelayTodayWorkspace
-      generatedAt={queue.generatedAt}
-      role={user.rep.role}
-      actions={actions}
-      system={{
-        conversationsActive: activeConversations,
-        conversationsNeedReply: actions.filter((action) => action.kind === 'reply_needed' || action.kind === 'inbound_opportunity').length,
-        opportunitiesQualified: actions.filter((action) => opportunityTaskKinds.has(action.kind)).length,
-        opportunitiesStrong: actions.filter((action) => action.kind === 'high_fit_lead' || action.kind === 'inbound_opportunity').length,
-        followupsDue: dash.followupsDue.length,
-        jobsWorthReview: actions.filter((action) => action.kind === 'job_worth_apply' || action.kind === 'proposal_ready').length,
-        studioIdeasReady: studioOpportunity ? 1 : 0,
-      }}
-      conversationsMoving={conversationsMoving}
-      opportunities={opportunities}
-      studioOpportunity={studioOpportunity}
-      targetProgress={targetProgress}
-      adminSummary={adminSummary}
-    />
+    <Suspense fallback={<DashboardShellSkeleton />}>
+      <RelayTodayWorkspaceAsync dataPromise={dataPromise} />
+    </Suspense>
+  )
+}
+
+function DashboardShellSkeleton() {
+  return (
+    <div className="space-y-6 pb-8">
+      <header className="space-y-2">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Your Relay / Today</p>
+        <div className="h-8 w-72 max-w-full rounded bg-bone" />
+        <div className="h-3.5 w-64 max-w-full rounded bg-bone" />
+      </header>
+      <div className="srf-console srf-console-edge hero-console-pulse overflow-hidden p-5 sm:p-6">
+        <div className="h-3 w-16 rounded bg-bone" />
+        <div className="mt-4 h-7 w-80 max-w-full rounded bg-bone" />
+        <div className="mt-2 h-3.5 w-64 max-w-full rounded bg-bone" />
+        <div className="mt-4 h-24 w-full rounded bg-bone" />
+      </div>
+      <section className="space-y-3">
+        <div className="h-3 w-24 rounded bg-bone" />
+        <div className="overflow-hidden rounded border border-line bg-bone-raised">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-3 border-b border-line/70 px-3 py-3 last:border-b-0">
+              <span className="w-7 text-mono-medium text-[11px] text-stone/75">{String(i + 1).padStart(2, '0')}</span>
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="h-3.5 w-40 max-w-full rounded bg-bone" />
+                <div className="h-3 w-56 max-w-full rounded bg-bone" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
   )
 }
 

@@ -1,7 +1,9 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { createScoutStore } from '@/lib/store'
 import { Plus, Briefcase, ArrowRight, Clock, Users, CheckCircle2 } from 'lucide-react'
 import { cn } from 'cn'
+import type { UpworkJob } from '@/lib/domain/types'
 
 
 export const dynamic = 'force-dynamic'
@@ -12,13 +14,14 @@ const VERDICT_STYLE: Record<string, { bg: string; text: string; label: string }>
   skip: { bg: 'bg-bone', text: 'text-slate', label: 'Skip' },
 }
 
-export default async function UpworkListPage() {
-  const store = await createScoutStore()
-  const jobs = await store.listUpworkJobs()
+type JobsPromise = Promise<UpworkJob[]>
 
-  const applyCount = jobs.filter((j) => j.verdict === 'apply').length
-  const ifConnectsCount = jobs.filter((j) => j.verdict === 'apply_if_connects').length
-  const totalConnects = jobs.reduce((sum, j) => sum + j.connectsCost, 0)
+function loadJobs(): JobsPromise {
+  return createScoutStore().then((store) => store.listUpworkJobs())
+}
+
+export default function UpworkListPage() {
+  const jobsPromise = loadJobs()
 
   return (
     <div className="space-y-5">
@@ -39,105 +42,159 @@ export default async function UpworkListPage() {
             New job
           </Link>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-4">
-          <ConsoleMetric icon={<Briefcase className="size-3.5" />} label="Total jobs" value={jobs.length} />
-          <ConsoleMetric icon={<CheckCircle2 className="size-3.5" />} label="Apply now" value={applyCount} />
-          <ConsoleMetric icon={<Users className="size-3.5" />} label="Apply if connects" value={ifConnectsCount} />
-          <ConsoleMetric icon={<Clock className="size-3.5" />} label="Connects at stake" value={totalConnects} />
-        </div>
+        <Suspense fallback={<UpworkMetricsSkeleton />}>
+          <UpworkMetrics jobsPromise={jobsPromise} />
+        </Suspense>
       </section>
 
-      {/* Job list */}
-      {jobs.length === 0 ? (
-        <section className="reveal-up stagger-2 rounded-3xl border border-dashed border-line bg-paper/50 p-12 text-center">
-          <div className="mx-auto max-w-sm space-y-4">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-bone">
-              <Briefcase className="size-5 text-orange" aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-base font-medium text-ink">No Upwork jobs yet.</p>
-              <p className="mt-2 text-sm leading-relaxed text-slate">
-                Paste a job post and Relay scores it so you know whether it&apos;s worth the Connects.
-              </p>
-            </div>
-            <Link
-              href="/upwork/new"
-              className="inline-flex items-center gap-2 rounded-2xl bg-orange px-5 py-2.5 text-sm font-medium text-bone transition-all duration-300 hover:bg-orange/90"
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              Add the first job
-            </Link>
+      <Suspense fallback={<UpworkListSkeleton />}>
+        <UpworkList jobsPromise={jobsPromise} />
+      </Suspense>
+    </div>
+  )
+}
+
+async function UpworkMetrics({ jobsPromise }: { jobsPromise: JobsPromise }) {
+  const jobs = await jobsPromise
+  const applyCount = jobs.filter((j) => j.verdict === 'apply').length
+  const ifConnectsCount = jobs.filter((j) => j.verdict === 'apply_if_connects').length
+  const totalConnects = jobs.reduce((sum, j) => sum + j.connectsCost, 0)
+  return (
+    <div className="mt-4 grid gap-3 sm:grid-cols-4">
+      <ConsoleMetric icon={<Briefcase className="size-3.5" />} label="Total jobs" value={jobs.length} />
+      <ConsoleMetric icon={<CheckCircle2 className="size-3.5" />} label="Apply now" value={applyCount} />
+      <ConsoleMetric icon={<Users className="size-3.5" />} label="Apply if connects" value={ifConnectsCount} />
+      <ConsoleMetric icon={<Clock className="size-3.5" />} label="Connects at stake" value={totalConnects} />
+    </div>
+  )
+}
+
+async function UpworkList({ jobsPromise }: { jobsPromise: JobsPromise }) {
+  const jobs = await jobsPromise
+
+  if (jobs.length === 0) {
+    return (
+      <section className="reveal-up stagger-2 rounded-3xl border border-dashed border-line bg-paper/50 p-12 text-center">
+        <div className="mx-auto max-w-sm space-y-4">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-bone">
+            <Briefcase className="size-5 text-orange" aria-hidden="true" />
           </div>
-        </section>
-      ) : (
-        <div className="reveal-up stagger-2 overflow-hidden rounded-2xl border border-line bg-paper">
-          <ul className="divide-y divide-line">
-            {jobs.map((job, i) => {
-              const verdict = job.verdict ? VERDICT_STYLE[job.verdict] : VERDICT_STYLE.skip
-              return (
-                <li
-                  key={job.id}
-                  className="slide-in-right"
-                  style={{ animationDelay: `${0.03 + i * 0.03}s` }}
-                >
-                  <Link
-                    href={`/upwork/${job.id}`}
-                    className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-bone/40"
-                  >
-                    {/* Score */}
-                    <div
-                      className={cn(
-                        'flex size-11 shrink-0 items-center justify-center rounded-xl font-mono text-sm font-medium',
-                        verdict.bg,
-                        verdict.text,
-                      )}
-                    >
-                      {job.score ?? '—'}
-                    </div>
-
-                    {/* Content */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-medium text-ink transition-colors group-hover:text-orange">
-                          {job.title}
-                        </span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate">
-                        <span>
-                          {job.budgetMin && job.budgetMax
-                            ? `$${job.budgetMin}–$${job.budgetMax}`
-                            : job.hourlyRateMin && job.hourlyRateMax
-                              ? `$${job.hourlyRateMin}–$${job.hourlyRateMax}/hr`
-                              : 'Budget not stated'}
-                        </span>
-                        <span className="text-line">·</span>
-                        <span>{job.proposalCount !== null ? `${job.proposalCount} proposals` : 'unknown'}</span>
-                        <span className="text-line">·</span>
-                        <span>{job.connectsCost} Connects</span>
-                      </div>
-                    </div>
-
-                    {/* Verdict + arrow */}
-                    <span
-                      className={cn(
-                        'hidden shrink-0 rounded-full px-2.5 py-1 text-xs font-medium sm:inline-flex',
-                        verdict.bg,
-                        verdict.text,
-                      )}
-                    >
-                      {verdict.label}
-                    </span>
-                    <ArrowRight
-                      className="size-4 shrink-0 text-line transition-all duration-200 group-hover:text-orange group-hover:translate-x-0.5"
-                      aria-hidden="true"
-                    />
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
+          <div>
+            <p className="text-base font-medium text-ink">No Upwork jobs yet.</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate">
+              Paste a job post and Relay scores it so you know whether it&apos;s worth the Connects.
+            </p>
+          </div>
+          <Link
+            href="/upwork/new"
+            className="inline-flex items-center gap-2 rounded-2xl bg-orange px-5 py-2.5 text-sm font-medium text-bone transition-all duration-300 hover:bg-orange/90"
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            Add the first job
+          </Link>
         </div>
-      )}
+      </section>
+    )
+  }
+
+  return (
+    <div className="reveal-up stagger-2 overflow-hidden rounded-2xl border border-line bg-paper">
+      <ul className="divide-y divide-line">
+        {jobs.map((job, i) => {
+          const verdict = job.verdict ? VERDICT_STYLE[job.verdict] : VERDICT_STYLE.skip
+          return (
+            <li
+              key={job.id}
+              className="slide-in-right"
+              style={{ animationDelay: `${0.03 + i * 0.03}s` }}
+            >
+              <Link
+                href={`/upwork/${job.id}`}
+                className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-bone/40"
+              >
+                {/* Score */}
+                <div
+                  className={cn(
+                    'flex size-11 shrink-0 items-center justify-center rounded-xl font-mono text-sm font-medium',
+                    verdict.bg,
+                    verdict.text,
+                  )}
+                >
+                  {job.score ?? '—'}
+                </div>
+
+                {/* Content */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-ink transition-colors group-hover:text-orange">
+                      {job.title}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate">
+                    <span>
+                      {job.budgetMin && job.budgetMax
+                        ? `$${job.budgetMin}–$${job.budgetMax}`
+                        : job.hourlyRateMin && job.hourlyRateMax
+                          ? `$${job.hourlyRateMin}–$${job.hourlyRateMax}/hr`
+                          : 'Budget not stated'}
+                    </span>
+                    <span className="text-line">·</span>
+                    <span>{job.proposalCount !== null ? `${job.proposalCount} proposals` : 'unknown'}</span>
+                    <span className="text-line">·</span>
+                    <span>{job.connectsCost} Connects</span>
+                  </div>
+                </div>
+
+                {/* Verdict + arrow */}
+                <span
+                  className={cn(
+                    'hidden shrink-0 rounded-full px-2.5 py-1 text-xs font-medium sm:inline-flex',
+                    verdict.bg,
+                    verdict.text,
+                  )}
+                >
+                  {verdict.label}
+                </span>
+                <ArrowRight
+                  className="size-4 shrink-0 text-line transition-all duration-200 group-hover:text-orange group-hover:translate-x-0.5"
+                  aria-hidden="true"
+                />
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+function UpworkMetricsSkeleton() {
+  return (
+    <div className="mt-4 grid gap-3 sm:grid-cols-4">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+          <div className="h-2.5 w-20 rounded bg-bone" />
+          <div className="mt-2 h-5 w-10 rounded bg-bone" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function UpworkListSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-line bg-paper">
+      <div className="divide-y divide-line">
+        {[0, 1, 2, 3, 4].map((row) => (
+          <div key={row} className="flex items-center gap-4 px-5 py-4">
+            <div className="size-11 shrink-0 rounded-xl bg-bone" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="h-3.5 w-52 max-w-full rounded bg-bone" />
+              <div className="h-3 w-72 max-w-full rounded bg-bone" />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

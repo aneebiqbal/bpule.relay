@@ -34,10 +34,12 @@ export default async function ContentPage({
     const base = await store.listContentPersonas(user.rep.id)
     const resolved = await Promise.all(
       base.map(async (p) => {
-        const topicClusters = await store.listTopicClusters(p.id)
-        const drafts = await store.listContentDrafts(p.id)
-        const history = await store.listContentHistory(p.id, 30)
-        const contentProfile = p.contentProfileId ? await store.getContentProfile(p.contentProfileId) : null
+        const [topicClusters, drafts, history, contentProfile] = await Promise.all([
+          store.listTopicClusters(p.id),
+          store.listContentDrafts(p.id),
+          store.listContentHistory(p.id, 30),
+          p.contentProfileId ? store.getContentProfile(p.contentProfileId) : Promise.resolve(null),
+        ])
 
         const cutoff = new Date().getTime() - 14 * 86_400_000
         const recentPosts = history.filter((h) => new Date(h.postedAt).getTime() >= cutoff)
@@ -52,9 +54,11 @@ export default async function ContentPage({
         } else if (draftedToday) {
           dailyStatus = 'drafted'
         } else {
-          const findings = await store.listResearchFindings(p.id, { unusedOnly: true, limit: 10 })
-          const feedback = await store.listContentDraftFeedback(p.id, 100)
-          const generatedToday = await store.countContentDraftsToday(p.id)
+          const [findings, feedback, generatedToday] = await Promise.all([
+            store.listResearchFindings(p.id, { unusedOnly: true, limit: 10 }),
+            store.listContentDraftFeedback(p.id, 100),
+            store.countContentDraftsToday(p.id),
+          ])
           const decision = buildDailyDecision({ persona: p, clusters: topicClusters, findings, feedback, generatedToday })
           dailyStatus = decision.decisionType === 'none' ? 'none' : 'asked'
         }

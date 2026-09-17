@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react'
+import { Suspense, type ComponentType } from 'react'
 import Link from 'next/link'
 import {
   MessageCircle,
@@ -200,15 +200,10 @@ function RelayMetric({ label, value }: { label: string; value: number }) {
   )
 }
 
-export default async function RelayPage() {
+async function loadRelay() {
   const user = await getCurrentUser()
-  if (!user) {
-    return (
-      <div className="rounded-lg border border-line p-8 text-center">
-        <p className="text-[15px] font-medium text-ink">Not authenticated.</p>
-      </div>
-    )
-  }
+  if (!user) return { authenticated: false as const }
+
   const store = await createScoutStore()
   const roleContext = buildRoleContext(user.rep, user.organization)
 
@@ -235,6 +230,22 @@ export default async function RelayPage() {
   const highCount = visibleTasks.filter((task) => task.priority === 'high').length
   const mediumLowCount = visibleTasks.filter((task) => task.priority === 'medium' || task.priority === 'low').length
 
+  return {
+    authenticated: true as const,
+    queue,
+    topAction,
+    restQueue,
+    highCount,
+    mediumLowCount,
+    role: roleContext.role,
+  }
+}
+
+type RelayData = Awaited<ReturnType<typeof loadRelay>>
+
+export default function RelayPage() {
+  const relayPromise = loadRelay()
+
   return (
     <div className="space-y-5">
       <header className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
@@ -244,17 +255,12 @@ export default async function RelayPage() {
         <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
           Full action queue across your operating system.
         </h1>
-        <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">
-          {queue.summary.total > 0
-            ? `${queue.summary.total} items prepared${queue.summary.urgent > 0 ? `, ${queue.summary.urgent} urgent` : ''}.`
-            : 'No active queue items right now.'}
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-4">
-          <RelayMetric label="Queue total" value={queue.summary.total} />
-          <RelayMetric label="Urgent" value={queue.summary.urgent} />
-          <RelayMetric label="High" value={highCount} />
-          <RelayMetric label="Medium/Low" value={mediumLowCount} />
-        </div>
+        <Suspense fallback={<div className="mt-2 h-4 w-72 max-w-full rounded bg-bone" />}>
+          <RelaySubtitle relayPromise={relayPromise} />
+        </Suspense>
+        <Suspense fallback={<RelayMetricsSkeleton />}>
+          <RelayMetrics relayPromise={relayPromise} />
+        </Suspense>
         <div className="mt-4 flex flex-wrap gap-2">
           <Link
             href="/dashboard"
@@ -272,6 +278,71 @@ export default async function RelayPage() {
         </div>
       </header>
 
+      <Suspense fallback={<RelayBodySkeleton />}>
+        <RelayBody relayPromise={relayPromise} />
+      </Suspense>
+
+      {/* Principle reminder */}
+      <section className="reveal-up stagger-3 srf-proof px-4 py-4">
+        <div className="flex items-start gap-3">
+          <Shield className="size-5 shrink-0 text-stone mt-0.5" />
+          <div>
+            <p className="text-[13px] font-medium text-ink">Relay prepares, you act.</p>
+            <p className="mt-0.5 text-[12px] text-graphite">
+              Every recommendation is traceable to its source. Relay never sends outreach,
+              applies to jobs, or impersonates you. The human is always the final actor.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div className="h-4 lg:hidden" />
+    </div>
+  )
+}
+
+async function RelaySubtitle({ relayPromise }: { relayPromise: Promise<RelayData> }) {
+  const data = await relayPromise
+  if (!data.authenticated) return null
+  const { queue } = data
+  return (
+    <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">
+      {queue.summary.total > 0
+        ? `${queue.summary.total} items prepared${queue.summary.urgent > 0 ? `, ${queue.summary.urgent} urgent` : ''}.`
+        : 'No active queue items right now.'}
+    </p>
+  )
+}
+
+async function RelayMetrics({ relayPromise }: { relayPromise: Promise<RelayData> }) {
+  const data = await relayPromise
+  if (!data.authenticated) return null
+  const { queue, highCount, mediumLowCount } = data
+  return (
+    <div className="mt-4 grid gap-3 sm:grid-cols-4">
+      <RelayMetric label="Queue total" value={queue.summary.total} />
+      <RelayMetric label="Urgent" value={queue.summary.urgent} />
+      <RelayMetric label="High" value={highCount} />
+      <RelayMetric label="Medium/Low" value={mediumLowCount} />
+    </div>
+  )
+}
+
+async function RelayBody({ relayPromise }: { relayPromise: Promise<RelayData> }) {
+  const data = await relayPromise
+
+  if (!data.authenticated) {
+    return (
+      <div className="rounded-lg border border-line p-8 text-center">
+        <p className="text-[15px] font-medium text-ink">Not authenticated.</p>
+      </div>
+    )
+  }
+
+  const { topAction, restQueue, role } = data
+
+  return (
+    <>
       {/* Top Action Hero */}
       {topAction && (
         <section className="reveal-up stagger-1">
@@ -304,7 +375,7 @@ export default async function RelayPage() {
               Relay has nothing prepared right now.
             </p>
             <p className="text-[13px] leading-relaxed text-graphite">
-              {roleContext.role === 'admin'
+              {role === 'admin'
                 ? 'Team is on track. Check back when new leads arrive or replies come in.'
                 : 'All clear. Time to prospect, work on content, or refine your profiles.'}
             </p>
@@ -326,22 +397,49 @@ export default async function RelayPage() {
           </div>
         </section>
       )}
+    </>
+  )
+}
 
-      {/* Principle reminder */}
-      <section className="reveal-up stagger-3 srf-proof px-4 py-4">
+function RelayMetricsSkeleton() {
+  return (
+    <div className="mt-4 grid gap-3 sm:grid-cols-4">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
+          <div className="h-2.5 w-16 rounded bg-bone" />
+          <div className="mt-2 h-5 w-10 rounded bg-bone" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function RelayBodySkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-line bg-bone-raised p-4">
         <div className="flex items-start gap-3">
-          <Shield className="size-5 shrink-0 text-stone mt-0.5" />
-          <div>
-            <p className="text-[13px] font-medium text-ink">Relay prepares, you act.</p>
-            <p className="mt-0.5 text-[12px] text-graphite">
-              Every recommendation is traceable to its source. Relay never sends outreach,
-              applies to jobs, or impersonates you. The human is always the final actor.
-            </p>
+          <div className="size-10 shrink-0 rounded-lg bg-bone" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-3 w-20 rounded bg-bone" />
+            <div className="h-4 w-56 max-w-full rounded bg-bone" />
+            <div className="h-3 w-72 max-w-full rounded bg-bone" />
           </div>
         </div>
-      </section>
-
-      <div className="h-4 lg:hidden" />
+      </div>
+      <div className="overflow-hidden rounded-xl border border-line bg-bone-raised">
+        <div className="divide-y divide-line">
+          {[0, 1, 2, 3].map((row) => (
+            <div key={row} className="flex items-center gap-3 p-4">
+              <div className="size-8 shrink-0 rounded-lg bg-bone" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="h-3.5 w-44 max-w-full rounded bg-bone" />
+                <div className="h-3 w-64 max-w-full rounded bg-bone" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

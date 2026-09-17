@@ -59,8 +59,12 @@ export async function proxy(request: NextRequest) {
 
   let isAuthenticated = false;
   try {
-    const { data } = await supabase.auth.getUser();
-    isAuthenticated = Boolean(data.user);
+    // Verify the JWT locally against the project's cached JWKS (the project
+    // signs with ES256). getClaims still refreshes the session cookie when the
+    // access token is about to expire, so this keeps the same refresh behavior
+    // as getUser without a network round trip on every request.
+    const { data, error } = await supabase.auth.getClaims();
+    isAuthenticated = !error && Boolean(data?.claims?.sub);
   } catch {
     // Session refresh failed — let the request through.
   }

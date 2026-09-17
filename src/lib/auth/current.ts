@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import type { Organization, Rep, VoiceProfile } from '@/lib/domain/types'
 import { isDemoMode } from '@/lib/ai/config'
 import { createServerSupabase } from '@/lib/supabase/server'
@@ -10,6 +11,8 @@ export interface CurrentUser {
 }
 
 const BPULSE_ORG_ID = '11111111-1111-1111-1111-111111111111'
+
+const PERF_LOG = process.env.SCOUT_PERF_LOG === '1'
 
 const DEMO_ORG: Organization = {
   id: BPULSE_ORG_ID,
@@ -31,31 +34,84 @@ const DEMO_REP: Rep = {
   timezone: 'UTC',
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+type EmbeddedOrgRow = {
+  id: string
+  name: string
+  plan: string
+  billing_customer_id: string | null
+  timezone: string | null
+  working_days: number[] | null
+  holidays: Array<{ date: string; label?: string }> | null
+  created_at: string
+}
+
+type EmbeddedVoiceProfileRow = {
+  id: string
+  rep_id: string
+  organization_id: string
+  style_card: VoiceProfile['styleCard']
+  sample_source: VoiceProfile['sampleSource']
+  calibrated_at: string | null
+}
+
+function firstEmbedded<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null
+  return Array.isArray(value) ? (value[0] ?? null) : value
+}
+
+/**
+ * Resolves the signed-in rep, organization and voice profile for the current
+ * request. Wrapped in React `cache` so the layout, page and store all share a
+ * single auth + profile lookup per request instead of re-querying Supabase.
+ */
+async function resolveCurrentUser(): Promise<CurrentUser | null> {
   if (isDemoMode()) {
     const profile = await getDemoStore(DEMO_REP).getVoiceProfile()
     return { rep: DEMO_REP, organization: DEMO_ORG, profile }
   }
 
+  const startedAt = PERF_LOG ? performance.now() : 0
+
   try {
     const supabase = await createServerSupabase()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
 
-    if (!user) return null
+    const authStartedAt = PERF_LOG ? performance.now() : 0
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
+    let userId = claimsData?.claims?.sub ?? null
+    let userEmail = (claimsData?.claims?.email as string | undefined) ?? null
+
+    if (claimsError || !userId) {
+      // Expired/refreshing or non-asymmetric signing keys: fall back to the
+      // Auth server so we never treat a valid session as signed out.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      userId = user?.id ?? null
+      userEmail = user?.email ?? null
+    }
+    if (PERF_LOG) {
+      console.log(
+        `[perf] getCurrentUser.auth ${(performance.now() - authStartedAt).toFixed(1)}ms`,
+      )
+    }
+
+    if (!userId) return null
 
     const { data: repRows, error: repError } = await supabase
       .from('reps')
-      .select('id, name, role, organization_id, created_at, timezone')
-      .eq('auth_user_id', user.id)
+      .select(
+        `id, name, role, organization_id, created_at, timezone,
+         organizations ( id, name, plan, billing_customer_id, timezone, working_days, holidays, created_at ),
+         voice_profiles ( id, rep_id, organization_id, style_card, sample_source, calibrated_at )`,
+      )
+      .eq('auth_user_id', userId)
       .order('created_at', { ascending: true })
       .limit(2)
 
     if (repError) {
       console.warn('[auth/current] rep lookup failed', {
-        userId: user.id,
-        email: user.email ?? null,
+        userId,
+        email: userEmail,
         code: (repError as { code?: string }).code ?? null,
         message: repError.message,
       })
@@ -66,15 +122,15 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
     if (repRows && repRows.length > 1) {
       console.warn('[auth/current] multiple rep rows for auth user; using oldest', {
-        userId: user.id,
+        userId,
         repCount: repRows.length,
       })
     }
 
     if (!repRow) {
       console.warn('[auth/current] no rep mapped to auth user', {
-        userId: user.id,
-        email: user.email ?? null,
+        userId,
+        email: userEmail,
       })
       return null
     }
@@ -88,26 +144,11 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       timezone: (repRow.timezone as string) ?? 'UTC',
     }
 
-    const { data: orgRows, error: orgError } = await supabase
-      .from('organizations')
-      .select('id, name, plan, billing_customer_id, timezone, working_days, holidays, created_at')
-      .eq('id', rep.organizationId)
-      .maybeSingle()
+    const orgRow = firstEmbedded<EmbeddedOrgRow>(repRow.organizations)
 
-    if (orgError) {
-      console.warn('[auth/current] org lookup failed', {
-        userId: user.id,
-        repId: rep.id,
-        organizationId: rep.organizationId,
-        code: (orgError as { code?: string }).code ?? null,
-        message: orgError.message,
-      })
-      return null
-    }
-
-    if (!orgRows) {
+    if (!orgRow) {
       console.warn('[auth/current] rep mapped to missing org', {
-        userId: user.id,
+        userId,
         repId: rep.id,
         organizationId: rep.organizationId,
       })
@@ -115,21 +156,17 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     }
 
     const organization: Organization = {
-      id: orgRows.id,
-      name: orgRows.name,
-      plan: orgRows.plan,
-      billingCustomerId: orgRows.billing_customer_id,
-      timezone: (orgRows.timezone as string) ?? 'UTC',
-      workingDays: Array.isArray(orgRows.working_days) ? (orgRows.working_days as number[]) : [1, 2, 3, 4, 5],
-      holidays: Array.isArray(orgRows.holidays) ? (orgRows.holidays as Array<{ date: string; label?: string }>) : [],
-      createdAt: orgRows.created_at,
+      id: orgRow.id,
+      name: orgRow.name,
+      plan: orgRow.plan as Organization['plan'],
+      billingCustomerId: orgRow.billing_customer_id,
+      timezone: (orgRow.timezone as string) ?? 'UTC',
+      workingDays: Array.isArray(orgRow.working_days) ? (orgRow.working_days as number[]) : [1, 2, 3, 4, 5],
+      holidays: Array.isArray(orgRow.holidays) ? (orgRow.holidays as Array<{ date: string; label?: string }>) : [],
+      createdAt: orgRow.created_at,
     }
 
-    const { data: vp } = await supabase
-      .from('voice_profiles')
-      .select('id, rep_id, organization_id, style_card, sample_source, calibrated_at')
-      .eq('rep_id', rep.id)
-      .maybeSingle()
+    const vp = firstEmbedded<EmbeddedVoiceProfileRow>(repRow.voice_profiles)
 
     const profile: VoiceProfile | null = vp
       ? {
@@ -138,9 +175,16 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
           organizationId: vp.organization_id,
           styleCard: vp.style_card,
           sampleSource: vp.sample_source,
-          calibratedAt: vp.calibrated_at,
+          calibratedAt: vp.calibrated_at as string,
         }
       : null
+
+    if (PERF_LOG) {
+      console.log(
+        `[perf] getCurrentUser.total ${(performance.now() - startedAt).toFixed(1)}ms t=${Date.now()}`,
+        { role: rep.role },
+      )
+    }
 
     return { rep, organization, profile }
   } catch (error) {
@@ -150,3 +194,5 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     return null
   }
 }
+
+export const getCurrentUser = cache(resolveCurrentUser)
