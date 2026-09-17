@@ -290,6 +290,13 @@ export async function POST(
       } catch {
         // Non-fatal
       }
+      if (leadRevenueIdentityId) {
+        try {
+          await store.updateLeadRevenueIdentity(detail.id, leadRevenueIdentityId)
+        } catch {
+          // Non-fatal
+        }
+      }
     }
 
     const draftLatencyMs = Date.now() - draftStarted

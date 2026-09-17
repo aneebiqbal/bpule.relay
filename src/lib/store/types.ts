@@ -808,6 +808,7 @@ export interface ScoutStore {
   }): Promise<void>
   updateLeadSenderProfile(leadId: string, senderProfileId: string | null): Promise<void>
   updateLeadStatus(leadId: string, status: 'won' | 'lost'): Promise<void>
+  updateLeadRevenueIdentity(leadId: string, revenueIdentityId: string): Promise<void>
   // content journey
   createContentJourneyEntry(input: {
     personaId: string

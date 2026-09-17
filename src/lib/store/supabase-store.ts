@@ -4068,6 +4068,15 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
   }
 
+  async updateLeadRevenueIdentity(leadId: string, revenueIdentityId: string): Promise<void> {
+    const { error } = await this.client
+      .from('leads')
+      .update({ revenue_identity_id: revenueIdentityId })
+      .eq('id', leadId)
+      .eq('owner_rep_id', this.rep.id)
+    if (error) throw error
+  }
+
   // ── content journey ──
 
   async createContentJourneyEntry(input: {
