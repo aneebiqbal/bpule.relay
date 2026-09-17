@@ -753,6 +753,36 @@ export class SupabaseStore implements ScoutStore {
       // Event emission must never break domain operations
     }
 
+    // Record accountability increment (non-fatal, only for outbound activity)
+    // Finds all active targets for this rep+activity and increments each.
+    if (type !== 'reply') {
+      try {
+        const activityType = type === 'connection' ? 'connection_request' : type
+        const { data: targets } = await this.client
+          .from('daily_targets')
+          .select('revenue_identity_id')
+          .eq('rep_id', this.rep.id)
+          .eq('activity_type', activityType)
+          .eq('active', true)
+        if (targets && targets.length > 0) {
+          for (const t of targets) {
+            try {
+              await this.client.rpc('record_activity_event', {
+                p_rep_id: this.rep.id,
+                p_identity_id: t.revenue_identity_id as string,
+                p_activity_type: activityType,
+                p_org_id: this.orgId,
+              })
+            } catch {
+              // Non-fatal per-target
+            }
+          }
+        }
+      } catch {
+        // Accountability increment must never block the send
+      }
+    }
+
     return { allowed: true, todaySends: todaySends + 1, limit }
   }
 

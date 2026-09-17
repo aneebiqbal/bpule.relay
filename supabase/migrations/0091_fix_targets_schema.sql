@@ -15,9 +15,9 @@ do $$
 begin
   -- If table exists but lacks activity_type column, it's the broken 0088 version.
   -- Drop it and recreate correctly.
-  if exists (select 1 from information_schema.table_tables where table_name = 'daily_targets')
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'daily_targets')
      and not exists (select 1 from information_schema.columns
-                     where table_name = 'daily_targets' and column_name = 'activity_type') then
+                     where table_schema = 'public' and table_name = 'daily_targets' and column_name = 'activity_type') then
     drop table if exists daily_targets cascade;
   end if;
 end $$;
@@ -47,7 +47,7 @@ alter table daily_targets alter column updated_at set default now();
 do $$
 begin
   if not exists (select 1 from information_schema.table_constraints
-                 where table_name = 'daily_targets'
+                 where table_schema = 'public' and table_name = 'daily_targets'
                  and constraint_name = 'daily_targets_rep_id_revenue_identity_id_activity_type_key') then
     alter table daily_targets
       add constraint daily_targets_rep_id_revenue_identity_id_activity_type_key
@@ -88,9 +88,9 @@ create policy "dt_delete" on daily_targets
 
 do $$
 begin
-  if exists (select 1 from information_schema.tables where table_name = 'daily_accountability')
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'daily_accountability')
      and not exists (select 1 from information_schema.columns
-                     where table_name = 'daily_accountability' and column_name = 'activity_type') then
+                     where table_schema = 'public' and table_name = 'daily_accountability' and column_name = 'activity_type') then
     drop table if exists daily_accountability cascade;
   end if;
 end $$;
@@ -124,7 +124,7 @@ alter table daily_accountability add column if not exists closed boolean not nul
 do $$
 begin
   if not exists (select 1 from information_schema.table_constraints
-                 where table_name = 'daily_accountability'
+                 where table_schema = 'public' and table_name = 'daily_accountability'
                  and constraint_name = 'daily_accountability_rep_id_revenue_identity_id_activi_key') then
     alter table daily_accountability
       add constraint daily_accountability_rep_id_revenue_identity_id_activi_key
@@ -153,3 +153,134 @@ create policy "da_update" on daily_accountability
   for update to authenticated
   using (organization_id = current_org_id() and is_org_admin())
   with check (organization_id = current_org_id() and is_org_admin());
+
+-- ============================================================================
+-- MISSING FROM 0085: Helper + trigger + RPC functions
+-- These were defined in 0085 but never applied to the live DB.
+-- ============================================================================
+
+create or replace function public.is_org_working_day(
+  p_org_id uuid,
+  p_date date
+) returns boolean
+language sql stable security definer set search_path = public as
+$$
+  select
+    coalesce(
+      (
+        select extract(dow from p_date)::int = any(o.working_days)
+        from organizations o
+        where o.id = p_org_id
+      ),
+      false
+    )
+    and not exists (
+      select 1
+      from organizations o,
+      jsonb_array_elements(o.holidays) h
+      where o.id = p_org_id
+        and (h->>'date')::date = p_date
+    );
+$$;
+
+create or replace function public.ensure_daily_accountability()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_date date;
+begin
+  v_date := current_date;
+  if public.is_org_working_day(NEW.organization_id, v_date) then
+    insert into daily_accountability (
+      organization_id, rep_id, revenue_identity_id, activity_type,
+      target_date, target_count, completed_count, status, closed
+    ) values (
+      NEW.organization_id, NEW.rep_id, NEW.revenue_identity_id, NEW.activity_type,
+      v_date, NEW.target_count, 0, 'on_track', false
+    )
+    on conflict (rep_id, revenue_identity_id, activity_type, target_date)
+    do update set
+      target_count = NEW.target_count,
+      updated_at = now()
+    where daily_accountability.closed = false;
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_ensure_daily_accountability on daily_targets;
+create trigger trg_ensure_daily_accountability
+  after insert or update on daily_targets
+  for each row
+  when (NEW.active = true)
+  execute function public.ensure_daily_accountability();
+
+create or replace function public.record_activity_event(
+  p_rep_id uuid,
+  p_identity_id uuid,
+  p_activity_type text,
+  p_org_id uuid
+)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_date date;
+  v_target_count int;
+  v_completed int;
+  v_status text;
+  v_existing_id uuid;
+  v_is_working boolean;
+begin
+  v_date := current_date;
+  v_is_working := public.is_org_working_day(p_org_id, v_date);
+
+  if not v_is_working then
+    return json_build_object('recorded', false, 'reason', 'not_working_day');
+  end if;
+
+  select coalesce(
+    (select target_count from daily_targets
+     where rep_id = p_rep_id
+       and revenue_identity_id = p_identity_id
+       and activity_type = p_activity_type
+       and active = true
+     limit 1),
+    0
+  ) into v_target_count;
+
+  insert into daily_accountability (
+    organization_id, rep_id, revenue_identity_id, activity_type,
+    target_date, target_count, completed_count, status, closed
+  ) values (
+    p_org_id, p_rep_id, p_identity_id, p_activity_type,
+    v_date, v_target_count, 1, 'on_track', false
+  )
+  on conflict (rep_id, revenue_identity_id, activity_type, target_date)
+  do update set
+    completed_count = daily_accountability.completed_count + 1,
+    updated_at = now()
+  where daily_accountability.closed = false
+  returning id, completed_count, target_count into v_existing_id, v_completed, v_target_count;
+
+  if v_completed >= v_target_count and v_target_count > 0 then
+    v_status := 'completed';
+  else
+    v_status := 'on_track';
+  end if;
+
+  update daily_accountability set status = v_status where id = v_existing_id;
+
+  return json_build_object(
+    'recorded', true,
+    'completed_count', v_completed,
+    'target_count', v_target_count,
+    'status', v_status
+  );
+end;
+$$;
