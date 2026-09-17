@@ -89,7 +89,9 @@ export async function streamDraft(
   const system = baseDraftSystem(input.styleCard, input.facts)
   const user = buildUserPrompt(input)
   const callLog: DraftCallLog[] = []
-  const isHighValue = input.score.total >= 10
+  // High value: canonical score >= 70 (0-100), or legacy score >= 10 (0-12)
+  const scoreForGate = input.canonicalScore ?? input.score.total
+  const isHighValue = scoreForGate >= 70 || (input.score.total >= 10 && input.score.total <= 12)
 
   // Chain selection based on generation mode:
   // - Standard: LongCat first → Groq fallback → GPT escalation only on quality failure

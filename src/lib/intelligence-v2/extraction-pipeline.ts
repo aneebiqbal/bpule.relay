@@ -1,0 +1,1473 @@
+/**
+ * Multi-Pass Extraction Pipeline
+ *
+ * Flow:
+ *   RAW INPUT → Pass A (Extract) → Pass B (Normalize) → Pass C (Intelligence)
+ *
+ * LongCat = primary intelligence engine
+ * Groq = fast structured parsing where useful
+ * GPT = escalation only
+ *
+ * Every call goes through existing central AI routing.
+ * Code owns schemas, persistence, eligibility hard rules, score calculation.
+ * AI does extraction, normalization, reasoning.
+ */
+
+import type {
+  ExtractedPerson,
+  ExtractedCompany,
+  ExtractedOpportunity,
+  ExtractedJob,
+  ExtractedContent,
+  NormalizedIntelligence,
+  RawSourceData,
+  RemoteEligibility,
+  EvidenceEntry,
+  OpportunitySignal,
+} from './types'
+import { assessRemoteEligibility, type RemoteEligibilityInput } from './remote-eligibility'
+import { longcatHost, tier4Host, type ChainStep } from '@/lib/ai/routing'
+import { structuredJsonChain } from '@/lib/ai/provider'
+
+// ── Pipeline Options ───────────────────────────────────────────────────────
+
+export interface ExtractionPipelineOptions {
+  onStatus?: (message: string) => void
+  /** Explicit source URLs if known before extraction */
+  knownSourceUrl?: string | null
+  knownProfileUrl?: string | null
+  knownCompanyUrl?: string | null
+  knownJobUrl?: string | null
+  /** When true, AI failures are not silently replaced by deterministic fallback extraction */
+  strictLiveMode?: boolean
+}
+
+export interface ExtractionPipelineResult {
+  intelligence: NormalizedIntelligence
+  rawSource: RawSourceData
+  remoteEligibility: RemoteEligibility
+  evidenceLedger: EvidenceEntry[]
+  callLog: Array<{ provider: string; model: string; task: string; latencyMs: number; fallback: boolean }>
+  /** Source URLs found in the input */
+  sourceUrls: string[]
+}
+
+// ── URL Extraction ─────────────────────────────────────────────────────────
+
+const URL_PATTERNS = [
+  /https?:\/\/(?:www\.)?linkedin\.com\/in\/[a-zA-Z0-9_-]+/gi,
+  /https?:\/\/(?:www\.)?linkedin\.com\/company\/[a-zA-Z0-9_-]+/gi,
+  /https?:\/\/[^\s<>"']+/gi,
+  // Bare domains (no protocol) — common in pasted LinkedIn text
+  /\b(?:www\.)?linkedin\.com\/(?:in|company)\/[a-zA-Z0-9_-]+/gi,
+  /\b[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}\/[^\s<>"']*/gi,
+]
+
+function extractUrls(text: string): string[] {
+  const urls = new Set<string>()
+  for (const pattern of URL_PATTERNS) {
+    const matches = text.match(pattern)
+    if (matches) {
+      for (const m of matches) {
+        urls.add(m.replace(/[,.;]+$/, ''))
+      }
+    }
+  }
+  return [...urls]
+}
+
+function categorizeUrl(url: string): 'linkedin_profile' | 'linkedin_company' | 'job_posting' | 'company_website' | 'other' {
+  const lower = url.toLowerCase()
+  if (lower.includes('linkedin.com/in/')) return 'linkedin_profile'
+  if (lower.includes('linkedin.com/company/')) return 'linkedin_company'
+  if (lower.includes('linkedin.com/jobs/') || lower.includes('linkedin.com/job/')) return 'job_posting'
+  if (lower.includes('greenhouse.io') || lower.includes('lever.co') || lower.includes('workable.com') || lower.includes('indeed.com')) return 'job_posting'
+  if (lower.includes('glassdoor.')) return 'job_posting'
+  return 'other'
+}
+
+// ── Source Type Detection ──────────────────────────────────────────────────
+
+function detectSourceType(text: string): RawSourceData['sourceType'] {
+  const hasProfileMarkers = /\b(about|experience|education|skills|endorsements|recommendations|connections|followers)\b/i.test(text)
+  const hasJobMarkers = /\b(job description|responsibilities|requirements|qualifications|apply now|salary|compensation|benefits)\b/i.test(text)
+  const hasPostMarkers = /\b(posted|shared|reactions|comments|reposted|view (?:my )?post)\b/i.test(text)
+
+  const types: RawSourceData['sourceType'][] = []
+  if (hasProfileMarkers) types.push('linkedin_profile')
+  if (hasJobMarkers) types.push('job_posting')
+  if (hasPostMarkers) types.push('linkedin_post')
+  if (types.length === 0) types.push('pasted_text')
+  if (types.length > 1) return 'mixed'
+  return types[0]
+}
+
+// ── Pass A: Extract ────────────────────────────────────────────────────────
+
+interface PassAOutput {
+  person: {
+    fullName: string | null
+    firstName: string | null
+    title: string | null
+    seniority: string | null
+    location: string | null
+    linkedinUrl: string | null
+    otherUrls: string[]
+  }
+  company: {
+    name: string | null
+    domain: string | null
+    linkedinUrl: string | null
+    industry: string | null
+    size: string | null
+    sizeEvidence: string | null
+    product: string | null
+    stage: string | null
+    stageEvidence: string | null
+  }
+  opportunity: {
+    signals: string[]
+    primarySignal: string | null
+    description: string | null
+    urgency: string
+  }
+  job: {
+    title: string | null
+    employmentType: string
+    workplaceType: string
+    allowedGeography: string | null
+    timezone: string | null
+    compensation: string | null
+    skills: string[]
+    seniority: string | null
+    source: string | null
+    postedDate: string | null
+  } | null
+  content: {
+    recentPosts: Array<{
+      paraphrase: string
+      verbatimQuote: string | null
+      topics: string[]
+      signals: string[]
+    }>
+    topics: string[]
+    explicitProblems: string[]
+    initiatives: string[]
+    launches: string[]
+    technicalSignals: string[]
+    hiringSignals: string[]
+  }
+}
+
+const LONGCAT_EXTRACTION_TIMEOUT_MS = 120_000
+
+const PASS_A_SYSTEM = `You are a precise factual extraction engine. Extract ONLY what is explicitly stated in the text. Return a single JSON object.
+
+CRITICAL RULES:
+- Never invent missing facts. Use null for unknown fields.
+- Never replace a source URL with an inferred URL.
+- Distinguish between FACT (explicitly stated) and INFERENCE (your conclusion).
+- Every extracted fact must have evidence from the text.
+- Keep all values concise and factual.
+- COMPANY LOCATION ≠ WORKER LOCATION. A company based in San Francisco offering remote work is NOT "US-only". Only mark workplaceType as ONSITE or geography as restricted if the text EXPLICITLY states a worker location requirement (e.g., "must be based in the US", "on-site in New York").
+- "Remote OK", "Remote-friendly", "work from anywhere" = REMOTE. Do not downgrade to ONSITE or geography-restricted merely because the company has a headquarters city.
+
+Extract these entities:
+1. PERSON: fullName, firstName, title, seniority, location, linkedinUrl, otherUrls
+2. COMPANY: name, domain, linkedinUrl, industry, size (+ evidence), product, stage (+ evidence)
+3. OPPORTUNITY: signals (hiring, freelance_project_need, technical_problem, growth_signal, funding, launch, migration, rebuild, hiring_pressure, explicit_ask), primarySignal, description, urgency (immediate, near_term, future, unknown)
+4. JOB (if present): title, employmentType, workplaceType (REMOTE/HYBRID/ONSITE/UNKNOWN), allowedGeography, timezone, compensation, skills, seniority, source, postedDate
+5. CONTENT: recentPosts (paraphrase, verbatimQuote, topics, signals), topics, explicitProblems, initiatives, launches, technicalSignals, hiringSignals`
+
+const PASS_A_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    person: {
+      type: 'object',
+      properties: {
+        fullName: { type: ['string', 'null'] },
+        firstName: { type: ['string', 'null'] },
+        title: { type: ['string', 'null'] },
+        seniority: { type: ['string', 'null'] },
+        location: { type: ['string', 'null'] },
+        linkedinUrl: { type: ['string', 'null'] },
+        otherUrls: { type: 'array', items: { type: 'string' } },
+      },
+    },
+    company: {
+      type: 'object',
+      properties: {
+        name: { type: ['string', 'null'] },
+        domain: { type: ['string', 'null'] },
+        linkedinUrl: { type: ['string', 'null'] },
+        industry: { type: ['string', 'null'] },
+        size: { type: ['string', 'null'] },
+        sizeEvidence: { type: ['string', 'null'] },
+        product: { type: ['string', 'null'] },
+        stage: { type: ['string', 'null'] },
+        stageEvidence: { type: ['string', 'null'] },
+      },
+    },
+    opportunity: {
+      type: 'object',
+      properties: {
+        signals: { type: 'array', items: { type: 'string' } },
+        primarySignal: { type: ['string', 'null'] },
+        description: { type: ['string', 'null'] },
+        urgency: { type: 'string' },
+      },
+    },
+    job: {
+      type: ['object', 'null'],
+      properties: {
+        title: { type: ['string', 'null'] },
+        employmentType: { type: 'string' },
+        workplaceType: { type: 'string' },
+        allowedGeography: { type: ['string', 'null'] },
+        timezone: { type: ['string', 'null'] },
+        compensation: { type: ['string', 'null'] },
+        skills: { type: 'array', items: { type: 'string' } },
+        seniority: { type: ['string', 'null'] },
+        source: { type: ['string', 'null'] },
+        postedDate: { type: ['string', 'null'] },
+      },
+    },
+    content: {
+      type: 'object',
+      properties: {
+        recentPosts: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              paraphrase: { type: 'string' },
+              verbatimQuote: { type: ['string', 'null'] },
+              topics: { type: 'array', items: { type: 'string' } },
+              signals: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        },
+        topics: { type: 'array', items: { type: 'string' } },
+        explicitProblems: { type: 'array', items: { type: 'string' } },
+        initiatives: { type: 'array', items: { type: 'string' } },
+        launches: { type: 'array', items: { type: 'string' } },
+        technicalSignals: { type: 'array', items: { type: 'string' } },
+        hiringSignals: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  },
+}
+
+function buildPassAUserPrompt(rawText: string, sourceUrls: string[]): string {
+  let prompt = `Extract factual entities from this text:\n\n${rawText}`
+  if (sourceUrls.length > 0) {
+    prompt += `\n\nSource URLs found in the text:\n${sourceUrls.join('\n')}`
+  }
+  return prompt
+}
+
+async function runPassA(
+  rawText: string,
+  sourceUrls: string[],
+  callLog: ExtractionPipelineResult['callLog'],
+  onStatus?: (msg: string) => void,
+  strictLiveMode?: boolean,
+): Promise<PassAOutput> {
+  const lc = longcatHost()
+  const gpt = tier4Host()
+  const chain: ChainStep[] = []
+  if (lc) chain.push({ costTier: 'tier1', host: lc })
+  if (gpt) chain.push({ costTier: 'tier4', host: gpt })
+
+  if (chain.length === 0) {
+    if (strictLiveMode) {
+      throw new Error('No AI provider available for live extraction (strict mode). Set LONGCAT_API_KEY.')
+    }
+    callLog.push({
+      provider: 'demo',
+      model: 'deterministic_fallback',
+      task: 'extract_pass_a',
+      latencyMs: 0,
+      fallback: true,
+    })
+    return demoPassA(rawText)
+  }
+
+  onStatus?.('Pass A: Extracting factual entities')
+  const startTime = Date.now()
+
+  try {
+    const result = await structuredJsonChain<unknown>(chain, {
+      system: PASS_A_SYSTEM,
+      user: buildPassAUserPrompt(rawText, sourceUrls),
+      schema: PASS_A_SCHEMA,
+      schemaName: 'intelligence_pass_a',
+    }, undefined, LONGCAT_EXTRACTION_TIMEOUT_MS)
+
+    callLog.push({
+      provider: result.host,
+      model: result.host,
+      task: 'extract_pass_a',
+      latencyMs: Date.now() - startTime,
+      fallback: result.costTier === 'tier4',
+    })
+
+    const validated = validatePassA(result.data)
+    return stabilizePassA(rawText, sourceUrls, validated)
+  } catch (err) {
+    if (strictLiveMode) {
+      throw new Error(`Live extraction failed in Pass A: ${err instanceof Error ? err.message : String(err)}`)
+    }
+    callLog.push({
+      provider: 'fallback',
+      model: 'demo',
+      task: 'extract_pass_a',
+      latencyMs: Date.now() - startTime,
+      fallback: true,
+    })
+    return demoPassA(rawText)
+  }
+}
+
+function mergeUnique(items: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of items) {
+    const value = item.trim()
+    if (!value) continue
+    const key = value.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(value)
+  }
+  return out
+}
+
+function stabilizePassA(rawText: string, sourceUrls: string[], modelPassA: PassAOutput): PassAOutput {
+  const heuristic = demoPassA(rawText)
+  const out: PassAOutput = {
+    person: { ...modelPassA.person },
+    company: { ...modelPassA.company },
+    opportunity: { ...modelPassA.opportunity },
+    job: modelPassA.job ? { ...modelPassA.job } : null,
+    content: {
+      recentPosts: [...modelPassA.content.recentPosts],
+      topics: [...modelPassA.content.topics],
+      explicitProblems: [...modelPassA.content.explicitProblems],
+      initiatives: [...modelPassA.content.initiatives],
+      launches: [...modelPassA.content.launches],
+      technicalSignals: [...modelPassA.content.technicalSignals],
+      hiringSignals: [...modelPassA.content.hiringSignals],
+    },
+  }
+
+  if (!out.person.fullName && heuristic.person.fullName) out.person.fullName = heuristic.person.fullName
+  if (!out.person.firstName && heuristic.person.firstName) out.person.firstName = heuristic.person.firstName
+  if (!out.person.title && heuristic.person.title) out.person.title = heuristic.person.title
+  if (!out.person.seniority && heuristic.person.seniority) out.person.seniority = heuristic.person.seniority
+  if (!out.person.location && heuristic.person.location) out.person.location = heuristic.person.location
+  if (!out.person.linkedinUrl && heuristic.person.linkedinUrl) out.person.linkedinUrl = heuristic.person.linkedinUrl
+
+  const sourceOtherUrls = sourceUrls.filter((u) => u !== out.person.linkedinUrl)
+  out.person.otherUrls = mergeUnique([
+    ...out.person.otherUrls,
+    ...heuristic.person.otherUrls,
+    ...sourceOtherUrls,
+  ])
+
+  if (!out.company.name && heuristic.company.name) out.company.name = heuristic.company.name
+  if (!out.company.domain && heuristic.company.domain) out.company.domain = heuristic.company.domain
+  if (!out.company.linkedinUrl && heuristic.company.linkedinUrl) out.company.linkedinUrl = heuristic.company.linkedinUrl
+  if (!out.company.product && heuristic.company.product) out.company.product = heuristic.company.product
+  if (!out.company.stage && heuristic.company.stage) out.company.stage = heuristic.company.stage
+  if (!out.company.size && heuristic.company.size) out.company.size = heuristic.company.size
+  if (!out.company.sizeEvidence && heuristic.company.sizeEvidence) out.company.sizeEvidence = heuristic.company.sizeEvidence
+
+  const mergedSignals = mergeUnique([
+    ...out.opportunity.signals,
+    ...heuristic.opportunity.signals,
+  ])
+  out.opportunity.signals = mergedSignals
+  if (!out.opportunity.primarySignal && mergedSignals.length > 0) {
+    out.opportunity.primarySignal = selectPrimarySignal(mergedSignals as OpportunitySignal[])
+  }
+  if ((!out.opportunity.description || /^remote\b/i.test(out.opportunity.description)) && heuristic.opportunity.description) {
+    out.opportunity.description = heuristic.opportunity.description
+  }
+  if (out.opportunity.urgency === 'unknown' && heuristic.opportunity.urgency !== 'unknown') {
+    out.opportunity.urgency = heuristic.opportunity.urgency
+  }
+
+  if (!out.job && heuristic.job) {
+    out.job = { ...heuristic.job }
+  } else if (out.job && heuristic.job) {
+    out.job = {
+      ...out.job,
+      title: out.job.title ?? heuristic.job.title,
+      employmentType: out.job.employmentType !== 'unknown' ? out.job.employmentType : heuristic.job.employmentType,
+      workplaceType: out.job.workplaceType !== 'UNKNOWN' ? out.job.workplaceType : heuristic.job.workplaceType,
+      allowedGeography: out.job.allowedGeography ?? heuristic.job.allowedGeography,
+      timezone: out.job.timezone ?? heuristic.job.timezone,
+      compensation: out.job.compensation ?? heuristic.job.compensation,
+      skills: mergeUnique([...out.job.skills, ...heuristic.job.skills]),
+      seniority: out.job.seniority ?? heuristic.job.seniority,
+      source: out.job.source ?? heuristic.job.source,
+      postedDate: out.job.postedDate ?? heuristic.job.postedDate,
+    }
+  }
+
+  out.content.hiringSignals = mergeUnique([
+    ...out.content.hiringSignals,
+    ...heuristic.content.hiringSignals,
+  ]).slice(0, 5)
+  out.content.technicalSignals = mergeUnique([
+    ...out.content.technicalSignals,
+    ...heuristic.content.technicalSignals,
+    ...(out.job?.skills ?? []),
+  ]).slice(0, 12)
+  out.content.explicitProblems = mergeUnique([
+    ...out.content.explicitProblems,
+    ...heuristic.content.explicitProblems,
+  ]).slice(0, 5)
+  out.content.topics = mergeUnique([
+    ...out.content.topics,
+    ...heuristic.content.topics,
+  ]).slice(0, 10)
+  out.content.initiatives = mergeUnique([
+    ...out.content.initiatives,
+    ...heuristic.content.initiatives,
+  ]).slice(0, 5)
+  out.content.launches = mergeUnique([
+    ...out.content.launches,
+    ...heuristic.content.launches,
+  ]).slice(0, 5)
+
+  if (out.content.recentPosts.length === 0 && heuristic.content.recentPosts.length > 0) {
+    out.content.recentPosts = heuristic.content.recentPosts
+  }
+
+  return out
+}
+
+function validatePassA(raw: unknown): PassAOutput {
+  const defaultOut: PassAOutput = {
+    person: { fullName: null, firstName: null, title: null, seniority: null, location: null, linkedinUrl: null, otherUrls: [] },
+    company: { name: null, domain: null, linkedinUrl: null, industry: null, size: null, sizeEvidence: null, product: null, stage: null, stageEvidence: null },
+    opportunity: { signals: [], primarySignal: null, description: null, urgency: 'unknown' },
+    job: null,
+    content: { recentPosts: [], topics: [], explicitProblems: [], initiatives: [], launches: [], technicalSignals: [], hiringSignals: [] },
+  }
+
+  if (!raw || typeof raw !== 'object') return defaultOut
+  const r = raw as Record<string, unknown>
+
+  // Person
+  const person = r.person as Record<string, unknown> | undefined
+  defaultOut.person = {
+    fullName: typeof person?.fullName === 'string' ? person.fullName : null,
+    firstName: typeof person?.firstName === 'string' ? person.firstName : null,
+    title: typeof person?.title === 'string' ? person.title : null,
+    seniority: typeof person?.seniority === 'string' ? person.seniority : null,
+    location: typeof person?.location === 'string' ? person.location : null,
+    linkedinUrl: typeof person?.linkedinUrl === 'string' ? person.linkedinUrl : null,
+    otherUrls: Array.isArray(person?.otherUrls) ? person.otherUrls.filter((u): u is string => typeof u === 'string') : [],
+  }
+
+  // Company
+  const company = r.company as Record<string, unknown> | undefined
+  defaultOut.company = {
+    name: typeof company?.name === 'string' ? company.name : null,
+    domain: typeof company?.domain === 'string' ? company.domain : null,
+    linkedinUrl: typeof company?.linkedinUrl === 'string' ? company.linkedinUrl : null,
+    industry: typeof company?.industry === 'string' ? company.industry : null,
+    size: typeof company?.size === 'string' ? company.size : null,
+    sizeEvidence: typeof company?.sizeEvidence === 'string' ? company.sizeEvidence : null,
+    product: typeof company?.product === 'string' ? company.product : null,
+    stage: typeof company?.stage === 'string' ? company.stage : null,
+    stageEvidence: typeof company?.stageEvidence === 'string' ? company.stageEvidence : null,
+  }
+
+  // Opportunity
+  const opportunity = r.opportunity as Record<string, unknown> | undefined
+  defaultOut.opportunity = {
+    signals: Array.isArray(opportunity?.signals) ? opportunity.signals.filter((s): s is string => typeof s === 'string') : [],
+    primarySignal: typeof opportunity?.primarySignal === 'string' ? opportunity.primarySignal : null,
+    description: typeof opportunity?.description === 'string' ? opportunity.description : null,
+    urgency: ['immediate', 'near_term', 'future', 'unknown'].includes(String(opportunity?.urgency))
+      ? String(opportunity?.urgency) as PassAOutput['opportunity']['urgency']
+      : 'unknown',
+  }
+
+  // Job (optional)
+  if (r.job && typeof r.job === 'object') {
+    const job = r.job as Record<string, unknown>
+    defaultOut.job = {
+      title: typeof job.title === 'string' ? job.title : null,
+      employmentType: ['full_time', 'part_time', 'contract', 'freelance', 'unknown'].includes(String(job.employmentType))
+        ? String(job.employmentType) as 'full_time' | 'part_time' | 'contract' | 'freelance' | 'unknown'
+        : 'unknown',
+      workplaceType: ['REMOTE', 'HYBRID', 'ONSITE', 'UNKNOWN'].includes(String(job.workplaceType))
+        ? String(job.workplaceType) as 'REMOTE' | 'HYBRID' | 'ONSITE' | 'UNKNOWN'
+        : 'UNKNOWN',
+      allowedGeography: typeof job.allowedGeography === 'string' ? job.allowedGeography : null,
+      timezone: typeof job.timezone === 'string' ? job.timezone : null,
+      compensation: typeof job.compensation === 'string' ? job.compensation : null,
+      skills: Array.isArray(job.skills) ? job.skills.filter((s): s is string => typeof s === 'string') : [],
+      seniority: typeof job.seniority === 'string' ? job.seniority : null,
+      source: typeof job.source === 'string' ? job.source : null,
+      postedDate: typeof job.postedDate === 'string' ? job.postedDate : null,
+    }
+  }
+
+  // Content
+  const content = r.content as Record<string, unknown> | undefined
+  defaultOut.content = {
+    recentPosts: Array.isArray(content?.recentPosts)
+      ? content.recentPosts.filter((p): p is { paraphrase: string; verbatimQuote: string | null; topics: string[]; signals: string[] } =>
+          typeof p === 'object' && p !== null && typeof (p as Record<string, unknown>).paraphrase === 'string'
+        ).map((p) => ({
+          paraphrase: p.paraphrase,
+          verbatimQuote: typeof p.verbatimQuote === 'string' ? p.verbatimQuote : null,
+          topics: Array.isArray(p.topics) ? p.topics.filter((t): t is string => typeof t === 'string') : [],
+          signals: Array.isArray(p.signals) ? p.signals.filter((s): s is string => typeof s === 'string') : [],
+        }))
+      : [],
+    topics: Array.isArray(content?.topics) ? content.topics.filter((t): t is string => typeof t === 'string') : [],
+    explicitProblems: Array.isArray(content?.explicitProblems) ? content.explicitProblems.filter((p): p is string => typeof p === 'string') : [],
+    initiatives: Array.isArray(content?.initiatives) ? content.initiatives.filter((i): i is string => typeof i === 'string') : [],
+    launches: Array.isArray(content?.launches) ? content.launches.filter((l): l is string => typeof l === 'string') : [],
+    technicalSignals: Array.isArray(content?.technicalSignals) ? content.technicalSignals.filter((t): t is string => typeof t === 'string') : [],
+    hiringSignals: Array.isArray(content?.hiringSignals) ? content.hiringSignals.filter((h): h is string => typeof h === 'string') : [],
+  }
+
+  return defaultOut
+}
+
+// ── Pass B: Normalize ──────────────────────────────────────────────────────
+
+function normalizePassA(
+  passA: PassAOutput,
+  sourceUrls: string[],
+  _remoteEligibility: RemoteEligibility,
+): {
+  intelligence: Omit<NormalizedIntelligence, 'remoteEligibility'>
+  evidenceLedger: EvidenceEntry[]
+  normalizedSourceUrls: string[]
+} {
+  const evidenceLedger: EvidenceEntry[] = []
+  const normalizedUrls: string[] = []
+
+  // Preserve and normalize URLs
+  for (const url of sourceUrls) {
+    const normalized = normalizeUrl(url)
+    if (normalized) {
+      normalizedUrls.push(normalized)
+      evidenceLedger.push({
+        signal: `Source URL: ${categorizeUrl(url)}`,
+        source: categorizeUrl(url) === 'linkedin_profile' ? 'linkedin_profile'
+          : categorizeUrl(url) === 'linkedin_company' ? 'linkedin_profile'
+          : categorizeUrl(url) === 'job_posting' ? 'job_posting'
+          : 'pasted_text',
+        sourceUrl: normalized,
+        evidenceType: 'FACT',
+        confidence: 'HIGH',
+        safeForOutreach: false,
+      })
+    }
+  }
+
+  // Person normalization
+  const person: ExtractedPerson = {
+    fullName: passA.person.fullName?.trim() || null,
+    firstName: passA.person.firstName?.trim() || extractFirstName(passA.person.fullName),
+    title: passA.person.title?.trim() || null,
+    seniority: normalizeSeniority(passA.person.seniority, passA.person.title),
+    location: passA.person.location?.trim() || null,
+    linkedinUrl: normalizeLinkedInUrl(passA.person.linkedinUrl),
+    otherUrls: passA.person.otherUrls.map(normalizeUrl).filter((u): u is string => u !== null),
+  }
+
+  // Company normalization
+  const company: ExtractedCompany = {
+    name: passA.company.name?.trim() || null,
+    domain: passA.company.domain?.trim() || null,
+    linkedinUrl: normalizeLinkedInUrl(passA.company.linkedinUrl),
+    industry: passA.company.industry?.trim() || null,
+    size: passA.company.size?.trim() || null,
+    sizeEvidence: passA.company.sizeEvidence?.trim() || null,
+    product: passA.company.product?.trim() || null,
+    stage: normalizeStage(passA.company.stage),
+    stageEvidence: passA.company.stageEvidence?.trim() || null,
+  }
+
+  // Opportunity normalization
+  const validSignals: OpportunitySignal[] = [
+    'hiring', 'freelance_project_need', 'technical_problem', 'growth_signal',
+    'funding', 'launch', 'migration', 'rebuild', 'hiring_pressure', 'explicit_ask',
+  ]
+  const signals = passA.opportunity.signals.filter((s): s is OpportunitySignal =>
+    validSignals.includes(s as OpportunitySignal)
+  )
+  const primarySignal = signals[0] ?? null
+
+  const opportunity: ExtractedOpportunity = {
+    signals,
+    primarySignal,
+    description: passA.opportunity.description?.trim() || null,
+    urgency: ['immediate', 'near_term', 'future', 'unknown'].includes(passA.opportunity.urgency)
+      ? passA.opportunity.urgency as ExtractedOpportunity['urgency']
+      : 'unknown',
+  }
+
+  // Job normalization (if present)
+  let job: ExtractedJob | null = null
+  const passAJob = passA.job
+  if (passAJob) {
+    job = {
+      title: passAJob.title?.trim() || null,
+      employmentType: (['full_time', 'part_time', 'contract', 'freelance', 'unknown'] as const).includes(passAJob.employmentType as never)
+        ? passAJob.employmentType as ExtractedJob['employmentType']
+        : 'unknown',
+      workplaceType: (['REMOTE', 'HYBRID', 'ONSITE', 'UNKNOWN'] as const).includes(passAJob.workplaceType as never)
+        ? passAJob.workplaceType as ExtractedJob['workplaceType']
+        : 'UNKNOWN',
+      allowedGeography: passAJob.allowedGeography?.trim() || null,
+      timezone: passAJob.timezone?.trim() || null,
+      compensation: passAJob.compensation?.trim() || null,
+      skills: passAJob.skills.map((s) => s.trim()).filter(Boolean),
+      seniority: passAJob.seniority?.trim() || null,
+      source: passAJob.source?.trim() || null,
+      postedDate: passAJob.postedDate?.trim() || null,
+    }
+  }
+
+  // Content normalization
+  const fallbackTechnicalSignals = job?.skills ?? []
+  const content: ExtractedContent = {
+    recentPosts: passA.content.recentPosts.map((p) => ({
+      paraphrase: p.paraphrase.trim(),
+      verbatimQuote: p.verbatimQuote?.trim() || null,
+      topics: p.topics.map((t) => t.trim()).filter(Boolean),
+      signals: p.signals.filter((s): s is OpportunitySignal => validSignals.includes(s as OpportunitySignal)),
+    })),
+    topics: mergeUnique([
+      ...passA.content.topics.map((t) => t.trim()).filter(Boolean),
+      ...fallbackTechnicalSignals,
+    ]).slice(0, 10),
+    explicitProblems: passA.content.explicitProblems.map((p) => p.trim()).filter(Boolean),
+    initiatives: passA.content.initiatives.map((i) => i.trim()).filter(Boolean),
+    launches: passA.content.launches.map((l) => l.trim()).filter(Boolean),
+    technicalSignals: mergeUnique([
+      ...passA.content.technicalSignals.map((t) => t.trim()).filter(Boolean),
+      ...fallbackTechnicalSignals,
+    ]).slice(0, 12),
+    hiringSignals: passA.content.hiringSignals.map((h) => h.trim()).filter(Boolean),
+  }
+
+  // Build evidence ledger from signals
+  if (content.hiringSignals.length > 0) {
+    evidenceLedger.push({
+      signal: 'Hiring activity detected',
+      source: 'pasted_text',
+      evidenceType: 'FACT',
+      confidence: 'HIGH',
+      safeForOutreach: true,
+      verbatimQuote: content.hiringSignals[0].slice(0, 200),
+    })
+  }
+  if (content.technicalSignals.length > 0) {
+    evidenceLedger.push({
+      signal: 'Technical work detected',
+      source: 'pasted_text',
+      evidenceType: 'STRONG_INFERENCE',
+      confidence: 'MEDIUM',
+      safeForOutreach: true,
+    })
+  }
+  if (content.explicitProblems.length > 0) {
+    evidenceLedger.push({
+      signal: 'Explicit problem stated',
+      source: 'pasted_text',
+      evidenceType: 'FACT',
+      confidence: 'HIGH',
+      safeForOutreach: true,
+      verbatimQuote: content.explicitProblems[0].slice(0, 200),
+    })
+  }
+
+  return {
+    intelligence: {
+      person,
+      company,
+      opportunity,
+      job,
+      content,
+      probableNeed: null, // Filled in Pass C
+      opportunityTrigger: null, // Filled in Pass C
+      timingSignal: null, // Filled in Pass C
+      risks: [],
+      unknowns: [],
+      resolvedContradictions: [],
+    },
+    evidenceLedger,
+    normalizedSourceUrls: normalizedUrls,
+  }
+}
+
+// ── Pass C: Intelligence ───────────────────────────────────────────────────
+
+const PASS_C_SYSTEM = `You are a strategic sales intelligence analyst. Given extracted prospect data, determine WHY this person/company could realistically hire a software development team.
+
+CRITICAL RULES:
+- Clearly distinguish FACT vs STRONG_INFERENCE vs WEAK_INFERENCE
+- Weak inferences must NOT become outreach claims
+- Be specific about what signals support each conclusion
+- If evidence is insufficient, say so rather than speculating
+
+Return a JSON object with:
+- probableNeed: What delivery need they likely have (null if unclear)
+- opportunityTrigger: What specific event/signal creates the opportunity now
+- timingSignal: Why now vs later (null if no timing signal)
+- risks: List of reasons this may NOT be a good opportunity
+- unknowns: List of important information we don't have`
+
+function buildPassCPrompt(passA: PassAOutput, passB: Omit<NormalizedIntelligence, 'remoteEligibility'>): string {
+  return `Analyze this prospect data for sales opportunity intelligence:
+
+PERSON: ${JSON.stringify(passB.person)}
+COMPANY: ${JSON.stringify(passB.company)}
+OPPORTUNITY: ${JSON.stringify(passB.opportunity)}
+JOB: ${JSON.stringify(passB.job)}
+CONTENT SIGNALS:
+- Topics: ${passB.content.topics.join(', ')}
+- Technical signals: ${passB.content.technicalSignals.join(', ')}
+- Hiring signals: ${passB.content.hiringSignals.join(', ')}
+- Explicit problems: ${passB.content.explicitProblems.join(', ')}
+- Recent initiatives: ${passB.content.initiatives.join(', ')}
+
+CONTEXT: Our team is based in Pakistan, seeking remote international contracts and freelance projects. We deliver software development services.
+
+What is their probable delivery need, what creates this opportunity now, and what are the risks/unknowns?`
+}
+
+const PASS_C_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    probableNeed: { type: ['string', 'null'] },
+    opportunityTrigger: { type: ['string', 'null'] },
+    timingSignal: { type: ['string', 'null'] },
+    risks: { type: 'array', items: { type: 'string' } },
+    unknowns: { type: 'array', items: { type: 'string' } },
+  },
+}
+
+async function runPassC(
+  passA: PassAOutput,
+  intelligence: Omit<NormalizedIntelligence, 'remoteEligibility'>,
+  callLog: ExtractionPipelineResult['callLog'],
+  onStatus?: (msg: string) => void,
+  strictLiveMode?: boolean,
+): Promise<Pick<NormalizedIntelligence, 'probableNeed' | 'opportunityTrigger' | 'timingSignal' | 'risks' | 'unknowns'>> {
+  const lc = longcatHost()
+  const gpt = tier4Host()
+  const chain: ChainStep[] = []
+  if (lc) chain.push({ costTier: 'tier1', host: lc })
+  if (gpt) chain.push({ costTier: 'tier4', host: gpt })
+
+  if (chain.length === 0) {
+    if (strictLiveMode) {
+      throw new Error('No AI provider available for live extraction (strict mode). Set LONGCAT_API_KEY.')
+    }
+    callLog.push({
+      provider: 'demo',
+      model: 'deterministic_fallback',
+      task: 'intelligence_pass_c',
+      latencyMs: 0,
+      fallback: true,
+    })
+    return demoPassC(passA)
+  }
+
+  onStatus?.('Pass C: Analyzing opportunity')
+  const startTime = Date.now()
+
+  try {
+    const result = await structuredJsonChain<unknown>(chain, {
+      system: PASS_C_SYSTEM,
+      user: buildPassCPrompt(passA, intelligence),
+      schema: PASS_C_SCHEMA,
+      schemaName: 'intelligence_pass_c',
+    }, undefined, LONGCAT_EXTRACTION_TIMEOUT_MS)
+
+    callLog.push({
+      provider: result.host,
+      model: result.host,
+      task: 'intelligence_pass_c',
+      latencyMs: Date.now() - startTime,
+      fallback: result.costTier === 'tier4',
+    })
+
+    const validated = validatePassC(result.data)
+    return stabilizePassC(validated, passA, intelligence)
+  } catch (err) {
+    if (strictLiveMode) {
+      throw new Error(`Live extraction failed in Pass C: ${err instanceof Error ? err.message : String(err)}`)
+    }
+    callLog.push({
+      provider: 'fallback',
+      model: 'demo',
+      task: 'intelligence_pass_c',
+      latencyMs: Date.now() - startTime,
+      fallback: true,
+    })
+    return stabilizePassC(demoPassC(passA), passA, intelligence)
+  }
+}
+
+function isRemoteOnlyInsight(text: string | null): boolean {
+  if (!text) return true
+  const value = text.trim().toLowerCase()
+  if (!value) return true
+  return /^(remote|remote role|this is remote|fully remote|work from anywhere)[\s.!]*$/.test(value)
+}
+
+function buildFallbackTrigger(passA: PassAOutput, intelligence: Omit<NormalizedIntelligence, 'remoteEligibility'>): string | null {
+  const company = intelligence.company.name ?? passA.company.name ?? 'The company'
+  const jobTitle = intelligence.job?.title ?? passA.job?.title
+  const skills = (intelligence.job?.skills ?? passA.job?.skills ?? []).slice(0, 5)
+
+  if (intelligence.opportunity.signals.includes('explicit_ask') || intelligence.opportunity.signals.includes('hiring')) {
+    const titlePart = jobTitle ? ` ${jobTitle}` : ' software talent'
+    const skillPart = skills.length > 0 ? ` (${skills.join(', ')})` : ''
+    return `${company} is explicitly hiring${titlePart}${skillPart}.`
+  }
+
+  if (intelligence.content.explicitProblems.length > 0) {
+    return intelligence.content.explicitProblems[0]
+  }
+
+  if (intelligence.content.hiringSignals.length > 0) {
+    return intelligence.content.hiringSignals[0]
+  }
+
+  if (intelligence.opportunity.description && !isRemoteOnlyInsight(intelligence.opportunity.description)) {
+    return intelligence.opportunity.description
+  }
+
+  return null
+}
+
+function buildFallbackProbableNeed(passA: PassAOutput, intelligence: Omit<NormalizedIntelligence, 'remoteEligibility'>): string | null {
+  const company = intelligence.company.name ?? passA.company.name ?? 'This company'
+  const skills = (intelligence.job?.skills ?? passA.job?.skills ?? intelligence.content.technicalSignals).slice(0, 6)
+
+  if (intelligence.opportunity.signals.includes('hiring') || intelligence.opportunity.signals.includes('explicit_ask')) {
+    if (skills.length > 0) {
+      return `${company} appears to need full-stack delivery capacity across ${skills.join(', ')}.`
+    }
+    return `${company} appears to need additional engineering delivery capacity.`
+  }
+
+  if (intelligence.opportunity.signals.includes('technical_problem')) {
+    return `${company} appears to need support resolving a technical delivery issue.`
+  }
+
+  return null
+}
+
+function stabilizePassC(
+  passC: Pick<NormalizedIntelligence, 'probableNeed' | 'opportunityTrigger' | 'timingSignal' | 'risks' | 'unknowns'>,
+  passA: PassAOutput,
+  intelligence: Omit<NormalizedIntelligence, 'remoteEligibility'>,
+): Pick<NormalizedIntelligence, 'probableNeed' | 'opportunityTrigger' | 'timingSignal' | 'risks' | 'unknowns'> {
+  const out = {
+    probableNeed: passC.probableNeed,
+    opportunityTrigger: passC.opportunityTrigger,
+    timingSignal: passC.timingSignal,
+    risks: [...passC.risks],
+    unknowns: [...passC.unknowns],
+  }
+
+  if (!out.probableNeed) {
+    out.probableNeed = buildFallbackProbableNeed(passA, intelligence)
+  }
+
+  if (isRemoteOnlyInsight(out.opportunityTrigger)) {
+    out.opportunityTrigger = buildFallbackTrigger(passA, intelligence)
+  }
+
+  if (!out.timingSignal) {
+    if (intelligence.opportunity.urgency === 'immediate') {
+      out.timingSignal = 'Immediate demand signaled in current hiring/problem statements.'
+    } else if (intelligence.opportunity.urgency === 'near_term' || intelligence.content.hiringSignals.length > 0) {
+      out.timingSignal = 'Current hiring activity indicates a near-term delivery window.'
+    }
+  }
+
+  return out
+}
+
+function validatePassC(raw: unknown): Pick<NormalizedIntelligence, 'probableNeed' | 'opportunityTrigger' | 'timingSignal' | 'risks' | 'unknowns'> {
+  if (!raw || typeof raw !== 'object') {
+    return { probableNeed: null, opportunityTrigger: null, timingSignal: null, risks: [], unknowns: [] }
+  }
+  const r = raw as Record<string, unknown>
+  return {
+    probableNeed: typeof r.probableNeed === 'string' ? r.probableNeed : null,
+    opportunityTrigger: typeof r.opportunityTrigger === 'string' ? r.opportunityTrigger : null,
+    timingSignal: typeof r.timingSignal === 'string' ? r.timingSignal : null,
+    risks: Array.isArray(r.risks) ? r.risks.filter((x): x is string => typeof x === 'string') : [],
+    unknowns: Array.isArray(r.unknowns) ? r.unknowns.filter((x): x is string => typeof x === 'string') : [],
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function normalizeUrl(url: string | null): string | null {
+  if (!url) return null
+  try {
+    const parsed = new URL(url)
+    return parsed.toString()
+  } catch {
+    return url.trim() || null
+  }
+}
+
+function normalizeLinkedInUrl(url: string | null): string | null {
+  if (!url) return null
+  const normalized = normalizeUrl(url)
+  if (!normalized) return null
+  // Ensure it looks like a LinkedIn URL
+  if (!normalized.includes('linkedin.com/')) return null
+  return normalized
+}
+
+function extractFirstName(fullName: string | null): string | null {
+  if (!fullName) return null
+  const parts = fullName.trim().split(/\s+/)
+  return parts[0] || null
+}
+
+function normalizeSeniority(seniority: string | null, title: string | null): string | null {
+  if (seniority) return seniority
+  if (!title) return null
+  const lower = title.toLowerCase()
+  if (/\b(ceo|cto|cio|coo|chief|founder|co[- ]?founder|president|partner|managing director)\b/i.test(lower)) return 'executive'
+  if (/\b(vp|head of|director)\b/i.test(lower)) return 'senior'
+  if (/\b(principal|staff|lead|architect|distinguished)\b/i.test(lower)) return 'senior'
+  if (/\b(senior|sr\.?|manager)\b/i.test(lower)) return 'mid_senior'
+  if (/\b(junior|jr\.?|intern|associate|entry|graduate)\b/i.test(lower)) return 'junior'
+  return 'mid'
+}
+
+function normalizeStage(stage: string | null): string | null {
+  if (!stage) return null
+  const lower = stage.toLowerCase()
+  if (/\b(seed|pre[- ]?seed|angel)\b/i.test(lower)) return 'seed'
+  if (/\b(series [abc])\b/i.test(lower)) return lower.match(/series [abc]/)?.[0] || 'growth'
+  if (/\b(growth|scale|series [def])\b/i.test(lower)) return 'growth'
+  if (/\b(enterprise|late|established|public|ipo)\b/i.test(lower)) return 'enterprise'
+  if (/\b(startup|early|small)\b/i.test(lower)) return 'early'
+  return stage.trim()
+}
+
+// ── Demo Fallback ──────────────────────────────────────────────────────────
+
+const TECH_KEYWORDS = [
+  'next.js',
+  'react',
+  'node.js',
+  'node',
+  'rails',
+  'ruby on rails',
+  'svelte',
+  'wxt',
+  'typescript',
+  'javascript',
+  'python',
+  'flask',
+  'firebase',
+  'postgresql',
+  'openai',
+  'chatgpt',
+  'langflow',
+  'oidc',
+  'oauth',
+  'blockchain',
+  'gdpr',
+  'rls',
+  'tenant isolation',
+  'headless cms',
+  'cdn',
+  'base44',
+  'payments',
+  'seo',
+  'lead generation',
+  'architecture',
+  'hipaa',
+  'supplement',
+  'rails 8',
+  'figma',
+  'css',
+  'astro',
+  '11ty',
+]
+
+const ASKING_PATTERNS = [
+  /\blooking for\b/i,
+  /\bneed (?:a|an|someone|help)\b/i,
+  /\bwe need\b/i,
+  /\bneeds?\b/i,
+  /\bseeking\b/i,
+  /\bdm me\b/i,
+  /\breach out\b/i,
+  /\bexternal help\b/i,
+]
+
+const DEV_ROLE_HINT = /\b(developer|engineer|full[- ]?stack|backend|frontend|software|app|platform|api|architect|devops|contractor|integration)\b/i
+
+const PAIN_PATTERNS = [
+  /\bstruggling\b/i,
+  /\bblank screen\b/i,
+  /\bbug\b/i,
+  /\burgent\b/i,
+  /\bnot production ready\b/i,
+  /\bdrowning\b/i,
+  /\bcan'?t deliver\b/i,
+  /\bslowing down\b/i,
+  /\bbacklog\b/i,
+  /\bprevious developer\b/i,
+  /\bdisappeared\b/i,
+  /\bfull requirements\b/i,
+]
+
+function splitLines(rawText: string): string[] {
+  return rawText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+function extractName(lines: string[]): string | null {
+  for (const line of lines.slice(0, 8)) {
+    if (/^(job|description|skills|posted|budget|client|company)\b/i.test(line)) continue
+    if (/^[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z'.-]+){0,3}$/.test(line)) {
+      return line
+    }
+  }
+  return null
+}
+
+function extractTitle(lines: string[]): string | null {
+  const titleLine = lines.find((line) =>
+    /\b(founder|ceo|cto|coo|vp|head|director|manager|lead|owner|president|engineer|developer|architect)\b/i.test(line),
+  )
+  return titleLine ?? null
+}
+
+function extractLocation(lines: string[], rawText: string): string | null {
+  const locationLine = lines.find((line) =>
+    /\b(remote|hybrid|on-?site|usa|united states|uk|united kingdom|europe|uae|canada|australia|germany|france|india|pakistan|singapore|new york|london|berlin|dubai|toronto|sydney|chicago|austin|stockholm|warsaw|dublin|edinburgh)\b/i.test(line) &&
+    (line.includes(',') || /\bremote\b/i.test(line)),
+  )
+  if (locationLine) {
+    return locationLine.replace(/^location:\s*/i, '').trim()
+  }
+
+  const inline = rawText.match(/\b(?:in|at)\s+([A-Z][A-Za-z .'-]+,\s*[A-Z][A-Za-z .'-]+)/)
+  return inline?.[1]?.trim() ?? null
+}
+
+function extractCompany(lines: string[], title: string | null, rawText: string): string | null {
+  const companyLine = lines.find((line) => /^company:\s*/i.test(line))
+  if (companyLine) return companyLine.replace(/^company:\s*/i, '').trim()
+
+  if (title) {
+    const atMatch = title.match(/\bat\s+([^|,]+)/i)
+    if (atMatch?.[1]) return atMatch[1].trim()
+  }
+
+  const aboutMatch = rawText.match(/\b([A-Z][A-Za-z0-9&._' -]{2,80})\s+(?:is building|builds|provides|runs|helps)\b/)
+  if (aboutMatch?.[1]) return aboutMatch[1].trim()
+
+  return null
+}
+
+function extractClientName(lines: string[]): string | null {
+  const clientLine = lines.find((line) => /^client:\s*/i.test(line))
+  if (!clientLine) return null
+  const value = clientLine.replace(/^client:\s*/i, '').trim()
+  return value.length > 0 ? value : null
+}
+
+function extractCompanySize(rawText: string): { size: string | null; evidence: string | null } {
+  const lineMatch = rawText.match(/\b(team of\s+\d+\+?\s+(?:engineers?|developers?|people)|\d+\+?\s+(?:engineers?|developers?|team members?))\b/i)
+  if (!lineMatch?.[1]) {
+    return { size: null, evidence: null }
+  }
+  return {
+    size: lineMatch[1],
+    evidence: lineMatch[0],
+  }
+}
+
+function extractSkills(lines: string[], rawText: string): string[] {
+  const skills = new Set<string>()
+  const skillsLine = lines.find((line) => /^skills:\s*/i.test(line))
+  if (skillsLine) {
+    const list = skillsLine
+      .replace(/^skills:\s*/i, '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    for (const skill of list) skills.add(skill)
+  }
+
+  const lower = rawText.toLowerCase()
+  for (const keyword of TECH_KEYWORDS) {
+    if (lower.includes(keyword)) skills.add(keyword)
+  }
+
+  const cloneMatch = lower.match(/clone of\s+([a-z0-9]+)/)
+  if (cloneMatch?.[1]) {
+    skills.add(`${cloneMatch[1]} clone`)
+  }
+
+  return [...skills].slice(0, 12)
+}
+
+function extractOpportunitySignals(rawText: string): { signals: OpportunitySignal[]; urgency: 'immediate' | 'near_term' | 'future' | 'unknown' } {
+  const lower = rawText.toLowerCase()
+  const signals: OpportunitySignal[] = []
+
+  const budgetMatch = rawText.match(/\b(?:budget:\s*)?[\$€£]\s*([0-9]{1,3}(?:,[0-9]{3})*|[0-9]{2,5})(?:\.\d{1,2})?/i)
+  const budgetValue = budgetMatch?.[1] ? Number(budgetMatch[1].replace(/,/g, '')) : null
+  const proposalMatch = rawText.match(/\bproposals?:\s*(\d{2,3})\b/i)
+  const proposalCount = proposalMatch?.[1] ? Number(proposalMatch[1]) : null
+  const oversizedScope = /\b(uber|clone|exactly like|everything|full app|entire platform|all features|drivers,\s*riders,\s*payments,\s*maps)\b/i.test(rawText)
+  const unrealisticTimeline = /\bin\s*(?:[1-9]\s*days?|[1-2]\s*weeks?)\b/i.test(rawText)
+  const nonCredibleFreelanceBrief =
+    budgetValue !== null
+    && budgetValue <= 300
+    && (oversizedScope || unrealisticTimeline || (proposalCount !== null && proposalCount >= 20))
+
+  const hasTechContext = DEV_ROLE_HINT.test(rawText) || TECH_KEYWORDS.some((k) => lower.includes(k))
+  const explicitAsk = ASKING_PATTERNS.some((p) => p.test(rawText)) && hasTechContext
+  const explicitHiring =
+    /\b(open roles?)\b/i.test(rawText)
+    || /\bhiring\b.{0,50}\b(developer|engineer|contractor|full[- ]?stack|backend|frontend|software)\b/i.test(rawText)
+    || /\b(developer|engineer|contractor|full[- ]?stack|backend|frontend|software)\b.{0,50}\bhiring\b/i.test(rawText)
+
+  if (explicitAsk && !nonCredibleFreelanceBrief) signals.push('explicit_ask')
+  if (/(job:|upwork|budget:|proposals?:|contract|freelance)/i.test(rawText) && hasTechContext && !nonCredibleFreelanceBrief) signals.push('freelance_project_need')
+  if (PAIN_PATTERNS.some((p) => p.test(rawText))) signals.push('technical_problem')
+  if (explicitHiring) signals.push('hiring')
+  if (/\b(raised|seed round|series [abc]|funding)\b/i.test(rawText)) signals.push('funding')
+  if (/\b(migration|migrate|migrated|move from|move to)\b/i.test(rawText)) signals.push('migration')
+  if (/\b(rebuild|overhaul|rewrite|re-?platform|production[- ]?ready)\b/i.test(rawText)) signals.push('rebuild')
+  if (/\b(growing|scaling|scale|expanding|growth)\b/i.test(rawText)) signals.push('growth_signal')
+  if (/\b(launch|launching|rollout|release)\b/i.test(rawText)) signals.push('launch')
+  if (/\b(drowning|can'?t keep up|slowing down|backlog|understaffed)\b/i.test(rawText)) signals.push('hiring_pressure')
+
+  if (signals.length === 0 && !hasTechContext) {
+    return { signals: [], urgency: 'unknown' }
+  }
+
+  const dedup = [...new Set(signals)]
+
+  let urgency: 'immediate' | 'near_term' | 'future' | 'unknown' = 'unknown'
+  if (/\b(urgent|asap|immediately|right now|this week)\b/i.test(rawText)) urgency = 'immediate'
+  else if (/\b(soon|next month|q[1-4]|near term|in \d+ (days|weeks))\b/i.test(rawText)) urgency = 'near_term'
+  else if (/\b(future|later this year|next quarter|long term)\b/i.test(rawText)) urgency = 'future'
+
+  return { signals: dedup, urgency }
+}
+
+function selectPrimarySignal(signals: OpportunitySignal[]): OpportunitySignal | null {
+  const priority: OpportunitySignal[] = [
+    'explicit_ask',
+    'freelance_project_need',
+    'technical_problem',
+    'hiring',
+    'hiring_pressure',
+    'migration',
+    'rebuild',
+    'funding',
+    'growth_signal',
+    'launch',
+  ]
+  for (const p of priority) {
+    if (signals.includes(p)) return p
+  }
+  return signals[0] ?? null
+}
+
+function extractSignalLine(lines: string[]): string | null {
+  for (const line of lines) {
+    if (ASKING_PATTERNS.some((p) => p.test(line)) || PAIN_PATTERNS.some((p) => p.test(line)) || /\b(open roles?|hiring|raised|seed|series|remote|hybrid|on-?site)\b/i.test(line)) {
+      return line.slice(0, 220)
+    }
+  }
+  return null
+}
+
+function extractJobFromText(lines: string[], rawText: string, skills: string[]): PassAOutput['job'] {
+  const hasJobMarkers = /(job:|description:|responsibilities:|requirements:|skills:|budget:|proposals?:|apply)/i.test(rawText)
+  if (!hasJobMarkers && !/\b(remote|hybrid|on-?site|hiring)\b/i.test(rawText)) {
+    return null
+  }
+
+  const titleLine = lines.find((line) => /^job:\s*/i.test(line))
+  const title = titleLine ? titleLine.replace(/^job:\s*/i, '').trim() : null
+
+  let workplaceType: 'REMOTE' | 'HYBRID' | 'ONSITE' | 'UNKNOWN' = 'UNKNOWN'
+  if (/\b(on-?site|onsite|in[- ]?person|no remote)\b/i.test(rawText)) workplaceType = 'ONSITE'
+  else if (/\b(hybrid|office requirement|days\/week in|in our .* office)\b/i.test(rawText)) workplaceType = 'HYBRID'
+  else if (/\b(remote|work from anywhere|worldwide|distributed|async)\b/i.test(rawText)) workplaceType = 'REMOTE'
+
+  let allowedGeography: string | null = null
+  if (/\b(us only|remote within us|united states only|must be based in the us)\b/i.test(rawText)) allowedGeography = 'US'
+  else if (/\b(eu\/?eea|eu only|europe only|eea only)\b/i.test(rawText)) allowedGeography = 'EU/EEA'
+  else if (/\b(uk only|united kingdom only)\b/i.test(rawText)) allowedGeography = 'UK'
+  else if (/\b(london office|in london)\b/i.test(rawText)) allowedGeography = 'London, UK'
+  else if (/\b(manhattan|new york office|on-site in new york)\b/i.test(rawText)) allowedGeography = 'Manhattan, New York, USA'
+
+  let timezone: string | null = null
+  if (/\b(pst|pdt|pacific)\b/i.test(rawText)) timezone = 'PST/PDT'
+  else if (/\b(est|edt|eastern)\b/i.test(rawText)) timezone = 'EST/EDT'
+  else if (/\b(cet|cest|central european)\b/i.test(rawText)) timezone = 'CET/CEST'
+  else if (/\b(gmt|utc)\b/i.test(rawText)) timezone = 'GMT/UTC'
+
+  const compensationLine = lines.find((line) => /^budget:\s*/i.test(line) || /\b\$\d+/i.test(line))
+  const compensation = compensationLine ? compensationLine.slice(0, 120) : null
+
+  const postedLine = lines.find((line) => /^posted:\s*/i.test(line))
+  const postedDate = postedLine ? postedLine.replace(/^posted:\s*/i, '').trim() : null
+
+  const employmentType: 'full_time' | 'part_time' | 'contract' | 'freelance' | 'unknown' =
+    /\b(freelance|upwork|proposal)\b/i.test(rawText)
+      ? 'freelance'
+      : /\b(contract)\b/i.test(rawText)
+        ? 'contract'
+        : /\b(full[- ]?time)\b/i.test(rawText)
+          ? 'full_time'
+          : /\b(part[- ]?time)\b/i.test(rawText)
+            ? 'part_time'
+            : 'unknown'
+
+  return {
+    title,
+    employmentType,
+    workplaceType,
+    allowedGeography,
+    timezone,
+    compensation,
+    skills,
+    seniority: /\b(senior|staff|lead|principal)\b/i.test(rawText) ? 'senior' : null,
+    source: /upwork\.com/i.test(rawText) || /\bupwork\b/i.test(rawText) ? 'upwork' : null,
+    postedDate,
+  }
+}
+
+function extractContentSignals(lines: string[], rawText: string): PassAOutput['content'] {
+  const lower = rawText.toLowerCase()
+  const technicalSignals = TECH_KEYWORDS.filter((k) => lower.includes(k)).slice(0, 10)
+
+  const hiringSignals = lines
+    .filter((line) =>
+      /\b(looking for|open roles?|need|hiring|contractor)\b/i.test(line) &&
+      (DEV_ROLE_HINT.test(line) || TECH_KEYWORDS.some((k) => line.toLowerCase().includes(k))),
+    )
+    .slice(0, 5)
+
+  const explicitProblems = lines
+    .filter((line) => PAIN_PATTERNS.some((p) => p.test(line)))
+    .slice(0, 5)
+
+  const recentPosts = lines
+    .filter((line) => /\b(post|posts?)\b/i.test(line) || line.startsWith('"') || line.startsWith("'"))
+    .slice(0, 3)
+    .map((line) => ({
+      paraphrase: line.slice(0, 180),
+      verbatimQuote: line.slice(0, 180),
+      topics: technicalSignals.slice(0, 3),
+      signals: extractOpportunitySignals(line).signals,
+    }))
+
+  const topics = [...new Set(technicalSignals.map((s) => s.replace(/[^a-z0-9+.#-]/gi, '')))].filter(Boolean)
+
+  return {
+    recentPosts,
+    topics,
+    explicitProblems,
+    initiatives: lines.filter((line) => /\b(building|launching|migrating|rebuilding|scaling)\b/i.test(line)).slice(0, 3),
+    launches: lines.filter((line) => /\b(launch|released|rollout)\b/i.test(line)).slice(0, 3),
+    technicalSignals,
+    hiringSignals,
+  }
+}
+
+function demoPassA(rawText: string): PassAOutput {
+  const lines = splitLines(rawText)
+  const name = extractName(lines)
+  const title = extractTitle(lines)
+  const location = extractLocation(lines, rawText)
+  const company = extractCompany(lines, title, rawText)
+  const sizeInfo = extractCompanySize(rawText)
+  const clientName = extractClientName(lines)
+  const linkedinUrl = extractUrls(rawText).find((u) => u.toLowerCase().includes('linkedin.com/in/')) ?? null
+  const otherUrls = extractUrls(rawText).filter((u) => u !== linkedinUrl)
+  const skills = extractSkills(lines, rawText)
+  const { signals, urgency } = extractOpportunitySignals(rawText)
+  const primarySignal = selectPrimarySignal(signals)
+  const signalLine = extractSignalLine(lines)
+  const content = extractContentSignals(lines, rawText)
+  const job = extractJobFromText(lines, rawText, skills)
+
+  return {
+    person: {
+      fullName: name ?? clientName ?? null,
+      firstName: (name ?? clientName)?.split(/\s+/)[0] ?? null,
+      title: title?.trim() ?? null,
+      seniority: null,
+      location,
+      linkedinUrl,
+      otherUrls,
+    },
+    company: {
+      name: company,
+      domain: null,
+      linkedinUrl: null,
+      industry: null,
+      size: sizeInfo.size,
+      sizeEvidence: sizeInfo.evidence,
+      product: null,
+      stage: null,
+      stageEvidence: null,
+    },
+    opportunity: {
+      signals,
+      primarySignal,
+      description: signalLine,
+      urgency,
+    },
+    job,
+    content,
+  }
+}
+
+function demoPassC(passA: PassAOutput): Pick<NormalizedIntelligence, 'probableNeed' | 'opportunityTrigger' | 'timingSignal' | 'risks' | 'unknowns'> {
+  const signals = passA.opportunity.signals
+  let probableNeed: string | null = null
+  if (signals.includes('freelance_project_need') || signals.includes('explicit_ask')) {
+    probableNeed = 'External software delivery support for an active project need.'
+  } else if (signals.includes('technical_problem')) {
+    probableNeed = 'Specialized engineering help to resolve a technical issue.'
+  } else if (signals.includes('hiring') || signals.includes('hiring_pressure')) {
+    probableNeed = 'Additional delivery capacity to keep up with shipping demands.'
+  }
+
+  const opportunityTrigger =
+    passA.opportunity.description
+    ?? passA.content.hiringSignals[0]
+    ?? passA.content.explicitProblems[0]
+    ?? null
+
+  const risks: string[] = []
+  const unknowns: string[] = []
+  if (!passA.person.fullName) unknowns.push('Contact name missing in source text')
+  if (!passA.company.name && !passA.person.fullName) unknowns.push('No clear company or client identified')
+  if (signals.length === 0) risks.push('No explicit buying signal detected')
+
+  return {
+    probableNeed,
+    opportunityTrigger,
+    timingSignal: passA.opportunity.urgency === 'immediate' ? 'Immediate signal from source text' : null,
+    risks,
+    unknowns,
+  }
+}
+
+// ── Main Pipeline Entry ────────────────────────────────────────────────────
+
+export async function runIntelligencePipeline(
+  rawText: string,
+  opts: ExtractionPipelineOptions = {},
+): Promise<ExtractionPipelineResult> {
+  const callLog: ExtractionPipelineResult['callLog'] = []
+
+  // Extract URLs before any processing
+  const sourceUrls = extractUrls(rawText)
+
+  // Build raw source data
+  const rawSource: RawSourceData = {
+    rawInput: rawText,
+    sourceType: detectSourceType(rawText),
+    sourceUrl: opts.knownSourceUrl ?? sourceUrls[0] ?? null,
+    profileUrl: opts.knownProfileUrl ?? sourceUrls.find((u) => u.includes('linkedin.com/in/')) ?? null,
+    companyUrl: opts.knownCompanyUrl ?? sourceUrls.find((u) => u.includes('linkedin.com/company/')) ?? null,
+    jobUrl: opts.knownJobUrl ?? sourceUrls.find((u) => u.includes('linkedin.com/jobs/') || u.includes('greenhouse.io') || u.includes('lever.co')) ?? null,
+    postUrls: sourceUrls.filter((u) => u.includes('linkedin.com/posts/') || u.includes('linkedin.com/feed/update')),
+    rawPosts: [],
+    rawJobDescription: null,
+    rawProfileText: null,
+    rawCompanyText: null,
+    capturedAt: new Date().toISOString(),
+  }
+
+  // Assess remote eligibility (deterministic, no AI needed)
+  const remoteEligibility = assessRemoteEligibility({
+    rawText,
+    requiredWorkerLocation: null, // Will be refined from extraction
+  })
+
+  // Pass A: Extract
+  const passA = await runPassA(rawText, sourceUrls, callLog, opts.onStatus, opts.strictLiveMode)
+
+  // Pass B: Normalize
+  opts.onStatus?.('Normalizing extraction')
+  const { intelligence: partialIntelligence, evidenceLedger, normalizedSourceUrls } = normalizePassA(passA, sourceUrls, remoteEligibility)
+
+  // Refine remote eligibility with extracted job data
+  const refinedEligibility = passA.job
+    ? assessRemoteEligibility({
+        rawText,
+        statedWorkplaceType: passA.job.workplaceType as RemoteEligibilityInput['statedWorkplaceType'],
+        requiredWorkerLocation: passA.job.allowedGeography,
+      })
+    : remoteEligibility
+
+  // Pass C: Intelligence
+  const passC = await runPassC(passA, partialIntelligence, callLog, opts.onStatus, opts.strictLiveMode)
+
+  // Assemble final intelligence
+  const intelligence: NormalizedIntelligence = {
+    ...partialIntelligence,
+    ...passC,
+    remoteEligibility: refinedEligibility,
+  }
+
+  // Merge evidence ledger with remote eligibility evidence
+  if (refinedEligibility.evidence) {
+    for (const ev of refinedEligibility.evidence) {
+      evidenceLedger.push({
+        signal: `Remote eligibility: ${ev}`,
+        source: 'pasted_text',
+        evidenceType: 'FACT',
+        confidence: 'HIGH',
+        safeForOutreach: false,
+      })
+    }
+  }
+
+  return {
+    intelligence,
+    rawSource,
+    remoteEligibility: refinedEligibility,
+    evidenceLedger,
+    callLog,
+    sourceUrls: normalizedSourceUrls,
+  }
+}

@@ -4,9 +4,10 @@ import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
 import { buildRoleContext } from '@/lib/relay/role-intelligence'
 import { buildRelayQueue, filterQueueByRole } from '@/lib/relay/queue-engine'
-import type { Lead, RelayTask, RevenueIdentity, RevenueIdentityWithAssignment } from '@/lib/domain/types'
+import { generateDailyIdeas } from '@/lib/content/daily-ideas'
+import type { ContentDraft, ContentIdeaCard, Lead, RelayTask, RevenueIdentity, RevenueIdentityWithAssignment } from '@/lib/domain/types'
 import { RelayTodayWorkspaceAsync } from '@/components/relay-today-workspace-async'
-import type { RelayTodayAction, RelayTodayWorkspaceProps } from '@/components/relay-today-workspace'
+import type { RelayTodayAction, RelayTodayWorkspaceProps, StudioOpportunityCard } from '@/components/relay-today-workspace'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,8 @@ type IdentityRef = {
   channel: string
   profileId: string | null
 }
+
+type Store = Awaited<ReturnType<typeof createScoutStore>>
 
 async function loadDashboardData(): Promise<RelayTodayWorkspaceProps> {
   const user = await getCurrentUser()
@@ -98,7 +101,7 @@ async function loadDashboardData(): Promise<RelayTodayWorkspaceProps> {
       prepared: task.recommendation.preparedOutput ?? task.recommendation.action,
       humanAction: task.humanAction,
       createdAt: task.createdAt,
-      fitScore: lead?.score ?? null,
+      fitScore: lead?.canonicalScore ?? lead?.score ?? null,
       identity,
       proof,
       inbound: task.kind === 'inbound_opportunity',
@@ -135,15 +138,7 @@ async function loadDashboardData(): Promise<RelayTodayWorkspaceProps> {
   const activeConversations = Array.from(relayData.conversations.values())
     .filter((conversation) => !['won', 'lost'].includes(conversation.stage)).length
 
-  const studioOpportunity = dash.contentForToday
-    ? {
-        title: dash.contentForToday.ideaTitle,
-        whyYou: dash.contentForToday.ideaReason,
-        href: dash.contentForToday.draftId
-          ? `/studio/drafts/${dash.contentForToday.draftId}`
-          : `/content/${dash.contentForToday.personaId}/today`,
-      }
-    : null
+  const studioOpportunity = await resolveStudioOpportunity(store, user.rep.id)
 
   let targetProgress: RelayTodayWorkspaceProps['targetProgress']
   targetProgress = null
@@ -358,7 +353,7 @@ function pickWhyLines(task: RelayTask): string[] {
 function entityHref(task: RelayTask): string {
   if (task.entityType === 'lead') return `/leads/${task.entityId}`
   if (task.entityType === 'job') return `/upwork/${task.entityId}`
-  if (task.entityType === 'content') return '/content'
+  if (task.entityType === 'content') return task.entityId ? `/content/${task.entityId}/today` : '/content'
   if (task.entityType === 'admin') return '/admin/command-center'
   return '/dashboard'
 }
@@ -370,4 +365,104 @@ function cleanTitle(title: string): string {
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text
   return `${text.slice(0, max).trimEnd()}...`
+}
+
+async function resolveStudioOpportunity(store: Store, repId: string): Promise<StudioOpportunityCard | null> {
+  const personas = await store.listContentPersonas(repId).catch(() => [])
+  if (personas.length === 0) return null
+
+  const draftsByPersona = await Promise.all(
+    personas.map(async (persona) => ({
+      persona,
+      drafts: await store.listContentDrafts(persona.id).catch(() => []),
+    })),
+  )
+
+  const latestDraft = pickLatestWorkspaceDraft(draftsByPersona)
+  if (latestDraft) {
+    const platform = normalizeStudioPlatform(latestDraft.draft.platform)
+    return {
+      title: latestDraft.draft.sourceMaterial || 'Continue your latest draft',
+      whyYou: 'Draft already created. Open workspace to finish and publish.',
+      href: `/studio/drafts/${latestDraft.draft.id}`,
+      personaId: latestDraft.persona.id,
+      draftId: latestDraft.draft.id,
+      platform,
+      idea: null,
+    }
+  }
+
+  const persona = personas[0]
+  const profile = persona.contentProfileId ? await store.getContentProfile(persona.contentProfileId).catch(() => null) : null
+  const [clusters, history, memories, journey] = await Promise.all([
+    store.listTopicClusters(persona.id).catch(() => []),
+    store.listContentHistory(persona.id, 60).catch(() => []),
+    store.listContentMemories(persona.id, { limit: 50 }).catch(() => []),
+    (store.listContentJourney?.(persona.id, 50) ?? Promise.resolve([])).catch(() => []),
+  ])
+
+  const ideas = generateDailyIdeas({
+    profile,
+    clusters,
+    history,
+    memories,
+    journey,
+    contentGoals: profile?.contentGoals ?? [],
+    audiences: profile?.audiences ?? [],
+    territories: profile?.territories ?? [],
+  })
+
+  const pick = ideas[0]
+  if (!pick) {
+    return {
+      title: 'Capture something worth sharing today',
+      whyYou: 'No generated angle yet. Open Studio to capture one real line and draft.',
+      href: `/content/${persona.id}/today`,
+      personaId: persona.id,
+      draftId: null,
+      platform: normalizeStudioPlatform(persona.platforms[0]),
+      idea: null,
+    }
+  }
+
+  return {
+    title: pick.title,
+    whyYou: pick.whyYou || pick.whyAudience,
+    href: `/content/${persona.id}/today`,
+    personaId: persona.id,
+    draftId: null,
+    platform: normalizeStudioPlatform(persona.platforms[0]),
+    idea: mapIdeaSeed(pick),
+  }
+}
+
+function pickLatestWorkspaceDraft(rows: Array<{ persona: { id: string; displayName: string; platforms: string[] }; drafts: ContentDraft[] }>) {
+  const candidates = rows
+    .flatMap(({ persona, drafts }) =>
+      drafts
+        .filter((draft) => draft.status === 'draft' || draft.status === 'ready')
+        .map((draft) => ({ persona, draft })),
+    )
+    .sort((a, b) => {
+      const aTime = new Date(a.draft.updatedAt ?? a.draft.createdAt).getTime()
+      const bTime = new Date(b.draft.updatedAt ?? b.draft.createdAt).getTime()
+      return bTime - aTime
+    })
+
+  return candidates[0] ?? null
+}
+
+function mapIdeaSeed(idea: ContentIdeaCard): StudioOpportunityCard['idea'] {
+  return {
+    title: idea.title,
+    angle: idea.angle,
+    territory: idea.territory,
+    sourceKind: idea.sourceKind,
+    whyYou: idea.whyYou,
+    whyAudience: idea.whyAudience,
+  }
+}
+
+function normalizeStudioPlatform(platform: string | undefined): 'linkedin' | 'x' {
+  return platform === 'x' ? 'x' : 'linkedin'
 }

@@ -61,6 +61,17 @@ function priorityFromScore(score: number): RelayTaskPriority {
   return 'low'
 }
 
+/**
+ * The single function that resolves which score to use for any lead.
+ * canonicalScore (0-100) is the persisted source of truth.
+ * Legacy score (0-12) is only a fallback for old leads without canonical intelligence.
+ */
+function effectiveScore(lead: Lead): number | null {
+  if (lead.canonicalScore != null) return lead.canonicalScore
+  if (lead.score != null) return lead.score * (100 / 12) // Convert 0-12 → 0-100
+  return null
+}
+
 function freshnessPenalty(createdAt: string): number {
   const ageDays = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24)
   if (ageDays > 30) return -10
@@ -103,7 +114,8 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
 
   // 4. New qualified opportunities (recently added, scored)
   for (const lead of input.queueData.queue) {
-    if (lead.status === 'new' && lead.score !== null && lead.score >= 60) {
+    const leadScore = effectiveScore(lead)
+    if (lead.status === 'new' && leadScore !== null && leadScore >= 60) {
       const alreadyHighFit = tasks.some(
         (t) => t.entityId === lead.id && t.kind === 'high_fit_lead',
       )
@@ -359,10 +371,11 @@ function buildFollowupTask(lead: Lead, daysSince: number, input: QueueInput): Re
 }
 
 function buildHighFitTask(lead: Lead, _input: QueueInput): RelayTask {
+  const score = effectiveScore(lead)
   const evidence: RelayEvidence[] = [
     {
       source: 'score',
-      detail: `Score: ${lead.score}/100, Verdict: ${lead.verdict}`,
+      detail: `Score: ${score ?? '?'}/100, Verdict: ${lead.verdict}`,
       timestamp: null,
       verified: true,
     },
@@ -389,22 +402,22 @@ function buildHighFitTask(lead: Lead, _input: QueueInput): RelayTask {
     action: 'Reach out — this lead scored high',
     preparedOutput: null,
     evidence,
-    confidence: lead.score ? lead.score / 100 : 0.5,
+    confidence: score ? score / 100 : 0.5,
     forbidsImpersonation: true,
   }
 
   return {
     id: `highfit-${lead.id}`,
     kind: 'high_fit_lead',
-    priority: priorityFromScore(lead.score ?? 0),
-    priorityScore: KIND_PRIORITY_BASE.high_fit_lead + (lead.score ?? 0) / 10 + freshnessPenalty(lead.createdAt),
+    priority: priorityFromScore(score ?? 0),
+    priorityScore: KIND_PRIORITY_BASE.high_fit_lead + (score ?? 0) / 10 + freshnessPenalty(lead.createdAt),
     title: lead.company,
     subtitle: lead.contactTitle
       ? `${lead.contactName ?? 'Contact'} · ${lead.contactTitle}`
       : (lead.contactName ?? 'High-fit lead'),
     entityType: 'lead',
     entityId: lead.id,
-    whatHappened: `Scored ${lead.score ?? '?'}/100 — ready for outreach`,
+    whatHappened: `Scored ${score ?? '?'}/100 — ready for outreach`,
     whyItMatters: lead.signalType === 7
       ? 'Actively seeking help. High probability of reply.'
       : 'Strong signal match. Worth a personalized message.',
@@ -419,10 +432,11 @@ function buildHighFitTask(lead: Lead, _input: QueueInput): RelayTask {
 }
 
 function buildNewOpportunityTask(lead: Lead, _input: QueueInput): RelayTask {
+  const score = effectiveScore(lead)
   const evidence: RelayEvidence[] = [
     {
       source: 'score',
-      detail: `Score: ${lead.score}/100, Verdict: ${lead.verdict ?? 'unscored'}`,
+      detail: `Score: ${score ?? '?'}/100, Verdict: ${lead.verdict ?? 'unscored'}`,
       timestamp: null,
       verified: true,
     },

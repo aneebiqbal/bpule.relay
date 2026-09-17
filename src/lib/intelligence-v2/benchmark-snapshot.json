@@ -1,0 +1,201 @@
+{
+  "status": {
+    "label": "V2 Calibration Gate Passed",
+    "state": "pass",
+    "detail": "Relay Intelligence V2 is benchmarked, calibrated, and human-reviewed before it is enabled in production."
+  },
+  "lastVerifiedAt": "2026-09-17T14:32:13.268Z",
+  "artifact": {
+    "datasetVersion": "1.0.0",
+    "path": "benchmark-results/benchmark-v2-2026-09-17T14-32-13-268Z.json"
+  },
+  "metrics": {
+    "landing": [
+      {
+        "id": "cases_passed",
+        "label": "benchmark cases passed",
+        "value": "36/36",
+        "note": "Every calibration case passed the V2 gate."
+      },
+      {
+        "id": "known_wins",
+        "label": "known wins recognized",
+        "value": "20/20",
+        "note": "Known revenue outcomes remain correctly identified."
+      },
+      {
+        "id": "bad_leads",
+        "label": "bad leads rejected",
+        "value": "9/9",
+        "note": "Bad-fit and ineligible opportunities stayed rejected."
+      },
+      {
+        "id": "mock_fallback_count",
+        "label": "mock fallback",
+        "value": "0",
+        "note": "No synthetic fallback path was used in the run."
+      },
+      {
+        "id": "extraction_completeness",
+        "label": "extraction completeness",
+        "value": "92%",
+        "note": "Average extraction completeness increased with V2 fixes."
+      },
+      {
+        "id": "orchestrator_execution",
+        "label": "real V2 orchestrator executed",
+        "value": "Verified",
+        "note": "Execution confirms produceCanonicalIntelligence drove the run."
+      }
+    ],
+    "app": [
+      {
+        "id": "cases",
+        "label": "Cases",
+        "value": "36/36 PASS"
+      },
+      {
+        "id": "known_wins",
+        "label": "Known wins",
+        "value": "20/20"
+      },
+      {
+        "id": "bad_leads_rejected",
+        "label": "Bad leads rejected",
+        "value": "9/9"
+      },
+      {
+        "id": "warn_fail",
+        "label": "WARN/FAIL",
+        "value": "0/0"
+      },
+      {
+        "id": "extraction_completeness",
+        "label": "Extraction completeness",
+        "value": "92%"
+      },
+      {
+        "id": "mock_fallback",
+        "label": "Mock fallback",
+        "value": "false"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "key": "pipeline_requested",
+      "value": "v2"
+    },
+    {
+      "key": "pipeline_executed",
+      "value": "v2"
+    },
+    {
+      "key": "pipeline_version",
+      "value": "relay_qualification_v2"
+    },
+    {
+      "key": "mock_fallback",
+      "value": "false"
+    },
+    {
+      "key": "orchestrator",
+      "value": "produceCanonicalIntelligence"
+    },
+    {
+      "key": "latest artifact path",
+      "value": "benchmark-results/benchmark-v2-2026-09-17T14-32-13-268Z.json"
+    }
+  ],
+  "categoryResults": [
+    {
+      "id": "known_wins",
+      "label": "Known wins",
+      "passed": 20,
+      "total": 20,
+      "notes": "Historical won deals are recognized and prioritized."
+    },
+    {
+      "id": "strong_opportunities",
+      "label": "Strong opportunities",
+      "passed": 7,
+      "total": 7,
+      "notes": "High-potential leads are still surfaced as qualified opportunities."
+    },
+    {
+      "id": "bad_prospects",
+      "label": "Bad prospects",
+      "passed": 9,
+      "total": 9,
+      "notes": "Bad-fit and restricted scenarios stay out of the action queue."
+    },
+    {
+      "id": "remote_eligibility",
+      "label": "Remote eligibility cases",
+      "passed": 6,
+      "total": 6,
+      "notes": "Remote, hybrid, and on-site edge cases are handled with tighter rules."
+    }
+  ],
+  "timelineEvents": [
+    {
+      "id": "wiring",
+      "label": "Benchmark wiring fixed",
+      "detail": "Harness routing now calls the intended V2 intelligence pipeline.",
+      "state": "complete"
+    },
+    {
+      "id": "real_execution",
+      "label": "Real V2 execution verified",
+      "detail": "Requested and executed pipeline values now match as V2.",
+      "state": "complete"
+    },
+    {
+      "id": "failure_found",
+      "label": "Calibration failure found",
+      "detail": "Benchmark exposed scoring and extraction drift before rollout.",
+      "state": "complete"
+    },
+    {
+      "id": "logic_fix",
+      "label": "Scoring/extraction logic fixed",
+      "detail": "V2 scoring and extraction handlers were corrected and re-run.",
+      "state": "complete"
+    },
+    {
+      "id": "final_pass",
+      "label": "Final benchmark passed",
+      "detail": "All calibration gate checks passed with no WARN or FAIL outcomes.",
+      "state": "complete"
+    }
+  ],
+  "copy": {
+    "landing": {
+      "kicker": "Relay Intelligence V2",
+      "title": "Built on proof, not vibes.",
+      "description": "Relay's scoring engine is tested against a golden dataset of real lead scenarios: won deals, strong opportunities, bad-fit leads, restricted remote roles, hybrid roles, and on-site roles. Every new intelligence version must pass calibration before it is trusted in-product.",
+      "trustLine": "Benchmarked. Calibrated. Tested against real scenarios. Human-reviewed.",
+      "disclaimer": "Benchmarks are internal quality gates, not guarantees.",
+      "finalCta": "Relay does not just generate. It evaluates, calibrates, and proves before it ships."
+    },
+    "app": {
+      "header": "Relay Intelligence Benchmark",
+      "description": "Before V2 is used in production, it is tested against a golden dataset covering known wins, strong opportunities, bad prospects, and remote eligibility edge cases.",
+      "statusBanner": "V2 Calibration Gate Passed",
+      "timelineTitle": "Benchmark timeline",
+      "evidenceTitle": "Execution evidence",
+      "categoriesTitle": "Case category breakdown",
+      "whatThisMeansTitle": "What this means",
+      "whatThisMeans": [
+        "Relay is better at recognizing real-fit opportunities.",
+        "Bad leads remain rejected.",
+        "Extraction quality improved.",
+        "Remote eligibility is handled more carefully.",
+        "The system is tested before user-facing rollout."
+      ],
+      "warmExplanation": "AI systems can sound confident even when they are wrong. Relay's benchmark exists to catch that before it reaches the user.",
+      "qualityGateNote": "Benchmarks are internal quality gates, not guarantees.",
+      "finalCta": "Relay does not just generate. It evaluates, calibrates, and proves before it ships."
+    }
+  }
+}

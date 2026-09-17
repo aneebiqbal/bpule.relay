@@ -529,6 +529,32 @@ export class SupabaseStore implements ScoutStore {
     }
     const lead = mapLead(row.data as Row)
 
+    // Create outbound relay run (non-fatal — must not break lead creation)
+    let relayRunId: string | null = null
+    try {
+      relayRunId = await this.createRelayRun({
+        runType: 'outbound',
+        primaryEntityType: 'lead',
+        primaryEntityId: lead.id,
+        assignedRepId: this.rep.id,
+        correlationId: lead.id,
+        context: {
+          leadId: lead.id,
+          company: lead.company,
+          direction: lead.direction ?? 'outbound',
+          source: 'createLead',
+        },
+      })
+
+      // Advance run through qualifying pipeline to awaiting_human
+      // (lead is already analyzed/qualified by the time it reaches Save Lead)
+      if (relayRunId) {
+        await this.advanceOutboundRunToWaiting(relayRunId)
+      }
+    } catch {
+      // Run creation must never break lead creation
+    }
+
     // Emit LEAD_CREATED event (non-fatal — must not break lead creation)
     try {
       await this.emitRelayEvent({
@@ -537,6 +563,8 @@ export class SupabaseStore implements ScoutStore {
         entityId: lead.id,
         actorType: 'rep',
         actorId: this.rep.id,
+        relayRunId,
+        correlationId: relayRunId ?? lead.id,
         payload: {
           company: lead.company,
           signalType: lead.signalType,
@@ -805,6 +833,42 @@ export class SupabaseStore implements ScoutStore {
       // Non-fatal: conversation state must not block the send
     }
 
+    // Transition outbound run: awaiting_human -> action_recorded -> waiting
+    // Only for outbound sends (not replies). Non-fatal.
+    let runId: string | null = null
+    if (type !== 'reply') {
+      try {
+        const runs = await this.listActiveRunsForEntity('lead', leadId)
+        const run = runs.find((r) => r.status === 'awaiting_human' || r.status === 'action_recorded')
+        if (run) {
+          runId = run.id
+          // Idempotency: only transition if actually at awaiting_human or action_recorded
+          if (run.status === 'awaiting_human') {
+            const toActionRecorded = await this.transitionRelayRun({
+              runId: run.id,
+              newStatus: 'action_recorded',
+              metadata: { messageType: type, sentTextLength: sentText.length },
+            })
+            if (toActionRecorded) {
+              await this.transitionRelayRun({
+                runId: run.id,
+                newStatus: 'waiting',
+                metadata: { transitionedBy: 'markContacted' },
+              })
+            }
+          } else if (run.status === 'action_recorded') {
+            await this.transitionRelayRun({
+              runId: run.id,
+              newStatus: 'waiting',
+              metadata: { transitionedBy: 'markContacted' },
+            })
+          }
+        }
+      } catch {
+        // Run transition must never block the send
+      }
+    }
+
     // Emit OUTREACH_RECORDED event (non-fatal)
     try {
       await this.emitRelayEvent({
@@ -813,12 +877,13 @@ export class SupabaseStore implements ScoutStore {
         entityId: leadId,
         actorType: 'rep',
         actorId: this.rep.id,
+        relayRunId: runId,
         payload: {
           messageType: type,
           sentTextLength: sentText.length,
         },
         source: 'app',
-        sourceEventId: `outreach_recorded:${leadId}:${Date.now()}`,
+        sourceEventId: `outreach_recorded:${leadId}:${runId ?? 'no-run'}:${Date.now()}`,
       })
     } catch {
       // Event emission must never break domain operations
@@ -4668,7 +4733,25 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
     return (data ?? []).map((r) => mapRelayRun(r as Record<string, unknown>))
   }
+
+  async advanceOutboundRunToWaiting(runId: string): Promise<void> {
+    const run = await this.getRelayRun(runId)
+    if (!run) return
+
+    const path = OUTBOUND_PATH_TO_WAITING
+    const currentIdx = path.indexOf(run.status)
+    if (currentIdx === -1) return
+
+    for (let i = currentIdx + 1; i < path.length; i++) {
+      const result = await this.transitionRelayRun({ runId, newStatus: path[i] })
+      if (!result) break
+    }
+  }
 }
+
+const OUTBOUND_PATH_TO_WAITING: import('@/lib/domain/types').RelayRunStatus[] = [
+  'detected', 'qualifying', 'qualified', 'preparing', 'awaiting_human', 'action_recorded', 'waiting',
+]
 
 function mapRelayEvent(r: Record<string, unknown>): import('@/lib/domain/types').RelayEvent {
   return {

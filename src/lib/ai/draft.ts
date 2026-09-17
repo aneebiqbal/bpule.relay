@@ -98,6 +98,8 @@ export interface DraftInput {
   lead: Lead
   extracted: ExtractedLead
   score: ScoreResult
+  /** Canonical 0-100 score from Intelligence V2. When present, takes precedence for quality gates. */
+  canonicalScore?: number | null
   type: DraftMessageType
   styleCard: StyleCard | null
   facts: Fact[]
@@ -373,7 +375,9 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
   }
 
   const callLog: DraftCallLog[] = []
-  const isHighValue = input.score.total >= 10
+  // High value: canonical score >= 70 (0-100), or legacy score >= 10 (0-12)
+  const scoreForGate = input.canonicalScore ?? input.score.total
+  const isHighValue = scoreForGate >= 70 || (input.score.total >= 10 && input.score.total <= 12)
 
   // Attempt 1: LongCat (primary writer)
   const longcatChain = buildLongcatDraftChain()

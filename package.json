@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "intelligence:benchmark": "npx tsx scripts/benchmark-intelligence.mjs",
+    "intelligence:benchmark:mock": "npx tsx scripts/benchmark-intelligence.mjs --pipeline=mock"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -17,6 +19,7 @@
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
     "date-fns": "^4.0.0",
+    "dotenv": "^17.4.2",
     "lucide-react": "^1.44.0",
     "next": "16.3.4",
     "openai": "^7.15.0",

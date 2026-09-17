@@ -194,8 +194,8 @@ function LeadGroup({
                   className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-bone"
                 >
                   <div className="shrink-0">
-                    {lead.score !== null ? (
-                      <ScoreRing score={lead.score} size={36} />
+                    {lead.score !== null || lead.canonicalScore !== null ? (
+                      <ScoreRing score={lead.score} canonicalScore={lead.canonicalScore} size={36} />
                     ) : (
                       <div className="flex size-[36px] items-center justify-center rounded-full border border-dashed border-line">
                         <Target className="size-3.5 text-stone" />

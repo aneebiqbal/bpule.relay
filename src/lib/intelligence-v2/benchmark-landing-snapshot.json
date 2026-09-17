@@ -1,0 +1,49 @@
+{
+  "lastVerifiedAt": "2026-09-17T14:32:13.268Z",
+  "metrics": [
+    {
+      "id": "cases_passed",
+      "label": "benchmark cases passed",
+      "value": "36/36",
+      "note": "Every calibration case passed the V2 gate."
+    },
+    {
+      "id": "known_wins",
+      "label": "known wins recognized",
+      "value": "20/20",
+      "note": "Known revenue outcomes remain correctly identified."
+    },
+    {
+      "id": "bad_leads",
+      "label": "bad leads rejected",
+      "value": "9/9",
+      "note": "Bad-fit and ineligible opportunities stayed rejected."
+    },
+    {
+      "id": "mock_fallback_count",
+      "label": "mock fallback",
+      "value": "0",
+      "note": "No synthetic fallback path was used in the run."
+    },
+    {
+      "id": "extraction_completeness",
+      "label": "extraction completeness",
+      "value": "92%",
+      "note": "Average extraction completeness increased with V2 fixes."
+    },
+    {
+      "id": "orchestrator_execution",
+      "label": "real V2 orchestrator executed",
+      "value": "Verified",
+      "note": "Relay V2 execution was verified against live calibration outputs."
+    }
+  ],
+  "copy": {
+    "kicker": "Relay Intelligence V2",
+    "title": "Built on proof, not vibes.",
+    "description": "Relay's scoring engine is tested against a golden dataset of real lead scenarios: won deals, strong opportunities, bad-fit leads, restricted remote roles, hybrid roles, and on-site roles. Every new intelligence version must pass calibration before it is trusted in-product.",
+    "trustLine": "Benchmarked. Calibrated. Tested against real scenarios. Human-reviewed.",
+    "disclaimer": "Benchmarks are internal quality gates, not guarantees.",
+    "finalCta": "Relay does not just generate. It evaluates, calibrates, and proves before it ships."
+  }
+}

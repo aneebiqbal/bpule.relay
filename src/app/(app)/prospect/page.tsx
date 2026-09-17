@@ -21,7 +21,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { readSse } from '@/lib/sse/client'
 import { cn } from 'cn'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
-import type { ProspectScore, Recommendation } from '@/lib/prospect/intelligence'
+
 import type { ProspectQualificationAssessment } from '@/lib/prospect/qualification-gate'
 
 type AnalyzeEvent =
@@ -30,7 +30,17 @@ type AnalyzeEvent =
   | {
       type: 'done'
       extracted: ExtractedLead
-      score: ProspectScore | null
+      score: {
+        total: number
+        displayScore: number
+        label: string
+        qualification: string
+        reasons: string[]
+        watchOut: string[]
+        dimensions: Array<{ label: string; points: number; max: number; note: string }>
+        missingInfo: string[]
+      } | null
+      canonical: unknown
       bestSender: Profile | null
       bestSenderProof: MatchedProof[]
       connectionNote: string
@@ -46,7 +56,17 @@ type AnalyzeEvent =
 
 interface AnalysisState {
   extracted: ExtractedLead | null
-  score: ProspectScore | null
+  score: {
+    total: number
+    displayScore: number
+    label: string
+    qualification: string
+    reasons: string[]
+    watchOut: string[]
+    dimensions: Array<{ label: string; points: number; max: number; note: string }>
+    missingInfo: string[]
+  } | null
+  canonical: { extractionCompleteness?: { score?: number } } | null
   bestSender: Profile | null
   bestSenderProof: MatchedProof[]
   connectionNote: string
@@ -60,9 +80,10 @@ interface AnalysisState {
   qualification: ProspectQualificationAssessment
 }
 
-const RECOMMENDATION_META: Record<Recommendation, { label: string; color: string; bg: string }> = {
-  connect: { label: 'Strong prospect', color: 'text-status-success', bg: 'bg-status-success/10' },
-  maybe: { label: 'Worth considering', color: 'text-orange', bg: 'bg-orange/10' },
+const QUALIFICATION_META: Record<string, { label: string; color: string; bg: string }> = {
+  strong: { label: 'Strong opportunity', color: 'text-status-success', bg: 'bg-status-success/10' },
+  worth_pursuing: { label: 'Worth pursuing', color: 'text-status-success', bg: 'bg-status-success/10' },
+  maybe: { label: 'Maybe — needs more signal', color: 'text-orange', bg: 'bg-orange/10' },
   skip: { label: 'Probably skip', color: 'text-graphite', bg: 'bg-stone/10' },
 }
 
@@ -152,6 +173,7 @@ export default function ProspectCheckPage() {
             setResult({
               extracted: event.extracted,
               score: event.score,
+              canonical: event.canonical ?? null,
               bestSender: event.bestSender,
               bestSenderProof: event.bestSenderProof,
               connectionNote: event.connectionNote,
@@ -277,8 +299,8 @@ export default function ProspectCheckPage() {
     rawRef.current?.focus()
   }
 
-  const recMeta = result?.score ? RECOMMENDATION_META[result.score.recommendation] : null
-  const confidence = result?.score ? `${result.score.evidenceConfidence}/100` : '—'
+  const recMeta = result?.score ? QUALIFICATION_META[result.score.qualification] ?? QUALIFICATION_META.maybe : null
+  const confidence = result?.canonical?.extractionCompleteness?.score != null ? `${result.canonical.extractionCompleteness.score}/100` : '—'
   const recommendation = result
     ? result.score
       ? recMeta?.label ?? 'Awaiting analysis'
@@ -406,18 +428,18 @@ export default function ProspectCheckPage() {
                         {recMeta?.label}
                       </span>
                       <span className="text-[12px] text-stone">
-                        {result.score.evidenceConfidence}/100 evidence confidence
+                        {result.canonical?.extractionCompleteness?.score ?? '?'}/100 extraction confidence
                       </span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {result.score.why.length > 0 && (
+              {result.score.reasons.length > 0 && (
                 <div className="mt-4 space-y-1.5">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-stone">Why</p>
                   <ul className="space-y-1">
-                    {result.score.why.map((w, i) => (
+                    {result.score.reasons.map((w, i) => (
                       <li key={i} className="flex items-start gap-2 text-[13px] text-ink">
                         <Check className="mt-0.5 size-3.5 shrink-0 text-status-success" aria-hidden="true" />
                         {w}
@@ -455,7 +477,7 @@ export default function ProspectCheckPage() {
                   {result.score.dimensions.map((dim) => {
                     const frac = dim.max > 0 ? dim.points / dim.max : 0
                     return (
-                      <div key={dim.key} className="space-y-1">
+                      <div key={dim.label} className="space-y-1">
                         <div className="flex items-baseline justify-between gap-3 text-[12px]">
                           <span className="text-ink">{dim.label}</span>
                           <span className="font-mono text-[11px] text-stone">{dim.points}/{dim.max}</span>

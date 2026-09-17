@@ -90,6 +90,16 @@ export interface Lead {
   inboundMessage?: string | null
   inboundRaw?: Record<string, unknown> | null
   senderProfileId?: string | null
+  // ── Intelligence V2: Canonical Prospect Intelligence ─────────────────
+  canonicalScore?: number | null
+  scoreVersion?: string | null
+  scoredAt?: string | null
+  canonicalIntelligence?: Record<string, unknown> | null
+  rawSourceData?: Record<string, unknown> | null
+  scoreBreakdown?: Record<string, unknown> | null
+  remoteEligibility?: Record<string, unknown> | null
+  evidenceLedger?: Record<string, unknown> | null
+  extractionCompleteness?: Record<string, unknown> | null
   createdAt: string
 }
 

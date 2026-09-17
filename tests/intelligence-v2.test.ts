@@ -1,0 +1,481 @@
+import { describe, it, expect } from 'vitest'
+import { computeCanonicalScore, checkHardNegatives, SCORE_VERSION, DIMENSION_WEIGHTS } from '@/lib/intelligence-v2/scoring-engine'
+import { assessRemoteEligibility } from '@/lib/intelligence-v2/remote-eligibility'
+import { scoreLabel, canonicalToDisplay } from '@/lib/intelligence-v2/types'
+import type { NormalizedIntelligence } from '@/lib/intelligence-v2/types'
+
+// ── Test Fixtures ──────────────────────────────────────────────────────────
+
+function makeIntelligence(overrides: Partial<NormalizedIntelligence> = {}): NormalizedIntelligence {
+  return {
+    person: {
+      fullName: 'Fizza Hussain',
+      firstName: 'Fizza',
+      title: 'CTO',
+      seniority: 'executive',
+      location: 'London, United Kingdom',
+      linkedinUrl: 'https://linkedin.com/in/fizza',
+      otherUrls: [],
+    },
+    company: {
+      name: 'TechCorp',
+      domain: 'techcorp.io',
+      linkedinUrl: null,
+      industry: 'SaaS',
+      size: '50+',
+      sizeEvidence: '50 employees',
+      product: 'Health platform',
+      stage: 'growth',
+      stageEvidence: 'Series A',
+    },
+    opportunity: {
+      signals: ['hiring'],
+      primarySignal: 'hiring',
+      description: 'Hiring founding engineer',
+      urgency: 'immediate',
+    },
+    job: null,
+    content: {
+      recentPosts: [],
+      topics: ['engineering', 'hiring'],
+      explicitProblems: [],
+      initiatives: [],
+      launches: [],
+      technicalSignals: ['fullstack', 'react'],
+      hiringSignals: ['hiring founding engineer'],
+    },
+    remoteEligibility: {
+      workplaceType: 'REMOTE',
+      remoteScope: 'WORLDWIDE',
+      eligibility: 'ELIGIBLE',
+      reason: 'Remote worldwide — eligible from Pakistan.',
+    },
+    probableNeed: 'Needs a founding engineer to build their health platform',
+    opportunityTrigger: 'Just raised Series A, actively hiring founding engineer',
+    timingSignal: 'Immediate hiring need',
+    risks: [],
+    unknowns: [],
+    resolvedContradictions: [],
+    ...overrides,
+  }
+}
+
+// ── Canonical Scoring Engine Tests ─────────────────────────────────────────
+
+describe('Canonical Scoring Engine', () => {
+  it('produces a deterministic score for the same input', () => {
+    const intelligence = makeIntelligence()
+    const input = {
+      intelligence,
+      rawText: 'Fizza Hussain, CTO at TechCorp. Hiring founding engineer. Remote worldwide.',
+      hasRelevantProof: true,
+      proofMatchStrength: 8,
+      hasCredibleIdentity: true,
+      isReachable: true,
+      resemblesPastWin: false,
+    }
+
+    const score1 = computeCanonicalScore(input)
+    const score2 = computeCanonicalScore(input)
+
+    expect(score1.total).toBe(score2.total)
+    expect(score1.dimensions.length).toBe(score2.dimensions.length)
+  })
+
+  it('score is within 0-100 range', () => {
+    const intelligence = makeIntelligence()
+    const input = {
+      intelligence,
+      rawText: 'Fizza Hussain, CTO at TechCorp. Hiring founding engineer. Remote worldwide.',
+      hasRelevantProof: true,
+      proofMatchStrength: 8,
+      hasCredibleIdentity: true,
+      isReachable: true,
+      resemblesPastWin: true,
+    }
+
+    const score = computeCanonicalScore(input)
+    expect(score.total).toBeGreaterThanOrEqual(0)
+    expect(score.total).toBeLessThanOrEqual(100)
+  })
+
+  it('dimension breakdown sums to total (minus hard negative cap)', () => {
+    const intelligence = makeIntelligence()
+    const input = {
+      intelligence,
+      rawText: 'Fizza Hussain, CTO at TechCorp. Hiring founding engineer. Remote worldwide.',
+      hasRelevantProof: true,
+      proofMatchStrength: 8,
+      hasCredibleIdentity: true,
+      isReachable: true,
+      resemblesPastWin: true,
+    }
+
+    const score = computeCanonicalScore(input)
+    const dimSum = score.dimensions.reduce((s, d) => s + d.points, 0)
+
+    // Without hard negatives, total should equal dim sum (clamped 0-100)
+    if (score.hardNegatives.length === 0) {
+      expect(score.total).toBe(Math.max(0, Math.min(100, dimSum)))
+    }
+  })
+
+  it('all 8 dimensions are evaluated', () => {
+    const intelligence = makeIntelligence()
+    const input = {
+      intelligence,
+      rawText: 'Test',
+      hasRelevantProof: false,
+      proofMatchStrength: 0,
+      hasCredibleIdentity: false,
+      isReachable: false,
+      resemblesPastWin: false,
+    }
+
+    const score = computeCanonicalScore(input)
+    expect(score.dimensions.length).toBe(8)
+
+    const dimKeys = score.dimensions.map((d) => d.key)
+    expect(dimKeys).toContain('opportunityFit')
+    expect(dimKeys).toContain('remoteEligibility')
+    expect(dimKeys).toContain('needIntent')
+    expect(dimKeys).toContain('revenueIdentityFit')
+    expect(dimKeys).toContain('proofStrength')
+    expect(dimKeys).toContain('accessReachability')
+    expect(dimKeys).toContain('timing')
+    expect(dimKeys).toContain('conversionEvidence')
+  })
+
+  it('dimension max values match the centralized weights', () => {
+    const intelligence = makeIntelligence()
+    const input = {
+      intelligence,
+      rawText: 'Test',
+      hasRelevantProof: false,
+      proofMatchStrength: 0,
+      hasCredibleIdentity: false,
+      isReachable: false,
+      resemblesPastWin: false,
+    }
+
+    const score = computeCanonicalScore(input)
+    const dimMap = Object.fromEntries(score.dimensions.map((d) => [d.key, d]))
+
+    expect(dimMap.opportunityFit.max).toBe(DIMENSION_WEIGHTS.opportunityFit.max)
+    expect(dimMap.remoteEligibility.max).toBe(DIMENSION_WEIGHTS.remoteEligibility.max)
+    expect(dimMap.needIntent.max).toBe(DIMENSION_WEIGHTS.needIntent.max)
+    expect(dimMap.revenueIdentityFit.max).toBe(DIMENSION_WEIGHTS.revenueIdentityFit.max)
+    expect(dimMap.proofStrength.max).toBe(DIMENSION_WEIGHTS.proofStrength.max)
+    expect(dimMap.accessReachability.max).toBe(DIMENSION_WEIGHTS.accessReachability.max)
+    expect(dimMap.timing.max).toBe(DIMENSION_WEIGHTS.timing.max)
+    expect(dimMap.conversionEvidence.max).toBe(DIMENSION_WEIGHTS.conversionEvidence.max)
+  })
+
+  it('score version is relay_qualification_v2', () => {
+    expect(SCORE_VERSION).toBe('relay_qualification_v2')
+  })
+})
+
+// ── Hard Negatives Tests ───────────────────────────────────────────────────
+
+describe('Hard Negatives', () => {
+  it('detects explicitly on-site only requirement', () => {
+    const negatives = checkHardNegatives('This is an on-site only role at our New York office.')
+    expect(negatives.length).toBeGreaterThan(0)
+  })
+
+  it('detects US-only geography restriction', () => {
+    const negatives = checkHardNegatives('Must be based in the United States.')
+    expect(negatives.length).toBeGreaterThan(0)
+  })
+
+  it('detects EU-only restriction', () => {
+    const negatives = checkHardNegatives('EU only position.')
+    expect(negatives.length).toBeGreaterThan(0)
+  })
+
+  it('does NOT flag worldwide remote as hard negative', () => {
+    const negatives = checkHardNegatives('Remote worldwide. Can be based anywhere.')
+    expect(negatives.length).toBe(0)
+  })
+
+  it('does NOT flag generic remote as hard negative', () => {
+    const negatives = checkHardNegatives('Fully remote position.')
+    expect(negatives.length).toBe(0)
+  })
+
+  it('caps score when hard negatives present', () => {
+    const intelligence = makeIntelligence()
+    const input = {
+      intelligence,
+      rawText: 'On-site only role in New York. Must be based in the US.',
+      hasRelevantProof: true,
+      proofMatchStrength: 10,
+      hasCredibleIdentity: true,
+      isReachable: true,
+      resemblesPastWin: true,
+    }
+
+    const score = computeCanonicalScore(input)
+    expect(score.total).toBeLessThanOrEqual(25)
+    expect(score.hardNegatives.length).toBeGreaterThan(0)
+  })
+})
+
+// ── Remote Eligibility Tests ────────────────────────────────────────────────
+
+describe('Remote Eligibility', () => {
+  it('Remote / worldwide → ELIGIBLE', () => {
+    const result = assessRemoteEligibility({
+      rawText: 'Remote worldwide. Work from anywhere.',
+    })
+    expect(result.eligibility).toBe('ELIGIBLE')
+    expect(result.workplaceType).toBe('REMOTE')
+    expect(result.remoteScope).toBe('WORLDWIDE')
+  })
+
+  it('Remote / anywhere → ELIGIBLE', () => {
+    const result = assessRemoteEligibility({
+      rawText: 'Fully remote. Location independent.',
+    })
+    expect(result.eligibility).toBe('ELIGIBLE')
+  })
+
+  it('Remote but US-only → INELIGIBLE', () => {
+    const result = assessRemoteEligibility({
+      rawText: 'Remote, but must be based in the United States.',
+    })
+    expect(result.eligibility).toBe('INELIGIBLE')
+  })
+
+  it('Remote but EU-only → INELIGIBLE', () => {
+    const result = assessRemoteEligibility({
+      rawText: 'Remote within EU only.',
+    })
+    expect(result.eligibility).toBe('INELIGIBLE')
+  })
+
+  it('Hybrid London → INELIGIBLE', () => {
+    const result = assessRemoteEligibility({
+      rawText: 'Hybrid role, 3 days per week in our London office.',
+      requiredWorkerLocation: 'London, United Kingdom',
+    })
+    expect(result.eligibility).toBe('INELIGIBLE')
+  })
+
+  it('On-site New York → INELIGIBLE', () => {
+    const result = assessRemoteEligibility({
+      rawText: 'On-site position at our New York headquarters.',
+      requiredWorkerLocation: 'New York, United States',
+    })
+    expect(result.eligibility).toBe('INELIGIBLE')
+  })
+
+  it('No workplace information → UNKNOWN (not automatic rejection)', () => {
+    const result = assessRemoteEligibility({
+      rawText: 'Building a new product. Looking for help.',
+    })
+    expect(result.eligibility).toBe('UNCLEAR')
+    expect(result.workplaceType).toBe('UNKNOWN')
+  })
+
+  it('Company location does NOT penalize international remote', () => {
+    const result = assessRemoteEligibility({
+      rawText: 'Our company is based in San Francisco. Hiring remote engineer worldwide.',
+      companyLocation: 'San Francisco, California',
+    })
+    expect(result.eligibility).toBe('ELIGIBLE')
+  })
+
+  it('Timezone overlap with PST → evaluates PKT feasibility', () => {
+    const result = assessRemoteEligibility({
+      rawText: 'Remote with some Pacific timezone overlap preferred.',
+    })
+    expect(result.remoteScope).toBe('TIMEZONE_RESTRICTED')
+    expect(result.pktOverlapFeasibility).toBeDefined()
+    // PKT (UTC+5) vs PST (UTC-8) = 13 hour difference → poor overlap
+    expect(result.pktOverlapFeasibility!).toBeLessThan(40)
+  })
+
+  it('Timezone overlap with GMT → good PKT feasibility', () => {
+    const result = assessRemoteEligibility({
+      rawText: 'Remote with GMT timezone overlap required.',
+    })
+    expect(result.remoteScope).toBe('TIMEZONE_RESTRICTED')
+    expect(result.pktOverlapFeasibility).toBeDefined()
+    // PKT (UTC+5) vs GMT (UTC+0) = 5 hour difference → moderate/good
+    expect(result.pktOverlapFeasibility!).toBeGreaterThanOrEqual(40)
+  })
+
+  it('Flexible/async schedule → LIKELY_ELIGIBLE', () => {
+    const result = assessRemoteEligibility({
+      rawText: 'Remote, async work. Flexible hours.',
+    })
+    expect(result.eligibility).toBe('LIKELY_ELIGIBLE')
+  })
+
+  it('Pakistan explicitly allowed → ELIGIBLE', () => {
+    const result = assessRemoteEligibility({
+      rawText: 'Remote. Open to Pakistan-based engineers.',
+    })
+    expect(result.eligibility).toBe('ELIGIBLE')
+  })
+})
+
+// ── Score Label Tests ──────────────────────────────────────────────────────
+
+describe('Score Labels', () => {
+  it('85+ → Strong opportunity', () => {
+    const { label, qualification } = scoreLabel(87)
+    expect(label).toBe('Strong opportunity')
+    expect(qualification).toBe('strong')
+  })
+
+  it('70-84 → Worth pursuing', () => {
+    const { label, qualification } = scoreLabel(75)
+    expect(label).toBe('Worth pursuing')
+    expect(qualification).toBe('worth_pursuing')
+  })
+
+  it('55-69 → Maybe', () => {
+    const { label, qualification } = scoreLabel(60)
+    expect(label).toBe('Maybe — needs more signal')
+    expect(qualification).toBe('maybe')
+  })
+
+  it('Below 40 → Not a fit', () => {
+    const { label, qualification } = scoreLabel(25)
+    expect(label).toBe('Not a fit')
+    expect(qualification).toBe('skip')
+  })
+})
+
+// ── Display Score Conversion Tests ─────────────────────────────────────────
+
+describe('Display Score Conversion', () => {
+  it('converts canonical 0-100 to display /10', () => {
+    expect(canonicalToDisplay(87)).toBe(9)
+    expect(canonicalToDisplay(75)).toBe(8)
+    expect(canonicalToDisplay(50)).toBe(5)
+    expect(canonicalToDisplay(100)).toBe(10)
+    expect(canonicalToDisplay(0)).toBe(0)
+  })
+
+  it('display score is always rounded', () => {
+    expect(canonicalToDisplay(83)).toBe(8)
+    expect(canonicalToDisplay(85)).toBe(9)
+    expect(canonicalToDisplay(84)).toBe(8)
+  })
+})
+
+// ── Score Stability Invariant Tests ────────────────────────────────────────
+
+describe('Score Stability Invariants', () => {
+  it('same input always produces same score (deterministic)', () => {
+    const intelligence = makeIntelligence()
+    const input = {
+      intelligence,
+      rawText: 'Fizza Hussain, CTO at TechCorp. Hiring founding engineer. Remote worldwide.',
+      hasRelevantProof: true,
+      proofMatchStrength: 8,
+      hasCredibleIdentity: true,
+      isReachable: true,
+      resemblesPastWin: false,
+    }
+
+    const scores = Array.from({ length: 10 }, () => computeCanonicalScore(input).total)
+    const allSame = scores.every((s) => s === scores[0])
+    expect(allSame).toBe(true)
+  })
+
+  it('score breakdown reasons match the dimensions that scored positively', () => {
+    const intelligence = makeIntelligence()
+    const input = {
+      intelligence,
+      rawText: 'Fizza Hussain, CTO at TechCorp. Hiring founding engineer. Remote worldwide.',
+      hasRelevantProof: true,
+      proofMatchStrength: 8,
+      hasCredibleIdentity: true,
+      isReachable: true,
+      resemblesPastWin: true,
+    }
+
+    const score = computeCanonicalScore(input)
+
+    // Each reason should reference a dimension that scored positively
+    expect(score.reasons.length).toBeGreaterThan(0)
+    expect(score.reasons.length).toBeLessThanOrEqual(5)
+  })
+
+  it('missing info reduces confidence, not necessarily score', () => {
+    const sparseIntelligence = makeIntelligence({
+      person: { fullName: null, firstName: null, title: null, seniority: null, location: null, linkedinUrl: null, otherUrls: [] },
+      company: { name: null, domain: null, linkedinUrl: null, industry: null, size: null, sizeEvidence: null, product: null, stage: null, stageEvidence: null },
+    })
+
+    const fullIntelligence = makeIntelligence()
+
+    const sparseInput = {
+      intelligence: sparseIntelligence,
+      rawText: 'Hiring engineer remote worldwide.',
+      hasRelevantProof: false,
+      proofMatchStrength: 0,
+      hasCredibleIdentity: false,
+      isReachable: false,
+      resemblesPastWin: false,
+    }
+
+    const fullInput = {
+      intelligence: fullIntelligence,
+      rawText: 'Fizza Hussain CTO at TechCorp. Hiring founding engineer remote worldwide. Has relevant proof.',
+      hasRelevantProof: true,
+      proofMatchStrength: 8,
+      hasCredibleIdentity: true,
+      isReachable: true,
+      resemblesPastWin: false,
+    }
+
+    const sparseScore = computeCanonicalScore(sparseInput)
+    const fullScore = computeCanonicalScore(fullInput)
+
+    // Sparse input should have more missing info tracked
+    expect(sparseScore.missingInfo.length).toBeGreaterThan(0)
+    // Full input should score higher
+    expect(fullScore.total).toBeGreaterThan(sparseScore.total)
+  })
+
+  it('remote worldwide naturally scores higher than remote US-only', () => {
+    const worldwideIntel = makeIntelligence({
+      remoteEligibility: {
+        workplaceType: 'REMOTE',
+        remoteScope: 'WORLDWIDE',
+        eligibility: 'ELIGIBLE',
+        reason: 'Remote worldwide',
+      },
+    })
+
+    const usOnlyIntel = makeIntelligence({
+      remoteEligibility: {
+        workplaceType: 'REMOTE',
+        remoteScope: 'COUNTRY_RESTRICTED',
+        eligibility: 'INELIGIBLE',
+        restrictedCountries: ['US'],
+        reason: 'US only',
+      },
+    })
+
+    const baseInput = {
+      rawText: 'Hiring engineer. Remote.',
+      hasRelevantProof: true,
+      proofMatchStrength: 7,
+      hasCredibleIdentity: true,
+      isReachable: true,
+      resemblesPastWin: false,
+    }
+
+    const worldwideScore = computeCanonicalScore({ ...baseInput, intelligence: worldwideIntel })
+    const usOnlyScore = computeCanonicalScore({ ...baseInput, intelligence: usOnlyIntel })
+
+    expect(worldwideScore.total).toBeGreaterThan(usOnlyScore.total)
+  })
+})

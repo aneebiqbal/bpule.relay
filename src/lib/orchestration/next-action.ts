@@ -227,11 +227,13 @@ export function projectNextActionForLead(
   }
 
   // If no active runs and lead is qualified but not contacted, suggest starting one
-  if (actions.length === 0 && lead.status === 'new' && lead.score !== null && lead.score >= 10) {
+  // Use canonicalScore (0-100); fall back to legacy score (0-12) converted
+  const leadScore = lead.canonicalScore ?? (lead.score != null ? lead.score * (100 / 12) : null)
+  if (actions.length === 0 && lead.status === 'new' && leadScore !== null && leadScore >= 70) {
     actions.push({
       actionType: 'START_OUTBOUND',
-      priority: lead.score >= 10 ? 'high' : 'medium',
-      reason: `Qualified lead "${lead.company}" (score: ${lead.score}) has no active outbound run.`,
+      priority: leadScore >= 70 ? 'high' : 'medium',
+      reason: `Qualified lead "${lead.company}" (score: ${leadScore}/100) has no active outbound run.`,
       executionPolicy: 'AUTO',
       entityType: 'lead',
       entityId: lead.id,

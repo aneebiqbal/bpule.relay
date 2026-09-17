@@ -1,4 +1,3 @@
-import { extractLeadBundle } from '@/lib/ai/extract'
 import { hasProvider } from '@/lib/ai/config'
 import { scanForSecrets } from '@/lib/ai/secrets'
 import { createScoutStore } from '@/lib/store'
@@ -10,19 +9,21 @@ import { type DraftMessageType } from '@/lib/ai/draft'
 import { selectFewShotExamples } from '@/lib/ai/few-shot'
 import { mergeProofMatches } from '@/lib/ai/proof-match'
 import { classifyLeadFact } from '@/lib/relay/profile-intelligence'
-import { scoreProspect } from '@/lib/prospect/intelligence'
 import { buildConnectionNoteStrategy } from '@/lib/prospect/strategy'
 import { validateAndRepair, normalizeGreeting, CONNECTION_NOTE_MAX_CHARS } from '@/lib/prospect/connection-note'
 import { evaluateProspectQualification } from '@/lib/prospect/qualification-gate'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
+import { produceCanonicalIntelligence, getDisplayScore } from '@/lib/intelligence-v2/orchestrator'
 
 /**
- * Prospect Analyze API
+ * Prospect Analyze API — Intelligence V2
  *
- * Pipeline: paste → extract → score → match best sender → generate connection note.
+ * Pipeline: paste → canonical intelligence (multi-pass extraction → completeness gate → canonical score) → match sender → connection note.
  *
  * Ephemeral by default. Nothing is persisted unless the client explicitly
  * calls POST /api/leads with the extracted data (via the "Save as Lead" flow).
+ *
+ * The canonical score is produced ONCE and never independently recomputed.
  */
 
 export async function POST(request: Request) {
@@ -85,7 +86,6 @@ export async function POST(request: Request) {
     try {
       store = await createScoutStore()
     } catch {
-      // Continue without store — ephemeral analysis still works without persistence
       store = null
     }
 
@@ -96,28 +96,21 @@ export async function POST(request: Request) {
       return
     }
 
-    // ── Step 1: Extract ──
-    emit({ type: 'status', message: 'Reading the profile' })
-    let extracted: ExtractedLead
+    // ── Step 1: Produce Canonical Intelligence ──
+    emit({ type: 'status', message: 'Extracting prospect intelligence' })
+    let canonicalResult: Awaited<ReturnType<typeof produceCanonicalIntelligence>>
     try {
-      const bundle = await extractLeadBundle(rawText, {
+      canonicalResult = await produceCanonicalIntelligence(rawText, {
         onStatus: (msg) => emit({ type: 'status', message: msg }),
-        task: 'extract',
       })
-      extracted = bundle.primary
-    } catch (err) {
-      emit({ type: 'error', message: 'Extraction failed.' })
+    } catch {
+      emit({ type: 'error', message: 'Intelligence extraction failed.' })
       return
     }
+
+    const canonical = canonicalResult.intelligence
 
     // ── Step 2: Load profiles + match best sender ──
-    const qualification = evaluateProspectQualification({ rawText, extracted })
-    if (!qualification.qualificationEligibility) {
-      emit({ type: 'status', message: 'Not enough context for a reliable qualification score.' })
-      emitInsufficientDone(emit, extracted, qualification)
-      return
-    }
-
     emit({ type: 'status', message: 'Matching sender profiles' })
     let profiles: Profile[] = []
     let fewShotPool: Array<{ id: string; messageId: string; leadId: string; playId: string | null; signalType: number | null; sentText: string; company: string; signalEvidence: string | null; tags: string[]; createdAt: string }> = []
@@ -135,10 +128,16 @@ export async function POST(request: Request) {
     }
 
     // Score each assigned profile and pick the best match
+    const tagsForMatching = [
+      ...canonical.intelligence.content.topics,
+      ...canonical.intelligence.content.technicalSignals,
+      ...(canonical.intelligence.company.industry ? [canonical.intelligence.company.industry] : []),
+    ]
+
     const profileMatches: Array<{ profile: Profile; matchedProof: MatchedProof[]; totalScore: number }> = []
     for (const profile of profiles) {
       const intelligence = buildProfileIntelligence(profile, [])
-      const matched = matchProofToLead(intelligence, extracted.tags ?? [], 3)
+      const matched = matchProofToLead(intelligence, tagsForMatching, 3)
       const totalScore = matched.reduce((s, m) => s + m.relevanceScore, 0)
       profileMatches.push({ profile, matchedProof: matched, totalScore })
     }
@@ -152,31 +151,42 @@ export async function POST(request: Request) {
     const bestSenderProof = bestMatch?.matchedProof ?? []
 
     if (explicitProfileId && !explicitMatch && profiles.length > 0) {
-      // Explicit profile requested but not found — fall back to best
       emit({ type: 'status', message: 'Requested profile unavailable, using best match.' })
     }
 
-    // ── Step 3: Score prospect ──
-    emit({ type: 'status', message: 'Scoring the prospect' })
-    const prospectScore = scoreProspect({
-      extracted,
-      assignedProfiles: profiles,
-      profileIntelligences: profileMatches,
-      bestSender,
-      bestSenderProof,
-    })
+    // ── Step 3: Build connection note strategy ──
+    const extracted: ExtractedLead = {
+      name: canonical.intelligence.person.fullName,
+      title: canonical.intelligence.person.title,
+      titleRaw: canonical.intelligence.person.title,
+      company: canonical.intelligence.company.name ?? 'Unknown company',
+      url: canonical.intelligence.person.linkedinUrl ?? canonical.rawSource.sourceUrl,
+      locationRaw: canonical.intelligence.person.location,
+      aboutSummary: null,
+      experienceSummary: null,
+      recentPosts: canonical.intelligence.content.recentPosts.map((p) => ({
+        paraphrase: p.paraphrase,
+        verbatimQuote: p.verbatimQuote,
+      })),
+      roleCategory: 'other',
+      marketRegion: 'unknown',
+      signalType: 7,
+      signalEvidence: canonical.intelligence.opportunity.description ?? canonical.intelligence.opportunityTrigger ?? rawText.slice(0, 200),
+      extractionConfidence: canonical.extractionCompleteness.score,
+      confidenceNotes: canonical.scoreBreakdown.missingInfo,
+      verbatimQuote: canonical.intelligence.content.recentPosts[0]?.verbatimQuote ?? null,
+      tags: tagsForMatching,
+    }
 
-    // ── Step 4: Build connection note strategy ──
     const connectionStrategy = buildConnectionNoteStrategy(
       extracted,
       bestSender,
       bestSenderProof,
     )
 
-    // ── Step 5: Generate connection note ──
+    // ── Step 4: Generate connection note ──
     emit({ type: 'status', message: 'Drafting the connection note' })
 
-    // Build outreach strategy for the draft pipeline
     const safeFact = classifyLeadFact(
       extracted.signalEvidence ?? '',
       extracted.signalEvidence ?? '',
@@ -201,7 +211,6 @@ export async function POST(request: Request) {
       })
     }
 
-    // Enhance strategy with connection note specific guidance
     let conversationContext: string | null = null
     if (connectionStrategy.candidateAngles.length > 0) {
       const angle = connectionStrategy.candidateAngles[0]
@@ -239,8 +248,8 @@ export async function POST(request: Request) {
         signalType: extracted.signalType,
         signalEvidence: extracted.signalEvidence,
         verbatimQuote: extracted.verbatimQuote,
-        score: prospectScore.total > 70 ? 10 : prospectScore.total > 55 ? 7 : 4,
-        verdict: prospectScore.recommendation === 'connect' ? 'send' as const : prospectScore.recommendation === 'maybe' ? 'research_more' as const : 'skip' as const,
+        score: getDisplayScore(canonical) ?? 5,
+        verdict: canonical.qualification === 'strong' || canonical.qualification === 'worth_pursuing' ? 'send' as const : canonical.qualification === 'maybe' ? 'research_more' as const : 'skip' as const,
         status: 'new' as const,
         playId: null,
         tags: extracted.tags ?? [],
@@ -250,15 +259,15 @@ export async function POST(request: Request) {
         leadId: 'prospect-ephemeral',
         lead: leadForFewShot,
         extracted,
-        score: { total: prospectScore.total, verdict: prospectScore.recommendation === 'connect' ? 'send' as const : prospectScore.recommendation === 'maybe' ? 'research_more' as const : 'skip' as const, breakdown: prospectScore.dimensions as unknown as { category: string; label: string; points: number; max: number; note: string }[] },
+        score: { total: canonical.canonicalScore, verdict: canonical.qualification === 'strong' || canonical.qualification === 'worth_pursuing' ? 'send' as const : 'research_more' as const, breakdown: canonical.scoreBreakdown.dimensions as unknown as { category: string; label: string; points: number; max: number; note: string }[] },
         type: 'connection' as DraftMessageType,
         styleCard: null,
         facts: [],
         plays: [],
         history: [],
         profile: bestSender,
-         matchedProof: null,
-       }, [])
+        matchedProof: null,
+      }, [])
       fewShotSelection = {
         examples: fewShotResult.examples.map((e) => ({
           company: e.company,
@@ -274,8 +283,8 @@ export async function POST(request: Request) {
     let matchedProofItem: import('@/lib/domain/types').ProofItem | null = null
     try {
       if (store) {
-        const tagMatches = await store.matchProofItems(extracted.tags ?? [], 5, bestSender?.id ?? null)
-        const leadEmbedding = await embedTextSafe(`${extracted.company} ${extracted.signalEvidence} ${(extracted.tags ?? []).join(' ')}`)
+        const tagMatches = await store.matchProofItems(tagsForMatching, 5, bestSender?.id ?? null)
+        const leadEmbedding = await embedTextSafe(`${extracted.company} ${extracted.signalEvidence} ${tagsForMatching.join(' ')}`)
         let semanticMatches: Array<{ item: Parameters<typeof mergeProofMatches>[1][0]; similarity: number }> = []
         if (leadEmbedding) {
           semanticMatches = await store.matchProofItemsByEmbedding(leadEmbedding, 5, bestSender?.id ?? null) as typeof semanticMatches
@@ -305,8 +314,8 @@ export async function POST(request: Request) {
       signalType: extracted.signalType,
       signalEvidence: extracted.signalEvidence,
       verbatimQuote: extracted.verbatimQuote,
-      score: prospectScore.total > 70 ? 10 : prospectScore.total > 55 ? 7 : 4,
-      verdict: prospectScore.recommendation === 'connect' ? 'send' as const : 'research_more' as const,
+      score: getDisplayScore(canonical) ?? 5,
+      verdict: canonical.qualification === 'strong' || canonical.qualification === 'worth_pursuing' ? 'send' as const : 'research_more' as const,
       status: 'new' as const,
       playId: null,
       tags: extracted.tags ?? [],
@@ -319,7 +328,8 @@ export async function POST(request: Request) {
           leadId: 'prospect-ephemeral',
           lead: leadForDraft,
           extracted,
-          score: { total: prospectScore.total, verdict: prospectScore.recommendation === 'connect' ? 'send' as const : 'research_more' as const, breakdown: prospectScore.dimensions as unknown as { category: string; label: string; points: number; max: number; note: string }[] },
+          score: { total: canonical.canonicalScore, verdict: canonical.qualification === 'strong' || canonical.qualification === 'worth_pursuing' ? 'send' as const : 'research_more' as const, breakdown: canonical.scoreBreakdown.dimensions as unknown as { category: string; label: string; points: number; max: number; note: string }[] },
+          canonicalScore: canonical.canonicalScore,
           type: 'connection' as DraftMessageType,
           styleCard: null,
           facts: [],
@@ -351,7 +361,6 @@ export async function POST(request: Request) {
       matchedProof: bestSenderProof,
     })
 
-    // Normalize greeting to use first name consistently
     if (qualityResult.text) {
       qualityResult = {
         ...qualityResult,
@@ -360,11 +369,29 @@ export async function POST(request: Request) {
       }
     }
 
-    // ── Emit final result ──
+    // ── Emit final result with canonical intelligence ──
     emit({
       type: 'done',
       extracted,
-      score: prospectScore,
+      canonical,
+      score: {
+        total: canonical.canonicalScore,
+        displayScore: getDisplayScore(canonical),
+        label: canonical.scoreBreakdown.label,
+        qualification: canonical.qualification,
+        reasons: canonical.scoreBreakdown.reasons,
+        watchOut: canonical.scoreBreakdown.watchOut,
+        dimensions: canonical.scoreBreakdown.dimensions,
+        missingInfo: canonical.scoreBreakdown.missingInfo,
+      },
+      remoteEligibility: canonical.remoteEligibility,
+      evidenceLedger: canonical.evidenceLedger,
+      sources: {
+        rawSource: canonical.rawSource,
+        urls: canonical.extractionCompleteness.urlsPreserved,
+        sourceUrlsFound: canonical.extractionCompleteness.sourceUrlsFound,
+      },
+      extractionCompleteness: canonical.extractionCompleteness,
       bestSender,
       bestSenderProof,
       connectionNote: qualityResult.text,
@@ -391,20 +418,28 @@ export async function POST(request: Request) {
           matchScore: pm.totalScore,
           topProof: pm.matchedProof[0]?.safeClaim ?? null,
         })),
-      qualification,
+      qualification: evaluateProspectQualification({ rawText, extracted }),
+      gateNotes: canonicalResult.gateNotes,
+      repairAttempted: canonicalResult.repairAttempted,
+      repairImproved: canonicalResult.repairImproved,
     })
   })
 }
 
 function emitInsufficientDone(
-  emit: (event: any) => void,
+  emit: (event: object) => void,
   extracted: ExtractedLead,
   qualification: ReturnType<typeof evaluateProspectQualification>,
 ): void {
   emit({
     type: 'done',
     extracted,
+    canonical: null,
     score: null,
+    remoteEligibility: null,
+    evidenceLedger: [],
+    sources: null,
+    extractionCompleteness: null,
     bestSender: null,
     bestSenderProof: [],
     connectionNote: '',
@@ -425,6 +460,9 @@ function emitInsufficientDone(
     demoMode: !hasProvider(),
     alternativeSenders: [],
     qualification,
+    gateNotes: [],
+    repairAttempted: false,
+    repairImproved: false,
   })
 }
 
