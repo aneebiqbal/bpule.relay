@@ -504,7 +504,7 @@ function buildJobApplyTask(job: UpworkJob, _input: QueueInput): RelayTask {
     priority: 'high',
     priorityScore: KIND_PRIORITY_BASE.job_worth_apply + (job.score ?? 0) / 10,
     title: job.title,
-    subtitle: `Upwork · ${job.requiredSkills.slice(0, 3).join(', ')}`,
+    subtitle: `Upwork · ${Array.isArray(job.requiredSkills) ? job.requiredSkills.slice(0, 3).join(', ') : ''}`,
     entityType: 'job',
     entityId: job.id,
     whatHappened: `Scored ${job.score ?? '?'}/100 — strong match`,

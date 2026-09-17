@@ -63,37 +63,48 @@ export async function produceCanonicalIntelligence(
   opts: OrchestratorOptions = {},
 ): Promise<OrchestratorResult> {
   const autoRepair = opts.autoRepair !== false // Default true
+  const trace: Array<{ stage: string; ms: number; provider?: string }> = []
+  const t0 = Date.now()
 
   opts.onStatus?.('Starting intelligence pipeline')
 
   // Step 1: Run multi-pass extraction pipeline
+  const tPipeline = Date.now()
   const pipelineResult: ExtractionPipelineResult = await runIntelligencePipeline(rawText, opts)
+  trace.push({ stage: 'pipeline_total', ms: Date.now() - tPipeline })
+  for (const entry of pipelineResult.callLog) {
+    trace.push({ stage: entry.task, ms: entry.latencyMs, provider: entry.provider })
+  }
 
   // Step 2: Assess extraction completeness
   opts.onStatus?.('Validating extraction completeness')
+  const tComplete = Date.now()
   let completeness = assessExtractionCompleteness({
     intelligence: pipelineResult.intelligence,
     rawSource: pipelineResult.rawSource,
     sourceUrls: pipelineResult.sourceUrls,
   })
+  trace.push({ stage: 'completeness_check', ms: Date.now() - tComplete })
 
   // Step 3: Evaluate completeness gate
   let gateDecision = evaluateCompletenessGate(completeness)
 
-  // Step 4: Auto-repair if needed and enabled
+  // Step 4: Auto-repair only on critical failure (score < 40 or cannot proceed)
   let repairAttempted = false
   let repairImproved = false
   let intelligence = pipelineResult.intelligence
 
-  if (autoRepair && (!gateDecision.canProceed || completeness.score < 60)) {
+  if (autoRepair && (!gateDecision.canProceed || completeness.score < 40)) {
     opts.onStatus?.('Running extraction repair')
     repairAttempted = true
+    const tRepair = Date.now()
 
     const repairResult = await repairExtraction(
       rawText,
       intelligence,
       completeness,
     )
+    trace.push({ stage: 'repair', ms: Date.now() - tRepair })
 
     if (repairResult.repaired) {
       intelligence = repairResult.intelligence
@@ -105,6 +116,7 @@ export async function produceCanonicalIntelligence(
 
   // Step 5: Compute canonical score
   opts.onStatus?.('Computing canonical score')
+  const tScore = Date.now()
 
   const inferredHasRelevantProof =
     opts.hasRelevantProof
@@ -131,6 +143,7 @@ export async function produceCanonicalIntelligence(
   }
 
   const scoreBreakdown = computeCanonicalScore(scoreInput)
+  trace.push({ stage: 'scoring', ms: Date.now() - tScore })
 
   // Step 6: Build evidence ledger (merge pipeline + scoring evidence)
   const evidenceLedger: EvidenceEntry[] = [
@@ -143,6 +156,9 @@ export async function produceCanonicalIntelligence(
 
   // Step 8: Assemble the canonical intelligence object
   const qualification = scoreLabel(scoreBreakdown.total).qualification
+
+  trace.push({ stage: 'total', ms: Date.now() - t0 })
+  console.info(`[ai/trace] ${trace.map((t) => `${t.stage}=${t.ms}ms${t.provider ? `(${t.provider})` : ''}`).join(' → ')}`)
 
   const canonical: CanonicalProspectIntelligence = {
     version: SCORE_VERSION,
@@ -164,6 +180,7 @@ export async function produceCanonicalIntelligence(
     personalizationAngle: buildPersonalizationAngle(intelligence),
     outreachContext,
     extractionCallLog: pipelineResult.callLog,
+    extractionTrace: trace,
   }
 
   opts.onStatus?.(`Complete — score ${scoreBreakdown.total}/100 (${scoreBreakdown.label})`)

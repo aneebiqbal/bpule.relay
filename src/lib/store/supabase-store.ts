@@ -72,6 +72,7 @@ import type {
   AuditLogEntry,
   TeamAccountabilityView,
   CommandCenterView,
+  CapturedProspect,
 } from '@/lib/domain/types'
 import type {
   CreateLeadResult,
@@ -4059,6 +4060,80 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
   }
 
+  async captureProspect(input: {
+    rawInput: string
+    extractedName: string | null
+    extractedCompany: string | null
+    extractedTitle: string | null
+    extractedLocation: string | null
+    linkedinUrl: string | null
+    companyUrl: string | null
+    canonicalScore: number | null
+    canonicalIntelligence: Record<string, unknown> | null
+    scoreBreakdown: Record<string, unknown> | null
+    revenueIdentityId: string | null
+    senderProfileId: string | null
+  }): Promise<CapturedProspect> {
+    const { data, error } = await this.client
+      .from('captured_prospects')
+      .insert({
+        organization_id: this.orgId,
+        owner_rep_id: this.rep.id,
+        raw_input: input.rawInput,
+        extracted_name: input.extractedName,
+        extracted_company: input.extractedCompany,
+        extracted_title: input.extractedTitle,
+        extracted_location: input.extractedLocation,
+        linkedin_url: input.linkedinUrl,
+        company_url: input.companyUrl,
+        canonical_score: input.canonicalScore,
+        canonical_intelligence: input.canonicalIntelligence,
+        score_breakdown: input.scoreBreakdown,
+        revenue_identity_id: input.revenueIdentityId,
+        sender_profile_id: input.senderProfileId,
+        status: 'captured',
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return this.mapCapturedProspect(data as Row)
+  }
+
+  async listCapturedProspects(): Promise<CapturedProspect[]> {
+    const { data, error } = await this.client
+      .from('captured_prospects')
+      .select('*')
+      .eq('organization_id', this.orgId)
+      .eq('status', 'captured')
+      .order('last_activity_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => this.mapCapturedProspect(r as Row))
+  }
+
+  async getCapturedProspect(id: string): Promise<CapturedProspect | null> {
+    const { data, error } = await this.client
+      .from('captured_prospects')
+      .select('*')
+      .eq('id', id)
+      .eq('organization_id', this.orgId)
+      .maybeSingle()
+    if (error) throw error
+    return data ? this.mapCapturedProspect(data as Row) : null
+  }
+
+  async updateCapturedProspectStatus(id: string, status: 'captured' | 'converted' | 'discarded', convertedLeadId?: string | null): Promise<void> {
+    const { error } = await this.client
+      .from('captured_prospects')
+      .update({
+        status,
+        converted_lead_id: convertedLeadId ?? null,
+        last_activity_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('organization_id', this.orgId)
+    if (error) throw error
+  }
+
   async updateLeadStatus(leadId: string, status: 'won' | 'lost'): Promise<void> {
     const { error } = await this.client
       .from('leads')
@@ -4075,6 +4150,10 @@ export class SupabaseStore implements ScoutStore {
       .eq('id', leadId)
       .eq('owner_rep_id', this.rep.id)
     if (error) throw error
+  }
+
+  getCurrentRepId(): string {
+    return this.rep.id
   }
 
   // ── content journey ──
@@ -4768,6 +4847,31 @@ export class SupabaseStore implements ScoutStore {
       if (!result) break
     }
   }
+
+  private mapCapturedProspect(r: Row): CapturedProspect {
+    return {
+      id: r.id as string,
+      organizationId: r.organization_id as string,
+      ownerRepId: r.owner_rep_id as string,
+      rawInput: r.raw_input as string,
+      extractedName: (r.extracted_name as string) ?? null,
+      extractedCompany: (r.extracted_company as string) ?? null,
+      extractedTitle: (r.extracted_title as string) ?? null,
+      extractedLocation: (r.extracted_location as string) ?? null,
+      linkedinUrl: (r.linkedin_url as string) ?? null,
+      companyUrl: (r.company_url as string) ?? null,
+      canonicalScore: (r.canonical_score as number) ?? null,
+      canonicalIntelligence: (r.canonical_intelligence as Record<string, unknown>) ?? null,
+      scoreBreakdown: (r.score_breakdown as Record<string, unknown>) ?? null,
+      revenueIdentityId: (r.revenue_identity_id as string) ?? null,
+      senderProfileId: (r.sender_profile_id as string) ?? null,
+      status: r.status as CapturedProspect['status'],
+      convertedLeadId: (r.converted_lead_id as string) ?? null,
+      lastActivityAt: r.last_activity_at as string,
+      createdAt: r.created_at as string,
+      updatedAt: r.updated_at as string,
+    }
+  }
 }
 
 const OUTBOUND_PATH_TO_WAITING: import('@/lib/domain/types').RelayRunStatus[] = [
@@ -5235,4 +5339,5 @@ function mapSalesMemory(r: Row): SalesMemory {
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   }
+
 }

@@ -1,5 +1,6 @@
 import { hasProvider } from '@/lib/ai/config'
 import { scanForSecrets } from '@/lib/ai/secrets'
+import { deduplicated } from '@/lib/ai/dedup'
 import { createScoutStore } from '@/lib/store'
 import { sseStream } from '@/lib/sse/sse'
 import { buildProfileIntelligence, matchProofToLead } from '@/lib/relay/profile-intelligence'
@@ -100,9 +101,13 @@ export async function POST(request: Request) {
     emit({ type: 'status', message: 'Extracting prospect intelligence' })
     let canonicalResult: Awaited<ReturnType<typeof produceCanonicalIntelligence>>
     try {
-      canonicalResult = await produceCanonicalIntelligence(rawText, {
-        onStatus: (msg) => emit({ type: 'status', message: msg }),
-      })
+      // Dedup: same rawText within 30s window reuses in-flight extraction
+      const dedupKey = `analyze:${rawText.slice(0, 200)}`
+      canonicalResult = await deduplicated(dedupKey, () =>
+        produceCanonicalIntelligence(rawText, {
+          onStatus: (msg) => emit({ type: 'status', message: msg }),
+        }),
+      )
     } catch {
       emit({ type: 'error', message: 'Intelligence extraction failed.' })
       return
@@ -149,6 +154,41 @@ export async function POST(request: Request) {
     const bestMatch = explicitMatch ?? profileMatches[0] ?? null
     const bestSender = bestMatch?.profile ?? null
     const bestSenderProof = bestMatch?.matchedProof ?? []
+
+    if (store) {
+      try {
+        const captured = await store.captureProspect({
+          rawInput: rawText,
+          extractedName: canonical.intelligence.person.fullName,
+          extractedCompany: canonical.intelligence.company.name ?? null,
+          extractedTitle: canonical.intelligence.person.title,
+          extractedLocation: canonical.intelligence.person.location,
+          linkedinUrl: canonical.intelligence.person.linkedinUrl ?? canonical.rawSource.sourceUrl ?? null,
+          companyUrl: canonical.rawSource.companyUrl ?? null,
+          canonicalScore: canonical.canonicalScore,
+          canonicalIntelligence: canonical as unknown as Record<string, unknown>,
+          scoreBreakdown: canonical.scoreBreakdown as unknown as Record<string, unknown>,
+          revenueIdentityId: bestSender ? (bestSender as Profile & { revenueIdentityId?: string | null }).revenueIdentityId ?? null : null,
+          senderProfileId: bestSender?.id ?? null,
+        })
+        await store.emitRelayEvent({
+          eventType: 'PROSPECT_CAPTURED',
+          entityType: 'captured_prospect',
+          entityId: captured.id,
+          actorType: 'rep',
+          actorId: store.getCurrentRepId(),
+          revenueIdentityId: captured.revenueIdentityId,
+          source: 'app',
+          sourceEventId: `prospect_captured:${captured.id}`,
+          payload: {
+            company: captured.extractedCompany,
+            score: captured.canonicalScore,
+          },
+        })
+      } catch {
+        // Non-fatal: captured prospect must not block analysis
+      }
+    }
 
     if (explicitProfileId && !explicitMatch && profiles.length > 0) {
       emit({ type: 'status', message: 'Requested profile unavailable, using best match.' })

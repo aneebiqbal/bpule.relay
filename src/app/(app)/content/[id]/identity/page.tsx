@@ -43,7 +43,7 @@ export default async function StudioIdentityPage({ params }: { params: Promise<{
         </section>
 
         {/* Known For */}
-        {profile && profile.expertise.length > 0 && (
+        {profile && profile.expertise?.length > 0 && (
           <section className="rounded border border-line bg-bone-raised p-4">
             <h2 className="text-sm font-medium text-ink">Known For</h2>
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -85,7 +85,7 @@ export default async function StudioIdentityPage({ params }: { params: Promise<{
         )}
 
         {/* Perspective / Opinions */}
-        {profile && profile.opinions.length > 0 && (
+        {profile && profile.opinions?.length > 0 && (
           <section className="rounded border border-line bg-bone-raised p-4">
             <h2 className="text-sm font-medium text-ink">Perspective</h2>
             <div className="mt-2 space-y-2">
@@ -100,7 +100,7 @@ export default async function StudioIdentityPage({ params }: { params: Promise<{
         )}
 
         {/* Journey summary */}
-        {profile && profile.experiences.length > 0 && (
+        {profile && profile.experiences?.length > 0 && (
           <section className="rounded border border-line bg-bone-raised p-4">
             <h2 className="text-sm font-medium text-ink">Key Experiences</h2>
             <div className="mt-2 space-y-1.5">

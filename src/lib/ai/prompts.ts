@@ -6,7 +6,7 @@
  * Keep prompts short; code is the real gate.
  */
 
-export const ANTI_AI_RULES = `Anti-AI rules: Do not use phrases like "I came across your", "I was immediately excited", "With X+ years of experience", "I am confident", "I'd love the opportunity", "hope this finds you well", "I hope this message finds you", "I wanted to reach out", "I noticed your company", "You recently raised", "which likely gives you some budget". These are generic AI tells or surveillance language.`
+export const ANTI_AI_RULES = `Anti-AI rules: Do not use phrases like "I came across your", "I was immediately excited", "With X+ years of experience", "I am confident", "I'd love the opportunity", "hope this finds you well", "I hope this message finds you", "I wanted to reach out", "I noticed your company", "You recently raised", "which likely gives you some budget", "noticed you're hiring", "noticed the hiring", "noticed [signal] at [company]", "noticed that you". These are generic AI tells or surveillance language.`
 
 export const FACTUALITY_RULES = `Claim ONLY facts listed in the facts table. A number that is not in the facts table must not appear in the draft. Never fabricate a project, client, result, or credential. Never invent metrics, budgets, pain points, technologies, customers, revenue problems, or relationships.`
 

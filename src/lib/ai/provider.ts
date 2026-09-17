@@ -5,6 +5,7 @@ import { groqApiKey, groqBaseUrl } from '@/lib/ai/config'
 import type { ChainStep } from '@/lib/ai/routing'
 import { estimateCostUsd, estimateTokens, type CostTier } from '@/lib/ai/cost'
 import { scanForSecrets } from '@/lib/ai/secrets'
+import { recordHealth, type HealthOutcome } from '@/lib/ai/health'
 
 /**
  * Multi-host, multi-tier model provider (architecture v2.1, September 2026).
@@ -31,7 +32,7 @@ function clientFor(baseUrl: string, apiKey: string): OpenAI {
     c = new OpenAI({
       apiKey,
       baseURL: baseUrl,
-      timeout: 30_000, // 30s max — fail fast and fall back to next host
+      timeout: 30_000, // 30s default — callers can override per-request via AbortSignal
     })
     clients.set(key, c)
   }
@@ -198,14 +199,18 @@ async function walkChain<T>(
         attempt(step),
       )
       const latency = Date.now() - start
-      console.info(`[ai/host] served by ${step.host.id} (${step.costTier})`)
+      console.info(`[ai/host] served by ${step.host.id} (${step.costTier}) in ${latency}ms`)
+      recordHealth(step.host.id, 'success', latency)
       await onAttempt?.({ host: step.host.id, model: step.host.model, costTier: step.costTier, success: true, failureReason: null, errorMessage: '', latencyMs: latency })
       return { data, host: step.host.id, costTier: step.costTier, estimatedCostUsd: 0 }
     } catch (err) {
       const reason = categorizeFailure(err)
+      const latency = Date.now() - start
       failures.push({ host: step.host.id, tier: step.costTier, error: reason, reason })
-      console.warn(`[ai/host] ${step.host.id} (${step.costTier}) failed: ${reason}`)
-      await onAttempt?.({ host: step.host.id, model: step.host.model, costTier: step.costTier, success: false, failureReason: reason, errorMessage: reason, latencyMs: Date.now() - start })
+      console.warn(`[ai/host] ${step.host.id} (${step.costTier}) failed: ${reason} after ${latency}ms`)
+      const outcome: HealthOutcome = reason === 'timeout' ? 'timeout' : reason === 'rate_limit' ? 'rate_limit' : 'error'
+      recordHealth(step.host.id, outcome, latency, reason)
+      await onAttempt?.({ host: step.host.id, model: step.host.model, costTier: step.costTier, success: false, failureReason: reason, errorMessage: reason, latencyMs: latency })
       onStatus?.(`${step.host.id} unavailable (${reason}); trying next host}`)
     }
   }
@@ -239,8 +244,10 @@ async function structuredJsonOnHost<T>(
   if (sysScan.blocked) throw new Error(`System prompt blocked: ${sysScan.reason}`)
   const userScan = scanForSecrets(opts.user)
   if (userScan.blocked) throw new Error(`Prompt blocked: ${userScan.reason}`)
-  const api = clientFor(host.baseUrl, host.apiKey)
-  if (timeoutMs) api.timeout = timeoutMs
+  // Create a per-call client with custom timeout instead of mutating the shared one
+  const api = timeoutMs
+    ? new OpenAI({ apiKey: host.apiKey, baseURL: host.baseUrl, timeout: timeoutMs })
+    : clientFor(host.baseUrl, host.apiKey)
   let user = opts.user
   const responseMode = opts.responseMode ?? 'json_object'
   if (responseMode === 'json_object' && !/json/i.test(user)) {

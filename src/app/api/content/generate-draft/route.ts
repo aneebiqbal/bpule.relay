@@ -354,10 +354,10 @@ function buildEnhancedDnaBlock(profile: any, postPlan: any): string {
   }
   if (postPlan.coreInsight) parts.push(`Core insight: ${postPlan.coreInsight}`)
   if (postPlan.groundingMode) parts.push(`Grounding: ${postPlan.groundingMode}`)
-  if (postPlan.allowedPersonalClaims.length > 0) {
+  if (Array.isArray(postPlan.allowedPersonalClaims) && postPlan.allowedPersonalClaims.length > 0) {
     parts.push(`ALLOWED personal claims:\n- ${postPlan.allowedPersonalClaims.join('\n- ')}`)
   }
-  if (postPlan.forbiddenClaims.length > 0) {
+  if (Array.isArray(postPlan.forbiddenClaims) && postPlan.forbiddenClaims.length > 0) {
     parts.push(`FORBIDDEN claims:\n- ${postPlan.forbiddenClaims.join('\n- ')}`)
   }
   return parts.join('\n')
@@ -487,7 +487,7 @@ function buildCorrectionPrompt(failureCodes: string[], failureMessages: string[]
       case 'UNSUPPORTED_PERSONAL_CLAIM':
         parts.push('- REMOVE all invented personal anecdotes, team stories, or client interactions.')
         parts.push('  Only use experiences explicitly confirmed in the Persona profile.')
-        if (postPlan?.allowedPersonalClaims?.length > 0) {
+        if (Array.isArray(postPlan?.allowedPersonalClaims) && postPlan.allowedPersonalClaims.length > 0) {
           parts.push(`  Allowed claims: ${postPlan.allowedPersonalClaims.slice(0, 5).join(', ')}`)
         }
         break
@@ -545,10 +545,10 @@ function buildCorrectionSystemPrompt(profile: any, body: any, postPlan: any): st
     if (postPlan.coreInsight) parts.push(`Core insight to preserve: ${postPlan.coreInsight}`)
     if (postPlan.audienceValue) parts.push(`Audience value: ${postPlan.audienceValue}`)
     if (postPlan.groundingMode) parts.push(`Grounding mode: ${postPlan.groundingMode}`)
-    if (postPlan.allowedPersonalClaims?.length > 0) {
+    if (Array.isArray(postPlan.allowedPersonalClaims) && postPlan.allowedPersonalClaims.length > 0) {
       parts.push(`ALLOWED personal claims:\n- ${postPlan.allowedPersonalClaims.join('\n- ')}`)
     }
-    if (postPlan.forbiddenClaims?.length > 0) {
+    if (Array.isArray(postPlan.forbiddenClaims) && postPlan.forbiddenClaims.length > 0) {
       parts.push(`FORBIDDEN:\n- ${postPlan.forbiddenClaims.join('\n- ')}`)
     }
   }

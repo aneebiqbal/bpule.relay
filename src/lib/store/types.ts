@@ -28,6 +28,7 @@ import type {
   ContentEvaluation,
   ContentInterviewSession,
   ContentInterviewAnswer,
+  CapturedProspect,
   ConversationStage,
   ConversationState,
   CsvImport,
@@ -809,6 +810,24 @@ export interface ScoutStore {
   updateLeadSenderProfile(leadId: string, senderProfileId: string | null): Promise<void>
   updateLeadStatus(leadId: string, status: 'won' | 'lost'): Promise<void>
   updateLeadRevenueIdentity(leadId: string, revenueIdentityId: string): Promise<void>
+  getCurrentRepId(): string
+  captureProspect(input: {
+    rawInput: string
+    extractedName: string | null
+    extractedCompany: string | null
+    extractedTitle: string | null
+    extractedLocation: string | null
+    linkedinUrl: string | null
+    companyUrl: string | null
+    canonicalScore: number | null
+    canonicalIntelligence: Record<string, unknown> | null
+    scoreBreakdown: Record<string, unknown> | null
+    revenueIdentityId: string | null
+    senderProfileId: string | null
+  }): Promise<CapturedProspect>
+  listCapturedProspects(): Promise<CapturedProspect[]>
+  getCapturedProspect(id: string): Promise<CapturedProspect | null>
+  updateCapturedProspectStatus(id: string, status: 'captured' | 'converted' | 'discarded', convertedLeadId?: string | null): Promise<void>
   // content journey
   createContentJourneyEntry(input: {
     personaId: string

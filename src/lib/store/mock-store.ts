@@ -56,6 +56,7 @@ import type {
   AccountabilityStatus,
   AppNotification,
   AuditLogEntry,
+  CapturedProspect,
 } from '@/lib/domain/types'
 import type {
   CreateLeadResult,
@@ -208,6 +209,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       calibratedAt: t(20),
     },
   ]
+
+  const capturedProspects: CapturedProspect[] = []
 
   const leads: Lead[] = [
     {
@@ -2436,6 +2439,62 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async updateLeadRevenueIdentity(leadId: string, revenueIdentityId: string) {
       const lead = leads.find((l) => l.id === leadId)
       if (lead) (lead as Lead & { revenueIdentityId?: string | null }).revenueIdentityId = revenueIdentityId
+    },
+    getCurrentRepId(): string {
+      return 'rep-demo'
+    },
+    async captureProspect(input: {
+      rawInput: string
+      extractedName: string | null
+      extractedCompany: string | null
+      extractedTitle: string | null
+      extractedLocation: string | null
+      linkedinUrl: string | null
+      companyUrl: string | null
+      canonicalScore: number | null
+      canonicalIntelligence: Record<string, unknown> | null
+      scoreBreakdown: Record<string, unknown> | null
+      revenueIdentityId: string | null
+      senderProfileId: string | null
+    }): Promise<CapturedProspect> {
+      const entry: CapturedProspect = {
+        id: nextId('cp'),
+        organizationId: DEMO_ORG_ID,
+        ownerRepId: 'rep-demo',
+        rawInput: input.rawInput,
+        extractedName: input.extractedName,
+        extractedCompany: input.extractedCompany,
+        extractedTitle: input.extractedTitle,
+        extractedLocation: input.extractedLocation,
+        linkedinUrl: input.linkedinUrl,
+        companyUrl: input.companyUrl,
+        canonicalScore: input.canonicalScore,
+        canonicalIntelligence: input.canonicalIntelligence,
+        scoreBreakdown: input.scoreBreakdown,
+        revenueIdentityId: input.revenueIdentityId,
+        senderProfileId: input.senderProfileId,
+        status: 'captured',
+        convertedLeadId: null,
+        lastActivityAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      capturedProspects.push(entry)
+      return entry
+    },
+    async listCapturedProspects(): Promise<CapturedProspect[]> {
+      return capturedProspects.filter((p) => p.status === 'captured')
+    },
+    async getCapturedProspect(id: string): Promise<CapturedProspect | null> {
+      return capturedProspects.find((p) => p.id === id) ?? null
+    },
+    async updateCapturedProspectStatus(id: string, status: 'captured' | 'converted' | 'discarded', convertedLeadId?: string | null): Promise<void> {
+      const entry = capturedProspects.find((p) => p.id === id)
+      if (entry) {
+        entry.status = status
+        if (convertedLeadId) entry.convertedLeadId = convertedLeadId
+        entry.lastActivityAt = new Date().toISOString()
+      }
     },
     // content journey
     async createContentJourneyEntry(input) {

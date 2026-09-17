@@ -259,6 +259,8 @@ export function isGeneric(message: string, leadCompany: string): boolean {
   const withoutCompany = message.replace(new RegExp(leadCompany, 'gi'), 'COMPANY')
   const genericPatterns = [
     /^(hey|hi|hello)\s*,?\s*(i noticed|i saw|i came across)/i,
+    /\b(noticed\s+(hiring|the hiring|that you|you're hiring))/i,
+    /\b(open to connecting)\b/i,
     /\b(let me know if (that|this) sounds helpful)\b/i,
     /\b(would love to (connect|chat|discuss))\b/i,
     /\b(i can help (you|COMPANY) (ship|build|grow|scale))\b/i,
@@ -280,8 +282,9 @@ export function isGeneric(message: string, leadCompany: string): boolean {
 export function feelsSurveillance(message: string): boolean {
   const lower = message.toLowerCase()
   const surveillancePatterns = [
-    /you('ve| have|'re| are)?\s*(recently|just|currently)/i,
     /i (noticed|saw|found|came across|was looking at) your/i,
+    /i (noticed|saw|found|came across)\s+(hiring|that you|you're hiring)/i,
+    /you('ve| have|'re| are)?\s*(recently|just|currently)/i,
     /your (funding|raise|series|budget)/i,
     /i (read|saw) that you (raised|closed|secured)/i,
     /congrats on (your|the) (raise|funding|series)/i,

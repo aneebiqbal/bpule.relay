@@ -236,16 +236,20 @@ async function streamFinalDraft(
     }
   }
 
-  // Run the hard quality gate evaluation
   let qualityGatePassed = primary.passed
   let qualityGateReasons: string[] = []
   try {
-    const { evaluateMessage } = await import('@/lib/relay/message-forge')
-    const evaluation = evaluateMessage(primary.draftText, input.strategy ?? null, input.type === 'upwork' ? 'upwork' : input.type === 'connection' ? 'connection' : 'dm')
-    qualityGatePassed = primary.passed && evaluation.passed
-    qualityGateReasons = evaluation.reasons
+    const { evaluateMessage, feelsSurveillance, isGeneric } = await import('@/lib/relay/message-forge')
+    const channel = input.type === 'upwork' ? 'upwork' : input.type === 'connection' ? 'connection' : 'dm'
+    const evaluation = evaluateMessage(primary.draftText, input.strategy ?? null, channel)
+    const surveillance = feelsSurveillance(primary.draftText)
+    const generic = isGeneric(primary.draftText, input.lead.company)
+    qualityGatePassed = primary.passed && evaluation.passed && !surveillance && !generic
+    qualityGateReasons = [...evaluation.reasons]
+    if (surveillance) qualityGateReasons.push('Surveillance-like opening')
+    if (generic) qualityGateReasons.push('Too generic')
   } catch {
-    // If quality gate fails, fall back to the self-check result
+    // Quality gate import failed — use self-check result only.
   }
 
   emit({ type: 'selfcheck', pass: qualityGatePassed, selfCheck: { ...primary.selfCheck, qualityGateReasons } })
@@ -343,7 +347,7 @@ function fallbackText(input: DraftInput): string {
   }
 
   if (input.type === 'connection') {
-    return `Hi ${name}, noticed ${evidence} at ${company}. Open to connecting?`
+    return `Hi ${name}, came across your profile and would be worth connecting.`
   }
 
   if (input.type === 'upwork') {

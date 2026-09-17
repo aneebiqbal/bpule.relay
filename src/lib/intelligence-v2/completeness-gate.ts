@@ -16,7 +16,7 @@ import type {
 import { longcatHost, tier4Host, type ChainStep } from '@/lib/ai/routing'
 import { structuredJsonChain } from '@/lib/ai/provider'
 
-const LONGCAT_REPAIR_TIMEOUT_MS = 120_000
+const LONGCAT_REPAIR_TIMEOUT_MS = 45_000
 
 // ── Completeness Assessment ────────────────────────────────────────────────
 

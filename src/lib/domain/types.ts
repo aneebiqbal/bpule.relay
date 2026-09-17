@@ -1268,6 +1268,29 @@ export interface IdentityPerformanceView {
 // ORCHESTRATION — Event Ledger + Relay Runs (Sprint 1)
 // ============================================================================
 
+export interface CapturedProspect {
+  id: string
+  organizationId: string
+  ownerRepId: string
+  rawInput: string
+  extractedName: string | null
+  extractedCompany: string | null
+  extractedTitle: string | null
+  extractedLocation: string | null
+  linkedinUrl: string | null
+  companyUrl: string | null
+  canonicalScore: number | null
+  canonicalIntelligence: Record<string, unknown> | null
+  scoreBreakdown: Record<string, unknown> | null
+  revenueIdentityId: string | null
+  senderProfileId: string | null
+  status: 'captured' | 'converted' | 'discarded'
+  convertedLeadId: string | null
+  lastActivityAt: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type RelayEventType =
   | 'LEAD_CREATED'
   | 'LEAD_QUALIFIED'
@@ -1290,6 +1313,11 @@ export type RelayEventType =
   | 'RUN_FAILED'
   | 'RECONCILIATION_DETECTED'
   | 'RECONCILIATION_APPLIED'
+  | 'PROSPECT_CAPTURED'
+  | 'PROSPECT_ANALYZED'
+  | 'EXTRACTION_STARTED'
+  | 'EXTRACTION_COMPLETED'
+  | 'ARTIFACT_GENERATED'
 
 export type RelayActorType = 'rep' | 'admin' | 'system' | 'integration'
 

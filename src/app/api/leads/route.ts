@@ -242,6 +242,21 @@ export async function POST(request: Request) {
 
   const lead = result.lead!
 
+  // Link captured prospect if one exists for this raw input
+  if (store && canonical?.rawSource?.rawInput) {
+    try {
+      const captured = await store.listCapturedProspects()
+      const match = captured.find(
+        (c) => c.rawInput === (canonical.rawSource.rawInput ?? '') && c.status === 'captured',
+      )
+      if (match) {
+        await store.updateCapturedProspectStatus(match.id, 'converted', lead.id)
+      }
+    } catch {
+      // Non-fatal: captured prospect linking must not break lead creation
+    }
+  }
+
   return NextResponse.json(
     {
       lead: {

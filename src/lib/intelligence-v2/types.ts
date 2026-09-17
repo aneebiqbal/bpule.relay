@@ -278,6 +278,8 @@ export interface CanonicalProspectIntelligence {
     latencyMs: number
     fallback: boolean
   }>
+  /** Timing trace for latency debugging */
+  extractionTrace?: Array<{ stage: string; ms: number; provider?: string }>
 }
 
 // ── Score Label Mapping ────────────────────────────────────────────────────

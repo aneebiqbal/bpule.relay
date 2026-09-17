@@ -159,7 +159,7 @@ interface PassAOutput {
   }
 }
 
-const LONGCAT_EXTRACTION_TIMEOUT_MS = 120_000
+const LONGCAT_EXTRACTION_TIMEOUT_MS = 45_000
 
 const PASS_A_SYSTEM = `You are a precise factual extraction engine. Extract ONLY what is explicitly stated in the text. Return a single JSON object.
 
@@ -791,6 +791,26 @@ async function runPassC(
     return demoPassC(passA)
   }
 
+  // Pass C is only needed for risks/unknowns when deterministic fallback is insufficient.
+  // If Pass A produced signals + we have person/company, skip the AI call.
+  const hasSignals = passA.opportunity.signals.length > 0
+  const hasPersonOrCompany = Boolean(passA.person.fullName || passA.company.name)
+  const deterministicPassC = stabilizePassC(demoPassC(passA), passA, intelligence)
+  const deterministicSufficient = hasSignals && hasPersonOrCompany &&
+    deterministicPassC.probableNeed !== null &&
+    deterministicPassC.opportunityTrigger !== null
+
+  if (deterministicSufficient) {
+    callLog.push({
+      provider: 'deterministic',
+      model: 'code',
+      task: 'intelligence_pass_c',
+      latencyMs: 0,
+      fallback: false,
+    })
+    return deterministicPassC
+  }
+
   onStatus?.('Pass C: Analyzing opportunity')
   const startTime = Date.now()
 
@@ -823,7 +843,7 @@ async function runPassC(
       latencyMs: Date.now() - startTime,
       fallback: true,
     })
-    return stabilizePassC(demoPassC(passA), passA, intelligence)
+    return deterministicPassC
   }
 }
 

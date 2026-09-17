@@ -42,7 +42,10 @@ function parseTags(raw: string): string[] {
   return [...new Set(raw.split(/[,\n]+/).map((t) => t.trim()).filter(Boolean))].slice(0, 20)
 }
 
-function serializeTags(tags: string[]): string {
+function serializeTags(tags: string[] | string | null | undefined): string {
+  if (!tags) return ''
+  if (typeof tags === 'string') return tags
+  if (!Array.isArray(tags)) return ''
   return tags.join(', ')
 }
 
@@ -286,9 +289,12 @@ export function RevenueIdentityManager() {
           const riAssignments = assignedReps(ri.id)
           return (
             <div key={ri.id} className={cn('rounded-xl border bg-bone-raised', ri.status === 'archived' ? 'border-line/50 opacity-60' : 'border-line')}>
-              <button
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => setExpanded(isExpanded ? null : ri.id)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(isExpanded ? null : ri.id) } }}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left cursor-pointer"
               >
                 {isExpanded ? <ChevronDown className="size-4 text-slate" /> : <ChevronRight className="size-4 text-slate" />}
                 <div className={cn('flex size-8 items-center justify-center rounded-lg text-xs font-medium',
@@ -338,7 +344,7 @@ export function RevenueIdentityManager() {
                     <Trash2 className="size-3.5" />
                   </button>
                 </div>
-              </button>
+              </div>
               {isExpanded && (
                 <div className="border-t border-line px-4 py-3 space-y-3">
                   {ri.positioning && <p className="text-xs text-graphite">{ri.positioning}</p>}
@@ -347,7 +353,7 @@ export function RevenueIdentityManager() {
                       <ExternalLink className="size-3" /> Profile
                     </a>
                   )}
-                  {ri.skills.length > 0 && (
+                  {Array.isArray(ri.skills) && ri.skills.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {ri.skills.slice(0, 8).map((s) => (
                         <span key={s} className="rounded bg-bone px-1.5 py-0.5 text-[10px] text-graphite">{s}</span>

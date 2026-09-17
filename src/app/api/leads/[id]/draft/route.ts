@@ -144,7 +144,7 @@ export async function POST(
     if (matched.length > 0) emit({ type: 'proof', items: matched })
 
     const embedTextPromise = embedText(
-      `${detail.company} ${detail.signalEvidence ?? ''} ${detail.tags.join(' ')}`,
+      `${detail.company} ${detail.signalEvidence ?? ''} ${Array.isArray(detail.tags) ? detail.tags.join(' ') : ''}`,
     ).then(async (leadEmbedding) => {
       const semanticMatches = await store.matchProofItemsByEmbedding(leadEmbedding, 8, profile?.id ?? null)
       const merged = mergeProofMatches(semanticMatches, tagMatches, 8)

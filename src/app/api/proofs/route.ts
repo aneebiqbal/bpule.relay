@@ -111,7 +111,7 @@ export async function POST(request: Request) {
   }
 
   // One-time embedding cost per proof item. Not per-draft.
-  const embeddingText = `${projectSummary} ${tags.join(' ')}`
+  const embeddingText = `${projectSummary} ${Array.isArray(tags) ? tags.join(' ') : ''}`
   let embedding: number[] | null = null
   try {
     embedding = await embedText(embeddingText)

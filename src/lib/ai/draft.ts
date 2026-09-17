@@ -167,7 +167,7 @@ function messageKind(input: DraftInput): string {
     case 'followup':
       return 'Follow-up message (second touch). The prospect read or opened the first message but has not replied. Keep it to two or three sentences, reference your earlier message, and give an easy way to say no.'
     case 'reply':
-      return 'Reply to a prospect who wrote back'
+      return 'Reply to a prospect who wrote back. Answer their question first. Do not repeat bio/proof facts already sent. Keep it short and direct.'
   }
 }
 
