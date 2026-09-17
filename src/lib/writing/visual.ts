@@ -30,7 +30,14 @@ const OVERUSED_VISUALS = [
   /robot\b/i,
   /ai\s+brain/i,
   /floating\s+code/i,
+  /floating\s+cards?/i,
+  /glowing\s+nodes?/i,
+  /abstract\s+networks?/i,
+  /split[\s-]?screen/i,
+  /before\s*(and|&|\/)\s*after/i,
+  /generic\s+arrows?/i,
   /futuristic\s+dashboard/i,
+  /glowing\s+dashboard/i,
   /stock\s+photo/i,
   /developer\s+at\s+desk/i,
   /motivational\s+quote\s+card/i,
@@ -43,35 +50,54 @@ const OVERUSED_VISUALS = [
   /laptop\s+on\s+a\s+table/i,
 ]
 
+const GENERIC_CORE_DETAIL_PATTERNS = [
+  /teach a counterintuitive lesson/i,
+  /common misconception/i,
+  /share a specific insight/i,
+  /from your experience/i,
+  /share the reasoning behind this belief/i,
+  /what most people get wrong/i,
+]
+
 /**
  * Generate a visual concept for a social post.
  * Returns a structured concept with idea description and image prompt.
  */
 export function generateVisualConcept(input: VisualConceptInput): VisualConcept {
-  const style = input.visualStyle ?? selectVisualStyle(input)
-  const concept = buildConcept(input, style ?? 'editorial-illustration')
+  const resolved = {
+    ...input,
+    coreDetail: resolveCoreDetail(input),
+  }
+  const style = input.visualStyle ?? selectVisualStyle(resolved)
+  const concept = buildConcept(resolved, style ?? 'editorial-illustration')
   return concept
 }
 
 function selectVisualStyle(input: VisualConceptInput): VisualConceptInput['visualStyle'] {
-  const lower = (input.angle + ' ' + input.coreDetail + ' ' + input.topic).toLowerCase()
+  const lower = `${input.postText} ${input.coreDetail} ${input.angle} ${input.topic}`.toLowerCase()
 
-  if (lower.includes('data') || lower.includes('metric') || lower.includes('number') || lower.includes('percent')) {
+  if (/\b(context window|retrieval|rag|hallucination|eval|evaluation|metric|percent|\d+%|\d+x)\b/.test(lower)) {
     return 'minimal-data'
   }
-  if (lower.includes('debug') || lower.includes('deploy') || lower.includes('config') || lower.includes('system')) {
-    return 'technical-diagram'
-  }
-  if (lower.includes('mistake') || lower.includes('lesson') || lower.includes('realization') || lower.includes('discover')) {
-    return 'visual-metaphor'
-  }
-  if (lower.includes('compare') || lower.includes('versus') || lower.includes('before') || lower.includes('after')) {
+  if (/\b(kubernetes|service mesh|operator|helm|cluster|tooling|yaml)\b/.test(lower)) {
     return 'object-composition'
   }
-  if (lower.includes('opinion') || lower.includes('believe') || lower.includes('think') || lower.includes('argue')) {
+  if (/\b(idempotency|retry|dedupe|render|useeffect|side-effect|fallback|handoff|orchestration|pipeline|api|query|cache)\b/.test(lower)) {
+    return 'technical-diagram'
+  }
+  if (/\b(hiring|leadership|manager|team structure|prioritization debt)\b/.test(lower)) {
     return 'typographic'
   }
-  if (lower.includes('abstract') || lower.includes('concept') || lower.includes('idea')) {
+  if (/\b(mistake|failure|lesson|realization|discover|backfire)\b/.test(lower)) {
+    return 'visual-metaphor'
+  }
+  if (/\b(compare|versus|vs|before|after|tradeoff|instead of)\b/.test(lower)) {
+    return 'object-composition'
+  }
+  if (/\b(opinion|believe|think|argue)\b/.test(lower)) {
+    return 'typographic'
+  }
+  if (/\b(abstract|concept|idea)\b/.test(lower)) {
     return 'abstract-concept'
   }
 
@@ -82,56 +108,160 @@ function buildConcept(input: VisualConceptInput, style: NonNullable<VisualConcep
   const aspectRatio = input.platform === 'linkedin' ? 'LinkedIn landscape composition (1.91:1)' : 'X composition (16:9)'
 
   const baseConstraints = 'No people. No generic AI imagery. No stock photos. No robots. No floating code. No motivational quote cards. No laptops on tables.'
+  const mechanism = deriveCompositionHint(input, style)
 
   switch (style) {
     case 'editorial-illustration':
       return {
-        visualIdea: `Editorial illustration capturing the core idea: ${input.coreDetail.slice(0, 80)}`,
-        imagePrompt: `Minimal editorial tech illustration: ${summarizeForImage(input.coreDetail)}. ${input.tone === 'serious' ? 'Muted, serious palette' : 'Restrained, focused palette'}. Clean lines, precise technical-diagram sensibility. Dark graphite background, warm off-white elements, one restrained accent color. ${baseConstraints} Premium software editorial style. ${aspectRatio}.`,
+        visualIdea: `Editorial illustration focused on this mechanism: ${mechanism}`,
+        imagePrompt: `Minimal editorial tech illustration focused on ${mechanism}. Context: ${summarizeForImage(input.coreDetail)}. ${input.tone === 'serious' ? 'Muted, serious palette' : 'Restrained, focused palette'}. Clean lines, precise technical-diagram sensibility. Dark graphite background, warm off-white elements, one restrained accent color. ${baseConstraints} Premium software editorial style. ${aspectRatio}.`,
       }
 
     case 'technical-diagram':
       return {
-        visualIdea: `Technical diagram showing: ${input.coreDetail.slice(0, 80)}`,
-        imagePrompt: `Clean technical diagram: ${summarizeForImage(input.coreDetail)}. Precise lines, clear relationships, functional aesthetic. Muted technical palette with one signal color for the key insight. White or near-white background. Annotated sparingly. Engineering documentation quality, not decorative. ${baseConstraints} Technical reference aesthetic. ${aspectRatio}.`,
+        visualIdea: `Technical diagram of: ${mechanism}`,
+        imagePrompt: `Clean technical diagram of ${mechanism}. Supporting detail: ${summarizeForImage(input.coreDetail)}. Precise lines, clear relationships, functional aesthetic. Muted technical palette with one signal color for the key insight. White or near-white background. Annotated sparingly with labels only where needed. Engineering documentation quality, not decorative. ${baseConstraints} Technical reference aesthetic. ${aspectRatio}.`,
       }
 
     case 'visual-metaphor':
       return {
-        visualIdea: `Visual metaphor for: ${input.coreDetail.slice(0, 80)}`,
-        imagePrompt: `Conceptual visual metaphor: ${summarizeForImage(input.coreDetail)}. Single clear metaphor, not literal illustration. Restrained color palette, one focal element. Negative space used deliberately. Thoughtful composition that rewards a second look. Editorial quality, not commercial stock. ${baseConstraints} Conceptual art direction. ${aspectRatio}.`,
+        visualIdea: `Visual metaphor for this tension: ${mechanism}`,
+        imagePrompt: `Conceptual visual metaphor centered on ${mechanism}. Context: ${summarizeForImage(input.coreDetail)}. Single clear metaphor, not literal illustration. Restrained color palette, one focal element. Negative space used deliberately. Thoughtful composition that rewards a second look. Editorial quality, not commercial stock. ${baseConstraints} Conceptual art direction. ${aspectRatio}.`,
       }
 
     case 'object-composition':
       return {
-        visualIdea: `Object composition representing: ${input.coreDetail.slice(0, 80)}`,
-        imagePrompt: `Carefully composed still life: objects representing ${summarizeForImage(input.coreDetail)}. Intentional arrangement, clean lighting, editorial quality. Muted tones, one accent. The composition itself communicates the idea without text. ${baseConstraints} Product photography quality. ${aspectRatio}.`,
+        visualIdea: `Object composition representing this tradeoff: ${mechanism}`,
+        imagePrompt: `Carefully composed still life showing ${mechanism}. Supporting context: ${summarizeForImage(input.coreDetail)}. Intentional arrangement, clean lighting, editorial quality. Muted tones, one accent. The composition itself communicates the idea without text. ${baseConstraints} Product photography quality. ${aspectRatio}.`,
       }
 
     case 'minimal-data':
       return {
-        visualIdea: `Minimal data visualization of: ${input.coreDetail.slice(0, 80)}`,
-        imagePrompt: `Minimal data visualization: one key relationship or number from "${summarizeForImage(input.coreDetail)}". Clean typography, generous white space, single chart or comparison. Muted palette with one accent color for the key data point. Information design quality, not dashboard. ${baseConstraints} Data journalism aesthetic. ${aspectRatio}.`,
+        visualIdea: `Minimal data visualization of this relationship: ${mechanism}`,
+        imagePrompt: `Minimal data visualization of ${mechanism}, grounded in "${summarizeForImage(input.coreDetail)}". Clean typography, generous white space, single chart or comparison. Muted palette with one accent color for the key data point. Information design quality, not dashboard UI. ${baseConstraints} Data journalism aesthetic. ${aspectRatio}.`,
       }
 
     case 'photographic':
       return {
-        visualIdea: `Photographic concept for: ${input.coreDetail.slice(0, 80)}`,
-        imagePrompt: `Editorial photograph: ${summarizeForImage(input.coreDetail)}. Natural lighting, authentic moment, not staged. Muted color grading, documentary quality. The image should feel like it was captured, not generated. ${baseConstraints} Documentary photography aesthetic. ${aspectRatio}.`,
+        visualIdea: `Photographic concept for this scene: ${mechanism}`,
+        imagePrompt: `Editorial photograph framing ${mechanism}. Context: ${summarizeForImage(input.coreDetail)}. Natural lighting, authentic moment, not staged. Muted color grading, documentary quality. The image should feel like it was captured, not generated. ${baseConstraints} Documentary photography aesthetic. ${aspectRatio}.`,
       }
 
     case 'typographic':
       return {
-        visualIdea: `Typographic concept expressing: ${input.coreDetail.slice(0, 80)}`,
-        imagePrompt: `Typography-driven composition: one key phrase from "${summarizeForImage(input.coreDetail)}" as the visual focal point. Thoughtful type choice, deliberate scale relationships. Minimal imagery — the type IS the image. Restrained palette, editorial layout quality. ${baseConstraints} Editorial design aesthetic. ${aspectRatio}.`,
+        visualIdea: `Typographic concept expressing this contrast: ${mechanism}`,
+        imagePrompt: `Typography-driven composition expressing ${mechanism}. Pull one short phrase from "${summarizeForImage(input.coreDetail)}" as the visual focal point. Thoughtful type choice, deliberate scale relationships. Minimal imagery; type carries the argument. Restrained palette, editorial layout quality. ${baseConstraints} Editorial design aesthetic. ${aspectRatio}.`,
       }
 
     case 'abstract-concept':
       return {
-        visualIdea: `Abstract visual for: ${input.coreDetail.slice(0, 80)}`,
-        imagePrompt: `Abstract conceptual composition: ${summarizeForImage(input.coreDetail)}. Shapes, color, and space communicating the idea without literal representation. Restrained palette, deliberate composition. Rewards contemplation. Fine art quality, not decorative. ${baseConstraints} Abstract editorial aesthetic. ${aspectRatio}.`,
+        visualIdea: `Abstract visual for this mechanism: ${mechanism}`,
+        imagePrompt: `Abstract conceptual composition based on ${mechanism}. Context: ${summarizeForImage(input.coreDetail)}. Shapes, color, and space communicating the idea without literal representation. Restrained palette, deliberate composition. Rewards contemplation. Fine art quality, not decorative. ${baseConstraints} Abstract editorial aesthetic. ${aspectRatio}.`,
       }
   }
+}
+
+function resolveCoreDetail(input: VisualConceptInput): string {
+  const fallback = [input.coreDetail, input.angle, input.topic].find((v) => typeof v === 'string' && v.trim().length > 0) ?? ''
+  const fallbackClean = summarizeForImage(fallback)
+  const fromPost = bestSentenceForVisual(input.postText)
+
+  if (fromPost) return fromPost
+  if (!isGenericCoreDetail(fallbackClean)) return fallbackClean
+  return summarizeForImage(input.topic)
+}
+
+function isGenericCoreDetail(text: string): boolean {
+  const trimmed = text.trim()
+  if (trimmed.length < 24) return true
+  return GENERIC_CORE_DETAIL_PATTERNS.some((pattern) => pattern.test(trimmed))
+}
+
+function bestSentenceForVisual(postText: string): string | null {
+  if (!postText || !postText.trim()) return null
+  const candidates = postText
+    .split(/\n+/)
+    .flatMap((line) => line.split(/[.!?]+/))
+    .map((line) => line.trim())
+    .filter((line) => line.length >= 24)
+
+  let best = ''
+  let bestScore = -1
+
+  for (const line of candidates) {
+    if (isGenericCoreDetail(line)) continue
+    const score = scoreSentenceForVisual(line)
+    if (score > bestScore) {
+      best = line
+      bestScore = score
+    }
+  }
+
+  if (!best) return null
+  return summarizeForImage(best)
+}
+
+function scoreSentenceForVisual(sentence: string): number {
+  const lower = sentence.toLowerCase()
+  let score = 0
+
+  if (/\b(because|causes?|leads? to|results? in|therefore|so that|instead of|versus|tradeoff)\b/.test(lower)) score += 3
+  if (/\b(idempotency|retry|fallback|handoff|render|retrieval|hallucination|kubernetes|pipeline|query|cache|team|hiring|prioritization)\b/.test(lower)) score += 3
+  if (/\b(\d+%|\d+x|\d+\s*(ms|sec|min|minutes|hours|users|customers|nodes))\b/.test(lower)) score += 2
+  if (/\b(failure|mistake|bottleneck|debt|stale|duplicate|latency|confidence)\b/.test(lower)) score += 2
+  if (sentence.length >= 45 && sentence.length <= 160) score += 1
+
+  return score
+}
+
+function deriveCompositionHint(
+  input: VisualConceptInput,
+  style: NonNullable<VisualConceptInput['visualStyle']>,
+): string {
+  const lower = `${input.postText} ${input.coreDetail}`.toLowerCase()
+
+  if (style === 'technical-diagram') {
+    if (/\b(idempotency|retry|duplicate)\b/.test(lower)) {
+      return 'a request-retry loop with a dedupe key ledger blocking duplicate writes'
+    }
+    if (/\b(render|useeffect|side-effect|bundle)\b/.test(lower)) {
+      return 'a render pipeline where side-effects are moved out of the render path'
+    }
+    if (/\b(fallback|handoff|confidence|agent)\b/.test(lower)) {
+      return 'a decision tree with confidence gate and explicit human fallback branch'
+    }
+    return 'a system flow map with one failure seam highlighted and corrected path annotated'
+  }
+
+  if (style === 'minimal-data') {
+    if (/\b(context window|retrieval|hallucination|rag)\b/.test(lower)) {
+      return 'context quality vs hallucination rate as a single two-axis relationship'
+    }
+    return 'one measurable relationship showing cause and effect'
+  }
+
+  if (style === 'object-composition') {
+    if (/\b(kubernetes|service mesh|operator|tooling|complexity)\b/.test(lower)) {
+      return 'a stack of tooling layers with excess layers removed to reveal a stable core'
+    }
+    return 'two competing objects arranged to show a clear tradeoff'
+  }
+
+  if (style === 'typographic') {
+    if (/\b(hiring|leadership|manager|team)\b/.test(lower)) {
+      return 'the contrast between hiring fast and hiring well'
+    }
+    return 'one primary claim paired with a short qualifying counterpoint'
+  }
+
+  if (style === 'visual-metaphor') {
+    if (/\b(failure|mistake|wrong|backfire)\b/.test(lower)) {
+      return 'a controlled failure point redirected into a safer path'
+    }
+    return 'a single metaphor showing mechanism, tension, and consequence'
+  }
+
+  return summarizeForImage(input.coreDetail)
 }
 
 /**
@@ -155,7 +285,26 @@ function summarizeForImage(text: string): string {
  * Returns true if the concept passes originality checks.
  */
 export function isVisualConceptOriginal(imagePrompt: string): boolean {
-  return !OVERUSED_VISUALS.some(pattern => pattern.test(imagePrompt))
+  const sanitized = stripNegativeConstraintMentions(imagePrompt)
+  return !OVERUSED_VISUALS.some(pattern => pattern.test(sanitized))
+}
+
+function stripNegativeConstraintMentions(text: string): string {
+  const negativePatterns = [
+    /\bno\s+people\b/gi,
+    /\bno\s+generic\s+ai\s+imagery\b/gi,
+    /\bno\s+stock\s+photos?\b/gi,
+    /\bno\s+robots?\b/gi,
+    /\bno\s+floating\s+code\b/gi,
+    /\bno\s+motivational\s+quote\s+cards?\b/gi,
+    /\bno\s+laptops?\s+on\s+tables?\b/gi,
+  ]
+
+  let cleaned = text
+  for (const pattern of negativePatterns) {
+    cleaned = cleaned.replace(pattern, '')
+  }
+  return cleaned
 }
 
 /**
