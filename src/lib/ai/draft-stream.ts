@@ -1,10 +1,11 @@
 import type { Profile, ProofItem } from '@/lib/domain/types'
 import type { SelfCheck, DraftResult, DraftInput, DraftVariant, DraftCallLog } from '@/lib/ai/draft'
 import { baseDraftSystem, buildCorrectiveFeedback, buildUserPrompt, generateDraft } from '@/lib/ai/draft'
-import { buildLongcatDraftChain, buildOpenaiDraftChain, pickDraftChain, tier2Chain, shouldEscalateToPremium } from '@/lib/ai/routing'
+import { shouldEscalateToPremium, type CostTierName } from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
-import { streamChatText, structuredJsonChain } from '@/lib/ai/provider'
 import { sanitizeDraft } from '@/lib/facts/sanitize'
+import { generate as runtimeGenerate } from '@/lib/ai/runtime'
+import { streamChatText } from '@/lib/ai/provider'
 
 export type DraftStreamEvent =
   | { type: 'status'; message: string }
@@ -68,11 +69,10 @@ export async function streamDraft(
   const msRemaining = () => VERCEL_HOBBY_TIMEOUT_MS - (Date.now() - streamStart)
   const hasTimeForAttempt = (minMs: number) => msRemaining() > minMs
 
-  emit({ type: 'status', message: 'Reading the profile' })
   emit({ type: 'profile', profile })
 
   if (!hasProvider()) {
-    emit({ type: 'status', message: 'Drafting in your voice' })
+    emit({ type: 'status', message: 'Writing message...' })
     const demo = await generateDraft(input)
     emit({ type: 'draft', chunk: demo.draftText })
     emit({ type: 'selfcheck', pass: demo.passed, selfCheck: demo.selfCheck })
@@ -90,25 +90,32 @@ export async function streamDraft(
   const system = baseDraftSystem(input.styleCard, input.facts)
   const user = buildUserPrompt(input)
   const callLog: DraftCallLog[] = []
-  // High value: canonical score >= 70 (0-100), or legacy score >= 10 (0-12)
   const scoreForGate = input.canonicalScore ?? input.score.total
   const isHighValue = scoreForGate >= 70 || (input.score.total >= 10 && input.score.total <= 12)
 
-  // Chain selection based on generation mode:
-  // - Standard: LongCat first → Groq fallback → GPT escalation only on quality failure
-  // - Premium: GPT first → LongCat fallback → Groq fallback
-  const primaryChain = generationMode === 'premium' ? buildOpenaiDraftChain() : buildLongcatDraftChain()
-  const escalationChain = generationMode === 'premium' ? buildLongcatDraftChain() : buildOpenaiDraftChain()
-  const fallbackChain = pickDraftChain()
+  // Route through runtime for health-aware provider selection
+  const taskClass = isHighValue ? 'DEEP_WRITING' : 'INTERACTIVE_WRITING'
 
-  emit({ type: 'status', message: 'Drafting in your voice...' })
-  emit({ type: 'attempt', attempt: 1, model: generationMode === 'premium' ? 'openai' : 'longcat', tier: 'strong' })
+  // Contextual status messages based on message type (no model/tier details)
+  const statusMessage = input.type === 'connection' ? 'Writing connection note...'
+    : input.type === 'reply' ? 'Preparing reply...'
+    : input.type === 'followup' ? 'Writing follow-up...'
+    : 'Writing message...'
+  emit({ type: 'status', message: statusMessage })
 
-  // Attempt 1: Primary writer — timeout depends on remaining time.
-  const attempt1Timeout = Math.min(8_000, Math.max(3_000, msRemaining() - 2_000))
-  const rawA = await structuredJsonChain<RawVariant>(primaryChain, { system, user, schema: DRAFT_SCHEMA }, undefined, attempt1Timeout)
+  // Attempt 1: Runtime handles provider routing (OpenCode Go → Groq → GPT → LongCat)
+  const attempt1Timeout = Math.min(12_000, Math.max(5_000, msRemaining() - 2_000))
+  const rawA = await runtimeGenerate<RawVariant>({
+    task: taskClass,
+    system,
+    user,
+    schema: DRAFT_SCHEMA as unknown as Record<string, unknown>,
+    maxTokens: 1024,
+    temperature: 0.7,
+    signal: new AbortSignal(), // Timeout handled by runtime
+  })
     .then((r) => {
-      callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
+      callLog.push({ costTier: (r.trace.costTier || 'tier1') as CostTierName, host: r.trace.provider, estimatedCostUsd: r.trace.estimatedCostUsd })
       return r.data
     })
     .catch(() => null)
@@ -116,12 +123,12 @@ export async function streamDraft(
   const variantA = rawA ? normalizeVariant(rawA, input) : null
 
   if (variantA?.passed) {
-    return await streamFinalDraft(input, emit, matchedProof, variantA, null, 'LongCat passed quality gates.', callLog)
+    return await streamFinalDraft(input, emit, matchedProof, variantA, null, 'Passed quality gates.', callLog)
   }
 
-  // Attempt 2: corrective retry on Groq with feedback — skip if running low on time
+  // Attempt 2: Corrective retry with feedback
   if (!hasTimeForAttempt(4_000)) {
-    emit({ type: 'status', message: 'Finalizing with best effort...' })
+    emit({ type: 'status', message: 'Finalizing...' })
     const best = variantA ?? null
     if (best) return await streamFinalDraft(input, emit, matchedProof, best, null, 'Best effort (time budget exhausted).', callLog)
   }
@@ -135,8 +142,8 @@ export async function streamDraft(
   })
 
   if (escalationDecision.shouldEscalate || isHighValue) {
-    emit({ type: 'status', message: 'Refining after first attempt...' })
-    emit({ type: 'attempt', attempt: 2, model: 'groq-retry', tier: 'cheap' })
+    emit({ type: 'status', message: 'Refining draft...' })
+
     const feedback = variantA ? buildCorrectiveFeedback(
       {
         output: {
@@ -150,54 +157,24 @@ export async function streamDraft(
       },
       input,
     ) : null
-    const rawB = await structuredJsonChain<RawVariant>(fallbackChain, {
+
+    const rawB = await runtimeGenerate<RawVariant>({
+      task: 'DEEP_WRITING',
       system,
       user: feedback ? `${user}\n\n${feedback}` : user,
-      schema: DRAFT_SCHEMA,
+      schema: DRAFT_SCHEMA as unknown as Record<string, unknown>,
+      maxTokens: 1024,
+      temperature: 0.5,
     })
       .then((r) => {
-        callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
+        callLog.push({ costTier: (r.trace.costTier || 'tier1') as CostTierName, host: r.trace.provider, estimatedCostUsd: r.trace.estimatedCostUsd })
         return r.data
       })
       .catch(() => null)
 
     const variantB = rawB ? normalizeVariant(rawB, input) : null
     if (variantB?.passed) {
-      return await streamFinalDraft(input, emit, matchedProof, variantB, variantA, 'Refined after first attempt failed self-check.', callLog, escalationDecision.reason)
-    }
-
-    // Attempt 3: Escalation to the other chain
-    if (escalationChain.length > 0 && (escalationDecision.shouldEscalate || generationMode === 'premium')) {
-      emit({ type: 'status', message: 'Escalating to stronger model...' })
-      emit({ type: 'attempt', attempt: 3, model: 'gpt-escalation', tier: 'strong' })
-      const gptFeedback = (variantA || variantB) ? buildCorrectiveFeedback(
-        {
-          output: {
-            draft: (variantA ?? variantB)!.draftText,
-            test_1_reply_or_delete: (variantA ?? variantB)!.selfCheck.test1ReplyOrDelete,
-            test_1_note: (variantA ?? variantB)!.selfCheck.test1Note,
-            test_2_not_generic: (variantA ?? variantB)!.selfCheck.test2NotGeneric,
-            test_2_note: (variantA ?? variantB)!.selfCheck.test2Note,
-          },
-          codeChecks: (variantA ?? variantB)!.selfCheck.codeChecks,
-        },
-        input,
-      ) : null
-      const rawC = await structuredJsonChain<RawVariant>(escalationChain, {
-        system,
-        user: gptFeedback ? `${user}\n\n${gptFeedback}` : user,
-        schema: DRAFT_SCHEMA,
-      })
-        .then((r) => {
-          callLog.push({ costTier: r.costTier, host: r.host, estimatedCostUsd: r.estimatedCostUsd })
-          return r.data
-        })
-        .catch(() => null)
-
-      const variantC = rawC ? normalizeVariant(rawC, input) : null
-      if (variantC) {
-        return await streamFinalDraft(input, emit, matchedProof, variantC, variantA ?? variantB, 'Escalated to GPT: cheaper tiers failed quality gates.', callLog, escalationDecision.reason)
-      }
+      return await streamFinalDraft(input, emit, matchedProof, variantB, variantA, 'Refined after first attempt.', callLog, escalationDecision.reason)
     }
   }
 
@@ -265,13 +242,20 @@ async function streamFinalDraft(
     })
   }
 
+  // Report the provider that actually produced the accepted output
+  // The callLog entry for the winning attempt is the LAST one (most recent)
+  const winningCall = callLog.length > 0 ? callLog[callLog.length - 1] : null
+  const modelUsed = winningCall
+    ? `${winningCall.host}${winningCall.costTier ? ` (${winningCall.costTier})` : ''}`
+    : 'unknown'
+
   const draft: DraftResult = {
     leadId: input.leadId,
     type: input.type,
     draftText: primary.draftText,
     selfCheck: { ...primary.selfCheck, qualityGateReasons },
     passed: qualityGatePassed,
-    modelUsed: callLog.map((c) => `${c.costTier}:${c.host}`).join(', ') || 'unknown',
+    modelUsed,
     attempts: callLog.length,
     strippedNumbers: primary.strippedNumbers,
     hadEmDash: primary.hadEmDash,
@@ -306,6 +290,11 @@ function buildDeterministicFallback(input: DraftInput, callLog: DraftCallLog[]):
   const sanitized = sanitizeDraft(draftText, input.facts)
   const passed = Boolean(codeChecks.companyMentioned && codeChecks.specificEvidenceMentioned && sanitized.strippedNumbers.length === 0 && !sanitized.requestedCall)
 
+  const lastCall = callLog.length > 0 ? callLog[callLog.length - 1] : null
+  const modelUsed = lastCall
+    ? `${lastCall.host}${lastCall.costTier ? ` (${lastCall.costTier})` : ''}`
+    : 'deterministic-fallback'
+
   return {
     leadId: input.leadId,
     type: input.type,
@@ -320,7 +309,7 @@ function buildDeterministicFallback(input: DraftInput, callLog: DraftCallLog[]):
       codeChecks,
     },
     passed,
-    modelUsed: callLog.map((c) => `${c.costTier}:${c.host}`).join(', ') || 'deterministic-fallback',
+    modelUsed,
     attempts: callLog.length,
     strippedNumbers: sanitized.strippedNumbers,
     hadEmDash: sanitized.hadEmDash,

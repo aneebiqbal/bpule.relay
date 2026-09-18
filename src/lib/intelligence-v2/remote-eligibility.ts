@@ -18,10 +18,17 @@ import type {
 // ── Workplace Type Detection ───────────────────────────────────────────────
 
 const REMOTE_FULL = /\b(remote|work from home|work from anywhere|fully remote|100% remote|location independent|distributed team|distributed workforce|fully distributed)\b/i
-const REMOTE_US_ANYWHERE = /\b(us[- ]?wide|united states[- ]only|anywhere in the us|anywhere in the usa|continental us|contiguous us|48 states|lower 48|us only|usa only|american[- ]only)\b/i
-const REMOTE_UK_ANYWHERE = /\b(uk[- ]?wide|united kingdom|anywhere in the uk|anywhere in england)\b/i
+const REMOTE_US_ANYWHERE = /\b(us[- ]?wide|anywhere in the us|anywhere in the usa|continental us|contiguous us|48 states|lower 48|us only|usa only|american[- ]only)\b/i
+const REMOTE_UK_ANYWHERE = /\b(uk[- ]?wide|anywhere in the uk|anywhere in england)\b/i
 const REMOTE_EU_ONLY = /\b(eu only|european union only|eea only|eu\/eea|europe only)\b/i
 const REMOTE_COUNTRY_RESTRICTED = /\b((?:only|must be (?:in|based in|located in|resident in))\s+(?:the\s+)?(?:us|usa|united states|uk|united kingdom|canada|australia|germany|netherlands|switzerland|singapore|uae))\b/i
+// Employer restriction patterns — ONLY match explicit employer language like
+// "we only hire US workers", "must be based in UK". Does NOT match
+// "looking for roles in UK" (that's job seeker preference, not restriction).
+const EMPLOYER_ONLY_HIRE = /\b(we only hire|only hiring|must be based in|must reside in|only accept(?:ing)? applications? from|only for (?:us|uk|eu) (?:residents|citizens|workers)|restricted to (?:us|uk|eu))\b/i
+
+// Job seeker context detection — when present, geography = person's preference
+export const JOB_SEEKER_MARKERS = /\b(open to work|looking for (?:a |remote | )?(?:job|role|position|opportunity|work|employment)|seeking (?:a |remote | )?(?:job|role|position|opportunity)|#OpenToWork|available for (?:freelance|contract|remote)|available for hire|looking to (?:join|work|relocate))\b/i
 const HYBRID = /\b(hybrid|part[- ]?remote|partial remote|office days|in[- ]?office|split between|\d+\s*days?\s*(?:\/\s*week)?\s*(?:in|at).{0,20}\boffice\b)\b/i
 const ONSITE = /\b(on[- ]?site|onsite|in[- ]?person|in[- ]?office|at our (?:office|headquarters|location)|based in (?:the )?(?:office|hq))\b/i
 const IMPLICIT_REMOTE_ASK = /\b(looking for|need (?:a|an|someone|help)?|seeking|dm me|reach out|contract|freelance|engagement|project basis|upwork|proposal)\b/i
@@ -111,6 +118,13 @@ export interface RemoteEligibilityInput {
   requiredWorkerLocation?: string | null
   /** Job title for context */
   title?: string | null
+  /**
+   * Source context determines how geography is interpreted.
+   * - 'employer_post': geography = employer restriction (bad for scoring)
+   * - 'job_seeker_profile': geography = person's preference (neutral/positive)
+   * - 'unknown': auto-detect from text content
+   */
+  sourceContext?: 'employer_post' | 'job_seeker_profile' | 'unknown'
 }
 
 export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEligibility {
@@ -148,23 +162,23 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
   let restrictedCountries: string[] = []
   let timezoneRequirement: string | null = null
 
+  // Detect job seeker context — geography in a job seeker profile means
+  // "I want to work here", NOT "employer restricts to this location".
+  const isJobSeeker = input.sourceContext === 'job_seeker_profile' ||
+    (input.sourceContext !== 'employer_post' && JOB_SEEKER_MARKERS.test(text))
+
   if (remoteScope === 'UNKNOWN') {
     if (WORLDWIDE_REMOTE.test(text)) {
       remoteScope = 'WORLDWIDE'
       evidence.push('Position is explicitly worldwide/global.')
-    } else if (REMOTE_US_ANYWHERE.test(text)) {
+    } else if (!isJobSeeker && EMPLOYER_ONLY_HIRE.test(text)) {
+      // Only treat as employer restriction if NOT a job seeker profile
       remoteScope = 'COUNTRY_RESTRICTED'
-      restrictedCountries = ['US']
-      evidence.push('Restricted to US-based workers.')
-    } else if (REMOTE_UK_ANYWHERE.test(text)) {
-      remoteScope = 'COUNTRY_RESTRICTED'
-      restrictedCountries = ['UK']
-      evidence.push('Restricted to UK-based workers.')
-    } else if (REMOTE_EU_ONLY.test(text)) {
-      remoteScope = 'REGION_RESTRICTED'
-      restrictedCountries = ['EU']
-      evidence.push('Restricted to EU/EEA workers.')
-    } else if (REMOTE_COUNTRY_RESTRICTED.test(text)) {
+      for (const { pattern, country } of COUNTRY_RESTRICTIONS) {
+        if (pattern.test(text)) restrictedCountries.push(country)
+      }
+      evidence.push(`Worker location restricted to: ${restrictedCountries.join(', ')}.`)
+    } else if (!isJobSeeker && REMOTE_COUNTRY_RESTRICTED.test(text)) {
       remoteScope = 'COUNTRY_RESTRICTED'
       for (const { pattern, country } of COUNTRY_RESTRICTIONS) {
         if (pattern.test(text)) {
@@ -241,25 +255,37 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
     eligibility = 'ELIGIBLE'
     reason = 'Explicitly open to Pakistan-based workers.'
   } else if (workplaceType === 'ONSITE' && input.requiredWorkerLocation && !pakistanAllowed) {
-    // Check if on-site is required at a location outside Pakistan
-    const onSiteLocation = input.requiredWorkerLocation.toLowerCase()
-    const isPakistanOnsite = /\b(pakistan|karachi|lahore|islamabad|peshawar|quetta|faisalabad|multan|rawalpindi)\b/i.test(onSiteLocation)
-    if (isPakistanOnsite) {
+    // EVIDENCE OWNERSHIP: Job seeker location preference is NOT an employer restriction.
+    // Only treat as INELIGIBLE if this is explicitly an employer post, not a person's profile.
+    if (input.sourceContext === 'job_seeker_profile') {
       eligibility = 'ELIGIBLE'
-      reason = 'On-site role in Pakistan — local engagement possible.'
+      reason = 'Job seeker location preference — not an employer restriction. Candidate is open to opportunities.'
     } else {
-      eligibility = 'INELIGIBLE'
-      reason = `On-site role required in ${input.requiredWorkerLocation} — not compatible with Pakistan-based remote work.`
+      const onSiteLocation = input.requiredWorkerLocation.toLowerCase()
+      const isPakistanOnsite = /\b(pakistan|karachi|lahore|islamabad|peshawar|quetta|faisalabad|multan|rawalpindi)\b/i.test(onSiteLocation)
+      if (isPakistanOnsite) {
+        eligibility = 'ELIGIBLE'
+        reason = 'On-site role in Pakistan — local engagement possible.'
+      } else {
+        eligibility = 'INELIGIBLE'
+        reason = `On-site role required in ${input.requiredWorkerLocation} — not compatible with Pakistan-based remote work.`
+      }
     }
   } else if (workplaceType === 'HYBRID' && input.requiredWorkerLocation && !pakistanAllowed) {
-    const hybridLocation = input.requiredWorkerLocation.toLowerCase()
-    const isPakistanHybrid = /\b(pakistan|karachi|lahore|islamabad)\b/i.test(hybridLocation)
-    if (isPakistanHybrid) {
-      eligibility = 'LIKELY_ELIGIBLE'
-      reason = `Hybrid role based in ${input.requiredWorkerLocation} — local presence possible.`
+    // EVIDENCE OWNERSHIP: Same guard for hybrid roles — person preference ≠ employer requirement.
+    if (input.sourceContext === 'job_seeker_profile') {
+      eligibility = 'ELIGIBLE'
+      reason = 'Job seeker location preference — not an employer restriction. Candidate is open to opportunities.'
     } else {
-      eligibility = 'INELIGIBLE'
-      reason = `Hybrid role requires presence in ${input.requiredWorkerLocation} — not compatible with Pakistan-based remote work.`
+      const hybridLocation = input.requiredWorkerLocation.toLowerCase()
+      const isPakistanHybrid = /\b(pakistan|karachi|lahore|islamabad)\b/i.test(hybridLocation)
+      if (isPakistanHybrid) {
+        eligibility = 'LIKELY_ELIGIBLE'
+        reason = `Hybrid role based in ${input.requiredWorkerLocation} — local presence possible.`
+      } else {
+        eligibility = 'INELIGIBLE'
+        reason = `Hybrid role requires presence in ${input.requiredWorkerLocation} — not compatible with Pakistan-based remote work.`
+      }
     }
   } else if (workplaceType === 'REMOTE' && remoteScope === 'WORLDWIDE') {
     eligibility = 'ELIGIBLE'
@@ -268,7 +294,12 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
     eligibility = 'ELIGIBLE'
     reason = 'Remote with no geographic restrictions — eligible from Pakistan.'
   } else if (workplaceType === 'REMOTE' && remoteScope === 'COUNTRY_RESTRICTED') {
-    if (restrictedCountries.includes('PK') || pakistanAllowed) {
+    // EVIDENCE OWNERSHIP: If this is a job seeker profile, "restricted" countries
+    // are the person's own preferences, not employer requirements.
+    if (input.sourceContext === 'job_seeker_profile') {
+      eligibility = 'ELIGIBLE'
+      reason = 'Job seeker is open to opportunities in these locations — Pakistan-based team can engage as a remote service provider.'
+    } else if (restrictedCountries.includes('PK') || pakistanAllowed) {
       eligibility = 'ELIGIBLE'
       reason = 'Pakistan explicitly allowed.'
     } else if (restrictedCountries.some((c) => ['US', 'UK', 'CA', 'AU', 'DE', 'NL', 'CH'].includes(c))) {
@@ -279,6 +310,11 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
       reason = `Restricted to ${restrictedCountries.join(', ')} — verify Pakistan eligibility.`
     }
   } else if (workplaceType === 'REMOTE' && remoteScope === 'REGION_RESTRICTED') {
+    // EVIDENCE OWNERSHIP: Same guard — region restrictions from job seeker text are preferences.
+    if (input.sourceContext === 'job_seeker_profile') {
+      eligibility = 'ELIGIBLE'
+      reason = 'Job seeker region preference — not an employer restriction.'
+    } else if (restrictedCountries.includes('EU')) {
     if (restrictedCountries.includes('EU')) {
       eligibility = 'INELIGIBLE'
       reason = 'Restricted to EU/EEA workers — Pakistan is not in the EU/EEA.'

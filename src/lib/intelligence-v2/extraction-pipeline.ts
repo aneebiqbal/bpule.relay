@@ -25,9 +25,8 @@ import type {
   EvidenceEntry,
   OpportunitySignal,
 } from './types'
-import { assessRemoteEligibility, type RemoteEligibilityInput } from './remote-eligibility'
-import { buildFastStructuredChain } from '@/lib/ai/routing'
-import { structuredJsonChain } from '@/lib/ai/provider'
+import { assessRemoteEligibility, JOB_SEEKER_MARKERS, type RemoteEligibilityInput } from './remote-eligibility'
+import { generate } from '@/lib/ai/runtime'
 
 // ── Pipeline Options ───────────────────────────────────────────────────────
 
@@ -276,41 +275,26 @@ async function runPassA(
   onStatus?: (msg: string) => void,
   strictLiveMode?: boolean,
 ): Promise<PassAOutput> {
-  // Fast structured chain: Groq 120b → GPT (LongCat excluded — 15-25x slower for extraction)
-  const chain = buildFastStructuredChain()
-
-  if (chain.length === 0) {
-    if (strictLiveMode) {
-      throw new Error('No AI provider available for live extraction (strict mode). Set LONGCAT_API_KEY.')
-    }
-    callLog.push({
-      provider: 'demo',
-      model: 'deterministic_fallback',
-      task: 'extract_pass_a',
-      latencyMs: 0,
-      fallback: true,
-    })
-    return demoPassA(rawText)
-  }
-
   onStatus?.('Analyzing prospect')
   const startTime = Date.now()
 
   try {
-    const result = await structuredJsonChain<unknown>(chain, {
+    const result = await generate<unknown>({
+      task: 'FAST_STRUCTURED',
       system: PASS_A_SYSTEM,
       user: buildPassAUserPrompt(rawText, sourceUrls),
       schema: PASS_A_SCHEMA,
       schemaName: 'intelligence_pass_a',
       maxTokens: 1024,
-    }, undefined, FAST_STRUCTURED_TIMEOUT_MS)
+      onStatus,
+    })
 
     callLog.push({
-      provider: result.host,
-      model: result.host,
+      provider: result.trace.provider,
+      model: result.trace.model,
       task: 'extract_pass_a',
-      latencyMs: Date.now() - startTime,
-      fallback: result.costTier === 'tier4',
+      latencyMs: result.trace.latencyMs,
+      fallback: result.trace.fallback,
     })
 
     const validated = validatePassA(result.data)
@@ -795,23 +779,6 @@ async function runPassC(
   onStatus?: (msg: string) => void,
   strictLiveMode?: boolean,
 ): Promise<Pick<NormalizedIntelligence, 'probableNeed' | 'opportunityTrigger' | 'timingSignal' | 'risks' | 'unknowns'>> {
-  // Fast structured chain: Groq 120b → GPT (LongCat excluded — 15-25x slower for extraction)
-  const chain = buildFastStructuredChain()
-
-  if (chain.length === 0) {
-    if (strictLiveMode) {
-      throw new Error('No AI provider available for live extraction (strict mode). Set LONGCAT_API_KEY.')
-    }
-    callLog.push({
-      provider: 'demo',
-      model: 'deterministic_fallback',
-      task: 'intelligence_pass_c',
-      latencyMs: 0,
-      fallback: true,
-    })
-    return demoPassC(passA)
-  }
-
   // Pass C is only needed for risks/unknowns when deterministic fallback is insufficient.
   // If Pass A produced signals + we have person/company, skip the AI call.
   const hasSignals = passA.opportunity.signals.length > 0
@@ -836,20 +803,22 @@ async function runPassC(
   const startTime = Date.now()
 
   try {
-    const result = await structuredJsonChain<unknown>(chain, {
+    const result = await generate<unknown>({
+      task: 'FAST_STRUCTURED',
       system: PASS_C_SYSTEM,
       user: buildPassCPrompt(passA, intelligence),
       schema: PASS_C_SCHEMA,
       schemaName: 'intelligence_pass_c',
       maxTokens: 512,
-    }, undefined, FAST_STRUCTURED_TIMEOUT_MS)
+      onStatus,
+    })
 
     callLog.push({
-      provider: result.host,
-      model: result.host,
+      provider: result.trace.provider,
+      model: result.trace.model,
       task: 'intelligence_pass_c',
-      latencyMs: Date.now() - startTime,
-      fallback: result.costTier === 'tier4',
+      latencyMs: result.trace.latencyMs,
+      fallback: result.trace.fallback,
     })
 
     const validated = validatePassC(result.data)
@@ -1461,9 +1430,13 @@ export async function runIntelligencePipeline(
   }
 
   // Assess remote eligibility (deterministic, no AI needed)
+  // Detect if this is a job seeker profile to avoid misinterpreting
+  // "looking for roles in UK" as "employer restricts to UK"
+  const isJobSeekerText = JOB_SEEKER_MARKERS.test(rawText)
   const remoteEligibility = assessRemoteEligibility({
     rawText,
     requiredWorkerLocation: null, // Will be refined from extraction
+    sourceContext: isJobSeekerText ? 'job_seeker_profile' : 'unknown',
   })
 
   // Pass A: Extract
@@ -1479,6 +1452,7 @@ export async function runIntelligencePipeline(
         rawText,
         statedWorkplaceType: passA.job.workplaceType as RemoteEligibilityInput['statedWorkplaceType'],
         requiredWorkerLocation: passA.job.allowedGeography,
+        sourceContext: isJobSeekerText ? 'job_seeker_profile' : 'unknown',
       })
     : remoteEligibility
 

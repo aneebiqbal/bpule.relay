@@ -119,6 +119,8 @@ export interface AiTrace {
   provider: string
   model: string
   credentialId: string
+  /** Cost tier label (e.g. 'tier1', 'tier4') for usage dashboards */
+  costTier?: string
   attempt: number
   inputTokens: number
   outputTokens: number
