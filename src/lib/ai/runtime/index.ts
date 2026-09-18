@@ -165,10 +165,19 @@ export async function generate<T = Record<string, unknown>>(
   const errors: Array<{ provider: string; model: string; error: string }> = []
   const skippedProviders: Array<{ provider: string; model: string; reason: string }> = []
   const RUNTIME_VERSION = 'runtime-v3'
+  const user = options.schema && !/\bjson\b/i.test(options.user)
+    ? `${options.user}\n\nRespond with a single JSON object only.`
+    : options.user
+  const useJson = Boolean(options.schema) && !options.onChunk
 
   for (let i = 0; i < chain.length; i++) {
     const step = chain[i]
     const resolved = step.modelResolver(options.modelOverride)
+
+    if (!providerHasCredentials(step.provider)) {
+      skippedProviders.push({ provider: resolved.provider, model: resolved.model, reason: 'missing_credentials' })
+      continue
+    }
 
     // Skip unhealthy providers
     if (!isAvailable(resolved.provider, resolved.model, step.credentialId)) {
@@ -192,10 +201,10 @@ export async function generate<T = Record<string, unknown>>(
     try {
       let result: ProviderResult<unknown>
 
-      if (profile.outputMode === 'json_object' && !options.stream) {
+      if (useJson || (profile.outputMode === 'json_object' && !options.stream && !options.onChunk)) {
         const params: JsonCallParams = {
           system: options.system,
-          user: options.user,
+          user,
           schema: options.schema,
           schemaName: options.schemaName,
           maxTokens,
@@ -207,7 +216,7 @@ export async function generate<T = Record<string, unknown>>(
       } else {
         const params: TextCallParams = {
           system: options.system,
-          user: options.user,
+          user,
           maxTokens,
           temperature,
           onChunk: options.onChunk,
@@ -318,6 +327,16 @@ async function callTextByProvider(
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function providerHasCredentials(provider: string): boolean {
+  switch (provider) {
+    case 'opencode': return hasOpenCode()
+    case 'groq': return hasGroq()
+    case 'openai': return hasOpenAi()
+    case 'longcat': return hasLongCat()
+    default: return false
+  }
+}
 
 function defaultTemperature(task: TaskClass): number {
   switch (task) {

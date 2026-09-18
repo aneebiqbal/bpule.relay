@@ -32,7 +32,7 @@ export const JOB_SEEKER_MARKERS = /\b(open to work|looking for (?:a |remote | )?
 const HYBRID = /\b(hybrid|part[- ]?remote|partial remote|office days|in[- ]?office|split between|\d+\s*days?\s*(?:\/\s*week)?\s*(?:in|at).{0,20}\boffice\b)\b/i
 const ONSITE = /\b(on[- ]?site|onsite|in[- ]?person|in[- ]?office|at our (?:office|headquarters|location)|based in (?:the )?(?:office|hq))\b/i
 const IMPLICIT_REMOTE_ASK = /\b(looking for|need (?:a|an|someone|help)?|seeking|dm me|reach out|contract|freelance|engagement|project basis|upwork|proposal)\b/i
-const TECH_ROLE_HINT = /\b(developer|engineer|full[- ]?stack|backend|frontend|software|app|platform|rails|react|node|python|api|extension|devops|architect)\b/i
+const TECH_ROLE_HINT = /\b(developer|engineer|full[- ]?stack|backend|frontend|software|app|platform|rails|react(?!ion)|node|python|api|extension|devops|architect)\b/i
 
 // ── Timezone Detection ─────────────────────────────────────────────────────
 
@@ -60,7 +60,7 @@ const COUNTRY_RESTRICTIONS: Array<{ pattern: RegExp; country: string }> = [
 ]
 
 const EXPLICIT_PAKISTAN_ALLOWED = /\b(pakistan|pakistani|pkt)\b/i
-const WORLDWIDE_REMOTE = /\b(worldwide|anywhere|global|all countries|no location restriction|no geographic restriction|regardless of location)\b/i
+const WORLDWIDE_REMOTE = /\b(?:work from anywhere|no location restriction|no geographic restriction|regardless of location|all countries|hire[sd]? (?:worldwide|globally)|(?:fully\s+)?remote(?:ly)?(?:\W+\w+){0,4}\W+(?:worldwide|globally|anywhere)|worldwide\s+remote)\b/i
 
 // ── PKT Overlap Calculation ────────────────────────────────────────────────
 

@@ -13,6 +13,8 @@ import { classifyLeadFact } from '@/lib/relay/profile-intelligence'
 import { buildConnectionNoteStrategy } from '@/lib/prospect/strategy'
 import { validateAndRepair, normalizeGreeting, CONNECTION_NOTE_MAX_CHARS } from '@/lib/prospect/connection-note'
 import { evaluateProspectQualification } from '@/lib/prospect/qualification-gate'
+import { classifyRoleFromTitle } from '@/lib/leads/targeting-pure'
+import { isLinkedInChromeText } from '@/lib/intelligence-v2/role-signals'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
 import { produceCanonicalIntelligence, getDisplayScore } from '@/lib/intelligence-v2/orchestrator'
 import { resolveTimezoneFromLocation } from '@/lib/timezone/resolve'
@@ -121,6 +123,80 @@ export async function POST(request: Request) {
     }
 
     const canonical = canonicalResult.intelligence
+    const extracted: ExtractedLead = {
+      name: canonical.intelligence.person.fullName,
+      title: canonical.intelligence.person.title,
+      titleRaw: canonical.intelligence.person.title,
+      company: canonical.intelligence.company.name ?? 'Unknown company',
+      url: canonical.intelligence.person.linkedinUrl ?? canonical.rawSource.sourceUrl,
+      locationRaw: canonical.intelligence.person.location,
+      aboutSummary: null,
+      experienceSummary: null,
+      recentPosts: canonical.intelligence.content.recentPosts
+        .filter((p) => !isLinkedInChromeText(p.paraphrase) && !isLinkedInChromeText(p.verbatimQuote))
+        .map((p) => ({
+          paraphrase: p.paraphrase,
+          verbatimQuote: p.verbatimQuote,
+        })),
+      roleCategory: classifyRoleFromTitle(canonical.intelligence.person.title),
+      marketRegion: 'unknown',
+      signalType: 7,
+      signalEvidence: canonical.intelligence.opportunity.description ?? canonical.intelligence.opportunityTrigger ?? rawText.slice(0, 200),
+      extractionConfidence: canonical.extractionCompleteness.score,
+      confidenceNotes: canonical.scoreBreakdown.missingInfo,
+      verbatimQuote: canonical.intelligence.content.recentPosts.find((p) => !isLinkedInChromeText(p.verbatimQuote))?.verbatimQuote ?? null,
+      tags: [
+        ...canonical.intelligence.content.topics,
+        ...canonical.intelligence.content.technicalSignals,
+        ...(canonical.intelligence.company.industry ? [canonical.intelligence.company.industry] : []),
+      ],
+    }
+
+    if (canonical.qualification === 'skip') {
+      emit({
+        type: 'done',
+        extracted,
+        canonical,
+        score: {
+          total: canonical.canonicalScore,
+          displayScore: getDisplayScore(canonical),
+          label: canonical.scoreBreakdown.label,
+          qualification: canonical.qualification,
+          reasons: canonical.scoreBreakdown.reasons,
+          watchOut: canonical.scoreBreakdown.watchOut,
+          dimensions: canonical.scoreBreakdown.dimensions,
+          missingInfo: canonical.scoreBreakdown.missingInfo,
+        },
+        remoteEligibility: canonical.remoteEligibility,
+        evidenceLedger: canonical.evidenceLedger,
+        sources: {
+          rawSource: canonical.rawSource,
+          urls: canonical.extractionCompleteness.urlsPreserved,
+          sourceUrlsFound: canonical.extractionCompleteness.sourceUrlsFound,
+        },
+        extractionCompleteness: canonical.extractionCompleteness,
+        bestSender: null,
+        bestSenderProof: [],
+        connectionNote: '',
+        charCount: 0,
+        maxChars: CONNECTION_NOTE_MAX_CHARS,
+        quality: { passed: true, failures: [], wasRepaired: false },
+        strategy: {
+          whyConnect: '',
+          relevantObservation: '',
+          forbidden: [],
+          candidateAngles: [],
+        },
+        draftFailed: false,
+        demoMode: !hasProvider(),
+        alternativeSenders: [],
+        qualification: evaluateProspectQualification({ rawText, extracted }),
+        gateNotes: canonicalResult.gateNotes,
+        repairAttempted: canonicalResult.repairAttempted,
+        repairImproved: canonicalResult.repairImproved,
+      })
+      return
+    }
 
     // ── Step 2: Load profiles + match best sender ──
     emit({ type: 'status', message: 'Matching sender profiles' })
@@ -202,29 +278,6 @@ export async function POST(request: Request) {
     }
 
     // ── Step 3: Build connection note strategy ──
-    const extracted: ExtractedLead = {
-      name: canonical.intelligence.person.fullName,
-      title: canonical.intelligence.person.title,
-      titleRaw: canonical.intelligence.person.title,
-      company: canonical.intelligence.company.name ?? 'Unknown company',
-      url: canonical.intelligence.person.linkedinUrl ?? canonical.rawSource.sourceUrl,
-      locationRaw: canonical.intelligence.person.location,
-      aboutSummary: null,
-      experienceSummary: null,
-      recentPosts: canonical.intelligence.content.recentPosts.map((p) => ({
-        paraphrase: p.paraphrase,
-        verbatimQuote: p.verbatimQuote,
-      })),
-      roleCategory: 'other',
-      marketRegion: 'unknown',
-      signalType: 7,
-      signalEvidence: canonical.intelligence.opportunity.description ?? canonical.intelligence.opportunityTrigger ?? rawText.slice(0, 200),
-      extractionConfidence: canonical.extractionCompleteness.score,
-      confidenceNotes: canonical.scoreBreakdown.missingInfo,
-      verbatimQuote: canonical.intelligence.content.recentPosts[0]?.verbatimQuote ?? null,
-      tags: tagsForMatching,
-    }
-
     const connectionStrategy = buildConnectionNoteStrategy(
       extracted,
       bestSender,

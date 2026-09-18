@@ -237,6 +237,7 @@ export function longcatHost(): ProviderHost | null {
 /** True once at least one tier has a usable key; false only in demo mode. */
 export function hasProvider(): boolean {
   return (
+    Boolean(process.env.OPENCODE_API_KEY) ||
     tier0Hosts('cheap').length > 0 ||
     tier1Hosts().length > 0 ||
     tier2Hosts().length > 0 ||

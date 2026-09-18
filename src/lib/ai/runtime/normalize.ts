@@ -83,6 +83,32 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * Groq gpt-oss and some OpenCode models put the usable answer in
+ * `reasoning` / `reasoning_content` and leave `content` empty.
+ */
+export function extractAssistantText(message: unknown): string {
+  if (!message || typeof message !== 'object') return ''
+  const msg = message as Record<string, unknown>
+  const candidates = [msg.content, msg.reasoning_content, msg.reasoning]
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) return value
+  }
+  return ''
+}
+
+export function extractDeltaText(delta: unknown): { content: string; reasoning: string } {
+  if (!delta || typeof delta !== 'object') return { content: '', reasoning: '' }
+  const d = delta as Record<string, unknown>
+  const content = typeof d.content === 'string' ? d.content : typeof d.text === 'string' ? d.text : ''
+  const reasoning = typeof d.reasoning_content === 'string'
+    ? d.reasoning_content
+    : typeof d.reasoning === 'string'
+      ? d.reasoning
+      : ''
+  return { content, reasoning }
+}
+
+/**
  * Coerce null strings and empty values in parsed JSON.
  * Walks the object and converts "null", "NULL", "None", "" to null.
  */

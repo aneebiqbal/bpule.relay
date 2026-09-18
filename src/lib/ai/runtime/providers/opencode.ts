@@ -17,7 +17,7 @@
 
 import type { ProviderModel, JsonCallParams, TextCallParams, ProviderResult } from '../types'
 import { recordSuccess, recordFailure } from '../health'
-import { normalizeJson, coerceNullStrings } from '../normalize'
+import { normalizeJson, coerceNullStrings, extractAssistantText, extractDeltaText } from '../normalize'
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -208,9 +208,8 @@ export async function callJson<T>(
       throw new Error(`OpenCode Go error: ${json.error?.message || 'Unknown error'}`)
     }
 
-    // Some models (kimi, hy) put output in reasoning_content instead of content
-    const msg = json.choices?.[0]?.message
-    const content = msg?.content || msg?.reasoning_content
+    // Some models (kimi, hy, glm) put output in reasoning_content instead of content
+    const content = extractAssistantText(json.choices?.[0]?.message)
     const inputTokens = json.usage?.prompt_tokens || 0
     const outputTokens = json.usage?.completion_tokens || 0
     const latencyMs = Date.now() - t0
@@ -301,6 +300,7 @@ export async function callText(
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
+    let reasoning = ''
 
     while (true) {
       const { done, value } = await reader.read()
@@ -316,16 +316,24 @@ export async function callText(
           if (data === '[DONE]') continue
           try {
             const json = JSON.parse(data)
-            const delta = json.choices?.[0]?.delta?.content ?? json.delta?.text ?? ''
-            if (delta) {
-              full += delta
-              params.onChunk?.(delta)
+            const delta = extractDeltaText(json.choices?.[0]?.delta ?? json.delta)
+            if (delta.content) {
+              full += delta.content
+              params.onChunk?.(delta.content)
             }
+            if (delta.reasoning) reasoning += delta.reasoning
           } catch {
             // Skip malformed frames
           }
         }
       }
+    }
+
+    if (!full.trim() && reasoning.trim()) {
+      full = reasoning
+    }
+    if (!full.trim()) {
+      throw new Error('OpenCode Go returned empty content')
     }
 
     const latencyMs = Date.now() - t0

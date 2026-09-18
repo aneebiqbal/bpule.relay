@@ -7,7 +7,7 @@
 
 import type { ProviderModel, JsonCallParams, TextCallParams, ProviderResult } from '../types'
 import { recordSuccess, recordFailure } from '../health'
-import { normalizeJson, coerceNullStrings } from '../normalize'
+import { normalizeJson, coerceNullStrings, extractAssistantText, extractDeltaText } from '../normalize'
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -103,15 +103,16 @@ export async function callJson<T>(
 
     if (!response.ok) {
       const status = response.status
+      const errorText = await response.text().catch(() => '')
       const failureType = status === 429 ? 'rate_limit' : 'error'
       recordFailure(model.provider, model.model, cred.id, failureType, Date.now() - t0)
 
       if (status === 429) throw new RateLimitedError()
-      throw new Error(`Groq ${status}`)
+      throw new Error(`Groq ${status}: ${errorText.slice(0, 200)}`)
     }
 
     const body = await response.json()
-    const content = body.choices?.[0]?.message?.content
+    const content = extractAssistantText(body.choices?.[0]?.message)
     const inputTokens = body.usage?.prompt_tokens || 0
     const outputTokens = body.usage?.completion_tokens || 0
     const latencyMs = Date.now() - t0
@@ -193,6 +194,7 @@ export async function callText(
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
+    let reasoning = ''
 
     while (true) {
       const { done, value } = await reader.read()
@@ -208,16 +210,24 @@ export async function callText(
           if (data === '[DONE]') continue
           try {
             const json = JSON.parse(data)
-            const delta = json.choices?.[0]?.delta?.content ?? ''
-            if (delta) {
-              full += delta
-              params.onChunk?.(delta)
+            const delta = extractDeltaText(json.choices?.[0]?.delta)
+            if (delta.content) {
+              full += delta.content
+              params.onChunk?.(delta.content)
             }
+            if (delta.reasoning) reasoning += delta.reasoning
           } catch {
             // Skip
           }
         }
       }
+    }
+
+    if (!full.trim() && reasoning.trim()) {
+      full = reasoning
+    }
+    if (!full.trim()) {
+      throw new Error('Groq returned empty content')
     }
 
     const latencyMs = Date.now() - t0

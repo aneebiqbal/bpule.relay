@@ -113,7 +113,6 @@ export async function streamDraft(
     schema: DRAFT_SCHEMA as unknown as Record<string, unknown>,
     maxTokens: 1024,
     temperature: 0.7,
-    signal: new AbortSignal(), // Timeout handled by runtime
   })
     .then((r) => {
       callLog.push({ costTier: (r.trace.costTier || 'tier1') as CostTierName, host: r.trace.provider, estimatedCostUsd: r.trace.estimatedCostUsd })

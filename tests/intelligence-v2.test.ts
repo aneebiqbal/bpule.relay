@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { computeCanonicalScore, checkHardNegatives, SCORE_VERSION, DIMENSION_WEIGHTS } from '@/lib/intelligence-v2/scoring-engine'
 import { assessRemoteEligibility } from '@/lib/intelligence-v2/remote-eligibility'
+import { isClinicianProfile, isLinkedInChromeText, techKeywordMatches } from '@/lib/intelligence-v2/role-signals'
+import { produceCanonicalIntelligence } from '@/lib/intelligence-v2/orchestrator'
 import { scoreLabel, canonicalToDisplay } from '@/lib/intelligence-v2/types'
 import type { NormalizedIntelligence } from '@/lib/intelligence-v2/types'
 
@@ -220,6 +222,69 @@ describe('Hard Negatives', () => {
     expect(score.total).toBeLessThanOrEqual(25)
     expect(score.hardNegatives.length).toBeGreaterThan(0)
   })
+
+  it('does not treat a clinician founder as a student or software buyer', () => {
+    const intelligence = makeIntelligence({
+      person: {
+        ...makeIntelligence().person,
+        fullName: 'Yosief Berhe',
+        firstName: 'Yosief',
+        title: 'PMHNP-BC',
+        seniority: 'Founder',
+      },
+      company: {
+        ...makeIntelligence().company,
+        name: 'Clarity Psychiatry',
+        industry: 'Telehealth',
+      },
+      opportunity: {
+        signals: [],
+        primarySignal: null,
+        description: 'Telehealth psychiatric practice',
+        urgency: 'unknown',
+      },
+      content: {
+        ...makeIntelligence().content,
+        technicalSignals: [],
+        hiringSignals: [],
+        topics: ['Mental Health'],
+      },
+      probableNeed: null,
+    })
+    const score = computeCanonicalScore({
+      intelligence,
+      rawText: 'Founder of Clarity Psychiatry. Psychiatric Nurse Practitioner Intern. Please feel free to reach out.',
+      hasRelevantProof: true,
+      proofMatchStrength: 8,
+      hasCredibleIdentity: true,
+      isReachable: true,
+      resemblesPastWin: true,
+    })
+    expect(score.watchOut.some((w) => /student/i.test(w))).toBe(false)
+    expect(score.watchOut.some((w) => /clinician/i.test(w))).toBe(true)
+    expect(score.label).toBe('Not a fit')
+    expect(score.total).toBeLessThanOrEqual(25)
+  })
+
+  it('does not invent software demand from a clinician LinkedIn paste', async () => {
+    const { intelligence } = await produceCanonicalIntelligence(
+      `Yosief Berhe PMHNP-BC
+PMHNP-BC | Licensed in Oregon & California | Founder of Clarity Psychiatry
+Portland, Oregon Metropolitan Area
+56 reactions · 8 comments
+I'm a board-certified Psychiatric Mental Health Nurse Practitioner and the founder of Clarity Psychiatry.
+Please feel free to reach out.
+I raised my hand and helped.
+Psychiatric Nurse Practitioner Intern`,
+    )
+    expect(intelligence.qualification).toBe('skip')
+    expect(intelligence.intelligence.content.technicalSignals).not.toContain('react')
+    expect(intelligence.intelligence.probableNeed).toBeNull()
+    expect(intelligence.intelligence.opportunity.signals).not.toContain('funding')
+    expect(intelligence.intelligence.opportunity.signals).not.toContain('explicit_ask')
+    expect(intelligence.scoreBreakdown.watchOut.some((w) => /student/i.test(w))).toBe(false)
+    expect(intelligence.scoreBreakdown.watchOut.some((w) => /clinician/i.test(w))).toBe(true)
+  })
 })
 
 // ── Remote Eligibility Tests ────────────────────────────────────────────────
@@ -232,6 +297,14 @@ describe('Remote Eligibility', () => {
     expect(result.eligibility).toBe('ELIGIBLE')
     expect(result.workplaceType).toBe('REMOTE')
     expect(result.remoteScope).toBe('WORLDWIDE')
+  })
+
+  it('does not treat public-health "worldwide" copy as a remote role', () => {
+    const result = assessRemoteEligibility({
+      rawText: 'Anxiety disorders surpassed depression as the leading cause of mental health disability worldwide in 2023. Global anxiety prevalence surged 47%.',
+    })
+    expect(result.remoteScope).not.toBe('WORLDWIDE')
+    expect(result.reason).not.toMatch(/worldwide|global/i)
   })
 
   it('Remote / anywhere → ELIGIBLE', () => {
@@ -477,5 +550,15 @@ describe('Score Stability Invariants', () => {
     const usOnlyScore = computeCanonicalScore({ ...baseInput, intelligence: usOnlyIntel })
 
     expect(worldwideScore.total).toBeGreaterThan(usOnlyScore.total)
+  })
+})
+
+describe('Role signal hygiene', () => {
+  it('does not treat LinkedIn reactions as React', () => {
+    expect(techKeywordMatches('56 reactions · 8 comments', 'react')).toBe(false)
+    expect(techKeywordMatches('We need a React developer', 'react')).toBe(true)
+    expect(isLinkedInChromeText('Posts')).toBe(true)
+    expect(isLinkedInChromeText('Post')).toBe(true)
+    expect(isClinicianProfile('PMHNP-BC', 'Clarity Psychiatry', 'Telehealth')).toBe(true)
   })
 })

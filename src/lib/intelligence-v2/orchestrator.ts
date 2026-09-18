@@ -17,6 +17,7 @@ import { scoreLabel } from './types'
 import { runIntelligencePipeline, type ExtractionPipelineOptions, type ExtractionPipelineResult } from './extraction-pipeline'
 import { assessExtractionCompleteness, repairExtraction, evaluateCompletenessGate } from './completeness-gate'
 import { computeCanonicalScore, SCORE_VERSION, type ScoreInput } from './scoring-engine'
+import { isNonBuyerProfessional } from './role-signals'
 
 // ── Orchestrator Options ───────────────────────────────────────────────────
 
@@ -209,9 +210,18 @@ export async function produceCanonicalIntelligence(
   }
 }
 
+function isNonBuyerIntel(intelligence: import('./types').NormalizedIntelligence): boolean {
+  return isNonBuyerProfessional({
+    title: intelligence.person.title,
+    company: intelligence.company.name,
+    industry: intelligence.company.industry,
+  })
+}
+
 function inferProofAvailability(
   intelligence: import('./types').NormalizedIntelligence,
 ): boolean {
+  if (isNonBuyerIntel(intelligence)) return false
   if (intelligence.content.technicalSignals.length >= 2) return true
   if (intelligence.opportunity.signals.includes('technical_problem')) return true
   if (intelligence.opportunity.signals.includes('migration')) return true
@@ -237,6 +247,7 @@ function inferProofStrength(
 function inferCredibleIdentity(
   intelligence: import('./types').NormalizedIntelligence,
 ): boolean {
+  if (isNonBuyerIntel(intelligence)) return false
   const title = (intelligence.person.title ?? '').toLowerCase()
   if (/\b(founder|ceo|cto|coo|chief|vp|head|director|owner|president)\b/.test(title)) {
     return true
@@ -257,6 +268,7 @@ function inferCredibleIdentity(
 function inferPastWinResemblance(
   intelligence: import('./types').NormalizedIntelligence,
 ): boolean {
+  if (isNonBuyerIntel(intelligence)) return false
   const signals = intelligence.opportunity.signals
   const hasBuyingSignal =
     signals.includes('explicit_ask')

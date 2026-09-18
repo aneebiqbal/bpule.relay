@@ -26,6 +26,15 @@ import type {
   OpportunitySignal,
 } from './types'
 import { assessRemoteEligibility, JOB_SEEKER_MARKERS, type RemoteEligibilityInput } from './remote-eligibility'
+import {
+  clinicianAllowedSignals,
+  isClinicianProfile,
+  isLinkedInChromeText,
+  isNonBuyerProfessional,
+  isRecruiterTitle,
+  recruiterAllowedSignals,
+  techKeywordMatches,
+} from './role-signals'
 import { generate } from '@/lib/ai/runtime'
 
 // ── Pipeline Options ───────────────────────────────────────────────────────
@@ -312,7 +321,7 @@ async function runPassA(
       latencyMs: Date.now() - startTime,
       fallback: true,
     })
-    return demoPassA(rawText)
+    return constrainNonBuyerPassA(demoPassA(rawText), rawText)
   }
 }
 
@@ -432,7 +441,32 @@ function stabilizePassA(rawText: string, sourceUrls: string[], modelPassA: PassA
   if (out.content.recentPosts.length === 0 && heuristic.content.recentPosts.length > 0) {
     out.content.recentPosts = heuristic.content.recentPosts
   }
+  out.content.recentPosts = out.content.recentPosts.filter(
+    (post) => !isLinkedInChromeText(post.paraphrase) && !isLinkedInChromeText(post.verbatimQuote),
+  )
 
+  return constrainNonBuyerPassA(out, rawText)
+}
+
+function constrainNonBuyerPassA(out: PassAOutput, rawText = ''): PassAOutput {
+  const title = out.person.title
+  const recruiter = isRecruiterTitle(title) || isRecruiterTitle(rawText)
+  const clinician = isClinicianProfile(title, out.company.name, `${out.company.industry ?? ''} ${rawText}`)
+  if (!recruiter && !clinician) return out
+
+  if (recruiter) {
+    out.opportunity.signals = recruiterAllowedSignals(out.opportunity.signals as OpportunitySignal[])
+    out.job = null
+  } else {
+    out.opportunity.signals = clinicianAllowedSignals(out.opportunity.signals as OpportunitySignal[])
+    out.job = null
+  }
+  out.opportunity.primarySignal = selectPrimarySignal(out.opportunity.signals as OpportunitySignal[])
+  if (recruiter || clinician) {
+    out.content.technicalSignals = []
+    out.content.explicitProblems = []
+    out.opportunity.urgency = 'unknown'
+  }
   return out
 }
 
@@ -880,6 +914,13 @@ function buildFallbackTrigger(passA: PassAOutput, intelligence: Omit<NormalizedI
 }
 
 function buildFallbackProbableNeed(passA: PassAOutput, intelligence: Omit<NormalizedIntelligence, 'remoteEligibility'>): string | null {
+  if (isNonBuyerProfessional({
+    title: intelligence.person.title ?? passA.person.title,
+    company: intelligence.company.name ?? passA.company.name,
+    industry: intelligence.company.industry ?? passA.company.industry,
+  })) {
+    return null
+  }
   const company = intelligence.company.name ?? passA.company.name ?? 'This company'
   const skills = (intelligence.job?.skills ?? passA.job?.skills ?? intelligence.content.technicalSignals).slice(0, 6)
 
@@ -908,6 +949,17 @@ function stabilizePassC(
     timingSignal: passC.timingSignal,
     risks: [...passC.risks],
     unknowns: [...passC.unknowns],
+  }
+
+  if (isNonBuyerProfessional({
+    title: intelligence.person.title ?? passA.person.title,
+    company: intelligence.company.name ?? passA.company.name,
+    industry: intelligence.company.industry ?? passA.company.industry,
+  })) {
+    out.probableNeed = null
+    if (!out.risks.some((risk) => /not a buyer/i.test(risk))) {
+      out.risks.push('Profile is a clinician, recruiter, or other non-buyer of software delivery.')
+    }
   }
 
   if (!out.probableNeed) {
@@ -1035,15 +1087,12 @@ const TECH_KEYWORDS = [
   '11ty',
 ]
 
-const ASKING_PATTERNS = [
-  /\blooking for\b/i,
-  /\bneed (?:a|an|someone|help)\b/i,
-  /\bwe need\b/i,
-  /\bneeds?\b/i,
-  /\bseeking\b/i,
-  /\bdm me\b/i,
-  /\breach out\b/i,
-  /\bexternal help\b/i,
+const SOFTWARE_ASK_PATTERNS = [
+  /\blooking for\b.{0,80}\b(?:developer|engineer|contractor|freelancer|agency|technical partner|(?:dev|engineering) team|react|node\.?js)\b/i,
+  /\bneed (?:a|an|someone who can|help) (?:build|fix|ship|develop|engineer|integrate|embed)\b/i,
+  /\bwe need (?:a |an )?(?:developer|engineer|contractor|technical|dev)\b/i,
+  /\bseeking (?:a |an )?(?:developer|engineer|contractor|technical cofounder|dev)\b/i,
+  /\bexternal (?:dev|developer|engineering|technical) help\b/i,
 ]
 
 const DEV_ROLE_HINT = /\b(developer|engineer|full[- ]?stack|backend|frontend|software|app|platform|api|architect|devops|contractor|integration)\b/i
@@ -1149,7 +1198,7 @@ function extractSkills(lines: string[], rawText: string): string[] {
 
   const lower = rawText.toLowerCase()
   for (const keyword of TECH_KEYWORDS) {
-    if (lower.includes(keyword)) skills.add(keyword)
+    if (techKeywordMatches(rawText, keyword)) skills.add(keyword)
   }
 
   const cloneMatch = lower.match(/clone of\s+([a-z0-9]+)/)
@@ -1161,7 +1210,6 @@ function extractSkills(lines: string[], rawText: string): string[] {
 }
 
 function extractOpportunitySignals(rawText: string): { signals: OpportunitySignal[]; urgency: 'immediate' | 'near_term' | 'future' | 'unknown' } {
-  const lower = rawText.toLowerCase()
   const signals: OpportunitySignal[] = []
 
   const budgetMatch = rawText.match(/\b(?:budget:\s*)?[\$€£]\s*([0-9]{1,3}(?:,[0-9]{3})*|[0-9]{2,5})(?:\.\d{1,2})?/i)
@@ -1175,18 +1223,18 @@ function extractOpportunitySignals(rawText: string): { signals: OpportunitySigna
     && budgetValue <= 300
     && (oversizedScope || unrealisticTimeline || (proposalCount !== null && proposalCount >= 20))
 
-  const hasTechContext = DEV_ROLE_HINT.test(rawText) || TECH_KEYWORDS.some((k) => lower.includes(k))
-  const explicitAsk = ASKING_PATTERNS.some((p) => p.test(rawText)) && hasTechContext
+  const hasTechContext = DEV_ROLE_HINT.test(rawText) || TECH_KEYWORDS.some((k) => techKeywordMatches(rawText, k))
+  const softwareAsk = SOFTWARE_ASK_PATTERNS.some((p) => p.test(rawText)) && hasTechContext
   const explicitHiring =
     /\b(open roles?)\b/i.test(rawText)
     || /\bhiring\b.{0,50}\b(developer|engineer|contractor|full[- ]?stack|backend|frontend|software)\b/i.test(rawText)
     || /\b(developer|engineer|contractor|full[- ]?stack|backend|frontend|software)\b.{0,50}\bhiring\b/i.test(rawText)
 
-  if (explicitAsk && !nonCredibleFreelanceBrief) signals.push('explicit_ask')
-  if (/(job:|upwork|budget:|proposals?:|contract|freelance)/i.test(rawText) && hasTechContext && !nonCredibleFreelanceBrief) signals.push('freelance_project_need')
-  if (PAIN_PATTERNS.some((p) => p.test(rawText))) signals.push('technical_problem')
+  if (softwareAsk && !nonCredibleFreelanceBrief) signals.push('explicit_ask')
+  if (/(job:|upwork|budget:|proposals?:)/i.test(rawText) && hasTechContext && !nonCredibleFreelanceBrief) signals.push('freelance_project_need')
+  if (PAIN_PATTERNS.some((p) => p.test(rawText)) && hasTechContext) signals.push('technical_problem')
   if (explicitHiring) signals.push('hiring')
-  if (/\b(raised|seed round|series [abc]|funding)\b/i.test(rawText)) signals.push('funding')
+  if (/\b(raised\s+[\$€£\d]|seed round|series [abc]\b|funding round)\b/i.test(rawText)) signals.push('funding')
   if (/\b(migration|migrate|migrated|move from|move to)\b/i.test(rawText)) signals.push('migration')
   if (/\b(rebuild|overhaul|rewrite|re-?platform|production[- ]?ready)\b/i.test(rawText)) signals.push('rebuild')
   if (/\b(growing|scaling|scale|expanding|growth)\b/i.test(rawText)) signals.push('growth_signal')
@@ -1228,7 +1276,7 @@ function selectPrimarySignal(signals: OpportunitySignal[]): OpportunitySignal | 
 
 function extractSignalLine(lines: string[]): string | null {
   for (const line of lines) {
-    if (ASKING_PATTERNS.some((p) => p.test(line)) || PAIN_PATTERNS.some((p) => p.test(line)) || /\b(open roles?|hiring|raised|seed|series|remote|hybrid|on-?site)\b/i.test(line)) {
+    if (SOFTWARE_ASK_PATTERNS.some((p) => p.test(line)) || (PAIN_PATTERNS.some((p) => p.test(line)) && DEV_ROLE_HINT.test(line)) || /\b(open roles?|hiring (?:a |an )?(?:developer|engineer)|seed round|series [abc])\b/i.test(line)) {
       return line.slice(0, 220)
     }
   }
@@ -1294,22 +1342,21 @@ function extractJobFromText(lines: string[], rawText: string, skills: string[]):
 }
 
 function extractContentSignals(lines: string[], rawText: string): PassAOutput['content'] {
-  const lower = rawText.toLowerCase()
-  const technicalSignals = TECH_KEYWORDS.filter((k) => lower.includes(k)).slice(0, 10)
+  const technicalSignals = TECH_KEYWORDS.filter((k) => techKeywordMatches(rawText, k)).slice(0, 10)
 
   const hiringSignals = lines
     .filter((line) =>
       /\b(looking for|open roles?|need|hiring|contractor)\b/i.test(line) &&
-      (DEV_ROLE_HINT.test(line) || TECH_KEYWORDS.some((k) => line.toLowerCase().includes(k))),
+      (DEV_ROLE_HINT.test(line) || TECH_KEYWORDS.some((k) => techKeywordMatches(line, k))),
     )
     .slice(0, 5)
 
   const explicitProblems = lines
-    .filter((line) => PAIN_PATTERNS.some((p) => p.test(line)))
+    .filter((line) => PAIN_PATTERNS.some((p) => p.test(line)) && DEV_ROLE_HINT.test(line))
     .slice(0, 5)
 
   const recentPosts = lines
-    .filter((line) => /\b(post|posts?)\b/i.test(line) || line.startsWith('"') || line.startsWith("'"))
+    .filter((line) => !isLinkedInChromeText(line) && (line.startsWith('"') || line.startsWith("'") || /^“.+"$/.test(line)))
     .slice(0, 3)
     .map((line) => ({
       paraphrase: line.slice(0, 180),
@@ -1382,12 +1429,17 @@ function demoPassA(rawText: string): PassAOutput {
 
 function demoPassC(passA: PassAOutput): Pick<NormalizedIntelligence, 'probableNeed' | 'opportunityTrigger' | 'timingSignal' | 'risks' | 'unknowns'> {
   const signals = passA.opportunity.signals
+  const nonBuyer = isNonBuyerProfessional({
+    title: passA.person.title,
+    company: passA.company.name,
+    industry: passA.company.industry,
+  })
   let probableNeed: string | null = null
-  if (signals.includes('freelance_project_need') || signals.includes('explicit_ask')) {
+  if (!nonBuyer && (signals.includes('freelance_project_need') || signals.includes('explicit_ask'))) {
     probableNeed = 'External software delivery support for an active project need.'
-  } else if (signals.includes('technical_problem')) {
+  } else if (!nonBuyer && signals.includes('technical_problem')) {
     probableNeed = 'Specialized engineering help to resolve a technical issue.'
-  } else if (signals.includes('hiring') || signals.includes('hiring_pressure')) {
+  } else if (!nonBuyer && (signals.includes('hiring') || signals.includes('hiring_pressure'))) {
     probableNeed = 'Additional delivery capacity to keep up with shipping demands.'
   }
 

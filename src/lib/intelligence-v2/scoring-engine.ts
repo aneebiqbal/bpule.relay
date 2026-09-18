@@ -16,6 +16,7 @@ import type {
   OpportunitySignal,
 } from './types'
 import { eligibilityScoreContribution } from './remote-eligibility'
+import { isBuyerLeadership, isClinicianProfile, isRecruiterTitle } from './role-signals'
 
 // ── Scoring Model Version ──────────────────────────────────────────────────
 
@@ -107,24 +108,21 @@ function computeRolePenalty(intelligence: NormalizedIntelligence, watchOut: stri
   // Only flag when the person is looking for THEIR OWN job/opportunity
   const jobSeekingPatterns = /\b(looking for (?:internship|job|work|opportunities|employment| a role| a position| remote role|full[- ]time work)|#opentowork|open to (?:new )?opportunities|seeking (?:a |new )?(?:job|role|position|opportunity|employment)|available for (?:new )?(?:job|role|position|opportunity))\b/i
   const hiringPatterns = /\b(looking for (?:a |an |the )?(?:developer|engineer|designer|team|cto|co[- ]?founder|partner|talent|candidate|hire))\b/i
-  const isStudent = (jobSeekingPatterns.test(allContent) || /\b(student|intern(?:ship)?|bootcamp|learning to code|self[- ]taught|career switch|aspiring)\b/i.test(allContent)) && !hiringPatterns.test(allContent)
+  const isOperatingFounder = isBuyerLeadership(intelligence.person.title, intelligence.person.seniority)
+  const isStudent = !isOperatingFounder
+    && (jobSeekingPatterns.test(allContent) || /\b(student|intern(?:ship)?|bootcamp|learning to code|self[- ]taught|career switch|aspiring)\b/i.test(allContent))
+    && !hiringPatterns.test(allContent)
   if (isStudent) {
     penalty += 35
     watchOut.push('Student / job seeker — not a buyer of development services')
   }
 
-  // Recruiter / talent acquisition
-  // IMPORTANT: Working AT a recruiting company ≠ being a recruiter.
-  // Bill Scalzitti is "Director of Client Solutions" at JobWriter (recruiting software).
-  // Abdulhakim Sheik is "AI Automation Specialist" but posts hiring listings for his company.
-  // Only penalize if the TITLE indicates a recruiting role AND they're not hiring.
-  const hasLeadershipTitle = /\b(ceo|cto|cfo|coo|founder|co[- ]?founder|director|head|vp|president|partner|owner|chief)\b/i.test(title)
-  const isHiring = intelligence.opportunity.signals.some((s) => ['hiring', 'explicit_ask', 'freelance_project_need'].includes(s))
-  const isRecruiter = /\b(recruiter|talent acquisition|sourcing|people ops)\b/i.test(title) ||
-    (/\b(recruiter|talent acquisition|sourcing|people ops|human resources)\b/i.test(allContent) && !hasLeadershipTitle && !isHiring && seniority !== 'executive' && seniority !== 'senior')
-  if (isRecruiter) {
+  if (isRecruiterTitle(intelligence.person.title)) {
     penalty += 30
     watchOut.push('Recruiter role: hiring for themselves, not a prospect for client work')
+  } else if (isClinicianProfile(intelligence.person.title, intelligence.company.name, `${intelligence.company.industry ?? ''} ${raw}`)) {
+    penalty += 30
+    watchOut.push('Clinician / care practice — not a buyer of software delivery')
   }
 
   // Non-technical micro business
@@ -281,6 +279,16 @@ function scoreOpportunityFit(
   reasons: string[],
   watchOut: string[],
 ): ScoreDimensionBreakdown {
+  if (isRecruiterTitle(intelligence.person.title) || isClinicianProfile(intelligence.person.title, intelligence.company.name, intelligence.company.industry) || isClinicianProfile(null, intelligence.company.name, intelligence.company.industry)) {
+    return {
+      key: 'opportunityFit',
+      label: DIMENSION_WEIGHTS.opportunityFit.label,
+      points: 4,
+      max: DIMENSION_WEIGHTS.opportunityFit.max,
+      note: 'This profile is not buying software delivery.',
+      direction: 'negative',
+    }
+  }
   const signals = intelligence.opportunity.signals
   const content = intelligence.content
 
@@ -375,6 +383,16 @@ function scoreNeedIntent(
   reasons: string[],
   watchOut: string[],
 ): ScoreDimensionBreakdown {
+  if (isRecruiterTitle(intelligence.person.title) || isClinicianProfile(intelligence.person.title, intelligence.company.name, intelligence.company.industry) || isClinicianProfile(null, intelligence.company.name, intelligence.company.industry)) {
+    return {
+      key: 'needIntent',
+      label: DIMENSION_WEIGHTS.needIntent.label,
+      points: 3,
+      max: DIMENSION_WEIGHTS.needIntent.max,
+      note: 'No software-delivery need on this profile.',
+      direction: 'negative',
+    }
+  }
   const opportunity = intelligence.opportunity
   let points = 4
   let note = 'No strong need signal.'
