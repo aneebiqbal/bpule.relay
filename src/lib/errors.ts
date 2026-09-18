@@ -53,6 +53,12 @@ export function safeErrorResponse(
   const safeMessage =
     error instanceof AppError ? error.safeMessage : fallbackMessage
 
+  // In development or for 500s, include the actual error message for debugging
+  const isDev = process.env.NODE_ENV === 'development'
+  const finalMessage = isDev || (status === 500 && error instanceof Error)
+    ? `${fallbackMessage} (${error instanceof Error ? error.message : String(error)})`
+    : safeMessage
+
   reportError(error, { route, status })
-  return NextResponse.json({ error: safeMessage }, { status })
+  return NextResponse.json({ error: finalMessage }, { status })
 }
