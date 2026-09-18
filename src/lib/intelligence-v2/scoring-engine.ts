@@ -116,11 +116,12 @@ function computeRolePenalty(intelligence: NormalizedIntelligence, watchOut: stri
   // Recruiter / talent acquisition
   // IMPORTANT: Working AT a recruiting company ≠ being a recruiter.
   // Bill Scalzitti is "Director of Client Solutions" at JobWriter (recruiting software).
-  // His profile mentions "Human Resources" because of his industry, not his role.
-  // Only penalize if the TITLE indicates a recruiting role.
+  // Abdulhakim Sheik is "AI Automation Specialist" but posts hiring listings for his company.
+  // Only penalize if the TITLE indicates a recruiting role AND they're not hiring.
   const hasLeadershipTitle = /\b(ceo|cto|cfo|coo|founder|co[- ]?founder|director|head|vp|president|partner|owner|chief)\b/i.test(title)
+  const isHiring = intelligence.opportunity.signals.some((s) => ['hiring', 'explicit_ask', 'freelance_project_need'].includes(s))
   const isRecruiter = /\b(recruiter|talent acquisition|sourcing|people ops)\b/i.test(title) ||
-    (/\b(recruiter|talent acquisition|sourcing|people ops|human resources)\b/i.test(allContent) && !hasLeadershipTitle && seniority !== 'executive' && seniority !== 'senior')
+    (/\b(recruiter|talent acquisition|sourcing|people ops|human resources)\b/i.test(allContent) && !hasLeadershipTitle && !isHiring && seniority !== 'executive' && seniority !== 'senior')
   if (isRecruiter) {
     penalty += 30
     watchOut.push('Recruiter role: hiring for themselves, not a prospect for client work')
