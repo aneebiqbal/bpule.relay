@@ -40,7 +40,7 @@ function kindLabel(kind: RelayTaskKind): string {
 
 function priorityColor(p: RelayTask['priority']): string {
   switch (p) {
-    case 'urgent': return 'text-red-500'
+    case 'urgent': return 'text-status-danger'
     case 'high': return 'text-orange'
     case 'medium': return 'text-graphite'
     case 'low': return 'text-stone'
@@ -49,7 +49,7 @@ function priorityColor(p: RelayTask['priority']): string {
 
 function priorityBg(p: RelayTask['priority']): string {
   switch (p) {
-    case 'urgent': return 'bg-red-500/10 border-red-500/20'
+    case 'urgent': return 'bg-status-danger/10 border-status-danger/20'
     case 'high': return 'bg-orange/10 border-orange/20'
     case 'medium': return 'bg-bone border-line'
     case 'low': return 'bg-bone-raised border-line'
@@ -85,78 +85,69 @@ function TaskCard({ task, featured = false }: { task: RelayTask; featured?: bool
     <Link
       href={entityHref(task)}
       className={cn(
-        'group block rounded-xl border p-4 transition-all hover:shadow-sm',
-        featured ? priorityBg(task.priority) : 'border-line bg-bone-raised hover:bg-bone',
-        task.stale && 'opacity-70',
+        'group block transition-all',
+        featured ? 'space-y-3' : 'border-b border-line/60 py-3 last:border-b-0',
+        task.stale && 'opacity-60',
       )}
     >
       <div className="flex items-start gap-3">
-        <div className={cn(
-          'flex shrink-0 items-center justify-center rounded-lg',
-          featured ? 'size-10' : 'size-8',
-          task.priority === 'urgent' ? 'bg-red-500/10' : 'bg-bone',
-        )}>
-           <TaskIcon kind={task.kind} size={featured ? 'md' : 'sm'} priority={task.priority} />
-        </div>
+        <TaskIcon kind={task.kind} size={featured ? 'md' : 'sm'} priority={task.priority} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={cn(
-              'rounded px-1.5 py-0.5 text-[10px] font-medium',
-              task.priority === 'urgent' ? 'bg-red-500/10 text-red-500' :
-              task.priority === 'high' ? 'bg-orange/10 text-orange' :
-              'bg-bone text-graphite',
+              'text-[10px] font-medium',
+              task.priority === 'urgent' ? 'text-status-danger' :
+              task.priority === 'high' ? 'text-orange' :
+              'text-stone',
             )}>
               {kindLabel(task.kind)}
             </span>
             {task.stale && (
               <span className="flex items-center gap-1 text-[10px] text-stone">
-                <AlertTriangle className="size-3" />
-                Stale
+                <AlertTriangle className="size-2.5" /> Stale
               </span>
             )}
             {task.recommendation.forbidsImpersonation && (
               <span className="flex items-center gap-1 text-[10px] text-stone">
-                <Shield className="size-3" />
-                Human only
+                <Shield className="size-2.5" /> Human only
               </span>
             )}
           </div>
           <h3 className={cn(
             'font-medium text-ink',
-            featured ? 'mt-1.5 text-[16px]' : 'mt-1 text-[14px]',
+            featured ? 'mt-1 text-[15px]' : 'mt-0.5 text-[13px]',
           )}>
             {task.title}
           </h3>
           <p className={cn(
             'text-graphite',
-            featured ? 'mt-0.5 text-[13px]' : 'text-[12px]',
+            featured ? 'mt-0.5 text-[12px]' : 'text-[11px]',
           )}>
             {task.subtitle}
           </p>
 
           {/* What happened + why */}
-          <div className={cn(
-            'mt-2 space-y-1',
-            !featured && 'hidden sm:block',
-          )}>
-            <p className="text-[12px] text-graphite">
-              <span className="font-medium text-ink">What:</span> {task.whatHappened}
-            </p>
-            <p className="text-[12px] text-graphite">
-              <span className="font-medium text-ink">Why:</span> {task.whyItMatters}
-            </p>
-          </div>
+          {featured && (
+            <div className="mt-2 space-y-0.5">
+              <p className="text-[12px] text-graphite">
+                <span className="font-medium text-ink">What:</span> {task.whatHappened}
+              </p>
+              <p className="text-[12px] text-graphite">
+                <span className="font-medium text-ink">Why:</span> {task.whyItMatters}
+              </p>
+            </div>
+          )}
 
           {/* Evidence trail */}
           {featured && task.recommendation.evidence.length > 0 && (
-            <div className="mt-3 space-y-1">
-              <p className="text-[11px] font-medium text-stone uppercase tracking-wide">Evidence</p>
+            <div className="mt-2 space-y-0.5">
+              <p className="text-[10px] font-medium text-stone uppercase tracking-wide">Evidence</p>
               {task.recommendation.evidence.map((e, i) => (
                 <p key={i} className="flex items-start gap-1.5 text-[11px] text-graphite">
                   {e.verified ? (
-                    <CheckCircle2 className="mt-0.5 size-3 shrink-0 text-status-success" />
+                    <CheckCircle2 className="mt-0.5 size-2.5 shrink-0 text-status-success" />
                   ) : (
-                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-stone" />
+                    <span className="mt-1.5 size-1 shrink-0 rounded-full bg-stone" />
                   )}
                   <span className="line-clamp-1">{e.detail}</span>
                 </p>
@@ -166,9 +157,9 @@ function TaskCard({ task, featured = false }: { task: RelayTask; featured?: bool
 
           {/* Prepared output */}
           {featured && task.recommendation.preparedOutput && (
-            <div className="mt-3 rounded-lg bg-bone p-3 border border-line">
-              <p className="text-[11px] font-medium text-stone uppercase tracking-wide">Prepared</p>
-              <p className="mt-1 text-[12px] text-graphite line-clamp-3">
+            <div className="mt-2 rounded bg-bone px-3 py-2">
+              <p className="text-[10px] font-medium text-stone uppercase tracking-wide">Prepared</p>
+              <p className="mt-0.5 text-[11px] text-graphite line-clamp-3">
                 {task.recommendation.preparedOutput}
               </p>
             </div>
@@ -176,14 +167,9 @@ function TaskCard({ task, featured = false }: { task: RelayTask; featured?: bool
 
           {/* Human action */}
           {featured && (
-            <div className="mt-3 flex items-center justify-between">
-              <p className="text-[12px] font-medium text-orange">
-                Action: {task.humanAction}
-              </p>
-              <span className="inline-flex items-center gap-1 text-[12px] font-medium text-orange opacity-0 transition-opacity group-hover:opacity-100">
-                Open <ChevronRight className="size-3" />
-              </span>
-            </div>
+            <p className="mt-2 text-[12px] font-medium text-orange">
+              Action: {task.humanAction} →
+            </p>
           )}
         </div>
       </div>
@@ -193,9 +179,9 @@ function TaskCard({ task, featured = false }: { task: RelayTask; featured?: bool
 
 function RelayMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
-      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
-      <p className="mt-1 text-[20px] font-medium text-[color:var(--console-text)]">{value}</p>
+    <div>
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/70">{label}</p>
+      <p className="mt-0.5 text-[18px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }
@@ -325,7 +311,7 @@ async function RelayMetrics({ relayPromise }: { relayPromise: Promise<RelayData>
   if (!data.authenticated) return null
   const { queue, highCount, mediumLowCount } = data
   return (
-    <div className="mt-4 grid gap-3 sm:grid-cols-4">
+    <div className="mt-3 flex flex-wrap gap-4">
       <RelayMetric label="Queue total" value={queue.summary.total} />
       <RelayMetric label="Urgent" value={queue.summary.urgent} />
       <RelayMetric label="High" value={highCount} />
@@ -358,14 +344,14 @@ async function RelayBody({ relayPromise }: { relayPromise: Promise<RelayData> })
 
       {/* Queue list */}
       {restQueue.length > 0 && (
-        <section className="reveal-up stagger-2 space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-label text-stone">Action Queue</h2>
-            <span className="text-mono-medium text-[11px] text-stone">
+        <section className="reveal-up stagger-2">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Action Queue</h2>
+            <span className="text-mono-medium text-[10px] text-stone">
               {restQueue.length} more
             </span>
           </div>
-          <div className="space-y-2">
+          <div>
             {restQueue.map((task) => (
               <TaskCard key={task.id} task={task} />
             ))}

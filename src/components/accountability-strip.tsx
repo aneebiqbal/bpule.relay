@@ -29,7 +29,7 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
   completed: { bg: 'bg-status-success/10 border-status-success/20', text: 'text-status-success', label: 'On Target' },
   on_track: { bg: 'bg-cobalt/10 border-cobalt/20', text: 'text-cobalt', label: 'On Track' },
   at_risk: { bg: 'bg-status-warning/10 border-status-warning/20', text: 'text-status-warning', label: 'Behind' },
-  missed: { bg: 'bg-red-50 border-red-200', text: 'text-red-600', label: 'Missed' },
+  missed: { bg: 'bg-status-danger/5 border-status-danger/20', text: 'text-status-danger', label: 'Missed' },
 }
 
 

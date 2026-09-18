@@ -44,7 +44,7 @@ export function StudioIntro({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-[#0f1219] px-6">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-console px-6">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
@@ -55,7 +55,7 @@ export function StudioIntro({ children }: { children: React.ReactNode }) {
       />
 
       <div className="reveal-up relative z-10 flex max-w-md flex-col items-center text-center">
-        <div className="mb-6 flex size-14 items-center justify-center rounded-2xl bg-cobalt shadow-cobalt">
+        <div className="mb-6 flex size-14 items-center justify-center rounded-xl bg-cobalt shadow-cobalt">
           <StudioMark className="size-8 bg-transparent" />
         </div>
 
@@ -68,7 +68,7 @@ export function StudioIntro({ children }: { children: React.ReactNode }) {
 
         <button
           onClick={markSeen}
-          className="group mt-8 inline-flex items-center gap-2 rounded-lg bg-cobalt px-5 py-2.5 text-sm font-medium text-bone transition-all hover:bg-cobalt-dark active:scale-[0.97]"
+          className="group mt-8 inline-flex items-center gap-2 rounded-md bg-cobalt px-5 py-2.5 text-sm font-medium text-bone transition-all hover:bg-cobalt-dark active:scale-[0.97]"
         >
           Continue
           <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />

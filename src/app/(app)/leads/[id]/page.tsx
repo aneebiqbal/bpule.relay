@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
 import { computeScore } from '@/lib/score/rubric'
 import { LeadWorkspaceAsync } from '@/components/lead-workspace-async'
+import { SkeletonText, SkeletonCircle, Skeleton } from '@/components/ui/skeleton'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,37 +50,37 @@ export default function LeadPage({ params }: LeadPageProps) {
 function LeadShellSkeleton() {
   return (
     <div className="space-y-4">
-      <section className="reveal-up rounded-2xl border border-line/80 bg-bone-raised overflow-hidden">
+      <section className="overflow-hidden rounded-lg border border-line bg-bone-raised">
         <div className="flex flex-col lg:flex-row">
-          <div className="flex-1 p-5 sm:p-6">
-            <div className="h-4 w-24 rounded bg-bone" />
-            <div className="mt-3 h-4 w-32 rounded bg-bone" />
-            <div className="mt-2 h-7 w-48 max-w-full rounded bg-bone" />
-            <div className="mt-0.5 h-3.5 w-40 max-w-full rounded bg-bone" />
-            <div className="mt-3 flex items-center gap-1.5">
-              <div className="h-5 w-20 rounded-lg bg-bone" />
-              <div className="h-5 w-24 rounded-lg bg-bone" />
+          <div className="flex-1 space-y-3 p-5 sm:p-6">
+            <SkeletonText className="h-3 w-24" />
+            <SkeletonText className="h-3 w-32" />
+            <SkeletonText className="h-5 w-48" />
+            <SkeletonText className="h-3.5 w-40" />
+            <div className="flex gap-2">
+              <Skeleton className="h-5 w-20 rounded-full" />
+              <Skeleton className="h-5 w-24 rounded-full" />
             </div>
-            <div className="mt-4 h-16 w-full rounded-xl bg-bone" />
+            <Skeleton className="h-16 w-full rounded-md" />
           </div>
-          <div className="flex shrink-0 flex-col items-center justify-center gap-3 border-t border-line/40 bg-bone/20 p-5 lg:border-t-0 lg:border-l lg:px-8">
-            <div className="size-[88px] rounded-full bg-bone" />
-            <div className="h-3 w-16 rounded bg-bone" />
+          <div className="flex shrink-0 flex-col items-center justify-center gap-3 border-t border-line bg-surface-muted p-5 lg:border-t-0 lg:border-l lg:px-8">
+            <SkeletonCircle className="size-[88px]" />
+            <SkeletonText className="h-3 w-16" />
           </div>
         </div>
       </section>
-      <div className="rounded-xl border border-line bg-bone-raised p-4">
-        <div className="h-3.5 w-28 rounded bg-bone" />
-        <div className="mt-2 h-4 w-40 max-w-full rounded bg-bone" />
+      <div className="rounded-lg border border-line bg-bone-raised p-4">
+        <SkeletonText className="h-3.5 w-28" />
+        <SkeletonText className="mt-2 h-4 w-40" />
       </div>
-      <div className="space-y-4 rounded-2xl border border-line/60 bg-bone-raised p-5">
-        <div className="h-4 w-20 rounded bg-bone" />
-        <div className="mt-4 flex flex-wrap gap-1 rounded-xl bg-bone/50 p-1">
+      <div className="space-y-4 rounded-lg border border-line bg-bone-raised p-5">
+        <SkeletonText className="h-4 w-20" />
+        <div className="mt-4 flex gap-1 rounded-lg bg-surface-muted p-1">
           {['DM', 'Connection', 'Upwork', 'Follow-up', 'Reply'].map((label) => (
-            <div key={label} className="h-7 w-20 rounded-lg bg-bone" />
+            <Skeleton key={label} className="h-7 w-20 rounded-md" />
           ))}
         </div>
-        <div className="mt-4 h-40 w-full rounded border border-line bg-bone/40" />
+        <Skeleton className="mt-4 h-40 w-full rounded-md border border-line" />
       </div>
     </div>
   )

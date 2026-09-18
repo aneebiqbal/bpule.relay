@@ -208,6 +208,26 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       sampleSource: 'quiz',
       calibratedAt: t(20),
     },
+    {
+      id: 'vp-hassan',
+      organizationId: DEMO_ORG_ID,
+      repId: 'rep-hassan',
+      styleCard: {
+        contractions: 'mostly_no',
+        formality: 3,
+        sentence_length: 'short',
+        punctuation: 'standard',
+        openers: 'statement',
+        emoji_use: 'none',
+        greeting: 'Hi',
+        sign_off: 'Best regards',
+        never_words: ['leverage', 'synergy', 'circle back'],
+        preferred_words: ['fit', 'ship', 'plan'],
+        summary: 'Short, direct, formal messages with no contractions and a classic sign-off.',
+      },
+      sampleSource: 'pasted_samples',
+      calibratedAt: t(10),
+    },
   ]
 
   const capturedProspects: CapturedProspect[] = []

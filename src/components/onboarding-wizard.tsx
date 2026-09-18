@@ -253,7 +253,7 @@ export function OnboardingWizard() {
     return (
       <div className="mx-auto max-w-lg space-y-6 px-4 py-12 text-center">
         <div className="mx-auto h-12 w-12 rounded-full bg-green-100 p-3">
-          <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="h-6 w-6 text-status-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
@@ -325,7 +325,7 @@ export function OnboardingWizard() {
 
       {/* Error */}
       {error && (
-        <p className="mt-4 rounded-lg bg-red-50 p-3 text-xs text-red-600">{error}</p>
+        <p className="mt-4 rounded-lg bg-status-danger/5 p-3 text-xs text-status-danger">{error}</p>
       )}
 
       {/* Navigation */}

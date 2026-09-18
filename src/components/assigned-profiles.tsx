@@ -45,7 +45,7 @@ export function AssignedProfilesView() {
   }, [])
 
   if (loading) return <div className="text-sm text-slate">Loading your assignments…</div>
-  if (error) return <div className="text-sm text-red-500">{error}</div>
+  if (error) return <div className="text-sm text-status-danger">{error}</div>
   if (!data) return null
 
   const completionPct = data.totalTarget > 0

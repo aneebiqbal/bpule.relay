@@ -76,7 +76,7 @@ export default async function AppLayout({
         role={user.rep.role}
         plan={user.organization.plan}
       >
-        <div className="min-h-dvh bg-bone lg:grid lg:grid-cols-[16rem_1fr]">
+        <div className="min-h-dvh bg-bone lg:grid lg:grid-cols-[14rem_1fr]">
           <AppRail
             repName={user.rep.name}
             organizationName={user.organization.name}

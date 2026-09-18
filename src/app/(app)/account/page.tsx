@@ -32,65 +32,68 @@ export default async function AccountPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Identity / Account</p>
-        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+      <header className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Identity</p>
+          <span className="size-1 rounded-full bg-line" />
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Account</p>
+        </div>
+        <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink sm:text-[32px]">
           Keep execution inside your operating limits.
         </h1>
-        <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">
+        <p className="max-w-2xl text-[13px] text-graphite">
           Relay tracks usage by day so your team can prioritize meaningful sends.
         </p>
+      </header>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
-            <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">Plan</p>
-            <p className="mt-1 text-[18px] font-medium text-[color:var(--console-text)]">{planLabel}</p>
-          </div>
-          <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
-            <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">Role</p>
-            <p className="mt-1 text-[18px] font-medium capitalize text-[color:var(--console-text)]">{user.rep.role}</p>
-          </div>
-          <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
-            <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">Sends Left Today</p>
-            <p className="mt-1 text-[18px] font-medium text-[color:var(--console-text)]">{sendsLeft}</p>
-          </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-line bg-bone-raised px-3 py-2.5 shadow-sm">
+          <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Plan</p>
+          <p className="mt-1 text-lg font-medium text-ink">{planLabel}</p>
         </div>
-
-        <div className="mt-4">
-          <div className="flex items-end justify-between gap-3">
-            <p className="text-[12px] text-[color:var(--console-mute)]">Daily send budget</p>
-            <p className="text-[12px] text-[color:var(--console-text)]">{totalUsed} / {totalLimit}</p>
-          </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded bg-line/30">
-            <div
-              className="h-full rounded bg-orange transition-all"
-              style={{ width: `${Math.min(100, Math.max(4, usagePct))}%` }}
-            />
-          </div>
-          <p className="mt-2 text-[12px] text-[color:var(--console-mute)]">
-            {sendsLeft > 0 ? `${sendsLeft} sends remaining` : 'Daily limit reached'} · resets at midnight
-          </p>
+        <div className="rounded-lg border border-line bg-bone-raised px-3 py-2.5 shadow-sm">
+          <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Role</p>
+          <p className="mt-1 text-lg font-medium capitalize text-ink">{user.rep.role}</p>
         </div>
+        <div className="rounded-lg border border-line bg-bone-raised px-3 py-2.5 shadow-sm">
+          <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Sends Left Today</p>
+          <p className="mt-1 text-lg font-medium text-ink">{sendsLeft}</p>
+        </div>
+      </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+      <div className="rounded-lg border border-line bg-bone-raised p-4 shadow-sm">
+        <div className="flex items-end justify-between gap-3">
+          <p className="text-[12px] text-graphite">Daily send budget</p>
+          <p className="text-[12px] font-medium text-ink">{totalUsed} / {totalLimit}</p>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-muted">
+          <div
+            className="h-full rounded-full bg-orange transition-all duration-500"
+            style={{ width: `${Math.min(100, Math.max(4, usagePct))}%` }}
+          />
+        </div>
+        <p className="mt-2 text-[12px] text-graphite">
+          {sendsLeft > 0 ? `${sendsLeft} sends remaining` : 'Daily limit reached'} · resets at midnight
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
           <Link
             href="/usage"
-            className="inline-flex items-center gap-1.5 rounded border border-orange/30 bg-orange/10 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-text)]"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line bg-bone px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-bone-raised"
           >
             Open detailed usage
             <ArrowRight className="size-3.5" />
           </Link>
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-1.5 rounded border border-line/30 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-mute)] hover:text-[color:var(--console-text)]"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
           >
-            Return to Relay Today
+            Return to Today
           </Link>
         </div>
-      </section>
+      </div>
 
       <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <article className="rounded border border-line bg-bone-raised">
+        <article className="rounded-lg border border-line bg-bone-raised shadow-sm">
           <div className="border-b border-line px-4 py-3">
             <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Identity Record</p>
           </div>
@@ -121,7 +124,7 @@ export default async function AccountPage() {
           </div>
         </article>
 
-        <article className="srf-proof px-4 py-3">
+        <article className="rounded-lg border border-line bg-bone-raised p-4 shadow-sm">
           <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
             <Gauge className="size-3.5 text-orange" />
             Calibration
@@ -131,7 +134,7 @@ export default async function AccountPage() {
           </p>
           <Link
             href="/onboarding"
-            className="mt-3 inline-flex items-center gap-1.5 rounded border border-line bg-bone px-2.5 py-1.5 text-[12px] font-medium text-ink hover:bg-bone-raised"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-line bg-bone px-2.5 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-surface-muted"
           >
             <Sparkles className="size-3.5 text-orange" aria-hidden="true" />
             {user.profile ? 'Review voice calibration' : 'Finish voice calibration'}
@@ -140,7 +143,7 @@ export default async function AccountPage() {
         </article>
       </section>
 
-      <section className="rounded border border-line bg-bone-raised">
+      <section className="rounded-lg border border-line bg-bone-raised shadow-sm">
         <div className="flex items-center gap-3 px-4 py-3">
           <Palette className="size-4 text-stone" aria-hidden="true" />
           <div className="flex-1">
@@ -151,10 +154,10 @@ export default async function AccountPage() {
         </div>
       </section>
 
-      <section className="rounded border border-line bg-bone-raised">
+      <section className="rounded-lg border border-line bg-bone-raised shadow-sm">
         <Link
           href="/pricing"
-          className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-bone"
+          className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-muted"
         >
           <Shield className="size-4 text-stone" aria-hidden="true" />
           <span className="flex-1 text-[14px] text-ink">View plans</span>

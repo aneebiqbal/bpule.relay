@@ -12,8 +12,13 @@ import {
   Sparkles,
   Target,
   X,
+  Clock,
+  AlertTriangle,
+  Zap,
 } from 'lucide-react'
 import { cn } from 'cn'
+import { Progress } from '@/components/ui/progress'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 type ActionKind =
   | 'reply_needed'
@@ -225,17 +230,34 @@ export function RelayTodayWorkspace({
 
   return (
     <div className="space-y-6 pb-8">
-      <header className="space-y-2">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Your Relay / Today</p>
-        <h1 className="text-[30px] font-medium tracking-[-0.03em] text-ink leading-[1.05]">{headline.title}</h1>
+      <header className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Your Relay</p>
+          <span className="size-1 rounded-full bg-line" />
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Today</p>
+        </div>
+        <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink sm:text-[32px]">
+          {headline.title}
+        </h1>
         <p className="text-[13px] text-graphite">
           {new Date(generatedAt).toLocaleDateString('en-US', { weekday: 'long' })} · {nowLabel} · {headline.sub}
         </p>
+        {totalActions > 0 && (
+          <div className="flex items-center gap-3 pt-1">
+            <div className="h-1 flex-1 overflow-hidden rounded-full bg-line/60">
+              <div
+                className="h-full rounded-full bg-orange transition-all duration-500"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+            <span className="shrink-0 text-mono-medium text-[10px] text-stone">{completedToday}/{totalActions}</span>
+          </div>
+        )}
       </header>
 
       {resolvedNotice && (
-        <div className="flex items-center gap-2 rounded border border-orange/30 bg-orange/[0.05] px-3 py-2 text-[12px] text-ink transition-all duration-200">
-          <CheckCircle2 className="size-4 text-orange" />
+        <div className="flex items-center gap-2 rounded-lg border border-status-success/20 bg-status-success/5 px-3 py-2 text-[12px] text-ink fade-in">
+          <CheckCircle2 className="size-4 text-status-success" />
           <span className="font-medium">{resolvedNotice}</span>
           {orderedActions[0] && (
             <span className="text-graphite">Next: {orderedActions[0].title}</span>
@@ -244,27 +266,32 @@ export function RelayTodayWorkspace({
       )}
 
       {topAction ? (
-        <section className="srf-console srf-console-edge hero-console-pulse overflow-hidden p-5 sm:p-6">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">01 / Now</p>
-          {topAction.inbound && (
-            <div className="mt-2 inline-flex items-center gap-2 rounded border border-orange/30 bg-orange/15 px-2 py-1 text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">
-              New inbound · moved to #1 because this conversation is active
+        <section className="overflow-hidden rounded-lg border border-line bg-bone-raised shadow-sm">
+          <div className="border-b border-line bg-bone-raised px-5 py-4">
+            <div className="flex items-center gap-2">
+              <span className="flex size-5 items-center justify-center rounded-full bg-orange text-[10px] font-bold text-bone">1</span>
+              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange">Now</p>
+              {topAction.inbound && (
+                <StatusBadge status="Inbound" variant="orange" />
+              )}
             </div>
-          )}
-          <div className="mt-4 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+          </div>
+          <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="space-y-3">
-              <h2 className="text-[28px] leading-[1.08] tracking-[-0.03em] text-[color:var(--console-text)]">{topAction.title}</h2>
-              <p className="text-[14px] text-[color:var(--console-mute)]">{topAction.subtitle}</p>
+              <h2 className="text-heading text-xl font-medium tracking-[-0.01em] text-ink sm:text-2xl">
+                {topAction.title}
+              </h2>
+              <p className="text-[14px] text-graphite">{topAction.subtitle}</p>
 
-              <div className="srf-console-inset rounded-md px-3 py-3">
-                <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">Why this matters</p>
-                <p className="mt-1 text-[13px] text-[color:var(--console-text)]">{topAction.whyItMatters}</p>
+              <div className="rounded-md border border-line bg-bone px-3 py-3">
+                <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Why this matters</p>
+                <p className="mt-1 text-[13px] text-ink">{topAction.whyItMatters}</p>
               </div>
 
               {topAction.identity && (
-                <div className="flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--console-mute)]">
-                  <span className="text-mono-medium uppercase tracking-[0.14em] text-stone-light">Working as</span>
-                  <span className="rounded border border-orange/30 bg-orange/10 px-2 py-0.5 font-medium text-[color:var(--console-text)]">
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-graphite">
+                  <span className="text-mono-medium uppercase tracking-[0.14em] text-stone">Working as</span>
+                  <span className="rounded-full border border-line bg-bone-raised px-2 py-0.5 font-medium text-ink">
                     {topAction.identity.name}
                   </span>
                   <span>{[topAction.identity.title, topAction.identity.channel?.toUpperCase()].filter(Boolean).join(' / ')}</span>
@@ -272,17 +299,17 @@ export function RelayTodayWorkspace({
               )}
 
               {topAction.proof && (
-                <div className="srf-proof border-orange/20 bg-bone/95 px-3 py-2">
-                  <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-dark">Relevant proof</p>
+                <div className="rounded-md border border-orange/20 bg-orange/5 px-3 py-2">
+                  <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange">Relevant proof</p>
                   <p className="mt-1 text-[12px] text-ink">{topAction.proof}</p>
                 </div>
               )}
             </div>
 
             <div className="space-y-3">
-              <div className="srf-console-inset rounded-md border border-orange/25 px-3 py-3">
-                <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/90">Relay prepared</p>
-                <p className="mt-1 text-[12px] leading-relaxed text-[color:var(--console-text)]">{topAction.prepared ?? topAction.humanAction}</p>
+              <div className="rounded-md border border-line bg-bone px-3 py-3">
+                <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Relay prepared</p>
+                <p className="mt-1 text-[12px] leading-relaxed text-ink">{topAction.prepared ?? topAction.humanAction}</p>
               </div>
               <button
                 type="button"
@@ -296,14 +323,14 @@ export function RelayTodayWorkspace({
                 <button
                   type="button"
                   onClick={() => snoozeAction(topAction)}
-                  className="rounded-md border border-line/30 px-2 py-2 text-[11px] text-[color:var(--console-mute)] hover:border-orange/40 hover:text-[color:var(--console-text)]"
+                  className="rounded-md border border-line px-2 py-2 text-[11px] text-graphite transition-colors hover:bg-bone hover:text-ink"
                 >
                   Snooze
                 </button>
                 <button
                   type="button"
                   onClick={() => markNotRelevant(topAction)}
-                  className="rounded-md border border-line/30 px-2 py-2 text-[11px] text-[color:var(--console-mute)] hover:border-orange/40 hover:text-[color:var(--console-text)]"
+                  className="rounded-md border border-line px-2 py-2 text-[11px] text-graphite transition-colors hover:bg-bone hover:text-ink"
                 >
                   Not relevant
                 </button>
@@ -312,9 +339,9 @@ export function RelayTodayWorkspace({
           </div>
         </section>
       ) : (
-        <section className="rounded border border-line bg-bone-raised px-5 py-10 text-center">
-          <p className="text-[28px] font-medium tracking-[-0.03em] text-ink">You&apos;re clear.</p>
-          <p className="mt-2 text-[13px] text-graphite">Relay will keep watching for anything new.</p>
+        <section className="rounded-lg border border-dashed border-line bg-bone-raised/40 px-5 py-10 text-center">
+          <p className="text-heading text-xl font-light text-ink">You&apos;re clear.</p>
+          <p className="mt-1 text-[13px] text-graphite">Relay will keep watching for anything new.</p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <Link href="/prospect" className="inline-flex items-center gap-2 rounded-md bg-orange px-3 py-2 text-[12px] font-medium text-bone">
               Check a prospect
@@ -328,11 +355,11 @@ export function RelayTodayWorkspace({
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Your Relay</p>
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Action queue</p>
           <span className="text-[11px] text-graphite">{remaining} active</span>
         </div>
         {orderedActions.length > 0 ? (
-          <div className="overflow-hidden rounded border border-line bg-bone-raised">
+          <div className="overflow-hidden rounded-lg border border-line bg-bone-raised">
             {orderedActions.map((action, index) => {
               const stage = stageLabel(index, snoozedSet.has(action.id))
               const isPrimary = index === 0
@@ -342,24 +369,24 @@ export function RelayTodayWorkspace({
                   key={action.id}
                   onClick={() => setSelectedId(action.id)}
                   className={cn(
-                    'group flex w-full items-center gap-3 border-b border-line/70 px-3 py-3 text-left transition-colors last:border-b-0',
-                    isPrimary ? 'bg-orange/[0.05]' : 'hover:bg-bone',
+                    'group flex w-full items-center gap-3 border-b border-line/60 px-3 py-3 text-left transition-colors last:border-b-0',
+                    isPrimary ? 'bg-orange/[0.03]' : 'hover:bg-bone',
                   )}
                 >
-                  <span className="w-7 text-mono-medium text-[11px] text-stone/75">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="w-6 text-mono-medium text-[11px] text-stone/75">{String(index + 1).padStart(2, '0')}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="truncate text-[14px] font-medium text-ink">{kindActionLabel(action.kind)}</span>
+                      <span className="truncate text-[13px] font-medium text-ink">{kindActionLabel(action.kind)}</span>
                       <span className="truncate text-[12px] text-graphite">{action.title}</span>
                     </div>
-                    <p className="truncate text-[12px] text-stone">{action.whyLines[0] ?? action.subtitle}</p>
+                    <p className="truncate text-[11px] text-stone">{action.whyLines[0] ?? action.subtitle}</p>
                   </div>
                   <span className={cn(
-                    'rounded px-2 py-0.5 text-mono-medium text-[10px] uppercase tracking-[0.12em]',
+                    'shrink-0 rounded-full px-2 py-0.5 text-mono-medium text-[9px] uppercase tracking-[0.12em]',
                     stage === 'NOW'
                       ? 'bg-orange text-bone'
                       : stage === 'NEXT'
-                        ? 'bg-orange/15 text-orange'
+                        ? 'bg-orange/10 text-orange'
                         : stage === 'TODAY'
                           ? 'bg-bone text-graphite'
                           : 'bg-bone text-stone',
@@ -371,7 +398,7 @@ export function RelayTodayWorkspace({
             })}
           </div>
         ) : (
-          <div className="rounded border border-dashed border-line px-4 py-7 text-center">
+          <div className="rounded-lg border border-dashed border-line bg-bone-raised/40 px-4 py-7 text-center">
             <p className="text-[13px] font-medium text-ink">Nothing active right now.</p>
             <p className="mt-1 text-[12px] text-graphite">Relay has already sorted the rest.</p>
           </div>
@@ -380,59 +407,58 @@ export function RelayTodayWorkspace({
 
       <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-4">
-          <div className="rounded border border-line bg-bone-raised px-4 py-4">
-            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Today&apos;s momentum</p>
-            <div className="mt-2 grid gap-2 text-[13px] text-ink sm:grid-cols-2">
-              <p>{completedToday} actions completed</p>
-              <p>{conversationsAdvanced} conversations advanced</p>
-              <p>{opportunitiesWorked} opportunities acted on</p>
-              <p>{inboundHandled} inbound replies handled</p>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded bg-line/60">
-              <div className="h-full rounded bg-orange transition-all duration-200" style={{ width: `${progressPct}%` }} />
-            </div>
-            {targetProgress && targetProgress.total > 0 && (
-              <div className="mt-3 flex items-center justify-between text-[12px]">
-                <span className="text-graphite">Today</span>
-                <span className="font-medium text-ink">
-                  {Math.min(targetProgress.completed + completedToday, targetProgress.total)} / {targetProgress.total}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div className="rounded border border-line bg-bone-raised px-4 py-4">
-            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Conversations moving</p>
-            {conversationsMoving.length > 0 ? (
-              <div className="mt-3 space-y-3">
+          {conversationsMoving.length > 0 && (
+            <div>
+              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Conversations moving</p>
+              <div className="mt-2 space-y-0">
                 {conversationsMoving.map((conversation) => (
-                  <Link key={conversation.id} href={conversation.href} className="block border-b border-line/70 pb-3 last:border-b-0 last:pb-0">
-                    <p className="text-[13px] font-medium text-ink">{conversation.name}</p>
-                    <p className="text-[12px] text-graphite">{conversation.signal}</p>
-                    <p className="mt-1 text-[11px] text-orange">Next: {conversation.next}</p>
+                  <Link key={conversation.id} href={conversation.href} className="flex items-baseline justify-between gap-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-medium text-ink">{conversation.name}</p>
+                      <p className="truncate text-[11px] text-graphite">{conversation.signal}</p>
+                    </div>
+                    <span className="shrink-0 text-[11px] font-medium text-orange">Next: {conversation.next}</span>
                   </Link>
                 ))}
               </div>
-            ) : (
-              <div className="mt-3 space-y-1">
-                <p className="text-[13px] font-medium text-ink">Nothing active yet.</p>
-                <p className="text-[12px] text-graphite">When someone replies, Relay will bring it here and prepare the next move.</p>
+            </div>
+          )}
+
+          {opportunities.length > 0 && (
+            <div>
+              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Opportunities</p>
+              <div className="mt-2 space-y-0">
+                {opportunities.map((opportunity) => (
+                  <Link key={opportunity.id} href={opportunity.href} className="flex items-baseline justify-between gap-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-medium text-ink">{opportunity.name}</p>
+                      <p className="truncate text-[11px] text-graphite">{opportunity.why[0] ?? 'Strong profile match'}</p>
+                    </div>
+                    {opportunity.fit !== null && (
+                      <span className="shrink-0 text-mono-medium text-[11px] text-orange">{opportunity.fit} FIT</span>
+                    )}
+                  </Link>
+                ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {opportunities.length === 0 && (
+            <p className="text-[12px] text-graphite">No leads yet. Start with a prospect you already have.</p>
+          )}
 
           {studioOpportunity && (
-            <div className="rounded border border-cobalt/25 bg-cobalt/[0.05] px-4 py-4">
-              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-cobalt">Studio / opportunity</p>
-              <p className="mt-2 text-[16px] font-medium text-ink">{studioOpportunity.title}</p>
-              <p className="mt-1 text-[12px] text-graphite">{studioOpportunity.whyYou}</p>
-              {studioOpportunity.idea?.angle ? (
-                <p className="mt-2 text-[11px] text-graphite">Angle: {studioOpportunity.idea.angle}</p>
-              ) : null}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="border-l-2 border-cobalt/30 pl-4">
+              <div className="flex items-center gap-2">
+                <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-cobalt">Studio opportunity</p>
+                <StatusBadge status="Ready" variant="cobalt" />
+              </div>
+              <p className="mt-1 text-[14px] font-medium text-ink">{studioOpportunity.title}</p>
+              <p className="mt-0.5 text-[12px] text-graphite">{studioOpportunity.whyYou}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StudioWriteThisButton opportunity={studioOpportunity} />
-                <Link href={studioOpportunity.href} className="rounded-md border border-cobalt/30 px-3 py-1.5 text-[12px] text-cobalt">
-                  Open in Studio
+                <Link href={studioOpportunity.href} className="text-[12px] font-medium text-cobalt">
+                  Open in Studio →
                 </Link>
               </div>
             </div>
@@ -440,76 +466,52 @@ export function RelayTodayWorkspace({
         </div>
 
         <div className="space-y-4">
-          <div className="rounded border border-line bg-bone-raised px-4 py-4">
-            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Today / system</p>
-            <div className="mt-2 space-y-2 text-[12px]">
-              <SystemRow label="Conversations" value={`${system.conversationsActive} active`} sub={`${system.conversationsNeedReply} need reply`} href="/relay" />
-              <SystemRow label="Opportunities" value={`${system.opportunitiesQualified} qualified`} sub={`${system.opportunitiesStrong} strong`} href="/leads" />
-              <SystemRow label="Follow-ups" value={`${system.followupsDue} due`} sub="Actionable today" href="/leads" />
-              <SystemRow label="Jobs" value={`${system.jobsWorthReview} worth reviewing`} sub="Apply queue" href="/upwork" />
-              <SystemRow label="Studio" value={`${system.studioIdeasReady} ideas ready`} sub="Create demand" href="/content" />
+          <div>
+            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">System</p>
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px]">
+              <SystemStat label="Conversations" value={system.conversationsActive} sub={`${system.conversationsNeedReply} need reply`} href="/relay" />
+              <SystemStat label="Opportunities" value={system.opportunitiesQualified} sub={`${system.opportunitiesStrong} strong`} href="/leads" />
+              <SystemStat label="Follow-ups" value={system.followupsDue} sub="due today" href="/leads" />
+              <SystemStat label="Studio" value={system.studioIdeasReady} sub="ideas ready" href="/content" />
             </div>
           </div>
 
-          <div className="rounded border border-line bg-bone-raised px-4 py-4">
-            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Opportunities worth looking at</p>
-            {opportunities.length > 0 ? (
-              <div className="mt-3 space-y-3">
-                {opportunities.map((opportunity) => (
-                  <Link key={opportunity.id} href={opportunity.href} className="block rounded border border-line/70 bg-bone px-3 py-2 hover:border-orange/30">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-[13px] font-medium text-ink">{opportunity.name}</p>
-                      {opportunity.fit !== null && (
-                        <span className="text-mono-medium text-[11px] text-orange">{opportunity.fit} FIT</span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-[11px] text-graphite">{opportunity.why[0] ?? 'Strong profile match'}</p>
-                  </Link>
-                ))}
+          {targetProgress && targetProgress.total > 0 && (
+            <div>
+              <div className="flex items-center justify-between">
+                <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Daily target</p>
+                <span className="text-mono-medium text-[11px] text-ink">
+                  {Math.min(targetProgress.completed + completedToday, targetProgress.total)} / {targetProgress.total}
+                </span>
               </div>
-            ) : (
-              <div className="mt-3 space-y-1">
-                <p className="text-[13px] font-medium text-ink">No leads yet.</p>
-                <p className="text-[12px] text-graphite">Start with a prospect you already have, or let Relay help you find one.</p>
-                <div className="mt-2 flex items-center gap-2">
-                  <Link href="/prospect" className="text-[11px] font-medium text-orange">Check a prospect</Link>
-                  <span className="text-stone">·</span>
-                  <Link href="/leads" className="text-[11px] font-medium text-orange">Find leads</Link>
-                </div>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {role === 'admin' && adminSummary && (
-            <div className="rounded border border-line bg-bone-raised px-4 py-4">
-              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Founder command / today</p>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-[12px]">
-                <MetricChip label="Attention" value={String(adminSummary.attentionItems.length).padStart(2, '0')} tone={adminSummary.attentionItems.length > 0 ? 'warn' : 'neutral'} />
-                <MetricChip label="Team" value={`${adminSummary.onTrackCount} / ${adminSummary.totalReps}`} tone="good" />
-                <MetricChip label="Conversations" value={String(adminSummary.activeConversations)} tone="neutral" />
-                <MetricChip label="High-intent" value={String(adminSummary.highIntent)} tone="warn" />
+            <div>
+              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Team</p>
+              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px]">
+                <SystemStat label="On track" value={`${adminSummary.onTrackCount}/${adminSummary.totalReps}`} tone="good" />
+                <SystemStat label="Active convos" value={adminSummary.activeConversations} />
+                <SystemStat label="High-intent" value={adminSummary.highIntent} tone={adminSummary.highIntent > 0 ? 'warn' : 'neutral'} />
+                <SystemStat label="Attention" value={adminSummary.attentionItems.length} tone={adminSummary.attentionItems.length > 0 ? 'warn' : 'neutral'} />
               </div>
 
               {adminSummary.attentionItems.length > 0 && (
-                <div className="mt-3 space-y-2">
+                <div className="mt-2 space-y-1">
                   {adminSummary.attentionItems.slice(0, 3).map((item) => (
-                    <div
-                      key={item.id}
-                      className={cn(
-                        'rounded border px-2.5 py-2 text-[11px]',
-                        item.severity === 'critical' ? 'border-status-danger/30 bg-status-danger/5 text-status-danger' : 'border-status-warning/30 bg-status-warning/5 text-status-warning',
-                      )}
-                    >
-                      <p className="font-medium">{item.title}</p>
-                      <p className="text-ink/70">{item.detail}</p>
-                    </div>
+                    <p key={item.id} className={cn(
+                      'text-[11px]',
+                      item.severity === 'critical' ? 'text-status-danger' : 'text-status-warning',
+                    )}>
+                      {item.title}
+                    </p>
                   ))}
                 </div>
               )}
 
-              <Link href="/admin/command-center" className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-ink">
-                Open full command center
-                <ExternalLink className="size-3" />
+              <Link href="/admin/command-center" className="mt-2 inline-block text-[11px] font-medium text-ink">
+                Open command center →
               </Link>
             </div>
           )}
@@ -579,19 +581,19 @@ function ActionDrawer({
   return (
     <div className="fixed inset-0 z-50">
       <button type="button" className="absolute inset-0 bg-ink/30" onClick={onClose} aria-label="Close action drawer" />
-      <aside className="absolute inset-x-0 bottom-0 h-[88dvh] rounded-t-xl border-t border-line bg-bone-raised p-4 shadow-lg sm:right-0 sm:top-0 sm:h-full sm:w-[460px] sm:rounded-none sm:border-l sm:border-t-0 sm:p-5">
+      <aside className="absolute inset-x-0 bottom-0 h-[88dvh] overflow-y-auto rounded-t-xl border-t border-line bg-bone-raised p-4 shadow-lg sm:right-0 sm:top-0 sm:h-full sm:w-[460px] sm:rounded-none sm:border-l sm:border-t-0 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">{kindLabel(action.kind)}</p>
-            <h3 className="mt-1 text-[20px] font-medium tracking-[-0.02em] text-ink">{action.title}</h3>
+            <h3 className="mt-1 text-lg font-medium tracking-[-0.01em] text-ink">{action.title}</h3>
             <p className="text-[12px] text-graphite">{action.subtitle}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded p-1 text-stone hover:bg-bone">
+          <button type="button" onClick={onClose} className="rounded-md p-1 text-stone transition-colors hover:bg-bone">
             <X className="size-4" />
           </button>
         </div>
 
-        <div className="mt-4 space-y-3 overflow-y-auto pb-6">
+        <div className="mt-4 space-y-3 pb-6">
           <DrawerFact label="Conversation context" value={action.whatHappened} icon={MessageSquare} />
           <DrawerFact label="Intent" value={action.whyItMatters} icon={Target} />
           <DrawerFact
@@ -601,24 +603,24 @@ function ActionDrawer({
           />
           <DrawerFact label="Proof" value={action.proof ?? 'No proof attached yet'} icon={Copy} />
 
-          <div className="rounded border border-line bg-bone p-3">
+          <div className="rounded-md border border-line bg-bone p-3">
             <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Relay draft</p>
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              className="mt-2 min-h-[170px] w-full resize-y rounded border border-line bg-bone-raised p-2.5 text-[13px] leading-relaxed text-ink outline-none focus:border-orange/50"
+              className="mt-2 min-h-[170px] w-full resize-y rounded-md border border-line bg-bone-raised p-2.5 text-[13px] leading-relaxed text-ink outline-none focus:border-orange/50"
             />
             <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
-              <button type="button" onClick={regenerate} className="rounded border border-line px-2 py-1.5 text-graphite hover:text-ink">
+              <button type="button" onClick={regenerate} className="rounded-md border border-line px-2 py-1.5 text-graphite transition-colors hover:text-ink">
                 Regenerate
               </button>
-              <button type="button" onClick={shorten} className="rounded border border-line px-2 py-1.5 text-graphite hover:text-ink">
+              <button type="button" onClick={shorten} className="rounded-md border border-line px-2 py-1.5 text-graphite transition-colors hover:text-ink">
                 Shorter
               </button>
-              <button type="button" onClick={changeProof} className="rounded border border-line px-2 py-1.5 text-graphite hover:text-ink">
+              <button type="button" onClick={changeProof} className="rounded-md border border-line px-2 py-1.5 text-graphite transition-colors hover:text-ink">
                 Change proof
               </button>
-              <Link href={action.href} className="rounded border border-line px-2 py-1.5 text-center text-graphite hover:text-ink">
+              <Link href={action.href} className="rounded-md border border-line px-2 py-1.5 text-center text-graphite transition-colors hover:text-ink">
                 Open full page
               </Link>
             </div>
@@ -627,17 +629,17 @@ function ActionDrawer({
           <button
             type="button"
             onClick={() => void copyAndResolve()}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-orange px-3 py-2.5 text-[13px] font-medium text-bone hover:bg-orange-dark"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-orange px-3 py-2.5 text-[13px] font-medium text-bone transition-colors hover:bg-orange-dark"
           >
             {copied ? 'Copied and resolved' : 'Copy / Send'}
             <ArrowRight className="size-4" />
           </button>
 
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={onSnooze} className="rounded border border-line px-2 py-2 text-[11px] text-graphite hover:text-ink">
+            <button type="button" onClick={onSnooze} className="rounded-md border border-line px-2 py-2 text-[11px] text-graphite transition-colors hover:text-ink">
               Snooze
             </button>
-            <button type="button" onClick={onNotRelevant} className="rounded border border-line px-2 py-2 text-[11px] text-graphite hover:text-ink">
+            <button type="button" onClick={onNotRelevant} className="rounded-md border border-line px-2 py-2 text-[11px] text-graphite transition-colors hover:text-ink">
               Not relevant
             </button>
           </div>
@@ -742,12 +744,12 @@ function StudioWriteThisButton({ opportunity }: { opportunity: StudioOpportunity
         type="button"
         onClick={() => void handleWriteThis()}
         disabled={state === 'writing' || state === 'opening'}
-        className="inline-flex items-center gap-1 rounded-md bg-cobalt px-3 py-1.5 text-[12px] font-medium text-bone disabled:opacity-60"
+        className="inline-flex items-center gap-1 rounded-md bg-cobalt px-3 py-1.5 text-[12px] font-medium text-bone transition-colors hover:bg-cobalt-dark disabled:opacity-60"
       >
         {label}
         <ArrowRight className="size-3" />
       </button>
-      {visualWarning ? <p className="text-[11px] text-amber-700">{visualWarning}</p> : null}
+      {visualWarning ? <p className="text-[11px] text-status-warning">{visualWarning}</p> : null}
       {error ? <p className="text-[11px] text-status-danger">{error}</p> : null}
       {manualHref ? (
         <Link href={manualHref} className="inline-flex items-center gap-1 text-[11px] font-medium text-cobalt underline underline-offset-2">
@@ -768,7 +770,7 @@ function DrawerFact({
   icon: React.ComponentType<{ className?: string }>
 }) {
   return (
-    <div className="rounded border border-line bg-bone p-3">
+    <div className="rounded-md border border-line bg-bone p-3">
       <p className="flex items-center gap-1.5 text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">
         <Icon className="size-3" />
         {label}
@@ -778,48 +780,46 @@ function DrawerFact({
   )
 }
 
-function SystemRow({
+function SystemStat({
   label,
   value,
   sub,
   href,
-}: {
-  label: string
-  value: string
-  sub: string
-  href: string
-}) {
-  return (
-    <Link href={href} className="flex items-center justify-between gap-2 rounded border border-line/50 bg-bone px-2.5 py-2 hover:border-orange/30">
-      <span className="text-stone">{label}</span>
-      <span className="text-right">
-        <span className="block text-ink">{value}</span>
-        <span className="block text-[10px] text-graphite">{sub}</span>
-      </span>
-    </Link>
-  )
-}
-
-function MetricChip({
-  label,
-  value,
   tone,
 }: {
   label: string
-  value: string
-  tone: 'good' | 'warn' | 'neutral'
+  value: string | number
+  sub?: string
+  href?: string
+  tone?: 'good' | 'warn' | 'neutral'
 }) {
+  const valueClass = tone === 'good'
+    ? 'text-status-success'
+    : tone === 'warn'
+      ? 'text-orange'
+      : 'text-ink'
+
+  const inner = (
+    <>
+      <span className="text-[11px] text-graphite">{label}</span>
+      <span className="flex items-baseline gap-1.5">
+        <span className={cn('text-[14px] font-medium', valueClass)}>{value}</span>
+        {sub && <span className="text-[10px] text-stone">{sub}</span>}
+      </span>
+    </>
+  )
+
+  if (href) {
+    return (
+      <Link href={href} className="group flex items-baseline justify-between gap-2">
+        {inner}
+      </Link>
+    )
+  }
+
   return (
-    <div className={cn(
-      'rounded border px-2.5 py-2',
-      tone === 'good'
-        ? 'border-status-success/30 bg-status-success/5'
-        : tone === 'warn'
-          ? 'border-status-warning/30 bg-status-warning/5'
-          : 'border-line bg-bone',
-    )}>
-      <p className="text-mono-medium text-[9px] uppercase tracking-[0.12em] text-stone">{label}</p>
-      <p className="mt-1 text-[14px] font-medium text-ink">{value}</p>
+    <div className="flex items-baseline justify-between gap-2">
+      {inner}
     </div>
   )
 }

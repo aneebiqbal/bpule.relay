@@ -169,31 +169,31 @@ function NextBestAction({
 
   return (
     <div className={cn(
-      'rounded-xl border p-4',
+      'border-l-2 pl-4 py-1',
       isUrgent
-        ? 'border-orange/20 bg-orange/[0.04]'
-        : 'border-line bg-bone-raised',
+        ? 'border-orange/40'
+        : 'border-line',
     )}>
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-label text-stone">Next best action</p>
-          <p className="mt-1 text-[15px] font-medium text-ink">{action.label}</p>
-          <p className="mt-0.5 text-[13px] text-graphite">{action.description}</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Next best action</p>
+          <p className="mt-0.5 text-[14px] font-medium text-ink">{action.label}</p>
+          <p className="mt-0.5 text-[12px] text-graphite">{action.description}</p>
         </div>
         <div className="shrink-0">
           {action.href ? (
             <a
               href={action.href}
-              className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-[13px] font-medium text-ink transition-all hover:bg-bone active:scale-[0.97]"
+              className="inline-flex items-center gap-1 text-[12px] font-medium text-ink hover:text-orange"
             >
-              {action.cta}
+              {action.cta} →
             </a>
           ) : (
             <button
               type="button"
               onClick={onAction}
               className={cn(
-                'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-medium transition-all active:scale-[0.97]',
+                'inline-flex items-center gap-2 rounded px-3 py-1.5 text-[12px] font-medium transition-all',
                 isUrgent
                   ? 'bg-orange text-bone hover:bg-orange-dark'
                   : 'bg-ink text-bone hover:bg-ink/90',
@@ -415,70 +415,65 @@ export function LeadWorkspace({
     <div className="space-y-4">
 
       {/* ═══ 1. WHERE THIS LEAD STANDS ═══ */}
-      <section className="reveal-up rounded-2xl border border-line/80 bg-bone-raised overflow-hidden">
-        {/* Top bar with score */}
-        <div className="flex flex-col lg:flex-row">
+      <section className="reveal-up space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:gap-6">
           {/* Lead info */}
-          <div className="flex-1 p-5 sm:p-6">
-            <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 -ml-2 text-sm text-graphite transition-colors hover:bg-bone hover:text-ink">
-              <ArrowLeft className="size-4" aria-hidden="true" />
+          <div className="flex-1 min-w-0">
+            <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-[12px] text-graphite transition-colors hover:text-ink">
+              <ArrowLeft className="size-3.5" aria-hidden="true" />
               Back to Today
             </Link>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <VerdictWord verdict={verdict} />
               {currentLead.status !== 'new' && !hasReply && <StatusWord status={currentLead.status} />}
               {hasReply && <StatusWord status="replied" />}
             </div>
 
-            <h1 className="mt-2 text-heading text-2xl text-ink sm:text-3xl">{currentLead.company}</h1>
+            <h1 className="mt-1 text-heading text-2xl text-ink sm:text-3xl">{currentLead.company}</h1>
             <p className="mt-0.5 text-sm text-graphite">{contactLine}</p>
 
             {/* Tags & meta */}
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
               {signal && (
-                <span className="inline-flex items-center gap-1 rounded-lg bg-orange/8 px-2 py-0.5 text-xs font-medium text-orange ring-1 ring-orange/10">
+                <span className="inline-flex items-center gap-1 rounded bg-orange/8 px-1.5 py-0.5 text-[11px] font-medium text-orange">
                   <Flame className="size-3" /> {signal.short}
                 </span>
               )}
               {currentLead.url && (
                 <a href={currentLead.url} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-lg bg-bone px-2 py-0.5 text-xs text-ink transition-colors hover:bg-line">
-                  {host ?? 'Source'} <ExternalLink className="size-2.5 text-graphite" />
+                  className="inline-flex items-center gap-1 text-[11px] text-graphite hover:text-ink">
+                  {host ?? 'Source'} <ExternalLink className="size-2.5" />
                 </a>
               )}
               {(currentLead.tags ?? []).map((t) => (
-                <span key={t} className="rounded-lg bg-bone px-2 py-0.5 font-mono text-xs text-ink-soft">{t}</span>
+                <span key={t} className="font-mono text-[11px] text-ink-soft">{t}</span>
               ))}
             </div>
 
-            {/* Evidence */}
-            <div className="mt-4 space-y-2 rounded-xl bg-bone/40 p-3">
-              <div className="flex gap-2">
-                <Target className="mt-0.5 size-3.5 shrink-0 text-orange" />
-                <p className="text-sm leading-relaxed text-ink">{lead.signalEvidence || 'No signal evidence captured.'}</p>
-              </div>
-              {lead.verbatimQuote && (
-                <p className="border-t border-line/40 pt-2 pl-5.5 text-sm italic text-graphite">
-                  &ldquo;{lead.verbatimQuote}&rdquo;
-                </p>
-              )}
-            </div>
+            {/* Evidence — no box, just text */}
+            <p className="mt-3 flex gap-2 text-[13px] leading-relaxed text-ink">
+              <Target className="mt-0.5 size-3.5 shrink-0 text-orange" />
+              {lead.signalEvidence || 'No signal evidence captured.'}
+            </p>
+            {lead.verbatimQuote && (
+              <p className="mt-2 pl-5.5 text-[13px] italic text-graphite">
+                &ldquo;{lead.verbatimQuote}&rdquo;
+              </p>
+            )}
           </div>
 
           {/* Score ring — right side on desktop */}
-          <div className="flex shrink-0 flex-col items-center justify-center gap-3 border-t border-line/40 bg-bone/20 p-5 lg:border-t-0 lg:border-l lg:px-8">
-            <ScoreRing score={score.total} size={88} />
-            <div className="text-center">
-              <p className="text-mono-medium text-xs text-graphite">out of 12</p>
-              <p className="text-xs font-medium text-ink">
-                {score.total >= 10 ? 'Strong lead' : score.total >= 7 ? 'Good lead' : score.total >= 4 ? 'Fair' : 'Weak'}
-              </p>
-            </div>
+          <div className="flex shrink-0 flex-col items-center gap-2 lg:pt-1">
+            <ScoreRing score={score.total} size={72} />
+            <p className="text-mono-medium text-[10px] text-stone">out of 12</p>
+            <p className="text-[11px] font-medium text-ink">
+              {score.total >= 10 ? 'Strong' : score.total >= 7 ? 'Good' : score.total >= 4 ? 'Fair' : 'Weak'}
+            </p>
             {profiles.length > 0 ? (
-              <label className="flex items-center gap-2 text-xs">
+              <label className="flex items-center gap-1.5 text-[11px]">
                 <span className="text-graphite">As</span>
-                <Select className="h-7 w-auto min-w-[7rem] py-0 text-xs" value={selectedProfileId ?? ''}
+                <Select className="h-6 w-auto min-w-[6rem] py-0 text-[11px]" value={selectedProfileId ?? ''}
                   onChange={(e) => setSelectedProfileId(e.target.value || null)}>
                   {profiles.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -488,24 +483,22 @@ export function LeadWorkspace({
                 </Select>
               </label>
             ) : (
-              <Link href="/profiles" className="text-xs text-orange underline-offset-4 hover:underline">Add identity</Link>
+              <Link href="/profiles" className="text-[11px] text-orange underline-offset-4 hover:underline">Add identity</Link>
             )}
           </div>
         </div>
 
-        {/* Score breakdown — collapsible */}
-        <div className="border-t border-line/40 px-5 py-4 sm:px-6">
-          <details className="group">
-            <summary className="flex cursor-pointer items-center gap-2 text-sm text-graphite">
-              <Info className="size-3.5" />
-              <span>Why this score</span>
-              <ChevronDown className="ml-auto size-3.5 transition-transform group-open:rotate-180" />
-            </summary>
-            <div className="mt-3 max-w-md">
-              <ScoreBreakdown score={score} />
-            </div>
-          </details>
-        </div>
+        {/* Score breakdown — collapsible, inline */}
+        <details className="group">
+          <summary className="flex cursor-pointer items-center gap-1.5 text-[12px] text-graphite hover:text-ink">
+            <Info className="size-3.5" />
+            <span>Why this score</span>
+            <ChevronDown className="ml-1 size-3 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="mt-2 max-w-md">
+            <ScoreBreakdown score={score} />
+          </div>
+        </details>
       </section>
 
       {/* Locked / not eligible */}
@@ -527,39 +520,37 @@ export function LeadWorkspace({
 
       {/* ═══ 2. PROOF MATCH ═══ */}
       {canDraft && !locked && activeProof && (
-        <section className="reveal-up stagger-1 rounded-2xl border border-orange/15 bg-gradient-to-br from-orange/[0.04] to-transparent p-5">
-          <div className="flex items-center gap-2 text-orange">
-            <Trophy className="size-4" />
-            <h2 className="text-heading text-sm text-ink">Proof to cite</h2>
+        <section className="reveal-up stagger-1 border-l-2 border-orange/30 pl-4">
+          <div className="flex items-center gap-2">
+            <Trophy className="size-3.5 text-orange" />
+            <h2 className="text-[12px] font-medium text-ink">Proof to cite</h2>
           </div>
-          <div className="mt-3 rounded-xl border border-orange/10 bg-paper/60 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-ink">
-                  {activeProof.permissionOnFile && activeProof.clientName ? activeProof.clientName : 'Client protected'}
-                </p>
-                {activeProof.reviewQuote && (
-                  <p className="mt-1 text-xs italic text-graphite">&ldquo;{activeProof.reviewQuote}&rdquo;</p>
-                )}
-                <p className="mt-1.5 text-xs leading-relaxed text-graphite">{activeProof.projectSummary}</p>
-                {activeProof.tags.length > 0 && (
-                  <div className="mt-2.5 flex flex-wrap gap-1">
-                    {activeProof.tags.map((t) => {
-                      const matches = (currentLead.tags ?? []).some((lt) => lt.toLowerCase() === t.toLowerCase())
-                      return (
-                        <span key={t} className={cn('rounded-md px-1.5 py-0.5 font-mono text-[10px] ring-1',
-                          matches ? 'bg-orange/10 text-orange ring-orange/20' : 'bg-bone text-graphite ring-transparent')}>
-                          {t}
-                        </span>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-              <Button variant="orange" size="sm" onClick={() => onDraftProof(activeProof.id)} disabled={drafting}>
-                Use this
-              </Button>
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-ink">
+                {activeProof.permissionOnFile && activeProof.clientName ? activeProof.clientName : 'Client protected'}
+              </p>
+              {activeProof.reviewQuote && (
+                <p className="mt-0.5 text-[12px] italic text-graphite">&ldquo;{activeProof.reviewQuote}&rdquo;</p>
+              )}
+              <p className="mt-1 text-[12px] leading-relaxed text-graphite">{activeProof.projectSummary}</p>
+              {activeProof.tags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {activeProof.tags.map((t) => {
+                    const matches = (currentLead.tags ?? []).some((lt) => lt.toLowerCase() === t.toLowerCase())
+                    return (
+                      <span key={t} className={cn('font-mono text-[10px]',
+                        matches ? 'text-orange' : 'text-graphite')}>
+                        {t}
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
             </div>
+            <Button variant="orange" size="sm" onClick={() => onDraftProof(activeProof.id)} disabled={drafting}>
+              Use this
+            </Button>
           </div>
         </section>
       )}
@@ -580,43 +571,43 @@ export function LeadWorkspace({
 
       {/* ═══ 3. DRAFT ═══ */}
       {canDraft && !locked && (
-        <section className="reveal-up stagger-2 space-y-4">
-          <div className="rounded-2xl border border-line/60 bg-bone-raised p-5">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-heading text-base text-ink">Draft</h2>
-              {draft && (
-                <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
-                  draft.passed ? 'bg-status-success/8 text-status-success' : 'bg-status-warning/8 text-status-warning')}>
-                  {draft.passed ? <Check className="size-3" /> : <X className="size-3" />}
-                  {draft.passed ? 'Ready to send' : 'Needs an edit'}
-                </span>
-              )}
-            </div>
+        <section className="reveal-up stagger-2 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-heading text-base text-ink">Draft</h2>
+            {draft && (
+              <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-medium',
+                draft.passed ? 'text-status-success' : 'text-status-warning')}>
+                {draft.passed ? <Check className="size-3" /> : <X className="size-3" />}
+                {draft.passed ? 'Ready' : 'Needs edit'}
+              </span>
+            )}
+          </div>
 
-            {/* Artifact selector */}
-            <div className="mt-4 flex flex-wrap gap-1 rounded-xl bg-bone/50 p-1">
-              {ARTIFACTS.map((t) => {
-                const disabledHint = artifactDisabled[t.id]
-                const active = artifact === t.id
-                return (
-                  <button key={t.id} role="tab" aria-selected={active} aria-disabled={Boolean(disabledHint)}
-                    title={disabledHint ?? undefined}
-                    onClick={() => { if (!disabledHint) { setOverrideCheck(false); setArtifact(t.id) } }}
-                    className={cn(
-                      'rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all',
-                      active ? 'bg-ink text-bone shadow-sm' : disabledHint ? 'cursor-not-allowed text-graphite/50' : 'text-graphite hover:bg-bone hover:text-ink',
-                    )}>
-                    {t.label}
-                  </button>
-                )
-              })}
-            </div>
+
+          {/* Artifact selector */}
+          <div className="flex flex-wrap gap-1">
+            {ARTIFACTS.map((t) => {
+              const disabledHint = artifactDisabled[t.id]
+              const active = artifact === t.id
+              return (
+                <button key={t.id} role="tab" aria-selected={active} aria-disabled={Boolean(disabledHint)}
+                  title={disabledHint ?? undefined}
+                  onClick={() => { if (!disabledHint) { setOverrideCheck(false); setArtifact(t.id) } }}
+                  className={cn(
+                    'rounded px-2 py-1 text-[11px] font-medium transition-all',
+                    active ? 'bg-ink text-bone' : disabledHint ? 'cursor-not-allowed text-graphite/40' : 'text-graphite hover:text-ink',
+                  )}>
+                  {t.label}
+                </button>
+              )
+            })}
+          </div>
 
             {artifact === 'reply' && (
-              <div className="mt-4 rounded-xl border border-line/60 bg-bone/30 p-3">
-                <Label htmlFor="reply-text" className="text-xs text-graphite">Prospect&apos;s reply (paste what they wrote)</Label>
+              <div className="mt-3">
+                <Label htmlFor="reply-text" className="text-[11px] text-graphite">Prospect&apos;s reply (paste what they wrote)</Label>
                 <Textarea id="reply-text" value={capturedReplyText} onChange={(e) => setCapturedReplyText(e.target.value)}
-                  rows={3} className="mt-1 border-0 bg-transparent px-0 py-1 text-sm shadow-none focus-visible:ring-0"
+                  rows={3} className="mt-1 text-[13px]"
                   placeholder="Paste the prospect's reply here..." />
               </div>
             )}
@@ -651,22 +642,22 @@ export function LeadWorkspace({
                 )}
 
                 {drafting || draft || draftText ? (
-                  <div className="mt-4 rounded-xl border-2 border-ink/8 bg-bone/15 p-3">
+                  <div className="mt-3 rounded-md border border-line bg-bone p-3">
                     <Textarea
                       value={showVariant && variantDraft ? variantDraft.draftText : draftText}
                       onChange={(e) => editDraft(e.target.value)}
                       rows={6}
-                      className="max-h-[28rem] overflow-y-auto border-0 bg-transparent px-0 py-1 text-[14px] leading-relaxed shadow-none focus-visible:ring-0"
+                      className="max-h-[28rem] overflow-y-auto border-0 bg-transparent px-0 py-1 text-[13px] leading-relaxed shadow-none focus-visible:ring-0"
                       aria-label="Draft text, editable"
                       placeholder="Your message appears here as it is written. Edit it freely."
                     />
-                    <div className="mt-2 flex items-center justify-between border-t border-line/50 pt-2">
-                      <span className={cn('font-mono text-xs',
-                        count > countMax ? 'text-status-danger' : count >= countMax * 0.9 ? 'text-status-warning' : 'text-status-success')}>
+                    <div className="mt-2 flex items-center justify-between">
+                      <span className={cn('font-mono text-[11px]',
+                        count > countMax ? 'text-status-danger' : count >= countMax * 0.9 ? 'text-status-warning' : 'text-graphite')}>
                         {count} {artifactCount(artifact).label} / {countMax}
                       </span>
                       <button onClick={() => void copyDraft()}
-                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-graphite transition-colors hover:bg-bone hover:text-ink">
+                        className="inline-flex items-center gap-1 text-[11px] text-graphite transition-colors hover:text-ink">
                         <Copy className="size-3" /> Copy
                       </button>
                     </div>
@@ -696,57 +687,58 @@ export function LeadWorkspace({
                         <X className="mt-0.5 size-3 shrink-0" /> No specific detail from the lead carried through.
                       </p>
                     )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+                   </div>
+                  )}
+                </>
+              )}
+            </section>
+          )}
 
           {/* ═══ 4. SEND ═══ */}
-          <div className="rounded-2xl border border-line/60 bg-bone-raised p-5">
+          {canDraft && !locked && (
+          <div>
             <h2 className="text-heading text-base text-ink">Send it</h2>
-            <p className="mt-1 text-sm text-graphite">Relay never sends for you. Copy the message, send it yourself, then log what you sent.</p>
+            <p className="mt-0.5 text-[12px] text-graphite">Relay never sends for you. Copy the message, send it yourself, then log what you sent.</p>
 
             {/* Pre-send gates */}
             {(draft || textToCheck) && (
-              <div className="mt-4 space-y-1.5 rounded-xl bg-bone/30 p-3">
+              <div className="mt-3 space-y-1">
                 {gates.map((g) => (
-                  <div key={g.label} className={cn('flex items-start gap-2 text-sm', g.ok ? 'text-status-success' : 'text-graphite')}>
+                  <div key={g.label} className={cn('flex items-start gap-2 text-[12px]', g.ok ? 'text-status-success' : 'text-graphite')}>
                     {g.ok
-                      ? <Check className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                      ? <Check className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
                       : <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-line" />}
                     <span>
                       {g.label}
-                      {!g.ok && g.why ? <span className="block text-xs text-status-warning">{g.why}</span> : null}
+                      {!g.ok && g.why ? <span className="block text-[11px] text-status-warning">{g.why}</span> : null}
                     </span>
                   </div>
                 ))}
                 {needOverride && (
-                  <label className="flex items-start gap-2.5 pt-1 text-xs text-graphite">
-                    <input type="checkbox" checked={overrideCheck} onChange={(e) => setOverrideCheck(e.target.checked)} className="mt-0.5 size-4 accent-gold" />
+                  <label className="flex items-start gap-2 pt-1 text-[11px] text-graphite">
+                    <input type="checkbox" checked={overrideCheck} onChange={(e) => setOverrideCheck(e.target.checked)} className="mt-0.5 size-3.5" />
                     <span>I read the flagged lines and will send this as written anyway.</span>
                   </label>
                 )}
               </div>
             )}
 
-            <div className="mt-4 grid gap-1.5">
-              <Label htmlFor="sent-text">Text you actually sent</Label>
+            <div className="mt-3">
+              <Label htmlFor="sent-text" className="text-[11px] text-graphite">Text you actually sent</Label>
               <Textarea id="sent-text" value={sentText} onChange={(e) => setSentText(e.target.value)}
                 onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { if (needOverride && !overrideCheck) return; e.preventDefault(); void logSend() } }}
-                rows={4} disabled={locked} className="max-h-[16rem] overflow-y-auto"
+                rows={3} disabled={locked}
                 placeholder={draft ? 'Paste the draft once it looks right, or paste what you typed.' : 'Paste what you actually sent. No auto-send, ever.'} />
             </div>
-            <div className="mt-3 flex items-center justify-between gap-4">
+            <div className="mt-2 flex items-center justify-between gap-4">
               <Button variant="orange" onClick={() => void logSend()} disabled={sending || locked || !sentText.trim() || (needOverride && !overrideCheck)} loading={sending}>
                 {sending ? 'Logging...' : needOverride && !overrideCheck ? 'Check the flags to log' : 'Log this send'}
               </Button>
-              <span className="text-mono-medium text-xs text-graphite">⌘ + Enter</span>
+              <span className="text-mono-medium text-[10px] text-stone">⌘ + Enter</span>
             </div>
-            {sendError && <p className="mt-2 text-sm text-status-danger" role="alert">{sendError}</p>}
-            {sentOk && <p className="mt-2 text-sm text-status-success">Logged. {sentOk.todaySends} {artifact} messages sent today.</p>}
+            {sendError && <p className="mt-2 text-[12px] text-status-danger" role="alert">{sendError}</p>}
+             {sentOk && <p className="mt-2 text-[12px] text-status-success">Logged. {sentOk.todaySends} {artifact} messages sent today.</p>}
           </div>
-        </section>
       )}
 
       {/* ═══ 5. TIMELINE (demoted, collapsible) ═══ */}
@@ -755,13 +747,13 @@ export function LeadWorkspace({
           <button
             type="button"
             onClick={() => setTimelineOpen((o) => !o)}
-            className="flex w-full items-center justify-between rounded-xl border border-line/60 bg-bone-raised px-5 py-3 text-left transition-colors hover:bg-bone/30"
+            className="flex w-full items-center justify-between border-b border-line pb-2 text-left"
           >
-            <span className="text-sm font-medium text-graphite">Timeline</span>
-            {timelineOpen ? <ChevronUp className="size-4 text-graphite" /> : <ChevronDown className="size-4 text-graphite" />}
+            <span className="text-[12px] font-medium text-graphite">Timeline</span>
+            {timelineOpen ? <ChevronUp className="size-3.5 text-graphite" /> : <ChevronDown className="size-3.5 text-graphite" />}
           </button>
           {timelineOpen && (
-            <div className="mt-2 rounded-xl border border-line/60 bg-bone-raised p-5">
+            <div className="mt-3">
               <Timeline lead={currentLead} />
             </div>
           )}

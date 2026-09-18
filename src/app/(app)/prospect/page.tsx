@@ -310,20 +310,19 @@ export default function ProspectCheckPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
-      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Intake / Prospect Check</p>
-        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+      <header className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Intake</p>
+          <span className="size-1 rounded-full bg-line" />
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Prospect Check</p>
+        </div>
+        <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink sm:text-[32px]">
           Decide if this prospect is worth your next outreach.
         </h1>
-        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+        <p className="max-w-2xl text-[13px] text-graphite">
           Relay scores fit, suggests the best sender profile, and prepares a connection note you can review.
         </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <SignalChip label="Analysis" value={result ? 'Ready' : analyzing ? 'Running' : 'Waiting'} />
-          <SignalChip label="Recommendation" value={recommendation} />
-          <SignalChip label="Evidence confidence" value={confidence} />
-        </div>
-      </section>
+      </header>
 
       {error ? (
         <Alert variant="destructive">
@@ -357,13 +356,12 @@ export default function ProspectCheckPage() {
         </Alert>
       ) : null}
 
-      {/* ── Input area ── */}
-      <div className="srf-proof px-4 py-4 sm:px-5">
+      <div className="rounded-lg border border-line bg-bone-raised p-4 shadow-sm sm:p-5">
         <div className="flex items-center gap-2">
           <Search className="size-4 text-orange" aria-hidden="true" />
           <h2 className="text-sm font-medium text-ink">Paste a LinkedIn profile</h2>
         </div>
-        <p className="mt-1 text-xs leading-relaxed text-slate">
+        <p className="mt-1 text-xs leading-relaxed text-graphite">
           Name, headline, current role, company, About, experience, posts — whatever you have.
         </p>
         <Textarea
@@ -381,7 +379,7 @@ export default function ProspectCheckPage() {
           className="mt-3 max-h-[24rem] overflow-y-auto font-mono text-[13px]"
         />
         <div className="mt-3 flex items-center justify-between gap-3">
-          <span className="text-xs text-slate">Cmd / Ctrl + Enter</span>
+          <span className="text-xs text-stone">Cmd / Ctrl + Enter</span>
           <div className="flex items-center gap-2">
             {result && (
               <Button variant="ghost" size="sm" onClick={skip}>
@@ -397,92 +395,75 @@ export default function ProspectCheckPage() {
         </div>
       </div>
 
-      {/* ── Loading state ── */}
       {analyzing && !result && (
-        <div className="flex min-h-[12rem] flex-col items-center justify-center rounded border border-dashed border-line px-6 text-center">
+        <div className="flex min-h-[12rem] flex-col items-center justify-center rounded-lg border border-dashed border-line bg-bone-raised/40 px-6 text-center">
           <RefreshCw className="size-5 animate-spin text-orange" aria-hidden="true" />
           <p className="mt-3 text-sm font-medium text-ink">Analyzing prospect…</p>
-          <p className="mt-1 text-xs text-slate">Usually a few seconds.</p>
+          <p className="mt-1 text-xs text-graphite">Usually a few seconds.</p>
         </div>
       )}
 
-      {/* ── Results ── */}
       {result && result.extracted && (
-        <div className="space-y-5">
+        <div className="space-y-4">
           {result.score ? (
-            <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-start gap-4">
-                  <ProspectScoreRing score={result.score.total} />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[15px] font-medium text-ink">
-                        {result.extracted.name ?? 'Unnamed prospect'}
-                      </span>
-                    </div>
-                    <p className="text-[13px] text-graphite">
-                      {result.extracted.titleRaw ?? result.extracted.title ?? 'No title'} {result.extracted.company ? `· ${result.extracted.company}` : ''}
-                    </p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className={cn('rounded px-2 py-0.5 text-[11px] font-medium', recMeta?.bg, recMeta?.color)}>
-                        {recMeta?.label}
-                      </span>
-                      <span className="text-[12px] text-stone">
-                        {result.canonical?.extractionCompleteness?.score ?? '?'}/100 extraction confidence
-                      </span>
-                    </div>
-                  </div>
+            <div>
+              <div className="flex items-baseline gap-3">
+                <ProspectScoreRing score={result.score.total} />
+                <div className="min-w-0">
+                  <h2 className="text-[15px] font-medium text-ink">
+                    {result.extracted.name ?? 'Unnamed prospect'}
+                  </h2>
+                  <p className="text-[12px] text-graphite">
+                    {result.extracted.titleRaw ?? result.extracted.title ?? 'No title'} {result.extracted.company ? `· ${result.extracted.company}` : ''}
+                  </p>
                 </div>
+                <span className={cn('ml-auto text-[11px] font-medium shrink-0', recMeta?.color)}>
+                  {recMeta?.label}
+                </span>
               </div>
 
               {Array.isArray(result.score.reasons) && result.score.reasons.length > 0 && (
-                <div className="mt-4 space-y-1.5">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-stone">Why</p>
-                  <ul className="space-y-1">
-                    {result.score.reasons.map((w, i) => (
-                      <li key={i} className="flex items-start gap-2 text-[13px] text-ink">
-                        <Check className="mt-0.5 size-3.5 shrink-0 text-status-success" aria-hidden="true" />
-                        {w}
-                      </li>
-                    ))}
-                  </ul>
+                <div className="mt-3 space-y-0.5">
+                  {result.score.reasons.map((w, i) => (
+                    <p key={i} className="flex items-start gap-2 text-[12px] text-ink">
+                      <Check className="mt-0.5 size-3 shrink-0 text-status-success" aria-hidden="true" />
+                      {w}
+                    </p>
+                  ))}
                 </div>
               )}
 
               {Array.isArray(result.score.watchOut) && result.score.watchOut.length > 0 && (
-                <div className="mt-3 space-y-1.5">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-stone">Watch out</p>
-                  <ul className="space-y-1">
-                    {result.score.watchOut.map((w, i) => (
-                      <li key={i} className="flex items-start gap-2 text-[13px] text-graphite">
-                        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" />
-                        {w}
-                      </li>
-                    ))}
-                  </ul>
+                <div className="mt-2 space-y-0.5">
+                  {result.score.watchOut.map((w, i) => (
+                    <p key={i} className="flex items-start gap-2 text-[12px] text-graphite">
+                      <AlertTriangle className="mt-0.5 size-3 shrink-0 text-status-warning" aria-hidden="true" />
+                      {w}
+                    </p>
+                  ))}
                 </div>
               )}
 
               <button
                 type="button"
                 onClick={() => setShowDetails(!showDetails)}
-                className="mt-3 flex items-center gap-1 text-[12px] text-stone hover:text-ink"
+                className="mt-2 flex items-center gap-1 text-[11px] text-stone transition-colors hover:text-ink"
               >
-                <ChevronDown className={cn('size-3.5 transition-transform', showDetails && 'rotate-180')} aria-hidden="true" />
+                <ChevronDown className={cn('size-3 transition-transform', showDetails && 'rotate-180')} aria-hidden="true" />
                 {showDetails ? 'Hide' : 'Show'} scoring details
               </button>
 
               {showDetails && (
-                <div className="mt-3 space-y-2 border-t border-line pt-3">
+                <div className="mt-2 space-y-2 border-t border-line pt-2">
                   {result.score.dimensions.map((dim) => {
                     const frac = dim.max > 0 ? dim.points / dim.max : 0
                     return (
-                      <div key={dim.label} className="space-y-1">
-                        <div className="flex items-baseline justify-between gap-3 text-[12px]">
+                      <div key={dim.label} className="space-y-0.5">
+                        <div className="flex items-baseline justify-between gap-3 text-[11px]">
                           <span className="text-ink">{dim.label}</span>
-                          <span className="font-mono text-[11px] text-stone">{dim.points}/{dim.max}</span>
+                          <span className="font-mono text-stone">{dim.points}/{dim.max}</span>
                         </div>
-                        <div className="h-1 overflow-hidden rounded-full bg-bone">
+                        <div className="h-1 overflow-hidden rounded-full bg-line/60">
                           <div
                             className={cn(
                               'h-full rounded-full transition-all',
@@ -491,7 +472,7 @@ export default function ProspectCheckPage() {
                             style={{ width: `${Math.max(frac * 100, frac > 0 ? 8 : 0)}%` }}
                           />
                         </div>
-                        <p className="text-[11px] text-stone">{dim.note}</p>
+                        <p className="text-[10px] text-stone">{dim.note}</p>
                       </div>
                     )
                   })}
@@ -499,27 +480,29 @@ export default function ProspectCheckPage() {
               )}
             </div>
           ) : (
-            <div className="rounded-2xl border border-status-warning/50 bg-status-warning/5 p-5 sm:p-6">
-              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-status-warning">Not enough information</p>
-              <h3 className="mt-2 text-[18px] font-medium text-ink">Relay could not verify enough evidence to score this prospect.</h3>
-              <p className="mt-2 text-sm text-graphite">Add richer person, company, and opportunity context, then analyze again.</p>
-              <div className="mt-4 grid gap-2 text-xs text-graphite sm:grid-cols-3">
-                <span className="rounded border border-line bg-paper px-2 py-1">Input quality: {result.qualification.inputQuality}/100</span>
-                <span className="rounded border border-line bg-paper px-2 py-1">Extractability: {result.qualification.extractability}/100</span>
-                <span className="rounded border border-line bg-paper px-2 py-1">Evidence coverage: {result.qualification.evidenceCoverage}/100</span>
+            <div className="border-l-2 border-status-warning/40 pl-4">
+              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-status-warning">Not enough information</p>
+              <p className="mt-1 text-[14px] font-medium text-ink">Relay could not verify enough evidence to score this prospect.</p>
+              <p className="mt-1 text-[12px] text-graphite">Add richer person, company, and opportunity context, then analyze again.</p>
+              <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-graphite">
+                <span>Input: {result.qualification.inputQuality}/100</span>
+                <span>·</span>
+                <span>Extractability: {result.qualification.extractability}/100</span>
+                <span>·</span>
+                <span>Evidence: {result.qualification.evidenceCoverage}/100</span>
               </div>
               {((Array.isArray(result.qualification.reasons) && result.qualification.reasons.length > 0) || (Array.isArray(result.qualification.missingCritical) && result.qualification.missingCritical.length > 0)) && (
-                <ul className="space-y-1">
+                <ul className="mt-2 space-y-0.5">
                   {Array.isArray(result.qualification.reasons) && result.qualification.reasons.slice(0, 3).map((w, i) => (
-                    <li key={i} className="mt-3 flex items-start gap-2 text-[13px] text-graphite">
-                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" />
+                    <li key={i} className="flex items-start gap-2 text-[12px] text-graphite">
+                      <AlertTriangle className="mt-0.5 size-3 shrink-0 text-status-warning" aria-hidden="true" />
                       {w}
                     </li>
                   ))}
                 </ul>
               )}
               {Array.isArray(result.qualification.suggestions) && result.qualification.suggestions.length > 0 && (
-                <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-graphite">
+                <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[11px] text-graphite">
                   {result.qualification.suggestions.map((suggestion) => (
                     <li key={suggestion}>{suggestion}</li>
                   ))}
@@ -528,49 +511,48 @@ export default function ProspectCheckPage() {
             </div>
           )}
 
-          {/* Best sender */}
           {result.score && result.bestSender && (
-            <div className="rounded-2xl border border-line bg-paper p-5">
+            <div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <User className="size-4 text-orange" aria-hidden="true" />
-                  <h3 className="text-sm font-medium text-ink">Best sender: {result.bestSender.label ?? 'Unnamed'}</h3>
+                  <User className="size-3.5 text-orange" aria-hidden="true" />
+                  <h3 className="text-[12px] font-medium text-ink">Best sender: {result.bestSender.label ?? 'Unnamed'}</h3>
                 </div>
                 {Array.isArray(result.alternativeSenders) && result.alternativeSenders.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setShowSenders(!showSenders)}
-                    className="flex items-center gap-1 text-[12px] text-stone hover:text-ink"
+                    className="flex items-center gap-1 text-[11px] text-stone transition-colors hover:text-ink"
                   >
                     Change sender
-                    <ChevronDown className={cn('size-3.5 transition-transform', showSenders && 'rotate-180')} aria-hidden="true" />
+                    <ChevronDown className={cn('size-3 transition-transform', showSenders && 'rotate-180')} aria-hidden="true" />
                   </button>
                 )}
               </div>
               {Array.isArray(result.bestSenderProof) && result.bestSenderProof.length > 0 && (
-                <p className="mt-1.5 text-[12px] text-graphite">
+                <p className="mt-1 text-[11px] text-graphite">
                   {result.bestSenderProof[0].safeClaim.slice(0, 100)}
                   {result.bestSenderProof.length > 1 ? ` +${result.bestSenderProof.length - 1} more` : ''}
                 </p>
               )}
               {Array.isArray(result.bestSenderProof) && result.bestSenderProof.length === 0 && (
-                <p className="mt-1.5 text-[12px] text-status-warning">
-                  No verified proof matches for this sender — note may lack credibility.
+                <p className="mt-1 text-[11px] text-status-warning">
+                  No verified proof matches for this sender.
                 </p>
               )}
 
               {showSenders && Array.isArray(result.alternativeSenders) && result.alternativeSenders.length > 0 && (
-                <div className="mt-3 space-y-2 border-t border-line pt-3">
+                <div className="mt-2 space-y-1">
                   {result.alternativeSenders.map((alt) => (
                     <button
                       key={alt.profile.id}
                       type="button"
                       onClick={() => changeSender(alt.profile.id)}
-                      className="block w-full rounded-lg border border-line bg-bone/40 px-3 py-2 text-left text-xs transition-colors hover:bg-bone"
+                      className="block w-full text-left text-[11px]"
                     >
-                      <span className="block font-medium text-ink">{alt.profile.label ?? 'Unnamed'}</span>
-                      <span className="mt-0.5 block text-slate">
-                        {alt.topProof ?? 'No direct proof match'} · score {alt.matchScore}
+                      <span className="font-medium text-ink">{alt.profile.label ?? 'Unnamed'}</span>
+                      <span className="ml-2 text-graphite">
+                        {alt.topProof ?? 'No match'} · {alt.matchScore}
                       </span>
                     </button>
                   ))}
@@ -579,66 +561,60 @@ export default function ProspectCheckPage() {
             </div>
           )}
 
-          {/* Connection note */}
-          <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
+          <div>
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-ink">Connection note</h3>
+              <h3 className="text-[12px] font-medium text-ink">Connection note</h3>
               <span className={cn(
-                'font-mono text-[12px]',
+                'font-mono text-[11px]',
                 result.charCount > result.maxChars ? 'text-status-danger' : 'text-stone',
               )}>
                 {result.charCount} / {result.maxChars}
               </span>
             </div>
-            <div className="mt-3 rounded-lg border border-line bg-bone/40 p-4">
-              <p className="text-[14px] leading-relaxed text-ink whitespace-pre-wrap">
+            <div className="mt-2 rounded-md bg-bone p-3">
+              <p className="text-[13px] leading-relaxed text-ink whitespace-pre-wrap">
                 {result.connectionNote || (result.score ? 'No note generated.' : 'Qualification blocked until you add enough context.')}
               </p>
             </div>
 
-            {/* Quality indicators */}
             {!result.quality.passed && Array.isArray(result.quality.failures) && result.quality.failures.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="mt-1.5 flex flex-wrap gap-1">
                 {result.quality.failures.slice(0, 3).map((f, i) => (
-                  <span key={i} className="rounded bg-status-warning/10 px-1.5 py-0.5 text-[10px] text-status-warning">
-                    {f}
-                  </span>
+                  <span key={i} className="text-[10px] text-status-warning">{f}</span>
                 ))}
               </div>
             )}
             {result.quality.wasRepaired && (
-              <p className="mt-1.5 text-[11px] text-stone">Auto-repaired to meet quality standards.</p>
+              <p className="mt-1 text-[10px] text-stone">Auto-repaired to meet quality standards.</p>
             )}
             {result.draftFailed && (
-              <p className="mt-1.5 text-[11px] text-status-warning">Draft generation failed — using fallback.</p>
+              <p className="mt-1 text-[10px] text-status-warning">Draft generation failed — using fallback.</p>
             )}
 
-            {/* Actions */}
-            <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button variant="orange" size="sm" onClick={() => void copyNote()} disabled={!result.score || !result.connectionNote}>
-                {copied ? <Check className="size-3.5" aria-hidden="true" /> : <Copy className="size-3.5" aria-hidden="true" />}
+                {copied ? <Check className="size-3" aria-hidden="true" /> : <Copy className="size-3" aria-hidden="true" />}
                 {copied ? 'Copied' : 'Copy note'}
               </Button>
               <Button variant="outline" size="sm" onClick={() => void analyze()} disabled={analyzing}>
-                <RefreshCw className="size-3.5" aria-hidden="true" />
+                <RefreshCw className="size-3" aria-hidden="true" />
                 Try another angle
               </Button>
               <Button variant="secondary" size="sm" onClick={() => void saveAsLead()} disabled={saving || !canSaveLead}>
                 {saving ? 'Creating...' : (
                   <>
                     {canSaveLead ? 'Create lead' : 'Lead not eligible'}
-                    <ArrowRight className="size-3.5" aria-hidden="true" />
+                    <ArrowRight className="size-3" aria-hidden="true" />
                   </>
                 )}
               </Button>
               <Button variant="ghost" size="sm" onClick={skip}>
-                <X className="size-3.5" aria-hidden="true" />
+                <X className="size-3" aria-hidden="true" />
                 Skip
               </Button>
             </div>
           </div>
 
-          {/* Demo mode notice */}
           {result.demoMode && (
             <Alert>
               <AlertTitle>Demo mode</AlertTitle>
@@ -650,7 +626,6 @@ export default function ProspectCheckPage() {
         </div>
       )}
 
-      {/* Mobile spacer */}
       <div className="h-4 lg:hidden" />
     </div>
   )
@@ -658,9 +633,9 @@ export default function ProspectCheckPage() {
 
 function SignalChip({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
-      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
-      <p className="mt-1 text-[14px] font-medium text-[color:var(--console-text)]">{value}</p>
+    <div className="rounded-md border border-line bg-bone-raised px-3 py-2">
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">{label}</p>
+      <p className="mt-1 text-[14px] font-medium text-ink">{value}</p>
     </div>
   )
 }

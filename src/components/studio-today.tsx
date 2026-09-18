@@ -305,55 +305,29 @@ export function StudioToday({
 
       <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-4">
-          <div className="rounded border border-line bg-bone-raised px-4 py-4">
-            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Other directions</p>
-            {alternatives.length > 0 ? (
-              <div className="mt-3 space-y-3">
+          {alternatives.length > 0 && (
+            <div>
+              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Other directions</p>
+              <div className="mt-2 space-y-0">
                 {alternatives.map((idea, index) => (
-                  <article key={idea.id} className="rounded border border-line/70 bg-bone px-3 py-3">
-                    <p className="text-mono-medium text-[10px] uppercase tracking-[0.12em] text-stone">
-                      {String(index + 1).padStart(2, '0')} / {sourceLabel(idea.sourceKind)}
-                    </p>
-                    <p className="mt-1 text-[14px] font-medium text-ink">{idea.title}</p>
-                    <p className="mt-1 text-[12px] text-graphite">{idea.angle}</p>
-                    <div className="mt-2 grid gap-1 text-[11px] text-graphite sm:grid-cols-2">
-                      <p><span className="text-ink">Why you:</span> {idea.whyYou}</p>
-                      <p><span className="text-ink">Why it may matter:</span> {idea.whyAudience}</p>
+                  <div key={idea.id} className="flex items-baseline justify-between gap-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium text-ink">{idea.title}</p>
+                      <p className="text-[11px] text-graphite">{idea.angle}</p>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void writeIdea(idea)}
-                        disabled={actionsLocked}
-                        className="inline-flex items-center gap-1 text-[12px] font-medium text-ink"
-                      >
-                        {openingDraftIdeaId === idea.id ? 'Opening workspace...' : loadingIdeaId === idea.id ? 'Writing...' : 'Write this'}
-                        <ArrowRight className="size-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void refreshIdeas('regeneration')}
-                        disabled={actionsLocked}
-                        className="text-[11px] text-graphite underline underline-offset-2"
-                      >
-                        Different angle
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void notForMe(idea)}
-                        disabled={actionsLocked}
-                        className="text-[11px] text-graphite underline underline-offset-2"
-                      >
-                        {dismissingIdeaId === idea.id ? 'Saving...' : 'Not for me'}
-                      </button>
-                    </div>
-                  </article>
+                    <button
+                      type="button"
+                      onClick={() => void writeIdea(idea)}
+                      disabled={actionsLocked}
+                      className="shrink-0 text-[11px] font-medium text-cobalt"
+                    >
+                      {openingDraftIdeaId === idea.id ? 'Opening...' : loadingIdeaId === idea.id ? 'Writing...' : 'Write this →'}
+                    </button>
+                  </div>
                 ))}
               </div>
-            ) : (
-              <p className="mt-3 text-[12px] text-graphite">Studio is collecting more directions for tomorrow.</p>
-            )}
-          </div>
+            </div>
+          )}
 
           <StudioQuickCapture
             personaId={persona.id}
@@ -363,67 +337,50 @@ export function StudioToday({
           />
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded border border-line bg-bone-raised px-4 py-4">
+        <div className="space-y-3">
+          <div>
             <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Content identity</p>
-            <IdentityRow label="Known for" value={(identitySummary.knownFor ?? []).join(' · ') || 'Still learning your strongest themes'} />
-            <IdentityRow label="Territories" value={(identitySummary.territories ?? []).join(' · ') || 'No territories mapped yet'} />
-            <IdentityRow label="Audience" value={(identitySummary.audience ?? []).join(' · ') || 'Audience not set yet'} />
-            <IdentityRow label="Recently used" value={identitySummary.recentlyUsed} />
-            <IdentityRow label="Underused" value={identitySummary.underused} />
-            <Link href={`/content/${persona.id}/identity`} className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-cobalt">
-              View identity
-              <ArrowRight className="size-3" />
+            <p className="mt-1 text-[11px] text-graphite">
+              {(identitySummary.knownFor ?? []).join(' · ') || 'Still learning your themes'}
+              {identitySummary.territories?.length ? ` · ${identitySummary.territories.join(' · ')}` : ''}
+            </p>
+            <Link href={`/content/${persona.id}/identity`} className="mt-1 inline-block text-[11px] font-medium text-cobalt">
+              View identity →
             </Link>
           </div>
 
           {journeySuggestion && (
-            <div className="rounded border border-line bg-bone-raised px-4 py-4">
+            <div>
               <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Your journey</p>
-              <p className="mt-2 text-[13px] font-medium text-ink">{journeySuggestion.title}</p>
-              <p className="mt-1 text-[12px] text-graphite">{journeySuggestion.detail}</p>
+              <p className="mt-1 text-[12px] font-medium text-ink">{journeySuggestion.title}</p>
+              <p className="mt-0.5 text-[11px] text-graphite">{journeySuggestion.detail}</p>
 
               {journeyState === 'idle' ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => void saveJourneyChoice('remembered')} disabled={savingJourneyChoice} className="rounded border border-line px-2.5 py-1.5 text-[11px] text-ink disabled:opacity-60">
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => void saveJourneyChoice('remembered')} disabled={savingJourneyChoice} className="text-[11px] text-ink disabled:opacity-60">
                     {savingJourneyChoice ? 'Saving...' : 'Remember'}
                   </button>
-                  <button type="button" onClick={() => void saveJourneyChoice('dismissed')} disabled={savingJourneyChoice} className="rounded border border-line px-2.5 py-1.5 text-[11px] text-graphite disabled:opacity-60">
-                    {savingJourneyChoice ? 'Saving...' : 'Don&apos;t save'}
+                  <button type="button" onClick={() => void saveJourneyChoice('dismissed')} disabled={savingJourneyChoice} className="text-[11px] text-graphite disabled:opacity-60">
+                    Don&apos;t save
                   </button>
-                  <button type="button" onClick={() => void refreshIdeas('surprise_me')} disabled={actionsLocked} className="rounded bg-cobalt px-2.5 py-1.5 text-[11px] font-medium text-bone disabled:opacity-60">
+                  <button type="button" onClick={() => void refreshIdeas('surprise_me')} disabled={actionsLocked} className="text-[11px] font-medium text-cobalt disabled:opacity-60">
                     Turn into idea
                   </button>
                 </div>
               ) : journeyState === 'remembered' ? (
-                <p className="mt-3 text-[11px] text-status-success">Confirmed. Studio can use this as context.</p>
+                <p className="mt-1 text-[10px] text-status-success">Confirmed.</p>
               ) : (
-                <p className="mt-3 text-[11px] text-graphite">Ignored for now. Studio will not treat it as a stored fact.</p>
+                <p className="mt-1 text-[10px] text-graphite">Ignored.</p>
               )}
             </div>
           )}
 
-          <div className="rounded border border-line bg-bone-raised px-4 py-4">
-            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Studio momentum</p>
-            <div className="mt-2 space-y-1 text-[12px] text-ink">
-              <p>{weeklyMomentum.ideasExplored} ideas explored</p>
-              <p>{weeklyMomentum.draftsCreated} drafts created</p>
-              <p>{weeklyMomentum.published} published</p>
-            </div>
-            <div className="mt-3 space-y-1.5">
-              {weeklyMomentum.territoryBalance.map((territory) => (
-                <div key={territory.name}>
-                  <div className="flex items-center justify-between text-[11px] text-graphite">
-                    <span>{territory.name}</span>
-                    <span>{territory.weight}%</span>
-                  </div>
-                  <div className="mt-1 h-1.5 rounded bg-line/60">
-                    <div className="h-full rounded bg-cobalt" style={{ width: `${territory.weight}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 text-[11px] text-graphite">{weeklyMomentum.insight}</p>
+          <div>
+            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Momentum</p>
+            <p className="mt-1 text-[11px] text-graphite">
+              {weeklyMomentum.ideasExplored} explored · {weeklyMomentum.draftsCreated} drafts · {weeklyMomentum.published} published
+            </p>
+            <p className="mt-1 text-[10px] text-stone">{weeklyMomentum.insight}</p>
           </div>
         </div>
       </section>

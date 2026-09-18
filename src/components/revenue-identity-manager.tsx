@@ -338,7 +338,7 @@ export function RevenueIdentityManager() {
                   )}
                   <button
                     onClick={(e) => { e.stopPropagation(); setPendingDelete(ri.id) }}
-                    className="rounded-md p-1.5 text-slate hover:bg-bone hover:text-red-500"
+                    className="rounded-md p-1.5 text-stone hover:bg-bone hover:text-status-danger"
                     title="Delete"
                   >
                     <Trash2 className="size-3.5" />
@@ -371,7 +371,7 @@ export function RevenueIdentityManager() {
                           return (
                             <div key={a.id} className="flex items-center justify-between rounded bg-bone px-2 py-1">
                               <span className="text-xs text-graphite">{rep?.name ?? a.repId}</span>
-                              <button onClick={() => void unassignRep(ri.id, a.repId)} className="text-[10px] text-slate hover:text-red-500">remove</button>
+                              <button onClick={() => void unassignRep(ri.id, a.repId)} className="text-[10px] text-stone hover:text-status-danger">remove</button>
                             </div>
                           )
                         })}

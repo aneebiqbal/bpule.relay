@@ -344,7 +344,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
     return (
       <div className="flex min-h-screen items-center justify-center bg-bone">
         <div className="text-center">
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-status-danger">{error}</p>
           <button onClick={() => router.back()} className="mt-3 text-sm text-underline text-graphite">
             Go back
           </button>
@@ -509,7 +509,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
             </div>
             </section>
 
-            {error && <p className="rounded-lg bg-red-50 p-2 text-xs text-red-600">{error}</p>}
+            {error && <p className="rounded-lg bg-status-danger/5 p-2 text-xs text-status-danger">{error}</p>}
 
             {/* Feedback */}
             {showFeedback && !feedbackSent && (
@@ -532,7 +532,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
               </div>
             )}
             {feedbackSent && (
-              <p className="rounded-lg bg-green-50 p-2 text-xs text-green-600">Thanks! Relay will learn from this.</p>
+              <p className="rounded-lg bg-status-success/5 p-2 text-xs text-status-success">Thanks! Relay will learn from this.</p>
             )}
           </div>
 
@@ -664,10 +664,10 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
 
 function SaveStatus({ status, onRetry }: { status: 'idle' | 'saving' | 'saved' | 'error'; onRetry: () => void }) {
   if (status === 'saving') return <span className="text-xs text-amber-600">Saving…</span>
-  if (status === 'saved') return <span className="text-xs text-green-600">Saved</span>
+  if (status === 'saved') return <span className="text-xs text-status-success">Saved</span>
   if (status === 'error') {
     return (
-      <span className="text-xs text-red-600">
+      <span className="text-xs text-status-danger">
         Couldn&apos;t save your edit —{' '}
         <button type="button" onClick={onRetry} className="underline underline-offset-2 hover:text-red-700">
           retry

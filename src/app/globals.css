@@ -1558,4 +1558,50 @@
   --text-body: 1.0625rem;
   --text-meta: 0.75rem;
   --measure: 36rem;
+
+  /* Semantic surface tokens */
+  --surface-muted: color-mix(in srgb, var(--bone) 96%, var(--ink) 4%);
+  --surface-hover: color-mix(in srgb, var(--bone) 92%, var(--ink) 8%);
+  --surface-selected: color-mix(in srgb, var(--orange) 6%, var(--bone-raised));
+  --surface-inverse: var(--ink);
+
+  /* Semantic border tokens */
+  --border-subtle: color-mix(in srgb, var(--ink) 6%, transparent);
+  --border-default: var(--line);
+  --border-strong: color-mix(in srgb, var(--ink) 18%, transparent);
+
+  /* Semantic text tokens */
+  --text-primary: var(--ink);
+  --text-secondary: var(--graphite);
+  --text-muted: var(--stone);
+  --text-faint: var(--stone-light);
+  --text-inverse: var(--bone);
+
+  /* Focus ring */
+  --focus-ring: color-mix(in srgb, var(--orange) 30%, transparent);
+  --focus-ring-offset: 2px;
+
+  /* Control heights */
+  --control-height-sm: 28px;
+  --control-height-md: 32px;
+  --control-height-lg: 40px;
+
+  /* Content widths */
+  --content-narrow: 640px;
+  --content-default: 896px;
+  --content-wide: 1152px;
+  --content-full: 1280px;
+
+  /* Sidebar */
+  --sidebar-width: 224px;
+  --sidebar-width-collapsed: 64px;
+
+  /* Z-index scale */
+  --z-base: 0;
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-overlay: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+  --z-tooltip: 60;
 }

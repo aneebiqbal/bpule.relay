@@ -1,0 +1,935 @@
+{
+  "generatedAt": "2026-09-18T17:44:42.752Z",
+  "baseUrl": "http://localhost:3000",
+  "viewports": [
+    "1440",
+    "1024",
+    "768",
+    "390"
+  ],
+  "routeCount": 16,
+  "results": [
+    {
+      "route": "/",
+      "name": "landing",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 62,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "landing-1440.png"
+      ],
+      "loadTimeMs": 2040
+    },
+    {
+      "route": "/login",
+      "name": "login",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 44,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "login-1440.png"
+      ],
+      "loadTimeMs": 1891
+    },
+    {
+      "route": "/signup",
+      "name": "signup",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 38,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "signup-1440.png"
+      ],
+      "loadTimeMs": 2021
+    },
+    {
+      "route": "/pricing",
+      "name": "pricing",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 21,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "pricing-1440.png"
+      ],
+      "loadTimeMs": 2531
+    },
+    {
+      "route": "/dashboard",
+      "name": "today",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 44,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "today-1440.png"
+      ],
+      "loadTimeMs": 1641
+    },
+    {
+      "route": "/leads",
+      "name": "leads",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 34,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "leads-1440.png"
+      ],
+      "loadTimeMs": 1662
+    },
+    {
+      "route": "/leads/new",
+      "name": "leads-new",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 32,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "leads-new-1440.png"
+      ],
+      "loadTimeMs": 1796
+    },
+    {
+      "route": "/prospect",
+      "name": "prospect-check",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 32,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "prospect-check-1440.png"
+      ],
+      "loadTimeMs": 1650
+    },
+    {
+      "route": "/relay",
+      "name": "conversations",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 36,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "conversations-1440.png"
+      ],
+      "loadTimeMs": 1636
+    },
+    {
+      "route": "/content",
+      "name": "studio",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 31,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "studio-1440.png"
+      ],
+      "loadTimeMs": 1622
+    },
+    {
+      "route": "/upwork",
+      "name": "jobs",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 33,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "jobs-1440.png"
+      ],
+      "loadTimeMs": 2069
+    },
+    {
+      "route": "/profiles",
+      "name": "profiles",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 39,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "profiles-1440.png"
+      ],
+      "loadTimeMs": 1843
+    },
+    {
+      "route": "/facts",
+      "name": "proof",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 39,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "proof-1440.png"
+      ],
+      "loadTimeMs": 1692
+    },
+    {
+      "route": "/usage",
+      "name": "usage",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 31,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "usage-1440.png"
+      ],
+      "loadTimeMs": 1635
+    },
+    {
+      "route": "/account",
+      "name": "settings",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 36,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "settings-1440.png"
+      ],
+      "loadTimeMs": 1688
+    },
+    {
+      "route": "/admin/command-center",
+      "name": "admin",
+      "status": 200,
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      ],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 30,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "admin-1440.png"
+      ],
+      "loadTimeMs": 1641
+    },
+    {
+      "route": "/",
+      "name": "landing",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 62,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "landing-1024.png"
+      ],
+      "loadTimeMs": 1621
+    },
+    {
+      "route": "/login",
+      "name": "login",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 44,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "login-1024.png"
+      ],
+      "loadTimeMs": 2049
+    },
+    {
+      "route": "/signup",
+      "name": "signup",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 44,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "signup-1024.png"
+      ],
+      "loadTimeMs": 1740
+    },
+    {
+      "route": "/pricing",
+      "name": "pricing",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 21,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "pricing-1024.png"
+      ],
+      "loadTimeMs": 1756
+    },
+    {
+      "route": "/dashboard",
+      "name": "today",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 44,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "today-1024.png"
+      ],
+      "loadTimeMs": 1704
+    },
+    {
+      "route": "/leads",
+      "name": "leads",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 34,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "leads-1024.png"
+      ],
+      "loadTimeMs": 2633
+    },
+    {
+      "route": "/leads/new",
+      "name": "leads-new",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 32,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "leads-new-1024.png"
+      ],
+      "loadTimeMs": 1852
+    },
+    {
+      "route": "/prospect",
+      "name": "prospect-check",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 32,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "prospect-check-1024.png"
+      ],
+      "loadTimeMs": 2046
+    },
+    {
+      "route": "/relay",
+      "name": "conversations",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 36,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "conversations-1024.png"
+      ],
+      "loadTimeMs": 1635
+    },
+    {
+      "route": "/content",
+      "name": "studio",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 31,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "studio-1024.png"
+      ],
+      "loadTimeMs": 1618
+    },
+    {
+      "route": "/upwork",
+      "name": "jobs",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 33,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "jobs-1024.png"
+      ],
+      "loadTimeMs": 1644
+    },
+    {
+      "route": "/profiles",
+      "name": "profiles",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 39,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "profiles-1024.png"
+      ],
+      "loadTimeMs": 1646
+    },
+    {
+      "route": "/facts",
+      "name": "proof",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 39,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "proof-1024.png"
+      ],
+      "loadTimeMs": 1639
+    },
+    {
+      "route": "/usage",
+      "name": "usage",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 31,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "usage-1024.png"
+      ],
+      "loadTimeMs": 1616
+    },
+    {
+      "route": "/account",
+      "name": "settings",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 36,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "settings-1024.png"
+      ],
+      "loadTimeMs": 1705
+    },
+    {
+      "route": "/admin/command-center",
+      "name": "admin",
+      "status": 200,
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      ],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 30,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "admin-1024.png"
+      ],
+      "loadTimeMs": 1669
+    },
+    {
+      "route": "/",
+      "name": "landing",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [
+        "SPAN.inline-flex rounded-[2px] border border- [-12-119]"
+      ],
+      "clickableElements": 62,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "landing-768.png"
+      ],
+      "loadTimeMs": 1651
+    },
+    {
+      "route": "/login",
+      "name": "login",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 44,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "login-768.png"
+      ],
+      "loadTimeMs": 1586
+    },
+    {
+      "route": "/signup",
+      "name": "signup",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 44,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "signup-768.png"
+      ],
+      "loadTimeMs": 1585
+    },
+    {
+      "route": "/pricing",
+      "name": "pricing",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 21,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "pricing-768.png"
+      ],
+      "loadTimeMs": 1596
+    },
+    {
+      "route": "/dashboard",
+      "name": "today",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 44,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "today-768.png"
+      ],
+      "loadTimeMs": 1635
+    },
+    {
+      "route": "/leads",
+      "name": "leads",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 34,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "leads-768.png"
+      ],
+      "loadTimeMs": 2121
+    },
+    {
+      "route": "/leads/new",
+      "name": "leads-new",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 32,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "leads-new-768.png"
+      ],
+      "loadTimeMs": 1837
+    },
+    {
+      "route": "/prospect",
+      "name": "prospect-check",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 32,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "prospect-check-768.png"
+      ],
+      "loadTimeMs": 1810
+    },
+    {
+      "route": "/relay",
+      "name": "conversations",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 36,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "conversations-768.png"
+      ],
+      "loadTimeMs": 7267
+    },
+    {
+      "route": "/content",
+      "name": "studio",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 31,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "studio-768.png"
+      ],
+      "loadTimeMs": 1649
+    },
+    {
+      "route": "/upwork",
+      "name": "jobs",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 33,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "jobs-768.png"
+      ],
+      "loadTimeMs": 1828
+    },
+    {
+      "route": "/profiles",
+      "name": "profiles",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 39,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "profiles-768.png"
+      ],
+      "loadTimeMs": 1643
+    },
+    {
+      "route": "/facts",
+      "name": "proof",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 39,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "proof-768.png"
+      ],
+      "loadTimeMs": 1703
+    },
+    {
+      "route": "/usage",
+      "name": "usage",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 31,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "usage-768.png"
+      ],
+      "loadTimeMs": 1709
+    },
+    {
+      "route": "/account",
+      "name": "settings",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 36,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "settings-768.png"
+      ],
+      "loadTimeMs": 1828
+    },
+    {
+      "route": "/admin/command-center",
+      "name": "admin",
+      "status": 200,
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      ],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 30,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "admin-768.png"
+      ],
+      "loadTimeMs": 2173
+    },
+    {
+      "route": "/",
+      "name": "landing",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [
+        "SPAN.inline-flex rounded-[2px] border border- [-38-94]",
+        "SPAN.inline-flex rounded-[2px] border border- [-8-104]",
+        "SPAN.inline-flex rounded-[2px] border border- [-30-108]"
+      ],
+      "clickableElements": 62,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "landing-390.png"
+      ],
+      "loadTimeMs": 1633
+    },
+    {
+      "route": "/login",
+      "name": "login",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 44,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "login-390.png"
+      ],
+      "loadTimeMs": 1601
+    },
+    {
+      "route": "/signup",
+      "name": "signup",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 38,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "signup-390.png"
+      ],
+      "loadTimeMs": 1602
+    },
+    {
+      "route": "/pricing",
+      "name": "pricing",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 15,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "pricing-390.png"
+      ],
+      "loadTimeMs": 1599
+    },
+    {
+      "route": "/dashboard",
+      "name": "today",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 38,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "today-390.png"
+      ],
+      "loadTimeMs": 1613
+    },
+    {
+      "route": "/leads",
+      "name": "leads",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 28,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "leads-390.png"
+      ],
+      "loadTimeMs": 1660
+    },
+    {
+      "route": "/leads/new",
+      "name": "leads-new",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 26,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "leads-new-390.png"
+      ],
+      "loadTimeMs": 1616
+    },
+    {
+      "route": "/prospect",
+      "name": "prospect-check",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 26,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "prospect-check-390.png"
+      ],
+      "loadTimeMs": 1654
+    },
+    {
+      "route": "/relay",
+      "name": "conversations",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 30,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "conversations-390.png"
+      ],
+      "loadTimeMs": 1970
+    },
+    {
+      "route": "/content",
+      "name": "studio",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 25,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "studio-390.png"
+      ],
+      "loadTimeMs": 1698
+    },
+    {
+      "route": "/upwork",
+      "name": "jobs",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 27,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "jobs-390.png"
+      ],
+      "loadTimeMs": 1683
+    },
+    {
+      "route": "/profiles",
+      "name": "profiles",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 33,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "profiles-390.png"
+      ],
+      "loadTimeMs": 1673
+    },
+    {
+      "route": "/facts",
+      "name": "proof",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 33,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "proof-390.png"
+      ],
+      "loadTimeMs": 1630
+    },
+    {
+      "route": "/usage",
+      "name": "usage",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 25,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "usage-390.png"
+      ],
+      "loadTimeMs": 1636
+    },
+    {
+      "route": "/account",
+      "name": "settings",
+      "status": 200,
+      "consoleErrors": [],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 30,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "settings-390.png"
+      ],
+      "loadTimeMs": 1629
+    },
+    {
+      "route": "/admin/command-center",
+      "name": "admin",
+      "status": 200,
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+        "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      ],
+      "horizontalOverflow": false,
+      "overflowingElements": [],
+      "clickableElements": 24,
+      "keyboardReachable": true,
+      "screenshotFiles": [
+        "admin-390.png"
+      ],
+      "loadTimeMs": 1618
+    }
+  ]
+}
