@@ -1,5 +1,5 @@
-import { pickModelChain } from '@/lib/ai/routing'
-import { structuredJsonChain } from '@/lib/ai/provider'
+import { hasProvider } from '@/lib/ai/config'
+import { generate } from '@/lib/ai/runtime'
 
 export interface ColdStartAnswer {
   questionId: string
@@ -52,8 +52,7 @@ export async function generateColdStartQuestion(args: {
   previousAnswers: ColdStartAnswer[]
   depth: number
 }): Promise<ColdStartQuestion> {
-  const chain = pickModelChain('extract')
-  if (chain.length === 0 || args.depth >= MAX_DEPTH) {
+  if (!hasProvider() || args.depth >= MAX_DEPTH) {
     return { id: `cs${args.depth}`, prompt: '', kind: 'choice', options: [], depth: args.depth, done: true }
   }
 
@@ -68,7 +67,8 @@ export async function generateColdStartQuestion(args: {
     ? `Initial profile/bio (may be brief):\n"""\n${args.profileInput.trim().slice(0, 4000)}\n"""`
     : 'No profile or bio was provided — ask broadly to establish who this person is and what they do.'
 
-  const result = await structuredJsonChain<ColdStartOutput>(chain, {
+  const result = await generate<ColdStartOutput>({
+    task: 'FAST_STRUCTURED',
     system: `You conduct an adaptive tap-first onboarding interview for a content-writing tool, for someone with NO past posts to analyze. Each question must be generated from the previous answers — never follow a fixed script.
 
 Rules:
@@ -81,6 +81,7 @@ Rules:
 - If no profile was provided, start extremely broad: "Which of these sounds most like your day-to-day?"`,
     user: `${profileContext}\n\nINTERVIEW SO FAR (${args.previousAnswers.length} answers, depth ${args.depth}):\n${answerHistory || '(none yet — this is the first question)'}\n\nGenerate the NEXT single question.`,
     schema: COLD_START_SCHEMA,
+    maxTokens: 512,
   })
 
   const done = result.data.done || args.depth >= MAX_DEPTH - 1

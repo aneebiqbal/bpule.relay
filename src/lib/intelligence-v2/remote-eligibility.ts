@@ -186,6 +186,10 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
         }
       }
       evidence.push(`Worker location restricted to: ${restrictedCountries.join(', ')}.`)
+    } else if (!isJobSeeker && REMOTE_EU_ONLY.test(text)) {
+      remoteScope = 'REGION_RESTRICTED'
+      restrictedCountries.push('EU')
+      evidence.push('Restricted to EU/EEA workers.')
     } else if (TZ_OVERLAP.test(text) || TZ_FLEXIBLE.test(text)) {
       remoteScope = 'TIMEZONE_RESTRICTED'
       if (TZ_PST_PDT.test(text)) {
@@ -207,6 +211,10 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
         timezoneRequirement = 'flexible'
         evidence.push('Flexible/async work indicated.')
       }
+    } else if (workplaceType === 'REMOTE' && REMOTE_EU_ONLY.test(text) && !isJobSeeker) {
+      remoteScope = 'REGION_RESTRICTED'
+      restrictedCountries.push('EU')
+      evidence.push('Remote but restricted to EU/EEA workers.')
     } else if (workplaceType === 'REMOTE') {
       remoteScope = 'ANYWHERE'
       evidence.push('Remote with no stated restrictions.')
@@ -315,7 +323,6 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
       eligibility = 'ELIGIBLE'
       reason = 'Job seeker region preference — not an employer restriction.'
     } else if (restrictedCountries.includes('EU')) {
-    if (restrictedCountries.includes('EU')) {
       eligibility = 'INELIGIBLE'
       reason = 'Restricted to EU/EEA workers — Pakistan is not in the EU/EEA.'
     } else {

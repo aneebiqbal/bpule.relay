@@ -134,4 +134,12 @@ export interface AiTrace {
   fallbackReason: string | null
   error: string | null
   timestamp: number
+  /** Runtime version for tracking which router served this call */
+  runtimeVersion: string
+  /** Where in the code this call originated */
+  callSite: string
+  /** Why the primary provider was skipped (health, rate limit, etc.) */
+  skippedProviders?: Array<{ provider: string; model: string; reason: string }>
+  /** Feature that initiated this call */
+  feature: string
 }

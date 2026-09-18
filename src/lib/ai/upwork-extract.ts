@@ -1,7 +1,6 @@
 import type { UpworkJob } from '@/lib/domain/types'
-import { pickModel } from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
-import { structuredJson } from '@/lib/ai/provider'
+import { generate } from '@/lib/ai/runtime'
 
 interface UpworkExtractionOutput {
   title: string
@@ -85,13 +84,14 @@ export async function extractUpworkJob(rawText: string): Promise<
     return demoExtract(rawText)
   }
 
-  const { model } = pickModel('extract')
-  const out = await structuredJson<UpworkExtractionOutput>({
-    model,
+  const result = await generate<UpworkExtractionOutput>({
+    task: 'FAST_STRUCTURED',
     system: UPWORK_EXTRACT_SYSTEM,
     user: `Raw Upwork job post:\n\n${rawText}`,
     schema: UPWORK_SCHEMA,
+    maxTokens: 1024,
   })
+  const out = result.data
 
   return {
     title: empty(out.title) ?? 'Untitled job',

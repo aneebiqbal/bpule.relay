@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractLead } from '@/lib/ai/extract'
+import { extractLead } from '@/lib/demo-extract'
 import { computeScore, verdictFor } from '@/lib/score/rubric'
 import { generateDraft } from '@/lib/ai/draft'
 import type { ExtractedLead, Fact, Lead, OrganizationRulebook, Play, StyleCard } from '@/lib/domain/types'

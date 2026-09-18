@@ -43,11 +43,19 @@ const HARD_NEGATIVE_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /\bno (?:remote|offsite|telecommute|work from home)\b/i, reason: 'Explicitly not remote' },
 ]
 
-export function checkHardNegatives(text: string): string[] {
+// Job seeker markers — when present, geography patterns are PREFERENCES not restrictions
+const JOB_SEEKER_MARKERS_PATTERN = /\b(open to work|looking for (?:a |remote | )?(?:job|role|position|opportunity|work|employment)|seeking (?:a |remote | )?(?:job|role|position|opportunity)|#OpenToWork|available for (?:freelance|contract|remote)|available for hire|looking to (?:join|work|relocate))\b/i
+
+export function checkHardNegatives(text: string, isJobSeekerContext?: boolean): string[] {
   const negatives: string[] = []
-  for (const { pattern, reason } of HARD_NEGATIVE_PATTERNS) {
-    if (pattern.test(text)) {
-      negatives.push(reason)
+
+  // Only check geography hard negatives if NOT a job seeker context
+  // Job seeker saying "Open to work in UK" != employer restricting to UK
+  if (!isJobSeekerContext) {
+    for (const { pattern, reason } of HARD_NEGATIVE_PATTERNS) {
+      if (pattern.test(text)) {
+        negatives.push(reason)
+      }
     }
   }
 
@@ -59,7 +67,7 @@ export function checkHardNegatives(text: string): string[] {
   const proposalCount = proposalOverload ? Number(proposalOverload[1]) : null
 
   if (lowBudget !== null && lowBudget <= 300 && hugeScope) {
-    negatives.push(`Budget ${lowBudget} with oversized scope request`) 
+    negatives.push(`Budget ${lowBudget} with oversized scope request`)
   }
   if (abandonedSignal) {
     negatives.push('Abandoned handoff with missing requirements')
@@ -69,6 +77,14 @@ export function checkHardNegatives(text: string): string[] {
   }
 
   return negatives
+}
+
+/**
+ * Detect if the text is from a job seeker (not an employer).
+ * Job seeker geography preferences must NOT be treated as employer restrictions.
+ */
+export function isJobSeekerText(text: string): boolean {
+  return JOB_SEEKER_MARKERS_PATTERN.test(text)
 }
 
 /**
@@ -144,6 +160,8 @@ export interface ScoreInput {
   resemblesPastWin: boolean
   /** Past conversion signal if any */
   pastConversionSignal?: string | null
+  /** Whether this is a job seeber profile (not employer) */
+  isJobSeekerContext?: boolean
 }
 
 export function computeCanonicalScore(input: ScoreInput): CanonicalScoreBreakdown {
@@ -153,9 +171,15 @@ export function computeCanonicalScore(input: ScoreInput): CanonicalScoreBreakdow
   const watchOut: string[] = []
   const missingInfo: string[] = []
 
+  // Detect job seeker context if not explicitly provided
+  const isJobSeeker = input.isJobSeekerContext ?? isJobSeekerText(rawText)
+
   // ── Check Hard Negatives ─────────────────────────────────────────────
-  const hardNegatives = checkHardNegatives(rawText)
-  if (intelligence.remoteEligibility.eligibility === 'INELIGIBLE') {
+  // Only check geography hard negatives if NOT a job seeker context
+  const hardNegatives = checkHardNegatives(rawText, isJobSeeker)
+  if (intelligence.remoteEligibility.eligibility === 'INELIGIBLE' && !isJobSeeker) {
+    // Only treat remote eligibility as hard negative if not a job seeker
+    // Job seeker "Open to work in UK" != employer restriction
     hardNegatives.push(intelligence.remoteEligibility.reason)
   }
 

@@ -68,6 +68,21 @@ export async function produceCanonicalIntelligence(
 
   opts.onStatus?.('Analyzing prospect')
 
+  // Step 0: Input qualification gate - classify before extraction
+  const { classifyInput } = await import('@/lib/prospect/qualification-gate')
+  const inputClassification = classifyInput(rawText)
+
+  if (inputClassification.classification === 'IRRELEVANT') {
+    // IRRELEVANT_OR_INSUFFICIENT: no score, no Pass C, no invented prospect
+    return {
+      intelligence: createIrrelevantIntelligence(rawText, inputClassification),
+      gatePassed: false,
+      gateNotes: inputClassification.reasons,
+      repairAttempted: false,
+      repairImproved: false,
+    }
+  }
+
   // Step 1: Run multi-pass extraction pipeline
   const tPipeline = Date.now()
   const pipelineResult: ExtractionPipelineResult = await runIntelligencePipeline(rawText, opts)
@@ -301,6 +316,7 @@ function buildScoringEvidence(scoreBreakdown: ReturnType<typeof computeCanonical
         signal: dim.label,
         source: 'inferred',
         evidenceType: 'STRONG_INFERENCE',
+        ownership: 'BUYER_INTENT',
         confidence: dim.points >= dim.max * 0.7 ? 'HIGH' : 'MEDIUM',
         safeForOutreach: false,
       })
@@ -405,6 +421,90 @@ function buildPersonalizationAngle(
   }
 
   return angles.length > 0 ? angles.slice(0, 3).join(' • ') : null
+}
+
+// ── Irrelevant Input Intelligence ─────────────────────────────────────────
+
+function createIrrelevantIntelligence(
+  rawText: string,
+  classification: { classification: string; confidence: number; reasons: string[] },
+): CanonicalProspectIntelligence {
+  const now = new Date().toISOString()
+  return {
+    version: SCORE_VERSION,
+    computedAt: now,
+    canonicalScore: 0,
+    scoreVersion: SCORE_VERSION,
+    scoredAt: now,
+    scoreBreakdown: {
+      dimensions: [],
+      hardNegatives: ['IRRELEVANT_OR_INSUFFICIENT_INPUT'],
+      missingInfo: classification.reasons,
+      total: 0,
+      label: 'N/A',
+      reasons: classification.reasons,
+      watchOut: [],
+    },
+    confidence: 0,
+    qualification: 'skip',
+    intelligence: {
+      person: { fullName: null, firstName: null, title: null, seniority: null, location: null, linkedinUrl: null, otherUrls: [] },
+      company: { name: null, domain: null, linkedinUrl: null, industry: null, size: null, sizeEvidence: null, product: null, stage: null, stageEvidence: null },
+      opportunity: { signals: [], primarySignal: null, description: null, urgency: 'unknown' },
+      job: null,
+      content: { recentPosts: [], topics: [], explicitProblems: [], initiatives: [], launches: [], technicalSignals: [], hiringSignals: [] },
+      remoteEligibility: {
+        workplaceType: 'UNKNOWN',
+        remoteScope: 'UNKNOWN',
+        eligibility: 'UNCLEAR',
+        reason: 'Input classified as irrelevant/insufficient — no eligibility assessment possible.',
+      },
+      probableNeed: null,
+      opportunityTrigger: null,
+      timingSignal: null,
+      risks: [],
+      unknowns: classification.reasons,
+      resolvedContradictions: [],
+    },
+    rawSource: {
+      rawInput: rawText,
+      sourceType: 'pasted_text',
+      sourceUrl: null,
+      profileUrl: null,
+      companyUrl: null,
+      jobUrl: null,
+      postUrls: [],
+      rawPosts: [],
+      rawJobDescription: null,
+      rawProfileText: null,
+      rawCompanyText: null,
+      capturedAt: now,
+    },
+    evidenceLedger: [],
+    remoteEligibility: {
+      workplaceType: 'UNKNOWN',
+      remoteScope: 'UNKNOWN',
+      eligibility: 'UNCLEAR',
+      reason: 'Input classified as irrelevant/insufficient — no eligibility assessment possible.',
+    },
+    extractionCompleteness: {
+      score: 0,
+      presentFields: [],
+      missingFields: ['person.fullName', 'company.name', 'opportunity.signals'],
+      weakFields: [],
+      repairAttempted: false,
+      repairImproved: false,
+      sourceUrlsFound: [],
+      urlsPreserved: [],
+    },
+    rescoreEvents: [],
+    recommendedIdentityId: null,
+    recommendedProofIds: [],
+    personalizationAngle: null,
+    outreachContext: null,
+    extractionCallLog: [],
+    extractionTrace: [],
+  }
 }
 
 // ── Read helpers for surfaces ──────────────────────────────────────────────

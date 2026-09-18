@@ -79,7 +79,13 @@ export async function POST(request: Request) {
 
   return sseStream(async (emit) => {
     if (precheck.inputHardFail) {
-      emit({ type: 'status', message: 'Not enough context for a reliable qualification score.' })
+      const isIrrelevant = precheck.inputClassification.classification === 'IRRELEVANT'
+      emit({
+        type: 'status',
+        message: isIrrelevant
+          ? 'Couldn\'t identify a prospect — this looks like a login/product page rather than a person, company, job, or business opportunity.'
+          : 'Not enough context for a reliable qualification score.',
+      })
       emitInsufficientDone(emit, minimumExtracted, precheck)
       return
     }
@@ -472,11 +478,16 @@ function emitInsufficientDone(
   extracted: ExtractedLead,
   qualification: ReturnType<typeof evaluateProspectQualification>,
 ): void {
+  const isIrrelevant = qualification.inputClassification.classification === 'IRRELEVANT'
   emit({
     type: 'done',
     extracted,
     canonical: null,
-    score: null,
+    score: isIrrelevant ? 'N/A' : null,
+    scoreNA: isIrrelevant,
+    scoreReason: isIrrelevant
+      ? 'Couldn\'t identify a prospect. This looks like a login/product page rather than a person, company, job, or business opportunity. Paste a LinkedIn profile, company page, job post, conversation, or other prospect information.'
+      : null,
     remoteEligibility: null,
     evidenceLedger: [],
     sources: null,

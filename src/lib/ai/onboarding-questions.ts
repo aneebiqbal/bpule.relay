@@ -1,5 +1,5 @@
-import { pickModelChain } from '@/lib/ai/routing'
-import { structuredJsonChain } from '@/lib/ai/provider'
+import { hasProvider } from '@/lib/ai/config'
+import { generate } from '@/lib/ai/runtime'
 
 export interface OnboardingQuestion {
   id: string
@@ -52,13 +52,13 @@ const QUESTION_SCHEMA = {
  * configured, returns an empty list and the caller falls back to free text.
  */
 export async function generateOnboardingQuestions(profileInput: string): Promise<OnboardingQuestion[]> {
-  const chain = pickModelChain('extract')
-  if (chain.length === 0) return []
+  if (!hasProvider()) return []
 
   const trimmed = profileInput.trim()
   if (!trimmed) return []
 
-  const result = await structuredJsonChain<OnboardingQuestionOutput>(chain, {
+  const result = await generate<OnboardingQuestionOutput>({
+    task: 'FAST_STRUCTURED',
     system: `You write short tap-to-select onboarding questions for a content-writing tool, based on a person's profile or bio.
 
 Rules:
@@ -68,6 +68,7 @@ Rules:
 - Keep each prompt to one short plain sentence, no jargon.`,
     user: `PROFILE OR BIO INPUT:\n"""\n${trimmed.slice(0, 9000)}\n"""`,
     schema: QUESTION_SCHEMA,
+    maxTokens: 1024,
   })
 
   const questions = Array.isArray(result.data.questions) ? result.data.questions : []

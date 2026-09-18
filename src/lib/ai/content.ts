@@ -1,5 +1,4 @@
-import { pickDraftChain, buildOpenaiDraftChain } from '@/lib/ai/routing'
-import { structuredJsonChain } from '@/lib/ai/provider'
+import { generate } from '@/lib/ai/runtime'
 
 import type { ContentPlatform } from '@/lib/domain/types'
 import { checkHumanization, rewriteToHumanize } from '@/lib/ai/humanization'
@@ -90,17 +89,13 @@ interface ModelContentOutput {
 export async function generateContent(
   input: ContentGenerationInput,
   onStatus?: (msg: string) => void,
-  onHostAttempt?: (log: { host: string; model: string; costTier: 'tier1' | 'tier2' | 'tier3' | 'tier4'; success: boolean; failureReason: 'rate_limit' | 'insufficient_balance' | 'timeout' | 'auth' | 'other' | null; errorMessage: string; latencyMs: number }) => void | Promise<void>,
-  generationMode: 'standard' | 'premium' = 'standard',
+  _onHostAttempt?: (log: { host: string; model: string; costTier: 'tier1' | 'tier2' | 'tier3' | 'tier4'; success: boolean; failureReason: 'rate_limit' | 'insufficient_balance' | 'timeout' | 'auth' | 'other' | null; errorMessage: string; latencyMs: number }) => void | Promise<void>,
+  _generationMode: 'standard' | 'premium' = 'standard',
 ): Promise<ContentGenerationResult> {
-  const chain = generationMode === 'premium' ? buildOpenaiDraftChain() : pickDraftChain()
-  if (chain.length === 0) {
-    throw new Error('No AI provider configured. Set GROQ_API_KEY to generate content.')
-  }
-
   onStatus?.('Drafting in this persona\'s voice...')
 
-  const result = await structuredJsonChain<ModelContentOutput>(chain, {
+  const result = await generate<ModelContentOutput>({
+    task: 'DEEP_WRITING',
     system: buildContentSystemPrompt(input),
     user: buildContentUserPrompt(input),
     schema: {
@@ -115,7 +110,9 @@ export async function generateContent(
       required: ['caption', 'hook_score', 'hook_feedback', 'self_check_passed', 'self_check_note'],
     },
     onStatus,
-  }, onHostAttempt)
+    maxTokens: 2048,
+    temperature: 0.7,
+  })
 
   const caption = result.data.caption.trim()
   const hook = extractHook(caption)

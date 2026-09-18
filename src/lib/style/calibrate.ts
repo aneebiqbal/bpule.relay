@@ -1,7 +1,6 @@
 import type { StyleCard, StyleSampleSource } from '@/lib/domain/types'
-import { pickModel } from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
-import { structuredJson } from '@/lib/ai/provider'
+import { generate } from '@/lib/ai/runtime'
 import {
   styleCardFromQuiz,
   type QuizAnswers,
@@ -87,8 +86,6 @@ export async function calibrateStyleCard(
     return { card, sampleSource: hasSamples ? 'pasted_samples' : 'quiz' }
   }
 
-  const { model } = pickModel('calibrate')
-
   const userBlock = [
     'Quiz answers:',
     JSON.stringify(input.quiz, null, 2),
@@ -98,14 +95,15 @@ export async function calibrateStyleCard(
     .join('\n')
 
   try {
-    const card = await structuredJson<StyleCard>({
-      model,
+    const result = await generate<StyleCard>({
+      task: 'FAST_STRUCTURED',
       system: CALIBRATE_SYSTEM,
       user: userBlock,
       schema: STYLE_CARD_SCHEMA,
+      maxTokens: 1024,
     })
 
-    return normalizeCard(card, quizSeed, sampleSource)
+    return normalizeCard(result.data, quizSeed, sampleSource)
   } catch (err) {
     // If the AI provider fails (invalid key, rate limit, model error),
     // fall back to the deterministic quiz-based card so onboarding never blocks.

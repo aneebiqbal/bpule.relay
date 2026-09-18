@@ -44,11 +44,37 @@ export interface RemoteEligibility {
 
 export type EvidenceType = 'FACT' | 'STRONG_INFERENCE' | 'WEAK_INFERENCE'
 
+/**
+ * Evidence ownership classification.
+ * - PERSON_PREFERENCE: What a person wants (e.g., "Open to work in UK"). NOT a restriction on who they can hire.
+ * - EMPLOYER_REQUIREMENT: Explicit employer restriction on worker location (e.g., "Must be US-based").
+ * - JOB_REQUIREMENT: Job posting requirement for worker location/eligibility.
+ * - COMPANY_ATTRIBUTE: Factual attribute of a company (e.g., "HQ in San Francisco").
+ * - BUYER_INTENT: Signal that a company/person is looking to buy services.
+ * - SELLER_INTENT: Signal that a person/company is selling services.
+ * - HIRING_INTENT: Signal that a company is hiring (not necessarily for remote).
+ * - CONTENT_OPINION: A person's opinion expressed in content.
+ *
+ * Only EMPLOYER_REQUIREMENT and JOB_REQUIREMENT can create worker-geography hard negatives.
+ * PERSON_PREFERENCE (e.g., "Open to work in UK") must NEVER be treated as a hiring restriction.
+ */
+export type EvidenceOwnership =
+  | 'PERSON_PREFERENCE'
+  | 'EMPLOYER_REQUIREMENT'
+  | 'JOB_REQUIREMENT'
+  | 'COMPANY_ATTRIBUTE'
+  | 'BUYER_INTENT'
+  | 'SELLER_INTENT'
+  | 'HIRING_INTENT'
+  | 'CONTENT_OPINION'
+
 export interface EvidenceEntry {
   signal: string
   source: 'linkedin_profile' | 'linkedin_post' | 'job_posting' | 'company_website' | 'pasted_text' | 'user_provided' | 'inferred'
   sourceUrl?: string
   evidenceType: EvidenceType
+  /** Who owns this evidence — determines how it affects scoring */
+  ownership: EvidenceOwnership
   confidence: 'HIGH' | 'MEDIUM' | 'LOW'
   safeForOutreach: boolean
   verbatimQuote?: string

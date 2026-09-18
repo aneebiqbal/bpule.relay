@@ -31,7 +31,7 @@ import { cn } from 'cn'
 import type { LeadDetail } from '@/lib/store/types'
 import type { Profile, ProofItem, ScoreResult } from '@/lib/domain/types'
 import type { DraftResult, SelfCheck } from '@/lib/ai/draft'
-import type { GenerationMode } from '@/lib/ai/generate'
+import type { GenerationMode } from '@/lib/ai/routing'
 import { GenerationModeSelector } from '@/components/generation-mode-selector'
 
 const ARTIFACTS = [

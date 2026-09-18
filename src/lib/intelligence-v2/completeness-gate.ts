@@ -13,8 +13,7 @@ import type {
   NormalizedIntelligence,
   RawSourceData,
 } from './types'
-import { buildFastStructuredChain } from '@/lib/ai/routing'
-import { structuredJsonChain } from '@/lib/ai/provider'
+import { generate } from '@/lib/ai/runtime'
 
 const LONGCAT_REPAIR_TIMEOUT_MS = 8_000
 
@@ -169,22 +168,17 @@ export async function repairExtraction(
   completeness: ExtractionCompleteness
   repairNotes: string[]
 }> {
-  // Fast structured chain: Groq 120b → GPT (LongCat excluded — too slow for repair)
-  const chain = buildFastStructuredChain()
-
-  if (chain.length === 0) {
-    return { repaired: false, intelligence: currentIntelligence, completeness, repairNotes: ['No AI provider for repair'] }
-  }
-
   const repairNotes: string[] = []
 
   try {
-    const result = await structuredJsonChain<unknown>(chain, {
+    const result = await generate<unknown>({
+      task: 'FAST_STRUCTURED',
       system: REPAIR_SYSTEM,
       user: buildRepairPrompt(rawText, currentIntelligence, completeness),
       schema: REPAIR_SCHEMA,
       schemaName: 'extraction_repair',
-    }, undefined, LONGCAT_REPAIR_TIMEOUT_MS)
+      maxTokens: 1024,
+    })
 
     const repair = validateRepair(result.data)
     if (!repair) {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { GenerationMode } from '@/lib/ai/generate'
+import type { GenerationMode } from '@/lib/ai/routing'
 
 interface GenerationModeSelectorProps {
   value: GenerationMode

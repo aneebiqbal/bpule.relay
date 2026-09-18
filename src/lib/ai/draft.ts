@@ -340,12 +340,21 @@ export function buildUserPrompt(
 }
 
 /**
- * Generate an outreach draft for a lead using conditional single-generation.
+ * ⚠️ DEMO-ONLY — NOT USED IN PRODUCTION.
+ *
+ * This function implements a LongCat-first drafting pipeline that is ONLY called
+ * when no AI provider API keys are configured (demo mode). It exists to support:
+ * - `draft-stream.ts` demo fallback (when `!hasProvider()`)
+ * - `eval.ts` test tooling
+ *
+ * PRODUCTION drafting uses `streamDraft()` in `draft-stream.ts`, which routes
+ * through Runtime V3 (OpenCode → Groq → OpenAI → LongCat).
+ *
+ * DO NOT reconnect this to production routes. DO NOT add new callers.
+ * If you need production drafting, use `streamDraft()` from `@/lib/ai/draft-stream`.
  *
  * Pipeline: LongCat → deterministic quality gate → PASS: return immediately.
  * On FAIL: second candidate (Groq strong or corrective retry) → GPT escalation.
- *
- * GPT is NOT a normal pipeline stage. Target: <5% of generations reach GPT.
  */
 export async function generateDraft(input: DraftInput): Promise<DraftResult> {
   if (input.type === 'reply' && !input.conversationContext) {

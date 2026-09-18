@@ -25,7 +25,12 @@ export { longcatHost, tier0Host, tier0Hosts, tier4Host } from '@/lib/ai/config'
  */
 export type AiTaskCategory = 'FAST_STRUCTURED' | 'STANDARD_GENERATION' | 'DEEP_GENERATION'
 
-export type { GenerationMode } from '@/lib/ai/generate'
+/**
+ * Generation mode — controls provider priority.
+ * standard: OpenCode → Groq → OpenAI → LongCat (via Runtime V3)
+ * premium: OpenAI first, then LongCat/Groq fallback
+ */
+export type GenerationMode = 'standard' | 'premium'
 
 /**
  * Build the LongCat-2.0 drafting chain with Groq fallback.

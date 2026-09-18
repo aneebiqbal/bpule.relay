@@ -1,11 +1,114 @@
 import type { ExtractedLead } from '@/lib/domain/types'
 
+export type InputClassification =
+  | 'PERSON_PROFILE'
+  | 'COMPANY_PROFILE'
+  | 'JOB_POST'
+  | 'HIRING_POST'
+  | 'CONVERSATION'
+  | 'INBOUND_REQUEST'
+  | 'BUSINESS_OPPORTUNITY'
+  | 'IRRELEVANT'
+  | 'INSUFFICIENT'
+
+export interface ClassificationResult {
+  classification: InputClassification
+  confidence: number
+  reasons: string[]
+}
+
+const UI_FRAGMENT_PATTERNS = [
+  /\b(sign\s*in|log\s*in|login|sign\s*up|register|forgot\s*password|reset\s*password)\b/i,
+  /\b(email|password|username)\s*[\/:]\s*(email|password|username|\*+)/i,
+  /\b(submit|cancel|close|menu|navigation|breadcrumb|footer|header)\b/i,
+  /\b(home\s*page|contact\s*us|about\s*us|privacy\s*policy|terms\s*of\s*service)\b/i,
+  /\b(enter\s+your\s+password|password\s+reset|account\s+settings|log\s*out)\b/i,
+  /\b(execution\s+os|dashboard\s+login|admin\s+portal|user\s+authentication)\b/i,
+]
+
+const PROSPECT_CONTENT_MARKERS = [
+  /\b(founder|ceo|cto|coo|cfo|chief|president|vp|head\s+of|director|manager|lead|senior|principal|staff)\b/i,
+  /\b(hiring|recruiting|looking\s+for|need\s+(?:a|an|someone|help)|seeking|want\s+to\s+hire)\b/i,
+  /\b(developer|engineer|designer|architect|full[- ]?stack|backend|frontend|devops)\b/i,
+  /\b(remote|hybrid|on[- ]?site|work\s+from\s+anywhere|distributed)\b/i,
+  /\b(project|budget|timeline|deadline|launch|migration|rebuild|rewrite)\b/i,
+  /\b(raised|funding|seed|series\s+[abc]|bootstrapped|revenue)\b/i,
+  /\b(company|startup|agency|firm|studio|inc\.?|llc|ltd)\b/i,
+]
+
+export function classifyInput(rawText: string): ClassificationResult {
+  const text = rawText.trim()
+  const reasons: string[] = []
+
+  let uiFragmentHits = 0
+  for (const pattern of UI_FRAGMENT_PATTERNS) {
+    if (pattern.test(text)) uiFragmentHits++
+  }
+
+  // Login form detection: email + password fields with sign-in language
+  // Use [\s\S]{0,200}? to match across newlines (UI paste often has line breaks)
+  const hasLoginForm = /(?:email|password|username)\b[\s\S]{0,200}?(?:password|email|username)\b/i.test(text) &&
+    /\bsign\s*in\b|\blog\s*in\b|\blogin\b/i.test(text)
+
+  // Additional heuristic: if text is short (< 25 words) and has login-like patterns, it's UI garbage
+  const wordCount = (text.match(/[a-z][a-z0-9+.#-]*/gi) ?? []).length
+  const hasPasswordField = /\bpassword\b/i.test(text) && /\bsign\s*in\b|\blog\s*in\b/i.test(text)
+  const isLikelyUIFragment = (hasPasswordField && wordCount < 30) || uiFragmentHits >= 2
+
+  if (hasLoginForm || isLikelyUIFragment) {
+    reasons.push(hasLoginForm
+      ? 'Input appears to be a login form or authentication UI fragment.'
+      : 'Input contains multiple UI/navigation fragments rather than prospect content.')
+    return {
+      classification: 'IRRELEVANT',
+      confidence: 90,
+      reasons,
+    }
+  }
+
+  let markerHits = 0
+  for (const pattern of PROSPECT_CONTENT_MARKERS) {
+    if (pattern.test(text)) markerHits++
+  }
+
+  const hasPersonMarkers = /\b(he|she|they|his|her|their|i|my|me)\b/i.test(text) ||
+    /\b\d+\+?\s*years?\s*(of\s*)?experience\b/i.test(text)
+  const hasJobMarkers = /\b(job\s*description|responsibilities|requirements|qualifications|apply\s*now|salary|compensation)\b/i.test(text)
+  const hasCompanyMarkers = /\b(company|startup|agency|firm|studio)\b/i.test(text) && markerHits >= 2
+  const hasHiringIntent = /\b(hiring|recruiting|looking\s+(?:for|to)|need\s+(?:a|an|someone))\b/i.test(text)
+  const hasProjectNeed = /\b(need\s+(?:help|support|a\s+developer|an\s+engineer)|looking\s+for\s+(?:a\s+developer|an\s+engineer|freelance|contract))\b/i.test(text)
+
+  if (hasJobMarkers && markerHits >= 2) {
+    return { classification: hasHiringIntent ? 'HIRING_POST' : 'JOB_POST', confidence: 75, reasons: ['Job description language detected.'] }
+  }
+
+  if (hasProjectNeed || hasHiringIntent) {
+    return { classification: 'BUSINESS_OPPORTUNITY', confidence: 70, reasons: ['Active hiring or project need detected.'] }
+  }
+
+  if (hasPersonMarkers && markerHits >= 2) {
+    return { classification: 'PERSON_PROFILE', confidence: 65, reasons: ['Personal profile or professional bio detected.'] }
+  }
+
+  if (hasCompanyMarkers) {
+    return { classification: 'COMPANY_PROFILE', confidence: 60, reasons: ['Company description detected.'] }
+  }
+
+  if (markerHits === 1) {
+    return { classification: 'INSUFFICIENT', confidence: 50, reasons: ['Minimal prospect signal detected; paste more context for reliable qualification.'] }
+  }
+
+  reasons.push('No identifiable prospect content found. This does not appear to be a person, company, job, or business opportunity.')
+  return { classification: 'IRRELEVANT', confidence: 80, reasons }
+}
+
 export type ProspectQualificationStatus = 'eligible' | 'insufficient_context'
 
 export interface ProspectQualificationAssessment {
   status: ProspectQualificationStatus
   qualificationEligibility: boolean
   inputHardFail: boolean
+  inputClassification: ClassificationResult
   inputQuality: number
   extractability: number
   evidenceCoverage: number
@@ -150,6 +253,7 @@ function scoreRawInput(rawText: string | null | undefined): {
   score: number
   hardFail: boolean
   reasons: string[]
+  classification: ClassificationResult
 } {
   const input = (rawText ?? '').trim()
   if (!input) {
@@ -157,6 +261,7 @@ function scoreRawInput(rawText: string | null | undefined): {
       score: 0,
       hardFail: true,
       reasons: ['Raw input is required to verify this prospect.'],
+      classification: { classification: 'IRRELEVANT', confidence: 100, reasons: ['No input provided.'] },
     }
   }
 
@@ -215,14 +320,22 @@ function scoreRawInput(rawText: string | null | undefined): {
     reasons.push('Input reads like generic marketing copy, not a concrete prospect signal.')
   }
 
+  const classification = classifyInput(input)
+  const isIrrelevant = classification.classification === 'IRRELEVANT'
+
   const hardFail =
+    isIrrelevant ||
     urlOnly ||
     tokenList.length < 4 ||
     placeholderRatio >= 0.75 ||
     (repeatRatio >= 0.72 && uniqueCount <= 3) ||
     (genericMarketing && alphaChars < 120)
 
-  return { score: clamp(score), hardFail, reasons }
+  if (isIrrelevant) {
+    reasons.push(...classification.reasons)
+  }
+
+  return { score: clamp(score), hardFail, reasons, classification }
 }
 
 function scoreExtractability(extracted: ExtractedLead): {
@@ -314,6 +427,7 @@ export function evaluateProspectQualification(params: {
     status: qualificationEligibility ? 'eligible' : 'insufficient_context',
     qualificationEligibility,
     inputHardFail: raw.hardFail,
+    inputClassification: raw.classification,
     inputQuality: raw.score,
     extractability: extractability.score,
     evidenceCoverage,

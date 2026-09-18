@@ -8,8 +8,7 @@ import { checkBannedPhrases, checkBadHook } from '@/lib/ai/content'
 import { evaluatePostQuality, isRegressionFixture } from '@/lib/content/quality-gate'
 import { buildPostPlan, validateCoreInsight } from '@/lib/content/post-plan'
 import { generateVisualConcept } from '@/lib/writing/visual'
-import { structuredJsonChain } from '@/lib/ai/provider'
-import { pickDraftChain, tier0Hosts, tier4Host, shouldEscalateToPremium } from '@/lib/ai/routing'
+import { generate } from '@/lib/ai/runtime'
 import { normalizeDraftWorkspacePlatform } from '@/lib/content/draft-workspace'
 import type { ContentDraft, ContentMemory, ContentIdeaCard } from '@/lib/domain/types'
 
@@ -381,96 +380,44 @@ async function attemptCorrectiveRetry(
   const failureCodes = qualityResult.failures.map((f) => f.code)
   const correctionInstructions = buildCorrectionPrompt(failureCodes, qualityResult.failures.map((f) => f.message), body.idea, profile, postPlan)
 
-  // Attempt 1: Groq strong corrective rewrite (tries both keys if available)
-  const groqHosts = tier0Hosts('strong')
-  if (groqHosts.length > 0) {
-    try {
-      const result = await structuredJsonChain<{ caption: string }>(
-        groqHosts.map((host) => ({ costTier: 'tier1', host })),
-        {
-          system: buildCorrectionSystemPrompt(profile, body, postPlan),
-          user: buildCorrectionUserPrompt(correctionInstructions, originalCaption, body.idea, platform),
-          schema: {
-            type: 'object',
-            properties: {
-              caption: { type: 'string', description: 'The rewritten post' },
-            },
-            required: ['caption'],
-          },
+  // Runtime V3 handles provider routing: OpenCode Go → Groq → GPT
+  try {
+    const result = await generate<{ caption: string }>({
+      task: 'FAST_STRUCTURED',
+      system: buildCorrectionSystemPrompt(profile, body, postPlan),
+      user: buildCorrectionUserPrompt(correctionInstructions, originalCaption, body.idea, platform),
+      schema: {
+        type: 'object',
+        properties: {
+          caption: { type: 'string', description: 'The rewritten post' },
         },
-      )
+        required: ['caption'],
+      },
+      maxTokens: 1024,
+      temperature: 0.5,
+    })
 
-      const newCaption = result.data.caption.trim()
-      const newQuality = evaluatePostQuality({
-        caption: newCaption,
-        personaContext: {
-          expertise: profile?.expertise?.map((e: any) => e.area) ?? [],
-          audiences: profile?.audiences ?? [],
-          goals: profile?.contentGoals ?? [],
-          projects: profile?.projects?.map((p: any) => p.name) ?? [],
-          opinions: profile?.opinions?.map((o: any) => o.belief) ?? [],
-          territories: profile?.territories ?? [],
-          role: profile?.role ?? '',
-        },
-        sourceMaterial: buildSourceMaterial(body.idea, profile, []),
-        platform,
-      })
+    const newCaption = result.data.caption.trim()
+    const newQuality = evaluatePostQuality({
+      caption: newCaption,
+      personaContext: {
+        expertise: profile?.expertise?.map((e: any) => e.area) ?? [],
+        audiences: profile?.audiences ?? [],
+        goals: profile?.contentGoals ?? [],
+        projects: profile?.projects?.map((p: any) => p.name) ?? [],
+        opinions: profile?.opinions?.map((o: any) => o.belief) ?? [],
+        territories: profile?.territories ?? [],
+        role: profile?.role ?? '',
+      },
+      sourceMaterial: buildSourceMaterial(body.idea, profile, []),
+      platform,
+    })
 
-      if (newQuality.passed) {
-        return { caption: newCaption, passed: true, method: 'groq' }
-      }
-    } catch {
-      // Groq failed, try GPT escalation
+    if (newQuality.passed) {
+      return { caption: newCaption, passed: true, method: result.trace.provider === 'openai' ? 'gpt' : 'groq' }
     }
-  }
-
-  // Attempt 2: GPT escalation (only when cheaper tiers fail)
-  const gptHost = tier4Host()
-  if (gptHost && shouldEscalateToPremium({
-    primaryPassed: false,
-    primaryScore: qualityResult.scores?.insightDepth ?? 0,
-    isHighValue: true,
-    malformedOutput: false,
-    attemptCount: 1,
-  }).shouldEscalate) {
-    try {
-      const result = await structuredJsonChain<{ caption: string }>(
-        [{ costTier: 'tier4', host: gptHost }],
-        {
-          system: buildCorrectionSystemPrompt(profile, body, postPlan),
-          user: buildCorrectionUserPrompt(correctionInstructions, originalCaption, body.idea, platform),
-          schema: {
-            type: 'object',
-            properties: {
-              caption: { type: 'string', description: 'The rewritten post' },
-            },
-            required: ['caption'],
-          },
-        },
-      )
-
-      const newCaption = result.data.caption.trim()
-      const newQuality = evaluatePostQuality({
-        caption: newCaption,
-        personaContext: {
-          expertise: profile?.expertise?.map((e: any) => e.area) ?? [],
-          audiences: profile?.audiences ?? [],
-          goals: profile?.contentGoals ?? [],
-          projects: profile?.projects?.map((p: any) => p.name) ?? [],
-          opinions: profile?.opinions?.map((o: any) => o.belief) ?? [],
-          territories: profile?.territories ?? [],
-          role: profile?.role ?? '',
-        },
-        sourceMaterial: buildSourceMaterial(body.idea, profile, []),
-        platform,
-      })
-
-      if (newQuality.passed) {
-        return { caption: newCaption, passed: true, method: 'gpt' }
-      }
-    } catch {
-      // GPT also failed
-    }
+  } catch {
+    // All providers failed
   }
 
   return null

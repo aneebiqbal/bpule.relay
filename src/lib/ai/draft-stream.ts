@@ -5,7 +5,6 @@ import { shouldEscalateToPremium, type CostTierName } from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
 import { sanitizeDraft } from '@/lib/facts/sanitize'
 import { generate as runtimeGenerate } from '@/lib/ai/runtime'
-import { streamChatText } from '@/lib/ai/provider'
 
 export type DraftStreamEvent =
   | { type: 'status'; message: string }
@@ -72,6 +71,8 @@ export async function streamDraft(
   emit({ type: 'profile', profile })
 
   if (!hasProvider()) {
+    // DEMO MODE: No API keys configured. Uses demo-only generateDraft().
+    // See generateDraft() JSDoc — NOT the production path.
     emit({ type: 'status', message: 'Writing message...' })
     const demo = await generateDraft(input)
     emit({ type: 'draft', chunk: demo.draftText })
@@ -464,106 +465,6 @@ function deterministicChecks(
     draft.toLowerCase().includes(w),
   )
   return { companyMentioned, specificEvidenceMentioned }
-}
-
-/**
- * Legacy single-attempt streaming. Kept for scenarios where you truly want
- * one streamed call (e.g. strong-model fallback or debugging).
- */
-export async function streamOneAttemptLegacy(
-  input: DraftInput,
-  model: string,
-  attempt: number,
-  emit: (e: DraftStreamEvent) => void,
-): Promise<{ draftText: string; check: { passed: boolean; selfCheck: SelfCheck } }> {
-  emit({ type: 'attempt', attempt, model, tier: 'strong' })
-
-  const marker = SELFCHECK_MARKER
-  const lookbehind = marker.length + 4
-  let buffered = ''
-  let shownCount = 0
-  let markerIdx = -1
-  let done = false
-
-  const full = await streamChatText({
-    model,
-    system: baseDraftSystem(input.styleCard, input.facts, { asPlainText: true }),
-    user: buildUserPrompt(input, { asPlainText: true }),
-    onStatus: (message) => emit({ type: 'status', message }),
-    onChunk: (delta) => {
-      if (done) return
-      buffered += delta
-      if (markerIdx < 0) {
-        const idx = buffered.indexOf(marker)
-        if (idx >= 0) {
-          markerIdx = idx
-          const before = buffered.slice(0, idx)
-          if (before.length > shownCount) {
-            emit({ type: 'draft', chunk: before.slice(shownCount) })
-            shownCount = before.length
-          }
-          done = true
-          return
-        }
-        const safeLen = Math.max(0, buffered.length - lookbehind)
-        if (safeLen > shownCount) {
-          emit({ type: 'draft', chunk: buffered.slice(shownCount, safeLen) })
-          shownCount = safeLen
-        }
-      }
-    },
-  })
-
-  const draftPart =
-    markerIdx >= 0
-      ? full.slice(0, markerIdx)
-      : full.slice(0, full.lastIndexOf('\n') + 1 || full.length)
-  const jsonPart = markerIdx >= 0 ? full.slice(markerIdx + marker.length) : ''
-
-  const remaining = draftPart.length > shownCount ? draftPart.slice(shownCount) : ''
-  if (remaining) emit({ type: 'draft', chunk: remaining })
-
-  const draftText = draftPart.trim()
-  if (!draftText) {
-    return {
-      draftText: '',
-      check: {
-        passed: false,
-        selfCheck: {
-          test1ReplyOrDelete: false,
-          test1Note: 'The model returned an empty draft.',
-          test2NotGeneric: false,
-          test2Note: 'The model returned an empty draft.',
-          codeChecks: { companyMentioned: false, specificEvidenceMentioned: false },
-        },
-      },
-    }
-  }
-
-  const rawCheck = parseSelfCheckBlock(jsonPart)
-
-  const test1 = Boolean(rawCheck?.test_1_reply_or_delete ?? false)
-  const test1Note = rawCheck?.test_1_note || 'No self-check note was produced.'
-  const test2 = Boolean(rawCheck?.test_2_not_generic ?? false)
-  const test2Note = rawCheck?.test_2_note || 'No self-check note was produced.'
-
-  const codeChecks = deterministicChecks(draftText, {
-    company: input.lead.company,
-    evidence: input.extracted.signalEvidence,
-  })
-
-  const passed =
-    test1 && test2 && codeChecks.companyMentioned && codeChecks.specificEvidenceMentioned
-
-  const selfCheck: SelfCheck = {
-    test1ReplyOrDelete: test1,
-    test1Note,
-    test2NotGeneric: test2,
-    test2Note,
-    codeChecks,
-  }
-
-  return { draftText, check: { passed, selfCheck } }
 }
 
 function parseSelfCheckBlock(raw: string): {

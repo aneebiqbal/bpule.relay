@@ -1,5 +1,5 @@
-import { pickModelChain } from '@/lib/ai/routing'
-import { structuredJsonChain } from '@/lib/ai/provider'
+import { hasProvider } from '@/lib/ai/config'
+import { generate } from '@/lib/ai/runtime'
 
 export interface PersonaRefinementInput {
   currentHumorStyle: string
@@ -48,8 +48,7 @@ const REFINEMENT_SCHEMA = {
  * not on every single decision.
  */
 export async function refinePersonaFromFeedback(input: PersonaRefinementInput): Promise<PersonaRefinementResult> {
-  const chain = pickModelChain('extract')
-  if (chain.length === 0) {
+  if (!hasProvider()) {
     return {
       humorStyle: input.currentHumorStyle,
       valuesAndOpinions: input.currentValuesAndOpinions,
@@ -78,7 +77,8 @@ export async function refinePersonaFromFeedback(input: PersonaRefinementInput): 
     `Total accepted: ${accepted.length}, skipped: ${rejected.length}, edited before posting: ${edited.length}`,
   ].join('\n')
 
-  const result = await structuredJsonChain<RefinementOutput>(chain, {
+  const result = await generate<RefinementOutput>({
+    task: 'FAST_STRUCTURED',
     system: `You refine a content persona's stored voice profile based on what the person actually chose to post versus skip over time.
 
 Rules:
@@ -90,6 +90,7 @@ Rules:
 - focus_shift_note is one plain sentence summarizing what changed and why, or "No clear shift yet." if behavior is still ambiguous.`,
     user: `PERSONA BEHAVIOR SUMMARY:\n"""\n${summary}\n"""\n\nProduce a refined but conservative profile update.`,
     schema: REFINEMENT_SCHEMA,
+    maxTokens: 1024,
   })
 
   return {

@@ -1,6 +1,5 @@
 import type { MarketRegion, RoleCategory } from '@/lib/domain/types'
-import { pickModel } from '@/lib/ai/routing'
-import { structuredJson } from '@/lib/ai/provider'
+import { generate } from '@/lib/ai/runtime'
 
 const roleCache = new Map<string, RoleCategory>()
 
@@ -75,16 +74,16 @@ export async function classifyRoleWithFallback(titleRaw: string | null | undefin
 
   if (roleCache.has(title)) return roleCache.get(title) as RoleCategory
 
-  const { model } = pickModel('classify')
-  const out = await structuredJson<{ role_category: RoleCategory }>({
-    model,
+  const result = await generate<{ role_category: RoleCategory }>({
+    task: 'FAST_STRUCTURED',
     system:
       'Classify this job title into exactly one role category. Return JSON only. Categories: founder_cofounder, ceo, technical_leadership, product, hiring_manager_recruiter, other.',
     user: `Title: ${titleRaw ?? ''}`,
     schema: ROLE_SCHEMA,
+    maxTokens: 128,
   })
 
-  const role = out.role_category ?? 'other'
+  const role = result.data.role_category ?? 'other'
   roleCache.set(title, role)
   return role
 }

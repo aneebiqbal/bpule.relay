@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
-import { buildLongcatDraftChain, buildOpenaiDraftChain, pickDraftChain, shouldEscalateToPremium } from '@/lib/ai/routing'
-import { structuredJsonChain } from '@/lib/ai/provider'
+import { generate } from '@/lib/ai/runtime'
 import { injectStyleCard } from '@/lib/style/inject'
-import { signalById } from '@/lib/score/signals'
 import { sanitizeDraft } from '@/lib/facts/sanitize'
 import { AI_TELL_PHRASES, BANNED_PHRASES } from '@/lib/writing/engine'
 
@@ -122,75 +120,20 @@ export async function POST(
 
   type ProposalResult = { proposal: string; self_check_passed: boolean; self_check_note: string }
 
-  // Attempt 1: Primary writer based on mode
-  const chainA = generationMode === 'premium' ? buildOpenaiDraftChain() : buildLongcatDraftChain()
+  // Runtime V3 handles provider routing: OpenCode Go → Groq → GPT → LongCat
   let best: ProposalResult | null = null
 
-  if (chainA.length > 0) {
-    const resultA = await structuredJsonChain<ProposalResult>(chainA, { system: systemPrompt, user: userPrompt, schema }).then((r) => r.data).catch(() => null)
-    if (resultA?.self_check_passed) {
-      best = resultA
-    } else if (resultA) {
-      best = resultA
-    }
-  }
-
-  // If LongCat passed, return immediately
-  if (best?.self_check_passed) {
-    const proposal = best.proposal.trim()
-    const sanitized = sanitizeDraft(proposal, facts)
-    return NextResponse.json({
-      draft: {
-        text: sanitized.text,
-        selfCheckPassed: best.self_check_passed,
-        selfCheckNote: best.self_check_note,
-        matchedProof: matchedProof ? { id: matchedProof.id, projectSummary: matchedProof.projectSummary } : null,
-      },
+  try {
+    const result = await generate<ProposalResult>({
+      task: 'DEEP_WRITING',
+      system: systemPrompt,
+      user: userPrompt,
+      schema: schema as unknown as Record<string, unknown>,
+      maxTokens: 1536,
+      temperature: 0.6,
     })
-  }
-
-  // Attempt 2: Groq retry
-  const escalation = shouldEscalateToPremium({
-    primaryPassed: best?.self_check_passed ?? false,
-    primaryScore: best?.self_check_passed ? 8 : 2,
-    isHighValue: false,
-    malformedOutput: !best,
-    attemptCount: 1,
-  })
-
-  const fallback = pickDraftChain()
-  if (fallback.length > 0 && escalation.shouldEscalate) {
-    const resultB = await structuredJsonChain<ProposalResult>(fallback, { system: systemPrompt, user: userPrompt, schema }).then((r) => r.data).catch(() => null)
-    if (resultB?.self_check_passed) {
-      best = resultB
-    } else if (resultB && !best) {
-      best = resultB
-    }
-  }
-
-  if (best?.self_check_passed) {
-    const proposal = best.proposal.trim()
-    const sanitized = sanitizeDraft(proposal, facts)
-    return NextResponse.json({
-      draft: {
-        text: sanitized.text,
-        selfCheckPassed: best.self_check_passed,
-        selfCheckNote: best.self_check_note,
-        matchedProof: matchedProof ? { id: matchedProof.id, projectSummary: matchedProof.projectSummary } : null,
-      },
-    })
-  }
-
-  // Attempt 3: GPT escalation
-  const chainB = buildOpenaiDraftChain()
-  if (chainB.length > 0 && escalation.shouldEscalate) {
-    const resultC = await structuredJsonChain<ProposalResult>(chainB, { system: systemPrompt, user: userPrompt, schema }).then((r) => r.data).catch(() => null)
-    if (resultC) {
-      best = resultC
-    }
-  }
-
-  if (!best) {
+    best = result.data
+  } catch {
     return NextResponse.json({ error: 'Generation failed. Please try again.' }, { status: 500 })
   }
 

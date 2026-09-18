@@ -1,5 +1,5 @@
-import { pickModelChain } from '@/lib/ai/routing'
-import { structuredJsonChain } from '@/lib/ai/provider'
+import { hasProvider } from '@/lib/ai/config'
+import { generate } from '@/lib/ai/runtime'
 
 interface TopicExtractionOutput {
   profile_summary: string
@@ -42,12 +42,12 @@ export async function extractProfileTopics(profileInput: string): Promise<{
   likelyTopics: Array<{ name: string; description: string }>
   valuesAndOpinions: string[]
 }> {
-  const chain = pickModelChain('extract')
-  if (chain.length === 0) {
+  if (!hasProvider()) {
     return { profileSummary: '', likelyTopics: [], valuesAndOpinions: [] }
   }
 
-  const result = await structuredJsonChain<TopicExtractionOutput>(chain, {
+  const result = await generate<TopicExtractionOutput>({
+    task: 'FAST_STRUCTURED',
     system: `You extract content themes from a person's profile text. Return JSON only.
 
 Rules:
@@ -57,6 +57,7 @@ Rules:
 - If a field is unknown, return empty string or empty array.`,
     user: `PROFILE OR BIO INPUT:\n"""\n${profileInput.slice(0, 9000)}\n"""`,
     schema: TOPIC_SCHEMA,
+    maxTokens: 1024,
   })
 
   return {
@@ -120,12 +121,12 @@ export async function extractFromPastPosts(pastPostsInput: string): Promise<{
   valuesAndOpinions: string[]
   humorStyle: string
 }> {
-  const chain = pickModelChain('extract')
-  if (chain.length === 0) {
+  if (!hasProvider()) {
     return { profileSummary: '', likelyTopics: [], valuesAndOpinions: [], humorStyle: '' }
   }
 
-  const result = await structuredJsonChain<PastPostsExtractionOutput>(chain, {
+  const result = await generate<PastPostsExtractionOutput>({
+    task: 'FAST_STRUCTURED',
     system: `You analyze a person's own real past social posts to extract their voice, themes, and convictions. Return JSON only.
 
 Rules:
@@ -136,6 +137,7 @@ Rules:
 - If a field cannot be grounded in the pasted text, return empty string or empty array.`,
     user: `PASTED PAST POSTS (one or more, boundaries may be informal):\n"""\n${pastPostsInput.slice(0, 12000)}\n"""`,
     schema: PAST_POSTS_SCHEMA,
+    maxTokens: 1024,
   })
 
   return {

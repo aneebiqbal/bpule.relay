@@ -1,6 +1,6 @@
 import type { ContentPlatform } from '@/lib/domain/types'
-import { buildLongcatDraftChain, buildOpenaiDraftChain, pickDraftChain, shouldEscalateToPremium } from '@/lib/ai/routing'
-import { structuredJsonChain } from '@/lib/ai/provider'
+import { shouldEscalateToPremium } from '@/lib/ai/routing'
+import { generate } from '@/lib/ai/runtime'
 import { checkHumanization, rewriteToHumanize } from '@/lib/ai/humanization'
 import { checkBannedPhrases, checkBadHook } from '@/lib/ai/content'
 import {
@@ -110,12 +110,11 @@ export async function runContentForge(input: ForgeInput): Promise<ForgeResult> {
     return buildForgeResult(input, candidateB, candidateA, evalB, evalA, structureSelection, 'B', escalation.reason)
   }
 
-  // Attempt 3: GPT escalation
-  const openaiChain = buildOpenaiDraftChain()
+  // Attempt 3: Runtime handles escalation automatically
   let candidateC: ForgeCandidate | null = null
   let evalC: ReturnType<typeof evaluateCandidate> | null = null
-  if (openaiChain.length > 0 && escalation.shouldEscalate) {
-    candidateC = await generateCandidateWithChain(input, 'B', structureSelection, openaiChain)
+  if (escalation.shouldEscalate) {
+    candidateC = await generateCandidate(input, 'B', structureSelection)
     if (candidateC) {
       evalC = evaluateCandidate(candidateC, input)
     }
@@ -196,20 +195,7 @@ async function generateCandidate(
   input: ForgeInput,
   writer: 'A' | 'B',
   structureSelection: { structure: ContentStructure; reason: string } | undefined,
-  overrideChain?: ReturnType<typeof buildOpenaiDraftChain>,
 ): Promise<ForgeCandidate> {
-  const defaultChain = writer === 'A' ? buildLongcatDraftChain() : buildOpenaiDraftChain()
-  const fallbackChain = pickDraftChain()
-  const activeChain = overrideChain && overrideChain.length > 0
-    ? overrideChain
-    : defaultChain.length > 0
-      ? defaultChain
-      : fallbackChain
-
-  if (activeChain.length === 0) {
-    return emptyCandidate(writer)
-  }
-
   const structureDirective = structureSelection
     ? structureToPrompt(structureSelection.structure)
     : 'Select the structure that best fits the material naturally.'
@@ -218,11 +204,12 @@ async function generateCandidate(
     ? `Write with a direct, personal voice. Lead with the specific detail. Keep sentences varied in length. ${structureDirective}`
     : `Write with a slightly more reflective voice. Connect the specific to the universal. Use natural rhythm. ${structureDirective}`
 
-  const result = await structuredJsonChain<{
+  const result = await generate<{
     caption: string
     self_check_passed: boolean
     self_check_note: string
-  }>(activeChain, {
+  }>({
+    task: 'DEEP_WRITING',
     system: buildWriterSystemPrompt(input, writerPersona),
     user: buildWriterUserPrompt(input),
     schema: {
@@ -234,6 +221,8 @@ async function generateCandidate(
         self_check_note: { type: 'string', description: 'Why this would or would not work' },
       },
     },
+    maxTokens: 2048,
+    temperature: 0.7,
   })
 
   const caption = (result.data.caption ?? '').trim()
@@ -288,17 +277,15 @@ async function generateCandidate(
 }
 
 /**
- * Generate a candidate using a specific chain (for GPT escalation).
+ * Generate a candidate (Runtime V3 handles provider routing).
  */
 async function generateCandidateWithChain(
   input: ForgeInput,
   writer: 'A' | 'B',
   structureSelection: { structure: ContentStructure; reason: string } | undefined,
-  chain?: ReturnType<typeof buildOpenaiDraftChain>,
 ): Promise<ForgeCandidate | null> {
-  if (!chain || chain.length === 0) return null
   try {
-    return await generateCandidate(input, writer, structureSelection, chain)
+    return await generateCandidate(input, writer, structureSelection)
   } catch {
     return null
   }

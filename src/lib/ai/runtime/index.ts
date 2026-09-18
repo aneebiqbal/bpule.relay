@@ -133,6 +133,10 @@ export interface GenerateOptions {
   modelOverride?: string
   /** Organization ID for telemetry persistence */
   organizationId?: string
+  /** Where in the code this call originated (e.g. 'extraction-pipeline:runPassA') */
+  callSite?: string
+  /** Feature that initiated this call (e.g. 'prospect_analysis', 'connection_note') */
+  feature?: string
 }
 
 export interface GenerateResult<T> {
@@ -159,6 +163,8 @@ export async function generate<T = Record<string, unknown>>(
 
   const chain = getChainForTask(options.task)
   const errors: Array<{ provider: string; model: string; error: string }> = []
+  const skippedProviders: Array<{ provider: string; model: string; reason: string }> = []
+  const RUNTIME_VERSION = 'runtime-v3'
 
   for (let i = 0; i < chain.length; i++) {
     const step = chain[i]
@@ -166,7 +172,9 @@ export async function generate<T = Record<string, unknown>>(
 
     // Skip unhealthy providers
     if (!isAvailable(resolved.provider, resolved.model, step.credentialId)) {
-      errors.push({ provider: resolved.provider, model: resolved.model, error: 'skipped_unhealthy' })
+      const reason = 'skipped_unhealthy'
+      errors.push({ provider: resolved.provider, model: resolved.model, error: reason })
+      skippedProviders.push({ provider: resolved.provider, model: resolved.model, reason })
       continue
     }
 
@@ -209,11 +217,13 @@ export async function generate<T = Record<string, unknown>>(
         result = await callTextByProvider(step.provider, providerModel, params, timeoutMs)
       }
 
+      const costTier = step.provider === 'openai' ? 'tier4' : step.provider === 'opencode' ? 'tier1' : step.provider === 'longcat' ? 'tier1' : 'tier1'
       const trace: AiTrace = {
         ...traceBase,
         provider: result.provider,
         model: result.model,
         credentialId: result.credentialId,
+        costTier,
         attempt: i + 1,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
@@ -225,6 +235,10 @@ export async function generate<T = Record<string, unknown>>(
         fallback: i > 0,
         fallbackReason: i > 0 ? errors[errors.length - 1]?.error ?? null : null,
         error: null,
+        runtimeVersion: RUNTIME_VERSION,
+        callSite: options.callSite ?? 'unknown',
+        skippedProviders: skippedProviders.length > 0 ? skippedProviders : undefined,
+        feature: options.feature ?? 'unknown',
       }
 
       logTrace(trace)
@@ -259,6 +273,10 @@ export async function generate<T = Record<string, unknown>>(
     fallback: errors.length > 1,
     fallbackReason: null,
     error: errors.map((e) => `${e.provider}/${e.model}: ${e.error}`).join('; '),
+    runtimeVersion: RUNTIME_VERSION,
+    callSite: options.callSite ?? 'unknown',
+    skippedProviders: skippedProviders.length > 0 ? skippedProviders : undefined,
+    feature: options.feature ?? 'unknown',
   }
   logTrace(trace)
   if (options.organizationId) {
@@ -317,11 +335,15 @@ function generateTaskId(): string {
 function logTrace(trace: AiTrace): void {
   const fallback = trace.fallback ? ` (fallback: ${trace.fallbackReason})` : ''
   const error = trace.error ? ` ERROR: ${trace.error}` : ''
+  const skipped = trace.skippedProviders?.length
+    ? ` skipped=[${trace.skippedProviders.map((s) => `${s.provider}:${s.reason}`).join(',')}]`
+    : ''
   console.info(
     `[relay-ai] task=${trace.taskClass} provider=${trace.provider} model=${trace.model} ` +
     `attempt=${trace.attempt} input_tokens=${trace.inputTokens} output_tokens=${trace.outputTokens} ` +
-    `ttfb=${trace.ttfbMs}ms latency=${trace.latencyMs}m cost=\$${trace.estimatedCostUsd.toFixed(6)}` +
-    `${fallback}${error}`,
+    `ttfb=${trace.ttfbMs}ms latency=${trace.latencyMs}ms cost=\$${trace.estimatedCostUsd.toFixed(6)} ` +
+    `runtime=${trace.runtimeVersion} site=${trace.callSite} feature=${trace.feature}` +
+    `${fallback}${skipped}${error}`,
   )
 }
 

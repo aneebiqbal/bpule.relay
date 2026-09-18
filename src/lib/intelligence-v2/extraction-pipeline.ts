@@ -287,6 +287,8 @@ async function runPassA(
       schemaName: 'intelligence_pass_a',
       maxTokens: 1024,
       onStatus,
+      callSite: 'extraction-pipeline:runPassA',
+      feature: 'prospect_analysis',
     })
 
     callLog.push({
@@ -580,6 +582,7 @@ function normalizePassA(
           : 'pasted_text',
         sourceUrl: normalized,
         evidenceType: 'FACT',
+        ownership: categorizeUrl(url) === 'job_posting' ? 'JOB_REQUIREMENT' : 'COMPANY_ATTRIBUTE',
         confidence: 'HIGH',
         safeForOutreach: false,
       })
@@ -680,6 +683,7 @@ function normalizePassA(
       signal: 'Hiring activity detected',
       source: 'pasted_text',
       evidenceType: 'FACT',
+      ownership: 'HIRING_INTENT',
       confidence: 'HIGH',
       safeForOutreach: true,
       verbatimQuote: content.hiringSignals[0].slice(0, 200),
@@ -690,6 +694,7 @@ function normalizePassA(
       signal: 'Technical work detected',
       source: 'pasted_text',
       evidenceType: 'STRONG_INFERENCE',
+      ownership: 'BUYER_INTENT',
       confidence: 'MEDIUM',
       safeForOutreach: true,
     })
@@ -699,6 +704,7 @@ function normalizePassA(
       signal: 'Explicit problem stated',
       source: 'pasted_text',
       evidenceType: 'FACT',
+      ownership: 'BUYER_INTENT',
       confidence: 'HIGH',
       safeForOutreach: true,
       verbatimQuote: content.explicitProblems[0].slice(0, 200),
@@ -811,6 +817,8 @@ async function runPassC(
       schemaName: 'intelligence_pass_c',
       maxTokens: 512,
       onStatus,
+      callSite: 'extraction-pipeline:runPassC',
+      feature: 'prospect_analysis',
     })
 
     callLog.push({
@@ -1446,12 +1454,15 @@ export async function runIntelligencePipeline(
   opts.onStatus?.('Normalizing extraction')
   const { intelligence: partialIntelligence, evidenceLedger, normalizedSourceUrls } = normalizePassA(passA, sourceUrls, remoteEligibility)
 
-  // Refine remote eligibility with extracted job data
+  // Refine remote eligibility with extracted job data.
+  // EVIDENCE OWNERSHIP: For job seeker profiles, AI-extracted workplaceType/allowedGeography
+  // are the PERSON'S preferences, not employer requirements. Pass sourceContext so
+  // the eligibility engine doesn't invert preferences into restrictions.
   const refinedEligibility = passA.job
     ? assessRemoteEligibility({
         rawText,
-        statedWorkplaceType: passA.job.workplaceType as RemoteEligibilityInput['statedWorkplaceType'],
-        requiredWorkerLocation: passA.job.allowedGeography,
+        statedWorkplaceType: isJobSeekerText ? 'UNKNOWN' : (passA.job.workplaceType as RemoteEligibilityInput['statedWorkplaceType']),
+        requiredWorkerLocation: isJobSeekerText ? null : passA.job.allowedGeography,
         sourceContext: isJobSeekerText ? 'job_seeker_profile' : 'unknown',
       })
     : remoteEligibility
@@ -1473,6 +1484,7 @@ export async function runIntelligencePipeline(
         signal: `Remote eligibility: ${ev}`,
         source: 'pasted_text',
         evidenceType: 'FACT',
+        ownership: 'EMPLOYER_REQUIREMENT',
         confidence: 'HIGH',
         safeForOutreach: false,
       })

@@ -5,8 +5,8 @@ import type {
   ContentInterviewAnswer,
   ContentOpportunity,
 } from '@/lib/domain/types'
-import { pickModelChain } from '@/lib/ai/routing'
-import { structuredJsonChain } from '@/lib/ai/provider'
+import { hasProvider } from '@/lib/ai/config'
+import { generate } from '@/lib/ai/runtime'
 
 /**
  * Adaptive Interview Agent.
@@ -90,9 +90,7 @@ export async function generateInterviewQuestion(input: {
   previousAnswers: ContentInterviewAnswer[]
   missingDimensions: string[]
 }): Promise<InterviewQuestion> {
-  const chain = pickModelChain('extract')
-  if (chain.length === 0) {
-    // Fallback questions when no model is configured
+  if (!hasProvider()) {
     return getFallbackQuestion(input.missingDimensions, input.previousAnswers.length)
   }
 
@@ -109,7 +107,8 @@ export async function generateInterviewQuestion(input: {
     ? input.previousAnswers.map((a, i) => `Q${i + 1}: ${a.question}\nA: ${a.answer}`).join('\n\n')
     : '(none — this is the first question)'
 
-  const result = await structuredJsonChain<{ question: string; reason: string }>(chain, {
+  const result = await generate<{ question: string; reason: string }>({
+    task: 'FAST_STRUCTURED',
     system: `You conduct a brief, targeted interview to extract the ONE piece of unique information that would make a social media post unmistakably attributable to this specific person.
 
 Rules:
@@ -144,6 +143,7 @@ Generate the NEXT single question. If enough information exists, return empty qu
         reason: { type: 'string', description: 'Why this question matters' },
       },
     },
+    maxTokens: 256,
   })
 
   const question = (result.data.question ?? '').trim()

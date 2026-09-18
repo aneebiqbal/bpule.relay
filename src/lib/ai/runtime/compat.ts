@@ -10,7 +10,7 @@
  * - Circuit breaking
  * - Telemetry persistence
  *
- * Eventually, call sites should migrate to using runtime.generate() directly.
+ * All interactive production flows MUST route through runtime.generate().
  */
 
 import { generate, type GenerateOptions, type GenerateResult } from './index'
@@ -49,6 +49,8 @@ export interface StructuredJsonChainOptions {
   onStatus?: (msg: string) => void
   maxTokens?: number
   organizationId?: string
+  callSite?: string
+  feature?: string
 }
 
 export async function structuredJsonChain<T = Record<string, unknown>>(
@@ -63,6 +65,8 @@ export async function structuredJsonChain<T = Record<string, unknown>>(
     maxTokens: options.maxTokens,
     onStatus: options.onStatus,
     organizationId: options.organizationId,
+    callSite: options.callSite,
+    feature: options.feature,
   })
   return result.data
 }
@@ -79,6 +83,8 @@ export interface StreamTextChainOptions {
   organizationId?: string
   /** Force a specific task class */
   taskClass?: TaskClass
+  callSite?: string
+  feature?: string
 }
 
 export async function streamTextChain(
@@ -94,6 +100,8 @@ export async function streamTextChain(
     onStatus: options.onStatus,
     maxTokens: options.maxTokens,
     organizationId: options.organizationId,
+    callSite: options.callSite,
+    feature: options.feature,
   })
   return result.data
 }
@@ -110,6 +118,8 @@ export async function structuredJsonLegacy<T = Record<string, unknown>>(opts: {
   strict?: boolean
   onStatus?: (msg: string) => void
   organizationId?: string
+  callSite?: string
+  feature?: string
 }): Promise<T> {
   const result = await generate<T>({
     task: 'FAST_STRUCTURED',
@@ -120,6 +130,8 @@ export async function structuredJsonLegacy<T = Record<string, unknown>>(opts: {
     onStatus: opts.onStatus,
     organizationId: opts.organizationId,
     modelOverride: opts.model,
+    callSite: opts.callSite,
+    feature: opts.feature,
   })
   return result.data
 }

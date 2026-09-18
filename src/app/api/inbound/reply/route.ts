@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
-import { streamChatTextChain } from '@/lib/ai/provider'
-import { pickDraftChain, buildOpenaiDraftChain } from '@/lib/ai/routing'
+import { generate } from '@/lib/ai/runtime'
 import {
   buildInboundReplyUserPrompt,
   validateInboundReply,
@@ -65,20 +64,18 @@ export async function POST(req: NextRequest) {
     }
 
     const basePrompt = buildInboundReplyUserPrompt(input)
-    // LongCat-first for inbound replies (standard mode default)
-    const generationMode = body.generationMode === 'premium' ? 'premium' : 'standard'
-    const chain = generationMode === 'premium' ? buildOpenaiDraftChain() : pickDraftChain()
 
     let text = ''
     let attemptPrompt = basePrompt
     for (let attempt = 0; attempt < 3; attempt++) {
-      text = await streamChatTextChain(chain, {
+      const result = await generate<string>({
+        task: 'INTERACTIVE_WRITING',
         system: INBOUND_REPLY_SYSTEM,
         user: attemptPrompt,
         temperature: 0.7,
-        onChunk: () => {},
-        onStatus: () => {},
-      }).then((r) => r.data)
+        maxTokens: 1024,
+      })
+      text = result.data
 
       text = sanitizeInboundReply(text)
 

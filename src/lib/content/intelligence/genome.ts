@@ -6,8 +6,7 @@ import type {
   ContentMemory,
   ContentOpportunity,
 } from '@/lib/domain/types'
-import { pickModelChain } from '@/lib/ai/routing'
-import { structuredJsonChain } from '@/lib/ai/provider'
+import { generate } from '@/lib/ai/runtime'
 import { ContentCache } from '@/lib/ai/cache'
 import { classifyClaimProvenance } from '@/lib/content/intelligence/research'
 
@@ -65,9 +64,8 @@ export async function constructIdeaGenome(input: GenomeInput): Promise<GenomeCon
   if (cached) return cached
 
   const useAi = process.env.SCOUT_GENOME_AI === '1'
-  const chain = useAi ? pickModelChain('extract') : []
 
-  if (chain.length === 0) {
+  if (!useAi) {
     const result = constructGenomeDeterministic(input)
     genomeCache.set(cacheKey, result)
     return result
@@ -85,7 +83,7 @@ export async function constructIdeaGenome(input: GenomeInput): Promise<GenomeCon
     ? input.memories.slice(0, 8).map((m) => `- ${m.memoryType}: ${m.content}`).join('\n')
     : 'No previous content recorded.'
 
-  const result = await structuredJsonChain<{
+  const result = await generate<{
     source: string
     topic: string
     angle: string
@@ -103,7 +101,8 @@ export async function constructIdeaGenome(input: GenomeInput): Promise<GenomeCon
     scroll_stop_potential: number
     qualified: boolean
     rejection_reason: string
-  }>(chain, {
+  }>({
+    task: 'FAST_STRUCTURED',
     system: `You analyze a content idea and produce a structured genome for generation.
 
 Rules:
@@ -156,6 +155,7 @@ Construct the genome and qualify this idea.`,
         rejection_reason: { type: 'string' },
       },
     },
+    maxTokens: 2048,
   })
 
   const d = result.data

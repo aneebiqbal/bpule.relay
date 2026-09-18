@@ -1,4 +1,6 @@
 import type { DraftResult, SelfCheck } from '@/lib/ai/draft'
+// generateDraft is DEMO-ONLY — used here for eval tooling without API keys.
+// See generateDraft() JSDoc in draft.ts.
 import { generateDraft, type DraftInput } from '@/lib/ai/draft'
 import { streamDraft } from '@/lib/ai/draft-stream'
 

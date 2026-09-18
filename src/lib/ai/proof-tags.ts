@@ -1,6 +1,5 @@
-import { pickModel } from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
-import { structuredJson } from '@/lib/ai/provider'
+import { generate } from '@/lib/ai/runtime'
 
 const TAGS_SCHEMA = {
   type: 'object',
@@ -19,14 +18,14 @@ const TAGS_SYSTEM = `You tag a past engineering project for later retrieval. Ret
  */
 export async function classifyProofTags(text: string): Promise<string[]> {
   if (!hasProvider()) return demoTags(text)
-  const { model } = pickModel('classify')
-  const out = await structuredJson<{ tags: string[] }>({
-    model,
+  const result = await generate<{ tags: string[] }>({
+    task: 'FAST_STRUCTURED',
     system: TAGS_SYSTEM,
     user: `Project description:\n\n${text}\n\nReturn the tags as JSON.`,
     schema: TAGS_SCHEMA,
+    maxTokens: 256,
   })
-  const tags = (out.tags ?? [])
+  const tags = (result.data.tags ?? [])
     .map((t) => (t ?? '').toLowerCase().trim())
     .filter((t) => t.length > 0 && t.length <= 32)
     .slice(0, 8)
