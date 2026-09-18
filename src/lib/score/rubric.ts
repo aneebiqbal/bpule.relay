@@ -6,7 +6,7 @@ import type {
   SignalDefinition,
   Verdict,
 } from '@/lib/domain/types'
-import { mapLocationToRegion } from '@/lib/leads/targeting'
+import { mapLocationToRegion } from '@/lib/leads/targeting-pure'
 
 /**
  * Scout qualification rubric.

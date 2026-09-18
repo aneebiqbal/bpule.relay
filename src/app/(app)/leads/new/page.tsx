@@ -34,7 +34,7 @@ const DEFAULT_RULEBOOK: OrganizationRulebook = {
   maxCompleteness: 5,
   confidenceSendThreshold: 72,
 }
-import { classifyRoleFromTitle, mapLocationToRegion } from '@/lib/leads/targeting'
+import { classifyRoleFromTitle, mapLocationToRegion } from '@/lib/leads/targeting-pure'
 import { readSse } from '@/lib/sse/client'
 import { cn } from 'cn'
 import type { ExtractedLead, MarketRegion, RoleCategory, SignalId } from '@/lib/domain/types'
