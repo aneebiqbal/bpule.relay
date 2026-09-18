@@ -59,7 +59,8 @@ export function checkHardNegatives(text: string, isJobSeekerContext?: boolean): 
     }
   }
 
-  const lowBudgetMatch = text.match(/\$\s*(\d{1,4})(?!\d)/)
+  // Exclude $15M, $1.2B, etc. — only match actual small budgets like $15, $300
+  const lowBudgetMatch = text.match(/\$\s*(\d{1,4})(?![\d.MBK])/i)
   const lowBudget = lowBudgetMatch ? Number(lowBudgetMatch[1]) : null
   const hugeScope = /\b(uber|clone|exactly like|everything|full app|entire platform|all features)\b/i.test(text)
   const abandonedSignal = /\b(previous developer).{0,40}(disappeared|vanished|left)|\babandoned project\b|\bdon't have (?:the )?full requirements\b|\bno full requirements\b/i.test(text)
@@ -113,8 +114,13 @@ function computeRolePenalty(intelligence: NormalizedIntelligence, watchOut: stri
   }
 
   // Recruiter / talent acquisition
-  const isRecruiter = /\b(recruiter|talent acquisition|sourcing|people ops|human resources)\b/i.test(allContent) ||
-    /\brecruiter\b/i.test(title)
+  // IMPORTANT: Working AT a recruiting company ≠ being a recruiter.
+  // Bill Scalzitti is "Director of Client Solutions" at JobWriter (recruiting software).
+  // His profile mentions "Human Resources" because of his industry, not his role.
+  // Only penalize if the TITLE indicates a recruiting role.
+  const hasLeadershipTitle = /\b(ceo|cto|cfo|coo|founder|co[- ]?founder|director|head|vp|president|partner|owner|chief)\b/i.test(title)
+  const isRecruiter = /\b(recruiter|talent acquisition|sourcing|people ops)\b/i.test(title) ||
+    (/\b(recruiter|talent acquisition|sourcing|people ops|human resources)\b/i.test(allContent) && !hasLeadershipTitle && seniority !== 'executive' && seniority !== 'senior')
   if (isRecruiter) {
     penalty += 30
     watchOut.push('Recruiter role: hiring for themselves, not a prospect for client work')
