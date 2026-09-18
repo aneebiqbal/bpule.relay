@@ -1073,8 +1073,10 @@ function splitLines(rawText: string): string[] {
 function extractName(lines: string[]): string | null {
   for (const line of lines.slice(0, 8)) {
     if (/^(job|description|skills|posted|budget|client|company)\b/i.test(line)) continue
-    if (/^[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z'.-]+){0,3}$/.test(line)) {
-      return line
+    // Allow parentheses for nicknames: "Ephraim (Effy) Gittler"
+    if (/^[A-Z][A-Za-z]+\s*(?:\([A-Za-z]+\)\s*)?[A-Za-z'-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2}$/.test(line)) {
+      // Strip nickname parentheses for clean name: "Ephraim (Effy) Gittler" → "Ephraim Gittler"
+      return line.replace(/\s*\([^)]+\)\s*/g, ' ').replace(/\s+/g, ' ').trim()
     }
   }
   return null
