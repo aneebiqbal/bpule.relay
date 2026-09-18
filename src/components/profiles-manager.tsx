@@ -440,6 +440,9 @@ function ProfileCard({
       if (data.signedUrl) {
         setCvUrl(data.signedUrl)
         window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+      } else {
+        // No CV uploaded yet — trigger file input to upload
+        inputRef.current?.click()
       }
     } catch {
       setCvUrl(null)
