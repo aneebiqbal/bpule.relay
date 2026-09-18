@@ -102,7 +102,11 @@ function computeRolePenalty(intelligence: NormalizedIntelligence, watchOut: stri
   let penalty = 0
 
   // Student / job seeker
-  const isStudent = /\b(student|intern(?:ship)?|bootcamp|learning to code|self[- ]taught|career switch|aspiring|looking for (?:internship|job|work|opportunities))\b/i.test(allContent)
+  // IMPORTANT: "looking for a developer/engineer/team" = HIRING, not job seeking
+  // Only flag when the person is looking for THEIR OWN job/opportunity
+  const jobSeekingPatterns = /\b(looking for (?:internship|job|work|opportunities|employment| a role| a position| remote role|full[- ]time work)|#opentowork|open to (?:new )?opportunities|seeking (?:a |new )?(?:job|role|position|opportunity|employment)|available for (?:new )?(?:job|role|position|opportunity))\b/i
+  const hiringPatterns = /\b(looking for (?:a |an |the )?(?:developer|engineer|designer|team|cto|co[- ]?founder|partner|talent|candidate|hire))\b/i
+  const isStudent = (jobSeekingPatterns.test(allContent) || /\b(student|intern(?:ship)?|bootcamp|learning to code|self[- ]taught|career switch|aspiring)\b/i.test(allContent)) && !hiringPatterns.test(allContent)
   if (isStudent) {
     penalty += 35
     watchOut.push('Student / job seeker — not a buyer of development services')
