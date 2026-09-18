@@ -536,7 +536,7 @@ export default function ProspectCheckPage() {
                   <User className="size-4 text-orange" aria-hidden="true" />
                   <h3 className="text-sm font-medium text-ink">Best sender: {result.bestSender.label ?? 'Unnamed'}</h3>
                 </div>
-                {result.alternativeSenders.length > 0 && (
+                {Array.isArray(result.alternativeSenders) && result.alternativeSenders.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setShowSenders(!showSenders)}
@@ -547,19 +547,19 @@ export default function ProspectCheckPage() {
                   </button>
                 )}
               </div>
-              {result.bestSenderProof.length > 0 && (
+              {Array.isArray(result.bestSenderProof) && result.bestSenderProof.length > 0 && (
                 <p className="mt-1.5 text-[12px] text-graphite">
                   {result.bestSenderProof[0].safeClaim.slice(0, 100)}
                   {result.bestSenderProof.length > 1 ? ` +${result.bestSenderProof.length - 1} more` : ''}
                 </p>
               )}
-              {result.bestSenderProof.length === 0 && (
+              {Array.isArray(result.bestSenderProof) && result.bestSenderProof.length === 0 && (
                 <p className="mt-1.5 text-[12px] text-status-warning">
                   No verified proof matches for this sender — note may lack credibility.
                 </p>
               )}
 
-              {showSenders && result.alternativeSenders.length > 0 && (
+              {showSenders && Array.isArray(result.alternativeSenders) && result.alternativeSenders.length > 0 && (
                 <div className="mt-3 space-y-2 border-t border-line pt-3">
                   {result.alternativeSenders.map((alt) => (
                     <button

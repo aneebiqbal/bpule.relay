@@ -340,7 +340,7 @@ export default function InboundPage() {
                 {intelligence.recommendedIdentity.label ?? intelligence.recommendedIdentity.platform}
               </p>
               <p className="mt-0.5 text-[12px] text-graphite">{intelligence.identityFitReason}</p>
-              {intelligence.matchingSkills.length > 0 && (
+              {Array.isArray(intelligence.matchingSkills) && intelligence.matchingSkills.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {intelligence.matchingSkills.slice(0, 6).map((skill) => (
                     <span key={skill} className="rounded bg-bone-raised px-1.5 py-0.5 text-[10px] text-graphite">
@@ -353,7 +353,7 @@ export default function InboundPage() {
           )}
 
           {/* Strongest proof */}
-          {intelligence.strongestProof.length > 0 && (
+          {Array.isArray(intelligence.strongestProof) && intelligence.strongestProof.length > 0 && (
             <div>
               <p className="text-label text-stone">Strongest relevant proof</p>
               <div className="mt-2 space-y-2">
@@ -372,7 +372,7 @@ export default function InboundPage() {
           )}
 
           {/* Missing info */}
-          {intelligence.missingInfo.length > 0 && (
+          {Array.isArray(intelligence.missingInfo) && intelligence.missingInfo.length > 0 && (
             <div>
               <p className="text-label text-stone">Missing information</p>
               <ul className="mt-1 space-y-1">
