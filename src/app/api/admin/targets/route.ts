@@ -4,6 +4,23 @@ import { getCurrentUser } from '@/lib/auth/current'
 import { safeErrorResponse } from '@/lib/errors'
 import type { DailyTarget } from '@/lib/domain/types'
 
+async function validateIdentityAssignedToRep(
+  supabase: Awaited<ReturnType<typeof createServerSupabase>>,
+  orgId: string,
+  repId: string,
+  revenueIdentityId: string,
+): Promise<boolean> {
+  if (!repId) return true
+  const { data } = await supabase
+    .from('identity_assignments')
+    .select('id')
+    .eq('organization_id', orgId)
+    .eq('rep_id', repId)
+    .eq('revenue_identity_id', revenueIdentityId)
+    .maybeSingle()
+  return Boolean(data)
+}
+
 function mapTarget(row: Record<string, unknown>): DailyTarget {
   return {
     id: row.id as string,
@@ -56,63 +73,31 @@ export async function POST(request: Request) {
   const activityType = typeof body.activityType === 'string' ? body.activityType.trim() : ''
   const targetCount = typeof body.targetCount === 'number' ? body.targetCount : 0
 
-  if (!revenueIdentityId || !activityType || targetCount <= 0) {
+  if (!repId || !revenueIdentityId || !activityType || targetCount <= 0) {
     return NextResponse.json(
-      { error: 'revenueIdentityId, activityType, and positive targetCount are required.' },
+      { error: 'repId, revenueIdentityId, activityType, and positive targetCount are required.' },
       { status: 400 },
     )
   }
 
   const supabase = await createServerSupabase()
 
-  // If repId provided, verify they belong to org
-  if (repId) {
-    const { data: rep } = await supabase
-      .from('reps')
-      .select('id')
-      .eq('id', repId)
-      .eq('organization_id', user.organization.id)
-      .maybeSingle()
-    if (!rep) return NextResponse.json({ error: 'Rep not found.' }, { status: 404 })
-  }
+  // Verify rep belongs to org
+  const { data: rep } = await supabase
+    .from('reps')
+    .select('id')
+    .eq('id', repId)
+    .eq('organization_id', user.organization.id)
+    .maybeSingle()
+  if (!rep) return NextResponse.json({ error: 'Rep not found.' }, { status: 404 })
 
-  // If no repId, create targets for all reps assigned to this identity
-  if (!repId) {
-    const { data: assignments } = await supabase
-      .from('identity_assignments')
-      .select('rep_id')
-      .eq('revenue_identity_id', revenueIdentityId)
-      .eq('organization_id', user.organization.id)
-
-    if (!assignments || assignments.length === 0) {
-      return NextResponse.json({ error: 'No reps assigned to this identity.' }, { status: 400 })
-    }
-
-    const rows = assignments.map((a) => ({
-      organization_id: user.organization.id,
-      rep_id: a.rep_id,
-      revenue_identity_id: revenueIdentityId,
-      activity_type: activityType,
-      target_count: targetCount,
-      active: true,
-      created_by: user.rep.id,
-    }))
-
-    const { error } = await supabase
-      .from('daily_targets')
-      .upsert(rows, { onConflict: 'rep_id,revenue_identity_id,activity_type' })
-
-    if (error) return safeErrorResponse(error, 500, 'Failed to create targets.', 'admin/targets')
-
-    await supabase.from('accountability_audit_log').insert({
-      organization_id: user.organization.id,
-      rep_id: user.rep.id,
-      revenue_identity_id: revenueIdentityId,
-      event_type: 'target_created',
-      detail: { activity_type: activityType, target_count: targetCount, scope: 'all_assigned' },
-    })
-
-    return NextResponse.json({ ok: true, count: rows.length })
+  // Verify identity is assigned to this rep
+  const assigned = await validateIdentityAssignedToRep(supabase, user.organization.id, repId, revenueIdentityId)
+  if (!assigned) {
+    return NextResponse.json(
+      { error: 'REVENUE_IDENTITY_NOT_ASSIGNED_TO_REP: The selected Revenue Identity is not assigned to this Rep.' },
+      { status: 400 },
+    )
   }
 
   const { data, error } = await supabase

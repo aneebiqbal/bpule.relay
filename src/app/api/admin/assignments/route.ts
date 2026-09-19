@@ -23,17 +23,25 @@ function mapAssignment(row: Record<string, unknown>): AssignmentDTO {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
 
   const supabase = await createServerSupabase()
-  const { data, error } = await supabase
+  const { searchParams } = new URL(request.url)
+  const repId = searchParams.get('repId')
+
+  let query = supabase
     .from('identity_assignments')
     .select('id, organization_id, revenue_identity_id, rep_id, assigned_by, created_at')
     .eq('organization_id', user.organization.id)
-    .order('created_at', { ascending: false })
+
+  if (repId) {
+    query = query.eq('rep_id', repId)
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false })
 
   if (error) return safeErrorResponse(error, 500, 'Failed to load assignments.', 'admin/assignments')
   return NextResponse.json({ assignments: (data ?? []).map(mapAssignment) })

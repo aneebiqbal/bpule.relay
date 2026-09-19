@@ -22,25 +22,55 @@ function activityLabel(t: ActivityType): string {
   return ACTIVITY_OPTIONS.find((o) => o.value === t)?.label ?? t
 }
 
+interface AssignmentDTO {
+  id: string
+  organizationId: string
+  revenueIdentityId: string
+  repId: string
+  assignedBy: string
+  createdAt: string
+}
+
 export function TargetsManager() {
   const [targets, setTargets] = useState<DailyTarget[]>([])
   const [identities, setIdentities] = useState<RevenueIdentity[]>([])
   const [reps, setReps] = useState<Rep[]>([])
+  const [assignments, setAssignments] = useState<AssignmentDTO[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ repId: '', revenueIdentityId: '', activityType: 'dm' as ActivityType, targetCount: 10 })
 
+  // Fetch assignments for the selected rep
+  const assignedIdentities = form.repId
+    ? assignments.filter((a) => a.repId === form.repId)
+    : []
+
+  const canCreate = form.repId && form.revenueIdentityId && form.activityType && form.targetCount > 0
+
+  // Auto-resolve identity when rep changes
+  function selectRep(repId: string) {
+    setForm({ ...form, repId, revenueIdentityId: '' })
+    if (repId) {
+      const repAssignments = assignments.filter((a) => a.repId === repId)
+      if (repAssignments.length === 1) {
+        setForm((prev) => ({ ...prev, revenueIdentityId: repAssignments[0].revenueIdentityId }))
+      }
+    }
+  }
+
   useEffect(() => {
     Promise.all([
       fetch('/api/admin/targets').then((r) => r.json()),
       fetch('/api/admin/revenue-identities').then((r) => r.json()),
       fetch('/api/reps').then((r) => r.json()),
-    ]).then(([t, i, r]) => {
+      fetch('/api/admin/assignments').then((r) => r.json()),
+    ]).then(([t, i, r, a]) => {
       setTargets(t.targets ?? [])
       setIdentities(i.identities ?? [])
       setReps(r.reps ?? [])
+      setAssignments(a.assignments ?? [])
     }).catch(() => setError('Failed to load'))
       .finally(() => setLoading(false))
   }, [])
@@ -89,6 +119,12 @@ export function TargetsManager() {
     }))
     .filter((lane) => lane.targets.length > 0)
 
+  // Check if a target's identity is still assigned to its rep
+  function isIdentityAssignedToTarget(target: DailyTarget): boolean {
+    if (!target.repId) return true
+    return assignments.some((a) => a.repId === target.repId && a.revenueIdentityId === target.revenueIdentityId)
+  }
+
   return (
     <div className="space-y-5">
       {error && (
@@ -127,20 +163,36 @@ export function TargetsManager() {
             <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">New Target Rule</p>
             <p className="mt-1 text-[13px] text-graphite">Attach a daily count to one identity and one activity type.</p>
           </div>
+          {!form.repId && assignedIdentities.length === 0 && (
+            <p className="text-[12px] text-status-warning col-span-2">Select a Rep to see their assigned Revenue Identities.</p>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>Rep</Label>
-              <Select value={form.repId} onChange={(e) => setForm({ ...form, repId: e.target.value })}>
-                <option value="">All assigned reps…</option>
+              <Select value={form.repId} onChange={(e) => selectRep(e.target.value)}>
+                <option value="">Select Rep…</option>
                 {reps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
               </Select>
             </div>
             <div>
-              <Label>Identity</Label>
-              <Select value={form.revenueIdentityId} onChange={(e) => setForm({ ...form, revenueIdentityId: e.target.value })}>
-                <option value="">Select…</option>
-                {identities.filter((i) => i.status === 'active').map((i) => <option key={i.id} value={i.id}>{i.identityName} ({i.channel})</option>)}
-              </Select>
+              <Label>Revenue Identity</Label>
+              {assignedIdentities.length === 0 && form.repId && (
+                <p className="text-[12px] text-status-warning">No Revenue Identity assigned to this Rep.</p>
+              )}
+              {assignedIdentities.length === 1 && (
+                <p className="text-[12px] text-graphite px-3 py-2 bg-bone rounded border border-line">
+                  {identities.find((i) => i.id === assignedIdentities[0].revenueIdentityId)?.identityName ?? 'Unknown'}
+                </p>
+              )}
+              {assignedIdentities.length > 1 && (
+                <Select value={form.revenueIdentityId} onChange={(e) => setForm({ ...form, revenueIdentityId: e.target.value })}>
+                  <option value="">Select Identity…</option>
+                  {assignedIdentities.map((a) => {
+                    const identity = identities.find((i) => i.id === a.revenueIdentityId)
+                    return <option key={a.id} value={a.revenueIdentityId}>{identity?.identityName ?? 'Unknown'} ({identity?.channel})</option>
+                  })}
+                </Select>
+              )}
             </div>
             <div>
               <Label>Activity Type</Label>
@@ -155,7 +207,7 @@ export function TargetsManager() {
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={() => void createTarget()} disabled={saving || !form.revenueIdentityId}>
+            <Button onClick={() => void createTarget()} disabled={saving || !canCreate}>
               {saving ? <Save className="size-3.5 mr-1.5 animate-spin" /> : <Save className="size-3.5 mr-1.5" />}
               Save
             </Button>
@@ -184,14 +236,20 @@ export function TargetsManager() {
                 <ul className="divide-y divide-line/60">
                   {lane.targets.map((target) => {
                     const rep = reps.find((row) => row.id === target.repId)
+                    const identityAssigned = isIdentityAssignedToTarget(target)
                     return (
                       <li key={target.id} className="flex items-center gap-3 px-4 py-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-[13px] font-medium text-ink">{activityLabel(target.activityType)}</span>
                             <span className="rounded bg-bone px-1.5 py-0.5 text-mono-medium text-[10px] text-stone">
-                              {rep?.name ?? 'All assigned reps'}
+                              {rep?.name ?? 'Unknown rep'}
                             </span>
+                            {!identityAssigned && (
+                              <span className="rounded bg-status-warning/10 px-1.5 py-0.5 text-[10px] text-status-warning">
+                                Identity no longer assigned
+                              </span>
+                            )}
                           </div>
                           <p className="mt-0.5 text-[12px] text-graphite">{target.targetCount} required actions per day</p>
                         </div>

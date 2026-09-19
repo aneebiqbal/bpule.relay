@@ -36,6 +36,14 @@ export async function PATCH(
   }
 
   const supabase = await createServerSupabase()
+  // Reject attempts to change identity or rep — these require assignment validation
+  if (body.revenueIdentityId !== undefined || body.repId !== undefined) {
+    return NextResponse.json(
+      { error: 'Cannot change Revenue Identity or Rep on an existing target. Create a new target instead.' },
+      { status: 400 },
+    )
+  }
+
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
   if (typeof body.targetCount === 'number' && body.targetCount > 0) {
