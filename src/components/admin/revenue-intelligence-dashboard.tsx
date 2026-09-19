@@ -228,7 +228,7 @@ export function RevenueIntelligenceDashboard() {
 
   if (loading) return <div className="text-sm text-muted-foreground">Loading...</div>
   if (error) return <div className="text-sm text-destructive">{error}</div>
-  if (!data) return <EmptyState message="No data available." />
+  if (!data) return <EmptyState message="No data for this period." />
 
   const maxFunnel = Math.max(data.funnel.extracted, data.funnel.qualified, data.funnel.contacted, data.funnel.replied, 1)
 

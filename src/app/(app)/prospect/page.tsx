@@ -308,7 +308,6 @@ export default function ProspectCheckPage() {
   }
 
   const recMeta = result?.score ? QUALIFICATION_META[result.score.qualification] ?? QUALIFICATION_META.maybe : null
-  const confidence = result?.canonical?.extractionCompleteness?.score != null ? `${result.canonical.extractionCompleteness.score}/100` : '—'
   const recommendation = result
     ? result.score
       ? recMeta?.label ?? 'Awaiting analysis'
@@ -327,9 +326,9 @@ export default function ProspectCheckPage() {
         <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink sm:text-[32px]">
           Decide if this prospect is worth your next outreach.
         </h1>
-        <p className="max-w-2xl text-[13px] text-graphite">
-          Relay scores fit, suggests the best sender profile, and prepares a connection note you can review.
-        </p>
+          <p className="max-w-2xl text-[13px] text-graphite">
+            Check whether a prospect is worth your next outreach.
+          </p>
       </header>
 
       {error ? (
