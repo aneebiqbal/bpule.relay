@@ -37,6 +37,28 @@ export const DIMENSION_WEIGHTS = {
 
 // ── Hard Negatives ─────────────────────────────────────────────────────────
 
+function splitCurrentEvidence(text: string): string {
+  const pastMarkers = [
+    /\nPAST EXPERIENCE\n/i,
+    /\nPast Experience\n/i,
+    /\nPAST PROJECTS\n/i,
+    /\nPast Projects\n/i,
+    /\nFreelance\n/i,
+    /\nIndependent\n/i,
+    /\nContract\n/i,
+    /\nConsulting\n/i,
+    /\nSide Projects\n/i,
+  ]
+  let earliest = text.length
+  for (const marker of pastMarkers) {
+    const match = text.match(marker)
+    if (match && match.index !== undefined && match.index < earliest) {
+      earliest = match.index
+    }
+  }
+  return text.slice(0, earliest)
+}
+
 const HARD_NEGATIVE_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /\b(on[- ]?site|onsite|in[- ]?person) (?:required|only|at our|in our)\b/i, reason: 'Explicitly on-site only at a non-Pakistan location' },
   { pattern: /\b(must be (?:based|located|resident) (?:in|at) (?:the )?(?:us|usa|united states|uk|united kingdom|canada|australia|germany))\b/i, reason: 'Explicit geography exclusion for Pakistan-based workers' },
@@ -50,22 +72,26 @@ const JOB_SEEKER_MARKERS_PATTERN = /\b(open to work|looking for (?:a |remote | )
 export function checkHardNegatives(text: string, isJobSeekerContext?: boolean): string[] {
   const negatives: string[] = []
 
+  // Scope hard negatives to current evidence only. Historical experience
+  // (past roles, old freelance budgets) must not create current restrictions.
+  const currentOnly = splitCurrentEvidence(text)
+
   // Only check geography hard negatives if NOT a job seeker context
   // Job seeker saying "Open to work in UK" != employer restricting to UK
   if (!isJobSeekerContext) {
     for (const { pattern, reason } of HARD_NEGATIVE_PATTERNS) {
-      if (pattern.test(text)) {
+      if (pattern.test(currentOnly)) {
         negatives.push(reason)
       }
     }
   }
 
   // Exclude $15M, $1.2B, etc. — only match actual small budgets like $15, $300
-  const lowBudgetMatch = text.match(/\$\s*(\d{1,4})(?![\d.MBK])/i)
+  const lowBudgetMatch = currentOnly.match(/\$\s*(\d{1,4})(?![\d.MBK])/i)
   const lowBudget = lowBudgetMatch ? Number(lowBudgetMatch[1]) : null
-  const hugeScope = /\b(uber|clone|exactly like|everything|full app|entire platform|all features)\b/i.test(text)
-  const abandonedSignal = /\b(previous developer).{0,40}(disappeared|vanished|left)|\babandoned project\b|\bdon't have (?:the )?full requirements\b|\bno full requirements\b/i.test(text)
-  const proposalOverload = /\bproposals?:\s*(\d{2,3})\b/i.exec(text)
+  const hugeScope = /\b(uber|clone|exactly like|everything|full app|entire platform|all features)\b/i.test(currentOnly)
+  const abandonedSignal = /\b(previous developer).{0,40}(disappeared|vanished|left)|\babandoned project\b|\bdon't have (?:the )?full requirements\b|\bno full requirements\b/i.test(currentOnly)
+  const proposalOverload = /\bproposals?:\s*(\d{2,3})\b/i.exec(currentOnly)
   const proposalCount = proposalOverload ? Number(proposalOverload[1]) : null
 
   if (lowBudget !== null && lowBudget <= 300 && hugeScope) {
@@ -120,7 +146,7 @@ function computeRolePenalty(intelligence: NormalizedIntelligence, watchOut: stri
   if (isRecruiterTitle(intelligence.person.title)) {
     penalty += 30
     watchOut.push('Recruiter role: hiring for themselves, not a prospect for client work')
-  } else if (isClinicianProfile(intelligence.person.title, intelligence.company.name, `${intelligence.company.industry ?? ''} ${raw}`)) {
+  } else if (isClinicianProfile(intelligence.person.title, intelligence.company.name, intelligence.company.industry)) {
     penalty += 30
     watchOut.push('Clinician / care practice — not a buyer of software delivery')
   }
@@ -132,12 +158,11 @@ function computeRolePenalty(intelligence: NormalizedIntelligence, watchOut: stri
     watchOut.push('Non-technical micro business — unlikely to need software development')
   }
 
-  // Crypto / token scams
-  const isCryptoScam = /\b(token|defi|web3|crypto|nft|airdrop|1000x|pump)\b/i.test(allContent) &&
-    /\b(paying in|pay in|tokenomics|launching)\b/i.test(raw)
-  if (isCryptoScam) {
+  // Fraud risk — concrete suspicious behavior, not industry membership
+  const isFraudRisk = /\b(pay(?:ing)? (?:in|with) (?:\$?crypto|\$?token|\$?btc|\$?eth)|\$\w+ (?:token|coin)|send (?:money|funds|payment) (?:before|upfront|first)|wire transfer only|no (?:contract|escrow|terms))\b/i.test(raw)
+  if (isFraudRisk) {
     penalty += 30
-    watchOut.push('Crypto/token project — high risk of non-payment or scam')
+    watchOut.push('Fraud risk — suspicious payment or contract behavior detected')
   }
 
   // Competitor agency / dev shop

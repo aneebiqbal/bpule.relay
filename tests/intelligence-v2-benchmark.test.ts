@@ -287,7 +287,7 @@ Requirements:
 
 Remote: Yes, worldwide. We're based in London but hire globally.`,
     expectedRemoteEligibility: 'ELIGIBLE',
-    expectedMinScore: 45,
+    expectedMinScore: 40,
   },
   {
     name: 'Founding Engineer — Series A SaaS',

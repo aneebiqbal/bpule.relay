@@ -30,7 +30,7 @@ const EMPLOYER_ONLY_HIRE = /\b(we only hire|only hiring|must be based in|must re
 // Job seeker context detection — when present, geography = person's preference
 export const JOB_SEEKER_MARKERS = /\b(open to work|looking for (?:a |remote | )?(?:job|role|position|opportunity|work|employment)|seeking (?:a |remote | )?(?:job|role|position|opportunity)|#OpenToWork|available for (?:freelance|contract|remote)|available for hire|looking to (?:join|work|relocate))\b/i
 const HYBRID = /\b(hybrid|part[- ]?remote|partial remote|office days|in[- ]?office|split between|\d+\s*days?\s*(?:\/\s*week)?\s*(?:in|at).{0,20}\boffice\b)\b/i
-const ONSITE = /\b(on[- ]?site|onsite|in[- ]?person|in[- ]?office|at our (?:office|headquarters|location)|based in (?:the )?(?:office|hq))\b/i
+const ONSITE = /\b(on[- ]?site|onsite|in[- ]?person|in[- ]?office|at our (?:office|headquarters|location)|based in (?:the )?(?:office|hq)|must work from (?:our|the) office|work from (?:our|the) office|days? in (?:the |our )?office|required in (?:the |our )?office)\b/i
 const IMPLICIT_REMOTE_ASK = /\b(looking for|need (?:a|an|someone|help)?|seeking|dm me|reach out|contract|freelance|engagement|project basis|upwork|proposal)\b/i
 const TECH_ROLE_HINT = /\b(developer|engineer|full[- ]?stack|backend|frontend|software|app|platform|rails|react(?!ion)|node|python|api|extension|devops|architect)\b/i
 

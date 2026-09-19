@@ -1122,9 +1122,14 @@ function splitLines(rawText: string): string[] {
 function extractName(lines: string[]): string | null {
   for (const line of lines.slice(0, 8)) {
     if (/^(job|description|skills|posted|budget|client|company)\b/i.test(line)) continue
+    // Check for explicit "Name:" field first
+    const explicitName = line.match(/^name:\s*(.+)$/i)
+    if (explicitName?.[1]) return explicitName[1].trim()
+    // Skip section headers, labels, and all-caps structural labels
+    if (/^(===|source|identity|about|current|past|activity|education|skills|other|hiring|batch|prospect|experience|contact)\b/i.test(line)) continue
+    if (/^[A-Z][A-Z\s]+$/.test(line)) continue
     // Allow parentheses for nicknames: "Ephraim (Effy) Gittler"
     if (/^[A-Z][A-Za-z]+\s*(?:\([A-Za-z]+\)\s*)?[A-Za-z'-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2}$/.test(line)) {
-      // Strip nickname parentheses for clean name: "Ephraim (Effy) Gittler" → "Ephraim Gittler"
       return line.replace(/\s*\([^)]+\)\s*/g, ' ').replace(/\s+/g, ' ').trim()
     }
   }
@@ -1133,16 +1138,18 @@ function extractName(lines: string[]): string | null {
 
 function extractTitle(lines: string[]): string | null {
   const titleLine = lines.find((line) =>
-    /\b(founder|ceo|cto|coo|vp|head|director|manager|lead|owner|president|engineer|developer|architect)\b/i.test(line),
+    /\b(founder|ceo|cto|coo|vp|head|director|manager|lead|owner|president|engineer|developer|architect|recruiter|recruiting)\b/i.test(line),
   )
-  return titleLine ?? null
+  if (!titleLine) return null
+  return titleLine
+    .replace(/^headline:\s*/i, '')
+    .replace(/^title:\s*/i, '')
+    .replace(/^current\s*role:\s*/i, '')
+    .trim()
 }
 
 function extractLocation(lines: string[], rawText: string): string | null {
-  const locationLine = lines.find((line) =>
-    /\b(remote|hybrid|on-?site|usa|united states|uk|united kingdom|europe|uae|canada|australia|germany|france|india|pakistan|singapore|new york|london|berlin|dubai|toronto|sydney|chicago|austin|stockholm|warsaw|dublin|edinburgh)\b/i.test(line) &&
-    (line.includes(',') || /\bremote\b/i.test(line)),
-  )
+  const locationLine = lines.find((line) => /^location:\s*/i.test(line))
   if (locationLine) {
     return locationLine.replace(/^location:\s*/i, '').trim()
   }
@@ -1233,7 +1240,10 @@ function extractOpportunitySignals(rawText: string): { signals: OpportunitySigna
   if (softwareAsk && !nonCredibleFreelanceBrief) signals.push('explicit_ask')
   if (/(job:|upwork|budget:|proposals?:)/i.test(rawText) && hasTechContext && !nonCredibleFreelanceBrief) signals.push('freelance_project_need')
   if (PAIN_PATTERNS.some((p) => p.test(rawText)) && hasTechContext) signals.push('technical_problem')
-  if (explicitHiring) signals.push('hiring')
+  if (explicitHiring) {
+    const relevance = classifyHiringRelevance(rawText)
+    if (relevance === 'software') signals.push('hiring')
+  }
   if (/\b(raised\s+[\$€£\d]|seed round|series [abc]\b|funding round)\b/i.test(rawText)) signals.push('funding')
   if (/\b(migration|migrate|migrated|move from|move to)\b/i.test(rawText)) signals.push('migration')
   if (/\b(rebuild|overhaul|rewrite|re-?platform|production[- ]?ready)\b/i.test(rawText)) signals.push('rebuild')
@@ -1427,6 +1437,21 @@ function demoPassA(rawText: string): PassAOutput {
   }
 }
 
+function classifyHiringRelevance(rawText: string): 'software' | 'product_design' | 'non_technical' | 'unknown' {
+  const segments = rawText.split(/(?:\n{2,}|--- POST \d+ ---|Posts|Activity)/gi)
+  for (const seg of segments) {
+    const isHiringContext = /\b(hiring|looking for|open roles?|we need|join our team|developer|engineer|senior|lead|manager|director|head of|vp|cto|co-founder|founder)\b/i.test(seg)
+    if (!isHiringContext) continue
+    const softwareRoles = (seg.match(/\b(developer|engineer|software|frontend|backend|full[- ]?stack|devops|sre|ml engineer|data engineer|security engineer|qa engineer|automation engineer|technical architect|vp of engineering|director of engineering|head of engineering)\b/gi) || []).length
+    const productRoles = (seg.match(/\b(product manager|product designer|ux designer|ui designer|program manager|project manager|product owner|scrum master|agile coach)\b/gi) || []).length
+    const genericNonTech = (seg.match(/\b(marketing|sales|finance|hr|people ops|recruiter|talent|operations|admin|legal|compliance|support|customer success)\b/gi) || []).length
+    if (softwareRoles > 0) return 'software'
+    if (productRoles > 0) return 'product_design'
+    if (genericNonTech > 0) return 'non_technical'
+  }
+  return 'unknown'
+}
+
 function demoPassC(passA: PassAOutput): Pick<NormalizedIntelligence, 'probableNeed' | 'opportunityTrigger' | 'timingSignal' | 'risks' | 'unknowns'> {
   const signals = passA.opportunity.signals
   const nonBuyer = isNonBuyerProfessional({
@@ -1440,7 +1465,10 @@ function demoPassC(passA: PassAOutput): Pick<NormalizedIntelligence, 'probableNe
   } else if (!nonBuyer && signals.includes('technical_problem')) {
     probableNeed = 'Specialized engineering help to resolve a technical issue.'
   } else if (!nonBuyer && (signals.includes('hiring') || signals.includes('hiring_pressure'))) {
-    probableNeed = 'Additional delivery capacity to keep up with shipping demands.'
+    const relevance = classifyHiringRelevance(passA.opportunity.description ?? '')
+    if (relevance === 'software') {
+      probableNeed = 'Additional delivery capacity to keep up with shipping demands.'
+    }
   }
 
   const opportunityTrigger =
