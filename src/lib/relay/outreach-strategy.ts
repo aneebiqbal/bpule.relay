@@ -5,6 +5,7 @@ import type {
   MatchedProof,
   SafeFact,
 } from '@/lib/domain/types'
+import { revenueStrategyToPromptBlock, type RevenueStrategy } from '@/lib/relay/revenue-strategy'
 
 /**
  * Outreach Strategy Engine
@@ -270,7 +271,60 @@ function getCtaStrategy(
  * Serialize strategy for the message generator prompt.
  * Compact — never dumps a full CV or all context.
  */
-export function strategyToPromptBlock(strategy: OutreachStrategy): string {
+export function strategyToPromptBlock(strategy: OutreachStrategy, revenue?: RevenueStrategy | null): string {
+  if (revenue) {
+    return revenueStrategyToPromptBlock(revenue)
+  }
+  if (strategy.allowedNow || strategy.messageJob) {
+    const synthetic: RevenueStrategy = {
+      who: strategy.leadContext,
+      assessment: strategy.assessment ?? {
+        fit: 'UNKNOWN',
+        intent: 'UNKNOWN',
+        confidence: 'LOW',
+        fitWhy: '',
+        intentWhy: '',
+        confidenceWhy: '',
+      },
+      contact: strategy.contact
+        ? {
+            reason: strategy.contact.reason as import('./revenue-strategy').ContactReason,
+            action: strategy.contact.action as import('./revenue-strategy').ContactAction,
+            why: strategy.contact.why,
+            messageRecommended: strategy.contact.messageRecommended,
+            noMessageReason: strategy.contact.noMessageReason,
+          }
+        : {
+            reason: 'NO_CREDIBLE_REASON',
+            action: 'SKIP',
+            why: strategy.uiRationale ?? '',
+            messageRecommended: false,
+            noMessageReason: 'No revenue strategy attached.',
+          },
+      knownFacts: [],
+      supportedInferences: [],
+      unknowns: [],
+      commercialSituation: strategy.leadContext,
+      relationshipState: strategy.relationshipStage,
+      strongestEvidence: strategy.safeTrigger,
+      reasonToActNow: strategy.uiRationale ?? null,
+      primaryUncertainty: null,
+      nextMove: 'ASK',
+      messageJob: (strategy.messageJob as RevenueStrategy['messageJob']) ?? null,
+      allowedNow: strategy.allowedNow ?? [],
+      evidenceToHold: strategy.hold ?? [],
+      unsupportedClaims: strategy.neverClaim ?? [],
+      proofNeeded: null,
+      successCondition: strategy.messageGoal,
+      knowledge: [],
+      nextAction: strategy.messageGoal,
+      uiRationale: strategy.uiRationale ?? strategy.messageGoal,
+      wordBudget: strategy.wordBudget ?? { min: 15, max: 55, label: strategy.channel },
+      channel: strategy.channel as RevenueStrategy['channel'],
+    }
+    return revenueStrategyToPromptBlock(synthetic)
+  }
+
   const parts = [
     `## Outreach Strategy`,
     ``,

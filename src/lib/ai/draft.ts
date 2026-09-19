@@ -157,17 +157,20 @@ Test 2: Could this draft be sent to a different company unchanged? If swapping t
 Write out the draft first, then honestly run the tests on it, then return the final draft plus test_1_reply_or_delete, test_1_note, test_2_not_generic, test_2_note. Do not weaken the tests to make them pass.`
 
 function messageKind(input: DraftInput): string {
+  const budget = input.strategy?.wordBudget
+  const job = input.strategy?.messageJob
+  const ceiling = budget ? `${budget.min}–${budget.max} words` : null
   switch (input.type) {
     case 'dm':
-      return 'LinkedIn DM (first touch, short)'
+      return `LinkedIn DM. One job${job ? ` (${job})` : ''}. ${ceiling ?? '20–55 words'}. One observation, one question.`
     case 'connection':
-      return 'LinkedIn connection note (under 300 chars, no pitch)'
+      return `LinkedIn connection note. Earn access only. ${ceiling ?? '15–35 words'}. No pitch, no praise, no CTA.`
     case 'upwork':
-      return 'Upwork cover letter'
+      return 'Upwork cover letter. Specific to the job. No biography dump.'
     case 'followup':
-      return 'Follow-up message (second touch). The prospect read or opened the first message but has not replied. Keep it to two or three sentences, reference your earlier message, and give an easy way to say no.'
+      return `Follow-up message. ${ceiling ?? '15–45 words'}. Add ONE new reason to reply or close the loop. Never "just following up".`
     case 'reply':
-      return 'Reply to a prospect who wrote back. Answer their question first. Do not repeat bio/proof facts already sent. Keep it short and direct.'
+      return `Reply. Their latest message is first-party evidence. Answer first. ${ceiling ?? '20–70 words'}. Do not restart the pitch.`
   }
 }
 
@@ -178,8 +181,8 @@ export function baseDraftSystem(
 ): string {
   const styleBlock = injectStyleCard(styleCard)
   const siteBlock = siteIsLive(facts)
-    ? 'The public site is live. A CTA may reference it, but never ask for a call — the offer is always a free Read (a short written review of their product/Stack/status), never a chat or meeting.'
-    : 'The public site is NOT live yet. Every call to action must land in a reply to this message or a free Read offer. Never link to a website that does not exist. Never ask for a call or meeting — the offer is always a free Read.'
+    ? 'The public site is live and may be referenced only if the message job needs it. Never ask for a call on first touch. Never offer an unsolicited analysis or "read".'
+    : 'The public site is NOT live. Never link to it. Never ask for a call on first touch. Never offer an unsolicited analysis or "read".'
   const testsBlock = opts?.asPlainText
     ? `Write the draft, then on the line after it write the marker ---SELFCHECK--- followed by ONLY this single JSON object:
 {"test_1_reply_or_delete": true or false, "test_1_note": "one sentence", "test_2_not_generic": true or false, "test_2_note": "one sentence"}
@@ -201,7 +204,9 @@ Write the draft first, then honestly run the tests on it, then the marker and th
     ANTI_AI_RULES,
     'Sound like a real person who read their profile, not a template. Vary sentence length.',
     SURVEILLANCE_RULES,
-    'Do not pitch too early. Default first-touch goal: earn a reply, not sell the entire service.',
+    'Relay knows more than it says. Use only ALLOWED_NOW evidence. One message, one job. If no job is specified, return an empty draft.',
+    'Do not pitch BPulse, headcount leverage, or pricing unless the job is PROVIDE_PROOF and they asked. Never invent a rate. NEVER ask for a call on first touch.',
+    'Truthful curiosity beats fake insight. Do not manufacture technical observations from a scrape.',
     siteBlock,
     styleBlock ? `SENDER VOICE (mandatory):\n${styleBlock}` : '',
     testsBlock,
@@ -277,15 +282,13 @@ export function buildUserPrompt(
         .join('\n')
     : ''
 
+  // Writer receives ONLY strategy-scoped facts. Raw scraped text is NEVER passed.
   const leadBlock = [
-    'THE LEAD (factual only):',
+    'THE LEAD (factual only, from strategy scope):',
     `Company: ${input.lead.company}`,
     `Contact: ${input.extracted.name ?? 'unknown'}${input.extracted.title ? `, ${input.extracted.title}` : ''}`,
     `Source URL: ${input.extracted.url ?? 'none'}`,
-    `Detected signal: ${signal?.short ?? 'unknown'} (${signal?.description ?? ''})`,
-    `Evidence: ${input.extracted.signalEvidence || 'none'}`,
-    input.extracted.verbatimQuote ? `Verbatim quote from them: ${input.extracted.verbatimQuote}` : '',
-    input.lead.rawInput ? '\nRaw research notes (context only, never quote words that are not marked verbatim):\n' + input.lead.rawInput : '',
+    input.strategy?.allowedNow?.length ? `Allowed evidence: ${input.strategy.allowedNow.slice(0, 2).join('; ')}` : '',
   ]
     .filter(Boolean)
     .join('\n')
@@ -364,13 +367,22 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
   }
 
   const verdict = input.score.verdict
-  if (verdict === 'skip') {
+  const strategyAllowsWrite = input.strategy?.contact?.messageRecommended === true || input.type === 'reply'
+  if (verdict === 'skip' && !strategyAllowsWrite) {
     throw new Error(
       'This lead scored skip. Drafting is only allowed for send and research_more leads.',
     )
   }
 
-  if (input.type !== 'reply' && !signalEvidenceMatch(input.extracted.signalType, input.extracted.signalEvidence)) {
+  if (input.strategy?.contact?.messageRecommended === false && input.type !== 'reply') {
+    return emptyDraft(input)
+  }
+
+  if (
+    input.type !== 'reply'
+    && !input.strategy
+    && !signalEvidenceMatch(input.extracted.signalType, input.extracted.signalEvidence)
+  ) {
     throw new Error(
       `Signal type ${input.extracted.signalType} is not supported by its evidence ("${input.extracted.signalEvidence}"). Rescore this lead before drafting.`,
     )
@@ -707,6 +719,32 @@ function deterministicChecks(
  * DEMO ONLY. Deterministic draft used when no API key is set. Reuses the real
  * play and facts pipeline so the loop runs end to end locally.
  */
+function emptyDraft(input: DraftInput): DraftResult {
+  return {
+    leadId: input.leadId,
+    type: input.type,
+    draftText: '',
+    selfCheck: {
+      test1ReplyOrDelete: true,
+      test1Note: 'No message recommended.',
+      test2NotGeneric: true,
+      test2Note: 'Silence is the correct result.',
+      codeChecks: {
+        companyMentioned: false,
+        specificEvidenceMentioned: false,
+      },
+    },
+    passed: true,
+    modelUsed: 'demo-local-deterministic',
+    attempts: 1,
+    strippedNumbers: [],
+    hadEmDash: false,
+    hadExclamation: false,
+    requestedCall: false,
+    callLog: [],
+  }
+}
+
 function demoDraft(input: DraftInput, userPrompt: string): DraftResult {
   void userPrompt
   const signal = signalById(input.extracted.signalType)
@@ -718,27 +756,43 @@ function demoDraft(input: DraftInput, userPrompt: string): DraftResult {
     .sort((a, b) => (a.sentAt ?? '').localeCompare(b.sentAt ?? ''))
     .at(-1)
 
-  const opener =
-    input.extracted.name ?? input.lead.company
-  const body =
-    input.type === 'followup'
-      ? `Wanted to make sure my last note made sense. ${lastSent ? 'Short version: ' + lastSent.sentText : ''} Happy to drop the idea if the timing is wrong.`
-      : signal && input.extracted.signalEvidence
-        ? `I noticed ${input.extracted.signalEvidence}`
-        : 'I noticed what you are building with your team'
-  const priceLine = priceFact ? `\n\n${priceFact.label}: ${priceFact.value}` : ''
-  const close = play ? play.templateShape : ''
+  const first = firstName(input.extracted.name)
+  const greeting = input.styleCard?.greeting ?? 'Hey'
+  const allowed = input.strategy?.allowedNow?.[0] ?? null
+  const job = input.strategy?.messageJob ?? null
+  const hireRole = inferRoleFromEvidence(input.extracted.signalEvidence, input.extracted.title)
+  const noMessage = input.strategy?.contact?.messageRecommended === false
 
-  const draft = [
-    `${input.styleCard?.greeting ?? 'Hey'} ${opener},`,
-    '',
-    body,
-    `${input.lead.company} looks like a strong fit for how I help teams ship faster. Happy to send over a free Read, a quick written take on what I'm seeing.${priceLine}`,
-    close,
-    input.styleCard?.sign_off ?? '',
-  ]
-    .filter(Boolean)
-    .join('\n')
+  let draft: string
+  if (noMessage) {
+    draft = ''
+  } else if (input.type === 'reply') {
+    draft = demoReplyDraft(input, first, greeting)
+  } else if (input.type === 'followup') {
+    const topic = /\bhiring\b/i.test(allowed ?? '') ? `that ${hireRole}` : (asTopic(allowed) ?? 'the earlier note')
+    draft = `${greeting} ${first} - if ${topic} is still open, I can share one relevant example. If not, all good.`
+  } else if (input.type === 'connection') {
+    if (/\bhiring\b/i.test(`${input.extracted.signalEvidence ?? ''} ${allowed ?? ''}`)) {
+      draft = `${greeting} ${first} - are you set on that ${hireRole}, or still deciding how to staff the build?`
+    } else if (allowed) {
+      draft = `${greeting} ${first} - is ${clipWords(asTopic(allowed) ?? stripProspectVoice(allowed), 10)} still the live constraint?`
+    } else {
+      draft = `${greeting} ${first} - worth a short note if the ${input.lead.company} work is still open.`
+    }
+  } else if (job === 'TEST_DELIVERY_MODEL' || (input.extracted.signalType === 1 && /\bhiring\b/i.test(input.extracted.signalEvidence ?? ''))) {
+    draft = `${greeting} ${first} - are you set on hiring for that ${hireRole} at ${input.lead.company}, or open to someone taking ownership of the build instead?`
+  } else if (allowed) {
+    draft = `${greeting} ${first} - is ${clipWords(asTopic(allowed) ?? stripProspectVoice(allowed), 12)} still the constraint at ${input.lead.company}?`
+  } else if (signal && input.extracted.signalEvidence) {
+    draft = `${greeting} ${first} — ${clipWords(input.extracted.signalEvidence, 16)}. Still the plan at ${input.lead.company}?`
+  } else {
+    draft = `${greeting} ${first} — is the ${input.lead.company} work still something you want outside help on?`
+  }
+
+  void lastSent
+  void play
+  void priceFact
+  void userPrompt
 
   const sanitized = sanitizeDraft(draft, input.facts)
 
@@ -791,4 +845,69 @@ function extractCompanyFromUserPrompt(prompt: string): string | null {
 function extractEvidenceFromUserPrompt(prompt: string): string | null {
   const m = prompt.match(/Evidence: (.+)/)
   return m?.[1]?.trim() ?? null
+}
+
+function firstName(name: string | null | undefined): string {
+  const part = (name ?? '').trim().split(/\s+/)[0]
+  return part || 'there'
+}
+
+function clipWords(text: string, max: number): string {
+  const words = text.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)
+  if (words.length <= max) return words.join(' ')
+  return words.slice(0, max).join(' ')
+}
+
+function stripProspectVoice(text: string): string {
+  return text
+    .replace(/^(we(?:'re| are)|i(?:'m| am))\s+hiring\b/i, 'hiring')
+    .replace(/^(we(?:'re| are)|i(?:'m| am))\s+/i, '')
+    .replace(/[.]+$/g, '')
+    .trim()
+}
+
+function asTopic(text: string | null): string | null {
+  if (!text) return null
+  const cleaned = stripProspectVoice(text)
+  const beforeIs = cleaned.split(/\b(?:is|are|was|were)\b/i)[0]?.trim()
+  if (beforeIs && beforeIs.split(/\s+/).length >= 2 && beforeIs.length >= 8) return beforeIs
+  return cleaned
+}
+
+function inferRoleFromEvidence(evidence: string | null | undefined, title: string | null | undefined): string {
+  const text = `${evidence ?? ''} ${title ?? ''}`
+  if (/\bfull[- ]stack\b/i.test(text)) return 'full-stack role'
+  if (/\bfrontend|front-end|react\b/i.test(text)) return 'frontend role'
+  if (/\bbackend|back-end|rails|node\b/i.test(text)) return 'backend role'
+  if (/\bmobile|ios|android\b/i.test(text)) return 'mobile role'
+  if (/\bdevops|sre|infra\b/i.test(text)) return 'infra role'
+  if (/\bsenior\b/i.test(text)) return 'senior role'
+  return 'role'
+}
+
+function demoReplyDraft(input: DraftInput, first: string, greeting: string): string {
+  const context = input.conversationContext ?? ''
+  const company = input.lead.company
+  if (/already hired|role is filled|not interested/i.test(context)) {
+    return `${greeting} ${first} — understood. Good luck with it.`
+  }
+  if (/\b(example|examples|portfolio|proof)\b/i.test(context) && /\b(rate|pricing|cost|how much)\b/i.test(context)) {
+    const proof = input.matchedProof?.projectSummary ?? 'one close delivery example'
+    return `${greeting} ${first} - I can share ${clipWords(proof, 12)}. Rate follows scope; if you say what you want owned, I can be specific.`
+  }
+  if (/\b(rate|pricing|cost|how much)\b/i.test(context)) {
+    const price = input.facts.find((f) => f.factType === 'price')
+    if (price) {
+      return `${greeting} ${first} — ${price.label} is ${price.value}, scoped to a defined outcome. What do you want owned?`
+    }
+    return `${greeting} ${first} — I do not quote a rate before scope. What do you want owned at ${company}?`
+  }
+  if (/\b(example|examples|portfolio|proof)\b/i.test(context)) {
+    const proof = input.matchedProof?.projectSummary ?? input.strategy?.allowedNow?.[0] ?? 'one close example'
+    return `${greeting} ${first} — ${clipWords(proof, 18)}. Want me to send that?`
+  }
+  if (/\bnext quarter|later this year|maybe later\b/i.test(context)) {
+    return `${greeting} ${first} — next quarter is fine. Want me to check back then, or is there a trigger I should watch?`
+  }
+  return `${greeting} ${first} — understood. What would be most useful to clarify first?`
 }

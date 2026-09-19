@@ -14,7 +14,15 @@ import {
   buildReplyStrategy,
   buildConversationContext,
   buildDeterministicConversationSummary,
+  getNextStage,
 } from '@/lib/relay/conversation-engine'
+import { determineFollowup, buildFollowupPrompt } from '@/lib/relay/followup-engine'
+import {
+  applyRevenueStrategyToOutreach,
+  buildRevenueStrategy,
+  shouldWriteMessage,
+  sourceFromLead,
+} from '@/lib/relay/revenue-strategy'
 
 export const maxDuration = 120
 
@@ -164,6 +172,36 @@ export async function POST(
       safeFacts = [classifyLeadFact(detail.signalEvidence ?? '', detail.signalEvidence ?? '', detail.signalType ?? null)]
       void profileIntelligence
 
+      if (type === 'followup') {
+        const followup = determineFollowup({
+          lead: detail,
+          priorMessages: detail.messages,
+          conversationStage: detail.status,
+          senderProfileId: profile.id,
+          followupCount: detail.status === 'followed_up' ? 1 : 0,
+          lastSentAt: detail.messages.filter((m) => m.sentAt).sort((a, b) => (a.sentAt ?? '').localeCompare(b.sentAt ?? '')).at(-1)?.sentAt ?? null,
+          lastReplyAt: null,
+        })
+        if (!followup.shouldFollowUp) {
+          emit({ type: 'error', message: followup.waitReason ?? followup.reason })
+          return
+        }
+        conversationContext = buildFollowupPrompt({
+          lead: detail,
+          priorMessages: detail.messages,
+          conversationStage: detail.status,
+          senderProfileId: profile.id,
+          followupCount: 0,
+          lastSentAt: detail.messages.filter((m) => m.sentAt).at(-1)?.sentAt ?? null,
+          lastReplyAt: null,
+        }, followup)
+      }
+
+      const alreadyShared = detail.messages
+        .filter((m) => m.sentText)
+        .map((m) => m.sentText as string)
+
+      let replyKnowledge: ReturnType<typeof analyzeReply>['knowledge'] | null = null
       if (type === 'reply') {
         const prospectReplyMsg = body.replyToMessageId && body.replyToMessageId !== 'manual'
           ? detail.messages.find((m) => m.id === body.replyToMessageId)
@@ -182,6 +220,7 @@ export async function POST(
             conversationStage: convStage,
             senderProfileId: profile.id,
           })
+          replyKnowledge = replyAnalysis.knowledge
           const replyStrategy = buildReplyStrategy(replyAnalysis, {
             leadId: detail.id,
             leadCompany: detail.company,
@@ -203,6 +242,8 @@ export async function POST(
           conversationContext = [
             `## Reply Strategy`,
             ``,
+            `**Job:** ${replyStrategy.messageJob}`,
+            `**Move:** ${replyStrategy.nextMove}`,
             `**Goal:** ${replyStrategy.goal}`,
             `**Approach:** ${replyStrategy.approach}`,
             `**Tone:** ${replyStrategy.tone}`,
@@ -210,6 +251,32 @@ export async function POST(
             ``,
             replyContext,
           ].join('\n')
+          try {
+            await store.upsertConversationState({
+              leadId: detail.id,
+              stage: getNextStage(convStage, replyAnalysis),
+              lastStrategy: replyStrategy.messageJob,
+              lastAngle: replyAnalysis.intent,
+              lastCta: replyStrategy.ctaStrategy,
+              commercialState: replyAnalysis.knowledge as unknown as Record<string, unknown>,
+            })
+            await store.emitRelayEvent({
+              eventType: 'REPLY_PREPARED',
+              entityType: 'lead',
+              entityId: detail.id,
+              actorType: 'system',
+              payload: {
+                intent: replyAnalysis.intent,
+                messageJob: replyStrategy.messageJob,
+                nextMove: replyStrategy.nextMove,
+                newFacts: replyAnalysis.knowledge.newFacts,
+              },
+              source: 'app',
+              sourceEventId: `reply_prepared:${detail.id}:${Date.now()}`,
+            })
+          } catch {
+            // Non-fatal
+          }
         } else {
           const priorMessages = detail.messages.filter((m) => m.sentText)
           const convStage = detail.status === 'followed_up' ? 'contacted' : detail.status === 'new' ? 'new' : detail.status === 'contacted' ? 'contacted' : detail.status === 'replied' ? 'replied' : detail.status === 'no' ? 'lost' : detail.status === 'dead' ? 'lost' : 'contacted'
@@ -229,8 +296,26 @@ export async function POST(
             'Write a helpful, direct reply to the prospect. Answer any open question first. Do not repeat bio/proof facts already sent unless they asked again.',
           ].join('\n')
         }
-      } else {
-        strategy = createOutreachStrategy({
+      }
+
+      const revenue = buildRevenueStrategy(sourceFromLead(detail, extracted, {
+        channel: type === 'followup' ? 'followup' : type === 'connection' ? 'connection' : type === 'reply' ? 'reply' : type === 'upwork' ? 'upwork' : 'dm',
+        relationshipStage: type === 'followup' ? 'followup' : type === 'reply' ? 'reply' : 'first_touch',
+        alreadyShared,
+        conversation: replyKnowledge,
+        priorFollowupCount: detail.status === 'followed_up' ? 1 : 0,
+      }))
+
+      if (type !== 'reply' && !shouldWriteMessage(revenue)) {
+        emit({
+          type: 'error',
+          message: revenue.contact.noMessageReason ?? 'No message recommended. Silence is the correct result.',
+        })
+        return
+      }
+
+      strategy = applyRevenueStrategyToOutreach(
+        createOutreachStrategy({
           leadCompany: detail.company,
           contactName: detail.contactName,
           contactTitle: detail.contactTitle,
@@ -242,8 +327,30 @@ export async function POST(
           senderProfile: profile,
           matchedProof: matchedProofCards,
           channel: type === 'upwork' ? 'upwork' : type === 'connection' ? 'connection' : 'dm',
-          relationshipStage: type === 'followup' ? 'followup' : 'first_touch',
-        })
+          relationshipStage: type === 'followup' ? 'followup' : type === 'reply' ? 'reply' : 'first_touch',
+        }),
+        revenue,
+      )
+      if (type !== 'reply') {
+        try {
+          await store.emitRelayEvent({
+            eventType: type === 'followup' ? 'FOLLOWUP_PREPARED' : 'OUTREACH_PREPARED',
+            entityType: 'lead',
+            entityId: detail.id,
+            actorType: 'system',
+            payload: {
+              type,
+              messageJob: revenue.messageJob,
+              contactAction: revenue.contact.action,
+              fit: revenue.assessment.fit,
+              intent: revenue.assessment.intent,
+            },
+            source: 'app',
+            sourceEventId: `${type}_prepared:${detail.id}:${Date.now()}`,
+          })
+        } catch {
+          // Non-fatal
+        }
       }
     }
 

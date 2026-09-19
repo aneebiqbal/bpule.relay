@@ -23,6 +23,7 @@ import type {
   RawSourceData,
   RemoteEligibility,
   EvidenceEntry,
+  EvidenceRelationship,
   OpportunitySignal,
 } from './types'
 import { assessRemoteEligibility, JOB_SEEKER_MARKERS, type RemoteEligibilityInput } from './remote-eligibility'
@@ -138,6 +139,11 @@ interface PassAOutput {
     primarySignal: string | null
     description: string | null
     urgency: string
+    organizationName?: string | null
+    organizationId?: string
+    organizationRelationship?: string
+    temporalScope?: string
+    polarity?: string
   }
   job: {
     title: string | null
@@ -664,6 +670,11 @@ function normalizePassA(
     urgency: ['immediate', 'near_term', 'future', 'unknown'].includes(passA.opportunity.urgency)
       ? passA.opportunity.urgency as ExtractedOpportunity['urgency']
       : 'unknown',
+    organizationName: passA.opportunity.organizationName?.trim() || undefined,
+    organizationId: passA.opportunity.organizationId?.trim() || undefined,
+    organizationRelationship: (passA.opportunity.organizationRelationship as ExtractedOpportunity['organizationRelationship']) || undefined,
+    temporalScope: (passA.opportunity.temporalScope as ExtractedOpportunity['temporalScope']) || undefined,
+    polarity: (passA.opportunity.polarity as ExtractedOpportunity['polarity']) || undefined,
   }
 
   // Job normalization (if present)
@@ -711,7 +722,13 @@ function normalizePassA(
     hiringSignals: passA.content.hiringSignals.map((h) => h.trim()).filter(Boolean),
   }
 
-  // Build evidence ledger from signals
+  // Build evidence ledger from signals — attach entity context
+  const opportunityOrg = opportunity.organizationName ?? company.name ?? undefined
+  const opportunityRelationship: EvidenceRelationship | undefined = opportunity.organizationRelationship
+    || (opportunity.organizationName && opportunity.organizationName !== company.name
+      ? 'OPPORTUNITY_ORGANIZATION'
+      : undefined)
+
   if (content.hiringSignals.length > 0) {
     evidenceLedger.push({
       signal: 'Hiring activity detected',
@@ -721,6 +738,12 @@ function normalizePassA(
       confidence: 'HIGH',
       safeForOutreach: true,
       verbatimQuote: content.hiringSignals[0].slice(0, 200),
+      subjectType: 'OPPORTUNITY',
+      organizationName: opportunityOrg,
+      organizationId: opportunity.organizationId,
+      relationshipToProspect: opportunityRelationship,
+      temporalScope: opportunity.temporalScope ?? 'UNKNOWN',
+      polarity: opportunity.polarity ?? 'ACTIVE',
     })
   }
   if (content.technicalSignals.length > 0) {
@@ -731,6 +754,12 @@ function normalizePassA(
       ownership: 'BUYER_INTENT',
       confidence: 'MEDIUM',
       safeForOutreach: true,
+      subjectType: 'OPPORTUNITY',
+      organizationName: opportunityOrg,
+      organizationId: opportunity.organizationId,
+      relationshipToProspect: opportunityRelationship,
+      temporalScope: opportunity.temporalScope ?? 'UNKNOWN',
+      polarity: opportunity.polarity ?? 'ACTIVE',
     })
   }
   if (content.explicitProblems.length > 0) {
@@ -742,6 +771,12 @@ function normalizePassA(
       confidence: 'HIGH',
       safeForOutreach: true,
       verbatimQuote: content.explicitProblems[0].slice(0, 200),
+      subjectType: 'OPPORTUNITY',
+      organizationName: opportunityOrg,
+      organizationId: opportunity.organizationId,
+      relationshipToProspect: opportunityRelationship,
+      temporalScope: opportunity.temporalScope ?? 'UNKNOWN',
+      polarity: opportunity.polarity ?? 'ACTIVE',
     })
   }
 
@@ -1180,6 +1215,32 @@ function extractClientName(lines: string[]): string | null {
   return value.length > 0 ? value : null
 }
 
+/**
+ * Detect opportunity organization — may differ from prospect's current company.
+ * E.g. "Tayo360 needing a full stack developer" → Tayo360 is the opportunity org.
+ */
+function extractOpportunityOrganization(rawText: string, prospectCompany: string | null): {
+  name: string | null
+  relationship: 'OPPORTUNITY_ORGANIZATION' | 'CLIENT' | 'THIRD_PARTY' | null
+} {
+  const lines = splitLines(rawText)
+  // Explicit "opportunity:" or "for [Company]" patterns
+  const oppLine = lines.find((l) => /^opportunity\s*:/i.test(l))
+  if (oppLine) {
+    const value = oppLine.replace(/^opportunity\s*:\s*/i, '').trim()
+    if (value) return { name: value, relationship: 'OPPORTUNITY_ORGANIZATION' }
+  }
+  // "X is hiring/looking for/needs a..." where X differs from prospect company
+  const hiringFor = rawText.match(/\b([A-Z][A-Za-z0-9\s&]+?)\s+(?:is\s+)?(?:hiring|looking\s+for|needs?\s+a?|seeking)\b/i)
+  if (hiringFor?.[1]) {
+    const orgName = hiringFor[1].trim()
+    if (orgName.length > 2 && orgName.length < 60 && (!prospectCompany || !orgName.toLowerCase().includes(prospectCompany.toLowerCase()))) {
+      return { name: orgName, relationship: 'OPPORTUNITY_ORGANIZATION' }
+    }
+  }
+  return { name: null, relationship: null }
+}
+
 function extractCompanySize(rawText: string): { size: string | null; evidence: string | null } {
   const lineMatch = rawText.match(/\b(team of\s+\d+\+?\s+(?:engineers?|developers?|people)|\d+\+?\s+(?:engineers?|developers?|team members?))\b/i)
   if (!lineMatch?.[1]) {
@@ -1216,7 +1277,30 @@ function extractSkills(lines: string[], rawText: string): string[] {
   return [...skills].slice(0, 12)
 }
 
-function extractOpportunitySignals(rawText: string): { signals: OpportunitySignal[]; urgency: 'immediate' | 'near_term' | 'future' | 'unknown' } {
+/**
+ * Check if a match is negated within a window before the match index.
+ * Returns true if the signal is negated/closed (should not be treated as active).
+ */
+function isNegatedContext(text: string, matchIndex: number, window = 60): boolean {
+  const before = text.slice(Math.max(0, matchIndex - window), matchIndex).toLowerCase()
+  const negationPatterns = [
+    /\bno\s+longer\b/,
+    /\bnot\s+(?:currently\s+)?(?:hiring|looking|seeking|open|accepting|interested)\b/,
+    /\bstopped\s+(?:hiring|looking|accepting)\b/,
+    /\bwe\s+(?:are|'re)\s+not\b/,
+    /\bwe\s+(?:have|'ve)?\s*(?:already\s+)?(?:filled|hired|found)\b/,
+    /\brole\s+is\s+(?:filled|closed|taken)\b/,
+    /\bposition\s+(?:filled|closed)\b/,
+    /\bno\s+(?:longer|open)\s+(?:roles?|positions?|openings?)\b/,
+    /\b(?:hiring|recruiting)\s+(?:freeze|pause|halt)\b/,
+    /\blocked\s+(?:to|for)\s+(?:outsourcing|contractors|agencies|freelancers)\b/,
+    /\bnot\s+open\s+to\s+(?:outsourcing|contractors|agencies|freelancers)\b/,
+    /\b(?:don't|do\s+not)\s+(?:work\s+with|accept|use)\s+(?:agencies|outsourcing|contractors)\b/,
+  ]
+  return negationPatterns.some((p) => p.test(before))
+}
+
+export function extractOpportunitySignals(rawText: string): { signals: OpportunitySignal[]; urgency: 'immediate' | 'near_term' | 'future' | 'unknown' } {
   const signals: OpportunitySignal[] = []
 
   const budgetMatch = rawText.match(/\b(?:budget:\s*)?[\$€£]\s*([0-9]{1,3}(?:,[0-9]{3})*|[0-9]{2,5})(?:\.\d{1,2})?/i)
@@ -1232,15 +1316,14 @@ function extractOpportunitySignals(rawText: string): { signals: OpportunitySigna
 
   const hasTechContext = DEV_ROLE_HINT.test(rawText) || TECH_KEYWORDS.some((k) => techKeywordMatches(rawText, k))
   const softwareAsk = SOFTWARE_ASK_PATTERNS.some((p) => p.test(rawText)) && hasTechContext
-  const explicitHiring =
-    /\b(open roles?)\b/i.test(rawText)
-    || /\bhiring\b.{0,50}\b(developer|engineer|contractor|full[- ]?stack|backend|frontend|software)\b/i.test(rawText)
-    || /\b(developer|engineer|contractor|full[- ]?stack|backend|frontend|software)\b.{0,50}\bhiring\b/i.test(rawText)
+  const hiringMatch = rawText.match(/\bhiring\b.{0,50}\b(developer|engineer|contractor|full[- ]?stack|backend|frontend|software)\b/i)
+    || rawText.match(/\b(developer|engineer|contractor|full[- ]?stack|backend|frontend|software)\b.{0,50}\bhiring\b/i)
+  const explicitHiring = /\b(open roles?)\b/i.test(rawText) || hiringMatch
 
   if (softwareAsk && !nonCredibleFreelanceBrief) signals.push('explicit_ask')
   if (/(job:|upwork|budget:|proposals?:)/i.test(rawText) && hasTechContext && !nonCredibleFreelanceBrief) signals.push('freelance_project_need')
   if (PAIN_PATTERNS.some((p) => p.test(rawText)) && hasTechContext) signals.push('technical_problem')
-  if (explicitHiring) {
+  if (explicitHiring && !isNegatedContext(rawText, hiringMatch ? rawText.indexOf(hiringMatch[0]) : 0)) {
     const relevance = classifyHiringRelevance(rawText)
     if (relevance === 'software') signals.push('hiring')
   }
@@ -1404,6 +1487,7 @@ function demoPassA(rawText: string): PassAOutput {
   const signalLine = extractSignalLine(lines)
   const content = extractContentSignals(lines, rawText)
   const job = extractJobFromText(lines, rawText, skills)
+  const opportunityOrg = extractOpportunityOrganization(rawText, company)
 
   return {
     person: {
@@ -1431,6 +1515,8 @@ function demoPassA(rawText: string): PassAOutput {
       primarySignal,
       description: signalLine,
       urgency,
+      organizationName: opportunityOrg.name,
+      organizationRelationship: opportunityOrg.relationship || undefined,
     },
     job,
     content,

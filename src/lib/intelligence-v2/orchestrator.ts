@@ -178,6 +178,7 @@ export async function produceCanonicalIntelligence(
 
   const canonical: CanonicalProspectIntelligence = {
     version: SCORE_VERSION,
+    intelligenceRunId: crypto.randomUUID(),
     computedAt: new Date().toISOString(),
     canonicalScore: scoreBreakdown.total,
     scoreVersion: SCORE_VERSION,
@@ -444,6 +445,7 @@ function createIrrelevantIntelligence(
   const now = new Date().toISOString()
   return {
     version: SCORE_VERSION,
+    intelligenceRunId: crypto.randomUUID(),
     computedAt: now,
     canonicalScore: 0,
     scoreVersion: SCORE_VERSION,

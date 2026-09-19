@@ -18,6 +18,14 @@ import { isLinkedInChromeText } from '@/lib/intelligence-v2/role-signals'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
 import { produceCanonicalIntelligence, getDisplayScore } from '@/lib/intelligence-v2/orchestrator'
 import { resolveTimezoneFromLocation } from '@/lib/timezone/resolve'
+import {
+  applyRevenueStrategyToOutreach,
+  buildRevenueStrategy,
+  mapSignalsToLegacyType,
+  shouldWriteMessage,
+  sourceFromCanonical,
+  toUiSnapshot,
+} from '@/lib/relay/revenue-strategy'
 
 /**
  * Prospect Analyze API — Intelligence V2
@@ -140,7 +148,7 @@ export async function POST(request: Request) {
         })),
       roleCategory: classifyRoleFromTitle(canonical.intelligence.person.title),
       marketRegion: 'unknown',
-      signalType: 7,
+      signalType: mapSignalsToLegacyType(canonical.intelligence.opportunity.signals),
       signalEvidence: canonical.intelligence.opportunity.description ?? canonical.intelligence.opportunityTrigger ?? rawText.slice(0, 200),
       extractionConfidence: canonical.extractionCompleteness.score,
       confidenceNotes: canonical.scoreBreakdown.missingInfo,
@@ -152,11 +160,61 @@ export async function POST(request: Request) {
       ],
     }
 
-    if (canonical.qualification === 'skip') {
+    const revenue = buildRevenueStrategy(sourceFromCanonical(canonical, { channel: 'connection' }))
+    const loop = toUiSnapshot(revenue)
+
+    if (store) {
+      try {
+        await store.emitRelayEvent({
+          eventType: 'PROSPECT_ANALYZED',
+          entityType: 'prospect',
+           entityId: extracted.url ?? extracted.company,
+          actorType: 'system',
+          payload: {
+            company: extracted.company,
+            qualification: canonical.qualification,
+            fit: loop.fit,
+            intent: loop.intent,
+            confidence: loop.confidence,
+            contactAction: loop.act,
+            messageRecommended: loop.messageRecommended,
+          },
+          source: 'app',
+          sourceEventId: `prospect_analyzed:${extracted.url ?? extracted.company}:${canonical.scoredAt}`,
+        })
+      } catch {
+        // Event emission must never block analyze
+      }
+    }
+
+    if (store && loop.messageRecommended) {
+      try {
+        await store.emitRelayEvent({
+          eventType: 'LEAD_QUALIFIED',
+          entityType: 'prospect',
+          entityId: extracted.url ?? extracted.company,
+          actorType: 'system',
+          payload: {
+            reason: loop.reason,
+            action: loop.act,
+            fit: loop.fit,
+            intent: loop.intent,
+            confidence: loop.confidence,
+          },
+          source: 'app',
+          sourceEventId: `lead_qualified:${extracted.url ?? extracted.company}:${canonical.scoredAt}`,
+        })
+      } catch {
+        // Qualification telemetry must never block analysis.
+      }
+    }
+
+    if (canonical.qualification === 'skip' || revenue.contact.action === 'SKIP') {
       emit({
         type: 'done',
         extracted,
         canonical,
+        revenue: loop,
         score: {
           total: canonical.canonicalScore,
           displayScore: getDisplayScore(canonical),
@@ -295,20 +353,23 @@ export async function POST(request: Request) {
 
     let outreachStrategy: ReturnType<typeof createOutreachStrategy> | null = null
     if (bestSender) {
-      outreachStrategy = createOutreachStrategy({
-        leadCompany: extracted.company,
-        contactName: extracted.name,
-        contactTitle: extracted.title,
-        signalType: extracted.signalType,
-        signalEvidence: extracted.signalEvidence,
-        verbatimQuote: extracted.verbatimQuote,
-        tags: extracted.tags ?? [],
-        safeFacts: [safeFact],
-        senderProfile: bestSender,
-        matchedProof: bestSenderProof,
-        channel: 'connection',
-        relationshipStage: 'first_touch',
-      })
+      outreachStrategy = applyRevenueStrategyToOutreach(
+        createOutreachStrategy({
+          leadCompany: extracted.company,
+          contactName: extracted.name,
+          contactTitle: extracted.title,
+          signalType: extracted.signalType,
+          signalEvidence: extracted.signalEvidence,
+          verbatimQuote: extracted.verbatimQuote,
+          tags: extracted.tags ?? [],
+          safeFacts: [safeFact],
+          senderProfile: bestSender,
+          matchedProof: bestSenderProof,
+          channel: 'connection',
+          relationshipStage: 'first_touch',
+        }),
+        revenue,
+      )
     }
 
     let conversationContext: string | null = null
@@ -396,10 +457,11 @@ export async function POST(request: Request) {
       // Proof matching optional
     }
 
-    // Generate the draft
+    // Generate the draft only when the strategy says a message is the right move.
     let draftText = ''
     let draftFailed = false
     let qualityResult: ReturnType<typeof validateAndRepair> | null = null
+    const writeMessage = shouldWriteMessage(revenue)
 
     const leadForDraft = {
       id: 'prospect-ephemeral',
@@ -423,6 +485,10 @@ export async function POST(request: Request) {
     }
 
     try {
+      if (!writeMessage) {
+        emit({ type: 'status', message: revenue.contact.noMessageReason ?? 'No message recommended' })
+        throw new Error('NO_MESSAGE')
+      }
       const draftResult = await streamDraft(
         {
           leadId: 'prospect-ephemeral',
@@ -448,18 +514,28 @@ export async function POST(request: Request) {
         bestSender,
       )
       draftText = draftResult.draftText
-    } catch {
-      draftFailed = true
+    } catch (err) {
+      draftFailed = writeMessage && !(err instanceof Error && err.message === 'NO_MESSAGE')
     }
 
-    // Quality gate for connection notes
-    qualityResult = validateAndRepair({
-      text: draftText || 'Hi, came across your profile and would love to connect.',
-      profile: bestSender,
-      prospectName: extracted.name,
-      prospectCompany: extracted.company,
-      matchedProof: bestSenderProof,
-    })
+    // Quality gate for connection notes — never invent a fallback pitch
+    qualityResult = draftText
+      ? validateAndRepair({
+          text: draftText,
+          profile: bestSender,
+          prospectName: extracted.name,
+          prospectCompany: extracted.company,
+          matchedProof: bestSenderProof,
+        })
+      : {
+          text: '',
+          charCount: 0,
+          maxChars: CONNECTION_NOTE_MAX_CHARS,
+          withinLimit: true,
+          passed: !writeMessage,
+          failures: writeMessage ? ['empty_draft'] : [],
+          repaired: null,
+        }
 
     if (qualityResult.text) {
       qualityResult = {
@@ -474,6 +550,7 @@ export async function POST(request: Request) {
       type: 'done',
       extracted,
       canonical,
+      revenue: loop,
       score: {
         total: canonical.canonicalScore,
         displayScore: getDisplayScore(canonical),
@@ -536,6 +613,23 @@ function emitInsufficientDone(
     type: 'done',
     extracted,
     canonical: null,
+    revenue: {
+      who: extracted.name ?? extracted.company,
+      fit: 'LOW',
+      intent: 'UNKNOWN',
+      confidence: 'LOW',
+      why: isIrrelevant
+        ? 'This is not a prospect. No message.'
+        : 'Not enough evidence to decide.',
+      act: isIrrelevant ? 'SKIP' : 'RESEARCH_MORE',
+      reason: 'NO_CREDIBLE_REASON',
+      nextAction: isIrrelevant ? 'Skip — paste a real profile' : 'Add more context',
+      messageRecommended: false,
+      noMessageReason: isIrrelevant
+        ? 'Login or product UI is not a reason to contact anyone.'
+        : 'Insufficient evidence.',
+      messageJob: null,
+    },
     score: isIrrelevant ? 'N/A' : null,
     scoreNA: isIrrelevant,
     scoreReason: isIrrelevant

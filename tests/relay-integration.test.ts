@@ -93,7 +93,7 @@ describe('Vertical Integration: Full Flow', () => {
     expect(strategy.messageGoal).toContain('reply')
 
     // 8. Evaluate a draft message
-    const testDraft = `Hey Sarah, the Solana integration work at Nomadz caught my eye. I built a similar monitoring system for a Solana-based product. Worth a thought?`
+    const testDraft = `Hey Sarah - is the Solana integration at Nomadz still the live constraint, or has that already moved?`
     const evaluation = evaluateMessage(testDraft, strategy, 'dm')
     expect(evaluation.passed).toBe(true)
     expect(isGeneric(testDraft, 'Nomadz')).toBe(false)

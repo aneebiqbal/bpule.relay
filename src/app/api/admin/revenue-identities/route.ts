@@ -2,6 +2,35 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { safeErrorResponse } from '@/lib/errors'
+import type { RevenueIdentity } from '@/lib/domain/types'
+
+function mapIdentity(row: Record<string, unknown>): RevenueIdentity {
+  return {
+    id: row.id as string,
+    organizationId: row.organization_id as string,
+    slug: row.slug as string,
+    identityName: row.identity_name as string,
+    title: (row.title as string) ?? null,
+    positioning: (row.positioning as string) ?? null,
+    profileUrl: (row.profile_url as string) ?? null,
+    skills: Array.isArray(row.skills) ? row.skills as string[] : [],
+    expertise: Array.isArray(row.expertise) ? row.expertise as string[] : [],
+    industries: Array.isArray(row.industries) ? row.industries as string[] : [],
+    technologies: Array.isArray(row.technologies) ? row.technologies as string[] : [],
+    allowedFirstPersonClaims: Array.isArray(row.allowed_first_person_claims) ? row.allowed_first_person_claims as string[] : [],
+    forbiddenClaims: Array.isArray(row.forbidden_claims) ? row.forbidden_claims as string[] : [],
+    channelRules: row.channel_rules && typeof row.channel_rules === 'object' ? row.channel_rules as Record<string, unknown> : {},
+    voiceTone: row.voice_tone && typeof row.voice_tone === 'object' ? row.voice_tone as Record<string, unknown> : {},
+    preferredOpportunityTypes: Array.isArray(row.preferred_opportunity_types) ? row.preferred_opportunity_types as string[] : [],
+    proposalPositioning: (row.proposal_positioning as string) ?? null,
+    profileId: (row.profile_id as string) ?? null,
+    channel: row.channel as RevenueIdentity['channel'],
+    status: row.status as RevenueIdentity['status'],
+    sourceKind: (row.source_kind as string) ?? 'manual',
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  }
+}
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -16,7 +45,7 @@ export async function GET() {
     .order('created_at', { ascending: false })
 
   if (error) return safeErrorResponse(error, 500, 'Failed to load identities.', 'admin/revenue-identities')
-  return NextResponse.json({ identities: data ?? [] })
+  return NextResponse.json({ identities: (data ?? []).map(mapIdentity) })
 }
 
 export async function POST(request: Request) {

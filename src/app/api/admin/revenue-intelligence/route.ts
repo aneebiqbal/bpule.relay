@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth/current'
+import { validateFunnelOrdering, computeCostCoverage, validateLatencyConsistency } from '@/lib/revenue-intelligence/metrics-health'
+import { generateInsights } from '@/lib/revenue-intelligence/insights'
 
 export const maxDuration = 30
 
@@ -9,6 +11,9 @@ function dateRange(range: string): { start: string; end: string } {
   const end = now.toISOString()
   let start: string
   switch (range) {
+    case 'today':
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+      break
     case '7d':
       start = new Date(now.getTime() - 7 * 24 * 3600000).toISOString()
       break
@@ -132,6 +137,12 @@ export async function GET(request: Request) {
     failed: extractionRuns.filter((r) => !r.success).length,
   }
 
+  const fallbackExtractions = extractionRuns.filter((r) => r.model === 'demo' || r.model === 'fallback').length
+  const aiExtractions = extractionRuns.filter((r) => r.model !== 'demo' && r.model !== 'fallback' && r.success).length
+  const extractionLatencies = extractionRuns.map((r) => r.latency_ms ?? 0).filter((l) => l > 0)
+  const avgExtractionTime = extractionLatencies.length > 0 ? Math.round(extractionLatencies.reduce((s, l) => s + l, 0) / extractionLatencies.length) : 0
+  const failedExtractions = extractionCounts.failed
+
   const providerCounts = new Map<string, { total: number; fallback: number; errors: number; totalLatency: number; totalCost: number }>()
   for (const trace of aiTraces) {
     const p = trace.provider ?? 'unknown'
@@ -146,6 +157,47 @@ export async function GET(request: Request) {
   const latencies = aiTraces.map((t) => t.latency_ms ?? 0).filter((l) => l > 0).sort((a, b) => a - b)
   const p50 = latencies.length > 0 ? latencies[Math.floor(latencies.length * 0.5)] : 0
   const p95 = latencies.length > 0 ? latencies[Math.floor(latencies.length * 0.95)] : 0
+  const latencyHealth = validateLatencyConsistency(Math.round(latencies.reduce((s, l) => s + l, 0) / (latencies.length || 1)), p50, p95, latencies.length)
+
+  const fallbackReasonCounts = new Map<string, number>()
+  for (const trace of aiTraces) {
+    if (trace.fallback || trace.model === 'demo' || trace.provider === 'fallback') {
+      const reason = (trace.fallback_reason as string) ?? (trace.model === 'demo' ? 'DEMO_MODE' : trace.provider === 'fallback' ? 'NO_CREDENTIALS' : 'UNKNOWN')
+      fallbackReasonCounts.set(reason, (fallbackReasonCounts.get(reason) ?? 0) + 1)
+    }
+  }
+  const fallbackReasons = [...fallbackReasonCounts.entries()].map(([reason, count]) => ({ reason, count }))
+
+  const totalAiCalls = aiTraces.length
+  const callsWithCost = aiTraces.filter((t) => t.estimated_cost_usd !== null && t.estimated_cost_usd !== undefined).length
+  const totalAiCost = aiTraces.reduce((sum, t) => sum + (t.estimated_cost_usd ?? 0), 0)
+  const costCoverage = totalAiCalls > 0 ? callsWithCost / totalAiCalls : 0
+  const costHealth = computeCostCoverage(callsWithCost, totalAiCalls)
+
+  const funnelIssues = validateFunnelOrdering(canonicalFunnel.contacted, canonicalFunnel.extracted, canonicalFunnel.qualified, canonicalFunnel.replied)
+
+  const insights = generateInsights({
+    funnel: canonicalFunnel,
+    extractionTotal: extractionCounts.total,
+    extractionSuccessful: extractionCounts.successful,
+    fallbackCount: fallbackExtractions,
+    aiCount: aiExtractions,
+    avgLatency: latencies.length > 0 ? Math.round(latencies.reduce((s, l) => s + l, 0) / latencies.length) : 0,
+    p50Latency: p50,
+    p95Latency: p95,
+    avgLatencySampleSize: latencies.length,
+    aiCost: totalAiCost,
+    costCoverage,
+    messageCount: messages.length,
+    unchangedCount: messages.filter((m) => m.send_disposition === 'SENT_UNCHANGED').length,
+    heavyEditCount: messages.filter((m) => m.send_disposition === 'HEAVY_EDIT').length,
+    rejectedCount: messages.filter((m) => m.send_disposition === 'REJECTED').length,
+    funnelIssues: funnelIssues.map((i) => ({ ...i, health: i.health as 'TRUSTED' | 'PARTIAL' | 'SUSPICIOUS' | 'UNAVAILABLE' })),
+  })
+
+  const unchangedMsg = messages.filter((m) => m.send_disposition === 'SENT_UNCHANGED').length
+  const heavyEditMsg = messages.filter((m) => m.send_disposition === 'HEAVY_EDIT').length
+  const rejectedMsg = messages.filter((m) => m.send_disposition === 'REJECTED').length
 
   const dispositionCounts = new Map<string, number>()
   for (const msg of messages) {
@@ -200,13 +252,6 @@ export async function GET(request: Request) {
       repPerformance.get(repId)!.targetProgress = progress.target > 0 ? Math.round((progress.completed / progress.target) * 100) : 0
     }
   }
-
-  const totalAiCalls = aiTraces.length
-  const totalAiCost = aiTraces.reduce((sum, t) => sum + (t.estimated_cost_usd ?? 0), 0)
-  const avgExtractionTime = extractionRuns.length > 0 ? Math.round(extractionRuns.reduce((s, r) => s + (r.latency_ms ?? 0), 0) / extractionRuns.length) : 0
-  const failedExtractions = extractionRuns.filter((r) => !r.success).length
-  const aiExtractions = extractionRuns.filter((r) => r.model && r.model !== 'demo').length
-  const fallbackExtractions = extractionRuns.filter((r) => r.model === 'demo').length
 
   const sourceCounts = new Map<string, { extracted: number; qualified: number; contacted: number; replies: number }>()
   for (const lead of leads) {
@@ -265,8 +310,36 @@ export async function GET(request: Request) {
     totalCost: Math.round(data.totalCost * 100) / 100,
   }))
 
+  const dataHealth = {
+    funnel: {
+      health: funnelIssues.length === 0 ? 'TRUSTED' : 'PARTIAL',
+      reason: funnelIssues.length > 0 ? funnelIssues.map((i) => i.reason).join('; ') : undefined,
+    },
+    latency: {
+      health: latencyHealth,
+      reason: latencyHealth === 'SUSPICIOUS' ? 'Percentile contradicts observed non-zero durations' : undefined,
+    },
+    cost: {
+      health: costHealth,
+      reason: costHealth !== 'TRUSTED' ? `${Math.round(costCoverage * 100)}% coverage` : undefined,
+    },
+    extraction: {
+      health: extractionCounts.total > 0 ? 'TRUSTED' : 'UNAVAILABLE',
+      reason: extractionCounts.total === 0 ? 'No extraction runs recorded' : undefined,
+    },
+    provider: {
+      health: providers.length > 0 ? 'TRUSTED' : 'UNAVAILABLE',
+      reason: providers.length === 0 ? 'No AI traces recorded' : undefined,
+    },
+  }
+
   return NextResponse.json({
     range: { start, end },
+    insights,
+    dataHealth,
+    latencyHealth,
+    costCoverage,
+    fallbackReasons,
     funnel: canonicalFunnel,
     conversationStages: Object.fromEntries(convStageCounts),
     extraction: {

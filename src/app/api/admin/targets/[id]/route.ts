@@ -2,6 +2,22 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { safeErrorResponse } from '@/lib/errors'
+import type { DailyTarget } from '@/lib/domain/types'
+
+function mapTarget(row: Record<string, unknown>): DailyTarget {
+  return {
+    id: row.id as string,
+    organizationId: row.organization_id as string,
+    repId: row.rep_id as string,
+    revenueIdentityId: row.revenue_identity_id as string,
+    activityType: row.activity_type as DailyTarget['activityType'],
+    targetCount: row.target_count as number,
+    active: row.active as boolean,
+    createdBy: (row.created_by as string) ?? null,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  }
+}
 
 export async function PATCH(
   request: Request,
@@ -46,7 +62,7 @@ export async function PATCH(
     detail: { target_id: id, changes: update },
   })
 
-  return NextResponse.json({ target: data })
+  return NextResponse.json({ target: mapTarget(data) })
 }
 
 export async function DELETE(

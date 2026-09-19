@@ -18,6 +18,7 @@ import type {
 import type { FollowupDue, QueueData, UpworkSnapshot } from '@/lib/store/types'
 import { analyzeReply } from './conversation-engine'
 import { buildReplyStrategy } from './conversation-engine'
+import { buildRevenueStrategy, sourceFromLead, toUiSnapshot } from './revenue-strategy'
 
 /**
  * Relay Queue Engine
@@ -418,9 +419,7 @@ function buildHighFitTask(lead: Lead, _input: QueueInput): RelayTask {
     entityType: 'lead',
     entityId: lead.id,
     whatHappened: `Scored ${score ?? '?'}/100 — ready for outreach`,
-    whyItMatters: lead.signalType === 7
-      ? 'Actively seeking help. High probability of reply.'
-      : 'Strong signal match. Worth a personalized message.',
+    whyItMatters: whyLeadMatters(lead),
     recommendation: rec,
     humanAction: 'Review, draft outreach, send manually',
     stale: freshnessPenalty(lead.createdAt) < -5,
@@ -663,6 +662,11 @@ function buildAdminTasks(input: QueueInput): RelayTask[] {
  * Admins see everything including admin_review tasks.
  * BD sees only their own pipeline tasks.
  */
+function whyLeadMatters(lead: Lead): string {
+  const snapshot = toUiSnapshot(buildRevenueStrategy(sourceFromLead(lead, null, { channel: 'dm' })))
+  return snapshot.why
+}
+
 export function filterQueueByRole(queue: RelayQueue, role: RelayRole): RelayTask[] {
   if (role === 'admin') return queue.tasks
   return queue.tasks.filter((t) => t.kind !== 'admin_review')

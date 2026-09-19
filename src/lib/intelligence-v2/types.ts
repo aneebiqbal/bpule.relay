@@ -68,6 +68,22 @@ export type EvidenceOwnership =
   | 'HIRING_INTENT'
   | 'CONTENT_OPINION'
 
+export type EvidenceSubjectType = 'PERSON' | 'ORGANIZATION' | 'OPPORTUNITY' | 'ROLE' | 'UNKNOWN'
+
+export type EvidenceRelationship =
+  | 'CURRENT_EMPLOYER'
+  | 'FOUNDED_COMPANY'
+  | 'OPPORTUNITY_ORGANIZATION'
+  | 'CLIENT'
+  | 'ADVISORY'
+  | 'HISTORICAL_EMPLOYER'
+  | 'THIRD_PARTY'
+  | 'UNKNOWN'
+
+export type EvidenceTemporalScope = 'CURRENT' | 'RECENT' | 'FUTURE' | 'HISTORICAL' | 'UNKNOWN'
+
+export type SignalPolarity = 'ACTIVE' | 'NEGATED' | 'CLOSED' | 'FUTURE' | 'UNKNOWN'
+
 export interface EvidenceEntry {
   signal: string
   source: 'linkedin_profile' | 'linkedin_post' | 'job_posting' | 'company_website' | 'pasted_text' | 'user_provided' | 'inferred'
@@ -78,9 +94,31 @@ export interface EvidenceEntry {
   confidence: 'HIGH' | 'MEDIUM' | 'LOW'
   safeForOutreach: boolean
   verbatimQuote?: string
+  /** What entity this evidence refers to */
+  subjectType?: EvidenceSubjectType
+  /** Stable ID of the subject where available */
+  subjectId?: string
+  /** Organization this evidence is attached to (may differ from prospect's company) */
+  organizationId?: string
+  /** Human-readable organization name for the subject */
+  organizationName?: string
+  /** Relationship between the referenced entity and the prospect */
+  relationshipToProspect?: EvidenceRelationship
+  /** When this evidence is valid */
+  temporalScope?: EvidenceTemporalScope
+  /** Whether the signal is active, negated, closed, or future */
+  polarity?: SignalPolarity
 }
 
 // ── Extracted Entities (Pass A) ────────────────────────────────────────────
+
+export interface PersonAffiliation {
+  organizationName: string
+  role?: string
+  relationship: EvidenceRelationship
+  temporalScope: EvidenceTemporalScope
+  isCurrent: boolean
+}
 
 export interface ExtractedPerson {
   fullName: string | null
@@ -90,6 +128,8 @@ export interface ExtractedPerson {
   location: string | null
   linkedinUrl: string | null
   otherUrls: string[]
+  /** All known affiliations — current employer, founded companies, advisory roles */
+  affiliations?: PersonAffiliation[]
 }
 
 export interface ExtractedCompany {
@@ -121,6 +161,15 @@ export interface ExtractedOpportunity {
   primarySignal: OpportunitySignal | null
   description: string | null
   urgency: 'immediate' | 'near_term' | 'future' | 'unknown'
+  /** Organization where the opportunity exists — may differ from prospect's current company */
+  organizationName?: string
+  organizationId?: string
+  /** Relationship between the opportunity organization and the prospect */
+  organizationRelationship?: EvidenceRelationship
+  /** Whether the opportunity is current, historical, or future */
+  temporalScope?: EvidenceTemporalScope
+  /** Polarity of the primary signal — active, negated, closed, or future */
+  polarity?: SignalPolarity
 }
 
 export interface ExtractedJob {
@@ -254,6 +303,8 @@ export interface RescoreEvent {
 export interface CanonicalProspectIntelligence {
   /** Schema version */
   version: 'relay_qualification_v2'
+  /** Unique ID for this intelligence run — links score/strategy/message to the same source */
+  intelligenceRunId: string
   /** When this intelligence was produced */
   computedAt: string
   /** The canonical score 0-100 */
@@ -317,6 +368,50 @@ export const SCORE_LABELS: Array<{ min: number; max: number; label: string; qual
   { min: 40, max: 54, label: 'Weak fit', qualification: 'skip' },
   { min: 0, max: 39, label: 'Not a fit', qualification: 'skip' },
 ]
+
+/**
+ * WriterInput — the ONLY data the message writer may receive.
+ * Built exclusively from canonical Strategy. Raw scraped text is NOT included.
+ */
+export type Channel = 'dm' | 'connection' | 'upwork' | 'email' | 'followup' | 'reply'
+export type RelationshipState = 'no_relationship' | 'first_touch' | 'followup' | 'reply' | 'warming'
+
+export interface WriterEvidence {
+  text: string
+  source: string
+  ownership: EvidenceOwnership
+  temporalScope?: EvidenceTemporalScope
+  organizationName?: string
+}
+
+export interface WriterProof {
+  summary: string
+  reviewQuote?: string
+  clientName?: string
+}
+
+export interface WriterInput {
+  channel: Channel
+  messageJob: string
+  relationshipState: RelationshipState
+  allowedEvidence: WriterEvidence[]
+  relevantProof: WriterProof[]
+  primaryUncertainty?: string
+  thingsNotToClaim: string[]
+  knowledgeRelease: {
+    safeNow: string[]
+    hold: string[]
+    neverClaim: string[]
+  }
+  prospectName?: string
+  prospectCompany?: string
+  opportunityOrganization?: string
+  wordBudget: { min: number; max: number; label: string }
+  successCondition: string
+  tone: string
+  ctaStrategy: string
+  intelligenceRunId?: string
+}
 
 export function scoreLabel(score: number): { label: string; qualification: CanonicalProspectIntelligence['qualification'] } {
   for (const entry of SCORE_LABELS) {

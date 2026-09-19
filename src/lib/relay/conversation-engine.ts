@@ -1,4 +1,11 @@
 import type { ConversationStage, Message, OutreachStrategy } from '@/lib/domain/types'
+import {
+  emptyConversationKnowledge,
+  type CommercialField,
+  type ConversationKnowledge,
+  type ConversationMove,
+  type MessageJob,
+} from '@/lib/relay/revenue-strategy'
 
 /**
  * Conversation Engine
@@ -25,6 +32,7 @@ export interface ReplyAnalysis {
   buyingSignal: boolean
   requestedInformation: string[]
   nextBestAction: string
+  knowledge: ConversationKnowledge
 }
 
 export function buildDeterministicConversationSummary(context: ReplyContext): string {
@@ -78,6 +86,7 @@ export function analyzeReply(replyText: string, _context: ReplyContext): ReplyAn
     buyingSignal: false,
     requestedInformation: [],
     nextBestAction: 'clarify',
+    knowledge: emptyConversationKnowledge(),
   }
 
   // Extract questions
@@ -126,7 +135,134 @@ export function analyzeReply(replyText: string, _context: ReplyContext): ReplyAn
     if (pattern.test(lower)) analysis.objections.push(objection)
   }
 
+  analysis.knowledge = extractConversationFacts(replyText, analysis)
   return analysis
+}
+
+/**
+ * First-party facts from a reply. Updates known/unknown without turning
+ * Relay into a BANT interrogation bot — only fields the reply actually touched.
+ */
+export function extractConversationFacts(
+  replyText: string,
+  analysis: Pick<ReplyAnalysis, 'intent' | 'questions' | 'objections' | 'buyingSignal' | 'requestedInformation'>,
+  prior?: ConversationKnowledge | null,
+): ConversationKnowledge {
+  const knowledge = prior ? cloneKnowledge(prior) : emptyConversationKnowledge()
+  const lower = replyText.toLowerCase()
+  const newFacts: string[] = []
+
+  const set = (field: CommercialField, value: string, status: 'known' | 'inferred' = 'known') => {
+    knowledge.fields[field] = { value, status }
+    newFacts.push(value)
+  }
+
+  if (analysis.intent === 'not_interested') {
+    set('need', 'They are not interested right now')
+    set('objection', analysis.objections[0] ?? 'not interested')
+    set('nextCommitment', 'none')
+  }
+
+  if (/\b(already hired|we hired|we('ve| have) (filled|hired)|role is filled|found someone)\b/i.test(lower)) {
+    set('need', 'Already hired / role filled')
+    set('timeline', 'closed')
+    set('nextCommitment', 'none')
+  }
+
+  if (/\b(next quarter|later this year|not this (month|quarter)|maybe later|in a few months)\b/i.test(lower)) {
+    set('timeline', clipMatch(replyText, /\b(next quarter|later this year|not this \w+|maybe later|in a few months)\b/i) ?? 'later')
+    set('urgency', 'low / future')
+  }
+
+  if (analysis.intent === 'pricing' || /\b(rate|pricing|cost|how much|what do you charge)\b/i.test(lower)) {
+    knowledge.fields.budget = { value: null, status: 'unknown' }
+    set('proofNeeded', 'They asked for rate or commercial context')
+  }
+
+  if (/\b(example|examples|case stud|portfolio|proof|have you (done|built|shipped))\b/i.test(lower)) {
+    set('proofNeeded', 'They asked for examples or proof')
+  }
+
+  if (analysis.intent === 'interested' || analysis.buyingSignal) {
+    set('deliveryOpenness', 'Open to continuing the conversation', 'inferred')
+  }
+
+  if (analysis.intent === 'meeting_request') {
+    set('nextCommitment', 'They asked to talk')
+  }
+
+  if (analysis.questions.length > 0) {
+    knowledge.fields.scopeMaturity = knowledge.fields.scopeMaturity.status === 'unknown'
+      ? { value: 'They have unanswered questions', status: 'inferred' }
+      : knowledge.fields.scopeMaturity
+  }
+
+  knowledge.newFacts = unique(newFacts)
+  knowledge.mostValuableUncertainty = pickMostValuableUncertainty(knowledge)
+  const move = chooseConversationMove(analysis, knowledge)
+  knowledge.nextMove = move.move
+  knowledge.messageJob = move.job
+  return knowledge
+}
+
+export function chooseConversationMove(
+  analysis: Pick<ReplyAnalysis, 'intent' | 'questions' | 'objections' | 'buyingSignal'>,
+  knowledge: ConversationKnowledge,
+): { move: ConversationMove; job: MessageJob } {
+  if (analysis.intent === 'not_interested' || knowledge.fields.need.value?.toLowerCase().includes('already hired')) {
+    return { move: 'CLOSE', job: 'CLOSE_LOOP' }
+  }
+  if (analysis.intent === 'meeting_request') {
+    return { move: 'CALL', job: 'MOVE_TO_CALL' }
+  }
+  if (knowledge.fields.proofNeeded.status === 'known' || analysis.intent === 'pricing') {
+    return { move: 'PROVIDE_PROOF', job: 'PROVIDE_PROOF' }
+  }
+  if (analysis.intent === 'objection') {
+    return { move: 'CLARIFY', job: 'RESOLVE_OBJECTION' }
+  }
+  if (analysis.questions.length > 0) {
+    return { move: 'ANSWER', job: 'CLARIFY_NEXT_STEP' }
+  }
+  if (knowledge.fields.timeline.status === 'known' && /later|quarter|future/i.test(knowledge.fields.timeline.value ?? '')) {
+    return { move: 'CLARIFY', job: 'UNDERSTAND_TIMELINE' }
+  }
+  if (analysis.intent === 'interested') {
+    const unknown = knowledge.mostValuableUncertainty
+    if (unknown === 'scope') return { move: 'ASK', job: 'UNDERSTAND_SCOPE' }
+    if (unknown === 'timeline') return { move: 'ASK', job: 'UNDERSTAND_TIMELINE' }
+    return { move: 'ASK', job: 'DISCOVER_NEED' }
+  }
+  return { move: 'CLARIFY', job: 'DISCOVER_NEED' }
+}
+
+function pickMostValuableUncertainty(knowledge: ConversationKnowledge): string | null {
+  const order: CommercialField[] = ['need', 'proofNeeded', 'scope', 'timeline', 'authority', 'currentSolution', 'budget']
+  for (const field of order) {
+    if (knowledge.fields[field].status === 'unknown') return field
+  }
+  return null
+}
+
+function cloneKnowledge(prior: ConversationKnowledge): ConversationKnowledge {
+  return {
+    fields: { ...emptyConversationKnowledge().fields, ...Object.fromEntries(
+      Object.entries(prior.fields).map(([k, v]) => [k, { ...v }]),
+    ) } as ConversationKnowledge['fields'],
+    newFacts: [],
+    mostValuableUncertainty: prior.mostValuableUncertainty,
+    nextMove: prior.nextMove,
+    messageJob: prior.messageJob,
+  }
+}
+
+function clipMatch(text: string, pattern: RegExp): string | null {
+  const match = text.match(pattern)
+  return match?.[0] ?? null
+}
+
+function unique(items: string[]): string[] {
+  return [...new Set(items)]
 }
 
 /**
@@ -156,65 +292,84 @@ export function buildReplyStrategy(
   approach: string
   tone: string
   ctaStrategy: string
+  messageJob: MessageJob
+  nextMove: ConversationMove
 } {
+  const job = analysis.knowledge.messageJob
+  const move = analysis.knowledge.nextMove
+
   switch (analysis.intent) {
     case 'interested':
       return {
-        goal: 'Acknowledge their interest and earn the next reply',
-        approach: `Thank them briefly, then either answer their specific question or offer one useful next step. ${analysis.questions.length > 0 ? 'Answer their questions directly first — do not defer them.' : 'Do not jump to a meeting ask. The goal is the next reply, not the close.'}`,
+        goal: job === 'PROVIDE_PROOF'
+          ? 'Answer the proof or rate question with one relevant fact'
+          : 'Use their reply as first-party intelligence and ask only the most valuable unknown',
+        approach: `Their words now outrank the original scrape. ${analysis.questions.length > 0 ? 'Answer their questions first.' : 'Do not restart a pitch.'} New facts: ${analysis.knowledge.newFacts.join('; ') || 'none extracted'}. Next uncertainty: ${analysis.knowledge.mostValuableUncertainty ?? 'none'}.`,
         tone: 'warm, direct, no pressure',
-        ctaStrategy: analysis.buyingSignal && analysis.questions.length === 0
-          ? 'Offer a low-friction next step: share a specific thought, example, or one-pager — not a meeting'
-          : 'Offer something useful or ask a clarifying question. No meeting pitch yet.',
+        ctaStrategy: 'One question maximum, and only if it is the most valuable unknown. No meeting pitch unless they asked.',
+        messageJob: job,
+        nextMove: move,
       }
 
     case 'objection':
       return {
         goal: 'Address the objection honestly',
-        approach: `Acknowledge their concern. ${analysis.objections.includes('pricing') ? 'Share context on how pricing works without being defensive.' : analysis.objections.includes('timing') ? 'Make it easy to pause and resume later.' : 'Provide specific evidence that addresses their concern.'}`,
+        approach: `Acknowledge their concern. ${analysis.objections.includes('pricing') ? 'Share how pricing is scoped — never invent a number.' : analysis.objections.includes('timing') ? 'Make it easy to pause and resume later.' : 'Provide specific evidence that addresses their concern.'}`,
         tone: 'empathetic, honest, not pushy',
         ctaStrategy: 'No hard CTA — earn trust first',
+        messageJob: job,
+        nextMove: move,
       }
 
     case 'pricing':
       return {
-        goal: 'Share pricing context naturally',
-        approach: 'Give a range or framework, not a hard number. Relate it to value/outcome.',
+        goal: 'Answer the commercial question without inventing a price',
+        approach: 'If an approved rate or range exists in facts, share it. Otherwise explain that price follows scope and ask the one question needed to scope. Never invent a number.',
         tone: 'transparent, professional',
-        ctaStrategy: 'Offer to share a more specific range based on scope',
+        ctaStrategy: 'Answer first. One scoping question only if required.',
+        messageJob: job,
+        nextMove: move,
       }
 
     case 'meeting_request':
       return {
-        goal: 'Confirm and prepare for the meeting',
-        approach: 'Acknowledge enthusiastically. Confirm time/preferences. Prepare them with one thing to think about.',
+        goal: 'Confirm the call because they asked — a sync is now more efficient',
+        approach: 'They requested a conversation. Confirm. Do not re-pitch.',
         tone: 'professional, prepared',
-        ctaStrategy: 'Confirm logistics + set a tiny expectation for the call',
+        ctaStrategy: 'Confirm logistics. One expectation for the call.',
+        messageJob: job,
+        nextMove: move,
       }
 
     case 'question':
       return {
         goal: 'Answer their questions directly — before anything else',
-        approach: 'Lead with the answer to their actual question. Do not restart the sales pitch. If they asked about capabilities, answer with specifics. If they asked about pricing, give a range or framework. Only after fully answering should you consider a light next step.',
+        approach: 'Lead with the answer. Do not restart the sales pitch. If they asked for examples, share one relevant proof. If they asked about rate, do not invent a number.',
         tone: 'helpful, specific, direct',
-        ctaStrategy: 'Answer first. Then, only if natural, ask a relevant follow-up question to keep the conversation moving. Do not answer a question about X with a pitch about Y.',
+        ctaStrategy: 'Answer first. At most one follow-up question.',
+        messageJob: job,
+        nextMove: move,
       }
 
     case 'not_interested':
       return {
-        goal: 'Leave the door open gracefully',
-        approach: 'Acknowledge, thank them, leave a light touch for the future. No pressure.',
+        goal: 'Close the loop gracefully',
+        approach: 'Acknowledge. Thank them. Stop. No future-pitch paragraph.',
         tone: 'gracious, brief',
-        ctaStrategy: 'None — just a clean close',
+        ctaStrategy: 'None',
+        messageJob: job,
+        nextMove: move,
       }
 
     case 'unclear':
     default:
       return {
-        goal: 'Clarify their intent',
-        approach: 'Ask a specific question to understand what they need.',
+        goal: 'Clarify the single most valuable unknown',
+        approach: `Ask about ${analysis.knowledge.mostValuableUncertainty ?? 'what they actually need'}. Do not interrogate.`,
         tone: 'curious, helpful',
         ctaStrategy: 'End with one clear question',
+        messageJob: job,
+        nextMove: move,
       }
   }
 }
@@ -268,6 +423,18 @@ export function buildConversationContext(
       parts.push(`- ${o}`)
     }
   }
+
+  parts.push(``)
+  parts.push(`### First-party state (updated from their reply):`)
+  parts.push(`- Job: ${analysis.knowledge.messageJob}`)
+  parts.push(`- Next move: ${analysis.knowledge.nextMove}`)
+  if (analysis.knowledge.newFacts.length > 0) {
+    parts.push(`- New facts: ${analysis.knowledge.newFacts.join('; ')}`)
+  }
+  if (analysis.knowledge.mostValuableUncertainty) {
+    parts.push(`- Most valuable unknown: ${analysis.knowledge.mostValuableUncertainty}`)
+  }
+  parts.push(`- Do not restart the original pitch. Do not invent rate, scope, or proof.`)
 
   return parts.join('\n')
 }

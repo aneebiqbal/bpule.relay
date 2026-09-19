@@ -86,6 +86,10 @@ interface DashboardData {
   qualificationDistribution: Record<string, number>
   activityFeed: ActivityItem[]
   targets: { total: number; totalTarget: number; totalCompleted: number }
+  insights: Array<{ id: string; type: string; severity: string; title: string; explanation: string; sampleSize?: number; confidence: string; suggestedInvestigation?: string }>
+  dataHealth: Record<string, { health: string; reason?: string }>
+  costCoverage: number
+  latencyHealth: { health: string; reason?: string }
 }
 
 const RANGE_OPTIONS = [
@@ -162,6 +166,31 @@ function EmptyState({ message }: { message: string }) {
   )
 }
 
+function DataHealthPanel({ dataHealth }: { dataHealth: Record<string, { health: string; reason?: string }> }) {
+  const healthColor = (h: string) => {
+    switch (h) {
+      case 'TRUSTED': return 'text-green-600'
+      case 'PARTIAL': return 'text-yellow-600'
+      case 'SUSPICIOUS': return 'text-red-600'
+      default: return 'text-muted-foreground'
+    }
+  }
+  return (
+    <div className="border border-border rounded-lg p-4 space-y-2">
+      <h3 className="text-sm font-medium">Data Health</h3>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+        {Object.entries(dataHealth).map(([key, val]) => (
+          <div key={key} className="space-y-0.5">
+            <div className="text-muted-foreground capitalize">{key}</div>
+            <div className={`font-medium ${healthColor(val.health)}`}>{val.health}</div>
+            {val.reason && <div className="text-muted-foreground text-[10px] leading-tight">{val.reason}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function RevenueIntelligenceDashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -234,6 +263,32 @@ export function RevenueIntelligenceDashboard() {
 
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          <div className="border border-border rounded-lg p-4 bg-card">
+            <h3 className="text-sm font-medium mb-2">Relay Brief</h3>
+            <div className="space-y-2">
+              {(data.insights ?? []).map((insight: { id: string; title: string; explanation: string; severity: string; confidence: string; sampleSize?: number }) => (
+                <div key={insight.id} className="flex items-start gap-2 text-xs">
+                  <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                    insight.severity === 'ACTION' ? 'bg-red-100 text-red-700' :
+                    insight.severity === 'WATCH' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-blue-100 text-blue-700'
+                  }`}>{insight.severity}</span>
+                  <div>
+                    <span className="font-medium">{insight.title}</span>
+                    <span className="text-muted-foreground ml-2">{insight.explanation}</span>
+                    {insight.sampleSize !== undefined && (
+                      <span className="text-muted-foreground ml-1">(n={insight.sampleSize})</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {(!data.insights || data.insights.length === 0) && (
+                <div className="text-sm text-muted-foreground">No insights generated for this period.</div>
+              )}
+            </div>
+            {data.dataHealth && <DataHealthPanel dataHealth={data.dataHealth} />}
+          </div>
+
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
             <StatCard label="Extracted" value={formatNumber(data.funnel.extracted)} />
             <StatCard label="Qualified" value={formatNumber(data.funnel.qualified)} />
@@ -418,6 +473,35 @@ export function RevenueIntelligenceDashboard() {
                 ])}
               />
             )}
+            <div className="grid grid-cols-3 gap-3">
+              <StatCard
+                label="AI Cost"
+                value={formatCurrency(data.ai.totalCost)}
+                subtext={
+                  data.costCoverage < 1
+                    ? `${Math.round(data.costCoverage * 100)}% coverage`
+                    : 'Full coverage'
+                }
+              />
+              <StatCard
+                label="P50 Latency"
+                value={`${data.ai.p50Latency}ms`}
+                subtext={
+                  data.latencyHealth?.health === 'SUSPICIOUS'
+                    ? 'AI traces available but percentiles are zero'
+                    : undefined
+                }
+              />
+              <StatCard
+                label="P95 Latency"
+                value={`${data.ai.p95Latency}ms`}
+                subtext={
+                  data.latencyHealth?.health === 'SUSPICIOUS'
+                    ? 'AI traces available but percentiles are zero'
+                    : undefined
+                }
+              />
+            </div>
           </div>
 
           {data.ai.providers.some((p) => p.fallback > 0 || p.errors > 0) && (

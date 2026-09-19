@@ -118,6 +118,9 @@ export interface Message {
   sentText: string | null
   sentAt: string | null
   modelUsed: string | null
+  originalDraft?: string | null
+  sendDisposition?: SendDisposition | null
+  rejectReasons?: SendFeedbackReason[]
   createdAt: string
 }
 
@@ -835,6 +838,7 @@ export interface ConversationState {
   wonAt: string | null
   lostAt: string | null
   lostReason: string | null
+  commercialState?: Record<string, unknown> | null
   createdAt: string
   updatedAt: string
 }
@@ -883,6 +887,8 @@ export interface EditLearning {
   madeShorter: boolean
   madeLonger: boolean
   formalityShift: 'more_formal' | 'less_formal' | 'same' | null
+  sendDisposition?: SendDisposition | null
+  rejectReasons?: SendFeedbackReason[]
   createdAt: string
 }
 
@@ -934,7 +940,43 @@ export interface OutreachStrategy {
   risk: string
   ctaStrategy: string
   mode: MessageMode
+  /** Optional revenue-loop fields. Older callers may omit them. */
+  assessment?: {
+    fit: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN'
+    intent: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN'
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+    fitWhy: string
+    intentWhy: string
+    confidenceWhy: string
+  }
+  contact?: {
+    reason: import('@/lib/relay/revenue-strategy').ContactReason
+    action: import('@/lib/relay/revenue-strategy').ContactAction
+    why: string
+    messageRecommended: boolean
+    noMessageReason: string | null
+  }
+  messageJob?: string | null
+  allowedNow?: string[]
+  hold?: string[]
+  neverClaim?: string[]
+  wordBudget?: { min: number; max: number; label: string }
+  uiRationale?: string
 }
+
+export type SendDisposition = 'SENT_UNCHANGED' | 'LIGHT_EDIT' | 'HEAVY_EDIT' | 'REJECTED'
+
+export type SendFeedbackReason =
+  | 'TOO_LONG'
+  | 'GENERIC'
+  | 'FAKE_PERSONALIZATION'
+  | 'UNSUPPORTED'
+  | 'TOO_SALESY'
+  | 'WRONG_OBJECTIVE'
+  | 'BAD_CTA'
+  | 'UNNATURAL'
+  | 'WRONG_PROOF'
+  | 'WRONG_TIMING'
 
 // ── Relay Agentic Workspace ────────────────────────────────────────────────
 

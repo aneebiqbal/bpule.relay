@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import type { MessageType } from '@/lib/domain/types'
-import { computeEditDelta } from '@/lib/relay/edit-learning'
+import { computeEditDelta, classifySendDisposition, inferFeedbackReasons } from '@/lib/relay/edit-learning'
 import { safeErrorResponse } from '@/lib/errors'
 
 const TYPES: MessageType[] = ['dm', 'connection', 'upwork', 'followup', 'reply']
@@ -12,15 +12,15 @@ export async function POST(
 ) {
   const { id } = await params
 
-  let body: { sentText?: string; type?: string; originalDraft?: string }
+  let body: { sentText?: string; type?: string; originalDraft?: string; rejected?: boolean; rejectReasons?: string[] }
   try {
     body = await request.json()
   } catch {
     body = {}
   }
 
-  const sentText = body.sentText?.trim()
-  if (!sentText) {
+  const sentText = body.sentText?.trim() ?? ''
+  if (!sentText && body.rejected !== true) {
     return NextResponse.json(
       { error: 'Paste the message text you actually sent.' },
       { status: 400 },
@@ -53,21 +53,25 @@ export async function POST(
   }
 
   try {
-    const result = await store.markContacted(id, sentText, type)
-    if (!result.allowed) {
-      return NextResponse.json(
-        { error: result.message ?? 'Send ceiling reached.' },
-        { status: 429 },
-      )
-    }
+    const originalDraft = body.originalDraft?.trim() || sentText
+    const disposition = classifySendDisposition(originalDraft, sentText, body.rejected === true)
+    const inferredReasons = inferFeedbackReasons(originalDraft, sentText, disposition)
+    const rejectReasons = [
+      ...inferredReasons,
+      ...((body.rejectReasons ?? []).filter((r): r is typeof inferredReasons[number] =>
+        [
+          'TOO_LONG', 'GENERIC', 'FAKE_PERSONALIZATION', 'UNSUPPORTED', 'TOO_SALESY',
+          'WRONG_OBJECTIVE', 'BAD_CTA', 'UNNATURAL', 'WRONG_PROOF', 'WRONG_TIMING',
+        ].includes(r),
+      )),
+    ]
 
-    // Capture edit learning if original draft was provided
-    if (body.originalDraft && body.originalDraft !== sentText) {
+    if (body.rejected === true) {
       try {
-        const delta = computeEditDelta(body.originalDraft, sentText)
+        const delta = computeEditDelta(originalDraft, sentText)
         await store.logEditLearning({
           messageId: null,
-          originalText: body.originalDraft,
+          originalText: originalDraft,
           editedText: sentText,
           editDistance: delta.editDistance,
           lengthDelta: delta.lengthDelta,
@@ -76,10 +80,62 @@ export async function POST(
           proofRemoved: delta.proofRemoved,
           madeShorter: delta.madeShorter,
           madeLonger: delta.madeLonger,
-          formalityShift: delta.formalityShift === 'more_formal' ? 'more_formal' : delta.formalityShift === 'less_formal' ? 'less_formal' : delta.formalityShift === 'same' ? 'same' : null,
+          formalityShift: delta.formalityShift,
+          sendDisposition: disposition,
+          rejectReasons,
         })
       } catch {
-        // Non-fatal: learning must not break the send
+        // Rejection telemetry must not break the UI.
+      }
+      return NextResponse.json({ ok: true, disposition, rejectReasons })
+    }
+
+    const result = await store.markContacted(id, sentText, type, {
+      originalDraft,
+      sendDisposition: disposition,
+      rejectReasons,
+    })
+    if (!result.allowed) {
+      return NextResponse.json(
+        { error: result.message ?? 'Send ceiling reached.' },
+        { status: 429 },
+      )
+    }
+
+    try {
+      const delta = computeEditDelta(originalDraft, sentText)
+      await store.logEditLearning({
+        messageId: null,
+        originalText: originalDraft,
+        editedText: sentText,
+        editDistance: delta.editDistance,
+        lengthDelta: delta.lengthDelta,
+        greetingChanged: delta.greetingChanged,
+        ctaChanged: delta.ctaChanged,
+        proofRemoved: delta.proofRemoved,
+        madeShorter: delta.madeShorter,
+        madeLonger: delta.madeLonger,
+        formalityShift: delta.formalityShift === 'more_formal' ? 'more_formal' : delta.formalityShift === 'less_formal' ? 'less_formal' : delta.formalityShift === 'same' ? 'same' : null,
+        sendDisposition: disposition,
+        rejectReasons,
+      })
+    } catch {
+      // Non-fatal: learning must not break the send
+    }
+
+    if (type === 'followup') {
+      try {
+        await store.emitRelayEvent({
+          eventType: 'FOLLOWUP_RECORDED',
+          entityType: 'lead',
+          entityId: id,
+          actorType: 'rep',
+          payload: { type, disposition },
+          source: 'app',
+          sourceEventId: `followup_recorded:${id}:${Date.now()}`,
+        })
+      } catch {
+        // Non-fatal
       }
     }
 
@@ -101,6 +157,7 @@ export async function POST(
       ok: true,
       todaySends: result.todaySends,
       type,
+      disposition,
     })
   } catch (err) {
     if (err instanceof Error && /locked|owner|unavailable/i.test(err.message)) {

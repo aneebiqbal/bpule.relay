@@ -26,6 +26,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { StatusWord, VerdictWord } from '@/components/status-word'
 import { ScoreRing } from '@/components/score-ring'
 import { signalById } from '@/lib/score/signals'
+import { buildRevenueStrategy, sourceFromLead, toUiSnapshot } from '@/lib/relay/revenue-strategy'
 import { readSse } from '@/lib/sse/client'
 import { cn } from 'cn'
 import type { LeadDetail } from '@/lib/store/types'
@@ -209,6 +210,21 @@ function NextBestAction({
   )
 }
 
+function LeadLoopStrip({ lead }: { lead: LeadDetail }) {
+  const snapshot = toUiSnapshot(buildRevenueStrategy(sourceFromLead(lead, null, { channel: 'dm' })))
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-graphite">
+      <span><span className="text-stone">Fit</span> {snapshot.fit}</span>
+      <span><span className="text-stone">Intent</span> {snapshot.intent}</span>
+      <span><span className="text-stone">Confidence</span> {snapshot.confidence}</span>
+      <span><span className="text-stone">Act</span> {snapshot.act.replaceAll('_', ' ')}</span>
+      {!snapshot.messageRecommended && (
+        <span className="text-status-warning">No message — {snapshot.noMessageReason}</span>
+      )}
+    </div>
+  )
+}
+
 export function LeadWorkspace({
   lead,
   score,
@@ -357,7 +373,11 @@ export function LeadWorkspace({
       const res = await fetch(`/api/leads/${lead.id}/contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sentText: sentText.trim(), type: artifact }),
+        body: JSON.stringify({
+          sentText: sentText.trim(),
+          type: artifact,
+          originalDraft: draftText || sentText.trim(),
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to log send.')
@@ -432,6 +452,7 @@ export function LeadWorkspace({
 
             <h1 className="mt-1 text-heading text-2xl text-ink sm:text-3xl">{currentLead.company}</h1>
             <p className="mt-0.5 text-sm text-graphite">{contactLine}</p>
+            <LeadLoopStrip lead={currentLead} />
 
             {/* Tags & meta */}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">

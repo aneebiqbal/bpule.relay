@@ -164,14 +164,22 @@ export function evaluateMessage(
     score -= 10
   }
 
-  // 8. Excessive length for channel
-  const wordCount = text.trim().split(/\s+/).length
+  // 8. Excessive length for channel — budgets, not targets
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length
   if (channel === 'dm' && wordCount > 55) {
     failures.push(`Too long for DM (${wordCount} words, max 55)`)
     score -= 15
   }
-  if (channel === 'connection' && text.length > 300) {
-    failures.push(`Too long for connection note (${text.length} chars, max 300)`)
+  if (channel === 'connection' && (text.length > 300 || wordCount > 35)) {
+    failures.push(`Too long for connection note (${wordCount} words / ${text.length} chars)`)
+    score -= 15
+  }
+  if (channel === 'followup' && wordCount > 45) {
+    failures.push(`Too long for follow-up (${wordCount} words, max 45)`)
+    score -= 15
+  }
+  if (channel === 'reply' && wordCount > 70) {
+    failures.push(`Too long for reply (${wordCount} words, max 70)`)
     score -= 15
   }
 
@@ -220,6 +228,43 @@ export function evaluateMessage(
     score -= 15
   }
 
+  // 15b. Outreach failure patterns the writer must not produce
+  const outreachTells = [
+    { pattern: /\bsaw your post\b/i, reason: 'Opens by proving we scraped a post' },
+    { pattern: /\bthis caught my eye\b/i, reason: 'Fake personalization ("caught my eye")' },
+    { pattern: /\bcongrats on\b/i, reason: 'Manufactured compliment' },
+    { pattern: /\bover the past \d+ years\b/i, reason: 'Credential dump' },
+    { pattern: /\bwe specialize in\b/i, reason: 'Agency credential dump' },
+    { pattern: /\bi can write (up )?a quick (analysis|read|audit)\b/i, reason: 'Unsolicited analysis offer' },
+    { pattern: /\bwould that be useful\??\b/i, reason: 'Soft fake CTA' },
+    { pattern: /\bjust following up\b|\bchecking in\b|\bbumping this\b/i, reason: 'Empty follow-up' },
+    { pattern: /\bwe(?:'re| are) hiring\b|\bi(?:'m| am) hiring\b/i, reason: 'Echoes prospect hiring voice as if the sender is hiring' },
+  ]
+  for (const { pattern, reason } of outreachTells) {
+    if (pattern.test(lower)) {
+      failures.push(reason)
+      score -= 20
+    }
+  }
+
+  const questionCount = (text.match(/\?/g) ?? []).length
+  if (questionCount > 1) {
+    failures.push('Multiple questions / CTAs — one job only')
+    score -= 20
+  }
+
+  if (strategy?.wordBudget && wordCount > strategy.wordBudget.max) {
+    failures.push(`Over strategy word budget (${wordCount} > ${strategy.wordBudget.max})`)
+    score -= 15
+  }
+
+  if (strategy?.messageJob === null || strategy?.contact?.messageRecommended === false) {
+    if (text.trim().length > 0) {
+      failures.push('A message was written when silence was the correct result')
+      score -= 40
+    }
+  }
+
   // 15. No specific personalization — check if the message references
   // anything from the lead context, safe trigger, or proof
   if (strategy && wordCount > 20) {
@@ -241,6 +286,21 @@ export function evaluateMessage(
     if (!hasSomeSpecificity) {
       failures.push('No specific personalization carried through')
       score -= 20
+    }
+  }
+
+  // 16. Factual claim guard — thingsNotToClaim must not appear in output
+  if (strategy) {
+    const claimsToCheck = [
+      ...(strategy.neverClaim ?? []),
+    ]
+    for (const claim of claimsToCheck) {
+      const claimLower = claim.toLowerCase().trim()
+      if (claimLower.length >= 4 && lower.includes(claimLower)) {
+        failures.push(`Violates thingsNotToClaim: "${claim.slice(0, 40)}"`)
+        score -= 30
+        break
+      }
     }
   }
 
@@ -290,9 +350,7 @@ export function feelsSurveillance(message: string): boolean {
     /congrats on (your|the) (raise|funding|series)/i,
   ]
 
-  // "I saw your post about X" is NOT surveillance — it's referencing public content
-  const isPublicReference = /i saw your (post|article|thread|update) about/i.test(lower)
-  if (isPublicReference) return false
+  if (/\b(saw|noticed) your (post|article|thread|update)\b/i.test(lower)) return true
 
   return surveillancePatterns.some((p) => p.test(lower))
 }

@@ -195,9 +195,10 @@ export function buildFollowupPrompt(
   parts.push(``)
   parts.push(`### Rules:`)
   parts.push(`- Do NOT say "just following up" or "checking in" or "bumping this"`)
-  parts.push(`- Keep it to 2-3 sentences`)
+  parts.push(`- 15–45 words. Add ONE new reason to reply, or close the loop.`)
   parts.push(`- Give them an easy way to say "not now"`)
   parts.push(`- Do not repeat the exact same offer as the first message`)
+  parts.push(`- Do not dump biography, proof, or BPulse positioning`)
 
   return parts.join('\n')
 }

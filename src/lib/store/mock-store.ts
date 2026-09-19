@@ -57,6 +57,8 @@ import type {
   AppNotification,
   AuditLogEntry,
   CapturedProspect,
+  SendDisposition,
+  SendFeedbackReason,
 } from '@/lib/domain/types'
 import type {
   CreateLeadResult,
@@ -864,6 +866,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       leadId: string,
       sentText: string,
       messageType: MessageType = 'dm',
+      feedback?: { originalDraft?: string | null; sendDisposition?: SendDisposition | null; rejectReasons?: SendFeedbackReason[] },
     ): Promise<DosageResult> {
       const lead = leads.find((l) => l.id === leadId)
       if (!lead) throw new Error('Lead not found')
@@ -917,6 +920,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         sentText,
         sentAt: new Date().toISOString(),
         modelUsed: null,
+        originalDraft: feedback?.originalDraft ?? null,
+        sendDisposition: feedback?.sendDisposition ?? null,
+        rejectReasons: feedback?.rejectReasons ?? [],
         createdAt: new Date().toISOString(),
       })
 
@@ -2395,6 +2401,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         wonAt: input.wonAt ?? existing?.wonAt ?? null,
         lostAt: input.lostAt ?? existing?.lostAt ?? null,
         lostReason: input.lostReason ?? existing?.lostReason ?? null,
+        commercialState: input.commercialState ?? existing?.commercialState ?? null,
         createdAt: existing?.createdAt ?? new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
@@ -2445,6 +2452,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         madeShorter: input.madeShorter,
         madeLonger: input.madeLonger,
         formalityShift: input.formalityShift,
+        sendDisposition: input.sendDisposition ?? null,
+        rejectReasons: input.rejectReasons ?? [],
         createdAt: new Date().toISOString(),
       })
     },

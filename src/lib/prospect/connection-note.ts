@@ -46,6 +46,10 @@ const BANNED_PHRASES_CONNECTION = [
   'as the (ceo|cto|founder|vp)',
   'i was impressed by',
   'i would love to connect and explore',
+  "we're hiring",
+  'we are hiring',
+  'i am hiring',
+  "i'm hiring",
 ]
 
 const GENERIC_CTAS_CONNECTION = [

@@ -1,3 +1,5 @@
+import type { SendDisposition, SendFeedbackReason } from '@/lib/domain/types'
+
 /**
  * BD Edit Learning
  *
@@ -8,6 +10,48 @@
  * Do NOT immediately rewrite global profile voice from one edit.
  * Accumulate signals.
  */
+
+export function classifySendDisposition(
+  originalText: string | null | undefined,
+  sentText: string,
+  rejected = false,
+): SendDisposition {
+  if (rejected) return 'REJECTED'
+  const original = (originalText ?? '').trim()
+  const sent = sentText.trim()
+  if (!original) return 'SENT_UNCHANGED'
+  if (normalizeForCompare(original) === normalizeForCompare(sent)) return 'SENT_UNCHANGED'
+  const distance = levenshteinDistance(original, sent)
+  const denom = Math.max(original.length, sent.length, 1)
+  const ratio = distance / denom
+  const wordDelta = Math.abs(original.split(/\s+/).length - sent.split(/\s+/).length)
+  if (ratio < 0.28 || wordDelta <= 6) return 'LIGHT_EDIT'
+  return 'HEAVY_EDIT'
+}
+
+export function inferFeedbackReasons(
+  originalText: string,
+  sentText: string,
+  disposition: SendDisposition,
+): SendFeedbackReason[] {
+  if (disposition === 'SENT_UNCHANGED') return []
+  const reasons: SendFeedbackReason[] = []
+  const originalWords = originalText.trim().split(/\s+/).length
+  const sentWords = sentText.trim().split(/\s+/).length
+  if (sentWords + 4 < originalWords) reasons.push('TOO_LONG')
+  if (/\b(saw your post|caught my eye|congrats|specialize in)\b/i.test(originalText)
+    && !/\b(saw your post|caught my eye|congrats|specialize in)\b/i.test(sentText)) {
+    reasons.push('FAKE_PERSONALIZATION')
+  }
+  if ((originalText.match(/\?/g) ?? []).length > (sentText.match(/\?/g) ?? []).length) {
+    reasons.push('BAD_CTA')
+  }
+  return reasons
+}
+
+function normalizeForCompare(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, ' ').trim()
+}
 
 export interface EditDelta {
   editDistance: number

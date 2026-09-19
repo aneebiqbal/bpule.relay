@@ -328,7 +328,7 @@ describe('Message Forge Quality Gate', () => {
 
   it('detects surveillance feel', () => {
     expect(feelsSurveillance('You recently closed a round with Solana Foundation.')).toBe(true)
-    expect(feelsSurveillance('I saw your post about the integration challenges.')).toBe(false)
+    expect(feelsSurveillance('I saw your post about the integration challenges.')).toBe(true)
     expect(feelsSurveillance('Congrats on the Series A!')).toBe(true)
   })
 

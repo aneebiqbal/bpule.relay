@@ -88,6 +88,11 @@ export async function streamDraft(
     )
   }
 
+  // P0: Strategy is mandatory for revenue outreach. No strategy → no generation.
+  if (!input.strategy || !input.strategy.messageJob) {
+    throw new Error('STRATEGY_REQUIRED: Revenue outreach generation requires a valid strategy with messageJob.')
+  }
+
   const system = baseDraftSystem(input.styleCard, input.facts)
   const user = buildUserPrompt(input)
   const callLog: DraftCallLog[] = []

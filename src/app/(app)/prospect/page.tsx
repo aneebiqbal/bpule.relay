@@ -23,10 +23,12 @@ import { cn } from 'cn'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
 
 import type { ProspectQualificationAssessment } from '@/lib/prospect/qualification-gate'
+import type { RevenueLoopSnapshot } from '@/lib/relay/revenue-strategy'
 
 type AnalyzeEvent =
   | { type: 'status'; message: string }
   | { type: 'error'; message: string }
+  | { type: 'done'; draft?: unknown; matchedProof?: unknown; extracted?: undefined; qualification?: undefined; revenue?: undefined }
   | {
       type: 'done'
       extracted: ExtractedLead
@@ -52,6 +54,7 @@ type AnalyzeEvent =
       demoMode: boolean
       alternativeSenders: Array<{ profile: Profile; matchScore: number; topProof: string | null }>
       qualification: ProspectQualificationAssessment
+      revenue?: RevenueLoopSnapshot
     }
 
 interface AnalysisState {
@@ -78,6 +81,7 @@ interface AnalysisState {
   draftFailed: boolean
   demoMode: boolean
   qualification: ProspectQualificationAssessment
+  revenue: RevenueLoopSnapshot | null
 }
 
 const QUALIFICATION_META: Record<string, { label: string; color: string; bg: string }> = {
@@ -170,6 +174,7 @@ export default function ProspectCheckPage() {
             return
           }
           if (event.type === 'done') {
+            if (!event.extracted && !event.qualification && !event.revenue) return
             setResult({
               extracted: event.extracted,
               score: event.score,
@@ -185,6 +190,7 @@ export default function ProspectCheckPage() {
               draftFailed: event.draftFailed,
               demoMode: event.demoMode,
               qualification: event.qualification,
+              revenue: event.revenue ?? null,
             })
             if (event.bestSender) {
               setSelectedProfileId(event.bestSender.id)
@@ -253,6 +259,8 @@ export default function ProspectCheckPage() {
           connectionNote: result.connectionNote,
           prospectScore: result.score?.total ?? null,
           prospectDimensions: result.score?.dimensions ?? null,
+          canonical: result.canonical,
+          canonicalScore: result.score?.total ?? null,
           rawInput,
           allowPotentialDuplicate,
         }),
@@ -422,6 +430,26 @@ export default function ProspectCheckPage() {
                 </span>
               </div>
 
+              {result.revenue && (
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <SignalChip label="Fit" value={result.revenue.fit} />
+                  <SignalChip label="Intent" value={result.revenue.intent} />
+                  <SignalChip label="Confidence" value={result.revenue.confidence} />
+                  <SignalChip label="Act" value={result.revenue.act.replaceAll('_', ' ')} />
+                </div>
+              )}
+              {result.revenue && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-[12px] text-ink">{result.revenue.why}</p>
+                  <p className="text-[11px] text-graphite">Next: {result.revenue.nextAction}</p>
+                  {!result.revenue.messageRecommended && (
+                    <p className="text-[12px] font-medium text-status-warning">
+                      No message recommended. {result.revenue.noMessageReason}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {Array.isArray(result.score.reasons) && result.score.reasons.length > 0 && (
                 <div className="mt-3 space-y-0.5">
                   {result.score.reasons.map((w, i) => (
@@ -563,7 +591,9 @@ export default function ProspectCheckPage() {
 
           <div>
             <div className="flex items-center justify-between">
-              <h3 className="text-[12px] font-medium text-ink">Connection note</h3>
+              <h3 className="text-[12px] font-medium text-ink">
+                {result.revenue && !result.revenue.messageRecommended ? 'Message' : 'Connection note'}
+              </h3>
               <span className={cn(
                 'font-mono text-[11px]',
                 result.charCount > result.maxChars ? 'text-status-danger' : 'text-stone',
@@ -573,7 +603,10 @@ export default function ProspectCheckPage() {
             </div>
             <div className="mt-2 rounded-md bg-bone p-3">
               <p className="text-[13px] leading-relaxed text-ink whitespace-pre-wrap">
-                {result.connectionNote || (result.score ? 'No note generated.' : 'Qualification blocked until you add enough context.')}
+                {result.connectionNote
+                  || (result.revenue && !result.revenue.messageRecommended
+                    ? result.revenue.noMessageReason ?? 'No message recommended.'
+                    : result.score ? 'No note generated.' : 'Qualification blocked until you add enough context.')}
               </p>
             </div>
 

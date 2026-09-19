@@ -122,6 +122,21 @@ export async function POST(request: Request) {
 
     const score = computeScore(extracted, rulebook)
 
+    const canonical = body.canonical && typeof body.canonical === 'object'
+      ? body.canonical as Record<string, unknown>
+      : null
+    const canonicalScore = typeof body.canonicalScore === 'number' ? body.canonicalScore : null
+    const canonicalQualification = typeof canonical?.qualification === 'string' ? canonical.qualification : null
+    const verdictFromCanonical =
+      canonicalQualification === 'strong' || canonicalQualification === 'worth_pursuing'
+        ? 'send'
+        : canonicalQualification === 'maybe'
+          ? 'research_more'
+          : canonicalQualification === 'skip'
+            ? 'skip'
+            : null
+    const verdict = verdictFromCanonical ?? score.verdict
+
     const result = await store.createLead({
       company,
       contactName: extracted.name,
@@ -133,7 +148,9 @@ export async function POST(request: Request) {
       verbatimQuote: extracted.verbatimQuote,
       tags: extracted.tags,
       score: score.total,
-      verdict: score.verdict,
+      verdict,
+      canonicalScore,
+      canonicalIntelligence: canonical,
       titleRaw: extracted.titleRaw ?? extracted.title,
       locationRaw: extracted.locationRaw ?? null,
       roleCategory: extracted.roleCategory ?? classifyRoleFromTitle(extracted.title),
@@ -204,7 +221,7 @@ export async function POST(request: Request) {
         lead: {
           ...lead,
           score: lead.score ?? score.total,
-          verdict: lead.verdict ?? score.verdict,
+          verdict: lead.verdict ?? verdict,
         },
         score,
         leadId: lead.id,

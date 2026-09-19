@@ -199,6 +199,9 @@ function mapMessage(r: Row): Message {
     sentText: (r.sent_text as string) ?? null,
     sentAt: (r.sent_at as string) ?? null,
     modelUsed: (r.model_used as string) ?? null,
+    originalDraft: (r.original_draft as string) ?? null,
+    sendDisposition: (r.send_disposition as Message['sendDisposition']) ?? null,
+    rejectReasons: Array.isArray(r.reject_reasons) ? r.reject_reasons as Message['rejectReasons'] : [],
     createdAt: r.created_at as string,
   }
 }
@@ -746,6 +749,11 @@ export class SupabaseStore implements ScoutStore {
     leadId: string,
     sentText: string,
     messageType: Message['type'] = 'dm',
+    feedback?: {
+      originalDraft?: string | null
+      sendDisposition?: import('@/lib/domain/types').SendDisposition | null
+      rejectReasons?: import('@/lib/domain/types').SendFeedbackReason[]
+    },
   ): Promise<DosageResult> {
     const type = messageType
     const todaySends = await this.countTodaysSends(type)
@@ -782,6 +790,9 @@ export class SupabaseStore implements ScoutStore {
         type,
         sent_text: sentText,
         sent_at: new Date().toISOString(),
+        original_draft: feedback?.originalDraft ?? null,
+        send_disposition: feedback?.sendDisposition ?? null,
+        reject_reasons: feedback?.rejectReasons ?? [],
       })
       .select('id')
       .single()
@@ -885,6 +896,8 @@ export class SupabaseStore implements ScoutStore {
         payload: {
           messageType: type,
           sentTextLength: sentText.length,
+          sendDisposition: feedback?.sendDisposition ?? null,
+          rejectReasons: feedback?.rejectReasons ?? [],
         },
         source: 'app',
         sourceEventId: `outreach_recorded:${leadId}:${runId ?? 'no-run'}:${Date.now()}`,
@@ -3918,6 +3931,7 @@ export class SupabaseStore implements ScoutStore {
     wonAt?: string | null
     lostAt?: string | null
     lostReason?: string | null
+    commercialState?: Record<string, unknown> | null
   }): Promise<ConversationState> {
     const existing = await this.getConversationState(input.leadId)
     const previousStage = existing?.stage ?? 'new'
@@ -3935,13 +3949,20 @@ export class SupabaseStore implements ScoutStore {
       won_at: input.wonAt ?? existing?.wonAt ?? null,
       lost_at: input.lostAt ?? existing?.lostAt ?? null,
       lost_reason: input.lostReason ?? existing?.lostReason ?? null,
+      commercial_state: input.commercialState ?? existing?.commercialState ?? {},
       updated_at: new Date().toISOString(),
     }
-    const { data, error } = await this.client
+    let { data, error } = await this.client
       .from('conversation_states')
       .upsert(row)
       .select('*')
       .single()
+    if (error && /commercial_state|42703|PGRST204/i.test(error.message ?? '')) {
+      const { commercial_state: _dropped, ...legacyRow } = row
+      const retry = await this.client.from('conversation_states').upsert(legacyRow).select('*').single()
+      data = retry.data
+      error = retry.error
+    }
     if (error) throw error
 
     const newState = mapConversationState(data as Row)
@@ -4032,6 +4053,8 @@ export class SupabaseStore implements ScoutStore {
     madeShorter: boolean
     madeLonger: boolean
     formalityShift: 'more_formal' | 'less_formal' | 'same' | null
+    sendDisposition?: import('@/lib/domain/types').SendDisposition | null
+    rejectReasons?: import('@/lib/domain/types').SendFeedbackReason[]
   }): Promise<void> {
     const { error } = await this.client.from('edit_learning').insert({
       organization_id: this.orgId,
@@ -4047,8 +4070,28 @@ export class SupabaseStore implements ScoutStore {
       made_shorter: input.madeShorter,
       made_longer: input.madeLonger,
       formality_shift: input.formalityShift,
+      send_disposition: input.sendDisposition ?? null,
+      reject_reasons: input.rejectReasons ?? [],
     })
-    if (error) throw error
+    if (error && /send_disposition|reject_reasons|42703|PGRST204/i.test(error.message ?? '')) {
+      const retry = await this.client.from('edit_learning').insert({
+        organization_id: this.orgId,
+        rep_id: this.rep.id,
+        message_id: input.messageId,
+        original_text: input.originalText,
+        edited_text: input.editedText,
+        edit_distance: input.editDistance,
+        length_delta: input.lengthDelta,
+        greeting_changed: input.greetingChanged,
+        cta_changed: input.ctaChanged,
+        proof_removed: input.proofRemoved,
+        made_shorter: input.madeShorter,
+        made_longer: input.madeLonger,
+        formality_shift: input.formalityShift,
+      })
+      if (retry.error) throw retry.error
+      return
+    }
   }
 
   async updateLeadSenderProfile(leadId: string, senderProfileId: string | null): Promise<void> {
@@ -5330,6 +5373,7 @@ function mapConversationState(r: Row): ConversationState {
     wonAt: (r.won_at as string) ?? null,
     lostAt: (r.lost_at as string) ?? null,
     lostReason: (r.lost_reason as string) ?? null,
+    commercialState: (r.commercial_state as Record<string, unknown>) ?? null,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   }

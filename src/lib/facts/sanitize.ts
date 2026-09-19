@@ -108,7 +108,7 @@ export function sanitizeDraft(
   const withoutDeadLinks = stripDeadSiteLinks(noNumbers, facts)
   // Exclamation marks are banned in Scout output — strip them
   const hadExclamation = /!/.test(withoutDeadLinks)
-  const clean = withoutDeadLinks.replace(/!/g, '.')
+  const clean = withoutDeadLinks.replace(/!/g, '.').replace(/\.{2,}/g, '.').replace(/\s+\./g, '.').trim()
   return {
     text: clean,
     strippedNumbers: stripped,

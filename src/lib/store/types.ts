@@ -312,7 +312,11 @@ export interface ScoutStore {
   saveDraft(input: SaveDraftInput): Promise<Message>
   listMessages(leadId: string): Promise<Message[]>
   /** Marks a lead contacted after a human sends the message externally. */
-  markContacted(leadId: string, sentText: string, messageType?: MessageType): Promise<DosageResult>
+  markContacted(leadId: string, sentText: string, messageType?: MessageType, feedback?: {
+    originalDraft?: string | null
+    sendDisposition?: import('@/lib/domain/types').SendDisposition | null
+    rejectReasons?: import('@/lib/domain/types').SendFeedbackReason[]
+  }): Promise<DosageResult>
   // voice profiles
   getVoiceProfile(): Promise<VoiceProfile | null>
   setVoiceProfile(
@@ -776,6 +780,7 @@ export interface ScoutStore {
     wonAt?: string | null
     lostAt?: string | null
     lostReason?: string | null
+    commercialState?: Record<string, unknown> | null
   }): Promise<ConversationState>
   addSalesMemory(input: {
     memoryType: SalesMemoryType
@@ -806,6 +811,8 @@ export interface ScoutStore {
     madeShorter: boolean
     madeLonger: boolean
     formalityShift: 'more_formal' | 'less_formal' | 'same' | null
+    sendDisposition?: import('@/lib/domain/types').SendDisposition | null
+    rejectReasons?: import('@/lib/domain/types').SendFeedbackReason[]
   }): Promise<void>
   updateLeadSenderProfile(leadId: string, senderProfileId: string | null): Promise<void>
   updateLeadStatus(leadId: string, status: 'won' | 'lost'): Promise<void>
