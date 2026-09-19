@@ -72,6 +72,12 @@ interface DashboardData {
   ai: AIStats
   messages: {
     total: number
+    generatedOnly: number
+    reviewed: number
+    unchanged: number
+    lightEdit: number
+    heavyEdit: number
+    rejected: number
     dispositions: Record<string, number>
   }
   relayVsHuman: {
@@ -90,6 +96,7 @@ interface DashboardData {
   dataHealth: Record<string, { health: string; reason?: string }>
   costCoverage: number
   latencyHealth: { health: string; reason?: string }
+  fallbackBreakdown: { demoMode: number; productionFailures: number; byReason: Record<string, number> }
 }
 
 const RANGE_OPTIONS = [
@@ -290,7 +297,7 @@ export function RevenueIntelligenceDashboard() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-            <StatCard label="Extracted" value={formatNumber(data.funnel.extracted)} />
+            <StatCard label="Unique Prospects" value={formatNumber(data.funnel.extracted)} subtext="analyzed" />
             <StatCard label="Qualified" value={formatNumber(data.funnel.qualified)} />
             <StatCard label="Contacted" value={formatNumber(data.funnel.contacted)} />
             <StatCard label="Replies" value={formatNumber(data.funnel.replied)} />
@@ -316,7 +323,7 @@ export function RevenueIntelligenceDashboard() {
             <div className="space-y-3">
               <h3 className="text-sm font-medium">AI Health</h3>
               <div className="grid grid-cols-2 gap-3">
-                <StatCard label="Total Extractions" value={formatNumber(data.extraction.total)} />
+                <StatCard label="Extraction Runs" value={formatNumber(data.extraction.total)} subtext="including retries" />
                 <StatCard label="Successful" value={formatNumber(data.extraction.successful)} />
                 <StatCard label="AI Extractions" value={formatNumber(data.extraction.aiExtractions)} />
                 <StatCard label="Fallback/Demo" value={formatNumber(data.extraction.fallbackExtractions)} subtext={data.extraction.total > 0 ? formatPercent(Math.round((data.extraction.fallbackExtractions / data.extraction.total) * 100)) + ' fallback' : undefined} />
@@ -334,8 +341,13 @@ export function RevenueIntelligenceDashboard() {
                 {formatPercent(Math.round((data.extraction.fallbackExtractions / data.extraction.total) * 100))} of extractions used fallback/demo
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                {data.extraction.fallbackExtractions} of {data.extraction.total} extractions did not use a live AI provider.
+                {data.fallbackBreakdown?.demoMode ?? 0} demo mode · {data.fallbackBreakdown?.productionFailures ?? 0} production fallback
               </div>
+              {data.fallbackBreakdown?.productionFailures > 0 && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Top reason: {Object.entries(data.fallbackBreakdown.byReason).filter(([k, v]) => k !== 'DEMO_MODE' && v > 0).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'UNKNOWN'}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -428,10 +440,10 @@ export function RevenueIntelligenceDashboard() {
       {activeTab === 'extraction' && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard label="Total Extractions" value={formatNumber(data.extraction.total)} />
+            <StatCard label="Extraction Runs" value={formatNumber(data.extraction.total)} subtext="including retries" />
             <StatCard label="Successful" value={formatNumber(data.extraction.successful)} />
             <StatCard label="Failed" value={formatNumber(data.extraction.failed)} />
-            <StatCard label="Avg Time" value={`${data.extraction.avgExtractionTime}ms`} />
+            <StatCard label="Avg Time" value={data.extraction.avgExtractionTime > 0 ? `${data.extraction.avgExtractionTime}ms` : 'Unavailable'} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -476,29 +488,35 @@ export function RevenueIntelligenceDashboard() {
             <div className="grid grid-cols-3 gap-3">
               <StatCard
                 label="AI Cost"
-                value={formatCurrency(data.ai.totalCost)}
+                value={data.costCoverage <= 0 ? 'Unavailable' : formatCurrency(data.ai.totalCost)}
                 subtext={
-                  data.costCoverage < 1
-                    ? `${Math.round(data.costCoverage * 100)}% coverage`
-                    : 'Full coverage'
+                  data.costCoverage <= 0
+                    ? 'No cost telemetry'
+                    : data.costCoverage < 0.95
+                      ? `${Math.round(data.costCoverage * 100)}% coverage`
+                      : 'Full coverage'
                 }
               />
               <StatCard
                 label="P50 Latency"
-                value={`${data.ai.p50Latency}ms`}
+                value={data.latencyHealth?.health === 'UNAVAILABLE' || data.latencyHealth?.health === 'SUSPICIOUS' ? 'Unavailable' : `${data.ai.p50Latency}ms`}
                 subtext={
                   data.latencyHealth?.health === 'SUSPICIOUS'
-                    ? 'AI traces available but percentiles are zero'
-                    : undefined
+                    ? 'Average latency contradicts percentiles — telemetry unreliable'
+                    : data.latencyHealth?.health === 'UNAVAILABLE'
+                      ? 'No valid latency samples'
+                      : undefined
                 }
               />
               <StatCard
                 label="P95 Latency"
-                value={`${data.ai.p95Latency}ms`}
+                value={data.latencyHealth?.health === 'UNAVAILABLE' || data.latencyHealth?.health === 'SUSPICIOUS' ? 'Unavailable' : `${data.ai.p95Latency}ms`}
                 subtext={
                   data.latencyHealth?.health === 'SUSPICIOUS'
-                    ? 'AI traces available but percentiles are zero'
-                    : undefined
+                    ? 'Average latency contradicts percentiles — telemetry unreliable'
+                    : data.latencyHealth?.health === 'UNAVAILABLE'
+                      ? 'No valid latency samples'
+                      : undefined
                 }
               />
             </div>
@@ -542,11 +560,24 @@ export function RevenueIntelligenceDashboard() {
           <div className="space-y-3">
             <h3 className="text-sm font-medium">Message Dispositions</h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <StatCard label="Total Messages" value={formatNumber(data.messages.total)} />
-              <StatCard label="Sent Unchanged" value={formatNumber(data.messages.dispositions.SENT_UNCHANGED ?? 0)} />
-              <StatCard label="Light Edit" value={formatNumber(data.messages.dispositions.LIGHT_EDIT ?? 0)} />
-              <StatCard label="Heavy Edit" value={formatNumber(data.messages.dispositions.HEAVY_EDIT ?? 0)} />
-              <StatCard label="Rejected" value={formatNumber(data.messages.dispositions.REJECTED ?? 0)} />
+              <StatCard label="Total Generated" value={formatNumber(data.messages.total)} />
+              <StatCard label="Generated Only" value={formatNumber(data.messages.generatedOnly)} subtext="draft created, not yet sent" />
+              <StatCard label="Reviewed" value={formatNumber(data.messages.reviewed)} subtext="sent or dispositioned" />
+              <StatCard
+                label="Unchanged"
+                value={data.messages.reviewed > 0 ? `${Math.round((data.messages.unchanged / data.messages.reviewed) * 100)}%` : '—'}
+                subtext={`${data.messages.unchanged} of ${data.messages.reviewed} reviewed`}
+              />
+              <StatCard
+                label="Heavy Edit"
+                value={data.messages.reviewed > 0 ? `${Math.round((data.messages.heavyEdit / data.messages.reviewed) * 100)}%` : '—'}
+                subtext={`${data.messages.heavyEdit} of ${data.messages.reviewed} reviewed`}
+              />
+              <StatCard
+                label="Rejected"
+                value={data.messages.reviewed > 0 ? `${Math.round((data.messages.rejected / data.messages.reviewed) * 100)}%` : '—'}
+                subtext={`${data.messages.rejected} of ${data.messages.reviewed} reviewed`}
+              />
             </div>
           </div>
         </div>

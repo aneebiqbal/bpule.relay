@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth/current'
-import { validateFunnelOrdering, computeCostCoverage, validateLatencyConsistency } from '@/lib/revenue-intelligence/metrics-health'
+import { validateFunnelOrdering, computeCostCoverage, validateLatencyConsistency, overallFunnelHealth, classifyFallback } from '@/lib/revenue-intelligence/metrics-health'
 import { generateInsights } from '@/lib/revenue-intelligence/insights'
 
 export const maxDuration = 30
@@ -195,11 +195,16 @@ export async function GET(request: Request) {
     funnelIssues: funnelIssues.map((i) => ({ ...i, health: i.health as 'TRUSTED' | 'PARTIAL' | 'SUSPICIOUS' | 'UNAVAILABLE' })),
   })
 
+  // Separate generated-only drafts from actual send dispositions
+  const generatedOnly = messages.filter((m) => !m.send_disposition && !m.sent_at).length
+  const reviewedMessages = messages.filter((m) => m.send_disposition || m.sent_at)
   const unchangedMsg = messages.filter((m) => m.send_disposition === 'SENT_UNCHANGED').length
   const heavyEditMsg = messages.filter((m) => m.send_disposition === 'HEAVY_EDIT').length
   const rejectedMsg = messages.filter((m) => m.send_disposition === 'REJECTED').length
+  const lightEditMsg = messages.filter((m) => m.send_disposition === 'LIGHT_EDIT').length
 
   const dispositionCounts = new Map<string, number>()
+  dispositionCounts.set('GENERATED_ONLY', generatedOnly)
   for (const msg of messages) {
     const d = msg.send_disposition ?? 'PENDING'
     dispositionCounts.set(d, (dispositionCounts.get(d) ?? 0) + 1)
@@ -312,16 +317,16 @@ export async function GET(request: Request) {
 
   const dataHealth = {
     funnel: {
-      health: funnelIssues.length === 0 ? 'TRUSTED' : 'PARTIAL',
+      health: overallFunnelHealth(funnelIssues),
       reason: funnelIssues.length > 0 ? funnelIssues.map((i) => i.reason).join('; ') : undefined,
     },
     latency: {
       health: latencyHealth,
-      reason: latencyHealth === 'SUSPICIOUS' ? 'Percentile contradicts observed non-zero durations' : undefined,
+      reason: latencyHealth === 'SUSPICIOUS' ? 'Percentile contradicts observed non-zero durations' : latencyHealth === 'UNAVAILABLE' ? 'No valid latency samples' : undefined,
     },
     cost: {
       health: costHealth,
-      reason: costHealth !== 'TRUSTED' ? `${Math.round(costCoverage * 100)}% coverage` : undefined,
+      reason: costHealth === 'UNAVAILABLE' ? 'No cost telemetry' : costHealth !== 'TRUSTED' ? `${Math.round(costCoverage * 100)}% coverage` : undefined,
     },
     extraction: {
       health: extractionCounts.total > 0 ? 'TRUSTED' : 'UNAVAILABLE',
@@ -333,6 +338,8 @@ export async function GET(request: Request) {
     },
   }
 
+  const fallbackBreakdown = classifyFallback(fallbackReasons)
+
   return NextResponse.json({
     range: { start, end },
     insights,
@@ -340,6 +347,7 @@ export async function GET(request: Request) {
     latencyHealth,
     costCoverage,
     fallbackReasons,
+    fallbackBreakdown,
     funnel: canonicalFunnel,
     conversationStages: Object.fromEntries(convStageCounts),
     extraction: {
@@ -359,6 +367,12 @@ export async function GET(request: Request) {
     },
     messages: {
       total: messages.length,
+      generatedOnly,
+      reviewed: reviewedMessages.length,
+      unchanged: unchangedMsg,
+      lightEdit: lightEditMsg,
+      heavyEdit: heavyEditMsg,
+      rejected: rejectedMsg,
       dispositions: Object.fromEntries(dispositionCounts),
     },
     relayVsHuman: {
