@@ -108,7 +108,8 @@ async function loadDashboardData(): Promise<RelayTodayWorkspaceProps> {
     }
   })
 
-  const conversationTaskKinds = new Set<RelayTask['kind']>(['reply_needed', 'followup_due', 'inbound_opportunity'])
+  // Deduplication: each action appears in only one section
+  const conversationTaskKinds = new Set<RelayTask['kind']>(['reply_needed', 'followup_due'])
   const opportunityTaskKinds = new Set<RelayTask['kind']>(['high_fit_lead', 'new_opportunity', 'job_worth_apply', 'inbound_opportunity'])
 
   const conversationsMoving = actions
@@ -121,6 +122,11 @@ async function loadDashboardData(): Promise<RelayTodayWorkspaceProps> {
       next: action.humanAction,
       href: action.href,
     }))
+
+  // Conversations needing reply (inbound) shown separately
+  const conversationsNeedReplyIds = new Set(
+    actions.filter((action) => action.kind === 'reply_needed' || action.kind === 'inbound_opportunity').map((a) => a.id)
+  )
 
   const opportunities = actions
     .filter((action) => opportunityTaskKinds.has(action.kind))
@@ -211,7 +217,7 @@ async function loadDashboardData(): Promise<RelayTodayWorkspaceProps> {
         teamRows,
         attentionItems,
         activeConversations,
-        highIntent: actions.filter((action) => action.kind === 'reply_needed' || action.kind === 'inbound_opportunity').length,
+        highIntent: actions.filter((action) => action.kind === 'inbound_opportunity').length,
         onTrackCount: teamRows.filter((row) => row.status === 'on_track' || row.status === 'completed').length,
         totalReps: teamRows.length,
       }
@@ -225,7 +231,7 @@ async function loadDashboardData(): Promise<RelayTodayWorkspaceProps> {
     role: user.rep.role,
     actions,
     system: {
-      conversationsActive: activeConversations,
+      conversationsActive: Math.max(activeConversations, actions.filter((a) => conversationTaskKinds.has(a.kind)).length),
       conversationsNeedReply: actions.filter((action) => action.kind === 'reply_needed' || action.kind === 'inbound_opportunity').length,
       opportunitiesQualified: actions.filter((action) => opportunityTaskKinds.has(action.kind)).length,
       opportunitiesStrong: actions.filter((action) => action.kind === 'high_fit_lead' || action.kind === 'inbound_opportunity').length,
