@@ -4584,6 +4584,16 @@ export class SupabaseStore implements ScoutStore {
 
   async createDailyTargetAdmin(input: { repId: string; revenueIdentityId: string; activityType: ActivityType; targetCount: number }): Promise<DailyTarget> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data: assigned } = await this.client
+      .from('identity_assignments')
+      .select('id')
+      .eq('organization_id', this.orgId)
+      .eq('rep_id', input.repId)
+      .eq('revenue_identity_id', input.revenueIdentityId)
+      .maybeSingle()
+    if (!assigned) {
+      throw new Error('REVENUE_IDENTITY_NOT_ASSIGNED_TO_REP: The selected Revenue Identity is not assigned to this Rep.')
+    }
     const { data, error } = await this.client
       .from('daily_targets')
       .upsert({ organization_id: this.orgId, rep_id: input.repId, revenue_identity_id: input.revenueIdentityId, activity_type: input.activityType, target_count: input.targetCount, active: true, created_by: this.rep.id }, { onConflict: 'rep_id,revenue_identity_id,activity_type' })

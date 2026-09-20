@@ -1,21 +1,16 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabase/server'
+import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import { safeErrorResponse } from '@/lib/errors'
-import type { DailyTarget } from '@/lib/domain/types'
 
-function mapTarget(row: Record<string, unknown>): DailyTarget {
-  return {
-    id: row.id as string,
-    organizationId: row.organization_id as string,
-    repId: row.rep_id as string,
-    revenueIdentityId: row.revenue_identity_id as string,
-    activityType: row.activity_type as DailyTarget['activityType'],
-    targetCount: row.target_count as number,
-    active: row.active as boolean,
-    createdBy: (row.created_by as string) ?? null,
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
+async function requireAdminStore() {
+  const user = await getCurrentUser()
+  if (!user) return { error: NextResponse.json({ error: 'Not signed in.' }, { status: 401 }) }
+  if (user.rep.role !== 'admin') return { error: NextResponse.json({ error: 'Admin only.' }, { status: 403 }) }
+  try {
+    return { store: await createScoutStore() }
+  } catch {
+    return { error: NextResponse.json({ error: 'Not signed in.' }, { status: 401 }) }
   }
 }
 
@@ -24,9 +19,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  const auth = await requireAdminStore()
+  if (auth.error) return auth.error
 
   let body: Record<string, unknown>
   try {
@@ -35,8 +29,6 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
-  const supabase = await createServerSupabase()
-  // Reject attempts to change identity or rep — these require assignment validation
   if (body.revenueIdentityId !== undefined || body.repId !== undefined) {
     return NextResponse.json(
       { error: 'Cannot change Revenue Identity or Rep on an existing target. Create a new target instead.' },
@@ -44,59 +36,37 @@ export async function PATCH(
     )
   }
 
-  const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
-
+  const patches: { targetCount?: number; active?: boolean } = {}
   if (typeof body.targetCount === 'number' && body.targetCount > 0) {
-    update.target_count = body.targetCount
+    patches.targetCount = Math.round(body.targetCount)
   }
   if (typeof body.active === 'boolean') {
-    update.active = body.active
+    patches.active = body.active
+  }
+  if (patches.targetCount === undefined && patches.active === undefined) {
+    return NextResponse.json({ error: 'Nothing to update.' }, { status: 400 })
   }
 
-  const { data, error } = await supabase
-    .from('daily_targets')
-    .update(update)
-    .eq('id', id)
-    .eq('organization_id', user.organization.id)
-    .select('*')
-    .single()
-
-  if (error) return safeErrorResponse(error, 500, 'Failed to update target.', 'admin/targets/[id]')
-
-  await supabase.from('accountability_audit_log').insert({
-    organization_id: user.organization.id,
-    rep_id: user.rep.id,
-    event_type: 'target_changed',
-    detail: { target_id: id, changes: update },
-  })
-
-  return NextResponse.json({ target: mapTarget(data) })
+  try {
+    const target = await auth.store.updateDailyTargetAdmin(id, patches)
+    return NextResponse.json({ target })
+  } catch (error) {
+    return safeErrorResponse(error, 500, 'Failed to update target.', 'admin/targets/[id]')
+  }
 }
 
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  const auth = await requireAdminStore()
+  if (auth.error) return auth.error
 
-  const supabase = await createServerSupabase()
-  const { error } = await supabase
-    .from('daily_targets')
-    .delete()
-    .eq('id', id)
-    .eq('organization_id', user.organization.id)
-
-  if (error) return safeErrorResponse(error, 500, 'Failed to delete target.', 'admin/targets/[id]')
-
-  await supabase.from('accountability_audit_log').insert({
-    organization_id: user.organization.id,
-    rep_id: user.rep.id,
-    event_type: 'target_deleted',
-    detail: { target_id: id },
-  })
-
-  return NextResponse.json({ ok: true })
+  try {
+    await auth.store.deleteDailyTargetAdmin(id)
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    return safeErrorResponse(error, 500, 'Failed to delete target.', 'admin/targets/[id]')
+  }
 }

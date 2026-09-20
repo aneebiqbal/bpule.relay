@@ -1,10 +1,12 @@
 import { Suspense } from 'react'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
 import { buildRoleContext } from '@/lib/relay/role-intelligence'
 import { buildRelayQueue, filterQueueByRole } from '@/lib/relay/queue-engine'
 import { generateDailyIdeas } from '@/lib/content/daily-ideas'
+import { cn } from 'cn'
 import type { ContentDraft, ContentIdeaCard, Lead, RelayTask, RevenueIdentity, RevenueIdentityWithAssignment } from '@/lib/domain/types'
 import { RelayTodayWorkspaceAsync } from '@/components/relay-today-workspace-async'
 import type { RelayTodayAction, RelayTodayWorkspaceProps, StudioOpportunityCard } from '@/components/relay-today-workspace'
@@ -247,13 +249,191 @@ async function loadDashboardData(): Promise<RelayTodayWorkspaceProps> {
   }
 }
 
-export default function TodayPage() {
-  const dataPromise = loadDashboardData()
+export default async function TodayPage() {
+  const user = await getCurrentUser()
+  if (!user) redirect('/login')
 
+  // Admin sees team monitoring, not personal execution tasks
+  if (user.rep.role === 'admin') {
+    const store = await createScoutStore()
+
+    const [, , , , teamAccountability] = await Promise.all([
+      store.getTodayDashboard(),
+      store.getRelayQueueData(),
+      store.fetchLeadsAll(),
+      store.listRevenueIdentitiesAdmin().catch(() => []),
+      store.getTeamAccountabilityAdmin().catch(() => null),
+    ])
+
+    let adminSummary: RelayTodayWorkspaceProps['adminSummary']
+    adminSummary = null
+    if (teamAccountability) {
+      try {
+        const team = teamAccountability
+        const teamRows = team.summaries
+          .map((summary) => ({
+            id: summary.repId,
+            name: summary.repName,
+            completed: summary.totalCompleted,
+            target: summary.totalTarget,
+            remaining: summary.remaining,
+            status: summary.status,
+          }))
+          .sort((a, b) => b.remaining - a.remaining)
+
+        const attentionItems = teamRows
+          .filter((row) => row.remaining > 0 && (row.status === 'at_risk' || row.status === 'missed' || row.completed === 0))
+          .slice(0, 4)
+          .map((row) => {
+            const severity: 'warning' | 'critical' = row.status === 'missed' ? 'critical' : 'warning'
+            return {
+              id: row.id,
+              title: `${row.name} behind target`,
+              detail: `${row.remaining} actions remaining today`,
+              severity,
+            }
+          })
+
+        const conversationsMoving: Array<{ id: string; name: string; signal: string; next: string; href: string }> = []
+        const activeConversations = conversationsMoving.length
+
+        adminSummary = {
+          teamRows,
+          attentionItems,
+          activeConversations,
+          highIntent: 0,
+          onTrackCount: teamRows.filter((row) => row.status === 'on_track' || row.status === 'completed').length,
+          totalReps: teamRows.length,
+        }
+      } catch {
+        adminSummary = null
+      }
+    }
+
+    return (
+      <AdminTodayView
+        adminSummary={adminSummary}
+        generatedAt={new Date().toISOString()}
+      />
+    )
+  }
+
+  // Reps see personal execution workspace
+  const dataPromise = loadDashboardData()
   return (
     <Suspense fallback={<DashboardShellSkeleton />}>
       <RelayTodayWorkspaceAsync dataPromise={dataPromise} />
     </Suspense>
+  )
+}
+
+function AdminTodayView({ adminSummary, generatedAt }: { adminSummary: RelayTodayWorkspaceProps['adminSummary']; generatedAt: string }) {
+  if (!adminSummary) {
+    return (
+      <div className="space-y-4">
+        <header className="space-y-1.5">
+          <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink">Revenue Operations</h1>
+          <p className="text-[13px] text-graphite">{new Date(generatedAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+        </header>
+        <p className="text-[13px] text-graphite">No team data available. Configure targets and assignments to begin monitoring.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <header className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Revenue Operations</p>
+        </div>
+        <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink">
+          {adminSummary.attentionItems.length > 0
+            ? `${adminSummary.attentionItems.length} item${adminSummary.attentionItems.length === 1 ? '' : 's'} need attention`
+            : 'Team is on track'}
+        </h1>
+        <p className="text-[13px] text-graphite">{new Date(generatedAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+      </header>
+
+      {adminSummary.attentionItems.length > 0 && (
+        <section className="rounded-lg border border-status-warning/30 bg-status-warning/5 p-4">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-status-warning">Needs Attention</p>
+          <div className="mt-3 space-y-2">
+            {adminSummary.attentionItems.map((item) => (
+              <div key={item.id} className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-[13px] font-medium text-ink">{item.title}</p>
+                  <p className="text-[12px] text-graphite">{item.detail}</p>
+                </div>
+                <span className={cn(
+                  'rounded px-1.5 py-0.5 text-mono-medium text-[10px] uppercase tracking-wide',
+                  item.severity === 'critical' ? 'bg-status-danger/15 text-status-danger' : 'bg-status-warning/15 text-status-warning',
+                )}>
+                  {item.severity}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="rounded-lg border border-line bg-bone-raised p-4">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Team Today</p>
+        {adminSummary.teamRows.length > 0 ? (
+          <div className="mt-3 overflow-hidden rounded border border-line">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-line bg-bone text-left text-mono-medium text-[10px] uppercase tracking-wide text-stone">
+                  <th className="px-3 py-2">Rep</th>
+                  <th className="px-3 py-2">Done</th>
+                  <th className="px-3 py-2">Target</th>
+                  <th className="px-3 py-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adminSummary.teamRows.map((row) => (
+                  <tr key={row.id} className="border-b border-line/60 last:border-b-0">
+                    <td className="px-3 py-2 font-medium text-ink">{row.name}</td>
+                    <td className="px-3 py-2 text-graphite">{row.completed}</td>
+                    <td className="px-3 py-2 text-graphite">{row.target}</td>
+                    <td className="px-3 py-2">
+                      <span className={cn(
+                        'rounded px-1.5 py-0.5 text-mono-medium text-[10px] uppercase tracking-wide',
+                        row.status === 'completed' ? 'bg-status-success/15 text-status-success' :
+                        row.status === 'at_risk' || row.status === 'missed' ? 'bg-status-warning/15 text-status-warning' :
+                        'bg-cobalt/10 text-cobalt',
+                      )}>
+                        {row.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-3 text-[12px] text-graphite">No active targets configured.</p>
+        )}
+      </section>
+
+      <div className="flex items-center gap-4 text-[12px]">
+        <div className="rounded border border-line bg-bone-raised px-3 py-2">
+          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">High-intent</p>
+          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.highIntent}</p>
+        </div>
+        <div className="rounded border border-line bg-bone-raised px-3 py-2">
+          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">Active convos</p>
+          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.activeConversations}</p>
+        </div>
+        <div className="rounded border border-line bg-bone-raised px-3 py-2">
+          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">On track</p>
+          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.onTrackCount}/{adminSummary.totalReps}</p>
+        </div>
+      </div>
+
+      <Link href="/admin/command-center" className="inline-flex items-center gap-1 text-[12px] font-medium text-ink">
+        Open full command center →
+      </Link>
+    </div>
   )
 }
 

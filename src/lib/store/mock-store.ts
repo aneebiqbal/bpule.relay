@@ -2633,6 +2633,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     async createDailyTargetAdmin(input: { repId: string; revenueIdentityId: string; activityType: ActivityType; targetCount: number }) {
       if (rep.role !== 'admin') throw new Error('Admin only')
+      const assigned = demoIdentityAssignments.some((a) => a.repId === input.repId && a.revenueIdentityId === input.revenueIdentityId)
+      if (!assigned) {
+        throw new Error('REVENUE_IDENTITY_NOT_ASSIGNED_TO_REP: The selected Revenue Identity is not assigned to this Rep.')
+      }
       const existing = demoDailyTargets.find((t) => t.repId === input.repId && t.revenueIdentityId === input.revenueIdentityId && t.activityType === input.activityType)
       if (existing) { existing.targetCount = input.targetCount; existing.active = true; existing.updatedAt = new Date().toISOString(); return existing }
       const dt: DailyTarget = { id: `dt-${Date.now()}`, organizationId: 'org-demo', ...input, active: true, createdBy: rep.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }

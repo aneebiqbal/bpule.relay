@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import { safeErrorResponse } from '@/lib/errors'
 import type { RevenueIdentity } from '@/lib/domain/types'
@@ -37,15 +38,13 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
 
-  const supabase = await createServerSupabase()
-  const { data, error } = await supabase
-    .from('revenue_identities')
-    .select('*')
-    .eq('organization_id', user.organization.id)
-    .order('created_at', { ascending: false })
-
-  if (error) return safeErrorResponse(error, 500, 'Failed to load identities.', 'admin/revenue-identities')
-  return NextResponse.json({ identities: (data ?? []).map(mapIdentity) })
+  try {
+    const store = await createScoutStore()
+    const identities = await store.listRevenueIdentitiesAdmin()
+    return NextResponse.json({ identities })
+  } catch (error) {
+    return safeErrorResponse(error, 500, 'Failed to load identities.', 'admin/revenue-identities')
+  }
 }
 
 export async function POST(request: Request) {
