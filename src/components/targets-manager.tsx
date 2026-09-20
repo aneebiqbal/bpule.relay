@@ -217,8 +217,8 @@ export function TargetsManager() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label>Revenue identity</Label>
-              <Select value={form.revenueIdentityId} onChange={(e) => selectIdentity(e.target.value)}>
+              <Label htmlFor="target-identity">Revenue identity</Label>
+              <Select id="target-identity" value={form.revenueIdentityId} onChange={(e) => selectIdentity(e.target.value)}>
                 <option value="">Select identity…</option>
                 {visibleIdentities.map((identity) => (
                   <option key={identity.id} value={identity.id}>
@@ -228,8 +228,9 @@ export function TargetsManager() {
               </Select>
             </div>
             <div>
-              <Label>Rep</Label>
+              <Label htmlFor="target-rep">Rep</Label>
               <Select
+                id="target-rep"
                 value={form.repId}
                 onChange={(e) => setForm({ ...form, repId: e.target.value })}
                 disabled={!form.revenueIdentityId}
@@ -247,30 +248,32 @@ export function TargetsManager() {
               )}
             </div>
             <div>
-              <Label>Activity</Label>
-              <Select value={form.activityType} onChange={(e) => setForm({ ...form, activityType: e.target.value as ActivityType })}>
+              <Label htmlFor="target-activity">Activity</Label>
+              <Select id="target-activity" value={form.activityType} onChange={(e) => setForm({ ...form, activityType: e.target.value as ActivityType })}>
                 {ACTIVITY_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </Select>
             </div>
             <div>
-              <Label>Daily count</Label>
+              <Label htmlFor="target-count">Daily count</Label>
               <Input
+                id="target-count"
                 type="number"
                 min={1}
                 value={form.targetCount}
-                onChange={(e) => setForm({ ...form, targetCount: parseInt(e.target.value, 10) || 0 })}
+                onChange={(e) => setForm({ ...form, targetCount: Number.parseInt(e.target.value, 10) || 0 })}
               />
             </div>
           </div>
           <label className="flex items-center gap-2 text-[12px] text-graphite">
             <input
               type="checkbox"
+              className="size-3.5"
               checked={form.assignIfNeeded}
               onChange={(e) => setForm({ ...form, assignIfNeeded: e.target.checked })}
             />
-            Assign the identity to this rep if needed
+            <span>Assign the identity to this rep if needed</span>
           </label>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
@@ -338,7 +341,17 @@ export function TargetsManager() {
                                 min={1}
                                 className="w-20"
                                 value={draft}
-                                onChange={(e) => setDraftCounts((prev) => ({ ...prev, [target.id]: parseInt(e.target.value, 10) || 0 }))}
+                                onChange={(e) => setDraftCounts((prev) => ({ ...prev, [target.id]: Number.parseInt(e.target.value, 10) || 0 }))}
+                                onBlur={() => {
+                                  if (!dirty || draft <= 0) return
+                                  void patchTarget(target.id, { targetCount: draft }).then(() => {
+                                    setDraftCounts((prev) => {
+                                      const next = { ...prev }
+                                      delete next[target.id]
+                                      return next
+                                    })
+                                  })
+                                }}
                                 aria-label={`${activityLabel(target.activityType)} daily count`}
                               />
                               <span className="text-[11px] text-stone">/ day</span>

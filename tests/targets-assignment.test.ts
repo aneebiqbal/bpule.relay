@@ -1,37 +1,81 @@
 import { describe, expect, it } from 'vitest'
-import { validateFunnelOrdering, overallFunnelHealth } from '@/lib/revenue-intelligence/metrics-health'
+import { buildMockStore } from '@/lib/store/mock-store'
 
-describe('Targets assignment validation', () => {
-  it('identity must be assigned to rep (server-side logic)', () => {
-    // The validation is done server-side via validateIdentityAssignedToRep
-    // This test verifies the overallFunnelHealth helper works correctly
-    const issues = validateFunnelOrdering(3, 6, 0, 0)
-    expect(overallFunnelHealth(issues)).toBe('SUSPICIOUS')
+const admin = {
+  id: 'rep-hassan',
+  name: 'Hassan (demo)',
+  role: 'admin' as const,
+  organizationId: 'org-demo',
+  createdAt: '2024-01-01T00:00:00.000Z',
+  timezone: 'UTC',
+}
+
+describe('Daily targets store', () => {
+  it('lists seeded targets and keeps a save after a second list', async () => {
+    const store = buildMockStore({ rep: admin, mode: 'demo' })
+    const initial = await store.listDailyTargetsAdmin()
+    expect(initial.length).toBeGreaterThan(0)
+
+    const created = await store.createDailyTargetAdmin({
+      repId: 'rep-hassan',
+      revenueIdentityId: 'ri-demo-linkedin',
+      activityType: 'followup',
+      targetCount: 8,
+    })
+    expect(created.targetCount).toBe(8)
+    expect(created.activityType).toBe('followup')
+
+    const after = await store.listDailyTargetsAdmin()
+    expect(after.some((t) => t.id === created.id && t.targetCount === 8)).toBe(true)
   })
 
-  it('changing rep should clear identity (UI logic)', () => {
-    // The selectRep function clears revenueIdentityId when rep changes
-    // This is verified by the component logic: setForm({ ...form, repId, revenueIdentityId: '' })
-    expect(true).toBe(true) // Logic verified by code inspection
+  it('upserts the same identity + activity instead of duplicating', async () => {
+    const store = buildMockStore({ rep: admin, mode: 'demo' })
+    const first = await store.createDailyTargetAdmin({
+      repId: 'rep-hassan',
+      revenueIdentityId: 'ri-demo-linkedin',
+      activityType: 'dm',
+      targetCount: 12,
+    })
+    const second = await store.createDailyTargetAdmin({
+      repId: 'rep-hassan',
+      revenueIdentityId: 'ri-demo-linkedin',
+      activityType: 'dm',
+      targetCount: 18,
+    })
+    expect(second.id).toBe(first.id)
+    expect(second.targetCount).toBe(18)
+    const dms = (await store.listDailyTargetsAdmin()).filter(
+      (t) => t.revenueIdentityId === 'ri-demo-linkedin' && t.activityType === 'dm',
+    )
+    expect(dms).toHaveLength(1)
   })
 
-  it('single assignment auto-selects identity', () => {
-    // When a rep has exactly one assignment, the identity is auto-selected
-    // Verified by: if (repAssignments.length === 1) { setForm((prev) => ({ ...prev, revenueIdentityId: repAssignments[0].revenueIdentityId })) }
-    expect(true).toBe(true) // Logic verified by code inspection
+  it('rejects a target when the identity is not assigned to the rep', async () => {
+    const store = buildMockStore({ rep: admin, mode: 'demo' })
+    await expect(
+      store.createDailyTargetAdmin({
+        repId: 'rep-ahmed',
+        revenueIdentityId: 'ri-demo-linkedin',
+        activityType: 'dm',
+        targetCount: 5,
+      }),
+    ).rejects.toThrow(/NOT_ASSIGNED/)
   })
 
-  it('no assignments disables creation', () => {
-    // canCreate requires form.repId && form.revenueIdentityId
-    // With 0 assignments, revenueIdentityId stays empty, so canCreate is false
-    const form = { repId: 'rep1', revenueIdentityId: '', activityType: 'dm', targetCount: 10 }
-    const canCreate = Boolean(form.repId && form.revenueIdentityId && form.activityType && form.targetCount > 0)
-    expect(canCreate).toBe(false)
-  })
+  it('pause and delete survive a subsequent list', async () => {
+    const store = buildMockStore({ rep: admin, mode: 'demo' })
+    const created = await store.createDailyTargetAdmin({
+      repId: 'rep-hassan',
+      revenueIdentityId: 'ri-demo-upwork',
+      activityType: 'followup',
+      targetCount: 4,
+    })
+    const paused = await store.updateDailyTargetAdmin(created.id, { active: false })
+    expect(paused.active).toBe(false)
+    expect((await store.listDailyTargetsAdmin()).find((t) => t.id === created.id)?.active).toBe(false)
 
-  it('cross-org identity rejected by server', () => {
-    // The server validates: organization + rep + identity + active assignment
-    // If no matching assignment exists, returns REVENUE_IDENTITY_NOT_ASSIGNED_TO_REP
-    expect(true).toBe(true) // Logic verified by code inspection
+    await store.deleteDailyTargetAdmin(created.id)
+    expect((await store.listDailyTargetsAdmin()).some((t) => t.id === created.id)).toBe(false)
   })
 })

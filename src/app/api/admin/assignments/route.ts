@@ -42,7 +42,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
-  const identityId = typeof body.identityId === 'string' ? body.identityId.trim() : typeof body.revenueIdentityId === 'string' ? body.revenueIdentityId.trim() : ''
+  let identityId = ''
+  if (typeof body.identityId === 'string') identityId = body.identityId.trim()
+  else if (typeof body.revenueIdentityId === 'string') identityId = body.revenueIdentityId.trim()
   const repId = typeof body.repId === 'string' ? body.repId.trim() : ''
   if (!identityId || !repId) {
     return NextResponse.json({ error: 'identityId and repId are required.' }, { status: 400 })
