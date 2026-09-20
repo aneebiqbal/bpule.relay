@@ -355,11 +355,18 @@ export class SupabaseStore implements ScoutStore {
     }))
   }
 
-  async fetchLeadsAll(): Promise<Lead[]> {
-    const { data, error } = await this.client
+  async fetchLeadsAll(scopeToUser = false): Promise<Lead[]> {
+    let query = this.client
       .from('leads')
       .select(LEAD_LIST_COLUMNS)
       .order('created_at', { ascending: false })
+
+    // Non-admin users can only see their own leads
+    if (scopeToUser || this.rep.role !== 'admin') {
+      query = query.eq('owner_rep_id', this.rep.id)
+    }
+
+    const { data, error } = await query
     if (error) throw error
     return (data ?? []).map(mapLead)
   }
@@ -684,6 +691,11 @@ export class SupabaseStore implements ScoutStore {
       .maybeSingle()
     if (error) throw error
     if (!data) return null
+
+    // Enforce ownership: non-admin can only access their own leads
+    if (this.rep.role !== 'admin' && (data as Record<string, unknown>).owner_rep_id !== this.rep.id) {
+      throw new Error('You are not the owner of this lead.')
+    }
 
     const [messages, outcomes] = await Promise.all([
       this.client

@@ -800,6 +800,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async getLead(id: string) {
       const lead = leads.find((l) => l.id === id)
       if (!lead) return null
+      // Enforce ownership: non-admin can only access their own leads
+      if (rep.role !== 'admin' && lead.ownerRepId !== rep.id) {
+        throw new Error('You are not the owner of this lead.')
+      }
       return {
         ...lead,
         messages: messages
@@ -814,8 +818,11 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .map((l) => ({ ...l, direction: l.direction ?? 'outbound', source: l.source ?? null, inboundMessage: l.inboundMessage ?? null, inboundRaw: l.inboundRaw ?? null }))
     },
-    async fetchLeadsAll() {
-      return leads
+    async fetchLeadsAll(scopeToUser = false) {
+      const filtered = scopeToUser || rep.role !== 'admin'
+        ? leads.filter((l) => l.ownerRepId === rep.id)
+        : leads
+      return filtered
         .map((l) => ({ ...l, direction: l.direction ?? 'outbound', source: l.source ?? null, inboundMessage: l.inboundMessage ?? null, inboundRaw: l.inboundRaw ?? null }))
     },
     async listMessages(leadId: string) {

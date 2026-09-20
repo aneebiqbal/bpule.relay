@@ -18,7 +18,10 @@ export async function GET(
     const lead = await store.getLead(id)
     if (!lead) return NextResponse.json({ error: 'Lead not found.' }, { status: 404 })
     return NextResponse.json({ lead })
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && /not the owner/i.test(err.message)) {
+      return NextResponse.json({ error: 'Not found.' }, { status: 404 })
+    }
     return NextResponse.json({ error: 'Failed to fetch lead.' }, { status: 500 })
   }
 }
