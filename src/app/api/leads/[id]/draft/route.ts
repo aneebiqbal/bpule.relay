@@ -165,6 +165,7 @@ export async function POST(
     let safeFacts: SafeFact[] = []
     let matchedProofCards: MatchedProof[] = []
     let conversationContext: string | null = null
+    let replyStrategy: ReturnType<typeof buildReplyStrategy> | null = null
 
     if (profile) {
       const profileIntelligence = buildProfileIntelligence(profile, [])
@@ -221,7 +222,7 @@ export async function POST(
             senderProfileId: profile.id,
           })
           replyKnowledge = replyAnalysis.knowledge
-          const replyStrategy = buildReplyStrategy(replyAnalysis, {
+          replyStrategy = buildReplyStrategy(replyAnalysis, {
             leadId: detail.id,
             leadCompany: detail.company,
             contactName: detail.contactName,
@@ -354,35 +355,58 @@ export async function POST(
       }
     }
 
+    // For reply types, use the reply strategy (which always has messageJob)
+    // This ensures we can always generate a reply, even when the revenue strategy says no message recommended
+    const draftStrategy: OutreachStrategy | null = type === 'reply' && replyStrategy && strategy
+      ? {
+          ...strategy,
+          messageJob: replyStrategy.messageJob,
+          contact: { ...strategy.contact, messageRecommended: true, action: 'CONTACT_NOW' as const, reason: 'RELATIONSHIP_CONTEXT' as const },
+        } as OutreachStrategy
+      : strategy
+
     const draftStarted = Date.now()
-    const draftResult = await streamDraft(
-      {
-        leadId: detail.id,
-        lead: detail,
-        extracted,
-        score,
-        type: type as DraftMessageType,
-        styleCard: voiceProfile?.styleCard ?? null,
-        facts,
-        plays,
-        history: detail.messages,
-        profile,
-        matchedProof: matched[0] ?? null,
-        fewShotExamples: fewShotSelection.examples.map((e) => ({
-          company: e.company,
-          signalEvidence: e.signalEvidence ?? '',
-          sentText: e.sentText,
-        })),
-        strategy,
-        safeFacts,
-        matchedProofCards,
-        conversationContext: conversationContext ?? undefined,
-      },
-      emit,
-      matched[0] ?? null,
-      profile ?? null,
-      generationMode,
-    )
+    let draftResult: Awaited<ReturnType<typeof streamDraft>>
+    try {
+      draftResult = await streamDraft(
+        {
+          leadId: detail.id,
+          lead: detail,
+          extracted,
+          score,
+          type: type as DraftMessageType,
+          styleCard: voiceProfile?.styleCard ?? null,
+          facts,
+          plays,
+          history: detail.messages,
+          profile,
+          matchedProof: matched[0] ?? null,
+          fewShotExamples: fewShotSelection.examples.map((e) => ({
+            company: e.company,
+            signalEvidence: e.signalEvidence ?? '',
+            sentText: e.sentText,
+          })),
+          strategy: draftStrategy,
+          safeFacts,
+          matchedProofCards,
+          conversationContext: conversationContext ?? undefined,
+        },
+        emit,
+        matched[0] ?? null,
+        profile ?? null,
+        generationMode,
+      )
+    } catch (draftErr) {
+      const message = draftErr instanceof Error ? draftErr.message : 'Drafting failed.'
+      if (/STRATEGY_REQUIRED/i.test(message)) {
+        emit({
+          type: 'error',
+          message: 'No message recommended for this prospect. Silence is the correct result.',
+        })
+        return
+      }
+      throw draftErr
+    }
 
     await store.saveDraft({
       leadId: detail.id,
