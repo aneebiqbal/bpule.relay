@@ -210,7 +210,7 @@ export async function POST(request: Request) {
     },
     allowPotentialDuplicate,
     senderProfileId: typeof body.senderProfileId === 'string' ? body.senderProfileId : null,
-    revenueIdentityId: typeof body.revenueIdentityId === 'string' ? body.revenueIdentityId : null,
+    revenueIdentityId: await validateRevenueIdentityId(body.revenueIdentityId),
     // Intelligence V2 fields
     canonicalScore: canonical?.canonicalScore ?? null,
     scoreVersion: canonical?.scoreVersion ?? null,
@@ -276,4 +276,41 @@ export async function POST(request: Request) {
     },
     { status: 201 },
   )
+}
+
+/**
+ * Validates that a revenue identity ID from client input is:
+ * 1. Belongs to the authenticated user's organization
+ * 2. Assigned to the current rep (for non-admin users)
+ * Returns the validated ID or null.
+ */
+async function validateRevenueIdentityId(
+  rawId: unknown,
+): Promise<string | null> {
+  if (typeof rawId !== 'string' || !rawId) return null
+
+  // Use the centralized auth helper which validates org + assignment
+  try {
+    const { isRevenueIdentityAssignedToRep } = await import('@/lib/auth/workspace')
+    const user = await import('@/lib/auth/current').then((m) => m.getCurrentUser())
+    if (!user) return null
+
+    // Admins can use any identity in their org
+    if (user.rep.role === 'admin') {
+      const supabase = await import('@/lib/supabase/server').then((m) => m.createServerSupabase())
+      const { data: identity } = await supabase
+        .from('revenue_identities')
+        .select('id')
+        .eq('id', rawId)
+        .eq('organization_id', user.organization.id)
+        .maybeSingle()
+      return identity?.id ?? null
+    }
+
+    // Reps can only use identities assigned to them
+    const isAssigned = await isRevenueIdentityAssignedToRep(user.rep.id, rawId)
+    return isAssigned ? rawId : null
+  } catch {
+    return null
+  }
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth/current'
-import { computeStatus, notificationDedupeKey } from '@/lib/relay/accountability-engine'
+import { computeStatus } from '@/lib/relay/accountability-engine'
 
 /**
  * Record a completed activity event for accountability.
@@ -19,16 +19,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
-  const revenueIdentityId = typeof body.revenueIdentityId === 'string' ? body.revenueIdentityId : ''
+  const rawIdentityId = typeof body.revenueIdentityId === 'string' ? body.revenueIdentityId : ''
   const activityType = typeof body.activityType === 'string' ? body.activityType : ''
 
-  if (!revenueIdentityId || !activityType) {
+  if (!rawIdentityId || !activityType) {
     return NextResponse.json({ error: 'revenueIdentityId and activityType are required.' }, { status: 400 })
   }
 
+  // SECURITY: Validate that the identity belongs to the rep's org and is assigned to them
   const supabase = await createServerSupabase()
   const org = user.organization
   const rep = user.rep
+
+  const { isRevenueIdentityAssignedToRep } = await import('@/lib/auth/workspace')
+  const isAuthorized = await isRevenueIdentityAssignedToRep(rep.id, rawIdentityId)
+  if (!isAuthorized) {
+    return NextResponse.json({ error: 'Identity not assigned to you.' }, { status: 403 })
+  }
+
+  const revenueIdentityId = rawIdentityId
   const today = new Date().toISOString().slice(0, 10)
 
   // Find the target for this rep + identity + activity
