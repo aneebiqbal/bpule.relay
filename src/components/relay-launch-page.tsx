@@ -320,7 +320,7 @@ function HeroSection() {
     <section
       id="hero"
       data-system="relay"
-      className="relative -mt-[4.5rem] overflow-hidden bg-[linear-gradient(180deg,var(--bone-050),var(--bone-000)_32%,var(--bone-050)) pt-24 pb-20 sm:pt-28"
+      className="relative -mt-[4.5rem] overflow-hidden bg-[linear-gradient(180deg,var(--bone-050),var(--bone-000)_32%,var(--bone-050))] pt-24 pb-20 sm:pt-28"
     >
       <div
         className="pointer-events-none absolute inset-0"
@@ -393,35 +393,6 @@ const BREAKPOINT_STUDIO_REVEAL = [0.44, 0.72] as const;
 const BREAKPOINT_IDEA = [0.2, 0.4, 0.62, 0.82] as const;
 
 function NoiseCompressionSection() {
-  const reducedMotion = usePrefersReducedMotion();
-  const ref = useRef<HTMLElement>(null);
-  const stage = useScrollStage(ref, BREAKPOINT_NOISE, reducedMotion);
-  const current = COMPRESSION_STAGES[Math.min(stage, COMPRESSION_STAGES.length - 1)];
-
-  const signals = useMemo(
-    () =>
-      Array.from({ length: 47 }, (_, index) => ({
-        id: `s-${index}`,
-        text: SIGNAL_LABELS[index % SIGNAL_LABELS.length],
-        source: index % 4 === 0 ? "REPLY" : index % 4 === 1 ? "LEAD" : index % 4 === 2 ? "JOB" : "STUDIO",
-      })),
-    [],
-  );
-
-  const coordinates = useMemo(
-    () =>
-      signals.map((_, index) => {
-        const angle = ((index * 137.5 + 8) * Math.PI) / 180;
-        const radius = 18 + (index % 10) * 3.5;
-        return {
-          left: 50 + Math.cos(angle) * radius,
-          top: 52 + Math.sin(angle) * radius * 0.82,
-          rotate: (index % 2 === 0 ? -1 : 1) * ((index % 5) + 1),
-        };
-      }),
-    [signals],
-  );
-
   const finalists = [
     { title: "SARAH REPLIED", meta: "PROOF REQUEST" },
     { title: "NORTHSTAR", meta: "STRONG FIT" },
@@ -429,63 +400,30 @@ function NoiseCompressionSection() {
   ];
 
   return (
-    <section id="how-it-works" data-system="relay" ref={ref} className="relative min-h-[210svh] scroll-mt-20 bg-[var(--bone-000)]">
-      <div className="sticky top-[3.8rem] flex min-h-[calc(100svh-3.8rem)] items-center">
-        <div className="landing-shell-wide grid w-full items-center gap-10 lg:grid-cols-[0.86fr_1.14fr] lg:gap-16">
-          <div>
-            <Kicker>WHY RELAY</Kicker>
-            <h2 className="mt-5 text-[clamp(2.2rem,6vw,5rem)] leading-[0.9] font-light tracking-[-0.05em] text-[var(--ink-900)]">
-              {current.titleA}
-              <br />
-              {current.titleB}
-            </h2>
-            <p className="mt-8 text-[15px] leading-relaxed text-[var(--ink-700)]">
-              Relay is not storing tasks. Relay is deciding where attention should go first.
-            </p>
-            <p className="mt-6 text-mono-regular text-[11px] tracking-[0.15em] uppercase text-orange">
-              {current.count} signals in play
-            </p>
-          </div>
+    <section id="how-it-works" data-system="relay" className="bg-[var(--bone-000)] py-[clamp(5rem,11vw,10rem)]">
+      <div className="landing-shell-wide grid items-center gap-10 lg:grid-cols-[0.86fr_1.14fr] lg:gap-16">
+        <div>
+          <Kicker>WHY RELAY</Kicker>
+          <h2 className="mt-5 text-[clamp(2.2rem,6vw,5rem)] leading-[0.9] font-light tracking-[-0.05em] text-[var(--ink-900)]">
+            47 THINGS
+            <br />
+            WANT YOUR ATTENTION.
+          </h2>
+          <p className="mt-8 text-[15px] leading-relaxed text-[var(--ink-700)]">
+            Relay is not storing tasks. Relay is deciding where attention should go first.
+          </p>
+          <p className="mt-6 text-mono-regular text-[11px] tracking-[0.15em] uppercase text-orange">
+            3 deserve it
+          </p>
+        </div>
 
-          <div className="relative h-[560px] overflow-hidden rounded-[10px] border border-[var(--bone-200)] bg-[linear-gradient(160deg,var(--bone-050),white)] max-sm:h-[430px]">
-            <div className="absolute inset-0">
-              {signals.map((signal, index) => {
-                const visible = index < current.visible;
-                const finalSlot = finalists[index];
-                return (
-                  <span
-                    key={signal.id}
-                    className="absolute transition-all duration-700"
-                    style={{
-                      left: stage >= 3 && index < 3 ? "50%" : pct(coordinates[index].left),
-                      top:
-                        stage >= 3 && index < 3
-                          ? `${33 + index * 19}%`
-                          : pct(coordinates[index].top),
-                      transform:
-                        stage >= 3 && index < 3
-                          ? "translate(-50%, -50%)"
-                          : `translate(-50%, -50%) rotate(${coordinates[index].rotate}deg)`,
-                      opacity: visible ? 1 : 0,
-                    }}
-                  >
-                    {stage >= 3 && index < 3 ? (
-                      <span className="block w-[min(92vw,420px)] rounded-[4px] border border-[var(--orange-line)] bg-[var(--orange-surface)] px-4 py-3">
-                        <span className="block text-[13px] font-medium text-[var(--ink-900)]">{finalSlot.title}</span>
-                        <span className="mt-1 block text-mono-regular text-[10px] tracking-[0.11em] uppercase text-orange">
-                          {finalSlot.meta}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex rounded-[2px] border border-[var(--bone-200)] bg-white px-2 py-1 text-mono-regular text-[9px] tracking-[0.09em] text-[var(--stone)] uppercase">
-                        {signal.source} / {signal.text}
-                      </span>
-                    )}
-                  </span>
-                );
-              })}
+        <div className="space-y-3">
+          {finalists.map((f) => (
+            <div key={f.title} className="rounded-[6px] border border-[var(--orange-line)] bg-[var(--orange-surface)] px-4 py-3">
+              <p className="text-[13px] font-medium text-[var(--ink-900)]">{f.title}</p>
+              <p className="mt-1 text-mono-regular text-[10px] tracking-[0.11em] uppercase text-orange">{f.meta}</p>
             </div>
-          </div>
+          ))}
         </div>
       </div>
     </section>
@@ -995,62 +933,27 @@ function HumanGateSection() {
 }
 
 function StudioRevealSection() {
-  const reducedMotion = usePrefersReducedMotion();
-  const ref = useRef<HTMLElement>(null);
-  const stage = useScrollStage(ref, BREAKPOINT_STUDIO_REVEAL, reducedMotion);
-
   return (
     <section
       id="studio"
       data-system="studio"
-      ref={ref}
-      className="relative min-h-[165svh] scroll-mt-20 bg-[linear-gradient(180deg,var(--bone-050),var(--bone-000)_35%,var(--cobalt-wash)_100%)]"
+      className="bg-[linear-gradient(180deg,var(--bone-050),var(--bone-000)_35%,var(--cobalt-wash)_100%)] py-[clamp(5rem,11vw,10rem)]"
     >
-      <div className="sticky top-[3.8rem] flex min-h-[calc(100svh-3.8rem)] items-center">
-        <div className="landing-shell-wide">
-          <div className="mx-auto max-w-4xl">
-            <div className="h-px w-full bg-[var(--bone-200)]">
-              <span
-                className="block h-px transition-all duration-700"
-                style={{
-                  width: stage === 0 ? "52%" : stage === 1 ? "20%" : "0%",
-                  background: "var(--orange-signal)",
-                }}
-              />
-            </div>
-
-            <div className="mt-12 min-h-[14.5rem]">
-              {stage <= 1 && (
-                <h3 className="text-[clamp(2.2rem,6vw,5.4rem)] leading-[0.9] font-light tracking-[-0.052em] text-[var(--ink-900)]">
-                  FINDING DEMAND
-                  <br />
-                  IS ONLY HALF
-                  <br />
-                  THE SYSTEM.
-                </h3>
-              )}
-
-              {stage >= 1 && (
-                <h3 className="mt-8 text-[clamp(2.2rem,6vw,5.4rem)] leading-[0.9] font-light tracking-[-0.052em] text-[var(--ink-900)]">
-                  SOMETIMES
-                  <br />
-                  YOU HAVE TO
-                  <br />
-                  CREATE IT.
-                </h3>
-              )}
-            </div>
-
-            <div className="mt-12 flex items-center gap-3">
-              <span
-                className="h-2 w-2 rounded-full bg-cobalt transition-opacity duration-700"
-                style={{ opacity: stage >= 2 ? 1 : 0.2 }}
-              />
-              <p className="text-mono-regular text-[11px] tracking-[0.16em] uppercase text-cobalt">
-                STUDIO / CREATE DEMAND
-              </p>
-            </div>
-          </div>
+      <div className="landing-shell-wide">
+        <div className="mx-auto max-w-4xl">
+          <p className="text-mono-regular text-[11px] tracking-[0.16em] uppercase text-cobalt">
+            STUDIO / CREATE DEMAND
+          </p>
+          <h3 className="mt-6 text-[clamp(2.2rem,6vw,5.4rem)] leading-[0.9] font-light tracking-[-0.052em] text-[var(--ink-900)]">
+            FINDING DEMAND
+            <br />
+            IS ONLY HALF
+            <br />
+            THE SYSTEM.
+          </h3>
+          <p className="mt-8 text-[15px] leading-relaxed text-[var(--ink-700)]">
+            Sometimes you have to create it. Studio helps you build authority and generate demand.
+          </p>
         </div>
       </div>
     </section>
@@ -1225,50 +1128,40 @@ const IDEA_STAGES = [
 ] as const;
 
 function IdeaEvolutionSection() {
-  const reducedMotion = usePrefersReducedMotion();
-  const ref = useRef<HTMLElement>(null);
-  const stage = useScrollStage(ref, BREAKPOINT_IDEA, reducedMotion);
-  const current = IDEA_STAGES[Math.min(stage, IDEA_STAGES.length - 1)];
+  const current = IDEA_STAGES[0];
 
   return (
-    <section id="studio-evolution" data-system="studio" ref={ref} className="relative min-h-[200svh] bg-[var(--bone-050)]">
-      <div className="sticky top-[3.8rem] flex min-h-[calc(100svh-3.8rem)] items-center">
-        <div className="landing-shell-wide grid items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
-          <div>
-            <Kicker tone="cobalt">IDEA BECOMES CONTENT</Kicker>
-            <p className="mt-4 text-[clamp(1.9rem,4.1vw,3.4rem)] leading-[0.95] font-light tracking-[-0.04em] text-[var(--ink-900)]">
-              &quot;You don&apos;t modernize legacy software by replacing everything.&quot;
-            </p>
-          </div>
+    <section id="studio-evolution" data-system="studio" className="bg-[var(--bone-050)] py-[clamp(5rem,10vw,9rem)]">
+      <div className="landing-shell-wide grid items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
+        <div>
+          <Kicker tone="cobalt">IDEA BECOMES CONTENT</Kicker>
+          <p className="mt-4 text-[clamp(1.9rem,4.1vw,3.4rem)] leading-[0.95] font-light tracking-[-0.04em] text-[var(--ink-900)]">
+            &quot;You don&apos;t modernize legacy software by replacing everything.&quot;
+          </p>
+        </div>
 
-          <div className="rounded-[8px] border border-[var(--cobalt-line)] bg-white px-5 py-5 shadow-[0_24px_40px_-30px_rgba(15,19,31,0.52)] sm:px-6 sm:py-6">
-            <p className="text-mono-regular text-[10px] tracking-[0.13em] uppercase text-cobalt">{current.code}</p>
-            <p className="mt-3 text-[26px] leading-[1.02] font-light tracking-[-0.04em] text-[var(--ink-900)]">
-              {current.title}
-            </p>
-            <p className="mt-4 text-[15px] leading-relaxed text-[var(--ink-800)]">{current.body}</p>
-            <p className="mt-5 border-t border-[var(--cobalt-line)] pt-3 text-mono-regular text-[10px] tracking-[0.11em] uppercase text-[var(--stone)]">
-              {current.note}
+        <div className="rounded-[8px] border border-[var(--cobalt-line)] bg-white px-5 py-5 shadow-[0_24px_40px_-30px_rgba(15,19,31,0.52)] sm:px-6 sm:py-6">
+          <p className="text-mono-regular text-[10px] tracking-[0.13em] uppercase text-cobalt">{current.code}</p>
+          <p className="mt-3 text-[26px] leading-[1.02] font-light tracking-[-0.04em] text-[var(--ink-900)]">
+            {current.title}
+          </p>
+          <p className="mt-4 text-[15px] leading-relaxed text-[var(--ink-800)]">{current.body}</p>
+          <p className="mt-5 border-t border-[var(--cobalt-line)] pt-3 text-mono-regular text-[10px] tracking-[0.11em] uppercase text-[var(--stone)]">
+            {current.note}
             </p>
 
-            <ol className="mt-5 flex flex-wrap gap-2">
-              {IDEA_STAGES.map((item, index) => (
-                <li
-                  key={item.code}
-                  className={cn(
-                    "rounded-[2px] border px-2 py-1 text-mono-regular text-[9px] tracking-[0.1em] uppercase",
-                    index <= stage
-                      ? "border-[var(--cobalt-line)] bg-[var(--cobalt-surface)] text-cobalt"
-                      : "border-[var(--bone-200)] text-[var(--stone)]",
-                  )}
-                >
-                  {item.code}
-                </li>
-              ))}
-            </ol>
+             <ol className="mt-5 flex flex-wrap gap-2">
+               {IDEA_STAGES.map((item) => (
+                 <li
+                   key={item.code}
+                   className="rounded-[2px] border border-[var(--cobalt-line)] bg-[var(--cobalt-surface)] px-2 py-1 text-mono-regular text-[9px] tracking-[0.1em] uppercase text-cobalt"
+                 >
+                   {item.code}
+                 </li>
+               ))}
+             </ol>
           </div>
         </div>
-      </div>
     </section>
   );
 }
