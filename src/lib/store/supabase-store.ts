@@ -94,6 +94,7 @@ import type {
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
 import { businessDaysBetween, FOLLOWUP_DUE_BUSINESS_DAYS } from '@/lib/leads/followup'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
+import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
 import { pickPlayForSignal } from '@/lib/score/plays'
@@ -4583,7 +4584,9 @@ export class SupabaseStore implements ScoutStore {
       organization_id: this.orgId, rep_id: this.rep.id, revenue_identity_id: identityId,
       event_type: 'identity_assigned', detail: { rep_id: repId },
     })
-    return { id: data.id as string, organizationId: data.organization_id as string, revenueIdentityId: data.revenue_identity_id as string, repId: data.rep_id as string, assignedBy: (data.assigned_by as string) ?? null, createdAt: data.created_at as string }
+    const assignment = { id: data.id as string, organizationId: data.organization_id as string, revenueIdentityId: data.revenue_identity_id as string, repId: data.rep_id as string, assignedBy: (data.assigned_by as string) ?? null, createdAt: data.created_at as string }
+    await this.ensureDefaultDailyTargetsAdmin({ repId, revenueIdentityId: identityId })
+    return assignment
   }
 
   async unassignIdentityAdmin(identityId: string, repId: string): Promise<void> {
@@ -4634,6 +4637,47 @@ export class SupabaseStore implements ScoutStore {
       event_type: 'target_created', detail: { rep_id: input.repId, activity_type: input.activityType, target_count: input.targetCount },
     })
     return { id: data.id as string, organizationId: data.organization_id as string, repId: data.rep_id as string, revenueIdentityId: data.revenue_identity_id as string, activityType: data.activity_type as ActivityType, targetCount: data.target_count as number, active: data.active as boolean, createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string }
+  }
+
+  async ensureDefaultDailyTargetsAdmin(input: { repId: string; revenueIdentityId: string }): Promise<DailyTarget[]> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const identity = await this.getRevenueIdentityAdmin(input.revenueIdentityId)
+    if (!identity) throw new Error('Identity not found')
+
+    const { data: existing, error } = await this.client
+      .from('daily_targets')
+      .select('activity_type')
+      .eq('organization_id', this.orgId)
+      .eq('rep_id', input.repId)
+      .eq('revenue_identity_id', input.revenueIdentityId)
+    if (error) throw error
+
+    const have = new Set((existing ?? []).map((row) => row.activity_type as ActivityType))
+    const created: DailyTarget[] = []
+    for (const row of defaultTargetsForChannel(identity.channel)) {
+      if (have.has(row.activityType)) continue
+      created.push(await this.createDailyTargetAdmin({
+        repId: input.repId,
+        revenueIdentityId: input.revenueIdentityId,
+        activityType: row.activityType,
+        targetCount: row.targetCount,
+      }))
+    }
+    return created
+  }
+
+  async backfillDefaultDailyTargetsAdmin(): Promise<{ created: number; assignments: number }> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const assignments = await this.listIdentityAssignmentsAdmin()
+    let created = 0
+    for (const assignment of assignments) {
+      const rows = await this.ensureDefaultDailyTargetsAdmin({
+        repId: assignment.repId,
+        revenueIdentityId: assignment.revenueIdentityId,
+      })
+      created += rows.length
+    }
+    return { created, assignments: assignments.length }
   }
 
   async updateDailyTargetAdmin(id: string, patches: { targetCount?: number; active?: boolean }): Promise<DailyTarget> {

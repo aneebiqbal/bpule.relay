@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
+import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import type { ActivityType } from '@/lib/domain/types'
 
 const ACTIVITY_TYPES: ActivityType[] = [
@@ -35,7 +36,17 @@ export async function GET() {
       auth.store.listIdentityAssignmentsAdmin(),
       auth.store.listAllReps(),
     ])
-    return NextResponse.json({ targets, identities, assignments, reps })
+    return NextResponse.json({
+      targets,
+      identities,
+      assignments,
+      reps,
+      defaults: {
+        linkedin: defaultTargetsForChannel('linkedin'),
+        upwork: defaultTargetsForChannel('upwork'),
+        other: defaultTargetsForChannel('other'),
+      },
+    })
   } catch (error) {
     return safeErrorResponse(error, 500, 'Failed to load targets.', 'admin/targets')
   }
@@ -52,34 +63,43 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
-  const repId = typeof body.repId === 'string' ? body.repId.trim() : ''
-  const revenueIdentityId = typeof body.revenueIdentityId === 'string' ? body.revenueIdentityId.trim() : ''
-  const activityType = typeof body.activityType === 'string' ? body.activityType.trim() : ''
-  const targetCount = typeof body.targetCount === 'number' ? body.targetCount : Number(body.targetCount)
-
-  if (!repId || !revenueIdentityId || !ACTIVITY_TYPES.includes(activityType as ActivityType) || !Number.isFinite(targetCount) || targetCount <= 0) {
-    return NextResponse.json(
-      { error: 'repId, revenueIdentityId, a valid activityType, and a positive targetCount are required.' },
-      { status: 400 },
-    )
-  }
-
   try {
+    if (body.backfillMissing === true) {
+      const result = await auth.store.backfillDefaultDailyTargetsAdmin()
+      const targets = await auth.store.listDailyTargetsAdmin()
+      return NextResponse.json({ ok: true, ...result, targets })
+    }
+
+    const repId = typeof body.repId === 'string' ? body.repId.trim() : ''
+    const revenueIdentityId = typeof body.revenueIdentityId === 'string' ? body.revenueIdentityId.trim() : ''
+    if (!repId || !revenueIdentityId) {
+      return NextResponse.json({ error: 'repId and revenueIdentityId are required.' }, { status: 400 })
+    }
+
     if (body.assignIfNeeded === true) {
       const assignments = await auth.store.listIdentityAssignmentsAdmin()
-      const already = assignments.some((a) => a.repId === repId && a.revenueIdentityId === revenueIdentityId)
+      const already = assignments.some((assignment) => assignment.repId === repId && assignment.revenueIdentityId === revenueIdentityId)
       if (!already) {
         await auth.store.assignIdentityAdmin(revenueIdentityId, repId)
       }
     }
 
-    const target = await auth.store.createDailyTargetAdmin({
-      repId,
-      revenueIdentityId,
-      activityType: activityType as ActivityType,
-      targetCount: Math.round(targetCount),
-    })
-    return NextResponse.json({ target }, { status: 201 })
+    const activityType = typeof body.activityType === 'string' ? body.activityType.trim() : ''
+    const rawCount = typeof body.targetCount === 'number' ? body.targetCount : Number(body.targetCount)
+    const wantsSingle = ACTIVITY_TYPES.includes(activityType as ActivityType) && Number.isFinite(rawCount) && rawCount > 0
+
+    if (wantsSingle) {
+      const target = await auth.store.createDailyTargetAdmin({
+        repId,
+        revenueIdentityId,
+        activityType: activityType as ActivityType,
+        targetCount: Math.round(rawCount),
+      })
+      return NextResponse.json({ target, targets: [target] }, { status: 201 })
+    }
+
+    const targets = await auth.store.ensureDefaultDailyTargetsAdmin({ repId, revenueIdentityId })
+    return NextResponse.json({ targets }, { status: 201 })
   } catch (error) {
     const message = error instanceof Error ? error.message : ''
     if (message.includes('REVENUE_IDENTITY_NOT_ASSIGNED_TO_REP')) {

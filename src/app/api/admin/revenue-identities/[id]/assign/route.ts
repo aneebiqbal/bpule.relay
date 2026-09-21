@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { createScoutStore } from '@/lib/store'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 
@@ -100,7 +101,17 @@ export async function POST(
     dedupe_key: `identity_assigned:${repId}:${id}:${new Date().toISOString().slice(0, 10)}`,
   })
 
-  return NextResponse.json({ assignment })
+  try {
+    const store = await createScoutStore()
+    const targets = await store.ensureDefaultDailyTargetsAdmin({
+      repId,
+      revenueIdentityId: id,
+    })
+    return NextResponse.json({ assignment, targets })
+  } catch (error) {
+    console.error('[admin/revenue-identities/assign] failed to seed daily pack:', error)
+    return NextResponse.json({ assignment, targets: [] })
+  }
 }
 
 export async function DELETE(

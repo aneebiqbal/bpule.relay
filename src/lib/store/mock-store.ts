@@ -79,6 +79,7 @@ import type {
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
+import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
 import { pickPlayForSignal } from '@/lib/score/plays'
@@ -2647,9 +2648,16 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async assignIdentityAdmin(identityId: string, repId: string) {
       if (rep.role !== 'admin') throw new Error('Admin only')
       const existing = demoIdentityAssignments.find((a) => a.revenueIdentityId === identityId && a.repId === repId)
-      if (existing) return existing
-      const ia: IdentityAssignment = { id: `ia-${Date.now()}`, organizationId: 'org-demo', revenueIdentityId: identityId, repId, assignedBy: rep.id, createdAt: new Date().toISOString() }
-      demoIdentityAssignments.push(ia)
+      const ia = existing ?? {
+        id: `ia-${Date.now()}`,
+        organizationId: 'org-demo',
+        revenueIdentityId: identityId,
+        repId,
+        assignedBy: rep.id,
+        createdAt: new Date().toISOString(),
+      }
+      if (!existing) demoIdentityAssignments.push(ia)
+      await this.ensureDefaultDailyTargetsAdmin({ repId, revenueIdentityId: identityId })
       return ia
     },
     async unassignIdentityAdmin(identityId: string, repId: string) {
@@ -2668,9 +2676,42 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }
       const existing = demoDailyTargets.find((t) => t.repId === input.repId && t.revenueIdentityId === input.revenueIdentityId && t.activityType === input.activityType)
       if (existing) { existing.targetCount = input.targetCount; existing.active = true; existing.updatedAt = new Date().toISOString(); return existing }
-      const dt: DailyTarget = { id: `dt-${Date.now()}`, organizationId: 'org-demo', ...input, active: true, createdBy: rep.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      const dt: DailyTarget = { id: nextId('dt'), organizationId: 'org-demo', ...input, active: true, createdBy: rep.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
       demoDailyTargets.push(dt)
       return dt
+    },
+    async ensureDefaultDailyTargetsAdmin(input: { repId: string; revenueIdentityId: string }) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      const identity = demoRevenueIdentities.find((row) => row.id === input.revenueIdentityId)
+      if (!identity) throw new Error('Identity not found')
+      const have = new Set(
+        demoDailyTargets
+          .filter((target) => target.repId === input.repId && target.revenueIdentityId === input.revenueIdentityId)
+          .map((target) => target.activityType),
+      )
+      const created: DailyTarget[] = []
+      for (const row of defaultTargetsForChannel(identity.channel)) {
+        if (have.has(row.activityType)) continue
+        created.push(await this.createDailyTargetAdmin({
+          repId: input.repId,
+          revenueIdentityId: input.revenueIdentityId,
+          activityType: row.activityType,
+          targetCount: row.targetCount,
+        }))
+      }
+      return created
+    },
+    async backfillDefaultDailyTargetsAdmin() {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      let created = 0
+      for (const assignment of demoIdentityAssignments) {
+        const rows = await this.ensureDefaultDailyTargetsAdmin({
+          repId: assignment.repId,
+          revenueIdentityId: assignment.revenueIdentityId,
+        })
+        created += rows.length
+      }
+      return { created, assignments: demoIdentityAssignments.length }
     },
     async updateDailyTargetAdmin(id: string, patches: { targetCount?: number; active?: boolean }) {
       if (rep.role !== 'admin') throw new Error('Admin only')

@@ -85,6 +85,7 @@ describe('Revenue Identity OS — Security Model', () => {
   describe('Target operations', () => {
     it('admin can create daily target', async () => {
       const store = buildMockStore(adminCtx())
+      await store.assignIdentityAdmin('ri-demo-linkedin', 'rep-regular')
       const target = await store.createDailyTargetAdmin({
         repId: 'rep-regular',
         revenueIdentityId: 'ri-demo-linkedin',

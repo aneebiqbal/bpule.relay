@@ -40,6 +40,7 @@ describe('Revenue OS — Full Security Integration', () => {
       const store = buildMockStore(ctx(ADMIN_A))
       const identities = await store.listRevenueIdentitiesAdmin()
       expect(identities.length).toBeGreaterThan(0)
+      await store.assignIdentityAdmin(identities[0].id, 'rep-a')
 
       const target = await store.createDailyTargetAdmin({
         repId: 'rep-a',

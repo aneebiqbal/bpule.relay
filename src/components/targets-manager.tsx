@@ -1,27 +1,25 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, Trash2, Save, AlertCircle, Target, Pause, Play } from 'lucide-react'
+import { Plus, Trash2, Pause, Play, Target, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
+import { activityLabel, formatDefaultPack } from '@/lib/accountability/default-targets'
+import { buildTeamTargetOverview } from '@/lib/accountability/target-overview'
 import type { DailyTarget, RevenueIdentity, Rep, ActivityType, IdentityAssignment } from '@/lib/domain/types'
 
 const ACTIVITY_OPTIONS: { value: ActivityType; label: string }[] = [
-  { value: 'dm', label: 'First DMs' },
-  { value: 'connection_request', label: 'Connection requests' },
+  { value: 'connection_request', label: 'Connections' },
+  { value: 'dm', label: 'DMs' },
   { value: 'followup', label: 'Follow-ups' },
   { value: 'application', label: 'Applications' },
   { value: 'proposal', label: 'Proposals' },
   { value: 'other', label: 'Other' },
 ]
-
-function activityLabel(t: ActivityType): string {
-  return ACTIVITY_OPTIONS.find((o) => o.value === t)?.label ?? t
-}
 
 interface TargetsPayload {
   targets?: DailyTarget[]
@@ -40,11 +38,12 @@ export function TargetsManager() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const [form, setForm] = useState({
     revenueIdentityId: '',
     repId: '',
     activityType: 'dm' as ActivityType,
-    targetCount: 10,
+    targetCount: 30,
     assignIfNeeded: true,
   })
   const [draftCounts, setDraftCounts] = useState<Record<string, number>>({})
@@ -74,17 +73,22 @@ export function TargetsManager() {
     }
   }, [load])
 
-  const identityById = useMemo(() => new Map(identities.map((i) => [i.id, i])), [identities])
-  const repsById = useMemo(() => new Map(reps.map((r) => [r.id, r])), [reps])
+  const identityById = useMemo(() => new Map(identities.map((identity) => [identity.id, identity])), [identities])
+  const repsById = useMemo(() => new Map(reps.map((rep) => [rep.id, rep])), [reps])
+  const overview = useMemo(
+    () => buildTeamTargetOverview({ reps, identities, assignments, targets }),
+    [reps, identities, assignments, targets],
+  )
 
+  const selectedIdentity = identityById.get(form.revenueIdentityId)
   const assignedRepsForIdentity = form.revenueIdentityId
-    ? assignments.filter((a) => a.revenueIdentityId === form.revenueIdentityId)
+    ? assignments.filter((assignment) => assignment.revenueIdentityId === form.revenueIdentityId)
     : []
-
-  const canCreate = Boolean(form.repId && form.revenueIdentityId && form.activityType && form.targetCount > 0)
+  const packPreview = selectedIdentity ? formatDefaultPack(selectedIdentity.channel) : null
+  const canAssignPack = Boolean(form.repId && form.revenueIdentityId)
 
   function selectIdentity(revenueIdentityId: string) {
-    const nextAssignments = assignments.filter((a) => a.revenueIdentityId === revenueIdentityId)
+    const nextAssignments = assignments.filter((assignment) => assignment.revenueIdentityId === revenueIdentityId)
     setForm((prev) => ({
       ...prev,
       revenueIdentityId,
@@ -92,7 +96,32 @@ export function TargetsManager() {
     }))
   }
 
-  async function createTarget() {
+  async function assignDailyPack() {
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/targets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repId: form.repId,
+          revenueIdentityId: form.revenueIdentityId,
+          assignIfNeeded: form.assignIfNeeded,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Failed to assign daily pack.')
+      await load()
+      setShowForm(false)
+      setForm({ revenueIdentityId: '', repId: '', activityType: 'dm', targetCount: 30, assignIfNeeded: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to assign daily pack.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function createSingleTarget() {
     setSaving(true)
     setError(null)
     try {
@@ -109,28 +138,31 @@ export function TargetsManager() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Failed to save target.')
-      const saved = data.target as DailyTarget
-      setTargets((prev) => {
-        const without = prev.filter((t) => !(t.repId === saved.repId && t.revenueIdentityId === saved.revenueIdentityId && t.activityType === saved.activityType))
-        return [saved, ...without]
-      })
-      if (form.assignIfNeeded && !assignments.some((a) => a.repId === form.repId && a.revenueIdentityId === form.revenueIdentityId)) {
-        setAssignments((prev) => [
-          {
-            id: `ia-local-${saved.id}`,
-            organizationId: saved.organizationId,
-            revenueIdentityId: saved.revenueIdentityId,
-            repId: saved.repId,
-            assignedBy: saved.createdBy,
-            createdAt: saved.createdAt,
-          },
-          ...prev,
-        ])
-      }
+      await load()
       setShowForm(false)
-      setForm({ revenueIdentityId: '', repId: '', activityType: 'dm', targetCount: 10, assignIfNeeded: true })
+      setShowAdvanced(false)
+      setForm({ revenueIdentityId: '', repId: '', activityType: 'dm', targetCount: 30, assignIfNeeded: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save target.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function backfillMissing() {
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/targets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backfillMissing: true }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Failed to apply standard packs.')
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to apply standard packs.')
     } finally {
       setSaving(false)
     }
@@ -149,7 +181,7 @@ export function TargetsManager() {
       return
     }
     const updated = data.target as DailyTarget
-    setTargets((prev) => prev.map((t) => (t.id === id ? updated : t)))
+    setTargets((prev) => prev.map((target) => (target.id === id ? updated : target)))
   }
 
   async function deleteTarget(id: string) {
@@ -159,61 +191,57 @@ export function TargetsManager() {
       setError('Delete failed')
       return
     }
-    setTargets((prev) => prev.filter((t) => t.id !== id))
+    setTargets((prev) => prev.filter((target) => target.id !== id))
   }
 
   if (loading) return <div className="text-sm text-slate">Loading targets…</div>
 
-  const activeTargets = targets.filter((target) => target.active)
-  const pausedTargets = targets.filter((target) => !target.active)
-  const repsCovered = new Set(activeTargets.map((target) => target.repId).filter(Boolean)).size
-  const identityCoverage = new Set(activeTargets.map((target) => target.revenueIdentityId)).size
-  const totalDailyActions = activeTargets.reduce((sum, target) => sum + target.targetCount, 0)
-
   const visibleIdentities = identities.filter((identity) => identity.status !== 'archived')
-  const grouped = visibleIdentities.map((identity) => ({
-    identity,
-    targets: targets.filter((target) => target.revenueIdentityId === identity.id),
-  }))
   const orphanTargets = targets.filter((target) => !identityById.has(target.revenueIdentityId))
 
   return (
     <div className="space-y-5">
       {error && (
         <Alert variant="destructive">
-          <AlertCircle className="size-4" />
           <AlertTitle>Could not complete that</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
       <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Admin / Accountability</p>
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Admin / Targets</p>
         <h2 className="mt-2 text-[24px] leading-[1.08] tracking-[-0.03em] text-[color:var(--console-text)]">
-          Daily expectations per identity.
+          Daily targets per person.
         </h2>
         <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">
-          Set what each revenue identity must complete today. Relay measures progress against these numbers.
+          Assign an identity to a rep and Relay fills the standard day: 30 connections, 30 DMs, 30 follow-ups on LinkedIn, or 10 applications and 10 proposals on Upwork. You can still change any number.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-4">
-          <AdminMetric label="Active targets" value={activeTargets.length} />
-          <AdminMetric label="Reps covered" value={repsCovered} />
-          <AdminMetric label="Identity lanes" value={identityCoverage} />
-          <AdminMetric label="Total actions/day" value={totalDailyActions} />
+          <AdminMetric label="People with work" value={overview.peopleCovered} />
+          <AdminMetric label="Active targets" value={overview.activeTargets} />
+          <AdminMetric label="Actions / day" value={overview.totalActionsPerDay} />
+          <AdminMetric label="Missing packs" value={overview.missingPacks} />
         </div>
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap gap-2">
           <Button onClick={() => setShowForm(!showForm)} size="sm" variant="orange">
             <Plus className="size-3.5 mr-1.5" />
-            {showForm ? 'Hide form' : 'Define target'}
+            {showForm ? 'Hide form' : 'Add daily pack'}
           </Button>
+          {overview.missingPacks > 0 && (
+            <Button onClick={() => void backfillMissing()} size="sm" variant="outline" disabled={saving}>
+              Apply standard packs to {overview.missingPacks} missing
+            </Button>
+          )}
         </div>
       </section>
 
       {showForm && (
         <section className="srf-proof space-y-4 px-4 py-4 sm:px-5">
           <div>
-            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">New daily target</p>
-            <p className="mt-1 text-[13px] text-graphite">One identity, one activity, one daily count.</p>
+            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Assign daily pack</p>
+            <p className="mt-1 text-[13px] text-graphite">
+              Pick the identity and the person who will run it. Existing counts stay; only missing activities are filled.
+            </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -236,36 +264,20 @@ export function TargetsManager() {
                 disabled={!form.revenueIdentityId}
               >
                 <option value="">{form.revenueIdentityId ? 'Select rep…' : 'Pick an identity first'}</option>
-                {(form.assignIfNeeded ? reps : assignedRepsForIdentity.map((a) => repsById.get(a.repId)).filter(Boolean) as Rep[]).map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                    {assignedRepsForIdentity.some((a) => a.repId === r.id) ? '' : ' · will assign'}
+                {(form.assignIfNeeded ? reps : assignedRepsForIdentity.map((assignment) => repsById.get(assignment.repId)).filter(Boolean) as Rep[]).map((rep) => (
+                  <option key={rep.id} value={rep.id}>
+                    {rep.name}
+                    {assignedRepsForIdentity.some((assignment) => assignment.repId === rep.id) ? '' : ' · will assign'}
                   </option>
                 ))}
               </Select>
-              {form.revenueIdentityId && assignedRepsForIdentity.length === 0 && (
-                <p className="mt-1 text-[12px] text-status-warning">No one is assigned yet. Saving will assign this rep.</p>
-              )}
-            </div>
-            <div>
-              <Label htmlFor="target-activity">Activity</Label>
-              <Select id="target-activity" value={form.activityType} onChange={(e) => setForm({ ...form, activityType: e.target.value as ActivityType })}>
-                {ACTIVITY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="target-count">Daily count</Label>
-              <Input
-                id="target-count"
-                type="number"
-                min={1}
-                value={form.targetCount}
-                onChange={(e) => setForm({ ...form, targetCount: Number.parseInt(e.target.value, 10) || 0 })}
-              />
             </div>
           </div>
+          {packPreview && (
+            <p className="rounded border border-orange/20 bg-orange/5 px-3 py-2 text-[13px] text-ink">
+              Standard pack: {packPreview}
+            </p>
+          )}
           <label className="flex items-center gap-2 text-[12px] text-graphite">
             <input
               type="checkbox"
@@ -275,163 +287,173 @@ export function TargetsManager() {
             />
             <span>Assign the identity to this rep if needed</span>
           </label>
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={() => void createTarget()} disabled={saving || !canCreate}>
-              <Save className={cn('size-3.5 mr-1.5', saving && 'animate-spin')} />
-              {saving ? 'Saving' : 'Save target'}
+            <Button onClick={() => void assignDailyPack()} disabled={saving || !canAssignPack}>
+              {saving ? 'Saving' : 'Assign daily pack'}
             </Button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((prev) => !prev)}
+            className="text-[12px] font-medium text-graphite hover:text-ink"
+          >
+            {showAdvanced ? 'Hide single activity' : 'Add one activity only'}
+          </button>
+          {showAdvanced && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="target-activity">Activity</Label>
+                <Select id="target-activity" value={form.activityType} onChange={(e) => setForm({ ...form, activityType: e.target.value as ActivityType })}>
+                  {ACTIVITY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="target-count">Daily count</Label>
+                <Input
+                  id="target-count"
+                  type="number"
+                  min={1}
+                  value={form.targetCount}
+                  onChange={(e) => setForm({ ...form, targetCount: Number.parseInt(e.target.value, 10) || 0 })}
+                />
+              </div>
+              <div className="sm:col-span-2 flex justify-end">
+                <Button onClick={() => void createSingleTarget()} disabled={saving || !canAssignPack || form.targetCount <= 0} variant="outline">
+                  Save one activity
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
       )}
 
-      {grouped.length === 0 && orphanTargets.length === 0 ? (
+      {overview.people.length === 0 ? (
         <section className="rounded-xl border border-dashed border-line py-10 text-center">
           <Target className="mx-auto mb-2 size-6 text-slate" />
-          <p className="text-sm font-medium text-ink">No identities or targets yet</p>
-          <p className="mt-1 text-xs text-slate">Create a revenue identity, then set a daily count per activity.</p>
+          <p className="text-sm font-medium text-ink">No targets assigned yet</p>
+          <p className="mt-1 text-xs text-slate">Assign an identity to a person to apply the standard daily pack.</p>
         </section>
       ) : (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Identity lanes</p>
-            <span className="text-[12px] text-graphite">{activeTargets.length} active · {pausedTargets.length} paused</span>
+            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Team visibility</p>
+            <span className="text-[12px] text-graphite">{overview.peopleCovered} people · {overview.totalActionsPerDay} actions/day</span>
           </div>
           <div className="space-y-3">
-            {grouped.map(({ identity, targets: laneTargets }) => {
-              const assignedNames = assignments
-                .filter((a) => a.revenueIdentityId === identity.id)
-                .map((a) => repsById.get(a.repId)?.name)
-                .filter(Boolean)
-              return (
-                <article key={identity.id} className="overflow-hidden rounded border border-line bg-bone-raised">
-                  <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+            {overview.people.map((person) => (
+              <article key={person.repId} className="overflow-hidden rounded border border-line bg-bone-raised">
+                <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Users className="size-3.5 text-stone" />
                     <div>
-                      <p className="text-[14px] font-medium text-ink">{identity.identityName}</p>
+                      <p className="text-[14px] font-medium text-ink">{person.repName}</p>
                       <p className="text-[12px] text-graphite">
-                        {identity.channel.toUpperCase()}
-                        {identity.title ? ` · ${identity.title}` : ''}
-                        {assignedNames.length > 0 ? ` · ${assignedNames.join(', ')}` : ' · unassigned'}
+                        {person.lanes.length} identit{person.lanes.length === 1 ? 'y' : 'ies'} · {person.totalActionsPerDay} actions/day
+                        {person.packComplete ? '' : ' · pack incomplete'}
                       </p>
                     </div>
-                    <span className="rounded bg-bone px-2 py-1 text-mono-medium text-[10px] uppercase tracking-[0.1em] text-stone">
-                      {laneTargets.filter((t) => t.active).length} active
-                    </span>
                   </div>
-                  {laneTargets.length === 0 ? (
-                    <p className="px-4 py-4 text-[13px] text-graphite">No daily targets on this identity yet.</p>
-                  ) : (
-                    <ul className="divide-y divide-line/60">
-                      {laneTargets.map((target) => {
-                        const draft = draftCounts[target.id] ?? target.targetCount
-                        const dirty = draft !== target.targetCount
-                        return (
-                          <li key={target.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-[13px] font-medium text-ink">{activityLabel(target.activityType)}</span>
-                                <span className="rounded bg-bone px-1.5 py-0.5 text-mono-medium text-[10px] text-stone">
-                                  {repsById.get(target.repId)?.name ?? 'Unknown rep'}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
+                </div>
+                <ul className="divide-y divide-line/60">
+                  {person.lanes.map((lane) => (
+                    <li key={`${person.repId}-${lane.identityId}`} className="px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[13px] font-medium text-ink">
+                          {lane.identityName}
+                          <span className="ml-2 text-[11px] font-normal uppercase tracking-wide text-stone">{lane.channel}</span>
+                        </p>
+                        <p className="text-[12px] text-graphite">{lane.actionsPerDay} / day</p>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {lane.activities.map((activity) => {
+                          const draft = draftCounts[activity.id] ?? activity.targetCount
+                          const dirty = draft !== activity.targetCount
+                          return (
+                            <div key={activity.id} className="flex items-center gap-1.5 rounded border border-line bg-bone px-2 py-1">
+                              <span className={cn('text-[11px] font-medium', activity.active ? 'text-ink' : 'text-slate')}>
+                                {activityLabel(activity.activityType)}
+                              </span>
                               <Input
                                 type="number"
                                 min={1}
-                                className="w-20"
+                                className="h-7 w-14"
                                 value={draft}
-                                onChange={(e) => setDraftCounts((prev) => ({ ...prev, [target.id]: Number.parseInt(e.target.value, 10) || 0 }))}
+                                onChange={(e) => setDraftCounts((prev) => ({ ...prev, [activity.id]: Number.parseInt(e.target.value, 10) || 0 }))}
                                 onBlur={() => {
                                   if (!dirty || draft <= 0) return
-                                  void patchTarget(target.id, { targetCount: draft }).then(() => {
+                                  void patchTarget(activity.id, { targetCount: draft }).then(() => {
                                     setDraftCounts((prev) => {
                                       const next = { ...prev }
-                                      delete next[target.id]
+                                      delete next[activity.id]
                                       return next
                                     })
                                   })
                                 }}
-                                aria-label={`${activityLabel(target.activityType)} daily count`}
+                                aria-label={`${activityLabel(activity.activityType)} daily count`}
                               />
-                              <span className="text-[11px] text-stone">/ day</span>
-                              {dirty && (
-                                <Button
-                                  size="sm"
-                                  variant="orange"
-                                  onClick={() => void patchTarget(target.id, { targetCount: draft }).then(() => {
-                                    setDraftCounts((prev) => {
-                                      const next = { ...prev }
-                                      delete next[target.id]
-                                      return next
-                                    })
-                                  })}
-                                >
-                                  Save
-                                </Button>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => void patchTarget(activity.id, { active: !activity.active })}
+                                className="rounded p-0.5 text-slate hover:text-ink"
+                                aria-label={activity.active ? 'Pause target' : 'Resume target'}
+                              >
+                                {activity.active ? <Pause className="size-3" /> : <Play className="size-3" />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void deleteTarget(activity.id)}
+                                className="rounded p-0.5 text-slate hover:text-status-danger"
+                                aria-label={`Delete ${activityLabel(activity.activityType)} target`}
+                              >
+                                <Trash2 className="size-3" />
+                              </button>
                             </div>
-                            <span
-                              className={cn(
-                                'rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
-                                target.active ? 'bg-status-success/10 text-status-success' : 'bg-stone/20 text-slate',
-                              )}
-                            >
-                              {target.active ? 'Active' : 'Paused'}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => void patchTarget(target.id, { active: !target.active })}
-                              className="rounded p-1 text-slate transition-colors hover:bg-bone hover:text-ink"
-                              aria-label={target.active ? 'Pause target' : 'Resume target'}
-                            >
-                              {target.active ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void deleteTarget(target.id)}
-                              className="rounded p-1 text-slate transition-colors hover:bg-bone hover:text-status-danger"
-                              aria-label={`Delete ${identity.identityName} ${activityLabel(target.activityType)} target`}
-                            >
-                              <Trash2 className="size-3.5" />
-                            </button>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
-                </article>
-              )
-            })}
-
-            {orphanTargets.length > 0 && (
-              <article className="overflow-hidden rounded border border-dashed border-line bg-bone-raised">
-                <div className="border-b border-line px-4 py-3">
-                  <p className="text-[14px] font-medium text-ink">Unmatched targets</p>
-                  <p className="text-[12px] text-graphite">Saved, but the identity record is missing.</p>
-                </div>
-                <ul className="divide-y divide-line/60">
-                  {orphanTargets.map((target) => (
-                    <li key={target.id} className="flex items-center gap-3 px-4 py-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-medium text-ink">{activityLabel(target.activityType)}</p>
-                        <p className="text-[12px] text-graphite">{target.targetCount} / day · {repsById.get(target.repId)?.name ?? target.repId}</p>
+                          )
+                        })}
+                        {lane.missing.map((missing) => (
+                          <span key={missing.activityType} className="rounded border border-dashed border-line px-2 py-1 text-[11px] text-slate">
+                            Missing {activityLabel(missing.activityType).toLowerCase()} ({missing.targetCount})
+                          </span>
+                        ))}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => void deleteTarget(target.id)}
-                        className="rounded p-1 text-slate hover:text-status-danger"
-                        aria-label="Delete unmatched target"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
                     </li>
                   ))}
                 </ul>
               </article>
-            )}
+            ))}
           </div>
         </section>
+      )}
+
+      {orphanTargets.length > 0 && (
+        <article className="overflow-hidden rounded border border-dashed border-line bg-bone-raised">
+          <div className="border-b border-line px-4 py-3">
+            <p className="text-[14px] font-medium text-ink">Unmatched targets</p>
+            <p className="text-[12px] text-graphite">Saved, but the identity record is missing.</p>
+          </div>
+          <ul className="divide-y divide-line/60">
+            {orphanTargets.map((target) => (
+              <li key={target.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-ink">{activityLabel(target.activityType)}</p>
+                  <p className="text-[12px] text-graphite">{target.targetCount} / day · {repsById.get(target.repId)?.name ?? target.repId}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void deleteTarget(target.id)}
+                  className="rounded p-1 text-slate hover:text-status-danger"
+                  aria-label="Delete unmatched target"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </article>
       )}
     </div>
   )

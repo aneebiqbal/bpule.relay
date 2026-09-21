@@ -885,6 +885,11 @@ export interface ScoutStore {
     activityType: import('@/lib/domain/types').ActivityType
     targetCount: number
   }): Promise<import('@/lib/domain/types').DailyTarget>
+  ensureDefaultDailyTargetsAdmin(input: {
+    repId: string
+    revenueIdentityId: string
+  }): Promise<import('@/lib/domain/types').DailyTarget[]>
+  backfillDefaultDailyTargetsAdmin(): Promise<{ created: number; assignments: number }>
   updateDailyTargetAdmin(id: string, patches: { targetCount?: number; active?: boolean }): Promise<import('@/lib/domain/types').DailyTarget>
   deleteDailyTargetAdmin(id: string): Promise<void>
   // accountability

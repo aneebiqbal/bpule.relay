@@ -1,16 +1,14 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
 import { GrowthEngineDashboard, GrowthEngineSkeleton } from '@/components/growth/growth-engine-dashboard'
+import type { CurrentUser } from '@/lib/auth/current'
 
 export const dynamic = 'force-dynamic'
 
-async function loadGrowthData() {
-  const user = await getCurrentUser()
-  if (!user) redirect('/login')
-  if (user.rep.role !== 'admin') redirect('/dashboard')
-
+async function loadGrowthData(user: CurrentUser) {
   const today = new Date().toISOString().slice(0, 10)
 
   try {
@@ -49,7 +47,15 @@ async function loadGrowthData() {
 }
 
 export default async function GrowthEnginePage() {
-  const dataPromise = loadGrowthData()
+  const user = await getCurrentUser()
+  if (!user) redirect('/login')
+
+  const authCtx = await getAuthContext()
+  if (user.rep.role !== 'admin' && !authCtx?.isOwner && !authCtx?.isAdmin) {
+    redirect('/dashboard')
+  }
+
+  const dataPromise = loadGrowthData(user)
 
   return (
     <Suspense fallback={<GrowthEngineSkeleton />}>

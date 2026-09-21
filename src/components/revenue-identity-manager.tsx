@@ -406,6 +406,9 @@ export function RevenueIdentityManager() {
       {assignDialog && (
         <Dialog open onClose={() => setAssignDialog(null)} title="Assign to Rep">
           <div className="p-5 space-y-3">
+            <p className="text-[12px] text-graphite">
+              This also assigns the standard daily pack for the identity: 30 connections, 30 DMs, and 30 follow-ups on LinkedIn, or 10 applications and 10 proposals on Upwork. Existing numbers are kept.
+            </p>
             <Select value={selectedRep} onChange={(e) => setSelectedRep(e.target.value)}>
               <option value="">Select a rep…</option>
               {reps.map((r) => (

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from './current'
+import { getAuthContext } from './organization'
 
 /**
  * Growth Engine Authorization
@@ -7,6 +8,14 @@ import { getCurrentUser } from './current'
  * The Relay Growth Engine is admin-only. These helpers enforce that
  * at the route level and API level.
  */
+
+export async function hasGrowthAccess(): Promise<boolean> {
+  const user = await getCurrentUser()
+  if (!user) return false
+  if (user.rep.role === 'admin') return true
+  const authCtx = await getAuthContext()
+  return Boolean(authCtx?.isOwner || authCtx?.isAdmin)
+}
 
 export async function requireGrowthAccess(): Promise<{
   repId: string
@@ -16,7 +25,7 @@ export async function requireGrowthAccess(): Promise<{
   const user = await getCurrentUser()
   if (!user) redirect('/login')
 
-  if (user.rep.role !== 'admin') {
+  if (!(await hasGrowthAccess())) {
     redirect('/dashboard')
   }
 
@@ -35,7 +44,7 @@ export async function assertGrowthAccessAPI(): Promise<{
   if (!user) {
     throw new GrowthAuthError('Not signed in.', 401)
   }
-  if (user.rep.role !== 'admin') {
+  if (!(await hasGrowthAccess())) {
     throw new GrowthAuthError('Admin access required.', 403)
   }
   return {
