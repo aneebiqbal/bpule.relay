@@ -10,14 +10,13 @@ import { getAllHealth, getCooldownRemaining } from '@/lib/ai/runtime'
 import { getAiUsageStats } from '@/lib/ai/runtime/telemetry'
 
 export async function GET(request: Request) {
-  // Admin guard
-  const { getCurrentUser } = await import('@/lib/auth/current')
-  const user = await getCurrentUser()
-  if (!user || user.rep.role !== 'admin') {
+  const { getAuthContext, can } = await import('@/lib/auth/organization')
+  const authCtx = await getAuthContext()
+  if (!authCtx || !can(authCtx, 'VIEW_TEAM_ANALYTICS')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const orgId = user.organization?.id || user.rep?.organizationId
+  const orgId = authCtx.orgId
 
   // Real-time health (in-memory)
   const health = getAllHealth()

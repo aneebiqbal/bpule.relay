@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
-import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 import type { ActivityType } from '@/lib/domain/types'
 
@@ -14,9 +14,9 @@ const ACTIVITY_TYPES: ActivityType[] = [
 ]
 
 async function requireAdminStore() {
-  const user = await getCurrentUser()
-  if (!user) return { error: NextResponse.json({ error: 'Not signed in.' }, { status: 401 }) }
-  if (user.rep.role !== 'admin') return { error: NextResponse.json({ error: 'Admin only.' }, { status: 403 }) }
+  const authCtx = await getAuthContext()
+  if (!authCtx) return { error: NextResponse.json({ error: 'Not signed in.' }, { status: 401 }) }
+  if (!can(authCtx, 'MANAGE_TEAM_TARGETS')) return { error: NextResponse.json({ error: 'Not authorized.' }, { status: 403 }) }
   try {
     return { store: await createScoutStore() }
   } catch {

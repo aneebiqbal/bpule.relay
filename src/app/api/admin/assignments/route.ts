@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
-import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 
-async function requireAdminStore() {
-  const user = await getCurrentUser()
-  if (!user) return { error: NextResponse.json({ error: 'Not signed in.' }, { status: 401 }) }
-  if (user.rep.role !== 'admin') return { error: NextResponse.json({ error: 'Admin only.' }, { status: 403 }) }
+async function requireCapabilityStore(capability: string) {
+  const authCtx = await getAuthContext()
+  if (!authCtx) return { error: NextResponse.json({ error: 'Not signed in.' }, { status: 401 }) }
+  if (!can(authCtx, capability)) return { error: NextResponse.json({ error: 'Not authorized.' }, { status: 403 }) }
   try {
     return { store: await createScoutStore() }
   } catch {
@@ -15,7 +15,7 @@ async function requireAdminStore() {
 }
 
 export async function GET(request: Request) {
-  const auth = await requireAdminStore()
+  const auth = await requireCapabilityStore('MANAGE_REVENUE_IDENTITIES')
   if (auth.error) return auth.error
 
   const { searchParams } = new URL(request.url)
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdminStore()
+  const auth = await requireCapabilityStore('MANAGE_REVENUE_IDENTITIES')
   if (auth.error) return auth.error
 
   let body: Record<string, unknown>

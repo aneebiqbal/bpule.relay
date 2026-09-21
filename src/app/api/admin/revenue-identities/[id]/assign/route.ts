@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
-import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 
 export async function POST(
@@ -8,9 +8,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
 
   let body: { repId?: string }
   try {
@@ -29,7 +29,7 @@ export async function POST(
     .from('revenue_identities')
     .select('id, identity_name')
     .eq('id', id)
-    .eq('organization_id', user.organization.id)
+    .eq('organization_id', authCtx.orgId)
     .maybeSingle()
 
   if (!identity) return NextResponse.json({ error: 'Identity not found.' }, { status: 404 })
@@ -39,7 +39,7 @@ export async function POST(
     .from('reps')
     .select('id, name')
     .eq('id', repId)
-    .eq('organization_id', user.organization.id)
+    .eq('organization_id', authCtx.orgId)
     .maybeSingle()
 
   if (!rep) return NextResponse.json({ error: 'Rep not found.' }, { status: 404 })
@@ -49,10 +49,10 @@ export async function POST(
     .from('identity_assignments')
     .upsert(
       {
-        organization_id: user.organization.id,
+        organization_id: authCtx.orgId,
         revenue_identity_id: id,
         rep_id: repId,
-        assigned_by: user.rep.id,
+        assigned_by: authCtx.repId,
       },
       { onConflict: 'revenue_identity_id,rep_id' },
     )
@@ -63,8 +63,8 @@ export async function POST(
 
   // Audit
   await supabase.from('accountability_audit_log').insert({
-    organization_id: user.organization.id,
-    rep_id: user.rep.id,
+    organization_id: authCtx.orgId,
+    rep_id: authCtx.repId,
     revenue_identity_id: id,
     event_type: 'identity_assigned',
     detail: { rep_id: repId, rep_name: rep.name },
@@ -73,12 +73,12 @@ export async function POST(
   // Emit WORK_ASSIGNED event (non-fatal)
   try {
     await supabase.rpc('emit_relay_event', {
-      p_org_id: user.organization.id,
+      p_org_id: authCtx.orgId,
       p_event_type: 'WORK_ASSIGNED',
       p_entity_type: 'revenue_identity',
       p_entity_id: id,
       p_actor_type: 'admin',
-      p_actor_id: user.rep.id,
+      p_actor_id: authCtx.repId,
       p_revenue_identity_id: id,
       p_source: 'app',
       p_source_event_id: `work_assigned:${repId}:${id}`,
@@ -91,7 +91,7 @@ export async function POST(
 
   // Notify the rep
   await supabase.from('notifications').insert({
-    organization_id: user.organization.id,
+    organization_id: authCtx.orgId,
     recipient_id: repId,
     notification_type: 'identity_assigned',
     title: 'New identity assigned',
@@ -108,9 +108,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
 
   const url = new URL(request.url)
   const repId = url.searchParams.get('repId')
@@ -123,13 +123,13 @@ export async function DELETE(
     .delete()
     .eq('revenue_identity_id', id)
     .eq('rep_id', repId)
-    .eq('organization_id', user.organization.id)
+    .eq('organization_id', authCtx.orgId)
 
   if (error) return safeErrorResponse(error, 500, 'Failed to unassign identity.', 'admin/revenue-identities/[id]/assign')
 
   await supabase.from('accountability_audit_log').insert({
-    organization_id: user.organization.id,
-    rep_id: user.rep.id,
+    organization_id: authCtx.orgId,
+    rep_id: authCtx.repId,
     revenue_identity_id: id,
     event_type: 'identity_unassigned',
     detail: { rep_id: repId },

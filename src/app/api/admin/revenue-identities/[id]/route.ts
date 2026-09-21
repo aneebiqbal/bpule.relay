@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
-import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 
 export async function GET(
@@ -8,16 +8,16 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
 
   const supabase = await createServerSupabase()
   const { data, error } = await supabase
     .from('revenue_identities')
     .select('*')
     .eq('id', id)
-    .eq('organization_id', user.organization.id)
+    .eq('organization_id', authCtx.orgId)
     .maybeSingle()
 
   if (error) return safeErrorResponse(error, 500, 'Failed to load identity.', 'admin/revenue-identities/[id]')
@@ -31,9 +31,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
 
   let body: Record<string, unknown>
   try {
@@ -49,7 +49,7 @@ export async function PATCH(
     .from('revenue_identities')
     .select('id')
     .eq('id', id)
-    .eq('organization_id', user.organization.id)
+    .eq('organization_id', authCtx.orgId)
     .maybeSingle()
 
   if (!existing) return NextResponse.json({ error: 'Not found.' }, { status: 404 })
@@ -89,8 +89,8 @@ export async function PATCH(
   if (error) return safeErrorResponse(error, 500, 'Failed to update identity.', 'admin/revenue-identities/[id]')
 
   await supabase.from('accountability_audit_log').insert({
-    organization_id: user.organization.id,
-    rep_id: user.rep.id,
+    organization_id: authCtx.orgId,
+    rep_id: authCtx.repId,
     revenue_identity_id: id,
     event_type: 'identity_edited',
     detail: { fields: Object.keys(update) },
@@ -104,9 +104,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
 
   const supabase = await createServerSupabase()
 
@@ -114,13 +114,13 @@ export async function DELETE(
     .from('revenue_identities')
     .delete()
     .eq('id', id)
-    .eq('organization_id', user.organization.id)
+    .eq('organization_id', authCtx.orgId)
 
   if (error) return safeErrorResponse(error, 500, 'Failed to delete identity.', 'admin/revenue-identities/[id]')
 
   await supabase.from('accountability_audit_log').insert({
-    organization_id: user.organization.id,
-    rep_id: user.rep.id,
+    organization_id: authCtx.orgId,
+    rep_id: authCtx.repId,
     revenue_identity_id: id,
     event_type: 'identity_deleted',
     detail: {},

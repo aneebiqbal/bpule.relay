@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
-import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import {
   computeStatus,
   dayProgress,
@@ -11,49 +11,55 @@ import {
 import type { AccountabilityStatus } from '@/lib/domain/types'
 
 export async function GET() {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!can(authCtx, 'VIEW_TEAM_ANALYTICS')) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
 
   const supabase = await createServerSupabase()
-  const org = user.organization
+
+  const { data: orgRow } = await supabase
+    .from('organizations')
+    .select('working_days, timezone')
+    .eq('id', authCtx.orgId)
+    .single()
+
   const now = new Date()
   const today = now.toISOString().slice(0, 10)
-  const isWorking = isWorkingDay(now, org.workingDays ?? [1, 2, 3, 4, 5])
-  const progress = dayProgress(now, org.timezone ?? 'UTC')
+  const isWorking = isWorkingDay(now, (orgRow?.working_days as number[]) ?? [1, 2, 3, 4, 5])
+  const progress = dayProgress(now, orgRow?.timezone ?? 'UTC')
 
   // Get all reps
   const { data: reps } = await supabase
     .from('reps')
     .select('id, name')
-    .eq('organization_id', org.id)
+    .eq('organization_id', authCtx.orgId)
 
   // Get all active identities
   const { data: identities } = await supabase
     .from('revenue_identities')
     .select('id, identity_name, slug, status')
-    .eq('organization_id', org.id)
+    .eq('organization_id', authCtx.orgId)
     .eq('status', 'active')
 
   // Get today's targets
   const { data: targets } = await supabase
     .from('daily_targets')
     .select('*')
-    .eq('organization_id', org.id)
+    .eq('organization_id', authCtx.orgId)
     .eq('active', true)
 
   // Get today's accountability
   const { data: accountability } = await supabase
     .from('daily_accountability')
     .select('*')
-    .eq('organization_id', org.id)
+    .eq('organization_id', authCtx.orgId)
     .eq('target_date', today)
 
   // Get last 10 working days of accountability for consecutive misses
   const { data: recentAccountability } = await supabase
     .from('daily_accountability')
     .select('rep_id, revenue_identity_id, activity_type, target_date, status')
-    .eq('organization_id', org.id)
+    .eq('organization_id', authCtx.orgId)
     .order('target_date', { ascending: false })
     .limit(500)
 

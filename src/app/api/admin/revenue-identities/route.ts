@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { createScoutStore } from '@/lib/store'
-import { getCurrentUser } from '@/lib/auth/current'
+import { createServerSupabase } from '@/lib/supabase/server'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 import type { RevenueIdentity } from '@/lib/domain/types'
 
@@ -34,9 +34,9 @@ function mapIdentity(row: Record<string, unknown>): RevenueIdentity {
 }
 
 export async function GET() {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
 
   try {
     const store = await createScoutStore()
@@ -48,9 +48,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
 
   let body: Record<string, unknown>
   try {
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
     : 'other'
 
   const row: Record<string, unknown> = {
-    organization_id: user.organization.id,
+    organization_id: authCtx.orgId,
     slug,
     identity_name: identityName,
     title: typeof body.title === 'string' ? body.title : null,
@@ -103,8 +103,8 @@ export async function POST(request: Request) {
 
   // Audit log
   await supabase.from('accountability_audit_log').insert({
-    organization_id: user.organization.id,
-    rep_id: user.rep.id,
+    organization_id: authCtx.orgId,
+    rep_id: authCtx.repId,
     revenue_identity_id: data.id,
     event_type: 'identity_created',
     detail: { identity_name: identityName, slug },

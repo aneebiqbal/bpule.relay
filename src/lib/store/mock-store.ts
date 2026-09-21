@@ -2872,5 +2872,82 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
           !['completed', 'failed', 'cancelled', 'rejected'].includes(r.status)
       )
     },
+
+    // ── Relay Growth Engine (demo stubs) ─────────────────────────────────────
+
+    async createGrowthMemory(input: any): Promise<any> {
+      return { id: 'rgm-demo', organizationId: 'org-demo', memoryType: input.memoryType,
+        title: input.title, content: input.content, source: input.source ?? null,
+        claimSafety: input.claimSafety ?? 'VERIFIED_PROFILE_PROOF', territories: input.territories ?? [],
+        audienceSegments: input.audienceSegments ?? [], active: true, usedInContent: false,
+        createdBy: rep.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    },
+    async listGrowthMemory(_activeOnly = true): Promise<any[]> { return [] },
+    async createGrowthEvent(input: any): Promise<any> {
+      return { id: 'rge-demo', organizationId: 'org-demo', eventType: input.eventType,
+        title: input.title, rawContent: input.rawContent, editorialContent: null,
+        processed: false, processedAt: null, sourceKind: input.sourceKind ?? 'build_log',
+        sourceId: null, createdBy: rep.id, createdAt: new Date().toISOString() }
+    },
+    async listGrowthEvents(_processedOnly = false): Promise<any[]> { return [] },
+    async markGrowthEventProcessed(_id: string, _editorialContent: string): Promise<void> {},
+    async createOpportunity(input: any): Promise<any> {
+      return { id: 'rco-demo', organizationId: 'org-demo', sourceType: input.sourceType,
+        sourceId: input.sourceId ?? null, title: input.title, observation: input.observation,
+        insight: input.insight, territory: input.territory, audienceSegment: input.audienceSegment,
+        contentJob: input.contentJob, evidenceStrength: input.evidenceStrength ?? 'medium',
+        claimBoundaries: input.claimBoundaries ?? [], audienceRelevance: input.audienceRelevance ?? 50,
+        novelty: input.novelty ?? 50, specificity: input.specificity ?? 50,
+        timeliness: input.timeliness ?? 50, relayDifferentiation: input.relayDifferentiation ?? 50,
+        conversationPotential: input.conversationPotential ?? 50, learningValue: input.learningValue ?? 50,
+        repetitionRisk: input.repetitionRisk ?? 0, commercialRelevance: input.commercialRelevance ?? 50,
+        selected: false, selectionDate: null, rejected: false, rejectionReason: null,
+        generatedAt: new Date().toISOString(), generationDate: new Date().toISOString().slice(0, 10) }
+    },
+    async listOpportunities(_date?: string): Promise<any[]> { return [] },
+    async selectOpportunity(_id: string, _date: string): Promise<void> {},
+    async rejectOpportunity(_id: string, _reason: string): Promise<void> {},
+    async createEditorialDecision(input: any): Promise<any> {
+      return { id: 'red-demo', organizationId: 'org-demo', decisionDate: input.decisionDate,
+        opportunityId: input.opportunityId, primaryReason: input.primaryReason,
+        audienceReason: input.audienceReason, timelinessReason: input.timelinessReason,
+        evidenceReason: input.evidenceReason, takeaway: input.takeaway, status: 'pending',
+        adminFeedback: null, adminEdits: null, createdAt: new Date().toISOString(), decidedAt: null }
+    },
+    async getEditorialDecision(_date: string): Promise<any> { return null },
+    async updateEditorialDecision(_id: string, _patches: any): Promise<void> {},
+    async createGrowthDraft(input: any): Promise<any> {
+      return { id: 'rgd-demo', organizationId: 'org-demo', decisionId: input.decisionId ?? null,
+        opportunityId: input.opportunityId ?? null, postPlan: input.postPlan,
+        platform: input.platform ?? 'linkedin', caption: '', hook: null,
+        visualType: null, visualConcept: null, visualPrompt: null, status: 'draft',
+        qualityScore: null, qualityNotes: null, createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString() }
+    },
+    async getGrowthDraft(_id: string): Promise<any> { return null },
+    async getGrowthDraftByDecision(_decisionId: string): Promise<any> { return null },
+    async updateGrowthDraft(_id: string, _patches: any): Promise<void> {},
+    async createPublication(input: any): Promise<any> {
+      return { id: 'rcp-demo', organizationId: 'org-demo', draftId: input.draftId ?? null,
+        platform: input.platform, caption: input.caption, territory: input.territory,
+        audienceSegment: input.audienceSegment, contentJob: input.contentJob,
+        publishedAt: null, externalId: null, externalUrl: null, campaign: input.campaign ?? null,
+        utmSource: null, utmMedium: null, utmContent: null, createdAt: new Date().toISOString() }
+    },
+    async listPublications(): Promise<any[]> { return [] },
+    async recordOutcome(_input: any): Promise<void> {},
+    async listOutcomes(_publicationId: string): Promise<any[]> { return [] },
+
+    // ── Team-scoped queries (demo stubs) ─────────────────────────────────────
+
+    async getTeamMembers(_teamId: string): Promise<any[]> { return [] },
+    async getTeamTargets(_teamId: string, _date?: string): Promise<any[]> { return [] },
+    async getManagedTeamSummary(_managerId: string): Promise<any[]> { return [] },
+    async getTeamInfo(_teamId: string): Promise<any> { return null },
+    async listTeams(): Promise<any[]> { return [] },
+    async getOrganizationRoles(): Promise<any[]> { return [] },
+    async getActiveTeamMemberships(): Promise<any[]> { return [] },
+    async getRepInfo(_repId: string): Promise<any> { return null },
+    async getRepAssignments(_repId: string): Promise<any[]> { return [] },
   }
 }

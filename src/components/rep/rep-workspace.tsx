@@ -1,9 +1,14 @@
-import { AlertTriangle, Shield } from 'lucide-react'
+'use client'
+
+import { useState } from 'react'
+import { AlertTriangle, Shield, Users } from 'lucide-react'
 import { YourDaySummary } from './your-day-summary'
 import { ResponsibilityCard } from './responsibility-card'
 import { DoThisNext } from './do-this-next'
 import { UpNext } from './up-next'
+import { TeamView } from './team-view'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from 'cn'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
 
 export interface RepWorkspaceData {
@@ -56,20 +61,93 @@ export interface RepWorkspaceData {
   nextAction: RelayTodayAction | null
   upNext: RelayTodayAction[]
   notifications: Array<{ id: string; title: string; body: string }>
+  isManager?: boolean
+  teamName?: string
+  teamMembers?: any[]
 }
 
 interface RepWorkspaceProps {
   data: RepWorkspaceData
+  teamData?: {
+    teams: Array<{
+      teamId: string
+      teamName: string
+      memberCount: number
+      totalTarget: number
+      totalCompleted: number
+      totalRemaining: number
+      needsAttention: number
+      members: Array<{
+        repId: string
+        repName: string
+        role: string
+        revenueIdentities: Array<{
+          identityName: string
+          channel: string
+          targets: Array<{
+            activityType: string
+            targetCount: number
+            completedCount: number
+            remaining: number
+            status: string
+          }>
+        }>
+        totalTarget: number
+        totalCompleted: number
+        totalRemaining: number
+        attentionReason: string | null
+      }>
+    }>
+    isOwner: boolean
+  }
 }
 
-export function RepWorkspace({ data }: RepWorkspaceProps) {
+export function RepWorkspace({ data, teamData }: RepWorkspaceProps) {
+  const [activeView, setActiveView] = useState<'my-work' | 'team'>('my-work')
+  const isManager = (teamData?.teams?.length ?? 0) > 0
+
   if (!data.hasAssignments) {
     return <NoAssignmentsState repName={data.rep.name} />
   }
 
   return (
     <div className="space-y-6 pb-8">
-      <YourDaySummary
+      {isManager && (
+        <div className="flex gap-1 border-b border-line">
+          <button
+            onClick={() => setActiveView('my-work')}
+            className={cn(
+              'px-3 py-2 text-[12px] font-medium transition-colors',
+              activeView === 'my-work'
+                ? 'border-b-2 border-orange text-ink'
+                : 'text-graphite hover:text-ink',
+            )}
+          >
+            My Work
+          </button>
+          <button
+            onClick={() => setActiveView('team')}
+            className={cn(
+              'px-3 py-2 text-[12px] font-medium transition-colors',
+              activeView === 'team'
+                ? 'border-b-2 border-orange text-ink'
+                : 'text-graphite hover:text-ink',
+            )}
+          >
+            Team
+          </button>
+        </div>
+      )}
+
+      {activeView === 'team' && isManager ? (
+        <TeamView
+          teamName={teamData?.teams?.[0]?.teamName || 'My Team'}
+          members={teamData?.teams?.[0]?.members || []}
+          isManager={true}
+        />
+      ) : (
+        <>
+          <YourDaySummary
         repName={data.rep.name}
         totalRemaining={data.day.totalRemaining}
         repliesWaiting={data.day.repliesWaiting}
@@ -152,6 +230,8 @@ export function RepWorkspace({ data }: RepWorkspaceProps) {
           </table>
         </div>
       </section>
+        </>
+      )}
     </div>
   )
 }

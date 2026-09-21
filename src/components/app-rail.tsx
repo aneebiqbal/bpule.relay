@@ -18,6 +18,8 @@ import {
   Menu,
   X,
   BarChart3,
+  TrendingUp,
+  Users,
 } from 'lucide-react'
 import { cn } from 'cn'
 import { RelayBrand } from '@/components/brand'
@@ -34,8 +36,16 @@ const WORK_NAV = [
   { href: '/relay', label: 'Conversations', icon: MessageSquare, exact: false },
 ]
 
+const TEAM_NAV = [
+  { href: '/dashboard', label: 'My Team', icon: Users, exact: false },
+]
+
 const CREATE_NAV = [
   { href: '/content', label: 'Studio', icon: PenLine, exact: false, studio: true },
+]
+
+const GROWTH_NAV = [
+  { href: '/content/growth', label: 'Relay Growth', icon: TrendingUp, exact: true },
 ]
 
 const INTELLIGENCE_NAV = [
@@ -60,6 +70,7 @@ const ROLE_LABEL: Record<RepRole, string> = {
   admin: 'Admin',
   rep: 'Rep',
   sourcer: 'Sourcer',
+  manager: 'Manager',
 }
 
 type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }>; exact: boolean; studio?: boolean }
@@ -344,8 +355,18 @@ export function AppRail({
             </div>
             <nav className="flex-1 overflow-y-auto px-2.5 py-3" aria-label="Mobile">
               <MobileNavSection label="Work" items={WORK_NAV} isActive={isActive} onNavigate={handleMobileNavigate} />
+              {(role === 'admin' || role === 'manager') && (
+                <div className="mt-3">
+                  <MobileNavSection label="Team" items={TEAM_NAV} isActive={isActive} onNavigate={handleMobileNavigate} />
+                </div>
+              )}
               <div className="mt-3">
                 <MobileNavSection label="Create" items={CREATE_NAV} isActive={isActive} studio onNavigate={handleMobileNavigate} />
+                {role === 'admin' && (
+                  <div className="mt-3">
+                    <MobileNavSection label="Growth" items={GROWTH_NAV} isActive={isActive} onNavigate={handleMobileNavigate} />
+                  </div>
+                )}
               </div>
               <div className="mt-3">
                 <MobileNavSection label="Intelligence" items={INTELLIGENCE_NAV} isActive={isActive} onNavigate={handleMobileNavigate} />
@@ -446,8 +467,18 @@ export function AppRail({
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-3">
           <NavSection label="Work" items={WORK_NAV} isActive={isActive} />
+          {(role === 'admin' || role === 'manager') && (
+            <div className="mt-3">
+              <NavSection label="Team" items={TEAM_NAV} isActive={isActive} />
+            </div>
+          )}
           <div className="mt-3">
             <NavSection label="Create" items={CREATE_NAV} isActive={isActive} studio />
+            {role === 'admin' && (
+              <div className="mt-3">
+                <NavSection label="Growth" items={GROWTH_NAV} isActive={isActive} />
+              </div>
+            )}
           </div>
           <div className="mt-3">
             <NavSection label="Intelligence" items={INTELLIGENCE_NAV} isActive={isActive} />

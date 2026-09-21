@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
-import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import { validateFunnelOrdering, computeCostCoverage, validateLatencyConsistency, overallFunnelHealth, classifyFallback } from '@/lib/revenue-intelligence/metrics-health'
 import { generateInsights } from '@/lib/revenue-intelligence/insights'
 
@@ -27,12 +27,11 @@ function dateRange(range: string): { start: string; end: string } {
 }
 
 export async function GET(request: Request) {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!can(authCtx, 'ACCESS_REVENUE_INTELLIGENCE')) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
 
   const supabase = await createServerSupabase()
-  const org = user.organization
   const { searchParams } = new URL(request.url)
   const range = searchParams.get('range') ?? '30d'
   const { start, end } = dateRange(range)
@@ -50,15 +49,15 @@ export async function GET(request: Request) {
     identitiesResult,
     extractionRunsResult,
   ] = await Promise.all([
-    supabase.from('relay_events').select('id, event_type, entity_id, entity_type, actor_id, actor_type, revenue_identity_id, payload, occurred_at, source_event_id').eq('organization_id', org.id).gte('occurred_at', start).lte('occurred_at', end).order('occurred_at', { ascending: false }).limit(5000),
-    supabase.from('leads').select('id, company, contact_name, contact_title, status, score, verdict, canonical_score, canonical_intelligence, direction, source, owner_rep_id, revenue_identity_id, signal_type, signal_evidence, tags, created_at, updated_at').eq('organization_id', org.id).gte('created_at', start).lte('created_at', end).order('created_at', { ascending: false }).limit(2000),
-    supabase.from('messages').select('id, lead_id, rep_id, type, send_disposition, reject_reasons, model_used, sent_at, created_at').eq('organization_id', org.id).gte('created_at', start).lte('created_at', end).order('created_at', { ascending: false }).limit(2000),
-    supabase.from('conversation_states').select('lead_id, stage, last_sent_at, last_reply_at, followup_count, won_at, lost_at, lost_reason, commercial_state').eq('organization_id', org.id),
-    supabase.from('ai_traces').select('id, task_class, provider, model, latency_ms, estimated_cost_usd, fallback, fallback_reason, error, quality, created_at').eq('organization_id', org.id).gte('created_at', start).lte('created_at', end).order('created_at', { ascending: false }).limit(5000),
-    supabase.from('daily_targets').select('id, rep_id, revenue_identity_id, activity_type, target_count, active').eq('organization_id', org.id).eq('active', true),
-    supabase.from('daily_accountability').select('id, rep_id, revenue_identity_id, activity_type, target_date, target_count, completed_count, status').eq('organization_id', org.id).gte('target_date', startStr).lte('target_date', endStr),
-    supabase.from('revenue_identities').select('id, slug, identity_name, title, channel, status').eq('organization_id', org.id),
-    supabase.from('extraction_runs').select('id, rep_id, success, latency_ms, model, error_message, created_at').eq('organization_id', org.id).gte('created_at', start).lte('created_at', end).limit(5000),
+    supabase.from('relay_events').select('id, event_type, entity_id, entity_type, actor_id, actor_type, revenue_identity_id, payload, occurred_at, source_event_id').eq('organization_id', authCtx.orgId).gte('occurred_at', start).lte('occurred_at', end).order('occurred_at', { ascending: false }).limit(5000),
+    supabase.from('leads').select('id, company, contact_name, contact_title, status, score, verdict, canonical_score, canonical_intelligence, direction, source, owner_rep_id, revenue_identity_id, signal_type, signal_evidence, tags, created_at, updated_at').eq('organization_id', authCtx.orgId).gte('created_at', start).lte('created_at', end).order('created_at', { ascending: false }).limit(2000),
+    supabase.from('messages').select('id, lead_id, rep_id, type, send_disposition, reject_reasons, model_used, sent_at, created_at').eq('organization_id', authCtx.orgId).gte('created_at', start).lte('created_at', end).order('created_at', { ascending: false }).limit(2000),
+    supabase.from('conversation_states').select('lead_id, stage, last_sent_at, last_reply_at, followup_count, won_at, lost_at, lost_reason, commercial_state').eq('organization_id', authCtx.orgId),
+    supabase.from('ai_traces').select('id, task_class, provider, model, latency_ms, estimated_cost_usd, fallback, fallback_reason, error, quality, created_at').eq('organization_id', authCtx.orgId).gte('created_at', start).lte('created_at', end).order('created_at', { ascending: false }).limit(5000),
+    supabase.from('daily_targets').select('id, rep_id, revenue_identity_id, activity_type, target_count, active').eq('organization_id', authCtx.orgId).eq('active', true),
+    supabase.from('daily_accountability').select('id, rep_id, revenue_identity_id, activity_type, target_date, target_count, completed_count, status').eq('organization_id', authCtx.orgId).gte('target_date', startStr).lte('target_date', endStr),
+    supabase.from('revenue_identities').select('id, slug, identity_name, title, channel, status').eq('organization_id', authCtx.orgId),
+    supabase.from('extraction_runs').select('id, rep_id, success, latency_ms, model, error_message, created_at').eq('organization_id', authCtx.orgId).gte('created_at', start).lte('created_at', end).limit(5000),
   ])
 
   const events = eventsResult.data ?? []

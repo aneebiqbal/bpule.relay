@@ -983,4 +983,175 @@ export interface ScoutStore {
   listTailoredCVsForJob(jobId: string): Promise<import('@/lib/domain/types').TailoredCV[]>
 
   markTailoredCVApplied(id: string): Promise<void>
+
+  // ── Relay Growth Engine ───────────────────────────────────────────────────
+
+  // Product Memory
+  createGrowthMemory(input: {
+    memoryType: import('@/lib/domain/types').GrowthMemoryType
+    title: string
+    content: string
+    source?: string | null
+    claimSafety?: import('@/lib/domain/types').ClaimSafety
+    territories?: string[]
+    audienceSegments?: string[]
+  }): Promise<import('@/lib/domain/types').RelayGrowthMemory>
+
+  listGrowthMemory(activeOnly?: boolean): Promise<import('@/lib/domain/types').RelayGrowthMemory[]>
+
+  // Growth Events (Build Log)
+  createGrowthEvent(input: {
+    eventType: import('@/lib/domain/types').GrowthEventType
+    title: string
+    rawContent: string
+    sourceKind?: string
+  }): Promise<import('@/lib/domain/types').RelayGrowthEvent>
+
+  listGrowthEvents(processedOnly?: boolean): Promise<import('@/lib/domain/types').RelayGrowthEvent[]>
+
+  markGrowthEventProcessed(id: string, editorialContent: string): Promise<void>
+
+  // Content Opportunities
+  createOpportunity(input: {
+    sourceType: import('@/lib/domain/types').OpportunitySourceType
+    sourceId?: string | null
+    title: string
+    observation: string
+    insight: string
+    territory: string
+    audienceSegment: string
+    contentJob: import('@/lib/domain/types').ContentJob
+    evidenceStrength?: 'strong' | 'medium' | 'weak'
+    claimBoundaries?: string[]
+    audienceRelevance?: number
+    novelty?: number
+    specificity?: number
+    timeliness?: number
+    relayDifferentiation?: number
+    conversationPotential?: number
+    learningValue?: number
+    repetitionRisk?: number
+    commercialRelevance?: number
+  }): Promise<import('@/lib/domain/types').RelayContentOpportunity>
+
+  listOpportunities(date?: string): Promise<import('@/lib/domain/types').RelayContentOpportunity[]>
+
+  selectOpportunity(id: string, date: string): Promise<void>
+
+  rejectOpportunity(id: string, reason: string): Promise<void>
+
+  // Editorial Decisions
+  createEditorialDecision(input: {
+    decisionDate: string
+    opportunityId: string | null
+    primaryReason: string
+    audienceReason: string
+    timelinessReason: string
+    evidenceReason: string
+    takeaway: string
+  }): Promise<import('@/lib/domain/types').RelayEditorialDecision>
+
+  getEditorialDecision(date: string): Promise<import('@/lib/domain/types').RelayEditorialDecision | null>
+
+  updateEditorialDecision(id: string, patches: {
+    status?: import('@/lib/domain/types').EditorialStatus
+    adminFeedback?: import('@/lib/domain/types').AdminFeedback
+    adminEdits?: string
+  }): Promise<void>
+
+  // Growth Drafts
+  createGrowthDraft(input: {
+    decisionId?: string | null
+    opportunityId?: string | null
+    postPlan: Record<string, unknown>
+    platform?: string
+  }): Promise<import('@/lib/domain/types').RelayGrowthDraft>
+
+  getGrowthDraft(id: string): Promise<import('@/lib/domain/types').RelayGrowthDraft | null>
+
+  getGrowthDraftByDecision(decisionId: string): Promise<import('@/lib/domain/types').RelayGrowthDraft | null>
+
+  updateGrowthDraft(id: string, patches: {
+    caption?: string
+    hook?: string
+    status?: string
+    visualType?: string
+    visualConcept?: string
+    visualPrompt?: string
+    qualityScore?: number
+    qualityNotes?: string[]
+  }): Promise<void>
+
+  // Publications
+  createPublication(input: {
+    draftId?: string | null
+    platform: string
+    caption: string
+    territory: string
+    audienceSegment: string
+    contentJob: string
+    campaign?: string
+  }): Promise<import('@/lib/domain/types').RelayContentPublication>
+
+  listPublications(): Promise<import('@/lib/domain/types').RelayContentPublication[]>
+
+  // Outcomes
+  recordOutcome(input: {
+    publicationId: string
+    impressions?: number
+    likes?: number
+    comments?: number
+    shares?: number
+    saves?: number
+    profileVisits?: number
+    newFollowers?: number
+    signups?: number
+  }): Promise<void>
+
+  listOutcomes(publicationId: string): Promise<import('@/lib/domain/types').RelayContentOutcome[]>
+
+  // ── Team-scoped queries ───────────────────────────────────────────────────
+
+  getTeamMembers(teamId: string): Promise<Array<{ repId: string; repName: string; role: string }>>
+
+  getTeamTargets(teamId: string, date?: string): Promise<Array<{
+    repId: string
+    repName: string
+    revenueIdentityId: string
+    identityName: string
+    channel: string
+    activityType: string
+    targetCount: number
+    completedCount: number
+    remaining: number
+    status: string
+  }>>
+
+  getManagedTeamSummary(managerId: string): Promise<Array<{
+    teamId: string
+    teamName: string
+    memberCount: number
+    totalTarget: number
+    totalCompleted: number
+    totalRemaining: number
+    needsAttention: number
+  }>>
+
+  getTeamInfo(teamId: string): Promise<{ id: string; name: string; description: string | null } | null>
+
+  listTeams(): Promise<Array<{ id: string; name: string; description: string | null }>>
+
+  getOrganizationRoles(): Promise<Array<{ personId: string; role: string }>>
+
+  getActiveTeamMemberships(): Promise<Array<{ teamId: string; personId: string; membershipRole: string }>>
+
+  getRepInfo(repId: string): Promise<{ id: string; name: string; role: string } | null>
+
+  getRepAssignments(repId: string): Promise<Array<{
+    assignmentId: string
+    revenueIdentityId: string
+    identityName: string
+    title: string | null
+    channel: string
+  }>>
 }

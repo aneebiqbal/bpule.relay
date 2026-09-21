@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
-import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext, can } from '@/lib/auth/organization'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const admin = url.searchParams.get('admin') === '1'
 
-  const user = await getCurrentUser()
-  if (!user) {
+  const authCtx = await getAuthContext()
+  if (!authCtx) {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
 
@@ -48,8 +48,8 @@ export async function POST(request: Request) {
     )
   }
 
-  const user = await getCurrentUser()
-  if (!user) {
+  const authCtx = await getAuthContext()
+  if (!authCtx) {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
 
@@ -67,9 +67,9 @@ export async function POST(request: Request) {
 
   // Editing another rep's profile is an admin-only action. Enforced here
   // server-side, independent of the RLS policy on `profiles`.
-  if (targetRepId && targetRepId !== user.rep.id) {
-    if (user.rep.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  if (targetRepId && targetRepId !== authCtx.repId) {
+    if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
+      return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
     }
     const profile = await store.upsertProfileAdmin({
       id: typeof body.id === 'string' ? body.id : undefined,

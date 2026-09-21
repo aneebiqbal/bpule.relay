@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { classifyProofTags } from '@/lib/ai/proof-tags'
 import { embedText } from '@/lib/ai/embed'
-import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext, can } from '@/lib/auth/organization'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -15,8 +15,8 @@ export async function GET(request: Request) {
     )
   }
 
-  const user = await getCurrentUser()
-  if (!user) {
+  const authCtx = await getAuthContext()
+  if (!authCtx) {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
 
@@ -33,8 +33,8 @@ export async function GET(request: Request) {
   if (admin) {
     // Reading another rep's proof items unredacted is an admin-only action.
     // Enforced here server-side, independent of the RLS policy.
-    if (user.rep.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+    if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
+      return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
     }
     const items = await store.listProofItemsAdmin(profileId)
     return NextResponse.json({ items })
@@ -70,8 +70,8 @@ export async function POST(request: Request) {
   // Enforced above the store as well as inside it: no permission, no name.
   if (!permissionOnFile) clientName = null
 
-  const user = await getCurrentUser()
-  if (!user) {
+  const authCtx = await getAuthContext()
+  if (!authCtx) {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
 
@@ -86,8 +86,8 @@ export async function POST(request: Request) {
   }
 
   const admin = Boolean(body.admin)
-  if (admin && user.rep.role !== 'admin') {
-    return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  if (admin && !can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
+    return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
   }
 
   const owned = admin

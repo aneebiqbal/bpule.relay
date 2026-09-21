@@ -1,27 +1,35 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
-import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import { calculateContactWindow, type TimingInput } from '@/lib/relay/timing-engine'
 
 export const maxDuration = 30
 
 export async function GET() {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (user.rep.role !== 'admin') return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!can(authCtx, 'VIEW_TEAM_ANALYTICS')) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
 
   const supabase = await createServerSupabase()
-  const org = user.organization
+
+  const { data: orgRow } = await supabase
+    .from('organizations')
+    .select('timezone')
+    .eq('id', authCtx.orgId)
+    .single()
+
+  const orgTimezone = orgRow?.timezone ?? 'UTC'
+
   const now = new Date()
   const today = now.toISOString().slice(0, 10)
 
   const [repsResult, eventsResult, capturedResult, leadsResult, targetsResult, accountabilityResult] = await Promise.all([
-    supabase.from('reps').select('id, name, created_at, role').eq('organization_id', org.id),
-    supabase.from('relay_events').select('*').eq('organization_id', org.id).order('occurred_at', { ascending: false }).limit(200),
-    supabase.from('captured_prospects').select('*').eq('organization_id', org.id).eq('status', 'captured').order('last_activity_at', { ascending: false }).limit(50),
-    supabase.from('leads').select('id, company, contact_name, contact_title, status, score, verdict, canonical_score, direction, owner_rep_id, tags, signal_type, signal_evidence, created_at, revenue_identity_id').eq('organization_id', org.id).order('created_at', { ascending: false }).limit(100),
-    supabase.from('daily_targets').select('*').eq('organization_id', org.id).eq('active', true),
-    supabase.from('daily_accountability').select('*').eq('organization_id', org.id).eq('target_date', today),
+    supabase.from('reps').select('id, name, created_at, role').eq('organization_id', authCtx.orgId),
+    supabase.from('relay_events').select('*').eq('organization_id', authCtx.orgId).order('occurred_at', { ascending: false }).limit(200),
+    supabase.from('captured_prospects').select('*').eq('organization_id', authCtx.orgId).eq('status', 'captured').order('last_activity_at', { ascending: false }).limit(50),
+    supabase.from('leads').select('id, company, contact_name, contact_title, status, score, verdict, canonical_score, direction, owner_rep_id, tags, signal_type, signal_evidence, created_at, revenue_identity_id').eq('organization_id', authCtx.orgId).order('created_at', { ascending: false }).limit(100),
+    supabase.from('daily_targets').select('*').eq('organization_id', authCtx.orgId).eq('active', true),
+    supabase.from('daily_accountability').select('*').eq('organization_id', authCtx.orgId).eq('target_date', today),
   ])
 
   const reps = repsResult.data ?? []
@@ -63,7 +71,7 @@ export async function GET() {
     const timing: TimingInput = {
       channel: (lead.direction === 'inbound' ? 'dm' : 'dm') as 'dm',
       prospectTimezone: null,
-      repTimezone: org.timezone ?? 'UTC',
+      repTimezone: orgTimezone,
       lastMeaningfulActionAt: lead.created_at,
       conversationStage: lead.status === 'new' ? 'new' : isContacted ? 'contacted' : 'new',
       connectionAccepted: false,
@@ -166,7 +174,7 @@ export async function GET() {
 
   return NextResponse.json({
     date: today,
-    orgTimezone: org.timezone ?? 'UTC',
+    orgTimezone,
     activeReps: reps.length,
     totalLeadsToday: leads.length,
     totalCapturedProspects: capturedItems.length,

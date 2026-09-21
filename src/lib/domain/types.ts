@@ -1,4 +1,4 @@
-export type RepRole = 'rep' | 'sourcer' | 'admin'
+export type RepRole = 'rep' | 'sourcer' | 'admin' | 'manager'
 
 export type OrganizationPlan = 'trial' | 'active' | 'past_due' | 'canceled'
 
@@ -1464,4 +1464,214 @@ export interface TailoredCV {
   appliedAt: string | null
   createdAt: string
   updatedAt: string
+}
+
+// ── Relay Growth Engine ───────────────────────────────────────────────────────
+
+export type GrowthMemoryType =
+  | 'product_fact' | 'product_decision' | 'experiment_result'
+  | 'customer_problem' | 'design_decision' | 'engineering_lesson'
+  | 'revenue_learning' | 'dogfood_result' | 'market_insight'
+  | 'content_insight' | 'audience_insight' | 'competitive_insight'
+
+// ClaimSafety already defined at line 898
+
+export type GrowthEventType =
+  | 'product_change' | 'product_decision' | 'bug_discovered' | 'bug_fixed'
+  | 'experiment_started' | 'experiment_result' | 'customer_problem'
+  | 'design_decision' | 'engineering_lesson' | 'revenue_learning'
+  | 'dogfood_result' | 'feature_shipped' | 'feature_rejected'
+  | 'assumption_invalidated' | 'build_log_entry'
+
+export type ContentJob =
+  | 'teach' | 'challenge' | 'show' | 'prove' | 'build_in_public'
+  | 'start_conversation' | 'create_category' | 'explain_product' | 'convert'
+
+export type OpportunitySourceType =
+  | 'product_memory' | 'product_event' | 'territory_gap'
+  | 'audience_need' | 'market_event' | 'experiment_result'
+  | 'dogfood_result' | 'content_gap'
+
+export type EditorialStatus =
+  | 'pending' | 'approved' | 'edited' | 'rejected' | 'regenerated' | 'not_today'
+
+export type AdminFeedback =
+  | 'approved_unchanged' | 'light_edit' | 'heavy_edit'
+  | 'rejected' | 'not_today' | 'wrong_topic' | 'too_generic'
+  | 'too_promotional' | 'repetitive' | 'weak_hook' | 'fact_problem'
+
+export interface RelayGrowthMemory {
+  id: string
+  organizationId: string
+  memoryType: GrowthMemoryType
+  title: string
+  content: string
+  source: string | null
+  claimSafety: ClaimSafety
+  territories: string[]
+  audienceSegments: string[]
+  active: boolean
+  usedInContent: boolean
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RelayGrowthEvent {
+  id: string
+  organizationId: string
+  eventType: GrowthEventType
+  title: string
+  rawContent: string
+  editorialContent: string | null
+  processed: boolean
+  processedAt: string | null
+  sourceKind: string
+  sourceId: string | null
+  createdBy: string | null
+  createdAt: string
+}
+
+export interface RelayContentOpportunity {
+  id: string
+  organizationId: string
+  sourceType: OpportunitySourceType
+  sourceId: string | null
+  title: string
+  observation: string
+  insight: string
+  territory: string
+  audienceSegment: string
+  contentJob: ContentJob
+  evidenceStrength: 'strong' | 'medium' | 'weak'
+  claimBoundaries: string[]
+  audienceRelevance: number
+  novelty: number
+  specificity: number
+  timeliness: number
+  relayDifferentiation: number
+  conversationPotential: number
+  learningValue: number
+  repetitionRisk: number
+  commercialRelevance: number
+  selected: boolean
+  selectionDate: string | null
+  rejected: boolean
+  rejectionReason: string | null
+  generatedAt: string
+  generationDate: string
+}
+
+export interface RelayEditorialDecision {
+  id: string
+  organizationId: string
+  decisionDate: string
+  opportunityId: string | null
+  primaryReason: string
+  audienceReason: string
+  timelinessReason: string
+  evidenceReason: string
+  takeaway: string
+  status: EditorialStatus
+  adminFeedback: AdminFeedback | null
+  adminEdits: string | null
+  createdAt: string
+  decidedAt: string | null
+}
+
+export interface RelayGrowthDraft {
+  id: string
+  organizationId: string
+  decisionId: string | null
+  opportunityId: string | null
+  postPlan: Record<string, unknown>
+  platform: string
+  caption: string
+  hook: string | null
+  visualType: string | null
+  visualConcept: string | null
+  visualPrompt: string | null
+  status: string
+  qualityScore: number | null
+  qualityNotes: string[] | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RelayContentPublication {
+  id: string
+  organizationId: string
+  draftId: string | null
+  platform: string
+  publishedAt: string | null
+  externalId: string | null
+  externalUrl: string | null
+  campaign: string | null
+  utmSource: string | null
+  utmMedium: string | null
+  utmContent: string | null
+  caption: string
+  territory: string
+  audienceSegment: string
+  contentJob: string
+  createdAt: string
+}
+
+export interface RelayContentOutcome {
+  id: string
+  organizationId: string
+  publicationId: string
+  impressions: number | null
+  uniqueReach: number | null
+  likes: number | null
+  comments: number | null
+  shares: number | null
+  saves: number | null
+  profileVisits: number | null
+  newFollowers: number | null
+  linkClicks: number | null
+  relayVisits: number | null
+  signups: number | null
+  activatedUsers: number | null
+  recordedAt: string
+  notes: string | null
+}
+
+export interface RelayGrowthExperiment {
+  id: string
+  organizationId: string
+  hypothesis: string
+  territory: string
+  variable: string
+  status: string
+  startedAt: string | null
+  completedAt: string | null
+  results: Record<string, unknown>
+  conclusion: string | null
+  createdAt: string
+}
+
+// PostPlan — structured plan before writing
+export interface PostPlan {
+  audience: string
+  territory: string
+  contentJob: ContentJob
+  coreInsight: string
+  evidence: string[]
+  claimBoundaries: string[]
+  openingStrategy: string
+  structure: string
+  takeaway: string
+  desiredReaction: string
+  productMention: 'none' | 'natural' | 'direct'
+  cta: string | null
+}
+
+// DailyEditor output
+export interface DailyEditorResult {
+  primary: RelayContentOpportunity | null
+  backup: RelayContentOpportunity | null
+  experimental: RelayContentOpportunity | null
+  reasoning: string
+  whyToday: string
 }

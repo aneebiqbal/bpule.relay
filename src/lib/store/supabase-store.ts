@@ -107,6 +107,35 @@ import {
 type Row = Record<string, unknown>
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+interface TeamMemberRow {
+  repId: string
+  repName: string
+  role: string
+}
+
+interface TeamTargetRow {
+  repId: string
+  repName: string
+  revenueIdentityId: string
+  identityName: string
+  channel: string
+  activityType: string
+  targetCount: number
+  completedCount: number
+  remaining: number
+  status: string
+}
+
+interface TeamSummaryRow {
+  teamId: string
+  teamName: string
+  memberCount: number
+  totalTarget: number
+  totalCompleted: number
+  totalRemaining: number
+  needsAttention: number
+}
+
 function normalizeStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.map((v) => String(v).trim()).filter(Boolean)
@@ -4950,6 +4979,608 @@ export class SupabaseStore implements ScoutStore {
       updatedAt: r.updated_at as string,
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RELAY GROWTH ENGINE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async createGrowthMemory(input: {
+    memoryType: import('@/lib/domain/types').GrowthMemoryType
+    title: string
+    content: string
+    source?: string | null
+    claimSafety?: import('@/lib/domain/types').ClaimSafety
+    territories?: string[]
+    audienceSegments?: string[]
+  }): Promise<import('@/lib/domain/types').RelayGrowthMemory> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('relay_growth_memory')
+      .insert({ organization_id: this.orgId, memory_type: input.memoryType, title: input.title,
+        content: input.content, source: input.source ?? null,
+        claim_safety: input.claimSafety ?? 'verified_product_fact',
+        territories: input.territories ?? [], audience_segments: input.audienceSegments ?? [],
+        created_by: this.rep.id }).select('*').single()
+    if (error) throw error
+    return { id: data.id, organizationId: data.organization_id, memoryType: data.memory_type,
+      title: data.title, content: data.content, source: data.source, claimSafety: data.claim_safety,
+      territories: data.territories, audienceSegments: data.audience_segments, active: data.active,
+      usedInContent: data.used_in_content, createdBy: data.created_by, createdAt: data.created_at,
+      updatedAt: data.updated_at }
+  }
+
+  async listGrowthMemory(activeOnly = true): Promise<import('@/lib/domain/types').RelayGrowthMemory[]> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    let query = this.client.from('relay_growth_memory').select('*').eq('organization_id', this.orgId)
+    if (activeOnly) query = query.eq('active', true)
+    const { data, error } = await query.order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id, organizationId: r.organization_id, memoryType: r.memory_type, title: r.title,
+      content: r.content, source: r.source, claimSafety: r.claim_safety, territories: r.territories,
+      audienceSegments: r.audience_segments, active: r.active, usedInContent: r.used_in_content,
+      createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at,
+    }))
+  }
+
+  async createGrowthEvent(input: {
+    eventType: import('@/lib/domain/types').GrowthEventType
+    title: string
+    rawContent: string
+    sourceKind?: string
+  }): Promise<import('@/lib/domain/types').RelayGrowthEvent> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('relay_growth_events')
+      .insert({ organization_id: this.orgId, event_type: input.eventType, title: input.title,
+        raw_content: input.rawContent, source_kind: input.sourceKind ?? 'build_log',
+        created_by: this.rep.id }).select('*').single()
+    if (error) throw error
+    return { id: data.id, organizationId: data.organization_id, eventType: data.event_type,
+      title: data.title, rawContent: data.raw_content, editorialContent: data.editorial_content,
+      processed: data.processed, processedAt: data.processed_at, sourceKind: data.source_kind,
+      sourceId: data.source_id, createdBy: data.created_by, createdAt: data.created_at }
+  }
+
+  async listGrowthEvents(processedOnly = false): Promise<import('@/lib/domain/types').RelayGrowthEvent[]> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    let query = this.client.from('relay_growth_events').select('*').eq('organization_id', this.orgId)
+    if (!processedOnly) query = query.eq('processed', false)
+    const { data, error } = await query.order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id, organizationId: r.organization_id, eventType: r.event_type, title: r.title,
+      rawContent: r.raw_content, editorialContent: r.editorial_content, processed: r.processed,
+      processedAt: r.processed_at, sourceKind: r.source_kind, sourceId: r.source_id,
+      createdBy: r.created_by, createdAt: r.created_at,
+    }))
+  }
+
+  async markGrowthEventProcessed(id: string, editorialContent: string): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    await this.client.from('relay_growth_events')
+      .update({ processed: true, editorial_content: editorialContent, processed_at: new Date().toISOString() })
+      .eq('id', id).eq('organization_id', this.orgId)
+  }
+
+  async createOpportunity(input: {
+    sourceType: import('@/lib/domain/types').OpportunitySourceType
+    sourceId?: string | null
+    title: string
+    observation: string
+    insight: string
+    territory: string
+    audienceSegment: string
+    contentJob: import('@/lib/domain/types').ContentJob
+    evidenceStrength?: 'strong' | 'medium' | 'weak'
+    claimBoundaries?: string[]
+    audienceRelevance?: number
+    novelty?: number
+    specificity?: number
+    timeliness?: number
+    relayDifferentiation?: number
+    conversationPotential?: number
+    learningValue?: number
+    repetitionRisk?: number
+    commercialRelevance?: number
+  }): Promise<import('@/lib/domain/types').RelayContentOpportunity> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('relay_content_opportunities')
+      .insert({ organization_id: this.orgId, source_type: input.sourceType,
+        source_id: input.sourceId ?? null, title: input.title, observation: input.observation,
+        insight: input.insight, territory: input.territory, audience_segment: input.audienceSegment,
+        content_job: input.contentJob, evidence_strength: input.evidenceStrength ?? 'medium',
+        claim_boundaries: input.claimBoundaries ?? [], audience_relevance: input.audienceRelevance ?? 50,
+        novelty: input.novelty ?? 50, specificity: input.specificity ?? 50,
+        timeliness: input.timeliness ?? 50, relay_differentiation: input.relayDifferentiation ?? 50,
+        conversation_potential: input.conversationPotential ?? 50, learning_value: input.learningValue ?? 50,
+        repetition_risk: input.repetitionRisk ?? 0, commercial_relevance: input.commercialRelevance ?? 50,
+      }).select('*').single()
+    if (error) throw error
+    return { id: data.id, organizationId: data.organization_id, sourceType: data.source_type,
+      sourceId: data.source_id, title: data.title, observation: data.observation,
+      insight: data.insight, territory: data.territory, audienceSegment: data.audience_segment,
+      contentJob: data.content_job, evidenceStrength: data.evidence_strength,
+      claimBoundaries: data.claim_boundaries, audienceRelevance: data.audience_relevance,
+      novelty: data.novelty, specificity: data.specificity, timeliness: data.timeliness,
+      relayDifferentiation: data.relay_differentiation, conversationPotential: data.conversation_potential,
+      learningValue: data.learning_value, repetitionRisk: data.repetition_risk,
+      commercialRelevance: data.commercial_relevance, selected: data.selected,
+      selectionDate: data.selection_date, rejected: data.rejected,
+      rejectionReason: data.rejection_reason, generatedAt: data.generated_at,
+      generationDate: data.generation_date }
+  }
+
+  async listOpportunities(date?: string): Promise<import('@/lib/domain/types').RelayContentOpportunity[]> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    let query = this.client.from('relay_content_opportunities').select('*').eq('organization_id', this.orgId)
+    if (date) query = query.eq('generation_date', date)
+    const { data, error } = await query.order('generated_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id, organizationId: r.organization_id, sourceType: r.source_type, sourceId: r.source_id,
+      title: r.title, observation: r.observation, insight: r.insight, territory: r.territory,
+      audienceSegment: r.audience_segment, contentJob: r.content_job, evidenceStrength: r.evidence_strength,
+      claimBoundaries: r.claim_boundaries, audienceRelevance: r.audience_relevance, novelty: r.novelty,
+      specificity: r.specificity, timeliness: r.timeliness, relayDifferentiation: r.relay_differentiation,
+      conversationPotential: r.conversation_potential, learningValue: r.learning_value,
+      repetitionRisk: r.repetition_risk, commercialRelevance: r.commercial_relevance,
+      selected: r.selected, selectionDate: r.selection_date, rejected: r.rejected,
+      rejectionReason: r.rejection_reason, generatedAt: r.generated_at, generationDate: r.generation_date,
+    }))
+  }
+
+  async selectOpportunity(id: string, date: string): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    await this.client.from('relay_content_opportunities')
+      .update({ selected: true, selection_date: date })
+      .eq('id', id).eq('organization_id', this.orgId)
+  }
+
+  async rejectOpportunity(id: string, reason: string): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    await this.client.from('relay_content_opportunities')
+      .update({ rejected: true, rejection_reason: reason })
+      .eq('id', id).eq('organization_id', this.orgId)
+  }
+
+  async createEditorialDecision(input: {
+    decisionDate: string
+    opportunityId: string | null
+    primaryReason: string
+    audienceReason: string
+    timelinessReason: string
+    evidenceReason: string
+    takeaway: string
+  }): Promise<import('@/lib/domain/types').RelayEditorialDecision> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('relay_editorial_decisions')
+      .insert({ organization_id: this.orgId, decision_date: input.decisionDate,
+        opportunity_id: input.opportunityId, primary_reason: input.primaryReason,
+        audience_reason: input.audienceReason, timeliness_reason: input.timelinessReason,
+        evidence_reason: input.evidenceReason, takeaway: input.takeaway }).select('*').single()
+    if (error) throw error
+    return { id: data.id, organizationId: data.organization_id, decisionDate: data.decision_date,
+      opportunityId: data.opportunity_id, primaryReason: data.primary_reason,
+      audienceReason: data.audience_reason, timelinessReason: data.timeliness_reason,
+      evidenceReason: data.evidence_reason, takeaway: data.takeaway, status: data.status,
+      adminFeedback: data.admin_feedback, adminEdits: data.admin_edits,
+      createdAt: data.created_at, decidedAt: data.decided_at }
+  }
+
+  async getEditorialDecision(date: string): Promise<import('@/lib/domain/types').RelayEditorialDecision | null> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('relay_editorial_decisions').select('*')
+      .eq('organization_id', this.orgId).eq('decision_date', date).maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return { id: data.id, organizationId: data.organization_id, decisionDate: data.decision_date,
+      opportunityId: data.opportunity_id, primaryReason: data.primary_reason,
+      audienceReason: data.audience_reason, timelinessReason: data.timeliness_reason,
+      evidenceReason: data.evidence_reason, takeaway: data.takeaway, status: data.status,
+      adminFeedback: data.admin_feedback, adminEdits: data.admin_edits,
+      createdAt: data.created_at, decidedAt: data.decided_at }
+  }
+
+  async updateEditorialDecision(id: string, patches: {
+    status?: import('@/lib/domain/types').EditorialStatus
+    adminFeedback?: import('@/lib/domain/types').AdminFeedback
+    adminEdits?: string
+  }): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const update: Record<string, unknown> = { decided_at: new Date().toISOString() }
+    if (patches.status) update.status = patches.status
+    if (patches.adminFeedback) update.admin_feedback = patches.adminFeedback
+    if (patches.adminEdits !== undefined) update.admin_edits = patches.adminEdits
+    await this.client.from('relay_editorial_decisions')
+      .update(update).eq('id', id).eq('organization_id', this.orgId)
+  }
+
+  async createGrowthDraft(input: {
+    decisionId?: string | null
+    opportunityId?: string | null
+    postPlan: Record<string, unknown>
+    platform?: string
+  }): Promise<import('@/lib/domain/types').RelayGrowthDraft> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('relay_growth_drafts')
+      .insert({ organization_id: this.orgId, decision_id: input.decisionId ?? null,
+        opportunity_id: input.opportunityId ?? null, post_plan: JSON.parse(JSON.stringify(input.postPlan)),
+        platform: input.platform ?? 'linkedin' }).select('*').single()
+    if (error) throw error
+    return { id: data.id, organizationId: data.organization_id, decisionId: data.decision_id,
+      opportunityId: data.opportunity_id, postPlan: data.post_plan, platform: data.platform,
+      caption: data.caption, hook: data.hook, visualType: data.visual_type,
+      visualConcept: data.visual_concept, visualPrompt: data.visual_prompt, status: data.status,
+      qualityScore: data.quality_score, qualityNotes: data.quality_notes,
+      createdAt: data.created_at, updatedAt: data.updated_at }
+  }
+
+  async getGrowthDraft(id: string): Promise<import('@/lib/domain/types').RelayGrowthDraft | null> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('relay_growth_drafts').select('*').eq('id', id)
+      .eq('organization_id', this.orgId).maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return { id: data.id, organizationId: data.organization_id, decisionId: data.decision_id,
+      opportunityId: data.opportunity_id, postPlan: data.post_plan, platform: data.platform,
+      caption: data.caption, hook: data.hook, visualType: data.visual_type,
+      visualConcept: data.visual_concept, visualPrompt: data.visual_prompt, status: data.status,
+      qualityScore: data.quality_score, qualityNotes: data.quality_notes,
+      createdAt: data.created_at, updatedAt: data.updated_at }
+  }
+
+  async getGrowthDraftByDecision(decisionId: string): Promise<import('@/lib/domain/types').RelayGrowthDraft | null> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('relay_growth_drafts').select('*').eq('decision_id', decisionId)
+      .eq('organization_id', this.orgId).maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return { id: data.id, organizationId: data.organization_id, decisionId: data.decision_id,
+      opportunityId: data.opportunity_id, postPlan: data.post_plan, platform: data.platform,
+      caption: data.caption, hook: data.hook, visualType: data.visual_type,
+      visualConcept: data.visual_concept, visualPrompt: data.visual_prompt, status: data.status,
+      qualityScore: data.quality_score, qualityNotes: data.quality_notes,
+      createdAt: data.created_at, updatedAt: data.updated_at }
+  }
+
+  async updateGrowthDraft(id: string, patches: {
+    caption?: string
+    hook?: string
+    status?: string
+    visualType?: string
+    visualConcept?: string
+    visualPrompt?: string
+    qualityScore?: number
+    qualityNotes?: string[]
+  }): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (patches.caption !== undefined) update.caption = patches.caption
+    if (patches.hook !== undefined) update.hook = patches.hook
+    if (patches.status) update.status = patches.status
+    if (patches.visualType) update.visual_type = patches.visualType
+    if (patches.visualConcept) update.visual_concept = patches.visualConcept
+    if (patches.visualPrompt) update.visual_prompt = patches.visualPrompt
+    if (patches.qualityScore !== undefined) update.quality_score = patches.qualityScore
+    if (patches.qualityNotes) update.quality_notes = patches.qualityNotes
+    await this.client.from('relay_growth_drafts')
+      .update(update).eq('id', id).eq('organization_id', this.orgId)
+  }
+
+  async createPublication(input: {
+    draftId?: string | null
+    platform: string
+    caption: string
+    territory: string
+    audienceSegment: string
+    contentJob: string
+    campaign?: string
+  }): Promise<import('@/lib/domain/types').RelayContentPublication> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('relay_content_publications')
+      .insert({ organization_id: this.orgId, draft_id: input.draftId ?? null,
+        platform: input.platform, caption: input.caption, territory: input.territory,
+        audience_segment: input.audienceSegment, content_job: input.contentJob,
+        campaign: input.campaign ?? null }).select('*').single()
+    if (error) throw error
+    return { id: data.id, organizationId: data.organization_id, draftId: data.draft_id,
+      platform: data.platform, publishedAt: data.published_at, externalId: data.external_id,
+      externalUrl: data.external_url, campaign: data.campaign, utmSource: data.utm_source,
+      utmMedium: data.utm_medium, utmContent: data.utm_content, caption: data.caption,
+      territory: data.territory, audienceSegment: data.audience_segment,
+      contentJob: data.content_job, createdAt: data.created_at }
+  }
+
+  async listPublications(): Promise<import('@/lib/domain/types').RelayContentPublication[]> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('relay_content_publications').select('*').eq('organization_id', this.orgId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id, organizationId: r.organization_id, draftId: r.draft_id, platform: r.platform,
+      publishedAt: r.published_at, externalId: r.external_id, externalUrl: r.external_url,
+      campaign: r.campaign, utmSource: r.utm_source, utmMedium: r.utm_medium,
+      utmContent: r.utm_content, caption: r.caption, territory: r.territory,
+      audienceSegment: r.audience_segment, contentJob: r.content_job, createdAt: r.created_at,
+    }))
+  }
+
+  async recordOutcome(input: {
+    publicationId: string
+    impressions?: number
+    likes?: number
+    comments?: number
+    shares?: number
+    saves?: number
+    profileVisits?: number
+    newFollowers?: number
+    signups?: number
+  }): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    await this.client.from('relay_content_outcomes').insert({
+      organization_id: this.orgId, publication_id: input.publicationId,
+      impressions: input.impressions ?? null, likes: input.likes ?? null,
+      comments: input.comments ?? null, shares: input.shares ?? null,
+      saves: input.saves ?? null, profile_visits: input.profileVisits ?? null,
+      new_followers: input.newFollowers ?? null, signups: input.signups ?? null,
+    })
+  }
+
+  async listOutcomes(publicationId: string): Promise<import('@/lib/domain/types').RelayContentOutcome[]> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('relay_content_outcomes').select('*').eq('publication_id', publicationId)
+      .order('recorded_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id, organizationId: r.organization_id, publicationId: r.publication_id,
+      impressions: r.impressions, uniqueReach: r.unique_reach, likes: r.likes,
+      comments: r.comments, shares: r.shares, saves: r.saves, profileVisits: r.profile_visits,
+      newFollowers: r.new_followers, linkClicks: r.link_clicks, relayVisits: r.relay_visits,
+      signups: r.signups, activatedUsers: r.activated_users, recordedAt: r.recorded_at,
+      notes: r.notes,
+    }))
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TEAM-SCOPED QUERIES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async getTeamMembers(teamId: string): Promise<TeamMemberRow[]> {
+    const { data, error } = await this.client
+      .from('team_memberships')
+      .select('person_id, membership_role, reps!inner(id, name)')
+      .eq('team_id', teamId)
+      .eq('active', true)
+    if (error) throw error
+    return (data ?? []).map((r: any) => ({
+      repId: r.reps.id,
+      repName: r.reps.name,
+      role: r.membership_role,
+    }))
+  }
+
+  async getTeamTargets(teamId: string, date?: string): Promise<TeamTargetRow[]> {
+    const targetDate = date ?? new Date().toISOString().slice(0, 10)
+
+    const { data: memberships } = await this.client
+      .from('team_memberships')
+      .select('person_id')
+      .eq('team_id', teamId)
+      .eq('active', true)
+
+    if (!memberships || memberships.length === 0) return []
+
+    const repIds = memberships.map((m) => m.person_id)
+
+    const { data: targets } = await this.client
+      .from('daily_targets')
+      .select('rep_id, revenue_identity_id, activity_type, target_count, active')
+      .in('rep_id', repIds)
+      .eq('active', true)
+
+    if (!targets || targets.length === 0) return []
+
+    const { data: accountability } = await this.client
+      .from('daily_accountability')
+      .select('rep_id, revenue_identity_id, activity_type, completed_count, status')
+      .in('rep_id', repIds)
+      .eq('target_date', targetDate)
+
+    const accMap = new Map(
+      (accountability ?? []).map((a) => [`${a.revenue_identity_id}:${a.activity_type}`, a]),
+    )
+
+    const { data: identities } = await this.client
+      .from('revenue_identities')
+      .select('id, identity_name, channel')
+      .in('revenue_identity_id', targets.map((t) => t.revenue_identity_id))
+
+    const identityMap = new Map((identities ?? []).map((i) => [i.id, i]))
+
+    const { data: reps } = await this.client
+      .from('reps')
+      .select('id, name')
+      .in('id', repIds)
+
+    const repMap = new Map((reps ?? []).map((r) => [r.id, r.name]))
+
+    return targets.map((t) => {
+      const key = `${t.revenue_identity_id}:${t.activity_type}`
+      const acc = accMap.get(key)
+      const identity = identityMap.get(t.revenue_identity_id)
+      const completed = acc?.completed_count ?? 0
+      return {
+        repId: t.rep_id,
+        repName: repMap.get(t.rep_id) ?? 'Unknown',
+        revenueIdentityId: t.revenue_identity_id,
+        identityName: identity?.identity_name ?? 'Unknown',
+        channel: identity?.channel ?? 'other',
+        activityType: t.activity_type,
+        targetCount: t.target_count,
+        completedCount: completed,
+        remaining: Math.max(0, t.target_count - completed),
+        status: acc?.status ?? 'on_track',
+      }
+    })
+  }
+
+  async getRepAssignments(repId: string): Promise<Array<{
+    assignmentId: string
+    revenueIdentityId: string
+    identityName: string
+    title: string | null
+    channel: string
+  }>> {
+    const { data, error } = await this.client
+      .from('identity_assignments')
+      .select('id, revenue_identity_id, identity:revenue_identities(id, identity_name, title, channel)')
+      .eq('rep_id', repId)
+      .eq('organization_id', this.orgId)
+    if (error) throw error
+    return (data ?? []).map((a: any) => ({
+      assignmentId: a.id,
+      revenueIdentityId: a.revenue_identity_id,
+      identityName: a.identity?.identity_name ?? 'Unknown',
+      title: a.identity?.title ?? null,
+      channel: a.identity?.channel ?? 'other',
+    }))
+  }
+
+  async getRepInfo(repId: string): Promise<{ id: string; name: string; role: string } | null> {
+    const { data, error } = await this.client
+      .from('reps')
+      .select('id, name, role')
+      .eq('id', repId)
+      .eq('organization_id', this.orgId)
+      .maybeSingle()
+    if (error) throw error
+    return data ? { id: data.id, name: data.name, role: data.role } : null
+  }
+
+  async getOrganizationRoles(): Promise<Array<{ personId: string; role: string }>> {
+    const { data, error } = await this.client
+      .from('organization_roles')
+      .select('person_id, role')
+      .eq('organization_id', this.orgId)
+    if (error) throw error
+    return (data ?? []).map((r) => ({ personId: r.person_id, role: r.role }))
+  }
+
+  async getActiveTeamMemberships(): Promise<Array<{ teamId: string; personId: string; membershipRole: string }>> {
+    const { data, error } = await this.client
+      .from('team_memberships')
+      .select('team_id, person_id, membership_role')
+      .eq('active', true)
+    if (error) throw error
+    return (data ?? []).map((m) => ({
+      teamId: m.team_id,
+      personId: m.person_id,
+      membershipRole: m.membership_role,
+    }))
+  }
+
+  async getTeamInfo(teamId: string): Promise<{ id: string; name: string; description: string | null } | null> {
+    const { data, error } = await this.client
+      .from('teams')
+      .select('id, name, description')
+      .eq('id', teamId)
+      .eq('organization_id', this.orgId)
+      .maybeSingle()
+    if (error) throw error
+    return data
+  }
+
+  async listTeams(): Promise<Array<{ id: string; name: string; description: string | null }>> {
+    const { data, error } = await this.client
+      .from('teams')
+      .select('id, name, description')
+      .eq('organization_id', this.orgId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: true })
+    if (error) throw error
+    return data ?? []
+  }
+
+  async getManagedTeamSummary(managerId: string): Promise<TeamSummaryRow[]> {
+    const { data: memberships } = await this.client
+      .from('team_memberships')
+      .select('team_id, teams!inner(name)')
+      .eq('person_id', managerId)
+      .eq('membership_role', 'MANAGER')
+      .eq('active', true)
+
+    if (!memberships || memberships.length === 0) return []
+
+    const teamIds = memberships.map((m) => m.team_id)
+    const today = new Date().toISOString().slice(0, 10)
+
+    const { data: allTargets } = await this.client
+      .from('daily_targets')
+      .select('rep_id, revenue_identity_id, activity_type, target_count, active')
+      .eq('active', true)
+
+    const { data: allAcc } = await this.client
+      .from('daily_accountability')
+      .select('rep_id, revenue_identity_id, activity_type, completed_count, status')
+      .eq('target_date', today)
+
+    const { data: teamMembers } = await this.client
+      .from('team_memberships')
+      .select('team_id, person_id')
+      .in('team_id', teamIds)
+      .eq('active', true)
+
+    const teamRepIds = new Map<string, string[]>()
+    for (const tm of teamMembers ?? []) {
+      const ids = teamRepIds.get(tm.team_id) ?? []
+      ids.push(tm.person_id)
+      teamRepIds.set(tm.team_id, ids)
+    }
+
+    const accMap = new Map(
+      (allAcc ?? []).map((a) => [`${a.rep_id}:${a.revenue_identity_id}:${a.activity_type}`, a]),
+    )
+
+    return (memberships as any[]).map((m) => {
+      const repIds = teamRepIds.get(m.team_id) ?? []
+      let totalTarget = 0
+      let totalCompleted = 0
+      let needsAttention = 0
+
+      for (const repId of repIds) {
+        const repTargets = (allTargets ?? []).filter((t) => t.rep_id === repId)
+        for (const t of repTargets) {
+          const key = `${repId}:${t.revenue_identity_id}:${t.activity_type}`
+          const acc = accMap.get(key)
+          totalTarget += t.target_count
+          totalCompleted += acc?.completed_count ?? 0
+          if (acc?.status === 'at_risk' || acc?.status === 'missed') {
+            needsAttention++
+          }
+        }
+      }
+
+      return {
+        teamId: m.team_id,
+        teamName: m.teams?.name ?? 'Unknown',
+        memberCount: repIds.length,
+        totalTarget,
+        totalCompleted,
+        totalRemaining: Math.max(0, totalTarget - totalCompleted),
+        needsAttention,
+      }
+    })
+  }
 }
 
 const OUTBOUND_PATH_TO_WAITING: import('@/lib/domain/types').RelayRunStatus[] = [
@@ -5419,4 +6050,9 @@ function mapSalesMemory(r: Row): SalesMemory {
     updatedAt: r.updated_at as string,
   }
 
+
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Helper functions (outside class)
+// ═════════════════════════════════════════════════════════════════════════════

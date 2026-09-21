@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createServiceSupabase } from '@/lib/supabase/service'
-import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext, can } from '@/lib/auth/organization'
 
 export async function DELETE() {
-  const user = await getCurrentUser()
-  if (!user) {
+  const authCtx = await getAuthContext()
+  if (!authCtx) {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
-  if (user.rep.role !== 'admin') {
+  if (!can(authCtx, 'MANAGE_ORG_SETTINGS')) {
     return NextResponse.json({ error: 'Only organization admins can delete the organization.' }, { status: 403 })
   }
 
@@ -16,7 +16,7 @@ export async function DELETE() {
   const { data: members, error: membersErr } = await service
     .from('reps')
     .select('id, auth_user_id')
-    .eq('organization_id', user.rep.organizationId)
+    .eq('organization_id', authCtx.orgId)
 
   if (membersErr) {
     return NextResponse.json({ error: 'Failed to list organization members.' }, { status: 500 })
@@ -25,7 +25,7 @@ export async function DELETE() {
   const { error: orgErr } = await service
     .from('organizations')
     .delete()
-    .eq('id', user.rep.organizationId)
+    .eq('id', authCtx.orgId)
 
   if (orgErr) {
     return NextResponse.json({ error: 'Failed to delete organization.' }, { status: 500 })

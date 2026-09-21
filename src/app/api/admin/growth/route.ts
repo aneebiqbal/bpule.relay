@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth/current";
+import { getAuthContext, can } from "@/lib/auth/organization";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const user = await getCurrentUser();
-  if (!user) {
+  const authCtx = await getAuthContext();
+  if (!authCtx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (user.rep.role !== "admin") {
+  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -20,7 +20,7 @@ export async function GET() {
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   try {
-    const orgId = user.rep.organizationId;
+    const orgId = authCtx.orgId;
 
     const [orgResult, repsResult, leadsResult, jobsResult, messagesResult] =
       await Promise.all([

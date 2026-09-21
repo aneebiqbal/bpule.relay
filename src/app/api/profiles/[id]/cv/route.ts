@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { createServerSupabase } from '@/lib/supabase/server'
-import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 
 const MAX_BYTES = 5 * 1024 * 1024
@@ -29,8 +29,8 @@ export async function GET(
 ) {
   const { id } = await params
 
-  const user = await getCurrentUser()
-  if (!user) {
+  const authCtx = await getAuthContext()
+  if (!authCtx) {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
 
@@ -46,8 +46,8 @@ export async function GET(
 
   const url = new URL(request.url)
   const admin = url.searchParams.get('admin') === '1'
-  if (admin && user.rep.role !== 'admin') {
-    return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  if (admin && !can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
+    return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
   }
 
   const profile = await loadProfileForRequest(store, admin, id)
@@ -72,8 +72,8 @@ export async function POST(
 ) {
   const { id } = await params
 
-  const user = await getCurrentUser()
-  if (!user) {
+  const authCtx = await getAuthContext()
+  if (!authCtx) {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
 
@@ -92,8 +92,8 @@ export async function POST(
   // Uploading/replacing a CV on another rep's behalf is an admin-only
   // action. Enforced here server-side, independent of the RLS/storage
   // policy checks (see supabase/storage-proof-cvs-policies.sql).
-  if (admin && user.rep.role !== 'admin') {
-    return NextResponse.json({ error: 'Admin only.' }, { status: 403 })
+  if (admin && !can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
+    return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
   }
 
   const profile = await loadProfileForRequest(store, admin, id)

@@ -2,6 +2,7 @@ import { Suspense, use } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
 import { buildRoleContext } from '@/lib/relay/role-intelligence'
 import { buildRelayQueue } from '@/lib/relay/queue-engine'
@@ -15,8 +16,10 @@ export default async function TodayPage() {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
 
-  // Admin sees team monitoring, not personal execution tasks
-  if (user.rep.role === 'admin') {
+  const authCtx = await getAuthContext()
+  if (!authCtx) redirect('/login')
+
+  if (authCtx.isOwner || authCtx.isAdmin) {
     const store = await createScoutStore()
 
     const [, , , , teamAccountability] = await Promise.all([
@@ -80,11 +83,13 @@ export default async function TodayPage() {
     )
   }
 
-  // Reps see personal responsibility workspace
+  // Managers and Members see personal responsibility workspace
+  // Managers also get a Team tab
   const repDataPromise = loadRepWorkspaceData()
+  const teamDataPromise = fetch('/api/me/team').then((r) => r.ok ? r.json() : { teams: [] }).catch(() => ({ teams: [] }))
   return (
     <Suspense fallback={<DashboardShellSkeleton />}>
-      <RepWorkspaceAsync dataPromise={repDataPromise} />
+      <RepWorkspaceAsync dataPromise={repDataPromise} teamDataPromise={teamDataPromise} />
     </Suspense>
   )
 }
@@ -159,9 +164,10 @@ async function loadRepWorkspaceData(): Promise<RepWorkspaceData> {
   }
 }
 
-function RepWorkspaceAsync({ dataPromise }: { dataPromise: Promise<RepWorkspaceData> }) {
+function RepWorkspaceAsync({ dataPromise, teamDataPromise }: { dataPromise: Promise<RepWorkspaceData>; teamDataPromise?: Promise<any> }) {
   const data = use(dataPromise)
-  return <RepWorkspace data={data} />
+  const teamData = teamDataPromise ? use(teamDataPromise) : undefined
+  return <RepWorkspace data={data} teamData={teamData} />
 }
 
 function AdminTodayView({ adminSummary, generatedAt }: { adminSummary: RelayTodayWorkspaceProps['adminSummary']; generatedAt: string }) {
