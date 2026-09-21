@@ -27,7 +27,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function activityLabel(t: ActivityType): string {
-  const map: Record<ActivityType, string> = { dm: 'DMs', connection_request: 'Connections', followup: 'Follow-ups', application: 'Applications', proposal: 'Proposals', other: 'Other' }
+  const map: Record<ActivityType, string> = { dm: 'DMs', email: 'Emails', connection_request: 'Connections', followup: 'Follow-ups', application: 'Applications', proposal: 'Proposals', other: 'Other' }
   return map[t] ?? t
 }
 
@@ -144,9 +144,10 @@ export function AssignedProfilesView() {
           <div className="flex items-center gap-3 border-b border-line px-4 py-3">
             <div className={cn('flex size-9 items-center justify-center rounded text-xs font-medium',
               ai.identity.channel === 'linkedin' ? 'bg-[#0a66c2]/10 text-[#0a66c2]' :
+              ai.identity.channel === 'email' ? 'bg-[#d97706]/10 text-[#d97706]' :
               ai.identity.channel === 'upwork' ? 'bg-[#14a800]/10 text-[#14a800]' : 'bg-graphite/10 text-graphite'
             )}>
-              {ai.identity.channel === 'linkedin' ? 'in' : ai.identity.channel === 'upwork' ? 'U' : '•'}
+              {ai.identity.channel === 'linkedin' ? 'in' : ai.identity.channel === 'email' ? '@' : ai.identity.channel === 'upwork' ? 'U' : '•'}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">

@@ -996,7 +996,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         })
       }
 
-      return { allowed: true, todaySends: todaySends + 1, limit }
+      return { allowed: true, todaySends: todaySends + 1, limit, messageId: msgId }
     },
     async getVoiceProfile() {
       return voiceProfiles.find((v) => v.repId === rep.id) ?? null

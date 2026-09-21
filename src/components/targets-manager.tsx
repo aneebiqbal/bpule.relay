@@ -13,6 +13,7 @@ import { buildTeamTargetOverview } from '@/lib/accountability/target-overview'
 import type { DailyTarget, RevenueIdentity, Rep, ActivityType, IdentityAssignment } from '@/lib/domain/types'
 
 const ACTIVITY_OPTIONS: { value: ActivityType; label: string }[] = [
+  { value: 'email', label: 'Emails' },
   { value: 'connection_request', label: 'Connections' },
   { value: 'dm', label: 'DMs' },
   { value: 'followup', label: 'Follow-ups' },
@@ -214,7 +215,7 @@ export function TargetsManager() {
           Daily targets per person.
         </h2>
         <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">
-          Assign an identity to a rep and Relay fills the standard day: 30 connections, 30 DMs, 30 follow-ups on LinkedIn, or 10 applications and 10 proposals on Upwork. You can still change any number.
+          Assign an identity to a rep and Relay fills the standard day: 30 connections, 30 DMs, 30 follow-ups on LinkedIn; 30 emails and 25 follow-ups on Email; or 10 applications and 10 proposals on Upwork. You can still change any number.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-4">
           <AdminMetric label="People with work" value={overview.peopleCovered} />

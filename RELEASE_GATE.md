@@ -1,5 +1,33 @@
 # Studio Release Gate
 
+## Email Outreach V1 Gate Status (2026-09-21)
+
+- Gate 1 (Prepare + Send API integration): PASS
+- Gate 2 (Webhook lifecycle): PASS
+- Gate 3 (Real browser acceptance): GREEN / PASS
+
+### Gate 3 Evidence
+
+```bash
+RUN_EMAIL_ACCEPTANCE=1 pnpm -s playwright test e2e/email-outreach-v1.spec.ts --project=desktop-chrome
+```
+
+- Result: `1 passed`
+- Runtime: `3.4m`
+
+### What this acceptance flow proves
+
+- Authorized identity enforcement is active (unauthorized identity prepare denied, reassignment required).
+- Lead email workflow completes end-to-end (prepare -> edit -> send from Relay).
+- Send idempotency holds on replay (same idempotency key does not duplicate a real send).
+- Waiting queue and send accountability persist across navigation/refresh.
+- Reply webhook transitions lifecycle correctly (appears in Replies, same conversation, lead marked replied, follow-up stopped).
+- Bulk prepare guardrails hold at runtime (contacts missing email stay `CONTACT_NOT_FOUND` with no generated send content).
+
+### Permanent Regression Test
+
+- Keep `e2e/email-outreach-v1.spec.ts` as the release regression spec for Email Outreach V1.
+
 ## Pre-Flight (already verified)
 
 - [x] TypeScript: `npx tsc --noEmit` passes

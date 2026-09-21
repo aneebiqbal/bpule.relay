@@ -106,7 +106,7 @@ export interface Lead {
   createdAt: string
 }
 
-export type MessageType = 'dm' | 'connection' | 'upwork' | 'followup' | 'reply'
+export type MessageType = 'dm' | 'connection' | 'upwork' | 'email' | 'followup' | 'reply'
 
 export interface Message {
   id: string
@@ -1092,7 +1092,7 @@ export interface InboundLeadInput {
 
 // ── Revenue Identity OS ─────────────────────────────────────────────────────
 
-export type RevenueIdentityChannel = 'linkedin' | 'upwork' | 'other'
+export type RevenueIdentityChannel = 'linkedin' | 'email' | 'upwork' | 'other'
 export type RevenueIdentityStatus = 'active' | 'archived'
 
 export interface RevenueIdentity {
@@ -1136,7 +1136,205 @@ export interface RevenueIdentityWithAssignment extends RevenueIdentity {
   assignedAt: string
 }
 
-export type ActivityType = 'dm' | 'connection_request' | 'followup' | 'application' | 'proposal' | 'other'
+export type ActivityType = 'dm' | 'email' | 'connection_request' | 'followup' | 'application' | 'proposal' | 'other'
+
+export type ContactPointType = 'email' | 'linkedin' | 'contact_form' | 'phone' | 'other'
+export type ContactPointSource =
+  | 'USER_PROVIDED'
+  | 'PUBLIC_PROFILE'
+  | 'COMPANY_WEBSITE'
+  | 'PUBLIC_DIRECTORY'
+  | 'CONNECTED_PROVIDER'
+  | 'INBOUND'
+  | 'INFERRED_PATTERN'
+export type ContactPointVerificationStatus = 'VERIFIED' | 'LIKELY_VALID' | 'UNVERIFIED' | 'INVALID' | 'BOUNCED' | 'UNKNOWN'
+
+export interface ContactPoint {
+  id: string
+  organizationId: string
+  leadId: string | null
+  personId: string | null
+  companyId: string | null
+  type: ContactPointType
+  value: string
+  source: ContactPointSource
+  sourceUrl: string | null
+  sourceType: string | null
+  verificationStatus: ContactPointVerificationStatus
+  verificationMethod: string | null
+  confidence: number | null
+  isPrimary: boolean
+  isBusinessContact: boolean
+  discoveredAt: string
+  verifiedAt: string | null
+  lastUsedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type RightToContactReason =
+  | 'NONE'
+  | 'HIRING'
+  | 'ACTIVE_NEED'
+  | 'PROJECT_SIGNAL'
+  | 'OUTSOURCING_SIGNAL'
+  | 'STRONG_FIT'
+  | 'RELATIONSHIP'
+
+export type ClaimEvidenceType =
+  | 'VERIFIED_SENDER_FACT'
+  | 'VERIFIED_PROOF'
+  | 'VERIFIED_LEAD_FACT'
+  | 'VERIFIED_OPPORTUNITY_FACT'
+  | 'USER_APPROVED_FACT'
+
+export interface EmailClaimIssue {
+  sentence: string
+  reason: string
+  requiredEvidence: ClaimEvidenceType[]
+}
+
+export interface EmailClaimSafetyResult {
+  safe: boolean
+  repaired: boolean
+  allowedEvidence: string[]
+  thingsNotToClaim: string[]
+  issues: EmailClaimIssue[]
+  repairedBody: string | null
+}
+
+export interface ResearchBrief {
+  person: string | null
+  currentRole: string | null
+  company: string
+  companyOffering: string | null
+  companyStage: string | null
+  currentSignals: string[]
+  currentOpportunity: string | null
+  relationshipType: string
+  fit: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN'
+  intent: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN'
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+  rightToContact: RightToContactReason
+  recentRelevantEvidence: string[]
+  possibleNeed: string | null
+  known: string[]
+  inferred: string[]
+  unknown: string[]
+  thingsNotToClaim: string[]
+  contactRoute: 'BUSINESS_EMAIL' | 'NO_EMAIL'
+  sourceReferences: Array<{
+    label: string
+    url: string | null | undefined
+    sourceType: string | null | undefined
+  }>
+}
+
+export type EmailGoal = 'GET_REPLY' | 'BOOK_CALL' | 'RECONNECT' | 'QUALIFY_NEED'
+
+export type OutreachArtifactType =
+  | 'CV'
+  | 'RESUME'
+  | 'PORTFOLIO'
+  | 'CASE_STUDY'
+  | 'PROJECT'
+  | 'CAPABILITY_DECK'
+  | 'PROPOSAL'
+  | 'OTHER'
+
+export interface OutreachArtifact {
+  id: string
+  organizationId: string
+  revenueIdentityId: string
+  profileId: string | null
+  artifactType: OutreachArtifactType
+  name: string
+  description: string | null
+  sourceUrl: string | null
+  tags: string[]
+  active: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EmailStrategy {
+  relationshipType: string
+  opportunityType: RightToContactReason
+  recipient: string
+  sender: string
+  commercialSituation: string
+  strongestEvidence: string | null
+  primaryUncertainty: string | null
+  whyEmail: string
+  emailGoal: EmailGoal
+  tone: string
+  allowedEvidence: string[]
+  proofToUse: string[]
+  proofToHold: string[]
+  attachmentRecommendation: {
+    relevance: 'RELEVANT' | 'OPTIONAL' | 'IRRELEVANT'
+    artifactId: string | null
+    artifactName: string | null
+    reason: string
+  }
+  thingsNotToClaim: string[]
+  ctaType: string
+  successCondition: string
+}
+
+export interface PreparedEmailDraft {
+  id: string
+  organizationId: string
+  leadId: string
+  revenueIdentityId: string
+  contactPointId: string | null
+  contactEmail: string | null
+  draftStatus: 'DRAFT' | 'RESEARCH_REQUIRED' | 'CONTACT_NOT_FOUND' | 'SKIP' | 'READY' | 'SENT' | 'FAILED'
+  relationshipType: string | null
+  opportunityType: string | null
+  emailGoal: EmailGoal | null
+  subject: string | null
+  subjectCandidates: string[]
+  body: string | null
+  strategy: EmailStrategy | null
+  researchBrief: ResearchBrief | null
+  claimSafety: EmailClaimSafetyResult | null
+  editDisposition: 'UNCHANGED' | 'LIGHT_EDIT' | 'HEAVY_EDIT' | 'REJECTED' | null
+  isFollowup: boolean
+  followupSequence: number
+  evidenceUsed: string[]
+  blockedReason: string | null
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EmailMessageMeta {
+  id: string
+  organizationId: string
+  leadId: string
+  messageId: string | null
+  preparedDraftId: string | null
+  revenueIdentityId: string
+  mailboxId: string
+  contactPointId: string | null
+  direction: 'OUTBOUND' | 'INBOUND'
+  category: 'FIRST_EMAIL' | 'FOLLOW_UP' | 'REPLY'
+  idempotencyKey: string
+  subject: string
+  body: string
+  provider: string
+  providerMessageId: string | null
+  providerThreadId: string | null
+  deliveryStatus: 'DRAFT' | 'QUEUED' | 'SENT' | 'DELIVERED' | 'BOUNCED' | 'FAILED' | 'REPLIED' | 'SUPPRESSED'
+  sentAt: string | null
+  deliveredAt: string | null
+  bouncedAt: string | null
+  repliedAt: string | null
+  lastEventAt: string | null
+  createdAt: string
+  updatedAt: string
+}
 
 export interface DailyTarget {
   id: string

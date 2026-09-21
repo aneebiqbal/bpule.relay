@@ -13,16 +13,21 @@ const admin = {
 }
 
 describe('default daily target packs', () => {
-  it('uses 30/30/30 for LinkedIn and 10/10 for Upwork', () => {
+  it('uses channel-specific default packs', () => {
     expect(defaultTargetsForChannel('linkedin')).toEqual([
       { activityType: 'connection_request', targetCount: 30 },
       { activityType: 'dm', targetCount: 30 },
       { activityType: 'followup', targetCount: 30 },
     ])
+    expect(defaultTargetsForChannel('email')).toEqual([
+      { activityType: 'email', targetCount: 30 },
+      { activityType: 'followup', targetCount: 25 },
+    ])
     expect(defaultTargetsForChannel('upwork')).toEqual([
       { activityType: 'application', targetCount: 10 },
       { activityType: 'proposal', targetCount: 10 },
     ])
+    expect(formatDefaultPack('email')).toContain('30 emails')
     expect(formatDefaultPack('linkedin')).toContain('30 connections')
   })
 

@@ -34,7 +34,9 @@ async function loadLeadData(id: string) {
 
   const matchedProofs = await store.matchProofItems(lead.tags ?? [], 5)
 
-  return { lead, score, profiles, matchedProofs }
+  const assignedIdentities = await store.listMyAssignedIdentities().catch(() => [])
+
+  return { lead, score, profiles, matchedProofs, assignedIdentities }
 }
 
 export default function LeadPage({ params }: LeadPageProps) {

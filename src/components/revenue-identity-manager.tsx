@@ -242,11 +242,12 @@ export function RevenueIdentityManager() {
             </div>
             <div>
               <Label htmlFor="ri-channel">Channel</Label>
-              <Select value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value as RevenueIdentityChannel })}>
-                <option value="linkedin">LinkedIn</option>
-                <option value="upwork">Upwork</option>
-                <option value="other">Other</option>
-              </Select>
+                <Select value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value as RevenueIdentityChannel })}>
+                  <option value="linkedin">LinkedIn</option>
+                  <option value="email">Email</option>
+                  <option value="upwork">Upwork</option>
+                  <option value="other">Other</option>
+                </Select>
             </div>
             <div className="sm:col-span-2">
               <Label htmlFor="ri-positioning">Positioning</Label>
@@ -299,10 +300,11 @@ export function RevenueIdentityManager() {
                 {isExpanded ? <ChevronDown className="size-4 text-slate" /> : <ChevronRight className="size-4 text-slate" />}
                 <div className={cn('flex size-8 items-center justify-center rounded-lg text-xs font-medium',
                   ri.channel === 'linkedin' ? 'bg-[#0a66c2]/10 text-[#0a66c2]' :
+                  ri.channel === 'email' ? 'bg-[#d97706]/10 text-[#d97706]' :
                   ri.channel === 'upwork' ? 'bg-[#14a800]/10 text-[#14a800]' :
                   'bg-graphite/10 text-graphite'
                 )}>
-                  {ri.channel === 'linkedin' ? 'in' : ri.channel === 'upwork' ? 'U' : '•'}
+                  {ri.channel === 'linkedin' ? 'in' : ri.channel === 'email' ? '@' : ri.channel === 'upwork' ? 'U' : '•'}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -407,7 +409,7 @@ export function RevenueIdentityManager() {
         <Dialog open onClose={() => setAssignDialog(null)} title="Assign to Rep">
           <div className="p-5 space-y-3">
             <p className="text-[12px] text-graphite">
-              This also assigns the standard daily pack for the identity: 30 connections, 30 DMs, and 30 follow-ups on LinkedIn, or 10 applications and 10 proposals on Upwork. Existing numbers are kept.
+              This also assigns the standard daily pack for the identity: 30 connections, 30 DMs, and 30 follow-ups on LinkedIn; 30 emails and 25 follow-ups on Email; or 10 applications and 10 proposals on Upwork. Existing numbers are kept.
             </p>
             <Select value={selectedRep} onChange={(e) => setSelectedRep(e.target.value)}>
               <option value="">Select a rep…</option>

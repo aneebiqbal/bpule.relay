@@ -6,6 +6,7 @@ import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import type { ActivityType } from '@/lib/domain/types'
 
 const ACTIVITY_TYPES: ActivityType[] = [
+  'email',
   'dm',
   'connection_request',
   'followup',
@@ -42,6 +43,7 @@ export async function GET() {
       assignments,
       reps,
       defaults: {
+        email: defaultTargetsForChannel('email'),
         linkedin: defaultTargetsForChannel('linkedin'),
         upwork: defaultTargetsForChannel('upwork'),
         other: defaultTargetsForChannel('other'),

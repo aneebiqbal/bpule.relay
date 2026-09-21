@@ -44,6 +44,7 @@ interface WorkspaceDetailData {
 function activityLabel(t: string): string {
   const map: Record<string, string> = {
     dm: 'DMs',
+    email: 'Emails',
     connection_request: 'Connections',
     followup: 'Follow-ups',
     application: 'Applications',
@@ -55,12 +56,14 @@ function activityLabel(t: string): string {
 
 function channelIcon(channel: string): string {
   if (channel === 'linkedin') return 'in'
+  if (channel === 'email') return '@'
   if (channel === 'upwork') return 'U'
   return '•'
 }
 
 function channelColor(channel: string): string {
   if (channel === 'linkedin') return 'bg-[#0a66c2]/10 text-[#0a66c2]'
+  if (channel === 'email') return 'bg-[#d97706]/10 text-[#d97706]'
   if (channel === 'upwork') return 'bg-[#14a800]/10 text-[#14a800]'
   return 'bg-graphite/10 text-graphite'
 }

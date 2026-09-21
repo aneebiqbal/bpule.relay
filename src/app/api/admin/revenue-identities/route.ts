@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
   const supabase = await createServerSupabase()
 
-  const channel = typeof body.channel === 'string' && ['linkedin', 'upwork', 'other'].includes(body.channel)
+  const channel = typeof body.channel === 'string' && ['linkedin', 'email', 'upwork', 'other'].includes(body.channel)
     ? body.channel
     : 'other'
 

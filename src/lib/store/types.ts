@@ -254,6 +254,7 @@ export interface DosageResult {
   todaySends: number
   limit: number
   message?: string
+  messageId?: string
 }
 
 export interface GoldenCaseRow {

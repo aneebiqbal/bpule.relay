@@ -2,7 +2,6 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -30,10 +29,11 @@ import { buildRevenueStrategy, sourceFromLead, toUiSnapshot } from '@/lib/relay/
 import { readSse } from '@/lib/sse/client'
 import { cn } from 'cn'
 import type { LeadDetail } from '@/lib/store/types'
-import type { Profile, ProofItem, ScoreResult } from '@/lib/domain/types'
+import type { Profile, ProofItem, ScoreResult, RevenueIdentityWithAssignment } from '@/lib/domain/types'
 import type { DraftResult, SelfCheck } from '@/lib/ai/draft'
 import type { GenerationMode } from '@/lib/ai/routing'
 import { GenerationModeSelector } from '@/components/generation-mode-selector'
+import { EmailOutreachPanel } from '@/components/email-outreach-panel'
 
 const ARTIFACTS = [
   { id: 'dm', label: 'DM', count: { kind: 'words', max: 55, label: 'words' } },
@@ -230,13 +230,14 @@ export function LeadWorkspace({
   score,
   profiles,
   matchedProofs,
+  assignedIdentities,
 }: {
   lead: LeadDetail
   score: ScoreResult
   profiles: Profile[]
   matchedProofs: ProofItem[]
+  assignedIdentities: RevenueIdentityWithAssignment[]
 }) {
-  const router = useRouter()
   // Incremented after mutations to trigger lightweight lead re-fetch
   const [leadVersion, setLeadVersion] = useState(0)
   // Local override of lead data for optimistic/targeted updates
@@ -588,6 +589,15 @@ export function LeadWorkspace({
             onAction={() => void generateDraft()}
           />
         </section>
+      )}
+
+      {!locked && (
+        <EmailOutreachPanel
+          leadId={lead.id}
+          assignedIdentities={assignedIdentities}
+          defaultIdentityId={currentLead.revenueIdentityId ?? assignedIdentities[0]?.id ?? null}
+          onSent={() => setLeadVersion((v) => v + 1)}
+        />
       )}
 
       {/* ═══ 3. DRAFT ═══ */}
