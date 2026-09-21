@@ -1,14 +1,21 @@
 import { createScoutStore } from '@/lib/store'
+import { getCurrentUser } from '@/lib/auth/current'
 import { ProfilesManager } from '@/components/profiles-manager'
 
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProfilesPage() {
+  const user = await getCurrentUser()
   const store = await createScoutStore()
-  const profiles = await store.listProfiles()
+  const isAdmin = user?.rep.role === 'admin'
+  const [profiles, reps] = await Promise.all([
+    isAdmin ? store.listAllProfiles() : store.listProfiles(),
+    isAdmin ? store.listAllReps() : Promise.resolve([]),
+  ])
   const linkedinCount = profiles.filter((profile) => profile.platform === 'linkedin').length
   const upworkCount = profiles.filter((profile) => profile.platform === 'upwork').length
+  const ownerByRepId = Object.fromEntries(reps.map((rep) => [rep.id, rep.name]))
 
   return (
     <div className="space-y-5">
@@ -18,7 +25,9 @@ export default async function ProfilesPage() {
           Manage who your team writes as.
         </h1>
         <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
-          Profiles define sender voice and proof eligibility. Client names surface only when permission is on file.
+          {isAdmin
+            ? 'Every profile the org owns, grouped by who added it. Client names surface only when permission is on file.'
+            : 'Profiles define sender voice and proof eligibility. Client names surface only when permission is on file.'}
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <Stat label="Total profiles" value={profiles.length} />
@@ -26,7 +35,7 @@ export default async function ProfilesPage() {
           <Stat label="Upwork" value={upworkCount} />
         </div>
       </section>
-      <ProfilesManager initialProfiles={profiles} />
+      <ProfilesManager initialProfiles={profiles} ownerByRepId={isAdmin ? ownerByRepId : undefined} />
     </div>
   )
 }

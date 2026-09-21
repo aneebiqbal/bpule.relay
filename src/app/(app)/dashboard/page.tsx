@@ -4,10 +4,11 @@ import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
+import { loadOrgCommandSnapshot } from '@/lib/admin/org-command-snapshot'
 import { buildRoleContext } from '@/lib/relay/role-intelligence'
 import { buildRelayQueue } from '@/lib/relay/queue-engine'
 import { cn } from 'cn'
-import type { RelayTodayAction, RelayTodayWorkspaceProps } from '@/components/relay-today-workspace'
+import type { RelayTodayAction } from '@/components/relay-today-workspace'
 import { RepWorkspace, type RepWorkspaceData } from '@/components/rep/rep-workspace'
 
 export const dynamic = 'force-dynamic'
@@ -20,59 +21,32 @@ export default async function TodayPage() {
   if (!authCtx) redirect('/login')
 
   if (authCtx.isOwner || authCtx.isAdmin) {
-    const store = await createScoutStore()
-
-    const [, , , , teamAccountability] = await Promise.all([
-      store.getTodayDashboard(),
-      store.getRelayQueueData(),
-      store.fetchLeadsAll(),
-      store.listRevenueIdentitiesAdmin().catch(() => []),
-      store.getTeamAccountabilityAdmin().catch(() => null),
-    ])
-
-    let adminSummary: RelayTodayWorkspaceProps['adminSummary']
-    adminSummary = null
-    if (teamAccountability) {
-      try {
-        const team = teamAccountability
-        const teamRows = (team.summaries ?? [])
-          .map((summary) => ({
-            id: summary.repId,
-            name: summary.repName,
-            completed: summary.totalCompleted,
-            target: summary.totalTarget,
-            remaining: summary.remaining,
-            status: summary.status,
-          }))
-          .sort((a, b) => b.remaining - a.remaining)
-
-        const attentionItems = teamRows
-          .filter((row) => row.remaining > 0 && (row.status === 'at_risk' || row.status === 'missed' || row.completed === 0))
-          .slice(0, 4)
-          .map((row) => {
-            const severity: 'warning' | 'critical' = row.status === 'missed' ? 'critical' : 'warning'
-            return {
-              id: row.id,
-              title: `${row.name} behind target`,
-              detail: `${row.remaining} actions remaining today`,
-              severity,
-            }
-          })
-
-        const conversationsMoving: Array<{ id: string; name: string; signal: string; next: string; href: string }> = []
-        const activeConversations = conversationsMoving.length
-
-        adminSummary = {
-          teamRows,
-          attentionItems,
-          activeConversations,
-          highIntent: 0,
-          onTrackCount: teamRows.filter((row) => row.status === 'on_track' || row.status === 'completed').length,
-          totalReps: teamRows.length,
-        }
-      } catch {
-        adminSummary = null
-      }
+    const snapshot = await loadOrgCommandSnapshot()
+    const teamRows = snapshot.people.map((person) => ({
+      id: person.repId,
+      name: person.repName,
+      completed: person.totalCompleted,
+      target: person.totalTarget,
+      remaining: person.totalRemaining,
+      status: person.status,
+      profiles: person.profiles,
+      leads: person.leads,
+      extractions: person.extractions,
+    }))
+    const attentionItems = snapshot.attention.slice(0, 6).map((item) => ({
+      id: item.id,
+      title: item.title,
+      detail: item.detail,
+      severity: item.severity,
+    }))
+    const adminSummary = {
+      teamRows,
+      attentionItems,
+      activeConversations: 0,
+      highIntent: 0,
+      onTrackCount: teamRows.filter((row) => row.status === 'on_track' || row.status === 'completed').length,
+      totalReps: teamRows.length,
+      totals: snapshot.totals,
     }
 
     return (
@@ -170,32 +144,66 @@ function RepWorkspaceAsync({ dataPromise, teamDataPromise }: { dataPromise: Prom
   return <RepWorkspace data={data} teamData={teamData} />
 }
 
-function AdminTodayView({ adminSummary, generatedAt }: { adminSummary: RelayTodayWorkspaceProps['adminSummary']; generatedAt: string }) {
-  if (!adminSummary) {
-    return (
-      <div className="space-y-4">
-        <header className="space-y-1.5">
-          <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink">Revenue Operations</h1>
-          <p className="text-[13px] text-graphite">{new Date(generatedAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-        </header>
-        <p className="text-[13px] text-graphite">No team data available. Configure targets and assignments to begin monitoring.</p>
-      </div>
-    )
+type AdminTodaySummary = {
+  teamRows: Array<{
+    id: string
+    name: string
+    completed: number
+    target: number
+    remaining: number
+    status: string
+    profiles: number
+    leads: number
+    extractions: number
+  }>
+  attentionItems: Array<{ id: string; title: string; detail: string; severity: 'warning' | 'critical' }>
+  activeConversations: number
+  highIntent: number
+  onTrackCount: number
+  totalReps: number
+  totals: {
+    people: number
+    profiles: number
+    leads: number
+    extractions: number
+    remaining: number
+    peopleWithWork: number
   }
+}
 
+function AdminTodayView({ adminSummary, generatedAt }: { adminSummary: AdminTodaySummary; generatedAt: string }) {
   return (
     <div className="space-y-6">
       <header className="space-y-1.5">
-        <div className="flex items-center gap-2">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Revenue Operations</p>
-        </div>
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Revenue Operations</p>
         <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink">
           {adminSummary.attentionItems.length > 0
             ? `${adminSummary.attentionItems.length} item${adminSummary.attentionItems.length === 1 ? '' : 's'} need attention`
-            : 'Team is on track'}
+            : adminSummary.totals.peopleWithWork > 0
+              ? 'Team work is visible'
+              : 'Team is on track'}
         </h1>
         <p className="text-[13px] text-graphite">{new Date(generatedAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
       </header>
+
+      <div className="grid gap-3 sm:grid-cols-4">
+        <div className="rounded border border-line bg-bone-raised px-3 py-2">
+          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">People</p>
+          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.totals.people}</p>
+        </div>
+        <div className="rounded border border-line bg-bone-raised px-3 py-2">
+          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">Profiles</p>
+          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.totals.profiles}</p>
+        </div>
+        <div className="rounded border border-line bg-bone-raised px-3 py-2">
+          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">Leads</p>
+          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.totals.leads}</p>
+        </div>
+        <div className="rounded border border-line bg-bone-raised px-3 py-2">
+          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">Extractions</p>
+          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.totals.extractions}</p>
+        </div>
+      </div>
 
       {adminSummary.attentionItems.length > 0 && (
         <section className="rounded-lg border border-status-warning/30 bg-status-warning/5 p-4">
@@ -220,33 +228,30 @@ function AdminTodayView({ adminSummary, generatedAt }: { adminSummary: RelayToda
       )}
 
       <section className="rounded-lg border border-line bg-bone-raised p-4">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Team Today</p>
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Everyone</p>
         {adminSummary.teamRows.length > 0 ? (
-          <div className="mt-3 overflow-hidden rounded border border-line">
+          <div className="mt-3 overflow-x-auto rounded border border-line">
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-line bg-bone text-left text-mono-medium text-[10px] uppercase tracking-wide text-stone">
-                  <th className="px-3 py-2">Rep</th>
-                  <th className="px-3 py-2">Done</th>
-                  <th className="px-3 py-2">Target</th>
-                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Person</th>
+                  <th className="px-3 py-2">Profiles</th>
+                  <th className="px-3 py-2">Leads</th>
+                  <th className="px-3 py-2">Extractions</th>
+                  <th className="px-3 py-2">Today</th>
                 </tr>
               </thead>
               <tbody>
                 {adminSummary.teamRows.map((row) => (
                   <tr key={row.id} className="border-b border-line/60 last:border-b-0">
-                    <td className="px-3 py-2 font-medium text-ink">{row.name}</td>
-                    <td className="px-3 py-2 text-graphite">{row.completed}</td>
-                    <td className="px-3 py-2 text-graphite">{row.target}</td>
-                    <td className="px-3 py-2">
-                      <span className={cn(
-                        'rounded px-1.5 py-0.5 text-mono-medium text-[10px] uppercase tracking-wide',
-                        row.status === 'completed' ? 'bg-status-success/15 text-status-success' :
-                        row.status === 'at_risk' || row.status === 'missed' ? 'bg-status-warning/15 text-status-warning' :
-                        'bg-cobalt/10 text-cobalt',
-                      )}>
-                        {row.status}
-                      </span>
+                    <td className="px-3 py-2 font-medium text-ink">
+                      <Link href={`/team/${row.id}`} className="hover:underline">{row.name}</Link>
+                    </td>
+                    <td className="px-3 py-2 text-graphite">{row.profiles}</td>
+                    <td className="px-3 py-2 text-graphite">{row.leads}</td>
+                    <td className="px-3 py-2 text-graphite">{row.extractions}</td>
+                    <td className="px-3 py-2 text-graphite">
+                      {row.target > 0 ? `${row.completed}/${row.target}` : '—'}
                     </td>
                   </tr>
                 ))}
@@ -254,24 +259,9 @@ function AdminTodayView({ adminSummary, generatedAt }: { adminSummary: RelayToda
             </table>
           </div>
         ) : (
-          <p className="mt-3 text-[12px] text-graphite">No active targets configured.</p>
+          <p className="mt-3 text-[12px] text-graphite">No people in this organization yet.</p>
         )}
       </section>
-
-      <div className="flex items-center gap-4 text-[12px]">
-        <div className="rounded border border-line bg-bone-raised px-3 py-2">
-          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">High-intent</p>
-          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.highIntent}</p>
-        </div>
-        <div className="rounded border border-line bg-bone-raised px-3 py-2">
-          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">Active convos</p>
-          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.activeConversations}</p>
-        </div>
-        <div className="rounded border border-line bg-bone-raised px-3 py-2">
-          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">On track</p>
-          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.onTrackCount}/{adminSummary.totalReps}</p>
-        </div>
-      </div>
 
       <Link href="/admin/command-center" className="inline-flex items-center gap-1 text-[12px] font-medium text-ink">
         Open full command center →

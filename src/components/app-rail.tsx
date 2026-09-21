@@ -37,7 +37,7 @@ const WORK_NAV = [
 ]
 
 const TEAM_NAV = [
-  { href: '/dashboard', label: 'My Team', icon: Users, exact: false },
+  { href: '/team', label: 'My Team', icon: Users, exact: false },
 ]
 
 const CREATE_NAV = [
@@ -61,6 +61,7 @@ const ACCOUNT_NAV = [
 
 const ADMIN_EXTRA = [
   { href: '/admin/command-center', label: 'Command', icon: Shield, exact: true },
+  { href: '/admin/people', label: 'People', icon: Users, exact: true },
   { href: '/admin/revenue-intelligence', label: 'Revenue', icon: BarChart3, exact: true },
   { href: '/admin/revenue-identities', label: 'Identities', icon: UserCircle2, exact: true },
   { href: '/admin/targets', label: 'Targets', icon: Target, exact: true },

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/auth/current";
+import { getAuthContext } from "@/lib/auth/organization";
 import { isDemoMode } from "@/lib/ai/config";
 import { createScoutStore } from "@/lib/store";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -43,7 +44,8 @@ export default async function AppLayout({
   }> = [];
 
   try {
-    if (user.rep.role === "admin") {
+    const authCtx = await getAuthContext();
+    if (authCtx?.isOwner || authCtx?.isAdmin) {
       const identities = await store.listRevenueIdentitiesAdmin();
       revenueIdentities = identities
         .filter((identity) => identity.status === "active")

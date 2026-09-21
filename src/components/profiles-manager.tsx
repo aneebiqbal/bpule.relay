@@ -62,7 +62,13 @@ const PLATFORM_STYLE: Record<Platform, { bg: string; text: string }> = {
   upwork: { bg: 'bg-[color-mix(in_oklch,#14a800_10%,transparent)]', text: 'text-[#14a800]' },
 }
 
-export function ProfilesManager({ initialProfiles }: { initialProfiles: Profile[] }) {
+export function ProfilesManager({
+  initialProfiles,
+  ownerByRepId,
+}: {
+  initialProfiles: Profile[]
+  ownerByRepId?: Record<string, string>
+}) {
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles)
   const [proofsByProfile, setProofsByProfile] = useState<
     Record<string, ProofItem[]>
@@ -286,6 +292,7 @@ export function ProfilesManager({ initialProfiles }: { initialProfiles: Profile[
               setPendingDelete({ kind: 'proof', profileId: p.id, itemId })
             }
             onCvFile={(file) => void uploadCv(p.id, file)}
+            ownerName={ownerByRepId?.[p.repId]}
             index={i}
           />
         ))}
@@ -409,6 +416,7 @@ function ProfileCard({
   onProofStart,
   onDeleteProof,
   onCvFile,
+  ownerName,
   index,
 }: {
   profile: Profile
@@ -421,6 +429,7 @@ function ProfileCard({
   onProofStart: () => void
   onDeleteProof: (itemId: string) => void
   onCvFile: (file: File) => void
+  ownerName?: string
   index: number
 }) {
   const [cvUrl, setCvUrl] = useState<string | null>(null)
@@ -473,9 +482,9 @@ function ProfileCard({
             <div className="text-sm font-medium text-ink">
               {profile.label ?? profile.headline ?? 'Unnamed profile'}
             </div>
-            {profile.headline ? (
-              <div className="text-xs text-slate">{profile.headline}</div>
-            ) : null}
+            <div className="text-xs text-slate">
+              {[ownerName, profile.headline].filter(Boolean).join(' · ')}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">

@@ -2,21 +2,32 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { Plus, Target, Search } from 'lucide-react'
 import { createScoutStore } from '@/lib/store'
+import { getCurrentUser } from '@/lib/auth/current'
 import { signalById } from '@/lib/score/signals'
 import { ScoreRing } from '@/components/score-ring'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { PageHeader } from '@/components/ui/page-header'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SkeletonText, SkeletonCircle } from '@/components/ui/skeleton'
-import { cn } from 'cn'
 import type { Lead } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
 
-type LeadsPromise = Promise<Lead[]>
+type LeadsPayload = { leads: Lead[]; ownerByRepId: Record<string, string>; orgView: boolean }
 
-function loadLeads(): LeadsPromise {
-  return createScoutStore().then((store) => store.listOwnedLeads())
+async function loadLeads(): Promise<LeadsPayload> {
+  const user = await getCurrentUser()
+  const store = await createScoutStore()
+  const orgView = user?.rep.role === 'admin'
+  const [leads, reps] = await Promise.all([
+    orgView ? store.fetchLeadsAll() : store.listOwnedLeads(),
+    orgView ? store.listAllReps() : Promise.resolve([]),
+  ])
+  return {
+    leads,
+    ownerByRepId: Object.fromEntries(reps.map((rep) => [rep.id, rep.name])),
+    orgView,
+  }
 }
 
 const STATUS_VARIANT: Record<string, 'success' | 'orange' | 'warning' | 'neutral' | 'cobalt' | 'danger' | 'info'> = {
@@ -44,7 +55,7 @@ export default function LeadsPage() {
     <div className="space-y-5">
       <PageHeader
         title="Leads"
-        description="Your pipeline. Work the highest-intent prospects first."
+        description="The org pipeline. Work the highest-intent prospects first."
         action={
           <Link
             href="/leads/new"
@@ -63,8 +74,8 @@ export default function LeadsPage() {
   )
 }
 
-async function LeadsBody({ leadsPromise }: { leadsPromise: LeadsPromise }) {
-  const leads = await leadsPromise
+async function LeadsBody({ leadsPromise }: { leadsPromise: Promise<LeadsPayload> }) {
+  const { leads, ownerByRepId, orgView } = await leadsPromise
 
   if (leads.length === 0) {
     return (
@@ -123,6 +134,9 @@ async function LeadsBody({ leadsPromise }: { leadsPromise: LeadsPromise }) {
                   </div>
                   <div className="mt-0.5 flex items-center gap-2 text-[12px] text-graphite">
                     {lead.contactName && <span className="truncate">{lead.contactName}</span>}
+                    {orgView && lead.ownerRepId && ownerByRepId[lead.ownerRepId] && (
+                      <span className="shrink-0 text-stone">· {ownerByRepId[lead.ownerRepId]}</span>
+                    )}
                     {signal && <span className="shrink-0 text-stone">· {signal.short}</span>}
                     {lead.source && <span className="shrink-0 capitalize text-stone">· {lead.source}</span>}
                   </div>
