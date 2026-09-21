@@ -92,17 +92,44 @@ function TodayTab({ data }: { data: GrowthData }) {
 
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true)
+    setFeedback(null)
     try {
       const res = await fetch('/api/growth/opportunities/generate', { method: 'POST' })
-      if (res.ok) {
-        window.location.reload()
-      } else {
-        setFeedback('Failed to generate opportunities.')
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setFeedback(typeof body.error === 'string' ? body.error : 'Failed to generate opportunities.')
+        return
       }
+      if (body.decision || (Array.isArray(body.opportunities) && body.opportunities.length > 0)) {
+        window.location.reload()
+        return
+      }
+      setFeedback(typeof body.message === 'string' ? body.message : 'No opportunities generated.')
     } catch {
       setFeedback('Failed to generate opportunities.')
     } finally {
       setIsGenerating(false)
+    }
+  }, [])
+
+  const handleSelect = useCallback(async (opportunityId: string) => {
+    setIsSubmitting(true)
+    setFeedback(null)
+    try {
+      const res = await fetch('/api/growth/opportunities/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: opportunityId }),
+      })
+      if (res.ok) {
+        window.location.reload()
+        return
+      }
+      setFeedback('Failed to select opportunity.')
+    } catch {
+      setFeedback('Failed to select opportunity.')
+    } finally {
+      setIsSubmitting(false)
     }
   }, [])
 
@@ -161,21 +188,55 @@ function TodayTab({ data }: { data: GrowthData }) {
   if (!data.decision) {
     return (
       <div className="space-y-4">
-        <section className="rounded-lg border border-dashed border-line bg-bone-raised/40 px-6 py-12 text-center">
-          <Sparkles className="mx-auto size-8 text-stone" />
-          <p className="mt-3 text-[14px] font-medium text-ink">No post selected for today</p>
-          <p className="mt-1 max-w-xs mx-auto text-[13px] text-graphite">
-            Generate opportunities and select one to create today&apos;s post.
-          </p>
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="mt-4 inline-flex items-center gap-2 rounded-md bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-colors hover:bg-orange-dark disabled:opacity-60"
-          >
-            <RefreshCw className={cn('size-4', isGenerating && 'animate-spin')} />
-            {isGenerating ? 'Generating...' : 'Generate Opportunities'}
-          </button>
-        </section>
+        {feedback && (
+          <div className="rounded-lg border border-line bg-bone-raised px-3 py-2 text-[12px] text-ink">
+            {feedback}
+          </div>
+        )}
+        {data.opportunities.length > 0 ? (
+          <section className="space-y-3">
+            <p className="text-[13px] text-graphite">
+              Select an opportunity to turn it into today&apos;s post.
+            </p>
+            {data.opportunities.map((opp) => (
+              <div key={opp.id} className="rounded-lg border border-line bg-bone-raised p-4">
+                <p className="text-[14px] font-medium text-ink">{opp.title}</p>
+                <p className="mt-1 text-[13px] text-graphite">{opp.insight}</p>
+                <button
+                  onClick={() => handleSelect(opp.id)}
+                  disabled={isSubmitting}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-orange px-3 py-2 text-[12px] font-medium text-bone transition-colors hover:bg-orange-dark disabled:opacity-60"
+                >
+                  Use this
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={handleGenerate}
+              disabled={isGenerating}
+              className="inline-flex items-center gap-2 text-[12px] font-medium text-graphite hover:text-ink"
+            >
+              <RefreshCw className={cn('size-3.5', isGenerating && 'animate-spin')} />
+              {isGenerating ? 'Generating...' : 'Generate more'}
+            </button>
+          </section>
+        ) : (
+          <section className="rounded-lg border border-dashed border-line bg-bone-raised/40 px-6 py-12 text-center">
+            <Sparkles className="mx-auto size-8 text-stone" />
+            <p className="mt-3 text-[14px] font-medium text-ink">No post selected for today</p>
+            <p className="mt-1 max-w-xs mx-auto text-[13px] text-graphite">
+              Generate opportunities and select one to create today&apos;s post.
+            </p>
+            <button
+              onClick={handleGenerate}
+              disabled={isGenerating}
+              className="mt-4 inline-flex items-center gap-2 rounded-md bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-colors hover:bg-orange-dark disabled:opacity-60"
+            >
+              <RefreshCw className={cn('size-4', isGenerating && 'animate-spin')} />
+              {isGenerating ? 'Generating...' : 'Generate Opportunities'}
+            </button>
+          </section>
+        )}
 
         <section className="rounded-lg border border-line bg-bone-raised p-5">
           <div className="flex items-center gap-2">

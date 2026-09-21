@@ -172,24 +172,108 @@ function isDuplicate(template: OpportunityTemplate, existing: RelayContentOpport
   return false
 }
 
+function asList(value: unknown, fallback: string[]): string[] {
+  if (Array.isArray(value) && value.length > 0) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  if (typeof value === 'string' && value.trim()) return [value.trim()]
+  return fallback
+}
+
+function fallbackOpportunities(): OpportunityTemplate[] {
+  return [
+    {
+      sourceType: 'product_memory',
+      title: 'AI does the preparation. People make the move.',
+      observation: 'Revenue teams have tools for capture, drafting, and tracking, but still decide what to do next in their head.',
+      insight: 'The product that wins is the one that prepares the next move without taking the action away from the human.',
+      territory: 'ai_human_work',
+      audienceSegment: 'technical_founder',
+      contentJob: 'challenge',
+      evidenceStrength: 'strong',
+      claimBoundaries: ['Do not claim specific metrics without verification'],
+      audienceRelevance: 82,
+      novelty: 74,
+      specificity: 78,
+      timeliness: 70,
+      relayDifferentiation: 88,
+      conversationPotential: 76,
+      learningValue: 80,
+      repetitionRisk: 0,
+      commercialRelevance: 55,
+    },
+    {
+      sourceType: 'product_memory',
+      title: 'Scattered tools still leave a blank next action',
+      observation: 'Leads, conversations, content, and jobs live in different places, so the highest-leverage move is rarely obvious.',
+      insight: 'A revenue system is only useful if it can name what deserves attention today.',
+      territory: 'revenue_systems',
+      audienceSegment: 'bd_revenue_lead',
+      contentJob: 'teach',
+      evidenceStrength: 'strong',
+      claimBoundaries: ['Do not claim specific metrics without verification'],
+      audienceRelevance: 84,
+      novelty: 68,
+      specificity: 76,
+      timeliness: 72,
+      relayDifferentiation: 80,
+      conversationPotential: 70,
+      learningValue: 78,
+      repetitionRisk: 0,
+      commercialRelevance: 62,
+    },
+    {
+      sourceType: 'product_memory',
+      title: 'Reps work as assigned Revenue Identities',
+      observation: 'Authorization and daily work should match the identity the operator is actually running, not a generic inbox.',
+      insight: 'Accountability only works when the identity, the queue, and the targets are the same object.',
+      territory: 'building_relay',
+      audienceSegment: 'technical_founder',
+      contentJob: 'show',
+      evidenceStrength: 'strong',
+      claimBoundaries: ['Frame as how Relay works, not a universal market claim'],
+      audienceRelevance: 76,
+      novelty: 80,
+      specificity: 84,
+      timeliness: 68,
+      relayDifferentiation: 90,
+      conversationPotential: 72,
+      learningValue: 82,
+      repetitionRisk: 0,
+      commercialRelevance: 48,
+    },
+  ]
+}
+
 export async function generateDailyOpportunities(input: GenerateInput): Promise<OpportunityTemplate[]> {
   const allTemplates: OpportunityTemplate[] = []
 
   for (const mem of input.memory) {
-    allTemplates.push(...generateFromMemory(mem))
+    allTemplates.push(...generateFromMemory({
+      ...mem,
+      territories: asList(mem.territories, TERRITORIES.slice(0, 1)),
+      audienceSegments: asList(mem.audienceSegments, AUDIENCES.slice(0, 1)),
+    }))
   }
 
   for (const event of input.events) {
     allTemplates.push(...generateFromEvent(event))
   }
 
-  const unique = allTemplates.filter((t) => !isDuplicate(t, input.existing))
+  if (allTemplates.length === 0) {
+    allTemplates.push(...fallbackOpportunities())
+  }
 
-  unique.sort((a, b) => {
-    const scoreA = a.audienceRelevance + a.novelty + a.specificity + a.evidenceStrength.length
-    const scoreB = b.audienceRelevance + b.novelty + b.specificity + b.evidenceStrength.length
+  const unique = allTemplates.filter((t) => !isDuplicate(t, input.existing))
+  const pool = unique.length > 0
+    ? unique
+    : fallbackOpportunities().filter((t) => !isDuplicate(t, input.existing))
+
+  pool.sort((a, b) => {
+    const scoreA = a.audienceRelevance + a.novelty + a.specificity
+    const scoreB = b.audienceRelevance + b.novelty + b.specificity
     return scoreB - scoreA
   })
 
-  return unique.slice(0, 30)
+  return pool.slice(0, 8)
 }

@@ -1,5 +1,4 @@
 import type { PostPlan, RelayContentOpportunity } from '@/lib/domain/types'
-import { buildPostPlanFromOpportunity } from './post-plan'
 
 interface WritingInput {
   opportunity: RelayContentOpportunity
@@ -76,7 +75,7 @@ async function callWritingEngine(context: string, plan: PostPlan): Promise<strin
   return result.data || generateFallbackPost(plan)
 }
 
-function generateFallbackPost(plan: PostPlan): string {
+export function generateFallbackPost(plan: PostPlan): string {
   const lines: string[] = []
 
   lines.push(plan.coreInsight)
