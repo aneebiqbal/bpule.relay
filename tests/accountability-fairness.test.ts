@@ -11,6 +11,7 @@ function createMockStore(overrides: Partial<AccountabilityStore> = {}): Accounta
     updateAccountabilityTemplate: vi.fn().mockResolvedValue({} as any),
     deleteAccountabilityTemplate: vi.fn().mockResolvedValue(undefined),
     getActiveContract: vi.fn().mockResolvedValue(null),
+    getDailyProgress: vi.fn().mockResolvedValue(null),
     getContractById: vi.fn().mockResolvedValue(null),
     createContract: vi.fn().mockResolvedValue({} as any),
     updateContract: vi.fn().mockResolvedValue({} as any),

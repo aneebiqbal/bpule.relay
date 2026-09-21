@@ -652,6 +652,35 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
   ]
   const demoRelayEvents: import('@/lib/domain/types').RelayEvent[] = []
   const demoRelayRuns: import('@/lib/domain/types').RelayRun[] = []
+  let growthSeq = 0
+  const growthNow = () => new Date().toISOString()
+  const growthId = (prefix: string) => {
+    growthSeq += 1
+    return `${prefix}-${growthSeq}`
+  }
+  const demoGrowthMemory: any[] = [
+    {
+      id: 'rgm-thesis', organizationId: rep.organizationId, memoryType: 'product_fact',
+      title: 'Relay Core Thesis', content: 'AI does the preparation. People make the move.',
+      source: 'canonical', claimSafety: 'VERIFIED_PROFILE_PROOF',
+      territories: ['building_relay', 'ai_human_work'],
+      audienceSegments: ['technical_founder', 'bd_lead'],
+      active: true, usedInContent: false, createdBy: rep.id, createdAt: growthNow(), updatedAt: growthNow(),
+    },
+    {
+      id: 'rgm-problem', organizationId: rep.organizationId, memoryType: 'product_fact',
+      title: 'Relay Problem Statement',
+      content: 'Revenue teams have leads, conversations, content, jobs and signals scattered everywhere, but still don\'t know what deserves attention next.',
+      source: 'canonical', claimSafety: 'VERIFIED_PROFILE_PROOF',
+      territories: ['revenue_systems'],
+      audienceSegments: ['bd_lead', 'small_sales_team'],
+      active: true, usedInContent: false, createdBy: rep.id, createdAt: growthNow(), updatedAt: growthNow(),
+    },
+  ]
+  const demoGrowthEvents: any[] = []
+  const demoOpportunities: any[] = []
+  const demoDecisions: any[] = []
+  const demoGrowthDrafts: any[] = []
   const extractionRuns: Array<{
     task: 'extract' | 'draft'
     success: boolean
@@ -2914,23 +2943,44 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     // ── Relay Growth Engine (demo stubs) ─────────────────────────────────────
 
     async createGrowthMemory(input: any): Promise<any> {
-      return { id: 'rgm-demo', organizationId: 'org-demo', memoryType: input.memoryType,
+      const row = {
+        id: growthId('rgm'), organizationId: rep.organizationId, memoryType: input.memoryType,
         title: input.title, content: input.content, source: input.source ?? null,
         claimSafety: input.claimSafety ?? 'VERIFIED_PROFILE_PROOF', territories: input.territories ?? [],
         audienceSegments: input.audienceSegments ?? [], active: true, usedInContent: false,
-        createdBy: rep.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+        createdBy: rep.id, createdAt: growthNow(), updatedAt: growthNow(),
+      }
+      demoGrowthMemory.unshift(row)
+      return row
     },
-    async listGrowthMemory(_activeOnly = true): Promise<any[]> { return [] },
+    async listGrowthMemory(activeOnly = true): Promise<any[]> {
+      return activeOnly ? demoGrowthMemory.filter((row) => row.active) : [...demoGrowthMemory]
+    },
     async createGrowthEvent(input: any): Promise<any> {
-      return { id: 'rge-demo', organizationId: 'org-demo', eventType: input.eventType,
+      const row = {
+        id: growthId('rge'), organizationId: rep.organizationId, eventType: input.eventType,
         title: input.title, rawContent: input.rawContent, editorialContent: null,
         processed: false, processedAt: null, sourceKind: input.sourceKind ?? 'build_log',
-        sourceId: null, createdBy: rep.id, createdAt: new Date().toISOString() }
+        sourceId: null, createdBy: rep.id, createdAt: growthNow(),
+      }
+      demoGrowthEvents.unshift(row)
+      return row
     },
-    async listGrowthEvents(_processedOnly = false): Promise<any[]> { return [] },
-    async markGrowthEventProcessed(_id: string, _editorialContent: string): Promise<void> {},
+    async listGrowthEvents(processedOnly = false): Promise<any[]> {
+      return processedOnly
+        ? demoGrowthEvents.filter((row) => row.processed)
+        : demoGrowthEvents.filter((row) => !row.processed)
+    },
+    async markGrowthEventProcessed(id: string, editorialContent: string): Promise<void> {
+      const row = demoGrowthEvents.find((item) => item.id === id)
+      if (!row) return
+      row.processed = true
+      row.editorialContent = editorialContent
+      row.processedAt = growthNow()
+    },
     async createOpportunity(input: any): Promise<any> {
-      return { id: 'rco-demo', organizationId: 'org-demo', sourceType: input.sourceType,
+      const row = {
+        id: growthId('rco'), organizationId: rep.organizationId, sourceType: input.sourceType,
         sourceId: input.sourceId ?? null, title: input.title, observation: input.observation,
         insight: input.insight, territory: input.territory, audienceSegment: input.audienceSegment,
         contentJob: input.contentJob, evidenceStrength: input.evidenceStrength ?? 'medium',
@@ -2940,31 +2990,81 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         conversationPotential: input.conversationPotential ?? 50, learningValue: input.learningValue ?? 50,
         repetitionRisk: input.repetitionRisk ?? 0, commercialRelevance: input.commercialRelevance ?? 50,
         selected: false, selectionDate: null, rejected: false, rejectionReason: null,
-        generatedAt: new Date().toISOString(), generationDate: new Date().toISOString().slice(0, 10) }
+        generatedAt: growthNow(), generationDate: new Date().toISOString().slice(0, 10),
+      }
+      demoOpportunities.unshift(row)
+      return row
     },
-    async listOpportunities(_date?: string): Promise<any[]> { return [] },
-    async selectOpportunity(_id: string, _date: string): Promise<void> {},
-    async rejectOpportunity(_id: string, _reason: string): Promise<void> {},
+    async listOpportunities(date?: string): Promise<any[]> {
+      return date
+        ? demoOpportunities.filter((row) => row.generationDate === date)
+        : [...demoOpportunities]
+    },
+    async selectOpportunity(id: string, date: string): Promise<void> {
+      const row = demoOpportunities.find((item) => item.id === id)
+      if (!row) return
+      row.selected = true
+      row.selectionDate = date
+    },
+    async rejectOpportunity(id: string, reason: string): Promise<void> {
+      const row = demoOpportunities.find((item) => item.id === id)
+      if (!row) return
+      row.rejected = true
+      row.rejectionReason = reason
+    },
     async createEditorialDecision(input: any): Promise<any> {
-      return { id: 'red-demo', organizationId: 'org-demo', decisionDate: input.decisionDate,
+      const row = {
+        id: growthId('red'), organizationId: rep.organizationId, decisionDate: input.decisionDate,
         opportunityId: input.opportunityId, primaryReason: input.primaryReason,
         audienceReason: input.audienceReason, timelinessReason: input.timelinessReason,
         evidenceReason: input.evidenceReason, takeaway: input.takeaway, status: 'pending',
-        adminFeedback: null, adminEdits: null, createdAt: new Date().toISOString(), decidedAt: null }
+        adminFeedback: null, adminEdits: null, createdAt: growthNow(), decidedAt: null,
+      }
+      demoDecisions.unshift(row)
+      return row
     },
-    async getEditorialDecision(_date: string): Promise<any> { return null },
-    async updateEditorialDecision(_id: string, _patches: any): Promise<void> {},
+    async getEditorialDecision(date: string): Promise<any> {
+      return demoDecisions.find((row) => row.decisionDate === date) ?? null
+    },
+    async updateEditorialDecision(id: string, patches: any): Promise<void> {
+      const row = demoDecisions.find((item) => item.id === id)
+      if (!row) return
+      if (patches.status) row.status = patches.status
+      if (patches.adminFeedback) row.adminFeedback = patches.adminFeedback
+      if (patches.adminEdits !== undefined) row.adminEdits = patches.adminEdits
+      row.decidedAt = growthNow()
+    },
     async createGrowthDraft(input: any): Promise<any> {
-      return { id: 'rgd-demo', organizationId: 'org-demo', decisionId: input.decisionId ?? null,
+      const row = {
+        id: growthId('rgd'), organizationId: rep.organizationId, decisionId: input.decisionId ?? null,
         opportunityId: input.opportunityId ?? null, postPlan: input.postPlan,
         platform: input.platform ?? 'linkedin', caption: '', hook: null,
         visualType: null, visualConcept: null, visualPrompt: null, status: 'draft',
-        qualityScore: null, qualityNotes: null, createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString() }
+        qualityScore: null, qualityNotes: null, createdAt: growthNow(),
+        updatedAt: growthNow(),
+      }
+      demoGrowthDrafts.unshift(row)
+      return row
     },
-    async getGrowthDraft(_id: string): Promise<any> { return null },
-    async getGrowthDraftByDecision(_decisionId: string): Promise<any> { return null },
-    async updateGrowthDraft(_id: string, _patches: any): Promise<void> {},
+    async getGrowthDraft(id: string): Promise<any> {
+      return demoGrowthDrafts.find((row) => row.id === id) ?? null
+    },
+    async getGrowthDraftByDecision(decisionId: string): Promise<any> {
+      return demoGrowthDrafts.find((row) => row.decisionId === decisionId) ?? null
+    },
+    async updateGrowthDraft(id: string, patches: any): Promise<void> {
+      const row = demoGrowthDrafts.find((item) => item.id === id)
+      if (!row) return
+      if (patches.caption !== undefined) row.caption = patches.caption
+      if (patches.hook !== undefined) row.hook = patches.hook
+      if (patches.status) row.status = patches.status
+      if (patches.visualType) row.visualType = patches.visualType
+      if (patches.visualConcept) row.visualConcept = patches.visualConcept
+      if (patches.visualPrompt) row.visualPrompt = patches.visualPrompt
+      if (patches.qualityScore !== undefined) row.qualityScore = patches.qualityScore
+      if (patches.qualityNotes) row.qualityNotes = patches.qualityNotes
+      row.updatedAt = growthNow()
+    },
     async createPublication(input: any): Promise<any> {
       return { id: 'rcp-demo', organizationId: 'org-demo', draftId: input.draftId ?? null,
         platform: input.platform, caption: input.caption, territory: input.territory,
@@ -2987,5 +3087,5 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async getActiveTeamMemberships(): Promise<any[]> { return [] },
     async getRepInfo(_repId: string): Promise<any> { return null },
     async getRepAssignments(_repId: string): Promise<any[]> { return [] },
-  }
+  } as import('@/lib/store/types').ScoutStore
 }

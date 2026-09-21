@@ -42,6 +42,7 @@ export interface AccountabilityStore {
 
   getActiveContract(identityId: string): Promise<RevenueIdentityContract | null>
   getContractById(contractId: string): Promise<RevenueIdentityContract | null>
+  getDailyProgress(personId: string, identityId: string): Promise<DailyProgress | null>
   createContract(input: {
     revenueIdentityId: string
     templateId?: string | null

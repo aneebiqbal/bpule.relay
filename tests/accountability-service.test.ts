@@ -22,6 +22,7 @@ function createMockStore(overrides: Partial<AccountabilityStore> = {}): Accounta
     updateAccountabilityTemplate: vi.fn().mockResolvedValue({} as AccountabilityTemplate),
     deleteAccountabilityTemplate: vi.fn().mockResolvedValue(undefined),
     getActiveContract: vi.fn().mockResolvedValue(null),
+    getDailyProgress: vi.fn().mockResolvedValue(null),
     getContractById: vi.fn().mockResolvedValue(null),
     createContract: vi.fn().mockResolvedValue({} as RevenueIdentityContract),
     updateContract: vi.fn().mockResolvedValue({} as RevenueIdentityContract),

@@ -4923,6 +4923,43 @@ export class SupabaseStore implements ScoutStore {
     } : null
   }
 
+  async getDailyProgress(personId: string, identityId: string): Promise<import('@/lib/domain/types').DailyProgress | null> {
+    const contract = await this.getActiveContract(identityId)
+    if (!contract) return null
+
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: dayClose } = await this.client
+      .from('day_closes')
+      .select('*')
+      .eq('person_id', personId)
+      .eq('revenue_identity_id', identityId)
+      .eq('date', today)
+      .maybeSingle()
+
+    const snapshot = (dayClose?.completion_snapshot ?? {}) as Record<string, number>
+    const allocations = await this.listContractAllocations(contract.id)
+    const myAlloc = allocations.find((a) => a.personId === personId)
+    const pct = (myAlloc?.allocationPct ?? (allocations.length === 0 ? 100 : 0)) / 100
+
+    const qp = Math.round(contract.qualifiedProspects * pct)
+    const conn = Math.round(contract.connections * pct)
+    const fd = Math.round(contract.firstDms * pct)
+    const em = Math.round(contract.emails * pct)
+    const fu = Math.round(contract.followups * pct)
+    const mt = Math.round(contract.meaningfulTouches * pct)
+
+    return {
+      qualifiedProspects: { completed: snapshot.qualifiedProspects ?? 0, target: qp, remaining: Math.max(0, qp - (snapshot.qualifiedProspects ?? 0)) },
+      connections: { completed: snapshot.connections ?? 0, target: conn, remaining: Math.max(0, conn - (snapshot.connections ?? 0)) },
+      firstDms: { completed: snapshot.firstDms ?? 0, target: fd, remaining: Math.max(0, fd - (snapshot.firstDms ?? 0)) },
+      emails: { completed: snapshot.emails ?? 0, target: em, remaining: Math.max(0, em - (snapshot.emails ?? 0)) },
+      followups: { completed: snapshot.followups ?? 0, target: fu, remaining: Math.max(0, fu - (snapshot.followups ?? 0)) },
+      dueReplies: { completed: snapshot.dueReplies ?? 0, target: contract.dueRepliesPct, remaining: Math.max(0, contract.dueRepliesPct - (snapshot.dueReplies ?? 0)) },
+      meaningfulTouches: { completed: snapshot.meaningfulTouches ?? 0, target: mt, remaining: Math.max(0, mt - (snapshot.meaningfulTouches ?? 0)) },
+      logging: { completed: snapshot.logging ?? 0, target: contract.loggingCompletenessPct, remaining: Math.max(0, contract.loggingCompletenessPct - (snapshot.logging ?? 0)) },
+    }
+  }
+
   async getContractById(contractId: string): Promise<import('@/lib/domain/types').RevenueIdentityContract | null> {
     const { data, error } = await this.client
       .from('revenue_identity_contracts').select('*').eq('id', contractId).maybeSingle()
