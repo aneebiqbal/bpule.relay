@@ -15,7 +15,7 @@ async function loadCommandCenterData() {
   const authCtx = await getAuthContext()
   if (!authCtx) redirect('/login')
 
-  if (!authCtx.isOwner && !authCtx.isAdmin) {
+  if (user.rep.role !== 'admin' && !authCtx.isOwner && !authCtx.isAdmin) {
     redirect('/dashboard')
   }
 

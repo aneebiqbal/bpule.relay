@@ -64,7 +64,13 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
     .eq('person_id', user.rep.id)
     .maybeSingle()
 
-  const organizationRole: OrganizationRole = orgRoleRow?.role ?? 'MEMBER'
+  const tableRole = orgRoleRow?.role as OrganizationRole | undefined
+  const organizationRole: OrganizationRole =
+    tableRole === 'OWNER' || tableRole === 'ADMIN'
+      ? tableRole
+      : user.rep.role === 'admin'
+        ? 'ADMIN'
+        : (tableRole ?? 'MEMBER')
 
   const { data: memberships } = await supabase
     .from('team_memberships')
