@@ -129,7 +129,7 @@ export async function requireAuthContext(): Promise<AuthContext> {
 }
 
 export function can(ctx: AuthContext, capability: string): boolean {
-  if (ctx.isOwner) return true
+  if (ctx.isOwner || ctx.isAdmin) return true
   return ctx.capabilities.has(capability)
 }
 

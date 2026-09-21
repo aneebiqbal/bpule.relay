@@ -9,16 +9,7 @@ import { PeopleViewSkeleton } from '@/components/admin/people-view'
 export const dynamic = 'force-dynamic'
 
 async function loadPeopleData() {
-  const user = await getCurrentUser()
-  if (!user) redirect('/login')
-
   const authCtx = await getAuthContext()
-  if (!authCtx) redirect('/login')
-
-  if (!authCtx.isOwner && !authCtx.isAdmin) {
-    redirect('/dashboard')
-  }
-
   const store = await createScoutStore()
 
   const teams = await store.listTeams()
@@ -63,18 +54,26 @@ async function loadPeopleData() {
   const members = people.filter((p) => p.role === 'MEMBER')
 
   return {
-    orgName: authCtx.orgName,
+    orgName: authCtx?.orgName ?? 'Organization',
     teams,
     people,
     owners,
     admins,
     managers,
     members,
-    isOwner: authCtx.isOwner,
+    isOwner: authCtx?.isOwner ?? false,
   }
 }
 
 export default async function PeoplePage() {
+  const user = await getCurrentUser()
+  if (!user) redirect('/login')
+
+  const authCtx = await getAuthContext()
+  if (user.rep.role !== 'admin' && !authCtx?.isOwner && !authCtx?.isAdmin) {
+    redirect('/dashboard')
+  }
+
   const dataPromise = loadPeopleData()
 
   return (

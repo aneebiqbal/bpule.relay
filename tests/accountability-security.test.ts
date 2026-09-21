@@ -48,6 +48,15 @@ describe('Accountability Security', () => {
       expect(can(ctx, 'MANAGE_ACCOUNTABILITY_POLICY')).toBe(true)
     })
 
+    it('product admin can manage team targets without seeded capabilities', () => {
+      const ctx = createAuthContext({
+        isAdmin: true,
+        organizationRole: 'ADMIN',
+        capabilities: new Set(),
+      })
+      expect(can(ctx, 'MANAGE_TEAM_TARGETS')).toBe(true)
+    })
+
     it('admin can approve rewards', () => {
       const ctx = createAuthContext({
         isAdmin: true,
