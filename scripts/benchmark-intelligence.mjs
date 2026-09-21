@@ -18,15 +18,16 @@ const REPO_ROOT = resolve(SCRIPT_DIR, '..')
 
 loadDotenv({ path: resolve(REPO_ROOT, '.env.local') })
 
-const { loadGoldenDataset, evaluateCase } = await import('./lib/benchmark/evaluator.mjs')
+const { loadGoldenDataset, loadTortureDataset, evaluateCase } = await import('./lib/benchmark/evaluator.mjs')
 const { evaluateOutreach, computeMessageSimilarity } = await import('./lib/benchmark/outreach-eval.mjs')
 const { generateConsoleReport, saveResultsJson } = await import('./lib/benchmark/report.mjs')
 
 const args = process.argv.slice(2)
 const options = {
-  pipeline: 'baseline',
+  pipeline: 'v2',
   compare: null,
   cases: null,
+  includeTorture: false,
   skipOutreach: false,
   requireProvider: null,
   forbidDemoFallback: false,
@@ -36,6 +37,7 @@ for (const arg of args) {
   if (arg.startsWith('--pipeline=')) options.pipeline = arg.split('=')[1]
   else if (arg.startsWith('--compare=')) options.compare = arg.split('=')[1]
   else if (arg.startsWith('--cases=')) options.cases = arg.split('=')[1].split(',')
+  else if (arg === '--include-torture') options.includeTorture = true
   else if (arg.startsWith('--require-provider=')) options.requireProvider = arg.split('=')[1]
   else if (arg === '--forbid-demo-fallback') options.forbidDemoFallback = true
   else if (arg === '--skip-outreach') options.skipOutreach = true
@@ -336,7 +338,7 @@ function generateSummaryForComparison(results) {
   const warn = results.caseResults.filter((r) => r.status === 'WARN').length
   const fail = results.caseResults.filter((r) => r.status === 'FAIL').length
 
-  const remoteResults = results.caseResults.filter((r) => r.remote)
+  const remoteResults = results.caseResults.filter((r) => r.remote && r.remote.skipped !== true)
   const remoteMatch = remoteResults.filter((r) => r.remote.matches).length
 
   const completenessScores = results.caseResults
@@ -404,13 +406,20 @@ async function main() {
   }
 
   const dataset = loadGoldenDataset()
-  let cases = dataset.cases
+  const torture = options.includeTorture ? loadTortureDataset() : null
+  let cases = [
+    ...dataset.cases,
+    ...(torture?.cases ?? []).map((c) => ({
+      ...c,
+      known_outcome: c.known_outcome ?? 'UNKNOWN',
+    })),
+  ]
   if (options.cases) {
     cases = cases.filter((c) => options.cases.includes(c.id))
     console.error(`  Filtered to ${cases.length} cases: ${options.cases.join(', ')}`)
   }
 
-  console.error(`  Golden dataset v${dataset.version}: ${cases.length} cases`)
+  console.error(`  Golden dataset v${dataset.version}${torture ? ` + torture v${torture.version}` : ''}: ${cases.length} cases`)
   console.error(
     `  Cases: ${cases.filter((c) => c.known_outcome === 'WON').length} wins, ` +
       `${cases.filter((c) => c.known_outcome === 'STRONG_OPPORTUNITY').length} strong, ` +

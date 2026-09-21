@@ -117,7 +117,7 @@ function computeSummary(results) {
   const warn = results.caseResults.filter((r) => r.status === 'WARN').length
   const fail = results.caseResults.filter((r) => r.status === 'FAIL').length
 
-  const remoteResults = results.caseResults.filter((r) => r.remote)
+  const remoteResults = results.caseResults.filter((r) => r.remote && r.remote.skipped !== true)
   const remoteTotal = remoteResults.length
   const remoteMatch = remoteResults.filter((r) => r.remote.matches).length
 

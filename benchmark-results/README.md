@@ -14,13 +14,16 @@ Prove whether a new intelligence system is actually better at recognizing opport
 # Run benchmark with mock pipeline (no AI calls, tests the harness)
 pnpm intelligence:benchmark:mock
 
-# Run benchmark with real production pipeline
+# Run benchmark with Intelligence V2 pipeline (default)
 pnpm intelligence:benchmark
 
+# Include torture cases (37 golden + 10 torture = 47)
+pnpm intelligence:benchmark -- --include-torture
+
 # Run with specific options
-node scripts/benchmark-intelligence.mjs --pipeline=baseline --cases=won-001,won-002
-node scripts/benchmark-intelligence.mjs --mock --pipeline=candidate
-node scripts/benchmark-intelligence.mjs --compare=benchmark-results/benchmark-baseline-xxx.json
+node scripts/benchmark-intelligence.mjs --pipeline=v2 --cases=won-001,won-002
+node scripts/benchmark-intelligence.mjs --mock --pipeline=mock
+node scripts/benchmark-intelligence.mjs --pipeline=v2 --compare=benchmark-results/benchmark-baseline-xxx.json
 ```
 
 ## Output

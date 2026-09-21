@@ -19,6 +19,12 @@ export function loadGoldenDataset() {
   return JSON.parse(raw)
 }
 
+export function loadTortureDataset() {
+  const path = join(__dirname, 'torture-tests.json')
+  const raw = readFileSync(path, 'utf-8')
+  return JSON.parse(raw)
+}
+
 // ── Invariant checks ─────────────────────────────────────────────────────────
 
 /**
@@ -128,6 +134,16 @@ export function checkInvariants(caseObj, extraction, scoring) {
 export function evaluateRemoteEligibility(caseObj, extraction) {
   const expected = caseObj.expected_remote_eligibility
   const actual = extraction?.remoteEligibility ?? 'unknown'
+
+  if (!expected) {
+    return {
+      expected: null,
+      actual,
+      matches: true,
+      severity: 'ok',
+      skipped: true,
+    }
+  }
 
   // Always accept exact match
   if (actual === expected) return { expected, actual, matches: true, severity: 'ok' }
