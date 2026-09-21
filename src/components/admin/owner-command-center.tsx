@@ -45,7 +45,7 @@ const CONTROL = [
     items: [
       { href: '/content', label: 'Studio', detail: 'Write as the company', icon: PenLine },
       { href: '/content/growth', label: 'Relay Growth', detail: 'Editorial engine', icon: TrendingUp },
-      { href: '/manage-profiles', label: 'Profiles', detail: 'Who each person writes as', icon: UserCircle2 },
+      { href: '/profiles', label: 'Profiles', detail: 'Every profile the team added', icon: UserCircle2 },
       { href: '/facts', label: 'Proof', detail: 'Claims the team is allowed to make', icon: Shield },
     ],
   },

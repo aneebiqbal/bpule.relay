@@ -1,5 +1,7 @@
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext } from '@/lib/auth/organization'
+import { isProductAdmin } from '@/lib/auth/admin-page'
 import { ProfilesManager } from '@/components/profiles-manager'
 
 
@@ -7,8 +9,9 @@ export const dynamic = 'force-dynamic'
 
 export default async function ProfilesPage() {
   const user = await getCurrentUser()
+  const authCtx = await getAuthContext()
   const store = await createScoutStore()
-  const isAdmin = user?.rep.role === 'admin'
+  const isAdmin = isProductAdmin(user, authCtx)
   const [profiles, reps] = await Promise.all([
     isAdmin ? store.listAllProfiles() : store.listProfiles(),
     isAdmin ? store.listAllReps() : Promise.resolve([]),

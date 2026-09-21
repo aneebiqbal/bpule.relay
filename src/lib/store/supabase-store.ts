@@ -6302,13 +6302,16 @@ export class SupabaseStore implements ScoutStore {
       .eq('target_date', targetDate)
 
     const accMap = new Map(
-      (accountability ?? []).map((a) => [`${a.revenue_identity_id}:${a.activity_type}`, a]),
+      (accountability ?? []).map((a) => [`${a.rep_id}:${a.revenue_identity_id}:${a.activity_type}`, a]),
     )
 
-    const { data: identities } = await this.client
-      .from('revenue_identities')
-      .select('id, identity_name, channel')
-      .in('revenue_identity_id', targets.map((t) => t.revenue_identity_id))
+    const identityIds = [...new Set(targets.map((t) => t.revenue_identity_id).filter(Boolean))]
+    const { data: identities } = identityIds.length > 0
+      ? await this.client
+          .from('revenue_identities')
+          .select('id, identity_name, channel')
+          .in('id', identityIds)
+      : { data: [] as Array<{ id: string; identity_name: string; channel: string }> }
 
     const identityMap = new Map((identities ?? []).map((i) => [i.id, i]))
 
@@ -6320,7 +6323,7 @@ export class SupabaseStore implements ScoutStore {
     const repMap = new Map((reps ?? []).map((r) => [r.id, r.name]))
 
     return targets.map((t) => {
-      const key = `${t.revenue_identity_id}:${t.activity_type}`
+      const key = `${t.rep_id}:${t.revenue_identity_id}:${t.activity_type}`
       const acc = accMap.get(key)
       const identity = identityMap.get(t.revenue_identity_id)
       const completed = acc?.completed_count ?? 0

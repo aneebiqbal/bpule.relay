@@ -1,13 +1,10 @@
-import { redirect } from 'next/navigation'
-import { getCurrentUser } from '@/lib/auth/current'
+import { requireProductAdmin } from '@/lib/auth/admin-page'
 import { RevenueIdentityManager } from '@/components/revenue-identity-manager'
 
 export const dynamic = 'force-dynamic'
 
 export default async function RevenueIdentitiesPage() {
-  const user = await getCurrentUser()
-  if (!user) redirect('/login')
-  if (user.rep.role !== 'admin') redirect('/dashboard')
+  await requireProductAdmin()
 
   return (
     <div className="space-y-5">

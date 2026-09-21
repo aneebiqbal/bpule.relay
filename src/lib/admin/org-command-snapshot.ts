@@ -97,12 +97,15 @@ function emptySnapshot(orgName: string, today: string, isOwner: boolean, isAdmin
   }
 }
 
-async function loadExtractionCounts(): Promise<Map<string, number>> {
+async function loadExtractionCounts(orgId: string): Promise<Map<string, number>> {
   const counts = new Map<string, number>()
   if (isDemoMode()) return counts
   try {
     const supabase = await createServerSupabase()
-    const { data, error } = await supabase.from('extraction_runs').select('rep_id')
+    const { data, error } = await supabase
+      .from('extraction_runs')
+      .select('rep_id')
+      .eq('organization_id', orgId)
     if (error || !data) return counts
     for (const row of data) {
       const repId = row.rep_id as string | null
@@ -147,7 +150,7 @@ async function resolveSnapshot(): Promise<OrgCommandSnapshot> {
       store.fetchLeadsAll().catch(() => []),
       store.listPlays().catch(() => []),
       store.getTeamAccountabilityAdmin(today).catch(() => null),
-      loadExtractionCounts(),
+      loadExtractionCounts(authCtx.orgId),
     ])
 
     const roleMap = new Map(orgRoles.map((r) => [r.personId, r.role]))

@@ -2,6 +2,9 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext } from '@/lib/auth/organization'
+import { isProductAdmin } from '@/lib/auth/admin-page'
+import { loadOrgCommandSnapshot } from '@/lib/admin/org-command-snapshot'
 import { REPLY_RATE_TARGET, READ_TO_CHECK_TARGET } from '@/lib/ai/config'
 import {
   TrendingUp,
@@ -37,8 +40,11 @@ function trendIcon(rate: number | null, target: number) {
 export default async function TeamPage() {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
+  const authCtx = await getAuthContext()
+  const adminView = isProductAdmin(user, authCtx)
 
   const store = await createScoutStore()
+  const snapshot = adminView ? await loadOrgCommandSnapshot() : null
   const [statsRes, extractionRes] = await Promise.allSettled([
     store.getTeamStats(),
     store.getExtractionMetrics(),
@@ -80,6 +86,45 @@ export default async function TeamPage() {
           <HeroStat label="Model spend (7d)" value={`$${extraction.totalCostUsd.toFixed(2)}`} />
         </div>
       </header>
+
+      {snapshot && snapshot.people.length > 0 && (
+        <section className="rounded-2xl border border-line/60 bg-bone-raised p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-label">Everyone&apos;s work</h2>
+            <span className="text-xs text-graphite">{snapshot.totals.peopleWithWork} people with recorded work</span>
+          </div>
+          <div className="mt-3 overflow-x-auto rounded border border-line">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-line bg-bone text-left text-mono-medium text-[10px] uppercase tracking-wide text-stone">
+                  <th className="px-3 py-2">Person</th>
+                  <th className="px-3 py-2">Identities</th>
+                  <th className="px-3 py-2">Profiles</th>
+                  <th className="px-3 py-2">Leads</th>
+                  <th className="px-3 py-2">Extractions</th>
+                  <th className="px-3 py-2">Today</th>
+                </tr>
+              </thead>
+              <tbody>
+                {snapshot.people.map((person) => (
+                  <tr key={person.repId} className="border-b border-line/60 last:border-b-0">
+                    <td className="px-3 py-2 font-medium text-ink">
+                      <Link href={`/team/${person.repId}`} className="hover:underline">{person.repName}</Link>
+                    </td>
+                    <td className="px-3 py-2 text-graphite">{person.identityNames.join(', ') || '—'}</td>
+                    <td className="px-3 py-2 text-graphite">{person.profiles}</td>
+                    <td className="px-3 py-2 text-graphite">{person.leads}</td>
+                    <td className="px-3 py-2 text-graphite">{person.extractions}</td>
+                    <td className="px-3 py-2 text-graphite">
+                      {person.totalTarget > 0 ? `${person.totalCompleted}/${person.totalTarget}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* ═══ PRIMARY METRICS ═══ */}
       <div className="reveal-up stagger-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

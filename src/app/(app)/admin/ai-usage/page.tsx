@@ -5,8 +5,8 @@
  * Operational view of the AI runtime.
  */
 
-import { redirect } from 'next/navigation'
-import { getCurrentUser } from '@/lib/auth/current'
+import { requireProductAdmin } from '@/lib/auth/admin-page'
+import { getAllHealth, getCooldownRemaining } from '@/lib/ai/runtime'
 
 interface AiUsageData {
   summary: {
@@ -36,27 +36,33 @@ interface AiUsageData {
   }>
 }
 
-async function fetchAiUsage(): Promise<AiUsageData | null> {
-  try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const res = await fetch(`${baseUrl}/api/admin/ai-usage`, {
-      cache: 'no-store',
-      credentials: 'include',
-    })
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
+async function loadAiUsage(): Promise<AiUsageData> {
+  const health = getAllHealth()
+  const providers = health.map((row) => ({
+    ...row,
+    cooldownRemainingMs: getCooldownRemaining(row.provider, row.model, row.credentialId),
+  }))
+  const totalRequests = providers.reduce((sum, row) => sum + row.requests, 0)
+  const totalSuccesses = providers.reduce((sum, row) => sum + row.successes, 0)
+  const totalErrors = providers.reduce((sum, row) => sum + row.errors, 0)
+  const totalTimeouts = providers.reduce((sum, row) => sum + row.timeouts, 0)
+  const totalRateLimits = providers.reduce((sum, row) => sum + row.rateLimits, 0)
+  return {
+    summary: {
+      totalRequests,
+      totalSuccesses,
+      totalErrors,
+      totalTimeouts,
+      totalRateLimits,
+      successRate: totalRequests > 0 ? Math.round((totalSuccesses / totalRequests) * 100) : 100,
+    },
+    providers,
   }
 }
 
 export default async function AdminAiUsagePage() {
-  const user = await getCurrentUser()
-  if (!user || user.rep.role !== 'admin') {
-    redirect('/dashboard')
-  }
-
-  const data = await fetchAiUsage()
+  await requireProductAdmin()
+  const data = await loadAiUsage()
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">

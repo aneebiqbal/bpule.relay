@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext } from '@/lib/auth/organization'
+import { isProductAdmin } from '@/lib/auth/admin-page'
 import { ManageProfiles } from '@/components/manage-profiles'
 
 
@@ -11,7 +13,8 @@ export default async function ManageProfilesPage() {
   if (!user) redirect('/login')
 
   const store = await createScoutStore()
-  const isAdmin = user.rep.role === 'admin'
+  const authCtx = await getAuthContext()
+  const isAdmin = isProductAdmin(user, authCtx)
 
   const [reps, profiles] = await Promise.all([
     store.listAllReps(),

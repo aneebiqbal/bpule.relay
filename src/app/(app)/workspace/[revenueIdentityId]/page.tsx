@@ -1,6 +1,8 @@
 import { Suspense } from 'react'
 import { notFound, redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext } from '@/lib/auth/organization'
+import { isProductAdmin } from '@/lib/auth/admin-page'
 import { isRevenueIdentityAssignedToRep } from '@/lib/auth/workspace'
 import { createScoutStore } from '@/lib/store'
 import { ResponsibilityWorkspaceDetail } from '@/components/rep/responsibility-workspace-detail'
@@ -18,14 +20,15 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   if (!user) redirect('/login')
 
   const { revenueIdentityId } = await params
+  const authCtx = await getAuthContext()
+  const admin = isProductAdmin(user, authCtx)
 
-  // SECURITY: Verify this rep is authorized to access this identity
-  const isAuthorized = await isRevenueIdentityAssignedToRep(user.rep.id, revenueIdentityId)
-  if (!isAuthorized) {
-    notFound()
+  if (!admin) {
+    const isAuthorized = await isRevenueIdentityAssignedToRep(user.rep.id, revenueIdentityId)
+    if (!isAuthorized) notFound()
   }
 
-  const dataPromise = loadWorkspaceDetail(revenueIdentityId)
+  const dataPromise = loadWorkspaceDetail(revenueIdentityId, admin)
 
   return (
     <Suspense fallback={<ResponsibilityWorkspaceSkeleton />}>
@@ -34,37 +37,36 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   )
 }
 
-async function loadWorkspaceDetail(identityId: string) {
+async function loadWorkspaceDetail(identityId: string, admin: boolean) {
   const store = await createScoutStore()
 
-  // Get the identity from the store (validates assignment via listMyAssignedIdentities)
-  const identity = await store.listMyAssignedIdentities().then((identities) =>
-    identities.find((i) => i.id === identityId) ?? null
-  )
+  const identity = admin
+    ? await store.getRevenueIdentityAdmin(identityId).catch(() => null)
+    : await store.listMyAssignedIdentities().then((identities) =>
+        identities.find((row) => row.id === identityId) ?? null
+      )
 
   if (!identity) {
     notFound()
   }
 
-  // Get accountability data from the store (handles both demo and supabase modes)
   const accountability = await store.getMyTodayAccountability()
-
-  // Filter targets for this specific identity
   const identityAccountability = accountability.assignedIdentities.find(
-    (ai) => ai.identity.id === identityId
+    (row) => row.identity.id === identityId
   )
 
-  const targetViews = identityAccountability?.targets.map((t) => ({
-    targetId: t.targetId,
-    activityType: t.activityType,
-    targetCount: t.targetCount,
-    completedCount: t.completedCount,
-    remaining: t.remaining,
-    status: t.status,
+  const targetViews = identityAccountability?.targets.map((target) => ({
+    targetId: target.targetId,
+    activityType: target.activityType,
+    targetCount: target.targetCount,
+    completedCount: target.completedCount,
+    remaining: target.remaining,
+    status: target.status,
   })) ?? []
 
-  // Get leads associated with this identity from the store
-  const allLeads = await store.fetchLeadsAll().catch(() => [])
+  const allLeads = admin
+    ? await store.fetchLeadsAll().catch(() => [])
+    : await store.listOwnedLeads().catch(() => [])
   const leads = allLeads
     .filter((lead) => lead.revenueIdentityId === identityId)
     .slice(0, 50)

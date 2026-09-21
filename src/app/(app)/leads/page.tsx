@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { Plus, Target, Search } from 'lucide-react'
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext } from '@/lib/auth/organization'
+import { isProductAdmin } from '@/lib/auth/admin-page'
 import { signalById } from '@/lib/score/signals'
 import { ScoreRing } from '@/components/score-ring'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -17,8 +19,9 @@ type LeadsPayload = { leads: Lead[]; ownerByRepId: Record<string, string>; orgVi
 
 async function loadLeads(): Promise<LeadsPayload> {
   const user = await getCurrentUser()
+  const authCtx = await getAuthContext()
   const store = await createScoutStore()
-  const orgView = user?.rep.role === 'admin'
+  const orgView = isProductAdmin(user, authCtx)
   const [leads, reps] = await Promise.all([
     orgView ? store.fetchLeadsAll() : store.listOwnedLeads(),
     orgView ? store.listAllReps() : Promise.resolve([]),

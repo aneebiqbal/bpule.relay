@@ -151,15 +151,7 @@ export function canAssignWork(ctx: AuthContext, targetRepId: string): boolean {
 
 export function getVisibleRepIds(ctx: AuthContext, allRepIds: string[]): string[] {
   if (ctx.isOwner || ctx.isAdmin) return allRepIds
-
-  const visible = new Set<string>([ctx.repId])
-  for (const m of ctx.teamMemberships) {
-    if (m.active) {
-      visible.add(ctx.repId)
-    }
-  }
-
-  return allRepIds.filter((id) => visible.has(id))
+  return allRepIds.filter((id) => id === ctx.repId)
 }
 
 export function canAccessOwnWork(ctx: AuthContext): boolean {

@@ -1,4 +1,4 @@
-import { Suspense, use } from 'react'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
@@ -49,28 +49,88 @@ export default async function TodayPage() {
       totals: snapshot.totals,
     }
 
+    const personal = await loadRepWorkspaceData(user.rep.id).catch(() => null)
     return (
       <AdminTodayView
         adminSummary={adminSummary}
         generatedAt={new Date().toISOString()}
+        personal={personal}
       />
     )
   }
 
-  // Managers and Members see personal responsibility workspace
-  // Managers also get a Team tab
-  const repDataPromise = loadRepWorkspaceData()
-  const teamDataPromise = fetch('/api/me/team').then((r) => r.ok ? r.json() : { teams: [] }).catch(() => ({ teams: [] }))
+  const [repData, teamData] = await Promise.all([
+    loadRepWorkspaceData(user.rep.id),
+    loadManagerTeamTab(),
+  ])
   return (
     <Suspense fallback={<DashboardShellSkeleton />}>
-      <RepWorkspaceAsync dataPromise={repDataPromise} teamDataPromise={teamDataPromise} />
+      <RepWorkspace data={repData} teamData={teamData} />
     </Suspense>
   )
 }
 
-async function loadRepWorkspaceData(): Promise<RepWorkspaceData> {
+async function loadManagerTeamTab() {
+  try {
+    const authCtx = await getAuthContext()
+    if (!authCtx || authCtx.managedTeamIds.length === 0) return { teams: [], isOwner: false }
+    const store = await createScoutStore()
+    const today = new Date().toISOString().slice(0, 10)
+    const teams = await Promise.all(authCtx.managedTeamIds.map(async (teamId) => {
+      const [teamInfo, members, targets] = await Promise.all([
+        store.getTeamInfo(teamId),
+        store.getTeamMembers(teamId),
+        store.getTeamTargets(teamId, today),
+      ])
+      const memberDetails = members.map((member) => {
+        const memberTargets = targets.filter((target) => target.repId === member.repId)
+        const totalTarget = memberTargets.reduce((sum, target) => sum + target.targetCount, 0)
+        const totalCompleted = memberTargets.reduce((sum, target) => sum + target.completedCount, 0)
+        return {
+          repId: member.repId,
+          repName: member.repName,
+          role: member.role,
+          revenueIdentities: memberTargets.map((target) => ({
+            identityName: target.identityName,
+            channel: target.channel,
+            targets: [{
+              activityType: target.activityType,
+              targetCount: target.targetCount,
+              completedCount: target.completedCount,
+              remaining: target.remaining,
+              status: target.status,
+            }],
+          })),
+          totalTarget,
+          totalCompleted,
+          totalRemaining: Math.max(0, totalTarget - totalCompleted),
+          attentionReason: memberTargets.some((target) => target.status === 'at_risk' || target.status === 'missed')
+            ? `${Math.max(0, totalTarget - totalCompleted)} remaining`
+            : null,
+        }
+      })
+      return {
+        teamId,
+        teamName: teamInfo?.name ?? 'My Team',
+        memberCount: members.length,
+        totalTarget: memberDetails.reduce((sum, member) => sum + member.totalTarget, 0),
+        totalCompleted: memberDetails.reduce((sum, member) => sum + member.totalCompleted, 0),
+        totalRemaining: memberDetails.reduce((sum, member) => sum + member.totalRemaining, 0),
+        needsAttention: memberDetails.filter((member) => member.attentionReason).length,
+        members: memberDetails,
+      }
+    }))
+    return { teams, isOwner: false }
+  } catch {
+    return { teams: [], isOwner: false }
+  }
+}
+
+async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   const user = await getCurrentUser()
-  if (!user) redirect('/login')
+  if (!user || user.rep.id !== repId) {
+    throw new Error('Not signed in')
+  }
 
   const store = await createScoutStore()
 
@@ -138,12 +198,6 @@ async function loadRepWorkspaceData(): Promise<RepWorkspaceData> {
   }
 }
 
-function RepWorkspaceAsync({ dataPromise, teamDataPromise }: { dataPromise: Promise<RepWorkspaceData>; teamDataPromise?: Promise<any> }) {
-  const data = use(dataPromise)
-  const teamData = teamDataPromise ? use(teamDataPromise) : undefined
-  return <RepWorkspace data={data} teamData={teamData} />
-}
-
 type AdminTodaySummary = {
   teamRows: Array<{
     id: string
@@ -171,7 +225,15 @@ type AdminTodaySummary = {
   }
 }
 
-function AdminTodayView({ adminSummary, generatedAt }: { adminSummary: AdminTodaySummary; generatedAt: string }) {
+function AdminTodayView({
+  adminSummary,
+  generatedAt,
+  personal,
+}: {
+  adminSummary: AdminTodaySummary
+  generatedAt: string
+  personal: RepWorkspaceData | null
+}) {
   return (
     <div className="space-y-6">
       <header className="space-y-1.5">
@@ -204,6 +266,17 @@ function AdminTodayView({ adminSummary, generatedAt }: { adminSummary: AdminToda
           <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.totals.extractions}</p>
         </div>
       </div>
+
+      {personal?.nextAction && (
+        <section className="rounded-lg border border-line bg-bone-raised p-4">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Your next move</p>
+          <p className="mt-2 text-[14px] font-medium text-ink">{personal.nextAction.title}</p>
+          <p className="mt-1 text-[13px] text-graphite">{personal.nextAction.humanAction}</p>
+          <Link href={personal.nextAction.href} className="mt-3 inline-flex text-[12px] font-medium text-ink hover:underline">
+            Open →
+          </Link>
+        </section>
+      )}
 
       {adminSummary.attentionItems.length > 0 && (
         <section className="rounded-lg border border-status-warning/30 bg-status-warning/5 p-4">
