@@ -896,6 +896,109 @@ export interface ScoutStore {
   markAccountabilityNotificationRead(id: string): Promise<void>
   listAuditLogAdmin(limit?: number): Promise<import('@/lib/domain/types').AuditLogEntry[]>
 
+  // accountability OS
+  listAccountabilityTemplates(): Promise<import('@/lib/domain/types').AccountabilityTemplate[]>
+  getAccountabilityTemplate(id: string): Promise<import('@/lib/domain/types').AccountabilityTemplate | null>
+  createAccountabilityTemplate(input: {
+    name: string
+    qualifiedProspects: number
+    connections: number
+    firstDms: number
+    emails: number
+    followups: number
+    dueRepliesPct: number
+    meaningfulTouches: number
+    loggingCompletenessPct: number
+    isDefault?: boolean
+  }): Promise<import('@/lib/domain/types').AccountabilityTemplate>
+  updateAccountabilityTemplate(id: string, patches: Record<string, unknown>): Promise<import('@/lib/domain/types').AccountabilityTemplate>
+  deleteAccountabilityTemplate(id: string): Promise<void>
+
+  getActiveContract(identityId: string): Promise<import('@/lib/domain/types').RevenueIdentityContract | null>
+  getContractById(contractId: string): Promise<import('@/lib/domain/types').RevenueIdentityContract | null>
+  createContract(input: {
+    revenueIdentityId: string
+    templateId?: string | null
+    annualRevenueTarget?: number
+    qualifiedProspects?: number
+    connections?: number
+    firstDms?: number
+    emails?: number
+    followups?: number
+    dueRepliesPct?: number
+    meaningfulTouches?: number
+    loggingCompletenessPct?: number
+    effectiveFrom?: string
+  }): Promise<import('@/lib/domain/types').RevenueIdentityContract>
+  updateContract(contractId: string, patches: Record<string, unknown>): Promise<import('@/lib/domain/types').RevenueIdentityContract>
+  supersedeContract(contractId: string, effectiveTo: string): Promise<void>
+
+  listContractAllocations(contractId: string): Promise<import('@/lib/domain/types').ContractAllocation[]>
+  setContractAllocations(contractId: string, allocations: { personId: string; allocationPct: number }[]): Promise<void>
+  getPersonAllocations(personId: string): Promise<import('@/lib/domain/types').ContractAllocation[]>
+
+  getDayClose(personId: string, identityId: string, date: string): Promise<import('@/lib/domain/types').DayClose | null>
+  getDayCloseById(id: string): Promise<import('@/lib/domain/types').DayClose | null>
+  createDayClose(input: {
+    personId: string
+    revenueIdentityId: string
+    contractId?: string | null
+    date: string
+    status?: import('@/lib/domain/types').DayCloseStatus
+    completionSnapshot?: Record<string, unknown>
+  }): Promise<import('@/lib/domain/types').DayClose>
+  updateDayClose(id: string, patches: Record<string, unknown>): Promise<import('@/lib/domain/types').DayClose>
+  listDayCloses(personId: string, identityId?: string, startDate?: string, endDate?: string): Promise<import('@/lib/domain/types').DayClose[]>
+  listTeamDayCloses(date: string): Promise<import('@/lib/domain/types').DayClose[]>
+
+  getMonthlyReview(personId: string, identityId: string, month: string): Promise<import('@/lib/domain/types').MonthlyAccountabilityReview | null>
+  createMonthlyReview(input: {
+    personId: string
+    revenueIdentityId: string
+    contractId?: string | null
+    month: string
+    executionSnapshot?: Record<string, unknown>
+    qualitySnapshot?: Record<string, unknown>
+    outcomeSnapshot?: Record<string, unknown>
+    consistencySnapshot?: Record<string, unknown>
+  }): Promise<import('@/lib/domain/types').MonthlyAccountabilityReview>
+  updateMonthlyReview(id: string, patches: Record<string, unknown>): Promise<import('@/lib/domain/types').MonthlyAccountabilityReview>
+  listMonthlyReviews(month: string): Promise<import('@/lib/domain/types').MonthlyAccountabilityReview[]>
+
+  listRewardPolicies(): Promise<import('@/lib/domain/types').RewardPolicy[]>
+  createRewardPolicy(input: {
+    name: string
+    tier: import('@/lib/domain/types').RewardTier
+    criteria: Record<string, unknown>
+    rewardType: import('@/lib/domain/types').RewardType
+    description?: string | null
+  }): Promise<import('@/lib/domain/types').RewardPolicy>
+  updateRewardPolicy(id: string, patches: Record<string, unknown>): Promise<import('@/lib/domain/types').RewardPolicy>
+  deleteRewardPolicy(id: string): Promise<void>
+
+  listRewardEligibility(reviewId: string): Promise<import('@/lib/domain/types').RewardEligibility[]>
+  createRewardEligibility(input: {
+    monthlyReviewId: string
+    policyId: string
+    reasonSnapshot?: Record<string, unknown>
+  }): Promise<import('@/lib/domain/types').RewardEligibility>
+  updateRewardEligibility(id: string, patches: Record<string, unknown>): Promise<import('@/lib/domain/types').RewardEligibility>
+
+  getOperatorAvailability(personId: string, date: string): Promise<import('@/lib/domain/types').OperatorAvailability | null>
+  setOperatorAvailability(input: {
+    personId: string
+    date: string
+    status: import('@/lib/domain/types').AvailabilityStatus
+    note?: string | null
+  }): Promise<import('@/lib/domain/types').OperatorAvailability>
+  listOperatorAvailability(personId: string, startDate: string, endDate: string): Promise<import('@/lib/domain/types').OperatorAvailability[]>
+
+  getMyDayView(): Promise<import('@/lib/domain/types').MyDayView>
+  getTeamAccountabilityView(date?: string): Promise<import('@/lib/domain/types').TeamAccountabilityView>
+  getIdentityAccountabilityView(identityId: string): Promise<import('@/lib/domain/types').IdentityAccountabilityView>
+  getOwnerCommandCenterView(): Promise<import('@/lib/domain/types').OwnerCommandCenterView>
+  getMonthlyReviewView(reviewId: string): Promise<import('@/lib/domain/types').MonthlyReviewView>
+
   // ============================================================================
   // ORCHESTRATION — Event Ledger + Relay Runs (Sprint 1)
   // ============================================================================

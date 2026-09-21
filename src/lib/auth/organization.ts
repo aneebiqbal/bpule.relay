@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getCurrentUser } from './current'
+import { isDemoMode } from '@/lib/ai/config'
 
 export type OrganizationRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER'
 export type TeamRole = 'MANAGER' | 'MEMBER'
@@ -30,6 +31,29 @@ export interface AuthContext {
 async function resolveAuthContext(): Promise<AuthContext | null> {
   const user = await getCurrentUser()
   if (!user) return null
+
+  if (isDemoMode()) {
+    const demoRole: OrganizationRole = user.rep.role === 'admin' ? 'OWNER' : 'MEMBER'
+    const demoCapabilities = new Set<string>(
+      demoRole === 'OWNER'
+        ? ['MANAGE_TEAM_MEMBERS', 'VIEW_TEAM_WORK', 'ASSIGN_TEAM_WORK', 'MANAGE_TEAM_TARGETS', 'VIEW_TEAM_ANALYTICS', 'MANAGE_REVENUE_IDENTITIES', 'MANAGE_ORG_USERS', 'MANAGE_ORG_SETTINGS', 'ACCESS_REVENUE_INTELLIGENCE', 'ACCESS_RELAY_GROWTH']
+        : ['VIEW_OWN_WORK', 'EXECUTE_OWN_WORK'],
+    )
+    return {
+      repId: user.rep.id,
+      orgId: user.organization.id,
+      orgName: user.organization.name,
+      organizationRole: demoRole,
+      teamMemberships: [],
+      managedTeamIds: [],
+      memberTeamIds: [],
+      capabilities: demoCapabilities,
+      isOwner: demoRole === 'OWNER',
+      isAdmin: demoRole === 'OWNER',
+      isManager: demoRole === 'OWNER',
+      isMember: true,
+    }
+  }
 
   const supabase = await createServerSupabase()
 

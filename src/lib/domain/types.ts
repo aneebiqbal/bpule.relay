@@ -1265,9 +1265,12 @@ export interface TargetProgressView {
 export interface TeamAccountabilityView {
   date: string
   isWorkingDay: boolean
-  summaries: AccountabilitySummary[]
-  consecutiveMisses: ConsecutiveMisses[]
-  requiresAttention: AttentionItem[]
+  members?: TeamMemberView[]
+  exceptions?: DayClose[]
+  needsAttention?: AttentionItem[]
+  summaries?: AccountabilitySummary[]
+  consecutiveMisses?: ConsecutiveMisses[]
+  requiresAttention?: AttentionItem[]
 }
 
 export interface AttentionItem {
@@ -1278,6 +1281,8 @@ export interface AttentionItem {
   activityType: ActivityType
   message: string
   severity: 'warning' | 'critical'
+  personId?: string
+  personName?: string
 }
 
 export interface CommandCenterView {
@@ -1304,6 +1309,248 @@ export interface IdentityPerformanceView {
   assignedReps: string[]
   totalTarget: number
   totalCompleted: number
+}
+
+// ── Accountability OS ────────────────────────────────────────────────────────
+
+export type AccountabilityTemplateName = 'LIGHT' | 'STANDARD' | 'HIGH_OUTPUT' | 'CUSTOM'
+
+export interface AccountabilityTemplate {
+  id: string
+  organizationId: string
+  name: string
+  qualifiedProspects: number
+  connections: number
+  firstDms: number
+  emails: number
+  followups: number
+  dueRepliesPct: number
+  meaningfulTouches: number
+  loggingCompletenessPct: number
+  isDefault: boolean
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type ContractStatus = 'active' | 'superseded' | 'archived'
+
+export interface RevenueIdentityContract {
+  id: string
+  revenueIdentityId: string
+  templateId: string | null
+  annualRevenueTarget: number
+  qualifiedProspects: number
+  connections: number
+  firstDms: number
+  emails: number
+  followups: number
+  dueRepliesPct: number
+  meaningfulTouches: number
+  loggingCompletenessPct: number
+  effectiveFrom: string
+  effectiveTo: string | null
+  status: ContractStatus
+  version: number
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ContractAllocation {
+  id: string
+  contractId: string
+  personId: string
+  allocationPct: number
+  createdAt: string
+  updatedAt: string
+}
+
+export type DayCloseStatus = 'not_started' | 'in_progress' | 'ready_to_close' | 'completed' | 'completed_with_exception' | 'missed'
+
+export type ExceptionReason = 'no_qualified_inventory' | 'channel_limit' | 'identity_blocked' | 'system_issue' | 'client_priority' | 'manager_approved' | 'other'
+
+export interface DayClose {
+  id: string
+  organizationId: string
+  personId: string
+  revenueIdentityId: string
+  contractId: string | null
+  date: string
+  status: DayCloseStatus
+  completionSnapshot: Record<string, unknown>
+  exceptionReason: ExceptionReason | null
+  exceptionNote: string | null
+  reviewedBy: string | null
+  reviewedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type ReviewStatus = 'pending' | 'in_review' | 'completed' | 'adjusted'
+
+export interface MonthlyAccountabilityReview {
+  id: string
+  organizationId: string
+  personId: string
+  revenueIdentityId: string
+  contractId: string | null
+  month: string
+  executionSnapshot: Record<string, unknown>
+  qualitySnapshot: Record<string, unknown>
+  outcomeSnapshot: Record<string, unknown>
+  consistencySnapshot: Record<string, unknown>
+  reviewStatus: ReviewStatus
+  managerNote: string | null
+  adminNote: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type RewardTier = 'bronze' | 'silver' | 'gold'
+
+export type RewardType = 'custom' | 'bonus_eligibility' | 'commission_review' | 'time_off_review' | 'gift_review' | 'recognition_only'
+
+export interface RewardPolicy {
+  id: string
+  organizationId: string
+  name: string
+  tier: RewardTier
+  criteria: Record<string, unknown>
+  rewardType: RewardType
+  description: string | null
+  enabled: boolean
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type RewardEligibilityStatus = 'pending' | 'approved' | 'rejected' | 'adjusted'
+
+export interface RewardEligibility {
+  id: string
+  monthlyReviewId: string
+  policyId: string
+  status: RewardEligibilityStatus
+  reasonSnapshot: Record<string, unknown>
+  approvedBy: string | null
+  approvedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type AvailabilityStatus = 'working' | 'leave' | 'holiday' | 'approved_unavailable'
+
+export interface OperatorAvailability {
+  id: string
+  organizationId: string
+  personId: string
+  date: string
+  status: AvailabilityStatus
+  note: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DailyContract {
+  revenueIdentityId: string
+  identityName: string
+  annualRevenueTarget: number
+  qualifiedProspects: number
+  connections: number
+  firstDms: number
+  emails: number
+  followups: number
+  dueRepliesPct: number
+  meaningfulTouches: number
+  loggingCompletenessPct: number
+  allocationPct: number
+}
+
+export interface DailyProgress {
+  qualifiedProspects: { completed: number; target: number; remaining: number }
+  connections: { completed: number; target: number; remaining: number }
+  firstDms: { completed: number; target: number; remaining: number }
+  emails: { completed: number; target: number; remaining: number }
+  followups: { completed: number; target: number; remaining: number }
+  dueReplies: { completed: number; target: number; remaining: number }
+  meaningfulTouches: { completed: number; target: number; remaining: number }
+  logging: { completed: number; target: number; remaining: number }
+}
+
+export interface MyDayView {
+  personId: string
+  personName: string
+  date: string
+  isWorkingDay: boolean
+  availabilityStatus: AvailabilityStatus
+  contracts: DailyContract[]
+  progress: DailyProgress
+  totalCompleted: number
+  totalTarget: number
+  totalRemaining: number
+  overallStatus: AccountabilityStatus
+  canCloseDay: boolean
+  dayCloseStatus: DayCloseStatus | null
+  nextAction: string | null
+}
+
+export interface TeamMemberView {
+  personId: string
+  personName: string
+  revenueIdentityId: string
+  identityName: string
+  totalCompleted: number
+  totalTarget: number
+  totalRemaining: number
+  status: AccountabilityStatus
+  dayCloseStatus: DayCloseStatus | null
+  exceptionReason: ExceptionReason | null
+  allocationPct: number
+}
+
+export interface IdentityAccountabilityView {
+  identityId: string
+  identityName: string
+  annualRevenueTarget: number
+  contract: RevenueIdentityContract | null
+  allocations: ContractAllocation[]
+  todayProgress: DailyProgress
+  monthProgress: DailyProgress
+  qualityStatus: 'healthy' | 'review_required' | 'unknown'
+  funnel: Record<string, number>
+  revenue: { won: number; pipeline: number; remaining: number }
+}
+
+export interface MonthlyReviewView {
+  review: MonthlyAccountabilityReview
+  personName: string
+  identityName: string
+  rewardEligibility: RewardEligibility[]
+  policies: RewardPolicy[]
+}
+
+export interface OwnerCommandCenterView {
+  date: string
+  isWorkingDay: boolean
+  totalOperators: number
+  completeOperators: number
+  onTrackOperators: number
+  needsAttentionOperators: number
+  remainingOutboundWork: number
+  repliesDue: number
+  monthExpectedWorkingDays: number
+  monthActualCompletedDays: number
+  monthMeaningfulOutbound: number
+  monthQualifiedConversations: number
+  monthCalls: number
+  monthProposals: number
+  monthWins: number
+  monthWonRevenue: number
+  reviewQueue: MonthlyAccountabilityReview[]
+  exceptionQueue: DayClose[]
+  rewardQueue: RewardEligibility[]
+  teamBreakdown: TeamMemberView[]
 }
 
 // ============================================================================

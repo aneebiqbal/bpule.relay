@@ -35,7 +35,7 @@ export default async function TodayPage() {
     if (teamAccountability) {
       try {
         const team = teamAccountability
-        const teamRows = team.summaries
+        const teamRows = (team.summaries ?? [])
           .map((summary) => ({
             id: summary.repId,
             name: summary.repName,

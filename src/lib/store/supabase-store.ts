@@ -157,6 +157,7 @@ function isOptionalSearchError(err: unknown): boolean {
     code === '42P01' ||
     code === '42703' ||
     code === 'PGRST204' ||
+    code === 'PGRST205' ||
     /does not exist|not found in the schema cache|could not find the table|Could not find a relationship/i.test(message)
   )
 }
@@ -4816,6 +4817,814 @@ export class SupabaseStore implements ScoutStore {
     }))
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Accountability OS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async listAccountabilityTemplates(): Promise<import('@/lib/domain/types').AccountabilityTemplate[]> {
+    const { data, error } = await this.client
+      .from('accountability_templates').select('*').eq('organization_id', this.orgId).order('name')
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id as string, organizationId: r.organization_id as string, name: r.name as string,
+      qualifiedProspects: r.qualified_prospects as number, connections: r.connections as number,
+      firstDms: r.first_dms as number, emails: r.emails as number, followups: r.followups as number,
+      dueRepliesPct: r.due_replies_pct as number, meaningfulTouches: r.meaningful_touches as number,
+      loggingCompletenessPct: r.logging_completeness_pct as number, isDefault: r.is_default as boolean,
+      createdBy: (r.created_by as string) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+    }))
+  }
+
+  async getAccountabilityTemplate(id: string): Promise<import('@/lib/domain/types').AccountabilityTemplate | null> {
+    const { data, error } = await this.client
+      .from('accountability_templates').select('*').eq('id', id).eq('organization_id', this.orgId).maybeSingle()
+    if (error) throw error
+    return data ? {
+      id: data.id as string, organizationId: data.organization_id as string, name: data.name as string,
+      qualifiedProspects: data.qualified_prospects as number, connections: data.connections as number,
+      firstDms: data.first_dms as number, emails: data.emails as number, followups: data.followups as number,
+      dueRepliesPct: data.due_replies_pct as number, meaningfulTouches: data.meaningful_touches as number,
+      loggingCompletenessPct: data.logging_completeness_pct as number, isDefault: data.is_default as boolean,
+      createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    } : null
+  }
+
+  async createAccountabilityTemplate(input: {
+    name: string; qualifiedProspects: number; connections: number; firstDms: number;
+    emails: number; followups: number; dueRepliesPct: number; meaningfulTouches: number;
+    loggingCompletenessPct: number; isDefault?: boolean
+  }): Promise<import('@/lib/domain/types').AccountabilityTemplate> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('accountability_templates')
+      .insert({
+        organization_id: this.orgId, name: input.name,
+        qualified_prospects: input.qualifiedProspects, connections: input.connections,
+        first_dms: input.firstDms, emails: input.emails, followups: input.followups,
+        due_replies_pct: input.dueRepliesPct, meaningful_touches: input.meaningfulTouches,
+        logging_completeness_pct: input.loggingCompletenessPct, is_default: input.isDefault ?? false,
+        created_by: this.rep.id,
+      })
+      .select('*').single()
+    if (error) throw error
+    return {
+      id: data.id as string, organizationId: data.organization_id as string, name: data.name as string,
+      qualifiedProspects: data.qualified_prospects as number, connections: data.connections as number,
+      firstDms: data.first_dms as number, emails: data.emails as number, followups: data.followups as number,
+      dueRepliesPct: data.due_replies_pct as number, meaningfulTouches: data.meaningful_touches as number,
+      loggingCompletenessPct: data.logging_completeness_pct as number, isDefault: data.is_default as boolean,
+      createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  async updateAccountabilityTemplate(id: string, patches: Record<string, unknown>): Promise<import('@/lib/domain/types').AccountabilityTemplate> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('accountability_templates').update(patches).eq('id', id).eq('organization_id', this.orgId)
+      .select('*').single()
+    if (error) throw error
+    return {
+      id: data.id as string, organizationId: data.organization_id as string, name: data.name as string,
+      qualifiedProspects: data.qualified_prospects as number, connections: data.connections as number,
+      firstDms: data.first_dms as number, emails: data.emails as number, followups: data.followups as number,
+      dueRepliesPct: data.due_replies_pct as number, meaningfulTouches: data.meaningful_touches as number,
+      loggingCompletenessPct: data.logging_completeness_pct as number, isDefault: data.is_default as boolean,
+      createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  async deleteAccountabilityTemplate(id: string): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { error } = await this.client
+      .from('accountability_templates').delete().eq('id', id).eq('organization_id', this.orgId)
+    if (error) throw error
+  }
+
+  async getActiveContract(identityId: string): Promise<import('@/lib/domain/types').RevenueIdentityContract | null> {
+    const { data, error } = await this.client
+      .from('revenue_identity_contracts')
+      .select('*')
+      .eq('revenue_identity_id', identityId)
+      .eq('status', 'active')
+      .order('effective_from', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) throw error
+    return data ? {
+      id: data.id as string, revenueIdentityId: data.revenue_identity_id as string,
+      templateId: (data.template_id as string) ?? null, annualRevenueTarget: data.annual_revenue_target as number,
+      qualifiedProspects: data.qualified_prospects as number, connections: data.connections as number,
+      firstDms: data.first_dms as number, emails: data.emails as number, followups: data.followups as number,
+      dueRepliesPct: data.due_replies_pct as number, meaningfulTouches: data.meaningful_touches as number,
+      loggingCompletenessPct: data.logging_completeness_pct as number,
+      effectiveFrom: data.effective_from as string, effectiveTo: (data.effective_to as string) ?? null,
+      status: data.status as import('@/lib/domain/types').ContractStatus, version: data.version as number,
+      createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    } : null
+  }
+
+  async getContractById(contractId: string): Promise<import('@/lib/domain/types').RevenueIdentityContract | null> {
+    const { data, error } = await this.client
+      .from('revenue_identity_contracts').select('*').eq('id', contractId).maybeSingle()
+    if (error) throw error
+    return data ? {
+      id: data.id as string, revenueIdentityId: data.revenue_identity_id as string,
+      templateId: (data.template_id as string) ?? null, annualRevenueTarget: data.annual_revenue_target as number,
+      qualifiedProspects: data.qualified_prospects as number, connections: data.connections as number,
+      firstDms: data.first_dms as number, emails: data.emails as number, followups: data.followups as number,
+      dueRepliesPct: data.due_replies_pct as number, meaningfulTouches: data.meaningful_touches as number,
+      loggingCompletenessPct: data.logging_completeness_pct as number,
+      effectiveFrom: data.effective_from as string, effectiveTo: (data.effective_to as string) ?? null,
+      status: data.status as import('@/lib/domain/types').ContractStatus, version: data.version as number,
+      createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    } : null
+  }
+
+  async createContract(input: {
+    revenueIdentityId: string; templateId?: string | null; annualRevenueTarget?: number;
+    qualifiedProspects?: number; connections?: number; firstDms?: number; emails?: number;
+    followups?: number; dueRepliesPct?: number; meaningfulTouches?: number;
+    loggingCompletenessPct?: number; effectiveFrom?: string
+  }): Promise<import('@/lib/domain/types').RevenueIdentityContract> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('revenue_identity_contracts')
+      .insert({
+        revenue_identity_id: input.revenueIdentityId,
+        template_id: input.templateId ?? null,
+        annual_revenue_target: input.annualRevenueTarget ?? 100000,
+        qualified_prospects: input.qualifiedProspects ?? 50,
+        connections: input.connections ?? 25,
+        first_dms: input.firstDms ?? 30,
+        emails: input.emails ?? 30,
+        followups: input.followups ?? 25,
+        due_replies_pct: input.dueRepliesPct ?? 100,
+        meaningful_touches: input.meaningfulTouches ?? 90,
+        logging_completeness_pct: input.loggingCompletenessPct ?? 100,
+        effective_from: input.effectiveFrom ?? new Date().toISOString().slice(0, 10),
+        status: 'active', version: 1, created_by: this.rep.id,
+      })
+      .select('*').single()
+    if (error) throw error
+    return {
+      id: data.id as string, revenueIdentityId: data.revenue_identity_id as string,
+      templateId: (data.template_id as string) ?? null, annualRevenueTarget: data.annual_revenue_target as number,
+      qualifiedProspects: data.qualified_prospects as number, connections: data.connections as number,
+      firstDms: data.first_dms as number, emails: data.emails as number, followups: data.followups as number,
+      dueRepliesPct: data.due_replies_pct as number, meaningfulTouches: data.meaningful_touches as number,
+      loggingCompletenessPct: data.logging_completeness_pct as number,
+      effectiveFrom: data.effective_from as string, effectiveTo: (data.effective_to as string) ?? null,
+      status: data.status as import('@/lib/domain/types').ContractStatus, version: data.version as number,
+      createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  async updateContract(contractId: string, patches: Record<string, unknown>): Promise<import('@/lib/domain/types').RevenueIdentityContract> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('revenue_identity_contracts').update(patches).eq('id', contractId)
+      .select('*').single()
+    if (error) throw error
+    return {
+      id: data.id as string, revenueIdentityId: data.revenue_identity_id as string,
+      templateId: (data.template_id as string) ?? null, annualRevenueTarget: data.annual_revenue_target as number,
+      qualifiedProspects: data.qualified_prospects as number, connections: data.connections as number,
+      firstDms: data.first_dms as number, emails: data.emails as number, followups: data.followups as number,
+      dueRepliesPct: data.due_replies_pct as number, meaningfulTouches: data.meaningful_touches as number,
+      loggingCompletenessPct: data.logging_completeness_pct as number,
+      effectiveFrom: data.effective_from as string, effectiveTo: (data.effective_to as string) ?? null,
+      status: data.status as import('@/lib/domain/types').ContractStatus, version: data.version as number,
+      createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  async supersedeContract(contractId: string, effectiveTo: string): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { error } = await this.client
+      .from('revenue_identity_contracts')
+      .update({ status: 'superseded', effective_to: effectiveTo })
+      .eq('id', contractId)
+    if (error) throw error
+  }
+
+  async listContractAllocations(contractId: string): Promise<import('@/lib/domain/types').ContractAllocation[]> {
+    const { data, error } = await this.client
+      .from('contract_allocations').select('*').eq('contract_id', contractId)
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id as string, contractId: r.contract_id as string, personId: r.person_id as string,
+      allocationPct: r.allocation_pct as number, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+    }))
+  }
+
+  async setContractAllocations(contractId: string, allocations: { personId: string; allocationPct: number }[]): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    await this.client.from('contract_allocations').delete().eq('contract_id', contractId)
+    if (allocations.length === 0) return
+    const rows = allocations.map((a) => ({
+      contract_id: contractId, person_id: a.personId, allocation_pct: a.allocationPct,
+    }))
+    const { error } = await this.client.from('contract_allocations').insert(rows)
+    if (error) throw error
+  }
+
+  async getPersonAllocations(personId: string): Promise<import('@/lib/domain/types').ContractAllocation[]> {
+    const { data, error } = await this.client
+      .from('contract_allocations').select('*').eq('person_id', personId)
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id as string, contractId: r.contract_id as string, personId: r.person_id as string,
+      allocationPct: r.allocation_pct as number, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+    }))
+  }
+
+  async getDayClose(personId: string, identityId: string, date: string): Promise<import('@/lib/domain/types').DayClose | null> {
+    const { data, error } = await this.client
+      .from('day_closes').select('*')
+      .eq('person_id', personId).eq('revenue_identity_id', identityId).eq('date', date)
+      .maybeSingle()
+    if (error) throw error
+    return data ? {
+      id: data.id as string, organizationId: data.organization_id as string,
+      personId: data.person_id as string, revenueIdentityId: data.revenue_identity_id as string,
+      contractId: (data.contract_id as string) ?? null, date: data.date as string,
+      status: data.status as import('@/lib/domain/types').DayCloseStatus,
+      completionSnapshot: (data.completion_snapshot as Record<string, unknown>) ?? {},
+      exceptionReason: (data.exception_reason as import('@/lib/domain/types').ExceptionReason) ?? null,
+      exceptionNote: (data.exception_note as string) ?? null,
+      reviewedBy: (data.reviewed_by as string) ?? null, reviewedAt: (data.reviewed_at as string) ?? null,
+      createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    } : null
+  }
+
+  async getDayCloseById(id: string): Promise<import('@/lib/domain/types').DayClose | null> {
+    const { data, error } = await this.client
+      .from('day_closes').select('*').eq('id', id).maybeSingle()
+    if (error) throw error
+    return data ? {
+      id: data.id as string, organizationId: data.organization_id as string,
+      personId: data.person_id as string, revenueIdentityId: data.revenue_identity_id as string,
+      contractId: (data.contract_id as string) ?? null, date: data.date as string,
+      status: data.status as import('@/lib/domain/types').DayCloseStatus,
+      completionSnapshot: (data.completion_snapshot as Record<string, unknown>) ?? {},
+      exceptionReason: (data.exception_reason as import('@/lib/domain/types').ExceptionReason) ?? null,
+      exceptionNote: (data.exception_note as string) ?? null,
+      reviewedBy: (data.reviewed_by as string) ?? null, reviewedAt: (data.reviewed_at as string) ?? null,
+      createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    } : null
+  }
+
+  async createDayClose(input: {
+    personId: string; revenueIdentityId: string; contractId?: string | null; date: string;
+    status?: import('@/lib/domain/types').DayCloseStatus; completionSnapshot?: Record<string, unknown>
+  }): Promise<import('@/lib/domain/types').DayClose> {
+    const { data, error } = await this.client
+      .from('day_closes')
+      .insert({
+        organization_id: this.orgId, person_id: input.personId,
+        revenue_identity_id: input.revenueIdentityId, contract_id: input.contractId ?? null,
+        date: input.date, status: input.status ?? 'not_started',
+        completion_snapshot: input.completionSnapshot ?? {},
+      })
+      .select('*').single()
+    if (error) throw error
+    return {
+      id: data.id as string, organizationId: data.organization_id as string,
+      personId: data.person_id as string, revenueIdentityId: data.revenue_identity_id as string,
+      contractId: (data.contract_id as string) ?? null, date: data.date as string,
+      status: data.status as import('@/lib/domain/types').DayCloseStatus,
+      completionSnapshot: (data.completion_snapshot as Record<string, unknown>) ?? {},
+      exceptionReason: (data.exception_reason as import('@/lib/domain/types').ExceptionReason) ?? null,
+      exceptionNote: (data.exception_note as string) ?? null,
+      reviewedBy: (data.reviewed_by as string) ?? null, reviewedAt: (data.reviewed_at as string) ?? null,
+      createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  async updateDayClose(id: string, patches: Record<string, unknown>): Promise<import('@/lib/domain/types').DayClose> {
+    const { data, error } = await this.client
+      .from('day_closes').update(patches).eq('id', id).select('*').single()
+    if (error) throw error
+    return {
+      id: data.id as string, organizationId: data.organization_id as string,
+      personId: data.person_id as string, revenueIdentityId: data.revenue_identity_id as string,
+      contractId: (data.contract_id as string) ?? null, date: data.date as string,
+      status: data.status as import('@/lib/domain/types').DayCloseStatus,
+      completionSnapshot: (data.completion_snapshot as Record<string, unknown>) ?? {},
+      exceptionReason: (data.exception_reason as import('@/lib/domain/types').ExceptionReason) ?? null,
+      exceptionNote: (data.exception_note as string) ?? null,
+      reviewedBy: (data.reviewed_by as string) ?? null, reviewedAt: (data.reviewed_at as string) ?? null,
+      createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  async listDayCloses(personId: string, identityId?: string, startDate?: string, endDate?: string): Promise<import('@/lib/domain/types').DayClose[]> {
+    let query = this.client.from('day_closes').select('*').eq('person_id', personId)
+    if (identityId) query = query.eq('revenue_identity_id', identityId)
+    if (startDate) query = query.gte('date', startDate)
+    if (endDate) query = query.lte('date', endDate)
+    const { data, error } = await query.order('date', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id as string, organizationId: r.organization_id as string,
+      personId: r.person_id as string, revenueIdentityId: r.revenue_identity_id as string,
+      contractId: (r.contract_id as string) ?? null, date: r.date as string,
+      status: r.status as import('@/lib/domain/types').DayCloseStatus,
+      completionSnapshot: (r.completion_snapshot as Record<string, unknown>) ?? {},
+      exceptionReason: (r.exception_reason as import('@/lib/domain/types').ExceptionReason) ?? null,
+      exceptionNote: (r.exception_note as string) ?? null,
+      reviewedBy: (r.reviewed_by as string) ?? null, reviewedAt: (r.reviewed_at as string) ?? null,
+      createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+    }))
+  }
+
+  async listTeamDayCloses(date: string): Promise<import('@/lib/domain/types').DayClose[]> {
+    const { data, error } = await this.client
+      .from('day_closes').select('*').eq('organization_id', this.orgId).eq('date', date)
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id as string, organizationId: r.organization_id as string,
+      personId: r.person_id as string, revenueIdentityId: r.revenue_identity_id as string,
+      contractId: (r.contract_id as string) ?? null, date: r.date as string,
+      status: r.status as import('@/lib/domain/types').DayCloseStatus,
+      completionSnapshot: (r.completion_snapshot as Record<string, unknown>) ?? {},
+      exceptionReason: (r.exception_reason as import('@/lib/domain/types').ExceptionReason) ?? null,
+      exceptionNote: (r.exception_note as string) ?? null,
+      reviewedBy: (r.reviewed_by as string) ?? null, reviewedAt: (r.reviewed_at as string) ?? null,
+      createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+    }))
+  }
+
+  async getMonthlyReview(personId: string, identityId: string, month: string): Promise<import('@/lib/domain/types').MonthlyAccountabilityReview | null> {
+    const { data, error } = await this.client
+      .from('monthly_accountability_reviews').select('*')
+      .eq('person_id', personId).eq('revenue_identity_id', identityId).eq('month', month)
+      .maybeSingle()
+    if (error) throw error
+    return data ? {
+      id: data.id as string, organizationId: data.organization_id as string,
+      personId: data.person_id as string, revenueIdentityId: data.revenue_identity_id as string,
+      contractId: (data.contract_id as string) ?? null, month: data.month as string,
+      executionSnapshot: (data.execution_snapshot as Record<string, unknown>) ?? {},
+      qualitySnapshot: (data.quality_snapshot as Record<string, unknown>) ?? {},
+      outcomeSnapshot: (data.outcome_snapshot as Record<string, unknown>) ?? {},
+      consistencySnapshot: (data.consistency_snapshot as Record<string, unknown>) ?? {},
+      reviewStatus: data.review_status as import('@/lib/domain/types').ReviewStatus,
+      managerNote: (data.manager_note as string) ?? null, adminNote: (data.admin_note as string) ?? null,
+      createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    } : null
+  }
+
+  async createMonthlyReview(input: {
+    personId: string; revenueIdentityId: string; contractId?: string | null; month: string;
+    executionSnapshot?: Record<string, unknown>; qualitySnapshot?: Record<string, unknown>;
+    outcomeSnapshot?: Record<string, unknown>; consistencySnapshot?: Record<string, unknown>
+  }): Promise<import('@/lib/domain/types').MonthlyAccountabilityReview> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('monthly_accountability_reviews')
+      .insert({
+        organization_id: this.orgId, person_id: input.personId,
+        revenue_identity_id: input.revenueIdentityId, contract_id: input.contractId ?? null,
+        month: input.month,
+        execution_snapshot: input.executionSnapshot ?? {},
+        quality_snapshot: input.qualitySnapshot ?? {},
+        outcome_snapshot: input.outcomeSnapshot ?? {},
+        consistency_snapshot: input.consistencySnapshot ?? {},
+        review_status: 'pending',
+      })
+      .select('*').single()
+    if (error) throw error
+    return {
+      id: data.id as string, organizationId: data.organization_id as string,
+      personId: data.person_id as string, revenueIdentityId: data.revenue_identity_id as string,
+      contractId: (data.contract_id as string) ?? null, month: data.month as string,
+      executionSnapshot: (data.execution_snapshot as Record<string, unknown>) ?? {},
+      qualitySnapshot: (data.quality_snapshot as Record<string, unknown>) ?? {},
+      outcomeSnapshot: (data.outcome_snapshot as Record<string, unknown>) ?? {},
+      consistencySnapshot: (data.consistency_snapshot as Record<string, unknown>) ?? {},
+      reviewStatus: data.review_status as import('@/lib/domain/types').ReviewStatus,
+      managerNote: (data.manager_note as string) ?? null, adminNote: (data.admin_note as string) ?? null,
+      createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  async updateMonthlyReview(id: string, patches: Record<string, unknown>): Promise<import('@/lib/domain/types').MonthlyAccountabilityReview> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('monthly_accountability_reviews').update(patches).eq('id', id).select('*').single()
+    if (error) throw error
+    return {
+      id: data.id as string, organizationId: data.organization_id as string,
+      personId: data.person_id as string, revenueIdentityId: data.revenue_identity_id as string,
+      contractId: (data.contract_id as string) ?? null, month: data.month as string,
+      executionSnapshot: (data.execution_snapshot as Record<string, unknown>) ?? {},
+      qualitySnapshot: (data.quality_snapshot as Record<string, unknown>) ?? {},
+      outcomeSnapshot: (data.outcome_snapshot as Record<string, unknown>) ?? {},
+      consistencySnapshot: (data.consistency_snapshot as Record<string, unknown>) ?? {},
+      reviewStatus: data.review_status as import('@/lib/domain/types').ReviewStatus,
+      managerNote: (data.manager_note as string) ?? null, adminNote: (data.admin_note as string) ?? null,
+      createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  async listMonthlyReviews(month: string): Promise<import('@/lib/domain/types').MonthlyAccountabilityReview[]> {
+    const { data, error } = await this.client
+      .from('monthly_accountability_reviews').select('*')
+      .eq('organization_id', this.orgId).eq('month', month)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id as string, organizationId: r.organization_id as string,
+      personId: r.person_id as string, revenueIdentityId: r.revenue_identity_id as string,
+      contractId: (r.contract_id as string) ?? null, month: r.month as string,
+      executionSnapshot: (r.execution_snapshot as Record<string, unknown>) ?? {},
+      qualitySnapshot: (r.quality_snapshot as Record<string, unknown>) ?? {},
+      outcomeSnapshot: (r.outcome_snapshot as Record<string, unknown>) ?? {},
+      consistencySnapshot: (r.consistency_snapshot as Record<string, unknown>) ?? {},
+      reviewStatus: r.review_status as import('@/lib/domain/types').ReviewStatus,
+      managerNote: (r.manager_note as string) ?? null, adminNote: (r.admin_note as string) ?? null,
+      createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+    }))
+  }
+
+  async listRewardPolicies(): Promise<import('@/lib/domain/types').RewardPolicy[]> {
+    const { data, error } = await this.client
+      .from('reward_policies').select('*').eq('organization_id', this.orgId).order('name')
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id as string, organizationId: r.organization_id as string, name: r.name as string,
+      tier: r.tier as import('@/lib/domain/types').RewardTier,
+      criteria: (r.criteria as Record<string, unknown>) ?? {},
+      rewardType: r.reward_type as import('@/lib/domain/types').RewardType,
+      description: (r.description as string) ?? null, enabled: r.enabled as boolean,
+      createdBy: (r.created_by as string) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+    }))
+  }
+
+  async createRewardPolicy(input: {
+    name: string; tier: import('@/lib/domain/types').RewardTier; criteria: Record<string, unknown>;
+    rewardType: import('@/lib/domain/types').RewardType; description?: string | null
+  }): Promise<import('@/lib/domain/types').RewardPolicy> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('reward_policies')
+      .insert({
+        organization_id: this.orgId, name: input.name, tier: input.tier,
+        criteria: input.criteria, reward_type: input.rewardType,
+        description: input.description ?? null, enabled: true, created_by: this.rep.id,
+      })
+      .select('*').single()
+    if (error) throw error
+    return {
+      id: data.id as string, organizationId: data.organization_id as string, name: data.name as string,
+      tier: data.tier as import('@/lib/domain/types').RewardTier,
+      criteria: (data.criteria as Record<string, unknown>) ?? {},
+      rewardType: data.reward_type as import('@/lib/domain/types').RewardType,
+      description: (data.description as string) ?? null, enabled: data.enabled as boolean,
+      createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  async updateRewardPolicy(id: string, patches: Record<string, unknown>): Promise<import('@/lib/domain/types').RewardPolicy> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('reward_policies').update(patches).eq('id', id).select('*').single()
+    if (error) throw error
+    return {
+      id: data.id as string, organizationId: data.organization_id as string, name: data.name as string,
+      tier: data.tier as import('@/lib/domain/types').RewardTier,
+      criteria: (data.criteria as Record<string, unknown>) ?? {},
+      rewardType: data.reward_type as import('@/lib/domain/types').RewardType,
+      description: (data.description as string) ?? null, enabled: data.enabled as boolean,
+      createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  async deleteRewardPolicy(id: string): Promise<void> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { error } = await this.client.from('reward_policies').delete().eq('id', id)
+    if (error) throw error
+  }
+
+  async listRewardEligibility(reviewId: string): Promise<import('@/lib/domain/types').RewardEligibility[]> {
+    const { data, error } = await this.client
+      .from('reward_eligibility').select('*').eq('monthly_review_id', reviewId)
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id as string, monthlyReviewId: r.monthly_review_id as string,
+      policyId: r.policy_id as string, status: r.status as import('@/lib/domain/types').RewardEligibilityStatus,
+      reasonSnapshot: (r.reason_snapshot as Record<string, unknown>) ?? {},
+      approvedBy: (r.approved_by as string) ?? null, approvedAt: (r.approved_at as string) ?? null,
+      createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+    }))
+  }
+
+  async createRewardEligibility(input: {
+    monthlyReviewId: string; policyId: string; reasonSnapshot?: Record<string, unknown>
+  }): Promise<import('@/lib/domain/types').RewardEligibility> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('reward_eligibility')
+      .insert({
+        monthly_review_id: input.monthlyReviewId, policy_id: input.policyId,
+        status: 'pending', reason_snapshot: input.reasonSnapshot ?? {},
+      })
+      .select('*').single()
+    if (error) throw error
+    return {
+      id: data.id as string, monthlyReviewId: data.monthly_review_id as string,
+      policyId: data.policy_id as string, status: data.status as import('@/lib/domain/types').RewardEligibilityStatus,
+      reasonSnapshot: (data.reason_snapshot as Record<string, unknown>) ?? {},
+      approvedBy: (data.approved_by as string) ?? null, approvedAt: (data.approved_at as string) ?? null,
+      createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  async updateRewardEligibility(id: string, patches: Record<string, unknown>): Promise<import('@/lib/domain/types').RewardEligibility> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('reward_eligibility').update(patches).eq('id', id).select('*').single()
+    if (error) throw error
+    return {
+      id: data.id as string, monthlyReviewId: data.monthly_review_id as string,
+      policyId: data.policy_id as string, status: data.status as import('@/lib/domain/types').RewardEligibilityStatus,
+      reasonSnapshot: (data.reason_snapshot as Record<string, unknown>) ?? {},
+      approvedBy: (data.approved_by as string) ?? null, approvedAt: (data.approved_at as string) ?? null,
+      createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  async getOperatorAvailability(personId: string, date: string): Promise<import('@/lib/domain/types').OperatorAvailability | null> {
+    const { data, error } = await this.client
+      .from('operator_availability').select('*')
+      .eq('person_id', personId).eq('date', date).maybeSingle()
+    if (error) throw error
+    return data ? {
+      id: data.id as string, organizationId: data.organization_id as string,
+      personId: data.person_id as string, date: data.date as string,
+      status: data.status as import('@/lib/domain/types').AvailabilityStatus,
+      note: (data.note as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    } : null
+  }
+
+  async setOperatorAvailability(input: {
+    personId: string; date: string; status: import('@/lib/domain/types').AvailabilityStatus; note?: string | null
+  }): Promise<import('@/lib/domain/types').OperatorAvailability> {
+    const { data, error } = await this.client
+      .from('operator_availability')
+      .upsert({
+        organization_id: this.orgId, person_id: input.personId, date: input.date,
+        status: input.status, note: input.note ?? null,
+      }, { onConflict: 'person_id,date' })
+      .select('*').single()
+    if (error) throw error
+    return {
+      id: data.id as string, organizationId: data.organization_id as string,
+      personId: data.person_id as string, date: data.date as string,
+      status: data.status as import('@/lib/domain/types').AvailabilityStatus,
+      note: (data.note as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  async listOperatorAvailability(personId: string, startDate: string, endDate: string): Promise<import('@/lib/domain/types').OperatorAvailability[]> {
+    const { data, error } = await this.client
+      .from('operator_availability').select('*')
+      .eq('person_id', personId).gte('date', startDate).lte('date', endDate)
+      .order('date')
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id as string, organizationId: r.organization_id as string,
+      personId: r.person_id as string, date: r.date as string,
+      status: r.status as import('@/lib/domain/types').AvailabilityStatus,
+      note: (r.note as string) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+    }))
+  }
+
+  async getMyDayView(): Promise<import('@/lib/domain/types').MyDayView> {
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: assignments } = await this.client
+      .from('identity_assignments').select('revenue_identity_id').eq('rep_id', this.rep.id)
+
+    const identityIds = assignments?.map((a: any) => a.revenue_identity_id) ?? []
+    const { data: contracts } = await this.client
+      .from('revenue_identity_contracts').select('*').eq('status', 'active').in('revenue_identity_id', identityIds)
+    const { data: allocations } = await this.client
+      .from('contract_allocations').select('*').in('contract_id', contracts?.map((c: any) => c.id) ?? [])
+    const { data: identities } = await this.client
+      .from('revenue_identities').select('*').in('id', identityIds)
+    const { data: dayCloses } = await this.client
+      .from('day_closes').select('*').eq('person_id', this.rep.id).eq('date', today)
+    const { data: availability } = await this.client
+      .from('operator_availability').select('*').eq('person_id', this.rep.id).eq('date', today).maybeSingle()
+
+    const myContracts: import('@/lib/domain/types').DailyContract[] = []
+    const progress: import('@/lib/domain/types').DailyProgress[] = []
+
+    for (const contract of contracts ?? []) {
+      const identity = identities?.find((i: any) => i.id === contract.revenue_identity_id)
+      const myAlloc = allocations?.find((a: any) => a.contract_id === contract.id && a.person_id === this.rep.id)
+      const pct = (myAlloc?.allocation_pct ?? (allocations?.filter((a: any) => a.contract_id === contract.id).length === 0 ? 100 : 0)) / 100
+
+      myContracts.push({
+        revenueIdentityId: contract.revenue_identity_id,
+        identityName: identity?.identity_name ?? '',
+        annualRevenueTarget: contract.annual_revenue_target,
+        qualifiedProspects: Math.round(contract.qualified_prospects * pct),
+        connections: Math.round(contract.connections * pct),
+        firstDms: Math.round(contract.first_dms * pct),
+        emails: Math.round(contract.emails * pct),
+        followups: Math.round(contract.followups * pct),
+        dueRepliesPct: contract.due_replies_pct,
+        meaningfulTouches: Math.round(contract.meaningful_touches * pct),
+        loggingCompletenessPct: contract.logging_completeness_pct,
+        allocationPct: Math.round(pct * 100),
+      })
+
+      const dc = dayCloses?.find((d: any) => d.revenue_identity_id === contract.revenue_identity_id)
+      const snap = (dc?.completion_snapshot ?? {}) as Record<string, number>
+      const qp = Math.round(contract.qualified_prospects * pct)
+      const conn = Math.round(contract.connections * pct)
+      const fd = Math.round(contract.first_dms * pct)
+      const em = Math.round(contract.emails * pct)
+      const fu = Math.round(contract.followups * pct)
+      const mt = Math.round(contract.meaningful_touches * pct)
+
+      progress.push({
+        qualifiedProspects: { completed: snap.qualifiedProspects ?? 0, target: qp, remaining: Math.max(0, qp - (snap.qualifiedProspects ?? 0)) },
+        connections: { completed: snap.connections ?? 0, target: conn, remaining: Math.max(0, conn - (snap.connections ?? 0)) },
+        firstDms: { completed: snap.firstDms ?? 0, target: fd, remaining: Math.max(0, fd - (snap.firstDms ?? 0)) },
+        emails: { completed: snap.emails ?? 0, target: em, remaining: Math.max(0, em - (snap.emails ?? 0)) },
+        followups: { completed: snap.followups ?? 0, target: fu, remaining: Math.max(0, fu - (snap.followups ?? 0)) },
+        dueReplies: { completed: snap.dueReplies ?? 0, target: contract.due_replies_pct, remaining: Math.max(0, contract.due_replies_pct - (snap.dueReplies ?? 0)) },
+        meaningfulTouches: { completed: snap.meaningfulTouches ?? 0, target: mt, remaining: Math.max(0, mt - (snap.meaningfulTouches ?? 0)) },
+        logging: { completed: snap.logging ?? 0, target: contract.logging_completeness_pct, remaining: Math.max(0, contract.logging_completeness_pct - (snap.logging ?? 0)) },
+      })
+    }
+
+    const totalTarget = myContracts.reduce((s, c) => s + c.qualifiedProspects + c.connections + c.firstDms + c.emails + c.followups + c.meaningfulTouches, 0)
+    const totalCompleted = progress.reduce((s, p) => s + p.qualifiedProspects.completed + p.connections.completed + p.firstDms.completed + p.emails.completed + p.followups.completed + p.meaningfulTouches.completed, 0)
+
+    return {
+      personId: this.rep.id,
+      personName: this.rep.name,
+      date: today,
+      isWorkingDay: availability?.status !== 'leave' && availability?.status !== 'holiday' && availability?.status !== 'approved_unavailable',
+      availabilityStatus: availability?.status ?? 'working',
+      contracts: myContracts,
+      progress: progress[0] ?? {
+        qualifiedProspects: { completed: 0, target: 0, remaining: 0 },
+        connections: { completed: 0, target: 0, remaining: 0 },
+        firstDms: { completed: 0, target: 0, remaining: 0 },
+        emails: { completed: 0, target: 0, remaining: 0 },
+        followups: { completed: 0, target: 0, remaining: 0 },
+        dueReplies: { completed: 0, target: 0, remaining: 0 },
+        meaningfulTouches: { completed: 0, target: 0, remaining: 0 },
+        logging: { completed: 0, target: 0, remaining: 0 },
+      },
+      totalCompleted,
+      totalTarget,
+      totalRemaining: Math.max(0, totalTarget - totalCompleted),
+      overallStatus: totalCompleted >= totalTarget && totalTarget > 0 ? 'completed' : totalCompleted > 0 ? 'on_track' : 'at_risk',
+      canCloseDay: totalCompleted >= totalTarget && totalTarget > 0,
+      dayCloseStatus: dayCloses?.[0]?.status ?? null,
+      nextAction: totalCompleted >= totalTarget ? 'Day complete' : 'Continue outreach',
+    }
+  }
+
+  async getTeamAccountabilityView(date?: string): Promise<import('@/lib/domain/types').TeamAccountabilityView> {
+    const targetDate = date ?? new Date().toISOString().slice(0, 10)
+    const { data: dayCloses } = await this.client
+      .from('day_closes').select('*').eq('organization_id', this.orgId).eq('date', targetDate)
+    const { data: reps } = await this.client
+      .from('reps').select('id, name').eq('organization_id', this.orgId)
+    const { data: identities } = await this.client
+      .from('revenue_identities').select('id, identity_name').eq('organization_id', this.orgId)
+
+    const members: import('@/lib/domain/types').TeamMemberView[] = (dayCloses ?? []).map((dc: any) => {
+      const rep = reps?.find((r: any) => r.id === dc.person_id)
+      const identity = identities?.find((i: any) => i.id === dc.revenue_identity_id)
+      const snap = (dc.completion_snapshot ?? {}) as Record<string, number>
+      const completed = (snap.qualifiedProspects ?? 0) + (snap.connections ?? 0) + (snap.firstDms ?? 0) + (snap.emails ?? 0) + (snap.followups ?? 0) + (snap.meaningfulTouches ?? 0)
+      return {
+        personId: dc.person_id,
+        personName: rep?.name ?? dc.person_id,
+        revenueIdentityId: dc.revenue_identity_id,
+        identityName: identity?.identity_name ?? '',
+        totalCompleted: completed,
+        totalTarget: 0,
+        totalRemaining: 0,
+        status: 'on_track' as const,
+        dayCloseStatus: dc.status,
+        exceptionReason: dc.exception_reason,
+        allocationPct: 100,
+      }
+    })
+
+    return {
+      date: targetDate,
+      isWorkingDay: true,
+      members,
+      exceptions: (dayCloses ?? []).filter((dc: any) => dc.exception_reason),
+      needsAttention: [],
+    }
+  }
+
+  async getIdentityAccountabilityView(identityId: string): Promise<import('@/lib/domain/types').IdentityAccountabilityView> {
+    const contract = await this.getActiveContract(identityId)
+    const allocations = contract ? await this.listContractAllocations(contract.id) : []
+    const { data: identity } = await this.client
+      .from('revenue_identities').select('*').eq('id', identityId).maybeSingle()
+
+    return {
+      identityId,
+      identityName: identity?.identity_name ?? '',
+      annualRevenueTarget: contract?.annualRevenueTarget ?? 0,
+      contract,
+      allocations,
+      todayProgress: {
+        qualifiedProspects: { completed: 0, target: contract?.qualifiedProspects ?? 0, remaining: contract?.qualifiedProspects ?? 0 },
+        connections: { completed: 0, target: contract?.connections ?? 0, remaining: contract?.connections ?? 0 },
+        firstDms: { completed: 0, target: contract?.firstDms ?? 0, remaining: contract?.firstDms ?? 0 },
+        emails: { completed: 0, target: contract?.emails ?? 0, remaining: contract?.emails ?? 0 },
+        followups: { completed: 0, target: contract?.followups ?? 0, remaining: contract?.followups ?? 0 },
+        dueReplies: { completed: 0, target: contract?.dueRepliesPct ?? 100, remaining: contract?.dueRepliesPct ?? 100 },
+        meaningfulTouches: { completed: 0, target: contract?.meaningfulTouches ?? 0, remaining: contract?.meaningfulTouches ?? 0 },
+        logging: { completed: 0, target: contract?.loggingCompletenessPct ?? 100, remaining: contract?.loggingCompletenessPct ?? 100 },
+      },
+      monthProgress: {
+        qualifiedProspects: { completed: 0, target: contract?.qualifiedProspects ?? 0, remaining: contract?.qualifiedProspects ?? 0 },
+        connections: { completed: 0, target: contract?.connections ?? 0, remaining: contract?.connections ?? 0 },
+        firstDms: { completed: 0, target: contract?.firstDms ?? 0, remaining: contract?.firstDms ?? 0 },
+        emails: { completed: 0, target: contract?.emails ?? 0, remaining: contract?.emails ?? 0 },
+        followups: { completed: 0, target: contract?.followups ?? 0, remaining: contract?.followups ?? 0 },
+        dueReplies: { completed: 0, target: contract?.dueRepliesPct ?? 100, remaining: contract?.dueRepliesPct ?? 100 },
+        meaningfulTouches: { completed: 0, target: contract?.meaningfulTouches ?? 0, remaining: contract?.meaningfulTouches ?? 0 },
+        logging: { completed: 0, target: contract?.loggingCompletenessPct ?? 100, remaining: contract?.loggingCompletenessPct ?? 100 },
+      },
+      qualityStatus: 'unknown',
+      funnel: {},
+      revenue: { won: 0, pipeline: 0, remaining: contract?.annualRevenueTarget ?? 0 },
+    }
+  }
+
+  async getOwnerCommandCenterView(): Promise<import('@/lib/domain/types').OwnerCommandCenterView> {
+    const today = new Date().toISOString().slice(0, 10)
+    const month = today.slice(0, 7) + '-01'
+    const { data: allReps } = await this.client.from('reps').select('id, name').eq('organization_id', this.orgId)
+    const { data: dayCloses } = await this.client.from('day_closes').select('*').eq('organization_id', this.orgId).eq('date', today)
+    const { data: monthReviews } = await this.client.from('monthly_accountability_reviews').select('*').eq('organization_id', this.orgId).eq('month', month)
+    const { data: exceptions } = await this.client.from('day_closes').select('*').eq('organization_id', this.orgId).eq('status', 'completed_with_exception').eq('date', today)
+    const { data: rewardEligibility } = await this.client.from('reward_eligibility').select('*').eq('status', 'pending')
+
+    return {
+      date: today,
+      isWorkingDay: true,
+      totalOperators: allReps?.length ?? 0,
+      completeOperators: dayCloses?.filter((dc: any) => dc.status === 'completed').length ?? 0,
+      onTrackOperators: dayCloses?.filter((dc: any) => dc.status === 'in_progress' || dc.status === 'ready_to_close').length ?? 0,
+      needsAttentionOperators: dayCloses?.filter((dc: any) => dc.status === 'missed').length ?? 0,
+      remainingOutboundWork: 0,
+      repliesDue: 0,
+      monthExpectedWorkingDays: 20,
+      monthActualCompletedDays: monthReviews?.length ?? 0,
+      monthMeaningfulOutbound: 0,
+      monthQualifiedConversations: 0,
+      monthCalls: 0,
+      monthProposals: 0,
+      monthWins: 0,
+      monthWonRevenue: 0,
+      reviewQueue: monthReviews ?? [],
+      exceptionQueue: exceptions ?? [],
+      rewardQueue: rewardEligibility ?? [],
+      teamBreakdown: [],
+    }
+  }
+
+  async getMonthlyReviewView(reviewId: string): Promise<import('@/lib/domain/types').MonthlyReviewView> {
+    const { data: review } = await this.client
+      .from('monthly_accountability_reviews').select('*').eq('id', reviewId).maybeSingle()
+    const { data: rep } = await this.client
+      .from('reps').select('name').eq('id', review?.person_id).maybeSingle()
+    const { data: identity } = await this.client
+      .from('revenue_identities').select('identity_name').eq('id', review?.revenue_identity_id).maybeSingle()
+    const eligibility = review ? await this.listRewardEligibility(review.id) : []
+    const policies = await this.listRewardPolicies()
+
+    return {
+      review: review ?? {
+        id: '', organizationId: this.orgId, personId: '', revenueIdentityId: '',
+        contractId: null, month: '', executionSnapshot: {}, qualitySnapshot: {},
+        outcomeSnapshot: {}, consistencySnapshot: {}, reviewStatus: 'pending',
+        managerNote: null, adminNote: null, createdAt: '', updatedAt: '',
+      },
+      personName: rep?.name ?? '',
+      identityName: identity?.identity_name ?? '',
+      rewardEligibility: eligibility,
+      policies,
+    }
+  }
+
   // ============================================================================
   // ORCHESTRATION — Event Ledger + Relay Runs (Sprint 1)
   // ============================================================================
@@ -5014,7 +5823,10 @@ export class SupabaseStore implements ScoutStore {
     let query = this.client.from('relay_growth_memory').select('*').eq('organization_id', this.orgId)
     if (activeOnly) query = query.eq('active', true)
     const { data, error } = await query.order('created_at', { ascending: false })
-    if (error) throw error
+    if (error) {
+      if (isOptionalSearchError(error)) return []
+      throw error
+    }
     return (data ?? []).map((r) => ({
       id: r.id, organizationId: r.organization_id, memoryType: r.memory_type, title: r.title,
       content: r.content, source: r.source, claimSafety: r.claim_safety, territories: r.territories,
@@ -5047,7 +5859,10 @@ export class SupabaseStore implements ScoutStore {
     let query = this.client.from('relay_growth_events').select('*').eq('organization_id', this.orgId)
     if (!processedOnly) query = query.eq('processed', false)
     const { data, error } = await query.order('created_at', { ascending: false })
-    if (error) throw error
+    if (error) {
+      if (isOptionalSearchError(error)) return []
+      throw error
+    }
     return (data ?? []).map((r) => ({
       id: r.id, organizationId: r.organization_id, eventType: r.event_type, title: r.title,
       rawContent: r.raw_content, editorialContent: r.editorial_content, processed: r.processed,
@@ -5117,7 +5932,10 @@ export class SupabaseStore implements ScoutStore {
     let query = this.client.from('relay_content_opportunities').select('*').eq('organization_id', this.orgId)
     if (date) query = query.eq('generation_date', date)
     const { data, error } = await query.order('generated_at', { ascending: false })
-    if (error) throw error
+    if (error) {
+      if (isOptionalSearchError(error)) return []
+      throw error
+    }
     return (data ?? []).map((r) => ({
       id: r.id, organizationId: r.organization_id, sourceType: r.source_type, sourceId: r.source_id,
       title: r.title, observation: r.observation, insight: r.insight, territory: r.territory,
@@ -5175,7 +5993,10 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('relay_editorial_decisions').select('*')
       .eq('organization_id', this.orgId).eq('decision_date', date).maybeSingle()
-    if (error) throw error
+    if (error) {
+      if (isOptionalSearchError(error)) return null
+      throw error
+    }
     if (!data) return null
     return { id: data.id, organizationId: data.organization_id, decisionDate: data.decision_date,
       opportunityId: data.opportunity_id, primaryReason: data.primary_reason,
@@ -5240,7 +6061,10 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('relay_growth_drafts').select('*').eq('decision_id', decisionId)
       .eq('organization_id', this.orgId).maybeSingle()
-    if (error) throw error
+    if (error) {
+      if (isOptionalSearchError(error)) return null
+      throw error
+    }
     if (!data) return null
     return { id: data.id, organizationId: data.organization_id, decisionId: data.decision_id,
       opportunityId: data.opportunity_id, postPlan: data.post_plan, platform: data.platform,
