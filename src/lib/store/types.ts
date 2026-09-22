@@ -255,6 +255,8 @@ export interface DosageResult {
   limit: number
   message?: string
   messageId?: string
+  /** True when this call was a duplicate (matched an existing idempotencyKey) and returned the ALREADY-recorded result rather than logging a new send. */
+  idempotent?: boolean
 }
 
 export interface GoldenCaseRow {
@@ -324,10 +326,21 @@ export interface ScoutStore {
   saveDraft(input: SaveDraftInput): Promise<Message>
   listMessages(leadId: string): Promise<Message[]>
   /** Marks a lead contacted after a human sends the message externally. */
+  /**
+   * Logs a real send/contact action. `feedback.idempotencyKey`, when
+   * provided, makes a duplicate call (double-click, network retry) for the
+   * SAME logical send a no-op that returns the already-recorded result
+   * instead of inserting a second messages row and double-incrementing
+   * accountability — mirrors the pattern sendPreparedEmail already uses for
+   * Email Outreach V1. Callers should mint one key per attempt (e.g. a
+   * UUID generated once in the UI when the send starts) and resend the same
+   * key on retry, not a fresh one.
+   */
   markContacted(leadId: string, sentText: string, messageType?: MessageType, feedback?: {
     originalDraft?: string | null
     sendDisposition?: import('@/lib/domain/types').SendDisposition | null
     rejectReasons?: import('@/lib/domain/types').SendFeedbackReason[]
+    idempotencyKey?: string | null
   }): Promise<DosageResult>
   // voice profiles
   getVoiceProfile(): Promise<VoiceProfile | null>

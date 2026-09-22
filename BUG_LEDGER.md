@@ -83,3 +83,39 @@
 | REL-BLOCK-002 | P1 | Lead outreach E2E form interaction failing — label selectors may not match actual form. | Lead creation via /leads/new not fully browser-verified. |
 | REL-BLOCK-003 | P1 | Reply API and studio quick-capture E2E assertions failing. | Reply/studio paths need selector/route fixes. |
 | REL-BLOCK-004 | P2 | Existing repo-wide ESLint debt (43 errors, 189 warnings) pre-existing. | Prevents clean `pnpm lint` gate. |
+
+## Team Bug Bash — Production Acceptance Gate (Current)
+
+Reported by the real team using the application. Baseline: `a301371` (see `RELAY_TEAM_BUG_BASH_BASELINE.md`). Status column uses REPRO (reproduced against real code before fixing) / ROOT-CAUSED / FIXED / VERIFIED (unit+integration) / BROWSER (real Playwright E2E) / LIVE-BLOCKED (would need a live AI provider or live browser session this sandbox doesn't have, flagged not glossed over).
+
+| ID | Severity | Reported | Status | Notes |
+|----|----------|----------|--------|-------|
+| TEAM-001 | P1 | Today section not showing updates/progress | Investigating | Trace: canonical event → persistence → accountability aggregation → Today API → Today UI. |
+| TEAM-002 | P0 | Same lead shows different scores internal vs external | Investigating | Likely overlaps REL-FUNC-005 (fixed) — auditing whether other consumers still diverge. |
+| TEAM-003 | P0 | Creating a draft pollutes timeline/accountability | Root-caused, fixed (real finding differs from literal report) | See TEAM-003 detail below. |
+| TEAM-004 | P0 | Prospect summary (HIGH/CONTACT NOW) disagrees with Detail (no evidence, score 0) | Investigating | Likely same class as REL-FUNC-004/005 surface-consistency work — verifying. |
+| TEAM-005 | P0 | Score changes across reanalysis (60→25→20) | Investigating | Overlaps input-hash reuse work (Phase 6) — migration not yet applied to live DB, flagged. |
+| TEAM-006 | P0 | Generate Lead 75+ returns nothing, UI goes blurry | Investigating | Client state / loading-overlay / error-boundary trace required. |
+| TEAM-007 | P1 | Follow-up / Reply sections do not open | Investigating | Full journey trace, not just click handler. |
+| TEAM-008 | P1 | 100% confidence shown alongside "Not Enough Info" contradiction | Investigating | Confidence vs qualification-eligibility semantics audit — not a numeric-equality fix. |
+| TEAM-009 | P2 | Feature request: visibility into saved/connected/DM-due leads | Investigating | Use canonical Lead + event/Next Action architecture, no new CRM subsystem. |
+| TEAM-010 | P2 | Feature request: standalone Email action control | Investigating | Build on Email Outreach V1; overlaps Daria fixture's prepare/send decoupling (already fixed). |
+
+### TEAM-003 detail — Log Sent had no idempotency protection
+
+**Reproduction against real code**: read `saveDraft()` vs `markContacted()` (`src/lib/store/supabase-store.ts`) end to end. `saveDraft()` inserts a `messages` row with `sent_text: null` and no `sent_at` — `countTodaysSends()`/`countTodaysSendsByTypes()` filter on `sent_at` via `.gte()`, which `NULL` never satisfies. **The literal "creating a draft counts as completed work" bug was NOT reproduced** — draft rows are correctly excluded from every accountability count and from Today's `daily_accountability.completed_count` (traced: `getDailyWorkspace` → `getMyTodayAccountability` → `daily_accountability` table, populated only by the `record_activity_event` RPC, called only from inside `markContacted`, never from `saveDraft`).
+
+**What WAS found, real and unprotected**: `POST /api/leads/[id]/contact` (the actual "Log Sent" route for dm/connection/followup/reply) had **no idempotency key**, unlike Email Outreach V1's `sendPreparedEmail` (which already checks `idempotency_key` before doing anything — see `tests/email-prepare-send-api.integration.test.ts`'s "is idempotent on double-click" test, which only covers email). A double-click, network retry, or duplicate request against this route would:
+1. Insert a second `messages` row with `sent_text` populated (no dedup check in `markContacted`'s insert).
+2. Double-increment `daily_accountability.completed_count` via `record_activity_event` (called unconditionally per `markContacted` invocation, RPC itself has no idempotency key either — always `+1`).
+3. Emit a second `OUTREACH_RECORDED` `relay_events` row — `emit_relay_event`'s own DB-level dedup (unique on `organization_id+source+source_event_id`) exists and works, but was defeated by the caller building `sourceEventId` with `${Date.now()}` in it, making every call's key unique regardless of whether it was a genuine retry.
+
+Client-side, the Send button is disabled while `sending` (covers same-tab double-click) but nothing protected against a real network-level retry or a second tab — exactly what TEAM-003's own test list asks for ("double-click Log Sent → exactly 1 activity", "retry API → exactly 1 activity", "two tabs → exactly 1 activity").
+
+**Fix**: added `idempotency_key` column + unique index to `messages` (migration `20260927000000_messages_idempotency_key.sql`, **written, not yet applied to the live DB**); `markContacted` now checks it first (before the daily-limit count, so a retry doesn't consume a ceiling slot) and returns the already-recorded result on a match, fail-open if the migration hasn't been applied; fixed `OUTREACH_RECORDED`'s `sourceEventId` to use the idempotency key (or the inserted message id) instead of `Date.now()`, so the existing DB-level event dedup actually works; client (`lead-workspace.tsx`) mints one key per distinct send attempt, reused across retries of the same text, regenerated on genuinely new text.
+
+**Regression tests**: `tests/log-sent-idempotency.test.ts` (route-level: duplicate key is a no-op, different key is not treated as duplicate, missing key stays backward-compatible).
+
+**Verified**: unit/integration (3 new tests, full suite 867/876 passing, same 9 pre-existing unrelated failures). **Not yet verified**: live browser double-click / two-tab / real network-retry proof (needs a live app session), migration not applied to live DB.
+
+**Separate finding, not fixed (flagging, not silently dropping)**: `POST /api/accountability/event` (`src/app/api/accountability/event/route.ts`) is a second, entirely separate accountability-write mechanism with its own upsert-into-`daily_accountability` logic and its own weak idempotency (unconditional `completed_count + 1` on every call, no dedup at all). Grepped the whole app — **it is never called from anywhere**, i.e. dead code. Its own comment claims "Reps cannot fake this — it's triggered by actual system events," which nothing in the code actually enforces if it WERE wired up. Recommend either wiring it up properly (with the same idempotency-key discipline as the fix above) if it's meant to be used, or removing it — leaving working-but-unused, weakly-guarded, misleadingly-commented code in the codebase is itself a risk for a future engineer who wires it up trusting the comment. Not removed/fixed in this pass since it has zero current callers and isn't part of any TEAM-reported symptom — flagging for a product decision on which system is canonical going forward (this overlaps TEAM-002's "one canonical owner" mandate).

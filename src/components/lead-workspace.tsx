@@ -265,6 +265,13 @@ export function LeadWorkspace({
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [sentOk, setSentOk] = useState<{ todaySends: number } | null>(null)
+  // One key per distinct send attempt (the exact text the user is about to
+  // log). Reused across retries of the SAME attempt (double-click, network
+  // retry) so the server can dedupe; regenerated whenever the text actually
+  // changes, since that's a genuinely different send. sentTextRef mirrors
+  // sentText's last value so the effect below only regenerates on real change.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
+  const lastKeyedTextRef = useRef<string>('')
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(profiles[0]?.id ?? null)
   const [proofList, setProofList] = useState<ProofItem[]>(matchedProofs)
   const [matchedProofId, setMatchedProofId] = useState<string | null>(null)
@@ -374,6 +381,14 @@ export function LeadWorkspace({
 
   async function logSend() {
     if (!sentText.trim()) return
+    const trimmed = sentText.trim()
+    // A different message text is a genuinely different send attempt — mint
+    // a fresh key. The same text (a retry of this exact attempt) reuses the
+    // same key so the server can recognize and dedupe the retry.
+    if (trimmed !== lastKeyedTextRef.current) {
+      idempotencyKeyRef.current = crypto.randomUUID()
+      lastKeyedTextRef.current = trimmed
+    }
     setSending(true)
     setSendError(null)
     setSentOk(null)
@@ -382,15 +397,20 @@ export function LeadWorkspace({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sentText: sentText.trim(),
+          sentText: trimmed,
           type: artifact,
-          originalDraft: draftText || sentText.trim(),
+          originalDraft: draftText || trimmed,
+          idempotencyKey: idempotencyKeyRef.current,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to log send.')
       setSentOk({ todaySends: data.todaySends })
       setSentText('')
+      // Send succeeded — clear the retry-dedup marker so a later message
+      // that happens to match this same text is treated as a NEW send, not
+      // mistaken for a retry of this one.
+      lastKeyedTextRef.current = ''
       // Refresh lead data to update timeline, status, next action
       setLeadVersion((v) => v + 1)
     } catch (err) {

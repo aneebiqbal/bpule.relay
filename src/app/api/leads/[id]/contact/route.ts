@@ -12,7 +12,7 @@ export async function POST(
 ) {
   const { id } = await params
 
-  let body: { sentText?: string; type?: string; originalDraft?: string; rejected?: boolean; rejectReasons?: string[] }
+  let body: { sentText?: string; type?: string; originalDraft?: string; rejected?: boolean; rejectReasons?: string[]; idempotencyKey?: string }
   try {
     body = await request.json()
   } catch {
@@ -94,7 +94,23 @@ export async function POST(
       originalDraft,
       sendDisposition: disposition,
       rejectReasons,
+      idempotencyKey: body.idempotencyKey?.trim() || null,
     })
+    if (result.idempotent) {
+      // Duplicate call for the same logical send (double-click, retry) —
+      // return the already-recorded result as a success, but skip the
+      // learning/memory/event side effects below, which already ran on the
+      // original call. Re-running them would be harmless for most (they're
+      // themselves best-effort/non-fatal) but pointless and would blur
+      // "how many times was this send attempted" telemetry.
+      return NextResponse.json({
+        ok: true,
+        todaySends: result.todaySends,
+        type,
+        disposition,
+        idempotent: true,
+      })
+    }
     if (!result.allowed) {
       return NextResponse.json(
         { error: result.message ?? 'Send ceiling reached.' },

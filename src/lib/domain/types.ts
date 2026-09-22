@@ -121,6 +121,8 @@ export interface Message {
   originalDraft?: string | null
   sendDisposition?: SendDisposition | null
   rejectReasons?: SendFeedbackReason[]
+  /** Idempotency key for a real send (sent_text populated). Never set on draft-only rows. */
+  idempotencyKey?: string | null
   createdAt: string
 }
 
