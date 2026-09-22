@@ -487,10 +487,14 @@ export function LeadWorkspace({
 
           {/* Score ring — right side on desktop */}
           <div className="flex shrink-0 flex-col items-center gap-2 lg:pt-1">
-            <ScoreRing score={score.total} size={72} />
-            <p className="text-mono-medium text-[10px] text-stone">out of 12</p>
+            <ScoreRing score={score.total} canonicalScore={currentLead.canonicalScore} size={72} />
+            <p className="text-mono-medium text-[10px] text-stone">
+              {currentLead.canonicalScore != null ? 'out of 10' : 'out of 12'}
+            </p>
             <p className="text-[11px] font-medium text-ink">
-              {score.total >= 10 ? 'Strong' : score.total >= 7 ? 'Good' : score.total >= 4 ? 'Fair' : 'Weak'}
+              {currentLead.canonicalScore != null
+                ? (currentLead.canonicalScore >= 85 ? 'Strong' : currentLead.canonicalScore >= 70 ? 'Good' : currentLead.canonicalScore >= 55 ? 'Fair' : 'Weak')
+                : (score.total >= 10 ? 'Strong' : score.total >= 7 ? 'Good' : score.total >= 4 ? 'Fair' : 'Weak')}
             </p>
             {profiles.length > 0 ? (
               <label className="flex items-center gap-1.5 text-[11px]">

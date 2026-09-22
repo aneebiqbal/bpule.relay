@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { notFound } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
 import { computeScore } from '@/lib/score/rubric'
+import { canonicalToLegacyScoreResult } from '@/lib/intelligence-v2/orchestrator'
 import { LeadWorkspaceAsync } from '@/components/lead-workspace-async'
 import { SkeletonText, SkeletonCircle, Skeleton } from '@/components/ui/skeleton'
 
@@ -21,7 +22,12 @@ async function loadLeadData(id: string) {
   ])
   if (!lead) notFound()
 
-  const score = computeScore({
+  // Canonical Intelligence V2 is the source of truth once a lead has been
+  // scored through it. Only fall back to the legacy rubric for leads that
+  // predate canonical scoring (canonicalScore is null). Never recompute a
+  // second, independent score for a lead that already has a canonical one —
+  // see canonicalToLegacyScoreResult() for why.
+  const score = canonicalToLegacyScoreResult(lead) ?? computeScore({
     name: lead.contactName,
     title: lead.contactTitle,
     company: lead.company,

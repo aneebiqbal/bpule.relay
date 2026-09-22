@@ -555,6 +555,65 @@ export function getScoreBreakdown(
 }
 
 /**
+ * Convert a persisted lead's canonical fields into the legacy `ScoreResult`
+ * shape (`{ total, verdict, breakdown, gates }`) so surfaces that were built
+ * against the legacy `src/lib/score/rubric.ts` model can display canonical
+ * intelligence without a UI rewrite.
+ *
+ * This is the ONE place that bridges canonical → legacy shape. Any surface
+ * showing a lead's score should call this (or read `canonicalScore` /
+ * `getDisplayScore` directly) rather than recomputing with `computeScore()`
+ * when canonical intelligence is present — recomputing produces a different,
+ * independently-derived score on a different scale (legacy is /12, canonical
+ * is /100) and is a duplicate source of truth.
+ *
+ * Returns `null` when no canonical score is on file, so the caller can fall
+ * back to `computeScore()` for legacy/pre-canonical leads.
+ */
+export function canonicalToLegacyScoreResult(persisted: {
+  canonicalScore?: number | null
+  scoreBreakdown?: unknown
+  qualification?: string | null
+  verdict?: 'send' | 'research_more' | 'skip' | null
+}): {
+  total: number
+  verdict: 'send' | 'research_more' | 'skip'
+  baseVerdict?: 'send' | 'research_more' | 'skip'
+  breakdown: Array<{ category: string; label: string; points: number; max: number; note: string }>
+  gates: string[]
+} | null {
+  if (persisted.canonicalScore == null) return null
+
+  const breakdown = persisted.scoreBreakdown as CanonicalProspectIntelligence['scoreBreakdown'] | null | undefined
+  const dimensions = Array.isArray(breakdown?.dimensions) ? breakdown!.dimensions : []
+
+  const qualificationVerdict =
+    persisted.qualification === 'strong' || persisted.qualification === 'worth_pursuing'
+      ? 'send' as const
+      : persisted.qualification === 'maybe'
+        ? 'research_more' as const
+        : persisted.qualification === 'skip'
+          ? 'skip' as const
+          : null
+
+  const verdict = persisted.verdict ?? qualificationVerdict ?? 'research_more'
+
+  return {
+    total: persisted.canonicalScore,
+    verdict,
+    baseVerdict: persisted.verdict ?? qualificationVerdict ?? undefined,
+    breakdown: dimensions.map((d) => ({
+      category: d.key,
+      label: d.label,
+      points: d.points,
+      max: d.max,
+      note: d.note,
+    })),
+    gates: ['Canonical Intelligence V2 score in use.'],
+  }
+}
+
+/**
  * Check if a re-score is warranted based on the rules:
  * - Source intelligence materially changes
  * - User explicitly requests it

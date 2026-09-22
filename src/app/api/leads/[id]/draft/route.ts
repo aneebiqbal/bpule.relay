@@ -1,5 +1,6 @@
-import type { ExtractedLead, OutreachStrategy, SafeFact, MatchedProof, ScoreBreakdownItem, Profile } from '@/lib/domain/types'
+import type { ExtractedLead, OutreachStrategy, SafeFact, MatchedProof, Profile } from '@/lib/domain/types'
 import { computeScore } from '@/lib/score/rubric'
+import { canonicalToLegacyScoreResult } from '@/lib/intelligence-v2/orchestrator'
 import { streamDraft } from '@/lib/ai/draft-stream'
 import type { DraftMessageType } from '@/lib/ai/draft'
 import { selectFewShotExamples } from '@/lib/ai/few-shot'
@@ -130,17 +131,10 @@ export async function POST(
       tags: detail.tags ?? [],
     }
 
-    const canonicalScore = detail.canonicalScore ?? null
-    const legacyScore = computeScore(extracted, rulebook!)
-    const score = canonicalScore !== null
-      ? {
-          total: canonicalScore,
-          verdict: detail.verdict ?? legacyScore.verdict ?? 'research_more',
-          baseVerdict: detail.verdict ?? 'research_more',
-          breakdown: (detail.scoreBreakdown as ScoreBreakdownItem[] | null) ?? legacyScore.breakdown ?? [],
-          gates: detail.canonicalScore ? ['Canonical Intelligence V2 score in use.'] : legacyScore.gates ?? [],
-        }
-      : legacyScore
+    // Canonical Intelligence V2 is the source of truth once a lead has been
+    // scored through it — see canonicalToLegacyScoreResult() for why we never
+    // recompute a second, independent score here.
+    const score = canonicalToLegacyScoreResult(detail) ?? computeScore(extracted, rulebook!)
 
     const tagMatches = await store.matchProofItems(detail.tags ?? [], 8, profile?.id ?? null)
     let matched = tagMatches
