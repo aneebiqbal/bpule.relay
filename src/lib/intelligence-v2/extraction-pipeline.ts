@@ -1281,23 +1281,32 @@ function extractSkills(lines: string[], rawText: string): string[] {
  * Check if a match is negated within a window before the match index.
  * Returns true if the signal is negated/closed (should not be treated as active).
  */
+const NEGATION_PATTERNS = [
+  /\bno\s+longer\b/,
+  /\bnot\s+(?:currently\s+)?(?:hiring|looking|seeking|open|accepting|interested)\b/,
+  /\bstopped\s+(?:hiring|looking|accepting)\b/,
+  /\bwe\s+(?:are|'re)\s+not\b/,
+  /\bwe\s+(?:have|'ve)?\s*(?:already\s+)?(?:filled|hired|found)\b/,
+  /\brole\s+is\s+(?:filled|closed|taken)\b/,
+  /\bposition\s+(?:filled|closed)\b/,
+  /\bno\s+(?:longer|open)\s+(?:roles?|positions?|openings?)\b/,
+  /\b(?:hiring|recruiting)\s+(?:freeze|pause|halt)\b/,
+  /\blocked\s+(?:to|for)\s+(?:outsourcing|contractors|agencies|freelancers)\b/,
+  /\bnot\s+open\s+to\s+(?:outsourcing|contractors|agencies|freelancers)\b/,
+  /\b(?:don't|do\s+not)\s+(?:work\s+with|accept|use)\s+(?:agencies|outsourcing|contractors)\b/,
+]
+
 function isNegatedContext(text: string, matchIndex: number, window = 60): boolean {
   const before = text.slice(Math.max(0, matchIndex - window), matchIndex).toLowerCase()
-  const negationPatterns = [
-    /\bno\s+longer\b/,
-    /\bnot\s+(?:currently\s+)?(?:hiring|looking|seeking|open|accepting|interested)\b/,
-    /\bstopped\s+(?:hiring|looking|accepting)\b/,
-    /\bwe\s+(?:are|'re)\s+not\b/,
-    /\bwe\s+(?:have|'ve)?\s*(?:already\s+)?(?:filled|hired|found)\b/,
-    /\brole\s+is\s+(?:filled|closed|taken)\b/,
-    /\bposition\s+(?:filled|closed)\b/,
-    /\bno\s+(?:longer|open)\s+(?:roles?|positions?|openings?)\b/,
-    /\b(?:hiring|recruiting)\s+(?:freeze|pause|halt)\b/,
-    /\blocked\s+(?:to|for)\s+(?:outsourcing|contractors|agencies|freelancers)\b/,
-    /\bnot\s+open\s+to\s+(?:outsourcing|contractors|agencies|freelancers)\b/,
-    /\b(?:don't|do\s+not)\s+(?:work\s+with|accept|use)\s+(?:agencies|outsourcing|contractors)\b/,
-  ]
-  return negationPatterns.some((p) => p.test(before))
+  return NEGATION_PATTERNS.some((p) => p.test(before))
+}
+
+/** Same negation check, but scanning the entire document — for signals (like
+ * a structural job-posting match) that have no single match index to anchor
+ * a windowed lookbehind around. */
+function isNegatedContextAnywhere(text: string): boolean {
+  const lower = text.toLowerCase()
+  return NEGATION_PATTERNS.some((p) => p.test(lower))
 }
 
 export function extractOpportunitySignals(rawText: string): { signals: OpportunitySignal[]; urgency: 'immediate' | 'near_term' | 'future' | 'unknown' } {
@@ -1318,12 +1327,29 @@ export function extractOpportunitySignals(rawText: string): { signals: Opportuni
   const softwareAsk = SOFTWARE_ASK_PATTERNS.some((p) => p.test(rawText)) && hasTechContext
   const hiringMatch = rawText.match(/\bhiring\b.{0,50}\b(developer|engineer|contractor|full[- ]?stack|backend|frontend|software)\b/i)
     || rawText.match(/\b(developer|engineer|contractor|full[- ]?stack|backend|frontend|software)\b.{0,50}\bhiring\b/i)
-  const explicitHiring = /\b(open roles?)\b/i.test(rawText) || hiringMatch
+  // Job postings often never use the literal word "hiring" — a title naming a
+  // tech role, structured with posting sections (What you'll do/Responsibilities,
+  // Requirements) and an application route, IS itself a hiring signal.
+  // e.g. "Senior Fullstack Engineer (Remote, Worldwide)" / "Founding Engineer" ...
+  const jobPostingTitle = /^[A-Z][\w\s/-]{0,60}(developer|engineer|architect|devops)\b.{0,40}$/im.test(rawText)
+  const jobPostingStructure =
+    /\b(what you'?ll do|responsibilities|requirements)\s*:?/i.test(rawText)
+    && /\b(apply|compensation|salary)\b/i.test(rawText)
+  const structuralJobPosting = jobPostingTitle && jobPostingStructure && hasTechContext
+  const explicitHiring = /\b(open roles?)\b/i.test(rawText) || hiringMatch || structuralJobPosting
 
   if (softwareAsk && !nonCredibleFreelanceBrief) signals.push('explicit_ask')
   if (/(job:|upwork|budget:|proposals?:)/i.test(rawText) && hasTechContext && !nonCredibleFreelanceBrief) signals.push('freelance_project_need')
   if (PAIN_PATTERNS.some((p) => p.test(rawText)) && hasTechContext) signals.push('technical_problem')
-  if (explicitHiring && !isNegatedContext(rawText, hiringMatch ? rawText.indexOf(hiringMatch[0]) : 0)) {
+  // A structural job posting has no single "hiring" match index to check
+  // context around, so scan the whole document for a filled/no-longer-hiring
+  // disclaimer instead of only the 60 chars before one match.
+  const negated = hiringMatch
+    ? isNegatedContext(rawText, rawText.indexOf(hiringMatch[0]))
+    : structuralJobPosting
+      ? isNegatedContextAnywhere(rawText)
+      : false
+  if (explicitHiring && !negated) {
     const relevance = classifyHiringRelevance(rawText)
     if (relevance === 'software') signals.push('hiring')
   }

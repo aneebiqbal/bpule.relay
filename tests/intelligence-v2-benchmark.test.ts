@@ -291,7 +291,7 @@ Remote: Yes, worldwide. We're based in London but hire globally.`,
   },
   {
     name: 'Founding Engineer — Series A SaaS',
-    rawtext: `Founding Engineer (Remote, Worldwide)
+    rawText: `Founding Engineer (Remote, Worldwide)
 
 B2B SaaS for logistics companies. Just raised $8M Seed. Looking for our first senior hire.
 
