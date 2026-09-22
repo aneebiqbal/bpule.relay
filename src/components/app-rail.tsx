@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Target,
   Briefcase,
+  Search,
   MessageSquare,
   PenLine,
   UserCircle2,
@@ -33,6 +34,7 @@ const WORK_NAV = [
   { href: '/leads', label: 'Leads', icon: Target, exact: false },
   { href: '/inbound', label: 'Inbound', icon: MessageSquare, exact: false },
   { href: '/upwork', label: 'Jobs', icon: Briefcase, exact: false },
+  { href: '/find-jobs', label: 'Find Jobs', icon: Search, exact: false },
   { href: '/relay', label: 'Conversations', icon: MessageSquare, exact: false },
 ]
 

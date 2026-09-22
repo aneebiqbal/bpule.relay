@@ -1,0 +1,46 @@
+{
+  "data": [
+    {
+      "slug": "senior-full-stack-developer-tandem",
+      "title": "Senior Full-Stack Developer",
+      "company_name": "Tandem Robotics",
+      "location": "Munich, Germany",
+      "remote": false,
+      "tags": ["TypeScript", "Node.js", "React", "PostgreSQL"],
+      "job_types": ["full-time"],
+      "seniority": "Senior",
+      "category": "Software Development",
+      "created_at": "2026-09-14T08:00:00Z",
+      "description": "<p>Robotics startup seeks a senior full-stack developer for its control-room interface.</p>",
+      "url": "https://www.arbeitnow.com/jobs/senior-full-stack-developer-tandem"
+    },
+    {
+      "slug": "platform-engineer-stadler",
+      "title": "Platform Engineer",
+      "company_name": "Stadler Systems",
+      "location": "Vienna, Austria",
+      "remote": false,
+      "tags": ["Kubernetes", "Go", "CI/CD"],
+      "job_types": ["full-time", "flexible"],
+      "seniority": "Mid",
+      "category": "DevOps",
+      "created_at": "2026-09-12T10:00:00Z",
+      "description": "<p>Own the developer platform at Stadler Systems and harden the delivery pipeline.</p>",
+      "url": "https://www.arbeitnow.com/jobs/platform-engineer-stadler"
+    },
+    {
+      "slug": "mobile-developer-flux",
+      "title": "Mobile Developer (Flutter)",
+      "company_name": "Flux Labs",
+      "location": "Remote",
+      "remote": true,
+      "tags": ["Flutter", "Dart", "Firebase"],
+      "job_types": ["full-time"],
+      "seniority": "Junior",
+      "category": "Mobile",
+      "created_at": "2026-09-16T09:30:00Z",
+      "description": "<p>Flux Labs builds a budgeting app used by 2M people. Remote Flutter role.</p>",
+      "url": "https://www.arbeitnow.com/jobs/mobile-developer-flux"
+    }
+  ]
+}
