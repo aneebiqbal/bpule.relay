@@ -17,6 +17,7 @@ import { classifyRoleFromTitle } from '@/lib/leads/targeting-pure'
 import { isLinkedInChromeText } from '@/lib/intelligence-v2/role-signals'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
 import { produceCanonicalIntelligence, getDisplayScore } from '@/lib/intelligence-v2/orchestrator'
+import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 import { resolveTimezoneFromLocation } from '@/lib/timezone/resolve'
 import {
   applyRevenueStrategyToOutreach,
@@ -39,7 +40,7 @@ import {
  */
 
 export async function POST(request: Request) {
-  let body: { rawText?: string; profileId?: string }
+  let body: { rawText?: string; profileId?: string; forceReanalyze?: boolean }
   try {
     body = await request.json()
   } catch {
@@ -123,6 +124,14 @@ export async function POST(request: Request) {
       canonicalResult = await deduplicated(dedupKey, () =>
         produceCanonicalIntelligence(rawText, {
           onStatus: (msg) => emit({ type: 'status', message: msg }),
+          forceReanalyze: body.forceReanalyze === true,
+          reuseIfUnchanged: store
+            ? async (hash) => {
+                const existing = await store!.findLeadByIntelligenceInputHash(hash)
+                const canonical = existing?.canonicalIntelligence as CanonicalProspectIntelligence | null | undefined
+                return canonical ?? null
+              }
+            : undefined,
         }),
       )
     } catch {
@@ -252,6 +261,7 @@ export async function POST(request: Request) {
         gateNotes: canonicalResult.gateNotes,
         repairAttempted: canonicalResult.repairAttempted,
         repairImproved: canonicalResult.repairImproved,
+        reused: canonicalResult.reused,
       })
       return
     }
@@ -599,6 +609,7 @@ export async function POST(request: Request) {
       gateNotes: canonicalResult.gateNotes,
       repairAttempted: canonicalResult.repairAttempted,
       repairImproved: canonicalResult.repairImproved,
+      reused: canonicalResult.reused,
     })
   })
 }

@@ -306,6 +306,17 @@ export interface ScoutStore {
   ): Promise<void>
   updateLeadTags(id: string, tags: string[]): Promise<void>
   getLead(id: string): Promise<LeadDetail | null>
+  /**
+   * Looks up a lead in the CURRENT organization whose persisted canonical
+   * intelligence was computed from this exact input hash (see
+   * src/lib/intelligence-v2/input-hash.ts). Used to reuse a prior canonical
+   * intelligence result instead of re-invoking AI extraction for unchanged
+   * input (Phase 6 — stable input hashing). Must be organization-scoped like
+   * every other lead lookup — never returns a lead from a different org.
+   * Returns null if no match, or if the match predates canonical intelligence
+   * (no canonicalIntelligence on file).
+   */
+  findLeadByIntelligenceInputHash(hash: string): Promise<LeadDetail | null>
   listOwnedLeads(): Promise<Lead[]>
   fetchLeadsAll(): Promise<Lead[]>
   getQueue(): Promise<QueueData>

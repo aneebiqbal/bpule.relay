@@ -842,6 +842,19 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         outcomes: outcomes.filter((o) => o.leadId === id),
       }
     },
+    async findLeadByIntelligenceInputHash(hash: string) {
+      if (!hash) return null
+      const match = leads.find((l) => {
+        const canonical = l.canonicalIntelligence as { intelligenceInputHash?: string } | null
+        return canonical?.intelligenceInputHash === hash && l.organizationId === rep.organizationId
+      })
+      if (!match) return null
+      return {
+        ...match,
+        messages: [],
+        outcomes: [],
+      }
+    },
     async listOwnedLeads() {
       return leads
         .filter((l) => l.ownerRepId === rep.id)

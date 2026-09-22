@@ -80,6 +80,7 @@ import type {
   ExtractionMetrics,
   FollowupDue,
   HostCallInput,
+  LeadDetail,
   ModelCallLogInput,
   MyRank,
   NewLeadInput,
@@ -170,7 +171,7 @@ function isOptionalSearchError(err: unknown): boolean {
  * drops it for list, queue and rate queries that never read it.
  */
 const LEAD_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, intelligence_input_hash, created_at'
 
 const LEAD_LIST_COLUMNS =
   'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, created_at'
@@ -749,6 +750,28 @@ export class SupabaseStore implements ScoutStore {
     ])
 
     return { ...mapLead(data as Row), messages, outcomes }
+  }
+
+  async findLeadByIntelligenceInputHash(hash: string): Promise<LeadDetail | null> {
+    if (!hash) return null
+    // Explicit organization_id scope, not RLS alone — this is a hash lookup
+    // across many rows (not a single-row-by-id fetch like getLead), so it
+    // must never be allowed to match a lead in a different organization.
+    const { data, error } = await this.client
+      .from('leads')
+      .select(LEAD_COLUMNS)
+      .eq('organization_id', this.orgId)
+      .eq('intelligence_input_hash', hash)
+      .not('canonical_intelligence', 'is', null)
+      .order('scored_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) {
+      if (isOptionalSearchError(error)) return null // migration not yet applied — fail open to fresh extraction, never throw
+      throw error
+    }
+    if (!data) return null
+    return { ...mapLead(data as Row), messages: [], outcomes: [] }
   }
 
   async listOwnedLeads(): Promise<Lead[]> {

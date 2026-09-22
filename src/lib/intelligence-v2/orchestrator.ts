@@ -18,6 +18,7 @@ import { runIntelligencePipeline, type ExtractionPipelineOptions, type Extractio
 import { assessExtractionCompleteness, repairExtraction, evaluateCompletenessGate } from './completeness-gate'
 import { computeCanonicalScore, SCORE_VERSION, type ScoreInput } from './scoring-engine'
 import { isNonBuyerProfessional } from './role-signals'
+import { buildIntelligenceInputHash, INTELLIGENCE_PIPELINE_VERSION } from './input-hash'
 
 // ── Orchestrator Options ───────────────────────────────────────────────────
 
@@ -43,6 +44,25 @@ export interface OrchestratorOptions extends ExtractionPipelineOptions {
   recommendedProofIds?: string[]
   /** When true, AI failures are not silently replaced by deterministic fallback extraction */
   strictLiveMode?: boolean
+  /**
+   * Input-hash reuse (Phase 6 — stable input hashing). When provided, the
+   * orchestrator computes the deterministic input hash for `rawText` and
+   * calls this BEFORE running any AI extraction. If it returns a persisted
+   * canonical intelligence result, that result is returned as-is (with
+   * `reused: true`) instead of re-invoking the pipeline — same input + same
+   * versions => a refresh/re-paste/retry never triggers new business truth.
+   *
+   * The caller owns the actual lookup (e.g. a Supabase query scoped to the
+   * caller's organization) — the orchestrator has no store/DB dependency by
+   * design, so it stays usable from scripts/tests without a live database.
+   * Only pass a result whose `intelligenceVersion`/`scoreVersion` you have
+   * already confirmed still match current versions — the orchestrator does
+   * one last version check itself as a safety net, but the lookup should not
+   * rely on that alone (e.g. don't look up leads from other organizations).
+   */
+  reuseIfUnchanged?: (inputHash: string) => Promise<CanonicalProspectIntelligence | null> | (CanonicalProspectIntelligence | null)
+  /** Explicit user-requested re-analysis — skips reuseIfUnchanged even if a matching hash exists. Always creates a new run, and (when the caller records rescore history) should be traceable as `trigger: 'user_requested'`. */
+  forceReanalyze?: boolean
 }
 
 export interface OrchestratorResult {
@@ -55,6 +75,8 @@ export interface OrchestratorResult {
   repairAttempted: boolean
   /** Whether auto-repair improved the extraction */
   repairImproved: boolean
+  /** True when this result was reused from a prior run via reuseIfUnchanged rather than freshly computed */
+  reused: boolean
 }
 
 // ── Main Orchestrator ──────────────────────────────────────────────────────
@@ -81,6 +103,33 @@ export async function produceCanonicalIntelligence(
       gateNotes: inputClassification.reasons,
       repairAttempted: false,
       repairImproved: false,
+      reused: false,
+    }
+  }
+
+  // Step 0.5: Input-hash reuse check (Phase 6) — BEFORE any AI call.
+  // Same normalized input + same pipeline/score versions => reuse the
+  // persisted result instead of re-extracting. Skipped entirely when the
+  // caller explicitly requests reanalysis (Force Reanalyze).
+  const inputHash = buildIntelligenceInputHash({ rawText })
+  if (opts.reuseIfUnchanged && !opts.forceReanalyze) {
+    opts.onStatus?.('Checking for existing intelligence')
+    const reusable = await opts.reuseIfUnchanged(inputHash)
+    if (
+      reusable
+      && reusable.intelligenceInputHash === inputHash
+      && reusable.intelligenceVersion === INTELLIGENCE_PIPELINE_VERSION
+      && reusable.scoreVersion === SCORE_VERSION
+    ) {
+      opts.onStatus?.(`Reusing existing intelligence — score ${reusable.canonicalScore}/100 (${reusable.scoreBreakdown.label})`)
+      return {
+        intelligence: reusable,
+        gatePassed: true,
+        gateNotes: ['Reused persisted canonical intelligence — unchanged input, same versions.'],
+        repairAttempted: false,
+        repairImproved: false,
+        reused: true,
+      }
     }
   }
 
@@ -179,6 +228,8 @@ export async function produceCanonicalIntelligence(
   const canonical: CanonicalProspectIntelligence = {
     version: SCORE_VERSION,
     intelligenceRunId: crypto.randomUUID(),
+    intelligenceInputHash: inputHash,
+    intelligenceVersion: INTELLIGENCE_PIPELINE_VERSION,
     computedAt: new Date().toISOString(),
     canonicalScore: scoreBreakdown.total,
     scoreVersion: SCORE_VERSION,
@@ -208,6 +259,7 @@ export async function produceCanonicalIntelligence(
     gateNotes: gateDecision.notes,
     repairAttempted,
     repairImproved,
+    reused: false,
   }
 }
 
@@ -446,6 +498,8 @@ function createIrrelevantIntelligence(
   return {
     version: SCORE_VERSION,
     intelligenceRunId: crypto.randomUUID(),
+    intelligenceInputHash: buildIntelligenceInputHash({ rawText }),
+    intelligenceVersion: INTELLIGENCE_PIPELINE_VERSION,
     computedAt: now,
     canonicalScore: 0,
     scoreVersion: SCORE_VERSION,

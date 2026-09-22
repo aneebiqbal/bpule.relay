@@ -3,12 +3,13 @@ import { scanForSecrets } from '@/lib/ai/secrets'
 import { sseStream } from '@/lib/sse/sse'
 import { createScoutStore } from '@/lib/store'
 import { produceCanonicalIntelligence, getDisplayScore } from '@/lib/intelligence-v2/orchestrator'
+import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 import type { ExtractedLead } from '@/lib/domain/types'
 
 export const maxDuration = 120
 
 export async function POST(request: Request) {
-  let body: { rawText?: string }
+  let body: { rawText?: string; forceReanalyze?: boolean }
   try {
     body = await request.json()
   } catch {
@@ -76,6 +77,14 @@ export async function POST(request: Request) {
     try {
       const canonicalResult = await produceCanonicalIntelligence(rawText, {
         onStatus: (msg) => emit({ type: 'status', message: msg }),
+        forceReanalyze: body.forceReanalyze === true,
+        reuseIfUnchanged: store
+          ? async (hash) => {
+              const existing = await store!.findLeadByIntelligenceInputHash(hash)
+              const canonical = existing?.canonicalIntelligence as CanonicalProspectIntelligence | null | undefined
+              return canonical ?? null
+            }
+          : undefined,
       })
 
       const canonical = canonicalResult.intelligence
@@ -146,6 +155,7 @@ export async function POST(request: Request) {
         gateNotes: canonicalResult.gateNotes,
         repairAttempted: canonicalResult.repairAttempted,
         repairImproved: canonicalResult.repairImproved,
+        reused: canonicalResult.reused,
       })
     } catch (err) {
       void safeLog({
