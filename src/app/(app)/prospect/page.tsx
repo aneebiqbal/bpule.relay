@@ -661,6 +661,25 @@ export default function ProspectCheckPage() {
                 Skip
               </Button>
             </div>
+
+            {!canSaveLead && (
+              <div className="mt-2 flex items-start gap-2 rounded-md border border-status-warning/30 bg-status-warning/5 px-3 py-2">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" />
+                <div className="text-[12px] leading-relaxed text-graphite">
+                  <p className="font-medium text-ink">
+                    Not enough verified context to create a reliable lead.
+                  </p>
+                  {result.qualification.missingCritical.length > 0 ? (
+                    <p className="mt-0.5">
+                      Missing: {result.qualification.missingCritical.join(', ')}.
+                    </p>
+                  ) : null}
+                  <p className="mt-0.5">
+                    Paste more of the original source (About section, company mentions, job/opportunity details) and try again — Relay will not invent a company or opportunity that isn&apos;t actually in the text.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {result.demoMode && (

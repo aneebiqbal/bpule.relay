@@ -1193,6 +1193,12 @@ function extractLocation(lines: string[], rawText: string): string | null {
   return inline?.[1]?.trim() ?? null
 }
 
+// Trailing/leading words that mean the adjacent capitalized phrase is a
+// role/function/department, NOT a company — guards the comma-separated
+// headline pattern below against false positives like "Senior Engineer,
+// Backend Team" or "CEO, Founder" (a dual-title line, not a company).
+const NON_COMPANY_WORD = /\b(founder|co-?founder|president|chairman|chairwoman|chairperson|owner|partner|director|manager|lead|head|engineer|engineering|developer|team|department|division|group|unit|operations|sales|marketing|product|design|finance|hr|people|recruiting|talent)\b/i
+
 function extractCompany(lines: string[], title: string | null, rawText: string): string | null {
   const companyLine = lines.find((line) => /^company:\s*/i.test(line))
   if (companyLine) return companyLine.replace(/^company:\s*/i, '').trim()
@@ -1209,10 +1215,43 @@ function extractCompany(lines: string[], title: string | null, rawText: string):
     // company, and must NOT be parsed as a company name.
     const founderOfMatch = title.match(/\b(?:founder|co-?founder|owner|proprietor)\s+of\s+([^|,]+)/i)
     if (founderOfMatch?.[1]) return founderOfMatch[1].trim()
+
+    // "Role, Company" — comma-separated headline (e.g. "CEO, CometHire"),
+    // at least as common as "Role at Company" in real LinkedIn exports and
+    // CSV-style pastes. Only fires when the title has exactly two
+    // comma-separated segments and the second looks like a proper noun
+    // (starts capitalized) that ISN'T itself a role/function/department
+    // word — otherwise "CEO, Founder" or "Engineer, Backend Team" would be
+    // misread as a company name.
+    const commaSegments = title.split(',').map((s) => s.trim()).filter(Boolean)
+    if (commaSegments.length === 2) {
+      const candidate = commaSegments[1]
+      if (candidate && /^[A-Z]/.test(candidate) && !NON_COMPANY_WORD.test(candidate)) {
+        return candidate
+      }
+    }
   }
 
-  const aboutMatch = rawText.match(/\b([A-Z][A-Za-z0-9&._' -]{2,80})\s+(?:is building|builds|provides|runs|helps)\b/)
-  if (aboutMatch?.[1]) return aboutMatch[1].trim()
+  // About/bio prose mentioning the company without a "Title at/of Company"
+  // headline at all. Two directions, both deliberately conservative:
+  // "Company [verb]" (e.g. "CometHire is building the future...") and
+  // "works/working for Company" (e.g. "I work for CometHire"). A bare
+  // "\bfor\s+(...)" / "\bat\s+(...)" / "\bwith\s+(...)" match was tried and
+  // rejected — it false-positives on ordinary prose ("for Q3 this year",
+  // "at scale", "with Passion and dedication") because the capture group
+  // happily swallows multi-word phrases including generic capitalized-
+  // after-period sentence starts. Every capture here is capped at a SINGLE
+  // word/hyphenated-name token, not a run of words, to avoid grabbing a
+  // trailing sentence fragment as a fake company name.
+  const companyThenVerbMatch = rawText.match(/\b([A-Z][A-Za-z0-9&._'-]{2,60})\s+(?:is building|builds|provides|runs|helps)\b/)
+  if (companyThenVerbMatch?.[1] && !NON_COMPANY_WORD.test(companyThenVerbMatch[1])) {
+    return companyThenVerbMatch[1].trim()
+  }
+
+  const worksForMatch = rawText.match(/\bworks?(?:ing)?\s+for\s+([A-Z][A-Za-z0-9&.'-]{1,40})\b/)
+  if (worksForMatch?.[1] && !NON_COMPANY_WORD.test(worksForMatch[1])) {
+    return worksForMatch[1].trim()
+  }
 
   return null
 }
