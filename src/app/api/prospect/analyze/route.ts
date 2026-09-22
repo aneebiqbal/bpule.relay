@@ -39,6 +39,20 @@ import {
  * The canonical score is produced ONCE and never independently recomputed.
  */
 
+// TEAM-006 (Relay team bug bash): high-scoring leads (canonicalScore/legacy
+// >= 70) route drafting through DEEP_WRITING (30s timeout PLUS a mandatory
+// corrective retry attempt on escalation — see isHighValue in
+// draft-stream.ts/draft.ts), which can legitimately take longer than a
+// platform function's default timeout. Every sibling route that can invoke
+// the same expensive extraction+drafting work already sets this explicitly
+// (leads/extract, leads/[id]/draft, inbound/analyze all use 120) — this
+// route was the one gap, and is architecturally the MOST likely to hit a
+// long-running high-value draft (it's the only route that both extracts
+// AND drafts in one request). Not present locally in `next dev` (no
+// enforced timeout), so this would only manifest in a real deployment —
+// consistent with a reported production-only symptom.
+export const maxDuration = 120
+
 export async function POST(request: Request) {
   let body: {
     rawText?: string
