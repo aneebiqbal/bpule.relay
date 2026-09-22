@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { bootstrapDemoProfile } from './helpers'
+import { bootstrapDemoProfile, loginAsAdmin } from './helpers'
 
 test.describe('LEAD -> Outreach', () => {
   test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
     await bootstrapDemoProfile('http://localhost:3000').catch(() => {})
     await page.context().request.post('/api/onboarding', {
       data: {

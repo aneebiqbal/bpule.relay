@@ -38,12 +38,13 @@ export async function proxy(request: NextRequest) {
   }
 
   const response = NextResponse.next({ request });
+  const isHttps = request.nextUrl.protocol === 'https:';
 
   const supabase = createServerClient(url, anonKey, {
     cookieOptions: {
       path: '/',
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      secure: isHttps,
     },
     cookies: {
       getAll() {
@@ -58,15 +59,23 @@ export async function proxy(request: NextRequest) {
   });
 
   let isAuthenticated = false;
+  let authCheckInconclusive = false;
   try {
-    // Verify the JWT locally against the project's cached JWKS (the project
-    // signs with ES256). getClaims still refreshes the session cookie when the
-    // access token is about to expire, so this keeps the same refresh behavior
-    // as getUser without a network round trip on every request.
-    const { data, error } = await supabase.auth.getClaims();
-    isAuthenticated = !error && Boolean(data?.claims?.sub);
+    // Proxy is the route-gatekeeper. Use the authoritative Auth service check
+    // so we do not treat transient local-claims verification issues as logout
+    // and redirect authenticated users to /login.
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      authCheckInconclusive = true;
+    } else {
+      isAuthenticated = Boolean(data.user);
+    }
   } catch {
-    // Session refresh failed — let the request through.
+    authCheckInconclusive = true;
+  }
+
+  if (authCheckInconclusive) {
+    return response;
   }
 
   // Unauthenticated users on protected routes → redirect to login

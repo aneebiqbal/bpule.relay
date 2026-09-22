@@ -31,6 +31,21 @@ interface DrillDownData {
   today: string
   isManager: boolean
   managedTeamIds: string[]
+  dayCloses?: Array<{
+    identityId: string
+    identityName: string
+    channel: string
+    status: string
+    exceptionReason: string | null
+    allocationPct: number
+    progress: {
+      connections: { completed: number; target: number; remaining: number }
+      firstDms: { completed: number; target: number; remaining: number }
+      emails: { completed: number; target: number; remaining: number }
+      followups: { completed: number; target: number; remaining: number }
+    }
+    dayCloseStatus: string
+  }>
 }
 
 export function ManagerDrillDown({ dataPromise }: { dataPromise: Promise<DrillDownData> }) {
@@ -156,6 +171,83 @@ export function ManagerDrillDown({ dataPromise }: { dataPromise: Promise<DrillDo
           </div>
         )}
       </section>
+
+      {/* Accountability OS: Day Close Progress */}
+      {data.dayCloses && data.dayCloses.length > 0 && (
+        <section className="space-y-3">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-ststone">
+            Today&apos;s Accountability (Contracts)
+          </p>
+          <div className="space-y-2">
+            {data.dayCloses.map((dc) => (
+              <div key={dc.identityId} className="rounded-lg border border-line bg-bone-raised p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[13px] font-medium text-ink">{dc.identityName}</p>
+                    <p className="text-[11px] text-graphite">
+                      {dc.channel} · {dc.allocationPct}% allocation
+                    </p>
+                  </div>
+                  <StatusBadge
+                    status={dc.dayCloseStatus === 'completed' ? 'Closed' : dc.dayCloseStatus === 'completed_with_exception' ? 'Exception' : dc.dayCloseStatus === 'missed' ? 'Missed' : 'Open'}
+                    variant={dc.dayCloseStatus === 'completed' ? 'success' : dc.dayCloseStatus === 'completed_with_exception' ? 'info' : dc.dayCloseStatus === 'missed' ? 'danger' : 'neutral'}
+                  />
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                  <div>
+                    <span className="text-graphite">Connections: </span>
+                    <span className={dc.progress.connections.remaining === 0 ? 'text-status-success' : 'text-ink'}>
+                      {dc.progress.connections.completed}/{dc.progress.connections.target}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-graphite">DMs: </span>
+                    <span className={dc.progress.firstDms.remaining === 0 ? 'text-status-success' : 'text-ink'}>
+                      {dc.progress.firstDms.completed}/{dc.progress.firstDms.target}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-graphite">Emails: </span>
+                    <span className={dc.progress.emails.remaining === 0 ? 'text-status-success' : 'text-ink'}>
+                      {dc.progress.emails.completed}/{dc.progress.emails.target}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-graphite">Follow-ups: </span>
+                    <span className={dc.progress.followups.remaining === 0 ? 'text-status-success' : 'text-ink'}>
+                      {dc.progress.followups.completed}/{dc.progress.followups.target}
+                    </span>
+                  </div>
+                </div>
+                {dc.exceptionReason && (
+                  <p className="mt-2 text-[11px] text-status-info">
+                    Exception: {dc.exceptionReason}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Exceptions */}
+      {data.dayCloses?.some((dc) => dc.exceptionReason) && (
+        <section className="space-y-3">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-status-warning">
+            Exception Requests
+          </p>
+          <div className="space-y-2">
+            {data.dayCloses?.filter((dc) => dc.exceptionReason).map((dc) => (
+              <div key={dc.identityId} className="rounded-lg border border-status-warning/20 bg-status-warning/5 p-3">
+                <p className="text-[13px] font-medium text-ink">{dc.identityName}</p>
+                <p className="text-[12px] text-graphite">
+                  Reason: {dc.exceptionReason}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }

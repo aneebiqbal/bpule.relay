@@ -2,6 +2,9 @@ import { test, expect } from '@playwright/test'
 import { loginAsAdmin } from './helpers'
 
 test.describe('RELAY - Conversations', () => {
+  const taskLinkSelector = 'section a[href^="/leads/"]:not([href="/leads/new"]), section a[href^="/upwork/"]'
+  const detailUrlMatcher = (url: URL) => url.pathname.startsWith('/leads/') || url.pathname.startsWith('/upwork/')
+
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto('/relay')
@@ -25,11 +28,14 @@ test.describe('RELAY - Conversations', () => {
 
   test('R03: Conversation cards are clickable', async ({ page }) => {
     // Find first conversation link/card
-    const convoLink = page.locator('a[href*="/relay/"], a[href*="/leads/"]').first()
+    const convoLink = page.locator(taskLinkSelector).first()
     const hasConvo = await convoLink.isVisible({ timeout: 5_000 }).catch(() => false)
     
     if (hasConvo) {
-      await convoLink.click()
+      await Promise.all([
+        page.waitForURL(detailUrlMatcher, { timeout: 15_000 }),
+        convoLink.click(),
+      ])
       await page.waitForLoadState('networkidle')
       await page.waitForTimeout(1000)
       
@@ -39,11 +45,14 @@ test.describe('RELAY - Conversations', () => {
   })
 
   test('R04: Reply functionality exists on conversation detail', async ({ page }) => {
-    const convoLink = page.locator('a[href*="/relay/"], a[href*="/leads/"]').first()
+    const convoLink = page.locator(taskLinkSelector).first()
     const hasConvo = await convoLink.isVisible({ timeout: 5_000 }).catch(() => false)
     
     if (hasConvo) {
-      await convoLink.click()
+      await Promise.all([
+        page.waitForURL(detailUrlMatcher, { timeout: 15_000 }),
+        convoLink.click(),
+      ])
       await page.waitForLoadState('networkidle')
       await page.waitForTimeout(1000)
       
@@ -56,16 +65,20 @@ test.describe('RELAY - Conversations', () => {
   })
 
   test('R05: Back button returns to conversation list', async ({ page }) => {
-    const convoLink = page.locator('a[href*="/relay/"], a[href*="/leads/"]').first()
+    const convoLink = page.locator(taskLinkSelector).first()
     const hasConvo = await convoLink.isVisible({ timeout: 5_000 }).catch(() => false)
     
     if (hasConvo) {
-      await convoLink.click()
+      await Promise.all([
+        page.waitForURL(detailUrlMatcher, { timeout: 15_000 }),
+        convoLink.click(),
+      ])
       await page.waitForLoadState('networkidle')
       
       await page.goBack()
+      await page.waitForURL(/\/relay/, { timeout: 15_000 })
       await page.waitForLoadState('networkidle')
-      
+
       expect(page.url()).toContain('/relay')
     }
   })

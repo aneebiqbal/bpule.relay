@@ -4,12 +4,14 @@ import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
-import { loadOrgCommandSnapshot } from '@/lib/admin/org-command-snapshot'
 import { buildRoleContext } from '@/lib/relay/role-intelligence'
 import { buildRelayQueue } from '@/lib/relay/queue-engine'
-import { cn } from 'cn'
+import { loadAccountabilityDashboard } from '@/lib/relay/dashboard-loader'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
 import { RepWorkspace, type RepWorkspaceData } from '@/components/rep/rep-workspace'
+import { MyDayCard, type MyDayData } from '@/components/rep/my-day-card'
+import { AdminCommandCenter, type CommandCenterData } from '@/components/admin/admin-command-center'
+import { ManagerTeamView, type ManagerTeamData } from '@/components/manager/manager-team-view'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,53 +22,252 @@ export default async function TodayPage() {
   const authCtx = await getAuthContext()
   if (!authCtx) redirect('/login')
 
-  if (authCtx.isOwner || authCtx.isAdmin) {
-    const snapshot = await loadOrgCommandSnapshot()
-    const teamRows = snapshot.people.map((person) => ({
-      id: person.repId,
-      name: person.repName,
-      completed: person.totalCompleted,
-      target: person.totalTarget,
-      remaining: person.totalRemaining,
-      status: person.status,
-      profiles: person.profiles,
-      leads: person.leads,
-      extractions: person.extractions,
-    }))
-    const attentionItems = snapshot.attention.slice(0, 6).map((item) => ({
-      id: item.id,
-      title: item.title,
-      detail: item.detail,
-      severity: item.severity,
-    }))
-    const adminSummary = {
-      teamRows,
-      attentionItems,
-      activeConversations: 0,
-      highIntent: 0,
-      onTrackCount: teamRows.filter((row) => row.status === 'on_track' || row.status === 'completed').length,
-      totalReps: teamRows.length,
-      totals: snapshot.totals,
-    }
+  // Load accountability data (all roles)
+  const acData = await loadAccountabilityDashboard()
 
+  if (authCtx.isOwner || authCtx.isAdmin) {
+    // Admin / Owner view
     const personal = await loadRepWorkspaceData(user.rep.id).catch(() => null)
+
     return (
-      <AdminTodayView
-        adminSummary={adminSummary}
-        generatedAt={new Date().toISOString()}
-        personal={personal}
-      />
+      <Suspense fallback={<DashboardShellSkeleton />}>
+        <AdminTodayViewWithAccountability
+          acData={acData}
+          personal={personal}
+        />
+      </Suspense>
     )
   }
 
+  // Check if manager (has managed teams)
+  if (authCtx.isManager && authCtx.managedTeamIds.length > 0) {
+    const [repData, teamData] = await Promise.all([
+      loadRepWorkspaceData(user.rep.id),
+      loadManagerTeamTab(),
+    ])
+
+    return (
+      <Suspense fallback={<DashboardShellSkeleton />}>
+        <ManagerTodayView
+          acData={acData}
+          repData={repData}
+          teamData={teamData}
+        />
+      </Suspense>
+    )
+  }
+
+  // Rep view
   const [repData, teamData] = await Promise.all([
     loadRepWorkspaceData(user.rep.id),
     loadManagerTeamTab(),
   ])
+
   return (
     <Suspense fallback={<DashboardShellSkeleton />}>
-      <RepWorkspace data={repData} teamData={teamData} />
+      <RepTodayViewWithAccountability
+        acData={acData}
+        repData={repData}
+        teamData={teamData}
+      />
     </Suspense>
+  )
+}
+
+// ── Rep View with My Day ─────────────────────────────────────────────────────
+
+function RepTodayViewWithAccountability({
+  acData,
+  repData,
+  teamData,
+}: {
+  acData: Awaited<ReturnType<typeof loadAccountabilityDashboard>>
+  repData: RepWorkspaceData
+  teamData: { teams: any[]; isOwner: boolean }
+}) {
+  const myDayData: MyDayData | null = acData?.myDay ? {
+    status: acData.myDay.status as MyDayData['status'],
+    timeRemaining: acData.myDay.timeRemaining,
+    dayElapsedPct: acData.myDay.dayElapsedPct,
+    totalCompleted: acData.myDay.totalCompleted,
+    totalTarget: acData.myDay.totalTarget,
+    totalRemaining: acData.myDay.totalRemaining,
+    categories: acData.myDay.categories.map((c) => ({
+      key: c.key,
+      label: c.label,
+      completed: c.completed,
+      target: c.target,
+      remaining: Math.max(0, c.target - c.completed),
+      href: c.href,
+    })),
+    warning: acData.myDay.warning ? {
+      level: acData.myDay.warning.level,
+      message: acData.myDay.warning.message,
+      categories: acData.myDay.warning.categories,
+    } : null,
+    canCloseDay: acData.myDay.canCloseDay,
+    dayCloseStatus: acData.myDay.dayCloseStatus,
+    hasContract: acData.myDay.hasContract,
+    identityId: repData.identities[0]?.revenueIdentityId ?? undefined,
+  } : null
+
+  return (
+    <div className="space-y-6 pb-8">
+      {myDayData && <MyDayCard data={myDayData} />}
+
+      <RepWorkspace data={repData} teamData={teamData} />
+    </div>
+  )
+}
+
+// ── Manager View ─────────────────────────────────────────────────────────────
+
+function ManagerTodayView({
+  acData,
+  repData,
+  teamData,
+}: {
+  acData: Awaited<ReturnType<typeof loadAccountabilityDashboard>>
+  repData: RepWorkspaceData
+  teamData: { teams: any[]; isOwner: boolean }
+}) {
+  const myDayData: MyDayData | null = acData?.myDay ? {
+    status: acData.myDay.status as MyDayData['status'],
+    timeRemaining: acData.myDay.timeRemaining,
+    dayElapsedPct: acData.myDay.dayElapsedPct,
+    totalCompleted: acData.myDay.totalCompleted,
+    totalTarget: acData.myDay.totalTarget,
+    totalRemaining: acData.myDay.totalRemaining,
+    categories: acData.myDay.categories.map((c) => ({
+      key: c.key,
+      label: c.label,
+      completed: c.completed,
+      target: c.target,
+      remaining: Math.max(0, c.target - c.completed),
+      href: c.href,
+    })),
+    warning: acData.myDay.warning ? {
+      level: acData.myDay.warning.level,
+      message: acData.myDay.warning.message,
+      categories: acData.myDay.warning.categories,
+    } : null,
+    canCloseDay: acData.myDay.canCloseDay,
+    dayCloseStatus: acData.myDay.dayCloseStatus,
+    hasContract: acData.myDay.hasContract,
+    identityId: repData.identities[0]?.revenueIdentityId ?? undefined,
+  } : null
+
+  const managerTeamData: ManagerTeamData = acData?.team ? {
+    date: acData.date,
+    teams: acData.team.teams.map((t) => ({
+      teamId: t.teamId,
+      teamName: t.teamName,
+      members: t.members,
+    })),
+  } : {
+    date: new Date().toISOString().slice(0, 10),
+    teams: [],
+  }
+
+  return (
+    <div className="space-y-6 pb-8">
+      {/* Tab navigation */}
+      <div className="flex gap-1 border-b border-line">
+        <span className="border-b-2 border-orange px-3 py-2 text-[12px] font-medium text-ink">My Work</span>
+        <span className="px-3 py-2 text-[12px] font-medium text-graphite">Team</span>
+      </div>
+
+      {/* My Work section */}
+      {myDayData && (
+        <section>
+          <MyDayCard data={myDayData} />
+        </section>
+      )}
+
+      <RepWorkspace data={repData} teamData={teamData} />
+
+      {/* Team section */}
+      {managerTeamData.teams.length > 0 && (
+        <section className="space-y-3">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Team Oversight</p>
+          <ManagerTeamView data={managerTeamData} />
+        </section>
+      )}
+    </div>
+  )
+}
+
+// ── Admin View with Command Center ───────────────────────────────────────────
+
+function AdminTodayViewWithAccountability({
+  acData,
+  personal,
+}: {
+  acData: Awaited<ReturnType<typeof loadAccountabilityDashboard>>
+  personal: RepWorkspaceData | null
+}) {
+  const ccData: CommandCenterData = acData?.commandCenter ? {
+    date: acData.date,
+    teamHealth: acData.commandCenter.teamHealth,
+    attentionItems: acData.commandCenter.attentionItems,
+    team: acData.commandCenter.team,
+  } : {
+    date: new Date().toISOString().slice(0, 10),
+    teamHealth: { working: 0, onTrack: 0, atRisk: 0, behind: 0, blocked: 0, closed: 0 },
+    attentionItems: [],
+    team: [],
+  }
+
+  const myDayData: MyDayData | null = acData?.myDay && acData.myDay.hasContract ? {
+    status: acData.myDay.status as MyDayData['status'],
+    timeRemaining: acData.myDay.timeRemaining,
+    dayElapsedPct: acData.myDay.dayElapsedPct,
+    totalCompleted: acData.myDay.totalCompleted,
+    totalTarget: acData.myDay.totalTarget,
+    totalRemaining: acData.myDay.totalRemaining,
+    categories: acData.myDay.categories.map((c) => ({
+      key: c.key,
+      label: c.label,
+      completed: c.completed,
+      target: c.target,
+      remaining: Math.max(0, c.target - c.completed),
+      href: c.href,
+    })),
+    warning: acData.myDay.warning ? {
+      level: acData.myDay.warning.level,
+      message: acData.myDay.warning.message,
+      categories: acData.myDay.warning.categories,
+    } : null,
+    canCloseDay: acData.myDay.canCloseDay,
+    dayCloseStatus: acData.myDay.dayCloseStatus,
+    hasContract: acData.myDay.hasContract,
+  } : null
+
+  return (
+    <div className="space-y-6 pb-8">
+      <header className="space-y-1.5">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0-14em] text-stone">Command Center</p>
+        <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink">
+          {ccData && ccData.attentionItems.length > 0
+            ? `${ccData.attentionItems.length} item${ccData.attentionItems.length === 1 ? '' : 's'} need attention`
+            : 'Team overview'}
+        </h1>
+        <p className="text-[13px] text-graphite">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+      </header>
+
+      <AdminCommandCenter data={ccData} />
+
+      {myDayData && (
+        <section className="space-y-3">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">My Work</p>
+          <MyDayCard data={myDayData} />
+        </section>
+      )}
+
+      <Link href="/admin/command-center" className="inline-flex items-center gap-1 text-[12px] font-medium text-ink">
+        Open full command center →
+      </Link>
+    </div>
   )
 }
 
@@ -134,11 +335,9 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
 
   const store = await createScoutStore()
 
-  // Get daily workspace from canonical auth helper
   const { getDailyWorkspace } = await import('@/lib/auth/workspace')
   const workspace = await getDailyWorkspace()
 
-  // Get relay queue for next action + up next
   const [dash, relayData] = await Promise.all([
     store.getTodayDashboard(),
     store.getRelayQueueData(),
@@ -198,151 +397,6 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   }
 }
 
-type AdminTodaySummary = {
-  teamRows: Array<{
-    id: string
-    name: string
-    completed: number
-    target: number
-    remaining: number
-    status: string
-    profiles: number
-    leads: number
-    extractions: number
-  }>
-  attentionItems: Array<{ id: string; title: string; detail: string; severity: 'warning' | 'critical' }>
-  activeConversations: number
-  highIntent: number
-  onTrackCount: number
-  totalReps: number
-  totals: {
-    people: number
-    profiles: number
-    leads: number
-    extractions: number
-    remaining: number
-    peopleWithWork: number
-  }
-}
-
-function AdminTodayView({
-  adminSummary,
-  generatedAt,
-  personal,
-}: {
-  adminSummary: AdminTodaySummary
-  generatedAt: string
-  personal: RepWorkspaceData | null
-}) {
-  return (
-    <div className="space-y-6">
-      <header className="space-y-1.5">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Revenue Operations</p>
-        <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink">
-          {adminSummary.attentionItems.length > 0
-            ? `${adminSummary.attentionItems.length} item${adminSummary.attentionItems.length === 1 ? '' : 's'} need attention`
-            : adminSummary.totals.peopleWithWork > 0
-              ? 'Team work is visible'
-              : 'Team is on track'}
-        </h1>
-        <p className="text-[13px] text-graphite">{new Date(generatedAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-      </header>
-
-      <div className="grid gap-3 sm:grid-cols-4">
-        <div className="rounded border border-line bg-bone-raised px-3 py-2">
-          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">People</p>
-          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.totals.people}</p>
-        </div>
-        <div className="rounded border border-line bg-bone-raised px-3 py-2">
-          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">Profiles</p>
-          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.totals.profiles}</p>
-        </div>
-        <div className="rounded border border-line bg-bone-raised px-3 py-2">
-          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">Leads</p>
-          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.totals.leads}</p>
-        </div>
-        <div className="rounded border border-line bg-bone-raised px-3 py-2">
-          <p className="text-mono-medium text-[9px] uppercase tracking-wide text-stone">Extractions</p>
-          <p className="mt-0.5 text-[15px] font-medium text-ink">{adminSummary.totals.extractions}</p>
-        </div>
-      </div>
-
-      {personal?.nextAction && (
-        <section className="rounded-lg border border-line bg-bone-raised p-4">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Your next move</p>
-          <p className="mt-2 text-[14px] font-medium text-ink">{personal.nextAction.title}</p>
-          <p className="mt-1 text-[13px] text-graphite">{personal.nextAction.humanAction}</p>
-          <Link href={personal.nextAction.href} className="mt-3 inline-flex text-[12px] font-medium text-ink hover:underline">
-            Open →
-          </Link>
-        </section>
-      )}
-
-      {adminSummary.attentionItems.length > 0 && (
-        <section className="rounded-lg border border-status-warning/30 bg-status-warning/5 p-4">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-status-warning">Needs Attention</p>
-          <div className="mt-3 space-y-2">
-            {adminSummary.attentionItems.map((item) => (
-              <div key={item.id} className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-[13px] font-medium text-ink">{item.title}</p>
-                  <p className="text-[12px] text-graphite">{item.detail}</p>
-                </div>
-                <span className={cn(
-                  'rounded px-1.5 py-0.5 text-mono-medium text-[10px] uppercase tracking-wide',
-                  item.severity === 'critical' ? 'bg-status-danger/15 text-status-danger' : 'bg-status-warning/15 text-status-warning',
-                )}>
-                  {item.severity}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="rounded-lg border border-line bg-bone-raised p-4">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Everyone</p>
-        {adminSummary.teamRows.length > 0 ? (
-          <div className="mt-3 overflow-x-auto rounded border border-line">
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr className="border-b border-line bg-bone text-left text-mono-medium text-[10px] uppercase tracking-wide text-stone">
-                  <th className="px-3 py-2">Person</th>
-                  <th className="px-3 py-2">Profiles</th>
-                  <th className="px-3 py-2">Leads</th>
-                  <th className="px-3 py-2">Extractions</th>
-                  <th className="px-3 py-2">Today</th>
-                </tr>
-              </thead>
-              <tbody>
-                {adminSummary.teamRows.map((row) => (
-                  <tr key={row.id} className="border-b border-line/60 last:border-b-0">
-                    <td className="px-3 py-2 font-medium text-ink">
-                      <Link href={`/team/${row.id}`} className="hover:underline">{row.name}</Link>
-                    </td>
-                    <td className="px-3 py-2 text-graphite">{row.profiles}</td>
-                    <td className="px-3 py-2 text-graphite">{row.leads}</td>
-                    <td className="px-3 py-2 text-graphite">{row.extractions}</td>
-                    <td className="px-3 py-2 text-graphite">
-                      {row.target > 0 ? `${row.completed}/${row.target}` : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="mt-3 text-[12px] text-graphite">No people in this organization yet.</p>
-        )}
-      </section>
-
-      <Link href="/admin/command-center" className="inline-flex items-center gap-1 text-[12px] font-medium text-ink">
-        Open full command center →
-      </Link>
-    </div>
-  )
-}
-
 function DashboardShellSkeleton() {
   return (
     <div className="space-y-6 pb-8">
@@ -374,6 +428,3 @@ function DashboardShellSkeleton() {
     </div>
   )
 }
-
-
-

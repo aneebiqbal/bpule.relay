@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { ManagerDrillDown } from '@/components/rep/manager-drilldown'
 import { ManagerDrillDownSkeleton } from '@/components/rep/manager-drilldown'
 
@@ -53,6 +54,31 @@ async function loadDrillDownData(repId: string) {
   const identities = await store.listMyAssignedIdentities()
 
   const assignments = await store.getRepAssignments(repId)
+  const supabase = await createServerSupabase()
+
+  // Load Accountability OS day closes for this rep
+  const { data: dayCloses } = await supabase
+    .from('day_closes')
+    .select('*')
+    .eq('person_id', repId)
+    .eq('date', today)
+
+  // Load contracts for day closes
+  const contractIds = [...new Set((dayCloses ?? []).map((dc: any) => dc.contract_id).filter(Boolean))]
+  const { data: contracts } = contractIds.length > 0
+    ? await supabase.from('revenue_identity_contracts').select('*').in('id', contractIds)
+    : { data: [] }
+
+  // Load identities for day closes
+  const dcIdentityIds = [...new Set((dayCloses ?? []).map((dc: any) => dc.revenue_identity_id))]
+  const { data: dcIdentities } = dcIdentityIds.length > 0
+    ? await supabase.from('revenue_identities').select('id, identity_name, channel').in('id', dcIdentityIds)
+    : { data: [] }
+
+  // Load allocations
+  const { data: allocations } = contractIds.length > 0
+    ? await supabase.from('contract_allocations').select('*').in('contract_id', contractIds)
+    : { data: [] }
 
   return {
     rep: {
@@ -71,6 +97,29 @@ async function loadDrillDownData(repId: string) {
     today,
     isManager: authCtx.isManager,
     managedTeamIds: authCtx.managedTeamIds,
+    // Accountability OS data
+    dayCloses: (dayCloses ?? []).map((dc: any) => {
+      const contract = (contracts ?? []).find((c: any) => c.id === dc.contract_id)
+      const identity = (dcIdentities ?? []).find((i: any) => i.id === dc.revenue_identity_id)
+      const myAlloc = (allocations ?? []).find((a: any) => a.contract_id === dc.contract_id && a.person_id === repId)
+      const pct = (myAlloc?.allocation_pct ?? ((allocations ?? []).filter((a: any) => a.contract_id === dc.contract_id).length === 0 ? 100 : 0)) / 100
+      const snap = (dc.completion_snapshot ?? {}) as Record<string, number>
+      return {
+        identityId: dc.revenue_identity_id,
+        identityName: identity?.identity_name ?? 'Unknown',
+        channel: identity?.channel ?? 'other',
+        status: dc.status,
+        exceptionReason: dc.exception_reason,
+        allocationPct: Math.round(pct * 100),
+        progress: {
+          connections: { completed: snap.connections ?? 0, target: Math.round((contract?.connections ?? 0) * pct), remaining: Math.max(0, Math.round((contract?.connections ?? 0) * pct) - (snap.connections ?? 0)) },
+          firstDms: { completed: snap.firstDms ?? 0, target: Math.round((contract?.first_dms ?? 0) * pct), remaining: Math.max(0, Math.round((contract?.first_dms ?? 0) * pct) - (snap.firstDms ?? 0)) },
+          emails: { completed: snap.emails ?? 0, target: Math.round((contract?.emails ?? 0) * pct), remaining: Math.max(0, Math.round((contract?.emails ?? 0) * pct) - (snap.emails ?? 0)) },
+          followups: { completed: snap.followups ?? 0, target: Math.round((contract?.followups ?? 0) * pct), remaining: Math.max(0, Math.round((contract?.followups ?? 0) * pct) - (snap.followups ?? 0)) },
+        },
+        dayCloseStatus: dc.status,
+      }
+    }),
   }
 }
 

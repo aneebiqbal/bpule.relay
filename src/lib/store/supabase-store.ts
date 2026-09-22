@@ -1070,6 +1070,38 @@ export class SupabaseStore implements ScoutStore {
               // Non-fatal per-target
             }
           }
+
+          // Bridge: canonical progress for Accountability OS (day_closes)
+          // Maps messageType → metric key. Exactly-once via source_event_id.
+          try {
+            const metricKeyMap: Record<string, string> = {
+              connection: 'connections',
+              dm: 'firstDms',
+              followup: 'followups',
+              email: 'emails',
+            }
+            const metricKey = metricKeyMap[type] ?? null
+            if (metricKey) {
+              const sourceEventId = `canonical:${leadId}:${idempotencyKey ?? 'none'}`
+              for (const t of targets) {
+                try {
+                  await this.client.rpc('record_canonical_progress', {
+                    p_org_id: this.orgId,
+                    p_person_id: this.rep.id,
+                    p_revenue_identity_id: t.revenue_identity_id as string,
+                    p_event_type: 'OUTREACH_RECORDED',
+                    p_metric_key: metricKey,
+                    p_source_event_id: sourceEventId,
+                    p_date: new Date().toISOString().slice(0, 10),
+                  })
+                } catch {
+                  // Non-fatal per-target
+                }
+              }
+            }
+          } catch {
+            // Progress bridge must never break the send
+          }
         }
       } catch {
         // Accountability increment must never block the send
@@ -2118,7 +2150,7 @@ export class SupabaseStore implements ScoutStore {
             .eq('rep_id', this.rep.id)
             .eq('activity_type', 'application')
             .eq('active', true)
-          if (targets && targets.length > 0) {
+           if (targets && targets.length > 0) {
             for (const t of targets) {
               try {
                 await this.client.rpc('record_activity_event', {
@@ -2130,6 +2162,28 @@ export class SupabaseStore implements ScoutStore {
               } catch {
                 // Non-fatal per-target
               }
+            }
+
+            // Bridge: canonical progress for Upwork applications
+            try {
+              const sourceEventId = `canonical:upwork:${jobId}:${this.rep.id}`
+              for (const t of targets) {
+                try {
+                  await this.client.rpc('record_canonical_progress', {
+                    p_org_id: this.orgId,
+                    p_person_id: this.rep.id,
+                    p_revenue_identity_id: t.revenue_identity_id as string,
+                    p_event_type: 'OUTREACH_RECORDED',
+                    p_metric_key: 'applications',
+                    p_source_event_id: sourceEventId,
+                    p_date: new Date().toISOString().slice(0, 10),
+                  })
+                } catch {
+                  // Non-fatal per-target
+                }
+              }
+            } catch {
+              // Progress bridge must never block the apply
             }
           }
         } catch {
@@ -5683,6 +5737,61 @@ export class SupabaseStore implements ScoutStore {
     const totalTarget = myContracts.reduce((s, c) => s + c.qualifiedProspects + c.connections + c.firstDms + c.emails + c.followups + c.meaningfulTouches, 0)
     const totalCompleted = progress.reduce((s, p) => s + p.qualifiedProspects.completed + p.connections.completed + p.firstDms.completed + p.emails.completed + p.followups.completed + p.meaningfulTouches.completed, 0)
 
+    // Aggregate progress across ALL identities (not just first)
+    const aggProgress: import('@/lib/domain/types').DailyProgress = progress.length > 0
+      ? {
+          qualifiedProspects: {
+            completed: progress.reduce((s, p) => s + p.qualifiedProspects.completed, 0),
+            target: progress.reduce((s, p) => s + p.qualifiedProspects.target, 0),
+            remaining: progress.reduce((s, p) => s + p.qualifiedProspects.remaining, 0),
+          },
+          connections: {
+            completed: progress.reduce((s, p) => s + p.connections.completed, 0),
+            target: progress.reduce((s, p) => s + p.connections.target, 0),
+            remaining: progress.reduce((s, p) => s + p.connections.remaining, 0),
+          },
+          firstDms: {
+            completed: progress.reduce((s, p) => s + p.firstDms.completed, 0),
+            target: progress.reduce((s, p) => s + p.firstDms.target, 0),
+            remaining: progress.reduce((s, p) => s + p.firstDms.remaining, 0),
+          },
+          emails: {
+            completed: progress.reduce((s, p) => s + p.emails.completed, 0),
+            target: progress.reduce((s, p) => s + p.emails.target, 0),
+            remaining: progress.reduce((s, p) => s + p.emails.remaining, 0),
+          },
+          followups: {
+            completed: progress.reduce((s, p) => s + p.followups.completed, 0),
+            target: progress.reduce((s, p) => s + p.followups.target, 0),
+            remaining: progress.reduce((s, p) => s + p.followups.remaining, 0),
+          },
+          dueReplies: {
+            completed: progress.reduce((s, p) => s + p.dueReplies.completed, 0),
+            target: progress.reduce((s, p) => s + p.dueReplies.target, 0),
+            remaining: progress.reduce((s, p) => s + p.dueReplies.remaining, 0),
+          },
+          meaningfulTouches: {
+            completed: progress.reduce((s, p) => s + p.meaningfulTouches.completed, 0),
+            target: progress.reduce((s, p) => s + p.meaningfulTouches.target, 0),
+            remaining: progress.reduce((s, p) => s + p.meaningfulTouches.remaining, 0),
+          },
+          logging: {
+            completed: progress.reduce((s, p) => s + p.logging.completed, 0),
+            target: progress.reduce((s, p) => s + p.logging.target, 0),
+            remaining: progress.reduce((s, p) => s + p.logging.remaining, 0),
+          },
+        }
+      : {
+          qualifiedProspects: { completed: 0, target: 0, remaining: 0 },
+          connections: { completed: 0, target: 0, remaining: 0 },
+          firstDms: { completed: 0, target: 0, remaining: 0 },
+          emails: { completed: 0, target: 0, remaining: 0 },
+          followups: { completed: 0, target: 0, remaining: 0 },
+          dueReplies: { completed: 0, target: 0, remaining: 0 },
+          meaningfulTouches: { completed: 0, target: 0, remaining: 0 },
+          logging: { completed: 0, target: 0, remaining: 0 },
+        }
+
     return {
       personId: this.rep.id,
       personName: this.rep.name,
@@ -5690,16 +5799,7 @@ export class SupabaseStore implements ScoutStore {
       isWorkingDay: availability?.status !== 'leave' && availability?.status !== 'holiday' && availability?.status !== 'approved_unavailable',
       availabilityStatus: availability?.status ?? 'working',
       contracts: myContracts,
-      progress: progress[0] ?? {
-        qualifiedProspects: { completed: 0, target: 0, remaining: 0 },
-        connections: { completed: 0, target: 0, remaining: 0 },
-        firstDms: { completed: 0, target: 0, remaining: 0 },
-        emails: { completed: 0, target: 0, remaining: 0 },
-        followups: { completed: 0, target: 0, remaining: 0 },
-        dueReplies: { completed: 0, target: 0, remaining: 0 },
-        meaningfulTouches: { completed: 0, target: 0, remaining: 0 },
-        logging: { completed: 0, target: 0, remaining: 0 },
-      },
+      progress: aggProgress,
       totalCompleted,
       totalTarget,
       totalRemaining: Math.max(0, totalTarget - totalCompleted),

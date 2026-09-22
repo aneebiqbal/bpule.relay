@@ -7,6 +7,7 @@ import { sanitizeDraft } from '@/lib/facts/sanitize'
 import { AI_TELL_PHRASES, BANNED_PHRASES } from '@/lib/writing/engine'
 
 export const dynamic = 'force-dynamic'
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 /**
  * POST /api/upwork/jobs/[id]/generate
@@ -21,6 +22,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
+  if (!UUID_PATTERN.test(id)) {
+    return NextResponse.json({ error: 'Job id must be a UUID.' }, { status: 400 })
+  }
 
   let body: { profileId?: string; proofId?: string; generationMode?: 'standard' | 'premium' }
   try {

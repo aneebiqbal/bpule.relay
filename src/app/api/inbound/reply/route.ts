@@ -12,6 +12,8 @@ import type { InboundReplyInput } from '@/lib/inbound/reply'
 
 export const maxDuration = 60
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 export async function POST(req: NextRequest) {
   const store = await createScoutStore().catch(() => null)
   if (!store) {
@@ -31,12 +33,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
-  if (!body.leadId) {
+  const leadId = typeof body.leadId === 'string' ? body.leadId.trim() : ''
+
+  if (!leadId) {
     return NextResponse.json({ error: 'leadId is required.' }, { status: 400 })
   }
 
+  if (!UUID_PATTERN.test(leadId)) {
+    return NextResponse.json({ error: 'leadId must be a UUID.' }, { status: 400 })
+  }
+
   try {
-    const lead = await store.getLead(body.leadId)
+    const lead = await store.getLead(leadId)
     if (!lead) {
       return NextResponse.json({ error: 'Lead not found.' }, { status: 404 })
     }

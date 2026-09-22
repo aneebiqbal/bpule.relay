@@ -34,13 +34,19 @@ function adminDb() {
   return createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-const TEST_PROFILE_TEXT = `E2ETestCo Founder Dana Wu
-Founder, E2ETestCo
+function makeProfileText(company: string): string {
+  return `${company} Founder Dana Wu
+Founder, ${company}
 
 About
-E2ETestCo is hiring a Senior Backend Engineer. Remote worldwide. Apply at careers@e2etestco.example.
+${company} is hiring a Senior Backend Engineer. Remote worldwide. Apply at careers@${company.toLowerCase().replace(/[^a-z0-9]+/g, '')}.example.
 
-E2ETestCo is building infrastructure tooling for platform teams.`
+${company} is building infrastructure tooling for platform teams.`
+}
+
+function uniqueCompany(tag: string): string {
+  return `E2ETestCo-${tag}-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`
+}
 
 test.describe('Canonical intelligence consistency — TEAM-002/004/005 acceptance', () => {
   const createdLeadIds: string[] = []
@@ -59,6 +65,7 @@ test.describe('Canonical intelligence consistency — TEAM-002/004/005 acceptanc
   })
 
   test('C01: same prospect analyzed twice produces identical canonical score/qualification (no live provider needed to prove this — fallback path is deterministic by construction, and this proves the APP wiring, not model behavior)', async ({ page }) => {
+    const profileText = makeProfileText(uniqueCompany('c01'))
     await loginAsAdmin(page)
     await page.goto('/prospect')
     await page.waitForLoadState('networkidle')
@@ -68,7 +75,7 @@ test.describe('Canonical intelligence consistency — TEAM-002/004/005 acceptanc
     async function analyzeOnce(): Promise<{ done: Record<string, unknown> }> {
       let doneEvent: Record<string, unknown> | null = null
       const responsePromise = page.waitForResponse((r) => r.url().includes('/api/prospect/analyze') && r.status() === 200)
-      await textarea.fill(TEST_PROFILE_TEXT)
+      await textarea.fill(profileText)
       const analyzeBtn = page.locator('button:has-text("Analyze")').first()
       await analyzeBtn.click()
       const response = await responsePromise
@@ -99,12 +106,13 @@ test.describe('Canonical intelligence consistency — TEAM-002/004/005 acceptanc
   })
 
   test('C02: Save Lead persists canonical score/qualification, and Lead Detail (refresh + reopen) shows the SAME values the Prospect Check summary showed', async ({ page }) => {
+    const profileText = makeProfileText(uniqueCompany('c02'))
     await loginAsAdmin(page)
     await page.goto('/prospect')
     await page.waitForLoadState('networkidle')
 
     const textarea = page.locator('textarea').first()
-    await textarea.fill(TEST_PROFILE_TEXT)
+    await textarea.fill(profileText)
     const analyzeBtn = page.locator('button:has-text("Analyze")').first()
     await analyzeBtn.click()
     await page.waitForTimeout(8_000) // SSE stream completion, mirrors prospect.spec.ts's own convention
@@ -176,12 +184,13 @@ test.describe('Canonical intelligence consistency — TEAM-002/004/005 acceptanc
   })
 
   test('C03: Try Another Angle does not change the persisted-would-be canonical score (only the message)', async ({ page }) => {
+    const profileText = makeProfileText(uniqueCompany('c03'))
     await loginAsAdmin(page)
     await page.goto('/prospect')
     await page.waitForLoadState('networkidle')
 
     const textarea = page.locator('textarea').first()
-    await textarea.fill(TEST_PROFILE_TEXT)
+    await textarea.fill(profileText)
     await page.locator('button:has-text("Analyze")').first().click()
     await page.waitForTimeout(8_000)
 
