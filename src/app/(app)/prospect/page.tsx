@@ -104,6 +104,7 @@ function pasteGuard(raw: string): string | null {
 
 export default function ProspectCheckPage() {
   const router = useRouter()
+  const errorRef = useRef<HTMLDivElement | null>(null)
   const [rawInput, setRawInput] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
@@ -132,6 +133,13 @@ export default function ProspectCheckPage() {
       abortRef.current?.abort()
     }
   }, [])
+
+  // Clicking "Create lead" happens near the bottom of a long results panel,
+  // but the error banner renders at the top of the page — without this, a
+  // failed save looks like the button did nothing (TEAM-002 / relay.bpulse.dev report).
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [error])
 
   const resetResult = useCallback(() => {
     setResult(null)
@@ -344,7 +352,7 @@ export default function ProspectCheckPage() {
       </header>
 
       {error ? (
-        <Alert variant="destructive">
+        <Alert variant="destructive" ref={errorRef}>
           <AlertTitle>Something failed</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
@@ -450,7 +458,7 @@ export default function ProspectCheckPage() {
                       channel specifically. Lead Detail may correctly show a
                       different policy for the DM channel on the same lead —
                       not a contradiction, a different question. */}
-                  <SignalChip label="Connection" value={result.revenue.messagingPolicy.replaceAll('_', ' ')} />
+                  <SignalChip label="Connection" value={result.revenue.messagingPolicy?.replaceAll('_', ' ') ?? '—'} />
                 </div>
               )}
               {result.revenue && (
