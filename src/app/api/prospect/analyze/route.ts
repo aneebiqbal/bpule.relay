@@ -660,7 +660,7 @@ export async function POST(request: Request) {
           matchScore: pm.totalScore,
           topProof: pm.matchedProof[0]?.safeClaim ?? null,
         })),
-      qualification: evaluateProspectQualification({ rawText, extracted }),
+      qualification: evaluateProspectQualification({ rawText, extracted, canonicalQualification: canonical.qualification }),
       gateNotes: canonicalResult.gateNotes,
       repairAttempted: canonicalResult.repairAttempted,
       repairImproved: canonicalResult.repairImproved,

@@ -91,9 +91,21 @@ export async function POST(request: Request) {
       tags: Array.isArray(body.tags) ? (body.tags as unknown[]).filter((t): t is string => typeof t === 'string') : [],
     }
 
+    // Extracted early (also re-derived below for score/verdict persistence)
+    // so the qualification gate can defer to canonical — see the
+    // canonicalQualification doc comment on evaluateProspectQualification.
+    const canonicalForGate = body.canonical && typeof body.canonical === 'object'
+      ? body.canonical as Record<string, unknown>
+      : null
+    const canonicalQualificationForGate =
+      typeof canonicalForGate?.qualification === 'string'
+        ? (canonicalForGate.qualification as 'strong' | 'worth_pursuing' | 'maybe' | 'skip')
+        : null
+
     const qualification = evaluateProspectQualification({
       extracted,
       rawText: typeof body.rawInput === 'string' ? body.rawInput : null,
+      canonicalQualification: canonicalQualificationForGate,
     })
     if (!qualification.qualificationEligibility) {
       return NextResponse.json(
@@ -122,9 +134,7 @@ export async function POST(request: Request) {
 
     const score = computeScore(extracted, rulebook)
 
-    const canonical = body.canonical && typeof body.canonical === 'object'
-      ? body.canonical as Record<string, unknown>
-      : null
+    const canonical = canonicalForGate
     // Derive from the canonical object itself, not a separately-sent
     // body.canonicalScore field — the client currently sends both and they
     // should always agree, but trusting a second, unverified number instead

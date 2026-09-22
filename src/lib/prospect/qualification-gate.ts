@@ -392,6 +392,32 @@ function scoreEvidenceCoverage(extracted: ExtractedLead, extractability: ReturnT
 export function evaluateProspectQualification(params: {
   extracted: ExtractedLead
   rawText?: string | null
+  /**
+   * The canonical intelligence result for this exact input, when one exists.
+   *
+   * TEAM-002/004/005/89-score-regression: qualificationEligibility used to be
+   * computed ONLY from this legacy heuristic (raw-text pattern scoring +
+   * extraction-completeness point totals against extracted.signalEvidence /
+   * extracted.aboutSummary — Pass A's narrow fields, not the canonical
+   * pipeline's own evidence ledger). That meant a prospect the canonical
+   * pipeline scored 89 ("Strong opportunity") could still be silently
+   * blocked from Save/Draft because this SEPARATE, disconnected gate's own
+   * word-count/regex thresholds didn't clear — two independent sources of
+   * truth for "is this prospect good enough," able to disagree, with the
+   * legacy one winning by simply running last and blocking outright.
+   *
+   * Fix: once a canonical result exists and the canonical pipeline itself
+   * did not already say 'skip' (that path short-circuits earlier and never
+   * reaches here), canonical eligibility is authoritative. The legacy
+   * extractability/evidence/missingCritical checks still run and are always
+   * returned (never hidden) for display/explanation, but they no longer
+   * independently veto an otherwise-eligible canonical result. The one
+   * exception is inputHardFail (garbage/UI-fragment/login-form input) —
+   * that's an input-sanity veto, not an extraction-completeness opinion, and
+   * a canonical score computed over garbage input isn't trustworthy either,
+   * so it still blocks regardless of canonical.
+   */
+  canonicalQualification?: 'strong' | 'worth_pursuing' | 'maybe' | 'skip' | null
 }): ProspectQualificationAssessment {
   const raw = scoreRawInput(params.rawText)
   const extractability = scoreExtractability(params.extracted)
@@ -416,12 +442,26 @@ export function evaluateProspectQualification(params: {
     reasons.push('Signal evidence is too generic; add concrete opportunity details.')
   }
 
-  const qualificationEligibility =
-    !raw.hardFail &&
+  const legacyEligibility =
     raw.score >= 45 &&
     extractability.score >= 45 &&
     evidenceCoverage >= 40 &&
     missingCritical.length === 0
+
+  // Canonical is authoritative for a prospect it has already scored (any
+  // qualification other than 'skip' — the canonical pipeline's own verdict
+  // that this is NOT a fit, which the legacy gate should not override
+  // either, but that path already short-circuits before extraction/save in
+  // every caller). Input-sanity hardFail always still blocks.
+  const canonicalVouches =
+    params.canonicalQualification != null && params.canonicalQualification !== 'skip'
+  const qualificationEligibility = !raw.hardFail && (canonicalVouches || legacyEligibility)
+
+  if (canonicalVouches && !legacyEligibility) {
+    reasons.push(
+      'Canonical intelligence already scored this prospect with sufficient evidence; legacy extraction-completeness checks below are shown for context only and do not block saving.',
+    )
+  }
 
   return {
     status: qualificationEligibility ? 'eligible' : 'insufficient_context',

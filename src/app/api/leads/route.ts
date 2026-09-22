@@ -144,6 +144,7 @@ export async function POST(request: Request) {
       typeof body.rawInput === 'string' && body.rawInput.trim()
         ? body.rawInput.trim()
         : canonical?.rawSource.rawInput ?? null,
+    canonicalQualification: canonical?.qualification ?? null,
   })
   if (!qualification.qualificationEligibility) {
     return NextResponse.json(
