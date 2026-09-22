@@ -2066,6 +2066,46 @@ export class SupabaseStore implements ScoutStore {
         sent_text: sentText,
         sent_at: new Date().toISOString(),
       }),
+      // Record accountability increment — TEAM-001 (Today showed no
+      // progress). This was the one real send-logging path in the app that
+      // never called record_activity_event: DM/connection/followup/reply/
+      // email all go through markContacted, which does; Upwork applications
+      // went straight to raw table writes and silently never counted
+      // toward the 'application' daily target (UPWORK_PACK in
+      // default-targets.ts), so a rep logging Upwork applications all day
+      // would see Today's progress stay at 0 no matter how much real work
+      // was done. Only 'application' is incremented (not the separate
+      // 'proposal' target also in UPWORK_PACK) — this route represents the
+      // single act of applying; crediting a second, distinct target for
+      // the same action would be its own accountability-integrity bug
+      // (one real action counting as two), not a fix. Non-fatal, mirrors
+      // markContacted's own error handling exactly.
+      (async () => {
+        try {
+          const { data: targets } = await this.client
+            .from('daily_targets')
+            .select('revenue_identity_id')
+            .eq('rep_id', this.rep.id)
+            .eq('activity_type', 'application')
+            .eq('active', true)
+          if (targets && targets.length > 0) {
+            for (const t of targets) {
+              try {
+                await this.client.rpc('record_activity_event', {
+                  p_rep_id: this.rep.id,
+                  p_identity_id: t.revenue_identity_id as string,
+                  p_activity_type: 'application',
+                  p_org_id: this.orgId,
+                })
+              } catch {
+                // Non-fatal per-target
+              }
+            }
+          }
+        } catch {
+          // Accountability increment must never block the apply
+        }
+      })(),
     ])
   }
 

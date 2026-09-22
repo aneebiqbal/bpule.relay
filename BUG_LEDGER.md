@@ -90,7 +90,7 @@ Reported by the real team using the application. Baseline: `a301371` (see `RELAY
 
 | ID | Severity | Reported | Status | Notes |
 |----|----------|----------|--------|-------|
-| TEAM-001 | P1 | Today section not showing updates/progress | Investigating | Trace: canonical event → persistence → accountability aggregation → Today API → Today UI. |
+| TEAM-001 | P0 | Today section not showing updates/progress | CONDITIONAL PASS (root-caused, fixed, integration-tested; browser/DB acceptance proof outstanding) | Real gap in Upwork accountability — see detail below. |
 | TEAM-002 | P0 | Same lead shows different scores internal vs external | Investigating | Likely overlaps REL-FUNC-005 (fixed) — auditing whether other consumers still diverge. |
 | TEAM-003 | P0 | Creating a draft pollutes timeline/accountability | Root-caused, fixed (real finding differs from literal report) | See TEAM-003 detail below. |
 | TEAM-004 | P0 | Prospect summary (HIGH/CONTACT NOW) disagrees with Detail (no evidence, score 0) | Investigating | Likely same class as REL-FUNC-004/005 surface-consistency work — verifying. |
@@ -131,3 +131,19 @@ Client-side, the Send button is disabled while `sending` (covers same-tab double
 `tests/company-extraction.test.ts` (7 tests: 2 positive extraction cases, 2 false-positive-guard cases, 1 pre-existing-pattern regression, 1 batch of 5 ordinary-prose non-fabrication checks, 1 documented-gap case). Full suite: same 9 pre-existing unrelated failures, no regressions (894 total). Typecheck and build clean.
 
 **Not yet verified**: live browser proof against the actual reported case (no source text supplied yet), and whether this specific extraction gap is even what Bakary's real profile hit — flagged, not assumed.
+
+### TEAM-001 detail — Upwork applications never incremented accountability
+
+**Trace performed** (canonical event → persistence → accountability aggregation → Today API → Today UI): `dashboard/page.tsx` → `loadRepWorkspaceData` → `getDailyWorkspace()` (`src/lib/auth/workspace.ts`) → `store.getMyTodayAccountability()` → reads `daily_accountability.completed_count`. Traced every write path into that table.
+
+**Confirmed correct**: DM, connection, follow-up, reply, and **email** (Email Outreach V1's `sendPreparedEmail` correctly calls `store.markContacted(..., 'email', ...)`) all route through `markContacted()`, which calls the `record_activity_event` RPC for every active matching `daily_targets` row, incrementing `daily_accountability.completed_count` transactionally (DB-level `on conflict ... do update`).
+
+**Confirmed broken**: `markUpworkApplied()` — the single call site for `POST /api/upwork/jobs/[id]/apply`, the only "log Upwork application" action in the app — wrote directly to `upwork_jobs.status` and inserted into `upwork_messages`, and **never called `record_activity_event` at all**. Since `UPWORK_PACK` (`src/lib/accountability/default-targets.ts`) assigns both an `application` (10/day) and a `proposal` (10/day) target to every Upwork-channel Revenue Identity, a rep logging real Upwork applications all day would see Today's progress bar for that channel stay at 0/10 regardless of actual work completed — a precise, literal match for "Today section is not showing updates/progress."
+
+**Fix**: added the same `record_activity_event` increment pattern `markContacted()` already uses, crediting only the `application` activity type (not also `proposal` — one real action must credit exactly one target, not two, to avoid a different accountability-integrity bug of double-counting). Non-fatal on RPC failure, matching the existing pattern exactly.
+
+**Note**: the mock/demo store's `getMyTodayAccountability()` returns hardcoded synthetic numbers (`t.activityType === 'dm' ? 22 : ...`) regardless of real actions — architecturally fine for a demo fixture, not touched, and not the cause of the reported bug (confirmed the live `relay.bpulse.dev` environment runs the real Supabase-backed store, not demo mode).
+
+`tests/upwork-accountability.test.ts` (3 tests, direct integration against `SupabaseStore` + a fake Supabase client asserting the actual RPC call args). Full suite: same 9 pre-existing unrelated failures, no regressions (897 total). Typecheck and build clean.
+
+**Status: CONDITIONAL PASS.** Root-caused and fixed at the code/API/DB level with integration-test proof of the RPC call. Not yet verified: full browser journey (log an Upwork application → refresh Today → see the count increment) against a live session, per the outstanding TEAM-001/002/004/005 acceptance matrix still owed.
