@@ -1,0 +1,76 @@
+{
+  "SearchResult": {
+    "SearchResultCount": 3,
+    "SearchResultItems": [
+      {
+        "MatchedObjectId": "12345678",
+        "MatchedObjectDescriptor": {
+          "PositionID": "usa-1",
+          "PositionTitle": "Web Developer (PHP)",
+          "OrganizationName": "Federal Reserve Board",
+          "PositionLocation": [
+            { "LocationName": "Washington, DC", "CountryCode": "US" },
+            { "LocationName": "Anywhere in the U.S.", "CountryCode": "US" }
+          ],
+          "PositionSalary": [
+            { "MinimumRange": 85000, "MaximumRange": 115000, "RateIntervalCode": "P", "LowGrade": 11, "HighGrade": 13 }
+          ],
+          "PublicationStartDate": "2026-09-13T00:00:00",
+          "ApplicationCloseDate": "2026-10-13T23:59:59",
+          "JobCategory": [{ "Name": "Information Technology" }],
+          "PositionOfferingType": [{ "Name": "Remote job" }],
+          "PositionURI": "https://www.usajobs.gov/GetJob/ViewDetails/12345678",
+          "LowGrade": "11",
+          "HighGrade": "13",
+          "UserArea": {
+            "Details": { "JobSummary": "Maintain and modernize the Board's PHP-based publications portal." }
+          }
+        }
+      },
+      {
+        "MatchedObjectId": "87654321",
+        "MatchedObjectDescriptor": {
+          "PositionID": "usa-2",
+          "PositionTitle": "DevOps Engineer",
+          "OrganizationName": "CloudCanvas",
+          "PositionLocation": [{ "LocationName": "Washington, DC", "CountryCode": "US" }],
+          "PositionSalary": [
+            { "MinimumRange": 95000, "MaximumRange": 125000, "RateIntervalCode": "P", "LowGrade": 12, "HighGrade": 13 }
+          ],
+          "PublicationStartDate": "2026-09-11T00:00:00",
+          "ApplicationCloseDate": "2026-10-11T23:59:59",
+          "JobCategory": [{ "Name": "Information Technology" }],
+          "PositionOfferingType": [{ "Name": "Hybrid" }],
+          "PositionURI": "https://cloudcanvas.com/careers/devops",
+          "LowGrade": "12",
+          "HighGrade": "13",
+          "UserArea": {
+            "Details": { "JobSummary": "Run multi-region Kubernetes clusters for the CloudCanvas platform." }
+          }
+        }
+      },
+      {
+        "MatchedObjectId": "11223344",
+        "MatchedObjectDescriptor": {
+          "PositionID": "usa-3",
+          "PositionTitle": "Budget Analyst",
+          "OrganizationName": "Department of Defense",
+          "PositionLocation": [{ "LocationName": "Remote", "CountryCode": "US" }],
+          "PositionSalary": [
+            { "MinimumRange": 62000, "MaximumRange": 78000, "RateIntervalCode": "P", "LowGrade": 9, "HighGrade": 11 }
+          ],
+          "PublicationStartDate": "2026-09-15T00:00:00",
+          "ApplicationCloseDate": "2026-10-15T23:59:59",
+          "JobCategory": [{ "Name": "Auditing" }],
+          "PositionOfferingType": [{ "Name": "Remote job" }],
+          "PositionURI": "https://www.usajobs.gov/GetJob/ViewDetails/11223344",
+          "LowGrade": "9",
+          "HighGrade": "11",
+          "UserArea": {
+            "Details": { "JobSummary": "Support budget formulation and execution for defense programs." }
+          }
+        }
+      }
+    ]
+  }
+}

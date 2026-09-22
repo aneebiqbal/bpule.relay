@@ -1,5 +1,6 @@
 import type { ContentPlatform } from '@/lib/domain/types'
 import { shouldEscalateToPremium } from '@/lib/ai/routing'
+import { hasProvider } from '@/lib/ai/config'
 import { generate } from '@/lib/ai/runtime'
 import { checkHumanization, rewriteToHumanize } from '@/lib/ai/humanization'
 import { checkBannedPhrases, checkBadHook } from '@/lib/ai/content'
@@ -203,6 +204,12 @@ async function generateCandidate(
   const writerPersona = writer === 'A'
     ? `Write with a direct, personal voice. Lead with the specific detail. Keep sentences varied in length. ${structureDirective}`
     : `Write with a slightly more reflective voice. Connect the specific to the universal. Use natural rhythm. ${structureDirective}`
+
+  // No provider configured (demo mode): short-circuit to the deterministic
+  // no-provider path instead of throwing "All providers failed".
+  if (!hasProvider()) {
+    return emptyCandidate(writer)
+  }
 
   const result = await generate<{
     caption: string

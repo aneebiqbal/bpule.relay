@@ -1,8 +1,17 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { runContentForge, type ForgeInput } from '@/lib/content/intelligence/forge'
 import { buildContentDnaPromptBlock } from '@/lib/content/content-dna'
 import { buildMemoryPromptBlock } from '@/lib/content/intelligence/memory'
 import type { ContentProfile, ContentMemory } from '@/lib/domain/types'
+
+// Force the deterministic no-provider path regardless of any local keys, so
+// this suite needs no API keys and makes no network calls (as its header
+// states). Forge falls back to the empty candidate when hasProvider() is
+// false; the pipeline and its quality gates still run end-to-end.
+vi.mock('@/lib/ai/config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/ai/config')>()
+  return { ...actual, hasProvider: () => false }
+})
 
 /**
  * Test the forge pipeline with premium writing rules.

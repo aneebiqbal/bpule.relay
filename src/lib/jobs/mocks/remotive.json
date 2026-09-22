@@ -1,0 +1,60 @@
+{
+  "jobs": [
+    {
+      "id": 301,
+      "url": "https://remotive.com/remote-jobs/senior-php-developer-hyperion",
+      "title": "Senior PHP Developer",
+      "company_name": "Hyperion Digital",
+      "location": "Remote",
+      "category": "full stack programming",
+      "tags": ["PHP", "Laravel", "MySQL"],
+      "job_type": "full_time",
+      "publication_date": "2026-09-09T12:00:00",
+      "candidate_required_location": "Anywhere",
+      "salary": "$105k - $130k",
+      "description": "<p>Hyperion Digital is looking for a Senior PHP Developer to lead its checkout team.</p><iframe src=\"https://evil.example\"></iframe><p>Fully remote.</p>"
+    },
+    {
+      "id": 302,
+      "url": "https://remotive.com/remote-jobs/wordpress-engineer-quill",
+      "title": "WordPress Engineer",
+      "company_name": "Quill Content Co",
+      "location": "Remote",
+      "category": "web development",
+      "tags": ["WordPress", "PHP", "React"],
+      "job_type": "full_time",
+      "publication_date": "2026-09-13T10:00:00",
+      "candidate_required_location": "Anywhere",
+      "salary": null,
+      "description": "<p>Maintain high-traffic WordPress sites and migrate themes to React blocks.</p>"
+    },
+    {
+      "id": 303,
+      "url": "https://remotive.com/remote-jobs/devops-engineer-cloudcanvas",
+      "title": "DevOps Engineer",
+      "company_name": "CloudCanvas",
+      "location": "Remote",
+      "category": "devops",
+      "tags": ["Terraform", "Kubernetes", "AWS"],
+      "job_type": "full_time",
+      "publication_date": "2026-09-11T07:00:00",
+      "candidate_required_location": "Anywhere",
+      "salary": "$95k - $115k",
+      "description": "<p>CloudCanvas runs multi-region Kubernetes clusters and needs a pragmatic DevOps engineer.</p>"
+    },
+    {
+      "id": 304,
+      "url": "https://remotive.com/remote-jobs/account-executive-prestige",
+      "title": "Account Executive",
+      "company_name": "Prestige Solutions",
+      "location": "Remote",
+      "category": "sales",
+      "tags": ["SaaS", "B2B"],
+      "job_type": "part_time",
+      "publication_date": "2026-09-15T09:00:00",
+      "candidate_required_location": "US",
+      "salary": "$60k - $80k",
+      "description": "<p>Sell an enterprise SaaS product to US accounts. Part-time, commission-heavy.</p>"
+    }
+  ]
+}

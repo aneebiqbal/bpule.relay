@@ -78,7 +78,7 @@ describe('Taste Signal Path: Signal Strength', () => {
 describe('Taste Signal Path: Persona Isolation', () => {
   it('signals for persona A do not affect persona B', () => {
     let tpA = createTasteProfile('personaA')
-    let tpB = createTasteProfile('personaB')
+    const tpB = createTasteProfile('personaB')
 
     for (let i = 0; i < 5; i++) {
       tpA = applyTasteSignal(tpA, { type: 'write_this', territory: 'ai', metadata: { wasTechnical: true } })

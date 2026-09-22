@@ -247,7 +247,7 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: Error | null; 
 
     if (action === 'insert') {
       const inserted = this.payloadRows.map((row) => {
-        let next = computeGeneratedColumns(this.table, clone(row))
+        const next = computeGeneratedColumns(this.table, clone(row))
         if (!next.id) next.id = this.assignId(this.table)
         table.push(next)
         return next

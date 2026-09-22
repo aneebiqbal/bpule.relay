@@ -288,6 +288,7 @@ export function buildUserPrompt(
     `Company: ${input.lead.company}`,
     `Contact: ${input.extracted.name ?? 'unknown'}${input.extracted.title ? `, ${input.extracted.title}` : ''}`,
     `Source URL: ${input.extracted.url ?? 'none'}`,
+    input.extracted.signalEvidence ? `Signal: ${input.extracted.signalEvidence}` : '',
     input.strategy?.allowedNow?.length ? `Allowed evidence: ${input.strategy.allowedNow.slice(0, 2).join('; ')}` : '',
   ]
     .filter(Boolean)

@@ -1,0 +1,80 @@
+{
+  "count": 5,
+  "results": [
+    {
+      "id": "adz-1",
+      "title": "Senior PHP Developer",
+      "category": { "tag": "software", "label": "Software Development" },
+      "company": { "display_name": "Hyperion Digital", "logo": "https://adzuna.co.uk/logos/hyperion.png" },
+      "location": { "display_name": "London, United Kingdom" },
+      "description": "<p>Hyperion Digital seeks a Senior PHP Developer for its fintech platform in London.</p>",
+      "redirect_url": "https://www.adzuna.co.uk/details/adz-1",
+      "salary_min": 70000,
+      "salary_max": 90000,
+      "salary_is_predicted": false,
+      "contract_type": "full_time",
+      "created": "2026-09-10T08:00:00Z",
+      "keywords": ["PHP", "Laravel"]
+    },
+    {
+      "id": "adz-2",
+      "title": "Backend Developer (Ruby)",
+      "category": { "tag": "software", "label": "Software Development" },
+      "company": { "display_name": "Brightpath Travel" },
+      "location": { "display_name": "Remote" },
+      "description": "<p>Brightpath Travel is hiring a Ruby backend developer to work across its booking stack.</p>",
+      "redirect_url": "https://www.adzuna.co.uk/details/adz-2",
+      "salary_min": 60000,
+      "salary_max": 75000,
+      "salary_is_predicted": false,
+      "contract_type": "full_time",
+      "created": "2026-09-15T09:00:00Z",
+      "keywords": ["Ruby", "Rails", "Postgres"]
+    },
+    {
+      "id": "adz-3",
+      "title": "Network Engineer",
+      "category": { "tag": "infrastructure", "label": "IT & Telecoms" },
+      "company": { "display_name": "Gridworks ISP" },
+      "location": { "display_name": "Manchester, United Kingdom" },
+      "description": "<p>Gridworks needs a network engineer to maintain national backbone infrastructure.</p>",
+      "redirect_url": "https://www.adzuna.co.uk/details/adz-3",
+      "salary_min": null,
+      "salary_max": null,
+      "salary_is_predicted": false,
+      "contract_type": "full_time",
+      "created": "2026-09-12T10:00:00Z",
+      "keywords": ["Cisco", "BGP"]
+    },
+    {
+      "id": "adz-4",
+      "title": "Data Scientist",
+      "category": { "tag": "data", "label": "Data Science" },
+      "company": { "display_name": "Tidepool Health" },
+      "location": { "display_name": "Edinburgh, United Kingdom" },
+      "description": "<p>Model patient outcomes at Tidepool Health using Python and RxJava tooling.</p>",
+      "redirect_url": "https://www.adzuna.co.uk/details/adz-4",
+      "salary_min": 65000,
+      "salary_max": 82000,
+      "salary_is_predicted": false,
+      "contract_type": "contract",
+      "created": "2026-09-11T11:00:00Z",
+      "keywords": ["Python", "Machine Learning"]
+    },
+    {
+      "id": "adz-5",
+      "title": "DevOps Engineer",
+      "category": { "tag": "infrastructure", "label": "IT & Telecoms" },
+      "company": { "display_name": "CloudCanvas" },
+      "location": { "display_name": "London, United Kingdom" },
+      "description": "<p>CloudCanvas seeks a DevOps Engineer to run multi-region Kubernetes clusters.</p>",
+      "redirect_url": "https://cloudcanvas.com/careers/devops",
+      "salary_min": 90000,
+      "salary_max": 110000,
+      "salary_is_predicted": false,
+      "contract_type": "permanent",
+      "created": "2026-09-11T07:00:00Z",
+      "keywords": ["Terraform", "Kubernetes", "AWS"]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.fix-jobs.tsbuildinfo"
+  },
+  "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", "tests/jobs*.test.ts"],
+  "exclude": [
+    "node_modules",
+    "scripts",
+    ".next",
+    "tests/intelligence-v2-benchmark.test.ts",
+    "tests/artifact-limits.sanitize.test.ts",
+    "tests/test_adam.mts"
+  ]
+}

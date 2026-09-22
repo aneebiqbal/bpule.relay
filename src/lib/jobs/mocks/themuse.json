@@ -1,0 +1,54 @@
+{
+  "page": 1,
+  "page_count": 1,
+  "results": [
+    {
+      "id": 501,
+      "name": "Senior PHP Developer",
+      "short_name": "senior-php-developer",
+      "company": {
+        "name": "Hyperion Digital",
+        "refs": { "logo_image": "https://themuse.com/logos/hyperion.jpeg" }
+      },
+      "locations": [{ "name": "New York, NY" }],
+      "levels": [{ "name": "Senior" }],
+      "type": [{ "name": "full-time" }],
+      "categories": [{ "name": "Engineering" }],
+      "contents": "<p>Hyperion Digital is hiring a Senior PHP Developer in New York. The team owns payments and checkout.</p>",
+      "publication_date": "2026-09-09",
+      "refs": { "landing_page": "https://www.themuse.com/jobs/hyperion/senior-php-developer" }
+    },
+    {
+      "id": 502,
+      "name": "Product Manager, Growth",
+      "short_name": "product-manager-growth",
+      "company": {
+        "name": "Amberleaf",
+        "refs": { "logo_image": "https://themuse.com/logos/amberleaf.jpeg" }
+      },
+      "locations": [{ "name": "Remote" }],
+      "levels": [{ "name": "Mid" }],
+      "type": [{ "name": "full-time" }],
+      "categories": [{ "name": "Product" }],
+      "contents": "<p>Amberleaf is growing its consumer app and needs a growth product manager.</p>",
+      "publication_date": "2026-09-14",
+      "refs": { "landing_page": "https://www.themuse.com/jobs/amberleaf/product-manager-growth" }
+    },
+    {
+      "id": 503,
+      "name": "Infrastructure Engineer",
+      "short_name": "infrastructure-engineer",
+      "company": {
+        "name": "CloudCanvas",
+        "refs": { "logo_image": "https://themuse.com/logos/cloudcanvas.jpeg" }
+      },
+      "locations": [{ "name": "Tampa, FL" }],
+      "levels": [{ "name": "Senior" }],
+      "type": [{ "name": "full-time" }],
+      "categories": [{ "name": "Engineering" }],
+      "contents": "<p>CloudCanvas runs multi-region Kubernetes clusters and needs a pragmatic DevOps engineer.</p>",
+      "publication_date": "2026-09-11",
+      "refs": { "landing_page": "https://cloudcanvas.com/careers/devops" }
+    }
+  ]
+}
