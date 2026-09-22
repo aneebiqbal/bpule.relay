@@ -717,6 +717,29 @@ export function deriveSignalEvidenceFallback(
   return ''
 }
 
+/**
+ * Verifies a CLIENT-HELD canonical result is still valid for reuse against a
+ * given rawText, under the current pipeline/score versions. Used by "Try
+ * Another Angle" (Relay team bug bash — TEAM-005): the ephemeral /prospect
+ * flow has no persisted lead yet for the normal reuseIfUnchanged lookup to
+ * match against, so the client sends back the canonical result it already
+ * holds, and this function is the server-side proof that it's genuinely
+ * still valid rather than merely trusting the client. Never returns true
+ * for a tampered, stale-version, or wrong-input result — see the individual
+ * checks. Pure and synchronous, safe to unit test directly.
+ */
+export function isClientCanonicalStillValid(
+  clientCanonical: CanonicalProspectIntelligence | null | undefined,
+  rawText: string,
+  forceReanalyze: boolean,
+): clientCanonical is CanonicalProspectIntelligence {
+  if (!clientCanonical || forceReanalyze) return false
+  if (clientCanonical.intelligenceInputHash !== buildIntelligenceInputHash({ rawText })) return false
+  if (clientCanonical.intelligenceVersion !== INTELLIGENCE_PIPELINE_VERSION) return false
+  if (clientCanonical.scoreVersion !== SCORE_VERSION) return false
+  return true
+}
+
 export function shouldRescore(
   existing: CanonicalProspectIntelligence,
   trigger: RescoreOptions['trigger'],
