@@ -545,7 +545,11 @@ export class SupabaseStore implements ScoutStore {
       extraction_completeness: input.extractionCompleteness ?? null,
     }
 
-    const row = await this.client.from('leads').insert(insertRow).select(LEAD_COLUMNS).single()
+    let row: { data: Row | null; error: unknown } = await this.client
+      .from('leads')
+      .insert(insertRow)
+      .select(LEAD_COLUMNS)
+      .single()
     if (row.error) {
       const code = (row.error as { code?: string }).code
       if (code === '23505') {
@@ -561,18 +565,44 @@ export class SupabaseStore implements ScoutStore {
         }
       }
 
-      // Never silently drop the extraction fields (title/location/role/region/
-      // confidence): a lead saved without them looks fine but is missing the
-      // data a rep would need to trust it later. Fail loudly instead so
-      // whoever operates this environment applies migration 0015, rather than
-      // BD discovering thin leads after the fact.
+      // 42703 (undefined column) here means the SELECT that reads back the
+      // just-inserted row references a column this environment's DB doesn't
+      // have yet — the INSERT itself (insertRow, above) never references
+      // intelligence_input_hash, so a genuinely-optional, additive migration
+      // (e.g. 20260926000000_intelligence_input_hash.sql) being unapplied
+      // must never throw away an otherwise-successful save. Retry the
+      // read-back with only the extraction-critical columns (title/location/
+      // role/region/confidence): if THOSE are also missing, migration 0015
+      // truly is absent and we still fail loudly rather than silently drop
+      // them; if only a newer optional column is missing, the lead is saved.
       if (code === '42703') {
-        throw new Error(
-          'This environment is missing the extraction-fields migration (0015_extraction_schema_and_metrics.sql). ' +
-            'Apply it before saving leads, so title, location, role, region, and confidence are never silently dropped.',
-        )
+        const fallback = await this.client
+          .from('leads')
+          .select(
+            'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, created_at',
+          )
+          .eq('organization_id', this.orgId)
+          .eq('company_key', key)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+        if (fallback.error) {
+          const fallbackCode = (fallback.error as { code?: string }).code
+          if (fallbackCode === '42703') {
+            throw new Error(
+              'This environment is missing the extraction-fields migration (0015_extraction_schema_and_metrics.sql). ' +
+                'Apply it before saving leads, so title, location, role, region, and confidence are never silently dropped.',
+            )
+          }
+          const fbErr = fallback.error as { message?: string; code?: string; details?: string; hint?: string }
+          throw new Error(
+            `Lead read-back failed after insert: ${fbErr.message ?? 'unknown error'} (code ${fbErr.code ?? 'n/a'})`,
+          )
+        }
+        row = fallback as typeof row
+      } else {
+        throw row.error
       }
-      throw row.error
     }
     const lead = mapLead(row.data as Row)
 
