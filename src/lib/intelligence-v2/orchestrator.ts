@@ -17,7 +17,8 @@ import { scoreLabel } from './types'
 import { runIntelligencePipeline, type ExtractionPipelineOptions, type ExtractionPipelineResult } from './extraction-pipeline'
 import { assessExtractionCompleteness, repairExtraction, evaluateCompletenessGate } from './completeness-gate'
 import { computeCanonicalScore, SCORE_VERSION, type ScoreInput } from './scoring-engine'
-import { isNonBuyerProfessional } from './role-signals'
+import { isNonBuyerProfessional, isLinkedInChromeText } from './role-signals'
+import { buildIntelligenceInputHash, INTELLIGENCE_PIPELINE_VERSION } from './input-hash'
 
 // ── Orchestrator Options ───────────────────────────────────────────────────
 
@@ -43,6 +44,25 @@ export interface OrchestratorOptions extends ExtractionPipelineOptions {
   recommendedProofIds?: string[]
   /** When true, AI failures are not silently replaced by deterministic fallback extraction */
   strictLiveMode?: boolean
+  /**
+   * Input-hash reuse (Phase 6 — stable input hashing). When provided, the
+   * orchestrator computes the deterministic input hash for `rawText` and
+   * calls this BEFORE running any AI extraction. If it returns a persisted
+   * canonical intelligence result, that result is returned as-is (with
+   * `reused: true`) instead of re-invoking the pipeline — same input + same
+   * versions => a refresh/re-paste/retry never triggers new business truth.
+   *
+   * The caller owns the actual lookup (e.g. a Supabase query scoped to the
+   * caller's organization) — the orchestrator has no store/DB dependency by
+   * design, so it stays usable from scripts/tests without a live database.
+   * Only pass a result whose `intelligenceVersion`/`scoreVersion` you have
+   * already confirmed still match current versions — the orchestrator does
+   * one last version check itself as a safety net, but the lookup should not
+   * rely on that alone (e.g. don't look up leads from other organizations).
+   */
+  reuseIfUnchanged?: (inputHash: string) => Promise<CanonicalProspectIntelligence | null> | (CanonicalProspectIntelligence | null)
+  /** Explicit user-requested re-analysis — skips reuseIfUnchanged even if a matching hash exists. Always creates a new run, and (when the caller records rescore history) should be traceable as `trigger: 'user_requested'`. */
+  forceReanalyze?: boolean
 }
 
 export interface OrchestratorResult {
@@ -55,6 +75,8 @@ export interface OrchestratorResult {
   repairAttempted: boolean
   /** Whether auto-repair improved the extraction */
   repairImproved: boolean
+  /** True when this result was reused from a prior run via reuseIfUnchanged rather than freshly computed */
+  reused: boolean
 }
 
 // ── Main Orchestrator ──────────────────────────────────────────────────────
@@ -81,6 +103,33 @@ export async function produceCanonicalIntelligence(
       gateNotes: inputClassification.reasons,
       repairAttempted: false,
       repairImproved: false,
+      reused: false,
+    }
+  }
+
+  // Step 0.5: Input-hash reuse check (Phase 6) — BEFORE any AI call.
+  // Same normalized input + same pipeline/score versions => reuse the
+  // persisted result instead of re-extracting. Skipped entirely when the
+  // caller explicitly requests reanalysis (Force Reanalyze).
+  const inputHash = buildIntelligenceInputHash({ rawText })
+  if (opts.reuseIfUnchanged && !opts.forceReanalyze) {
+    opts.onStatus?.('Checking for existing intelligence')
+    const reusable = await opts.reuseIfUnchanged(inputHash)
+    if (
+      reusable
+      && reusable.intelligenceInputHash === inputHash
+      && reusable.intelligenceVersion === INTELLIGENCE_PIPELINE_VERSION
+      && reusable.scoreVersion === SCORE_VERSION
+    ) {
+      opts.onStatus?.(`Reusing existing intelligence — score ${reusable.canonicalScore}/100 (${reusable.scoreBreakdown.label})`)
+      return {
+        intelligence: reusable,
+        gatePassed: true,
+        gateNotes: ['Reused persisted canonical intelligence — unchanged input, same versions.'],
+        repairAttempted: false,
+        repairImproved: false,
+        reused: true,
+      }
     }
   }
 
@@ -179,6 +228,8 @@ export async function produceCanonicalIntelligence(
   const canonical: CanonicalProspectIntelligence = {
     version: SCORE_VERSION,
     intelligenceRunId: crypto.randomUUID(),
+    intelligenceInputHash: inputHash,
+    intelligenceVersion: INTELLIGENCE_PIPELINE_VERSION,
     computedAt: new Date().toISOString(),
     canonicalScore: scoreBreakdown.total,
     scoreVersion: SCORE_VERSION,
@@ -208,6 +259,7 @@ export async function produceCanonicalIntelligence(
     gateNotes: gateDecision.notes,
     repairAttempted,
     repairImproved,
+    reused: false,
   }
 }
 
@@ -446,6 +498,8 @@ function createIrrelevantIntelligence(
   return {
     version: SCORE_VERSION,
     intelligenceRunId: crypto.randomUUID(),
+    intelligenceInputHash: buildIntelligenceInputHash({ rawText }),
+    intelligenceVersion: INTELLIGENCE_PIPELINE_VERSION,
     computedAt: now,
     canonicalScore: 0,
     scoreVersion: SCORE_VERSION,
@@ -555,12 +609,137 @@ export function getScoreBreakdown(
 }
 
 /**
+ * Convert a persisted lead's canonical fields into the legacy `ScoreResult`
+ * shape (`{ total, verdict, breakdown, gates }`) so surfaces that were built
+ * against the legacy `src/lib/score/rubric.ts` model can display canonical
+ * intelligence without a UI rewrite.
+ *
+ * This is the ONE place that bridges canonical → legacy shape. Any surface
+ * showing a lead's score should call this (or read `canonicalScore` /
+ * `getDisplayScore` directly) rather than recomputing with `computeScore()`
+ * when canonical intelligence is present — recomputing produces a different,
+ * independently-derived score on a different scale (legacy is /12, canonical
+ * is /100) and is a duplicate source of truth.
+ *
+ * Returns `null` when no canonical score is on file, so the caller can fall
+ * back to `computeScore()` for legacy/pre-canonical leads.
+ */
+export function canonicalToLegacyScoreResult(persisted: {
+  canonicalScore?: number | null
+  scoreBreakdown?: unknown
+  qualification?: string | null
+  verdict?: 'send' | 'research_more' | 'skip' | null
+}): {
+  total: number
+  verdict: 'send' | 'research_more' | 'skip'
+  baseVerdict?: 'send' | 'research_more' | 'skip'
+  breakdown: Array<{ category: string; label: string; points: number; max: number; note: string }>
+  gates: string[]
+} | null {
+  if (persisted.canonicalScore == null) return null
+
+  const breakdown = persisted.scoreBreakdown as CanonicalProspectIntelligence['scoreBreakdown'] | null | undefined
+  const dimensions = Array.isArray(breakdown?.dimensions) ? breakdown!.dimensions : []
+
+  const qualificationVerdict =
+    persisted.qualification === 'strong' || persisted.qualification === 'worth_pursuing'
+      ? 'send' as const
+      : persisted.qualification === 'maybe'
+        ? 'research_more' as const
+        : persisted.qualification === 'skip'
+          ? 'skip' as const
+          : null
+
+  const verdict = persisted.verdict ?? qualificationVerdict ?? 'research_more'
+
+  return {
+    total: persisted.canonicalScore,
+    verdict,
+    baseVerdict: persisted.verdict ?? qualificationVerdict ?? undefined,
+    breakdown: dimensions.map((d) => ({
+      category: d.key,
+      label: d.label,
+      points: d.points,
+      max: d.max,
+      note: d.note,
+    })),
+    gates: ['Canonical Intelligence V2 score in use.'],
+  }
+}
+
+/**
  * Check if a re-score is warranted based on the rules:
  * - Source intelligence materially changes
  * - User explicitly requests it
  * - Scoring model version changes
  * - Meaningful new signal arrives
  */
+/**
+ * Best-available signal evidence text for a canonical intelligence result,
+ * for surfaces that need a single evidence string (e.g. ExtractedLead.
+ * signalEvidence, used by draft generation's anti-hallucination guard).
+ *
+ * Prefers structured evidence in this order: opportunity.description,
+ * opportunityTrigger, a hiring/problem signal sentence, the first
+ * non-chrome recent-post paraphrase. Only falls back to a prefix of the raw
+ * source text as an absolute last resort — and even then, picks the first
+ * non-chrome LINE, not an arbitrary character-count slice, which previously
+ * could grab pure LinkedIn navigation noise ("· 3rd\nfounder of X\nBerlin,
+ * Germany\n·\nContact info\nsvg...") for profiles whose opportunity signal
+ * (e.g. growth_signal) never populates description/opportunityTrigger.
+ * See BUG_LEDGER — Daria Redkina / Solsonic hardening fixture.
+ */
+export function deriveSignalEvidenceFallback(
+  canonical: CanonicalProspectIntelligence,
+  rawText: string,
+): string {
+  const intel = canonical.intelligence
+
+  if (intel.opportunity.description) return intel.opportunity.description
+  if (intel.opportunityTrigger) return intel.opportunityTrigger
+  if (intel.content.hiringSignals[0]) return intel.content.hiringSignals[0]
+  if (intel.content.explicitProblems[0]) return intel.content.explicitProblems[0]
+
+  const firstRealPost = intel.content.recentPosts.find(
+    (p) => !isLinkedInChromeText(p.paraphrase) && !isLinkedInChromeText(p.verbatimQuote),
+  )
+  if (firstRealPost) return firstRealPost.paraphrase || firstRealPost.verbatimQuote || ''
+
+  const firstNonChromeLine = rawText
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l.length >= 20 && !isLinkedInChromeText(l))
+  if (firstNonChromeLine) return firstNonChromeLine.slice(0, 220)
+
+  // Genuinely nothing usable — return empty rather than chrome noise.
+  // Downstream (signalEvidenceMatch) correctly treats short/empty evidence
+  // as "no match," which is the honest outcome here.
+  return ''
+}
+
+/**
+ * Verifies a CLIENT-HELD canonical result is still valid for reuse against a
+ * given rawText, under the current pipeline/score versions. Used by "Try
+ * Another Angle" (Relay team bug bash — TEAM-005): the ephemeral /prospect
+ * flow has no persisted lead yet for the normal reuseIfUnchanged lookup to
+ * match against, so the client sends back the canonical result it already
+ * holds, and this function is the server-side proof that it's genuinely
+ * still valid rather than merely trusting the client. Never returns true
+ * for a tampered, stale-version, or wrong-input result — see the individual
+ * checks. Pure and synchronous, safe to unit test directly.
+ */
+export function isClientCanonicalStillValid(
+  clientCanonical: CanonicalProspectIntelligence | null | undefined,
+  rawText: string,
+  forceReanalyze: boolean,
+): clientCanonical is CanonicalProspectIntelligence {
+  if (!clientCanonical || forceReanalyze) return false
+  if (clientCanonical.intelligenceInputHash !== buildIntelligenceInputHash({ rawText })) return false
+  if (clientCanonical.intelligenceVersion !== INTELLIGENCE_PIPELINE_VERSION) return false
+  if (clientCanonical.scoreVersion !== SCORE_VERSION) return false
+  return true
+}
+
 export function shouldRescore(
   existing: CanonicalProspectIntelligence,
   trigger: RescoreOptions['trigger'],

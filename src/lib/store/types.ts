@@ -255,6 +255,8 @@ export interface DosageResult {
   limit: number
   message?: string
   messageId?: string
+  /** True when this call was a duplicate (matched an existing idempotencyKey) and returned the ALREADY-recorded result rather than logging a new send. */
+  idempotent?: boolean
 }
 
 export interface GoldenCaseRow {
@@ -306,6 +308,17 @@ export interface ScoutStore {
   ): Promise<void>
   updateLeadTags(id: string, tags: string[]): Promise<void>
   getLead(id: string): Promise<LeadDetail | null>
+  /**
+   * Looks up a lead in the CURRENT organization whose persisted canonical
+   * intelligence was computed from this exact input hash (see
+   * src/lib/intelligence-v2/input-hash.ts). Used to reuse a prior canonical
+   * intelligence result instead of re-invoking AI extraction for unchanged
+   * input (Phase 6 — stable input hashing). Must be organization-scoped like
+   * every other lead lookup — never returns a lead from a different org.
+   * Returns null if no match, or if the match predates canonical intelligence
+   * (no canonicalIntelligence on file).
+   */
+  findLeadByIntelligenceInputHash(hash: string): Promise<LeadDetail | null>
   listOwnedLeads(): Promise<Lead[]>
   fetchLeadsAll(): Promise<Lead[]>
   getQueue(): Promise<QueueData>
@@ -313,10 +326,21 @@ export interface ScoutStore {
   saveDraft(input: SaveDraftInput): Promise<Message>
   listMessages(leadId: string): Promise<Message[]>
   /** Marks a lead contacted after a human sends the message externally. */
+  /**
+   * Logs a real send/contact action. `feedback.idempotencyKey`, when
+   * provided, makes a duplicate call (double-click, network retry) for the
+   * SAME logical send a no-op that returns the already-recorded result
+   * instead of inserting a second messages row and double-incrementing
+   * accountability — mirrors the pattern sendPreparedEmail already uses for
+   * Email Outreach V1. Callers should mint one key per attempt (e.g. a
+   * UUID generated once in the UI when the send starts) and resend the same
+   * key on retry, not a fresh one.
+   */
   markContacted(leadId: string, sentText: string, messageType?: MessageType, feedback?: {
     originalDraft?: string | null
     sendDisposition?: import('@/lib/domain/types').SendDisposition | null
     rejectReasons?: import('@/lib/domain/types').SendFeedbackReason[]
+    idempotencyKey?: string | null
   }): Promise<DosageResult>
   // voice profiles
   getVoiceProfile(): Promise<VoiceProfile | null>

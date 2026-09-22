@@ -125,7 +125,17 @@ export async function POST(request: Request) {
     const canonical = body.canonical && typeof body.canonical === 'object'
       ? body.canonical as Record<string, unknown>
       : null
-    const canonicalScore = typeof body.canonicalScore === 'number' ? body.canonicalScore : null
+    // Derive from the canonical object itself, not a separately-sent
+    // body.canonicalScore field — the client currently sends both and they
+    // should always agree, but trusting a second, unverified number instead
+    // of the ground truth embedded in the canonical object is itself a
+    // duplicate-source-of-truth risk (Relay team bug bash — TEAM-002/004).
+    // Falls back to the legacy top-level field only for callers that don't
+    // send a canonical object at all.
+    const canonicalScore =
+      typeof canonical?.canonicalScore === 'number'
+        ? canonical.canonicalScore
+        : typeof body.canonicalScore === 'number' ? body.canonicalScore : null
     const canonicalQualification = typeof canonical?.qualification === 'string' ? canonical.qualification : null
     const verdictFromCanonical =
       canonicalQualification === 'strong' || canonicalQualification === 'worth_pursuing'
@@ -136,6 +146,14 @@ export async function POST(request: Request) {
             ? 'skip'
             : null
     const verdict = verdictFromCanonical ?? score.verdict
+    // Persisted `score` (0-12 legacy column) must not independently disagree
+    // with a canonical score that exists for this same lead — mirrors the
+    // pattern already used by /api/leads (see "Score: Use canonical if
+    // available, else fall back to rubric" there). Convert canonical's
+    // 0-100 onto the legacy 0-12 scale rather than storing the legacy
+    // computation unconditionally, which would leave a lead with BOTH a
+    // canonical_score AND a numerically-inconsistent legacy score column.
+    const legacyScoreTotal = canonicalScore != null ? Math.round(canonicalScore / 10) : score.total
 
     const result = await store.createLead({
       company,
@@ -147,7 +165,7 @@ export async function POST(request: Request) {
       signalEvidence,
       verbatimQuote: extracted.verbatimQuote,
       tags: extracted.tags,
-      score: score.total,
+      score: legacyScoreTotal,
       verdict,
       canonicalScore,
       canonicalIntelligence: canonical,

@@ -149,7 +149,11 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
 
   // Extract office location from text for hybrid/onsite roles
   if ((workplaceType === 'HYBRID' || workplaceType === 'ONSITE') && !input.requiredWorkerLocation) {
-    const locationMatch = text.match(/\b(?:in|at|from)\s+(?:our\s+)?([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)?,\s*(?:[A-Z]{2}|[A-Z][A-Za-z]+))\b/)
+    const locationMatch =
+      // "... in/at/from [our] City, ST" — narrative phrasing
+      text.match(/\b(?:in|at|from)\s+(?:our\s+)?([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)?,\s*(?:[A-Z]{2}|[A-Z][A-Za-z]+))\b/)
+      // "Location: City, ST" — structured job-posting field, no in/at/from
+      ?? text.match(/\bLocation\s*:\s*([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)?,\s*(?:[A-Z]{2}|[A-Z][A-Za-z]+))\b/)
     if (locationMatch) {
       input.requiredWorkerLocation = locationMatch[1]
       evidence.push(`Office location detected: ${locationMatch[1]}.`)

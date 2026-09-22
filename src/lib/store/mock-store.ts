@@ -842,6 +842,19 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         outcomes: outcomes.filter((o) => o.leadId === id),
       }
     },
+    async findLeadByIntelligenceInputHash(hash: string) {
+      if (!hash) return null
+      const match = leads.find((l) => {
+        const canonical = l.canonicalIntelligence as { intelligenceInputHash?: string } | null
+        return canonical?.intelligenceInputHash === hash && l.organizationId === rep.organizationId
+      })
+      if (!match) return null
+      return {
+        ...match,
+        messages: [],
+        outcomes: [],
+      }
+    },
     async listOwnedLeads() {
       return leads
         .filter((l) => l.ownerRepId === rep.id)
@@ -903,7 +916,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       leadId: string,
       sentText: string,
       messageType: MessageType = 'dm',
-      feedback?: { originalDraft?: string | null; sendDisposition?: SendDisposition | null; rejectReasons?: SendFeedbackReason[] },
+      feedback?: { originalDraft?: string | null; sendDisposition?: SendDisposition | null; rejectReasons?: SendFeedbackReason[]; idempotencyKey?: string | null },
     ): Promise<DosageResult> {
       const lead = leads.find((l) => l.id === leadId)
       if (!lead) throw new Error('Lead not found')
@@ -912,6 +925,20 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }
       if (lead.status === 'no' || lead.status === 'dead') {
         throw new Error('This lead is locked and cannot be contacted.')
+      }
+      const idempotencyKey = feedback?.idempotencyKey?.trim() || null
+      if (idempotencyKey) {
+        const existing = messages.find((m) => m.idempotencyKey === idempotencyKey)
+        if (existing) {
+          const type = messageType
+          const todaySendsNow = messages.filter((m) => {
+            if (!m.sentAt || m.type !== type || leads.find((l) => l.id === m.leadId)?.ownerRepId !== rep.id) return false
+            const s = new Date(m.sentAt)
+            const now = new Date()
+            return s.getFullYear() === now.getFullYear() && s.getMonth() === now.getMonth() && s.getDate() === now.getDate()
+          }).length
+          return { allowed: true, todaySends: todaySendsNow, limit: messageTypeLimit(type), messageId: existing.id, idempotent: true }
+        }
       }
       const type = messageType
       const todaySends = await (async () => {
@@ -960,6 +987,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         originalDraft: feedback?.originalDraft ?? null,
         sendDisposition: feedback?.sendDisposition ?? null,
         rejectReasons: feedback?.rejectReasons ?? [],
+        idempotencyKey,
         createdAt: new Date().toISOString(),
       })
 

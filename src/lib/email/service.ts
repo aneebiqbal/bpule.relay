@@ -11,6 +11,7 @@ import {
   normalizeEmail,
   isValidEmail,
   isBusinessEmail,
+  isSendEligibleContact,
   toVerificationStatus,
 } from '@/lib/email/contact-points'
 import { buildRevenueStrategy, shouldWriteMessage, sourceFromLead } from '@/lib/relay/revenue-strategy'
@@ -253,10 +254,11 @@ export async function prepareEmailDraft(input: {
   let subjectCandidates: string[] = []
   let claimSafety: PreparedEmailDraft['claimSafety'] = null
 
-  if (!selectedContact) {
-    draftStatus = 'CONTACT_NOT_FOUND'
-    blockedReason = 'No business email is available yet. Add or discover a contact point first.'
-  } else if (brief.rightToContact === 'NONE' || !shouldWriteMessage(revenue)) {
+  // ── CAN_PREPARE_EMAIL: a content-strategy question — is there a
+  // legitimate reason to reach out at all? This does NOT depend on whether
+  // we have a verified recipient. Preparing is research/writing; only
+  // sending needs a real, verified address.
+  if (brief.rightToContact === 'NONE' || !shouldWriteMessage(revenue)) {
     draftStatus = 'RESEARCH_REQUIRED'
     blockedReason = revenue.contact.noMessageReason ?? 'No credible reason to send an email yet.'
   } else {
@@ -289,6 +291,16 @@ export async function prepareEmailDraft(input: {
     if (!claimSafety.safe) {
       draftStatus = 'FAILED'
       blockedReason = 'Claim safety failed. Edit evidence/claims before sending.'
+    } else if (!isSendEligibleContact(selectedContact)) {
+      // ── CAN_SEND_EMAIL is a SEPARATE gate, checked only now that content
+      // exists. A missing, unverified, or merely inferred contact still
+      // yields a fully generated, reviewable draft — it just cannot be sent
+      // until a verified/likely-valid recipient is on file. Never let an
+      // inferred address become sendable just because a draft exists.
+      draftStatus = 'NEEDS_VERIFIED_CONTACT'
+      blockedReason = selectedContact
+        ? `Recipient not verified (${selectedContact.source === 'INFERRED_PATTERN' ? 'inferred pattern guess' : selectedContact.verificationStatus.toLowerCase()}). Verify or discover a confirmed contact before sending.`
+        : 'No business email is available yet. Add or discover a contact point to send this.'
     } else {
       draftStatus = 'READY'
     }
@@ -398,6 +410,20 @@ export async function sendPreparedEmail(input: {
 
   if (contact && (contact.verificationStatus === 'INVALID' || contact.verificationStatus === 'BOUNCED')) {
     throw new Error('Recipient email is invalid or bounced and cannot be contacted.')
+  }
+
+  // ── CAN_SEND_EMAIL gate. Uses the same isSendEligibleContact() definition
+  // prepareEmailDraft used to decide READY vs NEEDS_VERIFIED_CONTACT — this
+  // is the actual enforcement point, not just a UI hint. An inferred/
+  // unverified contact must NEVER be sendable merely because a draft with
+  // subject/body exists for it (see BUG_LEDGER — Daria Redkina / Solsonic
+  // hardening fixture).
+  if (!isSendEligibleContact(contact)) {
+    throw new Error(
+      contact
+        ? `Recipient is not verified (${contact.source === 'INFERRED_PATTERN' ? 'inferred pattern guess' : contact.verificationStatus.toLowerCase()}). Verify the contact before sending.`
+        : 'No verified recipient on file. Verify or discover a confirmed contact before sending.',
+    )
   }
 
   const email = draft.contactEmail ?? contact?.value ?? null

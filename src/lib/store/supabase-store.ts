@@ -80,6 +80,7 @@ import type {
   ExtractionMetrics,
   FollowupDue,
   HostCallInput,
+  LeadDetail,
   ModelCallLogInput,
   MyRank,
   NewLeadInput,
@@ -170,7 +171,7 @@ function isOptionalSearchError(err: unknown): boolean {
  * drops it for list, queue and rate queries that never read it.
  */
 const LEAD_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, intelligence_input_hash, created_at'
 
 const LEAD_LIST_COLUMNS =
   'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, created_at'
@@ -233,6 +234,7 @@ function mapMessage(r: Row): Message {
     originalDraft: (r.original_draft as string) ?? null,
     sendDisposition: (r.send_disposition as Message['sendDisposition']) ?? null,
     rejectReasons: Array.isArray(r.reject_reasons) ? r.reject_reasons as Message['rejectReasons'] : [],
+    idempotencyKey: (r.idempotency_key as string) ?? null,
     createdAt: r.created_at as string,
   }
 }
@@ -751,6 +753,28 @@ export class SupabaseStore implements ScoutStore {
     return { ...mapLead(data as Row), messages, outcomes }
   }
 
+  async findLeadByIntelligenceInputHash(hash: string): Promise<LeadDetail | null> {
+    if (!hash) return null
+    // Explicit organization_id scope, not RLS alone — this is a hash lookup
+    // across many rows (not a single-row-by-id fetch like getLead), so it
+    // must never be allowed to match a lead in a different organization.
+    const { data, error } = await this.client
+      .from('leads')
+      .select(LEAD_COLUMNS)
+      .eq('organization_id', this.orgId)
+      .eq('intelligence_input_hash', hash)
+      .not('canonical_intelligence', 'is', null)
+      .order('scored_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) {
+      if (isOptionalSearchError(error)) return null // migration not yet applied — fail open to fresh extraction, never throw
+      throw error
+    }
+    if (!data) return null
+    return { ...mapLead(data as Row), messages: [], outcomes: [] }
+  }
+
   async listOwnedLeads(): Promise<Lead[]> {
     const { data, error } = await this.client
       .from('leads')
@@ -796,9 +820,31 @@ export class SupabaseStore implements ScoutStore {
       originalDraft?: string | null
       sendDisposition?: import('@/lib/domain/types').SendDisposition | null
       rejectReasons?: import('@/lib/domain/types').SendFeedbackReason[]
+      idempotencyKey?: string | null
     },
   ): Promise<DosageResult> {
     const type = messageType
+    const idempotencyKey = feedback?.idempotencyKey?.trim() || null
+
+    // Idempotency check FIRST — before the daily-limit count, so a retry
+    // never consumes a second slot against the ceiling either. Mirrors
+    // sendPreparedEmail's pattern for Email Outreach V1 (see service.ts).
+    if (idempotencyKey) {
+      const { data: existing, error: existingError } = await this.client
+        .from('messages')
+        .select('id')
+        .eq('organization_id', this.orgId)
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle()
+      // A missing idempotency_key column (migration not yet applied) must
+      // fail open to normal (non-idempotent) behavior, never throw and
+      // block a real send.
+      if (!existingError && existing) {
+        const todaySendsNow = await this.countTodaysSends(type)
+        return { allowed: true, todaySends: todaySendsNow, limit: messageTypeLimit(type), messageId: existing.id as string, idempotent: true }
+      }
+    }
+
     const todaySends = await this.countTodaysSends(type)
     const limit = messageTypeLimit(type)
     if (todaySends >= limit) {
@@ -824,22 +870,34 @@ export class SupabaseStore implements ScoutStore {
       throw new Error('This lead is locked and cannot be contacted.')
     }
 
-    const { data: inserted, error: insertError } = await this.client
+    const insertPayload: Record<string, unknown> = {
+      organization_id: this.orgId,
+      lead_id: leadId,
+      rep_id: this.rep.id,
+      type,
+      sent_text: sentText,
+      sent_at: new Date().toISOString(),
+      original_draft: feedback?.originalDraft ?? null,
+      send_disposition: feedback?.sendDisposition ?? null,
+      reject_reasons: feedback?.rejectReasons ?? [],
+    }
+    if (idempotencyKey) insertPayload.idempotency_key = idempotencyKey
+
+    let { data: inserted, error: insertError } = await this.client
       .from('messages')
-      .insert({
-        organization_id: this.orgId,
-        lead_id: leadId,
-        rep_id: this.rep.id,
-        type,
-        sent_text: sentText,
-        sent_at: new Date().toISOString(),
-        original_draft: feedback?.originalDraft ?? null,
-        send_disposition: feedback?.sendDisposition ?? null,
-        reject_reasons: feedback?.rejectReasons ?? [],
-      })
+      .insert(insertPayload)
       .select('id')
       .single()
+    if (insertError && idempotencyKey && isOptionalSearchError(insertError)) {
+      // idempotency_key column doesn't exist yet (migration not applied) —
+      // fail open and log without it rather than blocking a real send.
+      delete insertPayload.idempotency_key
+      const retry = await this.client.from('messages').insert(insertPayload).select('id').single()
+      inserted = retry.data
+      insertError = retry.error
+    }
     if (insertError) throw insertError
+    if (!inserted) throw new Error('Failed to log the send.')
 
     // When a client replies, mark lead as replied and create an outcome
     const leadStatus = type === 'reply' ? 'replied' : type === 'followup' ? 'followed_up' : 'contacted'
@@ -943,7 +1001,16 @@ export class SupabaseStore implements ScoutStore {
           rejectReasons: feedback?.rejectReasons ?? [],
         },
         source: 'app',
-        sourceEventId: `outreach_recorded:${leadId}:${runId ?? 'no-run'}:${Date.now()}`,
+        // Deliberately NOT Date.now()-suffixed: emit_relay_event's DB-level
+        // dedup (relay_events unique on organization_id+source+source_event_id)
+        // only works if the same logical send produces the same
+        // sourceEventId on a retry. Prefer the caller-supplied idempotency
+        // key (stable across retries); fall back to the inserted message's
+        // own id (also stable — a retry that hit the messages-table
+        // idempotency check above returns the SAME message id, not a new
+        // row) rather than a timestamp, which would make every call unique
+        // and defeat the dedup entirely.
+        sourceEventId: `outreach_recorded:${leadId}:${idempotencyKey ?? inserted.id}`,
       })
     } catch {
       // Event emission must never break domain operations

@@ -5,7 +5,7 @@ import type {
   MatchedProof,
   SafeFact,
 } from '@/lib/domain/types'
-import { revenueStrategyToPromptBlock, type RevenueStrategy } from '@/lib/relay/revenue-strategy'
+import { revenueStrategyToPromptBlock, deriveMessagingPolicy, type RevenueStrategy } from '@/lib/relay/revenue-strategy'
 
 /**
  * Outreach Strategy Engine
@@ -276,6 +276,22 @@ export function strategyToPromptBlock(strategy: OutreachStrategy, revenue?: Reve
     return revenueStrategyToPromptBlock(revenue)
   }
   if (strategy.allowedNow || strategy.messageJob) {
+    const syntheticContact: RevenueStrategy['contact'] = strategy.contact
+      ? {
+          reason: strategy.contact.reason as import('./revenue-strategy').ContactReason,
+          action: strategy.contact.action as import('./revenue-strategy').ContactAction,
+          why: strategy.contact.why,
+          messageRecommended: strategy.contact.messageRecommended,
+          noMessageReason: strategy.contact.noMessageReason,
+        }
+      : {
+          reason: 'NO_CREDIBLE_REASON',
+          action: 'SKIP',
+          why: strategy.uiRationale ?? '',
+          messageRecommended: false,
+          noMessageReason: 'No revenue strategy attached.',
+        }
+    const syntheticChannel = strategy.channel as RevenueStrategy['channel']
     const synthetic: RevenueStrategy = {
       who: strategy.leadContext,
       assessment: strategy.assessment ?? {
@@ -286,21 +302,8 @@ export function strategyToPromptBlock(strategy: OutreachStrategy, revenue?: Reve
         intentWhy: '',
         confidenceWhy: '',
       },
-      contact: strategy.contact
-        ? {
-            reason: strategy.contact.reason as import('./revenue-strategy').ContactReason,
-            action: strategy.contact.action as import('./revenue-strategy').ContactAction,
-            why: strategy.contact.why,
-            messageRecommended: strategy.contact.messageRecommended,
-            noMessageReason: strategy.contact.noMessageReason,
-          }
-        : {
-            reason: 'NO_CREDIBLE_REASON',
-            action: 'SKIP',
-            why: strategy.uiRationale ?? '',
-            messageRecommended: false,
-            noMessageReason: 'No revenue strategy attached.',
-          },
+      contact: syntheticContact,
+      messagingPolicy: deriveMessagingPolicy(syntheticContact, syntheticChannel),
       knownFacts: [],
       supportedInferences: [],
       unknowns: [],
@@ -320,7 +323,7 @@ export function strategyToPromptBlock(strategy: OutreachStrategy, revenue?: Reve
       nextAction: strategy.messageGoal,
       uiRationale: strategy.uiRationale ?? strategy.messageGoal,
       wordBudget: strategy.wordBudget ?? { min: 15, max: 55, label: strategy.channel },
-      channel: strategy.channel as RevenueStrategy['channel'],
+      channel: syntheticChannel,
     }
     return revenueStrategyToPromptBlock(synthetic)
   }

@@ -16,7 +16,8 @@ import { evaluateProspectQualification } from '@/lib/prospect/qualification-gate
 import { classifyRoleFromTitle } from '@/lib/leads/targeting-pure'
 import { isLinkedInChromeText } from '@/lib/intelligence-v2/role-signals'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
-import { produceCanonicalIntelligence, getDisplayScore } from '@/lib/intelligence-v2/orchestrator'
+import { produceCanonicalIntelligence, getDisplayScore, deriveSignalEvidenceFallback, isClientCanonicalStillValid } from '@/lib/intelligence-v2/orchestrator'
+import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 import { resolveTimezoneFromLocation } from '@/lib/timezone/resolve'
 import {
   applyRevenueStrategyToOutreach,
@@ -39,7 +40,26 @@ import {
  */
 
 export async function POST(request: Request) {
-  let body: { rawText?: string; profileId?: string }
+  let body: {
+    rawText?: string
+    profileId?: string
+    forceReanalyze?: boolean
+    /**
+     * "Try Another Angle" support (Relay team bug bash — TEAM-005). The
+     * client already holds the canonical intelligence result from the
+     * initial Analyze call. When it sends that SAME result back here
+     * unchanged (verified by input hash below, not merely trusted), the
+     * route skips produceCanonicalIntelligence entirely — no fresh
+     * extraction, no fresh scoring — and only reruns sender-matching +
+     * connection-note generation. This is what makes "Try Another Angle"
+     * produce a new MESSAGE/STRATEGY angle without ever being able to
+     * change canonical evidence, score, qualification, or action, even
+     * before the lead has been saved (reuseIfUnchanged alone can't help
+     * here — it only matches against ALREADY-SAVED leads, and this button
+     * is used before that point).
+     */
+    existingCanonical?: CanonicalProspectIntelligence
+  }
   try {
     body = await request.json()
   } catch {
@@ -115,19 +135,49 @@ export async function POST(request: Request) {
     }
 
     // ── Step 1: Produce Canonical Intelligence ──
-    emit({ type: 'status', message: 'Extracting prospect intelligence' })
+    // "Try Another Angle": if the client sent back its already-held
+    // canonical result AND its recorded input hash still matches this exact
+    // rawText under the CURRENT pipeline/score versions, reuse it directly —
+    // skip extraction and scoring entirely. Verified server-side (hash +
+    // version equality), never merely trusted from the client, so a client
+    // cannot use this to smuggle a stale or tampered canonical result past
+    // real analysis.
     let canonicalResult: Awaited<ReturnType<typeof produceCanonicalIntelligence>>
-    try {
-      // Dedup: same rawText within 30s window reuses in-flight extraction
-      const dedupKey = `analyze:${rawText.slice(0, 200)}`
-      canonicalResult = await deduplicated(dedupKey, () =>
-        produceCanonicalIntelligence(rawText, {
-          onStatus: (msg) => emit({ type: 'status', message: msg }),
-        }),
-      )
-    } catch {
-      emit({ type: 'error', message: 'Intelligence extraction failed.' })
-      return
+    const clientCanonicalValid = isClientCanonicalStillValid(body.existingCanonical, rawText, body.forceReanalyze === true)
+
+    if (clientCanonicalValid) {
+      const clientCanonical = body.existingCanonical!
+      emit({ type: 'status', message: `Reusing existing intelligence — score ${clientCanonical.canonicalScore}/100 (${clientCanonical.scoreBreakdown.label})` })
+      canonicalResult = {
+        intelligence: clientCanonical,
+        gatePassed: true,
+        gateNotes: ['Reused client-held canonical intelligence for a new angle — unchanged input, same versions.'],
+        repairAttempted: false,
+        repairImproved: false,
+        reused: true,
+      }
+    } else {
+      emit({ type: 'status', message: 'Extracting prospect intelligence' })
+      try {
+        // Dedup: same rawText within 30s window reuses in-flight extraction
+        const dedupKey = `analyze:${rawText.slice(0, 200)}`
+        canonicalResult = await deduplicated(dedupKey, () =>
+          produceCanonicalIntelligence(rawText, {
+            onStatus: (msg) => emit({ type: 'status', message: msg }),
+            forceReanalyze: body.forceReanalyze === true,
+            reuseIfUnchanged: store
+              ? async (hash) => {
+                  const existing = await store!.findLeadByIntelligenceInputHash(hash)
+                  const canonical = existing?.canonicalIntelligence as CanonicalProspectIntelligence | null | undefined
+                  return canonical ?? null
+                }
+              : undefined,
+          }),
+        )
+      } catch {
+        emit({ type: 'error', message: 'Intelligence extraction failed.' })
+        return
+      }
     }
 
     const canonical = canonicalResult.intelligence
@@ -149,7 +199,7 @@ export async function POST(request: Request) {
       roleCategory: classifyRoleFromTitle(canonical.intelligence.person.title),
       marketRegion: 'unknown',
       signalType: mapSignalsToLegacyType(canonical.intelligence.opportunity.signals),
-      signalEvidence: canonical.intelligence.opportunity.description ?? canonical.intelligence.opportunityTrigger ?? rawText.slice(0, 200),
+      signalEvidence: deriveSignalEvidenceFallback(canonical, rawText),
       extractionConfidence: canonical.extractionCompleteness.score,
       confidenceNotes: canonical.scoreBreakdown.missingInfo,
       verbatimQuote: canonical.intelligence.content.recentPosts.find((p) => !isLinkedInChromeText(p.verbatimQuote))?.verbatimQuote ?? null,
@@ -252,6 +302,7 @@ export async function POST(request: Request) {
         gateNotes: canonicalResult.gateNotes,
         repairAttempted: canonicalResult.repairAttempted,
         repairImproved: canonicalResult.repairImproved,
+        reused: canonicalResult.reused,
       })
       return
     }
@@ -599,6 +650,7 @@ export async function POST(request: Request) {
       gateNotes: canonicalResult.gateNotes,
       repairAttempted: canonicalResult.repairAttempted,
       repairImproved: canonicalResult.repairImproved,
+      reused: canonicalResult.reused,
     })
   })
 }

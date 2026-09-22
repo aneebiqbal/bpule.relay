@@ -211,15 +211,22 @@ function NextBestAction({
 }
 
 function LeadLoopStrip({ lead }: { lead: LeadDetail }) {
+  // Channel-explicit: this strip evaluates the DM channel specifically.
+  // Other surfaces (e.g. Prospect Check) may correctly show a different
+  // messagingPolicy for a different channel (e.g. a connection note) for
+  // the SAME lead — that is not a contradiction, it's a different
+  // question. Always show messagingPolicyLabel (which names the channel-
+  // appropriate action) rather than a bare "no message" that reads as a
+  // universal verdict. See BUG_LEDGER — Daria Redkina / Solsonic fixture.
   const snapshot = toUiSnapshot(buildRevenueStrategy(sourceFromLead(lead, null, { channel: 'dm' })))
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-graphite">
       <span><span className="text-stone">Fit</span> {snapshot.fit}</span>
       <span><span className="text-stone">Intent</span> {snapshot.intent}</span>
       <span><span className="text-stone">Confidence</span> {snapshot.confidence}</span>
-      <span><span className="text-stone">Act</span> {snapshot.act.replaceAll('_', ' ')}</span>
-      {!snapshot.messageRecommended && (
-        <span className="text-status-warning">No message — {snapshot.noMessageReason}</span>
+      <span><span className="text-stone">DM</span> {snapshot.messagingPolicyLabel}</span>
+      {!snapshot.messageRecommended && snapshot.noMessageReason && (
+        <span className="text-status-warning">{snapshot.noMessageReason}</span>
       )}
     </div>
   )
@@ -258,6 +265,13 @@ export function LeadWorkspace({
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [sentOk, setSentOk] = useState<{ todaySends: number } | null>(null)
+  // One key per distinct send attempt (the exact text the user is about to
+  // log). Reused across retries of the SAME attempt (double-click, network
+  // retry) so the server can dedupe; regenerated whenever the text actually
+  // changes, since that's a genuinely different send. sentTextRef mirrors
+  // sentText's last value so the effect below only regenerates on real change.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
+  const lastKeyedTextRef = useRef<string>('')
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(profiles[0]?.id ?? null)
   const [proofList, setProofList] = useState<ProofItem[]>(matchedProofs)
   const [matchedProofId, setMatchedProofId] = useState<string | null>(null)
@@ -367,6 +381,14 @@ export function LeadWorkspace({
 
   async function logSend() {
     if (!sentText.trim()) return
+    const trimmed = sentText.trim()
+    // A different message text is a genuinely different send attempt — mint
+    // a fresh key. The same text (a retry of this exact attempt) reuses the
+    // same key so the server can recognize and dedupe the retry.
+    if (trimmed !== lastKeyedTextRef.current) {
+      idempotencyKeyRef.current = crypto.randomUUID()
+      lastKeyedTextRef.current = trimmed
+    }
     setSending(true)
     setSendError(null)
     setSentOk(null)
@@ -375,15 +397,20 @@ export function LeadWorkspace({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sentText: sentText.trim(),
+          sentText: trimmed,
           type: artifact,
-          originalDraft: draftText || sentText.trim(),
+          originalDraft: draftText || trimmed,
+          idempotencyKey: idempotencyKeyRef.current,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to log send.')
       setSentOk({ todaySends: data.todaySends })
       setSentText('')
+      // Send succeeded — clear the retry-dedup marker so a later message
+      // that happens to match this same text is treated as a NEW send, not
+      // mistaken for a retry of this one.
+      lastKeyedTextRef.current = ''
       // Refresh lead data to update timeline, status, next action
       setLeadVersion((v) => v + 1)
     } catch (err) {
@@ -487,10 +514,14 @@ export function LeadWorkspace({
 
           {/* Score ring — right side on desktop */}
           <div className="flex shrink-0 flex-col items-center gap-2 lg:pt-1">
-            <ScoreRing score={score.total} size={72} />
-            <p className="text-mono-medium text-[10px] text-stone">out of 12</p>
+            <ScoreRing score={score.total} canonicalScore={currentLead.canonicalScore} size={72} />
+            <p className="text-mono-medium text-[10px] text-stone">
+              {currentLead.canonicalScore != null ? 'out of 10' : 'out of 12'}
+            </p>
             <p className="text-[11px] font-medium text-ink">
-              {score.total >= 10 ? 'Strong' : score.total >= 7 ? 'Good' : score.total >= 4 ? 'Fair' : 'Weak'}
+              {currentLead.canonicalScore != null
+                ? (currentLead.canonicalScore >= 85 ? 'Strong' : currentLead.canonicalScore >= 70 ? 'Good' : currentLead.canonicalScore >= 55 ? 'Fair' : 'Weak')
+                : (score.total >= 10 ? 'Strong' : score.total >= 7 ? 'Good' : score.total >= 4 ? 'Fair' : 'Weak')}
             </p>
             {profiles.length > 0 ? (
               <label className="flex items-center gap-1.5 text-[11px]">
@@ -535,7 +566,7 @@ export function LeadWorkspace({
         <div className="flex items-start gap-3 rounded-xl border border-line bg-bone/40 px-4 py-3">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-warning" />
           <p className="text-sm leading-relaxed text-graphite">
-            Scored {score.total}/12 — not eligible for drafting. Add more research to push it over the line.
+            Scored {score.total}/{currentLead.canonicalScore != null ? 100 : 12} — not eligible for drafting. Add more research to push it over the line.
           </p>
         </div>
       )}

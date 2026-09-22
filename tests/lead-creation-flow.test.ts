@@ -205,4 +205,101 @@ describe('Lead creation hardening flow', () => {
     expect(updateLeadScoreMock).not.toHaveBeenCalled()
     expect(data.lead.id).toBe('lead-new')
   })
+
+  // Regression: Relay team bug bash, TEAM-002 (same lead shows different
+  // scores internal vs external — duplicate source of truth). Found while
+  // auditing every computeScore()/canonicalScore consumer: /api/prospect/save
+  // persisted the legacy rubric's score UNCONDITIONALLY, even when canonical
+  // intelligence (and its own, different-scale 0-100 score) was provided in
+  // the same request. /api/leads already did this correctly ("Score: Use
+  // canonical if available, else fall back to rubric"). A lead saved through
+  // /prospect could end up with canonical_score=79 AND a numerically
+  // unrelated legacy score column (whatever computeScore() happened to
+  // compute from the extracted fields) — a real, persisted duplicate source
+  // of truth, not just a display bug.
+  it('/api/prospect/save derives the persisted legacy score column FROM canonicalScore when canonical intelligence is present, never independently', async () => {
+    const createLeadMock = vi.fn().mockResolvedValue({
+      blocked: false,
+      lead: makeLead({ id: 'lead-canonical', score: 8, verdict: 'send', canonicalScore: 79 }),
+    })
+
+    createScoutStoreMock.mockResolvedValue({
+      getRulebook: vi.fn().mockResolvedValue(RULEBOOK),
+      createLead: createLeadMock,
+    })
+
+    const req = new Request('http://localhost/api/prospect/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(validCreateBody({
+        canonicalScore: 79,
+        canonical: { qualification: 'worth_pursuing' },
+      })),
+    })
+
+    const res = await prospectSaveRoute(req)
+    expect(res.status).toBe(201)
+    expect(createLeadMock).toHaveBeenCalledTimes(1)
+    const payload = createLeadMock.mock.calls[0]?.[0]
+    // 79/100 canonical -> round(79/10) = 8 on the legacy 0-12 scale. This
+    // MUST be derived from canonicalScore, not from an independent
+    // computeScore() run over the extracted fields, which could land on any
+    // other 0-12 value for the same lead.
+    expect(payload.score).toBe(8)
+    expect(payload.canonicalScore).toBe(79)
+    expect(payload.verdict).toBe('send') // 'worth_pursuing' qualification -> 'send'
+  })
+
+  it('/api/prospect/save derives canonicalScore from the canonical object itself, not a separately-sent field that could disagree with it', async () => {
+    const createLeadMock = vi.fn().mockResolvedValue({
+      blocked: false,
+      lead: makeLead({ id: 'lead-mismatch', canonicalScore: 79 }),
+    })
+    createScoutStoreMock.mockResolvedValue({
+      getRulebook: vi.fn().mockResolvedValue(RULEBOOK),
+      createLead: createLeadMock,
+    })
+
+    const req = new Request('http://localhost/api/prospect/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(validCreateBody({
+        // Deliberately mismatched — the embedded canonical.canonicalScore
+        // (the actual ground truth being persisted as canonicalIntelligence)
+        // must win over this stale/wrong separately-sent field.
+        canonicalScore: 12,
+        canonical: { canonicalScore: 79, qualification: 'worth_pursuing' },
+      })),
+    })
+
+    const res = await prospectSaveRoute(req)
+    expect(res.status).toBe(201)
+    const payload = createLeadMock.mock.calls[0]?.[0]
+    expect(payload.canonicalScore).toBe(79) // from canonical.canonicalScore, NOT the mismatched top-level 12
+    expect(payload.score).toBe(8) // round(79/10), derived from the SAME winning value
+  })
+
+  it('/api/prospect/save falls back to the legacy rubric score when NO canonical intelligence is provided (pre-canonical / manual-entry compatibility path)', async () => {
+    const createLeadMock = vi.fn().mockResolvedValue({
+      blocked: false,
+      lead: makeLead({ id: 'lead-legacy-only' }),
+    })
+
+    createScoutStoreMock.mockResolvedValue({
+      getRulebook: vi.fn().mockResolvedValue(RULEBOOK),
+      createLead: createLeadMock,
+    })
+
+    const req = new Request('http://localhost/api/prospect/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(validCreateBody()), // no canonicalScore, no canonical
+    })
+
+    const res = await prospectSaveRoute(req)
+    expect(res.status).toBe(201)
+    const payload = createLeadMock.mock.calls[0]?.[0]
+    expect(payload.canonicalScore).toBeNull()
+    expect(typeof payload.score).toBe('number') // legacy computeScore() result, the only option available
+  })
 })

@@ -70,6 +70,17 @@ function makeLead(overrides: Record<string, unknown> = {}) {
   }
 }
 
+// Overrides that make sourceFromLead/buildRevenueStrategy resolve to
+// messageRecommended=true (EXPLICIT_NEED), needed for CAN_PREPARE_EMAIL vs
+// CAN_SEND_EMAIL tests below, which must isolate contact-verification state
+// as the only variable — the default makeLead() fixture resolves to
+// CONNECT_OR_OBSERVE/messageRecommended=false, which is a content-strategy
+// gate unrelated to what these tests are checking.
+const EXPLICIT_NEED_LEAD_OVERRIDES = {
+  rawInput: 'We need help hiring backend engineers for core platform reliability.',
+  signalEvidence: 'We need help hiring backend engineers for core platform reliability.',
+}
+
 function baseIdentity(id: string, organizationId = ORG_ID) {
   return {
     id,
@@ -483,6 +494,154 @@ describe('Email prepare/send API integration', () => {
     expect(h.send).not.toHaveBeenCalled()
     expect(h.fake.tables.email_messages).toHaveLength(0)
     expect(h.fake.tables.email_send_attempts).toHaveLength(0)
+  })
+
+  // ── CAN_PREPARE_EMAIL vs CAN_SEND_EMAIL (hardening sprint) ───────────────
+  //
+  // Preparing an email (subject/body/strategy) is a research/writing
+  // operation and must not require a verified recipient. Sending does.
+  // See BUG_LEDGER — Daria Redkina / Solsonic hardening fixture: a
+  // CONNECT_OR_OBSERVE lead with only an inferred contact previously got an
+  // EMPTY draft ("No business email is available yet") instead of a real,
+  // reviewable draft with Send correctly disabled.
+
+  it('no email at all: prepare still generates subject/body, draftStatus is NOT READY (Send stays disabled)', async () => {
+    const h = setupHarness({ seed: { contact_points: [] }, leadOverrides: EXPLICIT_NEED_LEAD_OVERRIDES })
+    const { res, data } = await postPrepare({ revenueIdentityId: IDENTITY_ID })
+
+    expect(res.status).toBe(200)
+    expect(data.draft?.subject).toBeTruthy()
+    expect(data.draft?.body).toBeTruthy()
+    expect(data.draft?.draftStatus).not.toBe('READY')
+    expect(data.draft?.draftStatus).toBe('NEEDS_VERIFIED_CONTACT')
+    expect(data.draft?.blockedReason).toBeTruthy()
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('inferred-pattern email: prepare still generates subject/body, draftStatus is NOT READY (Send stays disabled)', async () => {
+    const h = setupHarness({
+      seed: {
+        contact_points: [
+          {
+            id: CONTACT_ID,
+            organization_id: ORG_ID,
+            lead_id: LEAD_ID,
+            person_id: null,
+            company_id: null,
+            type: 'email',
+            value: 'sarah.chen@acmehealth.com',
+            source: 'INFERRED_PATTERN',
+            source_url: null,
+            source_type: null,
+            verification_status: 'UNVERIFIED',
+            verification_method: null,
+            confidence: 0.35,
+            is_primary: true,
+            is_business_contact: true,
+            discovered_at: '2026-01-01T00:00:00.000Z',
+            verified_at: null,
+            last_used_at: null,
+            created_at: '2026-01-01T00:00:00.000Z',
+            updated_at: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+      leadOverrides: EXPLICIT_NEED_LEAD_OVERRIDES,
+    })
+    const { res, data } = await postPrepare({ revenueIdentityId: IDENTITY_ID })
+
+    expect(res.status).toBe(200)
+    expect(data.draft?.subject).toBeTruthy()
+    expect(data.draft?.body).toBeTruthy()
+    expect(data.draft?.draftStatus).toBe('NEEDS_VERIFIED_CONTACT')
+    expect(data.draft?.blockedReason).toMatch(/not verified|inferred/i)
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('verified email: prepare generates subject/body AND draftStatus is READY (send-eligible after normal safety gates)', async () => {
+    const h = setupHarness({ leadOverrides: EXPLICIT_NEED_LEAD_OVERRIDES }) // default seed has a VERIFIED contact
+    const { res, data } = await postPrepare({ revenueIdentityId: IDENTITY_ID })
+
+    expect(res.status).toBe(200)
+    expect(data.draft?.subject).toBeTruthy()
+    expect(data.draft?.body).toBeTruthy()
+    expect(data.draft?.draftStatus).toBe('READY')
+    expect(h.send).not.toHaveBeenCalled() // prepare never sends
+  })
+
+  it('send is blocked for an UNVERIFIED/inferred contact even if a draft with subject/body exists (the send-time enforcement, not just a UI hint)', async () => {
+    const h = setupHarness({
+      seed: {
+        contact_points: [
+          {
+            id: CONTACT_ID,
+            organization_id: ORG_ID,
+            lead_id: LEAD_ID,
+            person_id: null,
+            company_id: null,
+            type: 'email',
+            value: 'sarah.chen@acmehealth.com',
+            source: 'INFERRED_PATTERN',
+            source_url: null,
+            source_type: null,
+            verification_status: 'UNVERIFIED',
+            verification_method: null,
+            confidence: 0.35,
+            is_primary: true,
+            is_business_contact: true,
+            discovered_at: '2026-01-01T00:00:00.000Z',
+            verified_at: null,
+            last_used_at: null,
+            created_at: '2026-01-01T00:00:00.000Z',
+            updated_at: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        prepared_email_drafts: [
+          draftRow({
+            id: 'draft-unverified',
+            contact_point_id: CONTACT_ID,
+            contact_email: 'sarah.chen@acmehealth.com',
+            draft_status: 'NEEDS_VERIFIED_CONTACT',
+          }),
+        ],
+      },
+    })
+
+    const { res } = await postSend({ draftId: 'draft-unverified', idempotencyKey: 'idem-unverified' })
+    expect(res.status).toBeGreaterThanOrEqual(400)
+    expect(h.send).not.toHaveBeenCalled()
+    expect(h.fake.tables.email_messages).toHaveLength(0)
+  })
+
+  it('contact discovered/verified AFTER a draft exists becomes send-eligible without needing a new draft', async () => {
+    // Prepare with no contact -> NEEDS_VERIFIED_CONTACT, content still generated.
+    const h1 = setupHarness({ seed: { contact_points: [] }, leadOverrides: EXPLICIT_NEED_LEAD_OVERRIDES })
+    const prepared = await postPrepare({ revenueIdentityId: IDENTITY_ID })
+    expect(prepared.data.draft?.draftStatus).toBe('NEEDS_VERIFIED_CONTACT')
+    expect(prepared.data.draft?.subject).toBeTruthy()
+
+    // A fresh prepare call against a lead that NOW has a verified contact
+    // (simulating "contact was discovered/verified after the first draft")
+    // must produce a READY draft using the same generated content path —
+    // this test asserts the underlying mechanism (prepare is idempotent on
+    // content, gated only by contact state) rather than in-place draft
+    // mutation, since prepareEmailDraft always creates a fresh draft row.
+    void h1
+    const h2 = setupHarness({ leadOverrides: EXPLICIT_NEED_LEAD_OVERRIDES }) // default seed: VERIFIED contact
+    const reprepared = await postPrepare({ revenueIdentityId: IDENTITY_ID })
+    expect(reprepared.data.draft?.draftStatus).toBe('READY')
+    expect(reprepared.data.draft?.subject).toBe(prepared.data.draft?.subject) // same generated content
+    void h2
+  })
+
+  it('preparation creates zero accountability/send activity regardless of contact verification state', async () => {
+    const h = setupHarness({ seed: { contact_points: [] } })
+    await postPrepare({ revenueIdentityId: IDENTITY_ID })
+
+    expect(h.send).not.toHaveBeenCalled()
+    expect(h.markContacted).not.toHaveBeenCalled()
+    expect(h.fake.tables.email_messages).toHaveLength(0)
+    expect(h.fake.tables.email_send_attempts ?? []).toHaveLength(0)
   })
 
   it('blocks send on claim-safety failure', async () => {

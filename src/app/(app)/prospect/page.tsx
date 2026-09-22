@@ -143,13 +143,21 @@ export default function ProspectCheckPage() {
     setDuplicateConflict(null)
   }, [])
 
-  async function analyze() {
+  async function analyze(mode: 'analyze' | 'try-another-angle' = 'analyze') {
     const guard = pasteGuard(rawInput)
     if (guard) {
       setError(guard)
       rawRef.current?.focus()
       return
     }
+
+    // "Try Another Angle" must never re-derive canonical evidence/score/
+    // qualification/action — only a new message angle. Capture the
+    // ALREADY-HELD canonical result before resetResult() clears it, and
+    // send it back so the server can verify (not just trust) it's still
+    // valid for this exact input and skip re-extraction/re-scoring
+    // entirely. See BUG_LEDGER — TEAM-005.
+    const existingCanonical = mode === 'try-another-angle' ? result?.canonical ?? null : null
 
     resetResult()
     setAnalyzing(true)
@@ -159,7 +167,11 @@ export default function ProspectCheckPage() {
       const res = await fetch('/api/prospect/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawText: rawInput, profileId: selectedProfileId }),
+        body: JSON.stringify({
+          rawText: rawInput,
+          profileId: selectedProfileId,
+          ...(existingCanonical ? { existingCanonical } : {}),
+        }),
         signal: abortRef.current.signal,
       })
 
@@ -434,7 +446,11 @@ export default function ProspectCheckPage() {
                   <SignalChip label="Fit" value={result.revenue.fit} />
                   <SignalChip label="Intent" value={result.revenue.intent} />
                   <SignalChip label="Confidence" value={result.revenue.confidence} />
-                  <SignalChip label="Act" value={result.revenue.act.replaceAll('_', ' ')} />
+                  {/* Channel-explicit: this reflects the connection-note
+                      channel specifically. Lead Detail may correctly show a
+                      different policy for the DM channel on the same lead —
+                      not a contradiction, a different question. */}
+                  <SignalChip label="Connection" value={result.revenue.messagingPolicy.replaceAll('_', ' ')} />
                 </div>
               )}
               {result.revenue && (
@@ -628,7 +644,7 @@ export default function ProspectCheckPage() {
                 {copied ? <Check className="size-3" aria-hidden="true" /> : <Copy className="size-3" aria-hidden="true" />}
                 {copied ? 'Copied' : 'Copy note'}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => void analyze()} disabled={analyzing}>
+              <Button variant="outline" size="sm" onClick={() => void analyze('try-another-angle')} disabled={analyzing}>
                 <RefreshCw className="size-3" aria-hidden="true" />
                 Try another angle
               </Button>

@@ -305,6 +305,14 @@ export interface CanonicalProspectIntelligence {
   version: 'relay_qualification_v2'
   /** Unique ID for this intelligence run — links score/strategy/message to the same source */
   intelligenceRunId: string
+  /**
+   * Deterministic hash of the normalized source text + pipeline/score
+   * versions (see src/lib/intelligence-v2/input-hash.ts). Same hash + same
+   * versions => this result may be reused instead of re-running extraction.
+   */
+  intelligenceInputHash: string
+  /** Bundled extraction/normalization/prompt version this run used */
+  intelligenceVersion: string
   /** When this intelligence was produced */
   computedAt: string
   /** The canonical score 0-100 */

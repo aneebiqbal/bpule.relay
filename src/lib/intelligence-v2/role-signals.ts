@@ -3,8 +3,23 @@ import type { OpportunitySignal } from './types'
 const RECRUITER_TITLE =
   /\b(recruiter|talent acquisition|talent partner|talent scout|sourcer|people ops|human resources|\bhrbp\b|staffing specialist)\b/i
 
-const CLINICIAN_TITLE =
-  /\b(pmhnp|np-bc|fnp|psychiatrist|psychologist|physician|md\b|do\b|nurse practitioner|registered nurse|\brn\b|therapist|counselor|lcsw|lmft|clinician)\b/i
+// Full clinical role/credential words — safe to match case-insensitively
+// against any text (no short, common-English-word collision risk).
+const CLINICIAN_TITLE_WORDS =
+  /\b(pmhnp|np-bc|fnp|psychiatrist|psychologist|physician|nurse practitioner|registered nurse|therapist|counselor|lcsw|lmft|clinician)\b/i
+
+// Two/three-letter clinical credential abbreviations (MD, DO, RN, ...).
+// These collide with ordinary English words ("do", "an", "pa") when matched
+// case-insensitively against free text (e.g. "What you'll do" or "How to
+// apply"), so they're only trusted in their conventional credential form:
+// capitalized, immediately after a comma or as "Dr./Name, MD"-style suffix.
+const CLINICIAN_CREDENTIAL_ABBREVIATION =
+  /,\s*(MD|DO|RN|PA-C|PA)\b|\bDr\.\s+\w+.{0,3}\b(MD|DO)\b/
+
+const CLINICIAN_TITLE = {
+  test: (text: string): boolean =>
+    CLINICIAN_TITLE_WORDS.test(text) || CLINICIAN_CREDENTIAL_ABBREVIATION.test(text),
+}
 
 const CARE_PRACTICE =
   /\b(psychiatry|psychiatric|mental health|telehealth practice|medical practice|clinic|family medicine|primary care)\b/i
