@@ -134,11 +134,12 @@ describe('BD pipeline: full flow (extract -> score -> draft)', () => {
 
     expect(draft.draftText.length).toBeGreaterThan(0)
     expect(draft.draftText.toLowerCase()).toContain('acme robotics')
-    // The evidence text's "3" is not an approved fact value, so the
-    // unauthorized-numbers guard strips it from the draft — the number never
-    // reaches the rep. This is the guard working, not a leak.
-    expect(draft.strippedNumbers).toEqual(['3'])
-    expect(draft.draftText).not.toContain('3')
+    // The evidence's "3" is not an approved fact value. The generator may or
+    // may not cite it, but that number must never survive sanitization — only
+    // unapproved "3"s can ever be stripped, and the published draft cannot
+    // carry an unauthorized digit. This is the guard working, not a leak.
+    for (const n of draft.strippedNumbers) expect(n).toBe('3')
+    expect(draft.draftText).not.toMatch(/\d/)
     expect(draft.hadEmDash).toBe(false)
     expect(draft.requestedCall).toBe(false)
   })

@@ -15,8 +15,20 @@ import type { Fact } from '@/lib/domain/types'
 
 const NUMBER_RE = /\b\d+(?:[.,]\d+)?\b/g
 
+// Emojis are banned in Scout output. Covers pictographs, symbols, dingbats,
+// emoticon faces, and the variation-selector FE0F suffixed to many emoji.
+const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{2190}-\u{21FF}]/gu
+
 function digitsOnly(s: string): string {
   return s.replace(/\./g, '')
+}
+
+/** Removes all emoji from text and reports whether any were present. */
+function stripEmojis(text: string): { hadEmoji: boolean; text: string } {
+  const re = new RegExp(EMOJI_RE.source, 'gu')
+  const hadEmoji = re.test(text)
+  re.lastIndex = 0
+  return { hadEmoji, text: text.replace(re, '') }
 }
 
 /** Truthy when the facts table says the public site is live. */
@@ -101,19 +113,28 @@ export function requestsCall(text: string): boolean {
 export function sanitizeDraft(
   draft: string,
   facts: Fact[],
-): { text: string; strippedNumbers: string[]; hadEmDash: boolean; hadExclamation: boolean; requestedCall: boolean } {
+): { text: string; strippedNumbers: string[]; hadEmDash: boolean; hadExclamation: boolean; hadEmoji: boolean; requestedCall: boolean } {
   const before = draft
-  const noDashes = stripEmDashes(draft)
+  const hadEmoji = EMOJI_RE.test(before)
+  const hadEmDash = /[\u2014\u2013]/.test(before)
+  const noEmoji = before.replace(EMOJI_RE, '')
+  const noDashes = stripEmDashes(noEmoji)
   const { text: noNumbers, stripped } = stripUnauthorizedNumbers(noDashes, facts)
   const withoutDeadLinks = stripDeadSiteLinks(noNumbers, facts)
   // Exclamation marks are banned in Scout output — strip them
   const hadExclamation = /!/.test(withoutDeadLinks)
-  const clean = withoutDeadLinks.replace(/!/g, '.').replace(/\.{2,}/g, '.').replace(/\s+\./g, '.').trim()
+  const clean = withoutDeadLinks
+    .replace(/!/g, '.')
+    .replace(/\.{2,}/g, '.')
+    .replace(/\s+\./g, '.')
+    .replace(/  +/g, ' ')
+    .trim()
   return {
     text: clean,
     strippedNumbers: stripped,
-    hadEmDash: before !== noDashes,
+    hadEmDash,
     hadExclamation,
+    hadEmoji,
     requestedCall: requestsCall(clean),
   }
 }

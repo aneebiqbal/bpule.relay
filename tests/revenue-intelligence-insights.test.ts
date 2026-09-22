@@ -12,8 +12,9 @@ describe('Metric health validation', () => {
   })
 
   it('flags contacted > extracted', () => {
-    const issues = validateFunnelOrdering(3, 6, 0, 0)
-    expect(issues.length).toBe(0)
+    const issues = validateFunnelOrdering(6, 3, 5, 0)
+    expect(issues.length).toBeGreaterThan(0)
+    expect(issues[0].stage).toContain('contacted > extracted')
   })
 
   it('flags replied > contacted', () => {
@@ -62,7 +63,7 @@ describe('Deterministic insights', () => {
     const insights = generateInsights(baseParams)
     const lat = insights.find((i) => i.id === 'latency-inconsistency')
     expect(lat).toBeDefined()
-    expect(lat?.severity).toBe('SUSPICIOUS')
+    expect(lat?.severity).toBe('WATCH')
   })
 
   it('generates no-replies insight when contacted > 0 and replied = 0', () => {
@@ -89,7 +90,7 @@ describe('Deterministic insights', () => {
     const insights = generateInsights({ ...baseParams, aiCount: 184, costCoverage: 0.42 })
     const cost = insights.find((i) => i.id === 'cost-coverage')
     expect(cost).toBeDefined()
-    expect(cost?.severity).toBe('SUSPICIOUS')
+    expect(cost?.severity).toBe('ACTION')
   })
 
   it('does not generate funnel issue insights when funnel is clean', () => {

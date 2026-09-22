@@ -1,5 +1,6 @@
 import type { OutreachStrategy, MessageMode } from '@/lib/domain/types'
 import { BANNED_PHRASES, AI_TELL_PHRASES } from '@/lib/writing/engine'
+import { ARTIFACT_LIMITS, countFor, type ArtifactLimitKey } from '@/lib/relay/artifact-limits'
 
 /**
  * Premium Message Forge
@@ -164,23 +165,16 @@ export function evaluateMessage(
     score -= 10
   }
 
-  // 8. Excessive length for channel — budgets, not targets
+  // 8. Excessive length for channel — enforced from the shared artifact map so
+  //    the server gate always matches the workspace UI counter.
   const wordCount = text.trim().split(/\s+/).filter(Boolean).length
-  if (channel === 'dm' && wordCount > 55) {
-    failures.push(`Too long for DM (${wordCount} words, max 55)`)
-    score -= 15
-  }
-  if (channel === 'connection' && (text.length > 300 || wordCount > 35)) {
-    failures.push(`Too long for connection note (${wordCount} words / ${text.length} chars)`)
-    score -= 15
-  }
-  if (channel === 'followup' && wordCount > 45) {
-    failures.push(`Too long for follow-up (${wordCount} words, max 45)`)
-    score -= 15
-  }
-  if (channel === 'reply' && wordCount > 70) {
-    failures.push(`Too long for reply (${wordCount} words, max 70)`)
-    score -= 15
+  const artifactLimit = ARTIFACT_LIMITS[channel.toLowerCase() as ArtifactLimitKey]
+  if (artifactLimit) {
+    const count = countFor(artifactLimit.kind, text)
+    if (count > artifactLimit.max) {
+      failures.push(`Too long for ${channel.toLowerCase()} (${count} ${artifactLimit.label}, max ${artifactLimit.max})`)
+      score -= 15
+    }
   }
 
   // 9. Could be sent to 100 other leads?
