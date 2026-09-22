@@ -1200,6 +1200,15 @@ function extractCompany(lines: string[], title: string | null, rawText: string):
   if (title) {
     const atMatch = title.match(/\bat\s+([^|,]+)/i)
     if (atMatch?.[1]) return atMatch[1].trim()
+
+    // "Founder of X" / "Co-founder of X" / "Owner of X" — common LinkedIn
+    // headline pattern for founders that "at Company" doesn't cover.
+    // Deliberately scoped to these specific role words, NOT a general
+    // "\bof\s+(...)" match: "Head of Engineering", "VP of Sales", "Director
+    // of Product" use "of" to introduce a function/department, not a
+    // company, and must NOT be parsed as a company name.
+    const founderOfMatch = title.match(/\b(?:founder|co-?founder|owner|proprietor)\s+of\s+([^|,]+)/i)
+    if (founderOfMatch?.[1]) return founderOfMatch[1].trim()
   }
 
   const aboutMatch = rawText.match(/\b([A-Z][A-Za-z0-9&._' -]{2,80})\s+(?:is building|builds|provides|runs|helps)\b/)

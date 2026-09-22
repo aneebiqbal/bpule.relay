@@ -1,4 +1,4 @@
-import type { ContactPointVerificationStatus } from '@/lib/domain/types'
+import type { ContactPoint, ContactPointVerificationStatus } from '@/lib/domain/types'
 
 const FREE_EMAIL_DOMAINS = new Set([
   'gmail.com',
@@ -33,6 +33,26 @@ export function isBusinessEmail(email: string): boolean {
 
 export function isInferredEmailSource(source: string): boolean {
   return source === 'INFERRED_PATTERN'
+}
+
+/**
+ * CAN_SEND_EMAIL — the single, shared definition of "this contact is
+ * verified enough to send to." Used by BOTH prepareEmailDraft (to decide
+ * whether a generated draft is READY or NEEDS_VERIFIED_CONTACT) and
+ * sendPreparedEmail (the actual send-time enforcement gate) — see
+ * src/lib/email/service.ts. There must be exactly one definition of this
+ * so the two can never disagree.
+ *
+ * Deliberately conservative: only VERIFIED and LIKELY_VALID are send-
+ * eligible. UNVERIFIED, UNKNOWN, INVALID, BOUNCED, and no contact at all
+ * are NOT — including every INFERRED_PATTERN contact, which is never
+ * automatically upgraded past UNVERIFIED (see toVerificationStatus below).
+ * An inferred/guessed address must never become sendable merely because a
+ * draft exists for it.
+ */
+export function isSendEligibleContact(contact: ContactPoint | null): boolean {
+  if (!contact) return false
+  return contact.verificationStatus === 'VERIFIED' || contact.verificationStatus === 'LIKELY_VALID'
 }
 
 export function toVerificationStatus(input: {

@@ -335,7 +335,11 @@ function scoreOpportunityFit(
   } else if (signals.includes('growth_signal')) {
     points = 12
     note = 'Growth signal — may have expanding needs.'
-    reasons.push('Company growth indicates potential need.')
+    // Deliberately hedged: "company is growing/scaling" is the observed
+    // evidence. "Therefore they need our software services" is an
+    // inference, not a fact — do not state it as established. See
+    // BUG_LEDGER REL-FUNC-01x (Daria Redkina / Solsonic hardening fixture).
+    reasons.push('Company growth signal — a possible but unconfirmed need, not a verified requirement.')
   } else if (signals.includes('funding')) {
     points = 11
     note = 'Funding signal — resources available, needs unclear.'

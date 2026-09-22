@@ -16,7 +16,7 @@ import { evaluateProspectQualification } from '@/lib/prospect/qualification-gate
 import { classifyRoleFromTitle } from '@/lib/leads/targeting-pure'
 import { isLinkedInChromeText } from '@/lib/intelligence-v2/role-signals'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
-import { produceCanonicalIntelligence, getDisplayScore } from '@/lib/intelligence-v2/orchestrator'
+import { produceCanonicalIntelligence, getDisplayScore, deriveSignalEvidenceFallback } from '@/lib/intelligence-v2/orchestrator'
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 import { resolveTimezoneFromLocation } from '@/lib/timezone/resolve'
 import {
@@ -158,7 +158,7 @@ export async function POST(request: Request) {
       roleCategory: classifyRoleFromTitle(canonical.intelligence.person.title),
       marketRegion: 'unknown',
       signalType: mapSignalsToLegacyType(canonical.intelligence.opportunity.signals),
-      signalEvidence: canonical.intelligence.opportunity.description ?? canonical.intelligence.opportunityTrigger ?? rawText.slice(0, 200),
+      signalEvidence: deriveSignalEvidenceFallback(canonical, rawText),
       extractionConfidence: canonical.extractionCompleteness.score,
       confidenceNotes: canonical.scoreBreakdown.missingInfo,
       verbatimQuote: canonical.intelligence.content.recentPosts.find((p) => !isLinkedInChromeText(p.verbatimQuote))?.verbatimQuote ?? null,

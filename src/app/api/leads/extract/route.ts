@@ -2,7 +2,7 @@ import { hasProvider } from '@/lib/ai/config'
 import { scanForSecrets } from '@/lib/ai/secrets'
 import { sseStream } from '@/lib/sse/sse'
 import { createScoutStore } from '@/lib/store'
-import { produceCanonicalIntelligence, getDisplayScore } from '@/lib/intelligence-v2/orchestrator'
+import { produceCanonicalIntelligence, getDisplayScore, deriveSignalEvidenceFallback } from '@/lib/intelligence-v2/orchestrator'
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 import type { ExtractedLead } from '@/lib/domain/types'
 
@@ -118,7 +118,7 @@ export async function POST(request: Request) {
         roleCategory: 'other',
         marketRegion: 'unknown',
         signalType: 7,
-        signalEvidence: canonical.intelligence.opportunity.description ?? canonical.intelligence.opportunityTrigger ?? rawText.slice(0, 200),
+        signalEvidence: deriveSignalEvidenceFallback(canonical, rawText),
         extractionConfidence: canonical.extractionCompleteness.score,
         confidenceNotes: canonical.scoreBreakdown.missingInfo,
         verbatimQuote: canonical.intelligence.content.recentPosts[0]?.verbatimQuote ?? null,

@@ -378,21 +378,43 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
     return emptyDraft(input)
   }
 
+  // A connection note (EARN_CONNECTION / "observe, don't pitch") never needs
+  // to cite the specific classified signal — it's deliberately generic and
+  // low-key. So when evidence doesn't actually support the signal type, drop
+  // the mismatched evidence from what the generator is told rather than
+  // failing the whole draft — the note still gets written (through the
+  // normal live/demo generation path below, unchanged), it just can't
+  // reference a "signal" that doesn't check out. This is a real, separate
+  // extraction gap (see deriveSignalEvidenceFallback in orchestrator.ts),
+  // but the generation layer should not compound it into a silently empty
+  // draft when the strategy explicitly asked for a message.
+  //
+  // Message types that DO make a specific evidence claim (offer_small_win,
+  // problem_recognition, etc.) still hard-fail below — this is not a
+  // general loosening of the anti-hallucination guard, only a narrow
+  // carve-out for the one message type that never makes an evidence claim.
+  let effectiveInput = input
   if (
     input.type !== 'reply'
     && !input.strategy
     && !signalEvidenceMatch(input.extracted.signalType, input.extracted.signalEvidence)
   ) {
-    throw new Error(
-      `Signal type ${input.extracted.signalType} is not supported by its evidence ("${input.extracted.signalEvidence}"). Rescore this lead before drafting.`,
-    )
+    if (input.type !== 'connection') {
+      throw new Error(
+        `Signal type ${input.extracted.signalType} is not supported by its evidence ("${input.extracted.signalEvidence}"). Rescore this lead before drafting.`,
+      )
+    }
+    effectiveInput = {
+      ...input,
+      extracted: { ...input.extracted, signalEvidence: '', verbatimQuote: null },
+    }
   }
 
-  const userPrompt = buildUserPrompt(input)
-  const systemPrompt = baseDraftSystem(input.styleCard, input.facts)
+  const userPrompt = buildUserPrompt(effectiveInput)
+  const systemPrompt = baseDraftSystem(effectiveInput.styleCard, effectiveInput.facts)
 
   if (!hasProvider()) {
-    return demoDraft(input, userPrompt)
+    return demoDraft(effectiveInput, userPrompt)
   }
 
   const callLog: DraftCallLog[] = []

@@ -1289,7 +1289,30 @@ export interface PreparedEmailDraft {
   revenueIdentityId: string
   contactPointId: string | null
   contactEmail: string | null
-  draftStatus: 'DRAFT' | 'RESEARCH_REQUIRED' | 'CONTACT_NOT_FOUND' | 'SKIP' | 'READY' | 'SENT' | 'FAILED'
+  /**
+   * CAN_PREPARE_EMAIL vs CAN_SEND_EMAIL are separate concerns (Relay
+   * hardening sprint — see prepareEmailDraft/sendPreparedEmail in
+   * src/lib/email/service.ts). Preparing (subject/body/strategy) only
+   * requires a legitimate reason to reach out — it does NOT require a
+   * verified recipient. Sending requires a verified/likely-valid contact
+   * on top of that.
+   *
+   * - READY: content generated AND recipient is verified/likely-valid — send-eligible.
+   * - NEEDS_VERIFIED_CONTACT: content generated (subject/body/strategy all
+   *   present), but no verified/likely-valid recipient exists yet (no
+   *   contact at all, or only an unverified/inferred one). NOT send-eligible.
+   *   The UI must show the generated draft with a "Recipient not verified"
+   *   notice and a path to discover/verify/add a contact — never silently
+   *   hide the draft.
+   * - CONTACT_NOT_FOUND: retained for backward compatibility with historical
+   *   rows written before this distinction existed. New drafts should never
+   *   be written with this status — use NEEDS_VERIFIED_CONTACT instead,
+   *   which still has content.
+   * - RESEARCH_REQUIRED: no legitimate reason to email yet (rightToContact
+   *   is NONE) — this is a content-strategy gate, unrelated to contact
+   *   verification, and correctly has no subject/body.
+   */
+  draftStatus: 'DRAFT' | 'RESEARCH_REQUIRED' | 'CONTACT_NOT_FOUND' | 'NEEDS_VERIFIED_CONTACT' | 'SKIP' | 'READY' | 'SENT' | 'FAILED'
   relationshipType: string | null
   opportunityType: string | null
   emailGoal: EmailGoal | null

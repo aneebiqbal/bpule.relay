@@ -17,7 +17,7 @@ import { scoreLabel } from './types'
 import { runIntelligencePipeline, type ExtractionPipelineOptions, type ExtractionPipelineResult } from './extraction-pipeline'
 import { assessExtractionCompleteness, repairExtraction, evaluateCompletenessGate } from './completeness-gate'
 import { computeCanonicalScore, SCORE_VERSION, type ScoreInput } from './scoring-engine'
-import { isNonBuyerProfessional } from './role-signals'
+import { isNonBuyerProfessional, isLinkedInChromeText } from './role-signals'
 import { buildIntelligenceInputHash, INTELLIGENCE_PIPELINE_VERSION } from './input-hash'
 
 // ── Orchestrator Options ───────────────────────────────────────────────────
@@ -674,6 +674,49 @@ export function canonicalToLegacyScoreResult(persisted: {
  * - Scoring model version changes
  * - Meaningful new signal arrives
  */
+/**
+ * Best-available signal evidence text for a canonical intelligence result,
+ * for surfaces that need a single evidence string (e.g. ExtractedLead.
+ * signalEvidence, used by draft generation's anti-hallucination guard).
+ *
+ * Prefers structured evidence in this order: opportunity.description,
+ * opportunityTrigger, a hiring/problem signal sentence, the first
+ * non-chrome recent-post paraphrase. Only falls back to a prefix of the raw
+ * source text as an absolute last resort — and even then, picks the first
+ * non-chrome LINE, not an arbitrary character-count slice, which previously
+ * could grab pure LinkedIn navigation noise ("· 3rd\nfounder of X\nBerlin,
+ * Germany\n·\nContact info\nsvg...") for profiles whose opportunity signal
+ * (e.g. growth_signal) never populates description/opportunityTrigger.
+ * See BUG_LEDGER — Daria Redkina / Solsonic hardening fixture.
+ */
+export function deriveSignalEvidenceFallback(
+  canonical: CanonicalProspectIntelligence,
+  rawText: string,
+): string {
+  const intel = canonical.intelligence
+
+  if (intel.opportunity.description) return intel.opportunity.description
+  if (intel.opportunityTrigger) return intel.opportunityTrigger
+  if (intel.content.hiringSignals[0]) return intel.content.hiringSignals[0]
+  if (intel.content.explicitProblems[0]) return intel.content.explicitProblems[0]
+
+  const firstRealPost = intel.content.recentPosts.find(
+    (p) => !isLinkedInChromeText(p.paraphrase) && !isLinkedInChromeText(p.verbatimQuote),
+  )
+  if (firstRealPost) return firstRealPost.paraphrase || firstRealPost.verbatimQuote || ''
+
+  const firstNonChromeLine = rawText
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l.length >= 20 && !isLinkedInChromeText(l))
+  if (firstNonChromeLine) return firstNonChromeLine.slice(0, 220)
+
+  // Genuinely nothing usable — return empty rather than chrome noise.
+  // Downstream (signalEvidenceMatch) correctly treats short/empty evidence
+  // as "no match," which is the honest outcome here.
+  return ''
+}
+
 export function shouldRescore(
   existing: CanonicalProspectIntelligence,
   trigger: RescoreOptions['trigger'],
