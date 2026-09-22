@@ -115,9 +115,30 @@ Primary blockers:
 3. Mobile bottom-nav journey still has a reproducible auth redirect failure (`M06`).
 4. Relay back-navigation expectation fails (`R05`) and needs route-level UX/behavior confirmation.
 
+## Accountability Control Plane — ACCEPTANCE (Complete)
+
+- Final SHA: `af96757`
+- Unit/integration: 1063 passed (68 files)
+- Desktop Playwright: 19/19 passed
+- Mobile Playwright: 19/19 passed
+- Typecheck: clean
+- Build: succeeds
+- Verdict: **PASS**
+
+### P0 Closed
+- Auto-create day_close on assignment + contract (ensure_day_close RPC)
+- Canonical event → progress bridge (markContacted/markUpworkApplied → record_canonical_progress)
+- Exception E2E: blocked → request → submit → persisted
+
+### P1 Closed
+- Manager drill-down /team/[repId] with Accountability OS contract progress
+
+---
+
 ## Next Actions (Ordered)
 
-1. Fix the `DayCloseStatus` type mismatch so the baseline compile gate is green.
+1. ~~Fix the `DayCloseStatus` type mismatch~~ — RESOLVED
 2. Stabilize local E2E runtime (investigate `net::ERR_ABORTED` on `/prospect` and `/relay` transitions, then re-run smoke/canonical suites).
 3. Root-cause mobile `M06` auth redirect on bottom-nav click and add regression assertion.
 4. Re-run full acceptance sweep (desktop + mobile) and update this file with final READY/NOT READY decision.
+5. MockStore parity for new accountability methods (demo mode support).
