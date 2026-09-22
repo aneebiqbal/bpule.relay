@@ -211,15 +211,22 @@ function NextBestAction({
 }
 
 function LeadLoopStrip({ lead }: { lead: LeadDetail }) {
+  // Channel-explicit: this strip evaluates the DM channel specifically.
+  // Other surfaces (e.g. Prospect Check) may correctly show a different
+  // messagingPolicy for a different channel (e.g. a connection note) for
+  // the SAME lead — that is not a contradiction, it's a different
+  // question. Always show messagingPolicyLabel (which names the channel-
+  // appropriate action) rather than a bare "no message" that reads as a
+  // universal verdict. See BUG_LEDGER — Daria Redkina / Solsonic fixture.
   const snapshot = toUiSnapshot(buildRevenueStrategy(sourceFromLead(lead, null, { channel: 'dm' })))
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-graphite">
       <span><span className="text-stone">Fit</span> {snapshot.fit}</span>
       <span><span className="text-stone">Intent</span> {snapshot.intent}</span>
       <span><span className="text-stone">Confidence</span> {snapshot.confidence}</span>
-      <span><span className="text-stone">Act</span> {snapshot.act.replaceAll('_', ' ')}</span>
-      {!snapshot.messageRecommended && (
-        <span className="text-status-warning">No message — {snapshot.noMessageReason}</span>
+      <span><span className="text-stone">DM</span> {snapshot.messagingPolicyLabel}</span>
+      {!snapshot.messageRecommended && snapshot.noMessageReason && (
+        <span className="text-status-warning">{snapshot.noMessageReason}</span>
       )}
     </div>
   )
@@ -539,7 +546,7 @@ export function LeadWorkspace({
         <div className="flex items-start gap-3 rounded-xl border border-line bg-bone/40 px-4 py-3">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-warning" />
           <p className="text-sm leading-relaxed text-graphite">
-            Scored {score.total}/12 — not eligible for drafting. Add more research to push it over the line.
+            Scored {score.total}/{currentLead.canonicalScore != null ? 100 : 12} — not eligible for drafting. Add more research to push it over the line.
           </p>
         </div>
       )}

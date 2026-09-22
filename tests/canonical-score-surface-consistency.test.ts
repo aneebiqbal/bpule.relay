@@ -81,4 +81,24 @@ describe('canonicalToLegacyScoreResult — single source of truth for lead score
     const result = canonicalToLegacyScoreResult({ canonicalScore: 50, scoreBreakdown: {} })
     expect(result!.breakdown).toEqual([])
   })
+
+  /**
+   * Regression for a second, related display bug found on the same fixture
+   * (Daria Redkina / Solsonic): lead-workspace.tsx's "not eligible for
+   * drafting" message hardcoded "Scored {score.total}/12" regardless of
+   * scale. Once canonicalToLegacyScoreResult() started returning the
+   * canonical 0-100 total (correctly, per the tests above), that same
+   * literal string started rendering nonsensical output like "Scored
+   * 47/12". The UI fix (lead-workspace.tsx) picks the denominator from
+   * whether currentLead.canonicalScore is non-null — this test asserts the
+   * underlying invariant that fix depends on: total is ALWAYS on the 0-100
+   * scale whenever canonicalScore is present, never a 0-12 value smuggled
+   * through under the same field name.
+   */
+  it('total is always on the 0-100 canonical scale when canonicalScore is present, never a 0-12 legacy value under the same field', () => {
+    for (const score of [0, 1, 12, 13, 50, 99, 100]) {
+      const result = canonicalToLegacyScoreResult({ canonicalScore: score, qualification: 'maybe' })
+      expect(result!.total).toBe(score) // never divided, scaled, or reinterpreted
+    }
+  })
 })

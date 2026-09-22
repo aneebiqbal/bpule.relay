@@ -108,6 +108,82 @@ export interface ContactDecision {
   noMessageReason: string | null
 }
 
+/**
+ * Canonical messaging policy (Relay hardening sprint — cross-surface
+ * consistency). One explicit, self-describing value for what Relay actually
+ * recommends doing about a lead RIGHT NOW ON A GIVEN CHANNEL.
+ *
+ * This exists because ContactAction ('CONNECT_OR_OBSERVE' in particular) was
+ * being read the same way by every surface even though its actual meaning
+ * depends on `messageRecommended` AND the channel the strategy was built
+ * for. The same lead could correctly show CONNECT_OR_OBSERVE with a
+ * recommended connection note (channel: 'connection') on one surface, and
+ * CONNECT_OR_OBSERVE with no message at all (channel: 'dm') on another — both
+ * individually correct, but presented with no indication they're answers to
+ * different questions ("what about a connection note?" vs "what about a
+ * DM?"), so they read as contradictory. See BUG_LEDGER — Daria Redkina /
+ * Solsonic hardening fixture.
+ *
+ * Every surface displaying "what should I do about this lead" should read
+ * `messagingPolicy` (or call describeMessagingPolicy) instead of
+ * independently interpreting `action`/`messageRecommended`/`channel`.
+ */
+export type MessagingPolicy =
+  | 'CONNECT_WITH_NOTE'
+  | 'CONNECT_WITHOUT_NOTE'
+  | 'OBSERVE'
+  | 'DM'
+  | 'EMAIL'
+  | 'UPWORK_PROPOSAL'
+  | 'FOLLOW_UP'
+  | 'REPLY'
+  | 'RESEARCH_MORE'
+  | 'SKIP'
+
+/**
+ * Derives the canonical messaging policy for a given channel from the same
+ * ContactDecision every surface already computes — this does NOT change
+ * what gets decided, only how it's labeled, so it's safe to introduce
+ * without altering existing behavior (messageRecommended, action, etc. are
+ * unchanged and kept for backward compatibility).
+ */
+export function deriveMessagingPolicy(
+  contact: ContactDecision,
+  channel: StrategyChannel,
+): MessagingPolicy {
+  if (contact.action === 'SKIP') return 'SKIP'
+  if (contact.action === 'RESEARCH_MORE') return 'RESEARCH_MORE'
+
+  if (channel === 'reply') return 'REPLY'
+  if (channel === 'followup') return contact.messageRecommended ? 'FOLLOW_UP' : 'OBSERVE'
+  if (channel === 'email') return contact.messageRecommended ? 'EMAIL' : 'OBSERVE'
+  if (channel === 'upwork') return contact.messageRecommended ? 'UPWORK_PROPOSAL' : 'OBSERVE'
+  if (channel === 'dm') return contact.messageRecommended ? 'DM' : 'OBSERVE'
+  // channel === 'connection'
+  return contact.messageRecommended ? 'CONNECT_WITH_NOTE' : 'CONNECT_WITHOUT_NOTE'
+}
+
+/**
+ * Human-readable, channel-explicit description of a messaging policy — for
+ * surfaces that want one line of text rather than just the enum value.
+ * Always names the channel, so two surfaces showing different policies for
+ * different channels read as complementary, not contradictory.
+ */
+export function describeMessagingPolicy(policy: MessagingPolicy): string {
+  switch (policy) {
+    case 'CONNECT_WITH_NOTE': return 'Send a short connection note.'
+    case 'CONNECT_WITHOUT_NOTE': return 'Send a connection request with no note — do not pitch.'
+    case 'OBSERVE': return 'Observe only — no message on this channel yet.'
+    case 'DM': return 'Send a direct message.'
+    case 'EMAIL': return 'Send an email.'
+    case 'UPWORK_PROPOSAL': return 'Send an Upwork proposal.'
+    case 'FOLLOW_UP': return 'Send a follow-up.'
+    case 'REPLY': return 'Reply — they wrote back.'
+    case 'RESEARCH_MORE': return 'Research more before contacting.'
+    case 'SKIP': return 'Skip — not a credible prospect.'
+  }
+}
+
 export interface KnowledgeItem {
   text: string
   release: KnowledgeRelease
@@ -138,6 +214,8 @@ export interface RevenueStrategy {
   who: string
   assessment: FitIntentConfidence
   contact: ContactDecision
+  /** Canonical, channel-explicit messaging policy — see deriveMessagingPolicy(). */
+  messagingPolicy: MessagingPolicy
   knownFacts: string[]
   supportedInferences: string[]
   unknowns: string[]
@@ -172,6 +250,10 @@ export interface RevenueLoopSnapshot {
   messageRecommended: boolean
   noMessageReason: string | null
   messageJob: MessageJob | null
+  /** Canonical, channel-explicit messaging policy — prefer this over act/messageRecommended when displaying "what should I do" to a user. */
+  messagingPolicy: MessagingPolicy
+  /** Human-readable description of messagingPolicy, always naming the channel it applies to. */
+  messagingPolicyLabel: string
 }
 
 export interface StrategySource {
@@ -373,6 +455,7 @@ export function buildRevenueStrategy(source: StrategySource): RevenueStrategy {
     who,
     assessment,
     contact,
+    messagingPolicy: deriveMessagingPolicy(contact, source.channel),
     knownFacts: unique(knownFacts).slice(0, 6),
     supportedInferences: unique(supportedInferences).slice(0, 4),
     unknowns: unique(unknowns).slice(0, 6),
@@ -409,6 +492,8 @@ export function toUiSnapshot(strategy: RevenueStrategy): RevenueLoopSnapshot {
     messageRecommended: strategy.contact.messageRecommended,
     noMessageReason: strategy.contact.noMessageReason,
     messageJob: strategy.messageJob,
+    messagingPolicy: strategy.messagingPolicy,
+    messagingPolicyLabel: describeMessagingPolicy(strategy.messagingPolicy),
   }
 }
 

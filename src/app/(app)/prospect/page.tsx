@@ -434,7 +434,11 @@ export default function ProspectCheckPage() {
                   <SignalChip label="Fit" value={result.revenue.fit} />
                   <SignalChip label="Intent" value={result.revenue.intent} />
                   <SignalChip label="Confidence" value={result.revenue.confidence} />
-                  <SignalChip label="Act" value={result.revenue.act.replaceAll('_', ' ')} />
+                  {/* Channel-explicit: this reflects the connection-note
+                      channel specifically. Lead Detail may correctly show a
+                      different policy for the DM channel on the same lead —
+                      not a contradiction, a different question. */}
+                  <SignalChip label="Connection" value={result.revenue.messagingPolicy.replaceAll('_', ' ')} />
                 </div>
               )}
               {result.revenue && (

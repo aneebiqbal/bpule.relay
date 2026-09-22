@@ -57,7 +57,7 @@ More`
         opportunityTrigger: null,
         content: { hiringSignals: [], explicitProblems: [], recentPosts: [] },
       },
-    } as Parameters<typeof deriveSignalEvidenceFallback>[0]
+    } as unknown as Parameters<typeof deriveSignalEvidenceFallback>[0]
     const evidence = deriveSignalEvidenceFallback(fakeCanonical, chromeHeavyText)
     // Must not be the raw "· 3rd\nTitle Here\nBerlin, Germany\n·\nContact info..." blob
     expect(evidence).not.toContain('svg')
@@ -114,7 +114,7 @@ More`
         leadId: 'test-daria',
         lead: leadForDraft,
         extracted,
-        score: { total: canonical.canonicalScore, verdict: 'research_more', breakdown: canonical.scoreBreakdown.dimensions },
+        score: { total: canonical.canonicalScore, verdict: 'research_more' as const, breakdown: canonical.scoreBreakdown.dimensions as unknown as { category: string; label: string; points: number; max: number; note: string }[] },
         canonicalScore: canonical.canonicalScore,
         type: 'connection',
         styleCard: null, facts: [], plays: [], history: [], profile: null, matchedProof: null,
