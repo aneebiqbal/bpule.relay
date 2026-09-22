@@ -8,18 +8,18 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-ink text-bone hover:bg-ink/90 dark:bg-bone dark:text-bone dark:hover:bg-bone/90",
-        orange: "bg-orange text-bone hover:bg-orange-dark",
+        default: "bg-solid text-on-solid hover:bg-solid/90",
+        orange: "bg-orange text-on-accent hover:bg-orange-dark",
         outline:
-          "border-line bg-bone hover:bg-bone-raised hover:text-ink aria-expanded:bg-bone-raised",
+          "border-line bg-bone text-ink hover:bg-bone-raised hover:text-ink aria-expanded:bg-bone-raised",
         secondary:
           "bg-bone-raised text-ink hover:bg-line aria-expanded:bg-bone-raised",
         ghost:
-          "hover:bg-bone-raised hover:text-ink aria-expanded:bg-bone-raised",
+          "text-ink hover:bg-bone-raised hover:text-ink aria-expanded:bg-bone-raised",
         destructive:
           "bg-status-danger/10 text-status-danger hover:bg-status-danger/20 focus-visible:border-status-danger/40 focus-visible:ring-status-danger/20",
         link: "text-ink underline-offset-4 hover:underline",
-        cobalt: "bg-cobalt text-bone hover:bg-cobalt-dark",
+        cobalt: "bg-cobalt text-on-accent hover:bg-cobalt-dark",
       },
       size: {
         default:

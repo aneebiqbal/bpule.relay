@@ -150,7 +150,7 @@ export function StudioQuickCapture({
           type="button"
           onClick={() => void handleSubmit()}
           disabled={input.trim().length < 5 || actionsLocked}
-          className="inline-flex items-center gap-1 rounded bg-cobalt px-3 py-1.5 text-[12px] font-medium text-bone disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded bg-cobalt px-3 py-1.5 text-[12px] font-medium text-on-accent disabled:opacity-50"
         >
           <Sparkles className="size-3.5" />
           {parsing ? 'Finding...' : 'Find angles'}

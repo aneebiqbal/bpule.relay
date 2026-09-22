@@ -124,7 +124,7 @@ export function OpportunityCard({
       <div className="mt-4 flex items-center gap-2 pl-[52px]">
         <button
           onClick={onExplore}
-          className="inline-flex items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-sm font-medium text-bone transition-all hover:bg-ink/90 active:scale-[0.97]"
+          className="inline-flex items-center gap-1.5 rounded-md bg-solid px-4 py-2 text-sm font-medium text-on-solid transition-all hover:bg-solid/90 active:scale-[0.97]"
         >
           Explore
           <ChevronRight className="size-3.5" aria-hidden="true" />
@@ -252,7 +252,7 @@ export function QuickCapture({
                 <button
                   onClick={handleSubmit}
                   disabled={!text.trim()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-4 py-1.5 text-sm font-medium text-bone transition-all hover:bg-ink/90 disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-4 py-1.5 text-sm font-medium text-on-solid transition-all hover:bg-solid/90 disabled:opacity-40"
                 >
                   Continue
                   <ChevronRight className="size-3.5" aria-hidden="true" />

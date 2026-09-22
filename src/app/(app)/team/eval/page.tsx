@@ -134,7 +134,7 @@ export default async function EvalPage() {
           >
             <button
               type="submit"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-orange px-3 text-[0.8rem] font-medium text-bone transition-colors hover:bg-orange/90"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-orange px-3 text-[0.8rem] font-medium text-on-accent transition-colors hover:bg-orange/90"
             >
               <Play className="mr-1.5 size-3.5" />
               Run eval now

@@ -68,7 +68,7 @@ export function StudioIntro({ children }: { children: React.ReactNode }) {
 
         <button
           onClick={markSeen}
-          className="group mt-8 inline-flex items-center gap-2 rounded-md bg-cobalt px-5 py-2.5 text-sm font-medium text-bone transition-all hover:bg-cobalt-dark active:scale-[0.97]"
+          className="group mt-8 inline-flex items-center gap-2 rounded-md bg-cobalt px-5 py-2.5 text-sm font-medium text-on-accent transition-all hover:bg-cobalt-dark active:scale-[0.97]"
         >
           Continue
           <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />

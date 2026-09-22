@@ -93,7 +93,7 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
             </div>
             <Link
               href="/content/new"
-              className="inline-flex items-center gap-2 rounded bg-ink px-5 py-2.5 text-sm font-medium text-bone transition-all hover:bg-ink/90"
+              className="inline-flex items-center gap-2 rounded bg-solid px-5 py-2.5 text-sm font-medium text-on-solid transition-all hover:bg-solid/90"
             >
               Create your first persona
             </Link>
@@ -146,7 +146,7 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                   </div>
                   <div className="flex items-center gap-2">
                     {hasWaiting ? (
-                      <span className="rounded-full bg-cobalt px-2.5 py-1 text-mono-medium text-[10px] text-bone">
+                      <span className="rounded-full bg-cobalt px-2.5 py-1 text-mono-medium text-[10px] text-on-accent">
                         {readyDrafts} draft{readyDrafts === 1 ? '' : 's'} waiting
                       </span>
                     ) : (
@@ -160,7 +160,7 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                     {needsSetup ? (
                       <Link
                         href={`/content/${persona.id}`}
-                        className="group inline-flex items-center gap-1.5 rounded bg-ink px-4 py-2 text-sm font-medium text-bone transition-all hover:bg-ink/90 active:scale-[0.97]"
+                        className="group inline-flex items-center gap-1.5 rounded bg-solid px-4 py-2 text-sm font-medium text-on-solid transition-all hover:bg-solid/90 active:scale-[0.97]"
                       >
                         Finish setup
                         <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
@@ -171,7 +171,7 @@ export function ContentDashboard({ personas }: { personas: PersonaWithExtras[] }
                         className={cn(
                           'group inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-all active:scale-[0.97]',
                           hasWaiting
-                            ? 'bg-ink text-bone hover:bg-ink/90'
+                            ? 'bg-solid text-on-solid hover:bg-solid/90'
                             : 'border border-line text-ink hover:bg-bone',
                         )}
                       >

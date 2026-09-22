@@ -45,7 +45,7 @@ export function StudioLayout({ persona, children }: StudioLayoutProps) {
                 href={href}
                 className={cn(
                   'rounded px-2.5 py-1.5 text-[12px] transition-colors',
-                  active ? 'bg-cobalt text-bone' : 'text-graphite hover:bg-bone hover:text-ink',
+                  active ? 'bg-cobalt text-on-accent' : 'text-graphite hover:bg-bone hover:text-ink',
                 )}
               >
                 {item.label}

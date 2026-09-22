@@ -8,7 +8,7 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-ink text-bone",
+        default: "bg-solid text-on-solid",
         secondary: "bg-bone-raised text-ink",
         destructive: "bg-status-danger/10 text-status-danger",
         outline: "border-line text-ink-soft",

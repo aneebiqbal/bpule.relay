@@ -54,7 +54,7 @@ export function DoThisNext({ action }: DoThisNextProps) {
       <div className="mt-3">
         <Link
           href={action.href}
-          className="inline-flex items-center gap-2 rounded-md bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-colors hover:bg-orange-dark"
+          className="inline-flex items-center gap-2 rounded-md bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
         >
           {action.humanAction}
           <ArrowRight className="size-4" />

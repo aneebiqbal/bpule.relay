@@ -374,14 +374,14 @@ async function RelayBody({ relayPromise }: { relayPromise: Promise<RelayData> })
             <div className="flex items-center justify-center gap-2">
               <Link
                 href="/prospect"
-                className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-orange-dark"
+                className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-all hover:bg-orange-dark"
               >
                 <Search className="size-4" />
                 Check a prospect
               </Link>
               <Link
                 href="/leads/new"
-                className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-ink/90"
+                className="inline-flex items-center gap-2 rounded-lg bg-solid px-4 py-2 text-[13px] font-medium text-on-solid transition-all hover:bg-solid/90"
               >
                 New lead
               </Link>

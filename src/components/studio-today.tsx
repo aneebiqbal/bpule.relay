@@ -252,7 +252,7 @@ export function StudioToday({
                 type="button"
                 onClick={() => void writeIdea(pick)}
                 disabled={actionsLocked}
-                className="inline-flex items-center gap-2 rounded bg-ink px-4 py-2 text-[12px] font-medium text-bone hover:bg-ink/90 disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded bg-solid px-4 py-2 text-[12px] font-medium text-on-solid hover:bg-solid/90 disabled:opacity-60"
               >
                 {openingDraftIdeaId === pick.id ? 'Opening workspace...' : loadingIdeaId === pick.id ? 'Writing...' : 'Write this'}
                 <ArrowRight className="size-3.5" />
@@ -284,7 +284,7 @@ export function StudioToday({
             type="button"
             onClick={() => void refreshIdeas('surprise_me')}
             disabled={actionsLocked}
-            className="mt-3 rounded bg-cobalt px-3 py-2 text-[12px] font-medium text-bone disabled:opacity-60"
+            className="mt-3 rounded bg-cobalt px-3 py-2 text-[12px] font-medium text-on-accent disabled:opacity-60"
           >
             Find directions
           </button>

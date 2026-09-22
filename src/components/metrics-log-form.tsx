@@ -74,7 +74,7 @@ export function MetricsLogForm({
         <button
           onClick={() => void save()}
           disabled={saving}
-          className="rounded-lg bg-cobalt px-3.5 py-1.5 text-xs font-semibold text-bone transition-all hover:brightness-110 disabled:opacity-50"
+          className="rounded-lg bg-cobalt px-3.5 py-1.5 text-xs font-semibold text-on-accent transition-all hover:brightness-110 disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save results'}
         </button>

@@ -141,7 +141,7 @@ function PersonCard({ person, isOwner }: { person: any; isOwner: boolean }) {
     <div className="rounded-lg border border-line bg-bone-raised p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex size-8 items-center justify-center rounded-full bg-ink text-[11px] font-medium text-bone">
+          <div className="flex size-8 items-center justify-center rounded-full bg-solid text-[11px] font-medium text-on-solid">
             {person.name.charAt(0)}
           </div>
           <div>

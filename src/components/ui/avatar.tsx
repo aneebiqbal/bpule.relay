@@ -6,7 +6,7 @@ function Avatar({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="avatar"
       className={cn(
-        "relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-ink text-bone",
+        "relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-solid text-on-solid",
         className
       )}
       {...props}
@@ -29,7 +29,7 @@ function AvatarFallback({ className, ...props }: React.ComponentProps<"span">) {
     <span
       data-slot="avatar-fallback"
       className={cn(
-        "flex size-full items-center justify-center rounded-full bg-ink text-[11px] font-medium text-bone",
+        "flex size-full items-center justify-center rounded-full bg-solid text-[11px] font-medium text-on-solid",
         className
       )}
       aria-hidden="true"

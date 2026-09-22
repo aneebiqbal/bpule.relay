@@ -62,7 +62,7 @@ export default function LeadsPage() {
         action={
           <Link
             href="/leads/new"
-            className="inline-flex items-center gap-2 rounded-md bg-orange px-3 py-2 text-[13px] font-medium text-bone transition-colors hover:bg-orange-dark"
+            className="inline-flex items-center gap-2 rounded-md bg-orange px-3 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
           >
             <Plus className="size-4" aria-hidden="true" />
             New lead
@@ -89,7 +89,7 @@ async function LeadsBody({ leadsPromise }: { leadsPromise: Promise<LeadsPayload>
         action={
           <Link
             href="/prospect"
-            className="inline-flex items-center gap-2 rounded-md bg-orange px-3 py-2 text-[13px] font-medium text-bone transition-colors hover:bg-orange-dark"
+            className="inline-flex items-center gap-2 rounded-md bg-orange px-3 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
           >
             <Search className="size-4" aria-hidden="true" />
             Check a prospect

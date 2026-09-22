@@ -341,7 +341,7 @@ export function OnboardingWizard() {
           <button
             onClick={handleComplete}
             disabled={!canProceed() || creating}
-            className="rounded-lg bg-ink px-6 py-2.5 text-sm font-medium text-bone hover:bg-ink/90 disabled:opacity-50"
+            className="rounded-lg bg-solid px-6 py-2.5 text-sm font-medium text-on-solid hover:bg-solid/90 disabled:opacity-50"
           >
             {creating ? 'Creating...' : 'Complete setup'}
           </button>
@@ -349,7 +349,7 @@ export function OnboardingWizard() {
           <button
             onClick={goNext}
             disabled={!canProceed()}
-            className="rounded-lg bg-ink px-6 py-2.5 text-sm font-medium text-bone hover:bg-ink/90 disabled:opacity-50"
+            className="rounded-lg bg-solid px-6 py-2.5 text-sm font-medium text-on-solid hover:bg-solid/90 disabled:opacity-50"
           >
             Continue
           </button>
@@ -373,7 +373,7 @@ function StepIdentity({ state, update }: { state: OnboardingState; update: (p: P
             onClick={() => update({ personaRole: role })}
             className={`rounded-lg border px-3 py-2.5 text-sm text-left transition-colors ${
               state.personaRole === role
-                ? 'border-ink bg-ink text-bone'
+                ? 'border-ink bg-solid text-on-solid'
                 : 'border-ink/15 hover:border-ink/30'
             }`}
           >
@@ -430,7 +430,7 @@ function StepImport({ state, update, onExtract, extracting }: { state: Onboardin
         <button
           onClick={onExtract}
           disabled={state.sourceText.trim().length < 20 && state.sourceText.trim().length > 0}
-          className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-bone hover:bg-ink/90 disabled:opacity-50"
+          className="rounded-lg bg-solid px-4 py-2 text-sm font-medium text-on-solid hover:bg-solid/90 disabled:opacity-50"
         >
           {extracting ? 'Analyzing...' : 'Analyze'}
         </button>
@@ -525,7 +525,7 @@ function StepGoals({ state, update }: { state: OnboardingState; update: (p: Part
                 update({ selectedGoals: goals })
               }}
               className={`rounded-lg border px-3 py-2.5 text-sm text-left transition-colors ${
-                selected ? 'border-ink bg-ink text-bone' : 'border-ink/15 hover:border-ink/30'
+                selected ? 'border-ink bg-solid text-on-solid' : 'border-ink/15 hover:border-ink/30'
               }`}
             >
               {goal.label}
@@ -568,7 +568,7 @@ function StepAudience({ state, update }: { state: OnboardingState; update: (p: P
             onClick={() => toggleAudience(aud)}
             className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
               state.selectedAudiences.includes(aud)
-                ? 'border-ink bg-ink text-bone'
+                ? 'border-ink bg-solid text-on-solid'
                 : 'border-ink/15 hover:border-ink/30'
             }`}
           >
@@ -629,7 +629,7 @@ function StepTerritories({ state, update }: { state: OnboardingState; update: (p
             onClick={() => toggleTerritory(terr)}
             className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
               state.selectedTerritories.includes(terr)
-                ? 'border-ink bg-ink text-bone'
+                ? 'border-ink bg-solid text-on-solid'
                 : 'border-ink/15 hover:border-ink/30'
             }`}
           >
@@ -668,7 +668,7 @@ function StepVoice({ state, update }: { state: OnboardingState; update: (p: Part
             onClick={() => update({ voiceSelection: voice.id })}
             className={`w-full rounded-lg border p-3 text-left transition-colors ${
               state.voiceSelection === voice.id
-                ? 'border-ink bg-ink text-bone'
+                ? 'border-ink bg-solid text-on-solid'
                 : 'border-ink/15 hover:border-ink/30'
             }`}
           >
@@ -703,7 +703,7 @@ function StepComfort({ state, update }: { state: OnboardingState; update: (p: Pa
                 update({ selectedComfort: comfort })
               }}
               className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                selected ? 'border-ink bg-ink text-bone' : 'border-ink/15 hover:border-ink/30'
+                selected ? 'border-ink bg-solid text-on-solid' : 'border-ink/15 hover:border-ink/30'
               }`}
             >
               {item}

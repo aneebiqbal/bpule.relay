@@ -56,7 +56,7 @@ export function ManagerDrillDown({ dataPromise }: { dataPromise: Promise<DrillDo
       </div>
 
       <header className="flex items-start gap-4">
-        <div className="flex size-12 items-center justify-center rounded-lg bg-ink text-sm font-medium text-bone">
+        <div className="flex size-12 items-center justify-center rounded-lg bg-solid text-sm font-medium text-on-solid">
           {data.rep.name.charAt(0)}
         </div>
         <div>

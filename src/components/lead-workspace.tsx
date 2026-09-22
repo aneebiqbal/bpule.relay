@@ -196,8 +196,8 @@ function NextBestAction({
               className={cn(
                 'inline-flex items-center gap-2 rounded px-3 py-1.5 text-[12px] font-medium transition-all',
                 isUrgent
-                  ? 'bg-orange text-bone hover:bg-orange-dark'
-                  : 'bg-ink text-bone hover:bg-ink/90',
+                  ? 'bg-orange text-on-accent hover:bg-orange-dark'
+                  : 'bg-solid text-on-solid hover:bg-solid/90',
               )}
             >
               {action.cta}
@@ -626,7 +626,7 @@ export function LeadWorkspace({
                   onClick={() => { if (!disabledHint) { setOverrideCheck(false); setArtifact(t.id) } }}
                   className={cn(
                     'rounded px-2 py-1 text-[11px] font-medium transition-all',
-                    active ? 'bg-ink text-bone' : disabledHint ? 'cursor-not-allowed text-graphite/40' : 'text-graphite hover:text-ink',
+                    active ? 'bg-solid text-on-solid' : disabledHint ? 'cursor-not-allowed text-graphite/40' : 'text-graphite hover:text-ink',
                   )}>
                   {t.label}
                 </button>

@@ -280,7 +280,7 @@ export default function InboundPage() {
           <button
             onClick={analyze}
             disabled={!message.trim() || analysisState === 'analyzing'}
-            className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-orange-dark active:scale-[0.97] disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-all hover:bg-orange-dark active:scale-[0.97] disabled:opacity-50"
           >
             {analysisState === 'analyzing' ? (
               <Loader2 className="size-4 animate-spin" />
@@ -402,7 +402,7 @@ export default function InboundPage() {
             ) : (
               <button
                 onClick={saveAsLead}
-                className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-ink/90 active:scale-[0.97]"
+                className="inline-flex items-center gap-2 rounded-lg bg-solid px-4 py-2 text-[13px] font-medium text-on-solid transition-all hover:bg-solid/90 active:scale-[0.97]"
               >
                 <Save className="size-4" />
                 Save as Lead
@@ -412,7 +412,7 @@ export default function InboundPage() {
             {leadId && (
               <Link
                 href={`/leads/${leadId}`}
-                className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-orange-dark active:scale-[0.97]"
+                className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-all hover:bg-orange-dark active:scale-[0.97]"
               >
                 <Send className="size-4" />
                 Open Lead & Reply

@@ -27,6 +27,9 @@
 @theme inline {
   --color-bone: var(--bone);
   --color-bone-raised: var(--bone-raised);
+  --color-solid: var(--solid);
+  --color-on-solid: var(--on-solid);
+  --color-on-accent: var(--on-accent);
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-graphite: var(--graphite);
@@ -105,6 +108,9 @@
   /* ── Light mode ── */
   --bone: #f7f6f3;
   --bone-raised: #ffffff;
+  --solid: #1c1c1a;
+  --on-solid: #f7f6f3;
+  --on-accent: #f7f6f3;
   --ink: #1c1c1a;
   --ink-soft: #3d3c39;
   --graphite: #5c5b57;
@@ -206,6 +212,9 @@
   /* ── Dark mode ── */
   --bone: #141312;
   --bone-raised: #1c1b19;
+  --solid: #ece9e3;
+  --on-solid: #141312;
+  --on-accent: #f7f6f3;
   --ink: #ece9e3;
   --ink-soft: #b8b5ad;
   --graphite: #8c8982;
@@ -311,6 +320,9 @@
   color-scheme: light;
   --bone: #f7f6f3;
   --bone-raised: #ffffff;
+  --solid: #1c1c1a;
+  --on-solid: #f7f6f3;
+  --on-accent: #f7f6f3;
   --ink: #1c1c1a;
   --ink-soft: #3d3c39;
   --graphite: #5c5b57;
@@ -754,7 +766,7 @@
     padding: 0 1.25rem;
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--bone);
+    color: var(--on-accent);
     transition: background 0.2s ease, transform 0.15s ease;
   }
   .relay-cta:hover { background: var(--orange-dark); }
@@ -1604,4 +1616,14 @@
   --z-modal: 40;
   --z-toast: 50;
   --z-tooltip: 60;
+}
+
+@layer components {
+  :is(button, a, [role="button"], [data-slot="button"]).bg-orange,
+  :is(button, a, [role="button"], [data-slot="button"]).bg-cobalt {
+    color: var(--on-accent);
+  }
+  :is(button, a, [role="button"], [data-slot="button"]).bg-solid {
+    color: var(--on-solid);
+  }
 }

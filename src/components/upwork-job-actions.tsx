@@ -138,7 +138,7 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
         <button
           onClick={() => void generate()}
           disabled={generating || !selectedProfileId}
-          className="inline-flex items-center gap-1.5 rounded bg-orange px-4 py-2 text-sm font-medium text-bone transition-all hover:bg-orange-dark active:scale-[0.97] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded bg-orange px-4 py-2 text-sm font-medium text-on-accent transition-all hover:bg-orange-dark active:scale-[0.97] disabled:opacity-50"
         >
           {generating ? (
             <>
@@ -205,7 +205,7 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
                 'ml-auto inline-flex items-center gap-1.5 rounded px-4 py-2 text-sm font-medium transition-all',
                 applied
                   ? 'bg-status-success/10 text-status-success'
-                  : 'bg-status-success text-bone hover:bg-status-success/90',
+                  : 'bg-status-success text-on-accent hover:bg-status-success/90',
               )}
             >
               {applied ? (

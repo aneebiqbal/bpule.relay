@@ -147,7 +147,7 @@ function ResumeGenerateInner() {
         </div>
 
         <button onClick={void generate} disabled={generating || !selectedProfileId}
-          className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-all hover:bg-orange-dark active:scale-[0.97] disabled:opacity-50">
+          className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-all hover:bg-orange-dark active:scale-[0.97] disabled:opacity-50">
           {generating ? <RefreshCw className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
           {generating ? 'Tailoring...' : 'Generate tailored CV'}
         </button>

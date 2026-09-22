@@ -38,17 +38,17 @@ export function Tabs({ items, value, onChange, className }: TabsProps) {
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-all duration-150",
               active
-                ? "bg-ink text-bone shadow-sm"
+                ? "bg-solid text-on-solid shadow-sm"
                 : "text-graphite hover:bg-bone hover:text-ink"
             )}
           >
-            {Icon && <Icon className={cn("size-3.5", active ? "text-bone" : "text-stone")} />}
+            {Icon && <Icon className={cn("size-3.5", active ? "text-on-solid" : "text-stone")} />}
             <span>{label}</span>
             {typeof count === "number" && (
               <span
                 className={cn(
                   "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                  active ? "bg-bone/20 text-bone" : "bg-line text-graphite"
+                  active ? "bg-on-solid/20 text-on-solid" : "bg-line text-graphite"
                 )}
               >
                 {count}

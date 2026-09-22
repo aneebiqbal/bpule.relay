@@ -138,7 +138,7 @@ export function InterviewFlow({
             <button
               onClick={submitAnswer}
               disabled={!answer.trim()}
-              className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-ink text-bone transition-all hover:bg-ink/90 disabled:opacity-40"
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-solid text-on-solid transition-all hover:bg-solid/90 disabled:opacity-40"
             >
               <Send className="size-4" aria-hidden="true" />
             </button>

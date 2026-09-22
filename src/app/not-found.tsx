@@ -24,7 +24,7 @@ export default function NotFound() {
         <div className="mt-6 flex items-center gap-3">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-bone transition-all hover:bg-ink/90 active:scale-[0.97]"
+            className="inline-flex items-center gap-2 rounded-lg bg-solid px-5 py-2.5 text-sm font-medium text-on-solid transition-all hover:bg-solid/90 active:scale-[0.97]"
           >
             <Home className="size-4" />
             Home

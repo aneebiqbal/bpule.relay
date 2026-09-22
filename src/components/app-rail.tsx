@@ -95,8 +95,8 @@ function NavSection({ label, items, isActive, studio }: NavSectionProps) {
               'group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150',
               active
                 ? studio
-                  ? 'bg-cobalt text-bone shadow-cobalt'
-                  : 'bg-ink text-bone'
+                  ? 'bg-cobalt text-on-accent shadow-cobalt'
+                  : 'bg-solid text-on-solid'
                 : 'text-graphite hover:bg-bone-raised hover:text-ink',
             )}
           >
@@ -104,7 +104,9 @@ function NavSection({ label, items, isActive, studio }: NavSectionProps) {
               className={cn(
                 'size-3.5 shrink-0 transition-colors',
                 active
-                  ? 'text-bone'
+                  ? studio
+                    ? 'text-on-accent'
+                    : 'text-on-solid'
                   : studio
                     ? 'text-cobalt/60 group-hover:text-cobalt'
                     : 'text-stone group-hover:text-ink',
@@ -139,8 +141,8 @@ function MobileNavSection({ label, items, isActive, studio, onNavigate }: NavSec
               'group flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition-all duration-150',
               active
                 ? studio
-                  ? 'bg-cobalt text-bone'
-                  : 'bg-ink text-bone'
+                  ? 'bg-cobalt text-on-accent'
+                  : 'bg-solid text-on-solid'
                 : 'text-graphite hover:bg-bone-raised hover:text-ink',
             )}
           >
@@ -148,7 +150,9 @@ function MobileNavSection({ label, items, isActive, studio, onNavigate }: NavSec
               className={cn(
                 'size-4 shrink-0 transition-colors',
                 active
-                  ? 'text-bone'
+                  ? studio
+                    ? 'text-on-accent'
+                    : 'text-on-solid'
                   : studio
                     ? 'text-cobalt/60 group-hover:text-cobalt'
                     : 'text-stone group-hover:text-ink',
@@ -421,11 +425,11 @@ export function AppRail({
                               onClick={() => selectIdentity(identity.id)}
                               className={cn(
                                 'w-full rounded px-2 py-1.5 text-left transition-colors',
-                                selected ? 'bg-ink text-bone' : 'hover:bg-bone',
+                                selected ? 'bg-solid text-on-solid' : 'hover:bg-bone',
                               )}
                             >
                               <p className="truncate text-[12px] font-medium">{identity.identityName}</p>
-                              <p className={cn('truncate text-[10px]', selected ? 'text-bone/70' : 'text-graphite')}>
+                              <p className={cn('truncate text-[10px]', selected ? 'text-on-solid/70' : 'text-graphite')}>
                                 {[identity.title, identity.channel.toUpperCase()].filter(Boolean).join(' / ')}
                               </p>
                             </button>
@@ -534,11 +538,11 @@ export function AppRail({
                           onClick={() => selectIdentity(identity.id)}
                           className={cn(
                             'w-full rounded px-2 py-1.5 text-left transition-colors',
-                            selected ? 'bg-ink text-bone' : 'hover:bg-bone',
+                            selected ? 'bg-solid text-on-solid' : 'hover:bg-bone',
                           )}
                         >
                           <p className="truncate text-[12px] font-medium">{identity.identityName}</p>
-                          <p className={cn('truncate text-[10px]', selected ? 'text-bone/70' : 'text-graphite')}>
+                          <p className={cn('truncate text-[10px]', selected ? 'text-on-solid/70' : 'text-graphite')}>
                             {[identity.title, identity.channel.toUpperCase()].filter(Boolean).join(' / ')}
                           </p>
                         </button>

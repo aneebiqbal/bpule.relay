@@ -269,7 +269,7 @@ export function RelayTodayWorkspace({
         <section className="overflow-hidden rounded-lg border border-line bg-bone-raised shadow-sm">
           <div className="border-b border-line bg-bone-raised px-5 py-4">
             <div className="flex items-center gap-2">
-              <span className="flex size-5 items-center justify-center rounded-full bg-orange text-[10px] font-bold text-bone">1</span>
+              <span className="flex size-5 items-center justify-center rounded-full bg-orange text-[10px] font-bold text-on-accent">1</span>
               <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange">Now</p>
               {topAction.inbound && (
                 <StatusBadge status="Inbound" variant="orange" />
@@ -314,7 +314,7 @@ export function RelayTodayWorkspace({
               <button
                 type="button"
                 onClick={() => setSelectedId(topAction.id)}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-orange px-3 py-2.5 text-[13px] font-medium text-bone transition-colors hover:bg-orange-dark"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-orange px-3 py-2.5 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
               >
                 Review {kindActionLabel(topAction.kind)}
                 <ArrowRight className="size-4" />
@@ -343,7 +343,7 @@ export function RelayTodayWorkspace({
           <p className="text-heading text-xl font-light text-ink">You&apos;re clear.</p>
           <p className="mt-1 text-[13px] text-graphite">Relay will keep watching for anything new.</p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-            <Link href="/prospect" className="inline-flex items-center gap-2 rounded-md bg-orange px-3 py-2 text-[12px] font-medium text-bone">
+            <Link href="/prospect" className="inline-flex items-center gap-2 rounded-md bg-orange px-3 py-2 text-[12px] font-medium text-on-accent">
               Check a prospect
             </Link>
             <Link href="/content" className="inline-flex items-center gap-2 rounded-md border border-line px-3 py-2 text-[12px] font-medium text-ink hover:bg-bone">
@@ -384,7 +384,7 @@ export function RelayTodayWorkspace({
                   <span className={cn(
                     'shrink-0 rounded-full px-2 py-0.5 text-mono-medium text-[9px] uppercase tracking-[0.12em]',
                     stage === 'NOW'
-                      ? 'bg-orange text-bone'
+                      ? 'bg-orange text-on-accent'
                       : stage === 'NEXT'
                         ? 'bg-orange/10 text-orange'
                         : stage === 'TODAY'
@@ -629,7 +629,7 @@ function ActionDrawer({
           <button
             type="button"
             onClick={() => void copyAndResolve()}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-orange px-3 py-2.5 text-[13px] font-medium text-bone transition-colors hover:bg-orange-dark"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-orange px-3 py-2.5 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
           >
             {copied ? 'Copied and resolved' : 'Copy / Send'}
             <ArrowRight className="size-4" />
@@ -744,7 +744,7 @@ function StudioWriteThisButton({ opportunity }: { opportunity: StudioOpportunity
         type="button"
         onClick={() => void handleWriteThis()}
         disabled={state === 'writing' || state === 'opening'}
-        className="inline-flex items-center gap-1 rounded-md bg-cobalt px-3 py-1.5 text-[12px] font-medium text-bone transition-colors hover:bg-cobalt-dark disabled:opacity-60"
+        className="inline-flex items-center gap-1 rounded-md bg-cobalt px-3 py-1.5 text-[12px] font-medium text-on-accent transition-colors hover:bg-cobalt-dark disabled:opacity-60"
       >
         {label}
         <ArrowRight className="size-3" />

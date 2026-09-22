@@ -36,7 +36,7 @@ export default function UpworkListPage() {
           </div>
           <Link
             href="/upwork/new"
-            className="group inline-flex items-center gap-2.5 rounded-md bg-orange px-4 py-2 text-sm font-medium text-bone transition-all hover:bg-orange/90"
+            className="group inline-flex items-center gap-2.5 rounded-md bg-orange px-4 py-2 text-sm font-medium text-on-accent transition-all hover:bg-orange/90"
           >
             <Plus className="size-4 transition-transform duration-300 group-hover:rotate-90" aria-hidden="true" />
             New job
@@ -87,7 +87,7 @@ async function UpworkList({ jobsPromise }: { jobsPromise: JobsPromise }) {
           </div>
           <Link
             href="/upwork/new"
-            className="inline-flex items-center gap-2 rounded-2xl bg-orange px-5 py-2.5 text-sm font-medium text-bone transition-all duration-300 hover:bg-orange/90"
+            className="inline-flex items-center gap-2 rounded-2xl bg-orange px-5 py-2.5 text-sm font-medium text-on-accent transition-all duration-300 hover:bg-orange/90"
           >
             <Plus className="size-4" aria-hidden="true" />
             Add the first job

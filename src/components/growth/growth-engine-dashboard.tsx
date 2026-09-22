@@ -205,7 +205,7 @@ function TodayTab({ data }: { data: GrowthData }) {
                 <button
                   onClick={() => handleSelect(opp.id)}
                   disabled={isSubmitting}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-orange px-3 py-2 text-[12px] font-medium text-bone transition-colors hover:bg-orange-dark disabled:opacity-60"
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-orange px-3 py-2 text-[12px] font-medium text-on-accent transition-colors hover:bg-orange-dark disabled:opacity-60"
                 >
                   Use this
                 </button>
@@ -230,7 +230,7 @@ function TodayTab({ data }: { data: GrowthData }) {
             <button
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="mt-4 inline-flex items-center gap-2 rounded-md bg-orange px-4 py-2 text-[13px] font-medium text-bone transition-colors hover:bg-orange-dark disabled:opacity-60"
+              className="mt-4 inline-flex items-center gap-2 rounded-md bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark disabled:opacity-60"
             >
               <RefreshCw className={cn('size-4', isGenerating && 'animate-spin')} />
               {isGenerating ? 'Generating...' : 'Generate Opportunities'}
@@ -257,7 +257,7 @@ function TodayTab({ data }: { data: GrowthData }) {
           <button
             onClick={handleBuildLog}
             disabled={isSubmitting || !buildLogInput.trim()}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-ink px-3 py-2 text-[12px] font-medium text-bone transition-colors hover:bg-ink/90 disabled:opacity-60"
+            className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-solid px-3 py-2 text-[12px] font-medium text-on-solid transition-colors hover:bg-solid/90 disabled:opacity-60"
           >
             <Send className="size-3.5" />
             Add to Memory
@@ -343,7 +343,7 @@ function TodayTab({ data }: { data: GrowthData }) {
             <button
               onClick={() => handleFeedback('approved', 'approved_unchanged')}
               disabled={isSubmitting}
-              className="inline-flex items-center gap-1.5 rounded-md bg-orange px-3 py-2 text-[12px] font-medium text-bone transition-colors hover:bg-orange-dark disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-md bg-orange px-3 py-2 text-[12px] font-medium text-on-accent transition-colors hover:bg-orange-dark disabled:opacity-60"
             >
               <CheckCircle2 className="size-3.5" />
               Approve
@@ -515,7 +515,7 @@ function WeeklyTab() {
         <button
           onClick={loadReview}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-md bg-ink px-3 py-2 text-[12px] font-medium text-bone"
+          className="inline-flex items-center gap-1.5 rounded-md bg-solid px-3 py-2 text-[12px] font-medium text-on-solid"
         >
           <TrendingUp className="size-3.5" />
           {loading ? 'Loading...' : 'Generate Weekly Review'}

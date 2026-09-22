@@ -50,7 +50,7 @@ export function GenerationModeSelector({
         disabled={disabled}
         className={`flex-1 rounded-lg px-3 py-2 text-left transition-colors ${
           value === 'standard'
-            ? 'bg-ink text-bone'
+            ? 'bg-solid text-on-solid'
             : 'bg-bone-raised text-graphite hover:bg-bone-raised/80'
         }`}
       >

@@ -488,7 +488,7 @@ export function PersonaWorkspace({
                   onClick={() => setPlatform(p)}
                   className={cn(
                     'rounded-md px-3 py-1 text-sm font-medium transition-all',
-                    platform === p ? 'bg-ink text-bone' : 'text-graphite hover:text-ink',
+                    platform === p ? 'bg-solid text-on-solid' : 'text-graphite hover:text-ink',
                   )}
                 >
                   {p}
@@ -581,7 +581,7 @@ export function PersonaWorkspace({
             <button
               onClick={() => void reactToDraft('posting')}
               disabled={reacting || !draftId}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-bone transition-all hover:bg-ink/90 active:scale-[0.97] disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-solid px-5 py-2.5 text-sm font-medium text-on-solid transition-all hover:bg-solid/90 active:scale-[0.97] disabled:opacity-50"
             >
               <ThumbsUp className="size-4" aria-hidden="true" />
               Posting this

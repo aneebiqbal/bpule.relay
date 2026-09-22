@@ -448,7 +448,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
             <button
               onClick={handlePosting}
               disabled={posting || caption.length < 10 || Boolean(regenerating)}
-              className="rounded-lg bg-ink px-4 py-1.5 text-xs font-medium text-bone hover:bg-ink/90 disabled:opacity-50"
+              className="rounded-lg bg-solid px-4 py-1.5 text-xs font-medium text-on-solid hover:bg-solid/90 disabled:opacity-50"
             >
               {posting ? 'Posting...' : 'Posting this'}
             </button>
@@ -522,7 +522,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
                       onClick={() => void submitFeedback(reason)}
                       disabled={actionsLocked}
                       className={`rounded-full border px-2.5 py-1 text-xs ${
-                        feedbackReason === reason ? 'border-ink bg-ink text-bone' : 'border-line hover:border-ink'
+                        feedbackReason === reason ? 'border-ink bg-solid text-on-solid' : 'border-line hover:border-ink'
                       }`}
                     >
                       {reason}
@@ -645,7 +645,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
                     title={p.reason}
                     className={`flex-1 rounded-lg px-2 py-1.5 text-xs capitalize ${
                       normalizeDraftWorkspacePlatform(draft.platform) === p.id
-                        ? 'bg-ink text-bone'
+                        ? 'bg-solid text-on-solid'
                         : 'bg-ink/5 text-graphite hover:bg-ink/10'
                     }`}
                   >
@@ -685,7 +685,7 @@ function AdjustButton({ label, onClick, disabled = false, active = false }: { la
       disabled={disabled}
       className={`rounded-lg border px-2 py-1.5 text-xs disabled:opacity-50 ${
         active
-          ? 'border-ink bg-ink text-bone'
+          ? 'border-ink bg-solid text-on-solid'
           : 'border-line text-graphite hover:border-line hover:text-ink'
       }`}
     >

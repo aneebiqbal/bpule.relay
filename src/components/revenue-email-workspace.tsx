@@ -97,7 +97,7 @@ export function RevenueEmailWorkspace() {
               type="button"
               onClick={() => setActiveTab(tab)}
               className={active
-                ? 'rounded-md bg-ink px-3 py-1.5 text-xs font-medium text-bone'
+                ? 'rounded-md bg-solid px-3 py-1.5 text-xs font-medium text-on-solid'
                 : 'rounded-md border border-line px-3 py-1.5 text-xs font-medium text-graphite hover:text-ink'}
             >
               {tabLabel(tab)} {state.summary[tab] ? `(${state.summary[tab]})` : ''}

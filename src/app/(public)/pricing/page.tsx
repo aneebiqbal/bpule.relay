@@ -135,7 +135,7 @@ export default function PricingPage() {
                 }
               >
                 {plan.featured && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-orange px-3 py-1 text-mono-medium text-[10px] font-medium text-bone">
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-orange px-3 py-1 text-mono-medium text-[10px] font-medium text-on-accent">
                     Recommended
                   </span>
                 )}
@@ -164,7 +164,7 @@ export default function PricingPage() {
                   {plan.href ? (
                     <Link
                       href={plan.href}
-                      className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-orange text-[14px] font-medium text-bone transition-all hover:bg-orange-dark"
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-orange text-[14px] font-medium text-on-accent transition-all hover:bg-orange-dark"
                     >
                       {plan.cta}
                       <ArrowRight className="size-4" />
@@ -226,7 +226,7 @@ export default function PricingPage() {
             <div className="mt-6">
               <Link
                 href="/signup"
-                className="group inline-flex h-12 items-center gap-2 rounded-lg bg-orange px-6 text-[15px] font-medium text-bone transition-all hover:bg-orange-dark"
+                className="group inline-flex h-12 items-center gap-2 rounded-lg bg-orange px-6 text-[15px] font-medium text-on-accent transition-all hover:bg-orange-dark"
               >
                 Start free
                 <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />

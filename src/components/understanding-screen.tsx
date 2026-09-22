@@ -223,7 +223,7 @@ export function UnderstandingScreen({
             <button
               onClick={() => void save()}
               disabled={saving}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-3 py-1.5 text-sm font-medium text-bone transition-all hover:bg-ink/90 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-solid px-3 py-1.5 text-sm font-medium text-on-solid transition-all hover:bg-solid/90 disabled:opacity-50"
             >
               <Check className="size-3.5" aria-hidden="true" />
               {saving ? 'Saving...' : 'Save'}
