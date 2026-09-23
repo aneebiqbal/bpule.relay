@@ -5,7 +5,7 @@ import { canonicalUrl, siteConfig } from "@/lib/site-config";
 export const metadata: Metadata = {
   title: `Follow-ups & Replies | ${siteConfig.name}`,
   description:
-    "Relay's follow-up rule: one follow-up, five working days after the last send with no reply, then never again.",
+    "Relay's follow-up rule: up to three follow-ups, five working days after each send with no reply, then never again.",
   alternates: { canonical: canonicalUrl("/docs/follow-ups") },
   robots: { index: true, follow: true },
 };
@@ -25,13 +25,14 @@ export default function FollowUpsPage() {
         <h2 className="text-heading text-xl text-ink">The follow-up rule</h2>
         <div className="rounded-xl border border-orange/20 bg-orange/5 p-6">
           <p className="text-[16px] font-medium text-ink">
-            One follow-up. Five working days. Never again.
+            Up to three follow-ups. Five working days each. Never a fourth.
           </p>
           <p className="mt-3 text-[14px] leading-relaxed text-graphite">
-            Relay sends <em>you</em> a reminder to follow up exactly once: five{" "}
+            Relay sends <em>you</em> a reminder to follow up: five{" "}
             <strong className="text-ink">working days</strong> (Monday–Friday, not calendar
-            days) after the last send, if no reply has come in. After that one follow-up
-            is sent, the lead is permanently locked out of another.
+            days) after the last send, if no reply has come in. This can happen up to three
+            times per lead. After the third follow-up is sent, the lead is permanently
+            locked out of another.
           </p>
         </div>
         <p className="text-[14px] leading-relaxed text-graphite">
@@ -75,7 +76,7 @@ export default function FollowUpsPage() {
           </li>
           <li className="flex gap-2">
             <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-stone" />
-            <span>Relay does not repeat follow-ups forever. One per lead, ever.</span>
+            <span>Relay does not repeat follow-ups forever. Up to three per lead, ever.</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-stone" />

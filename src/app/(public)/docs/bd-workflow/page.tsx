@@ -100,8 +100,8 @@ export default function BDWorkflowPage() {
       <section className="space-y-4">
         <h2 className="text-heading text-xl text-ink">6. Follow up when due</h2>
         <p className="text-[14px] leading-relaxed text-graphite">
-          Relay tracks when a follow-up is due: one follow-up, five working days after
-          the last send with no reply, then never again. The queue surfaces these
+          Relay tracks when a follow-up is due: up to three follow-ups, five working days
+          after each send with no reply, then never again. The queue surfaces these
           automatically.
         </p>
         <p className="text-[14px] leading-relaxed text-graphite">

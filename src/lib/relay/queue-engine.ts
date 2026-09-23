@@ -409,7 +409,7 @@ function buildFollowupTask(lead: Lead, daysSince: number, input: QueueInput): Re
   ]
 
   const rec: RelayRecommendation = {
-    action: 'Send your one allowed follow-up',
+    action: 'Send your next follow-up',
     preparedOutput: null,
     evidence,
     confidence: 0.6,
@@ -426,9 +426,9 @@ function buildFollowupTask(lead: Lead, daysSince: number, input: QueueInput): Re
     entityType: 'lead',
     entityId: lead.id,
     whatHappened: `${daysSince} business days since your last send, no reply`,
-    whyItMatters: 'Relay allows exactly one follow-up. Use it when it adds value.',
+    whyItMatters: 'Relay allows up to 3 follow-ups per lead. Use each one when it adds value.',
     recommendation: rec,
-    humanAction: 'Review and send your one follow-up, or let it go',
+    humanAction: 'Review and send your next follow-up, or let it go',
     stale: false,
     stalenessNote: null,
     createdAt: lead.createdAt,
@@ -635,7 +635,7 @@ function buildColdLeadTask(lead: Lead, ageDays: number, _input: QueueInput): Rel
   ]
 
   const rec: RelayRecommendation = {
-    action: 'Decide: follow-up (one allowed) or archive',
+    action: 'Decide: follow up (up to 3 allowed) or archive',
     preparedOutput: null,
     evidence,
     confidence: 0.3,
@@ -652,9 +652,9 @@ function buildColdLeadTask(lead: Lead, ageDays: number, _input: QueueInput): Rel
     entityType: 'lead',
     entityId: lead.id,
     whatHappened: `Contacted ${Math.round(ageDays)} days ago, no reply`,
-    whyItMatters: 'Leads going cold lose momentum. One follow-up remains.',
+    whyItMatters: 'Leads going cold lose momentum. Up to 3 follow-ups remain.',
     recommendation: rec,
-    humanAction: 'Send your one follow-up or mark as no-reply',
+    humanAction: 'Send your next follow-up or mark as no-reply',
     stale: false,
     stalenessNote: ageDays > 21 ? 'Very cold — unlikely to get a reply' : null,
     createdAt: lead.createdAt,

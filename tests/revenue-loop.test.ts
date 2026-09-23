@@ -255,13 +255,33 @@ describe('Follow-up and waiting', () => {
     expect(result.waitReason).toMatch(/business day/)
   })
 
-  it('does not duplicate a follow-up', () => {
+  // Approved product design change: the follow-up cap was raised from 1 to
+  // 3 (see followup-engine.ts / default-targets.ts's followup: 3 rebalance).
+  // followupCount 1 is now the *second* follow-up, still allowed — this
+  // replaces the old "does not duplicate a follow-up" assertion at count 1,
+  // which asserted the now-superseded 1-follow-up rule. Business-rule
+  // change, not a regression. The real "does not duplicate" boundary is now
+  // at followupCount 3 (a 4th follow-up), covered below.
+  it('allows a second follow-up once followupCount is 1 (within the new 3-follow-up cap)', () => {
     const result = determineFollowup({
       lead: { ...lead, status: 'followed_up' },
       priorMessages: [],
       conversationStage: 'contacted',
       senderProfileId: null,
       followupCount: 1,
+      lastSentAt: '2024-01-01T00:00:00.000Z',
+      lastReplyAt: null,
+    })
+    expect(result.shouldFollowUp).toBe(true)
+  })
+
+  it('does not allow a 4th follow-up once followupCount reaches 3', () => {
+    const result = determineFollowup({
+      lead: { ...lead, status: 'followed_up' },
+      priorMessages: [],
+      conversationStage: 'contacted',
+      senderProfileId: null,
+      followupCount: 3,
       lastSentAt: '2024-01-01T00:00:00.000Z',
       lastReplyAt: null,
     })

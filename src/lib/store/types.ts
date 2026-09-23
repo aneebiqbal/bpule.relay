@@ -319,8 +319,10 @@ export interface ScoutStore {
    * (no canonicalIntelligence on file).
    */
   findLeadByIntelligenceInputHash(hash: string): Promise<LeadDetail | null>
-  listOwnedLeads(): Promise<Lead[]>
-  fetchLeadsAll(): Promise<Lead[]>
+  /** @param includeArchived defaults to false — archived leads are excluded from the default read path. */
+  listOwnedLeads(includeArchived?: boolean): Promise<Lead[]>
+  /** @param includeArchived defaults to false — archived leads are excluded from the default read path. */
+  fetchLeadsAll(scopeToUser?: boolean, includeArchived?: boolean): Promise<Lead[]>
   getQueue(): Promise<QueueData>
   // messages
   saveDraft(input: SaveDraftInput): Promise<Message>
@@ -874,6 +876,14 @@ export interface ScoutStore {
   listCapturedProspects(): Promise<CapturedProspect[]>
   getCapturedProspect(id: string): Promise<CapturedProspect | null>
   updateCapturedProspectStatus(id: string, status: 'captured' | 'converted' | 'discarded', convertedLeadId?: string | null): Promise<void>
+  /**
+   * Award accountability credit ('prospect_extracted' activity type) for a
+   * genuine new capture. Callers must only invoke this when
+   * CapturedProspect.isNewCapture is true (see captureProspect) — never on a
+   * reuse/cache hit, or a re-analyze of the same paste would double-credit.
+   * Non-fatal: implementations must never let this throw into the caller.
+   */
+  recordProspectExtracted(revenueIdentityId?: string | null): Promise<void>
   // content journey
   createContentJourneyEntry(input: {
     personaId: string

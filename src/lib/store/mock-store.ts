@@ -254,6 +254,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       status: 'contacted',
       playId: 'play-rescue',
       tags: ['FAKE', 'demo'],
+      archived: false,
+      archivedAt: null,
       createdAt: t(6),
     },
     {
@@ -274,6 +276,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       status: 'new',
       playId: 'play-hiring',
       tags: ['FAKE', 'demo'],
+      archived: false,
+      archivedAt: null,
       createdAt: t(1),
     },
     {
@@ -294,6 +298,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       status: 'contacted',
       playId: 'play-rescue',
       tags: ['FAKE', 'demo'],
+      archived: false,
+      archivedAt: null,
       createdAt: t(4),
     },
     {
@@ -314,6 +320,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       status: 'no',
       playId: 'play-rescue',
       tags: ['FAKE', 'demo'],
+      archived: false,
+      archivedAt: null,
       createdAt: t(30),
     },
     {
@@ -334,6 +342,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       status: 'contacted',
       playId: 'play-price',
       tags: ['FAKE', 'demo'],
+      archived: false,
+      archivedAt: null,
       createdAt: t(9),
     },
   ]
@@ -855,18 +865,20 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         outcomes: [],
       }
     },
-    async listOwnedLeads() {
+    async listOwnedLeads(includeArchived = false) {
       return leads
         .filter((l) => l.ownerRepId === rep.id)
+        .filter((l) => includeArchived || !l.archived)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .map((l) => ({ ...l, direction: l.direction ?? 'outbound', source: l.source ?? null, inboundMessage: l.inboundMessage ?? null, inboundRaw: l.inboundRaw ?? null }))
+        .map((l) => ({ ...l, direction: l.direction ?? 'outbound', source: l.source ?? null, inboundMessage: l.inboundMessage ?? null, inboundRaw: l.inboundRaw ?? null, archived: l.archived ?? false, archivedAt: l.archivedAt ?? null }))
     },
-    async fetchLeadsAll(scopeToUser = false) {
+    async fetchLeadsAll(scopeToUser = false, includeArchived = false) {
       const filtered = scopeToUser || rep.role !== 'admin'
         ? leads.filter((l) => l.ownerRepId === rep.id)
         : leads
       return filtered
-        .map((l) => ({ ...l, direction: l.direction ?? 'outbound', source: l.source ?? null, inboundMessage: l.inboundMessage ?? null, inboundRaw: l.inboundRaw ?? null }))
+        .filter((l) => includeArchived || !l.archived)
+        .map((l) => ({ ...l, direction: l.direction ?? 'outbound', source: l.source ?? null, inboundMessage: l.inboundMessage ?? null, inboundRaw: l.inboundRaw ?? null, archived: l.archived ?? false, archivedAt: l.archivedAt ?? null }))
     },
     async listMessages(leadId: string) {
       return messages.filter((m) => m.leadId === leadId)
@@ -966,6 +978,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       // When a client replies, mark the lead as replied and create an outcome
       if (type === 'reply') {
         lead.status = 'replied'
+        // Auto-restore on reply — mirrors SupabaseStore.markContacted.
+        lead.archived = false
+        lead.archivedAt = null
         outcomes.push({
           id: nextId('out'),
           organizationId: DEMO_ORG_ID,
@@ -1052,6 +1067,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const message: Message = { id: msgId, organizationId: DEMO_ORG_ID, leadId, repId: rep.id, type: 'reply', draftText: null, sentText: replyText, sentAt: now, modelUsed: null, direction: 'inbound', createdAt: now }
       messages.push(message)
       lead.status = 'replied'
+      // Auto-restore on reply — mirrors SupabaseStore.recordProspectReply.
+      lead.archived = false
+      lead.archivedAt = null
       outcomes.push({ id: nextId('out'), organizationId: DEMO_ORG_ID, leadId, stage: 'replied', occurredAt: now })
       const existingState = conversationStates.find((s) => s.leadId === leadId)
       if (existingState) { existingState.stage = 'replied'; existingState.lastReplyAt = now; existingState.updatedAt = now }
@@ -2610,7 +2628,14 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         updatedAt: new Date().toISOString(),
       }
       capturedProspects.push(entry)
-      return entry
+      // Demo store never dedupes on rawInput (unlike SupabaseStore), so every
+      // call here is, in fact, a new row — isNewCapture is always true.
+      return { ...entry, isNewCapture: true }
+    },
+    async recordProspectExtracted(_revenueIdentityId?: string | null): Promise<void> {
+      // No-op in demo mode — there is no daily_targets/daily_accountability
+      // ledger to credit against. Present so callers can call this
+      // unconditionally regardless of which store implementation is active.
     },
     async listCapturedProspects(): Promise<CapturedProspect[]> {
       return capturedProspects.filter((p) => p.status === 'captured')
