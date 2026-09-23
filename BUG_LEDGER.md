@@ -152,9 +152,23 @@ Reported by the real team using the application. Baseline: `a301371` (see `RELAY
 | TEAM-005 | P0 | Score changes across reanalysis (60→25→20) | **PASS** | Input-hash reuse (Phase 6), migration applied and verified live. |
 | TEAM-006 | P0 | Generate Lead 75+ returns nothing, UI goes blurry | CONDITIONAL PASS, LIVE-BLOCKED | `maxDuration=120` confirmed set consistently across every AI/drafting route family (analyze, extract, draft, inbound/analyze, content/generate-draft, relay/reconcile) — not just the one originally reported. Cannot verify the actual timeout-avoidance live in this environment: no AI provider credentials are configured here at all (confirmed via env — every analyze/draft call in this sandbox runs the deterministic fallback path, which is fast and never approaches the old default timeout), and `maxDuration` only has any effect on an actual Vercel deployment, not local `next dev`. Needs either a live provider key or a real Vercel deploy to close out — flagged, not glossed over. |
 | TEAM-007 | P1 | Follow-up / Reply sections do not open | **PASS** | Root-caused and fixed — see detail below. |
-| TEAM-008 | P1 | 100% confidence shown alongside "Not Enough Info" contradiction | Investigating | Confidence vs qualification-eligibility semantics audit — not a numeric-equality fix. |
+| TEAM-008 | P1 | 100% confidence shown alongside "Not Enough Info" contradiction | **PASS** | Root-caused and fixed — see detail below. |
 | TEAM-009 | P2 | Feature request: visibility into saved/connected/DM-due leads | Investigating | Use canonical Lead + event/Next Action architecture, no new CRM subsystem. |
 | TEAM-010 | P2 | Feature request: standalone Email action control | Investigating | Build on Email Outreach V1; overlaps Daria fixture's prepare/send decoupling (already fixed). |
+
+### TEAM-008 detail — confidence and eligibility are different axes, but weren't labeled as such
+
+**Reported**: "100% confidence shown alongside 'Not Enough Info' contradiction."
+
+**Confirmed this is not a numeric-equality bug — both numbers are individually correct.** `src/app/(app)/leads/new/page.tsx` displayed `form.extractionConfidence` (how accurately Relay read the fields it DID find — e.g. "the name field says 'Jordan Blake', I'm 100% sure that's right") right next to `qualification.qualificationEligibility` (whether ENOUGH was found overall — company, role, opportunity signal). These are genuinely different, orthogonal axes: a short, completely unambiguous paste (just a clear name + title, nothing else) can legitimately score 100/100 on field accuracy while still being far too thin to qualify as a lead. Both facts were true and correctly computed; the UI just presented them with no distinction, reading as a flat contradiction ("100% confident, yet not enough info?!").
+
+**Fix**: relabeled the badge from "N/100 confidence" to "N/100 field accuracy," added a `title` tooltip explaining the distinction, and — specifically when the lead is ineligible — added a one-line clarifying sentence ("Field accuracy measures what was found, not how much — that's why it can be high here while this lead still isn't eligible") directly above the existing `inputQuality`/`extractability`/`evidenceCoverage` breakdown (which was already shown but had no framing connecting it back to the confidence badge above it).
+
+**Scope check**: searched `/prospect`'s confidence display (`result.revenue.confidence`) — a completely different concept (canonical `ConfidenceLevel`: LOW/MEDIUM/HIGH, part of Fit/Intent/Confidence), rendered as a level not a percentage, so it can't produce the literal "100%" the report describes. The `leads/new` numeric badge is the only place this exact contradiction could appear, and is confirmed the source.
+
+**Live browser proof**: `e2e/confidence-vs-eligibility.spec.ts` — a deliberately short, unambiguous fixture ("Jordan Blake\nSenior Product Manager": high field accuracy, low completeness) against the real manual-entry flow. Confirms the ineligible state renders both the relabeled badge and the clarifying sentence together, live.
+
+**Verified**: `tsc --noEmit` and `npm run build` clean; full suite 1090/1090 passing.
 
 ### TEAM-007 detail — Follow-up/Reply tabs were a true no-op when disabled
 

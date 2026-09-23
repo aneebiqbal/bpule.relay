@@ -560,22 +560,28 @@ export default function NewLeadPage() {
                               ? 'text-status-success'
                               : 'text-status-warning',
                           )}
+                          title="How accurately Relay read the fields it DID find — not whether enough was found overall. A short, clear paste can score high here while still being too thin to qualify."
                         >
                           {form.extractionConfidence >= 72 ? (
                             <CheckCircle2 className="size-3.5" aria-hidden="true" />
                           ) : (
                             <AlertTriangle className="size-3.5" aria-hidden="true" />
                           )}
-                          {form.extractionConfidence}/100 confidence
+                          {form.extractionConfidence}/100 field accuracy
                         </span>
                         <span>{ROLE_LABELS[form.roleCategory]}</span>
                         <span>{REGION_LABELS[liveRegion]}</span>
                       </div>
                       {!qualification.qualificationEligibility ? (
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-status-warning">
-                          <span>Input quality {qualification.inputQuality}/100</span>
-                          <span>Extractability {qualification.extractability}/100</span>
-                          <span>Evidence {qualification.evidenceCoverage}/100</span>
+                        <div className="mt-2 space-y-1">
+                          <p className="text-[11px] text-status-warning">
+                            Field accuracy measures what was found, not how much — that&apos;s why it can be high here while this lead still isn&apos;t eligible.
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-status-warning">
+                            <span>Input quality {qualification.inputQuality}/100</span>
+                            <span>Extractability {qualification.extractability}/100</span>
+                            <span>Evidence {qualification.evidenceCoverage}/100</span>
+                          </div>
                         </div>
                       ) : null}
                     </div>
