@@ -41,6 +41,7 @@ export interface AccountabilityDashboardData {
     canCloseDay: boolean
     dayCloseStatus: string | null
     hasContract: boolean
+    hasIdentity: boolean
   }
   // Manager-specific
   team?: {
@@ -125,6 +126,184 @@ function computeTimeRemaining(timezone: string): string {
   const endMinutes = 17 * 60
   const currentMinutes = hour * 60 + minute
   return formatTimeRemaining(Math.max(0, endMinutes - currentMinutes))
+}
+
+const ACTIVITY_TYPE_TO_CATEGORY: Record<string, 'connections' | 'firstDms' | 'emails' | 'followups'> = {
+  connection_request: 'connections',
+  dm: 'firstDms',
+  email: 'emails',
+  followup: 'followups',
+}
+
+/**
+ * Pure aggregation for a single rep's "My Day" — the same daily_targets /
+ * revenue_identity_contracts duality documented on buildCommandCenterFromActivity
+ * below applies here too: a rep can have a real identity_assignments row and
+ * real daily_targets/daily_accountability data with no formal
+ * revenue_identity_contracts row ever created for their identity. Reading
+ * contracts alone previously produced an all-zero My Day view and a false
+ * "No revenue identity assigned" warning for a rep who was actively working.
+ * Extracted as a pure function so it's testable without mocking Next.js
+ * server auth context / Supabase.
+ */
+export function buildMyDayFromActivity(input: {
+  identityIds: string[]
+  repId: string
+  contracts: Array<{ id: string; revenue_identity_id: string; connections: number; first_dms: number; emails: number; followups: number }>
+  allocations: Array<{ contract_id: string; person_id: string; allocation_pct: number }>
+  dayCloses: Array<{ revenue_identity_id: string; status: string; completion_snapshot: Record<string, number> | null }>
+  targets: Array<{ revenue_identity_id: string; activity_type: string; target_count: number }>
+  accountability: Array<{ revenue_identity_id: string; activity_type: string; completed_count: number }>
+  isWorkingDay: boolean
+  dayElapsedPct: number
+}): {
+  status: string
+  totalCompleted: number
+  totalTarget: number
+  totalRemaining: number
+  categories: Array<{ key: string; label: string; completed: number; target: number; remaining: number; href: string }>
+  warning: { level: string; message: string; categories: Array<{ label: string; remaining: number; href: string }> } | null
+  canCloseDay: boolean
+  dayCloseStatus: string | null
+  hasContract: boolean
+  hasIdentity: boolean
+} {
+  const { identityIds, repId, contracts, allocations, dayCloses, targets, accountability, isWorkingDay, dayElapsedPct } = input
+
+  let totalConnectionsTarget = 0, totalConnectionsCompleted = 0
+  let totalFirstDmsTarget = 0, totalFirstDmsCompleted = 0
+  let totalEmailsTarget = 0, totalEmailsCompleted = 0
+  let totalFollowupsTarget = 0, totalFollowupsCompleted = 0
+
+  for (const contract of contracts) {
+    const myAlloc = allocations.find((a) => a.contract_id === contract.id && a.person_id === repId)
+    const pct = (myAlloc?.allocation_pct ?? (allocations.filter((a) => a.contract_id === contract.id).length === 0 ? 100 : 0)) / 100
+
+    const dc = dayCloses.find((d) => d.revenue_identity_id === contract.revenue_identity_id)
+    const snap = dc?.completion_snapshot ?? {}
+
+    totalConnectionsTarget += Math.round(contract.connections * pct)
+    totalConnectionsCompleted += snap.connections ?? 0
+    totalFirstDmsTarget += Math.round(contract.first_dms * pct)
+    totalFirstDmsCompleted += snap.first_dms ?? 0
+    totalEmailsTarget += Math.round(contract.emails * pct)
+    totalEmailsCompleted += snap.emails ?? 0
+    totalFollowupsTarget += Math.round(contract.followups * pct)
+    totalFollowupsCompleted += snap.followups ?? 0
+  }
+
+  // Fold in daily_targets/daily_accountability on top of any contract-based
+  // totals, so a rep provisioned through either system sees their real
+  // numbers instead of zeros. activity_type values that map onto an existing
+  // contract-style bucket are merged into it; 'application'/'proposal'/'other'
+  // get their own category rows.
+  let totalApplicationsTarget = 0, totalApplicationsCompleted = 0
+  let totalProposalsTarget = 0, totalProposalsCompleted = 0
+  let totalOtherTarget = 0, totalOtherCompleted = 0
+  const accByKey = new Map(accountability.map((a) => [`${a.revenue_identity_id}:${a.activity_type}`, a]))
+  for (const t of targets) {
+    const acc = accByKey.get(`${t.revenue_identity_id}:${t.activity_type}`)
+    const completed = acc?.completed_count ?? 0
+    const bucket = ACTIVITY_TYPE_TO_CATEGORY[t.activity_type]
+    if (bucket === 'connections') { totalConnectionsTarget += t.target_count; totalConnectionsCompleted += completed }
+    else if (bucket === 'firstDms') { totalFirstDmsTarget += t.target_count; totalFirstDmsCompleted += completed }
+    else if (bucket === 'emails') { totalEmailsTarget += t.target_count; totalEmailsCompleted += completed }
+    else if (bucket === 'followups') { totalFollowupsTarget += t.target_count; totalFollowupsCompleted += completed }
+    else if (t.activity_type === 'application') { totalApplicationsTarget += t.target_count; totalApplicationsCompleted += completed }
+    else if (t.activity_type === 'proposal') { totalProposalsTarget += t.target_count; totalProposalsCompleted += completed }
+    else { totalOtherTarget += t.target_count; totalOtherCompleted += completed }
+  }
+
+  const totalTarget = totalConnectionsTarget + totalFirstDmsTarget + totalEmailsTarget + totalFollowupsTarget
+    + totalApplicationsTarget + totalProposalsTarget + totalOtherTarget
+  const totalCompleted = totalConnectionsCompleted + totalFirstDmsCompleted + totalEmailsCompleted + totalFollowupsCompleted
+    + totalApplicationsCompleted + totalProposalsCompleted + totalOtherCompleted
+  const totalRemaining = Math.max(0, totalTarget - totalCompleted)
+
+  const categories = [
+    { key: 'connections', label: 'Connections', completed: totalConnectionsCompleted, target: totalConnectionsTarget, href: '/leads?filter=connect' },
+    { key: 'firstDms', label: 'First DMs', completed: totalFirstDmsCompleted, target: totalFirstDmsTarget, href: '/leads?filter=dm' },
+    { key: 'emails', label: 'Emails', completed: totalEmailsCompleted, target: totalEmailsTarget, href: '/leads?filter=email' },
+    { key: 'followups', label: 'Follow-ups', completed: totalFollowupsCompleted, target: totalFollowupsTarget, href: '/leads?filter=followup' },
+    { key: 'applications', label: 'Applications', completed: totalApplicationsCompleted, target: totalApplicationsTarget, href: '/leads?filter=application' },
+    { key: 'proposals', label: 'Proposals', completed: totalProposalsCompleted, target: totalProposalsTarget, href: '/leads?filter=proposal' },
+    { key: 'other', label: 'Other', completed: totalOtherCompleted, target: totalOtherTarget, href: '/leads' },
+  ].filter((c) => c.target > 0).map((c) => ({ ...c, remaining: Math.max(0, c.target - c.completed) }))
+
+  let status = 'on_track'
+  if (totalRemaining === 0 && totalTarget > 0) {
+    status = 'completed'
+  } else if (totalRemaining > 0 && totalTarget > 0) {
+    const ratio = totalCompleted / totalTarget
+    if (dayElapsedPct >= 0.8 && ratio < 0.5) status = 'behind'
+    else if (dayElapsedPct > 0.3 && ratio < dayElapsedPct - 0.3) status = 'at_risk'
+    else status = 'on_track'
+  } else if (totalTarget === 0) {
+    status = 'not_started'
+  }
+
+  const canCloseDay = totalRemaining === 0 && totalTarget > 0
+  const dayCloseStatus = dayCloses[0]?.status ?? null
+  // hasContract gates the FORMAL Day Close action specifically — you cannot
+  // formally close a day against a contract that doesn't exist, regardless
+  // of whether daily_targets/daily_accountability data is present.
+  const hasContract = contracts.length > 0
+  // hasIdentity reflects whether the rep has an identity assignment at all
+  // (identity_assignments). This is what "No revenue identity assigned" must
+  // actually mean — an assigned identity with daily_targets but no formal
+  // contract is NOT the same as no identity being assigned, and must not
+  // show this warning.
+  const hasIdentity = identityIds.length > 0
+
+  const categoriesWithRemaining = categories.filter((c) => c.remaining > 0)
+  let warning: { level: string; message: string; categories: Array<{ label: string; remaining: number; href: string }> } | null = null
+
+  if (isWorkingDay && hasIdentity) {
+    if (totalRemaining === 0 && totalTarget > 0) {
+      warning = { level: 'ready', message: "Today's required work is complete. You can close your day.", categories: [] }
+    } else if (dayElapsedPct >= 0.85 && totalRemaining > 0) {
+      warning = {
+        level: 'very_late',
+        message: `Your workday is nearly over. Complete the remaining ${totalRemaining} actions or request an exception before closing.`,
+        categories: categoriesWithRemaining.map((c) => ({ label: c.label, remaining: c.remaining, href: c.href })),
+      }
+    } else if (dayElapsedPct >= 0.65 && totalRemaining > 0) {
+      const categoryList = categoriesWithRemaining.slice(0, 3).map((c) => `${c.remaining} ${c.label.toLowerCase()}`).join(', ')
+      warning = {
+        level: 'late',
+        message: `Day Close is currently blocked. You still have ${categoryList} remaining.`,
+        categories: categoriesWithRemaining.map((c) => ({ label: c.label, remaining: c.remaining, href: c.href })),
+      }
+    } else if (dayElapsedPct >= 0.35 && totalRemaining > 0 && totalCompleted < totalTarget * dayElapsedPct * 0.7) {
+      const categoryList = categoriesWithRemaining.slice(0, 2).map((c) => `${c.remaining} ${c.label.toLowerCase()}`).join(' and ')
+      warning = {
+        level: 'midday',
+        message: `You're behind today's pace. ${categoryList} remain.`,
+        categories: categoriesWithRemaining.map((c) => ({ label: c.label, remaining: c.remaining, href: c.href })),
+      }
+    } else if (totalCompleted === 0 && dayElapsedPct < 0.3 && totalTarget > 0) {
+      warning = {
+        level: 'early',
+        message: `You have ${totalTarget} actions due today. Start with the most important category.`,
+        categories: categoriesWithRemaining.map((c) => ({ label: c.label, remaining: c.remaining, href: c.href })),
+      }
+    }
+  } else if (!hasIdentity && isWorkingDay) {
+    warning = { level: 'info', message: 'No revenue identity assigned. Ask your admin to assign one.', categories: [] }
+  }
+
+  return {
+    status,
+    totalCompleted,
+    totalTarget,
+    totalRemaining,
+    categories,
+    warning,
+    canCloseDay,
+    dayCloseStatus,
+    hasContract,
+    hasIdentity,
+  }
 }
 
 /**
@@ -279,6 +458,21 @@ async function load(): Promise<AccountabilityDashboardData | null> {
     ? await supabase.from('day_closes').select('*').eq('person_id', ctx.repId).eq('date', today).in('revenue_identity_id', identityIds)
     : { data: [] }
 
+  // daily_targets/daily_accountability is a separate, simpler per-activity-type
+  // target system (see the admin Command Center comment below for the full
+  // history) that can be populated for a rep even when no formal
+  // revenue_identity_contracts row has ever been created for their identity.
+  // Without this, a rep with a real identity assignment and real daily
+  // targets/completions saw "No revenue identity assigned" and an all-zero
+  // My Day view, because this section only ever read from `contracts`.
+  const { data: myTargets } = identityIds.length > 0
+    ? await supabase.from('daily_targets').select('*').eq('rep_id', ctx.repId).in('revenue_identity_id', identityIds).eq('active', true)
+    : { data: [] }
+
+  const { data: myAccountability } = identityIds.length > 0
+    ? await supabase.from('daily_accountability').select('*').eq('rep_id', ctx.repId).eq('target_date', today).eq('organization_id', ctx.orgId)
+    : { data: [] }
+
   const { data: availability } = await supabase
     .from('operator_availability')
     .select('status')
@@ -289,111 +483,22 @@ async function load(): Promise<AccountabilityDashboardData | null> {
   const availabilityStatus = (availability?.status as string) ?? 'working'
   const isWorkingDay = availabilityStatus === 'working'
 
-  // Build aggregated progress across all identities
-  let totalConnectionsTarget = 0
-  let totalConnectionsCompleted = 0
-  let totalFirstDmsTarget = 0
-  let totalFirstDmsCompleted = 0
-  let totalEmailsTarget = 0
-  let totalEmailsCompleted = 0
-  let totalFollowupsTarget = 0
-  let totalFollowupsCompleted = 0
-
-  for (const contract of contracts ?? []) {
-    const myAlloc = (allocations ?? []).find((a: any) => a.contract_id === contract.id && a.person_id === ctx.repId)
-    const pct = (myAlloc?.allocation_pct ?? ((allocations ?? []).filter((a: any) => a.contract_id === contract.id).length === 0 ? 100 : 0)) / 100
-
-    const dc = (dayCloses ?? []).find((d: any) => d.revenue_identity_id === contract.revenue_identity_id)
-    const snap = (dc?.completion_snapshot ?? {}) as Record<string, number>
-
-    totalConnectionsTarget += Math.round(contract.connections * pct)
-    totalConnectionsCompleted += snap.connections ?? 0
-    totalFirstDmsTarget += Math.round(contract.first_dms * pct)
-    totalFirstDmsCompleted += snap.first_dms ?? 0
-    totalEmailsTarget += Math.round(contract.emails * pct)
-    totalEmailsCompleted += snap.emails ?? 0
-    totalFollowupsTarget += Math.round(contract.followups * pct)
-    totalFollowupsCompleted += snap.followups ?? 0
-  }
-
-  const totalTarget = totalConnectionsTarget + totalFirstDmsTarget + totalEmailsTarget + totalFollowupsTarget
-  const totalCompleted = totalConnectionsCompleted + totalFirstDmsCompleted + totalEmailsCompleted + totalFollowupsCompleted
-  const totalRemaining = Math.max(0, totalTarget - totalCompleted)
-
-  const categories = [
-    { key: 'connections', label: 'Connections', completed: totalConnectionsCompleted, target: totalConnectionsTarget, href: '/leads?filter=connect' },
-    { key: 'firstDms', label: 'First DMs', completed: totalFirstDmsCompleted, target: totalFirstDmsTarget, href: '/leads?filter=dm' },
-    { key: 'emails', label: 'Emails', completed: totalEmailsCompleted, target: totalEmailsTarget, href: '/leads?filter=email' },
-    { key: 'followups', label: 'Follow-ups', completed: totalFollowupsCompleted, target: totalFollowupsTarget, href: '/leads?filter=followup' },
-  ].filter((c) => c.target > 0).map((c) => ({ ...c, remaining: Math.max(0, c.target - c.completed) }))
-
-  // Compute status
-  let status = 'on_track'
-  if (totalRemaining === 0 && totalTarget > 0) {
-    status = 'completed'
-  } else if (totalRemaining > 0 && totalTarget > 0) {
-    const ratio = totalCompleted / totalTarget
-    if (dayElapsedPct >= 0.8 && ratio < 0.5) status = 'behind'
-    else if (dayElapsedPct > 0.3 && ratio < dayElapsedPct - 0.3) status = 'at_risk'
-    else status = 'on_track'
-  } else if (totalTarget === 0) {
-    status = 'not_started'
-  }
-
-  const canCloseDay = totalRemaining === 0 && totalTarget > 0
-  const dayCloseStatus = (dayCloses ?? [])[0]?.status ?? null
-  const hasContract = (contracts ?? []).length > 0
-
-  // Build warning
-  const categoriesWithRemaining = categories.filter((c) => c.remaining > 0)
-  let warning: { level: string; message: string; categories: Array<{ label: string; remaining: number; href: string }> } | null = null
-
-  if (isWorkingDay && hasContract) {
-    if (totalRemaining === 0 && totalTarget > 0) {
-      warning = { level: 'ready', message: "Today's required work is complete. You can close your day.", categories: [] }
-    } else if (dayElapsedPct >= 0.85 && totalRemaining > 0) {
-      warning = {
-        level: 'very_late',
-        message: `Your workday is nearly over. Complete the remaining ${totalRemaining} actions or request an exception before closing.`,
-        categories: categoriesWithRemaining.map((c) => ({ label: c.label, remaining: c.remaining, href: c.href })),
-      }
-    } else if (dayElapsedPct >= 0.65 && totalRemaining > 0) {
-      const categoryList = categoriesWithRemaining.slice(0, 3).map((c) => `${c.remaining} ${c.label.toLowerCase()}`).join(', ')
-      warning = {
-        level: 'late',
-        message: `Day Close is currently blocked. You still have ${categoryList} remaining.`,
-        categories: categoriesWithRemaining.map((c) => ({ label: c.label, remaining: c.remaining, href: c.href })),
-      }
-    } else if (dayElapsedPct >= 0.35 && totalRemaining > 0 && totalCompleted < totalTarget * dayElapsedPct * 0.7) {
-      const categoryList = categoriesWithRemaining.slice(0, 2).map((c) => `${c.remaining} ${c.label.toLowerCase()}`).join(' and ')
-      warning = {
-        level: 'midday',
-        message: `You're behind today's pace. ${categoryList} remain.`,
-        categories: categoriesWithRemaining.map((c) => ({ label: c.label, remaining: c.remaining, href: c.href })),
-      }
-    } else if (totalCompleted === 0 && dayElapsedPct < 0.3 && totalTarget > 0) {
-      warning = {
-        level: 'early',
-        message: `You have ${totalTarget} actions due today. Start with the most important category.`,
-        categories: categoriesWithRemaining.map((c) => ({ label: c.label, remaining: c.remaining, href: c.href })),
-      }
-    }
-  } else if (!hasContract && isWorkingDay) {
-    warning = { level: 'info', message: 'No revenue identity assigned. Ask your admin to assign one.', categories: [] }
-  }
+  const myDayActivity = buildMyDayFromActivity({
+    identityIds,
+    repId: ctx.repId,
+    contracts: (contracts ?? []) as any[],
+    allocations: (allocations ?? []) as any[],
+    dayCloses: (dayCloses ?? []) as any[],
+    targets: (myTargets ?? []) as any[],
+    accountability: (myAccountability ?? []) as any[],
+    isWorkingDay,
+    dayElapsedPct,
+  })
 
   const myDay: AccountabilityDashboardData['myDay'] = {
-    status,
+    ...myDayActivity,
     timeRemaining: computeTimeRemaining(timezone),
     dayElapsedPct,
-    totalCompleted,
-    totalTarget,
-    totalRemaining,
-    categories,
-    warning,
-    canCloseDay,
-    dayCloseStatus,
-    hasContract,
   }
 
   const result: AccountabilityDashboardData = {

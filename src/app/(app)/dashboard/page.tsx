@@ -219,7 +219,7 @@ function AdminTodayViewWithAccountability({
     team: [],
   }
 
-  const myDayData: MyDayData | null = acData?.myDay && acData.myDay.hasContract ? {
+  const myDayData: MyDayData | null = acData?.myDay && acData.myDay.hasIdentity ? {
     status: acData.myDay.status as MyDayData['status'],
     timeRemaining: acData.myDay.timeRemaining,
     dayElapsedPct: acData.myDay.dayElapsedPct,
