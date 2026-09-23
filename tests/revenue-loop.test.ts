@@ -96,6 +96,40 @@ describe('FIT / INTENT / CONFIDENCE', () => {
   })
 })
 
+describe('First message after the invitation is accepted', () => {
+  const launch = {
+    channel: 'dm' as const,
+    opportunitySignals: ['launch' as const],
+    signalEvidence: 'They launched a new product line',
+    verbatimQuote: 'We just launched the new platform',
+    evidenceLedger: [fact('We just launched the new platform')],
+  }
+
+  it('still refuses a cold DM when the invitation is not accepted', () => {
+    const strategy = buildRevenueStrategy(source(launch))
+    expect(shouldWriteMessage(strategy)).toBe(false)
+    expect(strategy.contact.noMessageReason).toMatch(/do not force a DM/)
+  })
+
+  it('writes the first DM once the invitation is accepted', () => {
+    const strategy = buildRevenueStrategy(source({ ...launch, connectionAccepted: true }))
+    expect(shouldWriteMessage(strategy)).toBe(true)
+    expect(strategy.contact.noMessageReason).toBeNull()
+    expect(strategy.messageJob).toBe('DISCOVER_NEED')
+    expect(strategy.contact.action).toBe('CONTACT_NOW')
+  })
+
+  it('still stays silent for an irrelevant profile even if acceptance was marked', () => {
+    const strategy = buildRevenueStrategy(source({
+      channel: 'dm',
+      connectionAccepted: true,
+      hardNegatives: ['IRRELEVANT_OR_INSUFFICIENT_INPUT'],
+      qualification: 'skip',
+    }))
+    expect(shouldWriteMessage(strategy)).toBe(false)
+  })
+})
+
 describe('Right to contact — real cases', () => {
   it('explicit hiring need → CONTACT_NOW + TEST_DELIVERY_MODEL', () => {
     const strategy = buildRevenueStrategy(source({

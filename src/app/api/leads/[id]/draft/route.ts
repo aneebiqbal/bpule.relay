@@ -299,6 +299,7 @@ export async function POST(
         alreadyShared,
         conversation: replyKnowledge,
         priorFollowupCount: detail.status === 'followed_up' ? 1 : 0,
+        connectionAccepted: Boolean(detail.connectionAcceptedAt),
       }))
 
       if (type !== 'reply' && !shouldWriteMessage(revenue)) {

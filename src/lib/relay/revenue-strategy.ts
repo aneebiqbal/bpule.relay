@@ -352,6 +352,8 @@ export interface StrategySource {
   thingsNotToClaim: string[]
   conversation: ConversationKnowledge | null
   priorFollowupCount: number
+  /** Set only after the rep marks the invitation accepted. Unlocks the first DM. */
+  connectionAccepted?: boolean
 }
 
 const EMPTY_FIELD = (): CommercialFieldState => ({ value: null, status: 'unknown' })
@@ -390,6 +392,7 @@ export function sourceFromCanonical(
     alreadyShared?: string[]
     conversation?: ConversationKnowledge | null
     priorFollowupCount?: number
+    connectionAccepted?: boolean
   },
 ): StrategySource {
   const intel = canonical.intelligence
@@ -432,6 +435,7 @@ export function sourceFromCanonical(
     thingsNotToClaim: canonical.outreachContext?.thingsNotToClaim ?? [],
     conversation: opts.conversation ?? null,
     priorFollowupCount: opts.priorFollowupCount ?? 0,
+    connectionAccepted: opts.connectionAccepted ?? false,
   }
 }
 
@@ -444,6 +448,7 @@ export function sourceFromLead(
     alreadyShared?: string[]
     conversation?: ConversationKnowledge | null
     priorFollowupCount?: number
+    connectionAccepted?: boolean
   },
 ): StrategySource {
   const canonical = asCanonical(lead.canonicalIntelligence)
@@ -492,6 +497,7 @@ export function sourceFromLead(
     thingsNotToClaim: [],
     conversation: opts.conversation ?? null,
     priorFollowupCount: opts.priorFollowupCount ?? 0,
+    connectionAccepted: opts.connectionAccepted ?? false,
   }
 }
 
@@ -889,6 +895,23 @@ function decideContact(
     }
   }
 
+  // A cold DM is still blocked below ("do not force a DM"). Acceptance is
+  // different: the connection already happened, and the next step is the
+  // first message. Irrelevant profiles stay silent.
+  if (
+    source.connectionAccepted
+    && (source.channel === 'dm' || source.channel === 'followup')
+    && !irrelevant
+  ) {
+    return {
+      reason: 'RELATIONSHIP_CONTEXT',
+      action: 'CONTACT_NOW',
+      why: 'They accepted the connection. Write the next message. Do not pitch.',
+      messageRecommended: true,
+      noMessageReason: null,
+    }
+  }
+
   // Non-buyer relationship (recruiter/partner/peer): LOW commercial fit is
   // correct and must stand (see assessFitIntentConfidence), but it must NOT
   // by itself force SKIP. A recruiter, partner, or peer with genuine
@@ -1168,6 +1191,7 @@ function describeCommercialSituation(
 
 function describeRelationship(source: StrategySource): string {
   if (source.relationshipStage === 'reply') return 'They replied — first-party conversation'
+  if (source.connectionAccepted) return 'They accepted the connection'
   if (source.relationshipStage === 'followup') return 'Waiting after first touch'
   if (source.relationshipStage === 'warming') return 'Warming'
   return 'No relationship yet'
