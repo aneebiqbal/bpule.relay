@@ -8,7 +8,7 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
-  ChevronUp,
+  Clock,
   Copy,
   ExternalLink,
   Flame,
@@ -133,13 +133,13 @@ function NextBestAction({
     action = {
       label: 'Reply now',
       description: 'They wrote back. Every hour you wait lowers your chances.',
-      cta: 'Draft a reply',
+      cta: 'Open their message',
     }
   } else if (followupEligible) {
     action = {
       label: 'Follow up',
       description: 'No response yet. Up to 3 follow-ups, then move on.',
-      cta: 'Generate follow-up',
+      cta: 'Open follow-up',
     }
   } else if (lead.status === 'followed_up') {
     action = {
@@ -157,7 +157,7 @@ function NextBestAction({
     action = {
       label: 'Send first message',
       description: 'Strong lead. Reach out while the signal is fresh.',
-      cta: 'Generate draft',
+      cta: 'Open the next step',
     }
   } else if (verdict === 'research_more') {
     action = {
@@ -226,6 +226,125 @@ function NextBestAction({
         </div>
       </div>
     </div>
+  )
+}
+
+type WorkStep = 'connection' | 'accepted' | 'message' | 'client' | 'followup' | 'upwork'
+
+function timeAgo(iso: string | null | undefined, now: number): string {
+  if (!iso) return ''
+  const diff = now - new Date(iso).getTime()
+  if (Number.isNaN(diff)) return ''
+  if (diff < 0) return `in ${formatCooldownRemaining(-diff)}`
+  if (diff < 45_000) return 'just now'
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return mins % 60 === 0 ? `${hrs}h ago` : `${hrs}h ${mins % 60}m ago`
+  const days = Math.floor(hrs / 24)
+  return `${days}d ago`
+}
+
+function latestSent(messages: LeadDetail['messages'], type: LeadDetail['messages'][number]['type']) {
+  return messages
+    .filter((message) => message.type === type && message.sentText && message.sentAt)
+    .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''))[0] ?? null
+}
+
+function WorkPath({
+  now,
+  step,
+  connectionAt,
+  acceptedAt,
+  messageAt,
+  clientAt,
+  lockUntil,
+  followupWait,
+  followupsLeft,
+  onPick,
+  onAccept,
+  accepting,
+  acceptError,
+}: {
+  now: number
+  step: WorkStep
+  connectionAt: string | null
+  acceptedAt: string | null
+  messageAt: string | null
+  clientAt: string | null
+  lockUntil: string | null
+  followupWait: number
+  followupsLeft: number
+  onPick: (step: WorkStep) => void
+  onAccept: () => void
+  accepting: boolean
+  acceptError: string | null
+}) {
+  const lockMs = lockUntil ? new Date(lockUntil).getTime() - now : 0
+  const steps: Array<{ id: WorkStep; title: string; detail: string; done: boolean }> = [
+    { id: 'connection', title: 'Connection note', detail: connectionAt ? `Logged ${timeAgo(connectionAt, now)}` : 'Write it, send it, then log it', done: Boolean(connectionAt) },
+    { id: 'accepted', title: 'Invitation accepted', detail: acceptedAt ? `Accepted ${timeAgo(acceptedAt, now)}` : connectionAt ? 'Mark this when they accept on LinkedIn' : 'Opens after the note is logged', done: Boolean(acceptedAt) },
+    { id: 'message', title: 'Your message', detail: messageAt ? `Logged ${timeAgo(messageAt, now)}` : 'Generate it after they accept', done: Boolean(messageAt) },
+    { id: 'client', title: 'Their message', detail: clientAt ? `Saved ${timeAgo(clientAt, now)}` : 'Paste what they wrote, then write your reply', done: Boolean(clientAt) },
+    { id: 'followup', title: 'Follow up', detail: followupWait > 0 ? `Wait ${formatCooldownRemaining(followupWait)}` : followupsLeft <= 0 ? 'All 3 follow-ups used' : `${followupsLeft} left`, done: followupsLeft <= 0 },
+  ]
+
+  return (
+    <section className="rounded-xl border border-line bg-bone-raised p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Work this lead</p>
+          <p className="mt-1 text-[13px] text-graphite">Do one step, log it, then the next one opens.</p>
+        </div>
+        {lockMs > 0 && (
+          <p className="inline-flex items-center gap-1.5 rounded border border-orange/30 bg-orange/5 px-2.5 py-1 text-[12px] text-ink">
+            <Clock className="size-3.5 text-orange" />
+            Next outreach in {formatCooldownRemaining(lockMs)}
+          </p>
+        )}
+      </div>
+      <ol className="mt-3 grid gap-2 sm:grid-cols-2">
+        {steps.map((item, index) => {
+          const active = step === item.id
+          return (
+            <li key={item.id}>
+              <button
+                type="button"
+                aria-current={active ? 'step' : undefined}
+                onClick={() => onPick(item.id)}
+                className={cn(
+                  'flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors',
+                  active ? 'border-orange/40 bg-orange/5' : 'border-line bg-bone hover:bg-bone-raised',
+                )}
+              >
+                <span className={cn(
+                  'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium',
+                  item.done ? 'bg-status-success/15 text-status-success' : active ? 'bg-orange text-on-accent' : 'bg-bone text-stone',
+                )}>
+                  {item.done ? <Check className="size-3" /> : index + 1}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-medium text-ink">{item.title}</span>
+                  <span className="block text-[11px] text-graphite">{item.detail}</span>
+                </span>
+              </button>
+              {active && item.id === 'accepted' && !acceptedAt && (
+                <div className="mt-2 px-1">
+                  <Button variant="orange" size="sm" onClick={onAccept} disabled={!connectionAt || accepting} loading={accepting}>
+                    {accepting ? 'Saving...' : 'They accepted'}
+                  </Button>
+                  {!connectionAt && <p className="mt-1 text-[11px] text-graphite">Log the connection note first.</p>}
+                  {acceptError && <p className="mt-1 text-[12px] text-status-danger" role="alert">{acceptError}</p>}
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+      <button type="button" onClick={() => onPick('upwork')} className={cn('mt-2 text-[11px]', step === 'upwork' ? 'text-ink' : 'text-graphite hover:text-ink')}>
+        Upwork proposal instead
+      </button>
+    </section>
   )
 }
 
@@ -308,8 +427,11 @@ export function LeadWorkspace({
   const [variantDraft, setVariantDraft] = useState<import('@/lib/ai/draft').DraftVariant | null>(null)
   const [showVariant, setShowVariant] = useState(false)
   const [generationMode, setGenerationMode] = useState<GenerationMode>('standard')
-  const [timelineOpen, setTimelineOpen] = useState(true)
   const [capturedReplyText, setCapturedReplyText] = useState('')
+  const [now, setNow] = useState(() => Date.now())
+  const [stepPick, setStepPick] = useState<WorkStep | null>(null)
+  const [savingReply, setSavingReply] = useState(false)
+  const [replySaveError, setReplySaveError] = useState<string | null>(null)
 
   const streamBuffer = useRef('')
 
@@ -325,10 +447,6 @@ export function LeadWorkspace({
   const hasPriorSend = followupGate.hasPriorSend
   const followupEligible = followupGate.eligible
 
-  // Reply is available when: a reply outcome exists, user pasted reply text,
-  // or this is an inbound-first lead (client contacted us)
-  const replyAvailable = hasReply || Boolean(capturedReplyText) || currentLead.direction === 'inbound'
-
   const artifactDisabled: Record<ArtifactId, string | null> = {
     dm: dmGate.blocked
       ? 'Waiting on the LinkedIn connection to be accepted. Mark it accepted once you see it on LinkedIn.'
@@ -336,7 +454,7 @@ export function LeadWorkspace({
     connection: null,
     upwork: null,
     followup: followupGate.alreadyUsed
-      ? 'A follow-up was already sent on this lead. Only one, ever.'
+      ? 'All 3 follow-ups are used on this lead.'
       : currentLead.status === 'new'
         ? 'Eligible once this lead is contacted.'
         : !hasPriorSend
@@ -344,7 +462,7 @@ export function LeadWorkspace({
           : followupGate.inCooldown
             ? `Available in ${formatCooldownRemaining(followupGate.cooldownRemainingMs)} (6h after the last DM).`
             : null,
-    reply: !replyAvailable ? 'Paste the client reply above to enable.' : null,
+    reply: null,
   }
 
   const activeProof = proofList.find((p) => p.id === matchedProofId) ?? proofList[0] ?? null
@@ -446,8 +564,13 @@ export function LeadWorkspace({
       lastKeyedTextRef.current = ''
       // Refresh lead data to update timeline, status, next action
       setLeadVersion((v) => v + 1)
+      if (artifact === 'connection') setStepPick('accepted')
+      else if (artifact === 'dm') setStepPick('client')
+      else if (artifact === 'reply') setStepPick('followup')
+      else setStepPick(null)
     } catch (err) {
       setSendError(err instanceof Error ? err.message : 'Failed to log send.')
+      notifyError(err instanceof Error ? err.message : 'Failed to log send.', 'Not logged')
     } finally {
       setSending(false)
     }
@@ -464,8 +587,11 @@ export function LeadWorkspace({
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? 'Failed to mark the connection accepted.')
       setLeadVersion((v) => v + 1)
+      setStepPick('message')
     } catch (err) {
-      setMarkAcceptedError(err instanceof Error ? err.message : 'Failed to mark the connection accepted.')
+      const message = err instanceof Error ? err.message : 'Failed to mark the connection accepted.'
+      setMarkAcceptedError(message)
+      notifyError(message, 'Not saved')
     } finally {
       setMarkingAccepted(false)
     }
@@ -485,6 +611,60 @@ export function LeadWorkspace({
       .catch(() => {})
     return () => { cancelled = true }
   }, [leadVersion, lead.id])
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 15_000)
+    return () => clearInterval(timer)
+  }, [])
+
+  async function saveClientMessage() {
+    const text = capturedReplyText.trim()
+    if (!text) return
+    setSavingReply(true)
+    setReplySaveError(null)
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? 'Could not save their message.')
+      if (data.lead) setLeadOverride(data.lead)
+      else setLeadVersion((version) => version + 1)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not save their message.'
+      setReplySaveError(message)
+      notifyError(message, 'Not saved')
+    } finally {
+      setSavingReply(false)
+    }
+  }
+
+  const connectionAt = latestSent(currentLead.messages, 'connection')?.sentAt ?? null
+  const messageAt = latestSent(currentLead.messages, 'dm')?.sentAt ?? null
+  const clientAt = currentLead.messages
+    .filter((message) => message.direction === 'inbound' && message.sentAt)
+    .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''))[0]?.sentAt ?? null
+  const recommendedStep: WorkStep = connectionAt && !currentLead.connectionAcceptedAt
+    ? 'accepted'
+    : !messageAt && !connectionAt
+      ? 'connection'
+      : !messageAt
+        ? 'message'
+        : !clientAt
+          ? 'client'
+          : 'followup'
+  const step = stepPick ?? recommendedStep
+  const followupsLeft = Math.max(0, 3 - (currentLead.followupCount ?? 0))
+
+  useEffect(() => {
+    if (step === 'connection') setArtifact('connection')
+    else if (step === 'message') setArtifact('dm')
+    else if (step === 'client') setArtifact('reply')
+    else if (step === 'followup') setArtifact('followup')
+    else if (step === 'upwork') setArtifact('upwork')
+  }, [step])
 
   const textToCheck = sentText.trim() || draftText
   const { kind: countKind, max: countMax } = artifactCount(artifact)
@@ -675,7 +855,13 @@ export function LeadWorkspace({
             hasReply={hasReply}
             hasPriorSend={hasPriorSend}
             followupEligible={followupEligible}
-            onAction={() => void generateDraft()}
+            onAction={() => {
+              if (hasReply) setStepPick('client')
+              else if (followupEligible) setStepPick('followup')
+              else if (connectionAt && !currentLead.connectionAcceptedAt) setStepPick('accepted')
+              else if (!connectionAt) setStepPick('connection')
+              else setStepPick('message')
+            }}
             dmAction={dmSnapshot.act}
             dmMessagingPolicyLabel={dmSnapshot.messagingPolicyLabel}
           />
@@ -691,11 +877,31 @@ export function LeadWorkspace({
         />
       )}
 
-      {/* ═══ 3. DRAFT ═══ */}
       {canDraft && !locked && (
+        <WorkPath
+          now={now}
+          step={step}
+          connectionAt={connectionAt}
+          acceptedAt={currentLead.connectionAcceptedAt ?? null}
+          messageAt={messageAt}
+          clientAt={clientAt}
+          lockUntil={currentLead.lockedUntil ?? null}
+          followupWait={followupGate.inCooldown ? followupGate.cooldownRemainingMs : 0}
+          followupsLeft={followupsLeft}
+          onPick={setStepPick}
+          onAccept={() => void markConnectionAccepted()}
+          accepting={markingAccepted}
+          acceptError={markAcceptedError}
+        />
+      )}
+
+      {/* ═══ 3. DRAFT ═══ */}
+      {canDraft && !locked && step !== 'accepted' && (
         <section className="reveal-up stagger-2 space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-heading text-base text-ink">Draft</h2>
+            <h2 className="text-heading text-base text-ink">
+              {step === 'connection' ? 'Connection note' : step === 'client' ? 'Their message' : step === 'followup' ? 'Follow-up' : step === 'upwork' ? 'Upwork proposal' : 'Your message'}
+            </h2>
             {draft && (
               <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-medium',
                 draft.passed ? 'text-status-success' : 'text-status-warning')}>
@@ -706,39 +912,19 @@ export function LeadWorkspace({
           </div>
 
 
-          {/* Artifact selector */}
-          <div className="flex flex-wrap gap-1">
-            {ARTIFACTS.map((t) => {
-              const disabledHint = artifactDisabled[t.id]
-              const active = artifact === t.id
-              return (
-                <button key={t.id} role="tab" aria-selected={active} aria-disabled={Boolean(disabledHint)}
-                  title={disabledHint ?? undefined}
-                  // A disabled tab still switches to itself — clicking it
-                  // must show WHY it's disabled (rendered below from
-                  // artifactDisabled[artifact]), not silently do nothing.
-                  // Only the draft/send actions inside a disabled tab stay
-                  // blocked; the tab itself is always clickable to view its
-                  // state. Previously this was a true no-op on a disabled
-                  // tab, which is exactly what "Follow-up/Reply sections
-                  // don't open" (TEAM-007) looked like from the outside.
-                  onClick={() => { setOverrideCheck(false); setArtifact(t.id) }}
-                  className={cn(
-                    'rounded px-2 py-1 text-[11px] font-medium transition-all',
-                    active ? 'bg-solid text-on-solid' : disabledHint ? 'cursor-not-allowed text-graphite/40' : 'text-graphite hover:text-ink',
-                  )}>
-                  {t.label}
-                </button>
-              )
-            })}
-          </div>
-
-            {artifact === 'reply' && (
-              <div className="mt-3">
-                <Label htmlFor="reply-text" className="text-[11px] text-graphite">Prospect&apos;s reply (paste what they wrote)</Label>
+            {step === 'client' && (
+              <div className="mt-3 space-y-2">
+                <Label htmlFor="reply-text" className="text-[11px] text-graphite">Paste what they wrote</Label>
                 <Textarea id="reply-text" value={capturedReplyText} onChange={(e) => setCapturedReplyText(e.target.value)}
                   rows={3} className="mt-1 text-[13px]"
-                  placeholder="Paste the prospect's reply here..." />
+                  placeholder="Paste their message here..." />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => void saveClientMessage()} disabled={savingReply || !capturedReplyText.trim()} loading={savingReply}>
+                    {savingReply ? 'Saving...' : 'Save their message'}
+                  </Button>
+                  {clientAt && <span className="text-[11px] text-graphite">Saved {timeAgo(clientAt, now)}</span>}
+                </div>
+                {replySaveError && <p className="text-[12px] text-status-danger" role="alert">{replySaveError}</p>}
               </div>
             )}
 
@@ -746,19 +932,16 @@ export function LeadWorkspace({
               <div className="mt-3 space-y-2">
                 <p className="text-sm text-graphite">{artifactDisabled[artifact]}</p>
                 {artifact === 'dm' && dmGate.blocked && (
-                  <>
-                    <Button variant="outline" size="sm" onClick={() => void markConnectionAccepted()} disabled={markingAccepted} loading={markingAccepted}>
-                      {markingAccepted ? 'Marking...' : 'Mark connection accepted'}
-                    </Button>
-                    {markAcceptedError && <p className="text-sm text-status-danger">{markAcceptedError}</p>}
-                  </>
+                  <Button variant="outline" size="sm" onClick={() => setStepPick('accepted')}>
+                    Open invitation accepted
+                  </Button>
                 )}
               </div>
             ) : (
               <>
                  <div className="mt-4 flex flex-wrap items-center gap-3">
                    <Button variant="orange" onClick={() => void generateDraft()} disabled={drafting || locked || (artifact === 'reply' && !prospectReplyText)} loading={drafting}>
-                     {drafting ? 'Drafting...' : draft ? 'Rewrite' : 'Generate draft'}
+                     {drafting ? 'Writing...' : draft ? 'Rewrite' : step === 'client' ? 'Write our reply' : 'Generate'}
                    </Button>
                    <GenerationModeSelector value={generationMode} onChange={setGenerationMode} compact />
                   {statusMessage ? (
@@ -835,10 +1018,10 @@ export function LeadWorkspace({
           )}
 
           {/* ═══ 4. SEND ═══ */}
-          {canDraft && !locked && (
+          {canDraft && !locked && step !== 'accepted' && (
           <div>
-            <h2 className="text-heading text-base text-ink">Send it</h2>
-            <p className="mt-0.5 text-[12px] text-graphite">Relay never sends for you. Copy the message, send it yourself, then log what you sent.</p>
+            <h2 className="text-heading text-base text-ink">Log it</h2>
+            <p className="mt-0.5 text-[12px] text-graphite">Send it yourself on LinkedIn, then log the exact text. That is what starts the timer.</p>
 
             {/* Pre-send gates */}
             {(draft || textToCheck) && (
@@ -864,7 +1047,14 @@ export function LeadWorkspace({
             )}
 
             <div className="mt-3">
-              <Label htmlFor="sent-text" className="text-[11px] text-graphite">Text you actually sent</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="sent-text" className="text-[11px] text-graphite">Text you actually sent</Label>
+                {draftText && (
+                  <button type="button" onClick={() => setSentText(draftText)} className="text-[11px] text-orange hover:text-orange/80">
+                    Use the draft
+                  </button>
+                )}
+              </div>
               <Textarea id="sent-text" value={sentText} onChange={(e) => setSentText(e.target.value)}
                 onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { if (needOverride && !overrideCheck) return; e.preventDefault(); void logSend() } }}
                 rows={3} disabled={locked}
@@ -872,7 +1062,7 @@ export function LeadWorkspace({
             </div>
             <div className="mt-2 flex items-center justify-between gap-4">
               <Button variant="orange" onClick={() => void logSend()} disabled={sending || locked || !sentText.trim() || (needOverride && !overrideCheck)} loading={sending}>
-                {sending ? 'Logging...' : needOverride && !overrideCheck ? 'Check the flags to log' : 'Log this send'}
+                {sending ? 'Logging...' : needOverride && !overrideCheck ? 'Check the flags to log' : 'Log this'}
               </Button>
               <span className="text-mono-medium text-[10px] text-stone">⌘ + Enter</span>
             </div>
@@ -881,22 +1071,9 @@ export function LeadWorkspace({
           </div>
       )}
 
-      {/* ═══ 5. TIMELINE (demoted, collapsible) ═══ */}
-      {canDraft && !locked && (
+      {!locked && (
         <section className="reveal-up stagger-3">
-          <button
-            type="button"
-            onClick={() => setTimelineOpen((o) => !o)}
-            className="flex w-full items-center justify-between border-b border-line pb-2 text-left"
-          >
-            <span className="text-[12px] font-medium text-graphite">Timeline</span>
-            {timelineOpen ? <ChevronUp className="size-3.5 text-graphite" /> : <ChevronDown className="size-3.5 text-graphite" />}
-          </button>
-          {timelineOpen && (
-            <div className="mt-3">
-              <Timeline lead={currentLead} />
-            </div>
-          )}
+          <Timeline lead={currentLead} now={now} />
         </section>
       )}
     </div>
@@ -943,19 +1120,49 @@ function groupByDate(events: TimelineEvent[]): Array<{ label: string; events: Ti
   return groups
 }
 
-const Timeline = memo(function Timeline({ lead }: { lead: LeadDetail }) {
+const LOG_LABEL: Record<string, string> = {
+  connection: 'Connection note',
+  dm: 'Your message',
+  followup: 'Follow-up',
+  reply: 'Your reply',
+  email: 'Email',
+  upwork: 'Upwork proposal',
+  replied: 'They replied',
+  read: 'Read',
+  check: 'Check',
+  slice: 'Slice',
+  close: 'Closed',
+  standing: 'Standing',
+}
+
+const Timeline = memo(function Timeline({ lead, now }: { lead: LeadDetail; now: number }) {
   const events: TimelineEvent[] = [
-    ...lead.outcomes.map((o) => ({ id: o.id, kind: 'outcome' as const, date: o.occurredAt, sortKey: o.occurredAt, label: o.stage, detail: undefined })),
-    ...lead.messages.map((m) => ({ id: m.id, kind: 'message' as const, date: m.sentAt ?? m.createdAt, sortKey: m.sentAt ?? m.createdAt, label: m.type, detail: m.sentText ?? m.draftText ?? undefined })),
-  ].sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+    ...lead.outcomes.map((o) => ({ id: o.id, kind: 'outcome' as const, date: o.occurredAt, sortKey: o.occurredAt, label: LOG_LABEL[o.stage] ?? o.stage, detail: undefined })),
+    ...lead.messages.filter((m) => m.sentText || m.draftText).map((m) => ({
+      id: m.id,
+      kind: 'message' as const,
+      date: m.sentAt ?? m.createdAt,
+      sortKey: m.sentAt ?? m.createdAt,
+      label: m.direction === 'inbound' ? 'Their message' : (LOG_LABEL[m.type] ?? m.type),
+      detail: m.sentText ?? m.draftText ?? undefined,
+    })),
+    ...(lead.connectionAcceptedAt ? [{
+      id: `accepted-${lead.connectionAcceptedAt}`,
+      kind: 'outcome' as const,
+      date: lead.connectionAcceptedAt,
+      sortKey: lead.connectionAcceptedAt,
+      label: 'Invitation accepted',
+      detail: undefined,
+    }] : []),
+  ].sort((a, b) => b.sortKey.localeCompare(a.sortKey))
 
   const groups = groupByDate(events)
 
   return (
     <div>
-      <h2 className="text-sm font-medium text-ink">Timeline</h2>
+      <h2 className="text-sm font-medium text-ink">Log</h2>
       {events.length === 0 ? (
-        <p className="mt-2 text-sm text-graphite">Nothing here yet.</p>
+        <p className="mt-2 text-sm text-graphite">Nothing logged yet. A connection note shows up here after you log it.</p>
       ) : (
         <div className="mt-3 space-y-4">
           {groups.map((group) => (
@@ -970,8 +1177,8 @@ const Timeline = memo(function Timeline({ lead }: { lead: LeadDetail }) {
                     </div>
                     <div className="pb-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm capitalize text-ink">{e.label}</span>
-                        <span className="text-mono-medium text-xs text-graphite">{dateDayLabel(e.date)}</span>
+                        <span className="text-sm text-ink">{e.label}</span>
+                        <span className="text-mono-medium text-xs text-graphite">{timeAgo(e.date, now)} · {dateDayLabel(e.date)}</span>
                       </div>
                       {e.detail && <p className="mt-1 text-xs leading-relaxed text-graphite">{e.detail}</p>}
                     </div>
