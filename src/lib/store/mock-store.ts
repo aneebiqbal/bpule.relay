@@ -850,6 +850,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
           .filter((m) => m.leadId === id)
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
         outcomes: outcomes.filter((o) => o.leadId === id),
+        followupCount: conversationStates.find((s) => s.leadId === id)?.followupCount ?? 0,
       }
     },
     async findLeadByIntelligenceInputHash(hash: string) {

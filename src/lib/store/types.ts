@@ -173,6 +173,14 @@ export interface RateMetric {
 export interface LeadDetail extends Lead {
   messages: Message[]
   outcomes: Outcome[]
+  /**
+   * ConversationState.followupCount for this lead (0 if no conversation
+   * state row exists yet). Callers computing follow-up eligibility (e.g.
+   * evaluateFollowupGate) must pass this — without it, eligibility falls
+   * back to a status-based check that can only tell "at least one follow-up
+   * used", which under-counts once a lead can receive up to 3.
+   */
+  followupCount: number
 }
 
 export interface QueueData {

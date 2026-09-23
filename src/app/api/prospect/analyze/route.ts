@@ -422,6 +422,13 @@ export async function POST(request: Request) {
             score: captured.canonicalScore,
           },
         })
+        // Credit toward the rep's daily "prospects captured" target — only
+        // on a genuine new capture, never on a reuse/cache hit for input
+        // already analyzed, so re-analyzing the same paste can't be farmed
+        // for repeat credit.
+        if (captured.isNewCapture) {
+          await store.recordProspectExtracted(captured.revenueIdentityId)
+        }
       } catch {
         // Non-fatal: captured prospect must not block analysis
       }

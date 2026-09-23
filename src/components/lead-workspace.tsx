@@ -137,7 +137,7 @@ function NextBestAction({
   } else if (followupEligible) {
     action = {
       label: 'Follow up',
-      description: 'No response yet. One follow-up, then move on.',
+      description: 'No response yet. Up to 3 follow-ups, then move on.',
       cta: 'Generate follow-up',
     }
   } else if (lead.status === 'followed_up') {
@@ -320,7 +320,7 @@ export function LeadWorkspace({
   const hasReply = currentLead.messages.some((m) => m.type === 'reply' && m.sentText) || currentLead.outcomes.some((o) => o.stage === 'replied')
 
   const dmGate = evaluateDmGate({ messages: currentLead.messages, connectionAcceptedAt: currentLead.connectionAcceptedAt })
-  const followupGate = evaluateFollowupGate({ status: currentLead.status, messages: currentLead.messages })
+  const followupGate = evaluateFollowupGate({ status: currentLead.status, messages: currentLead.messages, followupCount: currentLead.followupCount })
   const hasPriorSend = followupGate.hasPriorSend
   const followupEligible = followupGate.eligible
 

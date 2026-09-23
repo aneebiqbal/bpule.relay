@@ -1037,7 +1037,10 @@ function selectMessageJob(
   if (conversation) return conversation.messageJob
 
   if (source.channel === 'followup' || source.relationshipStage === 'followup') {
-    return source.priorFollowupCount >= 1 ? null : 'CLOSE_LOOP'
+    // A lead can now receive up to MAX_FOLLOWUPS_PER_LEAD (3, see
+    // src/lib/relay/message-eligibility.ts) follow-ups across its life —
+    // this must stay in sync with that cap, not the old 1-follow-up rule.
+    return source.priorFollowupCount >= 3 ? null : 'CLOSE_LOOP'
   }
   if (source.channel === 'connection' || contact.action === 'CONNECT_OR_OBSERVE') {
     return 'EARN_CONNECTION'
