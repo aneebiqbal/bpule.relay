@@ -1866,16 +1866,19 @@ export async function runIntelligencePipeline(
   )
   const relationship = deriveRelationship(businessModel, passA, ownRawTextFinal)
 
-  // For recruiter / career-services business models, strip market-derived
-  // opportunity signals. A recruiter's posts about hiring demand, market
-  // growth, and talent shortages describe THEIR SERVICE / the market they
-  // operate in — not a buying intent for our software delivery. Line-by-line
-  // subject classification can miss mixed prose ("...economy gives companies
-  // confidence to grow..."), so as a backstop we remove these signal types
-  // entirely when the business model is RECRUITER. This enforces invariant:
-  // MARKET COMMENTARY ≠ BUYING INTENT.
-  const isRecruiter = relationship === 'RECRUITER' || businessModel === 'RECRUITER'
-  if (isRecruiter) {
+  // For any non-buyer relationship (recruiter, agency/partner, peer,
+  // networking-only founder), strip market-derived opportunity signals. Their
+  // posts about hiring demand, market growth, industry roadshows, or "moving
+  // to"/"scaling" language describe THEIR SERVICE, THEIR CUSTOMERS, or THEIR
+  // OWN COMPANY'S growth — not a buying intent for our software delivery.
+  // Line-by-line subject classification can miss mixed prose ("...we explored
+  // opportunities for collaboration..."), so as a backstop we remove these
+  // signal types entirely for any non-buyer relationship, not just
+  // recruiters — a founder doing BD for their own product is exactly as
+  // unlikely to be a genuine buyer as a recruiter is. This enforces
+  // invariant: MARKET/OWN-COMPANY COMMENTARY ≠ BUYING INTENT FOR BPULSE.
+  const isNonBuyer = isNonBuyerRelationship(relationship) || businessModel === 'RECRUITER'
+  if (isNonBuyer) {
     partialIntelligence.opportunity = {
       ...partialIntelligence.opportunity,
       signals: partialIntelligence.opportunity.signals.filter(

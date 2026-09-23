@@ -369,12 +369,21 @@ Building MyCo, a product for small businesses.`
     expect(finalText).toBe('')
   })
 
-  it('isNonBuyerRelationship correctly classifies RECRUITER/POTENTIAL_PARTNER/PEER as non-buyer, and POTENTIAL_BUYER/NETWORKING/UNKNOWN as not', () => {
+  // NETWORKING was corrected from "not a non-buyer" to "a non-buyer" during
+  // review of the Saar Meents fixture: a founder doing visible sales/BD for
+  // their own product (NETWORKING) was defaulting to POTENTIAL_BUYER purely
+  // because deriveRelationship never actually produced NETWORKING at all —
+  // the type existed but no code path returned it. Once wired up,
+  // NETWORKING needed to join the non-buyer set for the same reason
+  // RECRUITER/POTENTIAL_PARTNER/PEER are there: it must not be scored as
+  // current BPulse delivery demand just because the prospect is a
+  // decision-maker at a product company.
+  it('isNonBuyerRelationship correctly classifies RECRUITER/POTENTIAL_PARTNER/PEER/NETWORKING as non-buyer, and POTENTIAL_BUYER/UNKNOWN as not', () => {
     expect(isNonBuyerRelationship('RECRUITER')).toBe(true)
     expect(isNonBuyerRelationship('POTENTIAL_PARTNER')).toBe(true)
     expect(isNonBuyerRelationship('PEER')).toBe(true)
+    expect(isNonBuyerRelationship('NETWORKING')).toBe(true)
     expect(isNonBuyerRelationship('POTENTIAL_BUYER')).toBe(false)
-    expect(isNonBuyerRelationship('NETWORKING')).toBe(false)
     expect(isNonBuyerRelationship('UNKNOWN')).toBe(false)
   })
 

@@ -182,6 +182,34 @@ const PRODUCT_MODEL_PATTERNS = [
 // matching an unrelated "founder of X" mention with no product description.
 const OWN_PRODUCT_FOR_AUDIENCE = /\ban?\s+[\w\s-]{0,40}?\b(?:platform|tool|solution|app|software|product)\b[\w\s-]{0,20}?\bfor\b/i
 
+// A founder/exec doing visible outbound sales/business-development for their
+// OWN product — pitching it to customers, seeking partnerships/pilots with
+// the kind of organizations that would BUY or co-sell it. This is evidence
+// they are a SELLER, not evidence they are shopping for external software
+// delivery. General shape (not tied to any one company/industry): "open to
+// partnerships with <customer-type>", attending/sponsoring a trade
+// conference or roadshow to meet prospective customers, or explicitly
+// discussing pilots/collaboration with customer organizations.
+const OWN_PRODUCT_SALES_BD_PATTERNS = [
+  /\bopen\s+to\s+partnerships\s+with\b/i,
+  /\bexplore\s+opportunities\s+for\s+pilots?,?\s+partnerships?\s+and\s+collaboration\b/i,
+  /\b(?:roadshow|delegation|pavilion)\b.{0,80}\bmeet(?:ing)?\s+(?:the\s+)?(?:founders?|teams?|clients?|customers?|insurers?|carriers?)\b/i,
+  /\bsponsor(?:ing|ed)?\s+(?:the\s+)?[A-Z][\w.]*\s*(?:conference|summit|vegas|expo)\b/i,
+]
+
+/**
+ * Whether the text shows the prospect themselves seeking to BUY/commission
+ * external software delivery (as opposed to selling their own product). A
+ * founder who both sells a product AND separately says they need engineering
+ * help/a dev partner is still a real buyer signal — this only exists to stop
+ * "founder + product + partnership-with-customers language" from defaulting
+ * to POTENTIAL_BUYER when there is no such buyer-seeking language at all.
+ */
+function hasExternalDeliverySeekingSignal(blob: string): boolean {
+  return /\b(?:looking\s+for|need|hiring|seeking)\s+(?:a\s+)?(?:dev(?:elopment)?\s+(?:shop|agency|partner|team)|external\s+(?:developer|engineer|dev\s+team)|software\s+(?:vendor|contractor|agency))\b/i.test(blob)
+    || /\bwe\s+(?:need|are\s+looking\s+for|want\s+to\s+hire)\s+(?:an?\s+)?(?:agency|contractor|freelancer|dev\s+shop)\b/i.test(blob)
+}
+
 export function classifyBusinessModel(text: string): BusinessModel {
   const lower = ` ${text.toLowerCase()} `
 
@@ -281,6 +309,14 @@ export function firstNonEmptyString(...values: Array<string | null | undefined>)
  *
  * PEER: a non-decision-making technical individual at another company.
  *
+ * NETWORKING: a founder/exec who is visibly selling/doing business
+ * development for their OWN product (open to partnerships with customers,
+ * attending trade events to meet prospective customers) with no evidence
+ * they are ALSO seeking to buy external software delivery. Worth a real
+ * connection — a commercial relationship may develop — but must not be
+ * scored as if they currently have BPulse delivery demand just because they
+ * are a decision-maker at a product company.
+ *
  * POTENTIAL_BUYER: default when the prospect operates a product business and
  * has no disqualifying non-buyer signals.
  */
@@ -305,17 +341,30 @@ export function deriveRelationship(
   const hasDecisionRole = /\b(ceo|cto|cfo|coo|founder|co[- ]?founder|president|partner|managing director|vp|head of|director|owner|chief)\b/i.test(title)
   if (isIC && !hasDecisionRole) return 'PEER'
 
+  // Founder/exec of a product business, visibly selling/doing BD for that
+  // product to customers, with no sign they are also shopping for external
+  // delivery help. Check BD/sales-outbound language before defaulting a
+  // decision-maker at a product company to POTENTIAL_BUYER — otherwise every
+  // founder who mentions "partnerships" becomes a buyer signal for BPulse.
+  if (
+    businessModel === 'PRODUCT'
+    && OWN_PRODUCT_SALES_BD_PATTERNS.some((p) => p.test(blob))
+    && !hasExternalDeliverySeekingSignal(blob)
+  ) {
+    return 'NETWORKING'
+  }
+
   return 'POTENTIAL_BUYER'
 }
 
 /**
  * Whether this prospect should be treated as a non-buyer for software
- * delivery. Recruiters, agencies, and peers are not buyers — they may still
- * be worth contacting (networking/partnership) but must not be scored as if
- * they have delivery demand.
+ * delivery. Recruiters, agencies, peers, and networking contacts are not
+ * buyers — they may still be worth contacting (networking/partnership) but
+ * must not be scored as if they have delivery demand.
  */
 export function isNonBuyerRelationship(relationship: CommercialRelationship): boolean {
-  return relationship === 'RECRUITER' || relationship === 'POTENTIAL_PARTNER' || relationship === 'PEER'
+  return relationship === 'RECRUITER' || relationship === 'POTENTIAL_PARTNER' || relationship === 'PEER' || relationship === 'NETWORKING'
 }
 
 // ── Repost / third-party-authorship scoping ─────────────────────────────────
@@ -340,7 +389,12 @@ export function isNonBuyerRelationship(relationship: CommercialRelationship): bo
 export function stripThirdPartyRepostBlocks(rawText: string, prospectName: string | null): string {
   if (!prospectName?.trim()) return rawText
 
-  const VIEW_PROFILE_RE = /^View ([^']*)'s profile$/i
+  // English possessive: names not ending in "s" get 's ("Kobi Bendelak's
+  // profile"), names already ending in "s" get a bare trailing apostrophe
+  // ("Saar Meents' profile") — LinkedIn renders both forms depending on the
+  // author's name, so both must match or every block under a name ending in
+  // "s" (including the prospect's own) is misread as unattributed content.
+  const VIEW_PROFILE_RE = /^View (.+?)'s?\s+profile$/i
   const lines = rawText.split(/\r?\n/)
   const normalizedProspect = prospectName.trim().toLowerCase()
 
