@@ -24,7 +24,7 @@ import { cn } from 'cn'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
 
 import type { ProspectQualificationAssessment } from '@/lib/prospect/qualification-gate'
-import type { RevenueLoopSnapshot } from '@/lib/relay/revenue-strategy'
+import { describeVerdictForDisplay, type RevenueLoopSnapshot } from '@/lib/relay/revenue-strategy'
 
 type AnalyzeEvent =
   | { type: 'status'; message: string }
@@ -329,9 +329,20 @@ export default function ProspectCheckPage() {
   }
 
   const recMeta = result?.score ? QUALIFICATION_META[result.score.qualification] ?? QUALIFICATION_META.maybe : null
+  // Verdict must never contradict action: if qualification is 'skip' but the
+  // canonical action is NOT 'SKIP' (e.g. a valid CONNECT_OR_OBSERVE/
+  // CONNECT_WITHOUT_NOTE relationship contact), the headline must not read
+  // "Probably skip" — see Bug 2 (verdict/action reconciliation).
+  const verdictDisplay = result?.score
+    ? describeVerdictForDisplay(
+        result.score.qualification as 'strong' | 'worth_pursuing' | 'maybe' | 'skip',
+        result.revenue?.act ?? 'RESEARCH_MORE',
+        result.revenue?.messagingPolicyLabel,
+      )
+    : null
   const recommendation = result
     ? result.score
-      ? recMeta?.label ?? 'Awaiting analysis'
+      ? verdictDisplay?.headline ?? recMeta?.label ?? 'Awaiting analysis'
       : 'Not enough information'
     : 'Awaiting analysis'
   const canSaveLead = Boolean(result?.extracted && result.qualification.qualificationEligibility)
@@ -445,8 +456,11 @@ export default function ProspectCheckPage() {
                     {result.extracted.titleRaw ?? result.extracted.title ?? 'No title'} {result.extracted.company ? `· ${result.extracted.company}` : ''}
                   </p>
                 </div>
-                <span className={cn('ml-auto text-[11px] font-medium shrink-0', recMeta?.color)}>
-                  {recMeta?.label}
+                <span className={cn(
+                  'ml-auto text-[11px] font-medium shrink-0',
+                  verdictDisplay?.contradicted ? 'text-orange' : recMeta?.color,
+                )}>
+                  {verdictDisplay?.headline ?? recMeta?.label}
                 </span>
               </div>
 

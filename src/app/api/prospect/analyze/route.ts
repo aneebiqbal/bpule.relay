@@ -26,7 +26,23 @@ import {
   shouldWriteMessage,
   sourceFromCanonical,
   toUiSnapshot,
+  type MessagingPolicy,
 } from '@/lib/relay/revenue-strategy'
+
+/**
+ * Messaging policies that actually involve writing/sending a pitch message.
+ * CONNECT_WITHOUT_NOTE, OBSERVE, SKIP, RESEARCH_MORE carry no pitch and must
+ * never trigger sender/proof selection or "Best sender" UI — see Bug 4
+ * (Revenue Identity / proof gating tied to numeric qualification instead of
+ * to whether the action requires a pitch).
+ */
+const PITCHING_MESSAGING_POLICIES: ReadonlySet<MessagingPolicy> = new Set([
+  'DM', 'EMAIL', 'CONNECT_WITH_NOTE', 'UPWORK_PROPOSAL', 'FOLLOW_UP', 'REPLY',
+])
+
+function isPitchingPolicy(policy: MessagingPolicy): boolean {
+  return PITCHING_MESSAGING_POLICIES.has(policy)
+}
 
 /**
  * Prospect Analyze API — Intelligence V2
@@ -273,7 +289,12 @@ export async function POST(request: Request) {
       }
     }
 
-    if (canonical.qualification === 'skip' || revenue.contact.action === 'SKIP') {
+    // Gate sender/proof selection off whether the recommended messaging
+    // policy actually involves a pitch — NOT off qualification/action==='SKIP'
+    // alone. A non-skip-qualification prospect with a legitimate
+    // CONNECT_WITHOUT_NOTE or OBSERVE action has nothing to pitch and must
+    // not go through full sender/proof selection or show "Best sender" UI.
+    if (!isPitchingPolicy(loop.messagingPolicy)) {
       emit({
         type: 'done',
         extracted,
@@ -285,7 +306,7 @@ export async function POST(request: Request) {
           label: canonical.scoreBreakdown.label,
           qualification: canonical.qualification,
           reasons: canonical.scoreBreakdown.reasons,
-          watchOut: canonical.scoreBreakdown.watchOut,
+          watchOut: rewordWatchOutForNoOutreach(canonical.scoreBreakdown.watchOut),
           dimensions: canonical.scoreBreakdown.dimensions,
           missingInfo: canonical.scoreBreakdown.missingInfo,
         },
@@ -345,8 +366,18 @@ export async function POST(request: Request) {
       ...(canonical.intelligence.company.industry ? [canonical.intelligence.company.industry] : []),
     ]
 
+    // Channel authorization (Bug 5a): the recommended channel here is a
+    // LinkedIn connection note. A Revenue Identity whose platform is
+    // 'upwork' is not authorized to send a LinkedIn connection request no
+    // matter how strong its technical-skill/proof match score is — sender
+    // selection must never pick a channel-incompatible identity just
+    // because it scores well on content relevance. Filter to
+    // channel-authorized profiles BEFORE ranking by proof-match score.
+    const RECOMMENDED_CHANNEL_PLATFORM: Profile['platform'] = 'linkedin'
+    const channelAuthorizedProfiles = profiles.filter((p) => p.platform === RECOMMENDED_CHANNEL_PLATFORM)
+
     const profileMatches: Array<{ profile: Profile; matchedProof: MatchedProof[]; totalScore: number }> = []
-    for (const profile of profiles) {
+    for (const profile of channelAuthorizedProfiles) {
       const intelligence = buildProfileIntelligence(profile, [])
       const matched = matchProofToLead(intelligence, tagsForMatching, 3)
       const totalScore = matched.reduce((s, m) => s + m.relevanceScore, 0)
@@ -610,6 +641,29 @@ export async function POST(request: Request) {
       }
     }
 
+    // Post-generation consistency check (Bug 5b/5c): a candidate note that
+    // still fails the quality gate after the one-pass repair-and-reevaluate
+    // cycle in validateAndRepair must NEVER be exposed as the final
+    // recommended message — silently presenting a failing draft as if it
+    // were approved is exactly the bug this closes. Withhold it explicitly
+    // instead. This also covers CONNECT_WITH_NOTE ending up with an empty
+    // note (0 chars / nothing usable): that is not a valid "connection note
+    // recommended" state, so it is downgraded to an explicit withheld state
+    // with a reason rather than reaching the UI as if a note were ready.
+    if (writeMessage && !qualityResult.passed) {
+      const withheldReason = qualityResult.text.trim().length === 0
+        ? 'No safe connection note could be generated for this prospect.'
+        : `Generated note failed quality checks (${qualityResult.failures.join('; ') || 'unspecified'}) and was withheld rather than shown as final.`
+      qualityResult = {
+        ...qualityResult,
+        text: '',
+        charCount: 0,
+        withinLimit: true,
+        repaired: qualityResult.repaired,
+        failures: [...new Set([...qualityResult.failures, withheldReason])],
+      }
+    }
+
     // ── Emit final result with canonical intelligence ──
     emit({
       type: 'done',
@@ -738,4 +792,21 @@ async function embedTextSafe(text: string): Promise<number[] | null> {
   } catch {
     return null
   }
+}
+
+/**
+ * Reword the always-present "No Revenue Identity identified for this
+ * opportunity." watchOut for surfaces where no outreach message is planned
+ * (see Bug 4). That phrasing carries urgency appropriate to a pitching
+ * action; when the recommended action is CONNECT_WITHOUT_NOTE/OBSERVE/SKIP,
+ * it reads as an unaddressed problem on a profile where nothing was ever
+ * going to be pitched. Only touches this specific string — every other
+ * watchOut passes through unchanged.
+ */
+function rewordWatchOutForNoOutreach(watchOut: string[]): string[] {
+  return watchOut.map((w) =>
+    /no revenue identity identified for this opportunity/i.test(w)
+      ? 'Revenue Identity not required — no outreach message planned.'
+      : w,
+  )
 }

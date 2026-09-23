@@ -37,7 +37,7 @@ import {
   techKeywordMatches,
 } from './role-signals'
 import { generate } from '@/lib/ai/runtime'
-import { classifyBusinessModel, classifySentence, deriveRelationship, isNonBuyerRelationship } from './subject-attribution'
+import { classifyBusinessModel, classifySentence, deriveRelationship, isNonBuyerRelationship, stripThirdPartyRepostBlocks } from './subject-attribution'
 
 // ── Pipeline Options ───────────────────────────────────────────────────────
 
@@ -1494,9 +1494,35 @@ function extractSignalLine(lines: string[]): string | null {
   return null
 }
 
-function extractJobFromText(lines: string[], rawText: string, skills: string[]): PassAOutput['job'] {
+function extractJobFromText(lines: string[], rawText: string, skills: string[], opportunitySignals: OpportunitySignal[] = []): PassAOutput['job'] {
   const hasJobMarkers = /(job:|description:|responsibilities:|requirements:|skills:|budget:|proposals?:|apply)/i.test(rawText)
-  if (!hasJobMarkers && !/\b(remote|hybrid|on-?site|hiring)\b/i.test(rawText)) {
+  // A bare workplace-type word ("remote", "hybrid", "on-site") appearing
+  // ANYWHERE in the raw text is not evidence of a job/engagement opportunity
+  // — it is frequently the prospect's OWN employment-history workplace_type
+  // (e.g. an Experience entry like "SettWiz · Israel · Hybrid" for their
+  // current role as Founder/CEO). That is a fact about the prospect's job,
+  // not a location-constrained opportunity for BPulse to deliver into, and
+  // must not be conflated into one. Only treat these words as an opportunity
+  // signal when they appear alongside an actual hiring/engagement ask —
+  // never from a bare workplace-type word alone.
+  const hasExplicitEngagementAsk = /\b(hiring|we're looking for|we are looking for|open role|open position|job opening|now hiring|looking to hire|seeking a (?:developer|engineer|contractor|freelancer)|freelance project|contract role|apply now|apply by|send your resume|send your cv)\b/i.test(rawText)
+  // Also recognize the same general "looking for/need a developer" software-ask
+  // shape used elsewhere in this file (SOFTWARE_ASK_PATTERNS) — e.g. "Looking
+  // for a development partner to help build our patient portal" — so a real
+  // engagement ask phrased this way isn't dropped by the stricter gate above.
+  const hasSoftwareAsk = SOFTWARE_ASK_PATTERNS.some((p) => p.test(rawText))
+    && (DEV_ROLE_HINT.test(rawText) || TECH_KEYWORDS.some((k) => techKeywordMatches(rawText, k)))
+  // Also defer to the already-computed, subject-attribution-scoped opportunity
+  // signals: an explicit_ask / freelance_project_need / hiring / technical_problem
+  // signal already means real engagement language was found in the prospect's
+  // OWN attributable text, even when its exact phrasing doesn't match the
+  // narrower regexes above (e.g. "We need a team to help us build..."). This
+  // keeps the gate general — driven by the same signal detection already
+  // trusted elsewhere — rather than growing an ever-longer bespoke regex list.
+  const hasRelevantOpportunitySignal = opportunitySignals.some((s) =>
+    ['explicit_ask', 'freelance_project_need', 'hiring', 'technical_problem'].includes(s),
+  )
+  if (!hasJobMarkers && !hasExplicitEngagementAsk && !hasSoftwareAsk && !hasRelevantOpportunitySignal) {
     return null
   }
 
@@ -1612,8 +1638,14 @@ function extractContentSignals(lines: string[], rawText: string): PassAOutput['c
  * This is the core subject-attribution fix: market statistics and audience
  * language must not produce buyer signals for the prospect.
  */
-export function prospectAttributableText(rawText: string): string {
-  return splitLines(rawText)
+export function prospectAttributableText(rawText: string, prospectName?: string | null): string {
+  // Strip third-party repost blocks FIRST — a repost's "View <Other
+  // Person>'s profile" block is authored by someone else entirely, so
+  // line-level MARKET/AUDIENCE classification must never even see it as
+  // "the prospect's own text" in the first place. See
+  // stripThirdPartyRepostBlocks for the full rationale.
+  const ownText = prospectName ? stripThirdPartyRepostBlocks(rawText, prospectName) : rawText
+  return splitLines(ownText)
     .filter((line) => {
       const subject = classifySentence(line)
       return subject === 'PROSPECT' || subject === 'UNKNOWN'
@@ -1634,15 +1666,16 @@ function demoPassA(rawText: string): PassAOutput {
   const skills = extractSkills(lines, rawText)
 
   // Subject attribution: classify signals only from prospect-attributable text,
-  // never from market commentary or audience language. This prevents a
-  // recruiter's labor-market posts from becoming buyer evidence.
-  const attributableText = prospectAttributableText(rawText)
-  const businessModel = classifyBusinessModel(rawText)
+  // never from market commentary, audience language, or a REPOST of someone
+  // else's post. This prevents a recruiter's labor-market posts (or a
+  // third party's repost content) from becoming buyer evidence.
+  const attributableText = prospectAttributableText(rawText, name ?? clientName)
+  const businessModel = classifyBusinessModel(stripThirdPartyRepostBlocks(rawText, name ?? clientName))
   const { signals, urgency } = extractOpportunitySignals(attributableText)
   const primarySignal = selectPrimarySignal(signals)
   const signalLine = extractSignalLine(lines)
   const content = extractContentSignals(lines, attributableText)
-  const job = extractJobFromText(lines, rawText, skills)
+  const job = extractJobFromText(lines, rawText, skills, signals)
   const opportunityOrg = extractOpportunityOrganization(rawText, company)
 
   return {
@@ -1681,6 +1714,20 @@ function demoPassA(rawText: string): PassAOutput {
 
 function classifyHiringRelevance(rawText: string): 'software' | 'product_design' | 'non_technical' | 'unknown' {
   const segments = rawText.split(/(?:\n{2,}|--- POST \d+ ---|Posts|Activity)/gi)
+  // Evaluate every hiring-context segment and prefer the STRONGEST signal
+  // found anywhere in the document, rather than returning on the first
+  // matching segment in document order. A profile header/About section can
+  // legitimately mention "founder" (hiring-context) alongside an unrelated
+  // generic word like "operations" (from describing the prospect's own
+  // product, e.g. "...documentation, and operations for service
+  // businesses") with zero software-role words — short-circuiting on that
+  // segment would misclassify the WHOLE profile as non-technical even
+  // though a later segment (the actual hiring post) clearly names
+  // developer/engineer roles. Software > product design > non-technical is
+  // the priority order because a real software-role mention is unambiguous
+  // and should not be shadowed by a coincidental generic word elsewhere.
+  let sawProductDesign = false
+  let sawNonTech = false
   for (const seg of segments) {
     const isHiringContext = /\b(hiring|looking for|open roles?|we need|join our team|developer|engineer|senior|lead|manager|director|head of|vp|cto|co-founder|founder)\b/i.test(seg)
     if (!isHiringContext) continue
@@ -1688,9 +1735,11 @@ function classifyHiringRelevance(rawText: string): 'software' | 'product_design'
     const productRoles = (seg.match(/\b(product manager|product designer|ux designer|ui designer|program manager|project manager|product owner|scrum master|agile coach)\b/gi) || []).length
     const genericNonTech = (seg.match(/\b(marketing|sales|finance|hr|people ops|recruiter|talent|operations|admin|legal|compliance|support|customer success)\b/gi) || []).length
     if (softwareRoles > 0) return 'software'
-    if (productRoles > 0) return 'product_design'
-    if (genericNonTech > 0) return 'non_technical'
+    if (productRoles > 0) sawProductDesign = true
+    else if (genericNonTech > 0) sawNonTech = true
   }
+  if (sawProductDesign) return 'product_design'
+  if (sawNonTech) return 'non_technical'
   return 'unknown'
 }
 
@@ -1761,14 +1810,22 @@ export async function runIntelligencePipeline(
     capturedAt: new Date().toISOString(),
   }
 
+  // Heuristic prospect name, computed early (before Pass A) purely so raw-text
+  // scans below can exclude third-party repost blocks — a repost's "View
+  // <Other Person>'s profile" block is authored by someone else, and must
+  // never be scanned as if it were the prospect's own text (workplace type,
+  // location, opportunity signals, etc). See stripThirdPartyRepostBlocks.
+  const heuristicName = extractName(splitLines(rawText))
+  const ownRawText = stripThirdPartyRepostBlocks(rawText, heuristicName)
+
   // Assess remote eligibility (deterministic, no AI needed)
   // Detect if this is a job seeker profile to avoid misinterpreting
   // "looking for roles in UK" as "employer restricts to UK". Attribution-aware:
   // only first-person / self-reference markers count — audience language like
   // "anyone looking for a job" must not mark the prospect as a job seeker.
-  const isJobSeekerContext = isJobSeekerAttribution(rawText)
+  const isJobSeekerContext = isJobSeekerAttribution(ownRawText)
   const remoteEligibility = assessRemoteEligibility({
-    rawText,
+    rawText: ownRawText,
     requiredWorkerLocation: null, // Will be refined from extraction
     sourceContext: isJobSeekerContext ? 'job_seeker_profile' : 'unknown',
   })
@@ -1780,13 +1837,18 @@ export async function runIntelligencePipeline(
   opts.onStatus?.('Normalizing extraction')
   const { intelligence: partialIntelligence, evidenceLedger, normalizedSourceUrls } = normalizePassA(passA, sourceUrls, remoteEligibility)
 
+  // Repost scoping refined with the FINAL extracted name (Pass A may know
+  // better than the pre-Pass-A heuristic, e.g. via "Name:" fields or AI
+  // extraction) for everything downstream of Pass A.
+  const ownRawTextFinal = stripThirdPartyRepostBlocks(rawText, passA.person.fullName ?? heuristicName)
+
   // Refine remote eligibility with extracted job data.
   // EVIDENCE OWNERSHIP: For job seeker profiles, AI-extracted workplaceType/allowedGeography
   // are the PERSON'S preferences, not employer requirements. Pass sourceContext so
   // the eligibility engine doesn't invert preferences into restrictions.
   const refinedEligibility = passA.job
     ? assessRemoteEligibility({
-        rawText,
+        rawText: ownRawTextFinal,
         statedWorkplaceType: isJobSeekerContext ? 'UNKNOWN' : (passA.job.workplaceType as RemoteEligibilityInput['statedWorkplaceType']),
         requiredWorkerLocation: isJobSeekerContext ? null : passA.job.allowedGeography,
         sourceContext: isJobSeekerContext ? 'job_seeker_profile' : 'unknown',
@@ -1796,21 +1858,27 @@ export async function runIntelligencePipeline(
   // Subject attribution: classify the prospect's business model and commercial
   // relationship from the raw source + extracted entities. This is computed
   // BEFORE scoring so the score can reflect "this is a recruiter, not a buyer".
+  // Scoped to the prospect's OWN text — a repost's content (someone else's
+  // job, someone else's employer) must never feed business-model/relationship
+  // classification for the prospect.
   const businessModel = classifyBusinessModel(
-    `${rawText} ${passA.person.title ?? ''} ${passA.company.name ?? ''}`,
+    `${ownRawTextFinal} ${passA.person.title ?? ''} ${passA.company.name ?? ''}`,
   )
-  const relationship = deriveRelationship(businessModel, passA, rawText)
+  const relationship = deriveRelationship(businessModel, passA, ownRawTextFinal)
 
-  // For recruiter / career-services business models, strip market-derived
-  // opportunity signals. A recruiter's posts about hiring demand, market
-  // growth, and talent shortages describe THEIR SERVICE / the market they
-  // operate in — not a buying intent for our software delivery. Line-by-line
-  // subject classification can miss mixed prose ("...economy gives companies
-  // confidence to grow..."), so as a backstop we remove these signal types
-  // entirely when the business model is RECRUITER. This enforces invariant:
-  // MARKET COMMENTARY ≠ BUYING INTENT.
-  const isRecruiter = relationship === 'RECRUITER' || businessModel === 'RECRUITER'
-  if (isRecruiter) {
+  // For any non-buyer relationship (recruiter, agency/partner, peer,
+  // networking-only founder), strip market-derived opportunity signals. Their
+  // posts about hiring demand, market growth, industry roadshows, or "moving
+  // to"/"scaling" language describe THEIR SERVICE, THEIR CUSTOMERS, or THEIR
+  // OWN COMPANY'S growth — not a buying intent for our software delivery.
+  // Line-by-line subject classification can miss mixed prose ("...we explored
+  // opportunities for collaboration..."), so as a backstop we remove these
+  // signal types entirely for any non-buyer relationship, not just
+  // recruiters — a founder doing BD for their own product is exactly as
+  // unlikely to be a genuine buyer as a recruiter is. This enforces
+  // invariant: MARKET/OWN-COMPANY COMMENTARY ≠ BUYING INTENT FOR BPULSE.
+  const isNonBuyer = isNonBuyerRelationship(relationship) || businessModel === 'RECRUITER'
+  if (isNonBuyer) {
     partialIntelligence.opportunity = {
       ...partialIntelligence.opportunity,
       signals: partialIntelligence.opportunity.signals.filter(
@@ -1832,15 +1900,50 @@ export async function runIntelligencePipeline(
   // partner, or networking contact is not a job opportunity, so "remote
   // eligibility" (which measures worker-geography fit for a job) is not
   // applicable. Geography does not determine whether we can deliver services
-  // to them. Without this, a social-post "in person" line or a header
-  // location would wrongly make a recruiter INELIGIBLE.
+  // to them. Without this, a social-post "in person" line, a header
+  // location, or the prospect's OWN employment workplace_type (e.g. "Israel ·
+  // Hybrid" on their current role) would wrongly make a recruiter/partner/peer
+  // INELIGIBLE — conflating their employment arrangement with a
+  // location-constrained requirement for an unrelated BPulse engagement.
+  // Applies regardless of whether `passA.job` happens to be populated: for a
+  // non-buyer relationship, an extracted "job" is not a BPulse opportunity.
+  //
+  // Separately (and independent of relationship): when there is NO job
+  // object AND no opportunity signal that would make geography relevant at
+  // all (no hiring/freelance/explicit-ask/technical-problem/migration/
+  // rebuild signal), there is nothing for remote eligibility to be assessed
+  // against — the correct state is NOT_APPLICABLE, not UNCLEAR. UNCLEAR is
+  // reserved for when a real opportunity exists but geographic evidence is
+  // simply missing. Do not search for/apply workplace/location restrictions
+  // until an opportunity type where geography is relevant has been
+  // established.
+  const LOCATION_RELEVANT_SIGNALS: OpportunitySignal[] = [
+    'hiring', 'hiring_pressure', 'freelance_project_need', 'explicit_ask', 'technical_problem', 'migration', 'rebuild',
+  ]
+  const hasLocationRelevantOpportunity =
+    partialIntelligence.opportunity.signals.some((s) => LOCATION_RELEVANT_SIGNALS.includes(s))
+  // Only treat this as "no opportunity at all" when there is genuinely
+  // nothing to go on: no job object, no location-relevant opportunity
+  // signal, AND the deterministic workplace-type scan itself found no
+  // REMOTE/HYBRID/ONSITE evidence either (refinedEligibility.workplaceType
+  // stayed UNKNOWN). If the raw text already contains real workplace
+  // language (e.g. "Remote OK", "Remote-first company") the eligibility
+  // assessment computed from it is real evidence of a location-relevant
+  // opportunity and must not be discarded just because passA.job/opportunity
+  // signals happen not to have populated.
+  const noOpportunityAtAll = !passA.job
+    && !hasLocationRelevantOpportunity
+    && refinedEligibility.workplaceType === 'UNKNOWN'
+
   const finalEligibility: RemoteEligibility =
-    isNonBuyerRelationship(relationship) && !passA.job
+    isNonBuyerRelationship(relationship) || noOpportunityAtAll
       ? {
           workplaceType: 'UNKNOWN',
           remoteScope: 'UNKNOWN',
           eligibility: 'NOT_APPLICABLE',
-          reason: 'Not an employment or engagement opportunity — remote eligibility does not apply to this commercial relationship.',
+          reason: isNonBuyerRelationship(relationship)
+            ? 'Not an employment or engagement opportunity — remote eligibility does not apply to this commercial relationship.'
+            : 'No employment or location-constrained engagement opportunity detected.',
         }
       : refinedEligibility
 

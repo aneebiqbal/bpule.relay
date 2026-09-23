@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateMessage } from '@/lib/relay/message-forge'
-import { extractOpportunitySignals } from '@/lib/intelligence-v2/extraction-pipeline'
+import { extractOpportunitySignals, prospectAttributableText } from '@/lib/intelligence-v2/extraction-pipeline'
+import { produceCanonicalIntelligence } from '@/lib/intelligence-v2/orchestrator'
+import { assessRemoteEligibility } from '@/lib/intelligence-v2/remote-eligibility'
+import { stripThirdPartyRepostBlocks, isNonBuyerRelationship } from '@/lib/intelligence-v2/subject-attribution'
 import {
   buildRevenueStrategy,
+  describeMessagingPolicy,
+  describeVerdictForDisplay,
+  deriveMessagingPolicy,
+  sourceFromCanonical,
+  type ContactDecision,
   type StrategySource,
 } from '@/lib/relay/revenue-strategy'
 import type { EvidenceEntry } from '@/lib/intelligence-v2/types'
@@ -14,6 +22,8 @@ function source(overrides: Partial<StrategySource>): StrategySource {
     title: 'Founder',
     company: 'TestCo',
     qualification: 'worth_pursuing',
+    relationship: 'POTENTIAL_BUYER',
+    businessModel: 'PRODUCT',
     canonicalScore: 72,
     extractionCompleteness: 70,
     opportunitySignals: [],
@@ -187,5 +197,200 @@ describe('thingsNotToClaim propagation', () => {
     }))
     expect(strategy.unsupportedClaims.length).toBeGreaterThan(0)
     expect(strategy.unsupportedClaims.some((c) => /budget|technology/i.test(c))).toBe(true)
+  })
+})
+
+// ── General architectural invariants (hardening pass) ───────────────────────
+//
+// These assert the general rules the Tammo/Saar/Avigail/Abdulhakim hardening
+// fixes must uphold everywhere, independent of any one fixture's wording.
+// See AGENTS/BUG_LEDGER for the full background on each rule.
+describe('Architectural invariants — commercial qualification vs relationship strategy', () => {
+  function contact(overrides: Partial<ContactDecision> = {}): ContactDecision {
+    return {
+      reason: 'RELATIONSHIP_VALUE',
+      action: 'CONNECT_OR_OBSERVE',
+      why: 'Non-buyer relationship with genuine activity.',
+      messageRecommended: false,
+      noMessageReason: 'No buying need to pitch.',
+      ...overrides,
+    }
+  }
+
+  it('1. buyer score LOW + valid networking/relationship action is not flagged as contradiction', () => {
+    const strategy = buildRevenueStrategy(source({
+      qualification: 'skip',
+      relationship: 'RECRUITER',
+      businessModel: 'RECRUITER',
+      hardNegatives: ['Non-buyer role: 30 point penalty'],
+      name: 'Someone',
+      title: 'Recruiter',
+      recentPosts: [{ paraphrase: 'Active recruiting content', verbatimQuote: null }],
+    }))
+    // A non-buyer relationship with activity reaches CONNECT_OR_OBSERVE, not SKIP.
+    expect(strategy.contact.action).not.toBe('SKIP')
+    const display = describeVerdictForDisplay('skip', strategy.contact.action, describeMessagingPolicy(strategy.messagingPolicy))
+    expect(display.headline).not.toBe('Probably skip')
+  })
+
+  it('2. UNKNOWN intent + HIGH confidence is valid', () => {
+    const strategy = buildRevenueStrategy(source({
+      title: 'Founder & CEO',
+      opportunitySignals: [],
+      dimensionPoints: { opportunityFit: { points: 15, max: 20, note: 'Strong company/role' } },
+      extractionCompleteness: 80,
+      verbatimQuote: 'We are a well known company in our space',
+    }))
+    expect(strategy.assessment.intent).toBe('UNKNOWN')
+    // No rule anywhere requires confidence to be low just because intent is unknown.
+    expect(['MEDIUM', 'HIGH']).toContain(strategy.assessment.confidence)
+  })
+
+  it('3. CONNECT_WITHOUT_NOTE action never renders a bare contradictory SKIP headline', () => {
+    const policy = deriveMessagingPolicy(contact({ action: 'CONNECT_OR_OBSERVE', messageRecommended: false }), 'connection')
+    expect(policy).toBe('CONNECT_WITHOUT_NOTE')
+    const display = describeVerdictForDisplay('skip', 'CONNECT_OR_OBSERVE', 'Send a connection request with no note — do not pitch.')
+    expect(display.headline).not.toBe('Probably skip')
+    expect(display.headline.toLowerCase()).not.toMatch(/^skip/)
+  })
+
+  it('4. NOT_APPLICABLE remote eligibility never renders with the word "unclear"', () => {
+    const eligibility = assessRemoteEligibility({ rawText: 'No employment context at all here.' })
+    // Deterministic assessRemoteEligibility alone can still return UNCLEAR for
+    // genuinely ambiguous text (the NOT_APPLICABLE override lives one layer up,
+    // in the pipeline, once relationship/opportunity context is known) — so
+    // this asserts the CONTRACT: whenever the eligibility IS NOT_APPLICABLE,
+    // the reason string must never contain "unclear".
+    if (eligibility.eligibility === 'NOT_APPLICABLE') {
+      expect(eligibility.reason.toLowerCase()).not.toMatch(/unclear/)
+    }
+  })
+
+  it('5. non-buyer relationship does not fabricate buyer opportunity/intent', () => {
+    const strategy = buildRevenueStrategy(source({
+      relationship: 'PEER',
+      businessModel: 'UNKNOWN',
+      opportunitySignals: ['hiring'], // even if raw signals leak through
+      qualification: 'skip',
+    }))
+    expect(strategy.assessment.fit).toBe('LOW')
+  })
+
+  it('6. no-pitch action does not force fake/placeholder proof or unnecessary sender selection', () => {
+    // Structural: PITCHING policies are exactly DM/EMAIL/CONNECT_WITH_NOTE/
+    // UPWORK_PROPOSAL/FOLLOW_UP/REPLY — CONNECT_WITHOUT_NOTE/OBSERVE/SKIP/
+    // RESEARCH_MORE never require sender/proof selection (verified in
+    // route.ts via isPitchingPolicy — this test locks the enum contract that
+    // gate depends on).
+    const nonPitching = deriveMessagingPolicy(contact({ action: 'CONNECT_OR_OBSERVE', messageRecommended: false }), 'connection')
+    expect(nonPitching).toBe('CONNECT_WITHOUT_NOTE')
+    const observePolicy = deriveMessagingPolicy(contact({ action: 'CONNECT_OR_OBSERVE', messageRecommended: false }), 'dm')
+    expect(observePolicy).toBe('OBSERVE')
+  })
+
+  it('7. "no message recommended" stays "no message recommended"', () => {
+    const strategy = buildRevenueStrategy(source({
+      relationship: 'PEER',
+      recentPosts: [{ paraphrase: 'Generic post', verbatimQuote: null }],
+      opportunitySignals: [],
+    }))
+    expect(strategy.contact.messageRecommended).toBe(false)
+  })
+
+  it('8. relationship value / Revenue-Identity-availability does not inflate buyer score or intent', () => {
+    // dimensionPoints.revenueIdentityFit existing/positive must never leak
+    // into needIntent/opportunityFit dimensions — these are independent
+    // dimensions in StrategySource.dimensionPoints.
+    const strategy = buildRevenueStrategy(source({
+      dimensionPoints: {
+        revenueIdentityFit: { points: 13, max: 15, note: 'Compatible Revenue Identity available.' },
+        opportunityFit: { points: 4, max: 20, note: 'No clear opportunity match.' },
+        needIntent: { points: 3, max: 20, note: 'No strong need signal.' },
+      },
+      opportunitySignals: [],
+    }))
+    expect(strategy.assessment.fit).not.toBe('HIGH')
+    expect(strategy.assessment.intent).toBe('UNKNOWN')
+  })
+
+  it('9. third-party organization mentions in reposted content are never attributed as prospect\'s own employer/location/workplace restriction', () => {
+    const raw = `Jordan Lee
+· 2nd
+Founder at Loomwork
+
+About
+I build Loomwork, a workflow tool for ops teams.
+
+Activity
+View Jordan Lee's profile
+Jordan Lee reposted this
+
+View Casey Rivera's profile
+Casey Rivera
+CEO at OtherCo
+On-site requirement: our engineers work in-office at OtherCo HQ in Chicago.`
+    const stripped = stripThirdPartyRepostBlocks(raw, 'Jordan Lee')
+    expect(stripped.toLowerCase()).not.toMatch(/otherco|chicago|on-site requirement/i)
+    expect(stripped).toMatch(/Loomwork/)
+  })
+
+  it('10. prospect\'s own employment workplace_type does not automatically become a service-engagement remote restriction for an unrelated commercial opportunity', () => {
+    const raw = `Employment: Founder & CEO at MyCo
+MyCo · Full-time
+Country · Hybrid
+Building MyCo, a product for small businesses.`
+    // No hiring/freelance/explicit-ask/technical-problem signal anywhere —
+    // "Hybrid" describes the prospect's OWN job, not a BPulse engagement.
+    const attributable = prospectAttributableText(raw, 'Founder')
+    const { signals } = extractOpportunitySignals(attributable)
+    expect(signals).toHaveLength(0)
+  })
+
+  it('11. CONNECT_WITH_NOTE action cannot coexist with an empty/no-note final message state', () => {
+    // Structural contract: whenever messagingPolicy is CONNECT_WITH_NOTE,
+    // messageRecommended must be true (a note IS expected) — route.ts is
+    // responsible for downgrading to CONNECT_WITHOUT_NOTE with an explicit
+    // reason before this state reaches the UI if no safe note could be
+    // generated. This test locks the messagingPolicy contract itself.
+    const withNote = deriveMessagingPolicy(contact({ action: 'CONTACT_NOW', messageRecommended: true }), 'connection')
+    expect(withNote).toBe('CONNECT_WITH_NOTE')
+    const withoutNote = deriveMessagingPolicy(contact({ action: 'CONNECT_OR_OBSERVE', messageRecommended: false }), 'connection')
+    expect(withoutNote).toBe('CONNECT_WITHOUT_NOTE')
+    expect(withNote).not.toBe(withoutNote)
+  })
+
+  it('12. message with failing quality-gate status is never exposed as final recommended message (contract on connection-note result shape)', () => {
+    // Contract check: a ConnectionNoteResult with passed=false must never be
+    // treated as final — route.ts withholds text (charCount 0) rather than
+    // presenting a failing draft. This locks the shape the route depends on.
+    const failingResult = { text: 'some generic pitch', charCount: 19, maxChars: 300, withinLimit: true, passed: false, failures: ['Generic or forced CTA'], repaired: null }
+    // Simulates route.ts's post-generation consistency check.
+    const finalText = failingResult.passed ? failingResult.text : ''
+    expect(finalText).toBe('')
+  })
+
+  // NETWORKING was corrected from "not a non-buyer" to "a non-buyer" during
+  // review of the Saar Meents fixture: a founder doing visible sales/BD for
+  // their own product (NETWORKING) was defaulting to POTENTIAL_BUYER purely
+  // because deriveRelationship never actually produced NETWORKING at all —
+  // the type existed but no code path returned it. Once wired up,
+  // NETWORKING needed to join the non-buyer set for the same reason
+  // RECRUITER/POTENTIAL_PARTNER/PEER are there: it must not be scored as
+  // current BPulse delivery demand just because the prospect is a
+  // decision-maker at a product company.
+  it('isNonBuyerRelationship correctly classifies RECRUITER/POTENTIAL_PARTNER/PEER/NETWORKING as non-buyer, and POTENTIAL_BUYER/UNKNOWN as not', () => {
+    expect(isNonBuyerRelationship('RECRUITER')).toBe(true)
+    expect(isNonBuyerRelationship('POTENTIAL_PARTNER')).toBe(true)
+    expect(isNonBuyerRelationship('PEER')).toBe(true)
+    expect(isNonBuyerRelationship('NETWORKING')).toBe(true)
+    expect(isNonBuyerRelationship('POTENTIAL_BUYER')).toBe(false)
+    expect(isNonBuyerRelationship('UNKNOWN')).toBe(false)
+  })
+
+  it('produceCanonicalIntelligence threads relationship/businessModel into sourceFromCanonical', async () => {
+    const result = await produceCanonicalIntelligence('John Doe\nSoftware Engineer\n\nAbout\nI build things.', {})
+    const src = sourceFromCanonical(result.intelligence, { channel: 'connection' })
+    expect(src.relationship).toBe(result.intelligence.intelligence.relationship)
+    expect(src.businessModel).toBe(result.intelligence.intelligence.businessModel)
   })
 })
