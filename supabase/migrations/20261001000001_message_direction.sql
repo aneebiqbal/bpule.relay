@@ -11,7 +11,7 @@
 
 alter table messages add column if not exists direction text not null default 'outbound';
 
-alter table messages drop constraint if not exists messages_direction_check;
+alter table messages drop constraint if exists messages_direction_check;
 alter table messages add constraint messages_direction_check
   check (direction in ('outbound', 'inbound'));
 

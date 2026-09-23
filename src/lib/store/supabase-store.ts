@@ -182,6 +182,38 @@ const LEAD_COLUMNS =
 const LEAD_COLUMNS_STABLE =
   'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, created_at'
 
+const OPTIONAL_MESSAGE_COLUMNS = ['direction', 'idempotency_key'] as const
+
+/** Drop an optional messages column the live schema does not have yet, so a send can still be logged. */
+function omitNamedMissingColumns(payload: Record<string, unknown>, err: unknown, columns: readonly string[]): boolean {
+  if (!isOptionalSearchError(err)) return false
+  const message = ((err as { message?: string }).message ?? '').toLowerCase()
+  let omitted = false
+  for (const column of columns) {
+    if (Object.prototype.hasOwnProperty.call(payload, column) && message.includes(column)) {
+      delete payload[column]
+      omitted = true
+    }
+  }
+  return omitted
+}
+
+async function insertMessageReturningId(
+  client: { from: (table: string) => { insert: (payload: Record<string, unknown>) => { select: (columns: string) => { single: () => PromiseLike<{ data: { id: string } | null; error: { code?: string; message?: string } | null }> } } } },
+  payload: Record<string, unknown>,
+): Promise<{ data: { id: string } | null; error: { code?: string; message?: string } | null }> {
+  let data: { id: string } | null = null
+  let error: { code?: string; message?: string } | null = null
+  for (let attempt = 0; attempt < OPTIONAL_MESSAGE_COLUMNS.length + 1; attempt += 1) {
+    const result = await client.from('messages').insert(payload).select('id').single()
+    data = result.data
+    error = result.error
+    if (!error) break
+    if (!omitNamedMissingColumns(payload, error, OPTIONAL_MESSAGE_COLUMNS)) break
+  }
+  return { data, error }
+}
+
 function isMissingColumnError(err: unknown): boolean {
   const code = (err as { code?: string }).code ?? ''
   const message = (err as { message?: string }).message ?? ''
@@ -965,19 +997,7 @@ export class SupabaseStore implements ScoutStore {
     }
     if (idempotencyKey) insertPayload.idempotency_key = idempotencyKey
 
-    let { data: inserted, error: insertError } = await this.client
-      .from('messages')
-      .insert(insertPayload)
-      .select('id')
-      .single()
-    if (insertError && idempotencyKey && isOptionalSearchError(insertError)) {
-      // idempotency_key column doesn't exist yet (migration not applied) —
-      // fail open and log without it rather than blocking a real send.
-      delete insertPayload.idempotency_key
-      const retry = await this.client.from('messages').insert(insertPayload).select('id').single()
-      inserted = retry.data
-      insertError = retry.error
-    }
+    let { data: inserted, error: insertError } = await insertMessageReturningId(this.client, insertPayload)
     if (insertError && idempotencyKey && (insertError as { code?: string }).code === '23505') {
       // TRUE concurrent duplicate: the pre-check above (SELECT before
       // INSERT) cannot see an in-flight, not-yet-committed insert from a
@@ -1248,20 +1268,18 @@ export class SupabaseStore implements ScoutStore {
     }
 
     const now = new Date().toISOString()
-    const { data: inserted, error: insertError } = await this.client
-      .from('messages')
-      .insert({
-        organization_id: this.orgId,
-        lead_id: leadId,
-        rep_id: this.rep.id,
-        type: 'reply',
-        sent_text: replyText,
-        sent_at: now,
-        direction: 'inbound',
-      })
-      .select('id')
-      .single()
+    const replyPayload: Record<string, unknown> = {
+      organization_id: this.orgId,
+      lead_id: leadId,
+      rep_id: this.rep.id,
+      type: 'reply',
+      sent_text: replyText,
+      sent_at: now,
+      direction: 'inbound',
+    }
+    const { data: inserted, error: insertError } = await insertMessageReturningId(this.client, replyPayload)
     if (insertError) throw insertError
+    if (!inserted) throw new Error('Failed to record the reply.')
 
     try {
       // Auto-restore on reply: see markContacted's identical handling for
