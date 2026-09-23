@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { cn } from 'cn'
 
@@ -73,6 +74,23 @@ export function ManagerTeamView({ data }: { data: ManagerTeamData }) {
               </p>
               <span className="text-[11px] text-graphite">{team.members.length} members</span>
             </div>
+
+            {sortedMembers.length > 0 && (
+              <div className="mt-3 rounded-lg border border-line bg-bone-raised p-3" style={{ height: Math.max(140, sortedMembers.length * 32 + 24) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={sortedMembers} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: 4 }}>
+                    <XAxis type="number" hide allowDecimals={false} />
+                    <YAxis type="category" dataKey="personName" width={108} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--graphite)' }} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 11, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bone-raised)' }}
+                      formatter={(value, name) => [value ?? 0, name === 'totalCompleted' ? 'Done' : 'Left']}
+                    />
+                    <Bar dataKey="totalCompleted" stackId="day" name="Done" fill="var(--orange)" />
+                    <Bar dataKey="totalRemaining" stackId="day" name="Left" fill="var(--bone-200)" radius={[0, 3, 3, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
 
             {sortedMembers.length > 0 ? (
               <div className="mt-2 space-y-1.5">

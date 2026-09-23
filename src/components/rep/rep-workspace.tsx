@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { AlertTriangle, Shield, Users } from 'lucide-react'
+import { WorkPaceChart } from './work-pace-chart'
 import { YourDaySummary } from './your-day-summary'
 import { ResponsibilityCard } from './responsibility-card'
 import { DoThisNext } from './do-this-next'
@@ -64,6 +65,30 @@ export interface RepWorkspaceData {
   isManager?: boolean
   teamName?: string
   teamMembers?: any[]
+}
+
+function quotaLabel(activityType: string): string {
+  const labels: Record<string, string> = {
+    connection_request: 'Connections',
+    dm: 'First DMs',
+    email: 'Emails',
+    followup: 'Follow-ups',
+    application: 'Applications',
+    proposal: 'Proposals',
+  }
+  return labels[activityType] ?? activityType
+}
+
+function quotaHref(activityType: string): string {
+  const filters: Record<string, string> = {
+    connection_request: '/leads?filter=connect',
+    dm: '/leads?filter=dm',
+    email: '/leads?filter=email',
+    followup: '/leads?filter=followup',
+    application: '/leads?filter=application',
+    proposal: '/leads?filter=proposal',
+  }
+  return filters[activityType] ?? '/leads'
 }
 
 interface RepWorkspaceProps {
@@ -197,39 +222,25 @@ export function RepWorkspace({ data, teamData }: RepWorkspaceProps) {
         excludeId={data.nextAction?.id}
       />
 
-      <section className="space-y-2">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">
-          Today&apos;s Targets
-        </p>
-        <div className="overflow-hidden rounded-lg border border-line bg-bone-raised">
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="border-b border-line bg-bone text-left text-mono-medium text-[10px] uppercase tracking-wide text-stone">
-                <th className="px-3 py-2">Profile</th>
-                <th className="px-3 py-2">Activity</th>
-                <th className="px-3 py-2">Progress</th>
-                <th className="px-3 py-2 text-right">Remaining</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.targetSummary.byIdentity.flatMap((identity) =>
-                identity.targets.map((target) => (
-                  <tr key={target.targetId} className="border-b border-line/60 last:border-b-0">
-                    <td className="px-3 py-2 font-medium text-ink">{identity.identityName}</td>
-                    <td className="px-3 py-2 text-graphite">{target.activityType}</td>
-                    <td className="px-3 py-2 text-graphite">
-                      {target.completedCount} / {target.targetCount}
-                    </td>
-                    <td className="px-3 py-2 text-right font-medium text-orange">
-                      {target.remaining > 0 ? target.targetCount - target.completedCount : '—'}
-                    </td>
-                  </tr>
-                )),
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {data.targetSummary.byIdentity.length > 1 && (
+        <WorkPaceChart
+          categories={data.targetSummary.byIdentity.flatMap((identity) =>
+            identity.targets
+              .filter((target) => target.targetCount > 0)
+              .map((target) => ({
+                key: target.targetId,
+                label: `${quotaLabel(target.activityType)} · ${identity.identityName}`,
+                completed: target.completedCount,
+                target: target.targetCount,
+                remaining: target.remaining,
+                href: quotaHref(target.activityType),
+              })),
+          )}
+          dayElapsedPct={0}
+          totalCompleted={data.targetSummary.totalCompleted}
+          totalTarget={data.targetSummary.totalTarget}
+        />
+      )}
         </>
       )}
     </div>

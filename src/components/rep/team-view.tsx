@@ -1,3 +1,6 @@
+'use client'
+
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AlertTriangle, CheckCircle2, Clock, Eye, Target, Users } from 'lucide-react'
 import { cn } from 'cn'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -54,11 +57,11 @@ export function TeamView({ teamName, members, isManager }: TeamViewProps) {
             <p className="mt-0.5 text-[15px] font-medium text-ink">{totalCompleted}</p>
           </div>
           <div className="rounded border border-line bg-bone px-3 py-2">
-            <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-ststone">Target</p>
+            <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Target</p>
             <p className="mt-0.5 text-[15px] font-medium text-ink">{totalTarget}</p>
           </div>
           <div className="rounded border border-line bg-bone px-3 py-2">
-            <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-ststone">Remaining</p>
+            <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Remaining</p>
             <p className="mt-0.5 text-[15px] font-medium text-orange">{totalRemaining}</p>
           </div>
         </div>
@@ -79,6 +82,26 @@ export function TeamView({ teamName, members, isManager }: TeamViewProps) {
                 <span className="text-[11px] text-graphite">{m.attentionReason}</span>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {members.length > 0 && (
+        <section className="rounded-lg border border-line bg-bone-raised p-4">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Work left by person</p>
+          <div className="mt-2" style={{ height: Math.max(140, members.length * 36) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={members} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: 4 }}>
+                <XAxis type="number" hide allowDecimals={false} />
+                <YAxis type="category" dataKey="repName" width={108} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--graphite)' }} />
+                <Tooltip
+                  contentStyle={{ fontSize: 11, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bone-raised)' }}
+                  formatter={(value, name) => [value ?? 0, name === 'totalCompleted' ? 'Done' : 'Left']}
+                />
+                <Bar dataKey="totalCompleted" stackId="day" name="Done" fill="var(--orange)" />
+                <Bar dataKey="totalRemaining" stackId="day" name="Left" fill="var(--bone-200)" radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </section>
       )}

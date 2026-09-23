@@ -9,6 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  Legend,
 } from 'recharts'
 import { cn } from 'cn'
 import { Activity, MessageSquare, Zap, Users, TrendingUp } from 'lucide-react'
@@ -175,31 +176,36 @@ export function LiveCommandCenter() {
         </div>
       </div>
 
-      {/* Per-rep stacked bars */}
       {data.perRep.length > 0 && (
         <div className="rounded-2xl border border-line/60 bg-bone-raised p-4">
           <p className="text-label text-graphite">Who sent what today</p>
-          <div className="mt-3 space-y-2">
-            {data.perRep.slice(0, 8).map((rep) => {
-              const total = rep.connections + rep.dms + rep.followups + rep.emails + rep.replies
-              const max = Math.max(1, ...data.perRep.map((r) => r.connections + r.dms + r.followups + r.emails + r.replies))
-              const cPct = Math.round((rep.connections / max) * 100)
-              const dPct = Math.round((rep.dms / max) * 100)
-              const fPct = Math.round((rep.followups / max) * 100)
-              return (
-                <div key={rep.name}>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="truncate font-medium text-ink">{rep.name}</span>
-                    <span className="text-mono-medium text-stone">{total}</span>
-                  </div>
-                  <div className="mt-0.5 flex h-2 overflow-hidden rounded-full bg-bone">
-                    <div className="bg-cobalt" style={{ width: `${cPct}%` }} title={`${rep.connections} connections`} />
-                    <div className="bg-orange" style={{ width: `${dPct}%` }} title={`${rep.dms} DMs`} />
-                    <div className="bg-status-warning" style={{ width: `${fPct}%` }} title={`${rep.followups} follow-ups`} />
-                  </div>
-                </div>
-              )
-            })}
+          <div className="mt-2" style={{ height: Math.max(180, data.perRep.slice(0, 8).length * 36) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={data.perRep.slice(0, 8)}
+                layout="vertical"
+                margin={{ top: 4, right: 8, bottom: 0, left: 4 }}
+              >
+                <XAxis type="number" hide allowDecimals={false} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={108}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: 'var(--graphite)' }}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 11, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bone-raised)' }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="connections" stackId="sent" name="Connections" fill="var(--cobalt)" />
+                <Bar dataKey="dms" stackId="sent" name="First DMs" fill="var(--orange)" />
+                <Bar dataKey="followups" stackId="sent" name="Follow-ups" fill="var(--status-warning)" />
+                <Bar dataKey="emails" stackId="sent" name="Emails" fill="var(--status-success)" />
+                <Bar dataKey="replies" stackId="sent" name="Replies" fill="var(--status-info)" radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { Progress } from '@/components/ui/progress'
+import { WorkPaceChart } from '@/components/rep/work-pace-chart'
 import { cn } from 'cn'
 
 /**
@@ -62,48 +63,6 @@ const EXCEPTION_REASONS = [
 function StatusBadgeForStatus({ status }: { status: string }) {
   const config = STATUS_CONFIG[status] ?? { label: status, variant: 'neutral' as const }
   return <StatusBadge status={config.label} variant={config.variant} />
-}
-
-function CategoryRow({ category }: { category: MyDayData['categories'][0] }) {
-  const isComplete = category.remaining === 0
-  const pct = category.target > 0 ? Math.min(Math.round((category.completed / category.target) * 100), 100) : 0
-
-  return (
-    <div className={cn('flex items-center gap-3 rounded border px-3 py-2.5', isComplete ? 'border-status-success/20 bg-status-success/5' : 'border-line bg-bone-raised')}>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between">
-          <span className={cn('text-[13px] font-medium', isComplete ? 'text-status-success' : 'text-ink')}>{category.label}</span>
-          <span className="text-mono-medium text-[11px] text-stone">
-            {category.completed} / {category.target}
-          </span>
-        </div>
-        <div className="mt-1.5 flex items-center gap-2">
-          <Progress
-            value={category.completed}
-            max={category.target}
-            variant={isComplete ? 'success' : category.remaining > category.target * 0.5 ? 'danger' : 'warning'}
-            className="flex-1"
-          />
-          {!isComplete && (
-            <span className={cn('text-mono-medium text-[10px] font-medium', category.remaining > 5 ? 'text-status-danger' : 'text-status-warning')}>
-              {category.remaining} left
-            </span>
-          )}
-          {isComplete && (
-            <span className="text-mono-medium text-[10px] font-medium text-status-success">Complete</span>
-          )}
-        </div>
-      </div>
-      {!isComplete && category.href && (
-        <Link
-          href={category.href}
-          className="shrink-0 rounded border border-line bg-bone px-2 py-1 text-[11px] font-medium text-ink hover:bg-bone-raised hover:underline"
-        >
-          Work →
-        </Link>
-      )}
-    </div>
-  )
 }
 
 export function MyDayCard({ data }: { data: MyDayData }) {
@@ -173,8 +132,6 @@ export function MyDayCard({ data }: { data: MyDayData }) {
     }
   }
 
-  const remainingCategories = data.categories.filter((c) => c.remaining > 0)
-
   return (
     <div className="space-y-4">
       {/* Status header */}
@@ -243,16 +200,13 @@ export function MyDayCard({ data }: { data: MyDayData }) {
         </div>
       )}
 
-      {/* Category breakdown */}
       {data.categories.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Remaining Work</p>
-          <div className="space-y-1.5">
-            {data.categories.map((cat) => (
-              <CategoryRow key={cat.key} category={cat} />
-            ))}
-          </div>
-        </div>
+        <WorkPaceChart
+          categories={data.categories}
+          dayElapsedPct={data.dayElapsedPct}
+          totalCompleted={data.totalCompleted}
+          totalTarget={data.totalTarget}
+        />
       )}
 
       {/* Day Close action */}
