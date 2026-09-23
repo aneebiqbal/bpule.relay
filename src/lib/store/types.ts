@@ -936,6 +936,7 @@ export interface ScoutStore {
   getCommandCenterAdmin(): Promise<import('@/lib/domain/types').CommandCenterView>
   listMyAssignedIdentities(): Promise<import('@/lib/domain/types').RevenueIdentityWithAssignment[]>
   getMyTodayAccountability(): Promise<import('@/lib/domain/types').RepTodayView>
+  getRepTodayAccountability(repId: string): Promise<import('@/lib/domain/types').RepTodayView>
   listAccountabilityNotifications(): Promise<import('@/lib/domain/types').AppNotification[]>
   markAccountabilityNotificationRead(id: string): Promise<void>
   listAuditLogAdmin(limit?: number): Promise<import('@/lib/domain/types').AuditLogEntry[]>

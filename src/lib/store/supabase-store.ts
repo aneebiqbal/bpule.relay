@@ -5137,16 +5137,26 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getMyTodayAccountability(): Promise<import('@/lib/domain/types').RepTodayView> {
+    return this.getRepTodayAccountability(this.rep.id)
+  }
+
+  async getRepTodayAccountability(repId: string): Promise<import('@/lib/domain/types').RepTodayView> {
     const today = new Date().toISOString().slice(0, 10)
+    const isSelf = repId === this.rep.id
+    const repName = isSelf ? this.rep.name : (await this.getRepInfo(repId))?.name ?? this.rep.name
+    const { data: repRow } = isSelf
+      ? { data: null }
+      : await this.client.from('reps').select('timezone').eq('id', repId).eq('organization_id', this.orgId).maybeSingle()
+    const timezone = isSelf ? (this.rep.timezone ?? 'UTC') : ((repRow?.timezone as string) ?? 'UTC')
     const { data: assignments } = await this.client
       .from('identity_assignments').select('id, revenue_identity_id, assigned_by, created_at')
-      .eq('rep_id', this.rep.id).eq('organization_id', this.orgId)
+      .eq('rep_id', repId).eq('organization_id', this.orgId)
     if (!assignments || assignments.length === 0) {
-      return { repId: this.rep.id, repName: this.rep.name, timezone: this.rep.timezone ?? 'UTC', isWorkingDay: true, totalTarget: 0, totalCompleted: 0, totalRemaining: 0, overallStatus: 'on_track', assignedIdentities: [], notifications: [] }
+      return { repId, repName, timezone, isWorkingDay: true, totalTarget: 0, totalCompleted: 0, totalRemaining: 0, overallStatus: 'on_track', assignedIdentities: [], notifications: [] }
     }
     const identityIds = assignments.map((a) => a.revenue_identity_id as string)
-    const { data: targets } = await this.client.from('daily_targets').select('*').eq('rep_id', this.rep.id).in('revenue_identity_id', identityIds).eq('active', true)
-    const { data: accountability } = await this.client.from('daily_accountability').select('*').eq('rep_id', this.rep.id).eq('target_date', today).eq('organization_id', this.orgId)
+    const { data: targets } = await this.client.from('daily_targets').select('*').eq('rep_id', repId).in('revenue_identity_id', identityIds).eq('active', true)
+    const { data: accountability } = await this.client.from('daily_accountability').select('*').eq('rep_id', repId).eq('target_date', today).eq('organization_id', this.orgId)
     const targetList = (targets ?? []) as Record<string, unknown>[]
     const accMap = new Map(((accountability ?? []) as Record<string, unknown>[]).map((a) => [`${a.revenue_identity_id}:${a.activity_type}`, a]))
     let totalTarget = 0, totalCompleted = 0
@@ -5165,7 +5175,7 @@ export class SupabaseStore implements ScoutStore {
       return { assignmentId: a.id as string, identity: identity!, targets: targetViews }
     }))
     return {
-      repId: this.rep.id, repName: this.rep.name, timezone: this.rep.timezone ?? 'UTC', isWorkingDay: true,
+      repId, repName, timezone, isWorkingDay: true,
       totalTarget, totalCompleted, totalRemaining: Math.max(0, totalTarget - totalCompleted),
       overallStatus: totalCompleted >= totalTarget ? 'completed' : 'on_track',
       assignedIdentities: identityViews, notifications: [],

@@ -20,17 +20,20 @@ async function loadDrillDownData(repId: string) {
   const authCtx = await getAuthContext()
   if (!authCtx) redirect('/login')
 
+  const store = await createScoutStore()
+
   if (!authCtx.isOwner && !authCtx.isAdmin && authCtx.repId !== repId) {
-    if (!authCtx.managedTeamIds.some(async (teamId) => {
-      const store = await createScoutStore()
-      const members = await store.getTeamMembers(teamId)
-      return members.some((m) => m.repId === repId)
-    })) {
+    const teamMemberChecks = await Promise.all(
+      authCtx.managedTeamIds.map(async (teamId) => {
+        const members = await store.getTeamMembers(teamId)
+        return members.some((m) => m.repId === repId)
+      })
+    )
+    if (!teamMemberChecks.some(Boolean)) {
       redirect('/dashboard')
     }
   }
 
-  const store = await createScoutStore()
   const today = new Date().toISOString().slice(0, 10)
 
   const teamMembers = await Promise.all(
@@ -50,7 +53,7 @@ async function loadDrillDownData(repId: string) {
 
   if (!repInfo) redirect('/dashboard')
 
-  const targets = await store.getMyTodayAccountability()
+  const targets = await store.getRepTodayAccountability(repId)
   const identities = await store.listMyAssignedIdentities()
 
   const assignments = await store.getRepAssignments(repId)

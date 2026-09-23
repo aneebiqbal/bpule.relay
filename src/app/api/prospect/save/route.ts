@@ -156,14 +156,13 @@ export async function POST(request: Request) {
             ? 'skip'
             : null
     const verdict = verdictFromCanonical ?? score.verdict
-    // Persisted `score` (0-12 legacy column) must not independently disagree
-    // with a canonical score that exists for this same lead — mirrors the
-    // pattern already used by /api/leads (see "Score: Use canonical if
-    // available, else fall back to rubric" there). Convert canonical's
-    // 0-100 onto the legacy 0-12 scale rather than storing the legacy
-    // computation unconditionally, which would leave a lead with BOTH a
-    // canonical_score AND a numerically-inconsistent legacy score column.
-    const legacyScoreTotal = canonicalScore != null ? Math.round(canonicalScore / 10) : score.total
+    // Persisted `score` must not independently disagree with a canonical
+    // score that exists for this same lead — mirrors the pattern used by
+    // /api/leads ("Score: Use canonical if available, else fall back to
+    // rubric"). Store canonical's raw 0-100 value directly rather than a
+    // locally-converted scale, so `leads.score` means the same thing
+    // regardless of which endpoint created the lead.
+    const legacyScoreTotal = canonicalScore ?? score.total
 
     const result = await store.createLead({
       company,

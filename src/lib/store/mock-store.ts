@@ -2857,8 +2857,14 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         .filter((x): x is RevenueIdentityWithAssignment => x !== null)
     },
     async getMyTodayAccountability() {
-      const myAssignments = demoIdentityAssignments.filter((a) => a.repId === rep.id)
-      const myTargets = demoDailyTargets.filter((t) => t.repId === rep.id && t.active)
+      return this.getRepTodayAccountability(rep.id)
+    },
+    async getRepTodayAccountability(repId: string) {
+      const isSelf = repId === rep.id
+      const repName = isSelf ? rep.name : repId
+      const timezone = isSelf ? (rep.timezone ?? 'UTC') : 'UTC'
+      const myAssignments = demoIdentityAssignments.filter((a) => a.repId === repId)
+      const myTargets = demoDailyTargets.filter((t) => t.repId === repId && t.active)
       let totalTarget = 0, totalCompleted = 0
       const assignedIdentities = myAssignments.map((a) => {
         const identity = demoRevenueIdentities.find((r) => r.id === a.revenueIdentityId)
@@ -2872,7 +2878,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         return { assignmentId: a.id, identity: identity!, targets }
       })
       return {
-        repId: rep.id, repName: rep.name, timezone: rep.timezone ?? 'UTC', isWorkingDay: true,
+        repId, repName, timezone, isWorkingDay: true,
         totalTarget, totalCompleted, totalRemaining: Math.max(0, totalTarget - totalCompleted),
         overallStatus: totalCompleted >= totalTarget ? 'completed' : 'on_track',
         assignedIdentities, notifications: [],

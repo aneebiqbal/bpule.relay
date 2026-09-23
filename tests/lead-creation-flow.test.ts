@@ -217,10 +217,18 @@ describe('Lead creation hardening flow', () => {
   // unrelated legacy score column (whatever computeScore() happened to
   // compute from the extracted fields) — a real, persisted duplicate source
   // of truth, not just a display bug.
+  //
+  // Follow-up regression: the initial fix for TEAM-002 made /api/prospect/save
+  // derive `score` from canonicalScore, but divided it onto a legacy 0-12
+  // scale (round(canonicalScore / 10)) while /api/leads stored the raw 0-100
+  // value in that same `leads.score` column. Two lead-creation endpoints
+  // writing the same column on two different scales reintroduced the exact
+  // inconsistency this test exists to prevent, just one level down. Both
+  // endpoints now store the raw canonicalScore, matching /api/leads.
   it('/api/prospect/save derives the persisted legacy score column FROM canonicalScore when canonical intelligence is present, never independently', async () => {
     const createLeadMock = vi.fn().mockResolvedValue({
       blocked: false,
-      lead: makeLead({ id: 'lead-canonical', score: 8, verdict: 'send', canonicalScore: 79 }),
+      lead: makeLead({ id: 'lead-canonical', score: 79, verdict: 'send', canonicalScore: 79 }),
     })
 
     createScoutStoreMock.mockResolvedValue({
@@ -241,11 +249,11 @@ describe('Lead creation hardening flow', () => {
     expect(res.status).toBe(201)
     expect(createLeadMock).toHaveBeenCalledTimes(1)
     const payload = createLeadMock.mock.calls[0]?.[0]
-    // 79/100 canonical -> round(79/10) = 8 on the legacy 0-12 scale. This
-    // MUST be derived from canonicalScore, not from an independent
-    // computeScore() run over the extracted fields, which could land on any
-    // other 0-12 value for the same lead.
-    expect(payload.score).toBe(8)
+    // `score` MUST equal canonicalScore directly — same convention as
+    // /api/leads — not an independent computeScore() run over the extracted
+    // fields, nor a locally-converted scale, either of which could land on a
+    // different value for the same lead.
+    expect(payload.score).toBe(79)
     expect(payload.canonicalScore).toBe(79)
     expect(payload.verdict).toBe('send') // 'worth_pursuing' qualification -> 'send'
   })
@@ -276,7 +284,7 @@ describe('Lead creation hardening flow', () => {
     expect(res.status).toBe(201)
     const payload = createLeadMock.mock.calls[0]?.[0]
     expect(payload.canonicalScore).toBe(79) // from canonical.canonicalScore, NOT the mismatched top-level 12
-    expect(payload.score).toBe(8) // round(79/10), derived from the SAME winning value
+    expect(payload.score).toBe(79) // derived directly from the SAME winning value, same scale
   })
 
   it('/api/prospect/save falls back to the legacy rubric score when NO canonical intelligence is provided (pre-canonical / manual-entry compatibility path)', async () => {
