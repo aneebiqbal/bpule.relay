@@ -278,3 +278,60 @@ Re-ran `e2e/log-sent-idempotency.spec.ts` after the fix: **passes** — two conc
 `tests/upwork-accountability.test.ts` (3 tests, direct integration against `SupabaseStore` + a fake Supabase client asserting the actual RPC call args). Full suite: same 9 pre-existing unrelated failures, no regressions (897 total). Typecheck and build clean.
 
 **Status: CONDITIONAL PASS.** Root-caused and fixed at the code/API/DB level with integration-test proof of the RPC call. Not yet verified: full browser journey (log an Upwork application → refresh Today → see the count increment) against a live session, per the outstanding TEAM-001/002/004/005 acceptance matrix still owed.
+
+---
+
+## Semantic Attribution Regression — Market Commentary / Recruiter Content Inverted into Buying Intent
+
+**ID**: SEM-001 · **Severity**: P1 (wrong result — non-buyer scored as HIGH-intent buyer)
+
+**Reported symptom** (Tammo Strunk / Find a Job in Germany, a career-coaching business):
+score 87 / Fit HIGH / Intent HIGH / Confidence HIGH / "current, explicit need" /
+growth_signal / immediate_need / remote compatible "candidate is open to opportunities" /
+CONNECT_WITH_NOTE — all from evidence that describes the **German labor market**, not Tammo.
+
+**Root cause**: the pipeline had **no subject/relationship attribution layer**. Every extracted
+sentence was treated as first-person evidence of the prospect:
+
+1. **Signal extraction** (`extractOpportunitySignals`) ran over the full raw text with no
+   notion of who a sentence is about. Market statistics ("79,000 unfilled IT positions in
+   Germany"), audience language ("anyone looking for a job"), and a recruiter's service
+   descriptions all produced `hiring` / `growth_signal` / `migration` / `freelance_project_need`.
+2. **Content signals** (`extractContentSignals`) pulled hiring/initiative lines from posts.
+3. **Identity extraction** (`extractTitle`/`extractLocation`) scanned every line including
+   posts, so a post line ("Software Engineer → use AI in development") became the title and
+   prose deep in a post became the location.
+4. **Job-seeker attribution** (`JOB_SEEKER_MARKERS.test(rawText)`) matched audience language
+   ("anyone looking for a job") and marked the whole profile a job seeker → remote eligibility
+   "candidate is open to opportunities".
+5. **No relationship classification**: a career-coaching business was never distinguished from
+   a software buyer, so it was scored as POTENTIAL_BUYER.
+6. **Proof/identity inference** fabricated "relevant proof" from the prospect's own tech keywords.
+
+**Fix** (general attribution/relationship logic, no special-casing of Tammo):
+
+- New `src/lib/intelligence-v2/subject-attribution.ts`: `classifySentence` (PROSPECT/MARKET/
+  AUDIENCE/UNKNOWN), `classifyBusinessModel` (PRODUCT/RECRUITER), `deriveRelationship`
+  (POTENTIAL_BUYER/RECRUITER/POTENTIAL_PARTNER/PEER/NETWORKING), `splitProfileSections`,
+  `prospectAttributableText`.
+- `demoPassA` now extracts signals/content only from prospect-attributable text; identity
+  extraction is restricted to the profile header block (before About/Activity/Experience).
+- `constrainNonBuyerPassA` detects RECRUITER business model (not just title).
+- `isJobSeekerAttribution` restricts job-seeker markers to first-person/identity context.
+- Pipeline computes `businessModel` + `relationship` before scoring; strips market-derived
+  signals for RECRUITER; sets remote eligibility NOT_APPLICABLE for non-buyer relationships.
+- Scoring (`scoreOpportunityFit`/`scoreNeedIntent`/`computeRolePenalty`) and orchestrator
+  inference (`isNonBuyerIntel`) now respect `intelligence.relationship`.
+- `extractOfficeLocation` matches per-line (no cross-line stitching); message-forge rejects
+  unsupported shared-space claims.
+
+**Result for Tammo**: score 1 / Not a fit / skip · UNKNOWN intent · CONNECT_WITHOUT_NOTE ·
+remote NOT_APPLICABLE · company "Find a Job in Germany" · title "Managing Partner..." ·
+location "Berlin, Germany" · no fabricated signals · watchOut names the recruiter classification.
+
+**Regression tests**: `tests/hardening-regression-tammo.test.ts` (18 tests, all 10 invariants).
+Full suite: 1117 tests pass (74 files), no regressions. Golden/torture benchmark (vitest
+`intelligence-v2-benchmark.test.ts`): 21/21 pass. Daria fixture: 4/4 pass.
+
+**Verified**: typecheck clean (one pre-existing unrelated error in `lead-connection-lock.test.ts`),
+lint clean on changed files.

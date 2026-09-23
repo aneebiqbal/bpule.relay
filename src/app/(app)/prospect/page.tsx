@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { ScoreRing } from '@/components/score-ring'
 import { readSse } from '@/lib/sse/client'
 import { cn } from 'cn'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
@@ -435,7 +436,7 @@ export default function ProspectCheckPage() {
           {result.score ? (
             <div>
               <div className="flex items-baseline gap-3">
-                <ProspectScoreRing score={result.score.total} />
+                <ScoreRing canonicalScore={result.score.total} size={64} />
                 <div className="min-w-0">
                   <h2 className="text-[15px] font-medium text-ink">
                     {result.extracted.name ?? 'Unnamed prospect'}
@@ -715,50 +716,3 @@ function SignalChip({ label, value }: { label: string; value: string }) {
   )
 }
 
-function ProspectScoreRing({ score }: { score: number }) {
-  const size = 64
-  const max = 100
-  const pct = Math.min(Math.max(score, 0) / max, 1)
-  const strokeWidth = 5
-  const r = (size - strokeWidth * 2) / 2
-  const c = 2 * Math.PI * r
-  const color =
-    pct >= 0.7
-      ? 'var(--status-success)'
-      : pct >= 0.55
-        ? 'var(--orange)'
-        : 'var(--graphite)'
-
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="var(--line)"
-          strokeWidth={strokeWidth}
-          opacity={0.3}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={c * (1 - pct)}
-          className="transition-[stroke-dashoffset] duration-500 ease-out"
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-mono-medium text-[16px] font-medium leading-none text-ink">
-          {score}
-        </span>
-      </div>
-    </div>
-  )
-}

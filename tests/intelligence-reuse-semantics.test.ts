@@ -60,6 +60,8 @@ function makeCanonicalStub(overrides: Partial<CanonicalProspectIntelligence> = {
       risks: [],
       unknowns: [],
       resolvedContradictions: [],
+      businessModel: 'PRODUCT',
+      relationship: 'POTENTIAL_BUYER',
     },
     rawSource: {
       rawInput: SAMPLE_TEXT,

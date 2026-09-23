@@ -264,6 +264,13 @@ export async function produceCanonicalIntelligence(
 }
 
 function isNonBuyerIntel(intelligence: import('./types').NormalizedIntelligence): boolean {
+  if (
+    intelligence.relationship === 'RECRUITER'
+    || intelligence.relationship === 'POTENTIAL_PARTNER'
+    || intelligence.relationship === 'PEER'
+  ) {
+    return true
+  }
   return isNonBuyerProfessional({
     title: intelligence.person.title,
     company: intelligence.company.name,
@@ -533,6 +540,8 @@ function createIrrelevantIntelligence(
       risks: [],
       unknowns: classification.reasons,
       resolvedContradictions: [],
+      businessModel: 'UNKNOWN',
+      relationship: 'UNKNOWN',
     },
     rawSource: {
       rawInput: rawText,

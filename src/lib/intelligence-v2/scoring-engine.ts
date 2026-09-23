@@ -15,7 +15,7 @@ import type {
   RemoteEligibility,
   OpportunitySignal,
 } from './types'
-import { eligibilityScoreContribution } from './remote-eligibility'
+import { eligibilityScoreContribution, isJobSeekerAttribution } from './remote-eligibility'
 import { isBuyerLeadership, isClinicianProfile, isRecruiterTitle } from './role-signals'
 
 // ── Scoring Model Version ──────────────────────────────────────────────────
@@ -110,9 +110,11 @@ export function checkHardNegatives(text: string, isJobSeekerContext?: boolean): 
 /**
  * Detect if the text is from a job seeker (not an employer).
  * Job seeker geography preferences must NOT be treated as employer restrictions.
+ * Delegates to the attribution-aware checker so audience language ("anyone
+ * looking for a job") does not misclassify a recruiter as a job seeker.
  */
 export function isJobSeekerText(text: string): boolean {
-  return JOB_SEEKER_MARKERS_PATTERN.test(text)
+  return isJobSeekerAttribution(text)
 }
 
 /**
@@ -149,6 +151,11 @@ function computeRolePenalty(intelligence: NormalizedIntelligence, watchOut: stri
   } else if (isClinicianProfile(intelligence.person.title, intelligence.company.name, intelligence.company.industry)) {
     penalty += 30
     watchOut.push('Clinician / care practice — not a buyer of software delivery')
+  } else if (intelligence.relationship === 'RECRUITER') {
+    // Business-model detection (career-coaching / placement) caught this even
+    // though the title alone isn't a recruiter title. Same penalty class.
+    penalty += 30
+    watchOut.push('Recruiter / career-services business: their hiring content describes their service, not a software-buying need.')
   }
 
   // Non-technical micro business
@@ -304,7 +311,14 @@ function scoreOpportunityFit(
   reasons: string[],
   watchOut: string[],
 ): ScoreDimensionBreakdown {
-  if (isRecruiterTitle(intelligence.person.title) || isClinicianProfile(intelligence.person.title, intelligence.company.name, intelligence.company.industry) || isClinicianProfile(null, intelligence.company.name, intelligence.company.industry)) {
+  const isNonBuyer =
+    isRecruiterTitle(intelligence.person.title)
+    || isClinicianProfile(intelligence.person.title, intelligence.company.name, intelligence.company.industry)
+    || isClinicianProfile(null, intelligence.company.name, intelligence.company.industry)
+    || intelligence.relationship === 'RECRUITER'
+    || intelligence.relationship === 'POTENTIAL_PARTNER'
+    || intelligence.relationship === 'PEER'
+  if (isNonBuyer) {
     return {
       key: 'opportunityFit',
       label: DIMENSION_WEIGHTS.opportunityFit.label,
@@ -412,7 +426,14 @@ function scoreNeedIntent(
   reasons: string[],
   watchOut: string[],
 ): ScoreDimensionBreakdown {
-  if (isRecruiterTitle(intelligence.person.title) || isClinicianProfile(intelligence.person.title, intelligence.company.name, intelligence.company.industry) || isClinicianProfile(null, intelligence.company.name, intelligence.company.industry)) {
+  const isNonBuyerNeed =
+    isRecruiterTitle(intelligence.person.title)
+    || isClinicianProfile(intelligence.person.title, intelligence.company.name, intelligence.company.industry)
+    || isClinicianProfile(null, intelligence.company.name, intelligence.company.industry)
+    || intelligence.relationship === 'RECRUITER'
+    || intelligence.relationship === 'POTENTIAL_PARTNER'
+    || intelligence.relationship === 'PEER'
+  if (isNonBuyerNeed) {
     return {
       key: 'needIntent',
       label: DIMENSION_WEIGHTS.needIntent.label,

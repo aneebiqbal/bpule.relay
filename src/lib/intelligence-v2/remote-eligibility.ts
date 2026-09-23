@@ -29,6 +29,31 @@ const EMPLOYER_ONLY_HIRE = /\b(we only hire|only hiring|must be based in|must re
 
 // Job seeker context detection — when present, geography = person's preference
 export const JOB_SEEKER_MARKERS = /\b(open to work|looking for (?:a |remote | )?(?:job|role|position|opportunity|work|employment)|seeking (?:a |remote | )?(?:job|role|position|opportunity)|#OpenToWork|available for (?:freelance|contract|remote)|available for hire|looking to (?:join|work|relocate))\b/i
+
+/**
+ * Detect job-seeker context ONLY from prospect-attributable text.
+ *
+ * Audience language ("anyone looking for a job", "professionals seeking
+ * roles") must NOT mark the prospect as a job seeker — those describe the
+ * prospect's audience/candidates, not the prospect themselves. We therefore
+ * restrict matching to the profile header + first-person lines, the same
+ * attribution boundary used for signal extraction.
+ */
+import { classifySentence } from './subject-attribution'
+
+export function isJobSeekerAttribution(rawText: string): boolean {
+  const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  const prospectLines = lines.filter((line) => {
+    const subject = classifySentence(line)
+    return subject === 'PROSPECT' || subject === 'UNKNOWN'
+  })
+  // Also require first-person or self-reference for job-seeker markers — a
+  // bare "looking for a job" with no "I/we/my" is ambiguous and more likely
+  // audience language.
+  const text = prospectLines.join('\n')
+  if (!JOB_SEEKER_MARKERS.test(text)) return false
+  return /\b(I'm|I\s+am|I|we|we're|my|our|#OpenToWork|available for (?:hire|work))\b/i.test(text)
+}
 const HYBRID = /\b(hybrid|part[- ]?remote|partial remote|office days|in[- ]?office|split between|\d+\s*days?\s*(?:\/\s*week)?\s*(?:in|at).{0,20}\boffice\b)\b/i
 const ONSITE = /\b(on[- ]?site|onsite|in[- ]?person|in[- ]?office|at our (?:office|headquarters|location)|based in (?:the )?(?:office|hq)|must work from (?:our|the) office|work from (?:our|the) office|days? in (?:the |our )?office|required in (?:the |our )?office)\b/i
 const IMPLICIT_REMOTE_ASK = /\b(looking for|need (?:a|an|someone|help)?|seeking|dm me|reach out|contract|freelance|engagement|project basis|upwork|proposal)\b/i
@@ -149,14 +174,13 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
 
   // Extract office location from text for hybrid/onsite roles
   if ((workplaceType === 'HYBRID' || workplaceType === 'ONSITE') && !input.requiredWorkerLocation) {
-    const locationMatch =
-      // "... in/at/from [our] City, ST" — narrative phrasing
-      text.match(/\b(?:in|at|from)\s+(?:our\s+)?([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)?,\s*(?:[A-Z]{2}|[A-Z][A-Za-z]+))\b/)
-      // "Location: City, ST" — structured job-posting field, no in/at/from
-      ?? text.match(/\bLocation\s*:\s*([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)?,\s*(?:[A-Z]{2}|[A-Z][A-Za-z]+))\b/)
+    // Per-line matching only — the City, ST capture must not cross a blank
+    // line (which would stitch "Germany\n\nBerlin, Germany" into a fake
+    // "Germany Berlin, Germany" office location from a profile header).
+    const locationMatch = extractOfficeLocation(text)
     if (locationMatch) {
-      input.requiredWorkerLocation = locationMatch[1]
-      evidence.push(`Office location detected: ${locationMatch[1]}.`)
+      input.requiredWorkerLocation = locationMatch
+      evidence.push(`Office location detected: ${locationMatch}.`)
     }
   }
 
@@ -168,8 +192,11 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
 
   // Detect job seeker context — geography in a job seeker profile means
   // "I want to work here", NOT "employer restricts to this location".
+  // Attribution-aware: audience language ("anyone looking for a job") must not
+  // mark the prospect as a job seeker. Only first-person / self-reference
+  // markers in prospect-attributable text count.
   const isJobSeeker = input.sourceContext === 'job_seeker_profile' ||
-    (input.sourceContext !== 'employer_post' && JOB_SEEKER_MARKERS.test(text))
+    (input.sourceContext !== 'employer_post' && isJobSeekerAttribution(text))
 
   if (remoteScope === 'UNKNOWN') {
     if (WORLDWIDE_REMOTE.test(text)) {
@@ -384,6 +411,8 @@ export function eligibilityScoreContribution(eligibility: RemoteEligibility): nu
       return 20
     case 'LIKELY_ELIGIBLE':
       return 14
+    case 'NOT_APPLICABLE':
+      return 8 // Neutral — not a job, geography is irrelevant to scoring
     case 'UNCLEAR':
       return 8
     case 'INELIGIBLE':
@@ -391,4 +420,34 @@ export function eligibilityScoreContribution(eligibility: RemoteEligibility): nu
     default:
       return 0
   }
+}
+
+// ── Helper: Extract office location per-line ───────────────────────────────
+
+/**
+ * Extract an office location ("City, ST" or "City, Country") for a hybrid or
+ * on-site role. Matching is restricted to a single line so a profile header's
+ * "Berlin, Germany" location line is not stitched with an adjacent line into a
+ * fake compound location.
+ */
+function extractOfficeLocation(text: string): string | null {
+  const linePatterns = [
+    /\b(?:in|at|from)\s+(?:our\s+)?([A-Z][A-Za-z]+(?:[\s-][A-Z][A-Za-z]+)?,\s*(?:[A-Z]{2}|[A-Z][A-Za-z]+))\b/,
+    /\bLocation\s*:\s*([A-Z][A-Za-z]+(?:[\s-][A-Z][A-Za-z]+)?,\s*(?:[A-Z]{2}|[A-Z][A-Za-z]+))\b/,
+  ]
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    for (const pattern of linePatterns) {
+      const match = trimmed.match(pattern)
+      if (match?.[1]) {
+        const candidate = match[1].trim()
+        // Reject cross-line stitching artifacts (contains a bare country name
+        // that looks like a second capture) and very long captures.
+        if (candidate.length > 40) continue
+        return candidate
+      }
+    }
+  }
+  return null
 }

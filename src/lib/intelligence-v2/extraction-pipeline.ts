@@ -26,7 +26,7 @@ import type {
   EvidenceRelationship,
   OpportunitySignal,
 } from './types'
-import { assessRemoteEligibility, JOB_SEEKER_MARKERS, type RemoteEligibilityInput } from './remote-eligibility'
+import { assessRemoteEligibility, isJobSeekerAttribution, type RemoteEligibilityInput } from './remote-eligibility'
 import {
   clinicianAllowedSignals,
   isClinicianProfile,
@@ -37,6 +37,7 @@ import {
   techKeywordMatches,
 } from './role-signals'
 import { generate } from '@/lib/ai/runtime'
+import { classifyBusinessModel, classifySentence, deriveRelationship, isNonBuyerRelationship } from './subject-attribution'
 
 // ── Pipeline Options ───────────────────────────────────────────────────────
 
@@ -458,9 +459,14 @@ function constrainNonBuyerPassA(out: PassAOutput, rawText = ''): PassAOutput {
   const title = out.person.title
   const recruiter = isRecruiterTitle(title) || isRecruiterTitle(rawText)
   const clinician = isClinicianProfile(title, out.company.name, `${out.company.industry ?? ''} ${rawText}`)
-  if (!recruiter && !clinician) return out
+  // Business-model detection: a career-coaching / recruiting business
+  // (e.g. "Find a Job in Germany", "coached candidates") is a non-buyer even
+  // when the title alone isn't a recruiter title. The about/experience prose
+  // describes helping OTHER people find jobs — not buying software delivery.
+  const recruiterBusiness = !recruiter && !clinician && classifyBusinessModel(rawText) === 'RECRUITER'
+  if (!recruiter && !clinician && !recruiterBusiness) return out
 
-  if (recruiter) {
+  if (recruiter || recruiterBusiness) {
     out.opportunity.signals = recruiterAllowedSignals(out.opportunity.signals as OpportunitySignal[])
     out.job = null
   } else {
@@ -468,7 +474,7 @@ function constrainNonBuyerPassA(out: PassAOutput, rawText = ''): PassAOutput {
     out.job = null
   }
   out.opportunity.primarySignal = selectPrimarySignal(out.opportunity.signals as OpportunitySignal[])
-  if (recruiter || clinician) {
+  if (recruiter || clinician || recruiterBusiness) {
     out.content.technicalSignals = []
     out.content.explicitProblems = []
     out.opportunity.urgency = 'unknown'
@@ -793,6 +799,8 @@ function normalizePassA(
       risks: [],
       unknowns: [],
       resolvedContradictions: [],
+      businessModel: 'UNKNOWN',
+      relationship: 'UNKNOWN',
     },
     evidenceLedger,
     normalizedSourceUrls: normalizedUrls,
@@ -1154,6 +1162,26 @@ function splitLines(rawText: string): string[] {
     .filter(Boolean)
 }
 
+/**
+ * Identity-block section headers. Everything before the first of these is the
+ * profile header (name + headline + location) and is owned by the prospect.
+ * Everything after is About / posts / experience / education — where market
+ * commentary, audience language, and reposted content live, and which must NOT
+ * be mined for the prospect's title, location, or company.
+ */
+const SECTION_HEADER_RE = /^(about|activity|experience|posts?|comments?|images?|education|licenses?\s*&\s*certifications?|skills|highlights|contact\s*info|show\s+all)$/i
+
+/**
+ * Return only the header lines before the first section boundary. This keeps
+ * identity extraction (name/title/location/company) from being poisoned by
+ * post content — e.g. a line like "Software Engineer → use AI in development"
+ * inside a post must not become the prospect's title.
+ */
+function identityBlockLines(lines: string[]): string[] {
+  const end = lines.findIndex((line) => SECTION_HEADER_RE.test(line))
+  return end === -1 ? lines : lines.slice(0, end)
+}
+
 function extractName(lines: string[]): string | null {
   for (const line of lines.slice(0, 8)) {
     if (/^(job|description|skills|posted|budget|client|company)\b/i.test(line)) continue
@@ -1172,8 +1200,12 @@ function extractName(lines: string[]): string | null {
 }
 
 function extractTitle(lines: string[]): string | null {
-  const titleLine = lines.find((line) =>
-    /\b(founder|ceo|cto|coo|vp|head|director|manager|lead|owner|president|engineer|developer|architect|recruiter|recruiting)\b/i.test(line),
+  // Only the profile header block — never posts or experience — so that a
+  // reposted job description or a thought-leadership line ("Software Engineer
+  // → use AI in development") cannot become the prospect's title.
+  const headerLines = identityBlockLines(lines)
+  const titleLine = headerLines.find((line) =>
+    /\b(founder|ceo|cto|coo|vp|head|director|manager|lead|owner|president|engineer|developer|architect|recruiter|recruiting|partner|consultant|managing)\b/i.test(line),
   )
   if (!titleLine) return null
   return titleLine
@@ -1189,8 +1221,18 @@ function extractLocation(lines: string[], rawText: string): string | null {
     return locationLine.replace(/^location:\s*/i, '').trim()
   }
 
-  const inline = rawText.match(/\b(?:in|at)\s+([A-Z][A-Za-z .'-]+,\s*[A-Z][A-Za-z .'-]+)/)
-  return inline?.[1]?.trim() ?? null
+  // Restrict to the header block so a prose line deep in a post
+  // ("Germany, I would therefore think much broader than Berlin startups")
+  // cannot be mistaken for the prospect's location.
+  const headerBlock = identityBlockLines(lines).join('\n')
+  const inline = headerBlock.match(/\b(?:in|at)\s+([A-Z][A-Za-z .'-]+,\s*[A-Z][A-Za-z .'-]+)/)
+  if (inline?.[1]) return inline[1].trim()
+
+  // A bare "City, Country" line in the header (common LinkedIn format).
+  const bare = identityBlockLines(lines).find((line) =>
+    /^[A-Z][A-Za-z .'-]+,\s*[A-Z][A-Za-z .'-]+$/.test(line),
+  )
+  return bare ?? null
 }
 
 // Trailing/leading words that mean the adjacent capitalized phrase is a
@@ -1204,7 +1246,9 @@ function extractCompany(lines: string[], title: string | null, rawText: string):
   if (companyLine) return companyLine.replace(/^company:\s*/i, '').trim()
 
   if (title) {
-    const atMatch = title.match(/\bat\s+([^|,]+)/i)
+    // "Role @ Company" and "Role at Company" — LinkedIn headlines use both.
+    // @ is a non-word char so \b won't anchor before it; allow start/comma/space.
+    const atMatch = title.match(/(?:^|[\s,])(?:at|@)\s+([^|,]+)/i)
     if (atMatch?.[1]) return atMatch[1].trim()
 
     // "Founder of X" / "Co-founder of X" / "Owner of X" — common LinkedIn
@@ -1509,16 +1553,29 @@ function extractJobFromText(lines: string[], rawText: string, skills: string[]):
 }
 
 function extractContentSignals(lines: string[], rawText: string): PassAOutput['content'] {
+  // Tech keywords are extracted from the full text (they describe the space,
+  // not a buying intent) — but de-duplicated and capped.
   const technicalSignals = TECH_KEYWORDS.filter((k) => techKeywordMatches(rawText, k)).slice(0, 10)
 
-  const hiringSignals = lines
+  // Hiring / problem / initiative / launch signals MUST come from prospect-
+  // attributable lines only — market commentary lines ("79,000 unfilled IT
+  // positions", "companies need Software Engineers") describe the market, not
+  // the prospect's own buying intent. Filter before matching.
+  const attributableLines = lines.filter(
+    (line) => {
+      const subject = classifySentence(line)
+      return subject === 'PROSPECT' || subject === 'UNKNOWN'
+    },
+  )
+
+  const hiringSignals = attributableLines
     .filter((line) =>
       /\b(looking for|open roles?|need|hiring|contractor)\b/i.test(line) &&
       (DEV_ROLE_HINT.test(line) || TECH_KEYWORDS.some((k) => techKeywordMatches(line, k))),
     )
     .slice(0, 5)
 
-  const explicitProblems = lines
+  const explicitProblems = attributableLines
     .filter((line) => PAIN_PATTERNS.some((p) => p.test(line)) && DEV_ROLE_HINT.test(line))
     .slice(0, 5)
 
@@ -1538,11 +1595,30 @@ function extractContentSignals(lines: string[], rawText: string): PassAOutput['c
     recentPosts,
     topics,
     explicitProblems,
-    initiatives: lines.filter((line) => /\b(building|launching|migrating|rebuilding|scaling)\b/i.test(line)).slice(0, 3),
-    launches: lines.filter((line) => /\b(launch|released|rollout)\b/i.test(line)).slice(0, 3),
+    initiatives: attributableLines.filter((line) => /\b(building|launching|migrating|rebuilding|scaling)\b/i.test(line)).slice(0, 3),
+    launches: attributableLines.filter((line) => /\b(launch|released|rollout)\b/i.test(line)).slice(0, 3),
     technicalSignals,
     hiringSignals,
   }
+}
+
+/**
+ * Returns the subset of lines that are attributable to the prospect — filters
+ * out market-commentary lines (macro statistics about Germany/industry) and
+ * audience lines ("professionals looking for jobs", "anyone looking for a
+ * role") that describe the prospect's audience rather than the prospect's
+ * own buying intent. Only PROSPECT- and UNKNOWN-attribution lines survive.
+ *
+ * This is the core subject-attribution fix: market statistics and audience
+ * language must not produce buyer signals for the prospect.
+ */
+export function prospectAttributableText(rawText: string): string {
+  return splitLines(rawText)
+    .filter((line) => {
+      const subject = classifySentence(line)
+      return subject === 'PROSPECT' || subject === 'UNKNOWN'
+    })
+    .join('\n')
 }
 
 function demoPassA(rawText: string): PassAOutput {
@@ -1556,10 +1632,16 @@ function demoPassA(rawText: string): PassAOutput {
   const linkedinUrl = extractUrls(rawText).find((u) => u.toLowerCase().includes('linkedin.com/in/')) ?? null
   const otherUrls = extractUrls(rawText).filter((u) => u !== linkedinUrl)
   const skills = extractSkills(lines, rawText)
-  const { signals, urgency } = extractOpportunitySignals(rawText)
+
+  // Subject attribution: classify signals only from prospect-attributable text,
+  // never from market commentary or audience language. This prevents a
+  // recruiter's labor-market posts from becoming buyer evidence.
+  const attributableText = prospectAttributableText(rawText)
+  const businessModel = classifyBusinessModel(rawText)
+  const { signals, urgency } = extractOpportunitySignals(attributableText)
   const primarySignal = selectPrimarySignal(signals)
   const signalLine = extractSignalLine(lines)
-  const content = extractContentSignals(lines, rawText)
+  const content = extractContentSignals(lines, attributableText)
   const job = extractJobFromText(lines, rawText, skills)
   const opportunityOrg = extractOpportunityOrganization(rawText, company)
 
@@ -1681,12 +1763,14 @@ export async function runIntelligencePipeline(
 
   // Assess remote eligibility (deterministic, no AI needed)
   // Detect if this is a job seeker profile to avoid misinterpreting
-  // "looking for roles in UK" as "employer restricts to UK"
-  const isJobSeekerText = JOB_SEEKER_MARKERS.test(rawText)
+  // "looking for roles in UK" as "employer restricts to UK". Attribution-aware:
+  // only first-person / self-reference markers count — audience language like
+  // "anyone looking for a job" must not mark the prospect as a job seeker.
+  const isJobSeekerContext = isJobSeekerAttribution(rawText)
   const remoteEligibility = assessRemoteEligibility({
     rawText,
     requiredWorkerLocation: null, // Will be refined from extraction
-    sourceContext: isJobSeekerText ? 'job_seeker_profile' : 'unknown',
+    sourceContext: isJobSeekerContext ? 'job_seeker_profile' : 'unknown',
   })
 
   // Pass A: Extract
@@ -1703,25 +1787,75 @@ export async function runIntelligencePipeline(
   const refinedEligibility = passA.job
     ? assessRemoteEligibility({
         rawText,
-        statedWorkplaceType: isJobSeekerText ? 'UNKNOWN' : (passA.job.workplaceType as RemoteEligibilityInput['statedWorkplaceType']),
-        requiredWorkerLocation: isJobSeekerText ? null : passA.job.allowedGeography,
-        sourceContext: isJobSeekerText ? 'job_seeker_profile' : 'unknown',
+        statedWorkplaceType: isJobSeekerContext ? 'UNKNOWN' : (passA.job.workplaceType as RemoteEligibilityInput['statedWorkplaceType']),
+        requiredWorkerLocation: isJobSeekerContext ? null : passA.job.allowedGeography,
+        sourceContext: isJobSeekerContext ? 'job_seeker_profile' : 'unknown',
       })
     : remoteEligibility
 
+  // Subject attribution: classify the prospect's business model and commercial
+  // relationship from the raw source + extracted entities. This is computed
+  // BEFORE scoring so the score can reflect "this is a recruiter, not a buyer".
+  const businessModel = classifyBusinessModel(
+    `${rawText} ${passA.person.title ?? ''} ${passA.company.name ?? ''}`,
+  )
+  const relationship = deriveRelationship(businessModel, passA, rawText)
+
+  // For recruiter / career-services business models, strip market-derived
+  // opportunity signals. A recruiter's posts about hiring demand, market
+  // growth, and talent shortages describe THEIR SERVICE / the market they
+  // operate in — not a buying intent for our software delivery. Line-by-line
+  // subject classification can miss mixed prose ("...economy gives companies
+  // confidence to grow..."), so as a backstop we remove these signal types
+  // entirely when the business model is RECRUITER. This enforces invariant:
+  // MARKET COMMENTARY ≠ BUYING INTENT.
+  const isRecruiter = relationship === 'RECRUITER' || businessModel === 'RECRUITER'
+  if (isRecruiter) {
+    partialIntelligence.opportunity = {
+      ...partialIntelligence.opportunity,
+      signals: partialIntelligence.opportunity.signals.filter(
+        (s) => !['growth_signal', 'hiring', 'hiring_pressure', 'funding', 'launch', 'migration', 'rebuild'].includes(s),
+      ),
+      primarySignal: selectPrimarySignal(
+        partialIntelligence.opportunity.signals.filter(
+          (s) => !['growth_signal', 'hiring', 'hiring_pressure', 'funding', 'launch', 'migration', 'rebuild'].includes(s),
+        ),
+      ),
+      urgency: 'unknown',
+    }
+  }
+
   // Pass C: Intelligence
   const passC = await runPassC(passA, partialIntelligence, callLog, opts.onStatus, opts.strictLiveMode)
+
+  // Remote eligibility override for non-buyer relationships: a recruiter,
+  // partner, or networking contact is not a job opportunity, so "remote
+  // eligibility" (which measures worker-geography fit for a job) is not
+  // applicable. Geography does not determine whether we can deliver services
+  // to them. Without this, a social-post "in person" line or a header
+  // location would wrongly make a recruiter INELIGIBLE.
+  const finalEligibility: RemoteEligibility =
+    isNonBuyerRelationship(relationship) && !passA.job
+      ? {
+          workplaceType: 'UNKNOWN',
+          remoteScope: 'UNKNOWN',
+          eligibility: 'NOT_APPLICABLE',
+          reason: 'Not an employment or engagement opportunity — remote eligibility does not apply to this commercial relationship.',
+        }
+      : refinedEligibility
 
   // Assemble final intelligence
   const intelligence: NormalizedIntelligence = {
     ...partialIntelligence,
     ...passC,
-    remoteEligibility: refinedEligibility,
+    businessModel,
+    relationship,
+    remoteEligibility: finalEligibility,
   }
 
   // Merge evidence ledger with remote eligibility evidence
-  if (refinedEligibility.evidence) {
-    for (const ev of refinedEligibility.evidence) {
+  if (finalEligibility.evidence) {
+    for (const ev of finalEligibility.evidence) {
       evidenceLedger.push({
         signal: `Remote eligibility: ${ev}`,
         source: 'pasted_text',
@@ -1736,7 +1870,7 @@ export async function runIntelligencePipeline(
   return {
     intelligence,
     rawSource,
-    remoteEligibility: refinedEligibility,
+    remoteEligibility: finalEligibility,
     evidenceLedger,
     callLog,
     sourceUrls: normalizedSourceUrls,

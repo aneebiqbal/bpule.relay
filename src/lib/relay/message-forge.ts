@@ -233,6 +233,10 @@ export function evaluateMessage(
     { pattern: /\bwould that be useful\??\b/i, reason: 'Soft fake CTA' },
     { pattern: /\bjust following up\b|\bchecking in\b|\bbumping this\b/i, reason: 'Empty follow-up' },
     { pattern: /\bwe(?:'re| are) hiring\b|\bi(?:'m| am) hiring\b/i, reason: 'Echoes prospect hiring voice as if the sender is hiring' },
+    // Shared-space / peer claims without verified sender proof — the sender's
+    // Revenue Identity/proof must support "I work in this space" claims.
+    { pattern: /\bi\s+work\s+in\s+(?:this|the\s+(?:same|that))\s+space\b/i, reason: 'Unsupported shared-space claim — no verified sender proof' },
+    { pattern: /\bi(?:'m| am)\s+(?:also\s+)?(?:in|part\s+of)\s+(?:this|the)\s+(?:same\s+)?space\b/i, reason: 'Unsupported shared-space claim — no verified sender proof' },
   ]
   for (const { pattern, reason } of outreachTells) {
     if (pattern.test(lower)) {

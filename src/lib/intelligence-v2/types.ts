@@ -22,6 +22,11 @@ export type EligibilityStatus =
   | 'LIKELY_ELIGIBLE'
   | 'UNCLEAR'
   | 'INELIGIBLE'
+  // NOT_APPLICABLE: there is no job / engagement being evaluated, so remote
+  // eligibility is not a meaningful dimension. Used for non-buyer contacts
+  // (recruiters, networking prospects) where employment eligibility is
+  // irrelevant and geography does not determine service eligibility.
+  | 'NOT_APPLICABLE'
 
 export interface RemoteEligibility {
   workplaceType: WorkplaceType
@@ -202,6 +207,26 @@ export interface ExtractedContent {
 
 // ── Normalized Intelligence (Pass B → C) ───────────────────────────────────
 
+export type BusinessModel =
+  | 'PRODUCT'
+  | 'RECRUITER'
+  | 'UNKNOWN'
+
+/**
+ * Canonical commercial relationship classification. Determined BEFORE
+ * scoring so that the score knows what kind of prospect this is. A
+ * recruiter's "hiring" content is about their service, not about buying
+ * software — classifying first prevents the market-commentary → buyer-signal
+ * inversion.
+ */
+export type CommercialRelationship =
+  | 'POTENTIAL_BUYER'
+  | 'RECRUITER'
+  | 'POTENTIAL_PARTNER'
+  | 'NETWORKING'
+  | 'PEER'
+  | 'UNKNOWN'
+
 export interface NormalizedIntelligence {
   person: ExtractedPerson
   company: ExtractedCompany
@@ -219,6 +244,16 @@ export interface NormalizedIntelligence {
   unknowns: string[]
   /** Contradictions found and resolved */
   resolvedContradictions: string[]
+  /**
+   * What business model the prospect operates. RECRUITER means their
+   * hiring/talent content describes their service, not a buying need.
+   */
+  businessModel: BusinessModel
+  /**
+   * Canonical commercial relationship. RECRUITER/PARTNER/NETWORKING/PEER are
+   * non-buyer relationships; the opportunity score must reflect that.
+   */
+  relationship: CommercialRelationship
 }
 
 // ── Score Breakdown ────────────────────────────────────────────────────────

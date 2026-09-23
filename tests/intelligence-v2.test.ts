@@ -58,6 +58,8 @@ function makeIntelligence(overrides: Partial<NormalizedIntelligence> = {}): Norm
     risks: [],
     unknowns: [],
     resolvedContradictions: [],
+    businessModel: 'PRODUCT',
+    relationship: 'POTENTIAL_BUYER',
     ...overrides,
   }
 }
