@@ -33,7 +33,7 @@ test.describe('Accountability Control Plane', () => {
 
       // Day Close section should exist or show "All Complete" state
       const dayCloseSection = page.locator('text=Day Close').first()
-      const allComplete = page.locator('text=/All work complete|Complete/').first()
+      const allComplete = page.getByText(/All work complete|All targets complete|Complete/i).first()
 
       const dcVisible = await dayCloseSection.isVisible({ timeout: 10_000 }).catch(() => false)
       const acVisible = await allComplete.isVisible({ timeout: 5_000 }).catch(() => false)

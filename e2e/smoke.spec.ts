@@ -71,16 +71,28 @@ test.describe('SMOKE - Critical Path (Admin)', () => {
   test('S04: App rail navigation renders all items', async ({ page }) => {
     await bootstrapDemoProfile('http://localhost:3000').catch(() => {})
     await loginAsAdmin(page)
-    
-    // Check that navigation items exist
-    const nav = page.locator('nav, [role="navigation"]').first()
-    await expect(nav).toBeVisible()
-    
-    // Look for key nav items
-    const body = await page.textContent('body')
-    expect(body).toContain('Dashboard')
-    expect(body).toContain('Leads')
-    expect(body).toContain('Relay')
+
+    const mobileOpenNav = page.getByRole('button', { name: /Open navigation/i })
+    const isMobileDrawerUi = await mobileOpenNav.isVisible({ timeout: 2_000 }).catch(() => false)
+
+    if (isMobileDrawerUi) {
+      await mobileOpenNav.click()
+      const mobileNav = page.locator('nav[aria-label="Mobile"]').first()
+      await expect(mobileNav).toBeVisible({ timeout: 5_000 })
+
+      const drawerText = await mobileNav.textContent()
+      expect(drawerText).toContain('Today')
+      expect(drawerText).toContain('Leads')
+      expect(drawerText).toContain('Conversations')
+      return
+    }
+
+    const desktopNav = page.locator('aside nav').first()
+    await expect(desktopNav).toBeVisible({ timeout: 5_000 })
+    const navText = await desktopNav.textContent()
+    expect(navText).toContain('Today')
+    expect(navText).toContain('Leads')
+    expect(navText).toContain('Conversations')
   })
 
   test('S05: Navigation to each major route works', async ({ page }) => {

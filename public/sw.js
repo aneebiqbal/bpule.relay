@@ -28,20 +28,9 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url)
   if (url.pathname.startsWith('/api/')) return
-  if (url.pathname.startsWith('/_next/static/')) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached
-        return fetch(event.request).then((response) => {
-          if (!response.ok) return response
-          const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
-          return response
-        })
-      }),
-    )
-    return
-  }
+  // Never cache Next.js build artifacts in SW. After a deploy, stale chunk
+  // caches can serve missing build files and trigger MIME/nosniff boot errors.
+  if (url.pathname.startsWith('/_next/static/')) return
 })
 
 self.addEventListener('push', (event) => {

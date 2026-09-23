@@ -1,228 +1,198 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
+import { createClient } from '@supabase/supabase-js'
+import { bootstrapDemoProfile, loginAsAdmin } from './helpers'
 
-/**
- * Product Test C: Job → CV → Proposal → Applied (uninterrupted)
- * Plus: CV persistence, Yesterday timeline
- */
+function uniqueLabel(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`
+}
+
+async function ensureAuthenticatedSession(page: Page): Promise<void> {
+  await bootstrapDemoProfile('http://localhost:3000').catch(() => {})
+  try {
+    await loginAsAdmin(page)
+  } catch (error) {
+    const appShellVisible = await page.locator('a[href="/dashboard"]').first().isVisible({ timeout: 2_000 }).catch(() => false)
+    if (!appShellVisible) throw error
+    await page.goto('/dashboard')
+    await page.waitForLoadState('networkidle')
+  }
+}
+
+async function createLeadViaApi(page: Page, company: string): Promise<string> {
+  const res = await page.request.post('/api/leads', {
+    data: {
+      company,
+      contactName: 'Timeline Owner',
+      contactTitle: 'Engineering Lead',
+      titleRaw: `Engineering Lead at ${company}`,
+      locationRaw: 'Remote',
+      signalType: 6,
+      signalEvidence: 'Actively hiring backend engineers and requesting migration support.',
+      rawInput: `${company} is hiring backend engineers and asked for help modernizing their API platform.`,
+      tags: ['backend', 'migration', 'api'],
+      allowPotentialDuplicate: true,
+    },
+  })
+  expect(res.ok()).toBe(true)
+  const data = await res.json()
+  const leadId = data.lead?.id as string | undefined
+  expect(leadId).toBeTruthy()
+  return leadId as string
+}
+
+async function addTimelineMessage(page: Page, leadId: string, text: string, type: 'dm' | 'reply' = 'reply'): Promise<void> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (supabaseUrl && serviceRole) {
+    const res = await fetch(`${supabaseUrl}/rest/v1/messages`, {
+      method: 'POST',
+      headers: {
+        apikey: serviceRole,
+        Authorization: `Bearer ${serviceRole}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        lead_id: leadId,
+        type,
+        sent_text: text,
+        sent_at: new Date().toISOString(),
+      }),
+    })
+    expect(res.ok).toBe(true)
+    return
+  }
+
+  const contactRes = await page.request.post(`/api/leads/${leadId}/contact`, {
+    data: { sentText: text, type },
+  })
+  expect(contactRes.ok()).toBe(true)
+}
+
+test.beforeEach(async ({ page }) => {
+  await ensureAuthenticatedSession(page)
+})
 
 test.describe('PRODUCT TEST C: Job orchestration', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/dashboard')
-    await page.evaluate(async () => {
-      await fetch('/api/onboarding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          quiz: {
-            contractions: 'sometimes',
-            formality: 3,
-            sentenceLength: 'medium',
-            punctuation: 'standard',
-            openers: 'statement',
-            emoji: 'none',
-            greeting: 'Hey',
-            signOff: 'Best',
-            neverWords: '',
-            preferredWords: '',
-          },
-          samples: 'demo',
-        }),
-      })
-    })
-  })
+  test('C1: Upwork job -> generate CV -> CV persisted with jobId', async ({ page }) => {
+    const company = uniqueLabel('JobCo')
 
-  test('C1: Upwork job → generate CV → CV persisted with jobId', async ({ page }) => {
-    // Create an Upwork job first
     await page.goto('/upwork/new')
     await page.waitForLoadState('networkidle')
 
-    const jobDesc = `Senior Rails Developer needed for marketplace modernization.
-Must have: Rails, PostgreSQL, API design, Payment integration.
-Nice to have: React, Elasticsearch, AWS.
-Budget: $80/hr. Ongoing project with long-term potential.`
+    const jobPost = `Senior Rails Developer needed for ${company}.\nMust have: Rails, PostgreSQL, API design, payments.\nRemote worldwide contract.`
+    const rawInput = page.locator('textarea[placeholder*="full Upwork job post" i]').first()
+    await expect(rawInput).toBeVisible({ timeout: 10_000 })
+    await rawInput.fill(jobPost)
 
-    const textarea = page.locator('textarea').first()
-    if (await textarea.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await textarea.fill(jobDesc)
-      const analyzeBtn = page.locator('button:has-text("Analyze")').first()
-      if (await analyzeBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await analyzeBtn.click()
-        await page.waitForTimeout(6_000)
-      }
-    }
+    await page.getByRole('button', { name: 'Extract', exact: true }).click()
+    await expect(page.locator('#title')).toBeVisible({ timeout: 20_000 })
 
-    // Fill title manually (demo mode may not extract)
-    // Fill title and description (React controlled — use click+fill+blur)
-    const titleInput = page.locator('#title').first()
-    if (await titleInput.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await titleInput.click()
-      await titleInput.fill('Senior Rails Developer - Marketplace')
-      await titleInput.press('Tab')
-    }
-    const descField = page.locator('#description').first()
-    if (await descField.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await descField.click()
-      await descField.fill('Rails marketplace modernization with PostgreSQL and API design.')
-      await descField.press('Tab')
-    }
+    const jobTitle = `Senior Rails Developer - ${company}`
+    await page.locator('#title').fill(jobTitle)
+    await page.locator('#description').fill(`${company} needs migration support on Rails and PostgreSQL API reliability.`)
 
-    // Save the job — wait for URL to change away from /upwork/new
-    const saveBtn = page.locator('button:has-text("Save job")').first()
-    const saveVisible = await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false)
-    expect(saveVisible).toBeTruthy()
-    await expect(saveBtn).toBeEnabled({ timeout: 10_000 })
-    await saveBtn.click()
-    await page.waitForURL(url => !url.pathname.includes('/upwork/new'), { timeout: 15_000 })
+    await page.getByRole('button', { name: 'Save job', exact: true }).click()
+    await page.waitForURL(/\/upwork\/[a-f0-9-]+/, { timeout: 20_000 })
 
-    const jobUrl = page.url()
-    const jobId = jobUrl.split('/upwork/')[1]
-    // Ensure we didn't stay on /upwork/new
-    expect(jobId).not.toBe('new')
+    const jobId = page.url().split('/upwork/')[1]?.split(/[?#]/)[0]
+    expect(jobId).toBeTruthy()
 
-    // Navigate to resume generation for this job
-    await page.goto(`/resume/generate?jobId=${jobId}`)
+    await page.goto(`/resume/generate?jobId=${jobId as string}`)
     await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('heading', { name: 'Truthful job-specific CV' })).toBeVisible({ timeout: 15_000 })
 
-    // Verify the page loads with profile selector
-    const body = await page.textContent('body')
-    expect(body!.length).toBeGreaterThan(50)
+    const profilesRes = await page.request.get('/api/profiles')
+    expect(profilesRes.ok()).toBe(true)
+    const profilesPayload = await profilesRes.json()
+    const profileId = profilesPayload?.profiles?.[0]?.id as string | undefined
+    expect(profileId).toBeTruthy()
 
-    // Click generate (button should be present and clickable)
-    const genBtn = page.locator('button:has-text("Generate")').first()
-    const genVisible = await genBtn.isVisible({ timeout: 5_000 }).catch(() => false)
-    expect(genVisible).toBeTruthy()
-    await genBtn.click()
-    await page.waitForTimeout(3_000)
+    const generateResponse = await page.request.post('/api/resume/generate', {
+      data: {
+        profileId,
+        jobId,
+        targetTitle: jobTitle,
+        targetSkills: ['Rails', 'PostgreSQL', 'API design', 'payments'],
+      },
+    })
+    expect(generateResponse.ok()).toBe(true)
+    const resumePayload = await generateResponse.json()
+    const tailoredCvId = resumePayload.tailoredCvId as string | null
 
-    // In demo mode without proof data, the ATS section may not render,
-    // but the generate action should complete without error.
-    // The full ATS rendering is verified against real Supabase data.
-    const bodyAfter = await page.textContent('body')
-    const noError = !bodyAfter?.toLowerCase().includes('something failed') &&
-                    !bodyAfter?.toLowerCase().includes('generation failed')
-    expect(noError).toBeTruthy()
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (supabaseUrl && serviceRole) {
+      const db = createClient(supabaseUrl, serviceRole, { auth: { autoRefreshToken: false, persistSession: false } })
+      const { data, error } = await db
+        .from('tailored_cvs')
+        .select('id, job_id')
+        .eq('job_id', jobId as string)
+
+      if (error && error.code === 'PGRST205') {
+        throw new Error('tailored_cvs table is missing in this Supabase project. Apply migration 0087_tailored_cv_persistence.sql to unblock CV persistence proof.')
+      }
+
+      expect(error).toBeNull()
+      expect(Array.isArray(data)).toBe(true)
+      expect((data ?? []).length).toBeGreaterThan(0)
+
+      if (tailoredCvId) {
+        expect((data ?? []).some((row: { id?: string | null }) => row.id === tailoredCvId)).toBe(true)
+      }
+      return
+    }
+
+    expect(tailoredCvId).toBeTruthy()
   })
 
   test('C2: CV page survives navigation away and back', async ({ page }) => {
-    // Create a job via API (reliable, bypasses React input issues)
-    const jobData = await page.evaluate(async () => {
-      const res = await fetch('/api/upwork/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: 'Full-Stack Developer - Healthcare',
-          description: 'TypeScript, Node.js, PostgreSQL, React for healthcare startup. HIPAA compliance preferred.',
-          requiredSkills: ['TypeScript', 'Node.js', 'PostgreSQL', 'React'],
-        }),
-      })
-      return res.json()
+    const createRes = await page.request.post('/api/upwork/jobs', {
+      data: {
+        title: uniqueLabel('Full-Stack Developer Healthcare'),
+        description: 'TypeScript, Node.js, PostgreSQL, React for healthcare startup. HIPAA compliance preferred.',
+        requiredSkills: ['TypeScript', 'Node.js', 'PostgreSQL', 'React'],
+      },
     })
-    expect(jobData.job).toBeTruthy()
-    const jobId = jobData.job.id
+    expect(createRes.status()).toBe(201)
+    const createData = await createRes.json()
+    const jobId = createData.job?.id as string | undefined
+    expect(jobId).toBeTruthy()
 
-    // Navigate to CV generation page
-    await page.goto(`/resume/generate?jobId=${jobId}`)
+    await page.goto(`/resume/generate?jobId=${jobId as string}`)
     await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('heading', { name: 'Truthful job-specific CV' })).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText('Resume Tailoring')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('button', { name: 'Generate tailored CV', exact: true })).toBeVisible()
 
-    // Verify page loads with profile selector
-    const body = await page.textContent('body')
-    expect(body).toContain('Resume Tailoring')
-
-    // Generate button should be present
-    const genBtn = page.locator('button:has-text("Generate")').first()
-    const genVisible = await genBtn.isVisible({ timeout: 5_000 }).catch(() => false)
-    expect(genVisible).toBeTruthy()
-
-    // Navigate away to dashboard
     await page.goto('/dashboard')
     await page.waitForLoadState('networkidle')
 
-    // Navigate back to the same CV generation page — should still work
-    await page.goto(`/resume/generate?jobId=${jobId}`)
+    await page.goto(`/resume/generate?jobId=${jobId as string}`)
     await page.waitForLoadState('networkidle')
-
-    const bodyBack = await page.textContent('body')
-    expect(bodyBack).toContain('Resume Tailoring')
-
-    const genBtn2 = page.locator('button:has-text("Generate")').first()
-    const genVisible2 = await genBtn2.isVisible({ timeout: 5_000 }).catch(() => false)
-    expect(genVisible2).toBeTruthy()
+    await expect(page.getByRole('heading', { name: 'Truthful job-specific CV' })).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText('Resume Tailoring')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('button', { name: 'Generate tailored CV', exact: true })).toBeVisible()
   })
 })
 
 test.describe('TIMELINE: Yesterday fixture', () => {
-  test.beforeEach(async ({ page }) => {
-    // Navigate first so fetch has a base URL
-    await page.goto('/dashboard')
-    await page.evaluate(async () => {
-      await fetch('/api/onboarding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          quiz: {
-            contractions: 'sometimes',
-            formality: 3,
-            sentenceLength: 'medium',
-            punctuation: 'standard',
-            openers: 'statement',
-            emoji: 'none',
-            greeting: 'Hey',
-            signOff: 'Best',
-            neverWords: '',
-            preferredWords: '',
-          },
-          samples: 'demo',
-        }),
-      })
-    })
-  })
-
   test('T1: Timeline shows date group when messages exist', async ({ page }) => {
-    // Create a lead
-    await page.goto('/prospect')
+    const company = uniqueLabel('TimelineCo')
+    const leadId = await createLeadViaApi(page, company)
+
+    await page.goto(`/leads/${leadId}`)
     await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(1_000)
 
-    const prospect = `Yesterday Test Lead
-Engineer at YesterdayCo
-Portland, OR
+    await addTimelineMessage(page, leadId, `Client reply for ${company} confirming API migration urgency.`, 'reply')
 
-Backend developer with Go and Kubernetes experience.
-Building microservices for fintech.`
+    await page.reload({ waitUntil: 'networkidle' })
 
-    const textarea = page.locator('textarea').first()
-    await expect(textarea).toBeVisible({ timeout: 15_000 })
-    await textarea.fill(prospect)
-    await page.locator('button:has-text("Analyze")').click()
-    await page.waitForTimeout(8_000)
+    const timelineSection = page.getByRole('heading', { name: 'Timeline' }).locator('..')
+    await expect(timelineSection.getByText('Today').first()).toBeVisible({ timeout: 10_000 })
 
-    const saveBtn = page.locator('button:has-text("Create lead")').first()
-    if (await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      if (await saveBtn.isEnabled()) {
-        await saveBtn.click()
-        await page.waitForURL(/\/leads\/lead-/, { timeout: 15_000 })
-
-        // Log a message (creates "Today" entry)
-        const sentTextarea = page.locator('textarea[placeholder*="sent" i], textarea[placeholder*="Paste" i]').first()
-        if (await sentTextarea.isVisible({ timeout: 3_000 }).catch(() => false)) {
-          await sentTextarea.fill('Quick note about Go microservices.')
-          const logBtn = page.locator('button:has-text("Log this send"), button:has-text("Log")').first()
-          if (await logBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-            await logBtn.click()
-            await page.waitForTimeout(1_500)
-          }
-        }
-
-        // Timeline should be visible with "Today" group
-        const body = await page.textContent('body')
-        expect(body).toContain('Today')
-
-        // Hard refresh — timeline persists
-        await page.reload({ waitUntil: 'networkidle' })
-        await page.waitForTimeout(1_000)
-        const bodyAfter = await page.textContent('body')
-        expect(bodyAfter).toContain('Today')
-      }
-    }
+    await page.reload({ waitUntil: 'networkidle' })
+    await expect(timelineSection.getByText('Today').first()).toBeVisible({ timeout: 10_000 })
   })
 })

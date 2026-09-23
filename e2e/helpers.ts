@@ -69,7 +69,17 @@ async function loginWith(page: Page, email: string): Promise<void> {
     // values before checking enabled.
     await expect(emailInput).toHaveValue(email)
     await expect(passInput).toHaveValue(PASSWORD)
-    await expect(submitBtn).toBeEnabled({ timeout: 10_000 })
+
+    if (!(await submitBtn.isEnabled().catch(() => false))) {
+      await emailInput.fill('')
+      await emailInput.fill(email)
+      await passInput.fill('')
+      await passInput.fill(PASSWORD)
+      await emailInput.blur()
+      await passInput.blur()
+    }
+
+    await expect(submitBtn).toBeEnabled({ timeout: 20_000 })
     await submitBtn.click()
     // The click submits a real sign-in request (Supabase auth + server
     // session cookie exchange) in real-auth mode — wait for either a

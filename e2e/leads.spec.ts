@@ -1,5 +1,11 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { loginAsAdmin } from './helpers'
+
+const LEAD_DETAIL_PATH = /\/leads\/[a-zA-Z0-9-]+/
+
+function firstLeadLink(page: Page) {
+  return page.locator('a[href^="/leads/"]:not([href="/leads/new"]):not([href="/leads/import"])').first()
+}
 
 test.describe('LEADS - List, Detail, CRUD', () => {
   test.beforeEach(async ({ page }) => {
@@ -19,8 +25,7 @@ test.describe('LEADS - List, Detail, CRUD', () => {
   })
 
   test('L02: Lead cards are clickable and navigate to detail', async ({ page }) => {
-    // Find first lead card link (excludes /leads/new, targets lead-* detail routes)
-    const leadLink = page.locator('a[href*="/leads/lead-"]').first()
+    const leadLink = firstLeadLink(page)
     const hasLead = await leadLink.isVisible({ timeout: 8_000 }).catch(() => false)
     
     if (hasLead) {
@@ -32,12 +37,12 @@ test.describe('LEADS - List, Detail, CRUD', () => {
   })
 
   test('L03: Lead detail page shows contact info', async ({ page }) => {
-    const leadLink = page.locator('a[href*="/leads/lead-"]').first()
+    const leadLink = firstLeadLink(page)
     const hasLead = await leadLink.isVisible({ timeout: 8_000 }).catch(() => false)
     
     if (hasLead) {
       await leadLink.click()
-      await expect(page).toHaveURL(/\/leads\/lead-/, { timeout: 15_000 })
+      await expect(page).toHaveURL(LEAD_DETAIL_PATH, { timeout: 15_000 })
       await page.waitForTimeout(1500)
       
       const body = await page.textContent('body')
@@ -46,12 +51,12 @@ test.describe('LEADS - List, Detail, CRUD', () => {
   })
 
   test('L04: Back button from lead detail returns to leads list', async ({ page }) => {
-    const leadLink = page.locator('a[href*="/leads/lead-"]').first()
+    const leadLink = firstLeadLink(page)
     const hasLead = await leadLink.isVisible({ timeout: 8_000 }).catch(() => false)
     
     if (hasLead) {
       await leadLink.click()
-      await expect(page).toHaveURL(/\/leads\/lead-/, { timeout: 15_000 })
+      await expect(page).toHaveURL(LEAD_DETAIL_PATH, { timeout: 15_000 })
       
       // Go back
       await page.goBack()
@@ -83,11 +88,11 @@ test.describe('LEADS - List, Detail, CRUD', () => {
   })
 
   test('L07: Lead detail has action buttons (Contact, Draft, etc.)', async ({ page }) => {
-    const leadLink = page.locator('a[href*="/leads/lead-"]').first()
+    const leadLink = firstLeadLink(page)
     await expect(leadLink).toBeVisible({ timeout: 8_000 })
 
     await leadLink.click()
-    await expect(page).toHaveURL(/\/leads\/lead-/, { timeout: 15_000 })
+    await expect(page).toHaveURL(LEAD_DETAIL_PATH, { timeout: 15_000 })
     await page.waitForTimeout(1000)
 
     const body = await page.textContent('body')
@@ -99,12 +104,12 @@ test.describe('LEADS - List, Detail, CRUD', () => {
   })
 
   test('L08: Mark as Contacted works', async ({ page }) => {
-    const leadLink = page.locator('a[href*="/leads/lead-"]').first()
+    const leadLink = firstLeadLink(page)
     const hasLead = await leadLink.isVisible({ timeout: 8_000 }).catch(() => false)
     
     if (hasLead) {
       await leadLink.click()
-      await expect(page).toHaveURL(/\/leads\/lead-/, { timeout: 15_000 })
+      await expect(page).toHaveURL(LEAD_DETAIL_PATH, { timeout: 15_000 })
       await page.waitForTimeout(1000)
       
       const contactedBtn = page.locator('button:has-text("Contacted"), button:has-text("Mark Contacted"), button:has-text("Contact")').first()
@@ -115,7 +120,7 @@ test.describe('LEADS - List, Detail, CRUD', () => {
         await page.waitForTimeout(2000)
         
         // Page should still be functional
-        expect(page.url()).toMatch(/\/leads\/lead-/)
+        expect(page.url()).toMatch(LEAD_DETAIL_PATH)
       }
     }
   })
