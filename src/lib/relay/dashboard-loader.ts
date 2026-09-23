@@ -127,6 +127,109 @@ function computeTimeRemaining(timezone: string): string {
   return formatTimeRemaining(Math.max(0, endMinutes - currentMinutes))
 }
 
+/**
+ * Pure aggregation for the admin Command Center — see the doc comment above
+ * its call site in load() for why daily_targets/daily_accountability (not
+ * day_closes/revenue_identity_contracts) is the primary source. Extracted
+ * as a pure function (plain data in, plain data out) so it's testable
+ * without mocking Next.js server auth context / Supabase.
+ */
+export function buildCommandCenterFromActivity(input: {
+  reps: Array<{ id: string; name: string }>
+  assignments: Array<{ rep_id: string; revenue_identity_id: string }>
+  identities: Array<{ id: string; identity_name: string }>
+  targets: Array<{ revenue_identity_id: string; activity_type: string; target_count: number }>
+  accountability: Array<{ rep_id: string; revenue_identity_id: string; activity_type: string; completed_count: number }>
+  dayCloses: Array<{ person_id: string; status: string }>
+  dayElapsedPct: number
+}): NonNullable<AccountabilityDashboardData['commandCenter']> {
+  const { reps, assignments, identities, targets, accountability, dayCloses, dayElapsedPct } = input
+
+  const accByRep = new Map<string, typeof accountability>()
+  for (const acc of accountability) {
+    const list = accByRep.get(acc.rep_id) ?? []
+    list.push(acc)
+    accByRep.set(acc.rep_id, list)
+  }
+
+  let working = 0, onTrack = 0, atRisk = 0, behind = 0, blocked = 0, closed = 0
+  const teamRows: NonNullable<AccountabilityDashboardData['commandCenter']>['team'] = []
+  const attentionItems: NonNullable<AccountabilityDashboardData['commandCenter']>['attentionItems'] = []
+
+  const repIdsWithAssignments = new Set(assignments.map((a) => a.rep_id))
+
+  for (const rep of reps) {
+    if (!repIdsWithAssignments.has(rep.id)) continue
+
+    const myAssignments = assignments.filter((a) => a.rep_id === rep.id)
+    const myTargets = targets.filter((t) =>
+      myAssignments.some((a) => a.revenue_identity_id === t.revenue_identity_id),
+    )
+    const myAccountability = accByRep.get(rep.id) ?? []
+    const accMap = new Map(myAccountability.map((a) => [`${a.revenue_identity_id}:${a.activity_type}`, a]))
+
+    if (myTargets.length === 0) continue
+
+    let personTarget = 0
+    let personCompleted = 0
+    const workingAs = [...new Set(
+      myAssignments
+        .map((a) => identities.find((i) => i.id === a.revenue_identity_id)?.identity_name)
+        .filter((n): n is string => typeof n === 'string'),
+    )]
+    const categoriesBehind: Array<{ label: string; remaining: number }> = []
+
+    for (const t of myTargets) {
+      const acc = accMap.get(`${t.revenue_identity_id}:${t.activity_type}`)
+      const completed = acc?.completed_count ?? 0
+      personTarget += t.target_count
+      personCompleted += completed
+      const remaining = Math.max(0, t.target_count - completed)
+      if (remaining > 0) categoriesBehind.push({ label: t.activity_type.replace(/_/g, ' '), remaining })
+    }
+
+    const personRemaining = Math.max(0, personTarget - personCompleted)
+    const personStatus = personRemaining === 0 && personTarget > 0 ? 'completed' : 'on_track'
+
+    working++
+    let isBehind = false
+    if (personStatus === 'completed') {
+      closed++
+    } else if (dayElapsedPct >= 0.5 && personCompleted < personTarget * 0.6 && personRemaining > 0) {
+      isBehind = true
+      behind++
+      attentionItems.push({
+        repId: rep.id,
+        repName: rep.name,
+        identityName: workingAs[0] ?? 'Unknown',
+        status: 'behind',
+        message: `${rep.name} is behind: ${categoriesBehind.slice(0, 2).map((c) => `${c.remaining} ${c.label}`).join(', ')} remaining`,
+        remaining: personRemaining,
+      })
+    } else {
+      onTrack++
+    }
+
+    const dayClose = dayCloses.find((d) => d.person_id === rep.id)
+
+    teamRows.push({
+      personId: rep.id,
+      personName: rep.name,
+      workingAs,
+      progress: `${personCompleted}/${personTarget}`,
+      remaining: personRemaining,
+      status: isBehind ? 'behind' : personStatus,
+      dayCloseStatus: dayClose?.status ?? null,
+    })
+  }
+
+  return {
+    teamHealth: { working, onTrack, atRisk, behind, blocked, closed },
+    attentionItems,
+    team: teamRows,
+  }
+}
+
 async function load(): Promise<AccountabilityDashboardData | null> {
   const user = await getCurrentUser()
   if (!user) return null
@@ -401,130 +504,66 @@ async function load(): Promise<AccountabilityDashboardData | null> {
   }
 
   // ── Admin: load command center ──
+  //
+  // This used to be driven entirely by day_closes / revenue_identity_contracts
+  // (the "formal daily contract" accountability system). In practice those
+  // tables can be completely unprovisioned for an org — zero contracts ever
+  // created — while reps are actively working and daily_targets /
+  // daily_accountability (a separate, simpler per-activity-type target
+  // system — the one getMyTodayAccountability() already uses for a rep's own
+  // Today view) is genuinely populated with real completed counts. When that
+  // happens the Command Center showed all-zero stats and "No active
+  // operators today" for a team that was demonstrably working — the admin
+  // view was reading from a data source nothing had ever written to, not
+  // reflecting an actual empty team. daily_targets/daily_accountability is
+  // now the primary source (it's populated for every rep who has ever
+  // logged real activity); day_closes is still consulted, best-effort, to
+  // enrich the "Day Close" column when that separate system IS in use.
   if (role === 'admin') {
-    const { data: allDayCloses } = await supabase
-      .from('day_closes')
-      .select('*')
-      .eq('organization_id', ctx.orgId)
-      .eq('date', today)
-
     const { data: allReps } = await supabase
       .from('reps')
       .select('id, name')
       .eq('organization_id', ctx.orgId)
 
-    const allIdentityIds = [...new Set((allDayCloses ?? []).map((dc: any) => dc.revenue_identity_id))]
-    const { data: allContracts } = allIdentityIds.length > 0
-      ? await supabase.from('revenue_identity_contracts').select('*').in('revenue_identity_id', allIdentityIds).eq('status', 'active')
+    const { data: allAssignments } = await supabase
+      .from('identity_assignments')
+      .select('rep_id, revenue_identity_id')
+      .eq('organization_id', ctx.orgId)
+
+    const assignedIdentityIds = [...new Set((allAssignments ?? []).map((a: any) => a.revenue_identity_id))]
+    const { data: allIdentities } = assignedIdentityIds.length > 0
+      ? await supabase.from('revenue_identities').select('id, identity_name').in('id', assignedIdentityIds)
       : { data: [] }
 
-    const allContractIds = (allContracts ?? []).map((c: any) => c.id)
-    const { data: allAllocs } = allContractIds.length > 0
-      ? await supabase.from('contract_allocations').select('*').in('contract_id', allContractIds)
-      : { data: [] }
+    const { data: allTargets } = await supabase
+      .from('daily_targets')
+      .select('*')
+      .eq('organization_id', ctx.orgId)
+      .eq('active', true)
 
-    const { data: allIdentities } = allIdentityIds.length > 0
-      ? await supabase.from('revenue_identities').select('id, identity_name').in('id', allIdentityIds)
-      : { data: [] }
+    const { data: allAccountability } = await supabase
+      .from('daily_accountability')
+      .select('*')
+      .eq('organization_id', ctx.orgId)
+      .eq('target_date', today)
 
-    // Team health
-    let working = 0, onTrack = 0, atRisk = 0, behind = 0, blocked = 0, closed = 0
-    const teamRows: Array<{ personId: string; personName: string; workingAs: string[]; progress: string; remaining: number; status: string; dayCloseStatus: string | null }> = []
-    const attentionItems: Array<{ repId: string; repName: string; identityName: string; status: string; message: string; remaining: number }> = []
+    // day_closes is best-effort enrichment only — an org that has never
+    // provisioned contracts must not lose the rest of this view over it.
+    const { data: allDayCloses } = await supabase
+      .from('day_closes')
+      .select('person_id, status')
+      .eq('organization_id', ctx.orgId)
+      .eq('date', today)
 
-    const processedPersons = new Set<string>()
-
-    for (const dc of allDayCloses ?? []) {
-      if (processedPersons.has(dc.person_id)) continue
-      processedPersons.add(dc.person_id)
-
-      const personDayCloses = (allDayCloses ?? []).filter((d: any) => d.person_id === dc.person_id)
-      const rep = (allReps ?? []).find((r: any) => r.id === dc.person_id)
-      if (!rep) continue
-
-      let personTarget = 0
-      let personCompleted = 0
-      const workingAs: string[] = []
-      const categoriesBehind: Array<{ label: string; remaining: number }> = []
-
-      for (const pdc of personDayCloses) {
-        const contract = (allContracts ?? []).find((c: any) => c.id === pdc.contract_id)
-        if (!contract) continue
-        const myAlloc = (allAllocs ?? []).find((a: any) => a.contract_id === contract.id && a.person_id === dc.person_id)
-        const pct = (myAlloc?.allocation_pct ?? ((allAllocs ?? []).filter((a: any) => a.contract_id === contract.id).length === 0 ? 100 : 0)) / 100
-        const snap = (pdc.completion_snapshot ?? {}) as Record<string, number>
-
-        const connTarget = Math.round(contract.connections * pct)
-        const fdTarget = Math.round(contract.first_dms * pct)
-        const emTarget = Math.round(contract.emails * pct)
-        const fuTarget = Math.round(contract.followups * pct)
-
-        personTarget += connTarget + fdTarget + emTarget + fuTarget
-        personCompleted += (snap.connections ?? 0) + (snap.first_dms ?? 0) + (snap.emails ?? 0) + (snap.followups ?? 0)
-
-        const identity = (allIdentities ?? []).find((i: any) => i.id === pdc.revenue_identity_id)
-        if (identity) workingAs.push(identity.identity_name)
-
-        const connRem = Math.max(0, connTarget - (snap.connections ?? 0))
-        const fdRem = Math.max(0, fdTarget - (snap.first_dms ?? 0))
-        if (connRem > 0) categoriesBehind.push({ label: 'Connections', remaining: connRem })
-        if (fdRem > 0) categoriesBehind.push({ label: 'DMs', remaining: fdRem })
-      }
-
-      const personRemaining = Math.max(0, personTarget - personCompleted)
-      const personStatus = personRemaining === 0 && personTarget > 0 ? 'completed' : 'on_track'
-
-      // Health counts
-      working++
-      if (personStatus === 'completed') closed++
-      else onTrack++
-
-      // Behind check
-      if (dayElapsedPct >= 0.5 && personCompleted < personTarget * 0.6 && personRemaining > 0) {
-        behind++
-        onTrack = Math.max(0, onTrack - 1)
-        attentionItems.push({
-          repId: rep.id,
-          repName: rep.name,
-          identityName: workingAs[0] ?? 'Unknown',
-          status: 'behind',
-          message: `${rep.name} is behind: ${categoriesBehind.slice(0, 2).map((c) => `${c.remaining} ${c.label.toLowerCase()}`).join(', ')} remaining`,
-          remaining: personRemaining,
-        })
-      }
-
-      teamRows.push({
-        personId: rep.id,
-        personName: rep.name,
-        workingAs: [...new Set(workingAs)],
-        progress: `${personCompleted}/${personTarget}`,
-        remaining: personRemaining,
-        status: behind > 0 ? 'behind' : personStatus,
-        dayCloseStatus: personDayCloses[0]?.status ?? null,
-      })
-    }
-
-    // Exception items
-    for (const dc of (allDayCloses ?? []).filter((d: any) => d.exception_reason)) {
-      const rep = (allReps ?? []).find((r: any) => r.id === dc.person_id)
-      const identity = (allIdentities ?? []).find((i: any) => i.id === dc.revenue_identity_id)
-      if (rep) {
-        attentionItems.push({
-          repId: rep.id,
-          repName: rep.name,
-          identityName: identity?.identity_name ?? 'Unknown',
-          status: 'exception',
-          message: `${rep.name} requested ${dc.exception_reason}`,
-          remaining: 0,
-        })
-      }
-    }
-
-    result.commandCenter = {
-      teamHealth: { working, onTrack, atRisk, behind, blocked, closed },
-      attentionItems,
-      team: teamRows,
-    }
+    result.commandCenter = buildCommandCenterFromActivity({
+      reps: (allReps ?? []) as Array<{ id: string; name: string }>,
+      assignments: (allAssignments ?? []) as Array<{ rep_id: string; revenue_identity_id: string }>,
+      identities: (allIdentities ?? []) as Array<{ id: string; identity_name: string }>,
+      targets: (allTargets ?? []) as Array<{ revenue_identity_id: string; activity_type: string; target_count: number }>,
+      accountability: (allAccountability ?? []) as Array<{ rep_id: string; revenue_identity_id: string; activity_type: string; completed_count: number }>,
+      dayCloses: (allDayCloses ?? []) as Array<{ person_id: string; status: string }>,
+      dayElapsedPct,
+    })
   }
 
   return result
