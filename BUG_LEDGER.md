@@ -150,11 +150,23 @@ Reported by the real team using the application. Baseline: `a301371` (see `RELAY
 | TEAM-003 | P0 | Creating a draft pollutes timeline/accountability | **PASS** | Root-caused (real finding differs from literal report), fixed, and a SECOND real concurrency bug found+fixed via live E2E proof — see detail below. |
 | TEAM-004 | P0 | Prospect summary (HIGH/CONTACT NOW) disagrees with Detail (no evidence, score 0) | **PASS** | Same acceptance matrix as TEAM-002/005. |
 | TEAM-005 | P0 | Score changes across reanalysis (60→25→20) | **PASS** | Input-hash reuse (Phase 6), migration applied and verified live. |
-| TEAM-006 | P0 | Generate Lead 75+ returns nothing, UI goes blurry | CONDITIONAL PASS | `maxDuration` fix committed; live browser verification against a genuinely slow/high-value draft still outstanding. |
-| TEAM-007 | P1 | Follow-up / Reply sections do not open | Investigating | Full journey trace, not just click handler. |
+| TEAM-006 | P0 | Generate Lead 75+ returns nothing, UI goes blurry | CONDITIONAL PASS, LIVE-BLOCKED | `maxDuration=120` confirmed set consistently across every AI/drafting route family (analyze, extract, draft, inbound/analyze, content/generate-draft, relay/reconcile) — not just the one originally reported. Cannot verify the actual timeout-avoidance live in this environment: no AI provider credentials are configured here at all (confirmed via env — every analyze/draft call in this sandbox runs the deterministic fallback path, which is fast and never approaches the old default timeout), and `maxDuration` only has any effect on an actual Vercel deployment, not local `next dev`. Needs either a live provider key or a real Vercel deploy to close out — flagged, not glossed over. |
+| TEAM-007 | P1 | Follow-up / Reply sections do not open | **PASS** | Root-caused and fixed — see detail below. |
 | TEAM-008 | P1 | 100% confidence shown alongside "Not Enough Info" contradiction | Investigating | Confidence vs qualification-eligibility semantics audit — not a numeric-equality fix. |
 | TEAM-009 | P2 | Feature request: visibility into saved/connected/DM-due leads | Investigating | Use canonical Lead + event/Next Action architecture, no new CRM subsystem. |
 | TEAM-010 | P2 | Feature request: standalone Email action control | Investigating | Build on Email Outreach V1; overlaps Daria fixture's prepare/send decoupling (already fixed). |
+
+### TEAM-007 detail — Follow-up/Reply tabs were a true no-op when disabled
+
+**Reported**: "Follow-up / Reply sections do not open."
+
+**Traced the actual click handler** (`src/components/lead-workspace.tsx`, artifact tab buttons): `onClick={() => { if (!disabledHint) { setOverrideCheck(false); setArtifact(t.id) } }}` — when a tab was disabled (the common case: Follow-up is disabled by default on any fresh/uncontacted lead, Reply is disabled until a reply exists), clicking it was a literal no-op. No error, no message, no visible reaction at all — the tab simply didn't switch. This is exactly what "doesn't open" looks like from a BD's perspective, and it's a real bug independent of whether the gating logic itself (which section above's the DM/follow-up cooldown work) is correct — the gating was right, but a disabled tab gave zero feedback about WHY, or even that the click registered.
+
+**Fix**: the tab button now always switches `artifact` to itself regardless of disabled state — a disabled tab is still fully viewable, just its draft/send actions stay blocked (already correctly handled by the separate `artifactDisabled[artifact]` conditional that renders the reason instead of the draft controls). Only the actions *inside* a disabled tab are blocked, never the ability to see which tab you're on and why it's blocked.
+
+**Live browser proof**: `e2e/artifact-tab-disabled-click.spec.ts` — against a real, score-eligible, freshly-created lead (Uptalen, score 10/12, status `new`) where both Follow-up and Reply are genuinely disabled by construction. Confirms clicking either now flips `aria-selected` to `true` and the disabled-reason text becomes visible (`Eligible once this lead is contacted` for Follow-up; the reply textarea + `Paste the client reply above to enable` for Reply) — not silence. (Playwright's own actionability check refuses to click an `aria-disabled` element by default — used `{ force: true }`, which is exactly the mouse-click affordance a real user still has against `aria-disabled` markup, as opposed to the native HTML `disabled` attribute, which this button deliberately does not use.)
+
+**Verified**: `tsc --noEmit` and `npm run build` clean; full suite 1090/1090 passing (0 regressions).
 
 ### TEAM-003 detail — Log Sent had no idempotency protection
 

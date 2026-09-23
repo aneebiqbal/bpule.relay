@@ -10,9 +10,8 @@ function firstLeadLink(page: Page) {
 test.describe('LEADS - List, Detail, CRUD', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
-    await page.goto('/leads')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(1000)
+    await page.goto('/leads', { waitUntil: 'domcontentloaded' })
+    await expect(page.locator('main').first()).toBeVisible({ timeout: 20_000 })
   })
 
   test('L01: Leads page renders with lane groups', async ({ page }) => {
@@ -139,8 +138,8 @@ test.describe('LEADS - List, Detail, CRUD', () => {
   })
 
   test('L10: Lead creation via /leads/new', async ({ page }) => {
-    await page.goto('/leads/new')
-    await page.waitForLoadState('networkidle')
+    await page.goto('/leads/new', { waitUntil: 'domcontentloaded' })
+    await expect(page.locator('main').first()).toBeVisible({ timeout: 20_000 })
     
     const body = await page.textContent('body')
     expect(body!.length).toBeGreaterThan(10)

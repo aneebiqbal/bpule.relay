@@ -676,7 +676,15 @@ export function LeadWorkspace({
               return (
                 <button key={t.id} role="tab" aria-selected={active} aria-disabled={Boolean(disabledHint)}
                   title={disabledHint ?? undefined}
-                  onClick={() => { if (!disabledHint) { setOverrideCheck(false); setArtifact(t.id) } }}
+                  // A disabled tab still switches to itself — clicking it
+                  // must show WHY it's disabled (rendered below from
+                  // artifactDisabled[artifact]), not silently do nothing.
+                  // Only the draft/send actions inside a disabled tab stay
+                  // blocked; the tab itself is always clickable to view its
+                  // state. Previously this was a true no-op on a disabled
+                  // tab, which is exactly what "Follow-up/Reply sections
+                  // don't open" (TEAM-007) looked like from the outside.
+                  onClick={() => { setOverrideCheck(false); setArtifact(t.id) }}
                   className={cn(
                     'rounded px-2 py-1 text-[11px] font-medium transition-all',
                     active ? 'bg-solid text-on-solid' : disabledHint ? 'cursor-not-allowed text-graphite/40' : 'text-graphite hover:text-ink',
