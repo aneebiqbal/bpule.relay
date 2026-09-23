@@ -2223,7 +2223,7 @@ export class SupabaseStore implements ScoutStore {
         base_resume_snapshot: input.baseResumeSnapshot ?? {},
         tailored_resume: input.tailoredResume,
         ats_score: input.atsScore,
-        ats_dimensions: JSON.stringify(input.atsDimensions ?? []),
+        ats_dimensions: input.atsDimensions ?? [],
         ats_missing_skills: input.atsMissingSkills ?? [],
         target_title: input.targetTitle ?? null,
         target_skills: input.targetSkills ?? [],
