@@ -1,3 +1,5 @@
+import { notifyError } from '@/lib/ui/notify'
+
 export type SseHandlers<T extends { type: string } = { type: string }> = {
   onEvent: (event: T) => void
   onEnd?: () => void
@@ -21,6 +23,7 @@ export async function readSse<T extends { type: string }>(
     } catch {
       // Non-JSON error body; keep the generic message.
     }
+    notifyError(message)
     handlers.onError?.(message)
     throw new Error(message)
   }
@@ -54,11 +57,12 @@ export async function readSse<T extends { type: string }>(
       }
     }
   } catch (err) {
-    handlers.onError?.(
+    const message =
       err instanceof Error
         ? `Connection dropped: ${err.message}`
-        : 'Connection dropped while the model was writing.',
-    )
+        : 'Connection dropped while the model was writing.'
+    notifyError(message, 'Connection dropped')
+    handlers.onError?.(message)
     throw err
   } finally {
     reader.releaseLock()

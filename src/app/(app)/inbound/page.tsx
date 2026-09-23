@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import type { InboundIntelligence, LeadSource } from '@/lib/domain/types'
+import { notifyError } from '@/lib/ui/notify'
 
 type AnalysisState = 'idle' | 'analyzing' | 'done' | 'error'
 
@@ -48,7 +49,9 @@ export default function InboundPage() {
 
   async function analyze() {
     if (!message.trim()) {
-      setError('Please paste the client\'s message.')
+      const notice = 'Please paste the client\'s message.'
+      setError(notice)
+      notifyError(notice, 'Check the paste')
       return
     }
 
@@ -88,6 +91,7 @@ export default function InboundPage() {
       if (data.extracted?.url && !url) setUrl(data.extracted.url)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed.')
+      notifyError(err instanceof Error ? err.message : 'Analysis failed.')
       setAnalysisState('error')
     }
   }
@@ -123,6 +127,7 @@ export default function InboundPage() {
       setSaved(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save lead.')
+      notifyError(err instanceof Error ? err.message : 'Failed to save lead.', 'Lead was not created')
     }
   }
 

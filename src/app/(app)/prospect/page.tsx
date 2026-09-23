@@ -25,6 +25,8 @@ import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
 
 import type { ProspectQualificationAssessment } from '@/lib/prospect/qualification-gate'
 import { describeVerdictForDisplay, type RevenueLoopSnapshot } from '@/lib/relay/revenue-strategy'
+import { duplicateNotice } from '@/lib/ui/api-error-toast'
+import { notifyError } from '@/lib/ui/notify'
 
 type AnalyzeEvent =
   | { type: 'status'; message: string }
@@ -152,8 +154,8 @@ export default function ProspectCheckPage() {
   // but the error banner renders at the top of the page — without this, a
   // failed save looks like the button did nothing (TEAM-002 / relay.bpulse.dev report).
   useEffect(() => {
-    if (error) errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, [error])
+    if (error || duplicateConflict) errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [error, duplicateConflict])
 
   const resetResult = useCallback(() => {
     setResult(null)
@@ -169,6 +171,7 @@ export default function ProspectCheckPage() {
     const guard = pasteGuard(rawInput)
     if (guard) {
       setError(guard)
+      notifyError(guard, 'Check the paste')
       rawRef.current?.focus()
       return
     }
@@ -205,6 +208,7 @@ export default function ProspectCheckPage() {
           }
           if (event.type === 'error') {
             setError(event.message)
+            notifyError(event.message)
             return
           }
           if (event.type === 'done') {
@@ -259,7 +263,9 @@ export default function ProspectCheckPage() {
   async function saveAsLead(allowPotentialDuplicate = false) {
     if (saving || saveInFlightRef.current) return
     if (!prospectCanBeSaved(result)) {
-      setError('Lead was not created: not enough context to save a reliable lead.')
+      const message = 'Lead was not created: not enough context to save a reliable lead.'
+      setError(message)
+      notifyError(message, 'Not enough to save')
       return
     }
     saveInFlightRef.current = true
@@ -318,7 +324,9 @@ export default function ProspectCheckPage() {
       if (!res.ok) throw new Error(data.error ?? 'Failed to save lead.')
       router.push(`/leads/${data.leadId}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save lead.')
+      const message = err instanceof Error ? err.message : 'Failed to save lead.'
+      setError(message)
+      notifyError(message, 'Lead was not created')
     } finally {
       saveInFlightRef.current = false
       setSaving(false)
@@ -358,6 +366,7 @@ export default function ProspectCheckPage() {
       : 'Not enough information'
     : 'Awaiting analysis'
   const canSaveLead = prospectCanBeSaved(result)
+  const duplicateCopy = duplicateConflict ? duplicateNotice(duplicateConflict) : null
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -382,15 +391,11 @@ export default function ProspectCheckPage() {
         </Alert>
       ) : null}
 
-      {duplicateConflict ? (
-        <Alert>
-          <AlertTitle>
-            {duplicateConflict.duplicateKind === 'potential'
-              ? 'Potential duplicate found'
-              : 'Hard duplicate blocked'}
-          </AlertTitle>
+      {duplicateConflict && duplicateCopy ? (
+        <Alert ref={error ? undefined : errorRef}>
+          <AlertTitle>{duplicateCopy.title}</AlertTitle>
           <AlertDescription className="space-y-2">
-            <p>{duplicateConflict.reason ?? `${duplicateConflict.existingLeadCompany} already exists as a lead.`}</p>
+            <p>{duplicateCopy.description}</p>
             <div className="flex flex-wrap items-center gap-2">
               {duplicateConflict.existingLeadId ? (
                 <Button variant="secondary" size="sm" onClick={() => router.push(`/leads/${duplicateConflict.existingLeadId}`)}>

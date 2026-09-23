@@ -36,6 +36,8 @@ const DEFAULT_RULEBOOK: OrganizationRulebook = {
 }
 import { classifyRoleFromTitle, mapLocationToRegion } from '@/lib/leads/targeting-pure'
 import { readSse } from '@/lib/sse/client'
+import { duplicateNotice } from '@/lib/ui/api-error-toast'
+import { notifyError } from '@/lib/ui/notify'
 import { cn } from 'cn'
 import type { ExtractedLead, MarketRegion, RoleCategory, SignalId } from '@/lib/domain/types'
 
@@ -255,6 +257,7 @@ export default function NewLeadPage() {
     const guard = pasteGuard(form.rawInput.trim())
     if (guard) {
       setError(guard)
+      notifyError(guard, 'Check the paste')
       rawRef.current?.focus()
       return
     }
@@ -286,6 +289,7 @@ export default function NewLeadPage() {
 
           if (event.type === 'error') {
             setError(event.message)
+            notifyError(event.message)
             return
           }
 
@@ -309,7 +313,9 @@ export default function NewLeadPage() {
   async function save(allowPotentialDuplicate = false) {
     if (saving || saveInFlightRef.current) return
     if (!qualification.qualificationEligibility) {
-      setError('NOT ENOUGH INFORMATION. Add richer person, company, and opportunity context before saving this lead.')
+      const message = 'NOT ENOUGH INFORMATION. Add richer person, company, and opportunity context before saving this lead.'
+      setError(message)
+      notifyError(message, 'Not enough to save')
       return
     }
     const companyOk = validateField('company')
@@ -360,7 +366,9 @@ export default function NewLeadPage() {
       if (!res.ok) throw new Error(data.error ?? 'Failed to save lead.')
       router.push(`/leads/${data.lead.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save lead.')
+      const message = err instanceof Error ? err.message : 'Failed to save lead.'
+      setError(message)
+      notifyError(message, 'Lead was not created')
     } finally {
       saveInFlightRef.current = false
       setSaving(false)
@@ -409,14 +417,9 @@ export default function NewLeadPage() {
 
       {blocked ? (
         <Alert variant={blocked.duplicateKind === 'potential' ? 'default' : 'destructive'}>
-          <AlertTitle>
-            {blocked.duplicateKind === 'potential'
-              ? 'Potential duplicate found'
-              : 'Hard duplicate blocked'}
-          </AlertTitle>
+          <AlertTitle>{duplicateNotice(blocked).title}</AlertTitle>
           <AlertDescription>
-            {blocked.reason}{' '}
-            {blocked.existingOwnerName ? `Owner on file: ${blocked.existingOwnerName}.` : ''}
+            {duplicateNotice(blocked).description}
             <div className="mt-2 flex flex-wrap gap-2">
               {blocked.existingLeadId ? (
                 <Button variant="secondary" size="sm" onClick={() => router.push(`/leads/${blocked.existingLeadId}`)}>

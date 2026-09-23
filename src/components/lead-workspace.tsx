@@ -28,6 +28,7 @@ import { signalById } from '@/lib/score/signals'
 import { buildRevenueStrategy, describeVerdictForDisplay, sourceFromLead, toUiSnapshot } from '@/lib/relay/revenue-strategy'
 import { evaluateDmGate, evaluateFollowupGate, formatCooldownRemaining } from '@/lib/relay/message-eligibility'
 import { readSse } from '@/lib/sse/client'
+import { notifyError } from '@/lib/ui/notify'
 import { cn } from 'cn'
 import type { LeadDetail } from '@/lib/store/types'
 import type { Profile, ProofItem, ScoreResult, RevenueIdentityWithAssignment } from '@/lib/domain/types'
@@ -386,7 +387,7 @@ export function LeadWorkspace({
           if (event.type === 'attempt') { if (event.attempt > 0) { streamBuffer.current = ''; setDrafts((d) => ({ ...d, [target]: { result: null, text: '' } })) } return }
           if (event.type === 'draft') { streamBuffer.current += event.chunk; setDrafts((d) => ({ ...d, [target]: { result: d[target]?.result ?? null, text: streamBuffer.current } })); return }
           if (event.type === 'variant') { setVariantDraft(event.draft); return }
-          if (event.type === 'error') { setDraftError(event.message); return }
+          if (event.type === 'error') { setDraftError(event.message); notifyError(event.message, 'Draft failed'); return }
           if (event.type === 'done') { setDrafts((d) => ({ ...d, [target]: { result: event.draft, text: event.draft.draftText } })); if (event.matchedProof) setMatchedProofId(event.matchedProof.id); return }
         },
       })

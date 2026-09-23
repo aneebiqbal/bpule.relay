@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Step } from '@/components/wizard-step'
 import { readSse } from '@/lib/sse/client'
+import { notifyError } from '@/lib/ui/notify'
 import { cn } from 'cn'
 import type { UpworkJob } from '@/lib/domain/types'
 import { computeUpworkScore } from '@/lib/score/upwork-rubric'
@@ -78,7 +79,9 @@ export default function NewUpworkJobPage() {
   async function extract() {
     const raw = form.rawInput.trim()
     if (!raw || raw.length < 24) {
-      setError('Paste a real job post (at least a few sentences).')
+      const message = 'Paste a real job post (at least a few sentences).'
+      setError(message)
+      notifyError(message, 'Check the paste')
       rawRef.current?.focus()
       return
     }
@@ -101,6 +104,7 @@ export default function NewUpworkJobPage() {
         onEvent(event) {
           if (event.type === 'error') {
             setError(event.message)
+            notifyError(event.message)
             return
           }
           if (event.type === 'done') {
@@ -131,7 +135,9 @@ export default function NewUpworkJobPage() {
 
   async function save() {
     if (!form.title.trim() || !form.description.trim()) {
-      setError('Title and description are required.')
+      const message = 'Title and description are required.'
+      setError(message)
+      notifyError(message, 'Check the job')
       return
     }
     setSaving(true)
