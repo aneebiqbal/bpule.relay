@@ -163,7 +163,24 @@ const PRODUCT_MODEL_PATTERNS = [
   /\b(?:seed|series\s+[abc])\s+round\b/i,
   /\braised\s+\$?\d+m\b/i,
   /\bjust\s+closed\s+(?:our|the)\s+(?:seed|series|funding)\b/i,
+  // Founder-of-own-product self-introduction: "I'm the founder/CEO of X" +
+  // (elsewhere) "platform/tool/solution/app for [customers]". A generic
+  // shape covering many founders describing what their OWN company sells —
+  // not specific to any one profile's wording. Split into two anchored,
+  // linear checks (combined in classifyBusinessModel) rather than one
+  // backtracking-prone pattern.
+  /\b(?:i'?m|i am)\s+the\s+(?:founder|co-?founder|ceo)\s+(?:and\s+ceo\s+)?of\b/i,
+  // Founder-as-seller doing business development / partnership-seeking for
+  // their own company — general BD language, not a buying signal.
+  /\bopen\s+to\s+partnerships\s+with\b/i,
 ]
+
+// Paired with the "I'm the founder of X" marker above: only counts as a
+// product-model signal when the profile ALSO names what that company sells
+// as a platform/tool/solution/app/software/product FOR some audience — this
+// keeps the check general (any founder + own-product description) without
+// matching an unrelated "founder of X" mention with no product description.
+const OWN_PRODUCT_FOR_AUDIENCE = /\ban?\s+[\w\s-]{0,40}?\b(?:platform|tool|solution|app|software|product)\b[\w\s-]{0,20}?\bfor\b/i
 
 export function classifyBusinessModel(text: string): BusinessModel {
   const lower = ` ${text.toLowerCase()} `
@@ -172,10 +189,17 @@ export function classifyBusinessModel(text: string): BusinessModel {
     (n, p) => n + (p.test(lower) ? 1 : 0),
     0,
   )
-  const productScore = PRODUCT_MODEL_PATTERNS.reduce(
+  let productScore = PRODUCT_MODEL_PATTERNS.reduce(
     (n, p) => n + (p.test(lower) ? 1 : 0),
     0,
   )
+  // "I'm the founder of X" only counts toward product-model when the same
+  // text also describes what X sells as a platform/tool/product FOR an
+  // audience — otherwise a bare "founder of X" (with no product description
+  // at all) is too weak a signal on its own.
+  if (/\b(?:i'?m|i am)\s+the\s+(?:founder|co-?founder|ceo)\s+(?:and\s+ceo\s+)?of\b/i.test(lower) && OWN_PRODUCT_FOR_AUDIENCE.test(lower)) {
+    productScore += 1
+  }
 
   // Recruiter model needs strong signal — a single ambiguous phrase is not
   // enough, because tech founders also talk about "connecting" and "talent".
@@ -292,4 +316,52 @@ export function deriveRelationship(
  */
 export function isNonBuyerRelationship(relationship: CommercialRelationship): boolean {
   return relationship === 'RECRUITER' || relationship === 'POTENTIAL_PARTNER' || relationship === 'PEER'
+}
+
+// ── Repost / third-party-authorship scoping ─────────────────────────────────
+
+/**
+ * Pasted LinkedIn activity feeds interleave the prospect's OWN posts with
+ * REPOSTS of other people's posts (and, on a repost, the reposted author's
+ * bio/title/company line). Each post/repost block in the paste is preceded
+ * by a "View <Name>'s profile" line naming who AUTHORED that specific block.
+ * Without this scoping, a third party's post — their meeting locations,
+ * their employer, their "in person" language, their opinions — gets
+ * attributed to the prospect simply because it appears inside the
+ * prospect's pasted activity feed.
+ *
+ * This function removes any block whose "View <Name>'s profile" author is
+ * NOT the prospect (name match, case-insensitive), so downstream extraction
+ * (signals, remote eligibility, location) only ever sees content the
+ * prospect actually authored (plus any text with no attributable "View ...
+ * profile" marker at all, e.g. the profile header/About section, which is
+ * kept as prospect-owned by default).
+ */
+export function stripThirdPartyRepostBlocks(rawText: string, prospectName: string | null): string {
+  if (!prospectName?.trim()) return rawText
+
+  const VIEW_PROFILE_RE = /^View ([^']*)'s profile$/i
+  const lines = rawText.split(/\r?\n/)
+  const normalizedProspect = prospectName.trim().toLowerCase()
+
+  const kept: string[] = []
+  let skipping = false
+
+  for (const line of lines) {
+    const match = VIEW_PROFILE_RE.exec(line.trim())
+    if (match) {
+      const author = match[1].trim().toLowerCase()
+      // A block belongs to the prospect if the named author IS the prospect,
+      // or is a company page (companies don't "repost" as a person, and
+      // "View company: X" is handled by not matching this pattern at all —
+      // this branch only ever sees person profile markers).
+      skipping = author !== normalizedProspect
+      // Drop the "View ... profile" marker line itself either way — it is
+      // navigation chrome, not content.
+      continue
+    }
+    if (!skipping) kept.push(line)
+  }
+
+  return kept.join('\n')
 }

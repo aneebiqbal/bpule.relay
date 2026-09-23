@@ -407,6 +407,13 @@ function scoreRemoteEligibility(
     reasons.push(`Likely remote compatible: ${eligibility.reason}`)
   } else if (eligibility.eligibility === 'INELIGIBLE') {
     watchOut.push(`Remote barrier: ${eligibility.reason}`)
+  } else if (eligibility.eligibility === 'NOT_APPLICABLE') {
+    // NOT_APPLICABLE means there is no job/engagement being evaluated at all
+    // (e.g. a recruiter or networking contact) — this is a neutral, expected
+    // state, not a concern. It must never be worded as "unclear", which
+    // implies missing information about a real opportunity. See Bug 3 —
+    // remote-eligibility NOT_APPLICABLE mislabeling hardening.
+    reasons.push(`Remote eligibility not applicable: ${eligibility.reason}`)
   } else {
     watchOut.push(`Remote eligibility unclear: ${eligibility.reason}`)
   }
@@ -502,11 +509,25 @@ function scoreRevenueIdentityFit(
   let points = 5
   let note = 'No matching Revenue Identity.'
 
+  // Wording note (Bug 4.3): this dimension purely reflects "we could route
+  // this to a sender if outreach were needed" — it does not and must not
+  // imply a commercial opportunity has been established. "Compatible" avoids
+  // the earlier "for this opportunity" phrasing, which contradicted a
+  // simultaneous "no clear opportunity signal detected" watchOut on the same
+  // profile. This is a wording-only change — hasCredibleIdentity still only
+  // feeds this dimension's own points, never oppFit/needIntent.
   if (hasCredibleIdentity) {
     points = 13
-    note = 'Credible Revenue Identity available for this opportunity.'
-    reasons.push('Has a credible Revenue Identity for this opportunity.')
+    note = 'Compatible Revenue Identity available.'
+    reasons.push('Compatible Revenue Identity available for outreach, if needed.')
   } else {
+    // This is informational, not necessarily a concern — whether it matters
+    // depends on whether any outreach message is actually planned, which
+    // this scoring dimension has no visibility into (that is decided later,
+    // in the revenue-strategy layer, from qualification + action). Route.ts
+    // and the UI are responsible for suppressing/rewording this watchOut
+    // when the recommended action carries no pitch — see Bug 4 (route.ts
+    // sender/proof gating).
     watchOut.push('No Revenue Identity identified for this opportunity.')
   }
 

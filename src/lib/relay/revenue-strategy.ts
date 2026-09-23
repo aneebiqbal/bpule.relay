@@ -10,8 +10,9 @@
  * Research is intelligence, not copy. The writer receives ALLOWED_NOW only.
  */
 
-import type { CanonicalProspectIntelligence, EvidenceEntry, OpportunitySignal } from '@/lib/intelligence-v2/types'
+import type { CanonicalProspectIntelligence, EvidenceEntry, OpportunitySignal, CommercialRelationship, BusinessModel } from '@/lib/intelligence-v2/types'
 import type { ExtractedLead, Lead, OutreachStrategy } from '@/lib/domain/types'
+import { isNonBuyerRelationship } from '@/lib/intelligence-v2/subject-attribution'
 
 export type FitLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN'
 export type IntentLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN'
@@ -23,6 +24,7 @@ export type ContactReason =
   | 'DEMONSTRATED_PROBLEM'
   | 'STRONG_FIT'
   | 'RELATIONSHIP_CONTEXT'
+  | 'RELATIONSHIP_VALUE'
   | 'NO_CREDIBLE_REASON'
 
 export type ContactAction =
@@ -184,6 +186,59 @@ export function describeMessagingPolicy(policy: MessagingPolicy): string {
   }
 }
 
+/**
+ * Single source of truth for "verdict must not contradict action."
+ *
+ * Commercial qualification ('strong'/'worth_pursuing'/'maybe'/'skip') and
+ * relationship strategy (ContactAction) answer different questions — see
+ * AGENTS/BUG_LEDGER: LOW/NO buyer qualification + a valid relationship
+ * action (CONNECT_OR_OBSERVE, or any non-SKIP action) is NOT a contradiction.
+ * Every surface displaying a headline verdict must call this instead of
+ * independently deciding whether "skip" is safe to show — otherwise a
+ * qualification of 'skip' renders as "Probably skip" even when the actual
+ * recommended action is a valid connect/observe/contact action, which reads
+ * as an internal contradiction to the user.
+ *
+ * Rule: if action === 'SKIP', showing "skip" is correct and expected. If
+ * action !== 'SKIP' and qualification === 'skip', the headline must say
+ * something honest about the mismatch instead of a bare "skip".
+ */
+export function describeVerdictForDisplay(
+  qualification: CanonicalProspectIntelligence['qualification'] | null | undefined,
+  action: ContactAction,
+  actionLabel?: string | null,
+): { headline: string; contradicted: boolean } {
+  const QUALIFICATION_HEADLINES: Record<NonNullable<CanonicalProspectIntelligence['qualification']>, string> = {
+    strong: 'Strong opportunity',
+    worth_pursuing: 'Worth pursuing',
+    maybe: 'Maybe — needs more signal',
+    skip: 'Probably skip',
+  }
+
+  if (!qualification) {
+    return { headline: actionLabel ?? 'Awaiting analysis', contradicted: false }
+  }
+
+  if (qualification !== 'skip' || action === 'SKIP') {
+    return { headline: QUALIFICATION_HEADLINES[qualification], contradicted: false }
+  }
+
+  // qualification === 'skip' but the recommended action is NOT SKIP — a
+  // valid relationship action exists (connect/observe/research/contact) even
+  // though there is no current buyer opportunity. Never say "skip" here.
+  const label = actionLabel ?? describeContactActionLabel(action)
+  return { headline: `No current buyer fit — ${label}`, contradicted: true }
+}
+
+function describeContactActionLabel(action: ContactAction): string {
+  switch (action) {
+    case 'CONTACT_NOW': return 'contact now'
+    case 'CONNECT_OR_OBSERVE': return 'connect or observe'
+    case 'RESEARCH_MORE': return 'research more'
+    case 'SKIP': return 'skip'
+  }
+}
+
 export interface KnowledgeItem {
   text: string
   release: KnowledgeRelease
@@ -261,6 +316,15 @@ export interface StrategySource {
   title: string | null
   company: string
   qualification: CanonicalProspectIntelligence['qualification'] | null
+  /**
+   * Canonical commercial relationship (buyer/recruiter/partner/peer/etc.),
+   * threaded from NormalizedIntelligence.relationship. 'UNKNOWN' for legacy
+   * leads that predate this classification — treated as "no non-buyer
+   * signal", not as a buyer signal.
+   */
+  relationship: CommercialRelationship
+  /** Canonical business model (PRODUCT/RECRUITER/UNKNOWN), for the same reason. */
+  businessModel: BusinessModel
   canonicalScore: number | null
   extractionCompleteness: number | null
   opportunitySignals: OpportunitySignal[]
@@ -334,6 +398,8 @@ export function sourceFromCanonical(
     title: intel.person.title,
     company: intel.company.name ?? 'Unknown company',
     qualification: canonical.qualification,
+    relationship: intel.relationship,
+    businessModel: intel.businessModel,
     canonicalScore: canonical.canonicalScore,
     extractionCompleteness: canonical.extractionCompleteness.score,
     opportunitySignals: intel.opportunity.signals,
@@ -394,6 +460,11 @@ export function sourceFromLead(
     title: extracted?.title ?? lead.contactTitle,
     company: extracted?.company ?? lead.company,
     qualification: null,
+    // Legacy leads (no canonical intelligence) predate relationship
+    // classification — 'UNKNOWN' correctly means "no non-buyer signal",
+    // not "buyer confirmed".
+    relationship: 'UNKNOWN',
+    businessModel: 'UNKNOWN',
     canonicalScore: lead.canonicalScore ?? null,
     extractionCompleteness: extracted?.extractionConfidence ?? lead.extractionConfidence ?? null,
     opportunitySignals: inferSignalsFromLegacy(lead.signalType, lead.signalEvidence ?? extracted?.signalEvidence),
@@ -707,7 +778,17 @@ function assessFitIntentConfidence(source: StrategySource, scoped: ScopedItem[])
   let fit: FitLevel = 'UNKNOWN'
   let fitWhy = 'Not enough evidence to judge whether they could buy.'
 
-  if (hardSkip && /recruiter|clinician|irrelevant|student|competitor/i.test(source.hardNegatives.join(' '))) {
+  // Non-buyer relationship (recruiter/partner/peer) is determined upstream by
+  // subject-attribution's deriveRelationship() — read it directly rather than
+  // pattern-matching hardNegatives text (which is fragile: it breaks the
+  // moment a hard-negative reason string is reworded, and it can't
+  // distinguish "not a buyer, but a valid contact" from "not a credible
+  // contact at all"). Other hard-negative categories (irrelevant input,
+  // clinician, student, competitor) still fall back to the hardNegatives scan
+  // — subject-attribution does not model those.
+  const nonBuyerRelationship = isNonBuyerRelationship(source.relationship)
+  const otherNonBuyerHardNegative = hardSkip && /clinician|irrelevant|student|competitor/i.test(source.hardNegatives.join(' '))
+  if (nonBuyerRelationship || otherNonBuyerHardNegative) {
     fit = 'LOW'
     fitWhy = 'Profile is not a software-delivery buyer.'
   } else if (!hasIdentity && completeness < 30) {
@@ -805,6 +886,40 @@ function decideContact(
       why: 'They wrote back. First-party evidence now outranks the original scrape.',
       messageRecommended: true,
       noMessageReason: null,
+    }
+  }
+
+  // Non-buyer relationship (recruiter/partner/peer): LOW commercial fit is
+  // correct and must stand (see assessFitIntentConfidence), but it must NOT
+  // by itself force SKIP. A recruiter, partner, or peer with genuine
+  // relationship-worthy activity — active business development, conference/
+  // roadshow participation, "open to partnerships" language, an audience-
+  // facing service, a named identity — is a legitimate CONNECT_OR_OBSERVE
+  // outcome with no pitch. Only a genuinely empty/irrelevant profile (no
+  // identity, no activity, no content at all) reaches SKIP.
+  const nonBuyerRelationship = isNonBuyerRelationship(source.relationship)
+  if (nonBuyerRelationship && !irrelevant) {
+    const hasIdentitySignal = Boolean(source.name || source.title) && source.company !== 'Unknown company'
+    const hasActivitySignal = source.recentPosts.length > 0
+      || source.explicitProblems.length > 0
+      || source.hiringSignals.length > 0
+      || source.opportunitySignals.length > 0
+      || Boolean(source.verbatimQuote)
+    if (hasIdentitySignal || hasActivitySignal) {
+      return {
+        reason: 'RELATIONSHIP_VALUE',
+        action: 'CONNECT_OR_OBSERVE',
+        why: 'Not a software-delivery buyer, but a valid relationship contact (recruiter/partner/peer) with genuine identity or activity — worth connecting with or observing, not pitching.',
+        messageRecommended: false,
+        noMessageReason: 'No buying need to pitch. Connect or observe only — do not force a sales message.',
+      }
+    }
+    return {
+      reason: 'NO_CREDIBLE_REASON',
+      action: 'SKIP',
+      why: 'Non-buyer relationship with no identity or activity evidence — not a credible contact.',
+      messageRecommended: false,
+      noMessageReason: 'No credible reason to contact. Silence is the correct result.',
     }
   }
 

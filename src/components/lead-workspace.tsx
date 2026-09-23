@@ -25,7 +25,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { StatusWord, VerdictWord } from '@/components/status-word'
 import { ScoreRing } from '@/components/score-ring'
 import { signalById } from '@/lib/score/signals'
-import { buildRevenueStrategy, sourceFromLead, toUiSnapshot } from '@/lib/relay/revenue-strategy'
+import { buildRevenueStrategy, describeVerdictForDisplay, sourceFromLead, toUiSnapshot } from '@/lib/relay/revenue-strategy'
 import { evaluateDmGate, evaluateFollowupGate, formatCooldownRemaining } from '@/lib/relay/message-eligibility'
 import { readSse } from '@/lib/sse/client'
 import { cn } from 'cn'
@@ -111,6 +111,8 @@ function NextBestAction({
   hasPriorSend,
   followupEligible,
   onAction,
+  dmAction,
+  dmMessagingPolicyLabel,
 }: {
   lead: LeadDetail
   verdict: string
@@ -118,6 +120,10 @@ function NextBestAction({
   hasPriorSend: boolean
   followupEligible: boolean
   onAction?: () => void
+  /** Canonical DM-channel ContactAction — used only to keep the 'skip'
+   *  fallback below from contradicting a valid non-SKIP relationship action. */
+  dmAction?: string
+  dmMessagingPolicyLabel?: string
 }) {
   type Action = { label: string; description: string; cta: string; href?: string }
   let action: Action
@@ -157,6 +163,17 @@ function NextBestAction({
       label: 'Do more research',
       description: 'Promising, but not enough evidence yet. Add proof or context.',
       cta: 'Add research',
+    }
+  } else if (dmAction && dmAction !== 'SKIP') {
+    // Verdict/action reconciliation (Bug 2): a 'skip'/low commercial
+    // qualification does not by itself mean SKIP is the right action — a
+    // non-buyer relationship (recruiter/partner/peer) can still have a valid
+    // CONNECT_OR_OBSERVE/RESEARCH_MORE action. Never say "Not ready" /
+    // "scored low, focus elsewhere" when a real action exists.
+    action = {
+      label: 'No current buyer fit',
+      description: `Not a software-delivery buyer, but ${dmMessagingPolicyLabel?.toLowerCase() ?? 'a relationship action is recommended'}.`,
+      cta: 'Review lead',
     }
   } else {
     action = {
@@ -256,6 +273,17 @@ export function LeadWorkspace({
   const locked = currentLead.status === 'no' || currentLead.status === 'dead'
   const verdict = currentLead.verdict ?? score.verdict
   const canDraft = verdict === 'send' || verdict === 'research_more'
+
+  // Verdict/action reconciliation (Bug 2): the legacy `verdict` can read
+  // 'skip' (commercial qualification only) even when the canonical DM-channel
+  // action is a valid non-SKIP relationship action (CONNECT_OR_OBSERVE,
+  // etc). VerdictWord must not show a bare "skip" headline in that case —
+  // reuse the same DM-channel snapshot LeadLoopStrip already computes so the
+  // reconciliation rule lives in one place (describeVerdictForDisplay).
+  const dmSnapshot = toUiSnapshot(buildRevenueStrategy(sourceFromLead(currentLead, null, { channel: 'dm' })))
+  const verdictDisplay = verdict === 'skip'
+    ? describeVerdictForDisplay('skip', dmSnapshot.act, dmSnapshot.messagingPolicyLabel)
+    : null
 
   const [artifact, setArtifact] = useState<ArtifactId>('dm')
   const [drafting, setDrafting] = useState(false)
@@ -495,7 +523,14 @@ export function LeadWorkspace({
             </Link>
 
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <VerdictWord verdict={verdict} />
+              {verdictDisplay?.contradicted ? (
+                <span className="inline-flex items-center gap-1.5 font-medium text-orange">
+                  <span className="size-1.5 rounded-full bg-orange" aria-hidden="true" />
+                  {verdictDisplay.headline}
+                </span>
+              ) : (
+                <VerdictWord verdict={verdict} />
+              )}
               {currentLead.status !== 'new' && !hasReply && <StatusWord status={currentLead.status} />}
               {hasReply && <StatusWord status="replied" />}
             </div>
@@ -640,6 +675,8 @@ export function LeadWorkspace({
             hasPriorSend={hasPriorSend}
             followupEligible={followupEligible}
             onAction={() => void generateDraft()}
+            dmAction={dmSnapshot.act}
+            dmMessagingPolicyLabel={dmSnapshot.messagingPolicyLabel}
           />
         </section>
       )}

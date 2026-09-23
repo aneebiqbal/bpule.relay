@@ -21,6 +21,8 @@ function source(overrides: Partial<StrategySource>): StrategySource {
     title: 'Founder',
     company: 'Acme Robotics',
     qualification: 'worth_pursuing',
+    relationship: 'POTENTIAL_BUYER',
+    businessModel: 'PRODUCT',
     canonicalScore: 72,
     extractionCompleteness: 70,
     opportunitySignals: [],
