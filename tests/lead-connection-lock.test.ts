@@ -7,7 +7,7 @@ const ORG_ID = 'org-test'
 const REP_ID = 'rep-1'
 
 function makeRep(): Rep {
-  return { id: REP_ID, name: 'Test Rep', role: 'rep', organization_id: ORG_ID, createdAt: '2026-01-01T00:00:00.000Z', timezone: 'UTC' } as Rep
+  return { id: REP_ID, name: 'Test Rep', role: 'rep', organizationId: ORG_ID, createdAt: '2026-01-01T00:00:00.000Z', timezone: 'UTC' }
 }
 
 function makeOrg(): Organization {
