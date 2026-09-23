@@ -15,7 +15,7 @@ import { cn } from 'cn'
 import { Activity, MessageSquare, Zap, Users, TrendingUp } from 'lucide-react'
 
 type StreamItem = { id: string; eventType: string; label: string; actorName: string; occurredAt: string }
-type PerRep = { name: string; connections: number; dms: number; followups: number; emails: number; replies: number }
+type PerRep = { id: string; name: string; connections: number; dms: number; followups: number; emails: number; replies: number; total: number }
 type Funnel = { new: number; contacted: number; replied: number; followed_up: number; won: number; lost: number }
 type Feed = {
   date: string
@@ -179,21 +179,29 @@ export function LiveCommandCenter() {
       {data.perRep.length > 0 && (
         <div className="rounded-2xl border border-line/60 bg-bone-raised p-4">
           <p className="text-label text-graphite">Who sent what today</p>
-          <div className="mt-2" style={{ height: Math.max(180, data.perRep.slice(0, 8).length * 36) }}>
+          <div className="mt-2" style={{ height: Math.max(180, data.perRep.length * 36) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={data.perRep.slice(0, 8)}
+                data={data.perRep}
                 layout="vertical"
-                margin={{ top: 4, right: 8, bottom: 0, left: 4 }}
+                margin={{ top: 4, right: 28, bottom: 0, left: 4 }}
               >
                 <XAxis type="number" hide allowDecimals={false} />
                 <YAxis
                   type="category"
-                  dataKey="name"
-                  width={108}
+                  dataKey="id"
+                  width={132}
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 11, fill: 'var(--graphite)' }}
+                  tick={(props: { x: number; y: number; payload: { value: string } }) => {
+                    const row = data.perRep.find((rep) => rep.id === props.payload.value)
+                    return (
+                      <text x={props.x} y={props.y} dy={4} textAnchor="end" fill="var(--ink)" fontSize={11}>
+                        {row?.name ?? ''}
+                        <tspan fill="var(--graphite)"> {row?.total ?? 0}</tspan>
+                      </text>
+                    )
+                  }}
                 />
                 <Tooltip
                   contentStyle={{ fontSize: 11, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bone-raised)' }}

@@ -48,6 +48,7 @@ const STATUS_CONFIG: Record<string, { label: string; variant: 'success' | 'warni
   completed_with_exception: { label: 'COMPLETE (EXCEPTION)', variant: 'info' },
   missed: { label: 'MISSED', variant: 'danger' },
   approved_unavailable: { label: 'UNAVAILABLE', variant: 'neutral' },
+  no_quotas: { label: 'NO QUOTAS', variant: 'neutral' },
 }
 
 const EXCEPTION_REASONS = [
@@ -138,16 +139,18 @@ export function MyDayCard({ data }: { data: MyDayData }) {
       <div className="srf-console srf-console-edge overflow-hidden p-5 sm:p-6">
         <div className="flex items-center justify-between">
           <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">My Day</p>
-          <StatusBadgeForStatus status={data.status} />
+          <StatusBadgeForStatus status={data.totalTarget === 0 ? 'no_quotas' : data.status} />
         </div>
         <div className="mt-3 flex items-baseline gap-3">
           <span className="text-[28px] font-light tracking-tight text-ink">
-            {data.totalRemaining === 0 ? '✓' : data.totalRemaining}
+            {data.totalTarget === 0 ? '—' : data.totalRemaining === 0 ? '✓' : data.totalRemaining}
           </span>
           <span className="text-[13px] text-graphite">
-            {data.totalRemaining === 0
-              ? 'All work complete'
-              : `${data.totalRemaining} of ${data.totalTarget} remaining`}
+            {data.totalTarget === 0
+              ? 'No quotas assigned today'
+              : data.totalRemaining === 0
+                ? 'All work complete'
+                : `${data.totalRemaining} of ${data.totalTarget} remaining`}
           </span>
         </div>
         {data.totalTarget > 0 && (

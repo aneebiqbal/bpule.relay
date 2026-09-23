@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
-
-type PerRep = { name: string; connections: number; dms: number; followups: number; emails: number; replies: number }
+import { assembleWhoSentWhat, displayRepName } from '@/lib/relay/live-feed'
 
 const STREAM_EVENT_LABEL: Record<string, string> = {
   LEAD_CREATED: 'extracted a prospect',
@@ -66,20 +65,22 @@ export async function GET() {
       .eq('target_date', now.toISOString().slice(0, 10)),
   ])
 
-  const repIds = new Set<string>()
-  for (const e of events ?? []) if (e.actor_type === 'rep' && e.actor_id) repIds.add(e.actor_id as string)
-  const { data: reps } = repIds.size > 0
-    ? await supabase.from('reps').select('id, name').in('id', Array.from(repIds))
-    : { data: [] }
+  const { data: reps } = await supabase
+    .from('reps')
+    .select('id, name, auth_user_id')
+    .eq('organization_id', authCtx.orgId)
   const repNameById = new Map<string, string>()
-  for (const r of reps ?? []) repNameById.set(r.id as string, r.name as string)
+  for (const r of reps ?? []) {
+    if (r.name) repNameById.set(r.id as string, r.name as string)
+    if (r.auth_user_id && r.name) repNameById.set(r.auth_user_id as string, r.name as string)
+  }
 
   const stream = (events ?? []).map((e) => ({
     id: e.id as string,
     eventType: e.event_type as string,
     label: streamLabel(e.event_type as string),
     actorId: (e.actor_id as string) ?? null,
-    actorName: e.actor_type === 'rep' ? (repNameById.get(e.actor_id as string) ?? 'A rep') : 'Relay',
+    actorName: e.actor_type === 'rep' ? (displayRepName(repNameById.get(e.actor_id as string)) ?? 'A rep') : 'Relay',
     occurredAt: e.occurred_at as string,
   }))
 
@@ -90,22 +91,18 @@ export async function GET() {
     hourly[hr] += 1
   }
 
-  // Per-rep stacked activity for today
-  const perRepByType = new Map<string, Record<string, number>>()
-  for (const m of todaysMessages ?? []) {
-    if (!m.rep_id) continue
-    const rep = repNameById.get(m.rep_id as string) ?? m.rep_id
-    const bucket = perRepByType.get(rep) ?? { connections: 0, dms: 0, followups: 0, emails: 0, replies: 0 }
-    if (m.type === 'connection') bucket.connections += 1
-    else if (m.type === 'dm') bucket.dms += 1
-    else if (m.type === 'followup') bucket.followups += 1
-    else if (m.type === 'email') bucket.emails += 1
-    else if (m.type === 'reply') bucket.replies += 1
-    perRepByType.set(rep, bucket)
-  }
-  const perRep: PerRep[] = Array.from(perRepByType.entries())
-    .map(([name, counts]) => ({ name, connections: counts.connections, dms: counts.dms, followups: counts.followups, emails: counts.emails, replies: counts.replies }))
-    .sort((a, b) => (b.connections + b.dms + b.followups) - (a.connections + a.dms + a.followups))
+  const perRep = assembleWhoSentWhat({
+    reps: (reps ?? []).map((rep) => ({
+      id: rep.id as string,
+      name: (rep.name as string) ?? null,
+      authUserId: (rep.auth_user_id as string) ?? null,
+    })),
+    messages: (todaysMessages ?? []).map((message) => ({
+      repId: (message.rep_id as string) ?? null,
+      type: (message.type as string) ?? null,
+      direction: (message.direction as string) ?? null,
+    })),
+  })
 
   // Pipeline funnel from today's lead snapshot
   const funnel = { new: 0, contacted: 0, replied: 0, followed_up: 0, won: 0, lost: 0 }
