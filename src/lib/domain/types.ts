@@ -109,6 +109,17 @@ export interface Lead {
   lockedUntil?: string | null
   /** Why the lead was locked. Currently only 'connection_note_sent'. */
   lockedReason?: string | null
+  /**
+   * Soft-archive flag (housekeeping sweep, never a hard delete). true = not
+   * shown on the default leads board, but still findable via /archive
+   * search. Optional only for backward compatibility with existing object
+   * literals built before this field existed (tests, mock fixtures) —
+   * real construction sites (mapLead, mock-store demo leads) always set a
+   * concrete value.
+   */
+  archived?: boolean
+  /** When this lead was archived; cleared back to null on auto-restore-on-reply. */
+  archivedAt?: string | null
   createdAt: string
 }
 
@@ -1147,7 +1158,7 @@ export interface RevenueIdentityWithAssignment extends RevenueIdentity {
   assignedAt: string
 }
 
-export type ActivityType = 'dm' | 'email' | 'connection_request' | 'followup' | 'application' | 'proposal' | 'other'
+export type ActivityType = 'dm' | 'email' | 'connection_request' | 'followup' | 'application' | 'proposal' | 'prospect_extracted' | 'other'
 
 export type ContactPointType = 'email' | 'linkedin' | 'contact_form' | 'phone' | 'other'
 export type ContactPointSource =
@@ -1810,6 +1821,16 @@ export interface CapturedProspect {
   lastActivityAt: string
   createdAt: string
   updatedAt: string
+  /**
+   * True when this call to captureProspect() inserted a brand-new row; false
+   * when it returned an existing row for the same rep+rawInput (a re-analyze
+   * / cache hit). Not persisted — computed fresh on every call. Callers that
+   * award once-per-capture accountability credit (prospect_extracted, see
+   * ScoutStore.recordProspectExtracted) MUST gate on this flag so re-analyzing
+   * the same paste never double-credits. Optional only for backward
+   * compatibility with any older callers that don't need the distinction.
+   */
+  isNewCapture?: boolean
 }
 
 export type RelayEventType =

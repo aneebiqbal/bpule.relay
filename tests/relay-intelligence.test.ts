@@ -445,18 +445,38 @@ describe('Follow-up Engine', () => {
     expect(result.waitReason).toContain('business day')
   })
 
-  it('does not allow a second follow-up', () => {
+  // Approved product design change: the follow-up cap was raised from 1 to
+  // 3 (a lead can now receive up to 3 follow-ups total across its life —
+  // see src/lib/relay/followup-engine.ts and default-targets.ts's
+  // followup: 3 rebalance). A followupCount of 1 is now the *second*
+  // follow-up, still allowed — this replaces the old "does not allow a
+  // second follow-up" test, which asserted the now-superseded 1-follow-up
+  // rule. Business-rule change, not a regression.
+  it('allows a second follow-up (followupCount 1 of the new 3-follow-up cap), once 5 business days have passed', () => {
     const result = determineFollowup({
       lead: { id: 'l1', organizationId: 'org1', ownerRepId: null, company: 'Acme', companyKey: 'acme', contactName: 'Alex', contactTitle: 'Founder', url: null, rawInput: null, signalType: 1, signalEvidence: 'hiring', verbatimQuote: null, score: 8, verdict: 'send', status: 'followed_up', playId: null, tags: [], createdAt: '2024-01-01' },
-      priorMessages: [],
+      priorMessages: [{ id: 'm1', organizationId: 'org1', leadId: 'l1', repId: 'r1', type: 'followup', draftText: null, sentText: 'Following up, Alex', sentAt: '2024-01-01', modelUsed: null, createdAt: '2024-01-01' }],
       conversationStage: 'followed_up',
       senderProfileId: null,
       followupCount: 1,
       lastSentAt: '2024-01-01',
       lastReplyAt: null,
     })
+    expect(result.shouldFollowUp).toBe(true)
+  })
+
+  it('does not allow a fourth follow-up once all 3 have been used', () => {
+    const result = determineFollowup({
+      lead: { id: 'l1', organizationId: 'org1', ownerRepId: null, company: 'Acme', companyKey: 'acme', contactName: 'Alex', contactTitle: 'Founder', url: null, rawInput: null, signalType: 1, signalEvidence: 'hiring', verbatimQuote: null, score: 8, verdict: 'send', status: 'followed_up', playId: null, tags: [], createdAt: '2024-01-01' },
+      priorMessages: [],
+      conversationStage: 'followed_up',
+      senderProfileId: null,
+      followupCount: 3,
+      lastSentAt: '2024-01-01',
+      lastReplyAt: null,
+    })
     expect(result.shouldFollowUp).toBe(false)
-    expect(result.reason).toContain('One follow-up already')
+    expect(result.reason).toContain('All 3 follow-ups already used')
   })
 
   it('does not follow up if lead has replied', () => {

@@ -171,10 +171,10 @@ function isOptionalSearchError(err: unknown): boolean {
  * drops it for list, queue and rate queries that never read it.
  */
 const LEAD_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, intelligence_input_hash, connection_accepted_at, locked_until, locked_reason, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, intelligence_input_hash, connection_accepted_at, locked_until, locked_reason, archived, archived_at, created_at'
 
 const LEAD_LIST_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, connection_accepted_at, locked_until, locked_reason, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, connection_accepted_at, locked_until, locked_reason, archived, archived_at, created_at'
 
 function mapLead(r: Row): Lead {
   return {
@@ -219,6 +219,8 @@ function mapLead(r: Row): Lead {
     connectionAcceptedAt: (r.connection_accepted_at as string) ?? null,
     lockedUntil: (r.locked_until as string) ?? null,
     lockedReason: (r.locked_reason as string) ?? null,
+    archived: (r.archived as boolean) ?? false,
+    archivedAt: (r.archived_at as string) ?? null,
     createdAt: r.created_at as string,
   }
 }
@@ -392,7 +394,7 @@ export class SupabaseStore implements ScoutStore {
     }))
   }
 
-  async fetchLeadsAll(scopeToUser = false): Promise<Lead[]> {
+  async fetchLeadsAll(scopeToUser = false, includeArchived = false): Promise<Lead[]> {
     let query = this.client
       .from('leads')
       .select(LEAD_LIST_COLUMNS)
@@ -401,6 +403,14 @@ export class SupabaseStore implements ScoutStore {
     // Non-admin users can only see their own leads
     if (scopeToUser || this.rep.role !== 'admin') {
       query = query.eq('owner_rep_id', this.rep.id)
+    }
+
+    // Default excludes archived leads — the live board/dashboards/queues
+    // should never show a lead that has been swept into archive. Callers
+    // that genuinely need archived leads too (e.g. the /archive search
+    // page) pass includeArchived: true explicitly.
+    if (!includeArchived) {
+      query = query.eq('archived', false)
     }
 
     const { data, error } = await query
@@ -809,12 +819,16 @@ export class SupabaseStore implements ScoutStore {
     return { ...mapLead(data as Row), messages: [], outcomes: [] }
   }
 
-  async listOwnedLeads(): Promise<Lead[]> {
-    const { data, error } = await this.client
+  async listOwnedLeads(includeArchived = false): Promise<Lead[]> {
+    let query = this.client
       .from('leads')
       .select(LEAD_LIST_COLUMNS)
       .eq('owner_rep_id', this.rep.id)
       .order('created_at', { ascending: false })
+    if (!includeArchived) {
+      query = query.eq('archived', false)
+    }
+    const { data, error } = await query
     if (error) throw error
     return (data ?? []).map(mapLead)
   }
@@ -960,9 +974,18 @@ export class SupabaseStore implements ScoutStore {
 
     // When a client replies, mark lead as replied and create an outcome
     const leadStatus = type === 'reply' ? 'replied' : type === 'followup' ? 'followed_up' : 'contacted'
+    // Auto-restore on reply: a reply means the lead is active again and must
+    // return to the live dashboard automatically, even if it had been swept
+    // into archive (all 3 follow-ups used + 3+ quiet days). Harmless no-op
+    // for a lead that was never archived.
+    const updatePayload: Record<string, unknown> = { status: leadStatus }
+    if (type === 'reply') {
+      updatePayload.archived = false
+      updatePayload.archived_at = null
+    }
     const { data: updatedRows, error: updateError } = await this.client
       .from('leads')
-      .update({ status: leadStatus })
+      .update(updatePayload)
       .eq('id', leadId)
       .eq('owner_rep_id', this.rep.id)
       .neq('status', 'no')
@@ -1211,9 +1234,11 @@ export class SupabaseStore implements ScoutStore {
     if (insertError) throw insertError
 
     try {
+      // Auto-restore on reply: see markContacted's identical handling for
+      // why (a reply must bring an archived lead back to the live board).
       await this.client
         .from('leads')
-        .update({ status: 'replied' })
+        .update({ status: 'replied', archived: false, archived_at: null })
         .eq('id', leadId)
         .eq('owner_rep_id', this.rep.id)
     } catch {
@@ -1700,14 +1725,24 @@ export class SupabaseStore implements ScoutStore {
   }
 
   /**
-   * Contacted leads (never yet followed up) five working days past their
-   * last send with no reply. ONE follow-up ever: a lead already in
-   * 'followed_up' status is excluded here permanently, not just until its
-   * own window passes again — this is not a repeating reminder.
+   * Contacted leads five working days past their last send with no reply,
+   * eligible for their next follow-up. UP TO THREE follow-ups ever (raised
+   * from a 1-follow-up cap — approved product design change, see
+   * src/lib/relay/followup-engine.ts): a lead is excluded here only once
+   * followupCount reaches 3, not merely because status is 'followed_up'
+   * (that status just means "at least one follow-up sent", it is no longer
+   * a terminal state on its own).
    */
   private async fetchFollowupsDue(): Promise<FollowupDue[]> {
     const owned = await this.listOwnedLeads()
-    const contacted = owned.filter((l) => l.status === 'contacted')
+    // 'followed_up' must stay eligible here too, not just 'contacted' — with
+    // the 3-follow-up cap, a lead sits at status 'followed_up' after its
+    // 1st AND 2nd follow-up (markContacted sets this status on every
+    // followup send, not just the first) while still being eligible for
+    // more, up to followupCount >= 3 below. Excluding 'followed_up' here
+    // would silently cap every lead at exactly one follow-up regardless of
+    // the followupCount check.
+    const contacted = owned.filter((l) => l.status === 'contacted' || l.status === 'followed_up')
     if (contacted.length === 0) return []
 
     const leadIds = contacted.map((l) => l.id)
@@ -1748,7 +1783,7 @@ export class SupabaseStore implements ScoutStore {
       const daysSinceContact = businessDaysBetween(new Date(lastSent), now)
       if (daysSinceContact >= FOLLOWUP_DUE_BUSINESS_DAYS) {
         const followupCount = followupCountByLead.get(lead.id) ?? 0
-        if (followupCount >= 1) continue
+        if (followupCount >= 3) continue
         due.push({ lead, daysSinceContact })
       }
     }
@@ -4512,7 +4547,7 @@ export class SupabaseStore implements ScoutStore {
       .maybeSingle()
 
     if (existing.data) {
-      return this.mapCapturedProspect(existing.data as Row)
+      return { ...this.mapCapturedProspect(existing.data as Row), isNewCapture: false }
     }
 
     const { data, error } = await this.client
@@ -4537,7 +4572,53 @@ export class SupabaseStore implements ScoutStore {
       .select('*')
       .single()
     if (error) throw error
-    return this.mapCapturedProspect(data as Row)
+    return { ...this.mapCapturedProspect(data as Row), isNewCapture: true }
+  }
+
+  /**
+   * Award accountability credit for a genuine new prospect extraction/
+   * capture — activity_type 'prospect_extracted'. Mirrors markContacted's
+   * and markUpworkApplied's lookup-then-increment pattern exactly: find
+   * every ACTIVE daily_targets row for this rep+activity, and call
+   * record_activity_event for each. Non-fatal per-target and overall — this
+   * must never block prospect analysis.
+   *
+   * Callers MUST only invoke this for a genuine new capture (see
+   * CapturedProspect.isNewCapture), never for a reuse/cache hit — otherwise
+   * re-analyzing (or "Try Another Angle" on) the same paste would
+   * double-credit the same underlying action.
+   */
+  async recordProspectExtracted(revenueIdentityId?: string | null): Promise<void> {
+    try {
+      const { data: targets } = await this.client
+        .from('daily_targets')
+        .select('revenue_identity_id')
+        .eq('rep_id', this.rep.id)
+        .eq('activity_type', 'prospect_extracted')
+        .eq('active', true)
+      if (!targets || targets.length === 0) return
+
+      for (const t of targets) {
+        try {
+          await this.client.rpc('record_activity_event', {
+            p_rep_id: this.rep.id,
+            p_identity_id: t.revenue_identity_id as string,
+            p_activity_type: 'prospect_extracted',
+            p_org_id: this.orgId,
+          })
+        } catch {
+          // Non-fatal per-target
+        }
+      }
+
+      // Bridge: canonical progress for Accountability OS (day_closes) is
+      // deliberately NOT touched here — per the approved design, only
+      // System A (daily_targets/daily_accountability) is being fixed for
+      // extraction credit; System B (day_closes/record_canonical_progress)
+      // is untouched.
+    } catch {
+      // Accountability increment must never block prospect capture/analysis
+    }
   }
 
   async listCapturedProspects(): Promise<CapturedProspect[]> {

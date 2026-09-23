@@ -10,11 +10,27 @@ import type { Profile, ProofItem } from '@/lib/domain/types'
 interface UpworkJobActionsProps {
   jobId: string
   jobTitle: string
+  /** Stored score from computeUpworkScore (see upwork-rubric.ts), or null if not yet scored. */
+  jobScore: number | null
   profiles: Profile[]
   matchedProofs: ProofItem[]
 }
 
-export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: UpworkJobActionsProps) {
+// Relay does not recommend spending a Connect below this score — see
+// verdictFor() in upwork-rubric.ts (6-10 apply, 3-5 apply_if_connects, 0-2
+// skip). Mirrors the hard gate enforced server-side in
+// /api/upwork/jobs/[id]/apply/route.ts — this is a UI convenience only, not
+// the actual boundary.
+const MIN_SCORE_TO_APPLY = 6
+
+function markAppliedButtonClass(applied: boolean, belowGate: boolean): string {
+  if (applied) return 'bg-status-success/10 text-status-success'
+  if (belowGate) return 'bg-status-success/40 text-on-accent cursor-not-allowed opacity-60'
+  return 'bg-status-success text-on-accent hover:bg-status-success/90'
+}
+
+export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedProofs }: UpworkJobActionsProps) {
+  const belowGate = jobScore === null || jobScore < MIN_SCORE_TO_APPLY
   const [selectedProfileId, setSelectedProfileId] = useState(profiles[0]?.id ?? '')
   const [proposal, setProposal] = useState('')
   const [editing, setEditing] = useState(false)
@@ -87,6 +103,10 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
       setError('Generate a proposal before marking as applied.')
       return
     }
+    if (belowGate) {
+      setError(`Score below ${MIN_SCORE_TO_APPLY} — Relay does not recommend spending a Connect here.`)
+      return
+    }
     try {
       const res = await fetch(`/api/upwork/jobs/${jobId}/apply`, {
         method: 'POST',
@@ -101,7 +121,7 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to mark as applied.')
     }
-  }, [jobId, proposal])
+  }, [jobId, proposal, belowGate])
 
   return (
     <div className="space-y-4">
@@ -184,6 +204,12 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
             <p className="text-xs text-graphite italic">{selfCheckNote}</p>
           )}
 
+          {belowGate && !applied && (
+            <p className="text-xs text-status-danger">
+              Score below {MIN_SCORE_TO_APPLY} — Relay does not recommend spending a Connect here.
+            </p>
+          )}
+
           <div className="flex items-center gap-2">
             <button
               onClick={() => void copyProposal()}
@@ -200,19 +226,17 @@ export function UpworkJobActions({ jobId, jobTitle, profiles, matchedProofs }: U
             </button>
             <button
               onClick={() => void markApplied()}
-              disabled={applied}
-              className={cn(
-                'ml-auto inline-flex items-center gap-1.5 rounded px-4 py-2 text-sm font-medium transition-all',
-                applied
-                  ? 'bg-status-success/10 text-status-success'
-                  : 'bg-status-success text-on-accent hover:bg-status-success/90',
-              )}
+              disabled={applied || belowGate}
+              title={belowGate ? `Score below ${MIN_SCORE_TO_APPLY} — Relay does not recommend spending a Connect here.` : undefined}
+              className={cn('ml-auto inline-flex items-center gap-1.5 rounded px-4 py-2 text-sm font-medium transition-all', markAppliedButtonClass(applied, belowGate))}
             >
               {applied ? (
                 <>
                   <Check className="size-4" />
                   Marked applied
                 </>
+              ) : belowGate ? (
+                'Score too low to apply'
               ) : (
                 'Mark as applied'
               )}

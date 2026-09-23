@@ -27,7 +27,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function activityLabel(t: ActivityType): string {
-  const map: Record<ActivityType, string> = { dm: 'DMs', email: 'Emails', connection_request: 'Connections', followup: 'Follow-ups', application: 'Applications', proposal: 'Proposals', other: 'Other' }
+  const map: Record<ActivityType, string> = { dm: 'DMs', email: 'Emails', connection_request: 'Connections', followup: 'Follow-ups', application: 'Applications', proposal: 'Proposals', prospect_extracted: 'Prospects captured', other: 'Other' }
   return map[t] ?? t
 }
 

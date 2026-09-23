@@ -85,12 +85,59 @@ describe('evaluateFollowupGate', () => {
     expect(result.eligible).toBe(false)
   })
 
-  it('is never eligible once already used (one follow-up, ever) even outside cooldown', () => {
+  it('is never eligible once already used, when followupCount is not passed (legacy status-only callers)', () => {
+    // Backward-compat path: without a real followupCount, this falls back to
+    // the old status-based signal, which treats 'followed_up' as terminal.
     const result = evaluateFollowupGate({
       status: 'followed_up',
       messages: [
         msg({ type: 'dm', sentAt: new Date(T0 - FOLLOWUP_COOLDOWN_MS - 1000).toISOString() }),
         msg({ type: 'followup', sentAt: new Date(T0 - 1000).toISOString() }),
+      ],
+      now: T0,
+    })
+    expect(result.alreadyUsed).toBe(true)
+    expect(result.eligible).toBe(false)
+  })
+
+  // Approved product design change: the follow-up cap was raised from 1 to
+  // 3 (see followup-engine.ts). status 'followed_up' now just means "at
+  // least one follow-up sent" — it is no longer terminal on its own. A
+  // caller that has the real followupCount (ConversationState.followupCount)
+  // must pass it so a lead can reach its 2nd and 3rd follow-up.
+  it('is still eligible for a 2nd follow-up when followupCount is 1 and passed explicitly', () => {
+    const result = evaluateFollowupGate({
+      status: 'followed_up',
+      followupCount: 1,
+      messages: [
+        msg({ type: 'dm', sentAt: new Date(T0 - FOLLOWUP_COOLDOWN_MS - 1000).toISOString() }),
+        msg({ type: 'followup', sentAt: new Date(T0 - FOLLOWUP_COOLDOWN_MS - 1000).toISOString() }),
+      ],
+      now: T0,
+    })
+    expect(result.alreadyUsed).toBe(false)
+    expect(result.eligible).toBe(true)
+  })
+
+  it('is still eligible for a 3rd follow-up when followupCount is 2', () => {
+    const result = evaluateFollowupGate({
+      status: 'followed_up',
+      followupCount: 2,
+      messages: [
+        msg({ type: 'dm', sentAt: new Date(T0 - FOLLOWUP_COOLDOWN_MS - 1000).toISOString() }),
+      ],
+      now: T0,
+    })
+    expect(result.alreadyUsed).toBe(false)
+    expect(result.eligible).toBe(true)
+  })
+
+  it('is NOT eligible for a 4th follow-up once followupCount reaches 3', () => {
+    const result = evaluateFollowupGate({
+      status: 'followed_up',
+      followupCount: 3,
+      messages: [
+        msg({ type: 'dm', sentAt: new Date(T0 - FOLLOWUP_COOLDOWN_MS - 1000).toISOString() }),
       ],
       now: T0,
     })

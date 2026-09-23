@@ -13,21 +13,31 @@ const admin = {
 }
 
 describe('default daily target packs', () => {
+  // Rebalanced (approved product design): a lead can only ever receive 3
+  // follow-ups total across its life (see followup-engine.ts's cap raise
+  // 1 -> 3), so a flat 30/day followup target was never realistic — lowered
+  // to 3/day. Upwork proposals are now score-gated (>=6, higher effort) so
+  // their target is lower than applications. prospect_extracted is a new
+  // activity type (extraction now earns real accountability credit) added
+  // to both LinkedIn and Email packs, since /prospect capture happens on
+  // both channels.
   it('uses channel-specific default packs', () => {
     expect(defaultTargetsForChannel('linkedin')).toEqual([
       { activityType: 'connection_request', targetCount: 30 },
       { activityType: 'dm', targetCount: 30 },
-      { activityType: 'followup', targetCount: 30 },
+      { activityType: 'followup', targetCount: 3 },
+      { activityType: 'prospect_extracted', targetCount: 15 },
     ])
     expect(defaultTargetsForChannel('email')).toEqual([
-      { activityType: 'email', targetCount: 30 },
-      { activityType: 'followup', targetCount: 25 },
+      { activityType: 'email', targetCount: 25 },
+      { activityType: 'followup', targetCount: 3 },
+      { activityType: 'prospect_extracted', targetCount: 15 },
     ])
     expect(defaultTargetsForChannel('upwork')).toEqual([
       { activityType: 'application', targetCount: 10 },
-      { activityType: 'proposal', targetCount: 10 },
+      { activityType: 'proposal', targetCount: 5 },
     ])
-    expect(formatDefaultPack('email')).toContain('30 emails')
+    expect(formatDefaultPack('email')).toContain('25 emails')
     expect(formatDefaultPack('linkedin')).toContain('30 connections')
   })
 
@@ -35,7 +45,7 @@ describe('default daily target packs', () => {
     const missing = missingDefaultActivities('linkedin', [
       { activityType: 'dm' },
     ])
-    expect(missing.map((row) => row.activityType)).toEqual(['connection_request', 'followup'])
+    expect(missing.map((row) => row.activityType)).toEqual(['connection_request', 'followup', 'prospect_extracted'])
   })
 
   it('assigns the full pack when an identity is given to a rep', async () => {
@@ -44,8 +54,12 @@ describe('default daily target packs', () => {
     const targets = (await store.listDailyTargetsAdmin()).filter(
       (target) => target.repId === 'rep-ahmed' && target.revenueIdentityId === 'ri-demo-linkedin',
     )
-    expect(targets.map((target) => target.activityType).sort()).toEqual(['connection_request', 'dm', 'followup'])
-    expect(targets.every((target) => target.targetCount === 30)).toBe(true)
+    expect(targets.map((target) => target.activityType).sort()).toEqual(['connection_request', 'dm', 'followup', 'prospect_extracted'])
+    const byType = Object.fromEntries(targets.map((t) => [t.activityType, t.targetCount]))
+    expect(byType.connection_request).toBe(30)
+    expect(byType.dm).toBe(30)
+    expect(byType.followup).toBe(3)
+    expect(byType.prospect_extracted).toBe(15)
   })
 
   it('does not overwrite a customized count on re-assign', async () => {
@@ -64,7 +78,7 @@ describe('default daily target packs', () => {
     const followup = (await store.listDailyTargetsAdmin()).find(
       (target) => target.repId === 'rep-hassan' && target.revenueIdentityId === 'ri-demo-linkedin' && target.activityType === 'followup',
     )
-    expect(followup?.targetCount).toBe(30)
+    expect(followup?.targetCount).toBe(3)
   })
 
   it('shows each person and missing pack coverage to admin', () => {
@@ -96,6 +110,8 @@ describe('default daily target packs', () => {
     expect(overview.people[0].repName).toBe('Ahmed')
     expect(overview.people[0].totalActionsPerDay).toBe(30)
     expect(overview.missingPacks).toBe(1)
-    expect(overview.people[0].lanes[0].missing.map((row) => row.activityType)).toEqual(['connection_request', 'followup'])
+    // prospect_extracted joins the missing list too — it's now part of
+    // LINKEDIN_PACK (extraction credit rebalance, part B).
+    expect(overview.people[0].lanes[0].missing.map((row) => row.activityType)).toEqual(['connection_request', 'followup', 'prospect_extracted'])
   })
 })

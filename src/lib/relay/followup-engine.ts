@@ -49,16 +49,18 @@ export function determineFollowup(context: FollowupContext): FollowupStrategy {
     }
   }
 
-  // Already followed up once = no more (the Relay rule)
-  if (followupCount >= 1 || lead.status === 'followed_up') {
+  // All 3 follow-ups already used = no more (the Relay rule, raised from 1
+  // to 3 per the approved product design — a lead can receive up to 3
+  // follow-ups total across its life, not just one).
+  if (followupCount >= 3) {
     return {
       shouldFollowUp: false,
-      reason: 'One follow-up already used. Relay does not send a second.',
+      reason: 'All 3 follow-ups already used. Relay does not send a fourth.',
       approach: 'none',
       tone: 'none',
       ctaApproach: 'none',
       valueAdd: null,
-      waitReason: 'Maximum one follow-up per lead.',
+      waitReason: 'Maximum three follow-ups per lead.',
     }
   }
 
@@ -102,7 +104,7 @@ export function determineFollowup(context: FollowupContext): FollowupStrategy {
 
   return {
     shouldFollowUp: true,
-    reason: `${daysSince} business days since last send. One follow-up allowed.`,
+    reason: `${daysSince} business days since last send. Follow-up ${followupCount + 1} of 3 allowed.`,
     approach: approach.approach,
     tone: approach.tone,
     ctaApproach: approach.ctaApproach,
@@ -171,7 +173,7 @@ export function buildFollowupPrompt(
   const parts: string[] = []
 
   parts.push(`## Follow-up Message`)
-  parts.push(`This is the ONE allowed follow-up (${strategy.reason})`)
+  parts.push(`This follow-up is allowed under the 3-per-lead cap (${strategy.reason})`)
   parts.push(``)
   parts.push(`### Approach: ${strategy.approach}`)
   parts.push(`### Tone: ${strategy.tone}`)

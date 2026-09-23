@@ -223,6 +223,7 @@ export default async function UpworkJobPage({
         <UpworkJobActions
           jobId={id}
           jobTitle={job.title}
+          jobScore={job.score}
           profiles={profiles}
           matchedProofs={[]}
         />
