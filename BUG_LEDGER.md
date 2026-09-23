@@ -146,11 +146,11 @@ Reported by the real team using the application. Baseline: `a301371` (see `RELAY
 | ID | Severity | Reported | Status | Notes |
 |----|----------|----------|--------|-------|
 | TEAM-001 | P0 | Today section not showing updates/progress | CONDITIONAL PASS (root-caused, fixed, integration-tested; browser/DB acceptance proof outstanding) | Real gap in Upwork accountability — see detail below. |
-| TEAM-002 | P0 | Same lead shows different scores internal vs external | Investigating | Likely overlaps REL-FUNC-005 (fixed) — auditing whether other consumers still diverge. |
-| TEAM-003 | P0 | Creating a draft pollutes timeline/accountability | Root-caused, fixed (real finding differs from literal report) | See TEAM-003 detail below. |
-| TEAM-004 | P0 | Prospect summary (HIGH/CONTACT NOW) disagrees with Detail (no evidence, score 0) | Investigating | Likely same class as REL-FUNC-004/005 surface-consistency work — verifying. |
-| TEAM-005 | P0 | Score changes across reanalysis (60→25→20) | Investigating | Overlaps input-hash reuse work (Phase 6) — migration not yet applied to live DB, flagged. |
-| TEAM-006 | P0 | Generate Lead 75+ returns nothing, UI goes blurry | Investigating | Client state / loading-overlay / error-boundary trace required. |
+| TEAM-002 | P0 | Same lead shows different scores internal vs external | **PASS** | Browser+DB acceptance matrix complete — see "TEAM-002/004/005 C02 acceptance-test failure" entry. |
+| TEAM-003 | P0 | Creating a draft pollutes timeline/accountability | **PASS** | Root-caused (real finding differs from literal report), fixed, and a SECOND real concurrency bug found+fixed via live E2E proof — see detail below. |
+| TEAM-004 | P0 | Prospect summary (HIGH/CONTACT NOW) disagrees with Detail (no evidence, score 0) | **PASS** | Same acceptance matrix as TEAM-002/005. |
+| TEAM-005 | P0 | Score changes across reanalysis (60→25→20) | **PASS** | Input-hash reuse (Phase 6), migration applied and verified live. |
+| TEAM-006 | P0 | Generate Lead 75+ returns nothing, UI goes blurry | CONDITIONAL PASS | `maxDuration` fix committed; live browser verification against a genuinely slow/high-value draft still outstanding. |
 | TEAM-007 | P1 | Follow-up / Reply sections do not open | Investigating | Full journey trace, not just click handler. |
 | TEAM-008 | P1 | 100% confidence shown alongside "Not Enough Info" contradiction | Investigating | Confidence vs qualification-eligibility semantics audit — not a numeric-equality fix. |
 | TEAM-009 | P2 | Feature request: visibility into saved/connected/DM-due leads | Investigating | Use canonical Lead + event/Next Action architecture, no new CRM subsystem. |
@@ -171,7 +171,19 @@ Client-side, the Send button is disabled while `sending` (covers same-tab double
 
 **Regression tests**: `tests/log-sent-idempotency.test.ts` (route-level: duplicate key is a no-op, different key is not treated as duplicate, missing key stays backward-compatible).
 
-**Verified**: unit/integration (3 new tests, full suite 867/876 passing, same 9 pre-existing unrelated failures). **Not yet verified**: live browser double-click / two-tab / real network-retry proof (needs a live app session), migration not applied to live DB.
+**Verified**: unit/integration (3 new tests, full suite 867/876 passing, same 9 pre-existing unrelated failures). Migration since applied and confirmed live (`messages.idempotency_key` exists, unique index active).
+
+**Live browser + DB proof completed — and found a SECOND real bug in the process**: wrote `e2e/log-sent-idempotency.spec.ts`, firing two genuinely concurrent (`Promise.all`, not sequenced) `POST /api/leads/[id]/contact` calls with the same idempotency key against a real lead. First run FAILED — one of the two requests 500'd with `{"error":"Failed to log send. ([object Object])"}`. Root cause: `markContacted`'s pre-check (`SELECT` by idempotency_key before `INSERT`) cannot see an in-flight, not-yet-committed insert from a truly simultaneous second request — exactly what a real double-click or network retry looks like, not a sequenced pair. Both requests passed the pre-check, both attempted the `INSERT`, and the loser hit the unique constraint (`messages_org_idempotency_key_idx`) with a raw, unhandled `23505` Postgres error — the exactly-once guarantee this whole fix exists for was genuinely broken under real concurrency, not just theoretically.
+
+**Also found and fixed while diagnosing**: the `[object Object]` in the error response — `safeErrorResponse`/`reportError` (`src/lib/errors.ts`) called `String(error)` on non-`Error` objects (Supabase/Postgrest errors are plain objects with a `.message` field, not `Error` instances), producing the literal useless string `[object Object]` instead of the real Postgres error text — made this bug materially harder to diagnose than it should have been. Added `describeError()`, which checks for a `.message` field before falling back to `String()`, used by both functions.
+
+**Fix**: `markContacted` now catches `code === '23505'` on the idempotency-key insert specifically, re-queries for the row the concurrent request just committed, and returns it exactly like the pre-check path does (`idempotent: true`, the winner's `messageId`) — losing this race is the CORRECT outcome, not an error.
+
+Re-ran `e2e/log-sent-idempotency.spec.ts` after the fix: **passes** — two concurrent requests now correctly produce exactly one `messages` row.
+
+`tests/mark-contacted-race.test.ts` (new, 1 test) — extended `tests/helpers/fake-supabase.ts` with minimal, targeted unique-constraint simulation for `messages.idempotency_key` (not a general constraint system) so this class of bug has direct unit coverage too, not only the E2E proof.
+
+**Status: TEAM-003 now PASS.** Full suite 1090/1090 passing, `tsc --noEmit` and `npm run build` clean.
 
 **Separate finding, not fixed (flagging, not silently dropping)**: `POST /api/accountability/event` (`src/app/api/accountability/event/route.ts`) is a second, entirely separate accountability-write mechanism with its own upsert-into-`daily_accountability` logic and its own weak idempotency (unconditional `completed_count + 1` on every call, no dedup at all). Grepped the whole app — **it is never called from anywhere**, i.e. dead code. Its own comment claims "Reps cannot fake this — it's triggered by actual system events," which nothing in the code actually enforces if it WERE wired up. Recommend either wiring it up properly (with the same idempotency-key discipline as the fix above) if it's meant to be used, or removing it — leaving working-but-unused, weakly-guarded, misleadingly-commented code in the codebase is itself a risk for a future engineer who wires it up trusting the comment. Not removed/fixed in this pass since it has zero current callers and isn't part of any TEAM-reported symptom — flagging for a product decision on which system is canonical going forward (this overlaps TEAM-002's "one canonical owner" mandate).
 

@@ -246,6 +246,28 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: Error | null; 
     }
 
     if (action === 'insert') {
+      // Minimal, targeted unique-constraint simulation — just the one real
+      // index this fake needs to exercise (messages_org_idempotency_key_idx,
+      // scoped by organization_id+idempotency_key, NULL-excluded), not a
+      // general constraint system. Lets tests reproduce the true-concurrency
+      // race (two inserts with the same key) that markContacted()'s 23505
+      // handling exists for.
+      if (this.table === 'messages') {
+        for (const row of this.payloadRows) {
+          if (row.idempotency_key != null) {
+            const clash = table.some(
+              (existing) => existing.organization_id === row.organization_id && existing.idempotency_key === row.idempotency_key,
+            )
+            if (clash) {
+              const conflictError = Object.assign(
+                new Error('duplicate key value violates unique constraint "messages_org_idempotency_key_idx"'),
+                { code: '23505' },
+              )
+              return { data: null, error: conflictError }
+            }
+          }
+        }
+      }
       const inserted = this.payloadRows.map((row) => {
         const next = computeGeneratedColumns(this.table, clone(row))
         if (!next.id) next.id = this.assignId(this.table)

@@ -927,6 +927,27 @@ export class SupabaseStore implements ScoutStore {
       inserted = retry.data
       insertError = retry.error
     }
+    if (insertError && idempotencyKey && (insertError as { code?: string }).code === '23505') {
+      // TRUE concurrent duplicate: the pre-check above (SELECT before
+      // INSERT) cannot see an in-flight, not-yet-committed insert from a
+      // simultaneous request — that's exactly what a real double-click or
+      // network-level retry looks like, not a sequenced pair. The unique
+      // index (messages_org_idempotency_key_idx) is what actually
+      // guarantees exactly-once; losing this race is the CORRECT outcome,
+      // not an error — fetch the row the other request just committed and
+      // return it exactly like the pre-check path does, rather than
+      // surfacing a raw constraint-violation failure to the caller.
+      const { data: winner } = await this.client
+        .from('messages')
+        .select('id')
+        .eq('organization_id', this.orgId)
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle()
+      if (winner) {
+        const todaySendsNow = await this.countTodaysSends(type)
+        return { allowed: true, todaySends: todaySendsNow, limit: messageTypeLimit(type), messageId: winner.id as string, idempotent: true }
+      }
+    }
     if (insertError) throw insertError
     if (!inserted) throw new Error('Failed to log the send.')
 

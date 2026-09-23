@@ -12,10 +12,30 @@ export interface ErrorContext {
   [key: string]: unknown
 }
 
+/**
+ * Extracts a human-readable message from any thrown value. Error instances
+ * are the common case, but Supabase/Postgrest errors are plain objects with
+ * a `.message` field, not Error instances — String(error) on those (or on
+ * any other plain object) produces the useless literal "[object Object]",
+ * which is what actually happened here before this fix (see the messages
+ * idempotency race-condition investigation, TEAM-003).
+ */
+function describeError(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as { message: unknown }).message === 'string') {
+    return (error as { message: string }).message
+  }
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
 export function reportError(error: unknown, context: ErrorContext = {}): void {
   const payload = {
     ts: new Date().toISOString(),
-    message: error instanceof Error ? error.message : String(error),
+    message: describeError(error),
     stack: error instanceof Error ? error.stack : undefined,
     ...context,
   }
@@ -55,8 +75,8 @@ export function safeErrorResponse(
 
   // In development or for 500s, include the actual error message for debugging
   const isDev = process.env.NODE_ENV === 'development'
-  const finalMessage = isDev || (status === 500 && error instanceof Error)
-    ? `${fallbackMessage} (${error instanceof Error ? error.message : String(error)})`
+  const finalMessage = isDev || status === 500
+    ? `${fallbackMessage} (${describeError(error)})`
     : safeMessage
 
   reportError(error, { route, status })
