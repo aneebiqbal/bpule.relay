@@ -60,7 +60,8 @@ export async function POST(request: Request) {
     const summary = {
       READY: prepared.filter((p) => p.status === 'READY').length,
       RESEARCH_REQUIRED: prepared.filter((p) => p.status === 'RESEARCH_REQUIRED').length,
-      CONTACT_NOT_FOUND: prepared.filter((p) => p.status === 'CONTACT_NOT_FOUND').length,
+      CONTACT_NOT_FOUND: prepared.filter((p) => p.status === 'CONTACT_NOT_FOUND' || p.status === 'NEEDS_VERIFIED_CONTACT').length,
+      NEEDS_VERIFIED_CONTACT: prepared.filter((p) => p.status === 'NEEDS_VERIFIED_CONTACT').length,
       SKIP: prepared.filter((p) => p.status === 'SKIP').length,
       FAILED: prepared.filter((p) => p.status === 'FAILED').length,
     }
