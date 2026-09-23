@@ -92,6 +92,19 @@ const QUALIFICATION_META: Record<string, { label: string; color: string; bg: str
   skip: { label: 'Probably skip', color: 'text-graphite', bg: 'bg-stone/10' },
 }
 
+function prospectCanBeSaved(
+  result: AnalysisState | null,
+): result is AnalysisState & { extracted: ExtractedLead } {
+  if (!result?.extracted) return false
+  if (result.qualification?.inputHardFail) return false
+  if (result.qualification?.qualificationEligibility) return true
+  // Canonical score is the authority once a real analysis exists. The
+  // no-pitch early return used to omit it, so a scored prospect rendered
+  // "Lead not eligible" and the button did nothing.
+  const qualification = result.score?.qualification
+  return qualification === 'strong' || qualification === 'worth_pursuing' || qualification === 'maybe'
+}
+
 function pasteGuard(raw: string): string | null {
   if (!raw.trim()) return 'Paste some profile text first.'
   if (/^https?:\/\/\S+\s*$/i.test(raw.trim())) {
@@ -245,8 +258,7 @@ export default function ProspectCheckPage() {
 
   async function saveAsLead(allowPotentialDuplicate = false) {
     if (saving || saveInFlightRef.current) return
-    if (!result?.extracted) return
-    if (!result.qualification.qualificationEligibility) {
+    if (!prospectCanBeSaved(result)) {
       setError('Lead was not created: not enough context to save a reliable lead.')
       return
     }
@@ -345,7 +357,7 @@ export default function ProspectCheckPage() {
       ? verdictDisplay?.headline ?? recMeta?.label ?? 'Awaiting analysis'
       : 'Not enough information'
     : 'Awaiting analysis'
-  const canSaveLead = Boolean(result?.extracted && result.qualification.qualificationEligibility)
+  const canSaveLead = prospectCanBeSaved(result)
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -692,7 +704,7 @@ export default function ProspectCheckPage() {
                   <p className="font-medium text-ink">
                     Not enough verified context to create a reliable lead.
                   </p>
-                  {result.qualification.missingCritical.length > 0 ? (
+                  {(result.qualification?.missingCritical.length ?? 0) > 0 ? (
                     <p className="mt-0.5">
                       Missing: {result.qualification.missingCritical.join(', ')}.
                     </p>

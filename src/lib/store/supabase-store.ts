@@ -173,6 +173,25 @@ function isOptionalSearchError(err: unknown): boolean {
 const LEAD_COLUMNS =
   'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, intelligence_input_hash, connection_accepted_at, locked_until, locked_reason, archived, archived_at, created_at'
 
+/**
+ * Read-back used when a newer optional column (intelligence_input_hash,
+ * connection lock, archival) is not on this database yet. Must stay free of
+ * those columns. Extraction fields from migration 0015 stay here on purpose:
+ * if THOSE are missing, lead creation should still fail loudly.
+ */
+const LEAD_COLUMNS_STABLE =
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, created_at'
+
+function isMissingColumnError(err: unknown): boolean {
+  const code = (err as { code?: string }).code ?? ''
+  const message = (err as { message?: string }).message ?? ''
+  return (
+    code === '42703' ||
+    code === 'PGRST204' ||
+    /column .+ does not exist|schema cache/i.test(message)
+  )
+}
+
 const LEAD_LIST_COLUMNS =
   'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, connection_accepted_at, locked_until, locked_reason, archived, archived_at, created_at'
 
@@ -559,13 +578,20 @@ export class SupabaseStore implements ScoutStore {
       extraction_completeness: input.extractionCompleteness ?? null,
     }
 
-    let row: { data: Row | null; error: unknown } = await this.client
+    // Return only `id` from the insert. PostgREST runs insert().select(cols)
+    // as one INSERT ... RETURNING statement: if any selected column is
+    // missing (intelligence_input_hash, locked_until, archived, …), Postgres
+    // rolls the insert back and the lead is never saved. The previous
+    // fallback then looked the row up by company and found nothing, so
+    // Create lead looked like a dead button. Optional columns are read in a
+    // second query and dropped if this database does not have them yet.
+    const inserted = await this.client
       .from('leads')
       .insert(insertRow)
-      .select(LEAD_COLUMNS)
+      .select('id')
       .single()
-    if (row.error) {
-      const code = (row.error as { code?: string }).code
+    if (inserted.error) {
+      const code = (inserted.error as { code?: string }).code
       if (code === '23505') {
         const existing = (await this.fetchLeadsAll()).find(
           (lead) => lead.companyKey === key && lead.status !== 'dead',
@@ -578,45 +604,40 @@ export class SupabaseStore implements ScoutStore {
           duplicateKind: 'hard',
         }
       }
+      throw inserted.error
+    }
 
-      // 42703 (undefined column) here means the SELECT that reads back the
-      // just-inserted row references a column this environment's DB doesn't
-      // have yet — the INSERT itself (insertRow, above) never references
-      // intelligence_input_hash, so a genuinely-optional, additive migration
-      // (e.g. 20260926000000_intelligence_input_hash.sql) being unapplied
-      // must never throw away an otherwise-successful save. Retry the
-      // read-back with only the extraction-critical columns (title/location/
-      // role/region/confidence): if THOSE are also missing, migration 0015
-      // truly is absent and we still fail loudly rather than silently drop
-      // them; if only a newer optional column is missing, the lead is saved.
-      if (code === '42703') {
-        const fallback = await this.client
-          .from('leads')
-          .select(
-            'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, created_at',
-          )
-          .eq('organization_id', this.orgId)
-          .eq('company_key', key)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single()
-        if (fallback.error) {
-          const fallbackCode = (fallback.error as { code?: string }).code
-          if (fallbackCode === '42703') {
-            throw new Error(
-              'This environment is missing the extraction-fields migration (0015_extraction_schema_and_metrics.sql). ' +
-                'Apply it before saving leads, so title, location, role, region, and confidence are never silently dropped.',
-            )
-          }
-          const fbErr = fallback.error as { message?: string; code?: string; details?: string; hint?: string }
+    const insertedId = (inserted.data as { id?: string } | null)?.id
+    if (!insertedId) {
+      throw new Error('Lead insert did not return an id.')
+    }
+
+    let row: { data: Row | null; error: unknown } = await this.client
+      .from('leads')
+      .select(LEAD_COLUMNS)
+      .eq('id', insertedId)
+      .single()
+    if (row.error && isMissingColumnError(row.error)) {
+      const fallback = await this.client
+        .from('leads')
+        .select(LEAD_COLUMNS_STABLE)
+        .eq('id', insertedId)
+        .single()
+      if (fallback.error) {
+        if (isMissingColumnError(fallback.error)) {
           throw new Error(
-            `Lead read-back failed after insert: ${fbErr.message ?? 'unknown error'} (code ${fbErr.code ?? 'n/a'})`,
+            'This environment is missing the extraction-fields migration (0015_extraction_schema_and_metrics.sql). ' +
+              'Apply it before saving leads, so title, location, role, region, and confidence are never silently dropped.',
           )
         }
-        row = fallback as typeof row
-      } else {
-        throw row.error
+        const fbErr = fallback.error as { message?: string; code?: string }
+        throw new Error(
+          `Lead read-back failed after insert: ${fbErr.message ?? 'unknown error'} (code ${fbErr.code ?? 'n/a'})`,
+        )
       }
+      row = fallback as typeof row
+    } else if (row.error) {
+      throw row.error
     }
     const lead = mapLead(row.data as Row)
 

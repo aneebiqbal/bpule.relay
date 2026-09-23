@@ -333,7 +333,11 @@ export async function POST(request: Request) {
         draftFailed: false,
         demoMode: !hasProvider(),
         alternativeSenders: [],
-        qualification: evaluateProspectQualification({ rawText, extracted }),
+        qualification: evaluateProspectQualification({
+          rawText,
+          extracted,
+          canonicalQualification: canonical.qualification,
+        }),
         gateNotes: canonicalResult.gateNotes,
         repairAttempted: canonicalResult.repairAttempted,
         repairImproved: canonicalResult.repairImproved,
