@@ -2,10 +2,11 @@
 
 import { use } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, CheckCircle2, AlertTriangle, Target, Users } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, Target } from 'lucide-react'
 import { cn } from 'cn'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatusBadge } from '@/components/ui/status-badge'
+import { activityLabel } from '@/lib/admin/team-live'
 
 interface DrillDownData {
   rep: { id: string; name: string; role: string }
@@ -31,6 +32,13 @@ interface DrillDownData {
   today: string
   isManager: boolean
   managedTeamIds: string[]
+  openLeads?: Array<{
+    id: string
+    company: string
+    contactName: string | null
+    statusLabel: string
+    score: number | null
+  }>
   dayCloses?: Array<{
     identityId: string
     identityName: string
@@ -48,6 +56,31 @@ interface DrillDownData {
   }>
 }
 
+function OpenWork({ leads }: { readonly leads: NonNullable<DrillDownData['openLeads']> }) {
+  if (leads.length === 0) {
+    return <p className="text-[13px] text-graphite">No open leads in the queue.</p>
+  }
+  return (
+    <div className="overflow-hidden rounded-lg border border-line bg-bone-raised">
+      <ul className="divide-y divide-line/60">
+        {leads.map((lead) => (
+          <li key={lead.id}>
+            <Link href={`/leads/${lead.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-bone">
+              <span className="min-w-0 truncate text-[13px] text-ink">
+                {lead.company}
+                {lead.contactName ? <span className="text-graphite"> · {lead.contactName}</span> : null}
+              </span>
+              <span className="shrink-0 text-[11px] text-graphite">
+                {lead.statusLabel}{lead.score !== null ? ` · ${lead.score}` : ''}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 export function ManagerDrillDown({ dataPromise }: { dataPromise: Promise<DrillDownData> }) {
   const data = use(dataPromise)
 
@@ -60,13 +93,13 @@ export function ManagerDrillDown({ dataPromise }: { dataPromise: Promise<DrillDo
     <div className="space-y-6 pb-8">
       <div className="flex items-center gap-3">
         <Link
-          href="/dashboard"
+          href="/team"
           className="rounded-md p-1.5 text-graphite transition-colors hover:bg-bone-raised hover:text-ink"
         >
           <ArrowLeft className="size-4" />
         </Link>
         <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">
-          Manager View
+          Team
         </p>
       </div>
 
@@ -115,6 +148,13 @@ export function ManagerDrillDown({ dataPromise }: { dataPromise: Promise<DrillDo
 
       <section className="space-y-3">
         <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-ststone">
+          Working on
+        </p>
+        <OpenWork leads={data.openLeads ?? []} />
+      </section>
+
+      <section className="space-y-3">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-ststone">
           Responsibilities
         </p>
         {data.identities.length === 0 ? (
@@ -148,7 +188,7 @@ export function ManagerDrillDown({ dataPromise }: { dataPromise: Promise<DrillDo
                     <div className="mt-2 space-y-1">
                       {identityTargets.map((t) => (
                         <div key={t.targetId} className="flex items-center gap-2">
-                          <span className="text-[11px] text-graphite">{t.activityType}</span>
+                          <span className="text-[11px] text-graphite">{activityLabel(t.activityType)}</span>
                           <div className="h-1 flex-1 overflow-hidden rounded-full bg-line/60">
                             <div
                               className={cn(

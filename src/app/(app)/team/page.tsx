@@ -3,9 +3,9 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
-import { getAuthContext } from '@/lib/auth/organization'
-import { isProductAdmin } from '@/lib/auth/admin-page'
-import { loadOrgCommandSnapshot } from '@/lib/admin/org-command-snapshot'
+import { can, getAuthContext } from '@/lib/auth/organization'
+import { loadTeamLive } from '@/lib/admin/load-team-live'
+import { filterTeamLive, type TeamLivePayload } from '@/lib/admin/team-live'
 import { REPLY_RATE_TARGET, READ_TO_CHECK_TARGET } from '@/lib/ai/config'
 import { TeamLiveBoard } from '@/components/admin/team-live-board'
 import {
@@ -43,13 +43,19 @@ export default async function TeamPage() {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
   const authCtx = await getAuthContext()
-  const adminView = isProductAdmin(user, authCtx)
+  const canSeeTeam = Boolean(authCtx && can(authCtx, 'VIEW_TEAM_ANALYTICS'))
+
+  const livePromise: Promise<TeamLivePayload | null> = authCtx
+    ? loadTeamLive(authCtx.orgId)
+        .then((full) => filterTeamLive(full, { repId: authCtx.repId, canSeeTeam }))
+        .catch(() => null)
+    : Promise.resolve(null)
 
   const store = await createScoutStore()
-  const snapshot = adminView ? await loadOrgCommandSnapshot() : null
-  const [statsRes, extractionRes] = await Promise.allSettled([
-    store.getTeamStats(),
-    store.getExtractionMetrics(),
+  const [statsRes, extractionRes, live] = await Promise.all([
+    store.getTeamStats().then((value) => ({ status: 'fulfilled' as const, value })).catch(() => ({ status: 'rejected' as const })),
+    store.getExtractionMetrics().then((value) => ({ status: 'fulfilled' as const, value })).catch(() => ({ status: 'rejected' as const })),
+    livePromise,
   ])
   const stats =
     statsRes.status === 'fulfilled'
@@ -76,65 +82,20 @@ export default async function TeamPage() {
     <div className="space-y-5">
 
       <header className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Team / Performance Console</p>
-        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">Measure execution quality, not activity theater.</h1>
-        <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">
-          Relay tracks reply quality, read-to-check conversion, and extraction reliability across reps.
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Team</p>
+        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+          {canSeeTeam ? 'What each person is working on.' : 'What you are working on.'}
+        </h1>
+        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+          Identity, today&apos;s goals, the open leads in the queue, and what moved since this morning. Open a person for the full day.
         </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-4">
-          <HeroStat label="Reply target" value={pct(REPLY_RATE_TARGET)} />
-          <HeroStat label="Read-to-check target" value={pct(READ_TO_CHECK_TARGET)} />
-          <HeroStat label="Extraction failure" value={pct(extraction.failureRate)} />
-          <HeroStat label="Model spend (7d)" value={`$${extraction.totalCostUsd.toFixed(2)}`} />
-        </div>
       </header>
 
-      {adminView && (
-        <section className="space-y-2">
-          <Suspense fallback={<div className="h-28 animate-pulse rounded-xl border border-line bg-bone-raised" />}>
-            <TeamLiveBoard />
-          </Suspense>
-        </section>
-      )}
-
-      {snapshot && snapshot.people.length > 0 && (
-        <section className="rounded-2xl border border-line/60 bg-bone-raised p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-label">Everyone&apos;s work</h2>
-            <span className="text-xs text-graphite">{snapshot.totals.peopleWithWork} people with recorded work</span>
-          </div>
-          <div className="mt-3 overflow-x-auto rounded border border-line">
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr className="border-b border-line bg-bone text-left text-mono-medium text-[10px] uppercase tracking-wide text-stone">
-                  <th className="px-3 py-2">Person</th>
-                  <th className="px-3 py-2">Identities</th>
-                  <th className="px-3 py-2">Profiles</th>
-                  <th className="px-3 py-2">Leads</th>
-                  <th className="px-3 py-2">Extractions</th>
-                  <th className="px-3 py-2">Today</th>
-                </tr>
-              </thead>
-              <tbody>
-                {snapshot.people.map((person) => (
-                  <tr key={person.repId} className="border-b border-line/60 last:border-b-0">
-                    <td className="px-3 py-2 font-medium text-ink">
-                      <Link href={`/team/${person.repId}`} className="hover:underline">{person.repName}</Link>
-                    </td>
-                    <td className="px-3 py-2 text-graphite">{person.identityNames.join(', ') || '—'}</td>
-                    <td className="px-3 py-2 text-graphite">{person.profiles}</td>
-                    <td className="px-3 py-2 text-graphite">{person.leads}</td>
-                    <td className="px-3 py-2 text-graphite">{person.extractions}</td>
-                    <td className="px-3 py-2 text-graphite">
-                      {person.totalTarget > 0 ? `${person.totalCompleted}/${person.totalTarget}` : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+      <section>
+        <Suspense fallback={<div className="h-40 animate-pulse rounded-xl border border-line bg-bone-raised" />}>
+          <TeamLiveBoard initial={live} />
+        </Suspense>
+      </section>
 
       {/* ═══ PRIMARY METRICS ═══ */}
       <div className="reveal-up stagger-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -172,8 +133,9 @@ export default async function TeamPage() {
         />
       </div>
 
-      {/* ═══ LATENCY + MODEL MIX ═══ */}
-      <div className="reveal-up stagger-2 grid gap-3 lg:grid-cols-5">
+      <details className="reveal-up stagger-2 rounded-2xl border border-line/60 bg-bone-raised px-5 py-4">
+        <summary className="cursor-pointer text-label text-graphite">System health · latency and model mix</summary>
+        <div className="mt-4 grid gap-3 lg:grid-cols-5">
         {/* Latency — 2 cols */}
         <div className="lg:col-span-2 rounded-2xl border border-line/60 bg-bone-raised p-5">
           <div className="flex items-center gap-2 text-graphite">
@@ -254,12 +216,13 @@ export default async function TeamPage() {
             </p>
           )}
         </div>
-      </div>
+        </div>
+      </details>
 
       {/* ═══ PER REP ═══ */}
       <section className="reveal-up stagger-3 space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-label">Per rep</h2>
+          <h2 className="text-label">Reply quality</h2>
           <Link href="/team/eval" className="inline-flex items-center gap-1.5 text-xs font-medium text-orange transition-colors hover:text-orange/80">
             Eval harness
             <TrendingUp className="size-3" />
@@ -279,7 +242,7 @@ export default async function TeamPage() {
                   className="slide-in-right grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-3.5 transition-colors hover:bg-bone/20"
                   style={{ animationDelay: `${0.04 + i * 0.03}s` }}>
                   <div>
-                    <div className="text-sm font-medium text-ink">{row.rep.name}</div>
+                    <Link href={`/team/${row.rep.id}`} className="text-sm font-medium text-ink hover:underline">{row.rep.name}</Link>
                     <div className="text-xs text-graphite">{row.rep.role}</div>
                   </div>
                   <RateCell rate={row.replyRate} target={REPLY_RATE_TARGET} className="w-16" />
@@ -337,15 +300,6 @@ export default async function TeamPage() {
         <span className="text-line">·</span>
         <span>Failure rate &le; 8%</span>
       </div>
-    </div>
-  )
-}
-
-function HeroStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
-      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
-      <p className="mt-1 text-[16px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }

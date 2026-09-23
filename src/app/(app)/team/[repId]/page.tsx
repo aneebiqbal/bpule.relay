@@ -4,8 +4,8 @@ import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
 import { createServerSupabase } from '@/lib/supabase/server'
-import { ManagerDrillDown } from '@/components/rep/manager-drilldown'
-import { ManagerDrillDownSkeleton } from '@/components/rep/manager-drilldown'
+import { ManagerDrillDown, ManagerDrillDownSkeleton } from '@/components/rep/manager-drilldown'
+import { leadScore, leadStatusLabel } from '@/lib/admin/team-live'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,18 +53,27 @@ async function loadDrillDownData(repId: string) {
 
   if (!repInfo) redirect('/dashboard')
 
-  const targets = await store.getRepTodayAccountability(repId)
-  const identities = await store.listMyAssignedIdentities()
+  const [targets, assignments, supabase] = await Promise.all([
+    store.getRepTodayAccountability(repId),
+    store.getRepAssignments(repId),
+    createServerSupabase(),
+  ])
 
-  const assignments = await store.getRepAssignments(repId)
-  const supabase = await createServerSupabase()
-
-  // Load Accountability OS day closes for this rep
-  const { data: dayCloses } = await supabase
-    .from('day_closes')
-    .select('*')
-    .eq('person_id', repId)
-    .eq('date', today)
+  const [{ data: openLeadRows }, { data: dayCloses }] = await Promise.all([
+    supabase
+      .from('leads')
+      .select('id, company, contact_name, status, canonical_score, score')
+      .eq('organization_id', authCtx.orgId)
+      .eq('owner_rep_id', repId)
+      .in('status', ['new', 'contacted', 'followed_up', 'replied'])
+      .order('created_at', { ascending: false })
+      .limit(12),
+    supabase
+      .from('day_closes')
+      .select('*')
+      .eq('person_id', repId)
+      .eq('date', today),
+  ])
 
   // Load contracts for day closes
   const contractIds = [...new Set((dayCloses ?? []).map((dc: any) => dc.contract_id).filter(Boolean))]
@@ -100,6 +109,13 @@ async function loadDrillDownData(repId: string) {
     today,
     isManager: authCtx.isManager,
     managedTeamIds: authCtx.managedTeamIds,
+    openLeads: (openLeadRows ?? []).map((lead) => ({
+      id: lead.id as string,
+      company: (lead.company as string | null)?.trim() || 'Untitled company',
+      contactName: (lead.contact_name as string | null)?.trim() || null,
+      statusLabel: leadStatusLabel(lead.status as string | null),
+      score: leadScore({ canonical_score: lead.canonical_score as number | null, score: lead.score as number | null }),
+    })),
     // Accountability OS data
     dayCloses: (dayCloses ?? []).map((dc: any) => {
       const contract = (contracts ?? []).find((c: any) => c.id === dc.contract_id)
