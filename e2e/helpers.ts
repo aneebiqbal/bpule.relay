@@ -54,11 +54,11 @@ async function loginWith(page: Page, email: string): Promise<void> {
     // rather than assuming hydration = idle network).
     await page.waitForLoadState('networkidle')
     const emailInput = page
-      .locator('input[type="email"], input[name="email"], input[placeholder*="email" i]')
+      .locator('#login-email, input[type="email"], input[name="email"], input[placeholder*="email" i]')
       .first()
-    const passInput = page.locator('input[type="password"], input[name="password"]').first()
+    const passInput = page.locator('#login-password, input[type="password"], input[name="password"]').first()
     const submitBtn = page
-      .locator('button:has-text("Sign in"), button:has-text("Log in"), button[type="submit"]')
+      .locator('button:has-text("Sign in with password"), button:has-text("Sign in"), button:has-text("Log in"), button[type="submit"]')
       .first()
 
     await emailInput.click()
@@ -75,6 +75,18 @@ async function loginWith(page: Page, email: string): Promise<void> {
       await emailInput.fill(email)
       await passInput.fill('')
       await passInput.fill(PASSWORD)
+      await emailInput.evaluate((el, value) => {
+        const input = el as HTMLInputElement
+        input.value = String(value)
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      }, email)
+      await passInput.evaluate((el, value) => {
+        const input = el as HTMLInputElement
+        input.value = String(value)
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      }, PASSWORD)
       await emailInput.blur()
       await passInput.blur()
     }

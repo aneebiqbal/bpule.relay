@@ -82,12 +82,11 @@ test.describe('NAVIGATION - Deep Links, History, Routing', () => {
     const routes = ['/dashboard', '/leads', '/relay', '/studio', '/prospect', '/dashboard']
     
     for (const route of routes) {
-      await page.goto(route)
+      await page.goto(route, { waitUntil: 'domcontentloaded' })
       // Don't wait for full load - navigate rapidly
     }
     
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(2000)
+    await expect(page.locator('main').first()).toBeVisible({ timeout: 20_000 })
     
     // Page should be stable
     const body = await page.textContent('body')
