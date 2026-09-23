@@ -57,6 +57,22 @@ async function readTodaySends(page: Page): Promise<number> {
   return Number(data.todaySends ?? 0)
 }
 
+const createdTestIdentityIds: string[] = []
+
+async function deleteCreatedTestIdentities(): Promise<void> {
+  const url = envValue('NEXT_PUBLIC_SUPABASE_URL')
+  const serviceRoleKey = envValue('SUPABASE_SERVICE_ROLE_KEY')
+  if (!url || !serviceRoleKey || createdTestIdentityIds.length === 0) return
+  await Promise.all(createdTestIdentityIds.map((id) => fetch(`${url}/rest/v1/revenue_identities?id=eq.${id}`, {
+    method: 'DELETE',
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      Prefer: 'return=minimal',
+    },
+  })))
+}
+
 async function setupEmailIdentity(page: Page) {
   const workspaceRes = await page.context().request.get('/api/me/workspace')
   expect(workspaceRes.ok()).toBe(true)
@@ -110,6 +126,7 @@ async function setupEmailIdentity(page: Page) {
     expect(createRes.status(), JSON.stringify(createData)).toBe(201)
     const createdId = createData.identity?.id as string | undefined
     expect(createdId).toBeTruthy()
+    createdTestIdentityIds.push(createdId as string)
 
     const assignRes = await page.context().request.post('/api/admin/assignments', {
       data: {
@@ -310,6 +327,9 @@ async function createLeadWithContact(page: Page, identityId: string, repId: stri
 test.describe('Email Outreach V1 browser acceptance', () => {
   test.skip(process.env.RUN_EMAIL_ACCEPTANCE !== '1', 'Manual gate: requires migrated email tables + configured runtime environment.')
   test.setTimeout(420_000)
+  test.afterAll(async () => {
+    await deleteCreatedTestIdentities()
+  })
 
   test('lead flow + bulk prepare guardrails', async ({ page }) => {
     await bootstrapDemoProfile('http://localhost:3000').catch(() => {})
