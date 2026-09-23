@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Shield, ExternalLink, CheckCircle2, AlertTriangle, ArrowRight, Bell } from 'lucide-react'
 import { cn } from 'cn'
-import type { RepTodayView, TargetProgressView, ActivityType } from '@/lib/domain/types'
+import type { TargetProgressView, ActivityType } from '@/lib/domain/types'
+import { normalizeAssignedProfiles, type AssignedProfilesModel } from '@/lib/relay/assigned-profiles'
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
@@ -32,14 +33,14 @@ function activityLabel(t: ActivityType): string {
 }
 
 export function AssignedProfilesView() {
-  const [data, setData] = useState<RepTodayView | null>(null)
+  const [data, setData] = useState<AssignedProfilesModel | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/rep/today')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Failed to load'))))
-      .then((d) => setData(d))
+      .then((d) => setData(normalizeAssignedProfiles(d)))
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed'))
       .finally(() => setLoading(false))
   }, [])
@@ -52,7 +53,7 @@ export function AssignedProfilesView() {
     ? Math.min(100, Math.round((data.totalCompleted / data.totalTarget) * 100))
     : 100
   const urgentTargets = data.assignedIdentities
-    .flatMap((ai) => ai.targets.map((target) => ({ identityName: ai.identity.identityName, target })))
+    .flatMap((ai) => (ai.targets ?? []).map((target) => ({ identityName: ai.identity.identityName, target })))
     .filter((row) => row.target.status === 'at_risk' || row.target.status === 'missed')
 
   const nextAction =

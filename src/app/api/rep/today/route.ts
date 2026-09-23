@@ -30,12 +30,14 @@ export async function GET() {
 
   if (!assignments || assignments.length === 0) {
     return NextResponse.json({
+      repName: rep.name,
       isWorkingDay: isWorking,
       totalTarget: 0,
       totalCompleted: 0,
       totalRemaining: 0,
       overallStatus: 'on_track',
-      identities: [],
+      assignedIdentities: [],
+      notifications: [],
     })
   }
 
@@ -92,9 +94,11 @@ export async function GET() {
       }
     })
 
+    const identity = mapAssignedIdentity(a.identity)
+
     return {
       assignmentId: a.id,
-      identity: a.identity,
+      identity,
       targets: targetViews,
     }
   })
@@ -102,11 +106,33 @@ export async function GET() {
   const overallStatus = computeStatus(totalTarget, totalCompleted, progress)
 
   return NextResponse.json({
+    repName: rep.name,
     isWorkingDay: isWorking,
     totalTarget,
     totalCompleted,
     totalRemaining: Math.max(0, totalTarget - totalCompleted),
     overallStatus,
-    identities,
+    assignedIdentities: identities,
+    notifications: [],
   })
+}
+
+function mapAssignedIdentity(value: unknown) {
+  const row = Array.isArray(value) ? value[0] : value
+  const identity = row && typeof row === 'object' ? row as Record<string, unknown> : {}
+  const name = typeof identity.identity_name === 'string' && identity.identity_name.trim()
+    ? identity.identity_name.trim()
+    : typeof identity.identityName === 'string' && identity.identityName.trim()
+      ? identity.identityName.trim()
+      : 'Unnamed identity'
+  return {
+    identityName: name,
+    title: typeof identity.title === 'string' ? identity.title : null,
+    channel: typeof identity.channel === 'string' ? identity.channel : 'other',
+    profileUrl: typeof identity.profile_url === 'string'
+      ? identity.profile_url
+      : typeof identity.profileUrl === 'string'
+        ? identity.profileUrl
+        : null,
+  }
 }
