@@ -26,6 +26,7 @@ import { StatusWord, VerdictWord } from '@/components/status-word'
 import { ScoreRing } from '@/components/score-ring'
 import { signalById } from '@/lib/score/signals'
 import { buildRevenueStrategy, sourceFromLead, toUiSnapshot } from '@/lib/relay/revenue-strategy'
+import { evaluateDmGate, evaluateFollowupGate, formatCooldownRemaining } from '@/lib/relay/message-eligibility'
 import { readSse } from '@/lib/sse/client'
 import { cn } from 'cn'
 import type { LeadDetail } from '@/lib/store/types'
@@ -289,28 +290,31 @@ export function LeadWorkspace({
 
   const signal = signalById(currentLead.signalType)
   const hasReply = currentLead.messages.some((m) => m.type === 'reply' && m.sentText) || currentLead.outcomes.some((o) => o.stage === 'replied')
-  const hasPriorSend = currentLead.messages.some((m) => m.sentText && m.sentAt)
-  // ONE follow-up, ever. A lead already in 'followed_up' status has used its
-  // one follow-up and is permanently locked out of another — status
-  // 'followed_up' is deliberately NOT in the eligible set below.
-  const followupAlreadyUsed = currentLead.status === 'followed_up'
-  const followupEligible = currentLead.status === 'contacted' && hasPriorSend && !followupAlreadyUsed
+
+  const dmGate = evaluateDmGate({ messages: currentLead.messages, connectionAcceptedAt: currentLead.connectionAcceptedAt })
+  const followupGate = evaluateFollowupGate({ status: currentLead.status, messages: currentLead.messages })
+  const hasPriorSend = followupGate.hasPriorSend
+  const followupEligible = followupGate.eligible
 
   // Reply is available when: a reply outcome exists, user pasted reply text,
   // or this is an inbound-first lead (client contacted us)
   const replyAvailable = hasReply || Boolean(capturedReplyText) || currentLead.direction === 'inbound'
 
   const artifactDisabled: Record<ArtifactId, string | null> = {
-    dm: null,
+    dm: dmGate.blocked
+      ? 'Waiting on the LinkedIn connection to be accepted. Mark it accepted once you see it on LinkedIn.'
+      : null,
     connection: null,
     upwork: null,
-    followup: followupEligible
-      ? null
-      : followupAlreadyUsed
-        ? 'A follow-up was already sent on this lead. Only one, ever.'
-        : currentLead.status === 'new'
-          ? 'Eligible once this lead is contacted.'
-          : 'Eligible once a first message has been sent.',
+    followup: followupGate.alreadyUsed
+      ? 'A follow-up was already sent on this lead. Only one, ever.'
+      : currentLead.status === 'new'
+        ? 'Eligible once this lead is contacted.'
+        : !hasPriorSend
+          ? 'Eligible once a first message has been sent.'
+          : followupGate.inCooldown
+            ? `Available in ${formatCooldownRemaining(followupGate.cooldownRemainingMs)} (6h after the last DM).`
+            : null,
     reply: !replyAvailable ? 'Paste the client reply above to enable.' : null,
   }
 
@@ -417,6 +421,24 @@ export function LeadWorkspace({
       setSendError(err instanceof Error ? err.message : 'Failed to log send.')
     } finally {
       setSending(false)
+    }
+  }
+
+  const [markingAccepted, setMarkingAccepted] = useState(false)
+  const [markAcceptedError, setMarkAcceptedError] = useState<string | null>(null)
+
+  async function markConnectionAccepted() {
+    setMarkingAccepted(true)
+    setMarkAcceptedError(null)
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/connection-accepted`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? 'Failed to mark the connection accepted.')
+      setLeadVersion((v) => v + 1)
+    } catch (err) {
+      setMarkAcceptedError(err instanceof Error ? err.message : 'Failed to mark the connection accepted.')
+    } finally {
+      setMarkingAccepted(false)
     }
   }
 
@@ -675,7 +697,17 @@ export function LeadWorkspace({
             )}
 
             {artifactDisabled[artifact] ? (
-              <p className="mt-3 text-sm text-graphite">{artifactDisabled[artifact]}</p>
+              <div className="mt-3 space-y-2">
+                <p className="text-sm text-graphite">{artifactDisabled[artifact]}</p>
+                {artifact === 'dm' && dmGate.blocked && (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => void markConnectionAccepted()} disabled={markingAccepted} loading={markingAccepted}>
+                      {markingAccepted ? 'Marking...' : 'Mark connection accepted'}
+                    </Button>
+                    {markAcceptedError && <p className="text-sm text-status-danger">{markAcceptedError}</p>}
+                  </>
+                )}
+              </div>
             ) : (
               <>
                  <div className="mt-4 flex flex-wrap items-center gap-3">

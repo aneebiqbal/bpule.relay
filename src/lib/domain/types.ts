@@ -103,6 +103,8 @@ export interface Lead {
   remoteEligibility?: Record<string, unknown> | null
   evidenceLedger?: Record<string, unknown> | null
   extractionCompleteness?: Record<string, unknown> | null
+  /** Set by explicit rep action once the LinkedIn connection request is observed accepted. Null means not accepted / not applicable. Never inferred. */
+  connectionAcceptedAt?: string | null
   createdAt: string
 }
 

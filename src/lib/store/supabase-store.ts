@@ -171,10 +171,10 @@ function isOptionalSearchError(err: unknown): boolean {
  * drops it for list, queue and rate queries that never read it.
  */
 const LEAD_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, intelligence_input_hash, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, intelligence_input_hash, connection_accepted_at, created_at'
 
 const LEAD_LIST_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, connection_accepted_at, created_at'
 
 function mapLead(r: Row): Lead {
   return {
@@ -216,6 +216,7 @@ function mapLead(r: Row): Lead {
     remoteEligibility: (r.remote_eligibility as Record<string, unknown>) ?? null,
     evidenceLedger: (r.evidence_ledger as Record<string, unknown>) ?? null,
     extractionCompleteness: (r.extraction_completeness as Record<string, unknown>) ?? null,
+    connectionAcceptedAt: (r.connection_accepted_at as string) ?? null,
     createdAt: r.created_at as string,
   }
 }
@@ -1109,6 +1110,31 @@ export class SupabaseStore implements ScoutStore {
     }
 
     return { allowed: true, todaySends: todaySends + 1, limit }
+  }
+
+  /**
+   * Explicit rep confirmation that a LinkedIn connection request was
+   * accepted — never inferred. Gates DM eligibility in the lead workspace
+   * (a DM sent before a connection is accepted is generally not delivered
+   * or is out of sequence). Org/owner-scoped like other lead mutations;
+   * idempotent (setting it again just updates the timestamp).
+   */
+  async markConnectionAccepted(leadId: string): Promise<void> {
+    const { data: updatedRows, error } = await this.client
+      .from('leads')
+      .update({ connection_accepted_at: new Date().toISOString() })
+      .eq('id', leadId)
+      .eq('owner_rep_id', this.rep.id)
+      .neq('status', 'no')
+      .neq('status', 'dead')
+      .select('id')
+    if (error) {
+      if (isOptionalSearchError(error)) return // migration not yet applied — fail open, never block the workspace
+      throw error
+    }
+    if (!updatedRows || updatedRows.length === 0) {
+      throw new Error('This lead is not yours to update, or it is locked.')
+    }
   }
 
   async getVoiceProfile(): Promise<VoiceProfile | null> {

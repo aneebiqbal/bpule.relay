@@ -342,6 +342,8 @@ export interface ScoutStore {
     rejectReasons?: import('@/lib/domain/types').SendFeedbackReason[]
     idempotencyKey?: string | null
   }): Promise<DosageResult>
+  /** Explicit rep confirmation that a LinkedIn connection request was accepted — never inferred. */
+  markConnectionAccepted(leadId: string): Promise<void>
   // voice profiles
   getVoiceProfile(): Promise<VoiceProfile | null>
   setVoiceProfile(

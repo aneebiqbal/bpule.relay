@@ -84,6 +84,29 @@
 | REL-BLOCK-003 | P1 | Reply API and studio quick-capture E2E assertions failing. | Reply/studio paths need selector/route fixes. |
 | REL-BLOCK-004 | P2 | Existing repo-wide ESLint debt (43 errors, 189 warnings) pre-existing. | Prevents clean `pnpm lint` gate. |
 
+## Lead messaging lifecycle: DM was never gated on LinkedIn connection acceptance, no 6h follow-up cooldown existed
+
+**Reported**: the required flow is connection note sent → wait for the prospect to accept the connection → only then ask Relay for a DM → after a DM, follow-up should be gated for 6 hours → after any send, Relay should track "awaiting reply" per channel.
+
+**Traced the actual gating code** (`src/components/lead-workspace.tsx`) against this: `dm` was **never disabled** (`dm: null` unconditionally in `artifactDisabled`) — a BD could ask for and log a DM at any point regardless of connection status. `followup` was gated only on `status === 'contacted' && hasPriorSend` — no time-based cooldown existed anywhere. Searched the whole domain model for a "connection accepted" concept: found `LeadStatus`, `Message`, and every other type have **no such field at all**. A related `src/lib/relay/timing-engine.ts` already modeled `CONNECTION_ACCEPT_WINDOW_HOURS`/`FOLLOWUP_WINDOW_HOURS`/a `connectionAccepted` input — but both real call sites (`next-action.ts`, `admin/activity/route.ts`) hardcode `connectionAccepted: false` always, `lastMeaningfulActionAt`/`lastReplyAt`/`lastFollowupAt` all reuse `lead.createdAt` as a placeholder instead of real message timestamps, and the computed `timing` output has **zero UI consumers** anywhere in `src/components/` or `src/app/`. This was decorative scaffolding, not a real gate — the actual live gating logic lived entirely in `lead-workspace.tsx`'s own simpler booleans, which had none of the required rules.
+
+**Design confirmed with the user before building** (not invented unilaterally): how should Relay learn a connection was accepted, given there's no LinkedIn integration/webhook? Chose explicit manual BD confirmation — deterministic, no integration dependency, ships without waiting on a LinkedIn API relationship.
+
+**Built**:
+- Migration `20260930000002_lead_connection_accepted.sql` — additive `leads.connection_accepted_at timestamptz`, null by default, never inferred.
+- `SupabaseStore.markConnectionAccepted(leadId)` (+ `ScoutStore` interface + mock-store implementation) — org/owner-scoped, fail-open if the migration isn't applied (matches the existing `isOptionalSearchError` pattern), idempotent.
+- `POST /api/leads/[id]/connection-accepted` route.
+- `src/lib/relay/message-eligibility.ts` (new, pure, exported): `evaluateDmGate()` — DM blocked only when a `connection`-type message was actually sent (`sentText` + `sentAt` both present) AND `connectionAcceptedAt` is still null; a lead with no connection note at all (Upwork/email/DM-first outreach) is never gated by this. `evaluateFollowupGate()` — adds a genuine 6-hour cooldown anchored to the MOST RECENT sent `dm` message (not the first), on top of the existing "contacted status" and "one follow-up ever" rules, which were preserved unchanged.
+- `lead-workspace.tsx` now calls these pure functions instead of inline-duplicated logic, and shows a "Mark connection accepted" button directly under the DM tab's blocked explanation so a BD can unblock it in place once they see it accepted on LinkedIn.
+
+**Explicitly not built in this pass (flagging, not silently skipped)**: genuine per-channel "awaiting reply" tracking. `Message.type` includes `'reply'` as a flat type with no field recording which channel (dm/connection/upwork/email) the reply was actually replying to — implementing real per-channel awaiting-reply state needs that schema addition first, a separate, non-trivial design decision from the DM/follow-up gates built here.
+
+**Regression tests**: `tests/message-eligibility.test.ts` (16 tests — DM gate: no connection note never blocks, sent-but-unaccepted blocks, accepted unblocks, draft-only/un-sent connection message doesn't count; follow-up gate: no prior send not eligible, inside 6h cooldown not eligible, exactly-6h-elapsed eligible, uses the most recent DM not the first, permanently ineligible once already used even outside cooldown, connection-only send has no cooldown to wait out; `formatCooldownRemaining` boundary cases). `tests/lead-connection-accepted.test.ts` (4 tests against the real store via `createFakeSupabase`: sets the timestamp for the owning rep, throws for a different rep's lead, throws for a locked lead, idempotent re-calls).
+
+**Live browser + DB proof**: `e2e/lead-connection-accepted.spec.ts` — against a real lead already in the org's DB with a genuinely sent connection message and no recorded acceptance. Confirmed live: DM tab renders `aria-disabled="true"` with the exact blocked-reason tooltip, "Mark connection accepted" is visible, clicking it clears the block (`Generate draft` becomes available), and `leads.connection_accepted_at` is persisted in the DB, not just toggled client-side. **Found and fixed a stale-server issue while verifying this**: port 3000 was being served by a `next-server` production process started before this session's code changes, not hot-reloading `next dev` — restarted with a real dev server before this proof would even reflect current code.
+
+**Verified**: `tsc --noEmit` and `npm run build` clean; full suite 1089/1089 passing (0 new regressions); migration applied and confirmed live.
+
 ## Admin Command Center shows all-zero stats / "No active operators today" despite a genuinely working team
 
 **Reported live**: as admin, "Team Today" shows Working/On Track/At Risk/Behind/Blocked/Closed all at 0 and "No active operators today," while reps are actively logged in, working leads, and (per the report) "every data is being stored."

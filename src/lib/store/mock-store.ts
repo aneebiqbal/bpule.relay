@@ -1026,6 +1026,14 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
 
       return { allowed: true, todaySends: todaySends + 1, limit, messageId: msgId }
     },
+    async markConnectionAccepted(leadId: string): Promise<void> {
+      const lead = leads.find((l) => l.id === leadId)
+      if (!lead) throw new Error('Lead not found')
+      if (lead.ownerRepId !== rep.id || lead.status === 'no' || lead.status === 'dead') {
+        throw new Error('This lead is not yours to update, or it is locked.')
+      }
+      lead.connectionAcceptedAt = new Date().toISOString()
+    },
     async getVoiceProfile() {
       return voiceProfiles.find((v) => v.repId === rep.id) ?? null
     },
