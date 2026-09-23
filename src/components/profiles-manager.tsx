@@ -65,9 +65,11 @@ const PLATFORM_STYLE: Record<Platform, { bg: string; text: string }> = {
 export function ProfilesManager({
   initialProfiles,
   ownerByRepId,
+  isAdmin = false,
 }: {
   initialProfiles: Profile[]
   ownerByRepId?: Record<string, string>
+  isAdmin?: boolean
 }) {
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles)
   const [proofsByProfile, setProofsByProfile] = useState<
@@ -298,7 +300,7 @@ export function ProfilesManager({
         ))}
       </div>
 
-      {!profileDraft ? (
+      {isAdmin && (!profileDraft ? (
             <Button variant="outline" onClick={() => { setError(null); setProfileDraft({ ...INITIAL_PROFILE }) }}>
               <Plus className="mr-1.5 size-3.5" aria-hidden="true" />
               Add an identity
@@ -366,7 +368,7 @@ export function ProfilesManager({
             </Button>
           </div>
         </section>
-      )}
+      ))}
 
       {proofDraft ? (
         <ProofForm

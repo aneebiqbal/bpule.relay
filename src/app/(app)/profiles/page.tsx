@@ -38,7 +38,7 @@ export default async function ProfilesPage() {
           <Stat label="Upwork" value={upworkCount} />
         </div>
       </section>
-      <ProfilesManager initialProfiles={profiles} ownerByRepId={isAdmin ? ownerByRepId : undefined} />
+      <ProfilesManager initialProfiles={profiles} ownerByRepId={isAdmin ? ownerByRepId : undefined} isAdmin={isAdmin} />
     </div>
   )
 }

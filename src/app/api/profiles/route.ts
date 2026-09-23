@@ -53,6 +53,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
 
+  // Profile creation/editing is an admin-only action — reps select from
+  // profiles an admin has already created, they do not self-register one.
+  // Enforced here server-side, independent of the RLS policy on `profiles`.
+  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
+    return NextResponse.json({ error: 'Not authorized. Ask an admin to create or edit this profile.' }, { status: 403 })
+  }
+
   let store
   try {
     store = await createScoutStore()
@@ -63,28 +70,11 @@ export async function POST(request: Request) {
     )
   }
 
-  const targetRepId = typeof body.repId === 'string' ? body.repId : null
+  const targetRepId = typeof body.repId === 'string' ? body.repId : authCtx.repId
 
-  // Editing another rep's profile is an admin-only action. Enforced here
-  // server-side, independent of the RLS policy on `profiles`.
-  if (targetRepId && targetRepId !== authCtx.repId) {
-    if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
-      return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
-    }
-    const profile = await store.upsertProfileAdmin({
-      id: typeof body.id === 'string' ? body.id : undefined,
-      repId: targetRepId,
-      platform,
-      label: typeof body.label === 'string' ? body.label : null,
-      profileUrl: typeof body.profileUrl === 'string' ? body.profileUrl : null,
-      headline: typeof body.headline === 'string' ? body.headline : null,
-      cvPath: typeof body.cvPath === 'string' ? body.cvPath : null,
-    })
-    return NextResponse.json({ profile })
-  }
-
-  const profile = await store.upsertProfile({
+  const profile = await store.upsertProfileAdmin({
     id: typeof body.id === 'string' ? body.id : undefined,
+    repId: targetRepId,
     platform,
     label: typeof body.label === 'string' ? body.label : null,
     profileUrl: typeof body.profileUrl === 'string' ? body.profileUrl : null,
