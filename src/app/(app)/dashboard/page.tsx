@@ -11,6 +11,7 @@ import type { RelayTodayAction } from '@/components/relay-today-workspace'
 import { RepWorkspace, type RepWorkspaceData } from '@/components/rep/rep-workspace'
 import { MyDayCard, type MyDayData } from '@/components/rep/my-day-card'
 import { AdminCommandCenter, type CommandCenterData } from '@/components/admin/admin-command-center'
+import { LiveCommandCenter } from '@/components/admin/live-command-center'
 import { ManagerTeamView, type ManagerTeamData } from '@/components/manager/manager-team-view'
 
 export const dynamic = 'force-dynamic'
@@ -255,7 +256,9 @@ function AdminTodayViewWithAccountability({
         <p className="text-[13px] text-graphite">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
       </header>
 
-      <AdminCommandCenter data={ccData} />
+      <Suspense fallback={<div className="h-64 animate-pulse rounded-xl border border-line bg-bone-raised" />}>
+        <LiveCommandCenter />
+      </Suspense>
 
       {myDayData && (
         <section className="space-y-3">

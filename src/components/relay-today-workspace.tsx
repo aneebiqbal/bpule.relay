@@ -22,6 +22,7 @@ import { StatusBadge } from '@/components/ui/status-badge'
 
 type ActionKind =
   | 'reply_needed'
+  | 'connection_dm_due'
   | 'followup_due'
   | 'high_fit_lead'
   | 'new_opportunity'
@@ -828,6 +829,8 @@ function kindLabel(kind: ActionKind): string {
   switch (kind) {
     case 'reply_needed':
       return 'Reply sent'
+    case 'connection_dm_due':
+      return 'Connection message sent'
     case 'followup_due':
       return 'Follow-up sent'
     case 'high_fit_lead':
@@ -853,6 +856,8 @@ function kindActionLabel(kind: ActionKind): string {
   switch (kind) {
     case 'reply_needed':
       return 'Reply'
+    case 'connection_dm_due':
+      return 'Message'
     case 'followup_due':
       return 'Follow-up'
     case 'high_fit_lead':

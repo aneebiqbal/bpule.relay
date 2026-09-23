@@ -344,6 +344,17 @@ export interface ScoutStore {
   }): Promise<DosageResult>
   /** Explicit rep confirmation that a LinkedIn connection request was accepted — never inferred. */
   markConnectionAccepted(leadId: string): Promise<void>
+  /**
+   * Persist a prospect's inbound reply as a message row, flip the lead to
+   * 'replied', record the outcome, and emit a CLIENT_REPLIED event. Returns
+   * the inserted message. Owner-scoped.
+   */
+  recordProspectReply(leadId: string, replyText: string): Promise<Message>
+  /**
+   * Admin override: clear a lead's connection-pacing lock immediately. No-op
+   * if the lead is not locked. Admin/owner-scoped.
+   */
+  unlockLead(leadId: string): Promise<void>
   // voice profiles
   getVoiceProfile(): Promise<VoiceProfile | null>
   setVoiceProfile(
@@ -799,6 +810,7 @@ export interface ScoutStore {
     leadId: string
     stage?: ConversationStage
     senderProfileId?: string | null
+    lastReplyAt?: string | null
     lastStrategy?: string | null
     lastAngle?: string | null
     lastCta?: string | null

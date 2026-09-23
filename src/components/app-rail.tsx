@@ -21,6 +21,7 @@ import {
   BarChart3,
   TrendingUp,
   Users,
+  Layers,
 } from 'lucide-react'
 import { cn } from 'cn'
 import { RelayBrand } from '@/components/brand'
@@ -29,44 +30,43 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { APP_VERSION } from '@/lib/version'
 import type { RepRole } from '@/lib/domain/types'
 
-const WORK_NAV = [
+const PRIMARY_NAV = [
   { href: '/dashboard', label: 'Today', icon: CalendarDays, exact: true },
   { href: '/leads', label: 'Leads', icon: Target, exact: false },
-  { href: '/inbound', label: 'Inbound', icon: MessageSquare, exact: false },
-  { href: '/upwork', label: 'Jobs', icon: Briefcase, exact: false },
-  { href: '/find-jobs', label: 'Find Jobs', icon: Search, exact: false },
-  { href: '/relay', label: 'Conversations', icon: MessageSquare, exact: false },
 ]
 
 const TEAM_NAV = [
   { href: '/team', label: 'My Team', icon: Users, exact: false },
 ]
 
-const CREATE_NAV = [
+const STUDIO_NAV = [
   { href: '/content', label: 'Studio', icon: PenLine, exact: false, studio: true },
 ]
 
-const GROWTH_NAV = [
-  { href: '/content/growth', label: 'Relay Growth', icon: TrendingUp, exact: true },
-]
-
-const INTELLIGENCE_NAV = [
-  { href: '/profiles', label: 'Profiles', icon: UserCircle2, exact: false },
-  { href: '/facts', label: 'Proof', icon: Shield, exact: false },
-  { href: '/relay/benchmark', label: 'Benchmark', icon: Shield, exact: true },
-]
-
-const ACCOUNT_NAV = [
-  { href: '/usage', label: 'Usage', icon: Target, exact: false },
-  { href: '/account', label: 'Settings', icon: Settings, exact: false },
-]
-
-const ADMIN_EXTRA = [
-  { href: '/admin/command-center', label: 'Command', icon: Shield, exact: true },
-  { href: '/admin/people', label: 'People', icon: Users, exact: true },
-  { href: '/admin/revenue-intelligence', label: 'Revenue', icon: BarChart3, exact: true },
-  { href: '/admin/revenue-identities', label: 'Identities', icon: UserCircle2, exact: true },
-  { href: '/admin/targets', label: 'Targets', icon: Target, exact: true },
+const MORE_NAV: Array<{
+  href: string
+  label: string
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
+  exact: boolean
+  roles?: RepRole[]
+  adminOnly?: boolean
+  group: string
+}> = [
+  { href: '/inbound', label: 'Inbound', icon: MessageSquare, exact: false, group: 'Work' },
+  { href: '/upwork', label: 'Jobs', icon: Briefcase, exact: false, group: 'Work' },
+  { href: '/find-jobs', label: 'Find Jobs', icon: Search, exact: false, group: 'Work' },
+  { href: '/relay', label: 'Conversations', icon: MessageSquare, exact: false, group: 'Work' },
+  { href: '/content/growth', label: 'Relay Growth', icon: TrendingUp, exact: true, adminOnly: true, group: 'Create' },
+  { href: '/profiles', label: 'Profiles', icon: UserCircle2, exact: false, group: 'Intelligence' },
+  { href: '/facts', label: 'Proof', icon: Shield, exact: false, group: 'Intelligence' },
+  { href: '/relay/benchmark', label: 'Benchmark', icon: Shield, exact: true, group: 'Intelligence' },
+  { href: '/admin/command-center', label: 'Command', icon: Shield, exact: true, adminOnly: true, group: 'Admin' },
+  { href: '/admin/people', label: 'People', icon: Users, exact: true, adminOnly: true, group: 'Admin' },
+  { href: '/admin/revenue-intelligence', label: 'Revenue', icon: BarChart3, exact: true, adminOnly: true, group: 'Admin' },
+  { href: '/admin/revenue-identities', label: 'Identities', icon: UserCircle2, exact: true, adminOnly: true, group: 'Admin' },
+  { href: '/admin/targets', label: 'Targets', icon: Target, exact: true, adminOnly: true, group: 'Admin' },
+  { href: '/usage', label: 'Usage', icon: Layers, exact: false, group: 'Account' },
+  { href: '/account', label: 'Settings', icon: Settings, exact: false, group: 'Account' },
 ]
 
 const ROLE_LABEL: Record<RepRole, string> = {
@@ -77,14 +77,16 @@ const ROLE_LABEL: Record<RepRole, string> = {
 }
 
 type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }>; exact: boolean; studio?: boolean }
-type NavSectionProps = { label: string; items: NavItem[]; isActive: (href: string, exact: boolean) => boolean; studio?: boolean }
+type NavSectionProps = { label?: string; items: NavItem[]; isActive: (href: string, exact: boolean) => boolean; studio?: boolean }
 
 function NavSection({ label, items, isActive, studio }: NavSectionProps) {
   return (
     <div>
-      <div className="mb-1 px-2 pt-1">
-        <span className="text-label text-stone">{label}</span>
-      </div>
+      {label && (
+        <div className="mb-1 px-2 pt-1">
+          <span className="text-label text-stone">{label}</span>
+        </div>
+      )}
       {items.map(({ href, label: itemLabel, icon: Icon, exact }) => {
         const active = isActive(href, exact)
         return (
@@ -127,9 +129,11 @@ function NavSection({ label, items, isActive, studio }: NavSectionProps) {
 function MobileNavSection({ label, items, isActive, studio, onNavigate }: NavSectionProps & { onNavigate?: () => void }) {
   return (
     <div>
-      <div className="mb-1 px-2 pt-1">
-        <span className="text-label text-stone">{label}</span>
-      </div>
+      {label && (
+        <div className="mb-1 px-2 pt-1">
+          <span className="text-label text-stone">{label}</span>
+        </div>
+      )}
       {items.map(({ href, label: itemLabel, icon: Icon, exact }) => {
         const active = isActive(href, exact)
         return (
@@ -201,6 +205,7 @@ export function AppRail({
   const [identityOpen, setIdentityOpen] = useState(false)
   const [activeIdentityId, setActiveIdentityId] = useState<string | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
 
   useEffect(() => {
     const key = 'relay-active-identity'
@@ -244,6 +249,7 @@ export function AppRail({
   }, [])
 
   const atCeiling = sends >= dailyLimit
+  const isAdmin = role === 'admin'
 
   function isActive(href: string, exact: boolean) {
     return exact ? pathname === href : pathname.startsWith(href)
@@ -300,6 +306,87 @@ export function AppRail({
   const handleMobileNavigate = () => {
     setMobileMenuOpen(false)
   }
+
+  const moreItems = MORE_NAV.filter((item) => {
+    if (item.adminOnly && !isAdmin) return false
+    if (item.roles && !item.roles.includes(role)) return false
+    return true
+  })
+  const moreGroups: Array<{ group: string; items: typeof moreItems }> = []
+  for (const item of moreItems) {
+    const existing = moreGroups.find((g) => g.group === item.group)
+    if (existing) existing.items.push(item)
+    else moreGroups.push({ group: item.group, items: [item] })
+  }
+
+  const moreActive = moreItems.some((item) => isActive(item.href, item.exact))
+
+  const identityPicker = (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setIdentityOpen((open) => !open)}
+        className="group flex w-full items-center justify-between rounded-md border border-line bg-bone-raised px-2 py-2 text-left hover:border-orange/30"
+      >
+        <div className="min-w-0">
+          <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Working as</p>
+          {activeIdentity ? (
+            <>
+              <p className="truncate text-[12px] font-medium text-ink">{activeIdentity.identityName}</p>
+              <p className="truncate text-[10px] text-graphite">
+                {[activeIdentity.title, activeIdentity.channel.toUpperCase()].filter(Boolean).join(' / ')}
+              </p>
+            </>
+          ) : (
+            <p className="truncate text-[11px] text-graphite">No identity assigned</p>
+          )}
+        </div>
+        <ChevronDown className={cn('size-3.5 shrink-0 text-stone transition-transform', identityOpen && 'rotate-180')} />
+      </button>
+
+      {identityOpen && (
+        <div className="absolute right-0 bottom-[calc(100%+0.4rem)] z-20 w-full rounded-md border border-line bg-bone-raised p-1.5 shadow-lg">
+          {revenueIdentities.length === 0 ? (
+            <p className="px-2 py-1 text-[11px] text-graphite">
+              {role === 'admin' ? 'No active identities yet.' : 'No assigned identities yet.'}
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {revenueIdentities.map((identity) => {
+                const selected = identity.id === activeIdentity?.id
+                return (
+                  <button
+                    key={identity.id}
+                    type="button"
+                    onClick={() => selectIdentity(identity.id)}
+                    className={cn(
+                      'w-full rounded px-2 py-1.5 text-left transition-colors',
+                      selected ? 'bg-solid text-on-solid' : 'hover:bg-bone',
+                    )}
+                  >
+                    <p className="truncate text-[12px] font-medium">{identity.identityName}</p>
+                    <p className={cn('truncate text-[10px]', selected ? 'text-on-solid/70' : 'text-graphite')}>
+                      {[identity.title, identity.channel.toUpperCase()].filter(Boolean).join(' / ')}
+                    </p>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {role === 'admin' && (
+            <Link
+              href="/admin/revenue-identities"
+              onClick={() => setIdentityOpen(false)}
+              className="mt-1.5 block rounded border border-line px-2 py-1 text-center text-[11px] font-medium text-ink hover:bg-bone"
+            >
+              Manage identities
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <>
@@ -361,97 +448,31 @@ export function AppRail({
               </button>
             </div>
             <nav className="flex-1 overflow-y-auto px-2.5 py-3" aria-label="Mobile">
-              <MobileNavSection label="Work" items={WORK_NAV} isActive={isActive} onNavigate={handleMobileNavigate} />
-              {(role === 'admin' || role === 'manager') && (
+              <MobileNavSection items={PRIMARY_NAV} isActive={isActive} onNavigate={handleMobileNavigate} />
+              <div className="mt-3">
+                <MobileNavSection items={STUDIO_NAV} isActive={isActive} studio onNavigate={handleMobileNavigate} />
+              </div>
+              {isAdmin && (
                 <div className="mt-3">
-                  <MobileNavSection label="Team" items={TEAM_NAV} isActive={isActive} onNavigate={handleMobileNavigate} />
+                  <MobileNavSection items={TEAM_NAV} isActive={isActive} onNavigate={handleMobileNavigate} />
                 </div>
               )}
-              <div className="mt-3">
-                <MobileNavSection label="Create" items={CREATE_NAV} isActive={isActive} studio onNavigate={handleMobileNavigate} />
-                {role === 'admin' && (
-                  <div className="mt-3">
-                    <MobileNavSection label="Growth" items={GROWTH_NAV} isActive={isActive} onNavigate={handleMobileNavigate} />
+              <div className="mt-3 border-t border-line pt-3">
+                <div className="mb-1 px-2">
+                  <span className="text-label text-stone">More</span>
+                </div>
+                {moreGroups.map((g) => (
+                  <div key={g.group}>
+                    <div className="mb-0.5 px-2 pt-1">
+                      <span className="text-[10px] uppercase tracking-wide text-stone">{g.group}</span>
+                    </div>
+                    <MobileNavSection items={g.items} isActive={isActive} onNavigate={handleMobileNavigate} />
                   </div>
-                )}
-              </div>
-              <div className="mt-3">
-                <MobileNavSection label="Intelligence" items={INTELLIGENCE_NAV} isActive={isActive} onNavigate={handleMobileNavigate} />
-              </div>
-              {role === 'admin' && (
-                <div className="mt-3">
-                  <MobileNavSection label="Admin" items={ADMIN_EXTRA} isActive={isActive} onNavigate={handleMobileNavigate} />
-                </div>
-              )}
-              <div className="mt-3">
-                <MobileNavSection label="Account" items={ACCOUNT_NAV} isActive={isActive} onNavigate={handleMobileNavigate} />
+                ))}
               </div>
             </nav>
             <div className="border-t border-line px-3 py-3 space-y-2">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIdentityOpen((open) => !open)}
-                  className="group flex w-full items-center justify-between rounded-md border border-line bg-bone px-2 py-2 text-left hover:border-orange/30"
-                >
-                  <div className="min-w-0">
-                    <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Working as</p>
-                    {activeIdentity ? (
-                      <>
-                        <p className="truncate text-[12px] font-medium text-ink">{activeIdentity.identityName}</p>
-                        <p className="truncate text-[10px] text-graphite">
-                          {[activeIdentity.title, activeIdentity.channel.toUpperCase()].filter(Boolean).join(' / ')}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="truncate text-[11px] text-graphite">No identity assigned</p>
-                    )}
-                  </div>
-                  <ChevronDown className={cn('size-3.5 shrink-0 text-stone transition-transform', identityOpen && 'rotate-180')} />
-                </button>
-
-                {identityOpen && (
-                  <div className="absolute right-0 bottom-[calc(100%+0.4rem)] z-20 w-full rounded-md border border-line bg-bone-raised p-1.5 shadow-lg">
-                    {revenueIdentities.length === 0 ? (
-                      <p className="px-2 py-1 text-[11px] text-graphite">
-                        {role === 'admin' ? 'No active identities yet.' : 'No assigned identities yet.'}
-                      </p>
-                    ) : (
-                      <div className="space-y-1">
-                        {revenueIdentities.map((identity) => {
-                          const selected = identity.id === activeIdentity?.id
-                          return (
-                            <button
-                              key={identity.id}
-                              type="button"
-                              onClick={() => selectIdentity(identity.id)}
-                              className={cn(
-                                'w-full rounded px-2 py-1.5 text-left transition-colors',
-                                selected ? 'bg-solid text-on-solid' : 'hover:bg-bone',
-                              )}
-                            >
-                              <p className="truncate text-[12px] font-medium">{identity.identityName}</p>
-                              <p className={cn('truncate text-[10px]', selected ? 'text-on-solid/70' : 'text-graphite')}>
-                                {[identity.title, identity.channel.toUpperCase()].filter(Boolean).join(' / ')}
-                              </p>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-
-                    {role === 'admin' && (
-                      <Link
-                        href="/admin/revenue-identities"
-                        onClick={() => setIdentityOpen(false)}
-                        className="mt-1.5 block rounded border border-line px-2 py-1 text-center text-[11px] font-medium text-ink hover:bg-bone"
-                      >
-                        Manage identities
-                      </Link>
-                    )}
-                  </div>
-                )}
-              </div>
+              {identityPicker}
               <div className="flex items-center justify-between gap-2 px-1">
                 <IdentityChip name={repName} subtitle={`${ROLE_LABEL[role]} · ${organizationName}`} />
               </div>
@@ -473,98 +494,45 @@ export function AppRail({
         </div>
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-3">
-          <NavSection label="Work" items={WORK_NAV} isActive={isActive} />
-          {(role === 'admin' || role === 'manager') && (
+          <NavSection items={PRIMARY_NAV} isActive={isActive} />
+          <div className="mt-3">
+            <NavSection items={STUDIO_NAV} isActive={isActive} studio />
+          </div>
+          {isAdmin && (
             <div className="mt-3">
-              <NavSection label="Team" items={TEAM_NAV} isActive={isActive} />
+              <NavSection items={TEAM_NAV} isActive={isActive} />
             </div>
           )}
-          <div className="mt-3">
-            <NavSection label="Create" items={CREATE_NAV} isActive={isActive} studio />
-            {role === 'admin' && (
-              <div className="mt-3">
-                <NavSection label="Growth" items={GROWTH_NAV} isActive={isActive} />
+          <div className="mt-3 border-t border-line pt-3">
+            <button
+              type="button"
+              onClick={() => setMoreOpen((o) => !o)}
+              aria-expanded={moreOpen}
+              className={cn(
+                'flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors',
+                moreActive ? 'text-ink' : 'text-stone hover:text-ink',
+              )}
+            >
+              <span>More</span>
+              <ChevronDown className={cn('size-3 transition-transform', moreOpen && 'rotate-180')} />
+            </button>
+            {moreOpen && (
+              <div className="mt-1 space-y-2">
+                {moreGroups.map((g) => (
+                  <div key={g.group}>
+                    <div className="px-2 pt-1">
+                      <span className="text-[10px] uppercase tracking-wide text-stone">{g.group}</span>
+                    </div>
+                    <NavSection items={g.items} isActive={isActive} />
+                  </div>
+                ))}
               </div>
             )}
-          </div>
-          <div className="mt-3">
-            <NavSection label="Intelligence" items={INTELLIGENCE_NAV} isActive={isActive} />
-          </div>
-          {role === 'admin' && (
-            <div className="mt-3">
-              <NavSection label="Admin" items={ADMIN_EXTRA} isActive={isActive} />
-            </div>
-          )}
-          <div className="mt-3">
-            <NavSection label="Account" items={ACCOUNT_NAV} isActive={isActive} />
           </div>
         </nav>
 
         <div className="border-t border-line px-3 py-3 space-y-2">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIdentityOpen((open) => !open)}
-              className="group flex w-full items-center justify-between rounded-md border border-line bg-bone-raised px-2 py-2 text-left hover:border-orange/30"
-            >
-              <div className="min-w-0">
-                <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Working as</p>
-                {activeIdentity ? (
-                  <>
-                    <p className="truncate text-[12px] font-medium text-ink">{activeIdentity.identityName}</p>
-                    <p className="truncate text-[10px] text-graphite">
-                      {[activeIdentity.title, activeIdentity.channel.toUpperCase()].filter(Boolean).join(' / ')}
-                    </p>
-                  </>
-                ) : (
-                  <p className="truncate text-[11px] text-graphite">No identity assigned</p>
-                )}
-              </div>
-              <ChevronDown className={cn('size-3.5 shrink-0 text-stone transition-transform', identityOpen && 'rotate-180')} />
-            </button>
-
-            {identityOpen && (
-              <div className="absolute right-0 bottom-[calc(100%+0.4rem)] z-20 w-full rounded-md border border-line bg-bone-raised p-1.5 shadow-lg">
-                {revenueIdentities.length === 0 ? (
-                  <p className="px-2 py-1 text-[11px] text-graphite">
-                    {role === 'admin' ? 'No active identities yet.' : 'No assigned identities yet.'}
-                  </p>
-                ) : (
-                  <div className="space-y-1">
-                    {revenueIdentities.map((identity) => {
-                      const selected = identity.id === activeIdentity?.id
-                      return (
-                        <button
-                          key={identity.id}
-                          type="button"
-                          onClick={() => selectIdentity(identity.id)}
-                          className={cn(
-                            'w-full rounded px-2 py-1.5 text-left transition-colors',
-                            selected ? 'bg-solid text-on-solid' : 'hover:bg-bone',
-                          )}
-                        >
-                          <p className="truncate text-[12px] font-medium">{identity.identityName}</p>
-                          <p className={cn('truncate text-[10px]', selected ? 'text-on-solid/70' : 'text-graphite')}>
-                            {[identity.title, identity.channel.toUpperCase()].filter(Boolean).join(' / ')}
-                          </p>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {role === 'admin' && (
-                  <Link
-                    href="/admin/revenue-identities"
-                    onClick={() => setIdentityOpen(false)}
-                    className="mt-1.5 block rounded border border-line px-2 py-1 text-center text-[11px] font-medium text-ink hover:bg-bone"
-                  >
-                    Manage identities
-                  </Link>
-                )}
-              </div>
-            )}
-          </div>
+          {identityPicker}
 
           <div className="flex items-center justify-between gap-2 px-1">
             <IdentityChip name={repName} subtitle={`${ROLE_LABEL[role]} · ${organizationName}`} />

@@ -105,6 +105,10 @@ export interface Lead {
   extractionCompleteness?: Record<string, unknown> | null
   /** Set by explicit rep action once the LinkedIn connection request is observed accepted. Null means not accepted / not applicable. Never inferred. */
   connectionAcceptedAt?: string | null
+  /** Set when a connection note is sent on a good-profile lead. Lead is locked from further outreach until this timestamp. Null = unlocked. */
+  lockedUntil?: string | null
+  /** Why the lead was locked. Currently only 'connection_note_sent'. */
+  lockedReason?: string | null
   createdAt: string
 }
 
@@ -125,6 +129,8 @@ export interface Message {
   rejectReasons?: SendFeedbackReason[]
   /** Idempotency key for a real send (sent_text populated). Never set on draft-only rows. */
   idempotencyKey?: string | null
+  /** 'outbound' = rep sent; 'inbound' = prospect replied. Default outbound for legacy rows. */
+  direction?: 'inbound' | 'outbound'
   createdAt: string
 }
 
@@ -986,6 +992,7 @@ export type SendFeedbackReason =
 
 export type RelayTaskKind =
   | 'reply_needed'
+  | 'connection_dm_due'
   | 'followup_due'
   | 'high_fit_lead'
   | 'new_opportunity'

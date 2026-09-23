@@ -44,6 +44,7 @@ export interface QueueInput {
 
 const KIND_PRIORITY_BASE: Record<RelayTaskKind, number> = {
   reply_needed: 100,
+  connection_dm_due: 80,
   followup_due: 70,
   high_fit_lead: 55,
   new_opportunity: 50,
@@ -99,6 +100,23 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
   // 2. Reply needed
   for (const lead of input.queueData.replies) {
     tasks.push(buildReplyTask(lead, input))
+  }
+
+  // 2b. Connection message due — a good-profile lead whose 6h connection-pacing
+  // lock has just expired. The DM is now the next priority, but the existing
+  // gate still applies: it is only appropriate once the connection is accepted.
+  for (const lead of input.queueData.queue) {
+    if (
+      lead.status === 'contacted' &&
+      lead.lockedReason === 'connection_note_sent' &&
+      lead.lockedUntil &&
+      new Date(lead.lockedUntil).getTime() <= Date.now()
+    ) {
+      const already = tasks.some((t) => t.entityId === lead.id)
+      if (!already) {
+        tasks.push(buildConnectionDmTask(lead, input))
+      }
+    }
   }
 
   // 3. Follow-up due
@@ -253,6 +271,52 @@ function buildReplyTask(lead: Lead, input: QueueInput): RelayTask {
     stale: false,
     stalenessNote: null,
     createdAt: lead.createdAt,
+  }
+}
+
+function buildConnectionDmTask(lead: Lead, input: QueueInput): RelayTask {
+  const unlocked = lead.lockedUntil
+    ? Math.round((Date.now() - new Date(lead.lockedUntil).getTime()) / (1000 * 60))
+    : 0
+  const accepted = Boolean(lead.connectionAcceptedAt)
+  const evidence: RelayEvidence[] = [
+    {
+      source: 'message',
+      detail: accepted
+        ? `Connection accepted. The 6h pacing window has passed — a direct message is now appropriate.`
+        : `The 6h connection window has passed. The prospect may have accepted your connection — a direct message is now appropriate.`,
+      timestamp: lead.lockedUntil ?? null,
+      verified: true,
+    },
+  ]
+  return {
+    id: `connection-dm-${lead.id}`,
+    kind: 'connection_dm_due',
+    priority: 'high',
+    priorityScore: KIND_PRIORITY_BASE.connection_dm_due,
+    title: lead.company,
+    subtitle: lead.contactName ?? 'Send connection message',
+    entityType: 'lead',
+    entityId: lead.id,
+    whatHappened: accepted
+      ? `Connection accepted — pacing window over (${unlocked}m ago).`
+      : `Connection note sent — pacing window over (${unlocked}m ago).`,
+    whyItMatters: accepted
+      ? 'The prospect accepted your connection. Now a DM lands in their inbox, not into the void.'
+      : 'The pacing window is closed. Send your DM now — if they have not accepted yet, check LinkedIn first.',
+    recommendation: {
+      action: 'Send a direct message',
+      preparedOutput: null,
+      evidence,
+      confidence: accepted ? 0.8 : 0.6,
+      forbidsImpersonation: true,
+    },
+    humanAction: accepted
+      ? 'Review the lead, craft your connection message, send manually'
+      : 'Check LinkedIn for connection acceptance, then craft and send your DM manually',
+    createdAt: lead.createdAt,
+    stale: false,
+    stalenessNote: null,
   }
 }
 

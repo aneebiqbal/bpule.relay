@@ -2,6 +2,7 @@ import { Suspense, type ComponentType } from 'react'
 import Link from 'next/link'
 import {
   MessageCircle,
+  MessageSquare,
   Clock,
   Target,
   Search,
@@ -26,6 +27,7 @@ export const dynamic = 'force-dynamic'
 function kindLabel(kind: RelayTaskKind): string {
   switch (kind) {
     case 'reply_needed': return 'Reply needed'
+    case 'connection_dm_due': return 'Connection message'
     case 'followup_due': return 'Follow-up'
     case 'high_fit_lead': return 'High-fit'
     case 'new_opportunity': return 'Opportunity'
@@ -35,6 +37,7 @@ function kindLabel(kind: RelayTaskKind): string {
     case 'content_opportunity': return 'Content'
     case 'admin_review': return 'Admin'
     case 'inbound_opportunity': return 'Inbound'
+    default: return kind
   }
 }
 
@@ -64,6 +67,7 @@ function entityHref(task: RelayTask): string {
 
 const KIND_ICON_MAP: Record<RelayTaskKind, ComponentType<{ className?: string }>> = {
   reply_needed: MessageCircle,
+  connection_dm_due: MessageSquare,
   followup_due: Clock,
   high_fit_lead: Target,
   new_opportunity: Search,

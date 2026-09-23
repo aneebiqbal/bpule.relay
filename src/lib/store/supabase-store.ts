@@ -171,10 +171,10 @@ function isOptionalSearchError(err: unknown): boolean {
  * drops it for list, queue and rate queries that never read it.
  */
 const LEAD_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, intelligence_input_hash, connection_accepted_at, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, intelligence_input_hash, connection_accepted_at, locked_until, locked_reason, created_at'
 
 const LEAD_LIST_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, connection_accepted_at, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, connection_accepted_at, locked_until, locked_reason, created_at'
 
 function mapLead(r: Row): Lead {
   return {
@@ -217,6 +217,8 @@ function mapLead(r: Row): Lead {
     evidenceLedger: (r.evidence_ledger as Record<string, unknown>) ?? null,
     extractionCompleteness: (r.extraction_completeness as Record<string, unknown>) ?? null,
     connectionAcceptedAt: (r.connection_accepted_at as string) ?? null,
+    lockedUntil: (r.locked_until as string) ?? null,
+    lockedReason: (r.locked_reason as string) ?? null,
     createdAt: r.created_at as string,
   }
 }
@@ -236,6 +238,7 @@ function mapMessage(r: Row): Message {
     sendDisposition: (r.send_disposition as Message['sendDisposition']) ?? null,
     rejectReasons: Array.isArray(r.reject_reasons) ? r.reject_reasons as Message['rejectReasons'] : [],
     idempotencyKey: (r.idempotency_key as string) ?? null,
+    direction: (r.direction as Message['direction']) ?? 'outbound',
     createdAt: r.created_at as string,
   }
 }
@@ -889,7 +892,7 @@ export class SupabaseStore implements ScoutStore {
 
     const { data: leadRow, error: leadError } = await this.client
       .from('leads')
-      .select('id, status')
+      .select('id, status, verdict, locked_until')
       .eq('id', leadId)
       .eq('owner_rep_id', this.rep.id)
       .maybeSingle()
@@ -899,6 +902,9 @@ export class SupabaseStore implements ScoutStore {
     }
     if (leadRow.status === 'no' || leadRow.status === 'dead') {
       throw new Error('This lead is locked and cannot be contacted.')
+    }
+    if (leadRow.locked_until && new Date(leadRow.locked_until as string).getTime() > Date.now()) {
+      throw new Error('This lead is connection-locked. Wait for it to unlock before sending another outreach.')
     }
 
     const insertPayload: Record<string, unknown> = {
@@ -911,6 +917,7 @@ export class SupabaseStore implements ScoutStore {
       original_draft: feedback?.originalDraft ?? null,
       send_disposition: feedback?.sendDisposition ?? null,
       reject_reasons: feedback?.rejectReasons ?? [],
+      direction: 'outbound',
     }
     if (idempotencyKey) insertPayload.idempotency_key = idempotencyKey
 
@@ -986,6 +993,22 @@ export class SupabaseStore implements ScoutStore {
           })
       } catch {
         // Non-fatal: outcome creation must not block the send
+      }
+    }
+
+    // Connection-pacing lock: when a connection note is sent on a good-profile
+    // lead, lock the lead from further outreach for 6 working hours. The lead
+    // resurfaces at unlock as a "Send connection message" priority task.
+    if (type === 'connection' && leadRow.verdict === 'send') {
+      try {
+        const lockedUntil = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString()
+        await this.client
+          .from('leads')
+          .update({ locked_until: lockedUntil, locked_reason: 'connection_note_sent' })
+          .eq('id', leadId)
+          .eq('owner_rep_id', this.rep.id)
+      } catch {
+        // Non-fatal: lock must not block the send
       }
     }
 
@@ -1156,6 +1179,85 @@ export class SupabaseStore implements ScoutStore {
     if (!updatedRows || updatedRows.length === 0) {
       throw new Error('This lead is not yours to update, or it is locked.')
     }
+  }
+
+  async recordProspectReply(leadId: string, replyText: string): Promise<Message> {
+    const { data: leadRow, error: leadError } = await this.client
+      .from('leads')
+      .select('id, status')
+      .eq('id', leadId)
+      .eq('owner_rep_id', this.rep.id)
+      .maybeSingle()
+    if (leadError) throw leadError
+    if (!leadRow) throw new Error('You are not the owner of this lead.')
+    if (leadRow.status === 'no' || leadRow.status === 'dead') {
+      throw new Error('This lead is locked.')
+    }
+
+    const now = new Date().toISOString()
+    const { data: inserted, error: insertError } = await this.client
+      .from('messages')
+      .insert({
+        organization_id: this.orgId,
+        lead_id: leadId,
+        rep_id: this.rep.id,
+        type: 'reply',
+        sent_text: replyText,
+        sent_at: now,
+        direction: 'inbound',
+      })
+      .select('id')
+      .single()
+    if (insertError) throw insertError
+
+    try {
+      await this.client
+        .from('leads')
+        .update({ status: 'replied' })
+        .eq('id', leadId)
+        .eq('owner_rep_id', this.rep.id)
+    } catch {
+      // Non-fatal
+    }
+
+    try {
+      await this.client
+        .from('outcomes')
+        .insert({ organization_id: this.orgId, lead_id: leadId, stage: 'replied', occurred_at: now })
+    } catch {
+      // Non-fatal
+    }
+
+    try {
+      await this.upsertConversationState({ leadId, stage: 'replied', lastReplyAt: now })
+    } catch {
+      // Non-fatal
+    }
+
+    try {
+      await this.emitRelayEvent({
+        eventType: 'CLIENT_REPLIED',
+        entityType: 'lead',
+        entityId: leadId,
+        actorType: 'rep',
+        actorId: this.rep.id,
+        payload: { direction: 'inbound', messageType: 'reply' },
+        source: 'app',
+        sourceEventId: `prospect_reply:${leadId}:${inserted.id}`,
+      })
+    } catch {
+      // Non-fatal
+    }
+
+    return { id: inserted.id as string, organizationId: this.orgId, leadId, repId: this.rep.id, type: 'reply', draftText: null, sentText: replyText, sentAt: now, modelUsed: null, direction: 'inbound', createdAt: now }
+  }
+
+  async unlockLead(leadId: string): Promise<void> {
+    await this.client
+      .from('leads')
+      .update({ locked_until: null, locked_reason: null })
+      .eq('id', leadId)
+      .eq('organization_id', this.orgId)
   }
 
   async getVoiceProfile(): Promise<VoiceProfile | null> {
@@ -4204,6 +4306,7 @@ export class SupabaseStore implements ScoutStore {
     leadId: string
     stage?: ConversationStage
     senderProfileId?: string | null
+    lastReplyAt?: string | null
     lastStrategy?: string | null
     lastAngle?: string | null
     lastCta?: string | null
@@ -4222,6 +4325,7 @@ export class SupabaseStore implements ScoutStore {
       lead_id: input.leadId,
       stage: input.stage ?? existing?.stage ?? 'new',
       sender_profile_id: input.senderProfileId ?? existing?.senderProfileId ?? null,
+      last_reply_at: input.lastReplyAt ?? existing?.lastReplyAt ?? null,
       last_strategy: input.lastStrategy ?? existing?.lastStrategy ?? null,
       last_angle: input.lastAngle ?? existing?.lastAngle ?? null,
       last_cta: input.lastCta ?? existing?.lastCta ?? null,

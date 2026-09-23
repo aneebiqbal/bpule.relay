@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
@@ -6,6 +7,7 @@ import { getAuthContext } from '@/lib/auth/organization'
 import { isProductAdmin } from '@/lib/auth/admin-page'
 import { loadOrgCommandSnapshot } from '@/lib/admin/org-command-snapshot'
 import { REPLY_RATE_TARGET, READ_TO_CHECK_TARGET } from '@/lib/ai/config'
+import { TeamLiveBoard } from '@/components/admin/team-live-board'
 import {
   TrendingUp,
   Users,
@@ -86,6 +88,14 @@ export default async function TeamPage() {
           <HeroStat label="Model spend (7d)" value={`$${extraction.totalCostUsd.toFixed(2)}`} />
         </div>
       </header>
+
+      {adminView && (
+        <section className="space-y-2">
+          <Suspense fallback={<div className="h-28 animate-pulse rounded-xl border border-line bg-bone-raised" />}>
+            <TeamLiveBoard />
+          </Suspense>
+        </section>
+      )}
 
       {snapshot && snapshot.people.length > 0 && (
         <section className="rounded-2xl border border-line/60 bg-bone-raised p-5">

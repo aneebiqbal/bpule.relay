@@ -926,6 +926,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       if (lead.status === 'no' || lead.status === 'dead') {
         throw new Error('This lead is locked and cannot be contacted.')
       }
+      if (lead.lockedUntil && new Date(lead.lockedUntil).getTime() > Date.now()) {
+        throw new Error('This lead is connection-locked. Wait for it to unlock before sending another outreach.')
+      }
       const idempotencyKey = feedback?.idempotencyKey?.trim() || null
       if (idempotencyKey) {
         const existing = messages.find((m) => m.idempotencyKey === idempotencyKey)
@@ -988,8 +991,14 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         sendDisposition: feedback?.sendDisposition ?? null,
         rejectReasons: feedback?.rejectReasons ?? [],
         idempotencyKey,
+        direction: 'outbound' as const,
         createdAt: new Date().toISOString(),
       })
+
+      if (type === 'connection' && lead.verdict === 'send') {
+        lead.lockedUntil = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString()
+        lead.lockedReason = 'connection_note_sent'
+      }
 
       // Update conversation state
       const existingState = conversationStates.find((s) => s.leadId === leadId)
@@ -1033,6 +1042,25 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         throw new Error('This lead is not yours to update, or it is locked.')
       }
       lead.connectionAcceptedAt = new Date().toISOString()
+    },
+    async recordProspectReply(leadId: string, replyText: string): Promise<Message> {
+      const lead = leads.find((l) => l.id === leadId)
+      if (!lead || lead.ownerRepId !== rep.id) throw new Error('Lead not found')
+      if (lead.status === 'no' || lead.status === 'dead') throw new Error('This lead is locked.')
+      const now = new Date().toISOString()
+      const msgId = nextId('msg')
+      const message: Message = { id: msgId, organizationId: DEMO_ORG_ID, leadId, repId: rep.id, type: 'reply', draftText: null, sentText: replyText, sentAt: now, modelUsed: null, direction: 'inbound', createdAt: now }
+      messages.push(message)
+      lead.status = 'replied'
+      outcomes.push({ id: nextId('out'), organizationId: DEMO_ORG_ID, leadId, stage: 'replied', occurredAt: now })
+      const existingState = conversationStates.find((s) => s.leadId === leadId)
+      if (existingState) { existingState.stage = 'replied'; existingState.lastReplyAt = now; existingState.updatedAt = now }
+      else conversationStates.push({ id: nextId('cs'), organizationId: DEMO_ORG_ID, leadId, stage: 'replied', lastSentAt: null, lastSentMessageId: null, lastReplyAt: now, senderProfileId: null, lastStrategy: null, lastAngle: null, lastCta: null, followupCount: 0, nextFollowupAt: null, wonAt: null, lostAt: null, lostReason: null, createdAt: now, updatedAt: now })
+      return message
+    },
+    async unlockLead(leadId: string): Promise<void> {
+      const lead = leads.find((l) => l.id === leadId)
+      if (lead) { lead.lockedUntil = null; lead.lockedReason = null }
     },
     async getVoiceProfile() {
       return voiceProfiles.find((v) => v.repId === rep.id) ?? null
