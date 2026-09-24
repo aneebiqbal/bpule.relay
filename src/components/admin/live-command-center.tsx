@@ -193,7 +193,7 @@ export function LiveCommandCenter() {
                   width={132}
                   axisLine={false}
                   tickLine={false}
-                  tick={(props: { x: number; y: number; payload: { value: string } }) => {
+                  tick={(props: { x: string | number; y: string | number; payload: { value: string } }) => {
                     const row = data.perRep.find((rep) => rep.id === props.payload.value)
                     return (
                       <text x={props.x} y={props.y} dy={4} textAnchor="end" fill="var(--ink)" fontSize={11}>
