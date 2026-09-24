@@ -19,9 +19,10 @@ interface ProfileDraft {
   label: string
   profileUrl: string
   headline: string
+  repId: string
 }
 
-const INITIAL_PROFILE: ProfileDraft = {
+const INITIAL_PROFILE: Omit<ProfileDraft, 'repId'> = {
   platform: 'linkedin',
   label: '',
   profileUrl: '',
@@ -66,10 +67,12 @@ export function ProfilesManager({
   initialProfiles,
   ownerByRepId,
   isAdmin = false,
+  reps,
 }: {
   initialProfiles: Profile[]
   ownerByRepId?: Record<string, string>
   isAdmin?: boolean
+  reps?: Array<{ id: string; name: string }>
 }) {
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles)
   const [proofsByProfile, setProofsByProfile] = useState<
@@ -114,6 +117,10 @@ export function ProfilesManager({
       setError('Give the profile a label or a URL so it is recognizable.')
       return
     }
+    if (reps && reps.length > 0 && !profileDraft.repId) {
+      setError('Choose which rep this identity belongs to.')
+      return
+    }
     setSaving('profile')
     setError(null)
     try {
@@ -125,6 +132,7 @@ export function ProfilesManager({
           label: profileDraft.label.trim() || null,
           profileUrl: profileDraft.profileUrl.trim() || null,
           headline: profileDraft.headline.trim() || null,
+          ...(profileDraft.repId ? { repId: profileDraft.repId } : {}),
         }),
       })
       const data = await res.json()
@@ -282,6 +290,7 @@ export function ProfilesManager({
             expanded={expanded === p.id}
             deleting={deletingId === p.id}
             cvBusy={cvBusy}
+            isAdmin={isAdmin}
             onToggle={() => void openProfile(p.id)}
             onDelete={() => setPendingDelete({ kind: 'profile', profileId: p.id })}
             onProofStart={() =>
@@ -301,7 +310,7 @@ export function ProfilesManager({
       </div>
 
       {isAdmin && (!profileDraft ? (
-            <Button variant="outline" onClick={() => { setError(null); setProfileDraft({ ...INITIAL_PROFILE }) }}>
+            <Button variant="outline" onClick={() => { setError(null); setProfileDraft({ ...INITIAL_PROFILE, repId: reps?.[0]?.id ?? '' }) }}>
               <Plus className="mr-1.5 size-3.5" aria-hidden="true" />
               Add an identity
             </Button>
@@ -309,6 +318,19 @@ export function ProfilesManager({
         <section className="reveal-up rounded-2xl border border-line bg-paper p-6 card-elevated">
           <h2 className="text-heading text-base text-ink">New identity</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            {reps && reps.length > 0 ? (
+              <div className="grid gap-1.5 sm:col-span-2">
+                <Label>Rep</Label>
+                <Select
+                  value={profileDraft.repId}
+                  onChange={(e) => setProfileDraft({ ...profileDraft, repId: e.target.value })}
+                >
+                  {reps.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
             <div className="grid gap-1.5">
               <Label>Platform</Label>
               <Select
@@ -413,6 +435,7 @@ function ProfileCard({
   expanded,
   deleting,
   cvBusy,
+  isAdmin,
   onToggle,
   onDelete,
   onProofStart,
@@ -426,6 +449,7 @@ function ProfileCard({
   expanded: boolean
   deleting: boolean
   cvBusy: boolean
+  isAdmin: boolean
   onToggle: () => void
   onDelete: () => void
   onProofStart: () => void
@@ -524,15 +548,17 @@ function ProfileCard({
             {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
             Proof ({proofs.length})
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-status-danger hover:border-status-danger/40 hover:bg-status-danger/5"
-            onClick={onDelete}
-            disabled={deleting}
-          >
-            <Trash2 className="size-3" />
-          </Button>
+          {isAdmin ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-status-danger hover:border-status-danger/40 hover:bg-status-danger/5"
+              onClick={onDelete}
+              disabled={deleting}
+            >
+              <Trash2 className="size-3" />
+            </Button>
+          ) : null}
         </div>
       </div>
 

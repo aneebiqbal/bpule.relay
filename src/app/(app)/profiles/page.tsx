@@ -38,7 +38,12 @@ export default async function ProfilesPage() {
           <Stat label="Upwork" value={upworkCount} />
         </div>
       </section>
-      <ProfilesManager initialProfiles={profiles} ownerByRepId={isAdmin ? ownerByRepId : undefined} isAdmin={isAdmin} />
+      <ProfilesManager
+        initialProfiles={profiles}
+        ownerByRepId={isAdmin ? ownerByRepId : undefined}
+        isAdmin={isAdmin}
+        reps={isAdmin ? reps.map((r) => ({ id: r.id, name: r.name })) : undefined}
+      />
     </div>
   )
 }
