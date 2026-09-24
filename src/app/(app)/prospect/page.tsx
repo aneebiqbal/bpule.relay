@@ -8,6 +8,7 @@ import {
   Check,
   ChevronDown,
   Copy,
+  Handshake,
   RefreshCw,
   Search,
   SkipForward,
@@ -473,12 +474,20 @@ export default function ProspectCheckPage() {
                     {result.extracted.titleRaw ?? result.extracted.title ?? 'No title'} {result.extracted.company ? `· ${result.extracted.company}` : ''}
                   </p>
                 </div>
-                <span className={cn(
-                  'ml-auto text-[11px] font-medium shrink-0',
-                  verdictDisplay?.contradicted ? 'text-orange' : recMeta?.color,
-                )}>
-                  {verdictDisplay?.headline ?? recMeta?.label}
-                </span>
+                {verdictDisplay?.contradicted ? (
+                  <span
+                    role="status"
+                    className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-full border border-orange/40 bg-orange/10 px-2.5 py-1 text-[11px] font-semibold text-orange shadow-sm"
+                  >
+                    <Handshake className="size-3.5 shrink-0" aria-hidden="true" />
+                    <span className="size-1.5 shrink-0 rounded-full bg-orange gentle-pulse" aria-hidden="true" />
+                    {verdictDisplay.headline}
+                  </span>
+                ) : (
+                  <span className={cn('ml-auto text-[11px] font-medium shrink-0', recMeta?.color)}>
+                    {recMeta?.label}
+                  </span>
+                )}
               </div>
 
               {result.revenue && (

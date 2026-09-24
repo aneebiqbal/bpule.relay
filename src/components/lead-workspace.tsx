@@ -12,6 +12,7 @@ import {
   Copy,
   ExternalLink,
   Flame,
+  Handshake,
   Info,
   Target,
   Trophy,
@@ -711,8 +712,12 @@ export function LeadWorkspace({
 
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {verdictDisplay?.contradicted ? (
-                <span className="inline-flex items-center gap-1.5 font-medium text-orange">
-                  <span className="size-1.5 rounded-full bg-orange" aria-hidden="true" />
+                <span
+                  role="status"
+                  className="inline-flex items-center gap-2 rounded-full border border-orange/40 bg-orange/10 px-2.5 py-1 text-[12px] font-semibold text-orange shadow-sm"
+                >
+                  <Handshake className="size-3.5 shrink-0" aria-hidden="true" />
+                  <span className="size-1.5 shrink-0 rounded-full bg-orange gentle-pulse" aria-hidden="true" />
                   {verdictDisplay.headline}
                 </span>
               ) : (
