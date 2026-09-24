@@ -172,12 +172,18 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
     }
   }
 
-  // Extract office location from text for hybrid/onsite roles
+  // Extract office location from text for hybrid/onsite roles — SCOPED to the
+  // current employment context. The office location must be near the HYBRID/
+  // ONSITE keyword match (same role block) and must NOT be picked up from
+  // historical experience lines elsewhere in the profile (e.g. "Advising
+  // startups in UK, Israel and Ireland" from a 2010-2012 consulting role must
+  // not become the current engagement's office location).
   if ((workplaceType === 'HYBRID' || workplaceType === 'ONSITE') && !input.requiredWorkerLocation) {
     // Per-line matching only — the City, ST capture must not cross a blank
     // line (which would stitch "Germany\n\nBerlin, Germany" into a fake
     // "Germany Berlin, Germany" office location from a profile header).
-    const locationMatch = extractOfficeLocation(text)
+    const anchorPattern = workplaceType === 'HYBRID' ? HYBRID : ONSITE
+    const locationMatch = extractOfficeLocationScoped(text, anchorPattern)
     if (locationMatch) {
       input.requiredWorkerLocation = locationMatch
       evidence.push(`Office location detected: ${locationMatch}.`)
@@ -385,6 +391,20 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
   } else if (workplaceType === 'UNKNOWN') {
     eligibility = 'UNCLEAR'
     reason = 'No workplace information — cannot determine eligibility. Not automatic rejection.'
+  } else if (
+    (workplaceType === 'HYBRID' || workplaceType === 'ONSITE') &&
+    !input.requiredWorkerLocation &&
+    input.sourceContext !== 'employer_post'
+  ) {
+    // HYBRID/ONSITE detected in a person's profile but no specific office
+    // location was found in the current-role context. The workplace type
+    // describes the prospect's OWN employment arrangement (e.g. "Hybrid" as
+    // a CEO), not an external-vendor delivery requirement. There is no
+    // engagement location restriction, so geography is not a service-eligibility
+    // barrier. Historical locations from past roles must not be treated as
+    // current restrictions (handled by scoped extraction above).
+    eligibility = 'NOT_APPLICABLE'
+    reason = 'Hybrid/on-site workplace type reflects the prospect\'s own employment — no engagement location restriction stated. Not a vendor eligibility barrier.'
   } else {
     eligibility = 'UNCLEAR'
     reason = 'Insufficient information for a definitive eligibility determination.'
@@ -424,26 +444,73 @@ export function eligibilityScoreContribution(eligibility: RemoteEligibility): nu
 
 // ── Helper: Extract office location per-line ───────────────────────────────
 
+// Section boundaries in a pasted LinkedIn profile. When extracting the office
+// location for a current HYBRID/ONSITE role, we must stop at these boundaries
+// so that historical experience lines (which may mention UK, Israel, Ireland,
+// etc. from past roles) are never mistaken for the current role's location.
+const PROFILE_SECTION_BOUNDARIES = /^(experience|education|licenses?\s*&\s*certifications?|skills|show\s+all|featured|about|activity|posts?|comments?|videos?|images)\s*$/i
+
 /**
- * Extract an office location ("City, ST" or "City, Country") for a hybrid or
- * on-site role. Matching is restricted to a single line so a profile header's
- * "Berlin, Germany" location line is not stitched with an adjacent line into a
- * fake compound location.
+ * Extract an office location ("City, ST" or "City, Country") scoped to the
+ * block containing the workplace-type anchor (HYBRID or ONSITE).
+ *
+ * The anchor (the line that says "Hybrid" or "on-site") is found first; the
+ * search then looks for an office location only within ±WINDOW lines of that
+ * anchor and never crosses a profile section boundary. This prevents
+ * historical experience lines from being misread as the current role's
+ * location.
  */
-function extractOfficeLocation(text: string): string | null {
+function extractOfficeLocationScoped(text: string, anchorPattern: RegExp): string | null {
+  const lines = text.split(/\r?\n/)
+
+  // Find the anchor line (where HYBRID/ONSITE matched).
+  let anchorIndex = -1
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim()
+    if (trimmed && anchorPattern.test(trimmed)) {
+      anchorIndex = i
+      break
+    }
+  }
+
+  // Determine the search window: from the earlier of (anchor - WINDOW) or the
+  // last section boundary before the anchor, to the earlier of
+  // (anchor + WINDOW) or the next section boundary after the anchor.
+  const WINDOW = 8
+  let start = Math.max(0, anchorIndex - WINDOW)
+  let end = Math.min(lines.length - 1, anchorIndex + WINDOW)
+
+  // Shrink the window at section boundaries so we never search across into
+  // the Experience / Education / etc. section.
+  if (anchorIndex >= 0) {
+    for (let i = anchorIndex - 1; i >= Math.max(0, anchorIndex - WINDOW); i--) {
+      if (PROFILE_SECTION_BOUNDARIES.test(lines[i].trim())) {
+        start = i + 1
+        break
+      }
+    }
+    for (let i = anchorIndex + 1; i <= Math.min(lines.length - 1, anchorIndex + WINDOW); i++) {
+      if (PROFILE_SECTION_BOUNDARIES.test(lines[i].trim())) {
+        end = i - 1
+        break
+      }
+    }
+  }
+
   const linePatterns = [
     /\b(?:in|at|from)\s+(?:our\s+)?([A-Z][A-Za-z]+(?:[\s-][A-Z][A-Za-z]+)?,\s*(?:[A-Z]{2}|[A-Z][A-Za-z]+))\b/,
     /\bLocation\s*:\s*([A-Z][A-Za-z]+(?:[\s-][A-Z][A-Za-z]+)?,\s*(?:[A-Z]{2}|[A-Z][A-Za-z]+))\b/,
   ]
-  for (const line of text.split(/\r?\n/)) {
-    const trimmed = line.trim()
+
+  for (let i = start; i <= end; i++) {
+    const trimmed = lines[i]?.trim()
     if (!trimmed) continue
+    // Skip section boundary lines themselves.
+    if (PROFILE_SECTION_BOUNDARIES.test(trimmed)) continue
     for (const pattern of linePatterns) {
       const match = trimmed.match(pattern)
       if (match?.[1]) {
         const candidate = match[1].trim()
-        // Reject cross-line stitching artifacts (contains a bare country name
-        // that looks like a second capture) and very long captures.
         if (candidate.length > 40) continue
         return candidate
       }
