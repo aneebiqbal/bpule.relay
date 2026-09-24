@@ -2028,10 +2028,23 @@ export async function runIntelligencePipeline(
     && !hasLocationRelevantOpportunity
     && refinedEligibility.workplaceType === 'UNKNOWN'
 
+  // When overriding to NOT_APPLICABLE, workplaceType/remoteScope may still
+  // reflect real detected-in-text reality (e.g. a job post genuinely says
+  // ONSITE) and are kept as descriptive metadata — but `evidence` and
+  // `reason` are reset, never carried through. `evidence` strings get
+  // pushed into the evidence ledger as FACT/EMPLOYER_REQUIREMENT entries
+  // (see below) and can leak into strategy/message grounding as if they
+  // were real actionable justification; several of them were fabricated by
+  // heuristics pattern-matching generic vocabulary (e.g. "explicit ask for
+  // external project help" from ordinary engineering language) rather than
+  // a real employment/engagement ask. eligibility=NOT_APPLICABLE must never
+  // carry forward reasoning that argues for a specific eligibility verdict —
+  // only the plain fact of what workplace type text was detected, if any.
   const finalEligibility: RemoteEligibility =
     isNonBuyerRelationship(relationship) || noOpportunityAtAll
       ? {
-          ...refinedEligibility,
+          workplaceType: refinedEligibility.workplaceType,
+          remoteScope: refinedEligibility.remoteScope,
           eligibility: 'NOT_APPLICABLE',
           reason: isNonBuyerRelationship(relationship)
             ? 'Not an employment or engagement opportunity — remote eligibility does not apply to this commercial relationship.'

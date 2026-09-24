@@ -922,7 +922,15 @@ function decideContact(
   // identity, no activity, no content at all) reaches SKIP.
   const nonBuyerRelationship = isNonBuyerRelationship(source.relationship)
   if (nonBuyerRelationship && !irrelevant) {
-    const hasIdentitySignal = Boolean(source.name || source.title) && source.company !== 'Unknown company'
+    // A real name AND a real title is meaningful identity evidence on its
+    // own — it must not be invalidated just because company-name extraction
+    // separately failed to parse a company out of an unusual title format
+    // (e.g. "Founder & CEO · Merget" with a middle-dot separator). Requiring
+    // BOTH person fields AND a successfully-parsed company name made a
+    // clearly-identified real person (name + title) fall through to SKIP
+    // whenever company extraction had a parsing gap — an extraction-layer
+    // weakness should not manufacture a false "no credible contact" result.
+    const hasIdentitySignal = Boolean(source.name && source.title) || (source.company !== 'Unknown company' && Boolean(source.name || source.title))
     const hasActivitySignal = source.recentPosts.length > 0
       || source.explicitProblems.length > 0
       || source.hiringSignals.length > 0

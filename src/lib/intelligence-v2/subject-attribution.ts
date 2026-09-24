@@ -155,9 +155,14 @@ const RECRUITER_MODEL_PATTERNS = [
  * prospects can be delivery buyers.
  */
 const PRODUCT_MODEL_PATTERNS = [
-  /\b(?:build(?:ing|s)?|creat(?:ing|es)?|launch(?:ing|ed)?)\s+(?:a\s+)?(?:new\s+)?(?:product|platform|app|SaaS|service|tool|solution)\b/i,
-  /\bour\s+(?:product|platform|app|SaaS|service|tool|solution)\b/i,
-  /\bwe\s+(?:build|create|offer|provide|deliver)\s+(?:software|apps?|platforms?|solutions?|products?)\b/i,
+  /\b(?:build(?:ing|s)?|creat(?:ing|es)?|launch(?:ing|ed)?)\s+(?:a\s+)?(?:new\s+)?(?:product|platform|app|SaaS|service|tool|solution|infrastructure)\b/i,
+  /\bour\s+(?:product|platform|app|SaaS|service|tool|solution|infrastructure)\b/i,
+  // "we're building X Y Z infrastructure/software/platform..." — allow a
+  // bounded run of descriptive words between the verb and the noun, since
+  // founders routinely qualify what they build at length ("AI coding
+  // collaboration and version-control infrastructure", not just
+  // "infrastructure").
+  /\bwe(?:'?re)?\s+(?:build(?:ing)?|creat(?:e|ing)?|offer(?:ing)?|provid(?:e|ing)?|deliver(?:ing)?)\s+[\w\s-]{0,80}?\b(?:software|apps?|platforms?|solutions?|products?|infrastructure)\b/i,
   /\btech\s+(?:startup|company)\b/i,
   /\b(?:SaaS|B2B|B2C|D2C)\s+(?:startup|company|platform|product|business)\b/i,
   /\bsoftware\s+(?:company|product|platform|engineering)\b/i,
@@ -220,6 +225,28 @@ const OWN_PRODUCT_SALES_BD_PATTERNS = [
   /\bexplore\s+opportunities\s+for\s+pilots?,?\s+partnerships?\s+and\s+collaboration\b/i,
   /\b(?:roadshow|delegation|pavilion)\b.{0,80}\bmeet(?:ing)?\s+(?:the\s+)?(?:founders?|teams?|clients?|customers?|insurers?|carriers?)\b/i,
   /\bsponsor(?:ing|ed)?\s+(?:the\s+)?[A-Z][\w.]*\s*(?:conference|summit|vegas|expo)\b/i,
+]
+
+// A founder actively BUILDING and VALIDATING their own product — customer/
+// founder discovery, pre-launch, inviting early access/beta users. This is
+// PRODUCT EXECUTION evidence (they are making something and testing it with
+// the market), not evidence they are shopping for external engineering
+// delivery. General shape, not tied to any one company: talking to
+// founders/customers about their workflow/problem, being "close to launch"
+// or "pre-launch," and inviting people to try/access the product early.
+// Distinct from OWN_PRODUCT_SALES_BD_PATTERNS (post-launch partnership/BD
+// outreach to co-sell) — this covers the pre-launch/validation stage, which
+// the BD patterns don't recognize at all, leaving founders in this stage to
+// fall through to the POTENTIAL_BUYER default.
+const OWN_PRODUCT_VALIDATION_PATTERNS = [
+  /\btalk(?:ing|ed)?\s+to\s+(?:founders?|customers?|engineering\s+leaders?|users?)\s+(?:about|to\s+understand)\b/i,
+  /\bcustomer\s+discovery\b/i,
+  /\bfounder\s+(?:conversations?|discovery)\b/i,
+  /\b(?:not\s+public\s+yet|pre[- ]?launch|close\s+to\s+launch)\b.{0,60}\b(?:we'?re|i'?m)\s+(?:close|building)\b/i,
+  /\b(?:we'?re|i'?m)\s+(?:not\s+public\s+yet|pre[- ]?launch|close\s+to\s+launch)\b/i,
+  /\b(?:get|request)\s+early\s+access\b/i,
+  /\binvit(?:e|ing)\s+(?:you|people|builders?)\s+to\s+(?:get|try|access)\b/i,
+  /\b(?:validating|validated)\s+(?:the\s+)?(?:problem|idea|hypothesis)\b/i,
 ]
 
 /**
@@ -389,6 +416,20 @@ export function deriveRelationship(
   if (
     businessModel === 'PRODUCT'
     && OWN_PRODUCT_SALES_BD_PATTERNS.some((p) => p.test(blob))
+    && !hasExternalDeliverySeekingSignal(blob)
+  ) {
+    return 'NETWORKING'
+  }
+
+  // Founder/exec actively BUILDING and VALIDATING their own product
+  // (customer discovery, pre-launch, inviting early access) with no sign
+  // they are also shopping for external delivery help. Same non-buyer
+  // category as the BD/partnership case above — active product execution is
+  // not evidence of buyer demand for BPulse, regardless of how much
+  // engineering/technical language surrounds it.
+  if (
+    businessModel === 'PRODUCT'
+    && OWN_PRODUCT_VALIDATION_PATTERNS.some((p) => p.test(blob))
     && !hasExternalDeliverySeekingSignal(blob)
   ) {
     return 'NETWORKING'

@@ -74,6 +74,20 @@ const AI_CLICHES_CONNECTION = [
   'excited to reach out',
 ]
 
+// General business-truism patterns ("growth causes strain", "scaling causes
+// bottlenecks") stated as generalizations, not tied to any specific
+// prospect fact — a fabricated diagnosis dressed as observed insight. The
+// shape to catch: a generic subject (growth/scaling/teams "at this stage")
+// paired with a generalizing verb ("tend to", "usually", "often", "can")
+// and a negative-capacity outcome (strain/bottleneck/stretch resources).
+const GENERALIZED_PAIN_CLAIMS = [
+  /\b(?:growth|scaling|scale[- ]?up)\s+(?:phases?\s+)?(?:tends?\s+to|usually|often|can|typically)\s+(?:strain|stretch|overwhelm|break|outpace)\b/i,
+  /\bscaling\s+(?:usually\s+)?creates?\s+(?:engineering\s+)?bottlenecks?\b/i,
+  /\bteams?\s+at\s+this\s+stage\s+(?:often|usually|typically)\s+need\b/i,
+  /\brapid\s+growth\s+can\s+stretch\b/i,
+  /\b(?:companies|founders|teams)\s+(?:at\s+your\s+stage\s+)?(?:often|usually|typically)\s+(?:struggle|need|lack|run\s+into)\b/i,
+]
+
 export interface ConnectionNoteInput {
   text: string
   profile: Profile | null
@@ -175,6 +189,18 @@ export function evaluateConnectionNote(input: ConnectionNoteInput): ConnectionNo
     if (/\b(i built|i helped|i worked on|my experience with)\b/i.test(lower)) {
       failures.push('Claims experience without verified proof match')
     }
+  }
+
+  // 14b. Unsupported generalized-pain claim — a plausible general business
+  // pattern ("growth strains roadmaps", "scaling creates bottlenecks")
+  // stated as if it were a verified fact about THIS prospect. These read as
+  // confident diagnosis but are not grounded in any specific evidence about
+  // the prospect's actual situation — a generic truism personalized into a
+  // fabricated pain point. See hardening report: "Growth phases tend to
+  // strain roadmaps" sent to a pre-launch founder with zero evidence of any
+  // roadmap strain.
+  if (GENERALIZED_PAIN_CLAIMS.some((p) => p.test(lower))) {
+    failures.push('Unsupported generalized-pain claim (general pattern presented as prospect-specific fact)')
   }
 
   // 15. Could send to 100 prospects?
