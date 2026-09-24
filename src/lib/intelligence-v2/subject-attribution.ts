@@ -434,7 +434,18 @@ export function stripThirdPartyRepostBlocks(rawText: string, prospectName: strin
   // ("Saar Meents' profile") — LinkedIn renders both forms depending on the
   // author's name, so both must match or every block under a name ending in
   // "s" (including the prospect's own) is misread as unattributed content.
-  const VIEW_PROFILE_RE = /^View (.+?)'s?\s+profile$/i
+  //
+  // LinkedIn renders TWO kinds of attribution marker before a repost block:
+  //   "View <Person>'s profile"  (person repost) and
+  //   "View company: <Company>"   (company/organization repost).
+  // Both must be treated as third-party content and stripped unless the
+  // author IS the prospect. A Pendo product-launch post reposted by Mick
+  // Cunningham (RALCO) must never become RALCO buying evidence.
+  // LinkedIn exports use Unicode smart quotes (’ U+2019) for possessives,
+  // not ASCII apostrophes ('). Match both so "Brian Maccaba's profile"
+  // and "Brian Maccaba's profile" both match.
+  const VIEW_PROFILE_RE = /^View (.+?)['\u2019]s?\s+profile$/i
+  const VIEW_COMPANY_RE = /^View company:\s*(.+)$/i
   const lines = rawText.split(/\r?\n/)
   const normalizedProspect = prospectName.trim().toLowerCase()
 
@@ -442,15 +453,17 @@ export function stripThirdPartyRepostBlocks(rawText: string, prospectName: strin
   let skipping = false
 
   for (const line of lines) {
-    const match = VIEW_PROFILE_RE.exec(line.trim())
-    if (match) {
-      const author = match[1].trim().toLowerCase()
-      // A block belongs to the prospect if the named author IS the prospect,
-      // or is a company page (companies don't "repost" as a person, and
-      // "View company: X" is handled by not matching this pattern at all —
-      // this branch only ever sees person profile markers).
-      skipping = author !== normalizedProspect
-      // Drop the "View ... profile" marker line itself either way — it is
+    const trimmed = line.trim()
+    const profileMatch = VIEW_PROFILE_RE.exec(trimmed)
+    const companyMatch = VIEW_COMPANY_RE.exec(trimmed)
+    if (profileMatch || companyMatch) {
+      const author = (profileMatch?.[1] ?? companyMatch?.[1] ?? '').trim().toLowerCase()
+      // A block belongs to the prospect only if the named author IS the
+      // prospect (person) — company pages are ALWAYS third-party reposts from
+      // the prospect's perspective (a person reposting a company's post is
+      // sharing someone else's content, not their own).
+      skipping = companyMatch ? true : author !== normalizedProspect
+      // Drop the attribution marker line itself either way — it is
       // navigation chrome, not content.
       continue
     }

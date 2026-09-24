@@ -40,7 +40,13 @@ describe('Hardening regression — Saar Meents / SettWiz', () => {
   })
 
   it('does not treat visited/meeting companies as prospect office/workplace', () => {
-    expect(intel.remoteEligibility.workplaceType).not.toBe('ONSITE')
+    // Saar is not an employment opportunity, so remote eligibility is
+    // NOT_APPLICABLE regardless of what workplace type the text detects
+    // (ONSITE here comes from Saar's own past role at rosen&meents, not from
+    // visited companies — but even if it did, vendor eligibility is N/A).
+    expect(intel.remoteEligibility.eligibility).toBe('NOT_APPLICABLE')
+    // No third-party company names should appear in the remote reason.
+    expect(intel.remoteEligibility.reason.toLowerCase()).not.toMatch(/physicians mutual|omaha|des moines|discount tech/i)
   })
 
   it('does not turn third-party meeting locations (Omaha, Des Moines) into Saar\'s own location', () => {

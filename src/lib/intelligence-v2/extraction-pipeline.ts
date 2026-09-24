@@ -1191,9 +1191,12 @@ function extractName(lines: string[]): string | null {
     // Skip section headers, labels, and all-caps structural labels
     if (/^(===|source|identity|about|current|past|activity|education|skills|other|hiring|batch|prospect|experience|contact)\b/i.test(line)) continue
     if (/^[A-Z][A-Z\s]+$/.test(line)) continue
-    // Allow parentheses for nicknames: "Ephraim (Effy) Gittler"
-    if (/^[A-Z][A-Za-z]+\s*(?:\([A-Za-z]+\)\s*)?[A-Za-z'-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2}$/.test(line)) {
-      return line.replace(/\s*\([^)]+\)\s*/g, ' ').replace(/\s+/g, ' ').trim()
+    // Match a plain name ("Brian Maccaba") OR a name with a parenthetical
+    // nickname ("Ephraim (Effy) Gittler", 'Justus ("riptide") Hanna').
+    // LinkedIn renders the nickname in quotes inside parentheses. Strip both.
+    const nameMatch = line.match(/^([A-Z][A-Za-z'-]+)(?:\s+[\("']*[A-Za-z]+[\)"']*)?\s+([A-Za-z'-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2})$/)
+    if (nameMatch) {
+      return [nameMatch[1], nameMatch[2]].join(' ').trim()
     }
   }
   return null
@@ -1401,6 +1404,54 @@ function isNegatedContextAnywhere(text: string): boolean {
   return NEGATION_PATTERNS.some((p) => p.test(lower))
 }
 
+/**
+ * Detect whether a pain/problem keyword appears in a SOLVER / achievement /
+ * service-offering context rather than a "we have this problem" context.
+ *
+ * Solver context examples (should NOT produce technical_problem):
+ *   "earned $600K in bug bounty rewards"        → achievement
+ *   "finds critical vulnerabilities in protocols" → service offering
+ *   "we spent years building the scaffolding"    → own product development
+ *   "we've helped protocols like Ethereum"       → customer success
+ *   "I spent years finding critical vulnerabilities" → personal expertise
+ *
+ * Problem context examples (SHOULD produce technical_problem):
+ *   "struggling with our payment integration"
+ *   "urgent: our database is drowning"
+ *   "we need help with a critical vulnerability in our protocol"
+ */
+function isSolverContext(text: string): boolean {
+  const lower = text.toLowerCase()
+
+  // Achievement / bounty / reward language near pain keywords.
+  if (/\b(?:earned|won|received|payout|bounty|reward)\b/i.test(lower) && /\b(?:bug|vulnerabilit|exploit|hack|breach|flaw)\b/i.test(lower)) {
+    return true
+  }
+  // "Finding / detecting / discovering X for [customers|clients|protocols]"
+  // → the prospect solves this for others.
+  if (/\b(?:find(?:s|ing)?|detect(?:s|ing)?|discover(?:s|ing)?|hunt(?:s|ing)?)\b.{0,60}\b(?:vulnerabilit|bug|exploit|flaw|breach|weakness)\b/i.test(lower)) {
+    return true
+  }
+  // "Helped [companies/protocols] (with|solve|fix)" → service delivered.
+  if (/\b(?:helped|helping|assisted)\b.{0,40}\b(?:protocols?|companies?|clients?|projects?|teams?)\b/i.test(lower) && /\b(?:vulnerabilit|security|bug|exploit|audit)\b/i.test(lower)) {
+    return true
+  }
+  // Explicit offering/seller CTA: "if you're wondering about X, let's connect"
+  // or "we provide / we offer / our [product|service]".
+  if (/\b(?:we (?:provide|offer|deliver|specialize)|our (?:product|service|platform|solution|company)|if you're wondering|let's connect|we (?:help|assist) (?:protocols|companies|clients))\b/i.test(lower)) {
+    return true
+  }
+  // Past-tense expertise: "I spent years finding / I previously found"
+  if (/\b(?:i (?:spent|previously|used to|was))\b.{0,50}\b(?:find(?:ing)?|hunt(?:ing)?|search(?:ing)?)\b.{0,40}\b(?:vulnerabilit|bug|exploit|flaw)\b/i.test(lower)) {
+    return true
+  }
+  // Building own product: "building [company]" / "we're building" near pain words.
+  if (/we'?re\s+building\b.{0,80}\b(?:vulnerabilit|security|detection|scanning)\b/i.test(lower)) {
+    return true
+  }
+  return false
+}
+
 export function extractOpportunitySignals(rawText: string): { signals: OpportunitySignal[]; urgency: 'immediate' | 'near_term' | 'future' | 'unknown' } {
   const signals: OpportunitySignal[] = []
 
@@ -1432,7 +1483,15 @@ export function extractOpportunitySignals(rawText: string): { signals: Opportuni
 
   if (softwareAsk && !nonCredibleFreelanceBrief) signals.push('explicit_ask')
   if (/(job:|upwork|budget:|proposals?:)/i.test(rawText) && hasTechContext && !nonCredibleFreelanceBrief) signals.push('freelance_project_need')
-  if (PAIN_PATTERNS.some((p) => p.test(rawText)) && hasTechContext) signals.push('technical_problem')
+  // technical_problem: only flag when the prospect APPEARS TO HAVE the problem,
+  // not when they SOLVE it for others. "Earned $600K in bug bounty rewards"
+  // (achievement/solver context) or "We find critical vulnerabilities in
+  // protocols" (service offering) must NOT produce a buying signal. Check
+  // for solver/achievement/seller framing around the pain keyword.
+  const hasPain = PAIN_PATTERNS.some((p) => p.test(rawText))
+  if (hasPain && hasTechContext && !isSolverContext(rawText)) {
+    signals.push('technical_problem')
+  }
   // A structural job posting has no single "hiring" match index to check
   // context around, so scan the whole document for a filled/no-longer-hiring
   // disclaimer instead of only the 60 chars before one match.
@@ -1601,8 +1660,30 @@ function extractContentSignals(lines: string[], rawText: string): PassAOutput['c
     )
     .slice(0, 5)
 
+  // Explicit problems must be scoped to the prospect's OWN current situation.
+  // A pain keyword (e.g. "bug") near a dev keyword (e.g. "platform") in a
+  // third-party panel description ("HackenProof | Web3 bug bounty platform")
+  // or an achievement ("solved vulnerabilities for protocols") is NOT a current
+  // buying need. Require: (1) first-person/current-ownership framing, (2) NOT
+  // negated to a solved/achievement/past state, (3) NOT a third-party panel or
+  // event description.
+  const SOLVED_NEGATION = /\b(solved|resolved|fixed|built|created|designed|implemented|earned|helped|reduced|prevented|found|detected|discovered|shipped|delivered|launched)\b/i
+  const THIRD_PARTY_PANEL = /\b(panel(?:ists?)?|conference|summit|event|debate|discussion|conversation with|spoke at|keynote|session|meetup)\b/i
+  const FIRST_PERSON_PROBLEM = /\b(i|we|my|our|i'm|i've|we're|we've)\b.{0,60}(?:struggling|stuck|having|dealing|issue|problem|challenge|need|want|looking|seeking)|(?:struggling|stuck|having|dealing|issue|problem|challenge)\b.{0,40}(?:i|we|my|our)\b/i
   const explicitProblems = attributableLines
-    .filter((line) => PAIN_PATTERNS.some((p) => p.test(line)) && DEV_ROLE_HINT.test(line))
+    .filter((line) => {
+      if (!PAIN_PATTERNS.some((p) => p.test(line)) || !DEV_ROLE_HINT.test(line)) return false
+      const lower = line.toLowerCase()
+      // Reject third-party panel/event descriptions — "bug bounty platform"
+      // in a list of panelists is not the prospect's problem.
+      if (THIRD_PARTY_PANEL.test(lower)) return false
+      // Reject solved/achievement/past framing — "solved vulnerabilities" or
+      // "earned bounties" describes what the prospect SOLVES, not what they HAVE.
+      if (SOLVED_NEGATION.test(lower)) return false
+      // Require first-person current-ownership OR clear present-tense problem
+      // framing for it to count as a buying signal.
+      return FIRST_PERSON_PROBLEM.test(lower) || /\b(currently|now|right now|today|still)\b/i.test(lower)
+    })
     .slice(0, 5)
 
   const recentPosts = lines
@@ -1931,6 +2012,18 @@ export async function runIntelligencePipeline(
   // assessment computed from it is real evidence of a location-relevant
   // opportunity and must not be discarded just because passA.job/opportunity
   // signals happen not to have populated.
+  // A profile without an extracted job posting AND no detected workplace type
+  // has no engagement for which geography is relevant. The prospect's own
+  // employment workplace type (e.g. "England · Remote") describes THEIR
+  // arrangement, not a vendor restriction. ABSENCE OF RESTRICTION ≠ VERIFIED
+  // ELIGIBILITY. Only when a job posting or location-relevant buying signal
+  // exists does geography become a service-eligibility factor.
+  //
+  // IMPORTANT: only override to NOT_APPLICABLE when the workplace type scan
+  // itself found nothing (UNKNOWN). If the text genuinely says "Remote-first"
+  // or "Remote OK", that IS real workplace evidence and the eligibility
+  // assessment derived from it (ELIGIBLE for a distributed prospect) must be
+  // preserved — overriding it would discard real signal (e.g. Emily Torres).
   const noOpportunityAtAll = !passA.job
     && !hasLocationRelevantOpportunity
     && refinedEligibility.workplaceType === 'UNKNOWN'
@@ -1938,8 +2031,7 @@ export async function runIntelligencePipeline(
   const finalEligibility: RemoteEligibility =
     isNonBuyerRelationship(relationship) || noOpportunityAtAll
       ? {
-          workplaceType: 'UNKNOWN',
-          remoteScope: 'UNKNOWN',
+          ...refinedEligibility,
           eligibility: 'NOT_APPLICABLE',
           reason: isNonBuyerRelationship(relationship)
             ? 'Not an employment or engagement opportunity — remote eligibility does not apply to this commercial relationship.'

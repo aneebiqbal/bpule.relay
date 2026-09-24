@@ -158,11 +158,36 @@ function computeRolePenalty(intelligence: NormalizedIntelligence, watchOut: stri
     watchOut.push('Recruiter / career-services business: their hiring content describes their service, not a software-buying need.')
   }
 
-  // Non-technical micro business
-  const isMicroBusiness = /\b(plumb(?:er|ing)|electrician|baker|florist|bakery|cafe|restaurant|barber|salon|handyman|plumbing services)\b/i.test(allContent)
+  // Non-technical micro business — context-aware. A bare keyword match is
+  // not enough: a security founder can say "I can hook up an electrical
+  // outlet without being an electrician" as an analogy. Only flag when the
+  // micro-business term appears alongside ownership/operation language
+  // ("my plumbing business", "I run a bakery", "owner of...") suggesting it
+  // IS the person's actual trade, OR in the profile header/title where it
+  // describes the person's role — not buried in an analogy or third-party
+  // reference deep in a post.
+  const microBusinessTerms = /\b(plumb(?:er|ing)|electrician|baker|florist|bakery|restaurant|barber|salon|handyman|plumbing services)\b/i
+  const microBusinessContextA = /\b(my |our |owner of |run a |i am a |i'm a |i was a |works? (?:as|for) |freelance |independent )\s{0,30}(?:plumb(?:er|ing)|electrician|baker|florist|bakery|restaurant|barber|salon|handyman)\b/i
+  const microBusinessContextB = /\b(?:plumb(?:er|ing)|electrician|baker|florist|bakery|restaurant|barber|salon|handyman)\s{0,30}(?:business|company|shop|service|trade|practice)\b/i
+  const isMicroBusiness = microBusinessContextA.test(allContent) || microBusinessContextB.test(allContent) || (
+    microBusinessTerms.test(title) && !/\b(engineer|developer|software|cto|ceo|founder|product|security|ai|machine learning|data)\b/i.test(title)
+  )
   if (isMicroBusiness) {
     penalty += 25
     watchOut.push('Non-technical micro business — unlikely to need software development')
+  }
+
+  // Company technicality — a small company is not automatically non-technical.
+  // If the profile shows technical product/engineering evidence (building
+  // software, AI systems, security research), override any "small = non-tech"
+  // assumption. Company size and technicality are independent dimensions.
+  const hasTechnicalProductEvidence = /\b(?:building|built|developing|developed|shipped|architecture|proprietary|engineering|software|ai system|machine learning|security research|code|platform|saas|api|agent)\b/i.test(allContent)
+  if (isMicroBusiness && hasTechnicalProductEvidence) {
+    // Downgrade: the person clearly does technical work despite a micro-business
+    // keyword appearing (e.g. an analogy). Remove the penalty but keep a note.
+    penalty -= 25
+    watchOut.pop()
+    watchOut.push('Profile contains a micro-business term but also strong technical product evidence — treating as technical.')
   }
 
   // Fraud risk — concrete suspicious behavior, not industry membership

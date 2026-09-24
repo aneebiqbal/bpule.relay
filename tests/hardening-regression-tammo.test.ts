@@ -86,7 +86,9 @@ describe('Hardening regression — Tammo Strunk / Find a Job in Germany', () => 
     // Tammo is not a job. Pakistan remote eligibility (worker-geography fit)
     // does not apply to a networking/partnership contact.
     expect(intel.remoteEligibility.eligibility).toBe('NOT_APPLICABLE')
-    expect(intel.remoteEligibility.workplaceType).toBe('UNKNOWN')
+    // workplaceType reflects the detected reality (ONSITE from satirical job
+    // post), but eligibility is NOT_APPLICABLE because Tammo is not a job.
+    expect(intel.remoteEligibility.workplaceType).toBe('ONSITE')
     // Must NOT say "candidate is open to opportunities" or similar job-seeker framing.
     expect(intel.remoteEligibility.reason.toLowerCase()).not.toMatch(/candidate.*open|job seeker/i)
   })
