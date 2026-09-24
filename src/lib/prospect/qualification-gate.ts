@@ -36,6 +36,26 @@ const PROSPECT_CONTENT_MARKERS = [
   /\b(company|startup|agency|firm|studio|inc\.?|llc|ltd)\b/i,
 ]
 
+// LinkedIn's own paste chrome: a connection-degree badge (· 1st/2nd/3rd), a
+// section header for work history/education, or a connections count. These
+// are structural signals that a paste is a real profile regardless of
+// wording — a person who writes their "About" section in resume-style third
+// person (no "I"/"my"/"he"/"she") is extremely common and must not be
+// treated the same as an empty/garbage/login-screen paste just because it
+// has no pronouns and few keyword hits. See hardening report: Eli Takele
+// (real LinkedIn profile, third-person bio) was misclassified IRRELEVANT.
+const LINKEDIN_STRUCTURE_PATTERNS = [
+  /·\s*(1st|2nd|3rd)\b/i,
+  /^\s*experience\s*$/im,
+  /^\s*education\s*$/im,
+  /\b\d+\+?\s*connections?\b/i,
+  /\b(licenses?\s*&\s*certifications?)\b/i,
+]
+
+function hasLinkedInProfileStructure(text: string): boolean {
+  return LINKEDIN_STRUCTURE_PATTERNS.filter((p) => p.test(text)).length >= 2
+}
+
 export function classifyInput(rawText: string): ClassificationResult {
   const text = rawText.trim()
   const reasons: string[] = []
@@ -71,8 +91,10 @@ export function classifyInput(rawText: string): ClassificationResult {
     if (pattern.test(text)) markerHits++
   }
 
+  const hasStructure = hasLinkedInProfileStructure(text)
   const hasPersonMarkers = /\b(he|she|they|his|her|their|i|my|me)\b/i.test(text) ||
-    /\b\d+\+?\s*years?\s*(of\s*)?experience\b/i.test(text)
+    /\b\d+\+?\s*years?\s*(of\s*)?experience\b/i.test(text) ||
+    hasStructure
   const hasJobMarkers = /\b(job\s*description|responsibilities|requirements|qualifications|apply\s*now|salary|compensation)\b/i.test(text)
   const hasCompanyMarkers = /\b(company|startup|agency|firm|studio)\b/i.test(text) && markerHits >= 2
   const hasHiringIntent = /\b(hiring|recruiting|looking\s+(?:for|to)|need\s+(?:a|an|someone))\b/i.test(text)
@@ -86,6 +108,16 @@ export function classifyInput(rawText: string): ClassificationResult {
     return { classification: 'BUSINESS_OPPORTUNITY', confidence: 70, reasons: ['Active hiring or project need detected.'] }
   }
 
+  // A real LinkedIn profile paste (connection-degree badge, Experience/
+  // Education section headers, a connections count) is direct structural
+  // evidence of a person profile even with a single keyword hit — a
+  // resume-style third-person bio with a job title and one skill mention
+  // should not need two independent keyword categories to avoid being
+  // treated as irrelevant.
+  if (hasStructure && markerHits >= 1) {
+    return { classification: 'PERSON_PROFILE', confidence: 65, reasons: ['LinkedIn profile structure and prospect content detected.'] }
+  }
+
   if (hasPersonMarkers && markerHits >= 2) {
     return { classification: 'PERSON_PROFILE', confidence: 65, reasons: ['Personal profile or professional bio detected.'] }
   }
@@ -94,7 +126,7 @@ export function classifyInput(rawText: string): ClassificationResult {
     return { classification: 'COMPANY_PROFILE', confidence: 60, reasons: ['Company description detected.'] }
   }
 
-  if (markerHits === 1) {
+  if (markerHits === 1 || hasStructure) {
     return { classification: 'INSUFFICIENT', confidence: 50, reasons: ['Minimal prospect signal detected; paste more context for reliable qualification.'] }
   }
 

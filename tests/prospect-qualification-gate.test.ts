@@ -40,6 +40,79 @@ describe('Prospect qualification gate', () => {
     }
   })
 
+  // Regression: a real LinkedIn profile paste written in resume-style third
+  // person (no "I"/"my"/"he"/"she" pronouns, no exact "X years experience"
+  // phrase) was misclassified IRRELEVANT ("This is not a prospect. No
+  // message. Login or product UI is not a reason to contact anyone.")
+  // purely because classifyInput()'s hasPersonMarkers check required
+  // first/third-person pronouns that a third-person bio will never contain.
+  // Structural LinkedIn evidence (connection-degree badge, Experience/
+  // Education headers, a connections count) must be recognized regardless
+  // of pronoun usage.
+  it('does not hard-reject a real LinkedIn profile paste written in third person with no pronouns', () => {
+    const rawText = `Eli Takele
+· 2nd
+
+Frontend Developer at Viz.ai
+
+Tel Aviv District, Israel
+
+·
+
+Contact info
+
+500+
+
+connections
+
+Connect
+Message
+
+More
+About
+Software Developer with hands-on experience building scalable web applications using
+JavaScript (ES6), TypeScript, React.js, Next.js, Node.js, and MongoDB. Skilled in both
+frontend and backend development, with a strong grasp of clean code principles,
+test-driven development, and CI/CD pipelines using Azure and AWS.
+
+Experience
+Viz.ai logo
+Frontend Developer
+
+Viz.ai · Full-time
+
+Sep 2025 - Present · 1 yr 1 mo
+
+Education
+Ono Academic College logo
+Ono Academic College
+
+Bachelor's degree, Business Administration (Information Systems)
+
+Oct 2021 – Oct 2024
+
+Licenses & certifications
+Microsoft logo
+70-483 Programming in c#.
+
+Microsoft`
+
+    const result = evaluateProspectQualification({
+      rawText,
+      extracted: extracted({
+        name: 'Eli Takele',
+        title: 'Frontend Developer',
+        titleRaw: 'Frontend Developer at Viz.ai',
+        company: 'Viz.ai',
+        signalEvidence: rawText,
+        extractionConfidence: 70,
+      }),
+    })
+
+    expect(result.inputClassification.classification).not.toBe('IRRELEVANT')
+    expect(result.inputHardFail).toBe(false)
+  })
+
   it('rejects missing raw input so API callers cannot bypass with fabricated fields', () => {
     const result = evaluateProspectQualification({
       rawText: null,
