@@ -45,6 +45,17 @@ describe('normalizeGreeting', () => {
     const result = normalizeGreeting('Hi there, saw your profile.', 'Sarah Chen')
     expect(result).toBe('Hi Sarah, saw your profile.')
   })
+
+  it('collapses a multi-token / honorific-like display name to first name without leaving trailing tokens', () => {
+    // "MD ABUL MANSUR" is a real multi-token display name (extractFirstName
+    // returns "MD", its first token). The greeting-normalization regex
+    // previously consumed only ONE extra word after the first name, leaving
+    // "Mansur," dangling: "Hi MD Abul Mansur," incorrectly became
+    // "Hi MD, Mansur," instead of "Hi MD,".
+    const result = normalizeGreeting('Hi MD Abul Mansur, saw your work on XHYRE.', 'MD ABUL MANSUR')
+    expect(result).toBe('Hi MD, saw your work on XHYRE.')
+    expect(result).not.toMatch(/Hi MD, Mansur,/)
+  })
 })
 
 describe('validateAndRepair - greeting normalization', () => {

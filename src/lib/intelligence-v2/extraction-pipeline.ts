@@ -1184,14 +1184,26 @@ function identityBlockLines(lines: string[]): string[] {
 }
 
 function extractName(lines: string[]): string | null {
-  for (const line of lines.slice(0, 8)) {
+  for (const [index, line] of lines.slice(0, 8).entries()) {
     if (/^(job|description|skills|posted|budget|client|company)\b/i.test(line)) continue
     // Check for explicit "Name:" field first
     const explicitName = line.match(/^name:\s*(.+)$/i)
     if (explicitName?.[1]) return explicitName[1].trim()
     // Skip section headers, labels, and all-caps structural labels
     if (/^(===|source|identity|about|current|past|activity|education|skills|other|hiring|batch|prospect|experience|contact)\b/i.test(line)) continue
-    if (/^[A-Z][A-Z\s]+$/.test(line)) continue
+    // An all-caps line is usually a structural label ("ABOUT", "SKILLS"), but
+    // LinkedIn also renders SOME display names in all caps ("MD ABUL
+    // MANSUR"). The very first non-empty line of a pasted profile is always
+    // the display name — never a structural label — so treat an all-caps
+    // first line as the literal full name (checked BEFORE the mixed-case
+    // nameMatch heuristic below, which misparses an all-caps multi-token
+    // name by treating a middle token as an optional nickname parenthetical
+    // and dropping it — "MD ABUL MANSUR" would otherwise become "MD
+    // MANSUR"). An all-caps line at any other position is still a label.
+    if (/^[A-Z][A-Z\s'-]+$/.test(line)) {
+      if (index === 0 && line.split(/\s+/).length <= 4) return line.trim()
+      continue
+    }
     // Match a plain name ("Brian Maccaba") OR a name with a parenthetical
     // nickname ("Ephraim (Effy) Gittler", 'Justus ("riptide") Hanna').
     // LinkedIn renders the nickname in quotes inside parentheses. Strip both.
@@ -1654,9 +1666,15 @@ function extractContentSignals(lines: string[], rawText: string): PassAOutput['c
     },
   )
 
+  // Bare "need" is far too broad on its own — it matches routine marketing
+  // copy ("tailored to address the current demand and need of the particular
+  // region") describing what a company's PRODUCT satisfies for ITS customers,
+  // not a hiring ask. Require an actual hiring/acquisition verb phrase
+  // ("need a developer", "hiring a contractor") rather than the bare noun.
+  const HIRING_INTENT_PHRASE = /\b(?:looking for|open roles?|hiring)\b|\bneed(?:s|ed)?\s+(?:a|an|to\s+hire|someone)\b.{0,30}?\b(?:developer|engineer|contractor|freelancer|team)\b|\bcontractor\b/i
   const hiringSignals = attributableLines
     .filter((line) =>
-      /\b(looking for|open roles?|need|hiring|contractor)\b/i.test(line) &&
+      HIRING_INTENT_PHRASE.test(line) &&
       (DEV_ROLE_HINT.test(line) || TECH_KEYWORDS.some((k) => techKeywordMatches(line, k))),
     )
     .slice(0, 5)

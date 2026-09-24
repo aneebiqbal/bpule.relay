@@ -387,8 +387,13 @@ export function normalizeGreeting(text: string, prospectName: string | null): st
       }
     }
 
-    // Greeting with full name → replace with first name
-    const fullNameGreeting = new RegExp(`^(hi|hey|hello)\\s+${firstName}\\s+\\w+,?\\s*`, 'i')
+    // Greeting with full name → replace with first name. Consume ALL
+    // remaining name-like tokens after the first name (not just one) up to
+    // the comma — a multi-token or honorific-like display name (e.g. "MD
+    // ABUL MANSUR") otherwise leaves trailing tokens dangling: matching only
+    // "MD Abul" out of "Hi MD Abul Mansur," produces the malformed "Hi MD,
+    // Mansur," instead of the intended "Hi MD,".
+    const fullNameGreeting = new RegExp(`^(hi|hey|hello)\\s+${firstName}(?:\\s+\\w+){1,4}?,\\s*`, 'i')
     if (fullNameGreeting.test(trimmed)) {
       return trimmed.replace(fullNameGreeting, `${RegExp.$1} ${firstName}, `)
     }

@@ -179,6 +179,14 @@ const PRODUCT_MODEL_PATTERNS = [
   // Founder-as-seller doing business development / partnership-seeking for
   // their own company — general BD language, not a buying signal.
   /\bopen\s+to\s+partnerships\s+with\b/i,
+  // Third-person company-description style, as LinkedIn's "Experience"
+  // section renders it ("XHYRE Ltd. is the next generation Global RE Asset
+  // Exchange platform...", "Acme is a marketplace for..."): "[Company] is
+  // (a|the) [qualifiers] platform/marketplace/exchange/app/product/service".
+  // General shape, not tied to any one company name or industry — matches
+  // any company-name-shaped token followed by "is a/the ... platform/
+  // marketplace/exchange/product/app/service".
+  /\b[A-Z][\w.]*\s+(?:ltd\.?|inc\.?|llc)?\s*is\s+(?:a|the|also\s+a)\b[\w\s,-]{0,80}?\b(?:platform|marketplace|exchange|product|app|service|infrastructure)\b/i,
 ]
 
 // Paired with the "I'm the founder of X" marker above: only counts as a
@@ -189,14 +197,15 @@ const PRODUCT_MODEL_PATTERNS = [
 const OWN_PRODUCT_FOR_AUDIENCE = /\ban?\s+[\w\s-]{0,40}?\b(?:platform|tool|solution|app|software|product)\b[\w\s-]{0,20}?\bfor\b/i
 
 /**
- * Phrases describing an engineering-services / consulting / delivery
- * business — the prospect's company diagnoses or fixes technical problems
- * FOR OTHER COMPANIES as its service, rather than building a single product
- * it sells. General shape covering any founder/consultancy pitching
- * "we assess your X and bring in a team to fix it" — not tied to any one
- * company's wording. This is the pattern the RECRUITER/PRODUCT split was
- * missing: a services business that talks heavily about architecture,
- * technical debt, or engineering gaps is describing what it sells CUSTOMERS,
+ * Phrases describing a services / consulting / delivery business — the
+ * prospect's company diagnoses or fixes problems FOR OTHER COMPANIES (or a
+ * defined customer segment) as its service, rather than building a single
+ * product it sells or having the problem itself. General shape covering any
+ * founder/consultancy pitching "we assess your X and bring in a team to fix
+ * it" — not tied to any one company's wording or vertical (engineering,
+ * marketing, security, etc. all qualify). This is the pattern the
+ * RECRUITER/PRODUCT split was missing: a services business that talks
+ * heavily about its customers' problems is describing what it SELLS them,
  * not a problem it has itself.
  */
 const SERVICE_PROVIDER_PATTERNS = [
@@ -210,6 +219,17 @@ const SERVICE_PROVIDER_PATTERNS = [
   /\bconsulting\s+(?:firm|services?|partnership)\b/i,
   /\bengineering\s+(?:services|delivery|execution)\s+partner\b/i,
   /\bspecialized\s+engineering\s+(?:teams?|partnerships?)\b/i,
+  // General first-person "I/we help [a named customer segment] [do/solve/
+  // navigate something]" — the classic services-business self-introduction,
+  // independent of vertical. "I work with orthopedic practices that feel
+  // they've hit a plateau" and "we help protocols find vulnerabilities" are
+  // the same shape: the customer segment named after "help"/"work with" is
+  // the one WITH the problem, and the speaker is the one who solves it for
+  // them as a service.
+  /\b(?:i|we)\s+(?:help|work\s+with|partner\s+with)\s+[\w\s,'-]{0,60}?\b(?:that|who|feel|struggl|navigat|solve|fix|find|overcome)\b/i,
+  // "my/our focus is on applying/providing/delivering X (for|to) Y" — a
+  // services positioning statement naming what is delivered to a customer.
+  /\b(?:my|our)\s+focus\s+is\s+on\s+(?:applying|providing|delivering|offering)\b/i,
 ]
 
 // A founder/exec doing visible outbound sales/business-development for their
@@ -398,8 +418,17 @@ export function deriveRelationship(
   const company = (passA.company.name ?? '').toLowerCase()
   const blob = `${title} ${company} ${rawText}`.toLowerCase()
 
-  // Agency / vendor / dev-shop → potential partner, not buyer
-  if (/\b(agency|dev shop|outsourcing|development agency|consulting firm|freelance marketplace)\b/i.test(blob)) {
+  // Agency / vendor / dev-shop → potential partner, not buyer. Bare "agency"
+  // is too broad on its own — it matches "Donor Agency", "Implementing
+  // Agency", government/NGO stakeholder mentions with no commercial-services
+  // meaning at all (see Mansur/XHYRE, a former government e-procurement
+  // project naming "Donor Agency" as a meeting stakeholder). Require the
+  // word to appear in a services/delivery framing (a marketing/development/
+  // creative/dev-shop agency, or "agency" paired with client/customer
+  // language), not just anywhere in the text.
+  if (/\b(?:dev shop|outsourcing|development agency|marketing agency|creative agency|digital agency|consulting firm|freelance marketplace)\b/i.test(blob)
+    || /\bagency\b.{0,40}\b(?:clients?|customers?)\b/i.test(blob)
+    || /\b(?:clients?|customers?)\b.{0,40}\bagency\b/i.test(blob)) {
     return 'POTENTIAL_PARTNER'
   }
 
@@ -431,6 +460,38 @@ export function deriveRelationship(
     businessModel === 'PRODUCT'
     && OWN_PRODUCT_VALIDATION_PATTERNS.some((p) => p.test(blob))
     && !hasExternalDeliverySeekingSignal(blob)
+  ) {
+    return 'NETWORKING'
+  }
+
+  // Decision-maker (founder/CTO/CEO/etc.) at their OWN current product
+  // company, with no explicit sign they are shopping for external software
+  // delivery AND no independently-detected buyer/hiring opportunity signal.
+  // Running/leading a product business is not, on its own, buyer evidence
+  // for BPulse — a technical decision-maker is not automatically an active
+  // buyer (see Mansur/XHYRE: a CTO's own current company being a product
+  // platform, with zero external-delivery-seeking language, must not
+  // default to POTENTIAL_BUYER just because no other non-buyer pattern
+  // matched). This is the general fallback for the many profiles that
+  // describe their OWN company in third person (a LinkedIn "Experience"
+  // section) rather than in the first-person "we're building X" phrasing
+  // PRODUCT_MODEL_PATTERNS also matches.
+  //
+  // Must NOT fire when a real buyer/hiring opportunity signal already exists
+  // (hiring, hiring_pressure, freelance_project_need, technical_problem,
+  // explicit_ask) — a founder/CTO who is ALSO explicitly hiring engineers or
+  // stating a technical need IS a real buyer signal (see Abdul Hakim/
+  // Fullscript: "Hiring senior fullstack engineers", "looking for senior
+  // fullstack engineers" — a decision-maker with an explicit hiring ask,
+  // not mere product-company leadership).
+  const hasBuyerOpportunitySignal = (passA.opportunity.signals as string[]).some((s) =>
+    ['hiring', 'hiring_pressure', 'freelance_project_need', 'technical_problem', 'explicit_ask'].includes(s),
+  )
+  if (
+    businessModel === 'PRODUCT'
+    && hasDecisionRole
+    && !hasExternalDeliverySeekingSignal(blob)
+    && !hasBuyerOpportunitySignal
   ) {
     return 'NETWORKING'
   }
@@ -487,6 +548,14 @@ export function stripThirdPartyRepostBlocks(rawText: string, prospectName: strin
   // and "Brian Maccaba's profile" both match.
   const VIEW_PROFILE_RE = /^View (.+?)['\u2019]s?\s+profile$/i
   const VIEW_COMPANY_RE = /^View company:\s*(.+)$/i
+  // A profile-section header (Experience/Education/Skills/etc.) always marks
+  // the start of the prospect's OWN structured data — it can never appear
+  // inside someone else's reposted post. Without ending any active repost
+  // skip here, a trailing repost block with no closing "View <prospect>'s
+  // profile" marker (i.e. the Activity feed simply ends mid-skip on the last
+  // OTHER person's repost) silently swallows the entire Experience section
+  // that follows, since nothing ever flips `skipping` back off.
+  const SECTION_HEADER_RE = /^(?:experience|education|licenses?\s*&\s*certifications?|skills|volunteering|interests|projects|publications|honors?\s*&\s*awards?|recommendations)$/i
   const lines = rawText.split(/\r?\n/)
   const normalizedProspect = prospectName.trim().toLowerCase()
 
@@ -507,6 +576,9 @@ export function stripThirdPartyRepostBlocks(rawText: string, prospectName: strin
       // Drop the attribution marker line itself either way — it is
       // navigation chrome, not content.
       continue
+    }
+    if (SECTION_HEADER_RE.test(trimmed)) {
+      skipping = false
     }
     if (!skipping) kept.push(line)
   }

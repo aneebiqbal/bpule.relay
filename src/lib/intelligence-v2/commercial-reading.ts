@@ -38,7 +38,19 @@ const BUYER_PATTERNS: Array<{ kind: BuyerEvidenceKind; re: RegExp }> = [
   },
   { kind: 'BUYER_REQUEST', re: /\bhelp us build\b/i },
   { kind: 'CAPACITY_REQUEST', re: /\b(can'?t keep up|understaffed|need more (?:engineers|developers|capacity)|backlog is (?:growing|killing))\b/i },
-  { kind: 'PROCUREMENT_SIGNAL', re: /\b(rfp\b|procurement|vendor shortlist|budget for (?:development|engineering))\b/i },
+  // Bare mentions of "procurement" are not buyer-directional on their own —
+  // the word appears constantly in descriptions of procurement SYSTEMS,
+  // PLATFORMS, or PAST WORK (e.g. "the e-Government Procurement portal ...
+  // procurement activities by the Procuring Agencies") with no first-person
+  // buyer framing at all. Require the request to be spoken in first person
+  // ("we/our" + issuing/running/starting a procurement, an RFP, or a vendor
+  // shortlist) so describing a procurement SYSTEM never reads as a current
+  // buying signal (see Mansur/XHYRE: a former e-GP-portal project ≠ XHYRE
+  // currently procuring vendors).
+  {
+    kind: 'PROCUREMENT_SIGNAL',
+    re: /\b(?:we'?re|we\s+are|our)\s+[\w\s/.-]{0,30}?\b(?:issuing|running|starting|opening)\s+an?\s+rfp\b|\bwe'?re\s+(?:putting\s+together|building)\s+a\s+vendor\s+shortlist\b|\bour\s+budget\s+for\s+(?:development|engineering)\b/i,
+  },
   {
     kind: 'PARTNER_REQUEST',
     re: /\b(?:development|engineering|technical|technology)\s+partner\b|\blooking for a partner to (?:build|help)\b/i,
