@@ -13,6 +13,7 @@
 import type { CanonicalProspectIntelligence, EvidenceEntry, OpportunitySignal, CommercialRelationship, BusinessModel } from '@/lib/intelligence-v2/types'
 import type { ExtractedLead, Lead, OutreachStrategy } from '@/lib/domain/types'
 import { isNonBuyerRelationship } from '@/lib/intelligence-v2/subject-attribution'
+import { isStrategyGroundingText } from '@/lib/intelligence-v2/commercial-reading'
 
 export type FitLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN'
 export type IntentLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN'
@@ -1108,7 +1109,7 @@ function releaseKnowledge(
       items.push({ text: fact.text, release: 'ALREADY_SHARED', reason: 'Already used in a prior message.', scope: fact.scope })
       continue
     }
-    if (!fact.safeToMention) {
+    if (!fact.safeToMention || !isStrategyGroundingText(fact.text)) {
       items.push({ text: fact.text, release: 'HOLD', reason: 'Not safe for outreach.', scope: fact.scope })
       continue
     }
@@ -1158,10 +1159,10 @@ function buildUnknowns(source: StrategySource, conversation: ConversationKnowled
 }
 
 function pickStrongestCurrentEvidence(scoped: ScopedItem[], source: StrategySource): string | null {
-  const current = scoped.find((s) => s.scope === 'CURRENT_OPPORTUNITY' && s.kind === 'FACT')
+  const current = scoped.find((s) => s.scope === 'CURRENT_OPPORTUNITY' && s.kind === 'FACT' && isStrategyGroundingText(s.text))
   if (current) return current.text
-  if (source.verbatimQuote && scopeEvidenceText(source.verbatimQuote).startsWith('CURRENT')) return clip(source.verbatimQuote, 160)
-  const anyCurrent = scoped.find((s) => s.scope.startsWith('CURRENT'))
+  if (source.verbatimQuote && isStrategyGroundingText(source.verbatimQuote) && scopeEvidenceText(source.verbatimQuote).startsWith('CURRENT')) return clip(source.verbatimQuote, 160)
+  const anyCurrent = scoped.find((s) => s.scope.startsWith('CURRENT') && isStrategyGroundingText(s.text))
   return anyCurrent?.text ?? null
 }
 

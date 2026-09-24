@@ -80,6 +80,19 @@ const AI_CLICHES_CONNECTION = [
 // shape to catch: a generic subject (growth/scaling/teams "at this stage")
 // paired with a generalizing verb ("tend to", "usually", "often", "can")
 // and a negative-capacity outcome (strain/bottleneck/stretch resources).
+const UNSUPPORTED_PROSPECT_PAIN = [
+  /\bshipping\b.{0,40}\blagg/i,
+  /\broadmap\b.{0,40}\b(?:strain|stretch)/i,
+  /\b(?:strain|stretch)\w*.{0,40}\broadmap\b/i,
+  /\bengineering bottleneck/i,
+  /\bresource shortage/i,
+  /\bdevelopment capacity/i,
+  /\bscaling pain/i,
+  /\bgrowth strains? engineering/i,
+  /\bneed more capacity/i,
+  /\bdelivery gets? difficult/i,
+]
+
 const GENERALIZED_PAIN_CLAIMS = [
   /\b(?:growth|scaling|scale[- ]?up)\s+(?:phases?\s+)?(?:tends?\s+to|usually|often|can|typically)\s+(?:strain|stretch|overwhelm|break|outpace)\b/i,
   /\bscaling\s+(?:usually\s+)?creates?\s+(?:engineering\s+)?bottlenecks?\b/i,
@@ -94,6 +107,8 @@ export interface ConnectionNoteInput {
   prospectName: string | null
   prospectCompany: string | null
   matchedProof: MatchedProof[]
+  /** Canonical evidence. A pain phrase is allowed only when this text already contains it. */
+  evidenceText?: string | null
 }
 
 /**
@@ -107,6 +122,21 @@ export function evaluateConnectionNote(input: ConnectionNoteInput): ConnectionNo
   // 1. Empty or too short
   if (text.trim().length < 10) {
     failures.push('Too short to be meaningful')
+  }
+
+  // Semantic truth before style. A fluent note that invents the prospect's
+  // pain still fails. Evidence may excuse a phrase only when that same
+  // claim is already in the supplied canonical evidence.
+  const evidence = (input.evidenceText ?? '').toLowerCase()
+  const painClaims = [...GENERALIZED_PAIN_CLAIMS, ...UNSUPPORTED_PROSPECT_PAIN]
+  for (const pattern of painClaims) {
+    if (pattern.test(lower) && !pattern.test(evidence)) {
+      failures.push('Unsupported prospect pain (claim is not in canonical evidence)')
+      break
+    }
+  }
+  if (GENERALIZED_PAIN_CLAIMS.some((p) => p.test(lower) && !p.test(evidence))) {
+    failures.push('Unsupported generalized-pain claim (general pattern presented as prospect-specific fact)')
   }
 
   // 2. Surveillance opening
@@ -189,18 +219,6 @@ export function evaluateConnectionNote(input: ConnectionNoteInput): ConnectionNo
     if (/\b(i built|i helped|i worked on|my experience with)\b/i.test(lower)) {
       failures.push('Claims experience without verified proof match')
     }
-  }
-
-  // 14b. Unsupported generalized-pain claim — a plausible general business
-  // pattern ("growth strains roadmaps", "scaling creates bottlenecks")
-  // stated as if it were a verified fact about THIS prospect. These read as
-  // confident diagnosis but are not grounded in any specific evidence about
-  // the prospect's actual situation — a generic truism personalized into a
-  // fabricated pain point. See hardening report: "Growth phases tend to
-  // strain roadmaps" sent to a pre-launch founder with zero evidence of any
-  // roadmap strain.
-  if (GENERALIZED_PAIN_CLAIMS.some((p) => p.test(lower))) {
-    failures.push('Unsupported generalized-pain claim (general pattern presented as prospect-specific fact)')
   }
 
   // 15. Could send to 100 prospects?

@@ -71,6 +71,17 @@ describe('Hardening regression — Ved Kulkarni / Merget (product-execution vs. 
   })
 
   it('service-buyer intent stays UNKNOWN — customer discovery/pre-launch activity is not a buying need', () => {
+    const reading = intel.intelligence.commercialReading
+    expect(reading?.serviceBuyerIntent).toBe('UNKNOWN')
+    expect(reading?.serviceBuyerIntent).not.toBe('HIGH')
+    expect(reading?.externalEngineeringNeed).toBe('NONE_DETECTED')
+    expect(reading?.immediateBuyerNeed).toBe(false)
+    expect(reading?.buyerTiming).toBe('UNKNOWN')
+    expect(reading?.buyerTiming).not.toBe('IMMEDIATE')
+    expect(reading?.productMomentum).toBe('HIGH')
+    expect(reading?.customerDiscovery).toBe('SUPPORTED')
+    expect(reading?.preLaunchActivity).toBe('SUPPORTED')
+    expect(reading?.technicalRelevance).toBe('HIGH')
     const strategy = buildRevenueStrategy(sourceFromCanonical(intel, { channel: 'connection' }))
     expect(strategy.assessment.intent).toBe('UNKNOWN')
     expect(strategy.assessment.intent).not.toBe('HIGH')
@@ -142,7 +153,31 @@ describe('Hardening regression — Ved Kulkarni / Merget (product-execution vs. 
     // CONNECT_WITHOUT_NOTE carries no generated message at all — the correct
     // outcome here since there is no buyer need to pitch.
     expect(strategy.contact.messageRecommended).toBe(false)
-    expect(strategy.allowedNow.join(' ').toLowerCase()).not.toMatch(/roadmap strain|development resources|engineering capacity/)
+    expect(strategy.messagingPolicy).not.toBe('CONNECT_WITH_NOTE')
+    const grounded = [
+      strategy.uiRationale,
+      strategy.strongestEvidence ?? '',
+      ...strategy.allowedNow,
+      ...strategy.knownFacts,
+    ].join(' ')
+    expect(grounded).not.toMatch(/On-site requirement|Source URL:\s*other/i)
+    expect(grounded.toLowerCase()).not.toMatch(/roadmap strain|shipping lag|engineering bottleneck|resource shortage|development capacity|scaling pain/)
+    if (strategy.messagingPolicy === 'CONNECT_WITH_NOTE') {
+      expect(strategy.contact.messageRecommended).toBe(true)
+      expect(strategy.strongestEvidence).toBeTruthy()
+    }
+  })
+
+  it('rejects a fluent note that invents shipping lag even when the wording is otherwise clean', () => {
+    const result = evaluateConnectionNote({
+      text: 'Merget looks close. When shipping starts lagging the roadmap, extra engineering capacity is usually the gap.',
+      profile: null,
+      prospectName: 'Ved Kulkarni',
+      prospectCompany: 'Merget',
+      matchedProof: [],
+    })
+    expect(result.passed).toBe(false)
+    expect(result.failures[0]?.toLowerCase()).toMatch(/unsupported prospect pain/)
   })
 })
 

@@ -371,7 +371,7 @@ function scoreOpportunityFit(
     points = 14
     note = 'Hiring pressure detected — delivery need likely.'
     reasons.push('Hiring pressure suggests delivery need.')
-  } else if (signals.includes('growth_signal')) {
+  } else if (signals.includes('growth_signal') && intelligence.commercialReading?.externalEngineeringNeed !== 'NONE_DETECTED') {
     points = 12
     note = 'Growth signal — may have expanding needs.'
     // Deliberately hedged: "company is growing/scaling" is the observed
@@ -479,7 +479,7 @@ function scoreNeedIntent(
   let points = 4
   let note = 'No strong need signal.'
 
-  if (opportunity.urgency === 'immediate') {
+  if (opportunity.urgency === 'immediate' && intelligence.commercialReading?.immediateBuyerNeed !== false) {
     points = 18
     note = 'Immediate need — strong timing.'
     reasons.push('Immediate need detected.')
@@ -637,7 +637,7 @@ function scoreTiming(
   let points = 3
   let note = 'Timing signal unclear.'
 
-  if (intelligence.opportunity.urgency === 'immediate') {
+  if (intelligence.opportunity.urgency === 'immediate' && intelligence.commercialReading?.immediateBuyerNeed !== false) {
     points = 5
     note = 'Immediate timing — act now.'
     reasons.push('Immediate timing signal.')

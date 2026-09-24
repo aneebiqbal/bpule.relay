@@ -267,6 +267,8 @@ export interface NormalizedIntelligence {
    * non-buyer relationships; the opportunity score must reflect that.
    */
   relationship: CommercialRelationship
+  /** Buyer intent kept separate from product momentum. Strategy and score must read this, not a generic intent alias. */
+  commercialReading?: import('./commercial-reading').CommercialReading
 }
 
 // ── Score Breakdown ────────────────────────────────────────────────────────

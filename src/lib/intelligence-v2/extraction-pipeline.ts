@@ -38,6 +38,7 @@ import {
 } from './role-signals'
 import { generate } from '@/lib/ai/runtime'
 import { classifyBusinessModel, classifySentence, deriveRelationship, isNonBuyerRelationship, stripThirdPartyRepostBlocks } from './subject-attribution'
+import { applyBuyerIntentBoundary } from './commercial-reading'
 
 // ── Pipeline Options ───────────────────────────────────────────────────────
 
@@ -1208,7 +1209,7 @@ function extractTitle(lines: string[]): string | null {
   // → use AI in development") cannot become the prospect's title.
   const headerLines = identityBlockLines(lines)
   const titleLine = headerLines.find((line) =>
-    /\b(founder|ceo|cto|coo|vp|head|director|manager|lead|owner|president|engineer|developer|architect|recruiter|recruiting|partner|consultant|managing)\b/i.test(line),
+    /\b(founder|ceo|cto|coo|cfo|chief|officer|vp|head|director|manager|lead|owner|president|engineer|developer|architect|recruiter|recruiting|partner|consultant|managing)\b/i.test(line),
   )
   if (!titleLine) return null
   return titleLine
@@ -1508,7 +1509,7 @@ export function extractOpportunitySignals(rawText: string): { signals: Opportuni
   if (/\b(migration|migrate|migrated|move from|move to)\b/i.test(rawText)) signals.push('migration')
   if (/\b(rebuild|overhaul|rewrite|re-?platform|production[- ]?ready)\b/i.test(rawText)) signals.push('rebuild')
   if (/\b(growing|scaling|scale|expanding|growth)\b/i.test(rawText)) signals.push('growth_signal')
-  if (/\b(launch|launching|rollout|release)\b/i.test(rawText)) signals.push('launch')
+  if (/\b(launch|launched|launching|rollout|release|released)\b/i.test(rawText)) signals.push('launch')
   if (/\b(drowning|can'?t keep up|slowing down|backlog|understaffed)\b/i.test(rawText)) signals.push('hiring_pressure')
 
   if (signals.length === 0 && !hasTechContext) {
@@ -1958,6 +1959,15 @@ export async function runIntelligencePipeline(
   // recruiters — a founder doing BD for their own product is exactly as
   // unlikely to be a genuine buyer as a recruiter is. This enforces
   // invariant: MARKET/OWN-COMPANY COMMENTARY ≠ BUYING INTENT FOR BPULSE.
+  const bounded = applyBuyerIntentBoundary(partialIntelligence.opportunity, ownRawTextFinal)
+  partialIntelligence.opportunity = bounded.opportunity
+  partialIntelligence.opportunity.primarySignal = selectPrimarySignal(partialIntelligence.opportunity.signals)
+  partialIntelligence.commercialReading = bounded.reading
+  if (bounded.reading.externalEngineeringNeed === 'NONE_DETECTED') {
+    partialIntelligence.content.explicitProblems = []
+    partialIntelligence.probableNeed = null
+  }
+
   const isNonBuyer = isNonBuyerRelationship(relationship) || businessModel === 'RECRUITER'
   if (isNonBuyer) {
     partialIntelligence.opportunity = {
@@ -2059,10 +2069,16 @@ export async function runIntelligencePipeline(
     businessModel,
     relationship,
     remoteEligibility: finalEligibility,
+    commercialReading: partialIntelligence.commercialReading,
+  }
+  if (intelligence.commercialReading?.externalEngineeringNeed === 'NONE_DETECTED') {
+    intelligence.probableNeed = null
+    intelligence.timingSignal = null
+    intelligence.opportunity.urgency = 'unknown'
   }
 
   // Merge evidence ledger with remote eligibility evidence
-  if (finalEligibility.evidence) {
+  if (finalEligibility.eligibility !== 'NOT_APPLICABLE' && finalEligibility.evidence) {
     for (const ev of finalEligibility.evidence) {
       evidenceLedger.push({
         signal: `Remote eligibility: ${ev}`,
