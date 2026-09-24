@@ -210,6 +210,19 @@ export interface ExtractedContent {
 export type BusinessModel =
   | 'PRODUCT'
   | 'RECRUITER'
+  /**
+   * A consulting/engineering-services business: the prospect's own company
+   * SELLS technical delivery, diagnostics, or "partnership" engagements to
+   * ITS clients (e.g. "we drop in the right engineering pod to unblock
+   * them", "architecture diagnostics", "IT consulting"). Their
+   * architecture/technical-debt/engineering language describes what they
+   * offer CUSTOMERS, not a problem their own company has. Distinct from
+   * RECRUITER (places candidates) and PRODUCT (builds a platform/app) —
+   * this is a services/delivery business, and BPulse relevance runs through
+   * a PARTNERSHIP question (could we be a delivery partner/subcontractor?),
+   * never through inferring they need to buy software development.
+   */
+  | 'SERVICE_PROVIDER'
   | 'UNKNOWN'
 
 /**

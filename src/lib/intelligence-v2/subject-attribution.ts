@@ -26,6 +26,7 @@ export type EvidenceSubject =
 export type BusinessModel =
   | 'PRODUCT' // builds/sells a product or service (potential buyer of delivery)
   | 'RECRUITER' // recruitment / career-coaching / talent-placement business
+  | 'SERVICE_PROVIDER' // sells engineering/technical delivery or consulting TO clients (see types.ts BusinessModel for full doc)
   | 'UNKNOWN'
 
 // ── Market-commentary detection ─────────────────────────────────────────────
@@ -182,6 +183,30 @@ const PRODUCT_MODEL_PATTERNS = [
 // matching an unrelated "founder of X" mention with no product description.
 const OWN_PRODUCT_FOR_AUDIENCE = /\ban?\s+[\w\s-]{0,40}?\b(?:platform|tool|solution|app|software|product)\b[\w\s-]{0,20}?\bfor\b/i
 
+/**
+ * Phrases describing an engineering-services / consulting / delivery
+ * business — the prospect's company diagnoses or fixes technical problems
+ * FOR OTHER COMPANIES as its service, rather than building a single product
+ * it sells. General shape covering any founder/consultancy pitching
+ * "we assess your X and bring in a team to fix it" — not tied to any one
+ * company's wording. This is the pattern the RECRUITER/PRODUCT split was
+ * missing: a services business that talks heavily about architecture,
+ * technical debt, or engineering gaps is describing what it sells CUSTOMERS,
+ * not a problem it has itself.
+ */
+const SERVICE_PROVIDER_PATTERNS = [
+  /\bpartnerships?\s+with\s+specialized\s+engineering\s+teams?\b/i,
+  /\bdrop\s+in\s+the\s+right\s+engineering\s+pod\b/i,
+  /\bengineering\s+pods?\s+to\s+(?:drop\s+in|unblock|audit)\b/i,
+  /\b(?:architecture|technical)\s+diagnostics?\b/i,
+  /\bmap\s+(?:those\s+)?(?:exact\s+)?friction\s+points\b/i,
+  /\bwe\s+(?:audit|assess|diagnose)\s+(?:your|clients?'?|customers?'?)\s+(?:architecture|codebase|tech\s+stack|systems?)\b/i,
+  /\b(?:it|management|business|strategic)\s+consulting\b/i,
+  /\bconsulting\s+(?:firm|services?|partnership)\b/i,
+  /\bengineering\s+(?:services|delivery|execution)\s+partner\b/i,
+  /\bspecialized\s+engineering\s+(?:teams?|partnerships?)\b/i,
+]
+
 // A founder/exec doing visible outbound sales/business-development for their
 // OWN product — pitching it to customers, seeking partnerships/pilots with
 // the kind of organizations that would BUY or co-sell it. This is evidence
@@ -221,6 +246,10 @@ export function classifyBusinessModel(text: string): BusinessModel {
     (n, p) => n + (p.test(lower) ? 1 : 0),
     0,
   )
+  const serviceProviderScore = SERVICE_PROVIDER_PATTERNS.reduce(
+    (n, p) => n + (p.test(lower) ? 1 : 0),
+    0,
+  )
   // "I'm the founder of X" only counts toward product-model when the same
   // text also describes what X sells as a platform/tool/product FOR an
   // audience — otherwise a bare "founder of X" (with no product description
@@ -233,6 +262,11 @@ export function classifyBusinessModel(text: string): BusinessModel {
   // enough, because tech founders also talk about "connecting" and "talent".
   if (recruiterScore >= 2) return 'RECRUITER'
   if (recruiterScore >= 1 && productScore === 0) return 'RECRUITER'
+  // Service-provider needs a similarly strong signal, and must not fire
+  // alongside genuine product-model evidence (a SaaS founder who mentions
+  // "consulting" once in passing is still a product company).
+  if (serviceProviderScore >= 2) return 'SERVICE_PROVIDER'
+  if (serviceProviderScore >= 1 && productScore === 0 && recruiterScore === 0) return 'SERVICE_PROVIDER'
   if (productScore >= 1 && recruiterScore === 0) return 'PRODUCT'
   return 'UNKNOWN'
 }
@@ -326,6 +360,12 @@ export function deriveRelationship(
   rawText: string,
 ): CommercialRelationship {
   if (businessModel === 'RECRUITER') return 'RECRUITER'
+  // A company that SELLS engineering/technical delivery/consulting services
+  // is a potential partner (they could subcontract, co-deliver, or refer
+  // work), never a straightforward buyer — their architecture/technical-debt
+  // language describes what they diagnose and fix FOR CLIENTS, not a
+  // problem their own company has. See SERVICE_PROVIDER_PATTERNS.
+  if (businessModel === 'SERVICE_PROVIDER') return 'POTENTIAL_PARTNER'
 
   const title = (passA.person.title ?? '').toLowerCase()
   const company = (passA.company.name ?? '').toLowerCase()
