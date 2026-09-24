@@ -389,7 +389,6 @@ export function LeadWorkspace({
 
   const locked = currentLead.status === 'no' || currentLead.status === 'dead'
   const verdict = currentLead.verdict ?? score.verdict
-  const canDraft = verdict === 'send' || verdict === 'research_more'
 
   // Verdict/action reconciliation (Bug 2): the legacy `verdict` can read
   // 'skip' (commercial qualification only) even when the canonical DM-channel
@@ -401,6 +400,16 @@ export function LeadWorkspace({
   const verdictDisplay = verdict === 'skip'
     ? describeVerdictForDisplay('skip', dmSnapshot.act, dmSnapshot.messagingPolicyLabel)
     : null
+
+  // canDraft must not be a pure qualification-score gate: a lead can score
+  // 'skip' on commercial qualification alone while the revenue-strategy
+  // layer independently recommends a real contact action (e.g. Fit/Intent/
+  // Confidence all HIGH, action DM) — see Ran Endelman / PlexAI hardening
+  // report, where a 25/100 qualification blocked drafting entirely despite
+  // the strategy card recommending a DM send. Allow drafting whenever
+  // either the legacy verdict OR the canonical DM-channel action says there
+  // is a real reason to contact.
+  const canDraft = verdict === 'send' || verdict === 'research_more' || dmSnapshot.act !== 'SKIP'
 
   const [artifact, setArtifact] = useState<ArtifactId>('dm')
   const [drafting, setDrafting] = useState(false)

@@ -204,6 +204,32 @@ describe('Right to contact — real cases', () => {
     const result = classifyInput('Sign in\nEmail\nPassword\nForgot password\nLog in to your account')
     expect(result.classification).toBe('IRRELEVANT')
   })
+
+  // Regression: a lead with a low canonical/qualification score (some other
+  // scoring dimension pulled the number down) can still carry a genuine,
+  // explicit hiring signal — the action/messageRecommended must reflect
+  // that real signal, not the raw score alone. See Ran Endelman / PlexAI
+  // hardening report, where a 25/100 qualification ('skip') sat next to a
+  // strategy card independently showing Fit/Intent/Confidence all HIGH with
+  // a DM recommended — canDraft in lead-workspace.tsx must not gate purely
+  // on the 'skip' qualification when the strategy layer disagrees.
+  it('low qualification score does not suppress a genuine explicit hiring signal', () => {
+    const strategy = buildRevenueStrategy(source({
+      name: 'Ran Endelman',
+      title: 'Co-Founder & CEO',
+      company: 'PlexAI',
+      qualification: 'skip',
+      canonicalScore: 25,
+      opportunitySignals: ['hiring'],
+      hiringSignals: ['We\'re expanding the core team. We\'re hiring: Founding AI Engineer, Software Engineer.'],
+      signalEvidence: 'We\'re expanding the core team to match our growth. We\'re hiring: Founding AI Engineer, Software Engineer.',
+      verbatimQuote: 'We\'re hiring: Founding AI Engineer, Software Engineer.',
+      evidenceLedger: [fact('We\'re hiring: Founding AI Engineer, Software Engineer.')],
+      urgency: 'immediate',
+    }))
+    expect(strategy.contact.action).not.toBe('SKIP')
+    expect(shouldWriteMessage(strategy)).toBe(true)
+  })
 })
 
 describe('Conversation replies become first-party intelligence', () => {
