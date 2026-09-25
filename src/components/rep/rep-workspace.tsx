@@ -93,6 +93,7 @@ function quotaHref(activityType: string): string {
 
 interface RepWorkspaceProps {
   data: RepWorkspaceData
+  mode?: 'rep' | 'manager'
   teamData?: {
     teams: Array<{
       teamId: string
@@ -127,7 +128,7 @@ interface RepWorkspaceProps {
   }
 }
 
-export function RepWorkspace({ data, teamData }: RepWorkspaceProps) {
+export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps) {
   const [activeView, setActiveView] = useState<'my-work' | 'team'>('my-work')
   const isManager = (teamData?.teams?.length ?? 0) > 0
 
@@ -137,6 +138,17 @@ export function RepWorkspace({ data, teamData }: RepWorkspaceProps) {
 
   return (
     <div className="space-y-6 pb-8">
+      {mode === 'manager' && isManager && (
+        <section className="space-y-3">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Team Oversight</p>
+          <TeamView
+            teamName={teamData?.teams?.[0]?.teamName || 'My Team'}
+            members={teamData?.teams?.[0]?.members || []}
+            isManager={true}
+          />
+        </section>
+      )}
+
       {isManager && (
         <div className="flex gap-1 border-b border-line">
           <button
@@ -172,75 +184,64 @@ export function RepWorkspace({ data, teamData }: RepWorkspaceProps) {
         />
       ) : (
         <>
-          <YourDaySummary
-        repName={data.rep.name}
-        totalRemaining={data.day.totalRemaining}
-        repliesWaiting={data.day.repliesWaiting}
-        followUpsDue={data.day.followUpsDue}
-        outreachRemaining={data.day.outreachRemaining}
-        isComplete={data.day.isComplete}
-        isWorkingDay={data.isWorkingDay}
-        identityCount={data.identities.length}
-      />
+          <DoThisNext action={data.nextAction} />
 
-      {data.notifications.length > 0 && (
-        <section className="rounded-lg border border-line bg-bone-raised px-4 py-3">
-          <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
-            <AlertTriangle className="size-3.5 text-stone" />
-            Recent signals
-          </div>
-          <ul className="mt-1.5 space-y-0.5">
-            {data.notifications.slice(0, 3).map((note) => (
-              <li key={note.id} className="text-[12px] text-graphite">
-                {note.title}: {note.body}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <DoThisNext action={data.nextAction} />
-
-      <section className="space-y-3">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">
-          Your Responsibilities
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {data.identities.map((identity) => (
-            <ResponsibilityCard
-              key={identity.assignmentId}
-              {...identity}
-              repliesWaiting={identity.targets.some((t) => t.activityType === 'dm') ? 0 : 0}
-              followUpsDue={identity.targets.some((t) => t.activityType === 'followup') ? 0 : 0}
-            />
-          ))}
-        </div>
-      </section>
-
-      <UpNext
-        actions={data.upNext}
-        excludeId={data.nextAction?.id}
-      />
-
-      {data.targetSummary.byIdentity.length > 1 && (
-        <WorkPaceChart
-          categories={data.targetSummary.byIdentity.flatMap((identity) =>
-            identity.targets
-              .filter((target) => target.targetCount > 0)
-              .map((target) => ({
-                key: target.targetId,
-                label: `${quotaLabel(target.activityType)} · ${identity.identityName}`,
-                completed: target.completedCount,
-                target: target.targetCount,
-                remaining: target.remaining,
-                href: quotaHref(target.activityType),
-              })),
+          {data.notifications.length > 0 && (
+            <section className="rounded-lg border border-line bg-bone-raised px-4 py-3">
+              <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
+                <AlertTriangle className="size-3.5 text-stone" />
+                Recent signals
+              </div>
+              <ul className="mt-1.5 space-y-0.5">
+                {data.notifications.slice(0, 3).map((note) => (
+                  <li key={note.id} className="text-[12px] text-graphite">
+                    {note.title}: {note.body}
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
-          dayElapsedPct={0}
-          totalCompleted={data.targetSummary.totalCompleted}
-          totalTarget={data.targetSummary.totalTarget}
-        />
-      )}
+
+          <UpNext
+            actions={data.upNext}
+            excludeId={data.nextAction?.id}
+          />
+
+          <section className="space-y-3">
+            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">
+              Your Responsibilities
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {data.identities.map((identity) => (
+                <ResponsibilityCard
+                  key={identity.assignmentId}
+                  {...identity}
+                  repliesWaiting={identity.targets.some((t) => t.activityType === 'dm') ? 0 : 0}
+                  followUpsDue={identity.targets.some((t) => t.activityType === 'followup') ? 0 : 0}
+                />
+              ))}
+            </div>
+          </section>
+
+          {data.targetSummary.byIdentity.length > 1 && (
+            <WorkPaceChart
+              categories={data.targetSummary.byIdentity.flatMap((identity) =>
+                identity.targets
+                  .filter((target) => target.targetCount > 0)
+                  .map((target) => ({
+                    key: target.targetId,
+                    label: `${quotaLabel(target.activityType)} · ${identity.identityName}`,
+                    completed: target.completedCount,
+                    target: target.targetCount,
+                    remaining: target.remaining,
+                    href: quotaHref(target.activityType),
+                  })),
+              )}
+              dayElapsedPct={0}
+              totalCompleted={data.targetSummary.totalCompleted}
+              totalTarget={data.targetSummary.totalTarget}
+            />
+          )}
         </>
       )}
     </div>

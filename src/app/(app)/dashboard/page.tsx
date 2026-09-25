@@ -10,7 +10,7 @@ import { loadAccountabilityDashboard } from '@/lib/relay/dashboard-loader'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
 import { RepWorkspace, type RepWorkspaceData } from '@/components/rep/rep-workspace'
 import { MyDayCard, type MyDayData } from '@/components/rep/my-day-card'
-import { AdminCommandCenter, type CommandCenterData } from '@/components/admin/admin-command-center'
+import { type CommandCenterData } from '@/components/admin/admin-command-center'
 import { LiveCommandCenter } from '@/components/admin/live-command-center'
 import { ManagerTeamView, type ManagerTeamData } from '@/components/manager/manager-team-view'
 
@@ -120,8 +120,6 @@ function RepTodayViewWithAccountability({
         <p className="text-[13px] text-graphite">Do This Next · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
       </header>
 
-      {myDayData && <MyDayCard data={myDayData} />}
-
       <RepWorkspace data={repData} teamData={teamData} />
     </div>
   )
@@ -184,21 +182,12 @@ function ManagerTodayView({
         <p className="text-[13px] text-graphite">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
       </header>
 
-      {/* My Work section */}
+      <RepWorkspace data={repData} teamData={teamData} mode="manager" />
+
       {myDayData && (
-        <section>
+        <section className="space-y-3">
           <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">My Work</p>
           <MyDayCard data={myDayData} />
-        </section>
-      )}
-
-      <RepWorkspace data={repData} teamData={teamData} />
-
-      {/* Team section */}
-      {managerTeamData.teams.length > 0 && (
-        <section className="space-y-3">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Team Oversight</p>
-          <ManagerTeamView data={managerTeamData} />
         </section>
       )}
     </div>

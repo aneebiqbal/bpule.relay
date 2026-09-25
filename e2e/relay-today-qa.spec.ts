@@ -65,6 +65,21 @@ test.describe('RELAY - Role-Based Today Views', () => {
         await expect(upNext.locator('text=/What/').first()).toBeVisible()
       }
     })
+
+    test('T20: Do This Next appears before Up Next (priority order)', async ({ page }) => {
+      const doThisNext = page.locator('section', { hasText: 'Do This Next' }).first()
+      const upNext = page.locator('section', { hasText: 'Up Next' }).first()
+      if (
+        (await doThisNext.isVisible({ timeout: 8_000 }).catch(() => false)) &&
+        (await upNext.isVisible({ timeout: 8_000 }).catch(() => false))
+      ) {
+        const doThisNextPos = await doThisNext.boundingBox()
+        const upNextPos = await upNext.boundingBox()
+        expect(doThisNextPos, 'Do This Next should be above Up Next').not.toBeNull()
+        expect(upNextPos, 'Up Next should exist').not.toBeNull()
+        expect(doThisNextPos.y, 'Do This Next must come before Up Next').toBeLessThan(upNextPos.y)
+      }
+    })
   })
 
   test.describe('ADMIN', () => {
