@@ -270,8 +270,10 @@ export function RelayTodayWorkspace({
         <section className="overflow-hidden rounded-lg border border-line bg-bone-raised shadow-sm">
           <div className="border-b border-line bg-bone-raised px-5 py-4">
             <div className="flex items-center gap-2">
-              <span className="flex size-5 items-center justify-center rounded-full bg-orange text-[10px] font-bold text-on-accent">1</span>
-              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange">Now</p>
+              <span className="rounded-sm bg-orange px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-on-accent">
+                {kindActionLabel(topAction.kind)}
+              </span>
+              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Do This Next</p>
               {topAction.inbound && (
                 <StatusBadge status="Inbound" variant="orange" />
               )}
@@ -285,7 +287,7 @@ export function RelayTodayWorkspace({
               <p className="text-[14px] text-graphite">{topAction.subtitle}</p>
 
               <div className="rounded-md border border-line bg-bone px-3 py-3">
-                <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Why this matters</p>
+                <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Why</p>
                 <p className="mt-1 text-[13px] text-ink">{topAction.whyItMatters}</p>
               </div>
 
@@ -301,8 +303,8 @@ export function RelayTodayWorkspace({
 
               {topAction.proof && (
                 <div className="rounded-md border border-orange/20 bg-orange/5 px-3 py-2">
-                  <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange">Relevant proof</p>
-                  <p className="mt-1 text-[12px] text-ink">{topAction.proof}</p>
+                  <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Evidence</p>
+                  <p className="mt-1 text-[13px] text-ink">{topAction.proof}</p>
                 </div>
               )}
             </div>

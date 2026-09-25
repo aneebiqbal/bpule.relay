@@ -90,7 +90,9 @@ function TaskCard({ task, featured = false }: { task: RelayTask; featured?: bool
       href={entityHref(task)}
       className={cn(
         'group block transition-all',
-        featured ? 'space-y-3' : 'border-b border-line/60 py-3 last:border-b-0',
+        featured
+          ? 'rounded-lg border border-line bg-bone-raised pl-[16px] pr-4 py-4 space-y-3 border-l-[2px] border-l-orange'
+          : 'border-b border-line/60 py-3 last:border-b-0',
         task.stale && 'opacity-60',
       )}
     >
@@ -119,7 +121,7 @@ function TaskCard({ task, featured = false }: { task: RelayTask; featured?: bool
           </div>
           <h3 className={cn(
             'font-medium text-ink',
-            featured ? 'mt-1 text-[15px]' : 'mt-0.5 text-[13px]',
+            featured ? 'mt-1 text-[16px]' : 'mt-0.5 text-[14px]',
           )}>
             {task.title}
           </h3>
@@ -170,10 +172,12 @@ function TaskCard({ task, featured = false }: { task: RelayTask; featured?: bool
           )}
 
           {/* Human action */}
-          {featured && (
-            <p className="mt-2 text-[12px] font-medium text-orange">
-              Action: {task.humanAction} →
-            </p>
+          {featured && task.humanAction && (
+            <div className="action-line">
+              <span className="font-medium text-orange">
+                Action: {task.humanAction} →
+              </span>
+            </div>
           )}
         </div>
       </div>
@@ -184,7 +188,7 @@ function TaskCard({ task, featured = false }: { task: RelayTask; featured?: bool
 function RelayMetric({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/70">{label}</p>
+      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-console-mute">{label}</p>
       <p className="mt-0.5 text-[18px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
@@ -239,7 +243,7 @@ export default function RelayPage() {
   return (
     <div className="space-y-5">
       <header className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-console-mute">
           Queue / Relay Priority Engine
         </p>
         <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
@@ -254,7 +258,7 @@ export default function RelayPage() {
         <div className="mt-4 flex flex-wrap gap-2">
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-2 rounded border border-orange/30 bg-orange/10 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-text)]"
+            className="inline-flex items-center gap-2 rounded border border-line px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-mute)] hover:text-[color:var(--console-text)]"
           >
             <ArrowRight className="size-3.5 rotate-180" />
             Back to Today

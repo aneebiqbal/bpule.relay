@@ -114,6 +114,12 @@ function RepTodayViewWithAccountability({
 
   return (
     <div className="space-y-6 pb-8">
+      <header className="space-y-1.5">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Your Relay</p>
+        <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink">YOUR DAY</h1>
+        <p className="text-[13px] text-graphite">Do This Next · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+      </header>
+
       {myDayData && <MyDayCard data={myDayData} />}
 
       <RepWorkspace data={repData} teamData={teamData} />
@@ -172,15 +178,16 @@ function ManagerTodayView({
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Tab navigation */}
-      <div className="flex gap-1 border-b border-line">
-        <span className="border-b-2 border-orange px-3 py-2 text-[12px] font-medium text-ink">My Work</span>
-        <span className="px-3 py-2 text-[12px] font-medium text-graphite">Team</span>
-      </div>
+      <header className="space-y-1.5">
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Command Center</p>
+        <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink">Team overview</h1>
+        <p className="text-[13px] text-graphite">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+      </header>
 
       {/* My Work section */}
       {myDayData && (
         <section>
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">My Work</p>
           <MyDayCard data={myDayData} />
         </section>
       )}
@@ -247,7 +254,7 @@ function AdminTodayViewWithAccountability({
   return (
     <div className="space-y-6 pb-8">
       <header className="space-y-1.5">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0-14em] text-stone">Command Center</p>
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Command Center</p>
         <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink">
           {ccData && ccData.attentionItems.length > 0
             ? `${ccData.attentionItems.length} item${ccData.attentionItems.length === 1 ? '' : 's'} need attention`

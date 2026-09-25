@@ -144,7 +144,7 @@ export function RepWorkspace({ data, teamData }: RepWorkspaceProps) {
             className={cn(
               'px-3 py-2 text-[12px] font-medium transition-colors',
               activeView === 'my-work'
-                ? 'border-b-2 border-orange text-ink'
+                ? 'border-b-2 border-ink text-ink'
                 : 'text-graphite hover:text-ink',
             )}
           >
@@ -155,7 +155,7 @@ export function RepWorkspace({ data, teamData }: RepWorkspaceProps) {
             className={cn(
               'px-3 py-2 text-[12px] font-medium transition-colors',
               activeView === 'team'
-                ? 'border-b-2 border-orange text-ink'
+                ? 'border-b-2 border-ink text-ink'
                 : 'text-graphite hover:text-ink',
             )}
           >
@@ -184,9 +184,9 @@ export function RepWorkspace({ data, teamData }: RepWorkspaceProps) {
       />
 
       {data.notifications.length > 0 && (
-        <section className="rounded-lg border border-orange/20 bg-orange/5 px-4 py-3">
+        <section className="rounded-lg border border-line bg-bone-raised px-4 py-3">
           <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
-            <AlertTriangle className="size-3.5 text-orange" />
+            <AlertTriangle className="size-3.5 text-stone" />
             Recent signals
           </div>
           <ul className="mt-1.5 space-y-0.5">

@@ -326,13 +326,20 @@ export function AppRail({
       <button
         type="button"
         onClick={() => setIdentityOpen((open) => !open)}
-        className="group flex w-full items-center justify-between rounded-md border border-line bg-bone-raised px-2 py-2 text-left hover:border-orange/30"
+        aria-expanded={identityOpen}
+        aria-label={`Working as ${activeIdentity ? `${activeIdentity.identityName}${activeIdentity.title ? `, ${activeIdentity.title}` : ''}` : 'no identity'}. Click to change.`}
+        title={activeIdentity
+          ? `${activeIdentity.identityName}${activeIdentity.title ? ` · ${activeIdentity.title}` : ''}${activeIdentity.channel ? ` · ${activeIdentity.channel.toUpperCase()}` : ''}`
+          : 'No identity assigned'
+        }
+        className="group flex w-full items-center gap-2 rounded-md border border-line bg-bone-raised px-2 py-2 text-left hover:border-orange/30 focus-visible:outline-2 focus-visible:outline-orange/50"
       >
-        <div className="min-w-0">
-          <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Working as</p>
+        <span className="mt-0.5 size-2 shrink-0 rounded-full bg-orange" role="presentation" />
+        <div className="min-w-0 flex-1">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em]" style={{ color: 'color-mix(in srgb, var(--orange) 60%, var(--stone))' }}>Working as</p>
           {activeIdentity ? (
             <>
-              <p className="truncate text-[12px] font-medium text-ink">{activeIdentity.identityName}</p>
+              <p className="truncate text-[13px] font-medium text-ink">{activeIdentity.identityName}</p>
               <p className="truncate text-[10px] text-graphite">
                 {[activeIdentity.title, activeIdentity.channel.toUpperCase()].filter(Boolean).join(' / ')}
               </p>
@@ -343,6 +350,15 @@ export function AppRail({
         </div>
         <ChevronDown className={cn('size-3.5 shrink-0 text-stone transition-transform', identityOpen && 'rotate-180')} />
       </button>
+      {activeIdentity && (
+        <div
+          className="sr-only"
+          role="status"
+          aria-live="polite"
+        >
+          Working as {activeIdentity.identityName}{activeIdentity.title ? `, ${activeIdentity.title}` : ''}{activeIdentity.channel ? `, ${activeIdentity.channel}` : ''}
+        </div>
+      )}
 
       {identityOpen && (
         <div className="absolute right-0 bottom-[calc(100%+0.4rem)] z-20 w-full rounded-md border border-line bg-bone-raised p-1.5 shadow-lg">
@@ -360,14 +376,17 @@ export function AppRail({
                     type="button"
                     onClick={() => selectIdentity(identity.id)}
                     className={cn(
-                      'w-full rounded px-2 py-1.5 text-left transition-colors',
+                      'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors',
                       selected ? 'bg-solid text-on-solid' : 'hover:bg-bone',
                     )}
                   >
-                    <p className="truncate text-[12px] font-medium">{identity.identityName}</p>
-                    <p className={cn('truncate text-[10px]', selected ? 'text-on-solid/70' : 'text-graphite')}>
-                      {[identity.title, identity.channel.toUpperCase()].filter(Boolean).join(' / ')}
-                    </p>
+                    <span className={cn('size-1.5 shrink-0 rounded-full', selected ? 'bg-orange' : 'bg-stone/40')} />
+                    <div className="min-w-0">
+                      <p className="truncate text-[12px] font-medium">{identity.identityName}</p>
+                      <p className={cn('truncate text-[10px]', selected ? 'text-on-solid/70' : 'text-graphite')}>
+                        {[identity.title, identity.channel.toUpperCase()].filter(Boolean).join(' / ')}
+                      </p>
+                    </div>
                   </button>
                 )
               })}
@@ -418,9 +437,13 @@ export function AppRail({
           </div>
         </div>
         {activeIdentity && (
-          <div className="border-t border-line/60 px-4 py-1">
-            <p className="truncate text-mono-medium text-[9px] uppercase tracking-[0.12em] text-stone">
-              Working as {activeIdentity.identityName} / {activeIdentity.channel.toUpperCase()}
+          <div className="flex items-center gap-2 border-t border-line/60 px-4 py-1.5">
+            <span className="size-1.5 shrink-0 rounded-full bg-orange" />
+            <p className="min-w-0 truncate text-[11px] font-medium text-ink">
+              {activeIdentity.identityName}
+              <span className="text-graphite">
+                {[activeIdentity.title, activeIdentity.channel?.toUpperCase()].filter(Boolean).join(' / ')}
+              </span>
             </p>
           </div>
         )}
@@ -579,10 +602,10 @@ export function AppRail({
                 )}
               >
                 {active && (
-                  <span className={cn('absolute top-0 left-1/2 h-[2px] w-5 -translate-x-1/2 rounded-full', studio ? 'bg-cobalt' : 'bg-orange')} />
+                  <span className={cn('absolute top-0 left-1/2 h-[2px] w-5 -translate-x-1/2 rounded-full', studio ? 'bg-cobalt' : 'bg-ink')} />
                 )}
                 <Icon
-                  className={cn('size-[18px] transition-all', active ? (studio ? 'text-cobalt' : 'text-orange') : '')}
+                  className={cn('size-[18px] transition-all', active ? (studio ? 'text-cobalt' : 'text-ink') : '')}
                   aria-hidden="true"
                   strokeWidth={active ? 2 : 1.7}
                 />

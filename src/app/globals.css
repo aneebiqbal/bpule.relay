@@ -105,46 +105,54 @@
 }
 
 :root {
-  /* ── Light mode ── */
-  --bone: #f7f6f3;
-  --bone-raised: #ffffff;
-  --solid: #1c1c1a;
-  --on-solid: #f7f6f3;
+  /* ── App canvas: #1C1917 across all Relay surfaces ── */
+  --bg-base: #1C1917;
+  --surface-card: #252220;
+  --surface-mid: #2E2B28;
+  --text-bone: #F5F0E8;
+  --text-muted: #9E9790;
+  --text-dim: #6B6560;
+  --orange-signal: #d4652f;
+  --orange-muted: #8B3D18;
+  --bone: #1C1917;
+  --bone-raised: #2a2725;
+  --solid: #ece9e3;
+  --on-solid: #141312;
   --on-accent: #f7f6f3;
-  --ink: #1c1c1a;
-  --ink-soft: #3d3c39;
-  --graphite: #5c5b57;
-  --stone: #8a8984;
-  --stone-light: #b0afa9;
-  --line: #e0ddd6;
-  --line-organic: #d4d1c9;
+  --ink: #ece9e3;
+  --ink-soft: #b8b5ad;
+  --graphite: #8c8982;
+  --stone: #6b6964;
+  --stone-light: #4a4945;
+  --line: #282624;
+  --line-organic: #343027;
 
   --orange: #d4652f;
   --orange-light: #e8844e;
   --orange-dark: #b8531f;
-  --orange-faint: #fdf3ed;
+  --orange-faint: #1f1a14;
 
   --cobalt: #3b5bdb;
   --cobalt-light: #5c7afa;
   --cobalt-dark: #2f48b8;
   --cobalt-faint: #eef2ff;
 
-  --status-success: #1a7f4b;
-  --status-warning: #b8860b;
-  --status-danger: #c43d2f;
-  --status-info: #3b6cb5;
+  --status-success: #4caf7e;
+  --status-warning: #d6a13c;
+  --status-danger: #ef7d63;
+  --status-info: #6b9ae8;
 
   /* Shared material system tokens (Relay + Studio surfaces) */
-  --bone-000: #fdfbf6;
-  --bone-050: #f6f1e6;
-  --bone-100: #ece3d0;
-  --bone-200: #d9cdb4;
-  --bone-300: #c2b494;
+  --bone-000: #252220;
+  --bone-050: #201d1b;
+  --bone-100: #343027;
+  --bone-200: #4a4538;
+  --bone-300: #5c5648;
 
-  --ink-950: #100f0d;
-  --ink-900: #1a1916;
-  --ink-800: #262420;
-  --ink-700: #3c3a35;
+  --ink-950: #f5f1e8;
+  --ink-900: #ece9e3;
+  --ink-800: #d3cdc2;
+  --ink-700: #b2ab9f;
 
   --console: #131210;
   --console-raised: #1c1a17;
@@ -154,16 +162,17 @@
 
   --orange-strong: #b8531f;
   --orange-signal: #d4652f;
-  --orange-muted: #c47a4f;
-  --orange-wash: #f4e4d6;
-  --orange-surface: #fbf1e9;
+  --orange-muted: #8B3D18;
+  --orange-subtle: color-mix(in srgb, var(--orange-signal) 40%, transparent);
+  --orange-wash: #2a1d14;
+  --orange-surface: #201711;
   --orange-line: color-mix(in srgb, var(--orange-signal) 45%, var(--bone-200));
 
   --cobalt-strong: #2a3f96;
   --cobalt-signal: #3b5bdb;
   --cobalt-muted: #5a6fc4;
-  --cobalt-wash: #e2e7f7;
-  --cobalt-surface: #f1f3fc;
+  --cobalt-wash: #1a2238;
+  --cobalt-surface: #171d2c;
   --cobalt-line: color-mix(in srgb, var(--cobalt-signal) 45%, var(--bone-200));
 
   --r-chip: 2px;
@@ -188,7 +197,7 @@
   --destructive: var(--status-danger);
   --border: var(--line);
   --input: var(--line);
-  --ring: color-mix(in srgb, var(--orange) 30%, transparent);
+  --ring: color-mix(in srgb, var(--orange) 35%, transparent);
   --radius: 8px;
 
   --sidebar: var(--bone);
@@ -201,17 +210,17 @@
   --sidebar-ring: var(--ring);
 
   /* Elevation */
-  --shadow-sm: 0 1px 2px color-mix(in srgb, var(--ink) 4%, transparent);
-  --shadow-md: 0 2px 8px color-mix(in srgb, var(--ink) 5%, transparent), 0 1px 2px color-mix(in srgb, var(--ink) 3%, transparent);
-  --shadow-lg: 0 8px 24px color-mix(in srgb, var(--ink) 6%, transparent), 0 2px 6px color-mix(in srgb, var(--ink) 3%, transparent);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
   --shadow-orange: 0 4px 16px -4px color-mix(in srgb, var(--orange) 25%, transparent);
   --shadow-cobalt: 0 4px 16px -4px color-mix(in srgb, var(--cobalt) 25%, transparent);
 }
 
 .dark {
   /* ── Dark mode ── */
-  --bone: #141312;
-  --bone-raised: #1c1b19;
+  --bone: #1C1917;
+  --bone-raised: #2a2725;
   --solid: #ece9e3;
   --on-solid: #141312;
   --on-accent: #f7f6f3;
@@ -223,9 +232,9 @@
   --line: #282624;
   --line-soft: #1f1d1c;
 
-  --orange: #e8844e;
-  --orange-light: #f0a06e;
-  --orange-dark: #d4652f;
+  --orange: #d4652f;
+  --orange-light: #e8844e;
+  --orange-dark: #b8531f;
   --orange-faint: #1f1a14;
 
   --cobalt: #7c9aff;
@@ -239,11 +248,11 @@
   --status-info: #6b9ae8;
 
   /* Shared material system tokens (dark mode) */
-  --bone-000: #1b1916;
-  --bone-050: #171511;
-  --bone-100: #25221d;
-  --bone-200: #343027;
-  --bone-300: #4a4538;
+  --bone-000: #252220;
+  --bone-050: #201d1b;
+  --bone-100: #343027;
+  --bone-200: #4a4538;
+  --bone-300: #5c5648;
 
   --ink-950: #f5f1e8;
   --ink-900: #ece9e3;
@@ -257,8 +266,9 @@
   --console-mute: #a39d90;
 
   --orange-strong: #f0a06e;
-  --orange-signal: #e8844e;
-  --orange-muted: #d49368;
+  --orange-signal: #d4652f;
+  --orange-muted: #8B3D18;
+  --orange-subtle: color-mix(in srgb, var(--orange-signal) 40%, transparent);
   --orange-wash: #2a1d14;
   --orange-surface: #201711;
   --orange-line: color-mix(in srgb, var(--orange-signal) 45%, var(--bone-200));
@@ -638,6 +648,24 @@
 
   .number-tick {
     animation: number-tick 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* ── Action line (shared across Conversations/Leads/Today) ── */
+  .action-line {
+    border-top: 1px solid rgba(212, 101, 47, 0.2);
+    padding-top: 10px;
+    padding-bottom: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--orange-signal);
+  }
+
+  /* ── Secondary orange (nav, borders, low-priority labels) ── */
+  .orange-secondary {
+    color: var(--orange-subtle);
+  }
+  .border-orange-secondary {
+    border-color: var(--orange-subtle);
   }
 
   /* ── Gradient mesh for auth pages ── */
@@ -1338,25 +1366,25 @@
 
   .srf-console-edge {
     box-shadow:
-      inset 4px 0 0 var(--orange-signal),
+      inset 4px 0 0 var(--orange-subtle),
       0 24px 56px -26px rgba(16, 15, 13, 0.5),
-      0 0 0 1px rgba(212, 101, 47, 0.24);
+      0 0 0 1px rgba(212, 101, 47, 0.16);
   }
 
-  /* Hero's signature console — breathes with a slow orange glow along its
-     edge, distinct from the still Priority Console further down the page. */
+  /* Hero's signature console — breathes with a subtle orange glow along its
+     edge. Uses reduced orange so it does not compete with the primary action. */
   @keyframes hero-console-breathe {
     0%, 100% {
       box-shadow:
-        inset 4px 0 0 var(--orange-signal),
+        inset 4px 0 0 var(--orange-subtle),
         0 24px 56px -26px rgba(16, 15, 13, 0.5),
-        0 0 0 1px rgba(212, 101, 47, 0.24);
+        0 0 0 1px rgba(212, 101, 47, 0.16);
     }
     50% {
       box-shadow:
-        inset 4px 0 0 var(--orange-signal),
+        inset 4px 0 0 var(--orange-subtle),
         0 28px 64px -24px rgba(16, 15, 13, 0.56),
-        0 0 0 1px rgba(212, 101, 47, 0.4);
+        0 0 0 1px rgba(212, 101, 47, 0.28);
     }
   }
   .hero-console-pulse {
@@ -1366,9 +1394,9 @@
     .hero-console-pulse {
       animation: none;
       box-shadow:
-        inset 4px 0 0 var(--orange-signal),
+        inset 4px 0 0 var(--orange-subtle),
         0 24px 56px -26px rgba(16, 15, 13, 0.5),
-        0 0 0 1px rgba(212, 101, 47, 0.24);
+        0 0 0 1px rgba(212, 101, 47, 0.16);
     }
   }
 
@@ -1574,7 +1602,7 @@
   /* Semantic surface tokens */
   --surface-muted: color-mix(in srgb, var(--bone) 96%, var(--ink) 4%);
   --surface-hover: color-mix(in srgb, var(--bone) 92%, var(--ink) 8%);
-  --surface-selected: color-mix(in srgb, var(--orange) 6%, var(--bone-raised));
+  --surface-selected: color-mix(in srgb, var(--orange) 8%, var(--bone-raised));
   --surface-inverse: var(--ink);
 
   /* Semantic border tokens */

@@ -32,29 +32,54 @@ export function DoThisNext({ action }: DoThisNextProps) {
   if (!action) return null
 
   return (
-    <section className="rounded-lg border border-orange/30 bg-orange/[0.03] p-5">
+    <section className="rounded-lg border border-line bg-bone-raised p-4" aria-label="Do this next">
       <div className="flex items-center gap-2">
-        <KindIcon kind={action.kind} className="size-4 text-orange" />
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange">
+        <span className="rounded-sm bg-orange px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-on-accent">
+          {kindLabel(action.kind)}
+        </span>
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">
           Do This Next
         </p>
       </div>
       <h3 className="mt-2 text-[18px] font-medium tracking-[-0.01em] text-ink">
-        {kindLabel(action.kind)}: {action.title}
+        {action.title}
       </h3>
       {action.subtitle && (
         <p className="mt-1 text-[13px] text-graphite">{action.subtitle}</p>
       )}
+
+      <div className="mt-4 space-y-3">
+        {action.whatHappened && (
+          <div className="rounded-md border border-line bg-bone px-3 py-2">
+            <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">What</p>
+            <p className="mt-0.5 text-[13px] text-ink">{action.whatHappened}</p>
+          </div>
+        )}
+        {action.whyItMatters && (
+          <div className="rounded-md border border-line bg-bone px-3 py-2">
+            <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Why</p>
+            <p className="mt-0.5 text-[13px] text-ink">{action.whyItMatters}</p>
+          </div>
+        )}
+        {action.proof && (
+          <div className="rounded-md border border-orange/20 bg-orange/5 px-3 py-2">
+            <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">Evidence</p>
+            <p className="mt-0.5 text-[12px] text-ink">{action.proof}</p>
+          </div>
+        )}
+      </div>
+
       {action.identity && (
-        <p className="mt-2 text-[11px] text-stone">
+        <p className="mt-3 text-[11px] text-stone">
           Working as <span className="font-medium text-ink">{action.identity.name}</span>
           {action.identity.channel && ` · ${action.identity.channel.toUpperCase()}`}
         </p>
       )}
-      <div className="mt-3">
+
+      <div className="mt-3 action-line">
         <Link
           href={action.href}
-          className="inline-flex items-center gap-2 rounded-md bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
+          className="inline-flex items-center gap-2 text-[13px] font-medium text-orange transition-colors hover:text-orange-light"
         >
           {action.humanAction}
           <ArrowRight className="size-4" />

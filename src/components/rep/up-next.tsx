@@ -22,34 +22,48 @@ export function UpNext({ actions, excludeId, max = 4 }: UpNextProps) {
       </p>
       <div className="overflow-hidden rounded-lg border border-line bg-bone-raised">
         {visible.map((action, index) => (
-          <Link
+          <div
             key={action.id}
-            href={action.href}
-            className="group flex items-center gap-3 border-b border-line/60 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-bone"
+            className="border-b border-line/60 last:border-b-0"
           >
-            <span className="w-5 text-mono-medium text-[11px] text-stone/60">
-              {String(index + 1).padStart(2, '0')}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="truncate text-[13px] font-medium text-ink">
+            <Link
+              href={action.href}
+              className="group flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-bone"
+            >
+              <span className="w-5 mt-0.5 text-mono-medium text-[11px] text-stone/60">
+                {String(index + 1).padStart(2, '0')}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-medium text-ink">
                   {action.title}
-                </span>
-              </div>
-              <p className="truncate text-[11px] text-graphite">
-                {action.identity && (
-                  <>
-                    <span className="text-stone">Working as </span>
-                    {action.identity.name}
-                    {action.identity.channel && ` · ${action.identity.channel.toUpperCase()}`}
-                    {' · '}
-                  </>
+                </p>
+                {action.whatHappened && (
+                  <p className="mt-0.5 text-[11px] text-stone">
+                    <span className="text-mono-medium uppercase tracking-[0.1em]">What </span>
+                    {action.whatHappened}
+                  </p>
                 )}
-                {action.whyLines[0] ?? action.subtitle}
-              </p>
-            </div>
-            <ArrowRight className="size-3.5 shrink-0 text-stone transition-colors group-hover:text-orange" />
-          </Link>
+                {action.whyItMatters && (
+                  <p className="mt-0.5 text-[11px] text-graphite">
+                    <span className="text-mono-medium uppercase tracking-[0.1em]">Why </span>
+                    {action.whyItMatters}
+                  </p>
+                )}
+                {action.proof && (
+                  <p className="mt-0.5 text-[11px] text-graphite">
+                    <span className="text-mono-medium uppercase tracking-[0.1em]">Evidence </span>
+                    {action.proof}
+                  </p>
+                )}
+                {action.humanAction && (
+                  <p className="mt-1.5 text-[13px] font-medium text-orange">
+                    {action.humanAction}
+                  </p>
+                )}
+              </div>
+              <ArrowRight className="size-3.5 mt-0.5 shrink-0 text-stone transition-colors group-hover:text-ink" />
+            </Link>
+          </div>
         ))}
       </div>
     </section>
