@@ -538,6 +538,7 @@ export async function sendPreparedEmail(input: {
     originalDraft: originalBody,
     sendDisposition: disposition,
     rejectReasons,
+    idempotencyKey: idem,
   })
   if (!markResult.allowed) {
     throw new Error(markResult.message ?? 'Unable to record send in Relay.')

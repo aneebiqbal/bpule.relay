@@ -1183,6 +1183,7 @@ export class SupabaseStore implements ScoutStore {
                 p_identity_id: t.revenue_identity_id as string,
                 p_activity_type: activityType,
                 p_org_id: this.orgId,
+                p_source_event_id: `activity:${leadId}:${idempotencyKey ?? 'none'}:${t.revenue_identity_id}`,
               })
             } catch {
               // Non-fatal per-target
@@ -2390,6 +2391,7 @@ export class SupabaseStore implements ScoutStore {
                   p_identity_id: t.revenue_identity_id as string,
                   p_activity_type: 'application',
                   p_org_id: this.orgId,
+                  p_source_event_id: `activity:upwork:${jobId}:${t.revenue_identity_id}`,
                 })
               } catch {
                 // Non-fatal per-target
