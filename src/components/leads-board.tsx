@@ -131,8 +131,8 @@ export function LeadsBoard({ leads, orgView }: { leads: LeadRow[]; orgView: bool
   return (
     <div className="space-y-3">
       {/* Search + sort */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[180px] flex-1">
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-stone" />
           <input
             value={search}
@@ -153,7 +153,7 @@ export function LeadsBoard({ leads, orgView }: { leads: LeadRow[]; orgView: bool
       </div>
 
       {/* Filter tabs */}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1">
         {FILTERS.map((f) => (
           <button
             key={f.key}
@@ -172,8 +172,22 @@ export function LeadsBoard({ leads, orgView }: { leads: LeadRow[]; orgView: bool
 
       {/* List */}
       {filtered.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-line py-8 text-center">
-          <p className="text-[13px] text-graphite">No leads match.</p>
+        <div className="rounded-lg border border-dashed border-line px-6 py-10 text-center">
+          <p className="text-[14px] font-medium text-ink">
+            {search ? 'No leads match your search.' : 'No leads yet.'}
+          </p>
+          <p className="mt-1 text-[13px] text-graphite">
+            {search ? 'Try a different search term.' : 'Find prospects and save them to start your outreach.'}
+          </p>
+          {!search && (
+            <Link
+              href="/prospect"
+              className="mt-4 inline-flex items-center gap-2 rounded-md bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
+            >
+              <Search className="size-3.5" />
+              Find prospects
+            </Link>
+          )}
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-line bg-bone-raised shadow-sm">
@@ -187,7 +201,7 @@ export function LeadsBoard({ leads, orgView }: { leads: LeadRow[]; orgView: bool
               const lastActivity = lead.lastActivityAt ?? lead.createdAt
               return (
                 <li key={lead.id}>
-                  <div className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-bone sm:px-5">
+                  <div className="group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-bone sm:px-5">
                     <div className="shrink-0">
                       {score !== null && score !== undefined ? (
                         <ScoreRing score={lead.score} canonicalScore={lead.canonicalScore} size={36} />
