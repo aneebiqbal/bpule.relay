@@ -1,7 +1,7 @@
 # Relay 2-3 Week Hardening — Baseline Report
 
 **Baseline SHA:** `dae8a34` (accountability idempotency)
-**Report SHA:** `6c50b1b`
+**Report SHA:** `f157fa8`
 **Date:** 2026-09-26
 
 ---
@@ -12,7 +12,7 @@
 |--------|-------|
 | Typecheck | Clean (new code) |
 | Production build | Passes |
-| Unit tests | 1332/1332 passed |
+| Unit tests | 1332/1332 passed (then fixed + 2 more) |
 | Pre-existing failures | 0 (was 1, fixed) |
 
 ## 2. Bugs Found & Fixed
@@ -71,7 +71,7 @@
 | followup | Yes (3/day) | Yes | Fixed dedup |
 | email | Yes (25/day) | Yes | Fixed idempotency |
 | application | Yes (10/day) | Yes | Fixed idempotency |
-| **proposal** | **Yes (5/day)** | **No** | **GAP** — no code path increments proposal |
+| **proposal** | No (removed) | N/A | CLOSED — was duplicate of application; one Upwork apply = one truth |
 
 ## 4. P0 Status
 
@@ -101,11 +101,13 @@
 **CONDITIONAL PASS**
 
 - Code-level P0 fixes complete and tested
-- Unit test suite: 1332/1332 green
+- Unit test suite: 1332/1332 green (zero failures)
 - Build: clean
-- **Blocker:** Migration `20261001000004` not yet applied to hosted DB — exactly-once behavior not yet proven at the database layer
+- Follow-up event dedup fixed (was Date.now())
+- Proposal duplicate target removed
+- **Blocker:** Migration `20261001000004` not yet applied to hosted DB — exactly-once RPC idempotency not yet proven at the database layer
 - **Blocker:** No SUPABASE_ACCESS_TOKEN available in this environment to apply migration
 
 ---
 
-**Next step:** Apply migration via `SUPABASE_ACCESS_TOKEN=sqp_xxx node scripts/apply-accountability-idempotency.mjs` then re-run the concurrency proof tests.
+**Next step:** Apply migration via `SUPABASE_ACCESS_TOKEN=sqp_xxx node scripts/apply-accountability-idempotency.mjs`, then run concurrency proof tests (simultaneous identical requests → exactly 1 event + 1 increment).
