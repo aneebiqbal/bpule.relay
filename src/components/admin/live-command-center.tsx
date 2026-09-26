@@ -1,7 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { formatDistance } from 'date-fns'
 import { Activity, MessageSquare, Zap } from 'lucide-react'
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 type StreamItem = { id: string; eventType: string; label: string; actorName: string; occurredAt: string }
 type PerRep = { id: string; name: string; connections: number; dms: number; followups: number; emails: number; replies: number; total: number }
@@ -19,11 +23,7 @@ type Feed = {
 function relativeTime(iso: string, now: number): string {
   const diff = now - new Date(iso).getTime()
   if (diff < 60_000) return 'just now'
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
+  return `${formatDistance(new Date(iso), new Date(now))} ago`
 }
 
 export function LiveCommandCenter() {
@@ -63,6 +63,7 @@ export function LiveCommandCenter() {
   }
 
   const quiet = data.perRep.filter((rep) => rep.total === 0)
+  const hours = data.hourly.map((count, hour) => ({ hour: `${hour}`, count })).filter((row) => Number(row.hour) >= 8 && Number(row.hour) <= 18)
 
   return (
     <div className="space-y-5">
@@ -71,6 +72,36 @@ export function LiveCommandCenter() {
         <StatTile icon={<MessageSquare className="size-4" />} label="Replies" value={String(data.totals.replies)} />
         <StatTile icon={<Zap className="size-4" />} label="Actions done" value={String(data.totals.completed)} />
       </div>
+
+      <Card>
+        <CardHeader className="pb-0">
+          <CardTitle className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Sent by hour</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-36">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={hours} margin={{ top: 8, right: 4, bottom: 0, left: -24 }}>
+                <XAxis dataKey="hour" tick={{ fontSize: 11, fill: 'var(--stone)' }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'var(--stone)' }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  cursor={{ fill: 'var(--bone)' }}
+                  content={({ active, payload }) => {
+                    const row = payload?.[0]?.payload as { hour: string; count: number } | undefined
+                    if (!active || !row) return null
+                    return (
+                      <div className="rounded-lg border border-line bg-bone-raised px-2.5 py-1.5 text-[11px] shadow-sm">
+                        <p className="font-medium text-ink">{row.hour}:00</p>
+                        <p className="text-graphite">{row.count} sent</p>
+                      </div>
+                    )
+                  }}
+                />
+                <Bar dataKey="count" fill="var(--orange)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
 
       <section className="overflow-hidden rounded-lg border border-line bg-bone-raised">
         <div className="px-4 py-3">
@@ -89,9 +120,9 @@ export function LiveCommandCenter() {
                     {rep.connections} notes · {rep.dms} messages · {rep.followups} follow-ups · {rep.replies} replies
                   </span>
                 </span>
-                <span className={rep.total === 0 ? 'text-[13px] font-medium text-status-danger' : 'text-[13px] font-medium text-ink'}>
-                  {rep.total === 0 ? 'Nothing sent' : rep.total}
-                </span>
+                <Badge variant={rep.total === 0 ? 'destructive' : 'outline'}>
+                  {rep.total === 0 ? 'Nothing sent' : String(rep.total)}
+                </Badge>
               </li>
             ))}
           </ul>
@@ -128,12 +159,14 @@ export function LiveCommandCenter() {
 
 function StatTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-line/60 bg-bone-raised p-3">
-      <div className="flex items-center gap-1.5 text-graphite">
-        {icon}
-        <span className="text-label">{label}</span>
-      </div>
-      <p className="mt-1 text-mono-medium text-2xl font-medium text-ink">{value}</p>
-    </div>
+    <Card>
+      <CardContent className="p-3">
+        <div className="flex items-center gap-1.5 text-graphite">
+          {icon}
+          <span className="text-label">{label}</span>
+        </div>
+        <p className="mt-1 text-mono-medium text-2xl font-medium text-ink">{value}</p>
+      </CardContent>
+    </Card>
   )
 }

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { AlertTriangle, Shield } from 'lucide-react'
+import { Progress } from '@/components/ui/progress'
 import { DailyJobs, jobsFromTargets } from './daily-jobs'
 import { DoThisNext } from './do-this-next'
 import { UpNext } from './up-next'
@@ -128,12 +129,13 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
                         {won ? 'Day won' : `${member.totalCompleted} of ${member.totalTarget}`}
                       </span>
                     </span>
-                    <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-line/70">
-                      <span
-                        className={won ? 'block h-full rounded-full bg-status-success' : 'block h-full rounded-full bg-orange'}
-                        style={{ width: `${member.totalTarget > 0 ? Math.round((member.totalCompleted / member.totalTarget) * 100) : 0}%` }}
-                      />
-                    </span>
+                    <Progress
+                      className="mt-1.5"
+                      value={member.totalCompleted}
+                      max={member.totalTarget > 0 ? member.totalTarget : 1}
+                      size="md"
+                      variant={won ? 'success' : 'default'}
+                    />
                   </Link>
                 </li>
               )

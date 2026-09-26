@@ -2,18 +2,15 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { cn } from 'cn'
+import { formatDistance } from 'date-fns'
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import type { TeamLivePayload, TeamLivePerson } from '@/lib/admin/team-live'
 
 function relativeTime(iso: string | null, now: number): string {
   if (!iso) return 'quiet today'
-  const diff = now - new Date(iso).getTime()
-  if (diff < 60_000) return 'just now'
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
+  return `${formatDistance(new Date(iso), new Date(now))} ago`
 }
 
 function movedToday(person: TeamLivePerson): boolean {
@@ -86,6 +83,38 @@ export function TeamLiveBoard({ initial = null }: { readonly initial?: TeamLiveP
         </p>
       )}
 
+      {sorted.some((person) => person.totalTarget > 0) && (
+        <div className="rounded-lg border border-line bg-bone-raised px-2 py-3">
+          <p className="px-2 text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Still open</p>
+          <div style={{ height: Math.max(120, sorted.length * 32) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={sorted.map((person) => ({ name: person.repName, left: person.totalRemaining, done: person.totalCompleted }))}
+                layout="vertical"
+                margin={{ top: 8, right: 12, bottom: 0, left: 4 }}
+              >
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="name" width={88} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--ink)' }} />
+                <Tooltip
+                  cursor={{ fill: 'var(--bone)' }}
+                  content={({ active, payload }) => {
+                    const row = payload?.[0]?.payload as { name: string; left: number; done: number } | undefined
+                    if (!active || !row) return null
+                    return (
+                      <div className="rounded-lg border border-line bg-bone-raised px-2.5 py-1.5 text-[11px] shadow-sm">
+                        <p className="font-medium text-ink">{row.name}</p>
+                        <p className="text-graphite">{row.done} done · {row.left} left</p>
+                      </div>
+                    )
+                  }}
+                />
+                <Bar dataKey="left" fill="var(--orange)" radius={[0, 4, 4, 0]} barSize={8} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {sorted.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line px-4 py-8 text-center text-[14px] text-graphite">No people yet.</p>
       ) : (
@@ -112,16 +141,17 @@ function PersonRow({ person, now }: { readonly person: TeamLivePerson; readonly 
             {' · '}
             {person.extractionsCount} pulled · {person.outreachSent} sent · {relativeTime(person.lastActivityAt, now)}
           </span>
-          <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-line/70">
-            <span
-              className={cn('block h-full rounded-full', won ? 'bg-status-success' : 'bg-orange')}
-              style={{ width: `${person.totalTarget > 0 ? Math.round((person.totalCompleted / person.totalTarget) * 100) : 0}%` }}
-            />
-          </span>
+          <Progress
+            className="mt-1.5"
+            value={person.totalTarget > 0 ? person.totalCompleted : 0}
+            max={person.totalTarget > 0 ? person.totalTarget : 1}
+            size="md"
+            variant={won ? 'success' : 'default'}
+          />
         </span>
-        <span className={cn('shrink-0 text-[13px] font-medium', won ? 'text-status-success' : person.totalRemaining > 0 ? 'text-ink' : 'text-graphite')}>
+        <Badge variant={won ? 'success' : person.totalRemaining > 0 ? 'orange' : 'outline'}>
           {won ? 'Day won' : person.totalTarget > 0 ? `${person.totalRemaining} left` : 'No numbers'}
-        </span>
+        </Badge>
       </Link>
     </li>
   )
