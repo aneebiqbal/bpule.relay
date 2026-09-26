@@ -1,7 +1,7 @@
 # Relay UX Refinement Report
 
 **Baseline SHA:** `6c50b1b`
-**Final SHA:** `294f903`
+**Final SHA:** `31a396f`
 **Date:** 2026-09-26
 
 ---
@@ -39,7 +39,15 @@ Product UX audit across 17 routes at 5 viewports. Fixed orange hierarchy, card c
 - `.card-compact` / `.row-compact` — comfortable density
 - `.workflow-state` / `.workflow-action` — STATE → EXPLANATION → ACTION pattern
 
-### 5. UX Acceptance Tests
+### 5. Day Off State Simplification (UX-P1 → resolved)
+**Problem:** Non-working day showed the full DailyJobs component — pie chart, pace reading, badges, keyboard shortcuts — all meaningless when numbers aren't due. User feedback: "not very easy, it's complicated."
+**Fix:** Early return for `!workingDay` shows just "Day off" + one calm sentence. No charts, no pace pressure, no dead keyboard shortcuts.
+**Verification:** Production server confirmed H2="Day off", 0 badges when non-working.
+
+### 6. Dead Code Removal
+Removed `src/components/rep/your-day-summary.tsx` — was never imported.
+
+### 7. UX Acceptance Tests
 **Added `e2e/ux-product-acceptance.spec.ts`:**
 - Every page loads without horizontal overflow (desktop + mobile)
 - Every page has a visible h1 heading
@@ -68,14 +76,19 @@ Product UX audit across 17 routes at 5 viewports. Fixed orange hierarchy, card c
 
 ---
 
+## Responsive Sweep Results
+
+65 viewport/page checks across 1440/1280/1024/768/390: **0 overflow, 0 issues.**
+
 ## Test Results
 
 | Gate | Result |
 |------|--------|
-| Typecheck | Clean |
+| Typecheck | Clean (1 pre-existing in relationship-state.ts) |
 | Build | Pass |
 | Unit tests | 1338/1338 |
-| UX acceptance | Ready for browser run |
+| UX acceptance | 27/27 Playwright passed (desktop + mobile) |
+| Responsive | 65/65 checks passed |
 
 ---
 
@@ -98,4 +111,4 @@ Product UX audit across 17 routes at 5 viewports. Fixed orange hierarchy, card c
 
 ---
 
-**Verdict:** CONDITIONAL PASS — code-level UX refinements complete and tested. Browser acceptance gates need a running server to fully verify responsive behavior.
+**Verdict:** PASS — all browser gates green (27/27 Playwright, 65/65 responsive checks). Orange hierarchy fixed. Theme tokens corrected. Day off simplified. 1338/1338 tests. Build clean.
