@@ -23,6 +23,7 @@ type IdentitySummary = {
   id: string;
   name: string;
   title?: string | null;
+  channel?: string;
   status?: string | null;
 };
 
@@ -445,6 +446,7 @@ export function RelayOnboardingExperience({ bootstrap }: { bootstrap: Onboarding
                   id: String(identity.id ?? ""),
                   name: String(identity.identityName ?? identity.slug ?? "Assigned profile"),
                   title: typeof identity.title === "string" ? identity.title : null,
+                  channel: typeof identity.channel === "string" ? identity.channel : undefined,
                   status: typeof identity.status === "string" ? identity.status : "active",
                 };
               })
@@ -807,11 +809,18 @@ export function RelayOnboardingExperience({ bootstrap }: { bootstrap: Onboarding
             ) : (
               <div className="grid gap-2">
                 {identities.slice(0, 4).map((identity) => (
-                  <div key={identity.id} className="auth-note-strip">
-                    <p className="text-[var(--ink)]">{identity.name}</p>
-                    <p className="text-xs text-[var(--graphite)]">
-                      {identity.title || "No title"} - {(identity.status || "active").toUpperCase()}
-                    </p>
+                  <div key={identity.id} className="auth-note-strip flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[var(--ink)] truncate">{identity.name}</p>
+                      <p className="text-xs text-[var(--graphite)] truncate">
+                        {identity.title || "No title"}
+                      </p>
+                    </div>
+                    {identity.channel && identity.channel !== 'other' ? (
+                      <span className="shrink-0 rounded-sm bg-orange/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.08em] text-orange">
+                        {identity.channel}
+                      </span>
+                    ) : null}
                   </div>
                 ))}
               </div>

@@ -4,15 +4,14 @@ import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { buildRoleContext } from '@/lib/relay/role-intelligence'
 import { buildRelayQueue } from '@/lib/relay/queue-engine'
 import { loadAccountabilityDashboard } from '@/lib/relay/dashboard-loader'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
 import { RepWorkspace, type RepWorkspaceData } from '@/components/rep/rep-workspace'
-import { MyDayCard, type MyDayData } from '@/components/rep/my-day-card'
 import { type CommandCenterData } from '@/components/admin/admin-command-center'
 import { LiveCommandCenter } from '@/components/admin/live-command-center'
-import { ManagerTeamView, type ManagerTeamData } from '@/components/manager/manager-team-view'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,15 +26,9 @@ export default async function TodayPage() {
   const acData = await loadAccountabilityDashboard()
 
   if (authCtx.isOwner || authCtx.isAdmin) {
-    // Admin / Owner view
-    const personal = await loadRepWorkspaceData(user.rep.id).catch(() => null)
-
     return (
       <Suspense fallback={<DashboardShellSkeleton />}>
-        <AdminTodayViewWithAccountability
-          acData={acData}
-          personal={personal}
-        />
+        <AdminTodayViewWithAccountability acData={acData} />
       </Suspense>
     )
   }
@@ -50,7 +43,6 @@ export default async function TodayPage() {
     return (
       <Suspense fallback={<DashboardShellSkeleton />}>
         <ManagerTodayView
-          acData={acData}
           repData={repData}
           teamData={teamData}
         />
@@ -67,7 +59,6 @@ export default async function TodayPage() {
   return (
     <Suspense fallback={<DashboardShellSkeleton />}>
       <RepTodayViewWithAccountability
-        acData={acData}
         repData={repData}
         teamData={teamData}
       />
@@ -78,40 +69,12 @@ export default async function TodayPage() {
 // ── Rep View with My Day ─────────────────────────────────────────────────────
 
 function RepTodayViewWithAccountability({
-  acData,
   repData,
   teamData,
 }: {
-  acData: Awaited<ReturnType<typeof loadAccountabilityDashboard>>
   repData: RepWorkspaceData
   teamData: { teams: any[]; isOwner: boolean }
 }) {
-  const myDayData: MyDayData | null = acData?.myDay ? {
-    status: acData.myDay.status as MyDayData['status'],
-    timeRemaining: acData.myDay.timeRemaining,
-    dayElapsedPct: acData.myDay.dayElapsedPct,
-    totalCompleted: acData.myDay.totalCompleted,
-    totalTarget: acData.myDay.totalTarget,
-    totalRemaining: acData.myDay.totalRemaining,
-    categories: acData.myDay.categories.map((c) => ({
-      key: c.key,
-      label: c.label,
-      completed: c.completed,
-      target: c.target,
-      remaining: Math.max(0, c.target - c.completed),
-      href: c.href,
-    })),
-    warning: acData.myDay.warning ? {
-      level: acData.myDay.warning.level,
-      message: acData.myDay.warning.message,
-      categories: acData.myDay.warning.categories,
-    } : null,
-    canCloseDay: acData.myDay.canCloseDay,
-    dayCloseStatus: acData.myDay.dayCloseStatus,
-    hasContract: acData.myDay.hasContract,
-    identityId: repData.identities[0]?.revenueIdentityId ?? undefined,
-  } : null
-
   return (
     <div className="space-y-6 pb-8">
       <header className="space-y-1.5">
@@ -128,52 +91,12 @@ function RepTodayViewWithAccountability({
 // ── Manager View ─────────────────────────────────────────────────────────────
 
 function ManagerTodayView({
-  acData,
   repData,
   teamData,
 }: {
-  acData: Awaited<ReturnType<typeof loadAccountabilityDashboard>>
   repData: RepWorkspaceData
   teamData: { teams: any[]; isOwner: boolean }
 }) {
-  const myDayData: MyDayData | null = acData?.myDay ? {
-    status: acData.myDay.status as MyDayData['status'],
-    timeRemaining: acData.myDay.timeRemaining,
-    dayElapsedPct: acData.myDay.dayElapsedPct,
-    totalCompleted: acData.myDay.totalCompleted,
-    totalTarget: acData.myDay.totalTarget,
-    totalRemaining: acData.myDay.totalRemaining,
-    categories: acData.myDay.categories.map((c) => ({
-      key: c.key,
-      label: c.label,
-      completed: c.completed,
-      target: c.target,
-      remaining: Math.max(0, c.target - c.completed),
-      href: c.href,
-    })),
-    warning: acData.myDay.warning ? {
-      level: acData.myDay.warning.level,
-      message: acData.myDay.warning.message,
-      categories: acData.myDay.warning.categories,
-    } : null,
-    canCloseDay: acData.myDay.canCloseDay,
-    dayCloseStatus: acData.myDay.dayCloseStatus,
-    hasContract: acData.myDay.hasContract,
-    identityId: repData.identities[0]?.revenueIdentityId ?? undefined,
-  } : null
-
-  const managerTeamData: ManagerTeamData = acData?.team ? {
-    date: acData.date,
-    teams: acData.team.teams.map((t) => ({
-      teamId: t.teamId,
-      teamName: t.teamName,
-      members: t.members,
-    })),
-  } : {
-    date: new Date().toISOString().slice(0, 10),
-    teams: [],
-  }
-
   return (
     <div className="space-y-6 pb-8">
       <header className="space-y-1.5">
@@ -183,13 +106,6 @@ function ManagerTodayView({
       </header>
 
       <RepWorkspace data={repData} teamData={teamData} mode="manager" />
-
-      {myDayData && (
-        <section className="space-y-3">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">My Work</p>
-          <MyDayCard data={myDayData} />
-        </section>
-      )}
     </div>
   )
 }
@@ -198,10 +114,8 @@ function ManagerTodayView({
 
 function AdminTodayViewWithAccountability({
   acData,
-  personal,
 }: {
   acData: Awaited<ReturnType<typeof loadAccountabilityDashboard>>
-  personal: RepWorkspaceData | null
 }) {
   const ccData: CommandCenterData = acData?.commandCenter ? {
     date: acData.date,
@@ -215,31 +129,6 @@ function AdminTodayViewWithAccountability({
     team: [],
   }
 
-  const myDayData: MyDayData | null = acData?.myDay && acData.myDay.hasIdentity ? {
-    status: acData.myDay.status as MyDayData['status'],
-    timeRemaining: acData.myDay.timeRemaining,
-    dayElapsedPct: acData.myDay.dayElapsedPct,
-    totalCompleted: acData.myDay.totalCompleted,
-    totalTarget: acData.myDay.totalTarget,
-    totalRemaining: acData.myDay.totalRemaining,
-    categories: acData.myDay.categories.map((c) => ({
-      key: c.key,
-      label: c.label,
-      completed: c.completed,
-      target: c.target,
-      remaining: Math.max(0, c.target - c.completed),
-      href: c.href,
-    })),
-    warning: acData.myDay.warning ? {
-      level: acData.myDay.warning.level,
-      message: acData.myDay.warning.message,
-      categories: acData.myDay.warning.categories,
-    } : null,
-    canCloseDay: acData.myDay.canCloseDay,
-    dayCloseStatus: acData.myDay.dayCloseStatus,
-    hasContract: acData.myDay.hasContract,
-  } : null
-
   return (
     <div className="space-y-6 pb-8">
       <header className="space-y-1.5">
@@ -252,16 +141,34 @@ function AdminTodayViewWithAccountability({
         <p className="text-[13px] text-graphite">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
       </header>
 
+      {ccData.team.length > 0 && (
+        <section className="overflow-hidden rounded-lg border border-line bg-bone-raised">
+          <div className="px-4 py-3">
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Who covered their day</p>
+            <p className="mt-1 text-[14px] text-graphite">Green means every number is done. Everyone else still has work.</p>
+          </div>
+          <ul className="divide-y divide-line/70 border-t border-line">
+            {[...ccData.team].sort((a, b) => b.remaining - a.remaining).map((person) => {
+              const won = person.remaining === 0 && person.status === 'completed'
+              return (
+                <li key={person.personId} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <span className="min-w-0">
+                    <span className="block text-[14px] font-medium text-ink">{person.personName}</span>
+                    <span className="text-[12px] text-graphite">{person.workingAs.join(', ') || 'No profile'}</span>
+                  </span>
+                  <span className={won ? 'text-[13px] font-medium text-status-success' : 'text-[13px] text-ink'}>
+                    {won ? 'Day won' : `${person.remaining} left`}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
+
       <Suspense fallback={<div className="h-64 animate-pulse rounded-xl border border-line bg-bone-raised" />}>
         <LiveCommandCenter />
       </Suspense>
-
-      {myDayData && (
-        <section className="space-y-3">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">My Work</p>
-          <MyDayCard data={myDayData} />
-        </section>
-      )}
 
       <Link href="/admin/command-center" className="inline-flex items-center gap-1 text-[12px] font-medium text-ink">
         Open full command center →
@@ -359,6 +266,8 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   const { filterQueueByRole } = await import('@/lib/relay/queue-engine')
   const visibleTasks = filterQueueByRole(queue, roleContext.role)
 
+  const profilesPulled = await countProfilesPulled(user.organization.id, user.rep.id)
+
   const actions: RelayTodayAction[] = visibleTasks.slice(0, 10).map((task) => ({
     id: task.id,
     kind: task.kind,
@@ -393,6 +302,27 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     nextAction: actions[0] ?? null,
     upNext: actions.slice(1),
     notifications: [],
+    profilesPulled,
+  }
+}
+
+async function countProfilesPulled(orgId: string, repId: string): Promise<number> {
+  try {
+    const supabase = await createServerSupabase()
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
+    const { count } = await supabase
+      .from('extraction_runs')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
+      .eq('rep_id', repId)
+      .gte('created_at', start.toISOString())
+      .lt('created_at', end.toISOString())
+    return count ?? 0
+  } catch {
+    return 0
   }
 }
 

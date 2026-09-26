@@ -77,7 +77,9 @@ test.describe('RELAY - Role-Based Today Views', () => {
         const upNextPos = await upNext.boundingBox()
         expect(doThisNextPos, 'Do This Next should be above Up Next').not.toBeNull()
         expect(upNextPos, 'Up Next should exist').not.toBeNull()
-        expect(doThisNextPos.y, 'Do This Next must come before Up Next').toBeLessThan(upNextPos.y)
+        if (doThisNextPos && upNextPos) {
+          expect(doThisNextPos.y, 'Do This Next must come before Up Next').toBeLessThan(upNextPos.y)
+        }
       }
     })
   })

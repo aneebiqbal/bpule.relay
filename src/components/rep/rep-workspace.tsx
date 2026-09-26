@@ -1,15 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { AlertTriangle, Shield, Users } from 'lucide-react'
-import { WorkPaceChart } from './work-pace-chart'
-import { YourDaySummary } from './your-day-summary'
-import { ResponsibilityCard } from './responsibility-card'
+import Link from 'next/link'
+import { AlertTriangle, Shield } from 'lucide-react'
+import { DailyJobs, jobsFromTargets } from './daily-jobs'
 import { DoThisNext } from './do-this-next'
 import { UpNext } from './up-next'
-import { TeamView } from './team-view'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from 'cn'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
 
 export interface RepWorkspaceData {
@@ -62,33 +58,10 @@ export interface RepWorkspaceData {
   nextAction: RelayTodayAction | null
   upNext: RelayTodayAction[]
   notifications: Array<{ id: string; title: string; body: string }>
+  profilesPulled?: number
   isManager?: boolean
   teamName?: string
   teamMembers?: any[]
-}
-
-function quotaLabel(activityType: string): string {
-  const labels: Record<string, string> = {
-    connection_request: 'Connections',
-    dm: 'First DMs',
-    email: 'Emails',
-    followup: 'Follow-ups',
-    application: 'Applications',
-    proposal: 'Proposals',
-  }
-  return labels[activityType] ?? activityType
-}
-
-function quotaHref(activityType: string): string {
-  const filters: Record<string, string> = {
-    connection_request: '/leads?filter=connect',
-    dm: '/leads?filter=dm',
-    email: '/leads?filter=email',
-    followup: '/leads?filter=followup',
-    application: '/leads?filter=application',
-    proposal: '/leads?filter=proposal',
-  }
-  return filters[activityType] ?? '/leads'
 }
 
 interface RepWorkspaceProps {
@@ -129,60 +102,47 @@ interface RepWorkspaceProps {
 }
 
 export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps) {
-  const [activeView, setActiveView] = useState<'my-work' | 'team'>('my-work')
-  const isManager = (teamData?.teams?.length ?? 0) > 0
+  const members = teamData?.teams.flatMap((team) => team.members) ?? []
 
-  if (!data.hasAssignments) {
+  if (!data.hasAssignments && mode !== 'manager') {
     return <NoAssignmentsState repName={data.rep.name} />
   }
 
   return (
     <div className="space-y-6 pb-8">
-      {mode === 'manager' && isManager && (
-        <section className="space-y-3">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Team Oversight</p>
-          <TeamView
-            teamName={teamData?.teams?.[0]?.teamName || 'My Team'}
-            members={teamData?.teams?.[0]?.members || []}
-            isManager={true}
-          />
+      {mode === 'manager' && members.length > 0 && (
+        <section className="overflow-hidden rounded-lg border border-line bg-bone-raised">
+          <div className="px-4 py-3">
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Team</p>
+            <p className="mt-1 text-[14px] text-graphite">Who has not covered their numbers.</p>
+          </div>
+          <ul className="divide-y divide-line/70 border-t border-line">
+            {[...members].sort((a, b) => b.totalRemaining - a.totalRemaining).map((member) => {
+              const won = member.totalTarget > 0 && member.totalRemaining === 0
+              return (
+                <li key={member.repId}>
+                  <Link href={`/team/${member.repId}`} className="block px-4 py-3 hover:bg-bone">
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="text-[14px] font-medium text-ink">{member.repName}</span>
+                      <span className={won ? 'text-[13px] font-medium text-status-success' : 'text-[13px] text-ink'}>
+                        {won ? 'Day won' : `${member.totalCompleted} of ${member.totalTarget}`}
+                      </span>
+                    </span>
+                    <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-line/70">
+                      <span
+                        className={won ? 'block h-full rounded-full bg-status-success' : 'block h-full rounded-full bg-orange'}
+                        style={{ width: `${member.totalTarget > 0 ? Math.round((member.totalCompleted / member.totalTarget) * 100) : 0}%` }}
+                      />
+                    </span>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
         </section>
       )}
 
-      {isManager && (
-        <div className="flex gap-1 border-b border-line">
-          <button
-            onClick={() => setActiveView('my-work')}
-            className={cn(
-              'px-3 py-2 text-[12px] font-medium transition-colors',
-              activeView === 'my-work'
-                ? 'border-b-2 border-ink text-ink'
-                : 'text-graphite hover:text-ink',
-            )}
-          >
-            My Work
-          </button>
-          <button
-            onClick={() => setActiveView('team')}
-            className={cn(
-              'px-3 py-2 text-[12px] font-medium transition-colors',
-              activeView === 'team'
-                ? 'border-b-2 border-ink text-ink'
-                : 'text-graphite hover:text-ink',
-            )}
-          >
-            Team
-          </button>
-        </div>
-      )}
-
-      {activeView === 'team' && isManager ? (
-        <TeamView
-          teamName={teamData?.teams?.[0]?.teamName || 'My Team'}
-          members={teamData?.teams?.[0]?.members || []}
-          isManager={true}
-        />
-      ) : (
+      {data.hasAssignments && (
         <>
           <DoThisNext action={data.nextAction} />
 
@@ -202,46 +162,38 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
             </section>
           )}
 
+          <DailyJobs
+            jobs={jobsFromTargets(data.identities)}
+            workingDay={data.isWorkingDay}
+            profilesPulled={data.profilesPulled ?? 0}
+          />
+
           <UpNext
             actions={data.upNext}
             excludeId={data.nextAction?.id}
           />
 
-          <section className="space-y-3">
-            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">
-              Your Responsibilities
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {data.identities.map((identity) => (
-                <ResponsibilityCard
-                  key={identity.assignmentId}
-                  {...identity}
-                  repliesWaiting={identity.targets.some((t) => t.activityType === 'dm') ? 0 : 0}
-                  followUpsDue={identity.targets.some((t) => t.activityType === 'followup') ? 0 : 0}
-                />
-              ))}
+          <section className="space-y-2">
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Working as</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {data.identities.map((identity) => {
+                const left = identity.targets.reduce((sum, target) => sum + target.remaining, 0)
+                return (
+                  <Link
+                    key={identity.assignmentId}
+                    href={`/workspace/${identity.revenueIdentityId}`}
+                    className="flex items-center justify-between rounded-lg border border-line bg-bone-raised px-3 py-3"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-[14px] font-medium text-ink">{identity.identityName}</span>
+                      <span className="text-[12px] text-graphite">{identity.channel} · {identity.title || 'No title'}</span>
+                    </span>
+                    <span className="shrink-0 text-[12px] font-medium text-ink">{left === 0 ? 'Covered' : `${left} left`}</span>
+                  </Link>
+                )
+              })}
             </div>
           </section>
-
-          {data.targetSummary.byIdentity.length > 1 && (
-            <WorkPaceChart
-              categories={data.targetSummary.byIdentity.flatMap((identity) =>
-                identity.targets
-                  .filter((target) => target.targetCount > 0)
-                  .map((target) => ({
-                    key: target.targetId,
-                    label: `${quotaLabel(target.activityType)} · ${identity.identityName}`,
-                    completed: target.completedCount,
-                    target: target.targetCount,
-                    remaining: target.remaining,
-                    href: quotaHref(target.activityType),
-                  })),
-              )}
-              dayElapsedPct={0}
-              totalCompleted={data.targetSummary.totalCompleted}
-              totalTarget={data.targetSummary.totalTarget}
-            />
-          )}
         </>
       )}
     </div>

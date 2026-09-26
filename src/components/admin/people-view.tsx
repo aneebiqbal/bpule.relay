@@ -41,22 +41,27 @@ export function PeopleView({ dataPromise }: { dataPromise: Promise<PeopleData> }
 
   return (
     <div className="space-y-6 pb-8">
-      <header className="space-y-1.5">
-        <div className="flex items-center gap-2">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-ststone">
-            Organization
-          </p>
-          <span className="size-1 rounded-full bg-line" />
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange">
-            People
-          </p>
+      <header className="space-y-2">
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">
+                Organization
+              </p>
+              <span className="size-1 rounded-full bg-line" />
+              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange">
+                People
+              </p>
+            </div>
+            <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink sm:text-[32px]">
+              {data.orgName}
+            </h1>
+            <p className="text-[13px] text-graphite">
+              {data.people.length} people · {data.teams.length} teams
+            </p>
+          </div>
+          <BypassAllButton />
         </div>
-        <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink sm:text-[32px]">
-          {data.orgName}
-        </h1>
-        <p className="text-[13px] text-graphite">
-          {data.people.length} people · {data.teams.length} teams
-        </p>
       </header>
 
       {data.owners.length > 0 && (
@@ -132,6 +137,51 @@ export function PeopleView({ dataPromise }: { dataPromise: Promise<PeopleData> }
           </section>
         )
       })}
+    </div>
+  )
+}
+
+function BypassAllButton() {
+  const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
+  const [result, setResult] = useState<{ created: number; skipped: number } | null>(null)
+
+  async function handleBypass() {
+    if (!confirm('Skip voice-calibration onboarding for every rep without a voice profile? This creates a default profile so they reach the dashboard.')) return
+    setStatus('running')
+    setResult(null)
+    try {
+      const res = await fetch('/api/admin/people/bypass-onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed')
+      setResult({ created: json.created, skipped: json.skipped })
+      setStatus('done')
+    } catch {
+      setStatus('error')
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <button
+        type="button"
+        onClick={handleBypass}
+        disabled={status === 'running'}
+        className="rounded-md border border-orange/30 bg-orange/5 px-3 py-1.5 text-[12px] font-medium text-orange transition-colors hover:bg-orange/10 disabled:opacity-50"
+      >
+        {status === 'running' ? 'Bypassing…' : 'Bypass Onboarding for All'}
+      </button>
+      {status === 'done' && result ? (
+        <p className="text-[10px] text-status-success">
+          Done · {result.created} created · {result.skipped} already onboarded
+        </p>
+      ) : null}
+      {status === 'error' ? (
+        <p className="text-[10px] text-status-danger">Failed — check console</p>
+      ) : null}
     </div>
   )
 }

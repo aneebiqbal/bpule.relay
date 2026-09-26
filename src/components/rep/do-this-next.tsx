@@ -1,3 +1,6 @@
+'use client'
+
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowRight, MessageSquare, Clock, Zap } from 'lucide-react'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
@@ -22,6 +25,14 @@ function kindLabel(kind: string): string {
   }
 }
 
+function waitLabel(iso: string): string {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000))
+  if (mins < 60) return `${mins} min`
+  const hours = Math.round(mins / 60)
+  if (hours < 48) return `${hours} hours`
+  return `${Math.round(hours / 24)} days`
+}
+
 function KindIcon({ kind, className }: { kind: string; className?: string }) {
   if (kind === 'reply_needed' || kind === 'inbound_opportunity') return <MessageSquare className={className} />
   if (kind === 'followup_due') return <Clock className={className} />
@@ -29,10 +40,24 @@ function KindIcon({ kind, className }: { kind: string; className?: string }) {
 }
 
 export function DoThisNext({ action }: DoThisNextProps) {
+  useEffect(() => {
+    if (!action) return
+    function onKey(event: KeyboardEvent) {
+      const target = event.target
+      if (target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (event.key.toLowerCase() !== 'j' || !action) return
+      event.preventDefault()
+      window.location.href = action.href
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [action])
+
   if (!action) return null
 
   return (
-    <section className="rounded-lg border border-line bg-bone-raised p-4" aria-label="Do this next">
+    <section className="rounded-lg border border-orange/40 bg-bone-raised p-4" aria-label="Do this next">
       <div className="flex items-center gap-2">
         <span className="rounded-sm bg-orange px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-on-accent">
           {kindLabel(action.kind)}
@@ -44,6 +69,9 @@ export function DoThisNext({ action }: DoThisNextProps) {
       <h3 className="mt-2 text-[18px] font-medium tracking-[-0.01em] text-ink">
         {action.title}
       </h3>
+      {action.createdAt && (
+        <p className="mt-1 text-[12px] font-medium text-orange">Waiting {waitLabel(action.createdAt)}</p>
+      )}
       {action.subtitle && (
         <p className="mt-1 text-[13px] text-graphite">{action.subtitle}</p>
       )}
@@ -83,6 +111,7 @@ export function DoThisNext({ action }: DoThisNextProps) {
         >
           {action.humanAction}
           <ArrowRight className="size-4" />
+          <kbd className="rounded border border-orange/30 px-1 text-[10px] text-orange">J</kbd>
         </Link>
       </div>
     </section>

@@ -1,18 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  Legend,
-} from 'recharts'
-import { cn } from 'cn'
-import { Activity, MessageSquare, Zap, Users, TrendingUp } from 'lucide-react'
+import { Activity, MessageSquare, Zap } from 'lucide-react'
 
 type StreamItem = { id: string; eventType: string; label: string; actorName: string; occurredAt: string }
 type PerRep = { id: string; name: string; connections: number; dms: number; followups: number; emails: number; replies: number; total: number }
@@ -36,21 +25,6 @@ function relativeTime(iso: string, now: number): string {
   if (hrs < 24) return `${hrs}h ago`
   return `${Math.floor(hrs / 24)}d ago`
 }
-
-function hourLabel(h: number): string {
-  if (h === 0) return '12a'
-  if (h < 12) return `${h}a`
-  if (h === 12) return '12p'
-  return `${h - 12}p`
-}
-
-const FUNNEL_ORDER: Array<{ key: keyof Funnel; label: string; color: string }> = [
-  { key: 'new', label: 'New', color: 'bg-orange' },
-  { key: 'contacted', label: 'Contacted', color: 'bg-cobalt' },
-  { key: 'followed_up', label: 'Followed up', color: 'bg-status-warning' },
-  { key: 'replied', label: 'Replying', color: 'bg-status-success' },
-  { key: 'won', label: 'Won', color: 'bg-status-success' },
-]
 
 export function LiveCommandCenter() {
   const [data, setData] = useState<Feed | null>(null)
@@ -88,135 +62,66 @@ export function LiveCommandCenter() {
     return <div className="h-64 animate-pulse rounded-xl border border-line bg-bone-raised" />
   }
 
-  const hourlyData = data.hourly.map((count, h) => ({ hour: hourLabel(h), h, count }))
-  const maxFunnel = Math.max(1, ...FUNNEL_ORDER.map((f) => data.funnel[f.key]))
+  const quiet = data.perRep.filter((rep) => rep.total === 0)
 
   return (
     <div className="space-y-5">
-      {/* Totals */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile icon={<Activity className="size-4" />} label="Outreach today" value={String(data.totals.outreach)} />
-        <StatTile icon={<MessageSquare className="size-4" />} label="Replies today" value={String(data.totals.replies)} />
+      <div className="grid grid-cols-3 gap-3">
+        <StatTile icon={<Activity className="size-4" />} label="Sent today" value={String(data.totals.outreach)} />
+        <StatTile icon={<MessageSquare className="size-4" />} label="Replies" value={String(data.totals.replies)} />
         <StatTile icon={<Zap className="size-4" />} label="Actions done" value={String(data.totals.completed)} />
-        <StatTile icon={<TrendingUp className="size-4" />} label="Events" value={String(data.totals.events)} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-5">
-        {/* Activity stream — 3 cols */}
-        <div className="lg:col-span-3 rounded-2xl border border-line/60 bg-bone-raised p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-graphite">
-              <Activity className="size-3.5" />
-              <span className="text-label">Live activity</span>
-            </div>
-            <span className="text-[10px] text-stone">updated {relativeTime(data.generatedAt, now)}</span>
-          </div>
-          <div className="mt-3 max-h-72 space-y-1.5 overflow-y-auto pr-1">
-            {data.stream.length === 0 ? (
-              <p className="py-6 text-center text-[12px] text-graphite">No activity yet today.</p>
-            ) : (
-              data.stream.slice(0, 30).map((item) => (
-                <div key={item.id} className="flex items-baseline gap-2 text-[12px]">
-                  <span className="shrink-0 text-mono-medium text-stone text-[10px] w-10 text-right">{relativeTime(item.occurredAt, now)}</span>
-                  <span className="text-ink">
-                    <span className="font-medium">{item.actorName}</span> {item.label}
+      <section className="overflow-hidden rounded-lg border border-line bg-bone-raised">
+        <div className="px-4 py-3">
+          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Who sent what</p>
+          <p className="mt-1 text-[13px] text-graphite">Notes, first messages, follow-ups, and replies.</p>
+        </div>
+        {data.perRep.length === 0 ? (
+          <p className="border-t border-line px-4 py-6 text-[13px] text-graphite">No one has sent anything yet.</p>
+        ) : (
+          <ul className="divide-y divide-line/70 border-t border-line">
+            {data.perRep.map((rep) => (
+              <li key={rep.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <span className="min-w-0">
+                  <span className="block truncate text-[14px] font-medium text-ink">{rep.name}</span>
+                  <span className="text-[12px] text-graphite">
+                    {rep.connections} notes · {rep.dms} messages · {rep.followups} follow-ups · {rep.replies} replies
                   </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+                </span>
+                <span className={rep.total === 0 ? 'text-[13px] font-medium text-status-danger' : 'text-[13px] font-medium text-ink'}>
+                  {rep.total === 0 ? 'Nothing sent' : rep.total}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {quiet.length > 0 && data.perRep.some((rep) => rep.total > 0) && (
+          <p className="border-t border-line px-4 py-2 text-[12px] text-status-danger">
+            {quiet.map((rep) => rep.name).join(', ')} {quiet.length === 1 ? 'has' : 'have'} not sent anything.
+          </p>
+        )}
+      </section>
 
-        {/* Funnel — 2 cols */}
-        <div className="lg:col-span-2 rounded-2xl border border-line/60 bg-bone-raised p-4">
-          <div className="flex items-center gap-2 text-graphite">
-            <Users className="size-3.5" />
-            <span className="text-label">Pipeline</span>
-          </div>
-          <div className="mt-3 space-y-2">
-            {FUNNEL_ORDER.map((f) => {
-              const value = data.funnel[f.key]
-              const pct = Math.round((value / maxFunnel) * 100)
-              return (
-                <div key={f.key}>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-graphite">{f.label}</span>
-                    <span className="text-mono-medium text-ink">{value}</span>
-                  </div>
-                  <div className="mt-0.5 h-2 overflow-hidden rounded-full bg-bone">
-                    <div className={cn('h-full rounded-full transition-all duration-500', f.color)} style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+      <section className="rounded-lg border border-line bg-bone-raised p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Just happened</p>
+          <span className="text-[11px] text-stone">updated {relativeTime(data.generatedAt, now)}</span>
         </div>
-      </div>
-
-      {/* Hourly activity chart */}
-      <div className="rounded-2xl border border-line/60 bg-bone-raised p-4">
-        <p className="text-label text-graphite">Team activity by hour</p>
-        <div className="mt-2 h-40">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={hourlyData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-              <XAxis dataKey="hour" tick={{ fontSize: 9, fill: 'var(--stone)' }} interval={2} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 9, fill: 'var(--stone)' }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <Tooltip
-                contentStyle={{ fontSize: 11, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bone-raised)' }}
-                formatter={(value) => [`${value} events`, 'Activity']}
-                labelFormatter={(label) => `${label}`}
-              />
-              <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-                {hourlyData.map((entry) => (
-                  <Cell key={entry.h} fill={entry.count > 0 ? 'var(--orange)' : 'var(--line)'} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="mt-3 space-y-1.5">
+          {data.stream.length === 0 ? (
+            <p className="py-4 text-[13px] text-graphite">Nothing yet today.</p>
+          ) : (
+            data.stream.slice(0, 8).map((item) => (
+              <p key={item.id} className="text-[13px] text-ink">
+                <span className="text-stone">{relativeTime(item.occurredAt, now)}</span>
+                {' '}
+                <span className="font-medium">{item.actorName}</span> {item.label}
+              </p>
+            ))
+          )}
         </div>
-      </div>
-
-      {data.perRep.length > 0 && (
-        <div className="rounded-2xl border border-line/60 bg-bone-raised p-4">
-          <p className="text-label text-graphite">Who sent what today</p>
-          <div className="mt-2" style={{ height: Math.max(180, data.perRep.length * 36) }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={data.perRep}
-                layout="vertical"
-                margin={{ top: 4, right: 28, bottom: 0, left: 4 }}
-              >
-                <XAxis type="number" hide allowDecimals={false} />
-                <YAxis
-                  type="category"
-                  dataKey="id"
-                  width={132}
-                  axisLine={false}
-                  tickLine={false}
-                  tick={(props: { x: string | number; y: string | number; payload: { value: string } }) => {
-                    const row = data.perRep.find((rep) => rep.id === props.payload.value)
-                    return (
-                      <text x={props.x} y={props.y} dy={4} textAnchor="end" fill="var(--ink)" fontSize={11}>
-                        {row?.name ?? ''}
-                        <tspan fill="var(--graphite)"> {row?.total ?? 0}</tspan>
-                      </text>
-                    )
-                  }}
-                />
-                <Tooltip
-                  contentStyle={{ fontSize: 11, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bone-raised)' }}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="connections" stackId="sent" name="Connections" fill="var(--cobalt)" />
-                <Bar dataKey="dms" stackId="sent" name="First DMs" fill="var(--orange)" />
-                <Bar dataKey="followups" stackId="sent" name="Follow-ups" fill="var(--status-warning)" />
-                <Bar dataKey="emails" stackId="sent" name="Emails" fill="var(--status-success)" />
-                <Bar dataKey="replies" stackId="sent" name="Replies" fill="var(--status-info)" radius={[0, 3, 3, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+      </section>
     </div>
   )
 }
