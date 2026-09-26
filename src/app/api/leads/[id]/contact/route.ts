@@ -148,7 +148,9 @@ export async function POST(
           actorType: 'rep',
           payload: { type, disposition },
           source: 'app',
-          sourceEventId: `followup_recorded:${id}:${Date.now()}`,
+          // Stable key across retries (mirrors OUTREACH_RECORDED pattern).
+          // Date.now() would make every call unique and defeat dedup.
+          sourceEventId: `followup_recorded:${id}:${body.idempotencyKey ?? 'none'}`,
         })
       } catch {
         // Non-fatal
