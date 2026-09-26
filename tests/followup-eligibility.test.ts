@@ -19,8 +19,8 @@ function followupEligible(lead: Pick<Lead, 'status'>, messages: Pick<Message, 's
   return lead.status === 'contacted' && hasPriorSend && !followupAlreadyUsed
 }
 
-function businessDaysAgo(n: number): string {
-  const d = new Date()
+function businessDaysAgo(n: number, from: Date = new Date('2026-09-23T09:00:00Z')): string {
+  const d = new Date(from)
   let remaining = n
   while (remaining > 0) {
     d.setDate(d.getDate() - 1)
@@ -90,16 +90,22 @@ describe('business day arithmetic (Mon-Fri only, weekends never count)', () => {
 })
 
 describe('the real 5-business-day due window', () => {
+  // Freeze "now" to a Wednesday so business-day math is deterministic
+  // regardless of which day this test suite runs on.
+  const NOW = new Date('2026-09-23T09:00:00Z') // a Wednesday
+
   it('is not due before 5 full business days have passed', () => {
-    expect(isFollowupDue(businessDaysAgo(4), false)).toBe(false)
+    // 4 business days before NOW = Thu Sep 17. Thu -> NOW = 4 business days.
+    expect(isFollowupDue(businessDaysAgo(4, NOW), false, NOW)).toBe(false)
   })
 
   it('is due at exactly 5 business days', () => {
-    expect(isFollowupDue(businessDaysAgo(5), false)).toBe(true)
+    // 5 business days before NOW = Wed Sep 16. Wed -> NOW = 5 business days.
+    expect(isFollowupDue(businessDaysAgo(5, NOW), false, NOW)).toBe(true)
   })
 
   it('is due well past the 5-business-day window', () => {
-    expect(isFollowupDue(businessDaysAgo(15), false)).toBe(true)
+    expect(isFollowupDue(businessDaysAgo(15, NOW), false, NOW)).toBe(true)
   })
 
   it('a weekend does not shorten the wait — sending on a Friday does not make Monday "due"', () => {
@@ -111,7 +117,19 @@ describe('the real 5-business-day due window', () => {
   })
 
   it('is never due once the prospect has replied, regardless of elapsed time — a NO is permanent', () => {
-    expect(isFollowupDue(businessDaysAgo(30), true)).toBe(false)
+    expect(isFollowupDue(businessDaysAgo(30, NOW), true, NOW)).toBe(false)
+  })
+
+  it('weekend boundary: send Friday, next Monday is only 1 business day — not due', () => {
+    const friday = new Date('2026-09-18T09:00:00Z') // a Friday
+    const monday = new Date('2026-09-21T09:00:00Z') // following Monday
+    expect(isFollowupDue(friday.toISOString(), false, monday)).toBe(false)
+  })
+
+  it('weekend boundary: send Friday, next Friday is exactly 5 business days — due', () => {
+    const friday = new Date('2026-09-18T09:00:00Z') // a Friday
+    const nextFriday = new Date('2026-09-25T09:00:00Z') // following Friday
+    expect(isFollowupDue(friday.toISOString(), false, nextFriday)).toBe(true)
   })
 })
 
