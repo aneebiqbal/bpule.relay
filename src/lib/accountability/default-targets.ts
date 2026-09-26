@@ -43,13 +43,12 @@ const EMAIL_PACK: DefaultDailyTarget[] = [
   { activityType: 'prospect_extracted', targetCount: 15 },
 ]
 
-// Applications are reviewed/counted at a higher volume than proposals:
-// proposals are the higher-effort, score-gated action (score >= 6 required,
-// see src/lib/score/upwork-rubric.ts + the apply-route hard gate) so the
-// daily target for them is intentionally lower than the applications target.
+// One Upwork apply IS one proposal — there is no separate "proposal" action
+// a rep can take that isn't already counted as an application. Having two
+// targets for the same business action would make the "proposals" row a
+// permanently dead 0/N in Daily Jobs. Single target, single truth.
 const UPWORK_PACK: DefaultDailyTarget[] = [
   { activityType: 'application', targetCount: 10 },
-  { activityType: 'proposal', targetCount: 5 },
 ]
 
 export function defaultTargetsForChannel(channel: RevenueIdentityChannel): DefaultDailyTarget[] {

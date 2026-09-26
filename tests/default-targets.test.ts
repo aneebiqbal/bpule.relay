@@ -16,11 +16,10 @@ describe('default daily target packs', () => {
   // Rebalanced (approved product design): a lead can only ever receive 3
   // follow-ups total across its life (see followup-engine.ts's cap raise
   // 1 -> 3), so a flat 30/day followup target was never realistic — lowered
-  // to 3/day. Upwork proposals are now score-gated (>=6, higher effort) so
-  // their target is lower than applications. prospect_extracted is a new
-  // activity type (extraction now earns real accountability credit) added
-  // to both LinkedIn and Email packs, since /prospect capture happens on
-  // both channels.
+  // to 3/day. Upwork: one apply IS one proposal — single target, single
+  // truth (see default-targets.ts). prospect_extracted is a new activity
+  // type (extraction now earns real accountability credit) added to both
+  // LinkedIn and Email packs, since /prospect capture happens on both.
   it('uses channel-specific default packs', () => {
     expect(defaultTargetsForChannel('linkedin')).toEqual([
       { activityType: 'connection_request', targetCount: 30 },
@@ -35,7 +34,6 @@ describe('default daily target packs', () => {
     ])
     expect(defaultTargetsForChannel('upwork')).toEqual([
       { activityType: 'application', targetCount: 10 },
-      { activityType: 'proposal', targetCount: 5 },
     ])
     expect(formatDefaultPack('email')).toContain('25 emails')
     expect(formatDefaultPack('linkedin')).toContain('30 connections')

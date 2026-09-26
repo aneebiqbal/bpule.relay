@@ -3,18 +3,22 @@ import { dayVerdict, jobsFromTargets, paceReading, workWindowLabel } from '@/com
 
 describe('daily jobs', () => {
   it('turns targets into one row per job, in the order a BD works', () => {
+    // proposal is no longer a standalone target — one Upwork apply = one
+    // application (see default-targets.ts). Unknown activity types that are
+    // not in ORDER appear as extra rows with a fallback title; here we only
+    // supply valid targets so the output is exactly the canonical order.
     const jobs = jobsFromTargets([
       {
         targets: [
-          { activityType: 'proposal', targetCount: 5, completedCount: 0, remaining: 5 },
           { activityType: 'connection_request', targetCount: 30, completedCount: 0, remaining: 30 },
           { activityType: 'dm', targetCount: 30, completedCount: 2, remaining: 28 },
+          { activityType: 'application', targetCount: 10, completedCount: 3, remaining: 7 },
         ],
       },
     ])
-    expect(jobs.map((job) => job.key)).toEqual(['connection_request', 'dm', 'proposal'])
+    expect(jobs.map((job) => job.key)).toEqual(['connection_request', 'dm', 'application'])
     expect(jobs[0]?.title).toBe('Send connection notes')
-    expect(jobs[2]?.title).toBe('Upwork proposals')
+    expect(jobs[2]?.title).toBe('Upwork applications')
   })
 
   it('calls the day won only when every number is covered', () => {

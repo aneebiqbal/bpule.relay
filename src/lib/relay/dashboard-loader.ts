@@ -195,8 +195,10 @@ export function buildMyDayFromActivity(input: {
   // Fold in daily_targets/daily_accountability on top of any contract-based
   // totals, so a rep provisioned through either system sees their real
   // numbers instead of zeros. activity_type values that map onto an existing
-  // contract-style bucket are merged into it; 'application'/'proposal'/'other'
-  // get their own category rows.
+  // contract-style bucket are merged into it; 'application'/'other' get their
+  // own category rows. 'proposal' is retained for backward compatibility with
+  // legacy rows but is no longer a default target (one Upwork apply = one
+  // application; see default-targets.ts).
   let totalApplicationsTarget = 0, totalApplicationsCompleted = 0
   let totalProposalsTarget = 0, totalProposalsCompleted = 0
   let totalOtherTarget = 0, totalOtherCompleted = 0
