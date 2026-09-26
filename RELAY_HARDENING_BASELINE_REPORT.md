@@ -1,7 +1,7 @@
 # Relay 2-3 Week Hardening — Baseline Report
 
 **Baseline SHA:** `dae8a34` (accountability idempotency)
-**Report SHA:** `f157fa8`
+**Report SHA:** `d4a04b7`
 **Date:** 2026-09-26
 
 ---
@@ -12,7 +12,7 @@
 |--------|-------|
 | Typecheck | Clean (new code) |
 | Production build | Passes |
-| Unit tests | 1332/1332 passed (then fixed + 2 more) |
+| Unit tests | 1338/1338 passed |
 | Pre-existing failures | 0 (was 1, fixed) |
 
 ## 2. Bugs Found & Fixed
@@ -105,6 +105,8 @@
 - Build: clean
 - Follow-up event dedup fixed (was Date.now())
 - Proposal duplicate target removed
+- Concurrency contract tests added (6 tests proving exactly-once invariants)
+- Migration apply script created (awaits SUPABASE_ACCESS_TOKEN)
 - **Blocker:** Migration `20261001000004` not yet applied to hosted DB — exactly-once RPC idempotency not yet proven at the database layer
 - **Blocker:** No SUPABASE_ACCESS_TOKEN available in this environment to apply migration
 
