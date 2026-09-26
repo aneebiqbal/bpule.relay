@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { formatDistance } from 'date-fns'
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import type { TeamLivePayload, TeamLivePerson } from '@/lib/admin/team-live'
@@ -39,11 +39,11 @@ export function TeamLiveBoard({ initial = null }: { readonly initial?: TeamLiveP
     let cancelled = false
     const tick = () => { if (!cancelled) setNow(Date.now()) }
     const onFocus = () => { if (!cancelled) { load(); tick() } }
-    load()
+    const kick = setTimeout(() => { if (!cancelled) load() }, 0)
     const dataInterval = setInterval(() => { if (!cancelled) load() }, 15_000)
     const tickInterval = setInterval(tick, 15_000)
     window.addEventListener('focus', onFocus)
-    return () => { cancelled = true; clearInterval(dataInterval); clearInterval(tickInterval); window.removeEventListener('focus', onFocus) }
+    return () => { cancelled = true; clearTimeout(kick); clearInterval(dataInterval); clearInterval(tickInterval); window.removeEventListener('focus', onFocus) }
   }, [load])
 
   if (error && !data) {
@@ -85,11 +85,23 @@ export function TeamLiveBoard({ initial = null }: { readonly initial?: TeamLiveP
 
       {sorted.some((person) => person.totalTarget > 0) && (
         <div className="rounded-lg border border-line bg-bone-raised px-2 py-3">
-          <p className="px-2 text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Still open</p>
-          <div style={{ height: Math.max(120, sorted.length * 32) }}>
+          <div className="flex items-center justify-between gap-3 px-2">
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Done and still open</p>
+            <p className="flex gap-3 text-[11px] text-graphite">
+              <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-status-success" />Done</span>
+              <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-status-danger" />Behind</span>
+              <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-status-warning" />Open</span>
+            </p>
+          </div>
+          <div style={{ height: Math.max(120, sorted.length * 36) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={sorted.map((person) => ({ name: person.repName, left: person.totalRemaining, done: person.totalCompleted }))}
+                data={sorted.map((person) => ({
+                  name: person.repName,
+                  done: person.totalCompleted,
+                  left: person.totalRemaining,
+                  behind: person.totalTarget > 0 && person.totalCompleted / person.totalTarget < 0.3 && person.totalRemaining > 0,
+                }))}
                 layout="vertical"
                 margin={{ top: 8, right: 12, bottom: 0, left: 4 }}
               >
@@ -98,17 +110,23 @@ export function TeamLiveBoard({ initial = null }: { readonly initial?: TeamLiveP
                 <Tooltip
                   cursor={{ fill: 'var(--bone)' }}
                   content={({ active, payload }) => {
-                    const row = payload?.[0]?.payload as { name: string; left: number; done: number } | undefined
+                    const row = payload?.[0]?.payload as { name: string; left: number; done: number; behind: boolean } | undefined
                     if (!active || !row) return null
                     return (
                       <div className="rounded-lg border border-line bg-bone-raised px-2.5 py-1.5 text-[11px] shadow-sm">
                         <p className="font-medium text-ink">{row.name}</p>
-                        <p className="text-graphite">{row.done} done · {row.left} left</p>
+                        <p className="text-graphite">{row.done} done · {row.left} left{row.behind ? ' · behind' : ''}</p>
                       </div>
                     )
                   }}
                 />
-                <Bar dataKey="left" fill="var(--orange)" radius={[0, 4, 4, 0]} barSize={8} />
+                <Bar dataKey="done" stackId="day" fill="var(--status-success)" barSize={10} />
+                <Bar dataKey="left" stackId="day" radius={[0, 4, 4, 0]} barSize={10}>
+                  {sorted.map((person) => {
+                    const behind = person.totalTarget > 0 && person.totalCompleted / person.totalTarget < 0.3 && person.totalRemaining > 0
+                    return <Cell key={person.repId} fill={behind ? 'var(--status-danger)' : 'var(--status-warning)'} />
+                  })}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -146,11 +164,11 @@ function PersonRow({ person, now }: { readonly person: TeamLivePerson; readonly 
             value={person.totalTarget > 0 ? person.totalCompleted : 0}
             max={person.totalTarget > 0 ? person.totalTarget : 1}
             size="md"
-            variant={won ? 'success' : 'default'}
+            variant={won ? 'success' : person.totalTarget > 0 && person.totalCompleted / person.totalTarget < 0.3 ? 'danger' : 'warning'}
           />
         </span>
-        <Badge variant={won ? 'success' : person.totalRemaining > 0 ? 'orange' : 'outline'}>
-          {won ? 'Day won' : person.totalTarget > 0 ? `${person.totalRemaining} left` : 'No numbers'}
+        <Badge variant={won ? 'success' : person.totalTarget > 0 && person.totalCompleted / person.totalTarget < 0.3 ? 'destructive' : person.totalRemaining > 0 ? 'warning' : 'outline'}>
+          {won ? 'Day won' : person.totalTarget > 0 && person.totalCompleted / person.totalTarget < 0.3 ? 'Behind' : person.totalTarget > 0 ? `${person.totalRemaining} left` : 'No numbers'}
         </Badge>
       </Link>
     </li>

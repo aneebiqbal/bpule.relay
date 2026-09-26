@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect } from 'react'
 import Link from 'next/link'
-import { ArrowRight, MessageSquare, Clock, Zap } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useHotkeys } from 'react-hotkeys-hook'
+import { ArrowRight } from 'lucide-react'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
 
 interface DoThisNextProps {
@@ -33,26 +34,13 @@ function waitLabel(iso: string): string {
   return `${Math.round(hours / 24)} days`
 }
 
-function KindIcon({ kind, className }: { kind: string; className?: string }) {
-  if (kind === 'reply_needed' || kind === 'inbound_opportunity') return <MessageSquare className={className} />
-  if (kind === 'followup_due') return <Clock className={className} />
-  return <Zap className={className} />
-}
-
 export function DoThisNext({ action }: DoThisNextProps) {
-  useEffect(() => {
-    if (!action) return
-    function onKey(event: KeyboardEvent) {
-      const target = event.target
-      if (target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
-      if (event.metaKey || event.ctrlKey || event.altKey) return
-      if (event.key.toLowerCase() !== 'j' || !action) return
-      event.preventDefault()
-      window.location.href = action.href
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [action])
+  const router = useRouter()
+  useHotkeys('j', () => { if (action) router.push(action.href) }, {
+    preventDefault: true,
+    useKey: true,
+    enabled: Boolean(action),
+  }, [action, router])
 
   if (!action) return null
 

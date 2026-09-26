@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { formatDistance } from 'date-fns'
 import { Activity, MessageSquare, Zap } from 'lucide-react'
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -63,7 +63,13 @@ export function LiveCommandCenter() {
   }
 
   const quiet = data.perRep.filter((rep) => rep.total === 0)
-  const hours = data.hourly.map((count, hour) => ({ hour: `${hour}`, count })).filter((row) => Number(row.hour) >= 8 && Number(row.hour) <= 18)
+  const currentHour = new Date(now).getHours()
+  const hours = data.hourly
+    .map((count, hour) => {
+      const state = hour > currentHour ? 'later' : hour === currentHour ? 'now' : count === 0 ? 'quiet' : 'sent'
+      return { hour: `${hour}`, count, state, shown: state === 'quiet' ? 0.35 : count }
+    })
+    .filter((row) => Number(row.hour) >= 8 && Number(row.hour) <= 18)
 
   return (
     <div className="space-y-5">
@@ -76,6 +82,11 @@ export function LiveCommandCenter() {
       <Card>
         <CardHeader className="pb-0">
           <CardTitle className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Sent by hour</CardTitle>
+          <p className="flex flex-wrap gap-3 text-[11px] text-graphite">
+            <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-orange" />This hour</span>
+            <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-status-success" />Sent</span>
+            <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-status-danger" />Quiet</span>
+          </p>
         </CardHeader>
         <CardContent>
           <div className="h-36">
@@ -86,17 +97,25 @@ export function LiveCommandCenter() {
                 <Tooltip
                   cursor={{ fill: 'var(--bone)' }}
                   content={({ active, payload }) => {
-                    const row = payload?.[0]?.payload as { hour: string; count: number } | undefined
+                    const row = payload?.[0]?.payload as { hour: string; count: number; state: string } | undefined
                     if (!active || !row) return null
+                    const meaning = row.state === 'now' ? 'This hour' : row.state === 'quiet' ? 'Quiet hour' : row.state === 'later' ? 'Not yet' : 'Sent'
                     return (
                       <div className="rounded-lg border border-line bg-bone-raised px-2.5 py-1.5 text-[11px] shadow-sm">
-                        <p className="font-medium text-ink">{row.hour}:00</p>
+                        <p className="font-medium text-ink">{row.hour}:00 · {meaning}</p>
                         <p className="text-graphite">{row.count} sent</p>
                       </div>
                     )
                   }}
                 />
-                <Bar dataKey="count" fill="var(--orange)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="shown" radius={[4, 4, 0, 0]}>
+                  {hours.map((row) => (
+                    <Cell
+                      key={row.hour}
+                      fill={row.state === 'now' ? 'var(--orange)' : row.state === 'quiet' ? 'var(--status-danger)' : row.state === 'sent' ? 'var(--status-success)' : 'var(--line)'}
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -120,8 +139,8 @@ export function LiveCommandCenter() {
                     {rep.connections} notes · {rep.dms} messages · {rep.followups} follow-ups · {rep.replies} replies
                   </span>
                 </span>
-                <Badge variant={rep.total === 0 ? 'destructive' : 'outline'}>
-                  {rep.total === 0 ? 'Nothing sent' : String(rep.total)}
+                <Badge variant={rep.total === 0 ? 'destructive' : 'success'}>
+                  {rep.total === 0 ? 'Nothing sent' : `${rep.total} sent`}
                 </Badge>
               </li>
             ))}

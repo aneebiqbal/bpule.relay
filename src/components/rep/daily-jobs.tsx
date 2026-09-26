@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useHotkeys } from 'react-hotkeys-hook'
 import {
   Briefcase,
   FileText,
@@ -13,11 +14,10 @@ import {
   UserPlus,
   type LucideIcon,
 } from 'lucide-react'
-import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts'
 import { cn } from 'cn'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
 
 export interface DailyJob {
   key: string
@@ -248,32 +248,15 @@ export function DailyJobs({
   const paceColor = pace.tone === 'won' ? 'var(--status-success)' : pace.tone === 'behind' || pace.tone === 'closed' ? 'var(--status-danger)' : 'var(--orange)'
   const hasPullJob = jobs.some((job) => job.key === 'prospect_extracted')
 
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      const target = event.target
-      if (target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
-      if (event.metaKey || event.ctrlKey || event.altKey) return
-      const key = event.key.toLowerCase()
-      if (key === 'p') {
-        event.preventDefault()
-        router.push('/prospect')
-        return
-      }
-      if (key === 'n' && firstOpen) {
-        event.preventDefault()
-        router.push(firstOpen.href)
-        return
-      }
-      const index = Number(key) - 1
-      const job = jobs[index]
-      if (job && key >= '1' && key <= '9') {
-        event.preventDefault()
-        router.push(job.href)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [jobs, firstOpen, router])
+  useHotkeys('p', () => router.push('/prospect'), { preventDefault: true, useKey: true })
+  useHotkeys('n', () => { if (firstOpen) router.push(firstOpen.href) }, { preventDefault: true, useKey: true, enabled: Boolean(firstOpen) }, [firstOpen, router])
+  useHotkeys('1,2,3,4,5,6,7,8,9', (event) => {
+    const job = jobs[Number(event.key) - 1]
+    if (job) router.push(job.href)
+  }, {
+    useKey: true,
+    preventDefault: (event) => Boolean(jobs[Number(event.key) - 1]),
+  }, [jobs, router])
 
   return (
     <>
@@ -292,7 +275,7 @@ export function DailyJobs({
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={[{ name: 'done', value: Math.max(unitsPct, 1) }, { name: 'left', value: Math.max(100 - unitsPct, 0) }]}
+                  data={unitsPct <= 0 ? [{ name: 'left', value: 100 }] : [{ name: 'done', value: unitsPct }, { name: 'left', value: Math.max(100 - unitsPct, 0) }]}
                   dataKey="value"
                   innerRadius={22}
                   outerRadius={32}
@@ -321,6 +304,11 @@ export function DailyJobs({
               </Badge>
               {workingDay && <Badge variant="outline">{clock.text}</Badge>}
             </div>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-graphite">
+              <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-status-success" />Covered</span>
+              <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-status-danger" />Behind</span>
+              <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-orange" />Do this</span>
+            </div>
           </div>
         </div>
         <p className="mt-3 text-[12px] text-stone">Shortcuts: P pull profiles · N next open job · 1–{Math.min(9, jobs.length) || 1} jump</p>
@@ -328,42 +316,6 @@ export function DailyJobs({
           <p className="mt-1 text-[13px] font-medium text-status-danger">The clock is running and nothing is sent yet.</p>
         )}
       </div>
-
-      {jobs.length > 0 && (
-        <div className="border-t border-line px-2 py-3">
-          <p className="px-2 text-[11px] font-medium uppercase tracking-[0.12em] text-stone">You vs the clock</p>
-          <div style={{ height: Math.max(140, chartRows.length * 36) }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartRows} layout="vertical" margin={{ top: 8, right: 12, bottom: 0, left: 4 }}>
-                <XAxis type="number" hide />
-                <YAxis type="category" dataKey="name" width={78} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--ink)' }} />
-                <Tooltip
-                  cursor={{ fill: 'var(--bone)' }}
-                  content={({ active, payload }) => {
-                    const row = payload?.[0]?.payload as (typeof chartRows)[number] | undefined
-                    if (!active || !row) return null
-                    return (
-                      <div className="rounded-lg border border-line bg-bone-raised px-2.5 py-1.5 text-[11px] shadow-sm">
-                        <p className="font-medium text-ink">{row.name}</p>
-                        <p className="text-graphite">{row.done} done · clock {row.clock} · goal {row.goal}</p>
-                      </div>
-                    )
-                  }}
-                />
-                <Bar dataKey="done" name="Done" radius={[0, 4, 4, 0]} barSize={8}>
-                  {chartRows.map((row) => (
-                    <Cell
-                      key={row.key}
-                      fill={row.done >= row.goal ? 'var(--status-success)' : row.done < row.clock ? 'var(--status-danger)' : 'var(--orange)'}
-                    />
-                  ))}
-                </Bar>
-                {workingDay && <Bar dataKey="clock" name="Clock" fill="var(--line)" radius={[0, 4, 4, 0]} barSize={8} />}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
 
       {!hasPullJob && (
         <div className="border-t border-line px-4 py-3">
@@ -386,6 +338,10 @@ export function DailyJobs({
         </div>
       )}
 
+      {workingDay && jobs.length > 0 && (
+        <p className="border-t border-line px-4 py-2 text-[12px] text-graphite">The mark on each bar is where the clock says you should be.</p>
+      )}
+
       <ol className="divide-y divide-line/70">
         {jobs.map((job, index) => {
           const covered = job.done >= job.goal
@@ -394,11 +350,14 @@ export function DailyJobs({
           const Icon = COPY[job.key]?.icon ?? ScanSearch
           const clockForJob = chartRows[index]?.clock ?? 0
           const behind = workingDay && !covered && job.done < clockForJob
+          const clockPct = job.goal > 0 ? Math.min(100, Math.round((clockForJob / job.goal) * 100)) : 0
+          const gap = clockForJob - job.done
+          const status = covered ? 'Covered' : behind ? `${gap} behind` : job.done > clockForJob ? `${job.done - clockForJob} ahead` : 'On the clock'
           const hint = job.key === 'prospect_extracted' ? `${profilesPulled} pulled today. ${job.hint}` : job.hint
           return (
-            <li key={job.key} className="px-4 py-3">
+            <li key={job.key} className={cn('px-4 py-3', isNext && 'bg-orange/5')}>
               <div className="flex items-start gap-3">
-                <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-md', covered ? 'bg-status-success/10 text-status-success' : behind ? 'bg-status-danger/10 text-status-danger' : 'bg-bone text-ink')}>
+                <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-md', covered ? 'bg-status-success/10 text-status-success' : behind ? 'bg-status-danger/10 text-status-danger' : isNext ? 'bg-orange/10 text-orange' : 'bg-bone text-ink')}>
                   <Icon className="size-4" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -407,21 +366,33 @@ export function DailyJobs({
                       {index + 1}. {job.title}
                     </p>
                     <Badge variant={covered ? 'success' : isNext ? 'orange' : behind ? 'destructive' : 'outline'}>
-                      {covered ? 'Covered' : `${job.done}/${job.goal}`}
+                      {isNext ? 'Do this' : covered ? 'Covered' : `${job.done}/${job.goal}`}
                     </Badge>
                   </div>
                   <p className="text-[12px] text-graphite">{hint}</p>
-                  <Progress className="mt-2" value={pct} max={100} size="md" variant={covered ? 'success' : behind ? 'danger' : 'default'} />
-                  <div className="mt-2 flex items-center justify-between gap-3">
-                    {!covered && workingDay ? (
-                      <Link href={job.href} className={buttonVariants({ variant: 'orange', size: 'xs' })}>
-                        {job.button} · {job.goal - job.done} left
-                      </Link>
-                    ) : (
-                      <p className="text-[12px] font-medium text-status-success">{covered ? 'Covered' : 'Paused'}</p>
+                  <div className="relative mt-2 h-2.5 rounded-full bg-line/70">
+                    <div
+                      className={cn('h-full rounded-full', covered ? 'bg-status-success' : behind ? 'bg-status-danger' : isNext ? 'bg-orange' : 'bg-status-warning')}
+                      style={{ width: `${covered ? 100 : pct}%` }}
+                    />
+                    {workingDay && clockPct > 0 && clockPct < 100 && (
+                      <span className="absolute top-1/2 h-4 w-px -translate-y-1/2 bg-ink" style={{ left: `${clockPct}%` }} />
                     )}
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between gap-3">
+                    <p className={cn('text-[12px] font-medium', covered ? 'text-status-success' : behind ? 'text-status-danger' : isNext ? 'text-orange' : 'text-graphite')}>
+                      {status} · {job.done}/{job.goal}
+                    </p>
                     <kbd className="rounded border border-line px-1.5 py-0.5 text-[11px] text-stone">{index + 1}</kbd>
                   </div>
+                  {!covered && workingDay && (
+                    <Link href={job.href} className={cn('mt-2', buttonVariants({ variant: isNext ? 'orange' : 'outline', size: 'xs' }))}>
+                      {job.button} · {job.goal - job.done} left
+                    </Link>
+                  )}
+                  {!covered && !workingDay && (
+                    <p className="mt-2 text-[12px] font-medium text-graphite">Paused</p>
+                  )}
                 </div>
               </div>
             </li>
