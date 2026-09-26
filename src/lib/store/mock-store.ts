@@ -1058,6 +1058,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         throw new Error('This lead is not yours to update, or it is locked.')
       }
       lead.connectionAcceptedAt = new Date().toISOString()
+      // Connection accepted clears the connection-note pacing lock — the
+      // rep can now send a DM. Mirrors the real SupabaseStore behavior.
+      lead.lockedUntil = null
+      lead.lockedReason = null
     },
     async recordProspectReply(leadId: string, replyText: string): Promise<Message> {
       const lead = leads.find((l) => l.id === leadId)

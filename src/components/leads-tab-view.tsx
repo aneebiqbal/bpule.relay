@@ -2,13 +2,45 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { MessageSquare } from 'lucide-react'
+import { MessageSquare, Clock, ArrowRight } from 'lucide-react'
 import { cn } from 'cn'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { LeadsBoard } from '@/components/leads-board'
+import { rowRelationshipLabel } from '@/components/leads-board'
 import type { Lead } from '@/lib/domain/types'
 
 type LeadRow = Lead & { ownerName?: string; lastActivityAt?: string | null }
+
+type ConversationGroup = 'needs_reply' | 'followup_due' | 'waiting' | 'recent'
+
+function conversationGroup(lead: LeadRow): ConversationGroup {
+  if (lead.status === 'replied') return 'needs_reply'
+  if (lead.status === 'followed_up') return 'followup_due'
+  if (lead.status === 'contacted') {
+    if (!lead.connectionAcceptedAt && lead.lockedReason === 'connection_note_sent') return 'waiting'
+    return 'waiting'
+  }
+  return 'recent'
+}
+
+const GROUP_LABEL: Record<ConversationGroup, string> = {
+  needs_reply: 'Needs your reply',
+  followup_due: 'Follow-ups due',
+  waiting: 'Waiting on them',
+  recent: 'Recent',
+}
+
+const GROUP_ORDER: ConversationGroup[] = ['needs_reply', 'followup_due', 'waiting', 'recent']
+
+function rowSubtitle(lead: LeadRow): string {
+  if (lead.status === 'replied') return 'They wrote back — reply while it\'s fresh'
+  if (lead.status === 'followed_up') return 'No reply logged — time to follow up'
+  if (lead.status === 'contacted') {
+    if (!lead.connectionAcceptedAt && lead.lockedReason === 'connection_note_sent') return 'Connection sent — waiting for them'
+    return 'Message sent — waiting for reply'
+  }
+  return 'Active conversation'
+}
 
 export function LeadsTabView({
   allLeads,
@@ -63,43 +95,58 @@ function ConversationsView({ leads, orgView }: { leads: LeadRow[]; orgView: bool
       </div>
     )
   }
-  const sorted = [...leads].sort((a, b) => {
-    const aT = a.lastActivityAt ?? a.createdAt
-    const bT = b.lastActivityAt ?? b.createdAt
-    return new Date(bT).getTime() - new Date(aT).getTime()
-  })
+
+  const grouped = new Map<ConversationGroup, LeadRow[]>()
+  for (const g of GROUP_ORDER) grouped.set(g, [])
+  for (const lead of leads) {
+    const g = conversationGroup(lead)
+    grouped.get(g)!.push(lead)
+  }
+
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-bone-raised shadow-sm">
-      <ul className="divide-y divide-line/60">
-        {sorted.map((lead) => (
-          <li key={lead.id}>
-            <Link href={`/leads/${lead.id}`} className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-bone sm:px-5">
-              <div className="shrink-0">
-                <div className="flex size-[36px] items-center justify-center rounded-full border border-line bg-bone">
-                  <MessageSquare className="size-4 text-orange" />
-                </div>
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-[14px] font-medium text-ink">{lead.company}</span>
-                  <StatusBadge
-                    status={lead.status === 'replied' ? 'Replying' : lead.status === 'contacted' ? 'Contacted' : 'In progress'}
-                    variant={lead.status === 'replied' ? 'success' : 'cobalt'}
-                  />
-                </div>
-                <div className="mt-0.5 flex items-center gap-2 text-[12px] text-graphite">
-                  {lead.contactName && <span className="truncate">{lead.contactName}</span>}
-                  {orgView && lead.ownerName && <span className="shrink-0 text-stone">· {lead.ownerName}</span>}
-                </div>
-              </div>
-              <div className="hidden shrink-0 text-right sm:block">
-                <p className="text-[11px] text-stone">Last activity</p>
-                <p className="text-[11px] text-graphite">{lead.lastActivityAt ? new Date(lead.lastActivityAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'}</p>
-              </div>
-            </Link>
-          </li>
-        ))}
-      </ul>
+    <div className="space-y-4">
+      {GROUP_ORDER.filter((g) => grouped.get(g)!.length > 0).map((group) => {
+        const items = grouped.get(group)!
+        return (
+          <div key={group}>
+            <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">{GROUP_LABEL[group]}</p>
+            <ul className="mt-1.5 overflow-hidden rounded-lg border border-line bg-bone-raised shadow-sm divide-y divide-line/60">
+              {items.map((lead) => (
+                <li key={lead.id}>
+                  <Link href={`/leads/${lead.id}`} className="group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-bone sm:px-5">
+                    <div className="shrink-0">
+                      <div className={cn(
+                        'flex size-[36px] items-center justify-center rounded-full',
+                        group === 'needs_reply' ? 'bg-orange/10' : 'border border-line bg-bone',
+                      )}>
+                        {group === 'needs_reply' ? (
+                          <MessageSquare className="size-4 text-orange" />
+                        ) : group === 'followup_due' ? (
+                          <Clock className="size-4 text-status-warning" />
+                        ) : (
+                          <MessageSquare className="size-4 text-stone" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-[13px] font-medium text-ink">{lead.company}</span>
+                        {lead.contactName && (
+                          <span className="truncate text-[12px] text-graphite">{lead.contactName}</span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-[12px] text-graphite">{rowSubtitle(lead)}</p>
+                    </div>
+                    <div className="shrink-0">
+                      <ArrowRight className="size-4 text-stone transition-transform group-hover:translate-x-0.5 group-hover:text-orange" />
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })}
     </div>
   )
 }

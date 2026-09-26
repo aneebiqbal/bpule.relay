@@ -8,12 +8,15 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
+  ChevronRight,
   Clock,
   Copy,
   ExternalLink,
   Flame,
   Handshake,
   Info,
+  MessageSquare,
+  Pencil,
   Target,
   Trophy,
   X,
@@ -28,6 +31,7 @@ import { ScoreRing } from '@/components/score-ring'
 import { signalById } from '@/lib/score/signals'
 import { buildRevenueStrategy, describeVerdictForDisplay, sourceFromLead, toUiSnapshot } from '@/lib/relay/revenue-strategy'
 import { evaluateDmGate, evaluateFollowupGate, formatCooldownRemaining } from '@/lib/relay/message-eligibility'
+import { computeRelationshipState } from '@/lib/relay/relationship-state'
 import { readSse } from '@/lib/sse/client'
 import { notifyError } from '@/lib/ui/notify'
 import { cn } from 'cn'
@@ -52,7 +56,7 @@ interface ArtifactDraftState {
   text: string
 }
 
-function artifactCount(id: ArtifactId): { kind: 'words' | 'chars'; max: number; label: string } {
+function artifactCount(id: ArtifactId) {
   return ARTIFACTS.find((a) => a.id === id)!.count
 }
 
@@ -60,8 +64,6 @@ function countFor(kind: 'words' | 'chars', text: string): number {
   if (kind === 'chars') return text.length
   return text.trim().split(/\s+/).filter(Boolean).length
 }
-
-
 
 type DraftEvent =
   | { type: 'status'; message: string }
@@ -77,6 +79,26 @@ type DraftEvent =
 function hostOf(url: string | null): string | null {
   if (!url) return null
   try { return new URL(url).host } catch { return null }
+}
+
+function timeAgo(iso: string | null | undefined, now: number): string {
+  if (!iso) return ''
+  const diff = now - new Date(iso).getTime()
+  if (Number.isNaN(diff)) return ''
+  if (diff < 0) return `in ${formatCooldownRemaining(-diff)}`
+  if (diff < 45_000) return 'just now'
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return mins % 60 === 0 ? `${hrs}h ago` : `${hrs}h ${mins % 60}m ago`
+  const days = Math.floor(hrs / 24)
+  return `${days}d ago`
+}
+
+function latestSent(messages: LeadDetail['messages'], type: LeadDetail['messages'][number]['type']) {
+  return messages
+    .filter((message) => message.type === type && message.sentText && message.sentAt)
+    .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''))[0] ?? null
 }
 
 function ScoreBreakdown({ score }: { score: ScoreResult }) {
@@ -105,257 +127,7 @@ function ScoreBreakdown({ score }: { score: ScoreResult }) {
   )
 }
 
-function NextBestAction({
-  lead,
-  verdict,
-  hasReply,
-  hasPriorSend,
-  followupEligible,
-  onAction,
-  dmAction,
-  dmMessagingPolicyLabel,
-}: {
-  lead: LeadDetail
-  verdict: string
-  hasReply: boolean
-  hasPriorSend: boolean
-  followupEligible: boolean
-  onAction?: () => void
-  /** Canonical DM-channel ContactAction — used only to keep the 'skip'
-   *  fallback below from contradicting a valid non-SKIP relationship action. */
-  dmAction?: string
-  dmMessagingPolicyLabel?: string
-}) {
-  type Action = { label: string; description: string; cta: string; href?: string }
-  let action: Action
-
-  if (hasReply) {
-    action = {
-      label: 'Reply now',
-      description: 'They wrote back. Every hour you wait lowers your chances.',
-      cta: 'Open their message',
-    }
-  } else if (followupEligible) {
-    action = {
-      label: 'Follow up',
-      description: 'No response yet. Up to 3 follow-ups, then move on.',
-      cta: 'Open follow-up',
-    }
-  } else if (lead.status === 'followed_up') {
-    action = {
-      label: 'Waiting',
-      description: 'Follow-up sent. No further action unless they reply.',
-      cta: 'Review lead',
-    }
-  } else if (hasPriorSend) {
-    action = {
-      label: 'Waiting',
-      description: 'First message sent. Waiting for a reply.',
-      cta: 'Review lead',
-    }
-  } else if (verdict === 'send') {
-    action = {
-      label: 'Send first message',
-      description: 'Strong lead. Reach out while the signal is fresh.',
-      cta: 'Open the next step',
-    }
-  } else if (verdict === 'research_more') {
-    action = {
-      label: 'Do more research',
-      description: 'Promising, but not enough evidence yet. Add proof or context.',
-      cta: 'Add research',
-    }
-  } else if (dmAction && dmAction !== 'SKIP') {
-    // Verdict/action reconciliation (Bug 2): a 'skip'/low commercial
-    // qualification does not by itself mean SKIP is the right action — a
-    // non-buyer relationship (recruiter/partner/peer) can still have a valid
-    // CONNECT_OR_OBSERVE/RESEARCH_MORE action. Never say "Not ready" /
-    // "scored low, focus elsewhere" when a real action exists.
-    action = {
-      label: 'No current buyer fit',
-      description: `Not a software-delivery buyer, but ${dmMessagingPolicyLabel?.toLowerCase() ?? 'a relationship action is recommended'}.`,
-      cta: 'Review lead',
-    }
-  } else {
-    action = {
-      label: 'Not ready',
-      description: 'This lead scored low. Focus on stronger opportunities.',
-      cta: 'Find better leads',
-      href: '/prospect',
-    }
-  }
-
-  const isUrgent = hasReply || followupEligible || verdict === 'send'
-
-  return (
-    <div className={cn(
-      'border-l-2 pl-4 py-1',
-      isUrgent
-        ? 'border-orange/40'
-        : 'border-line',
-    )}>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Next best action</p>
-          <p className="mt-0.5 text-[14px] font-medium text-ink">{action.label}</p>
-          <p className="mt-0.5 text-[12px] text-graphite">{action.description}</p>
-        </div>
-        <div className="shrink-0">
-          {action.href ? (
-            <a
-              href={action.href}
-              className="inline-flex items-center gap-1 text-[12px] font-medium text-ink hover:text-orange"
-            >
-              {action.cta} →
-            </a>
-          ) : (
-            <button
-              type="button"
-              onClick={onAction}
-              className={cn(
-                'inline-flex items-center gap-2 rounded px-3 py-1.5 text-[12px] font-medium transition-all',
-                isUrgent
-                  ? 'bg-orange text-on-accent hover:bg-orange-dark'
-                  : 'bg-solid text-on-solid hover:bg-solid/90',
-              )}
-            >
-              {action.cta}
-              <ArrowRight className="size-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-type WorkStep = 'connection' | 'accepted' | 'message' | 'client' | 'followup' | 'upwork'
-
-function timeAgo(iso: string | null | undefined, now: number): string {
-  if (!iso) return ''
-  const diff = now - new Date(iso).getTime()
-  if (Number.isNaN(diff)) return ''
-  if (diff < 0) return `in ${formatCooldownRemaining(-diff)}`
-  if (diff < 45_000) return 'just now'
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return mins % 60 === 0 ? `${hrs}h ago` : `${hrs}h ${mins % 60}m ago`
-  const days = Math.floor(hrs / 24)
-  return `${days}d ago`
-}
-
-function latestSent(messages: LeadDetail['messages'], type: LeadDetail['messages'][number]['type']) {
-  return messages
-    .filter((message) => message.type === type && message.sentText && message.sentAt)
-    .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''))[0] ?? null
-}
-
-function WorkPath({
-  now,
-  step,
-  connectionAt,
-  acceptedAt,
-  messageAt,
-  clientAt,
-  lockUntil,
-  followupWait,
-  followupsLeft,
-  onPick,
-  onAccept,
-  accepting,
-  acceptError,
-}: {
-  now: number
-  step: WorkStep
-  connectionAt: string | null
-  acceptedAt: string | null
-  messageAt: string | null
-  clientAt: string | null
-  lockUntil: string | null
-  followupWait: number
-  followupsLeft: number
-  onPick: (step: WorkStep) => void
-  onAccept: () => void
-  accepting: boolean
-  acceptError: string | null
-}) {
-  const lockMs = lockUntil ? new Date(lockUntil).getTime() - now : 0
-  const steps: Array<{ id: WorkStep; title: string; detail: string; done: boolean }> = [
-    { id: 'connection', title: 'Connection note', detail: connectionAt ? `Logged ${timeAgo(connectionAt, now)}` : 'Write it, send it, then log it', done: Boolean(connectionAt) },
-    { id: 'accepted', title: 'Invitation accepted', detail: acceptedAt ? `Accepted ${timeAgo(acceptedAt, now)}` : connectionAt ? 'Mark this when they accept on LinkedIn' : 'Opens after the note is logged', done: Boolean(acceptedAt) },
-    { id: 'message', title: 'Your message', detail: messageAt ? `Logged ${timeAgo(messageAt, now)}` : 'Generate it after they accept', done: Boolean(messageAt) },
-    { id: 'client', title: 'Their message', detail: clientAt ? `Saved ${timeAgo(clientAt, now)}` : 'Paste what they wrote, then write your reply', done: Boolean(clientAt) },
-    { id: 'followup', title: 'Follow up', detail: followupWait > 0 ? `Wait ${formatCooldownRemaining(followupWait)}` : followupsLeft <= 0 ? 'All 3 follow-ups used' : `${followupsLeft} left`, done: followupsLeft <= 0 },
-  ]
-
-  return (
-    <section className="rounded-xl border border-line bg-bone-raised p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Work this lead</p>
-          <p className="mt-1 text-[13px] text-graphite">Do one step, log it, then the next one opens.</p>
-        </div>
-        {lockMs > 0 && (
-          <p className="inline-flex items-center gap-1.5 rounded border border-orange/30 bg-orange/5 px-2.5 py-1 text-[12px] text-ink">
-            <Clock className="size-3.5 text-orange" />
-            Next outreach in {formatCooldownRemaining(lockMs)}
-          </p>
-        )}
-      </div>
-      <ol className="mt-3 grid gap-2 sm:grid-cols-2">
-        {steps.map((item, index) => {
-          const active = step === item.id
-          return (
-            <li key={item.id}>
-              <button
-                type="button"
-                aria-current={active ? 'step' : undefined}
-                onClick={() => onPick(item.id)}
-                className={cn(
-                  'flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors',
-                  active ? 'border-orange/40 bg-orange/5' : 'border-line bg-bone hover:bg-bone-raised',
-                )}
-              >
-                <span className={cn(
-                  'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium',
-                  item.done ? 'bg-status-success/15 text-status-success' : active ? 'bg-orange text-on-accent' : 'bg-bone text-stone',
-                )}>
-                  {item.done ? <Check className="size-3" /> : index + 1}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[13px] font-medium text-ink">{item.title}</span>
-                  <span className="block text-[11px] text-graphite">{item.detail}</span>
-                </span>
-              </button>
-              {active && item.id === 'accepted' && !acceptedAt && (
-                <div className="mt-2 px-1">
-                  <Button variant="orange" size="sm" onClick={onAccept} disabled={!connectionAt || accepting} loading={accepting}>
-                    {accepting ? 'Saving...' : 'They accepted'}
-                  </Button>
-                  {!connectionAt && <p className="mt-1 text-[11px] text-graphite">Log the connection note first.</p>}
-                  {acceptError && <p className="mt-1 text-[12px] text-status-danger" role="alert">{acceptError}</p>}
-                </div>
-              )}
-            </li>
-          )
-        })}
-      </ol>
-      <button type="button" onClick={() => onPick('upwork')} className={cn('mt-2 text-[11px]', step === 'upwork' ? 'text-ink' : 'text-graphite hover:text-ink')}>
-        Upwork proposal instead
-      </button>
-    </section>
-  )
-}
-
 function LeadLoopStrip({ lead }: { lead: LeadDetail }) {
-  // Channel-explicit: this strip evaluates the DM channel specifically.
-  // Other surfaces (e.g. Prospect Check) may correctly show a different
-  // messagingPolicy for a different channel (e.g. a connection note) for
-  // the SAME lead — that is not a contradiction, it's a different
-  // question. Always show messagingPolicyLabel (which names the channel-
-  // appropriate action) rather than a bare "no message" that reads as a
-  // universal verdict. See BUG_LEDGER — Daria Redkina / Solsonic fixture.
   const snapshot = toUiSnapshot(buildRevenueStrategy(sourceFromLead(lead, null, { channel: 'dm' })))
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-graphite">
@@ -370,6 +142,235 @@ function LeadLoopStrip({ lead }: { lead: LeadDetail }) {
   )
 }
 
+// ─── Relationship pipeline visualization ─────────────────────────
+
+const PIPELINE_PHASES = [
+  { id: 'connected', label: 'Connected' },
+  { id: 'conversation', label: 'Conversation' },
+  { id: 'meeting', label: 'Meeting' },
+  { id: 'proposal', label: 'Proposal' },
+  { id: 'outcome', label: 'Outcome' },
+] as const
+
+function RelationshipPipeline({ phase }: { phase: string }) {
+  const phaseToStep: Record<string, number> = {
+    connection_due: 0, connection_sent: 0, connection_accepted: 0,
+    dm_due: 1, dm_sent: 1, waiting_for_reply: 1,
+    replied: 1, follow_up_due: 1, conversation: 1,
+    meeting: 2, proposal: 3, won: 4, lost: 4,
+  }
+  const activeStep = phaseToStep[phase] ?? 0
+
+  return (
+    <div className="flex items-center gap-1 overflow-x-auto">
+      {PIPELINE_PHASES.map((p, i) => (
+        <div key={p.id} className="flex shrink-0 items-center gap-1">
+          <div className={cn(
+            'flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium transition-all duration-200',
+            i < activeStep ? 'bg-status-success/10 text-status-success' :
+            i === activeStep ? 'bg-orange/10 text-orange' :
+            'bg-bone-raised text-stone',
+          )}>
+            {i < activeStep && <Check className="size-2.5" />}
+            {p.label}
+          </div>
+          {i < PIPELINE_PHASES.length - 1 && (
+            <ChevronRight className={cn('size-3 shrink-0', i < activeStep ? 'text-status-success/40' : 'text-line')} />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Improved timeline ────────────────────────────────────────────
+
+function dateDayLabel(isoString: string): string {
+  const d = new Date(isoString)
+  const now = new Date()
+  const dDay = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const diffMs = nowDay.getTime() - dDay.getTime()
+  const diffDays = Math.round(diffMs / 86_400_000)
+  const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  if (diffDays === 0) return `Today · ${timeStr}`
+  if (diffDays === 1) return `Yesterday · ${timeStr}`
+  if (diffDays < 7) return `${d.toLocaleDateString([], { weekday: 'long' })} · ${timeStr}`
+  return `${d.toLocaleDateString()} · ${timeStr}`
+}
+
+type TimelineEvent = {
+  id: string
+  category: 'client' | 'outbound' | 'relationship' | 'outcome' | 'system'
+  date: string
+  sortKey: string
+  label: string
+  detail?: string
+}
+
+function groupByDate(events: TimelineEvent[]): Array<{ label: string; events: TimelineEvent[] }> {
+  const groups: Array<{ label: string; events: TimelineEvent[] }> = []
+  let currentLabel = ''
+  for (const e of events) {
+    const d = new Date(e.date)
+    const now = new Date()
+    const dDay = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const diffDays = Math.round((nowDay.getTime() - dDay.getTime()) / 86_400_000)
+    let label: string
+    if (diffDays === 0) label = 'Today'
+    else if (diffDays === 1) label = 'Yesterday'
+    else if (diffDays < 7) label = d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })
+    else label = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+    if (label !== currentLabel) {
+      groups.push({ label, events: [e] })
+      currentLabel = label
+    } else {
+      groups[groups.length - 1].events.push(e)
+    }
+  }
+  return groups
+}
+
+const EVENT_CATEGORIES: Record<string, 'client' | 'outbound' | 'relationship' | 'outcome' | 'system'> = {
+  connection: 'outbound',
+  dm: 'outbound',
+  followup: 'outbound',
+  reply: 'outbound',
+  email: 'outbound',
+  upwork: 'outbound',
+  replied: 'client',
+  read: 'client',
+  check: 'outcome',
+  slice: 'outcome',
+  close: 'outcome',
+  standing: 'outcome',
+}
+
+const EVENT_LABELS: Record<string, string> = {
+  connection: 'Connection request sent',
+  dm: 'You sent a DM',
+  followup: 'Follow-up sent',
+  reply: 'You replied',
+  email: 'Email sent',
+  upwork: 'Upwork proposal sent',
+  replied: 'They replied',
+  read: 'Read',
+  check: 'Check',
+  slice: 'Slice',
+  close: 'Closed',
+  standing: 'Standing',
+}
+
+const Timeline = memo(function Timeline({ lead, now }: { lead: LeadDetail; now: number }) {
+  const events: TimelineEvent[] = [
+    ...lead.messages
+      .filter((m) => m.sentText || m.draftText)
+      .map((m) => ({
+        id: m.id,
+        category: m.direction === 'inbound' ? 'client' : (EVENT_CATEGORIES[m.type] ?? 'outbound'),
+        date: m.sentAt ?? m.createdAt,
+        sortKey: m.sentAt ?? m.createdAt,
+        label: m.direction === 'inbound' ? 'They said' : (EVENT_LABELS[m.type] ?? m.type),
+        detail: m.sentText ?? m.draftText ?? undefined,
+      })),
+    ...lead.outcomes
+      .filter((o) => o.stage !== 'replied')
+      .map((o) => ({
+        id: o.id,
+        category: EVENT_CATEGORIES[o.stage] ?? 'outcome',
+        date: o.occurredAt,
+        sortKey: o.occurredAt,
+        label: EVENT_LABELS[o.stage] ?? o.stage,
+        detail: undefined,
+      })),
+    ...(lead.connectionAcceptedAt ? [{
+      id: `accepted-${lead.connectionAcceptedAt}`,
+      category: 'relationship' as const,
+      date: lead.connectionAcceptedAt,
+      sortKey: lead.connectionAcceptedAt,
+      label: 'Connection accepted',
+      detail: undefined,
+    }] : []),
+  ].sort((a, b) => b.sortKey.localeCompare(a.sortKey))
+
+  const groups = groupByDate(events)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  function toggle(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  if (events.length === 0) {
+    return (
+      <div>
+        <h2 className="text-sm font-medium text-ink">Activity</h2>
+        <p className="mt-2 text-[13px] text-graphite">Nothing logged yet. A connection note shows up here after you log it.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <h2 className="text-sm font-medium text-ink">Activity</h2>
+      <div className="mt-3 space-y-5">
+        {groups.map((group) => (
+          <div key={group.label}>
+            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">{group.label}</p>
+            <ul className="mt-1 space-y-0">
+              {group.events.map((e) => (
+                <li key={e.id} className="relative flex items-start gap-3 py-2">
+                  <div className="flex flex-col items-center pt-1">
+                    <span className={cn(
+                      'size-2 rounded-full',
+                      e.category === 'client' ? 'bg-cobalt' :
+                      e.category === 'relationship' ? 'bg-status-success' :
+                      e.category === 'outcome' ? 'bg-orange' :
+                      e.category === 'outbound' ? 'bg-ink/30' :
+                      'bg-line',
+                    )} aria-hidden="true" />
+                    <div className="w-px flex-1 bg-line" />
+                  </div>
+                  <div className="min-w-0 flex-1 pb-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[13px] text-ink">{e.label}</span>
+                      <span className="text-mono-medium text-[11px] text-graphite">{timeAgo(e.date, now)}</span>
+                    </div>
+                    {e.detail && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => toggle(e.id)}
+                          className="mt-1 inline-flex items-center gap-1 text-[11px] text-graphite hover:text-ink"
+                        >
+                          <ChevronRight className={cn('size-3 transition-transform', expanded.has(e.id) && 'rotate-90')} />
+                          {expanded.has(e.id) ? 'Hide' : 'View'}
+                        </button>
+                        {expanded.has(e.id) && (
+                          <p className="mt-1.5 rounded-md border border-line bg-bone-raised/50 p-2.5 text-[12px] leading-relaxed text-ink whitespace-pre-wrap">
+                            {e.detail}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+})
+
+// ─── Main LeadWorkspace ───────────────────────────────────────────
+
 export function LeadWorkspace({
   lead,
   score,
@@ -381,35 +382,18 @@ export function LeadWorkspace({
   profiles: Profile[]
   matchedProofs: ProofItem[]
 }) {
-  // Incremented after mutations to trigger lightweight lead re-fetch
   const [leadVersion, setLeadVersion] = useState(0)
-  // Local override of lead data for optimistic/targeted updates
   const [leadOverride, setLeadOverride] = useState<LeadDetail | null>(null)
-  // Use override when available, otherwise server prop
   const currentLead = leadOverride || lead
 
   const locked = currentLead.status === 'no' || currentLead.status === 'dead'
   const verdict = currentLead.verdict ?? score.verdict
 
-  // Verdict/action reconciliation (Bug 2): the legacy `verdict` can read
-  // 'skip' (commercial qualification only) even when the canonical DM-channel
-  // action is a valid non-SKIP relationship action (CONNECT_OR_OBSERVE,
-  // etc). VerdictWord must not show a bare "skip" headline in that case —
-  // reuse the same DM-channel snapshot LeadLoopStrip already computes so the
-  // reconciliation rule lives in one place (describeVerdictForDisplay).
   const dmSnapshot = toUiSnapshot(buildRevenueStrategy(sourceFromLead(currentLead, null, { channel: 'dm' })))
   const verdictDisplay = verdict === 'skip'
     ? describeVerdictForDisplay('skip', dmSnapshot.act, dmSnapshot.messagingPolicyLabel)
     : null
 
-  // canDraft must not be a pure qualification-score gate: a lead can score
-  // 'skip' on commercial qualification alone while the revenue-strategy
-  // layer independently recommends a real contact action (e.g. Fit/Intent/
-  // Confidence all HIGH, action DM) — see Ran Endelman / PlexAI hardening
-  // report, where a 25/100 qualification blocked drafting entirely despite
-  // the strategy card recommending a DM send. Allow drafting whenever
-  // either the legacy verdict OR the canonical DM-channel action says there
-  // is a real reason to contact.
   const canDraft = verdict === 'send' || verdict === 'research_more' || dmSnapshot.act !== 'SKIP'
 
   const [artifact, setArtifact] = useState<ArtifactId>('dm')
@@ -421,11 +405,6 @@ export function LeadWorkspace({
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [sentOk, setSentOk] = useState<{ todaySends: number } | null>(null)
-  // One key per distinct send attempt (the exact text the user is about to
-  // log). Reused across retries of the SAME attempt (double-click, network
-  // retry) so the server can dedupe; regenerated whenever the text actually
-  // changes, since that's a genuinely different send. sentTextRef mirrors
-  // sentText's last value so the effect below only regenerates on real change.
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const lastKeyedTextRef = useRef<string>('')
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(profiles[0]?.id ?? null)
@@ -436,9 +415,11 @@ export function LeadWorkspace({
   const [generationMode, setGenerationMode] = useState<GenerationMode>('standard')
   const [capturedReplyText, setCapturedReplyText] = useState('')
   const [now, setNow] = useState(() => Date.now())
-  const [stepPick, setStepPick] = useState<WorkStep | null>(null)
   const [savingReply, setSavingReply] = useState(false)
   const [replySaveError, setReplySaveError] = useState<string | null>(null)
+  const [showLogUpdate, setShowLogUpdate] = useState(false)
+  const [showPasteReply, setShowPasteReply] = useState(false)
+  const [activeWorkspace, setActiveWorkspace] = useState<'connection' | 'dm' | 'reply' | 'followup' | 'upwork' | null>(null)
 
   const streamBuffer = useRef('')
 
@@ -453,6 +434,8 @@ export function LeadWorkspace({
   const followupGate = evaluateFollowupGate({ status: currentLead.status, messages: currentLead.messages, followupCount: currentLead.followupCount })
   const hasPriorSend = followupGate.hasPriorSend
   const followupEligible = followupGate.eligible
+
+  const relationshipState = computeRelationshipState(currentLead, now)
 
   const artifactDisabled: Record<ArtifactId, string | null> = {
     dm: dmGate.blocked
@@ -476,6 +459,10 @@ export function LeadWorkspace({
   const chosenProfileId = profiles.some((p) => p.id === selectedProfileId) ? selectedProfileId : profiles[0]?.id ?? null
   const lastReply = currentLead.messages.filter((m) => m.type === 'reply' && m.sentText).at(-1)
   const prospectReplyText = capturedReplyText || lastReply?.sentText || ''
+
+  const connectionAt = latestSent(currentLead.messages, 'connection')?.sentAt ?? null
+  const messageAt = latestSent(currentLead.messages, 'dm')?.sentAt ?? null
+  const followupsLeft = Math.max(0, 3 - (currentLead.followupCount ?? 0))
 
   const editDraft = useCallback((text: string) => {
     setDrafts((d) => ({ ...d, [artifact]: { result: d[artifact]?.result ?? null, text } }))
@@ -518,7 +505,6 @@ export function LeadWorkspace({
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Drafting failed.'
-      // Don't expose raw provider errors to users
       setDraftError(msg.includes('provider') || msg.includes('API key') ? 'Couldn\'t generate draft right now.' : msg)
     } finally {
       setDrafting(false)
@@ -540,9 +526,6 @@ export function LeadWorkspace({
   async function logSend() {
     if (!sentText.trim()) return
     const trimmed = sentText.trim()
-    // A different message text is a genuinely different send attempt — mint
-    // a fresh key. The same text (a retry of this exact attempt) reuses the
-    // same key so the server can recognize and dedupe the retry.
     if (trimmed !== lastKeyedTextRef.current) {
       idempotencyKeyRef.current = crypto.randomUUID()
       lastKeyedTextRef.current = trimmed
@@ -565,16 +548,9 @@ export function LeadWorkspace({
       if (!res.ok) throw new Error(data.error ?? 'Failed to log send.')
       setSentOk({ todaySends: data.todaySends })
       setSentText('')
-      // Send succeeded — clear the retry-dedup marker so a later message
-      // that happens to match this same text is treated as a NEW send, not
-      // mistaken for a retry of this one.
       lastKeyedTextRef.current = ''
-      // Refresh lead data to update timeline, status, next action
       setLeadVersion((v) => v + 1)
-      if (artifact === 'connection') setStepPick('accepted')
-      else if (artifact === 'dm') setStepPick('client')
-      else if (artifact === 'reply') setStepPick('followup')
-      else setStepPick(null)
+      setActiveWorkspace(null)
     } catch (err) {
       setSendError(err instanceof Error ? err.message : 'Failed to log send.')
       notifyError(err instanceof Error ? err.message : 'Failed to log send.', 'Not logged')
@@ -594,7 +570,6 @@ export function LeadWorkspace({
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? 'Failed to mark the connection accepted.')
       setLeadVersion((v) => v + 1)
-      setStepPick('message')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to mark the connection accepted.'
       setMarkAcceptedError(message)
@@ -604,7 +579,6 @@ export function LeadWorkspace({
     }
   }
 
-  // Re-fetch lead data after mutations (targeted, not full page reload)
   useEffect(() => {
     if (leadVersion === 0) return
     let cancelled = false
@@ -639,6 +613,8 @@ export function LeadWorkspace({
       if (!res.ok) throw new Error(data.error ?? 'Could not save their message.')
       if (data.lead) setLeadOverride(data.lead)
       else setLeadVersion((version) => version + 1)
+      setCapturedReplyText('')
+      setShowPasteReply(false)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not save their message.'
       setReplySaveError(message)
@@ -647,31 +623,6 @@ export function LeadWorkspace({
       setSavingReply(false)
     }
   }
-
-  const connectionAt = latestSent(currentLead.messages, 'connection')?.sentAt ?? null
-  const messageAt = latestSent(currentLead.messages, 'dm')?.sentAt ?? null
-  const clientAt = currentLead.messages
-    .filter((message) => message.direction === 'inbound' && message.sentAt)
-    .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''))[0]?.sentAt ?? null
-  const recommendedStep: WorkStep = connectionAt && !currentLead.connectionAcceptedAt
-    ? 'accepted'
-    : !messageAt && !connectionAt
-      ? 'connection'
-      : !messageAt
-        ? 'message'
-        : !clientAt
-          ? 'client'
-          : 'followup'
-  const step = stepPick ?? recommendedStep
-  const followupsLeft = Math.max(0, 3 - (currentLead.followupCount ?? 0))
-
-  useEffect(() => {
-    if (step === 'connection') setArtifact('connection')
-    else if (step === 'message') setArtifact('dm')
-    else if (step === 'client') setArtifact('reply')
-    else if (step === 'followup') setArtifact('followup')
-    else if (step === 'upwork') setArtifact('upwork')
-  }, [step])
 
   const textToCheck = sentText.trim() || draftText
   const { kind: countKind, max: countMax } = artifactCount(artifact)
@@ -697,27 +648,44 @@ export function LeadWorkspace({
     : 'No contact named yet'
   const host = hostOf(currentLead.url)
 
+  // Determine workspace from relationship phase
+  useEffect(() => {
+    if (activeWorkspace) return
+    if (relationshipState.phase === 'connection_due' || relationshipState.phase === 'connection_sent') {
+      setArtifact('connection')
+    } else if (relationshipState.phase === 'connection_accepted' || relationshipState.phase === 'dm_due') {
+      setArtifact('dm')
+    } else if (relationshipState.phase === 'replied') {
+      setArtifact('reply')
+    } else if (relationshipState.phase === 'follow_up_due') {
+      setArtifact('followup')
+    } else if (relationshipState.phase === 'dm_sent' || relationshipState.phase === 'waiting_for_reply' || relationshipState.phase === 'conversation') {
+      setArtifact('reply')
+    }
+  }, [relationshipState.phase, activeWorkspace])
+
+  // Conversation messages for display
+  const conversationMessages = currentLead.messages
+    .filter((m) => m.sentText)
+    .sort((a, b) => (a.sentAt ?? a.createdAt).localeCompare(b.sentAt ?? b.createdAt))
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
 
-      {/* ═══ 1. WHERE THIS LEAD STANDS ═══ */}
-      <section className="reveal-up space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-start lg:gap-6">
-          {/* Lead info */}
-          <div className="flex-1 min-w-0">
-            <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-[12px] text-graphite transition-colors hover:text-ink">
-              <ArrowLeft className="size-3.5" aria-hidden="true" />
-              Back to Today
-            </Link>
+      {/* ═══ HEADER ═══ */}
+      <div className="flex flex-col gap-4">
+        <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-[12px] text-graphite transition-colors hover:text-ink w-fit">
+          <ArrowLeft className="size-3.5" aria-hidden="true" />
+          Back to Today
+        </Link>
 
-            <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
               {verdictDisplay?.contradicted ? (
-                <span
-                  role="status"
-                  className="inline-flex items-center gap-2 rounded-full border border-orange/40 bg-orange/10 px-2.5 py-1 text-[12px] font-semibold text-orange shadow-sm"
-                >
-                  <Handshake className="size-3.5 shrink-0" aria-hidden="true" />
-                  <span className="size-1.5 shrink-0 rounded-full bg-orange gentle-pulse" aria-hidden="true" />
+                <span role="status" className="inline-flex items-center gap-2 rounded-full border border-orange/40 bg-orange/10 px-2.5 py-1 text-[12px] font-semibold text-orange">
+                  <Handshake className="size-3.5 shrink-0" />
+                  <span className="size-1.5 shrink-0 rounded-full bg-orange gentle-pulse" />
                   {verdictDisplay.headline}
                 </span>
               ) : (
@@ -729,44 +697,31 @@ export function LeadWorkspace({
 
             <h1 className="mt-1 text-heading text-2xl text-ink sm:text-3xl">{currentLead.company}</h1>
             <p className="mt-0.5 text-sm text-graphite">{contactLine}</p>
-            <LeadLoopStrip lead={currentLead} />
 
-            {/* Tags & meta */}
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-graphite">
+              <span className="capitalize">{currentLead.source ?? 'linkedin'}</span>
               {signal && (
-                <span className="inline-flex items-center gap-1 rounded bg-orange/8 px-1.5 py-0.5 text-[11px] font-medium text-orange">
-                  <Flame className="size-3" /> {signal.short}
-                </span>
+                <>
+                  <span className="text-line">·</span>
+                  <span className="inline-flex items-center gap-1 text-orange">
+                    <Flame className="size-3" /> {signal.short}
+                  </span>
+                </>
               )}
               {currentLead.url && (
-                <a href={currentLead.url} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[11px] text-graphite hover:text-ink">
-                  {host ?? 'Source'} <ExternalLink className="size-2.5" />
-                </a>
+                <>
+                  <span className="text-line">·</span>
+                  <a href={currentLead.url} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 hover:text-ink">
+                    {host ?? 'Source'} <ExternalLink className="size-2.5" />
+                  </a>
+                </>
               )}
-              {(currentLead.tags ?? []).map((t) => (
-                <span key={t} className="font-mono text-[11px] text-ink-soft">{t}</span>
-              ))}
             </div>
-
-            {/* Evidence — no box, just text */}
-            <p className="mt-3 flex gap-2 text-[13px] leading-relaxed text-ink">
-              <Target className="mt-0.5 size-3.5 shrink-0 text-orange" />
-              {lead.signalEvidence || 'No signal evidence captured.'}
-            </p>
-            {lead.verbatimQuote && (
-              <p className="mt-2 pl-5.5 text-[13px] italic text-graphite">
-                &ldquo;{lead.verbatimQuote}&rdquo;
-              </p>
-            )}
           </div>
 
-          {/* Score ring — right side on desktop */}
-          <div className="flex shrink-0 flex-col items-center gap-2 lg:pt-1">
-            <ScoreRing score={score.total} canonicalScore={currentLead.canonicalScore} size={72} />
-            <p className="text-mono-medium text-[10px] text-stone">
-              {currentLead.canonicalScore != null ? 'out of 10' : 'out of 12'}
-            </p>
+          <div className="flex shrink-0 flex-col items-center gap-1">
+            <ScoreRing score={score.total} canonicalScore={currentLead.canonicalScore} size={64} />
             <p className="text-[11px] font-medium text-ink">
               {currentLead.canonicalScore != null
                 ? (currentLead.canonicalScore >= 85 ? 'Strong' : currentLead.canonicalScore >= 70 ? 'Good' : currentLead.canonicalScore >= 55 ? 'Fair' : 'Weak')
@@ -775,7 +730,7 @@ export function LeadWorkspace({
             {profiles.length > 0 ? (
               <label className="flex items-center gap-1.5 text-[11px]">
                 <span className="text-graphite">As</span>
-                <Select className="h-6 w-auto min-w-[6rem] py-0 text-[11px]" value={selectedProfileId ?? ''}
+                <Select className="h-6 w-auto min-w-[5rem] py-0 text-[11px]" value={selectedProfileId ?? ''}
                   onChange={(e) => setSelectedProfileId(e.target.value || null)}>
                   {profiles.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -790,9 +745,9 @@ export function LeadWorkspace({
           </div>
         </div>
 
-        {/* Score breakdown — collapsible, inline */}
-        <details className="group">
-          <summary className="flex cursor-pointer items-center gap-1.5 text-[12px] text-graphite hover:text-ink">
+        {/* Score breakdown — collapsible */}
+        <details className="group text-[12px]">
+          <summary className="flex cursor-pointer items-center gap-1.5 text-graphite hover:text-ink">
             <Info className="size-3.5" />
             <span>Why this score</span>
             <ChevronDown className="ml-1 size-3 transition-transform group-open:rotate-180" />
@@ -801,7 +756,7 @@ export function LeadWorkspace({
             <ScoreBreakdown score={score} />
           </div>
         </details>
-      </section>
+      </div>
 
       {/* Locked / not eligible */}
       {locked && (
@@ -820,379 +775,521 @@ export function LeadWorkspace({
         </div>
       )}
 
-      {/* ═══ 2. PROOF MATCH ═══ */}
-      {canDraft && !locked && activeProof && (
-        <section className="reveal-up stagger-1 border-l-2 border-orange/30 pl-4">
-          <div className="flex items-center gap-2">
-            <Trophy className="size-3.5 text-orange" />
-            <h2 className="text-[12px] font-medium text-ink">Proof to cite</h2>
-          </div>
-          <div className="mt-2 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[13px] font-medium text-ink">
-                {activeProof.permissionOnFile && activeProof.clientName ? activeProof.clientName : 'Client protected'}
-              </p>
-              {activeProof.reviewQuote && (
-                <p className="mt-0.5 text-[12px] italic text-graphite">&ldquo;{activeProof.reviewQuote}&rdquo;</p>
-              )}
-              <p className="mt-1 text-[12px] leading-relaxed text-graphite">{activeProof.projectSummary}</p>
-              {activeProof.tags.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {activeProof.tags.map((t) => {
-                    const matches = (currentLead.tags ?? []).some((lt) => lt.toLowerCase() === t.toLowerCase())
-                    return (
-                      <span key={t} className={cn('font-mono text-[10px]',
-                        matches ? 'text-orange' : 'text-graphite')}>
-                        {t}
-                      </span>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-            <Button variant="orange" size="sm" onClick={() => onDraftProof(activeProof.id)} disabled={drafting}>
-              Use this
-            </Button>
-          </div>
-        </section>
-      )}
-
-      {/* ═══ NEXT BEST ACTION ═══ */}
+      {/* ═══ MAIN TWO-COLUMN LAYOUT ═══ */}
       {canDraft && !locked && (
-        <section className="reveal-up stagger-1">
-          <NextBestAction
-            lead={currentLead}
-            verdict={verdict}
-            hasReply={hasReply}
-            hasPriorSend={hasPriorSend}
-            followupEligible={followupEligible}
-            onAction={() => {
-              if (hasReply) setStepPick('client')
-              else if (followupEligible) setStepPick('followup')
-              else if (connectionAt && !currentLead.connectionAcceptedAt) setStepPick('accepted')
-              else if (!connectionAt) setStepPick('connection')
-              else setStepPick('message')
-            }}
-            dmAction={dmSnapshot.act}
-            dmMessagingPolicyLabel={dmSnapshot.messagingPolicyLabel}
-          />
-        </section>
-      )}
+        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
 
-      {canDraft && !locked && (
-        <WorkPath
-          now={now}
-          step={step}
-          connectionAt={connectionAt}
-          acceptedAt={currentLead.connectionAcceptedAt ?? null}
-          messageAt={messageAt}
-          clientAt={clientAt}
-          lockUntil={currentLead.lockedUntil ?? null}
-          followupWait={followupGate.inCooldown ? followupGate.cooldownRemainingMs : 0}
-          followupsLeft={followupsLeft}
-          onPick={setStepPick}
-          onAccept={() => void markConnectionAccepted()}
-          accepting={markingAccepted}
-          acceptError={markAcceptedError}
-        />
-      )}
+          {/* ── LEFT: NOW + WORK + CONVERSATION + ACTIVITY ── */}
+          <div className="min-w-0 space-y-6">
 
-      {/* ═══ 3. DRAFT ═══ */}
-      {canDraft && !locked && step !== 'accepted' && (
-        <section className="reveal-up stagger-2 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-heading text-base text-ink">
-              {step === 'connection' ? 'Connection note' : step === 'client' ? 'Their message' : step === 'followup' ? 'Follow-up' : step === 'upwork' ? 'Upwork proposal' : 'Your message'}
-            </h2>
-            {draft && (
-              <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-medium',
-                draft.passed ? 'text-status-success' : 'text-status-warning')}>
-                {draft.passed ? <Check className="size-3" /> : <X className="size-3" />}
-                {draft.passed ? 'Ready' : 'Needs edit'}
-              </span>
-            )}
-          </div>
+            {/* NOW — Relationship state card */}
+            <section className="rounded-xl border border-line bg-bone-raised/20 p-5">
+              <RelationshipHeader state={relationshipState} contactName={currentLead.contactName} />
 
-
-            {step === 'client' && (
-              <div className="mt-3 space-y-2">
-                <Label htmlFor="reply-text" className="text-[11px] text-graphite">Paste what they wrote</Label>
-                <Textarea id="reply-text" value={capturedReplyText} onChange={(e) => setCapturedReplyText(e.target.value)}
-                  rows={3} className="mt-1 text-[13px]"
-                  placeholder="Paste their message here..." />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => void saveClientMessage()} disabled={savingReply || !capturedReplyText.trim()} loading={savingReply}>
-                    {savingReply ? 'Saving...' : 'Save their message'}
-                  </Button>
-                  {clientAt && <span className="text-[11px] text-graphite">Saved {timeAgo(clientAt, now)}</span>}
-                </div>
-                {replySaveError && <p className="text-[12px] text-status-danger" role="alert">{replySaveError}</p>}
+              <div className="mt-3">
+                <RelationshipPipeline phase={relationshipState.phase} />
               </div>
-            )}
 
-            {artifactDisabled[artifact] ? (
-              <div className="mt-3 space-y-2">
-                <p className="text-sm text-graphite">{artifactDisabled[artifact]}</p>
-                {artifact === 'dm' && dmGate.blocked && (
-                  <Button variant="outline" size="sm" onClick={() => setStepPick('accepted')}>
-                    Open invitation accepted
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <>
-                 <div className="mt-4 flex flex-wrap items-center gap-3">
-                   <Button variant="orange" onClick={() => void generateDraft()} disabled={drafting || locked || (artifact === 'reply' && !prospectReplyText)} loading={drafting}>
-                     {drafting ? 'Writing...' : draft ? 'Rewrite' : step === 'client' ? 'Write our reply' : 'Generate'}
-                   </Button>
-                   <GenerationModeSelector value={generationMode} onChange={setGenerationMode} compact />
-                  {statusMessage ? (
-                    <span className="flex items-center gap-2 text-sm text-graphite">
-                      <span className="size-1.5 rounded-full bg-orange gentle-pulse" />
-                      {statusMessage}
-                    </span>
-                  ) : (
-                    <span className="text-mono-medium text-xs text-graphite">⌘ + Enter</span>
-                  )}
-                </div>
-
-                {draftError && (
-                  <div className="mt-3 space-y-2">
-                    <Alert variant="destructive">
-                      <AlertTitle>Couldn&apos;t generate draft</AlertTitle>
-                      <AlertDescription>{draftError}</AlertDescription>
-                    </Alert>
-                    <Button variant="outline" size="sm" onClick={() => void generateDraft()}>Retry</Button>
+              {/* Your Move */}
+              {relationshipState.kind === 'your_move' && (
+                <div className="mt-4 rounded-lg border border-orange/20 bg-orange/[0.03] p-4">
+                  <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-orange">
+                    <span className="size-1.5 rounded-full bg-orange gentle-pulse" />
+                    Your move
                   </div>
-                )}
-
-                {drafting || draft || draftText ? (
-                  <div className="mt-3 rounded-md border border-line bg-bone p-3">
-                    <Textarea
-                      value={showVariant && variantDraft ? variantDraft.draftText : draftText}
-                      onChange={(e) => editDraft(e.target.value)}
-                      rows={6}
-                      className="max-h-[28rem] overflow-y-auto border-0 bg-transparent px-0 py-1 text-[13px] leading-relaxed shadow-none focus-visible:ring-0"
-                      aria-label="Draft text, editable"
-                      placeholder="Your message appears here as it is written. Edit it freely."
-                    />
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className={cn('font-mono text-[11px]',
-                        count > countMax ? 'text-status-danger' : count >= countMax * 0.9 ? 'text-status-warning' : 'text-graphite')}>
-                        {count} {artifactCount(artifact).label} / {countMax}
-                      </span>
-                      <button onClick={() => void copyDraft()}
-                        className="inline-flex items-center gap-1 text-[11px] text-graphite transition-colors hover:text-ink">
-                        <Copy className="size-3" /> Copy
-                      </button>
+                  <p className="mt-2 text-[15px] font-medium text-ink">{relationshipState.title}</p>
+                  <p className="mt-1 text-[13px] text-graphite">{relationshipState.detail}</p>
+                  {relationshipState.lastClientMessage && relationshipState.phase === 'replied' && (
+                    <div className="mt-3 rounded-md border border-line bg-bone p-3">
+                      <p className="text-[10px] text-stone">They said</p>
+                      <p className="mt-1 text-[13px] leading-relaxed text-ink line-clamp-3">
+                        &ldquo;{relationshipState.lastClientMessage.sentText}&rdquo;
+                      </p>
                     </div>
-                  </div>
-                ) : null}
-
-                {/* Self-check notes */}
-                {draft && !draft.passed && (
-                  <div className="mt-3 space-y-1">
-                    {!draft.selfCheck.test1ReplyOrDelete && (
-                      <p className="flex items-start gap-2 text-xs text-status-warning">
-                        <X className="mt-0.5 size-3 shrink-0" /> Would likely be deleted, not replied to.
-                      </p>
-                    )}
-                    {!draft.selfCheck.test2NotGeneric && (
-                      <p className="flex items-start gap-2 text-xs text-status-warning">
-                        <X className="mt-0.5 size-3 shrink-0" /> Too generic — would survive a company swap.
-                      </p>
-                    )}
-                    {!draft.selfCheck.codeChecks.companyMentioned && (
-                      <p className="flex items-start gap-2 text-xs text-status-warning">
-                        <X className="mt-0.5 size-3 shrink-0" /> Does not name {currentLead.company}.
-                      </p>
-                    )}
-                    {!draft.selfCheck.codeChecks.specificEvidenceMentioned && (
-                      <p className="flex items-start gap-2 text-xs text-status-warning">
-                        <X className="mt-0.5 size-3 shrink-0" /> No specific detail from the lead carried through.
-                      </p>
-                    )}
-                   </div>
                   )}
-                </>
+                  <div className="mt-3">
+                    <Button variant="orange" size="sm" onClick={() => {
+                      if (relationshipState.phase === 'replied') { setArtifact('reply'); setActiveWorkspace('reply') }
+                      else if (relationshipState.phase === 'follow_up_due') { setArtifact('followup'); setActiveWorkspace('followup') }
+                      else if (relationshipState.phase === 'connection_accepted' || relationshipState.phase === 'dm_due') { setArtifact('dm'); setActiveWorkspace('dm') }
+                      else { setArtifact('connection'); setActiveWorkspace('connection') }
+                    }}>
+                      {relationshipState.primaryCta}
+                      <ArrowRight className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Their Move */}
+              {relationshipState.kind === 'their_move' && (
+                <div className="mt-4 rounded-lg border border-line bg-bone-raised/30 p-4">
+                  <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-stone">
+                    <Clock className="size-3" />
+                    Their move
+                  </div>
+                  <p className="mt-2 text-[15px] font-medium text-ink">
+                    Waiting for {relationshipState.waitingOn === 'connection' ? currentLead.contactName ?? 'them' : currentLead.contactName ?? 'them'}
+                  </p>
+                  {relationshipState.lastActionLabel && (
+                    <p className="mt-1 text-[13px] text-graphite">
+                      {relationshipState.lastActionLabel}{relationshipState.lastActionAt ? ` · ${timeAgo(relationshipState.lastActionAt, now)}` : ''}
+                    </p>
+                  )}
+                  <p className="mt-2 text-[11px] text-stone">No action needed right now.</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowPasteReply(true)}
+                    >
+                      <MessageSquare className="size-3.5" />
+                      They replied
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setShowLogUpdate(true)}>
+                      <Pencil className="size-3.5" />
+                      Log an update
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Terminal */}
+              {(relationshipState.kind === 'won' || relationshipState.kind === 'lost') && (
+                <div className={cn(
+                  'mt-4 rounded-lg border p-4',
+                  relationshipState.kind === 'won' ? 'border-status-success/20 bg-status-success/5' : 'border-line bg-bone-raised/50',
+                )}>
+                  <p className={cn(
+                    'text-[10px] font-medium uppercase tracking-[0.12em]',
+                    relationshipState.kind === 'won' ? 'text-status-success' : 'text-stone',
+                  )}>
+                    {relationshipState.kind === 'won' ? 'Opportunity won' : 'Opportunity lost'}
+                  </p>
+                  <p className="mt-1.5 text-[13px] text-graphite">{relationshipState.detail}</p>
+                </div>
               )}
             </section>
-          )}
 
-          {/* ═══ 4. SEND ═══ */}
-          {canDraft && !locked && step !== 'accepted' && (
-          <div>
-            <h2 className="text-heading text-base text-ink">Log it</h2>
-            <p className="mt-0.5 text-[12px] text-graphite">Send it yourself on LinkedIn, then log the exact text. That is what starts the timer.</p>
-
-            {/* Pre-send gates */}
-            {(draft || textToCheck) && (
-              <div className="mt-3 space-y-1">
-                {gates.map((g) => (
-                  <div key={g.label} className={cn('flex items-start gap-2 text-[12px]', g.ok ? 'text-status-success' : 'text-graphite')}>
-                    {g.ok
-                      ? <Check className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
-                      : <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-line" />}
-                    <span>
-                      {g.label}
-                      {!g.ok && g.why ? <span className="block text-[11px] text-status-warning">{g.why}</span> : null}
-                    </span>
+            {/* Paste reply panel */}
+            {showPasteReply && (
+              <section className="rounded-xl border border-line bg-bone p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="size-4 text-orange" />
+                    <p className="text-[12px] font-medium text-ink">Did they reply?</p>
                   </div>
-                ))}
-                {needOverride && (
-                  <label className="flex items-start gap-2 pt-1 text-[11px] text-graphite">
-                    <input type="checkbox" checked={overrideCheck} onChange={(e) => setOverrideCheck(e.target.checked)} className="mt-0.5 size-3.5" />
-                    <span>I read the flagged lines and will send this as written anyway.</span>
-                  </label>
+                  <button type="button" onClick={() => setShowPasteReply(false)} className="text-[11px] text-graphite hover:text-ink">
+                    <X className="size-4" />
+                  </button>
+                </div>
+                <Textarea
+                  value={capturedReplyText}
+                  onChange={(e) => setCapturedReplyText(e.target.value)}
+                  rows={4}
+                  className="mt-3 text-[13px]"
+                  placeholder="Paste their message here..."
+                  disabled={savingReply}
+                />
+                {replySaveError && <p className="mt-2 text-[12px] text-status-danger" role="alert">{replySaveError}</p>}
+                <div className="mt-3 flex items-center gap-2">
+                  <Button variant="orange" size="sm" onClick={() => void saveClientMessage()} disabled={savingReply || !capturedReplyText.trim()} loading={savingReply}>
+                    Save Reply
+                  </Button>
+                </div>
+              </section>
+            )}
+
+            {/* Log update panel */}
+            {showLogUpdate && (
+              <section className="rounded-xl border border-line bg-bone p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Pencil className="size-4 text-stone" />
+                    <p className="text-[12px] font-medium text-ink">Log an update</p>
+                  </div>
+                  <button type="button" onClick={() => setShowLogUpdate(false)} className="text-[11px] text-graphite hover:text-ink">
+                    <X className="size-4" />
+                  </button>
+                </div>
+                <LogUpdateOptions
+                  phase={relationshipState.phase}
+                  leadId={lead.id}
+                  onLogged={() => { setShowLogUpdate(false); setLeadVersion((v) => v + 1) }}
+                />
+              </section>
+            )}
+
+            {/* Workspace: draft + send */}
+            {activeWorkspace && (
+              <section className="space-y-4 rounded-xl border border-line bg-bone-raised/20 p-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[14px] font-medium text-ink">
+                    {activeWorkspace === 'connection' ? 'Connection note' :
+                     activeWorkspace === 'dm' ? 'Your message' :
+                     activeWorkspace === 'reply' ? 'Reply' :
+                     activeWorkspace === 'followup' ? 'Follow-up' : 'Upwork proposal'}
+                  </h2>
+                  <button type="button" onClick={() => setActiveWorkspace(null)} className="text-[11px] text-graphite hover:text-ink">
+                    Close
+                  </button>
+                </div>
+
+                {/* Proof match */}
+                {activeProof && (activeWorkspace === 'dm' || activeWorkspace === 'connection' || activeWorkspace === 'followup') && (
+                  <div className="border-l-2 border-orange/30 pl-4 py-2">
+                    <div className="flex items-center gap-2">
+                      <Trophy className="size-3.5 text-orange" />
+                      <p className="text-[12px] font-medium text-ink">Proof to cite</p>
+                    </div>
+                    <p className="mt-1 text-[13px] text-ink">
+                      {activeProof.permissionOnFile && activeProof.clientName ? activeProof.clientName : 'Client protected'}
+                    </p>
+                    {activeProof.reviewQuote && (
+                      <p className="mt-0.5 text-[12px] italic text-graphite">&ldquo;{activeProof.reviewQuote}&rdquo;</p>
+                    )}
+                    <Button variant="orange" size="xs" onClick={() => onDraftProof(activeProof.id)} disabled={drafting} className="mt-2">
+                      Use this
+                    </Button>
+                  </div>
+                )}
+
+                {/* Generate */}
+                {artifactDisabled[artifact] ? (
+                  <div className="py-2">
+                    <p className="text-[13px] text-graphite">{artifactDisabled[artifact]}</p>
+                    {artifact === 'dm' && dmGate.blocked && (
+                      <Button variant="outline" size="sm" onClick={() => void markConnectionAccepted()} disabled={!connectionAt || markingAccepted} loading={markingAccepted} className="mt-2">
+                        Mark connection accepted
+                      </Button>
+                    )}
+                    {markAcceptedError && <p className="mt-1 text-[12px] text-status-danger" role="alert">{markAcceptedError}</p>}
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button variant="orange" size="sm" onClick={() => void generateDraft()} disabled={drafting || (artifact === 'reply' && !prospectReplyText)} loading={drafting}>
+                        {drafting ? 'Writing...' : draft ? 'Rewrite' : 'Generate'}
+                      </Button>
+                      <GenerationModeSelector value={generationMode} onChange={setGenerationMode} compact />
+                      {statusMessage && (
+                        <span className="flex items-center gap-2 text-[13px] text-graphite">
+                          <span className="size-1.5 rounded-full bg-orange gentle-pulse" />
+                          {statusMessage}
+                        </span>
+                      )}
+                    </div>
+
+                    {draftError && (
+                      <Alert variant="destructive" className="mt-3">
+                        <AlertTitle>Couldn&apos;t generate draft</AlertTitle>
+                        <AlertDescription>{draftError}</AlertDescription>
+                      </Alert>
+                    )}
+
+                    {(drafting || draft || draftText) && (
+                      <div className="mt-3 rounded-md border border-line bg-bone p-3">
+                        <Textarea
+                          value={showVariant && variantDraft ? variantDraft.draftText : draftText}
+                          onChange={(e) => editDraft(e.target.value)}
+                          rows={6}
+                          className="max-h-[28rem] overflow-y-auto border-0 bg-transparent px-0 py-1 text-[13px] leading-relaxed shadow-none focus-visible:ring-0"
+                          placeholder="Your message appears here as it is written. Edit it freely."
+                        />
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className={cn('font-mono text-[11px]',
+                            count > countMax ? 'text-status-danger' : count >= countMax * 0.9 ? 'text-status-warning' : 'text-graphite')}>
+                            {count} {artifactCount(artifact).label} / {countMax}
+                          </span>
+                          <button onClick={() => void copyDraft()} className="inline-flex items-center gap-1 text-[11px] text-graphite hover:text-ink">
+                            <Copy className="size-3" /> Copy
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {draft && !draft.passed && (
+                      <div className="mt-3 space-y-1">
+                        {!draft.selfCheck.test1ReplyOrDelete && (
+                          <p className="flex items-start gap-2 text-[12px] text-status-warning">
+                            <X className="mt-0.5 size-3 shrink-0" /> Would likely be deleted, not replied to.
+                          </p>
+                        )}
+                        {!draft.selfCheck.test2NotGeneric && (
+                          <p className="flex items-start gap-2 text-[12px] text-status-warning">
+                            <X className="mt-0.5 size-3 shrink-0" /> Too generic.
+                          </p>
+                        )}
+                        {!draft.selfCheck.codeChecks.companyMentioned && (
+                          <p className="flex items-start gap-2 text-[12px] text-status-warning">
+                            <X className="mt-0.5 size-3 shrink-0" /> Does not name {currentLead.company}.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Log it */}
+                {!artifactDisabled[artifact] && (
+                  <div className="mt-4 border-t border-line pt-4">
+                    <h3 className="text-[13px] font-medium text-ink">Log it</h3>
+                    <p className="mt-0.5 text-[12px] text-graphite">Send it yourself on LinkedIn, then log the exact text.</p>
+
+                    {(draft || textToCheck) && (
+                      <div className="mt-3 space-y-1">
+                        {gates.map((g) => (
+                          <div key={g.label} className={cn('flex items-start gap-2 text-[12px]', g.ok ? 'text-status-success' : 'text-graphite')}>
+                            {g.ok
+                              ? <Check className="mt-0.5 size-3 shrink-0" />
+                              : <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-line" />}
+                            <span>
+                              {g.label}
+                              {!g.ok && g.why ? <span className="block text-[11px] text-status-warning">{g.why}</span> : null}
+                            </span>
+                          </div>
+                        ))}
+                        {needOverride && (
+                          <label className="flex items-start gap-2 pt-1 text-[11px] text-graphite">
+                            <input type="checkbox" checked={overrideCheck} onChange={(e) => setOverrideCheck(e.target.checked)} className="mt-0.5 size-3.5" />
+                            <span>I read the flagged lines and will send this as written anyway.</span>
+                          </label>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="mt-3">
+                      <Label htmlFor="sent-text" className="text-[11px] text-graphite">Text you actually sent</Label>
+                      <Textarea
+                        id="sent-text"
+                        value={sentText}
+                        onChange={(e) => setSentText(e.target.value)}
+                        onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { if (needOverride && !overrideCheck) return; e.preventDefault(); void logSend() } }}
+                        rows={3}
+                        placeholder={draft ? 'Paste the draft once it looks right.' : 'Paste what you actually sent. No auto-send, ever.'}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between">
+                      <Button variant="orange" size="sm" onClick={() => void logSend()} disabled={sending || !sentText.trim() || (needOverride && !overrideCheck)} loading={sending}>
+                        {sending ? 'Logging...' : needOverride && !overrideCheck ? 'Check the flags to log' : 'Log this'}
+                      </Button>
+                      <span className="text-mono-medium text-[10px] text-stone">⌘ + Enter</span>
+                    </div>
+                    {sendError && <p className="mt-2 text-[12px] text-status-danger" role="alert">{sendError}</p>}
+                    {sentOk && <p className="mt-2 text-[12px] text-status-success">Logged. {sentOk.todaySends} messages sent today.</p>}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* CONVERSATION */}
+            {conversationMessages.length > 0 && (
+              <section>
+                <h2 className="text-sm font-medium text-ink">Conversation</h2>
+                <div className="mt-3 space-y-2">
+                  {conversationMessages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={cn(
+                        'rounded-lg border p-3',
+                        msg.direction === 'inbound'
+                          ? 'border-cobalt/20 bg-cobalt/[0.03]'
+                          : 'border-line bg-bone-raised/30',
+                      )}
+                    >
+                      <div className="flex items-center gap-2 text-[10px] text-stone">
+                        <span className={cn(
+                          'font-medium',
+                          msg.direction === 'inbound' ? 'text-cobalt' : 'text-graphite',
+                        )}>
+                          {msg.direction === 'inbound' ? currentLead.contactName ?? 'They' : 'You'}
+                        </span>
+                        <span>·</span>
+                        <span>{timeAgo(msg.sentAt, now)}</span>
+                        <span>·</span>
+                        <span className="capitalize">{msg.type}</span>
+                      </div>
+                      <p className="mt-1.5 text-[13px] leading-relaxed text-ink whitespace-pre-wrap">
+                        {msg.sentText}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* ACTIVITY */}
+            <section>
+              <Timeline lead={currentLead} now={now} />
+            </section>
+          </div>
+
+          {/* ── RIGHT: RELATIONSHIP CONTEXT ── */}
+          <aside className="space-y-4">
+            <div className="rounded-xl border border-line bg-bone-raised/10 p-4">
+              <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Relationship</p>
+              <dl className="mt-3 space-y-3">
+                <div>
+                  <dt className="text-[11px] text-stone">Current stage</dt>
+                  <dd className="mt-0.5 text-[13px] font-medium text-ink capitalize">{relationshipState.phase.replace(/_/g, ' ')}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] text-stone">Channel</dt>
+                  <dd className="mt-0.5 text-[13px] text-ink capitalize">{currentLead.source ?? 'linkedin'}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] text-stone">Fit</dt>
+                  <dd className="mt-0.5 text-[13px] text-ink">{dmSnapshot.fit}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] text-stone">Intent</dt>
+                  <dd className="mt-0.5 text-[13px] text-ink">{dmSnapshot.intent}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] text-stone">Confidence</dt>
+                  <dd className="mt-0.5 text-[13px] text-ink">{dmSnapshot.confidence}</dd>
+                </div>
+                {followupsLeft < 3 && (
+                  <div>
+                    <dt className="text-[11px] text-stone">Follow-ups used</dt>
+                    <dd className="mt-0.5 text-[13px] text-ink">{3 - followupsLeft} of 3</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+
+            {/* Signal evidence */}
+            {lead.signalEvidence && (
+              <div className="rounded-xl border border-line bg-bone-raised/10 p-4">
+                <div className="flex items-center gap-1.5">
+                  <Target className="size-3.5 text-orange" />
+                  <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Signal</p>
+                </div>
+                <p className="mt-2 text-[13px] leading-relaxed text-ink">{lead.signalEvidence}</p>
+                {lead.verbatimQuote && (
+                  <p className="mt-2 text-[12px] italic text-graphite">&ldquo;{lead.verbatimQuote}&rdquo;</p>
                 )}
               </div>
             )}
-
-            <div className="mt-3">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="sent-text" className="text-[11px] text-graphite">Text you actually sent</Label>
-                {draftText && (
-                  <button type="button" onClick={() => setSentText(draftText)} className="text-[11px] text-orange hover:text-orange/80">
-                    Use the draft
-                  </button>
-                )}
-              </div>
-              <Textarea id="sent-text" value={sentText} onChange={(e) => setSentText(e.target.value)}
-                onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { if (needOverride && !overrideCheck) return; e.preventDefault(); void logSend() } }}
-                rows={3} disabled={locked}
-                placeholder={draft ? 'Paste the draft once it looks right, or paste what you typed.' : 'Paste what you actually sent. No auto-send, ever.'} />
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-4">
-              <Button variant="orange" onClick={() => void logSend()} disabled={sending || locked || !sentText.trim() || (needOverride && !overrideCheck)} loading={sending}>
-                {sending ? 'Logging...' : needOverride && !overrideCheck ? 'Check the flags to log' : 'Log this'}
-              </Button>
-              <span className="text-mono-medium text-[10px] text-stone">⌘ + Enter</span>
-            </div>
-            {sendError && <p className="mt-2 text-[12px] text-status-danger" role="alert">{sendError}</p>}
-             {sentOk && <p className="mt-2 text-[12px] text-status-success">Logged. {sentOk.todaySends} {artifact} messages sent today.</p>}
-          </div>
-      )}
-
-      {!locked && (
-        <section className="reveal-up stagger-3">
-          <Timeline lead={currentLead} now={now} />
-        </section>
-      )}
-    </div>
-  )
-}
-
-function dateDayLabel(isoString: string): string {
-  const d = new Date(isoString)
-  const now = new Date()
-  const dDay = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const diffMs = nowDay.getTime() - dDay.getTime()
-  const diffDays = Math.round(diffMs / 86_400_000)
-  const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  if (diffDays === 0) return `Today · ${timeStr}`
-  if (diffDays === 1) return `Yesterday · ${timeStr}`
-  if (diffDays < 7) return `${d.toLocaleDateString([], { weekday: 'long' })} · ${timeStr}`
-  return `${d.toLocaleDateString()} · ${timeStr}`
-}
-
-type TimelineEvent = { id: string; kind: 'outcome' | 'message'; date: string; sortKey: string; label: string; detail?: string }
-
-function groupByDate(events: TimelineEvent[]): Array<{ label: string; events: TimelineEvent[] }> {
-  const groups: Array<{ label: string; events: TimelineEvent[] }> = []
-  let currentLabel = ''
-  for (const e of events) {
-    const d = new Date(e.date)
-    const now = new Date()
-    const dDay = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-    const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const diffDays = Math.round((nowDay.getTime() - dDay.getTime()) / 86_400_000)
-    let label: string
-    if (diffDays === 0) label = 'Today'
-    else if (diffDays === 1) label = 'Yesterday'
-    else if (diffDays < 7) label = d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })
-    else label = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-    if (label !== currentLabel) {
-      groups.push({ label, events: [e] })
-      currentLabel = label
-    } else {
-      groups[groups.length - 1].events.push(e)
-    }
-  }
-  return groups
-}
-
-const LOG_LABEL: Record<string, string> = {
-  connection: 'Connection note',
-  dm: 'Your message',
-  followup: 'Follow-up',
-  reply: 'Your reply',
-  email: 'Email',
-  upwork: 'Upwork proposal',
-  replied: 'They replied',
-  read: 'Read',
-  check: 'Check',
-  slice: 'Slice',
-  close: 'Closed',
-  standing: 'Standing',
-}
-
-const Timeline = memo(function Timeline({ lead, now }: { lead: LeadDetail; now: number }) {
-  const events: TimelineEvent[] = [
-    ...lead.outcomes.map((o) => ({ id: o.id, kind: 'outcome' as const, date: o.occurredAt, sortKey: o.occurredAt, label: LOG_LABEL[o.stage] ?? o.stage, detail: undefined })),
-    ...lead.messages.filter((m) => m.sentText || m.draftText).map((m) => ({
-      id: m.id,
-      kind: 'message' as const,
-      date: m.sentAt ?? m.createdAt,
-      sortKey: m.sentAt ?? m.createdAt,
-      label: m.direction === 'inbound' ? 'Their message' : (LOG_LABEL[m.type] ?? m.type),
-      detail: m.sentText ?? m.draftText ?? undefined,
-    })),
-    ...(lead.connectionAcceptedAt ? [{
-      id: `accepted-${lead.connectionAcceptedAt}`,
-      kind: 'outcome' as const,
-      date: lead.connectionAcceptedAt,
-      sortKey: lead.connectionAcceptedAt,
-      label: 'Invitation accepted',
-      detail: undefined,
-    }] : []),
-  ].sort((a, b) => b.sortKey.localeCompare(a.sortKey))
-
-  const groups = groupByDate(events)
-
-  return (
-    <div>
-      <h2 className="text-sm font-medium text-ink">Log</h2>
-      {events.length === 0 ? (
-        <p className="mt-2 text-sm text-graphite">Nothing logged yet. A connection note shows up here after you log it.</p>
-      ) : (
-        <div className="mt-3 space-y-4">
-          {groups.map((group) => (
-            <div key={group.label}>
-              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">{group.label}</p>
-              <ul className="mt-1 space-y-0">
-                {group.events.map((e) => (
-                  <li key={e.id} className="relative flex items-start gap-3 py-2">
-                    <div className="flex flex-col items-center">
-                      <span className={cn('size-2 rounded-full', e.kind === 'outcome' ? 'bg-orange' : 'bg-ink/20')} aria-hidden="true" />
-                      <div className="w-px flex-1 bg-line" />
-                    </div>
-                    <div className="pb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-ink">{e.label}</span>
-                        <span className="text-mono-medium text-xs text-graphite">{timeAgo(e.date, now)} · {dateDayLabel(e.date)}</span>
-                      </div>
-                      {e.detail && <p className="mt-1 text-xs leading-relaxed text-graphite">{e.detail}</p>}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          </aside>
         </div>
       )}
     </div>
   )
-})
+}
+
+// ─── Sub-components ──────────────────────────────────────────────
+
+function RelationshipHeader({ state, contactName }: { state: ReturnType<typeof computeRelationshipState>; contactName?: string | null }) {
+  const isYourMove = state.kind === 'your_move'
+  const isTerminal = state.kind === 'won' || state.kind === 'lost'
+  const label = isTerminal ? (state.kind === 'won' ? 'Won' : 'Lost') :
+    isYourMove ? 'Your move' : 'Their move'
+
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className={cn(
+          'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium',
+          state.kind === 'won' ? 'bg-status-success/10 text-status-success' :
+          state.kind === 'lost' ? 'bg-bone-raised text-stone' :
+          isYourMove ? 'bg-orange/10 text-orange' :
+          'bg-bone-raised text-stone',
+        )}>
+          {isYourMove && <span className="size-1.5 rounded-full bg-orange gentle-pulse" />}
+          {label}
+        </span>
+        {state.lastActionLabel && (
+          <span className="text-[11px] text-graphite">{state.lastActionLabel}</span>
+        )}
+      </div>
+      {state.lastActionAt && (
+        <span className="text-[11px] text-stone">{timeAgo(state.lastActionAt, Date.now())}</span>
+      )}
+    </div>
+  )
+}
+
+function timeAgoInline(iso: string | null, now: number): string {
+  return timeAgo(iso, now)
+}
+
+function LogUpdateOptions({ phase, leadId, onLogged }: { phase: string; leadId: string; onLogged?: () => void }) {
+  const [selected, setSelected] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const options: Array<{ show: string[]; label: string; value: string }> = [
+    { show: ['connection_sent', 'connection_due', 'connection_accepted'], label: 'They accepted my connection', value: 'connection_accepted' },
+    { show: ['dm_sent', 'waiting_for_reply', 'replied', 'follow_up_due', 'conversation'], label: 'They replied', value: 'client_replied' },
+    { show: ['connection_due', 'connection_sent', 'connection_accepted'], label: 'I sent a connection request', value: 'connection_sent' },
+    { show: ['connection_accepted', 'dm_sent', 'waiting_for_reply'], label: 'I sent a message', value: 'dm_sent' },
+    { show: ['conversation', 'meeting'], label: 'Meeting booked', value: 'meeting_booked' },
+    { show: ['conversation', 'meeting', 'proposal'], label: 'They are interested', value: 'interested' },
+    { show: ['conversation', 'meeting', 'proposal'], label: 'Not interested', value: 'not_interested' },
+    { show: ['dm_sent', 'waiting_for_reply'], label: 'No response yet', value: 'no_response' },
+    { show: ['*'], label: 'Something else', value: 'other' },
+  ]
+
+  const visible = options.filter((o) => o.show.includes(phase) || o.show.includes('*'))
+
+  async function handleLog() {
+    if (!selected) return
+    setSaving(true)
+    setError(null)
+    try {
+      let res: Response
+      if (selected === 'connection_accepted') {
+        res = await fetch(`/api/leads/${leadId}/connection-accepted`, { method: 'POST' })
+      } else {
+        res = await fetch(`/api/leads/${leadId}/contact`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: selected, sentText: '', direction: 'inbound' }),
+        })
+      }
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? 'Could not log update.')
+      setSelected(null)
+      onLogged?.()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not log update.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-1">
+      {visible.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => setSelected(opt.value)}
+          className={cn(
+            'flex w-full items-center gap-2.5 rounded-md border px-3 py-2 text-left text-[13px] transition-all duration-150',
+            selected === opt.value
+              ? 'border-orange/40 bg-orange/5 text-ink'
+              : 'border-line bg-bone-raised/50 text-graphite hover:bg-bone-raised hover:text-ink',
+          )}
+        >
+          <span className={cn(
+            'flex size-4 shrink-0 items-center justify-center rounded-full border transition-all',
+            selected === opt.value ? 'border-orange bg-orange' : 'border-line bg-bone',
+          )}>
+            {selected === opt.value && <Check className="size-2.5 text-on-accent" />}
+          </span>
+          {opt.label}
+        </button>
+      ))}
+      {error && <p className="mt-2 text-[12px] text-status-danger" role="alert">{error}</p>}
+      <div className="mt-2 flex items-center gap-2">
+        <Button variant="orange" size="sm" onClick={() => void handleLog()} disabled={saving || !selected} loading={saving}>
+          Log this
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 export type { SelfCheck }

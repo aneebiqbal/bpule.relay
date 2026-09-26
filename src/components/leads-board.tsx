@@ -35,6 +35,38 @@ const STATUS_LABEL: Record<string, string> = {
   dead: 'Closed',
 }
 
+/**
+ * Lightweight row-level relationship label.
+ * Derives a human-readable state from canonical Lead fields without
+ * needing full message history (which the list view doesn't load).
+ */
+export function rowRelationshipLabel(lead: LeadRow): { label: string; variant: 'success' | 'orange' | 'warning' | 'neutral' | 'cobalt' | 'danger' | 'info' } {
+  if (lead.status === 'won') return { label: 'Won', variant: 'success' }
+  if (lead.status === 'lost' || lead.status === 'dead' || lead.status === 'no') return { label: 'Closed', variant: 'neutral' }
+  if (lead.status === 'replied') return { label: 'They replied', variant: 'success' }
+  if (lead.status === 'followed_up') return { label: 'Waiting on them', variant: 'warning' }
+  if (lead.status === 'contacted') {
+    if (!lead.connectionAcceptedAt && lead.lockedReason === 'connection_note_sent') {
+      return { label: 'Waiting for connection', variant: 'warning' }
+    }
+    return { label: 'Waiting for reply', variant: 'cobalt' }
+  }
+  if (lead.status === 'new') return { label: 'New', variant: 'neutral' }
+  return { label: STATUS_LABEL[lead.status] ?? lead.status, variant: STATUS_VARIANT[lead.status] ?? 'neutral' }
+}
+
+function rowNextAction(lead: LeadRow): string | null {
+  if (lead.status === 'won' || lead.status === 'lost' || lead.status === 'dead' || lead.status === 'no') return null
+  if (lead.status === 'replied') return 'Reply now'
+  if (lead.status === 'followed_up') return 'Follow up'
+  if (lead.status === 'contacted') {
+    if (!lead.connectionAcceptedAt && lead.lockedReason === 'connection_note_sent') return 'Waiting for connection'
+    return 'Waiting for reply'
+  }
+  if (lead.status === 'new') return 'Start outreach'
+  return null
+}
+
 type FilterKey = 'all' | 'new' | 'contacted' | 'awaiting_connection' | 'replied' | 'followup_due' | 'won' | 'lost' | 'locked'
 
 const FILTERS: Array<{ key: FilterKey; label: string }> = [
@@ -199,6 +231,8 @@ export function LeadsBoard({ leads, orgView }: { leads: LeadRow[]; orgView: bool
               const countdown = lockCountdownMs(lead.lockedUntil ?? null, now)
               const mins = Math.max(0, Math.round(countdown / 60_000))
               const lastActivity = lead.lastActivityAt ?? lead.createdAt
+              const relLabel = rowRelationshipLabel(lead)
+              const nextAction = rowNextAction(lead)
               return (
                 <li key={lead.id}>
                   <div className="group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-bone sm:px-5">
@@ -215,20 +249,29 @@ export function LeadsBoard({ leads, orgView }: { leads: LeadRow[]; orgView: bool
                       <div className="flex items-center gap-2">
                         <span className="truncate text-[14px] font-medium text-ink">{lead.company}</span>
                         <StatusBadge
-                          status={STATUS_LABEL[lead.status] ?? lead.status}
-                          variant={STATUS_VARIANT[lead.status] ?? 'neutral'}
+                          status={relLabel.label}
+                          variant={relLabel.variant}
                         />
                         {locked && (
                           <StatusBadge status={`Locked · ${mins}m`} variant="warning" />
                         )}
                       </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-[12px] text-graphite">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] text-graphite">
                         {lead.contactName && <span className="truncate">{lead.contactName}</span>}
                         {orgView && lead.ownerName && (
                           <span className="shrink-0 text-stone">· {lead.ownerName}</span>
                         )}
                         {signal && <span className="shrink-0 text-stone">· {signal.short}</span>}
-                        {lead.source && <span className="shrink-0 capitalize text-stone">· {lead.source}</span>}
+                        {nextAction && (
+                          <span className={cn(
+                            'shrink-0',
+                            relLabel.variant === 'success' ? 'text-status-success' :
+                            relLabel.variant === 'warning' ? 'text-status-warning' :
+                            'text-stone',
+                          )}>
+                            · {nextAction}
+                          </span>
+                        )}
                       </div>
                     </Link>
                     <div className="hidden shrink-0 items-center gap-2 sm:flex">
