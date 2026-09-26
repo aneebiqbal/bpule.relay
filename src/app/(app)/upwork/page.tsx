@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 const VERDICT_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   apply: { bg: 'bg-status-success/10', text: 'text-status-success', label: 'Apply' },
   apply_if_connects: { bg: 'bg-status-warning/10', text: 'text-status-warning', label: 'If Connects' },
-  skip: { bg: 'bg-bone', text: 'text-slate', label: 'Skip' },
+  skip: { bg: 'bg-bone', text: 'text-stone', label: 'Skip' },
 }
 
 type JobsPromise = Promise<UpworkJob[]>
@@ -74,22 +74,22 @@ async function UpworkList({ jobsPromise }: { jobsPromise: JobsPromise }) {
 
   if (jobs.length === 0) {
     return (
-      <section className="reveal-up stagger-2 rounded-3xl border border-dashed border-line bg-paper/50 p-12 text-center">
-        <div className="mx-auto max-w-sm space-y-4">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-bone">
-            <Briefcase className="size-5 text-orange" aria-hidden="true" />
+      <section className="rounded-lg border border-dashed border-line bg-bone-raised/40 px-6 py-10 text-center">
+        <div className="mx-auto max-w-sm space-y-3">
+          <div className="mx-auto flex size-10 items-center justify-center rounded-full border border-line">
+            <Briefcase className="size-4 text-muted" aria-hidden="true" />
           </div>
           <div>
-            <p className="text-base font-medium text-ink">No Upwork jobs yet.</p>
-            <p className="mt-2 text-sm leading-relaxed text-slate">
+            <p className="text-[14px] font-medium text-ink">No Upwork jobs yet.</p>
+            <p className="mt-1 text-[13px] text-graphite">
               Paste a job post and Relay scores it so you know whether it&apos;s worth the Connects.
             </p>
           </div>
           <Link
             href="/upwork/new"
-            className="inline-flex items-center gap-2 rounded-2xl bg-orange px-5 py-2.5 text-sm font-medium text-on-accent transition-all duration-300 hover:bg-orange/90"
+            className="inline-flex items-center gap-2 rounded-md bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
           >
-            <Plus className="size-4" aria-hidden="true" />
+            <Plus className="size-3.5" aria-hidden="true" />
             Add the first job
           </Link>
         </div>
@@ -98,7 +98,7 @@ async function UpworkList({ jobsPromise }: { jobsPromise: JobsPromise }) {
   }
 
   return (
-    <div className="reveal-up stagger-2 overflow-hidden rounded-2xl border border-line bg-paper">
+    <div className="overflow-hidden rounded-lg border border-line bg-bone-raised">
       <ul className="divide-y divide-line">
         {jobs.map((job, i) => {
           const verdict = job.verdict ? VERDICT_STYLE[job.verdict] : VERDICT_STYLE.skip
@@ -126,11 +126,11 @@ async function UpworkList({ jobsPromise }: { jobsPromise: JobsPromise }) {
                 {/* Content */}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium text-ink transition-colors group-hover:text-orange">
+                    <span className="truncate text-[13px] font-medium text-ink transition-colors group-hover:text-orange">
                       {job.title}
                     </span>
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate">
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-graphite">
                     <span>
                       {job.budgetMin && job.budgetMax
                         ? `$${job.budgetMin}–$${job.budgetMax}`
@@ -183,10 +183,10 @@ function UpworkMetricsSkeleton() {
 
 function UpworkListSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-paper">
+    <div className="overflow-hidden rounded-lg border border-line bg-bone-raised">
       <div className="divide-y divide-line">
         {[0, 1, 2, 3, 4].map((row) => (
-          <div key={row} className="flex items-center gap-4 px-5 py-4">
+          <div key={row} className="flex items-center gap-4 px-5 py-3">
             <div className="size-11 shrink-0 rounded-xl bg-bone" />
             <div className="min-w-0 flex-1 space-y-2">
               <div className="h-3.5 w-52 max-w-full rounded bg-bone" />
