@@ -31,8 +31,8 @@ export function ScoreRing({
     pct >= 0.83
       ? 'var(--status-success)'
       : pct >= 0.58
-        ? 'var(--orange)'
-        : 'var(--graphite)'
+        ? 'var(--bone)'
+        : 'var(--line)'
   const fontSize = Math.max(size * 0.36, 11)
 
   // Display value: canonical scores show /10, legacy shows raw

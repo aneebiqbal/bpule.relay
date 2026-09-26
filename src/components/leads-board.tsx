@@ -15,7 +15,7 @@ type LeadRow = Lead & { ownerName?: string; lastActivityAt?: string | null }
 
 const STATUS_VARIANT: Record<string, 'success' | 'orange' | 'warning' | 'neutral' | 'cobalt' | 'danger' | 'info'> = {
   replied: 'success',
-  new: 'orange',
+  new: 'neutral',
   contacted: 'cobalt',
   followed_up: 'warning',
   won: 'success',
