@@ -668,6 +668,44 @@
     border-color: var(--orange-subtle);
   }
 
+  /* ── Operational page header ── */
+  .page-header {
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 1.5rem;
+  }
+
+  /* ── Section + compact density ── */
+  .section-title {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--stone);
+  }
+
+  .card-compact {
+    padding: 0.75rem 1rem;
+  }
+
+  .row-compact {
+    padding: 0.5rem 1rem;
+  }
+
+  /* ── Workflow state + action pattern ── */
+  .workflow-state {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .workflow-action {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--orange-signal);
+  }
+
   /* ── Gradient mesh for auth pages ── */
   .gradient-mesh {
     background-image:
