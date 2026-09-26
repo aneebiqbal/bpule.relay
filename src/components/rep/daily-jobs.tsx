@@ -248,6 +248,16 @@ export function DailyJobs({
     preventDefault: (event) => Boolean(jobs[Number(event.key) - 1]),
   }, [jobs, router])
 
+  if (!workingDay) {
+    return (
+      <section className="rounded-lg border border-line bg-bone-raised px-4 py-5" aria-label="Today's jobs">
+        <p className="text-mono-medium text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Today</p>
+        <h2 className="mt-1 text-[20px] font-medium tracking-[-0.02em] text-ink">Day off</h2>
+        <p className="mt-1.5 text-[13px] text-graphite">Numbers are not due today. Still answer anyone who replied.</p>
+      </section>
+    )
+  }
+
   return (
     <>
     <section className="overflow-hidden rounded-lg border border-line bg-bone-raised" aria-label="Today's jobs">
