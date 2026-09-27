@@ -84,6 +84,13 @@ const TASK_PROFILES: Record<TaskClass, TaskProfile> = {
 }
 
 // ── Provider Chain per Task ─────────────────────────────────────────────────
+//
+// OpenAI is the primary intelligence layer. When OPENAI_API_KEY is present it
+// leads the chain so the tier model mapping (luna/terra/sol) takes effect.
+// OpenCode, Groq, LongCat remain as fallbacks when their keys are configured.
+//
+// Legacy override: set SCOUT_AI_PREFERRED_PROVIDER=opencode|groq|longcat to
+// restore old ordering for a specific deployment.
 
 interface ChainEntry {
   provider: 'groq' | 'opencode' | 'openai' | 'longcat'
@@ -91,35 +98,39 @@ interface ChainEntry {
   credentialId: string
 }
 
+type ProviderName = 'opencode' | 'groq' | 'openai' | 'longcat'
+
+function preferredProvider(): ProviderName {
+  const override = process.env.SCOUT_AI_PREFERRED_PROVIDER
+  if (override === 'opencode' || override === 'groq' || override === 'longcat' || override === 'openai') {
+    return override
+  }
+  return hasOpenAi() ? 'openai' : 'opencode'
+}
+
+function buildChain(primary: ProviderName, fallbacks: ProviderName[]): ChainEntry[] {
+  const all: ProviderName[] = [primary, ...fallbacks]
+  return all.map((p) => {
+    switch (p) {
+      case 'opencode': return { provider: 'opencode', modelResolver: resolveOpenCodeModel, credentialId: 'opencode-primary' }
+      case 'groq': return { provider: 'groq', modelResolver: resolveGroqModel, credentialId: 'groq-primary' }
+      case 'openai': return { provider: 'openai', modelResolver: resolveOpenAiModel, credentialId: 'openai-primary' }
+      case 'longcat': return { provider: 'longcat', modelResolver: resolveLongCatModel, credentialId: 'longcat-primary' }
+    }
+  })
+}
+
 function getChainForTask(taskClass: TaskClass): ChainEntry[] {
+  const primary = preferredProvider()
   switch (taskClass) {
     case 'FAST_STRUCTURED':
-      return [
-        { provider: 'opencode', modelResolver: resolveOpenCodeModel, credentialId: 'opencode-primary' },
-        { provider: 'groq', modelResolver: resolveGroqModel, credentialId: 'groq-primary' },
-        { provider: 'openai', modelResolver: resolveOpenAiModel, credentialId: 'openai-primary' },
-      ]
+      return buildChain(primary, ['opencode', 'groq', 'longcat'].filter((p) => p !== primary) as ProviderName[])
     case 'INTERACTIVE_WRITING':
-      return [
-        { provider: 'opencode', modelResolver: resolveOpenCodeModel, credentialId: 'opencode-primary' },
-        { provider: 'groq', modelResolver: resolveGroqModel, credentialId: 'groq-primary' },
-        { provider: 'openai', modelResolver: resolveOpenAiModel, credentialId: 'openai-primary' },
-        { provider: 'longcat', modelResolver: resolveLongCatModel, credentialId: 'longcat-primary' },
-      ]
+      return buildChain(primary, ['opencode', 'groq', 'longcat'].filter((p) => p !== primary) as ProviderName[])
     case 'DEEP_WRITING':
-      return [
-        { provider: 'opencode', modelResolver: resolveOpenCodeModel, credentialId: 'opencode-primary' },
-        { provider: 'groq', modelResolver: resolveGroqModel, credentialId: 'groq-primary' },
-        { provider: 'openai', modelResolver: resolveOpenAiModel, credentialId: 'openai-primary' },
-        { provider: 'longcat', modelResolver: resolveLongCatModel, credentialId: 'longcat-primary' },
-      ]
+      return buildChain(primary, ['opencode', 'groq', 'longcat'].filter((p) => p !== primary) as ProviderName[])
     case 'BACKGROUND_INTELLIGENCE':
-      return [
-        { provider: 'longcat', modelResolver: resolveLongCatModel, credentialId: 'longcat-primary' },
-        { provider: 'opencode', modelResolver: resolveOpenCodeModel, credentialId: 'opencode-primary' },
-        { provider: 'groq', modelResolver: resolveGroqModel, credentialId: 'groq-primary' },
-        { provider: 'openai', modelResolver: resolveOpenAiModel, credentialId: 'openai-primary' },
-      ]
+      return buildChain(primary, ['opencode', 'groq', 'longcat'].filter((p) => p !== primary) as ProviderName[])
   }
 }
 
