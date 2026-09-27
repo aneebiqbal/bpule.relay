@@ -8,6 +8,7 @@
 import type { ProviderModel, JsonCallParams, TextCallParams, ProviderResult } from '../types'
 import { recordSuccess, recordFailure } from '../health'
 import { normalizeJson, coerceNullStrings } from '../normalize'
+import { TIER_REGISTRY, type IntelligenceTier } from '../model-router'
 
 interface OpenAiCredential {
   id: string
@@ -28,32 +29,36 @@ function getCredentials(): OpenAiCredential[] {
   return creds
 }
 
+function makeModel(modelId: string, inputCost: number, outputCost: number): ProviderModel {
+  return {
+    provider: 'openai',
+    model: modelId,
+    baseUrl: process.env.OPENAI_CHAT_BASE_URL || 'https://api.openai.com/v1',
+    costPerInputToken: inputCost,
+    costPerOutputToken: outputCost,
+    supportsStreaming: true,
+    supportsJsonSchema: true,
+    maxContextTokens: 128_000,
+  }
+}
+
 export const OPENAI_MODELS: Record<string, ProviderModel> = {
-  'gpt-4o-mini': {
-    provider: 'openai',
-    model: 'gpt-4o-mini',
-    baseUrl: 'https://api.openai.com/v1',
-    costPerInputToken: 0.15,
-    costPerOutputToken: 0.60,
-    supportsStreaming: true,
-    supportsJsonSchema: true,
-    maxContextTokens: 128_000,
-  },
-  'gpt-4o': {
-    provider: 'openai',
-    model: 'gpt-4o',
-    baseUrl: 'https://api.openai.com/v1',
-    costPerInputToken: 2.50,
-    costPerOutputToken: 10.00,
-    supportsStreaming: true,
-    supportsJsonSchema: true,
-    maxContextTokens: 128_000,
-  },
+  'gpt-4o-mini': makeModel('gpt-4o-mini', 0.15, 0.60),
+  'gpt-4o': makeModel('gpt-4o', 2.50, 10.00),
+  // Intelligence tiers — model ids are env-overridable via model-router registry
+  luna: makeModel(TIER_REGISTRY.luna.modelId, TIER_REGISTRY.luna.costPerInputToken, TIER_REGISTRY.luna.costPerOutputToken),
+  terra: makeModel(TIER_REGISTRY.terra.modelId, TIER_REGISTRY.terra.costPerInputToken, TIER_REGISTRY.terra.costPerOutputToken),
+  sol: makeModel(TIER_REGISTRY.sol.modelId, TIER_REGISTRY.sol.costPerInputToken, TIER_REGISTRY.sol.costPerOutputToken),
 }
 
 export function resolveModel(modelId?: string): ProviderModel {
   const id = modelId || process.env.OPENAI_DEFAULT_MODEL || 'gpt-4o-mini'
   return OPENAI_MODELS[id] || OPENAI_MODELS['gpt-4o-mini']
+}
+
+/** Resolve model by intelligence tier — used by the runtime router */
+export function resolveModelForTier(tier: IntelligenceTier): ProviderModel {
+  return OPENAI_MODELS[tier] || OPENAI_MODELS['gpt-4o-mini']
 }
 
 function selectCredential(): OpenAiCredential | null {

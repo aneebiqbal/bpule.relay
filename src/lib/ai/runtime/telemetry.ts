@@ -35,6 +35,11 @@ export interface PersistedTrace {
   fallback: boolean
   fallback_reason: string | null
   error: string | null
+  call_site: string
+  feature: string
+  model_tier: string | null
+  prompt_version: string | null
+  cache_hit: boolean
   created_at: string
 }
 
@@ -67,6 +72,11 @@ export async function persistTrace(
       fallback: trace.fallback,
       fallback_reason: trace.fallbackReason,
       error: trace.error,
+      call_site: trace.callSite,
+      feature: trace.feature,
+      model_tier: trace.modelTier ?? null,
+      prompt_version: trace.promptVersion ?? null,
+      cache_hit: trace.cacheHit ?? false,
       created_at: new Date(trace.timestamp).toISOString(),
     }
 
@@ -85,6 +95,7 @@ export async function persistTrace(
 
 /**
  * Get aggregated AI usage statistics for an organization.
+ * Safe outside request scope — returns zeroed shape on any failure.
  */
 export async function getAiUsageStats(
   organizationId: string,
@@ -102,31 +113,38 @@ export async function getAiUsageStats(
   fallbackRate: number
   providerBreakdown: Array<{ provider: string; count: number; p50: number }>
   taskBreakdown: Array<{ taskClass: string; count: number; p50: number }>
+  featureBreakdown: Array<{ feature: string; count: number; costUsd: number }>
+  tierBreakdown: Array<{ tier: string; count: number; costUsd: number }>
+  cacheHitRate: number
 }> {
-  const supabase = await getSupabase()
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  const ZEROS = {
+    totalRequests: 0, totalSuccesses: 0, totalErrors: 0,
+    avgLatencyMs: 0, p50LatencyMs: 0, p95LatencyMs: 0,
+    totalInputTokens: 0, totalOutputTokens: 0, totalEstimatedCostUsd: 0,
+    fallbackRate: 0, providerBreakdown: [] as Array<{ provider: string; count: number; p50: number }>,
+    taskBreakdown: [] as Array<{ taskClass: string; count: number; p50: number }>,
+    featureBreakdown: [] as Array<{ feature: string; count: number; costUsd: number }>,
+    tierBreakdown: [] as Array<{ tier: string; count: number; costUsd: number }>,
+    cacheHitRate: 0,
+  }
 
-  const { data, error } = await supabase
-    .from('ai_traces')
-    .select('*')
-    .eq('organization_id', organizationId)
-    .gte('created_at', since)
+  let data: any[] | null = null
+  try {
+    const supabase = await getSupabase()
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+    const { data: qdata, error } = await supabase
+      .from('ai_traces')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .gte('created_at', since)
+    if (error) return ZEROS
+    data = qdata
+  } catch {
+    return ZEROS
+  }
 
-  if (error || !data || data.length === 0) {
-    return {
-      totalRequests: 0,
-      totalSuccesses: 0,
-      totalErrors: 0,
-      avgLatencyMs: 0,
-      p50LatencyMs: 0,
-      p95LatencyMs: 0,
-      totalInputTokens: 0,
-      totalOutputTokens: 0,
-      totalEstimatedCostUsd: 0,
-      fallbackRate: 0,
-      providerBreakdown: [],
-      taskBreakdown: [],
-    }
+  if (!data || data.length === 0) {
+    return ZEROS
   }
 
   const traces = data as PersistedTrace[]
@@ -167,6 +185,38 @@ export async function getAiUsageStats(
     }
   })
 
+  // Feature breakdown (cost by feature)
+  const byFeature = new Map<string, PersistedTrace[]>()
+  for (const t of traces) {
+    const key = t.feature || 'unknown'
+    const existing = byFeature.get(key) || []
+    existing.push(t)
+    byFeature.set(key, existing)
+  }
+  const featureBreakdown = [...byFeature.entries()].map(([feature, items]) => ({
+    feature,
+    count: items.length,
+    costUsd: Math.round(items.reduce((s, i) => s + Number(i.estimated_cost_usd), 0) * 10000) / 10000,
+  }))
+
+  // Tier breakdown (cost by intelligence tier)
+  const byTier = new Map<string, PersistedTrace[]>()
+  for (const t of traces) {
+    const key = t.model_tier || 'unversioned'
+    const existing = byTier.get(key) || []
+    existing.push(t)
+    byTier.set(key, existing)
+  }
+  const tierBreakdown = [...byTier.entries()].map(([tier, items]) => ({
+    tier,
+    count: items.length,
+    costUsd: Math.round(items.reduce((s, i) => s + Number(i.estimated_cost_usd), 0) * 10000) / 10000,
+  }))
+
+  // Cache hit rate
+  const cacheHits = traces.filter((t) => t.cache_hit).length
+  const cacheHitRate = traces.length > 0 ? Math.round((cacheHits / traces.length) * 100) : 0
+
   return {
     totalRequests: traces.length,
     totalSuccesses: successes.length,
@@ -180,6 +230,9 @@ export async function getAiUsageStats(
     fallbackRate: traces.length > 0 ? Math.round((fallbacks.length / traces.length) * 100) : 0,
     providerBreakdown,
     taskBreakdown,
+    featureBreakdown,
+    tierBreakdown,
+    cacheHitRate,
   }
 }
 

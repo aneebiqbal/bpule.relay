@@ -7,6 +7,9 @@ import {
   sanitizeInboundReply,
   INBOUND_REPLY_SYSTEM,
 } from '@/lib/inbound/reply'
+import { buildConversationMemory, type ConversationMemory } from '@/lib/ai/copilot/memory'
+import { understandConversation, type CopilotUnderstandResult } from '@/lib/ai/copilot'
+import { hasProvider } from '@/lib/ai/config'
 import type { ProofItem } from '@/lib/domain/types'
 import type { InboundReplyInput } from '@/lib/inbound/reply'
 
@@ -73,8 +76,45 @@ export async function POST(req: NextRequest) {
 
     const basePrompt = buildInboundReplyUserPrompt(input)
 
+    // Copilot: AI understands the inbound message when a provider is available.
+    // Deterministic analysis remains the base; AI enhances interpretation.
+    let copilotUnderstanding: CopilotUnderstandResult | null = null
+    const inboundMsg = lead.inboundMessage?.trim()
+    if (hasProvider() && inboundMsg) {
+      try {
+        const memory = buildConversationMemory({
+          stage: lead.status ?? 'inbound',
+          knowledge: null,
+          priorMessages: (input.history ?? []).filter((m) => m.sentText),
+        })
+        const { result } = await understandConversation({
+          incomingMessage: inboundMsg,
+          memory,
+          contactName: lead.contactName,
+          leadCompany: lead.company,
+        })
+        copilotUnderstanding = result
+      } catch {
+        // Copilot understanding is enhancement only — fall back to deterministic
+      }
+    }
+
+    const aiContextBlock = copilotUnderstanding
+      ? [
+          '',
+          '## AI Interpretation (use to refine understanding — do not expose to user)',
+          `Intent: ${copilotUnderstanding.intent}`,
+          `Sentiment: ${copilotUnderstanding.sentiment} (confidence: ${copilotUnderstanding.confidence})`,
+          `Objective: ${copilotUnderstanding.objective}`,
+          copilotUnderstanding.questions.length ? `Questions detected: ${copilotUnderstanding.questions.join(' | ')}` : '',
+          copilotUnderstanding.objection ? `Objection: ${copilotUnderstanding.objection}` : '',
+          copilotUnderstanding.commercial_signal ? 'Commercial signal detected' : '',
+          copilotUnderstanding.missing_context.length ? `Missing context: ${copilotUnderstanding.missing_context.join(' | ')}` : '',
+        ].filter(Boolean).join('\n')
+      : ''
+
     let text = ''
-    let attemptPrompt = basePrompt
+    let attemptPrompt = basePrompt + aiContextBlock
     for (let attempt = 0; attempt < 3; attempt++) {
       const result = await generate<string>({
         task: 'INTERACTIVE_WRITING',
@@ -82,6 +122,8 @@ export async function POST(req: NextRequest) {
         user: attemptPrompt,
         temperature: 0.7,
         maxTokens: 1024,
+        promptVersion: 'inbound-reply-v1',
+        feature: 'inbound_reply',
       })
       text = result.data
 

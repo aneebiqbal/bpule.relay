@@ -142,4 +142,10 @@ export interface AiTrace {
   skippedProviders?: Array<{ provider: string; model: string; reason: string }>
   /** Feature that initiated this call */
   feature: string
+  /** Intelligence tier used: luna | terra | sol */
+  modelTier?: 'luna' | 'terra' | 'sol'
+  /** Prompt version identifier for regression tracking */
+  promptVersion?: string
+  /** Whether result was served from deterministic cache */
+  cacheHit?: boolean
 }

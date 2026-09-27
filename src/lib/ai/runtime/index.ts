@@ -11,6 +11,10 @@
  *     user: '...',
  *     schema: { ... },
  *   })
+ *
+ * Intelligence flow:
+ *   deterministic guard → cache check → tier selection → provider chain
+ *     → schema validate → cache store → budget record → trace persist
  */
 
 import type {
@@ -24,9 +28,19 @@ import type {
 import { isAvailable, recordFailure } from './health'
 import { resolveModel as resolveGroqModel, callJson as groqJson, callText as groqText, hasGroq } from './providers/groq'
 import { resolveModel as resolveOpenCodeModel, callJson as openCodeJson, callText as openCodeText, hasOpenCode } from './providers/opencode'
-import { resolveModel as resolveOpenAiModel, callJson as openAiJson, callText as openAiText, hasOpenAi } from './providers/openai'
+import { resolveModel as resolveOpenAiModel, resolveModelForTier, callJson as openAiJson, callText as openAiText, hasOpenAi } from './providers/openai'
 import { resolveModel as resolveLongCatModel, callJson as longcatJson, callText as longcatText, hasLongCat } from './providers/longcat'
 import { persistTrace } from './telemetry'
+import { validateShape, type ShapeSchema, schemaAsPromptInstruction } from './schemas'
+import {
+  defaultTierForTask,
+  resolveTier,
+  shouldEscalateTier,
+  getTierConfig,
+  type IntelligenceTier,
+} from './model-router'
+import { ContentCache } from '@/lib/ai/cache'
+import { isBudgetExceeded, recordCost } from '@/lib/ai/budget'
 
 // ── Task Profiles ────────────────────────────────────────────────────────────
 
@@ -36,7 +50,7 @@ const TASK_PROFILES: Record<TaskClass, TaskProfile> = {
     outputMode: 'json_object',
     reasoningLevel: 'NONE',
     maxTokens: 1024,
-    timeoutMs: 10_000, // OpenCode Go ~1.4s, allow headroom
+    timeoutMs: 10_000,
     stream: false,
     allowDeterministicFallback: true,
   },
@@ -45,7 +59,7 @@ const TASK_PROFILES: Record<TaskClass, TaskProfile> = {
     outputMode: 'text',
     reasoningLevel: 'LOW',
     maxTokens: 2048,
-    timeoutMs: 15_000, // OpenCode Go ~1.5-3s for writing
+    timeoutMs: 15_000,
     stream: true,
     allowDeterministicFallback: true,
   },
@@ -78,13 +92,6 @@ interface ChainEntry {
 }
 
 function getChainForTask(taskClass: TaskClass): ChainEntry[] {
-  // OpenCode Go is the primary for most tasks — evidence shows glm-5.3-flash is
-  // the best balance of speed (1.4s), quality (perfect JSON extraction), and cost.
-  // Groq is the fallback (fast but rate-limited). GPT is the safety net.
-  //
-  // LongCat is EXCLUDED from FAST_STRUCTURED — if OpenCode+Groq+OpenAI all fail,
-  // waiting 30-50s for LongCat is worse UX than a clean retry. LongCat only runs
-  // first for BACKGROUND workloads where latency doesn't matter.
   switch (taskClass) {
     case 'FAST_STRUCTURED':
       return [
@@ -131,6 +138,14 @@ export interface GenerateOptions {
   onStatus?: (msg: string) => void
   signal?: AbortSignal
   modelOverride?: string
+  /** Intelligence tier: luna | terra | sol — defaults by task */
+  tier?: IntelligenceTier
+  /** Prompt version for cache key + trace (e.g. 'conversation-understand-v1') */
+  promptVersion?: string
+  /** Schema definition for output validation (ShapeSchema format) */
+  outputSchema?: ShapeSchema
+  /** Skip cache (force fresh generation) */
+  skipCache?: boolean
   /** Organization ID for telemetry persistence */
   organizationId?: string
   /** Where in the code this call originated (e.g. 'extraction-pipeline:runPassA') */
@@ -142,6 +157,16 @@ export interface GenerateOptions {
 export interface GenerateResult<T> {
   data: T
   trace: AiTrace
+  cacheHit?: boolean
+}
+
+// ── Cache ────────────────────────────────────────────────────────────────────
+
+const resultCache = new ContentCache<unknown>({ maxSize: 500, ttlMs: 15 * 60 * 1000, version: 'ai-runtime-v3' })
+
+function cacheKey(opts: Pick<GenerateOptions, 'task' | 'system' | 'user' | 'promptVersion' | 'schemaName'>): string {
+  const parts = [opts.task, opts.promptVersion || 'unversioned', opts.schemaName || 'none', opts.system, opts.user]
+  return parts.join('::')
 }
 
 // ── Main Generate Function ──────────────────────────────────────────────────
@@ -165,21 +190,73 @@ export async function generate<T = Record<string, unknown>>(
   const errors: Array<{ provider: string; model: string; error: string }> = []
   const skippedProviders: Array<{ provider: string; model: string; reason: string }> = []
   const RUNTIME_VERSION = 'runtime-v3'
-  const user = options.schema && !/\bjson\b/i.test(options.user)
-    ? `${options.user}\n\nRespond with a single JSON object only.`
-    : options.user
-  const useJson = Boolean(options.schema) && !options.onChunk
+  const tier = resolveTier(options.tier, options.task)
+
+  // Schema injection: append shape instruction to user prompt if schema provided
+  let user = options.user
+  if (options.outputSchema) {
+    user = `${options.user}\n\n${schemaAsPromptInstruction(options.outputSchema)}\n\nRespond with a single JSON object only.`
+  } else if (options.schema && !/\bjson\b/i.test(options.user)) {
+    user = `${options.user}\n\nRespond with a single JSON object only.`
+  }
+  const useJson = Boolean(options.schema || options.outputSchema) && !options.onChunk && !options.stream
+
+  // ── Cache Check ───────────────────────────────────────────────────────────
+  if (!options.skipCache) {
+    const key = cacheKey({ task: options.task, system: options.system, user: options.user, promptVersion: options.promptVersion, schemaName: options.schemaName })
+    const cached = resultCache.get(key)
+    if (cached !== null) {
+      const trace: AiTrace = {
+        ...traceBase,
+        provider: 'cache',
+        model: 'cache',
+        credentialId: 'cache',
+        costTier: 'cache',
+        attempt: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        ttfbMs: 0,
+        latencyMs: 0,
+        estimatedCostUsd: 0,
+        schemaValid: true,
+        quality: 'UNASSESSED',
+        fallback: false,
+        fallbackReason: null,
+        error: null,
+        runtimeVersion: RUNTIME_VERSION,
+        callSite: options.callSite ?? 'unknown',
+        feature: options.feature ?? 'unknown',
+        modelTier: tier,
+        promptVersion: options.promptVersion,
+        cacheHit: true,
+      }
+      logTrace(trace)
+      return { data: cached as T, trace, cacheHit: true }
+    }
+  }
+
+  // ── Budget Guard ──────────────────────────────────────────────────────────
+  const tierConfig = getTierConfig(tier)
+  if (tierConfig.budgetClass === 'expensive' && isBudgetExceeded()) {
+    throw new Error('AI budget exceeded — expensive tier blocked')
+  }
+
+  // ── Provider Chain ───────────────────────────────────────────────────────
+  let currentTier: IntelligenceTier = tier
 
   for (let i = 0; i < chain.length; i++) {
     const step = chain[i]
-    const resolved = step.modelResolver(options.modelOverride)
+
+    // For OpenAI steps, use the intelligence tier model
+    const resolved = step.provider === 'openai'
+      ? { ...resolveModelForTier(currentTier), model: resolveModelForTier(currentTier).model, baseUrl: resolveModelForTier(currentTier).baseUrl, provider: 'openai' }
+      : step.modelResolver(options.modelOverride)
 
     if (!providerHasCredentials(step.provider)) {
       skippedProviders.push({ provider: resolved.provider, model: resolved.model, reason: 'missing_credentials' })
       continue
     }
 
-    // Skip unhealthy providers
     if (!isAvailable(resolved.provider, resolved.model, step.credentialId)) {
       const reason = 'skipped_unhealthy'
       errors.push({ provider: resolved.provider, model: resolved.model, error: reason })
@@ -226,7 +303,40 @@ export async function generate<T = Record<string, unknown>>(
         result = await callTextByProvider(step.provider, providerModel, params, timeoutMs)
       }
 
-      const costTier = step.provider === 'openai' ? 'tier4' : step.provider === 'opencode' ? 'tier1' : step.provider === 'longcat' ? 'tier1' : 'tier1'
+      // ── Schema Validation ────────────────────────────────────────────────
+      let schemaValid = true
+      let validationRetries = 0
+      if (options.outputSchema && useJson && typeof result.data === 'object' && result.data !== null) {
+        const validation = validateShape(result.data as Record<string, unknown>, options.outputSchema)
+        if (!validation.valid && validationRetries < 1) {
+          validationRetries++
+          // Retry once with corrective instruction
+          const correctiveUser = `${user}\n\nPREVIOUS OUTPUT INVALID. Missing: ${validation.missing.join(', ') || 'none'}. Type errors: ${validation.typeErrors.join(', ') || 'none'}. Fix and return valid JSON.`
+          const retryParams: JsonCallParams = {
+            system: options.system,
+            user: correctiveUser,
+            schema: options.schema,
+            schemaName: options.schemaName,
+            maxTokens,
+            temperature,
+            onStatus: options.onStatus,
+            signal: options.signal,
+          }
+          const retryResult = await callJsonByProvider(step.provider, providerModel, retryParams, timeoutMs)
+          const retryValidation = validateShape(retryResult.data as Record<string, unknown>, options.outputSchema)
+          if (retryValidation.valid) {
+            result = retryResult
+            schemaValid = true
+          } else {
+            schemaValid = false
+            recordFailure(resolved.provider, resolved.model, step.credentialId, 'malformed', result.latencyMs)
+          }
+        } else if (!validation.valid) {
+          schemaValid = false
+        }
+      }
+
+      const costTier = step.provider === 'openai' ? 'tier4' : step.provider === 'longcat' ? 'tier1' : 'tier1'
       const trace: AiTrace = {
         ...traceBase,
         provider: result.provider,
@@ -239,7 +349,7 @@ export async function generate<T = Record<string, unknown>>(
         ttfbMs: result.ttfbMs,
         latencyMs: result.latencyMs,
         estimatedCostUsd: result.estimatedCostUsd,
-        schemaValid: true,
+        schemaValid,
         quality: 'UNASSESSED',
         fallback: i > 0,
         fallbackReason: i > 0 ? errors[errors.length - 1]?.error ?? null : null,
@@ -248,6 +358,30 @@ export async function generate<T = Record<string, unknown>>(
         callSite: options.callSite ?? 'unknown',
         skippedProviders: skippedProviders.length > 0 ? skippedProviders : undefined,
         feature: options.feature ?? 'unknown',
+        modelTier: tier,
+        promptVersion: options.promptVersion,
+      }
+
+      // ── Budget Record ────────────────────────────────────────────────────
+      recordCost({
+        feature: options.feature ?? 'unknown',
+        operation: options.task,
+        provider: result.provider,
+        model: result.model,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        latencyMs: result.latencyMs,
+        cacheHit: false,
+        retryCount: validationRetries,
+        fallback: i > 0,
+        estimatedCostUsd: result.estimatedCostUsd,
+        costTier,
+      })
+
+      // ── Cache Store ──────────────────────────────────────────────────────
+      if (!options.skipCache && schemaValid) {
+        const key = cacheKey({ task: options.task, system: options.system, user: options.user, promptVersion: options.promptVersion, schemaName: options.schemaName })
+        resultCache.set(key, result.data)
       }
 
       logTrace(trace)
@@ -260,7 +394,21 @@ export async function generate<T = Record<string, unknown>>(
       errors.push({ provider: resolved.provider, model: resolved.model, error: errorMsg })
       recordFailure(resolved.provider, resolved.model, step.credentialId, 'error')
 
-      // Try next provider
+      // Tier escalation check for OpenAI path
+      if (step.provider === 'openai') {
+        const esc = shouldEscalateTier({
+          taskClass: options.task,
+          primaryTier: currentTier,
+          attemptCount: errors.length,
+          malformedOutput: errorMsg.includes('malformed') || errorMsg.includes('INVALID'),
+          isHighValue: options.feature === 'high_value_lead',
+          qualityFailed: false,
+        })
+        if (esc.escalate && esc.toTier !== currentTier) {
+          currentTier = esc.toTier
+        }
+      }
+
       continue
     }
   }
@@ -286,6 +434,8 @@ export async function generate<T = Record<string, unknown>>(
     callSite: options.callSite ?? 'unknown',
     skippedProviders: skippedProviders.length > 0 ? skippedProviders : undefined,
     feature: options.feature ?? 'unknown',
+    modelTier: tier,
+    promptVersion: options.promptVersion,
   }
   logTrace(trace)
   if (options.organizationId) {
@@ -326,7 +476,7 @@ async function callTextByProvider(
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function providerHasCredentials(provider: string): boolean {
   switch (provider) {
@@ -357,12 +507,16 @@ function logTrace(trace: AiTrace): void {
   const skipped = trace.skippedProviders?.length
     ? ` skipped=[${trace.skippedProviders.map((s) => `${s.provider}:${s.reason}`).join(',')}]`
     : ''
+  const schema = trace.schemaValid === false ? ' schema=INVALID' : ''
+  const cache = trace.cacheHit ? ' cache=hit' : ''
+  const mTier = trace.modelTier ? ` tier=${trace.modelTier}` : ''
+  const pVer = trace.promptVersion ? ` prompt=${trace.promptVersion}` : ''
   console.info(
     `[relay-ai] task=${trace.taskClass} provider=${trace.provider} model=${trace.model} ` +
     `attempt=${trace.attempt} input_tokens=${trace.inputTokens} output_tokens=${trace.outputTokens} ` +
-    `ttfb=${trace.ttfbMs}ms latency=${trace.latencyMs}ms cost=\$${trace.estimatedCostUsd.toFixed(6)} ` +
+    `ttfb=${trace.ttfbMs}ms latency=${trace.latencyMs}ms cost=$${trace.estimatedCostUsd.toFixed(6)} ` +
     `runtime=${trace.runtimeVersion} site=${trace.callSite} feature=${trace.feature}` +
-    `${fallback}${skipped}${error}`,
+    `${mTier}${pVer}${cache}${fallback}${skipped}${schema}${error}`,
   )
 }
 
@@ -375,3 +529,7 @@ export { hasGroq } from './providers/groq'
 export { hasOpenCode } from './providers/opencode'
 export { hasOpenAi } from './providers/openai'
 export { hasLongCat } from './providers/longcat'
+export { defaultTierForTask, resolveTier, shouldEscalateTier, getTierConfig, TIER_REGISTRY } from './model-router'
+export { validateShape, type ShapeSchema, type FieldSpec } from './schemas'
+export function clearResultCache(): void { resultCache.clear() }
+export function getResultCacheSize(): number { return resultCache.size }

@@ -347,3 +347,12 @@ export function messageTypeLimit(type: string): number {
 /** Published team targets. */
 export const REPLY_RATE_TARGET = 0.15
 export const READ_TO_CHECK_TARGET = 0.25
+
+// ── Intelligence Tier Accessors (mirror runtime/model-router.ts) ───────────────
+// Canonical tier model resolution lives in src/lib/ai/runtime/model-router.ts.
+// These accessors exist for call sites that need tier env vars without importing
+// the runtime (avoiding circular deps in config-only contexts).
+
+export function aiLunaModel(): string { return process.env.SCOUT_AI_LUNA_MODEL ?? 'gpt-5.6-luna' }
+export function aiTerraModel(): string { return process.env.SCOUT_AI_TERRA_MODEL ?? 'gpt-5.6-terra' }
+export function aiSolModel(): string { return process.env.SCOUT_AI_SOL_MODEL ?? 'gpt-5.6-sol' }
