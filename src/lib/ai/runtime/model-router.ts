@@ -29,10 +29,20 @@ export interface TierConfig {
 
 // ── Tier Registry ─────────────────────────────────────────────────────────────
 
+// Intelligence tier -> real OpenAI model mapping.
+// Tier names (luna/terra/sol) are internal routing labels; the actual model
+// IDs point to real, available OpenAI models and are env-overridable.
+//
+//   luna  = fast/cheap      -> gpt-4o-mini   (classification, extraction, JSON)
+//   terra = balanced        -> gpt-4o        (copilot, replies, writing)
+//   sol   = deep/reasoning  -> o1-preview    (ambiguous, high-value reasoning)
+//
+// Override with SCOUT_AI_LUNA_MODEL / SCOUT_AI_TERRA_MODEL / SCOUT_AI_SOL_MODEL.
+
 export const TIER_REGISTRY: Record<IntelligenceTier, TierConfig> = {
   luna: {
     tier: 'luna',
-    modelId: process.env.SCOUT_AI_LUNA_MODEL || 'gpt-5.6-luna',
+    modelId: process.env.SCOUT_AI_LUNA_MODEL || 'gpt-4o-mini',
     reasoningLevel: 'NONE',
     costPerInputToken: 0.15,
     costPerOutputToken: 0.60,
@@ -41,7 +51,7 @@ export const TIER_REGISTRY: Record<IntelligenceTier, TierConfig> = {
   },
   terra: {
     tier: 'terra',
-    modelId: process.env.SCOUT_AI_TERRA_MODEL || 'gpt-5.6-terra',
+    modelId: process.env.SCOUT_AI_TERRA_MODEL || 'gpt-4o',
     reasoningLevel: 'MEDIUM',
     costPerInputToken: 2.50,
     costPerOutputToken: 10.00,
@@ -50,7 +60,7 @@ export const TIER_REGISTRY: Record<IntelligenceTier, TierConfig> = {
   },
   sol: {
     tier: 'sol',
-    modelId: process.env.SCOUT_AI_SOL_MODEL || 'gpt-5.6-sol',
+    modelId: process.env.SCOUT_AI_SOL_MODEL || 'o1-preview',
     reasoningLevel: 'HIGH',
     costPerInputToken: 15.0,
     costPerOutputToken: 60.0,

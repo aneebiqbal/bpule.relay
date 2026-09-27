@@ -353,6 +353,6 @@ export const READ_TO_CHECK_TARGET = 0.25
 // These accessors exist for call sites that need tier env vars without importing
 // the runtime (avoiding circular deps in config-only contexts).
 
-export function aiLunaModel(): string { return process.env.SCOUT_AI_LUNA_MODEL ?? 'gpt-5.6-luna' }
-export function aiTerraModel(): string { return process.env.SCOUT_AI_TERRA_MODEL ?? 'gpt-5.6-terra' }
-export function aiSolModel(): string { return process.env.SCOUT_AI_SOL_MODEL ?? 'gpt-5.6-sol' }
+export function aiLunaModel(): string { return process.env.SCOUT_AI_LUNA_MODEL ?? 'gpt-4o-mini' }
+export function aiTerraModel(): string { return process.env.SCOUT_AI_TERRA_MODEL ?? 'gpt-4o' }
+export function aiSolModel(): string { return process.env.SCOUT_AI_SOL_MODEL ?? 'o1-preview' }
