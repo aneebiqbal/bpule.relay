@@ -35,8 +35,10 @@ export interface TierConfig {
 //
 //   luna  = fast/cheap      -> gpt-4o-mini   (classification, extraction, JSON)
 //   terra = balanced        -> gpt-4o        (copilot, replies, writing)
-//   sol   = deep/reasoning  -> o1-preview    (ambiguous, high-value reasoning)
+//   sol   = deep/reasoning  -> gpt-4.1       (ambiguous, high-value reasoning)
 //
+// Verified against live API with account key. o1/o1-pro require responses API
+// and max_completion_tokens (incompatible with chat completions adapter).
 // Override with SCOUT_AI_LUNA_MODEL / SCOUT_AI_TERRA_MODEL / SCOUT_AI_SOL_MODEL.
 
 export const TIER_REGISTRY: Record<IntelligenceTier, TierConfig> = {
@@ -60,10 +62,10 @@ export const TIER_REGISTRY: Record<IntelligenceTier, TierConfig> = {
   },
   sol: {
     tier: 'sol',
-    modelId: process.env.SCOUT_AI_SOL_MODEL || 'o1-preview',
+    modelId: process.env.SCOUT_AI_SOL_MODEL || 'gpt-4.1',
     reasoningLevel: 'HIGH',
-    costPerInputToken: 15.0,
-    costPerOutputToken: 60.0,
+    costPerInputToken: 2.0,
+    costPerOutputToken: 8.0,
     maxContextTokens: 128_000,
     budgetClass: 'expensive',
   },

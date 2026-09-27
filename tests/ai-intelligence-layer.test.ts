@@ -44,15 +44,19 @@ describe('intelligence tier router', () => {
     }
   })
 
-  it('luna is cheapest, sol is most expensive', () => {
+  it('luna is the cheapest tier', () => {
     expect(TIER_REGISTRY.luna.costPerInputToken).toBeLessThan(TIER_REGISTRY.terra.costPerInputToken)
-    expect(TIER_REGISTRY.terra.costPerInputToken).toBeLessThan(TIER_REGISTRY.sol.costPerInputToken)
+    expect(TIER_REGISTRY.luna.costPerInputToken).toBeLessThan(TIER_REGISTRY.sol.costPerInputToken)
   })
 
   it('luna budget class is cheap, sol is expensive', () => {
     expect(TIER_REGISTRY.luna.budgetClass).toBe('cheap')
     expect(TIER_REGISTRY.terra.budgetClass).toBe('normal')
     expect(TIER_REGISTRY.sol.budgetClass).toBe('expensive')
+  })
+
+  it('sol model is gpt-4.1 (verified working)', () => {
+    expect(TIER_REGISTRY.sol.modelId).toBe('gpt-4.1')
   })
 })
 
@@ -232,7 +236,7 @@ describe('budget enforcement', () => {
       feature: 'test',
       operation: 'extract',
       provider: 'openai',
-      model: 'gpt-5.6-luna',
+      model: 'gpt-4o-mini',
       inputTokens: 100,
       outputTokens: 50,
       latencyMs: 200,

@@ -355,4 +355,4 @@ export const READ_TO_CHECK_TARGET = 0.25
 
 export function aiLunaModel(): string { return process.env.SCOUT_AI_LUNA_MODEL ?? 'gpt-4o-mini' }
 export function aiTerraModel(): string { return process.env.SCOUT_AI_TERRA_MODEL ?? 'gpt-4o' }
-export function aiSolModel(): string { return process.env.SCOUT_AI_SOL_MODEL ?? 'o1-preview' }
+export function aiSolModel(): string { return process.env.SCOUT_AI_SOL_MODEL ?? 'gpt-4.1' }
