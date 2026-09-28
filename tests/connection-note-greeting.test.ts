@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeGreeting, extractFirstName, validateAndRepair } from '@/lib/prospect/connection-note'
+import { normalizeGreeting, extractFirstName, validateAndRepair, evaluateConnectionNote } from '@/lib/prospect/connection-note'
 
 describe('extractFirstName', () => {
   it('extracts first name from full name', () => {
@@ -82,5 +82,52 @@ describe('validateAndRepair - greeting normalization', () => {
     expect(result.passed).toBe(true)
     expect(result.repaired).not.toBeNull()
     expect(result.text.toLowerCase()).not.toContain('came across')
+  })
+
+  it('rejects questions in connection notes', () => {
+    const result = evaluateConnectionNote({
+      text: 'Hi Sarah, curious about how you are scaling the team?',
+      profile: null,
+      prospectName: 'Sarah Chen',
+      prospectCompany: 'Acme',
+      matchedProof: [],
+    })
+    expect(result.passed).toBe(false)
+    expect(result.failures.some((f) => f.toLowerCase().includes('question'))).toBe(true)
+  })
+
+  it('rejects manufactured personalization', () => {
+    const result = evaluateConnectionNote({
+      text: 'Hi Sarah, would love to learn more about your work at Acme.',
+      profile: null,
+      prospectName: 'Sarah Chen',
+      prospectCompany: 'Acme',
+      matchedProof: [],
+    })
+    expect(result.passed).toBe(false)
+    expect(result.failures.some((f) => /manufactured|curious|would love to learn/i.test(f))).toBe(true)
+  })
+
+  it('rejects service descriptions', () => {
+    const result = evaluateConnectionNote({
+      text: 'Hi Sarah, we build Rails apps and I think we can help Acme.',
+      profile: null,
+      prospectName: 'Sarah Chen',
+      prospectCompany: 'Acme',
+      matchedProof: [],
+    })
+    expect(result.passed).toBe(false)
+    expect(result.failures.some((f) => /service description/i.test(f))).toBe(true)
+  })
+
+  it('passes a clean observation-based connection note', () => {
+    const result = evaluateConnectionNote({
+      text: 'Hi Sarah, noticed the Rails migration at Acme. Close to work I have done. Worth connecting.',
+      profile: null,
+      prospectName: 'Sarah Chen',
+      prospectCompany: 'Acme',
+      matchedProof: [],
+    })
+    expect(result.passed).toBe(true)
   })
 })

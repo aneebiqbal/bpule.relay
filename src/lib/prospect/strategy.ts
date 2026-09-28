@@ -126,11 +126,20 @@ function buildCandidateAngles(
   const angles: ConnectionAngle[] = []
   const title = extracted.titleRaw ?? extracted.title ?? ''
 
-  // Angle A: Common domain / professional connection
+  // Shared rules for ALL angles — connection notes earn access, not discovery.
+  const sharedRules = [
+    'NO questions. NO curiosity language. NO "curious about", "how do you", "would love to learn".',
+    'NO pitch. NO service description. NO "I can help", "we build", "we deliver".',
+    'NO praise. NO "impressive", "great work", "caught my attention".',
+    'Specific observation + genuine overlap + simple reason to connect only.',
+    'Must sound natural if spoken aloud. Zero effort to respond to.',
+  ].join(' ')
+
+  // Angle A: Shared domain / genuine professional overlap
   angles.push({
     label: 'Shared domain',
-    approach: 'Lead with a genuine observation about their work or domain.',
-    systemDirective: 'Sound like one professional who genuinely works in the same space reaching out to another. No pitch. No praise. One specific observation about their domain or work, then a natural reason to connect.',
+    approach: 'One specific observation about their work or domain, then a natural reason to connect.',
+    systemDirective: `${sharedRules} Lead with a genuine, specific observation about their domain or work. Then state a simple reason to connect. Sound like one professional in the same space reaching out to another.`,
   })
 
   // Angle B: Relevant proof / credibility (only if we have a match)
@@ -139,7 +148,7 @@ function buildCandidateAngles(
     angles.push({
       label: 'Relevant proof',
       approach: `Briefly reference ${profile.label}'s relevant experience without a pitch.`,
-      systemDirective: `Reference ONE specific relevant capability: "${topProof.safeClaim.slice(0, 80)}". Then connect that to their work in one sentence. No "I can help you" language. The proof is context, not a pitch.`,
+      systemDirective: `${sharedRules} Reference ONE specific relevant capability: "${topProof.safeClaim.slice(0, 80)}". Connect it to their work in one sentence. The proof is context, not a pitch.`,
     })
   }
 
@@ -148,7 +157,7 @@ function buildCandidateAngles(
     angles.push({
       label: 'Specific observation',
       approach: 'React to something specific they said or did.',
-      systemDirective: `React to this specific thing: "${extracted.verbatimQuote.slice(0, 80)}". Make it a genuine reaction, not a compliment. Show you actually read it.`,
+      systemDirective: `${sharedRules} React to this specific thing: "${extracted.verbatimQuote.slice(0, 80)}". A genuine reaction, not a compliment. Show you actually read it.`,
     })
   }
 

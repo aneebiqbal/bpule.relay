@@ -494,9 +494,11 @@ export async function POST(request: Request) {
         ``,
         `**Hard rules:**`,
         `- Max ${CONNECTION_NOTE_MAX_CHARS} characters for LinkedIn connection notes`,
-        `- Short, natural, no pitch, no praise, no sales language`,
-        `- Sound like one professional reaching out to another`,
-        `- No em dashes, no emojis, no exclamation marks`,
+        `- Specific observation + genuine overlap + simple reason to connect`,
+        `- NO questions. NO "curious about", "how do you", "would love to learn"`,
+        `- NO pitch. NO service description. NO "I can help", "we build"`,
+        `- NO praise. NO "impressive", "caught my attention"`,
+        `- Must sound natural if spoken aloud. Zero effort to respond to.`,
       ].filter(Boolean).join('\n')
     }
 

@@ -341,7 +341,7 @@ function fallbackText(input: DraftInput): string {
   }
 
   if (input.type === 'connection') {
-    return `Hi ${name}, noticed ${evidence} — would be worth connecting.`
+    return `Hi ${name} — noticed ${evidence}. Close to work I've done. Worth connecting.`
   }
 
   if (input.type === 'upwork') {

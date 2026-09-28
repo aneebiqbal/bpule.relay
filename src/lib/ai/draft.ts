@@ -164,7 +164,7 @@ function messageKind(input: DraftInput): string {
     case 'dm':
       return `LinkedIn DM. One job${job ? ` (${job})` : ''}. ${ceiling ?? '20–55 words'}. One observation, one question.`
     case 'connection':
-      return `LinkedIn connection note. Earn access only. ${ceiling ?? '15–35 words'}. No pitch, no praise, no CTA.`
+      return `LinkedIn connection note. Earn access only. ${ceiling ?? '15–35 words'}. Specific observation + genuine overlap + simple reason to connect. No questions. No pitch. No praise. No service description. Sounds natural spoken aloud. Zero effort to respond to.`
     case 'upwork':
       return 'Upwork cover letter. Specific to the job. No biography dump.'
     case 'followup':
@@ -796,11 +796,11 @@ function demoDraft(input: DraftInput, userPrompt: string): DraftResult {
     draft = `${greeting} ${first} - if ${topic} is still open, I can share one relevant example. If not, all good.`
   } else if (input.type === 'connection') {
     if (/\bhiring\b/i.test(`${input.extracted.signalEvidence ?? ''} ${allowed ?? ''}`)) {
-      draft = `${greeting} ${first} - are you set on that ${hireRole}, or still deciding how to staff the build?`
+      draft = `${greeting} ${first} — noticed the ${hireRole} search at ${input.lead.company}. I've done similar builds and it's a space I work in. Worth connecting.`
     } else if (allowed) {
-      draft = `${greeting} ${first} - is ${clipWords(asTopic(allowed) ?? stripProspectVoice(allowed), 10)} still the live constraint?`
+      draft = `${greeting} ${first} — ${clipWords(asTopic(allowed) ?? stripProspectVoice(allowed), 10)} at ${input.lead.company} is close to work I've done. Seemed worth a connection.`
     } else {
-      draft = `${greeting} ${first} - worth a short note if the ${input.lead.company} work is still open.`
+      draft = `${greeting} ${first} — the ${input.lead.company} work is in a space I spend time in. Genuinely seemed worth connecting.`
     }
   } else if (job === 'TEST_DELIVERY_MODEL' || (input.extracted.signalType === 1 && /\bhiring\b/i.test(input.extracted.signalEvidence ?? ''))) {
     draft = `${greeting} ${first} - are you set on hiring for that ${hireRole} at ${input.lead.company}, or open to someone taking ownership of the build instead?`

@@ -50,6 +50,15 @@ const BANNED_PHRASES_CONNECTION = [
   'we are hiring',
   'i am hiring',
   "i'm hiring",
+  // Discovery / curiosity language — connection notes earn access, not start discovery
+  'curious about',
+  'how do you',
+  'would love to learn',
+  'would love to hear',
+  'what your thoughts',
+  'how your team',
+  'what you think',
+  'would be great to learn',
 ]
 
 const GENERIC_CTAS_CONNECTION = [
@@ -224,6 +233,33 @@ export function evaluateConnectionNote(input: ConnectionNoteInput): ConnectionNo
   // 15. Could send to 100 prospects?
   if (couldSendTo100Prospects(text, input.prospectCompany)) {
     failures.push('Generic enough to send to 100 prospects')
+  }
+
+  // 16. No questions — connection notes earn access, not start discovery.
+  // A question requires effort to respond to and turns a low-friction accept
+  // into a conversation the prospect did not ask for.
+  if (/[?]/.test(text)) {
+    failures.push('Contains a question — connection notes must not ask anything')
+  }
+
+  // 17. Manufactured personalization — "curious about", "how do you", etc.
+  const manufactured = [
+    /\bcurious about\b/i,
+    /\bhow do you\b/i,
+    /\bwould love to learn\b/i,
+    /\bwould love to hear\b/i,
+    /\bwhat your thoughts\b/i,
+  ]
+  for (const re of manufactured) {
+    if (re.test(lower)) {
+      failures.push('Manufactured personalization / discovery language')
+      break
+    }
+  }
+
+  // 18. Service description / capability pitch (not a connection note)
+  if (/\b(we (build|ship|deliver|help)|i (build|ship|deliver|help)|our (work|focus|practice))\b/i.test(lower)) {
+    failures.push('Service description — not a connection note')
   }
 
   // 16. Uses "I" but sender name mismatch
