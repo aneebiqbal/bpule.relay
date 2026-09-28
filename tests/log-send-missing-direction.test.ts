@@ -40,7 +40,7 @@ describe('markContacted survives a missing messages.direction column', () => {
         chain.limit = self
         chain.maybeSingle = () => {
           if (table === 'leads') {
-            return Promise.resolve({ data: { id: 'lead-1', status: 'new', verdict: 'research_more', locked_until: null }, error: null })
+            return Promise.resolve({ data: { id: 'lead-1', status: 'new', verdict: 'research_more', locked_until: null, owner_rep_id: 'rep-1' }, error: null })
           }
           return Promise.resolve({ data: null, error: null })
         }

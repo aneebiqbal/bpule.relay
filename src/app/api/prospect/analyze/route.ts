@@ -248,10 +248,12 @@ export async function POST(request: Request) {
         await store.emitRelayEvent({
           eventType: 'PROSPECT_ANALYZED',
           entityType: 'prospect',
-           entityId: extracted.url ?? extracted.company,
+          // No entity UUID exists pre-capture — the source URL/company
+          // identify this prospect via payload + sourceEventId instead.
           actorType: 'system',
           payload: {
             company: extracted.company,
+            sourceUrl: extracted.url ?? null,
             qualification: canonical.qualification,
             fit: loop.fit,
             intent: loop.intent,
@@ -272,9 +274,10 @@ export async function POST(request: Request) {
         await store.emitRelayEvent({
           eventType: 'LEAD_QUALIFIED',
           entityType: 'prospect',
-          entityId: extracted.url ?? extracted.company,
           actorType: 'system',
           payload: {
+            company: extracted.company,
+            sourceUrl: extracted.url ?? null,
             reason: loop.reason,
             action: loop.act,
             fit: loop.fit,

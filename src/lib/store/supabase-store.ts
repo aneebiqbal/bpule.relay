@@ -822,8 +822,12 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
     if (!data) return null
 
-    // Enforce ownership: non-admin can only access their own leads
-    if (this.rep.role !== 'admin' && (data as Record<string, unknown>).owner_rep_id !== this.rep.id) {
+    // Enforce ownership: non-admin can only access their own leads.
+    // A lead with no owner (NULL owner_rep_id) is claimable — the acting
+    // rep is treated as its owner so freshly-extracted leads that haven't
+    // been assigned yet don't block the workflow.
+    const leadOwner = (data as Record<string, unknown>).owner_rep_id as string | null
+    if (this.rep.role !== 'admin' && leadOwner !== null && leadOwner !== this.rep.id) {
       throw new Error('You are not the owner of this lead.')
     }
 
@@ -968,13 +972,27 @@ export class SupabaseStore implements ScoutStore {
 
     const { data: leadRow, error: leadError } = await this.client
       .from('leads')
-      .select('id, status, verdict, locked_until')
+      .select('id, status, verdict, locked_until, owner_rep_id')
       .eq('id', leadId)
-      .eq('owner_rep_id', this.rep.id)
       .maybeSingle()
     if (leadError) throw leadError
     if (!leadRow) {
       throw new Error('You are not the owner of this lead, so it could not be marked contacted.')
+    }
+    // Enforce ownership: a rep can act on their own leads and on leads
+    // with no owner (NULL). An unowned lead is claimed by the acting rep
+    // so a freshly-extracted lead never blocks the send/log workflow.
+    const leadOwnerId = (leadRow as unknown as { owner_rep_id: string | null }).owner_rep_id
+    if (this.rep.role !== 'admin' && leadOwnerId !== null && leadOwnerId !== this.rep.id) {
+      throw new Error('You are not the owner of this lead, so it could not be marked contacted.')
+    }
+    if (leadOwnerId === null) {
+      // Claim the unowned lead for this rep.
+      const { error: claimError } = await this.client
+        .from('leads')
+        .update({ owner_rep_id: this.rep.id })
+        .eq('id', leadId)
+      if (claimError) throw claimError
     }
     if (leadRow.status === 'no' || leadRow.status === 'dead') {
       throw new Error('This lead is locked and cannot be contacted.')
@@ -6255,19 +6273,26 @@ export class SupabaseStore implements ScoutStore {
     metadata?: Record<string, unknown>
     occurredAt?: string
   }): Promise<string | null> {
+    // relay_events stores entity/actor/correlation IDs as uuid — coerce any
+    // non-UUID value to null rather than failing the whole insert. Event
+    // emission must never break the calling operation (callers that need a
+    // string identity use payload/sourceEventId instead).
+    const uuidOrNullOrUndefined = (value: string | null | undefined): string | null =>
+      value == null || value === '' ? null : isUuid(value) ? value : null
+
     const { data, error } = await this.client.rpc('emit_relay_event', {
       p_org_id: this.orgId,
       p_event_type: input.eventType,
       p_entity_type: input.entityType,
-      p_entity_id: input.entityId ?? null,
+      p_entity_id: uuidOrNullOrUndefined(input.entityId),
       p_actor_type: input.actorType ?? 'system',
-      p_actor_id: input.actorId ?? null,
-      p_revenue_identity_id: input.revenueIdentityId ?? null,
+      p_actor_id: uuidOrNullOrUndefined(input.actorId),
+      p_revenue_identity_id: uuidOrNullOrUndefined(input.revenueIdentityId),
       p_source: input.source ?? 'app',
       p_source_event_id: input.sourceEventId ?? null,
-      p_correlation_id: input.correlationId ?? null,
-      p_causation_id: input.causationId ?? null,
-      p_relay_run_id: input.relayRunId ?? null,
+      p_correlation_id: uuidOrNullOrUndefined(input.correlationId),
+      p_causation_id: uuidOrNullOrUndefined(input.causationId),
+      p_relay_run_id: uuidOrNullOrUndefined(input.relayRunId),
       p_payload: JSON.parse(JSON.stringify(input.payload ?? {})),
       p_metadata: JSON.parse(JSON.stringify(input.metadata ?? {})),
       p_occurred_at: input.occurredAt ?? new Date().toISOString(),
