@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { RelayStructuredData } from "@/components/structured-data";
 import { canonicalUrl, siteConfig } from "@/lib/site-config";
-import { MarketingLandingPage } from "@/components/marketing/marketing-landing-page";
+import { ConvergenceLanding } from "@/components/landing/convergence-landing";
 
 export const metadata: Metadata = {
   title: `${siteConfig.name} — Know what to do next`,
@@ -34,7 +34,7 @@ export default function LandingPage() {
   return (
     <>
       <RelayStructuredData />
-      <MarketingLandingPage />
+      <ConvergenceLanding />
     </>
   );
 }
