@@ -77,12 +77,6 @@ export async function callJson<T>(
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), timeoutMs)
 
-  // First-byte timeout: if no response headers arrive within 4s, abort immediately.
-  // This turns a rate-limited OpenAI call (which can hang 10s+) into a fast failover
-  // to the next provider in the chain instead of burning the full timeout budget.
-  const firstByteTimeoutMs = Math.min(4000, timeoutMs)
-  const firstByteTimer = setTimeout(() => ac.abort(), firstByteTimeoutMs)
-
   const t0 = Date.now()
   let ttfb: number | null = null
 
@@ -103,7 +97,6 @@ export async function callJson<T>(
       signal: ac.signal,
     })
 
-    clearTimeout(firstByteTimer)
     ttfb = Date.now() - t0
 
     if (!response.ok) {
@@ -162,10 +155,6 @@ export async function callText(
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), timeoutMs)
 
-  // First-byte timeout: fail fast on rate-limited/slow responses
-  const firstByteTimeoutMs = Math.min(4000, timeoutMs)
-  const firstByteTimer = setTimeout(() => ac.abort(), firstByteTimeoutMs)
-
   const t0 = Date.now()
   let ttfb: number | null = null
   let full = ''
@@ -186,8 +175,6 @@ export async function callText(
       }),
       signal: ac.signal,
     })
-
-    clearTimeout(firstByteTimer)
 
     if (!response.ok) {
       const failureType = response.status === 429 ? 'rate_limit' : 'error'
@@ -251,7 +238,6 @@ export async function callText(
     throw err
   } finally {
     clearTimeout(timer)
-    clearTimeout(firstByteTimer)
   }
 }
 

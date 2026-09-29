@@ -50,7 +50,7 @@ const TASK_PROFILES: Record<TaskClass, TaskProfile> = {
     outputMode: 'json_object',
     reasoningLevel: 'NONE',
     maxTokens: 1024,
-    timeoutMs: 5_000,
+    timeoutMs: 8_000,
     stream: false,
     allowDeterministicFallback: true,
   },
