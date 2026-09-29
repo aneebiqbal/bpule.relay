@@ -114,7 +114,7 @@ export async function POST(
     }
 
     const profile = selectedProfile
-    const voiceProfile = await store.getVoiceProfile()
+    const voiceProfile = await store.getVoiceProfile(profile?.id)
 
     const extracted: ExtractedLead = {
       name: detail.contactName,

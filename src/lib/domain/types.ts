@@ -264,6 +264,7 @@ export interface VoiceProfile {
   id: string
   repId: string
   organizationId: string
+  profileId?: string | null
   styleCard: StyleCard
   sampleSource: StyleSampleSource
   calibratedAt: string

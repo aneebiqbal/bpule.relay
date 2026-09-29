@@ -1352,11 +1352,35 @@ export class SupabaseStore implements ScoutStore {
       .eq('organization_id', this.orgId)
   }
 
-  async getVoiceProfile(): Promise<VoiceProfile | null> {
+  async getVoiceProfile(profileId?: string): Promise<VoiceProfile | null> {
+    // Profile-specific voice takes precedence; fall back to rep default
+    if (profileId) {
+      const { data: profileData, error: profileError } = await this.client
+        .from('voice_profiles')
+        .select('*')
+        .eq('rep_id', this.rep.id)
+        .eq('profile_id', profileId)
+        .maybeSingle()
+      if (profileError) throw profileError
+      if (profileData) {
+        const r = profileData as Row & { profile_id?: string | null }
+        return {
+          id: r.id as string,
+          repId: r.rep_id as string,
+          organizationId: r.organization_id as string,
+          profileId: r.profile_id ?? null,
+          styleCard: r.style_card as VoiceProfile['styleCard'],
+          sampleSource: r.sample_source as VoiceProfile['sampleSource'],
+          calibratedAt: r.calibrated_at as string,
+        }
+      }
+    }
+
     const { data, error } = await this.client
       .from('voice_profiles')
       .select('*')
       .eq('rep_id', this.rep.id)
+      .is('profile_id', null)
       .maybeSingle()
     if (error) throw error
     if (!data) return null
@@ -1374,6 +1398,7 @@ export class SupabaseStore implements ScoutStore {
   async setVoiceProfile(
     styleCard: VoiceProfile['styleCard'],
     sampleSource: VoiceProfile['sampleSource'],
+    profileId?: string,
   ): Promise<VoiceProfile> {
     const { data, error } = await this.client
       .from('voice_profiles')
@@ -1381,20 +1406,22 @@ export class SupabaseStore implements ScoutStore {
         {
           rep_id: this.rep.id,
           organization_id: this.orgId,
+          profile_id: profileId ?? null,
           style_card: JSON.parse(JSON.stringify(styleCard)),
           sample_source: sampleSource,
           calibrated_at: new Date().toISOString(),
         },
-        { onConflict: 'rep_id' },
+        { onConflict: profileId ? 'rep_id, profile_id' : 'rep_id', ignoreDuplicates: false },
       )
       .select('*')
       .single()
     if (error) throw error
-    const r = data as Row
+    const r = data as Row & { profile_id?: string | null }
     return {
       id: r.id as string,
       repId: r.rep_id as string,
       organizationId: r.organization_id as string,
+      profileId: r.profile_id ?? null,
       styleCard: r.style_card as VoiceProfile['styleCard'],
       sampleSource: r.sample_source as VoiceProfile['sampleSource'],
       calibratedAt: r.calibrated_at as string,

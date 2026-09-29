@@ -1085,11 +1085,15 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const lead = leads.find((l) => l.id === leadId)
       if (lead) { lead.lockedUntil = null; lead.lockedReason = null }
     },
-    async getVoiceProfile() {
-      return voiceProfiles.find((v) => v.repId === rep.id) ?? null
+    async getVoiceProfile(profileId?: string) {
+      if (profileId) {
+        const profileMatch = voiceProfiles.find((v) => v.repId === rep.id && v.profileId === profileId)
+        if (profileMatch) return profileMatch
+      }
+      return voiceProfiles.find((v) => v.repId === rep.id && !v.profileId) ?? null
     },
-    async setVoiceProfile(styleCard, sampleSource) {
-      const existing = voiceProfiles.find((v) => v.repId === rep.id)
+    async setVoiceProfile(styleCard, sampleSource, profileId?: string) {
+      const existing = voiceProfiles.find((v) => v.repId === rep.id && (v.profileId ?? null) === (profileId ?? null))
       const vp: VoiceProfile = {
         id: existing?.id ?? nextId('vp'),
         organizationId: DEMO_ORG_ID,

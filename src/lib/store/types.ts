@@ -366,10 +366,11 @@ export interface ScoutStore {
    */
   unlockLead(leadId: string): Promise<void>
   // voice profiles
-  getVoiceProfile(): Promise<VoiceProfile | null>
+  getVoiceProfile(profileId?: string): Promise<VoiceProfile | null>
   setVoiceProfile(
     styleCard: StyleCard,
     sampleSource: StyleSampleSource,
+    profileId?: string,
   ): Promise<VoiceProfile>
   /** Every rep, for the Manage Profiles screen's rep grouping (read is open to any authenticated rep, matching RLS). */
   listAllReps(): Promise<Rep[]>

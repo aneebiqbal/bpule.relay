@@ -166,7 +166,7 @@ create or replace function public.emit_relay_event(
   p_relay_run_id text default null,
   p_payload jsonb default '{}'::jsonb,
   p_metadata jsonb default '{}'::jsonb,
-  p_occurred_at timestamz default now()
+  p_occurred_at timestamptz default now()
 )
 returns uuid
 language plpgsql

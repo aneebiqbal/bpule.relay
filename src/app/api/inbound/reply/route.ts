@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
       body.profileId ? store.getProfile(body.profileId) : Promise.resolve(null),
       store.listAllProofItems(),
       store.listMessages(lead.id),
-      store.getVoiceProfile(),
+      store.getVoiceProfile(body.profileId ?? undefined),
     ])
 
     // Inject the full calibrated voice card so replies match outbound voice
