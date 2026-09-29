@@ -2,6 +2,7 @@ import type { DailyGrowthBrief, VisualType } from '@/lib/domain/types'
 import type { ScoutStore } from '@/lib/store/types'
 import type { TrendCandidate } from '@/lib/trends/types'
 import { generate } from '@/lib/ai/runtime'
+import { cleanPost } from '@/lib/content/intelligence/v2/daily-brief-engine'
 
 const RELAY_BRAND_TERRITORIES = [
   'knowing what to do next',
@@ -94,6 +95,8 @@ PRIVACY: No customer names, real revenue numbers, or private data. Only Relay's 
     feature: 'relay_growth_v2',
   })
 
+  const cleanedPost = cleanPost(postResult.data)
+
   const visualSystem = `Design a visual for a LinkedIn post about Relay (revenue intelligence).
 
 VISUAL TYPES: PRODUCT_SCREENSHOT, EDITORIAL_GRAPHIC, TECHNICAL_DIAGRAM, TYPOGRAPHIC_CONCEPT, DATA_VISUAL, GENERATED_IMAGE, NO_VISUAL
@@ -101,11 +104,12 @@ VISUAL TYPES: PRODUCT_SCREENSHOT, EDITORIAL_GRAPHIC, TECHNICAL_DIAGRAM, TYPOGRAP
 RULES:
 - Default to GENERATED_IMAGE. Only use NO_VISUAL if purely conversational.
 - Use PRODUCT_SCREENSHOT only when showing Relay product UI.
-- Avoid AI clichés: no robots, no glowing brains, no stock people, no 3D spheres.
-- The image supports the hook, not illustrates it literally.
-- Output ONLY: {"type": "VISUAL_TYPE", "concept": "one sentence", "prompt": "detailed image generation prompt, 1.91:1 ratio, no text, no logos", "reason": "why this fits"}
+- Avoid: robots, glowing brains, stock photos, 3D spheres, floating code.
+- The image should visualize a concept from the post, not be random abstract art.
+- Make it specific and relevant. For sales/data topics: clean dashboards, signal paths, before/after comparisons, funnel diagrams.
+- Output ONLY: {"type": "VISUAL_TYPE", "concept": "one sentence", "prompt": "specific image generation prompt, 1.91:1 ratio", "reason": "why this fits"}
 
-IMAGE STYLE: Minimal, editorial, professional. Abstract compositions, diagrams, or scenes. No text in image. No faces. No logos.`
+IMAGE STYLE: Clean, professional, minimal. Concrete visual metaphors. No text in image. No faces. No logos.`
 
   const visualResult = await generate<{
     type: VisualType

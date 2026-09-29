@@ -139,7 +139,13 @@ export async function generateDailyBrief(
     })
     costTracking.total += ideaCost
 
-    const scoredIdeas = scoreIdeas(rawIdeas, input)
+    let scoredIdeas = scoreIdeas(rawIdeas, input)
+
+    // Fallback: if AI returned 0 ideas, generate from profile + trends
+    if (scoredIdeas.length === 0) {
+      scoredIdeas = generateDeterministicIdeas(input)
+    }
+
     const selectedIdeas = selectDiverseSet(scoredIdeas, 5)
     const recommended = selectedIdeas[0]
     const alternates = selectedIdeas.slice(1)
@@ -333,7 +339,42 @@ Output ONLY the post text. No intro, no sign-off, no meta-commentary.`
     feature: 'studio_v2_daily',
   })
 
-  return result.data
+  return cleanPost(result.data)
+}
+
+export function cleanPost(raw: string): string {
+  let text = raw.trim()
+
+  // Remove em dashes
+  text = text.replace(/\u2014|\u2013/g, ',').replace(/—|–/g, ',')
+
+  // Fix broken sentences: "word. word" -> "word. Word" (but not "e. g.")
+  text = text.replace(/\.\s+([a-z])/g, (_, c) => `. ${c.toUpperCase()}`)
+
+  // Remove sentences that end mid-word (trailing fragment)
+  const sentences = text.split(/\.\s+/).filter(s => {
+    const words = s.trim().split(/\s+/)
+    // Remove if last word is clearly a fragment (1-2 chars, no verb)
+    if (words.length <= 2 && /^(in|the|for|to|of|and|but|or|with|on|at|by)$/i.test(words[0])) return false
+    return true
+  })
+  text = sentences.join('. ')
+
+  // Trim to 250 words max
+  const words = text.split(/\s+/)
+  if (words.length > 250) {
+    text = words.slice(0, 250).join(' ')
+    // End at last complete sentence
+    const lastPeriod = text.lastIndexOf('.')
+    if (lastPeriod > text.length * 0.7) {
+      text = text.slice(0, lastPeriod + 1)
+    }
+  }
+
+  // Remove trailing filler phrases
+  text = text.replace(/\s*(Thoughts\?|Agree\?|What do you think\?|Let that sink in\.?)\s*$/i, '')
+
+  return text.trim()
 }
 
 async function generatePostWithQualityGate(input: {
@@ -447,9 +488,11 @@ RULES:
 - Output ONLY this JSON: {"type": "VISUAL_TYPE", "concept": "one sentence describing the image", "prompt": "detailed image generation prompt, 2-3 sentences, specific style and composition", "reason": "why this visual fits"}
 
 IMAGE PROMPT STYLE:
-- Minimal, editorial, professional. Think sketches, diagrams, or abstract compositions.
-- Specify aspect ratio 1.91:1 for LinkedIn feed.
-- No text in the image. No logos. No faces.`
+- Concrete, not random. The image must relate to the post topic.
+- For sales/data topics: signal paths, before/after comparisons, funnel diagrams, clean dashboards.
+- For leadership topics: minimal scenes, single objects, metaphorical compositions.
+- Specify 1.91:1 aspect ratio. No text. No logos. No faces.
+- Use a muted, professional color palette. One accent color max.`
 
   const user = JSON.stringify({
     ideaTitle: idea.title,
@@ -559,6 +602,72 @@ function buildPersonaContext(
   }
 
   return parts.join('\n')
+}
+
+function generateDeterministicIdeas(input: DailyBriefInput): IdeaCandidate[] {
+  const ideas: IdeaCandidate[] = []
+  const territories = input.profile?.territories ?? []
+  const expertise = (input.profile?.expertise ?? []).map(e => e.area).filter(Boolean) as string[]
+  const role = input.profile?.role ?? ''
+
+  // 1. Trend-grounded ideas (max 2)
+  for (const candidate of input.trendCandidates.slice(0, 2)) {
+    ideas.push({
+      title: `What "${candidate.item.title}" means for ${expertise[0] ?? role}`,
+      angle: `A current development relevant to ${role || 'your field'}. What does this mean for how you work?`,
+      whyNow: candidate.whyNow,
+      territory: territories[0],
+      trendGrounded: true,
+      formatSuggestion: 'observation',
+      novelty: 0.8,
+      relevance: 0.9,
+      credibility: 0.85,
+      insight: 0.7,
+    })
+  }
+
+  // 2. Expertise-based
+  for (const area of expertise.slice(0, 2)) {
+    ideas.push({
+      title: `A lesson from working in ${area}`,
+      angle: `Share a specific insight from your experience. What would you tell someone starting out?`,
+      whyNow: 'Evergreen',
+      territory: area,
+      trendGrounded: false,
+      formatSuggestion: 'practical_lesson',
+      novelty: 0.6,
+      relevance: 0.8,
+      credibility: 0.9,
+      insight: 0.8,
+    })
+  }
+
+  // 3. Territory opinions
+  for (const territory of territories.slice(0, 2)) {
+    if (ideas.length >= 5) break
+    ideas.push({
+      title: `Why ${territory} matters more than people think`,
+      angle: `A contrarian take on ${territory} that challenges common assumptions.`,
+      whyNow: 'Evergreen',
+      territory,
+      trendGrounded: false,
+      formatSuggestion: 'opinion',
+      novelty: 0.7,
+      relevance: 0.8,
+      credibility: 0.8,
+      insight: 0.75,
+    })
+  }
+
+  // Ensure at least 3
+  if (ideas.length < 3) {
+    ideas.push(
+      { title: `A thought on ${expertise[0] ?? 'your work'}`, angle: 'Share a specific insight from your experience.', whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'observation', novelty: 0.5, relevance: 0.7, credibility: 0.8, insight: 0.7 },
+      { title: `What is changing in ${territories[0] ?? 'your field'}`, angle: 'An observation about a trend or shift you are seeing.', whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'observation', novelty: 0.5, relevance: 0.7, credibility: 0.8, insight: 0.7 },
+    )
+  }
+
+  return ideas.slice(0, 5)
 }
 
 function scoreIdeas(
