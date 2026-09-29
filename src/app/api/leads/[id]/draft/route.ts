@@ -95,7 +95,11 @@ export async function POST(
     ])
 
     const leadRevenueIdentityId = detail.revenueIdentityId ?? null
-    let selectedProfile = profiles.find((p) => p.id === profileId) ?? profiles[0] ?? null
+    // Priority: explicit param → lead's stored sender_profile_id → revenue identity match → first profile
+    let selectedProfile =
+      profiles.find((p) => p.id === profileId) ??
+      profiles.find((p) => p.id === detail.senderProfileId) ??
+      profiles[0] ?? null
 
     if (leadRevenueIdentityId && !profileId) {
       const identityProfile = profiles.find((p) => (p as Profile & { revenueIdentityId?: string }).revenueIdentityId === leadRevenueIdentityId)
