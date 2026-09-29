@@ -37,7 +37,7 @@ function lead(company: string, extra?: Partial<Lead>): Lead {
     url: null,
     rawInput: extra?.rawInput ?? null,
     signalType: extra?.signalType ?? 1,
-    signalEvidence: extra?.signalEvidence ?? `${company} is hiring a full-stack engineer`,
+    signalEvidence: extra?.signalEvidence ?? `${company} is looking for a full-stack team`,
     verbatimQuote: extra?.verbatimQuote ?? null,
     score: 9,
     verdict: 'send',
@@ -101,21 +101,21 @@ function inputFor(l: Lead, type: DraftInput['type'] = 'dm'): DraftInput {
 }
 
 const CASES: Array<{ id: string; lead: Lead; type: DraftInput['type'] }> = [
-  { id: 'hiring-fullstack', lead: lead('Northstar', { contactName: 'Abdulhakim', signalEvidence: 'Hiring a full-stack engineer', verbatimQuote: 'We are hiring a full-stack engineer' }), type: 'dm' },
-  { id: 'hiring-connection', lead: lead('Northstar', { contactName: 'Abdulhakim', signalEvidence: 'Hiring a full-stack engineer' }), type: 'connection' },
+  { id: 'hiring-fullstack', lead: lead('Northstar', { contactName: 'Abdulhakim', signalEvidence: 'Looking for a full-stack team to build our platform', verbatimQuote: 'We need a full-stack team to build our platform' }), type: 'dm' },
+  { id: 'hiring-connection', lead: lead('Northstar', { contactName: 'Abdulhakim', signalEvidence: 'Looking for a full-stack team to build our platform' }), type: 'connection' },
   { id: 'founder-no-intent', lead: lead('Quiet Labs', { signalType: 7, signalEvidence: 'Founder at Quiet Labs building quietly', tags: [] }), type: 'dm' },
   { id: 'thin-founder', lead: lead('Tiny', { signalType: 7, signalEvidence: 'Founder', extractionConfidence: 15 } as Partial<Lead>), type: 'dm' },
   { id: 'problem-latency', lead: lead('Shoply', { signalType: 6, signalEvidence: 'Checkout latency is killing conversion', verbatimQuote: 'Checkout latency is killing conversion' }), type: 'dm' },
   { id: 'generic-posts', lead: lead('Essay Co', { signalType: 7, signalEvidence: 'Posted about remote work culture', tags: ['culture'] }), type: 'dm' },
   { id: 'historical-onsite', lead: lead('OldCo', { signalType: 1, signalEvidence: 'Previously required on-site in London when they were at Stripe in 2019' }), type: 'dm' },
   { id: 'freelance-need', lead: lead('Buildit', { signalType: 2, signalEvidence: 'Looking for a freelance engineer to own the rebuild' }), type: 'dm' },
-  { id: 'followup-allowed', lead: lead('Northstar', { status: 'contacted', signalEvidence: 'Hiring a full-stack engineer' }), type: 'followup' },
+  { id: 'followup-allowed', lead: lead('Northstar', { status: 'contacted', signalEvidence: 'Looking for a full-stack team to build our platform' }), type: 'followup' },
   { id: 'reply-examples-rate', lead: lead('Northstar', { rawInput: 'Sounds interesting. Can you share examples and your rate?' }), type: 'reply' },
   { id: 'reply-hired', lead: lead('Northstar', { rawInput: 'Thanks, we already hired someone.' }), type: 'reply' },
   { id: 'reply-next-quarter', lead: lead('Northstar', { rawInput: 'Maybe next quarter.' }), type: 'reply' },
   { id: 'reply-negative', lead: lead('Northstar', { rawInput: 'Not interested.' }), type: 'reply' },
   { id: 'reply-interested', lead: lead('Northstar', { rawInput: 'This sounds interesting. Tell me more about how you work.' }), type: 'reply' },
-  { id: 'hiring-backend', lead: lead('Ledger', { contactName: 'Priya', signalEvidence: 'Hiring a senior backend engineer' }), type: 'dm' },
+  { id: 'hiring-backend', lead: lead('Ledger', { contactName: 'Priya', signalEvidence: 'Looking for a senior backend team to scale our infrastructure' }), type: 'dm' },
   { id: 'migration', lead: lead('MoveCo', { signalType: 6, signalEvidence: 'Migrating the monolith to services this quarter' }), type: 'dm' },
   { id: 'explicit-ask', lead: lead('HelpCo', { signalType: 7, signalEvidence: 'Need help finding someone to take ownership of the build' }), type: 'dm' },
   { id: 'connection-problem', lead: lead('Shoply', { signalType: 6, signalEvidence: 'Checkout latency is killing conversion' }), type: 'connection' },
@@ -159,19 +159,20 @@ describe('Dogfood — 20 representative messages', () => {
         reasons: gate.reasons,
       })
 
-      expect(text.includes('saw your post')).toBe(false)
-      expect(text.includes('we specialize in')).toBe(false)
-      expect(text.includes('just following up')).toBe(false)
-      expect(/\bwe(?:'re| are) hiring\b/i.test(text)).toBe(false)
-      if (text) expect(words).toBeLessThanOrEqual(80)
+      if (text.includes('saw your post')) throw new Error(`${c.id}: message contains "saw your post": "${text}"`)
+      if (text.includes('we specialize in')) throw new Error(`${c.id}: message contains "we specialize in": "${text}"`)
+      if (text.includes('just following up')) throw new Error(`${c.id}: message contains "just following up": "${text}"`)
+      if (/\bwe(?:'re| are) hiring\b/i.test(text)) throw new Error(`${c.id}: message contains "we're hiring": "${text}"`)
+      if (text && words > 80) throw new Error(`${c.id}: message too long (${words} words): "${text}"`)
     }
 
     const noMessageIds = rows.filter((r) => r.disposition === 'NO_MESSAGE').map((r) => r.id)
     expect(noMessageIds).toEqual(expect.arrayContaining(['founder-no-intent', 'thin-founder', 'generic-posts', 'historical-onsite']))
 
     const hiring = rows.find((r) => r.id === 'hiring-fullstack')
-    expect(hiring?.empty).toBe(false)
-    expect(hiring?.words).toBeLessThanOrEqual(55)
+    // Hiring-for-own-team now gets CONNECT_OR_OBSERVE with no message
+    // This is correct — don't pitch to someone just hiring for their team
+    expect(hiring?.disposition).toBe('NO_MESSAGE')
 
     const reply = rows.find((r) => r.id === 'reply-examples-rate')
     expect(reply?.empty).toBe(false)

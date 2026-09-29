@@ -355,6 +355,8 @@ export interface StrategySource {
   priorFollowupCount: number
   /** Set only after the rep marks the invitation accepted. Unlocks the first DM. */
   connectionAccepted?: boolean
+  /** Buyer evidence kinds from commercial reading — distinguishes hiring+apply from generic hiring */
+  buyerEvidenceKinds?: string[]
 }
 
 const EMPTY_FIELD = (): CommercialFieldState => ({ value: null, status: 'unknown' })
@@ -437,6 +439,7 @@ export function sourceFromCanonical(
     conversation: opts.conversation ?? null,
     priorFollowupCount: opts.priorFollowupCount ?? 0,
     connectionAccepted: opts.connectionAccepted ?? false,
+    buyerEvidenceKinds: canonical.intelligence.commercialReading?.buyerEvidenceKinds,
   }
 }
 
@@ -826,6 +829,7 @@ function assessFitIntentConfidence(source: StrategySource, scoped: ScopedItem[])
     source.opportunitySignals.includes('explicit_ask')
     || source.urgency === 'immediate'
     || source.opportunitySignals.includes('freelance_project_need')
+    || (source.buyerEvidenceKinds ?? []).includes('BUYER_REQUEST')
   ) {
     intent = 'HIGH'
     intentWhy = 'Current, explicit need or active project ask.'
@@ -979,6 +983,7 @@ function decideContact(
   if (
     source.opportunitySignals.includes('explicit_ask')
     || source.opportunitySignals.includes('freelance_project_need')
+    || (source.buyerEvidenceKinds ?? []).includes('BUYER_REQUEST')
   ) {
     return {
       reason: 'EXPLICIT_NEED',

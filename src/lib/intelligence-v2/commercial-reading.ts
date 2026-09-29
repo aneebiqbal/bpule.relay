@@ -37,6 +37,10 @@ const BUYER_PATTERNS: Array<{ kind: BuyerEvidenceKind; re: RegExp }> = [
     re: /\bneed (?:a |an |someone )?[\w\s/.-]{0,40}?\b(?:developer|engineer|team|help|someone)\b.{0,40}?\b(?:to|who can|for)\b/i,
   },
   { kind: 'BUYER_REQUEST', re: /\bhelp us build\b/i },
+  // Hiring post with explicit apply/contact instructions = buyer request.
+  // "Hiring: Role — send resume/GitHub/portfolio/DM to apply" is functionally
+  // a request for outside help, not just a hiring announcement.
+  { kind: 'BUYER_REQUEST', re: /\bhiring\b.{0,150}\b(?:send|apply|contact|dm|email|resume|github|portfolio|rate|availability)\b.{0,100}\b(?:apply|contact|send|reach|instructions|instructions?)\b/i },
   { kind: 'CAPACITY_REQUEST', re: /\b(can'?t keep up|understaffed|need more (?:engineers|developers|capacity)|backlog is (?:growing|killing))\b/i },
   // Bare mentions of "procurement" are not buyer-directional on their own —
   // the word appears constantly in descriptions of procurement SYSTEMS,

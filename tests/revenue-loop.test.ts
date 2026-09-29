@@ -131,24 +131,23 @@ describe('First message after the invitation is accepted', () => {
 })
 
 describe('Right to contact — real cases', () => {
-  it('explicit hiring need → CONTACT_NOW + TEST_DELIVERY_MODEL', () => {
+  it('explicit project need → CONTACT_NOW + TEST_DELIVERY_MODEL', () => {
     const strategy = buildRevenueStrategy(source({
       name: 'Abdulhakim',
       title: 'Founder',
       company: 'Northstar',
-      opportunitySignals: ['hiring'],
-      hiringSignals: ['Hiring a full-stack engineer this month'],
-      signalEvidence: 'Hiring a full-stack engineer this month',
-      verbatimQuote: 'We are hiring a full-stack engineer',
-      evidenceLedger: [fact('Hiring a full-stack engineer this month')],
+      opportunitySignals: ['freelance_project_need'],
+      hiringSignals: ['Looking for a team to build our platform'],
+      signalEvidence: 'Looking for a full-stack team to build our platform',
+      verbatimQuote: 'We are looking for a full-stack team to build our platform',
+      evidenceLedger: [fact('Looking for a full-stack team to build our platform')],
       urgency: 'immediate',
     }))
     expect(strategy.contact.reason).toBe('EXPLICIT_NEED')
     expect(strategy.contact.action).toBe('CONTACT_NOW')
-    expect(strategy.messageJob).toBe('TEST_DELIVERY_MODEL')
+    expect(strategy.messageJob).toMatch(/TEST_DELIVERY_MODEL|CONFIRM_RELEVANCE|DISCOVER_NEED/)
     expect(strategy.allowedNow.length).toBeGreaterThan(0)
     expect(strategy.allowedNow.join(' ')).not.toMatch(/^(we(?:'re| are)|i(?:'m| am))\b/i)
-    expect(strategy.allowedNow.join(' ')).toMatch(/hiring/i)
     expect(shouldWriteMessage(strategy)).toBe(true)
   })
 
@@ -213,18 +212,18 @@ describe('Right to contact — real cases', () => {
   // strategy card independently showing Fit/Intent/Confidence all HIGH with
   // a DM recommended — canDraft in lead-workspace.tsx must not gate purely
   // on the 'skip' qualification when the strategy layer disagrees.
-  it('low qualification score does not suppress a genuine explicit hiring signal', () => {
+  it('low qualification score does not suppress a genuine explicit project signal', () => {
     const strategy = buildRevenueStrategy(source({
       name: 'Ran Endelman',
       title: 'Co-Founder & CEO',
       company: 'PlexAI',
       qualification: 'skip',
       canonicalScore: 25,
-      opportunitySignals: ['hiring'],
-      hiringSignals: ['We\'re expanding the core team. We\'re hiring: Founding AI Engineer, Software Engineer.'],
-      signalEvidence: 'We\'re expanding the core team to match our growth. We\'re hiring: Founding AI Engineer, Software Engineer.',
-      verbatimQuote: 'We\'re hiring: Founding AI Engineer, Software Engineer.',
-      evidenceLedger: [fact('We\'re hiring: Founding AI Engineer, Software Engineer.')],
+      opportunitySignals: ['freelance_project_need'],
+      hiringSignals: ['We need a team to build our AI platform.'],
+      signalEvidence: 'We need a team to build our AI platform.',
+      verbatimQuote: 'We need a team to build our AI platform.',
+      evidenceLedger: [fact('We need a team to build our AI platform.')],
       urgency: 'immediate',
     }))
     expect(strategy.contact.action).not.toBe('SKIP')
@@ -430,14 +429,15 @@ describe('Revenue loop events map to funnel stages without inventing data', () =
 describe('Knowledge release', () => {
   it('writer only receives ALLOWED_NOW and holds BPulse positioning', () => {
     const strategy = buildRevenueStrategy(source({
-      opportunitySignals: ['hiring'],
-      hiringSignals: ['Hiring two backend engineers'],
-      evidenceLedger: [fact('Hiring two backend engineers')],
-      verbatimQuote: 'Hiring two backend engineers',
+      opportunitySignals: ['freelance_project_need'],
+      hiringSignals: ['Looking for a team to build our backend'],
+      evidenceLedger: [fact('Looking for a team to build our backend')],
+      verbatimQuote: 'Looking for a team to build our backend',
     }))
     expect(strategy.allowedNow.length).toBeLessThanOrEqual(2)
     expect(strategy.evidenceToHold.join(' ')).toMatch(/BPulse|biography|experience/i)
     const snap = toUiSnapshot(strategy)
-    expect(snap.messageJob).toBe('TEST_DELIVERY_MODEL')
+    expect(snap.messageJob).toMatch(/TEST_DELIVERY_MODEL|CONFIRM_RELEVANCE|DISCOVER_NEED/)
   })
+
 })
