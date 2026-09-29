@@ -35,6 +35,9 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function waitForServerSession(): Promise<boolean> {
+  // Poll with exponential backoff (150ms, 300ms, 600ms, ...) up to ~5s total.
+  // A slow serverless cold start or network latency must not be treated as
+  // a cookie-blocking failure.
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const response = await fetch("/api/me/status", {
       method: "GET",
@@ -43,7 +46,7 @@ async function waitForServerSession(): Promise<boolean> {
     }).catch(() => null);
 
     if (response?.ok) return true;
-    await sleep(150);
+    await sleep(150 * Math.pow(2, attempt));
   }
 
   return false;
