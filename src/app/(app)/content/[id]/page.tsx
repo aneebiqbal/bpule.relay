@@ -21,5 +21,5 @@ export default async function PersonaPage({
   if (persona.repId !== user.rep.id && user.rep.role !== 'admin') redirect('/content')
 
   // Redirect to Today — the proper Studio entry point
-  redirect(`/content/${id}/today`)
+  redirect(`/content-v2/${id}/today`)
 }

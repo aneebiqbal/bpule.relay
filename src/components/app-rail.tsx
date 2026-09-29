@@ -56,7 +56,7 @@ const MORE_NAV: Array<{
   { href: '/upwork', label: 'Jobs', icon: Briefcase, exact: false, group: 'Work' },
   { href: '/find-jobs', label: 'Find Jobs', icon: Search, exact: false, group: 'Work' },
   { href: '/relay', label: 'Conversations', icon: MessageSquare, exact: false, group: 'Work' },
-  { href: '/content/growth', label: 'Relay Growth', icon: TrendingUp, exact: true, adminOnly: true, group: 'Create' },
+  { href: '/content-v2/growth', label: 'Relay Growth', icon: TrendingUp, exact: true, adminOnly: true, group: 'Create' },
   { href: '/profiles', label: 'Profiles', icon: UserCircle2, exact: false, group: 'Intelligence' },
   { href: '/facts', label: 'Proof', icon: Shield, exact: false, group: 'Intelligence' },
   { href: '/relay/benchmark', label: 'Benchmark', icon: Shield, exact: true, group: 'Intelligence' },

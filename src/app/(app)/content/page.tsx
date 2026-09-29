@@ -81,7 +81,7 @@ export default async function ContentPage({
       }
       return score(b) - score(a)
     })
-    redirect(`/content/${ordered[0].id}/today`)
+    redirect(`/content-v2/${ordered[0].id}/today`)
   }
 
   return (

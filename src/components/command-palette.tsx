@@ -203,7 +203,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       description: 'Growth engine',
       icon: TrendingUp,
       group: 'Studio',
-      action: () => { router.push('/content/growth'); onOpenChange(false) },
+      action: () => { router.push('/content-v2/growth'); onOpenChange(false) },
     },
     {
       id: 'usage',
