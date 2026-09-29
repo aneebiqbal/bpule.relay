@@ -75,6 +75,11 @@ async function generateAndRespond(
         localDate,
       })
 
+      // If AI produced a post with no caption, trigger fallback
+      if (!brief.postCaption || brief.postCaption.length < 20) {
+        throw new Error('AI returned empty post')
+      }
+
       return NextResponse.json({ brief })
     } catch (aiErr) {
       // AI providers failed — create a fallback brief so the page always works

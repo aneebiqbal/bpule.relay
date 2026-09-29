@@ -111,6 +111,11 @@ async function generateAndRespond(
         timezone,
       })
 
+      // If AI produced 0 ideas, treat as failure to trigger fallback
+      if (!result.ideas || result.ideas.length === 0) {
+        throw new Error('AI returned 0 ideas')
+      }
+
       return NextResponse.json({ brief: result.brief, ideas: result.ideas, cost: result.cost })
     } catch (aiErr) {
       // AI providers failed — fall back to deterministic brief from trends + profile
