@@ -112,6 +112,8 @@ export async function generateContent(
     onStatus,
     maxTokens: 2048,
     temperature: 0.7,
+    callSite: 'content:generateContent',
+    feature: 'content_studio',
   })
 
   const caption = result.data.caption.trim()

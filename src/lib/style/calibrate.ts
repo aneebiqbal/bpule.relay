@@ -101,6 +101,8 @@ export async function calibrateStyleCard(
       user: userBlock,
       schema: STYLE_CARD_SCHEMA,
       maxTokens: 1024,
+      callSite: 'calibrate:styleCard',
+      feature: 'onboarding_calibration',
     })
 
     return normalizeCard(result.data, quizSeed, sampleSource)

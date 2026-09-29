@@ -118,6 +118,8 @@ export async function streamDraft(
     schema: DRAFT_SCHEMA as unknown as Record<string, unknown>,
     maxTokens: 1024,
     temperature: 0.7,
+    callSite: 'draft-stream:attempt1',
+    feature: 'outbound_draft',
   })
     .then((r) => {
       callLog.push({ costTier: (r.trace.costTier || 'tier1') as CostTierName, host: r.trace.provider, estimatedCostUsd: r.trace.estimatedCostUsd })
@@ -170,6 +172,8 @@ export async function streamDraft(
       schema: DRAFT_SCHEMA as unknown as Record<string, unknown>,
       maxTokens: 1024,
       temperature: 0.5,
+      callSite: 'draft-stream:attempt2',
+      feature: 'outbound_draft',
     })
       .then((r) => {
         callLog.push({ costTier: (r.trace.costTier || 'tier1') as CostTierName, host: r.trace.provider, estimatedCostUsd: r.trace.estimatedCostUsd })
