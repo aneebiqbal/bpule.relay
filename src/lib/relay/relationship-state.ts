@@ -76,6 +76,55 @@ function latestOutbound(messages: Message[]): Message | null {
     .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''))[0] ?? null
 }
 
+function isAutoReply(text: string): boolean {
+  return /out of office|ooo|auto.?(reply|response)|i am currently away|i('m| am) on vacation|on leave|delayed response|limited email access/i.test(text)
+}
+
+/**
+ * Heuristically detect rejection / auto-reply messages that should NOT
+ * trigger the "They replied — respond now" state. These are terminal or
+ * non-conversational responses that don't require our action.
+ */
+function isRejectionOrAutoReply(msg: Message): boolean {
+  const text = (msg.sentText ?? '').toLowerCase().trim()
+  if (!text) return false
+
+  // Common rejection patterns
+  const rejectionPatterns = [
+    /not interested/i,
+    /no thanks/i,
+    /unsubscribe/i,
+    /remove me/i,
+    /do not contact/i,
+    /stop messaging/i,
+    /wrong person/i,
+    /wrong timing/i,
+    /not looking/i,
+    /not a good fit/i,
+    /pass for now/i,
+    /please don't reach out/i,
+    /don't contact/i,
+  ]
+
+  // Common auto-reply patterns
+  const autoReplyPatterns = [
+    /out of office/i,
+    /ooo/i,
+    /auto.?(reply|response)/i,
+    /i am currently away/i,
+    /i('m| am) on vacation/i,
+    /on leave/i,
+    /delayed response/i,
+    /limited email access/i,
+  ]
+
+  // Very short messages (< 40 chars) matching rejection patterns are likely rejections
+  if (text.length < 200 && rejectionPatterns.some((p) => p.test(text))) return true
+  if (autoReplyPatterns.some((p) => p.test(text))) return true
+
+  return false
+}
+
 export function computeRelationshipState(lead: LeadDetail, now: number = Date.now()): RelationshipState {
   const dmGate = evaluateDmGate({
     messages: lead.messages,
@@ -91,22 +140,22 @@ export function computeRelationshipState(lead: LeadDetail, now: number = Date.no
   const connectionSent = Boolean(latestMessage(lead.messages, 'connection'))
   const lastDmMsg = latestMessage(lead.messages, 'dm')
   const dmSent = Boolean(lastDmMsg)
-  const clientReplied = Boolean(latestInbound(lead.messages)) ||
+  const lastClient = latestInbound(lead.messages)
+  const clientReplied = (Boolean(lastClient) && !isRejectionOrAutoReply(lastClient!)) ||
     lead.outcomes.some((o) => o.stage === 'replied')
   const outboundReply = lead.messages
     .filter((m) => m.type === 'reply' && m.direction !== 'inbound' && m.sentText && m.sentAt)
     .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''))[0] ?? null
   const replySent = Boolean(outboundReply)
   const followupSent = Boolean(latestMessage(lead.messages, 'followup'))
-  const lastClient = latestInbound(lead.messages)
   const lastOutbound = latestOutbound(lead.messages)
 
-  // Follow-up is due after 5 business days (not just the 6h cooldown).
-  // The 6h cooldown is a separate anti-spam gate; the real due date uses
-  // business-day math from leads/followup.ts.
-  const followupBusinessDaysDue = lastDmMsg?.sentAt
-    ? isFollowupDue(lastDmMsg.sentAt, clientReplied, new Date(now))
+  // Follow-up is due after 5 business days from the MOST RECENT outbound
+  // message (not the first DM), so active conversations don't get stale follow-ups.
+  const followupBusinessDaysDue = lastOutbound?.sentAt
+    ? isFollowupDue(lastOutbound.sentAt, clientReplied, new Date(now))
     : false
+  // Single source of truth for follow-up cap — use the shared constant
   const followupMaxUsed = lead.followupCount >= 3
 
   const lastReply = lead.messages
@@ -153,6 +202,32 @@ export function computeRelationshipState(lead: LeadDetail, now: number = Date.no
   // ── Waiting on connection acceptance ─────────────────────────────
   if (connectionSent && !dmGate.connectionAccepted) {
     const connMsg = latestMessage(lead.messages, 'connection')
+    const connSentAt = connMsg?.sentAt ? new Date(connMsg.sentAt).getTime() : null
+
+    // Connection pending timeout: after 14 calendar days with no acceptance,
+    // surface a terminal "connection expired" state so the rep can move on
+    // instead of waiting forever.
+    if (connSentAt) {
+      const daysPending = (now - connSentAt) / (1000 * 60 * 60 * 24)
+      if (daysPending > 14) {
+        return {
+          kind: 'lost',
+          phase: 'lost',
+          title: 'Connection expired',
+          detail: 'Connection request was not accepted within 14 days. Consider a different approach or archive this lead.',
+          waitingOn: null,
+          waitingSince: connMsg?.sentAt ?? null,
+          followUpDueLabel: null,
+          lastClientMessage: null,
+          lastOutboundMessage: connMsg,
+          primaryCta: 'Archive Lead',
+          secondaryCta: 'Log Update',
+          lastActionLabel: 'Connection expired',
+          lastActionAt: null,
+        }
+      }
+    }
+
     return {
       kind: 'their_move',
       phase: 'connection_sent',
@@ -185,6 +260,27 @@ export function computeRelationshipState(lead: LeadDetail, now: number = Date.no
       primaryCta: 'Prepare Reply',
       secondaryCta: null,
       lastActionLabel: 'They replied',
+      lastActionAt: lastClient?.sentAt ?? null,
+    }
+  }
+
+  // ── Client rejected or sent auto-reply ─────────────────────────────
+  if (lastClient && isRejectionOrAutoReply(lastClient)) {
+    return {
+      kind: 'lost',
+      phase: 'lost',
+      title: 'Client not interested',
+      detail: isAutoReply(lastClient.sentText ?? '')
+        ? 'Auto-reply received. No action required unless the client follows up.'
+        : 'The client indicated they\'re not interested. Consider archiving this lead.',
+      waitingOn: null,
+      waitingSince: null,
+      followUpDueLabel: null,
+      lastClientMessage: lastClient,
+      lastOutboundMessage: lastOutbound,
+      primaryCta: 'Archive Lead',
+      secondaryCta: 'Log Update',
+      lastActionLabel: 'Client responded',
       lastActionAt: lastClient?.sentAt ?? null,
     }
   }
