@@ -29,6 +29,11 @@ export async function DELETE() {
     return NextResponse.json({ error: 'Failed to check organization members.' }, { status: 500 })
   }
 
+  // Revoke all sessions BEFORE deletion so existing cookies/refresh tokens
+  // are immediately invalidated. Without this, JWTs remain valid until natural
+  // expiry even after the rep row is gone.
+  await service.auth.admin.signOut(authUserId)
+
   if ((memberCount ?? 0) > 1) {
     const { error: repErr } = await service
       .from('reps')

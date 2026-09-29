@@ -4,7 +4,9 @@ import { getAuthContext, type AuthContext } from '@/lib/auth/organization'
 
 export function isProductAdmin(user: CurrentUser | null | undefined, authCtx: AuthContext | null | undefined): boolean {
   if (!user) return false
-  return user.rep.role === 'admin' || Boolean(authCtx?.isOwner || authCtx?.isAdmin)
+  // Auth context is the canonical source. Never trust reps.role alone — it may
+  // be stale after a demotion that updated organization_roles but not reps.
+  return Boolean(authCtx?.isOwner || authCtx?.isAdmin)
 }
 
 export async function requireProductAdmin(): Promise<{ user: CurrentUser; authCtx: AuthContext | null }> {

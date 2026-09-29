@@ -12,7 +12,7 @@ import { getAuthContext } from './organization'
 export async function hasGrowthAccess(): Promise<boolean> {
   const user = await getCurrentUser()
   if (!user) return false
-  if (user.rep.role === 'admin') return true
+  // Auth context is canonical — never trust reps.role alone (may be stale after demotion)
   const authCtx = await getAuthContext()
   return Boolean(authCtx?.isOwner || authCtx?.isAdmin)
 }

@@ -39,8 +39,9 @@ async function isRateLimited(
     .gte('created_at', windowStart)
 
   if (error) {
-    // Fail open on DB error — don't block signups if rate limit table is unreachable
-    return false
+    // Fail CLOSED on DB error — never allow unlimited signups during a DB issue.
+    // A brief signup block is preferable to unchecked org/user creation.
+    return true
   }
 
   if ((count ?? 0) >= RATE_LIMIT_MAX_ATTEMPTS) {

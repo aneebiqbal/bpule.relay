@@ -296,8 +296,10 @@ async function validateRevenueIdentityId(
     const user = await import('@/lib/auth/current').then((m) => m.getCurrentUser())
     if (!user) return null
 
-    // Admins can use any identity in their org
-    if (user.rep.role === 'admin') {
+    // Admins/owners can use any identity in their org — resolve via auth context, not reps.role
+    const { getAuthContext } = await import('@/lib/auth/organization')
+    const authCtx = await getAuthContext()
+    if (authCtx?.isOwner || authCtx?.isAdmin) {
       const supabase = await import('@/lib/supabase/server').then((m) => m.createServerSupabase())
       const { data: identity } = await supabase
         .from('revenue_identities')

@@ -64,13 +64,13 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
     .eq('person_id', user.rep.id)
     .maybeSingle()
 
+  // organization_roles is the canonical source of truth for org-level access.
+  // reps.role is used only as a bootstrap fallback when no org role row exists
+  // (e.g., during initial migration or for legacy accounts). If a row exists,
+  // it always wins — never let stale reps.role escalate a demoted user.
   const tableRole = orgRoleRow?.role as OrganizationRole | undefined
   const organizationRole: OrganizationRole =
-    tableRole === 'OWNER' || tableRole === 'ADMIN'
-      ? tableRole
-      : user.rep.role === 'admin'
-        ? 'ADMIN'
-        : (tableRole ?? 'MEMBER')
+    tableRole ?? (user.rep.role === 'admin' ? 'ADMIN' : 'MEMBER')
 
   const { data: memberships } = await supabase
     .from('team_memberships')

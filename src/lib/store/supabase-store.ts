@@ -1405,6 +1405,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('facts')
       .select('*')
+      .eq('organization_id', this.orgId)
       .order('label', { ascending: true })
     if (error) throw error
     return (data ?? []).map(mapFact)
@@ -1445,12 +1446,12 @@ export class SupabaseStore implements ScoutStore {
 
   async deleteFact(id: string): Promise<void> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
-    const { error } = await this.client.from('facts').delete().eq('id', id)
+    const { error } = await this.client.from('facts').delete().eq('id', id).eq('organization_id', this.orgId)
     if (error) throw error
   }
 
   async listPlays(): Promise<Play[]> {
-    const { data, error } = await this.client.from('plays').select('*')
+    const { data, error } = await this.client.from('plays').select('*').eq('organization_id', this.orgId)
     if (error) throw error
     return (data ?? []).map(mapPlay)
   }
@@ -1475,7 +1476,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async deletePlay(id: string): Promise<void> {
-    const { error } = await this.client.from('plays').delete().eq('id', id)
+    const { error } = await this.client.from('plays').delete().eq('id', id).eq('organization_id', this.orgId)
     if (error) throw error
   }
 
@@ -1483,6 +1484,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('reps')
       .select('id, name, role, organization_id, created_at, timezone')
+      .eq('organization_id', this.orgId)
       .order('name', { ascending: true })
     if (error) throw error
     return (data ?? []).map((row: Row) => ({
@@ -1572,6 +1574,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('profiles')
       .select('*')
+      .eq('organization_id', this.orgId)
       .order('created_at', { ascending: true })
     if (error) throw error
     return (data ?? []).map(mapProfile)
@@ -1724,6 +1727,7 @@ export class SupabaseStore implements ScoutStore {
       .from('proof_items')
       .delete()
       .eq('id', id)
+      .eq('organization_id', this.orgId)
     if (error) throw error
   }
 
@@ -1777,7 +1781,7 @@ export class SupabaseStore implements ScoutStore {
 
   async deleteProofItemAdmin(id: string): Promise<void> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
-    const { error } = await this.client.from('proof_items').delete().eq('id', id)
+    const { error } = await this.client.from('proof_items').delete().eq('id', id).eq('organization_id', this.orgId)
     if (error) throw error
   }
 
@@ -2110,6 +2114,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('golden_set')
       .select('*')
+      .eq('organization_id', this.orgId)
       .eq('active', true)
       .order('created_at', { ascending: true })
     if (error) throw error
@@ -2160,7 +2165,7 @@ export class SupabaseStore implements ScoutStore {
 
   async removeGoldenCase(id: string): Promise<void> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
-    const { error } = await this.client.from('golden_set').delete().eq('id', id)
+    const { error } = await this.client.from('golden_set').delete().eq('id', id).eq('organization_id', this.orgId)
     if (error) throw error
   }
 
@@ -2168,6 +2173,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('eval_runs')
       .select('*')
+      .eq('organization_id', this.orgId)
       .order('created_at', { ascending: false })
       .limit(50)
     if (error) throw error
@@ -2228,6 +2234,7 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await this.client
       .from('few_shot_wins')
       .select('*')
+      .eq('organization_id', this.orgId)
       .order('created_at', { ascending: false })
       .limit(limit)
     if (error) throw error

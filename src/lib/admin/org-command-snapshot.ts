@@ -191,6 +191,7 @@ async function resolveSnapshot(): Promise<OrgCommandSnapshot> {
         repId: rep.id,
         repName: rep.name,
         productRole: rep.role,
+        // organization_roles is canonical; reps.role is display-only fallback
         orgRole: roleMap.get(rep.id) ?? (rep.role === 'admin' ? 'ADMIN' : 'MEMBER'),
         teamNames,
         profiles: profiles.filter((p) => p.repId === rep.id).length,

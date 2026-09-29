@@ -43,6 +43,16 @@ export async function POST(req: NextRequest) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
+  // Voice profile (Relay onboarding) is a prerequisite. Without it, the redirect
+  // target (/content/:id/today) is inside the (app) shell which requires
+  // user.profile — creating an infinite redirect loop.
+  if (!user.profile) {
+    return NextResponse.json(
+      { error: 'Relay onboarding required', redirectTo: '/onboarding' },
+      { status: 422 },
+    )
+  }
+
   const body: CompleteOnboardingBody | null = await req.json().catch(() => null)
   if (!body) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
