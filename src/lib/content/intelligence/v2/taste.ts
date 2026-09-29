@@ -132,6 +132,9 @@ function applyDimensionalSignal(dims: TasteDimensions, signal: TasteSignal, stre
   if (signal.metadata?.wasPersonal !== undefined) {
     dims.personalVsUniversal = clamp(dims.personalVsUniversal + strength * lr * (signal.metadata.wasPersonal ? 0.5 : -0.5), -1, 1)
   }
+  if (signal.metadata?.wasShort !== undefined) {
+    dims.shortVsDeep = clamp(dims.shortVsDeep + strength * lr * (signal.metadata.wasShort ? 0.5 : -0.5), -1, 1)
+  }
 }
 
 /**

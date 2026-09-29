@@ -170,8 +170,11 @@ async function buildForgeResult(
     tone: input.generationMode === 'personal' ? 'serious' : 'thoughtful',
   })
 
-  const candidateA = winner === 'A' ? winning : (other?.writer === 'A' ? other : winning)
-  const candidateB = winner === 'B' || winner === 'synthesis' ? winning : (other?.writer === 'B' ? other : winning)
+  // When one candidate passes immediately, `other` may be null. In that case,
+  // the loser slot must be null (not a duplicate of the winner) so downstream
+  // UI/logic can detect that only one candidate was generated.
+  const candidateA = winner === 'A' ? winning : (other?.writer === 'A' ? other : null)
+  const candidateB = winner === 'B' || winner === 'synthesis' ? winning : (other?.writer === 'B' ? other : null)
 
   return {
     caption: platformCaption,
