@@ -777,8 +777,10 @@ function assessFitIntentConfidence(source: StrategySource, scoped: ScopedItem[])
   const oppFit = source.dimensionPoints.opportunityFit
   const needIntent = source.dimensionPoints.needIntent
   const hardSkip = source.hardNegatives.length > 0 || source.qualification === 'skip'
+  // 'hiring' is NOT a strong need signal — it means hiring for own team.
+  // Only explicit asks, freelance needs, and technical problems are strong.
   const strongNeedSignals = source.opportunitySignals.some((s) =>
-    ['hiring', 'freelance_project_need', 'explicit_ask', 'technical_problem'].includes(s),
+    ['freelance_project_need', 'explicit_ask', 'technical_problem'].includes(s),
   )
   const currentStrongNeed = strongNeedSignals && currentOpportunity.length > 0
 
@@ -823,11 +825,10 @@ function assessFitIntentConfidence(source: StrategySource, scoped: ScopedItem[])
   } else if (
     source.opportunitySignals.includes('explicit_ask')
     || source.urgency === 'immediate'
-    || (source.opportunitySignals.includes('hiring') && currentOpportunity.length > 0)
     || source.opportunitySignals.includes('freelance_project_need')
   ) {
     intent = 'HIGH'
-    intentWhy = 'Current, explicit need or active hiring/project ask.'
+    intentWhy = 'Current, explicit need or active project ask.'
   } else if (
     source.opportunitySignals.includes('technical_problem')
     || source.opportunitySignals.includes('hiring_pressure')
@@ -978,14 +979,24 @@ function decideContact(
   if (
     source.opportunitySignals.includes('explicit_ask')
     || source.opportunitySignals.includes('freelance_project_need')
-    || (source.opportunitySignals.includes('hiring') && currentOpportunity.length > 0)
   ) {
     return {
       reason: 'EXPLICIT_NEED',
       action: 'CONTACT_NOW',
-      why: 'There is a current, explicit need — hiring, a project ask, or a public request for help.',
+      why: 'There is a current, explicit need — a project ask or a public request for help.',
       messageRecommended: true,
       noMessageReason: null,
+    }
+  }
+
+  // Hiring for own team — NOT a strong buyer signal. Connect without pitching.
+  if (source.opportunitySignals.includes('hiring') && currentOpportunity.length > 0) {
+    return {
+      reason: 'RELEVANT_CHANGE',
+      action: 'CONNECT_OR_OBSERVE',
+      why: 'They are hiring for their own team — not a clear need for outside services. Connect without pitching.',
+      messageRecommended: false,
+      noMessageReason: 'Hiring for own team is not a clear signal they need outside services. Do not pitch.',
     }
   }
 
