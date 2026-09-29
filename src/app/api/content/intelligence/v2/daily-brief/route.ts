@@ -4,7 +4,7 @@ import { getCurrentUser } from '@/lib/auth/current'
 import type { TrendRelevanceProfile } from '@/lib/trends/types'
 import { rankTrendsForPersona } from '@/lib/trends/engine'
 import { generateDailyBrief } from '@/lib/content/intelligence/v2/daily-brief-engine'
-import type { ContentPersona, ContentProfile } from '@/lib/domain/types'
+import type { ContentPersona, ContentProfile, DailyContentIdea } from '@/lib/domain/types'
 import type { ScoutStore } from '@/lib/store/types'
 
 export const dynamic = 'force-dynamic'
@@ -94,29 +94,140 @@ async function generateAndRespond(
       explorationRatio: 0.25,
     })
 
-    const result = await generateDailyBrief(store, {
-      persona,
-      profile: profile ?? {
-        id: '',
-        organizationId: persona.organizationId,
-        personaId: persona.id,
-        confidence: 0,
-      } as ContentProfile,
-      tasteProfile,
-      memories,
-      trendCandidates,
-      recentIdeas,
-      localDate,
-      timezone,
-    })
+    try {
+      const result = await generateDailyBrief(store, {
+        persona,
+        profile: profile ?? {
+          id: '',
+          organizationId: persona.organizationId,
+          personaId: persona.id,
+          confidence: 0,
+        } as ContentProfile,
+        tasteProfile,
+        memories,
+        trendCandidates,
+        recentIdeas,
+        localDate,
+        timezone,
+      })
 
-    return NextResponse.json({ brief: result.brief, ideas: result.ideas, cost: result.cost })
+      return NextResponse.json({ brief: result.brief, ideas: result.ideas, cost: result.cost })
+    } catch (aiErr) {
+      // AI providers failed — fall back to deterministic brief from trends + profile
+      try {
+        const fallbackIdeas = generateFallbackIdeas(profile, trendCandidates, persona)
+        const brief = await store.createDailyContentBrief({
+          organizationId: persona.organizationId,
+          personaId: persona.id,
+          localDate,
+          promptVersion: 'fallback-v1',
+          trendSnapshot: { source: 'fallback', count: fallbackIdeas.length },
+        })
+
+        const ideaRecords: DailyContentIdea[] = []
+        for (let i = 0; i < fallbackIdeas.length; i++) {
+          const idea = fallbackIdeas[i]
+          const record = await store.createDailyContentIdea({
+            briefId: brief.id,
+            organizationId: persona.organizationId,
+            personaId: persona.id,
+            ideaType: i === 0 ? 'recommended' : 'alternate',
+            title: idea.title,
+            angle: idea.angle,
+            whyNow: idea.whyNow,
+            territory: idea.territory,
+            trendGrounded: idea.trendGrounded,
+            formatSuggestion: idea.formatSuggestion,
+          })
+          ideaRecords.push(record)
+        }
+
+        if (ideaRecords[0]) {
+          await store.updateDailyContentBriefRecommended(brief.id, ideaRecords[0].id)
+        }
+        await store.updateDailyContentBriefStatus(brief.id, 'ready')
+
+        return NextResponse.json({ brief, ideas: ideaRecords, fromFallback: true })
+      } catch (fallbackErr) {
+        return NextResponse.json(
+          { error: 'Generation failed', message: aiErr instanceof Error ? aiErr.message : 'AI providers unavailable' },
+          { status: 503 },
+        )
+      }
+    }
   } catch (err) {
     return NextResponse.json(
       { error: 'Generation failed', message: err instanceof Error ? err.message : 'Unknown error' },
       { status: 500 },
     )
   }
+}
+
+interface FallbackIdea {
+  title: string
+  angle: string
+  whyNow: string
+  territory?: string
+  trendGrounded: boolean
+  formatSuggestion?: string
+}
+
+function generateFallbackIdeas(
+  profile: ContentProfile | null,
+  trendCandidates: import('@/lib/trends/types').TrendCandidate[],
+  persona: ContentPersona,
+): FallbackIdea[] {
+  const ideas: FallbackIdea[] = []
+  const territories = profile?.territories ?? []
+  const expertise = (profile?.expertise ?? []).map(e => e.area).filter(Boolean)
+
+  // 1. Top trend-grounded ideas (max 2)
+  for (const candidate of trendCandidates.slice(0, 2)) {
+    ideas.push({
+      title: `What "${candidate.item.title}" means for ${expertise[0] ?? 'your work'}`,
+      angle: `A current development relevant to ${persona.personaRole ?? 'your role'}. Consider what this means for your audience.`,
+      whyNow: candidate.whyNow,
+      territory: territories[0],
+      trendGrounded: true,
+      formatSuggestion: 'observation',
+    })
+  }
+
+  // 2. Expertise-based ideas
+  for (const area of expertise.slice(0, 2)) {
+    ideas.push({
+      title: `A lesson from ${area}`,
+      angle: `Share a specific insight or lesson from your experience in ${area}. What would you tell someone starting out?`,
+      whyNow: 'Evergreen expertise',
+      territory: area,
+      trendGrounded: false,
+      formatSuggestion: 'practical_lesson',
+    })
+  }
+
+  // 3. Territory wildcards
+  for (const territory of territories.slice(0, 2)) {
+    if (ideas.length >= 5) break
+    ideas.push({
+      title: `Why ${territory} matters more than people think`,
+      angle: `An opinion or contrarian take on ${territory} that challenges common assumptions.`,
+      whyNow: 'Evergreen territory',
+      territory,
+      trendGrounded: false,
+      formatSuggestion: 'opinion',
+    })
+  }
+
+  // Ensure at least 3 ideas
+  if (ideas.length === 0) {
+    ideas.push(
+      { title: `A thought on ${expertise[0] ?? 'your work'}`, angle: 'Share a specific insight from your experience today.', whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'observation' },
+      { title: `What's changing in ${territories[0] ?? 'your field'}`, angle: 'An observation about a current development.', whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'observation' },
+      { title: `A lesson worth sharing`, angle: 'Share a practical lesson from your work.', whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'practical_lesson' },
+    )
+  }
+
+  return ideas.slice(0, 5)
 }
 
 function inferTrendInterestFromProfile(profile: ContentProfile | null): TrendRelevanceProfile {

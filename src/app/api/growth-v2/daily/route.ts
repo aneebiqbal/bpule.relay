@@ -66,15 +66,44 @@ async function generateAndRespond(
     const recentHooks: string[] = []
     const recentAngles: string[] = []
 
-    const brief = await generateDailyGrowthBrief(store, orgId, {
-      trendCandidates,
-      recentTopics,
-      recentHooks,
-      recentAngles,
-      localDate,
-    })
+    try {
+      const brief = await generateDailyGrowthBrief(store, orgId, {
+        trendCandidates,
+        recentTopics,
+        recentHooks,
+        recentAngles,
+        localDate,
+      })
 
-    return NextResponse.json({ brief })
+      return NextResponse.json({ brief })
+    } catch (aiErr) {
+      // AI providers failed — create a fallback brief so the page always works
+      try {
+        const fallbackTrend = trendCandidates[0]
+        const fallbackBrief = await store.createDailyGrowthBrief({
+          organizationId: orgId,
+          localDate,
+          promptVersion: 'fallback-v1',
+          postCaption: fallbackTrend
+            ? `Today's signal: "${fallbackTrend.item.title}" — ${fallbackTrend.whyNow}. What does this mean for how you qualify prospects and time your outreach?`
+            : "Most sales tools tell you everything that happened. The harder problem is deciding which event deserves action. What's your next move?",
+          visualType: 'NO_VISUAL',
+          visualReason: 'Fallback — text-only post while AI providers recover',
+          alternateIdeas: [
+            { title: 'Why context beats more data', angle: 'More prospect data does not create better outreach if none of it explains why now.', whyNow: 'Evergreen' },
+            { title: 'The follow-up timing problem', angle: 'A sent message is not an unfinished task — waiting is the work.', whyNow: 'Evergreen' },
+            { title: 'Knowing what to do next', angle: 'Signal overload is the problem. Prioritization is the solution.', whyNow: 'Evergreen' },
+          ],
+        })
+
+        return NextResponse.json({ brief: fallbackBrief, fromFallback: true })
+      } catch (fallbackErr) {
+        return NextResponse.json(
+          { error: 'Generation failed', message: aiErr instanceof Error ? aiErr.message : 'AI providers unavailable' },
+          { status: 503 },
+        )
+      }
+    }
   } catch (err) {
     return NextResponse.json(
       { error: 'Generation failed', message: err instanceof Error ? err.message : 'Unknown' },

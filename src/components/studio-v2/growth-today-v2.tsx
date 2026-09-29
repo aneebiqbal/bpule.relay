@@ -31,11 +31,14 @@ export function GrowthTodayV2() {
     setError('')
     try {
       const res = await fetch('/api/growth-v2/daily', { method: 'POST' })
-      if (!res.ok) throw new Error('Generation failed')
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}))
+        throw new Error(errJson.message || 'Generation failed')
+      }
       const json = await res.json()
       setData(json.brief)
-    } catch {
-      setError('Generation failed. Try again.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Generation failed. Try again.')
     } finally {
       setGenerating(false)
     }
@@ -54,11 +57,11 @@ export function GrowthTodayV2() {
   }
 
   return (
-    <div className="min-h-screen bg-studio-paper">
-      <header className="sticky top-0 z-10 border-b border-ink/10 bg-studio-paper/80 backdrop-blur-sm">
+    <div className="min-h-screen bg-bone">
+      <header className="sticky top-0 z-10 border-b border-line bg-bone/80 backdrop-blur-sm">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-4">
-            <span className="font-mono text-xs uppercase tracking-[0.15em] text-ink/50">Relay Growth</span>
+            <span className="font-mono text-xs uppercase tracking-[0.15em] text-orange-signal">Relay Growth</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="font-mono text-[11px] text-ink/40">
@@ -67,7 +70,7 @@ export function GrowthTodayV2() {
             <button
               onClick={generateBrief}
               disabled={generating}
-              className="flex items-center gap-1.5 rounded-md border border-ink/15 bg-white px-3 py-1.5 text-xs text-ink/70 transition-colors hover:border-orange/40 hover:text-orange disabled:opacity-50"
+              className="interactive flex items-center gap-1.5 rounded-md border border-line bg-bone-raised px-3 py-1.5 text-xs text-ink/70 transition-colors hover:border-orange/40 hover:text-orange disabled:opacity-50"
             >
               <RefreshCw className={`h-3 w-3 ${generating ? 'animate-spin' : ''}`} />
               {generating ? 'Generating...' : 'Refresh'}
@@ -99,7 +102,7 @@ export function GrowthTodayV2() {
                 Today&apos;s post
               </h2>
               <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-                <div className="rounded-lg border border-ink/10 bg-white p-6 shadow-sm">
+                <div className="rounded-lg border border-line bg-bone-raised p-6">
                   {data.postCaption && (
                     <div className="whitespace-pre-wrap border-l-2 border-orange/30 pl-4 text-[15px] leading-[1.7] text-ink/85">
                       {data.postCaption}
@@ -108,7 +111,7 @@ export function GrowthTodayV2() {
                   <div className="mt-6 flex items-center gap-3">
                     <button
                       onClick={() => data.postCaption && handleCopy(data.postCaption, 'post')}
-                      className="flex items-center gap-1.5 rounded-md bg-orange px-4 py-2 text-sm text-white transition-colors hover:bg-orange-dark"
+                      className="flex items-center gap-1.5 rounded-md bg-orange px-4 py-2 text-sm text-on-accent transition-colors hover:bg-orange-dark"
                     >
                       <Copy className="h-3.5 w-3.5" />
                       {copiedField === 'post' ? 'Copied!' : 'Copy post'}
@@ -118,8 +121,8 @@ export function GrowthTodayV2() {
 
                 {/* Visual direction */}
                 {data.visualType && data.visualType !== 'NO_VISUAL' && (
-                  <div className="rounded-lg border border-ink/10 bg-white p-4">
-                    <span className="mb-3 inline-block rounded-md bg-orange-wash px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-orange">
+                  <div className="rounded-lg border border-line bg-bone-raised p-4">
+                    <span className="mb-3 inline-block rounded-md bg-orange/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-orange">
                       Visual
                     </span>
                     <p className="mb-2 text-sm font-medium text-ink">{data.visualConcept}</p>
@@ -152,7 +155,7 @@ export function GrowthTodayV2() {
                   {data.alternateIdeas.map((idea, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between rounded-md border border-ink/8 bg-white px-4 py-3"
+                      className="flex items-center justify-between rounded-md border border-line bg-bone-raised px-4 py-3"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-ink">{idea.title}</p>

@@ -648,51 +648,6 @@
     background-size: auto, 20px 20px;
   }
 
-  /* ── Studio V2: Light editorial surface ── */
-  .bg-studio-paper {
-    background-color: #F5F0E8;
-    color: #1C1917;
-    font-family: var(--font-sans, 'IBM Plex Sans', system-ui, sans-serif);
-  }
-  .bg-studio-paper .text-ink { color: #1C1917; }
-  .bg-studio-paper .text-ink\/85 { color: rgba(28, 25, 23, 0.85); }
-  .bg-studio-paper .text-ink\/70 { color: rgba(28, 25, 23, 0.7); }
-  .bg-studio-paper .text-ink\/60 { color: rgba(28, 25, 23, 0.6); }
-  .bg-studio-paper .text-ink\/50 { color: rgba(28, 25, 23, 0.5); }
-  .bg-studio-paper .text-ink\/40 { color: rgba(28, 25, 23, 0.4); }
-  .bg-studio-paper .text-ink\/30 { color: rgba(28, 25, 23, 0.3); }
-  .bg-studio-paper .border-ink\/10 { border-color: rgba(28, 25, 23, 0.1); }
-  .bg-studio-paper .border-ink\/15 { border-color: rgba(28, 25, 23, 0.15); }
-  .bg-studio-paper .border-ink\/8 { border-color: rgba(28, 25, 23, 0.08); }
-  .bg-studio-paper .bg-ink\/5 { background-color: rgba(28, 25, 23, 0.05); }
-  .bg-studio-paper .shadow-sm { box-shadow: 0 1px 3px rgba(28, 25, 23, 0.06); }
-  .bg-studio-paper .text-cobalt { color: #3b5bdb; }
-  .bg-studio-paper .bg-cobalt { background-color: #3b5bdb; }
-  .bg-studio-paper .bg-cobalt-faint { background-color: #eef2ff; }
-  .bg-studio-paper .border-cobalt\/30 { border-color: rgba(59, 91, 219, 0.3); }
-  .bg-studio-paper .border-cobalt\/40 { border-color: rgba(59, 91, 219, 0.4); }
-  .bg-studio-paper .hover\:bg-cobalt-dark:hover { background-color: #2f48b8; }
-  .bg-studio-paper .hover\:text-cobalt:hover { color: #3b5bdb; }
-  .bg-studio-paper .hover\:border-cobalt\/30:hover { border-color: rgba(59, 91, 219, 0.3); }
-  .bg-studio-paper .hover\:border-cobalt\/40:hover { border-color: rgba(59, 91, 219, 0.4); }
-  .bg-studio-paper .hover\:bg-cobalt-faint\/30:hover { background-color: rgba(238, 242, 255, 0.3); }
-  .bg-studio-paper .text-status-danger { color: #dc2626; }
-  .bg-studio-paper .border-status-danger\/20 { border-color: rgba(220, 38, 38, 0.2); }
-  .bg-studio-paper .bg-status-danger\/5 { background-color: rgba(220, 38, 38, 0.05); }
-  .bg-studio-paper .border-t-cobalt\/30 { border-top-color: rgba(59, 91, 219, 0.3); }
-  .bg-studio-paper .from-cobalt\/30 { --tw-gradient-from: rgba(59, 91, 219, 0.3); }
-  .bg-studio-paper .to-cobalt { --tw-gradient-to: #3b5bdb; }
-  .bg-studio-paper .bg-white { background-color: #ffffff; }
-  .bg-studio-paper .text-orange { color: #d4652f; }
-  .bg-studio-paper .bg-orange { background-color: #d4652f; }
-  .bg-studio-paper .bg-orange-wash { background-color: #fef3eb; }
-  .bg-studio-paper .hover\:bg-orange-dark:hover { background-color: #b8531f; }
-  .bg-studio-paper .hover\:text-orange:hover { color: #d4652f; }
-  .bg-studio-paper .hover\:border-orange\/40:hover { border-color: rgba(212, 101, 47, 0.4); }
-  .bg-studio-paper .border-orange\/30 { border-color: rgba(212, 101, 47, 0.3); }
-  .bg-studio-paper .from-orange\/30 { --tw-gradient-from: rgba(212, 101, 47, 0.3); }
-  .bg-studio-paper .to-orange { --tw-gradient-to: #d4652f; }
-
   /* ── Interactive ── */
   .interactive {
     transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
