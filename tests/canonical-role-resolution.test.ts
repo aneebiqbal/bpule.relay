@@ -15,7 +15,8 @@ describe('Canonical role resolution', () => {
   it('organization_roles row always wins over reps.role', () => {
     // Simulate the fixed logic
     function resolveRole(tableRole: string | undefined, repsRole: string): string {
-      return tableRole ?? (repsRole === 'admin' ? 'ADMIN' : 'MEMBER')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (tableRole ?? (repsRole === 'admin' ? 'ADMIN' : 'MEMBER')) as any
     }
 
     // Table says MEMBER, reps.role says admin → must be MEMBER (demotion respected)
@@ -63,18 +64,18 @@ describe('Canonical role resolution', () => {
   it('stale reps.role cannot escalate privileges', () => {
     // The key scenario: admin demotes user in organization_roles
     // but forgets to update reps.role. The user must NOT have admin access.
-    const tableRole = 'MEMBER' // canonical: demoted
+    const tableRole: string | undefined = 'MEMBER' // canonical: demoted
     const staleRepsRole = 'admin' // stale: still says admin
 
     // Fixed logic: table wins
-    const effectiveRole = tableRole ?? (staleRepsRole === 'admin' ? 'ADMIN' : 'MEMBER')
+    const effectiveRole: string = tableRole ?? (staleRepsRole === 'admin' ? 'ADMIN' : 'MEMBER')
     expect(effectiveRole).toBe('MEMBER')
 
     // Old (buggy) logic would have been:
     // if (tableRole === 'OWNER' || tableRole === 'ADMIN') tableRole
     // else if (repsRole === 'admin') 'ADMIN'  ← BUG: stale reps.role escalates
     // else tableRole ?? 'MEMBER'
-    const buggyRole =
+    const buggyRole: string =
       tableRole === 'OWNER' || tableRole === 'ADMIN'
         ? tableRole
         : staleRepsRole === 'admin'

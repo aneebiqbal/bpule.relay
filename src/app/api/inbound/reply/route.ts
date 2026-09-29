@@ -52,12 +52,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Lead not found.' }, { status: 404 })
     }
 
-    const [profile, allProofItems, messages, styleCard] = await Promise.all([
+    const [profile, allProofItems, messages, voiceProfileRow] = await Promise.all([
       body.profileId ? store.getProfile(body.profileId) : Promise.resolve(null),
       store.listAllProofItems(),
       store.listMessages(lead.id),
-      store.getVoiceProfile().then((vp) => vp?.styleCard?.summary ?? null),
+      store.getVoiceProfile(),
     ])
+
+    // Inject the full calibrated voice card so replies match outbound voice
+    const styleCardSummary = voiceProfileRow?.styleCard?.summary ?? null
+    const styleCardVoice = voiceProfileRow?.styleCard
+      ? [
+          voiceProfileRow.styleCard.contractions ? `Contractions: ${voiceProfileRow.styleCard.contractions}` : '',
+          voiceProfileRow.styleCard.formality ? `Formality: ${voiceProfileRow.styleCard.formality}/5` : '',
+          voiceProfileRow.styleCard.sentence_length ? `Sentence rhythm: ${voiceProfileRow.styleCard.sentence_length}` : '',
+          voiceProfileRow.styleCard.openers ? `Opener style: ${voiceProfileRow.styleCard.openers}` : '',
+          voiceProfileRow.styleCard.greeting ? `Greeting: ${voiceProfileRow.styleCard.greeting}` : '',
+          voiceProfileRow.styleCard.sign_off ? `Sign-off: ${voiceProfileRow.styleCard.sign_off}` : '',
+          voiceProfileRow.styleCard.never_words.length ? `Never use: ${voiceProfileRow.styleCard.never_words.join(', ')}` : '',
+        ].filter(Boolean).join('\n')
+      : null
 
     const proofItems = allProofItems
       .filter((p: ProofItem) => !body.profileId || p.profileId === body.profileId)
@@ -71,10 +85,15 @@ export async function POST(req: NextRequest) {
       profile,
       proofItems,
       history: messages.filter((m: { sentText: string | null }) => m.sentText),
-      styleCard,
+      styleCard: styleCardSummary,
     }
 
-    const basePrompt = buildInboundReplyUserPrompt(input)
+    // Prepend calibrated voice instructions to the reply prompt
+    const voiceBlock = styleCardVoice
+      ? `\n## Your calibrated voice (follow this exactly)\n${styleCardVoice}\n`
+      : ''
+
+    const basePrompt = buildInboundReplyUserPrompt(input) + voiceBlock
 
     // Copilot: AI understands the inbound message when a provider is available.
     // Deterministic analysis remains the base; AI enhances interpretation.
