@@ -58,8 +58,8 @@ export interface ForgeResult {
   caption: string
   hook: string
   winner: 'A' | 'B' | 'synthesis'
-  candidateA: ForgeCandidate
-  candidateB: ForgeCandidate
+  candidateA: ForgeCandidate | null
+  candidateB: ForgeCandidate | null
   evaluation: {
     quality: number
     distribution: number

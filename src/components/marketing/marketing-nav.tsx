@@ -8,9 +8,9 @@ import { Menu, X } from 'lucide-react'
 
 const NAV_ITEMS = [
   { href: '/#product', label: 'Product' },
-  { href: '/#how-it-works', label: 'How it works' },
-  { href: '/#studio', label: 'Studio' },
-  { href: '/#team', label: 'Team' },
+  { href: '/#priority', label: 'Intelligence' },
+  { href: '/#conversation', label: 'Conversations' },
+  { href: '/pricing', label: 'Pricing' },
 ]
 
 const STATE_BY_SECTION: Record<string, { label: string; tone: 'orange' | 'cobalt' }> = {

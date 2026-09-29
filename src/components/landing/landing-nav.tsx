@@ -8,8 +8,8 @@ import { cn } from 'cn'
 
 const NAV_ITEMS = [
   { href: '/#product', label: 'Product' },
-  { href: '/#moves', label: 'Moves' },
-  { href: '/#studio', label: 'Studio' },
+  { href: '/#priority', label: 'Intelligence' },
+  { href: '/#conversation', label: 'Conversations' },
   { href: '/pricing', label: 'Pricing' },
 ]
 
