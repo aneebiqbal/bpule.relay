@@ -73,6 +73,20 @@ import type {
   TeamAccountabilityView,
   CommandCenterView,
   CapturedProspect,
+  TrendSource,
+  TrendItem,
+  TrendSourceType,
+  EvidenceQuality,
+  DailyContentBrief,
+  DailyContentIdea,
+  DailyGrowthBrief,
+  BriefStatus,
+  IdeaType,
+  SourceFreshness,
+  VisualType,
+  TrendInterestProfile,
+  FieldConfidence,
+  PersonaIntelligenceProfile,
 } from '@/lib/domain/types'
 import type {
   CreateLeadResult,
@@ -7076,6 +7090,564 @@ export class SupabaseStore implements ScoutStore {
         needsAttention,
       }
     })
+  }
+
+  // ─── Studio V2: Trend Intelligence ───
+
+  async listTrendSources(): Promise<TrendSource[]> {
+    const { data, error } = await this.client
+      .from('trend_sources')
+      .select('*')
+      .order('source_key')
+    if (error) throw error
+    return (data ?? []).map(mapTrendSource)
+  }
+
+  async getTrendSource(sourceKey: string): Promise<TrendSource | null> {
+    const { data, error } = await this.client
+      .from('trend_sources')
+      .select('*')
+      .eq('source_key', sourceKey)
+      .maybeSingle()
+    if (error) throw error
+    return data ? mapTrendSource(data) : null
+  }
+
+  async upsertTrendSource(input: {
+    sourceKey: string
+    sourceType: TrendSourceType
+    displayName: string
+    baseUrl?: string
+    enabled?: boolean
+    fetchIntervalMinutes?: number
+    config?: Record<string, unknown>
+  }): Promise<TrendSource> {
+    const { data, error } = await this.client
+      .from('trend_sources')
+      .upsert({
+        source_key: input.sourceKey,
+        source_type: input.sourceType,
+        display_name: input.displayName,
+        base_url: input.baseUrl ?? null,
+        enabled: input.enabled ?? true,
+        fetch_interval_minutes: input.fetchIntervalMinutes ?? 60,
+        config: input.config ?? {},
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'source_key' })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapTrendSource(data)
+  }
+
+  async updateTrendSourceHealth(sourceKey: string, success: boolean, error?: string): Promise<void> {
+    const now = new Date().toISOString()
+    if (success) {
+      await this.client
+        .from('trend_sources')
+        .update({ last_fetched_at: now, last_success_at: now, consecutive_failures: 0, last_error: null, updated_at: now })
+        .eq('source_key', sourceKey)
+    } else {
+      const { data: current } = await this.client
+        .from('trend_sources')
+        .select('consecutive_failures')
+        .eq('source_key', sourceKey)
+        .maybeSingle()
+      await this.client
+        .from('trend_sources')
+        .update({
+          last_fetched_at: now,
+          consecutive_failures: ((current?.consecutive_failures as number) ?? 0) + 1,
+          last_error: error ?? null,
+          updated_at: now,
+        })
+        .eq('source_key', sourceKey)
+    }
+  }
+
+  async createTrendItem(input: {
+    sourceId: string
+    sourceItemId: string
+    url?: string
+    title: string
+    excerpt?: string
+    author?: string
+    publishedAt?: string
+    metrics?: Record<string, unknown>
+    topics?: string[]
+    contentFingerprint: string
+    evidenceQuality?: EvidenceQuality
+    expiresAt?: string
+  }): Promise<TrendItem> {
+    const { data, error } = await this.client
+      .from('trend_items')
+      .insert({
+        source_id: input.sourceId,
+        source_item_id: input.sourceItemId,
+        url: input.url ?? null,
+        title: input.title,
+        excerpt: input.excerpt ?? null,
+        author: input.author ?? null,
+        published_at: input.publishedAt ?? null,
+        metrics: input.metrics ?? {},
+        topics: input.topics ?? [],
+        content_fingerprint: input.contentFingerprint,
+        evidence_quality: input.evidenceQuality ?? 'medium',
+        expires_at: input.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapTrendItem(data)
+  }
+
+  async listTrendItems(opts?: { since?: string; topics?: string[]; limit?: number }): Promise<TrendItem[]> {
+    let query = this.client
+      .from('trend_items')
+      .select('*')
+      .gt('expires_at', new Date().toISOString())
+      .order('published_at', { ascending: false })
+      .limit(opts?.limit ?? 100)
+
+    if (opts?.since) {
+      query = query.gt('fetched_at', opts.since)
+    }
+    if (opts?.topics && opts.topics.length > 0) {
+      query = query.contains('topics', opts.topics)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+    return (data ?? []).map(mapTrendItem)
+  }
+
+  // ─── Studio V2: Daily Briefs ───
+
+  async createDailyContentBrief(input: {
+    organizationId: string
+    personaId: string
+    localDate: string
+    generationVersion?: number
+    trendSnapshot?: Record<string, unknown>
+    promptVersion?: string
+  }): Promise<DailyContentBrief> {
+    const { data, error } = await this.client
+      .from('daily_content_briefs')
+      .insert({
+        organization_id: input.organizationId,
+        persona_id: input.personaId,
+        local_date: input.localDate,
+        generation_version: input.generationVersion ?? 1,
+        trend_snapshot: input.trendSnapshot ?? {},
+        prompt_version: input.promptVersion ?? 'v1',
+        status: 'generating',
+        generation_started_at: new Date().toISOString(),
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapDailyContentBrief(data)
+  }
+
+  async getDailyContentBrief(personaId: string, localDate: string): Promise<DailyContentBrief | null> {
+    const { data, error } = await this.client
+      .from('daily_content_briefs')
+      .select('*')
+      .eq('persona_id', personaId)
+      .eq('local_date', localDate)
+      .order('generation_version', { ascending: false })
+      .maybeSingle()
+    if (error) throw error
+    return data ? mapDailyContentBrief(data) : null
+  }
+
+  async getDailyContentBriefWithIdeas(personaId: string, localDate: string): Promise<{
+    brief: DailyContentBrief
+    ideas: DailyContentIdea[]
+  } | null> {
+    const brief = await this.getDailyContentBrief(personaId, localDate)
+    if (!brief) return null
+    const ideas = await this.listDailyContentIdeas(brief.id)
+    return { brief, ideas }
+  }
+
+  async updateDailyContentBriefStatus(briefId: string, status: BriefStatus, cost?: number): Promise<DailyContentBrief> {
+    const update: Record<string, unknown> = {
+      status,
+      updated_at: new Date().toISOString(),
+    }
+    if (status === 'ready') {
+      update.generation_completed_at = new Date().toISOString()
+    }
+    if (cost !== undefined) {
+      update.generation_cost_usd = cost
+    }
+    const { data, error } = await this.client
+      .from('daily_content_briefs')
+      .update(update)
+      .eq('id', briefId)
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapDailyContentBrief(data)
+  }
+
+  async updateDailyContentBriefRecommended(briefId: string, ideaId: string): Promise<DailyContentBrief> {
+    const { data, error } = await this.client
+      .from('daily_content_briefs')
+      .update({ recommended_idea_id: ideaId, updated_at: new Date().toISOString() })
+      .eq('id', briefId)
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapDailyContentBrief(data)
+  }
+
+  async getLatestDailyContentBrief(personaId: string): Promise<DailyContentBrief | null> {
+    const { data, error } = await this.client
+      .from('daily_content_briefs')
+      .select('*')
+      .eq('persona_id', personaId)
+      .order('local_date', { ascending: false })
+      .order('generation_version', { ascending: false })
+      .maybeSingle()
+    if (error) throw error
+    return data ? mapDailyContentBrief(data) : null
+  }
+
+  async createDailyContentIdea(input: {
+    briefId: string
+    organizationId: string
+    personaId: string
+    ideaType: IdeaType
+    title: string
+    angle?: string
+    whyNow?: string
+    sourceIds?: string[]
+    sourceFreshness?: SourceFreshness
+    formatSuggestion?: string
+    territory?: string
+    noveltyScore?: number
+    relevanceScore?: number
+    credibilityScore?: number
+    insightScore?: number
+    trendGrounded?: boolean
+    postCaption?: string
+    postPlatform?: string
+    visualType?: VisualType
+    visualConcept?: string
+    visualPrompt?: string
+    visualComposition?: string
+    visualAspectRatio?: string
+    visualFocalPoint?: string
+    visualAllowedText?: string
+    visualScreenshotTarget?: string
+    visualReason?: string
+    qualityResult?: Record<string, unknown>
+  }): Promise<DailyContentIdea> {
+    const { data, error } = await this.client
+      .from('daily_content_ideas')
+      .insert({
+        brief_id: input.briefId,
+        organization_id: input.organizationId,
+        persona_id: input.personaId,
+        idea_type: input.ideaType,
+        title: input.title,
+        angle: input.angle ?? null,
+        why_now: input.whyNow ?? null,
+        source_ids: input.sourceIds ?? [],
+        source_freshness: input.sourceFreshness ?? null,
+        format_suggestion: input.formatSuggestion ?? null,
+        territory: input.territory ?? null,
+        novelty_score: input.noveltyScore ?? null,
+        relevance_score: input.relevanceScore ?? null,
+        credibility_score: input.credibilityScore ?? null,
+        insight_score: input.insightScore ?? null,
+        trend_grounded: input.trendGrounded ?? false,
+        post_caption: input.postCaption ?? null,
+        post_platform: input.postPlatform ?? 'linkedin',
+        visual_type: input.visualType ?? null,
+        visual_concept: input.visualConcept ?? null,
+        visual_prompt: input.visualPrompt ?? null,
+        visual_composition: input.visualComposition ?? null,
+        visual_aspect_ratio: input.visualAspectRatio ?? '1.91:1',
+        visual_focal_point: input.visualFocalPoint ?? null,
+        visual_allowed_text: input.visualAllowedText ?? null,
+        visual_screenshot_target: input.visualScreenshotTarget ?? null,
+        visual_reason: input.visualReason ?? null,
+        quality_result: input.qualityResult ?? null,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapDailyContentIdea(data)
+  }
+
+  async listDailyContentIdeas(briefId: string): Promise<DailyContentIdea[]> {
+    const { data, error } = await this.client
+      .from('daily_content_ideas')
+      .select('*')
+      .eq('brief_id', briefId)
+      .order('idea_type', { ascending: true })
+    if (error) throw error
+    return (data ?? []).map(mapDailyContentIdea)
+  }
+
+  async markDailyContentIdeaCopied(ideaId: string): Promise<void> {
+    await this.client
+      .from('daily_content_ideas')
+      .update({ copied_at: new Date().toISOString() })
+      .eq('id', ideaId)
+  }
+
+  async markDailyContentIdeaRejected(ideaId: string): Promise<void> {
+    await this.client
+      .from('daily_content_ideas')
+      .update({ rejected_at: new Date().toISOString() })
+      .eq('id', ideaId)
+  }
+
+  async updatePersonaTrendInterest(personaId: string, profile: TrendInterestProfile): Promise<void> {
+    await this.client
+      .from('content_personas')
+      .update({ trend_interest_profile: profile, updated_at: new Date().toISOString() })
+      .eq('id', personaId)
+  }
+
+  async updatePersonaFieldConfidence(personaId: string, confidence: FieldConfidence): Promise<void> {
+    await this.client
+      .from('content_profiles')
+      .update({ field_confidence: confidence })
+      .eq('persona_id', personaId)
+  }
+
+  async synthesizePersonaIntelligence(input: {
+    personaId: string
+    profileInput?: string
+    pastPostsInput?: string
+    role?: string
+    company?: string
+    description?: string
+  }): Promise<PersonaIntelligenceProfile> {
+    const { generate } = await import('@/lib/ai/runtime')
+    const system = `You are a persona intelligence synthesizer. Given raw user input, produce a structured Persona Intelligence Profile.
+RULES:
+- Only use information explicitly provided or strongly implied by the input.
+- Do NOT invent experience, opinions, accomplishments, or technical skills.
+- Mark each field confidence as: PROVIDED (explicitly stated), STRONG_INFERENCE (clearly implied), WEAK_INFERENCE (possible but uncertain), UNKNOWN (no basis).
+- Weak inferences must NOT be used as factual first-person experience.
+- Be concise. Output ONLY valid JSON matching the schema.`
+
+    const user = JSON.stringify({
+      profileInput: input.profileInput,
+      pastPostsInput: input.pastPostsInput,
+      role: input.role,
+      company: input.company,
+      description: input.description,
+    })
+
+    const result = await generate<PersonaIntelligenceProfile>({
+      task: 'FAST_STRUCTURED',
+      system,
+      user,
+      promptVersion: 'persona-synthesis-v1',
+      callSite: 'studio-v2:synthesizePersonaIntelligence',
+      feature: 'studio_v2_persona',
+      organizationId: this.orgId,
+    })
+
+    return result.data
+  }
+
+  // ─── Relay Growth V2 ───
+
+  async createDailyGrowthBrief(input: {
+    organizationId: string
+    localDate: string
+    generationVersion?: number
+    trendSnapshot?: Record<string, unknown>
+    promptVersion?: string
+    postCaption?: string
+    visualType?: VisualType
+    visualConcept?: string
+    visualPrompt?: string
+    visualReason?: string
+    alternateIdeas?: Array<{ title: string; angle: string; whyNow: string }>
+    contentMemoryHash?: string
+    qualityResult?: Record<string, unknown>
+    generationCostUsd?: number
+  }): Promise<DailyGrowthBrief> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('daily_growth_briefs')
+      .insert({
+        organization_id: input.organizationId,
+        local_date: input.localDate,
+        generation_version: input.generationVersion ?? 1,
+        trend_snapshot: input.trendSnapshot ?? {},
+        prompt_version: input.promptVersion ?? 'v1',
+        post_caption: input.postCaption ?? null,
+        visual_type: input.visualType ?? null,
+        visual_concept: input.visualConcept ?? null,
+        visual_prompt: input.visualPrompt ?? null,
+        visual_reason: input.visualReason ?? null,
+        alternate_ideas: input.alternateIdeas ?? [],
+        content_memory_hash: input.contentMemoryHash ?? null,
+        quality_result: input.qualityResult ?? null,
+        generation_cost_usd: input.generationCostUsd ?? null,
+        status: input.postCaption ? 'ready' : 'generating',
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapDailyGrowthBrief(data)
+  }
+
+  async getDailyGrowthBrief(localDate: string): Promise<DailyGrowthBrief | null> {
+    const { data, error } = await this.client
+      .from('daily_growth_briefs')
+      .select('*')
+      .eq('organization_id', this.orgId)
+      .eq('local_date', localDate)
+      .order('generation_version', { ascending: false })
+      .maybeSingle()
+    if (error) throw error
+    return data ? mapDailyGrowthBrief(data) : null
+  }
+
+  async markDailyGrowthBriefCopied(briefId: string): Promise<void> {
+    await this.client
+      .from('daily_growth_briefs')
+      .update({ copied_at: new Date().toISOString() })
+      .eq('id', briefId)
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Mapper functions
+// ═════════════════════════════════════════════════════════════════════════════
+
+function mapTrendSource(r: Record<string, unknown>): TrendSource {
+  return {
+    id: r.id as string,
+    sourceKey: r.source_key as string,
+    sourceType: r.source_type as TrendSource['sourceType'],
+    displayName: r.display_name as string,
+    baseUrl: r.base_url as string | null,
+    enabled: r.enabled as boolean,
+    fetchIntervalMinutes: r.fetch_interval_minutes as number,
+    lastFetchedAt: r.last_fetched_at as string | null,
+    lastSuccessAt: r.last_success_at as string | null,
+    lastError: r.last_error as string | null,
+    consecutiveFailures: r.consecutive_failures as number,
+    rateLimitRemaining: r.rate_limit_remaining as number | null,
+    rateLimitResetAt: r.rate_limit_reset_at as string | null,
+    config: r.config as Record<string, unknown>,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  }
+}
+
+function mapTrendItem(r: Record<string, unknown>): TrendItem {
+  return {
+    id: r.id as string,
+    sourceId: r.source_id as string,
+    sourceItemId: r.source_item_id as string,
+    url: r.url as string | null,
+    title: r.title as string,
+    excerpt: r.excerpt as string | null,
+    author: r.author as string | null,
+    publishedAt: r.published_at as string | null,
+    fetchedAt: r.fetched_at as string,
+    metrics: r.metrics as Record<string, unknown>,
+    topics: (r.topics as string[]) ?? [],
+    contentFingerprint: r.content_fingerprint as string,
+    evidenceQuality: r.evidence_quality as TrendItem['evidenceQuality'],
+    expiresAt: r.expires_at as string,
+    createdAt: r.created_at as string,
+  }
+}
+
+function mapDailyContentBrief(r: Record<string, unknown>): DailyContentBrief {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    personaId: r.persona_id as string,
+    localDate: r.local_date as string,
+    generationVersion: r.generation_version as number,
+    status: r.status as DailyContentBrief['status'],
+    recommendedIdeaId: r.recommended_idea_id as string | null,
+    trendSnapshot: r.trend_snapshot as Record<string, unknown>,
+    promptVersion: r.prompt_version as string,
+    runtimeVersion: (r.runtime_version as string) ?? '1.0',
+    generationStartedAt: r.generation_started_at as string | null,
+    generationCompletedAt: r.generation_completed_at as string | null,
+    generationCostUsd: r.generation_cost_usd as number | null,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  }
+}
+
+function mapDailyContentIdea(r: Record<string, unknown>): DailyContentIdea {
+  return {
+    id: r.id as string,
+    briefId: r.brief_id as string,
+    organizationId: r.organization_id as string,
+    personaId: r.persona_id as string,
+    ideaType: r.idea_type as DailyContentIdea['ideaType'],
+    title: r.title as string,
+    angle: r.angle as string | null,
+    whyNow: r.why_now as string | null,
+    sourceIds: (r.source_ids as string[]) ?? [],
+    sourceFreshness: r.source_freshness as DailyContentIdea['sourceFreshness'],
+    formatSuggestion: r.format_suggestion as string | null,
+    territory: r.territory as string | null,
+    noveltyScore: r.novelty_score as number | null,
+    relevanceScore: r.relevance_score as number | null,
+    credibilityScore: r.credibility_score as number | null,
+    insightScore: r.insight_score as number | null,
+    trendGrounded: r.trend_grounded as boolean,
+    postCaption: r.post_caption as string | null,
+    postPlatform: (r.post_platform as string) ?? 'linkedin',
+    visualType: r.visual_type as DailyContentIdea['visualType'],
+    visualConcept: r.visual_concept as string | null,
+    visualPrompt: r.visual_prompt as string | null,
+    visualComposition: r.visual_composition as string | null,
+    visualAspectRatio: (r.visual_aspect_ratio as string) ?? '1.91:1',
+    visualFocalPoint: r.visual_focal_point as string | null,
+    visualAllowedText: r.visual_allowed_text as string | null,
+    visualScreenshotTarget: r.visual_screenshot_target as string | null,
+    visualReason: r.visual_reason as string | null,
+    qualityResult: r.quality_result as Record<string, unknown> | null,
+    copiedAt: r.copied_at as string | null,
+    postedAt: r.posted_at as string | null,
+    rejectedAt: r.rejected_at as string | null,
+    createdAt: r.created_at as string,
+  }
+}
+
+function mapDailyGrowthBrief(r: Record<string, unknown>): DailyGrowthBrief {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    localDate: r.local_date as string,
+    generationVersion: r.generation_version as number,
+    status: r.status as DailyGrowthBrief['status'],
+    recommendedIdeaId: r.recommended_idea_id as string | null,
+    trendSnapshot: r.trend_snapshot as Record<string, unknown>,
+    promptVersion: r.prompt_version as string,
+    postCaption: r.post_caption as string | null,
+    visualType: r.visual_type as DailyGrowthBrief['visualType'],
+    visualConcept: r.visual_concept as string | null,
+    visualPrompt: r.visual_prompt as string | null,
+    visualReason: r.visual_reason as string | null,
+    alternateIdeas: (r.alternate_ideas as DailyGrowthBrief['alternateIdeas']) ?? [],
+    contentMemoryHash: r.content_memory_hash as string | null,
+    qualityResult: r.quality_result as Record<string, unknown> | null,
+    generationCostUsd: r.generation_cost_usd as number | null,
+    copiedAt: r.copied_at as string | null,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
   }
 }
 

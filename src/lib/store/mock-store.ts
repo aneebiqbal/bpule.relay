@@ -59,6 +59,14 @@ import type {
   CapturedProspect,
   SendDisposition,
   SendFeedbackReason,
+  TrendSource,
+  TrendItem,
+  DailyContentBrief,
+  DailyContentIdea,
+  DailyGrowthBrief,
+  TrendInterestProfile,
+  FieldConfidence,
+  PersonaIntelligenceProfile,
 } from '@/lib/domain/types'
 import type {
   CreateLeadResult,
@@ -3232,5 +3240,99 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async getActiveTeamMemberships(): Promise<any[]> { return [] },
     async getRepInfo(_repId: string): Promise<any> { return null },
     async getRepAssignments(_repId: string): Promise<any[]> { return [] },
+
+    // ── Studio V2 + Growth V2 (demo stubs) ─────────────────────────────────
+
+    async listTrendSources(): Promise<TrendSource[]> { return [] },
+    async getTrendSource(_sourceKey: string): Promise<TrendSource | null> { return null },
+    async upsertTrendSource(input: any): Promise<TrendSource> {
+      return { id: 'ts-demo', sourceKey: input.sourceKey, sourceType: input.sourceType,
+        displayName: input.displayName, baseUrl: null, enabled: true,
+        fetchIntervalMinutes: 60, lastFetchedAt: null, lastSuccessAt: null,
+        lastError: null, consecutiveFailures: 0, rateLimitRemaining: null,
+        rateLimitResetAt: null, config: {}, createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString() }
+    },
+    async updateTrendSourceHealth(_sourceKey: string, _success: boolean, _error?: string): Promise<void> {},
+    async createTrendItem(input: any): Promise<TrendItem> {
+      return { id: 'ti-demo', sourceId: input.sourceId, sourceItemId: input.sourceItemId,
+        url: null, title: input.title, excerpt: null, author: null, publishedAt: null,
+        fetchedAt: new Date().toISOString(), metrics: {}, topics: [],
+        contentFingerprint: input.contentFingerprint, evidenceQuality: 'medium',
+        expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+        createdAt: new Date().toISOString() }
+    },
+    async listTrendItems(_opts?: any): Promise<TrendItem[]> { return [] },
+    async createDailyContentBrief(input: any): Promise<DailyContentBrief> {
+      return { id: 'dcb-demo', organizationId: input.organizationId,
+        personaId: input.personaId, localDate: input.localDate,
+        generationVersion: 1, status: 'generating', recommendedIdeaId: null,
+        trendSnapshot: {}, promptVersion: 'v1', runtimeVersion: '1.0',
+        generationStartedAt: new Date().toISOString(), generationCompletedAt: null,
+        generationCostUsd: null, createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString() }
+    },
+    async getDailyContentBrief(_personaId: string, _localDate: string): Promise<DailyContentBrief | null> { return null },
+    async getDailyContentBriefWithIdeas(personaId: string, localDate: string): Promise<any> { return null },
+    async updateDailyContentBriefStatus(briefId: string, status: any, cost?: number): Promise<DailyContentBrief> {
+      return { id: briefId, organizationId: 'org-demo', personaId: 'persona-demo',
+        localDate: new Date().toISOString().slice(0, 10), generationVersion: 1,
+        status, recommendedIdeaId: null, trendSnapshot: {}, promptVersion: 'v1',
+        runtimeVersion: '1.0', generationStartedAt: new Date().toISOString(),
+        generationCompletedAt: status === 'ready' ? new Date().toISOString() : null,
+        generationCostUsd: cost ?? null, createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString() }
+    },
+    async updateDailyContentBriefRecommended(briefId: string, ideaId: string): Promise<DailyContentBrief> {
+      return { id: briefId, organizationId: 'org-demo', personaId: 'persona-demo',
+        localDate: new Date().toISOString().slice(0, 10), generationVersion: 1,
+        status: 'ready', recommendedIdeaId: ideaId, trendSnapshot: {},
+        promptVersion: 'v1', runtimeVersion: '1.0',
+        generationStartedAt: new Date().toISOString(),
+        generationCompletedAt: new Date().toISOString(),
+        generationCostUsd: null, createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString() }
+    },
+    async getLatestDailyContentBrief(_personaId: string): Promise<DailyContentBrief | null> { return null },
+    async createDailyContentIdea(input: any): Promise<DailyContentIdea> {
+      return { id: 'dci-demo', briefId: input.briefId, organizationId: input.organizationId,
+        personaId: input.personaId, ideaType: input.ideaType, title: input.title,
+        angle: null, whyNow: null, sourceIds: [], sourceFreshness: null,
+        formatSuggestion: null, territory: null, noveltyScore: null,
+        relevanceScore: null, credibilityScore: null, insightScore: null,
+        trendGrounded: false, postCaption: null, postPlatform: 'linkedin',
+        visualType: null, visualConcept: null, visualPrompt: null,
+        visualComposition: null, visualAspectRatio: '1.91:1',
+        visualFocalPoint: null, visualAllowedText: null,
+        visualScreenshotTarget: null, visualReason: null,
+        qualityResult: null, copiedAt: null, postedAt: null, rejectedAt: null,
+        createdAt: new Date().toISOString() }
+    },
+    async listDailyContentIdeas(_briefId: string): Promise<DailyContentIdea[]> { return [] },
+    async markDailyContentIdeaCopied(_ideaId: string): Promise<void> {},
+    async markDailyContentIdeaRejected(_ideaId: string): Promise<void> {},
+    async synthesizePersonaIntelligence(_input: any): Promise<PersonaIntelligenceProfile> {
+      return { identity: '', currentRole: '', expertise: [], credibleExperience: [],
+        products: [], audience: '', audienceProblems: [], knowledgeTerritories: [],
+        opinions: [], likelyContentTerritories: [], technicalDepth: 'moderate',
+        preferredPostDepth: 'medium', tone: '', writingCharacteristics: [],
+        vocabulary: [], thingsNeverToClaim: [], proofInventory: [],
+        allowedPersonalContext: [], trendKeywords: [], entitiesToMonitor: [],
+        contentBoundaries: [], confidence: 0, fieldConfidence: {} }
+    },
+    async updatePersonaTrendInterest(_personaId: string, _profile: TrendInterestProfile): Promise<void> {},
+    async updatePersonaFieldConfidence(_personaId: string, _confidence: FieldConfidence): Promise<void> {},
+    async createDailyGrowthBrief(input: any): Promise<DailyGrowthBrief> {
+      return { id: 'dgb-demo', organizationId: input.organizationId,
+        localDate: input.localDate, generationVersion: 1, status: 'ready',
+        recommendedIdeaId: null, trendSnapshot: {}, promptVersion: 'v1',
+        postCaption: null, visualType: null, visualConcept: null,
+        visualPrompt: null, visualReason: null, alternateIdeas: [],
+        contentMemoryHash: null, qualityResult: null, generationCostUsd: null,
+        copiedAt: null, createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString() }
+    },
+    async getDailyGrowthBrief(_localDate: string): Promise<DailyGrowthBrief | null> { return null },
+    async markDailyGrowthBriefCopied(_briefId: string): Promise<void> {},
   } as import('@/lib/store/types').ScoutStore
 }

@@ -64,6 +64,20 @@ import type {
   UpworkMessage,
   Verdict,
   VoiceProfile,
+  TrendSource,
+  TrendItem,
+  TrendSourceType,
+  EvidenceQuality,
+  DailyContentBrief,
+  DailyContentIdea,
+  DailyGrowthBrief,
+  BriefStatus,
+  IdeaType,
+  SourceFreshness,
+  VisualType,
+  TrendInterestProfile,
+  FieldConfidence,
+  PersonaIntelligenceProfile,
 } from '@/lib/domain/types'
 
 export interface StoreContext {
@@ -1321,4 +1335,122 @@ export interface ScoutStore {
     title: string | null
     channel: string
   }>>
+
+  // ─── Studio V2: Trend Intelligence ───
+
+  listTrendSources(): Promise<TrendSource[]>
+  getTrendSource(sourceKey: string): Promise<TrendSource | null>
+  upsertTrendSource(input: {
+    sourceKey: string
+    sourceType: TrendSourceType
+    displayName: string
+    baseUrl?: string
+    enabled?: boolean
+    fetchIntervalMinutes?: number
+    config?: Record<string, unknown>
+  }): Promise<TrendSource>
+  updateTrendSourceHealth(sourceKey: string, success: boolean, error?: string): Promise<void>
+
+  createTrendItem(input: {
+    sourceId: string
+    sourceItemId: string
+    url?: string
+    title: string
+    excerpt?: string
+    author?: string
+    publishedAt?: string
+    metrics?: Record<string, unknown>
+    topics?: string[]
+    contentFingerprint: string
+    evidenceQuality?: EvidenceQuality
+    expiresAt?: string
+  }): Promise<TrendItem>
+  listTrendItems(opts?: { since?: string; topics?: string[]; limit?: number }): Promise<TrendItem[]>
+
+  // ─── Studio V2: Daily Briefs ───
+
+  createDailyContentBrief(input: {
+    organizationId: string
+    personaId: string
+    localDate: string
+    generationVersion?: number
+    trendSnapshot?: Record<string, unknown>
+    promptVersion?: string
+  }): Promise<DailyContentBrief>
+  getDailyContentBrief(personaId: string, localDate: string): Promise<DailyContentBrief | null>
+  getDailyContentBriefWithIdeas(personaId: string, localDate: string): Promise<{
+    brief: DailyContentBrief
+    ideas: DailyContentIdea[]
+  } | null>
+  updateDailyContentBriefStatus(briefId: string, status: BriefStatus, cost?: number): Promise<DailyContentBrief>
+  updateDailyContentBriefRecommended(briefId: string, ideaId: string): Promise<DailyContentBrief>
+  getLatestDailyContentBrief(personaId: string): Promise<DailyContentBrief | null>
+
+  createDailyContentIdea(input: {
+    briefId: string
+    organizationId: string
+    personaId: string
+    ideaType: IdeaType
+    title: string
+    angle?: string
+    whyNow?: string
+    sourceIds?: string[]
+    sourceFreshness?: SourceFreshness
+    formatSuggestion?: string
+    territory?: string
+    noveltyScore?: number
+    relevanceScore?: number
+    credibilityScore?: number
+    insightScore?: number
+    trendGrounded?: boolean
+    postCaption?: string
+    postPlatform?: string
+    visualType?: VisualType
+    visualConcept?: string
+    visualPrompt?: string
+    visualComposition?: string
+    visualAspectRatio?: string
+    visualFocalPoint?: string
+    visualAllowedText?: string
+    visualScreenshotTarget?: string
+    visualReason?: string
+    qualityResult?: Record<string, unknown>
+  }): Promise<DailyContentIdea>
+  listDailyContentIdeas(briefId: string): Promise<DailyContentIdea[]>
+  markDailyContentIdeaCopied(ideaId: string): Promise<void>
+  markDailyContentIdeaRejected(ideaId: string): Promise<void>
+
+  // ─── Studio V2: Persona Intelligence ───
+
+  synthesizePersonaIntelligence(input: {
+    personaId: string
+    profileInput?: string
+    pastPostsInput?: string
+    role?: string
+    company?: string
+    description?: string
+  }): Promise<PersonaIntelligenceProfile>
+  updatePersonaTrendInterest(personaId: string, profile: TrendInterestProfile): Promise<void>
+  updatePersonaFieldConfidence(personaId: string, confidence: FieldConfidence): Promise<void>
+
+  // ─── Relay Growth V2 ───
+
+  createDailyGrowthBrief(input: {
+    organizationId: string
+    localDate: string
+    generationVersion?: number
+    trendSnapshot?: Record<string, unknown>
+    promptVersion?: string
+    postCaption?: string
+    visualType?: VisualType
+    visualConcept?: string
+    visualPrompt?: string
+    visualReason?: string
+    alternateIdeas?: Array<{ title: string; angle: string; whyNow: string }>
+    contentMemoryHash?: string
+    qualityResult?: Record<string, unknown>
+    generationCostUsd?: number
+  }): Promise<DailyGrowthBrief>
+  getDailyGrowthBrief(localDate: string): Promise<DailyGrowthBrief | null>
+  markDailyGrowthBriefCopied(briefId: string): Promise<void>
 }

@@ -411,15 +411,6 @@ export interface ContentQuickCapture {
   createdAt: string
 }
 
-export interface DailyContentBrief {
-  personaId: string
-  date: string
-  pick: ContentIdeaCard | null
-  alternatives: ContentIdeaCard[]
-  timely: ContentIdeaCard | null
-  refreshReason: string
-}
-
 export interface ContentIdeaCard {
   id: string
   title: string
@@ -452,6 +443,8 @@ export interface ContentPersona {
   onboardingStep?: string
   onboardingCompleted?: boolean
   onboardingData?: Record<string, unknown>
+  trendInterestProfile?: TrendInterestProfile
+  lastBriefAt?: string
   createdAt: string
 }
 
@@ -2175,4 +2168,174 @@ export interface DailyEditorResult {
   experimental: RelayContentOpportunity | null
   reasoning: string
   whyToday: string
+}
+
+// ─── Studio V2: Trend Intelligence ───
+
+export type TrendSourceType = 'hackernews' | 'devto' | 'github' | 'stackoverflow' | 'rss' | 'arxiv'
+export type EvidenceQuality = 'high' | 'medium' | 'low'
+
+export interface TrendSource {
+  id: string
+  sourceKey: string
+  sourceType: TrendSourceType
+  displayName: string
+  baseUrl: string | null
+  enabled: boolean
+  fetchIntervalMinutes: number
+  lastFetchedAt: string | null
+  lastSuccessAt: string | null
+  lastError: string | null
+  consecutiveFailures: number
+  rateLimitRemaining: number | null
+  rateLimitResetAt: string | null
+  config: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TrendItem {
+  id: string
+  sourceId: string
+  sourceItemId: string
+  url: string | null
+  title: string
+  excerpt: string | null
+  author: string | null
+  publishedAt: string | null
+  fetchedAt: string
+  metrics: Record<string, unknown>
+  topics: string[]
+  contentFingerprint: string
+  evidenceQuality: EvidenceQuality
+  expiresAt: string
+  createdAt: string
+}
+
+export type SourceFreshness = 'new_today' | 'recent' | 'active_discussion' | 'growing_attention' | 'fresh_announcement' | 'evergreen'
+export type VisualType = 'PRODUCT_SCREENSHOT' | 'EDITORIAL_GRAPHIC' | 'TECHNICAL_DIAGRAM' | 'TYPOGRAPHIC_CONCEPT' | 'DATA_VISUAL' | 'GENERATED_IMAGE' | 'NO_VISUAL'
+export type IdeaType = 'recommended' | 'alternate'
+export type BriefStatus = 'generating' | 'ready' | 'failed' | 'stale'
+
+export interface DailyContentBrief {
+  id: string
+  organizationId: string
+  personaId: string
+  localDate: string
+  generationVersion: number
+  status: BriefStatus
+  recommendedIdeaId: string | null
+  trendSnapshot: Record<string, unknown>
+  promptVersion: string
+  runtimeVersion: string
+  generationStartedAt: string | null
+  generationCompletedAt: string | null
+  generationCostUsd: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DailyContentIdea {
+  id: string
+  briefId: string
+  organizationId: string
+  personaId: string
+  ideaType: IdeaType
+  title: string
+  angle: string | null
+  whyNow: string | null
+  sourceIds: string[]
+  sourceFreshness: SourceFreshness | null
+  formatSuggestion: string | null
+  territory: string | null
+  noveltyScore: number | null
+  relevanceScore: number | null
+  credibilityScore: number | null
+  insightScore: number | null
+  trendGrounded: boolean
+  postCaption: string | null
+  postPlatform: string
+  visualType: VisualType | null
+  visualConcept: string | null
+  visualPrompt: string | null
+  visualComposition: string | null
+  visualAspectRatio: string
+  visualFocalPoint: string | null
+  visualAllowedText: string | null
+  visualScreenshotTarget: string | null
+  visualReason: string | null
+  qualityResult: Record<string, unknown> | null
+  copiedAt: string | null
+  postedAt: string | null
+  rejectedAt: string | null
+  createdAt: string
+}
+
+export interface DailyGrowthBrief {
+  id: string
+  organizationId: string
+  localDate: string
+  generationVersion: number
+  status: BriefStatus
+  recommendedIdeaId: string | null
+  trendSnapshot: Record<string, unknown>
+  promptVersion: string
+  postCaption: string | null
+  visualType: VisualType | null
+  visualConcept: string | null
+  visualPrompt: string | null
+  visualReason: string | null
+  alternateIdeas: Array<{
+    title: string
+    angle: string
+    whyNow: string
+  }>
+  contentMemoryHash: string | null
+  qualityResult: Record<string, unknown> | null
+  generationCostUsd: number | null
+  copiedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+// Persona Trend Interest Profile
+export interface TrendInterestProfile {
+  primaryTerritories: string[]
+  secondaryTerritories: string[]
+  technologies: string[]
+  industries: string[]
+  audienceInterests: string[]
+  monitoredEntities: string[]
+  excludedTerritories: string[]
+}
+
+// Persona Intelligence Profile confidence
+export interface FieldConfidence {
+  [field: string]: 'PROVIDED' | 'STRONG_INFERENCE' | 'WEAK_INFERENCE' | 'UNKNOWN'
+}
+
+export interface PersonaIntelligenceProfile {
+  identity: string
+  currentRole: string
+  expertise: string[]
+  credibleExperience: string[]
+  products: string[]
+  audience: string
+  audienceProblems: string[]
+  knowledgeTerritories: string[]
+  opinions: string[]
+  likelyContentTerritories: string[]
+  technicalDepth: 'shallow' | 'moderate' | 'deep'
+  preferredPostDepth: 'short' | 'medium' | 'deep'
+  tone: string
+  writingCharacteristics: string[]
+  vocabulary: string[]
+  thingsNeverToClaim: string[]
+  proofInventory: string[]
+  allowedPersonalContext: string[]
+  trendKeywords: string[]
+  entitiesToMonitor: string[]
+  contentBoundaries: string[]
+  confidence: number
+  fieldConfidence: FieldConfidence
 }
