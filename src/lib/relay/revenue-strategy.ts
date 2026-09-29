@@ -927,6 +927,23 @@ function decideContact(
     }
   }
 
+  // Check for explicit buyer need BEFORE non-buyer relationship suppression.
+  // A recruiter/partner who is ALSO actively seeking help (e.g., "looking for
+  // development partners") should get CONTACT_NOW, not CONNECT_OR_OBSERVE.
+  const hasBuyerRequest = (source.buyerEvidenceKinds ?? []).includes('BUYER_REQUEST')
+    || source.opportunitySignals.includes('explicit_ask')
+    || source.opportunitySignals.includes('freelance_project_need')
+
+  if (hasBuyerRequest && !irrelevant) {
+    return {
+      reason: 'EXPLICIT_NEED',
+      action: 'CONTACT_NOW',
+      why: 'There is a current, explicit need — a project ask or a public request for help.',
+      messageRecommended: true,
+      noMessageReason: null,
+    }
+  }
+
   // Non-buyer relationship (recruiter/partner/peer): LOW commercial fit is
   // correct and must stand (see assessFitIntentConfidence), but it must NOT
   // by itself force SKIP. A recruiter, partner, or peer with genuine
@@ -986,6 +1003,21 @@ function decideContact(
       why: 'The only need evidence is historical. It must not be treated as a current opportunity.',
       messageRecommended: false,
       noMessageReason: 'Historical company or role evidence is not a current reason to write.',
+    }
+  }
+
+  // Hiring + buyer request (apply instructions) = genuine buyer signal
+  if (
+    source.opportunitySignals.includes('hiring') &&
+    currentOpportunity.length > 0 &&
+    (source.buyerEvidenceKinds ?? []).includes('BUYER_REQUEST')
+  ) {
+    return {
+      reason: 'EXPLICIT_NEED',
+      action: 'CONTACT_NOW',
+      why: 'Hiring with explicit apply instructions — they are actively seeking help.',
+      messageRecommended: true,
+      noMessageReason: null,
     }
   }
 

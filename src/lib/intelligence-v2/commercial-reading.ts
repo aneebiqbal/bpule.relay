@@ -30,7 +30,13 @@ const BUYER_PATTERNS: Array<{ kind: BuyerEvidenceKind; re: RegExp }> = [
   // partner") between the noun phrase and the noun itself.
   {
     kind: 'BUYER_REQUEST',
-    re: /\blooking for (?:a |an )?[\w\s/.-]{0,40}?\b(?:developer|engineer|team|freelancer|contractor|agency|vendor|partner)\b/i,
+    re: /\blooking for (?:a |an )?[\w\s/.-]{0,40}?\b(?:developer|engineer|team|freelancer|contractor|agency|vendor)\b/i,
+  },
+  // "development partners" or "engineering partners" = buyer signal
+  // but bare "partners" or "partners, not clients" = not a buyer signal
+  {
+    kind: 'BUYER_REQUEST',
+    re: /\blooking for\s+(?:\w+\s+){0,3}?(?:development|engineering|technical|technology)\s+partners?\b/i,
   },
   {
     kind: 'BUYER_REQUEST',

@@ -147,6 +147,8 @@ const RECRUITER_MODEL_PATTERNS = [
   /\binterview\s+preparation\b/i,
   /\bco-found(?:ed|er).+\b(?:recruit(?:er|ment)|talent|staffing|career|placement)\b/i,
   /\b(?:recruitment|staffing|talent\s+(?:acquisition|agency))\s+(?:firm|company|business|agency)\b/i,
+  /\b(?:technical\s+)?recruiter\s+(?:at|for)\b/i,
+  /\b(?:recruiting|recruitment|hiring)\s+(?:for|at)\s+(?:senior|lead|staff|principal|engineer|developer|designer|manager|director)\b/i,
 ]
 
 /**
