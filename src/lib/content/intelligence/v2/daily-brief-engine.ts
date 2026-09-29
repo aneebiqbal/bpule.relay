@@ -285,25 +285,28 @@ async function generateFinishedPost(input: {
   costTracking: { total: number }
   repairHint?: string
 }): Promise<string> {
-  const system = `You are writing a LinkedIn post on behalf of the persona described below.
+  const system = `You write viral LinkedIn posts for a B2B practitioner. The post must stop the scroll.
 
-HARD RULES — VIOLATION = REJECTION:
-- NEVER write a listicle. No "Here are X tips" or numbered lists or "best practices" format.
-- NEVER open with "As X continues to evolve..." or similar generic transitions.
-- NEVER use "In conclusion" or "Remember" or "Thoughts?" or "Agree?".
-- NEVER write "Here's the thing", "Let that sink in", "Game changer", "The future is here".
-- NEVER fabricate personal stories, experiments, or metrics you cannot verify.
-- NEVER restate generic knowledge that anyone could write. Add YOUR specific insight.
-- NEVER use emoji bullets (✅, 🔑, →) or thread markers (1/).
-- Maximum 2 hashtags. No exclamation marks.
+FORMAT RULES (NON-NEGOTIABLE):
+- Line 1 is the HOOK. It must be a bold claim, surprising number, or contrarian take. This is all LinkedIn shows before "see more".
+- Max 250 words total. Short paragraphs: 1-2 sentences each. White space between paragraphs.
+- NO em dashes. Use commas or periods instead.
+- NO listicles. No numbered lists. No "here are X tips".
+- NO generic openers: "In today's fast-paced...", "As X continues to evolve...", "The future is...".
+- NO filler phrases: "Here's the thing", "Let that sink in", "Game changer", "It goes without saying".
+- NO fake stories or fabricated metrics. Write from the persona's real expertise only.
+- NO "Thoughts?", "Agree?", "What do you think?" at the end.
+- Max 2 hashtags. Zero exclamation marks. Zero emojis.
 
-WRITING STYLE:
-- Open with a specific observation, claim, or contrarian take — not a generic transition.
-- Write like a practitioner sharing a real insight, not a journalist summarizing news.
-- Vary structure: observation, argument, breakdown, field note, misconception, tradeoff.
-- If referencing a trend, add what it means from THIS person's perspective specifically.
-- 200-500 words. Natural rhythm. First person only where persona approves.
-- Output ONLY the post text. No meta-commentary, no intro, no sign-off.`
+STRUCTURE:
+1. Hook (1 line, bold claim or surprising insight)
+2. Context (2-3 short paragraphs max)
+3. Specific insight or contrarian take
+4. End with a question that invites replies
+
+TONE: Direct, confident, specific. Like a founder sharing a real lesson, not a journalist writing an article.
+
+Output ONLY the post text. No intro, no sign-off, no meta-commentary.`
 
   const userObj: Record<string, unknown> = {
     persona: input.personaContext,
@@ -324,8 +327,8 @@ WRITING STYLE:
     task: 'DEEP_WRITING',
     system,
     user,
-    maxTokens: 1200,
-    promptVersion: DAILY_BRIEF_PROMPT_VERSION + '-post',
+    maxTokens: 600,
+    promptVersion: DAILY_BRIEF_PROMPT_VERSION + '-post-v2',
     callSite: 'daily-brief:generatePost',
     feature: 'studio_v2_daily',
   })
@@ -380,51 +383,41 @@ function evaluatePostQuality(caption: string): PostQualityResult {
     warnings.push('UNVERIFIED_METRIC')
   }
 
+  // Hard rule: no em dashes
+  if (/\u2014|\u2013/.test(caption) || caption.includes('—') || caption.includes('–')) {
+    failures.push('EM_DASH')
+  }
+
+  // Hard rule: max 250 words
+  const wordCount = caption.split(/\s+/).length
+  if (wordCount < 50) failures.push('TOO_SHORT')
+  if (wordCount > 250) failures.push('TOO_LONG')
+
   // Anti-slop: banned phrases
   for (const phrase of BANNED_PHRASES) {
     if (caption.toLowerCase().includes(phrase.toLowerCase())) {
-      failures.push(`BANNED_PHRASE: "${phrase}"`)
+      failures.push(`BANNED: "${phrase}"`)
     }
   }
 
   // Anti-slop: banned hooks
   for (const pattern of BANNED_HOOK_PATTERNS) {
     if (pattern.test(caption)) {
-      failures.push(`BANNED_HOOK: ${pattern.source}`)
-    }
-  }
-
-  // Anti-slop: fake experience
-  for (const pattern of FARED_EXPERIENCE_PATTERNS) {
-    if (pattern.test(caption)) {
-      failures.push(`FAKE_EXPERIENCE: ${pattern.source}`)
+      failures.push(`HOOK: ${pattern.source}`)
     }
   }
 
   // Anti-listicle: detect numbered "best practices" / "tips" format
   const numberedItems = caption.match(/^\d+\.\s+\*\*/gm) || []
-  if (numberedItems.length >= 3) failures.push('LISTICLE_FORMAT')
+  if (numberedItems.length >= 3) failures.push('LISTICLE')
+  if (/here are (some|the|my|top|key|best)/i.test(caption)) failures.push('LISTICLE_OPENER')
 
-  const hereAreMatch = /here are (some|the|my|top|key|best)/i.test(caption)
-  if (hereAreMatch) failures.push('LISTICLE_OPENER')
-
-  // Channel: excessive formatting
-  const emojiCount = (caption.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length
-  if (emojiCount > 3) failures.push('EXCESSIVE_EMOJI')
-
-  const threadMarkers = (caption.match(/^\d+\//gm) || []).length
-  if (threadMarkers > 2) failures.push('THREAD_MARKERS')
-
-  const hashtagCount = (caption.match(/#[a-zA-Z]/g) || []).length
-  if (hashtagCount > 3) failures.push('EXCESSIVE_HASHTAGS')
-
-  // Insight: must have substance (not just restating a headline)
-  const wordCount = caption.split(/\s+/).length
-  if (wordCount < 80) failures.push('TOO_SHORT')
-  if (wordCount > 800) failures.push('TOO_LONG')
+  // Formatting
+  if ((caption.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length > 0) failures.push('EMOJI')
+  if ((caption.match(/#[a-zA-Z]/g) || []).length > 2) failures.push('HASHTAGS')
+  if (/!$/.test(caption.trim())) failures.push('EXCLAMATION')
 
   const passed = failures.length === 0
-
   return { passed, failures, warnings, wordCount }
 }
 
@@ -442,15 +435,21 @@ async function generateVisualDirection(
   persona: ContentPersona,
   costTracking: { total: number },
 ): Promise<VisualDirection | null> {
-  const system = `Decide the visual strategy for a LinkedIn post.
+  const system = `Design a visual for a LinkedIn post. Default to GENERATED_IMAGE unless text is clearly stronger.
 
 VISUAL TYPES: PRODUCT_SCREENSHOT, EDITORIAL_GRAPHIC, TECHNICAL_DIAGRAM, TYPOGRAPHIC_CONCEPT, DATA_VISUAL, GENERATED_IMAGE, NO_VISUAL
 
 RULES:
-- Prefer NO_VISUAL when text-only is stronger.
+- Use GENERATED_IMAGE for most posts. Only use NO_VISUAL if the post is purely conversational.
 - Use PRODUCT_SCREENSHOT only for Relay/Studio product posts.
-- Avoid AI clichés (robots, glowing brains, 3D spheres, stock people).
-- Output ONLY this JSON: {"type": "VISUAL_TYPE", "concept": "short description", "prompt": "image generation prompt if GENERATED_IMAGE", "reason": "why this fits the post"}`
+- Avoid AI clichés: no robots, no glowing brains, no 3D spheres, no stock people, no floating code.
+- The image should support the hook, not illustrate it literally.
+- Output ONLY this JSON: {"type": "VISUAL_TYPE", "concept": "one sentence describing the image", "prompt": "detailed image generation prompt, 2-3 sentences, specific style and composition", "reason": "why this visual fits"}
+
+IMAGE PROMPT STYLE:
+- Minimal, editorial, professional. Think sketches, diagrams, or abstract compositions.
+- Specify aspect ratio 1.91:1 for LinkedIn feed.
+- No text in the image. No logos. No faces.`
 
   const user = JSON.stringify({
     ideaTitle: idea.title,

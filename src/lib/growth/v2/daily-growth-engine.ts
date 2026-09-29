@@ -45,31 +45,38 @@ export async function generateDailyGrowthBrief(
     .map(t => `- ${t}`)
     .join('\n')
 
-  const system = `You are the editorial voice of Relay — a revenue intelligence platform.
+  const system = `You write viral LinkedIn posts for Relay (revenue intelligence platform). The post must stop the scroll and teach Relay's worldview.
 
 YOUR WORLDVIEW:
 - Most sales tools tell you everything that happened. The harder problem is deciding which event deserves action.
 - More prospect data does not create better outreach if none of it explains why now.
-- A sent message is not an unfinished task — waiting is the work.
+- A sent message is not an unfinished task. Waiting is the work.
 - Context before action. Evidence vs assumptions. Human-controlled AI.
 - Studio creates demand. Relay captures it.
 
-ANTI-SLOP RULES:
-- Never open with "In today's fast-paced..." or similar.
-- No "Here's the thing", "Let that sink in", "Game changer".
-- No "Thoughts?" or emoji bullets or thread markers.
-- Vary structure: observation, principle, workflow explanation, strong opinion.
-- The post teaches Relay's worldview before selling Relay.
-- 200-500 words. Clear, direct, editorial.
-- Output ONLY the post text.
+FORMAT RULES (NON-NEGOTIABLE):
+- Line 1 is the HOOK. Bold claim, surprising number, or contrarian take. This is all LinkedIn shows before "see more".
+- Max 200 words total. Short paragraphs: 1-2 sentences each. White space between paragraphs.
+- NO em dashes. Use commas or periods instead.
+- NO listicles. No numbered lists. No "here are X tips".
+- NO generic openers: "In today's fast-paced...", "As X continues to evolve...".
+- NO filler: "Here's the thing", "Let that sink in", "Game changer".
+- NO fake stories, fake metrics, or named customers.
+- NO "Thoughts?", "Agree?", "What do you think?" at the end.
+- Max 2 hashtags. Zero exclamation marks. Zero emojis.
+- Teach Relay's worldworldview without being promotional. Show the problem, hint at the approach.
 
-PRIVACY RULES:
-- NEVER reference specific customer names, leads, or companies.
-- NEVER use real revenue numbers, conversion rates, or performance metrics.
-- NEVER quote or paraphrase customer conversations.
-- NEVER show screenshots of real customer data.
-- Use only Relay's public product truths and general commercial principles.
-- If discussing results, use hypothetical or anonymized examples only.`
+STRUCTURE:
+1. Hook (1 line, bold claim or surprising insight)
+2. Context (2-3 short paragraphs max)
+3. Specific insight or contrarian take
+4. End with a question that invites replies
+
+TONE: Direct, confident, specific. Like a founder sharing a real lesson.
+
+Output ONLY the post text. No intro, no sign-off.
+
+PRIVACY: No customer names, real revenue numbers, or private data. Only Relay's public truths.`
 
   const user = JSON.stringify({
     territories: RELAY_BRAND_TERRITORIES,
@@ -81,20 +88,24 @@ PRIVACY RULES:
     task: 'DEEP_WRITING',
     system,
     user,
-    maxTokens: 1000,
-    promptVersion: GROWTH_PROMPT_VERSION,
+    maxTokens: 500,
+    promptVersion: GROWTH_PROMPT_VERSION + '-v2',
     callSite: 'daily-growth:generatePost',
     feature: 'relay_growth_v2',
   })
 
-  const visualSystem = `Decide the visual strategy for a LinkedIn post about Relay (revenue intelligence).
+  const visualSystem = `Design a visual for a LinkedIn post about Relay (revenue intelligence).
 
 VISUAL TYPES: PRODUCT_SCREENSHOT, EDITORIAL_GRAPHIC, TECHNICAL_DIAGRAM, TYPOGRAPHIC_CONCEPT, DATA_VISUAL, GENERATED_IMAGE, NO_VISUAL
 
 RULES:
-- Prefer PRODUCT_SCREENSHOT when showing Relay product behavior.
-- Avoid AI clichés (robots, glowing brains, stock people).
-- Output ONLY valid JSON.`
+- Default to GENERATED_IMAGE. Only use NO_VISUAL if purely conversational.
+- Use PRODUCT_SCREENSHOT only when showing Relay product UI.
+- Avoid AI clichés: no robots, no glowing brains, no stock people, no 3D spheres.
+- The image supports the hook, not illustrates it literally.
+- Output ONLY: {"type": "VISUAL_TYPE", "concept": "one sentence", "prompt": "detailed image generation prompt, 1.91:1 ratio, no text, no logos", "reason": "why this fits"}
+
+IMAGE STYLE: Minimal, editorial, professional. Abstract compositions, diagrams, or scenes. No text in image. No faces. No logos.`
 
   const visualResult = await generate<{
     type: VisualType

@@ -51,13 +51,16 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ personaId }),
       })
-      if (!res.ok) throw new Error('Generation failed')
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}))
+        throw new Error(errJson.message || 'Generation failed')
+      }
       const json = await res.json()
       setData(json)
       const recommended = json.ideas?.find((i: DailyContentIdea) => i.ideaType === 'recommended')
       if (recommended) setActiveIdeaId(recommended.id)
-    } catch {
-      setError('Generation failed. Try again in a moment.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Generation failed. Try again in a moment.')
     } finally {
       setGenerating(false)
     }
@@ -89,13 +92,13 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
   const alternates = data?.ideas.filter(i => i.id !== activeIdea?.id) ?? []
 
   return (
-    <div className="min-h-screen bg-studio-paper">
+    <div className="min-h-screen bg-bone">
       {/* Top bar */}
-      <header className="sticky top-0 z-10 border-b border-ink/10 bg-studio-paper/80 backdrop-blur-sm">
+      <header className="sticky top-0 z-10 border-b border-line bg-bone/80 backdrop-blur-sm">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-4">
-            <span className="font-mono text-xs uppercase tracking-[0.15em] text-ink/50">Studio</span>
-            <span className="h-3 w-px bg-ink/15" />
+            <span className="font-mono text-xs uppercase tracking-[0.15em] text-cobalt">Studio</span>
+            <span className="h-3 w-px bg-line" />
             <span className="text-sm text-ink/70">{displayName}</span>
           </div>
           <div className="flex items-center gap-3">
@@ -105,7 +108,7 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
             <button
               onClick={generateBrief}
               disabled={generating}
-              className="flex items-center gap-1.5 rounded-md border border-ink/15 bg-white px-3 py-1.5 text-xs text-ink/70 transition-colors hover:border-cobalt/40 hover:text-cobalt disabled:opacity-50"
+              className="interactive flex items-center gap-1.5 rounded-md border border-line bg-bone-raised px-3 py-1.5 text-xs text-ink/70 transition-colors hover:border-cobalt/40 hover:text-cobalt disabled:opacity-50"
             >
               <RefreshCw className={`h-3 w-3 ${generating ? 'animate-spin' : ''}`} />
               {generating ? 'Generating...' : 'Refresh'}
@@ -142,7 +145,7 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
 
               <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
                 {/* Post content */}
-                <div className="rounded-lg border border-ink/10 bg-white p-6 shadow-sm">
+                <div className="rounded-lg border border-line bg-bone-raised p-6">
                   <h3 className="mb-3 text-lg font-medium text-ink">{activeIdea.title}</h3>
                   {activeIdea.angle && (
                     <p className="mb-4 text-sm leading-relaxed text-ink/60">{activeIdea.angle}</p>
@@ -155,14 +158,14 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
                   <div className="mt-6 flex items-center gap-3">
                     <button
                       onClick={() => activeIdea.postCaption && handleCopy(activeIdea.postCaption, activeIdea.id)}
-                      className="flex items-center gap-1.5 rounded-md bg-cobalt px-4 py-2 text-sm text-white transition-colors hover:bg-cobalt-dark"
+                      className="flex items-center gap-1.5 rounded-md bg-cobalt px-4 py-2 text-sm text-on-accent transition-colors hover:bg-cobalt-dark"
                     >
                       <Copy className="h-3.5 w-3.5" />
                       {copiedId === activeIdea.id ? 'Copied!' : 'Copy post'}
                     </button>
                     <button
                       onClick={() => router.push(`/studio/drafts/new?personaId=${personaId}&ideaId=${activeIdea.id}`)}
-                      className="flex items-center gap-1.5 rounded-md border border-ink/15 px-4 py-2 text-sm text-ink/70 transition-colors hover:border-ink/30"
+                      className="interactive flex items-center gap-1.5 rounded-md border border-line px-4 py-2 text-sm text-ink/70 transition-colors hover:border-ink/30"
                     >
                       Edit
                     </button>
@@ -170,34 +173,35 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
                 </div>
 
                 {/* Visual direction */}
-                {activeIdea.visualType && activeIdea.visualType !== 'NO_VISUAL' && (
-                  <div className="rounded-lg border border-ink/10 bg-white p-4">
-                    <span className="mb-3 inline-block rounded-md bg-cobalt-faint px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-cobalt">
-                      Visual
+                <div className="rounded-lg border border-line bg-bone-raised p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="rounded-md bg-cobalt/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-cobalt">
+                      {activeIdea.visualType === 'NO_VISUAL' ? 'Text Only' : 'Visual'}
                     </span>
-                    <p className="mb-2 text-sm font-medium text-ink">{activeIdea.visualConcept}</p>
-                    {activeIdea.visualPrompt && (
-                      <p className="text-xs leading-relaxed text-ink/50">{activeIdea.visualPrompt}</p>
-                    )}
-                    {activeIdea.visualReason && (
-                      <p className="mt-2 text-[11px] text-ink/40">{activeIdea.visualReason}</p>
-                    )}
                     {activeIdea.visualPrompt && (
                       <button
-                        onClick={() => navigator.clipboard.writeText(activeIdea.visualPrompt!)}
-                        className="mt-3 text-[11px] text-cobalt hover:underline"
+                        onClick={() => handleCopy(activeIdea.visualPrompt!, 'visual')}
+                        className="flex items-center gap-1 text-[11px] text-cobalt hover:underline"
                       >
-                        Copy image prompt
+                        <Copy className="h-3 w-3" />
+                        {copiedId === 'visual' ? 'Copied!' : 'Copy prompt'}
                       </button>
                     )}
                   </div>
-                )}
+                  <p className="mb-2 text-sm font-medium text-ink">{activeIdea.visualConcept}</p>
+                  {activeIdea.visualPrompt && (
+                    <p className="text-xs leading-relaxed text-ink/60">{activeIdea.visualPrompt}</p>
+                  )}
+                  {activeIdea.visualReason && (
+                    <p className="mt-2 text-[11px] text-ink/40">{activeIdea.visualReason}</p>
+                  )}
+                </div>
               </div>
 
               {/* Source provenance */}
               {activeIdea.whyNow && (
                 <div className="mt-3 flex items-center gap-2 text-[11px] text-ink/40">
-                  <span className="rounded-sm bg-ink/5 px-1.5 py-0.5 font-mono uppercase">{activeIdea.sourceFreshness ?? 'editorial'}</span>
+                  <span className="srf-chip">{activeIdea.sourceFreshness ?? 'editorial'}</span>
                   <span>{activeIdea.whyNow}</span>
                 </div>
               )}
@@ -214,7 +218,7 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
                     <button
                       key={idea.id}
                       onClick={() => setActiveIdeaId(idea.id)}
-                      className="flex w-full items-center justify-between rounded-md border border-ink/8 bg-white px-4 py-3 text-left transition-colors hover:border-cobalt/30 hover:bg-cobalt-faint/30"
+                      className="interactive flex w-full items-center justify-between rounded-md border border-line bg-bone-raised px-4 py-3 text-left transition-colors hover:border-cobalt/30"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-ink">{idea.title}</p>
