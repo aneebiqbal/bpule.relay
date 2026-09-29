@@ -267,9 +267,10 @@ Timezone: Async-first, no required overlap hours.
 
 Apply at: careers.example.com`,
     expectedRemoteEligibility: 'ELIGIBLE',
-    // Deterministic scoring currently lands 43 for this record; keep a floor
-    // that still alarms on real degradation.
-    expectedMinScore: 40,
+    // After removing artificial score baselines, this job posting (hiring
+    // signal, not explicit buyer intent) scores ~34. Still alarms on real
+    // degradation while accepting honest zero-baseline scoring.
+    expectedMinScore: 30,
   },
   {
     name: 'Freelance React Native — Health Startup',

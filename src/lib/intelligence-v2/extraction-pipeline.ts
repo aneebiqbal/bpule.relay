@@ -968,7 +968,9 @@ function buildFallbackProbableNeed(passA: PassAOutput, intelligence: Omit<Normal
   const company = intelligence.company.name ?? passA.company.name ?? 'This company'
   const skills = (intelligence.job?.skills ?? passA.job?.skills ?? intelligence.content.technicalSignals).slice(0, 6)
 
-  if (intelligence.opportunity.signals.includes('hiring') || intelligence.opportunity.signals.includes('explicit_ask')) {
+  // Only return a need statement when there's a genuine buying signal,
+  // and keep it hedged — this is a fallback, not an AI-extracted fact.
+  if (intelligence.opportunity.signals.includes('explicit_ask')) {
     if (skills.length > 0) {
       return `${company} appears to need full-stack delivery capacity across ${skills.join(', ')}.`
     }
@@ -979,6 +981,8 @@ function buildFallbackProbableNeed(passA: PassAOutput, intelligence: Omit<Normal
     return `${company} appears to need support resolving a technical delivery issue.`
   }
 
+  // Hiring signal alone is NOT evidence of need for external delivery —
+  // they may be hiring full-time employees. Return null rather than fabricate.
   return null
 }
 

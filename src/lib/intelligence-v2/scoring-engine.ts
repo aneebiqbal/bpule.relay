@@ -347,7 +347,7 @@ function scoreOpportunityFit(
     return {
       key: 'opportunityFit',
       label: DIMENSION_WEIGHTS.opportunityFit.label,
-      points: 4,
+      points: 0,
       max: DIMENSION_WEIGHTS.opportunityFit.max,
       note: 'This profile is not buying software delivery.',
       direction: 'negative',
@@ -356,7 +356,7 @@ function scoreOpportunityFit(
   const signals = intelligence.opportunity.signals
   const content = intelligence.content
 
-  let points = 5 // Baseline: some opportunity exists
+  let points = 0 // No baseline floor — zero evidence means zero points
   let note = 'No clear opportunity match.'
 
   // Strong service match signals
@@ -398,9 +398,9 @@ function scoreOpportunityFit(
     note += ' Technical work confirmed.'
   }
 
-  // Penalty for unclear opportunity
+  // No evidence = no points. Zero-evidence profiles must score genuinely low.
   if (signals.length === 0 && content.technicalSignals.length === 0) {
-    points = 4
+    points = 0
     note = 'No clear opportunity signal from available evidence.'
     watchOut.push('No clear opportunity signal detected.')
   }
@@ -476,7 +476,7 @@ function scoreNeedIntent(
     }
   }
   const opportunity = intelligence.opportunity
-  let points = 4
+  let points = 0
   let note = 'No strong need signal.'
 
   if (opportunity.urgency === 'immediate' && intelligence.commercialReading?.immediateBuyerNeed !== false) {
@@ -531,7 +531,7 @@ function scoreRevenueIdentityFit(
   reasons: string[],
   watchOut: string[],
 ): ScoreDimensionBreakdown {
-  let points = 5
+  let points = 0
   let note = 'No matching Revenue Identity.'
 
   // Wording note (Bug 4.3): this dimension purely reflects "we could route
@@ -572,7 +572,7 @@ function scoreProofStrength(
   reasons: string[],
   watchOut: string[],
 ): ScoreDimensionBreakdown {
-  let points = 2
+  let points = 0
   let note = 'No verified proof available.'
 
   if (hasRelevantProof && matchStrength >= 8) {
@@ -606,7 +606,7 @@ function scoreAccessReachability(
   reasons: string[],
   watchOut: string[],
 ): ScoreDimensionBreakdown {
-  let points = 2
+  let points = 0
   let note = 'Reachability unclear.'
 
   if (isReachable && intelligence.person.linkedinUrl) {
@@ -634,7 +634,7 @@ function scoreTiming(
   intelligence: NormalizedIntelligence,
   reasons: string[],
 ): ScoreDimensionBreakdown {
-  let points = 3
+  let points = 0
   let note = 'Timing signal unclear.'
 
   if (intelligence.opportunity.urgency === 'immediate' && intelligence.commercialReading?.immediateBuyerNeed !== false) {
@@ -670,7 +670,7 @@ function scoreConversionEvidence(
   pastConversionSignal: string | null,
   reasons: string[],
 ): ScoreDimensionBreakdown {
-  let points = 2
+  let points = 0
   let note = 'No direct conversion evidence.'
 
   if (resemblesPastWin) {

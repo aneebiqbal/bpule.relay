@@ -381,20 +381,11 @@ export function rescoreIntelligence(
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function buildScoringEvidence(scoreBreakdown: ReturnType<typeof computeCanonicalScore>): EvidenceEntry[] {
-  const entries: EvidenceEntry[] = []
-  for (const dim of scoreBreakdown.dimensions) {
-    if (dim.points > 0 && dim.direction === 'positive') {
-      entries.push({
-        signal: dim.label,
-        source: 'inferred',
-        evidenceType: 'STRONG_INFERENCE',
-        ownership: 'BUYER_INTENT',
-        confidence: dim.points >= dim.max * 0.7 ? 'HIGH' : 'MEDIUM',
-        safeForOutreach: false,
-      })
-    }
-  }
-  return entries
+  // Scoring dimensions are NOT evidence — they are product-internal measurements.
+  // Injecting them as BUYER_INTENT evidence pollutes the evidence ledger with
+  // artifacts that didn't come from the source. Return empty: evidence must come
+  // from extraction, not from scoring.
+  return []
 }
 
 function buildOutreachContext(

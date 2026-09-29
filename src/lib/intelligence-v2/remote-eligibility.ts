@@ -432,9 +432,9 @@ export function eligibilityScoreContribution(eligibility: RemoteEligibility): nu
     case 'LIKELY_ELIGIBLE':
       return 14
     case 'NOT_APPLICABLE':
-      return 8 // Neutral — not a job, geography is irrelevant to scoring
+      return 0 // Not a job — no evidence of eligibility, no points
     case 'UNCLEAR':
-      return 8
+      return 0 // Unknown — no evidence of eligibility, no points
     case 'INELIGIBLE':
       return -30 // Hard negative
     default:
