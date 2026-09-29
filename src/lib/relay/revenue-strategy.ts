@@ -357,6 +357,11 @@ export interface StrategySource {
   connectionAccepted?: boolean
   /** Buyer evidence kinds from commercial reading — distinguishes hiring+apply from generic hiring */
   buyerEvidenceKinds?: string[]
+  /** Remote eligibility assessment — suppress outreach if INELIGIBLE */
+  remoteEligibility?: {
+    eligibility: string
+    reason?: string
+  }
 }
 
 const EMPTY_FIELD = (): CommercialFieldState => ({ value: null, status: 'unknown' })
@@ -440,6 +445,10 @@ export function sourceFromCanonical(
     priorFollowupCount: opts.priorFollowupCount ?? 0,
     connectionAccepted: opts.connectionAccepted ?? false,
     buyerEvidenceKinds: canonical.intelligence.commercialReading?.buyerEvidenceKinds,
+    remoteEligibility: canonical.remoteEligibility ? {
+      eligibility: canonical.remoteEligibility.eligibility,
+      reason: canonical.remoteEligibility.reason,
+    } : undefined,
   }
 }
 
@@ -1002,6 +1011,17 @@ function decideContact(
       why: 'They are hiring for their own team — not a clear need for outside services. Connect without pitching.',
       messageRecommended: false,
       noMessageReason: 'Hiring for own team is not a clear signal they need outside services. Do not pitch.',
+    }
+  }
+
+  // Remote barrier: if eligibility is INELIBIBLE, suppress all outreach
+  if (source.remoteEligibility?.eligibility === 'INELIGIBLE') {
+    return {
+      reason: 'NO_CREDIBLE_REASON',
+      action: 'SKIP',
+      why: `Remote barrier: ${source.remoteEligibility.reason ?? 'not compatible with Pakistan-based remote work'}.`,
+      messageRecommended: false,
+      noMessageReason: 'Remote eligibility barrier. Do not contact.',
     }
   }
 

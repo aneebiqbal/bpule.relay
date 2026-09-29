@@ -482,7 +482,17 @@ function buildOutreachContext(
   } else if (content.explicitProblems.length > 0) {
     personalizationAnchor = content.explicitProblems[0].slice(0, 120)
   } else if (intelligence.opportunity.description) {
-    personalizationAnchor = intelligence.opportunity.description.slice(0, 120)
+    // Don't use raw technical signals as personalization — they produce
+    // generic "your work with React and Node.js" notes
+    const desc = intelligence.opportunity.description
+    const isTechnicalSignal = /^Technical work detected/i.test(desc) || /^Hiring/i.test(desc)
+    if (!isTechnicalSignal) {
+      personalizationAnchor = desc.slice(0, 120)
+    }
+  }
+  // If no meaningful anchor, leave null — the writer should not invent one
+  if (personalizationAnchor && personalizationAnchor.length < 10) {
+    personalizationAnchor = null
   }
 
   // Things not to claim
