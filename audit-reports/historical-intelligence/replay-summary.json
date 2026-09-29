@@ -1,0 +1,17 @@
+{
+  "totalRecords": 361,
+  "processed": 361,
+  "errors": 0,
+  "highHistorical": 287,
+  "highNew": 36,
+  "dropped": 251,
+  "pollutionFixed": 297,
+  "stillPolluted": 0,
+  "newScoreBands": {
+    "0-20": 154,
+    "21-40": 86,
+    "41-60": 85,
+    "61-80": 29,
+    "81-100": 7
+  }
+}

@@ -89,6 +89,32 @@ export type EvidenceTemporalScope = 'CURRENT' | 'RECENT' | 'FUTURE' | 'HISTORICA
 
 export type SignalPolarity = 'ACTIVE' | 'NEGATED' | 'CLOSED' | 'FUTURE' | 'UNKNOWN'
 
+/**
+ * Need ownership classification — WHO owns the problem/need described.
+ * A statement about a market problem must not automatically become
+ * "this prospect needs our services".
+ *
+ * - SELF_NEED: The prospect's own company has the need (e.g., "We're hiring engineers")
+ * - CUSTOMER_NEED: The prospect's customers have the need (e.g., "Our clients struggle with X")
+ * - MARKET_PROBLEM: An industry/market-level problem (e.g., "Currency exchange is difficult in emerging markets")
+ * - SERVICE_OFFERING: The prospect offers services to solve this (e.g., "I help companies modernize")
+ * - PRODUCT_PROBLEM: A problem with the prospect's own product (e.g., "Our deployment pipeline is slow")
+ * - EMPLOYER_NEED: The prospect's employer (if they're an employee) has the need
+ * - UNKNOWN: Need ownership cannot be determined
+ *
+ * Only SELF_NEED or EMPLOYER_NEED should materially increase buyer intent.
+ * SERVICE_OFFERING describes what they SELL, not what they BUY.
+ * CUSTOMER_NEED describes their customers' problems, not theirs.
+ */
+export type NeedOwnership =
+  | 'SELF_NEED'
+  | 'CUSTOMER_NEED'
+  | 'MARKET_PROBLEM'
+  | 'SERVICE_OFFERING'
+  | 'PRODUCT_PROBLEM'
+  | 'EMPLOYER_NEED'
+  | 'UNKNOWN'
+
 export interface EvidenceEntry {
   signal: string
   source: 'linkedin_profile' | 'linkedin_post' | 'job_posting' | 'company_website' | 'pasted_text' | 'user_provided' | 'inferred'
@@ -113,6 +139,8 @@ export interface EvidenceEntry {
   temporalScope?: EvidenceTemporalScope
   /** Whether the signal is active, negated, closed, or future */
   polarity?: SignalPolarity
+  /** Who owns the need/problem described by this evidence */
+  needOwnership?: NeedOwnership
 }
 
 // ── Extracted Entities (Pass A) ────────────────────────────────────────────
@@ -269,6 +297,13 @@ export interface NormalizedIntelligence {
   relationship: CommercialRelationship
   /** Buyer intent kept separate from product momentum. Strategy and score must read this, not a generic intent alias. */
   commercialReading?: import('./commercial-reading').CommercialReading
+  /** Classified need ownership per evidence entry — who owns the problems/needs described */
+  needOwnershipSummary?: {
+    /** The dominant need ownership classification for this prospect */
+    dominant: NeedOwnership
+    /** Count of evidence entries per ownership type */
+    counts: Record<NeedOwnership, number>
+  }
 }
 
 // ── Score Breakdown ────────────────────────────────────────────────────────

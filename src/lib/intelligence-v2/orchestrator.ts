@@ -12,6 +12,7 @@
 import type {
   CanonicalProspectIntelligence,
   EvidenceEntry,
+  NeedOwnership,
 } from './types'
 import { scoreLabel } from './types'
 import { runIntelligencePipeline, type ExtractionPipelineOptions, type ExtractionPipelineResult } from './extraction-pipeline'
@@ -19,6 +20,7 @@ import { assessExtractionCompleteness, repairExtraction, evaluateCompletenessGat
 import { computeCanonicalScore, SCORE_VERSION, type ScoreInput } from './scoring-engine'
 import { isNonBuyerProfessional, isLinkedInChromeText } from './role-signals'
 import { buildIntelligenceInputHash, INTELLIGENCE_PIPELINE_VERSION } from './input-hash'
+import { classifyNeedOwnership, dominantNeedOwnership } from './need-ownership'
 
 // ── Orchestrator Options ───────────────────────────────────────────────────
 
@@ -211,10 +213,43 @@ export async function produceCanonicalIntelligence(
   trace.push({ stage: 'scoring', ms: Date.now() - tScore })
 
   // Step 6: Build evidence ledger (merge pipeline + scoring evidence)
-  const evidenceLedger: EvidenceEntry[] = [
+  // Defensive filter removes any scoring dimension artifacts that may have
+  // leaked from legacy code paths or AI drift. Evidence must be source-grounded.
+  const rawLedger = [
     ...pipelineResult.evidenceLedger,
     ...buildScoringEvidence(scoreBreakdown),
   ]
+  const evidenceLedger = filterScoringArtifacts(rawLedger)
+
+  // Step 6b: Compute need ownership summary from evidence ledger + raw text
+  const needOwnershipCounts: Record<NeedOwnership, number> = {
+    SELF_NEED: 0,
+    CUSTOMER_NEED: 0,
+    MARKET_PROBLEM: 0,
+    SERVICE_OFFERING: 0,
+    PRODUCT_PROBLEM: 0,
+    EMPLOYER_NEED: 0,
+    UNKNOWN: 0,
+  }
+  for (const entry of evidenceLedger) {
+    const ownership = entry.needOwnership ?? 'UNKNOWN'
+    needOwnershipCounts[ownership]++
+  }
+  // Also classify the raw text directly — evidence may be thin or empty
+  // in fallback mode, but the raw text always has signal
+  const textOwnership = classifyNeedOwnership(rawText)
+  if (textOwnership !== 'UNKNOWN') {
+    needOwnershipCounts[textOwnership]++
+  }
+  const needOwnershipSummary = {
+    dominant: dominantNeedOwnership(
+      Object.entries(needOwnershipCounts)
+        .filter(([_, count]) => count > 0)
+        .map(([ownership]) => ownership as NeedOwnership),
+    ),
+    counts: needOwnershipCounts,
+  }
+  intelligence.needOwnershipSummary = needOwnershipSummary
 
   // Step 7: Build outreach context
   const outreachContext = buildOutreachContext(intelligence, scoreBreakdown, pipelineResult)
@@ -386,6 +421,40 @@ function buildScoringEvidence(scoreBreakdown: ReturnType<typeof computeCanonical
   // artifacts that didn't come from the source. Return empty: evidence must come
   // from extraction, not from scoring.
   return []
+}
+
+/**
+ * Scoring dimension labels that must NEVER appear in the evidence ledger.
+ * These are product-internal measurements, not source-grounded evidence.
+ * If they appear, they were injected by a legacy code path or AI drift.
+ */
+const SCORING_DIMENSION_LABELS = [
+  'opportunity fit',
+  'remote eligibility',
+  'need / intent',
+  'need/intent',
+  'revenue identity fit',
+  'proof strength',
+  'access / reachability',
+  'access/reachability',
+  'timing',
+  'conversion evidence',
+]
+
+/**
+ * Defensive filter: remove any evidence entries whose signal is actually a
+ * scoring dimension label. This is a safety net — the pipeline should never
+ * create these in the first place, but historical data and future AI drift
+ * must not pollute the ledger.
+ */
+function filterScoringArtifacts(evidenceLedger: EvidenceEntry[]): EvidenceEntry[] {
+  return evidenceLedger.filter((entry) => {
+    const signal = (entry.signal ?? '').toLowerCase().trim()
+    if (!signal) return false
+    return !SCORING_DIMENSION_LABELS.some(
+      (dim) => signal === dim || signal.startsWith(dim)
+    )
+  })
 }
 
 function buildOutreachContext(

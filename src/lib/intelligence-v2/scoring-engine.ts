@@ -14,9 +14,11 @@ import type {
   NormalizedIntelligence,
   RemoteEligibility,
   OpportunitySignal,
+  NeedOwnership,
 } from './types'
 import { eligibilityScoreContribution, isJobSeekerAttribution } from './remote-eligibility'
 import { isBuyerLeadership, isClinicianProfile, isRecruiterTitle } from './role-signals'
+import { classifyNeedOwnership, isBuyerNeedOwnership, dominantNeedOwnership } from './need-ownership'
 
 // ── Scoring Model Version ──────────────────────────────────────────────────
 
@@ -295,6 +297,16 @@ export function computeCanonicalScore(input: ScoreInput): CanonicalScoreBreakdow
   // Apply role quality penalty (non-buyers score low regardless of technical content)
   total = Math.max(0, total - rolePenalty)
 
+  // Apply need ownership penalty: if the dominant need is SERVICE_OFFERING
+  // or CUSTOMER_NEED, the prospect is describing services they sell or their
+  // customers' problems — NOT a buying intent for our services.
+  const needPenalty = computeNeedOwnershipPenalty(intelligence, rawText, watchOut)
+  total = Math.max(0, total - needPenalty)
+
+  // Hiring-for-own-team is handled by reduced hiring signal weights above.
+  // No hard cap — other dimensions (remote eligibility, identity fit) contribute
+  // naturally. The need ownership penalty handles SERVICE_OFFERING cases.
+
   // Apply hard negative override
   if (hardNegatives.length > 0) {
     total = Math.min(total, 25) // Hard cap when hard negatives present
@@ -329,6 +341,65 @@ function scoreLabel(score: number): string {
   return 'Not a fit'
 }
 
+// ── Need Ownership Penalty ────────────────────────────────────────────────
+
+/**
+ * Penalize scores when the dominant need ownership indicates the prospect
+ * is describing services they SELL or their CUSTOMERS' problems — not a
+ * buying intent for our software development services.
+ *
+ * This prevents "I help companies modernize" (SERVICE_OFFERING) from scoring
+ * as if it were "I need help modernizing" (SELF_NEED).
+ */
+function computeNeedOwnershipPenalty(
+  intelligence: NormalizedIntelligence,
+  rawText: string,
+  watchOut: string[],
+): number {
+  // Classify need ownership from raw text
+  const textOwnership = classifyNeedOwnership(rawText)
+
+  // Also check evidence-level ownership if available
+  const evidenceOwnerships: NeedOwnership[] =
+    intelligence.needOwnershipSummary
+      ? Object.entries(intelligence.needOwnershipSummary.counts)
+          .filter(([_, count]) => count > 0)
+          .map(([ownership]) => ownership as NeedOwnership)
+      : []
+
+  // Collect all ownership signals
+  const allOwnerships = [textOwnership, ...evidenceOwnerships].filter(
+    (o) => o !== 'UNKNOWN',
+  )
+
+  if (allOwnerships.length === 0) return 0
+
+  const dominant = dominantNeedOwnership(allOwnerships)
+
+  // SERVICE_OFFERING: The prospect describes services they provide.
+  // This is the #1 source of false positives — a fractional CTO saying
+  // "I help companies modernize infrastructure" is NOT a buyer.
+  if (dominant === 'SERVICE_OFFERING') {
+    watchOut.push('Profile describes services they provide — likely a service provider, not a buyer.')
+    return 40 // Heavy penalty
+  }
+
+  // CUSTOMER_NEED: The prospect's customers have the problem.
+  // They may be aware of the problem but aren't buying for themselves.
+  if (dominant === 'CUSTOMER_NEED') {
+    watchOut.push('Need described is a customer problem, not a self-directed buying need.')
+    return 20
+  }
+
+  // MARKET_PROBLEM: Industry-level problem, not a personal buying need.
+  if (dominant === 'MARKET_PROBLEM') {
+    watchOut.push('Market-level problem described — not a personal buying need.')
+    return 15
+  }
+
+  return 0
+}
+
 // ── Individual Dimension Scorers ───────────────────────────────────────────
 
 function scoreOpportunityFit(
@@ -360,13 +431,21 @@ function scoreOpportunityFit(
   let note = 'No clear opportunity match.'
 
   // Strong service match signals
-  const strongSignals: OpportunitySignal[] = ['hiring', 'freelance_project_need', 'explicit_ask', 'technical_problem']
+  // NOTE: 'hiring' is NOT a strong signal — it means hiring for own team.
+  // Only 'freelance_project_need', 'explicit_ask', 'technical_problem' are strong.
+  const strongSignals: OpportunitySignal[] = ['freelance_project_need', 'explicit_ask', 'technical_problem']
   const hasStrong = signals.some((s) => strongSignals.includes(s))
 
   if (hasStrong) {
     points = 16
     note = `Strong opportunity signal: ${signals.join(', ')}.`
     reasons.push(`Strong opportunity signal: ${signals[0]}.`)
+  } else if (signals.includes('hiring')) {
+    // Hiring for own team — moderate signal. Could indicate capacity need
+    // if they can't find the right person, but not a strong buyer signal.
+    points = 8
+    note = 'Hiring signal — may indicate capacity need.'
+    reasons.push('Hiring detected (moderate signal).')
   } else if (signals.includes('hiring_pressure')) {
     points = 14
     note = 'Hiring pressure detected — delivery need likely.'
@@ -469,7 +548,7 @@ function scoreNeedIntent(
     return {
       key: 'needIntent',
       label: DIMENSION_WEIGHTS.needIntent.label,
-      points: 3,
+      points: 0,
       max: DIMENSION_WEIGHTS.needIntent.max,
       note: 'No software-delivery need on this profile.',
       direction: 'negative',
@@ -479,40 +558,55 @@ function scoreNeedIntent(
   let points = 0
   let note = 'No strong need signal.'
 
-  if (opportunity.urgency === 'immediate' && intelligence.commercialReading?.immediateBuyerNeed !== false) {
+  // Check need ownership — if the dominant need is SERVICE_OFFERING or
+  // CUSTOMER_NEED, suppress buyer-intent scoring regardless of signals
+  const dominantOwnership = intelligence.needOwnershipSummary?.dominant ?? 'UNKNOWN'
+  const isServiceProviderNeed =
+    dominantOwnership === 'SERVICE_OFFERING' || dominantOwnership === 'CUSTOMER_NEED'
+
+  if (opportunity.urgency === 'immediate' && intelligence.commercialReading?.immediateBuyerNeed !== false && !isServiceProviderNeed) {
     points = 18
     note = 'Immediate need — strong timing.'
     reasons.push('Immediate need detected.')
-  } else if (opportunity.signals.includes('explicit_ask')) {
+  } else if (opportunity.signals.includes('explicit_ask') && !isServiceProviderNeed) {
     points = 19
     note = 'Publicly asking for help — strongest signal.'
     reasons.push('Explicitly seeking external help.')
-  } else if (opportunity.signals.includes('hiring')) {
-    points = 16
-    note = 'Active hiring — delivery demand.'
-    reasons.push('Actively hiring.')
-  } else if (opportunity.signals.includes('freelance_project_need')) {
+  } else if (opportunity.signals.includes('hiring') && !isServiceProviderNeed) {
+    // "Hiring" means they want EMPLOYEES, not outside contractors.
+    // This is a moderate signal — they may need outside help if hiring fails.
+    points = 10
+    note = 'Hiring for own team — moderate signal for outside services.'
+    reasons.push('Hiring detected (may indicate capacity need).')
+  } else if (opportunity.signals.includes('freelance_project_need') && !isServiceProviderNeed) {
     points = 17
     note = 'Freelance/project need — direct opportunity.'
     reasons.push('Freelance/project need detected.')
-  } else if (opportunity.signals.includes('technical_problem')) {
+  } else if (opportunity.signals.includes('technical_problem') && !isServiceProviderNeed) {
     points = 15
     note = 'Technical problem — may need specialized help.'
     reasons.push('Technical challenge identified.')
-  } else if (opportunity.urgency === 'near_term') {
+  } else if (opportunity.urgency === 'near_term' && !isServiceProviderNeed) {
     points = 12
     note = 'Near-term need — relevant window.'
-  } else if (opportunity.urgency === 'future') {
+  } else if (opportunity.urgency === 'future' && !isServiceProviderNeed) {
     points = 8
     note = 'Future need — timing unclear.'
   }
 
-  // Boost for content signals
-  if (intelligence.content.hiringSignals.length > 0) {
+  // Boost for content signals — but only if need ownership supports buyer intent
+  if (intelligence.content.hiringSignals.length > 0 && !isServiceProviderNeed) {
     points = Math.min(points + 2, 19)
   }
 
-  if (points < 8) {
+  // If service provider need, cap at minimal points
+  if (isServiceProviderNeed && points > 5) {
+    points = 5
+    note = 'Need signal suppressed — profile describes services they provide, not a buying need.'
+    watchOut.push('Need ownership indicates service provider, not buyer.')
+  }
+
+  if (points < 8 && !isServiceProviderNeed) {
     watchOut.push('No clear need signal from evidence.')
   }
 

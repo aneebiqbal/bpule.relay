@@ -1,0 +1,80 @@
+[
+  {
+    "id": "6ec2ea3c-6253-40a8-a0c2-59cd9063c650",
+    "persona_id": "e77befa7-84a4-4ccc-9c54-e51450154f9c",
+    "platform": "linkedin",
+    "source_kind": "idea",
+    "caption": "The pod restartPolicy defaults to Always, yet many treat it as a cure‑all for crashing containers.\n\nIn practice the restartPolicy only governs the kubelet’s response to container exit codes – it does not reset a faulty image, secret, or mis‑configured init‑container. When a pod repeatedly fails because the underlying cause is external, the kubelet will keep restarting it, consuming resources and obscuring the real problem.\n\nKey points:\n- RestartPolicy is scoped to the pod, not the workload controller. Deployments, StatefulSets, and DaemonSets each have their own back‑off logic.\n- Exit codes matter: a non‑zero exit code triggers a restart, but a successful exit (code 0) signals completion, even if the pod was supposed to stay alive.\n- The default back‑off starts at 10 seconds and doubles up to 5 minutes. This exponential delay can make troubleshooting feel like a “black‑hole” if you’re only watching the pod status.\n\nWhat to do:\n1. Use liveness probes to detect unhealthy containers early and let the pod terminate intentionally.\n2. Define explicit restartPolicy (Always, OnFailure, Never) based on the workload type; for batch jobs, OnFailure or Never prevents endless restarts.\n3. Pair probes with proper terminationGracePeriodSeconds to give containers a chance to flush logs before being killed.\n4. Monitor the “kube_pod_container_status_waiting_reason” metric; frequent “CrashLoopBackOff” often indicates a missing dependency rather than a code bug.\n\nBottom line: RestartPolicy is a mechanism, not a safety net. Align it with probes, back‑off settings, and workload semantics to keep your cluster stable.",
+    "status": "ready",
+    "hook_score": 8,
+    "specificity_hit": true,
+    "self_check_passed": true,
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "created_at": "2026-09-16T17:36:34.448196+00:00"
+  },
+  {
+    "id": "55711ea1-baaa-48b0-950b-0409c0dc1d26",
+    "persona_id": "e77befa7-84a4-4ccc-9c54-e51450154f9c",
+    "platform": "linkedin",
+    "source_kind": "idea",
+    "caption": "Treating the merge commit as the ultimate gate to production is a misconception that costs teams time and reliability.\n\nHaving worked with Git and CI/CD pipelines for years, I’ve observed that the *merge* itself rarely guarantees a clean deployment. The common belief is: once a PR is merged, the CI run on that merge commit is the final safety net. In practice, that merge often occurs on a stale target branch, meaning the build and tests are run against code that no longer reflects the live environment.\n\n**Why it matters**\n- A stale base can hide integration issues that only appear when the target branch has moved forward.\n- The merge commit may pass CI, yet the subsequent release fails because the actual state of the repository differs.\n\n**Counter‑intuitive fix**\n1. Run the full CI pipeline *before* the merge, against the exact combination of source and target branches. Tools like \"pre‑merge pipelines\" or \"branch‑by‑branch validation\" let you catch integration problems early.\n2. After the merge, trigger a lightweight verification that rebuilds the exact merge commit to ensure nothing changed in the interim.\n3. Keep the target branch up‑to‑date in the PR (rebase or fast‑forward) so the merge commit reflects the current state.\n\nBy separating the *pre‑merge* validation from the *post‑merge* verification, teams gain a reliable safety net without relying on the merge commit alone. This approach reduces hot‑fixes and improves confidence in every release.",
+    "status": "ready",
+    "hook_score": 8,
+    "specificity_hit": true,
+    "self_check_passed": true,
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "created_at": "2026-09-16T20:32:28.437701+00:00"
+  },
+  {
+    "id": "7fa26afc-fe93-4379-b966-36ca2abfc0a2",
+    "persona_id": "6c6c29ac-f62f-4f50-ac4e-d5f81ef77d61",
+    "platform": "linkedin",
+    "source_kind": "idea",
+    "caption": "Traditional DevOps treats infrastructure as a fleet of disposable, stateless units. AI/ML infrastructure operates on a fundamentally different scaling property.\n\nTraditional web-scale architecture was built to turn servers into fungible cattle. AI workloads require specialized, stateful compute that behaves more like pets, but on a massive scale.\n\nThe tradeoff is forcing standard horizontal scaling patterns onto fundamentally different hardware and workloads in AI/ML. We spend so much engineering effort to make these specialized units redundant to prevent distributed training failures, but that is a tax on flexibility. The cost is horizontal scaling on hardware that often demands vertical optimization and specialized topology. The decoupling required by traditional CI/CD pipelines simply does not map to the stateful, long-running processes of model training.\n\nOptimizing these tradeoffs is where architectural decisions mature in this space.",
+    "status": "ready",
+    "hook_score": 8,
+    "specificity_hit": true,
+    "self_check_passed": true,
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "created_at": "2026-09-17T23:44:06.161008+00:00"
+  },
+  {
+    "id": "35b8fb9a-2cb6-4df4-a240-72d7d1718731",
+    "persona_id": "e77befa7-84a4-4ccc-9c54-e51450154f9c",
+    "platform": "linkedin",
+    "source_kind": "idea",
+    "caption": "Most Kubernetes migrations fail on the same tradeoff nobody budgets for: operational maturity vs. deployment speed.\n\nGitOps pipelines make it trivial to ship changes to a cluster in minutes. But Kubernetes rewards teams that move slowly at first — RBAC design, resource requests, network policies, upgrade strategy. Skip those, and the same platform that gave you fast deploys gives you fast outages.\n\nThe tradeoff, concretely:\n\n- Move fast, define later: deploys land in days, but every workload inherits defaults that fall apart under load. Debugging becomes archaeology.\n- Move slow, define first: a few extra weeks of policy and observability work, then the platform compounds — every deploy after that is safer and cheaper.\n\nFrom working with Kubernetes and CI/CD pipelines, the second path almost always wins. The teams that struggle aren't the ones lacking Kubernetes knowledge — they're the ones treating the cluster like a VM with extra steps, inheriting the speed of the pipeline without the guardrails of the platform.\n\nThe honest framing: Kubernetes front-loads cost and back-loads leverage. If your roadmap can't absorb the front-load, a simpler platform may genuinely be the better call. That's not a failure — it's a fit decision.",
+    "status": "ready",
+    "hook_score": 7,
+    "specificity_hit": true,
+    "self_check_passed": true,
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "created_at": "2026-09-18T01:45:54.494934+00:00"
+  },
+  {
+    "id": "6e371fb9-d794-4c05-b5b9-3a028621c70c",
+    "persona_id": "e77befa7-84a4-4ccc-9c54-e51450154f9c",
+    "platform": "linkedin",
+    "source_kind": "idea",
+    "caption": "The tradeoff most teams miss in Kubernetes adoption: running stateful workloads on it.\n\nKubernetes is excellent at managing stateless services. But databases and message queues on Kubernetes introduce a real tradeoff: you gain declarative orchestration and self-healing, but you inherit the full complexity of StatefulSets, persistent volume lifecycle, and careful handling of failover ordering.\n\nFor many teams, a managed database outside the cluster paired with stateless services inside it delivers most of the benefit at a fraction of the operational risk.\n\nThe same logic applies to CI/CD pipelines. Moving everything into-cluster sounds clean, but it couples your deployment tooling to the same infrastructure you are trying to deploy. Keeping the pipeline independent means a cluster problem never blocks your ability to fix the cluster.\n\nKubernetes and Git-based delivery are powerful defaults — knowing when not to use them for a given workload is the part of the craft that comes with experience.\n\nWhat is your rule of thumb for stateful workloads on Kubernetes?",
+    "status": "ready",
+    "hook_score": 8,
+    "specificity_hit": true,
+    "self_check_passed": true,
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "created_at": "2026-09-18T22:23:41.01344+00:00"
+  },
+  {
+    "id": "e38a8ce4-72a5-4109-a513-6a4a752b0fb1",
+    "persona_id": "e77befa7-84a4-4ccc-9c54-e51450154f9c",
+    "platform": "linkedin",
+    "source_kind": "idea",
+    "caption": "Most teams treat CI pipeline speed and reliability as opposing goals. They're not — the conflict usually comes from one design decision: monolithic pipelines.\n\nA single pipeline that runs lint, tests, builds, scans, and deploys in sequence is easy to reason about. It's also the reason builds take 30 minutes and fail for unrelated reasons.\n\nThe tradeoff, broken down:\n\nMonolithic pipeline\n- Simple mental model, one place to look\n- Every commit pays the full cost\n- One flaky stage blocks everything\n\nSplit, parallelized stages\n- Faster feedback on what actually changed\n- More moving parts to maintain\n- Requires discipline around shared dependencies and caching\n\nThe non-obvious part: the biggest wins come from caching and path-based triggers, not from throwing more compute at runners. Caching dependencies correctly and only running relevant jobs per path change often cuts pipeline time more than any hardware upgrade — and it costs nothing at runtime.\n\nThe mistake I see most often is optimizing the slowest stage instead of asking whether that stage needed to run at all for this change.\n\nFast pipelines aren't a compute problem. They're a graph design problem.\n\nI've spent a lot of time in Git/CI-CD and Kubernetes infrastructure, and this distinction shows up in nearly every pipeline review.",
+    "status": "ready",
+    "hook_score": 7,
+    "specificity_hit": true,
+    "self_check_passed": true,
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "created_at": "2026-09-21T15:17:13.134054+00:00"
+  }
+]

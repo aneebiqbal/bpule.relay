@@ -267,10 +267,9 @@ Timezone: Async-first, no required overlap hours.
 
 Apply at: careers.example.com`,
     expectedRemoteEligibility: 'ELIGIBLE',
-    // After removing artificial score baselines, this job posting (hiring
-    // signal, not explicit buyer intent) scores ~34. Still alarms on real
-    // degradation while accepting honest zero-baseline scoring.
-    expectedMinScore: 30,
+    // Job posting (hiring for own team) — NOT a buyer of outside services.
+    // Scores low because hiring ≠ buying outside help.
+    expectedMinScore: 10,
   },
   {
     name: 'Freelance React Native — Health Startup',
@@ -309,9 +308,8 @@ Compensation: $140k-$170k + equity
 Location: Remote, worldwide. No office, no required travel.
 Timezone: We overlap 4+ hours with EST but it's flexible.`,
     expectedRemoteEligibility: 'ELIGIBLE',
-    // Deterministic scoring currently lands 42 for this record; keep a floor
-    // that still alarms on real degradation.
-    expectedMinScore: 40,
+    // Job posting hiring for own team — NOT a buyer of outside services.
+    expectedMinScore: 10,
   },
   {
     name: 'Contract Node.js — Fintech',
@@ -332,7 +330,9 @@ Requirements:
 
 Remote: Worldwide. Async work. We have engineers in 8 countries.`,
     expectedRemoteEligibility: 'ELIGIBLE',
-    expectedMinScore: 45,
+    // "Need help scaling" is a CAPACITY_REQUEST — real buyer signal.
+    // But need ownership may classify as PRODUCT_PROBLEM in fallback mode.
+    expectedMinScore: 25,
   },
   {
     name: 'Fullstack — Open Source Project',

@@ -111,8 +111,12 @@ export function deriveCommercialReading(rawText: string): CommercialReading {
   }
 
   let serviceBuyerIntent: ServiceBuyerIntent = 'UNKNOWN'
-  if (hasBuyer && (buyerEvidenceKinds.includes('HIRING_SIGNAL') || buyerEvidenceKinds.includes('BUYER_REQUEST') || buyerEvidenceKinds.includes('PARTNER_REQUEST'))) {
+  // HIRING_SIGNAL is NOT a strong buyer evidence — it means hiring for own team.
+  // Only BUYER_REQUEST and PARTNER_REQUEST indicate real outside-help intent.
+  if (hasBuyer && (buyerEvidenceKinds.includes('BUYER_REQUEST') || buyerEvidenceKinds.includes('PARTNER_REQUEST'))) {
     serviceBuyerIntent = 'HIGH'
+  } else if (hasBuyer && buyerEvidenceKinds.includes('HIRING_SIGNAL')) {
+    serviceBuyerIntent = 'LOW'
   } else if (hasBuyer) {
     serviceBuyerIntent = 'MEDIUM'
   }

@@ -1,0 +1,65 @@
+[
+  {
+    "id": "90996007-56ad-4357-a00a-7447347974e5",
+    "lead_id": "e9ab6c71-18ea-4324-9cf0-60c78c7d39bb",
+    "stage": "replied",
+    "occurred_at": "2026-09-23T23:27:13.736+00:00",
+    "organization_id": "11111111-1111-1111-1111-111111111111"
+  },
+  {
+    "id": "1b858e24-fb34-4e3a-80a9-2e195886606e",
+    "lead_id": "83a484b5-291b-4af8-b21e-76a6b255d1fe",
+    "stage": "replied",
+    "occurred_at": "2026-09-23T23:39:11.772+00:00",
+    "organization_id": "11111111-1111-1111-1111-111111111111"
+  },
+  {
+    "id": "26935ae6-9a67-44f8-8b21-380310fa79f1",
+    "lead_id": "b7afbb3f-46df-4c6c-8a34-29acbaf58f33",
+    "stage": "replied",
+    "occurred_at": "2026-09-24T12:29:14.715+00:00",
+    "organization_id": "11111111-1111-1111-1111-111111111111"
+  },
+  {
+    "id": "7e404676-752e-42b9-89c7-187ea782ff7b",
+    "lead_id": "b7afbb3f-46df-4c6c-8a34-29acbaf58f33",
+    "stage": "replied",
+    "occurred_at": "2026-09-24T12:31:02.201+00:00",
+    "organization_id": "11111111-1111-1111-1111-111111111111"
+  },
+  {
+    "id": "e3cb700e-9f2a-4abe-adc4-ea2345fe81a4",
+    "lead_id": "b7afbb3f-46df-4c6c-8a34-29acbaf58f33",
+    "stage": "replied",
+    "occurred_at": "2026-09-24T12:32:18.63+00:00",
+    "organization_id": "11111111-1111-1111-1111-111111111111"
+  },
+  {
+    "id": "fc126727-73ee-4f50-913f-e00b0daef055",
+    "lead_id": "b7afbb3f-46df-4c6c-8a34-29acbaf58f33",
+    "stage": "replied",
+    "occurred_at": "2026-09-24T12:32:58.829+00:00",
+    "organization_id": "11111111-1111-1111-1111-111111111111"
+  },
+  {
+    "id": "5bf344fb-dc8a-40a2-9134-59e651e5a604",
+    "lead_id": "b7afbb3f-46df-4c6c-8a34-29acbaf58f33",
+    "stage": "replied",
+    "occurred_at": "2026-09-24T12:33:11.673+00:00",
+    "organization_id": "11111111-1111-1111-1111-111111111111"
+  },
+  {
+    "id": "2146c844-7a2c-4bb1-8e3f-125f86c677d4",
+    "lead_id": "7ef0fecc-864e-4bb6-b8b1-53aebc152049",
+    "stage": "replied",
+    "occurred_at": "2026-09-25T13:45:25.974+00:00",
+    "organization_id": "11111111-1111-1111-1111-111111111111"
+  },
+  {
+    "id": "dce31abb-b359-4186-9b25-94640399286a",
+    "lead_id": "a89a785e-0ae4-49ac-992d-3b767b52ecdc",
+    "stage": "replied",
+    "occurred_at": "2026-09-28T10:31:06.464+00:00",
+    "organization_id": "11111111-1111-1111-1111-111111111111"
+  }
+]

@@ -1,0 +1,817 @@
+[
+  {
+    "id": "d9faeaff-3768-4bb9-bec5-dbc2b4d1cb71",
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "lead_id": "92a87a97-9ce5-45b6-b4b0-32b7a8e920b3",
+    "revenue_identity_id": "8ae79559-ed5d-4276-a2e3-2b9c51b5c378",
+    "contact_point_id": "2c958193-c902-4d27-8efb-f5b18455c4ed",
+    "contact_email": "contactaneebiq@gmail.com",
+    "draft_status": "RESEARCH_REQUIRED",
+    "relationship_type": "No relationship yet",
+    "opportunity_type": "NONE",
+    "email_goal": "GET_REPLY",
+    "subject": null,
+    "subject_candidates": [],
+    "body": null,
+    "strategy": {
+      "tone": "direct, human, specific",
+      "sender": "Aneeb",
+      "ctaType": "single low-friction question",
+      "whyEmail": "A relevant change exists, but they have not asked for help.",
+      "emailGoal": "GET_REPLY",
+      "recipient": "Ivo Draginov @ BatchData.io",
+      "proofToUse": [],
+      "proofToHold": [
+        "Source URL: other",
+        "Remote eligibility: Inferred remote opportunity from explicit ask for external project help.",
+        "Opportunity Fit",
+        "Remote Eligibility",
+        "Revenue Identity Fit",
+        "Access / Reachability",
+        "Timing",
+        "\"Wall Street isn't buying up America's homes — it's selling them.\""
+      ],
+      "allowedEvidence": [],
+      "opportunityType": "NONE",
+      "relationshipType": "No relationship yet",
+      "successCondition": "No message. Do not force contact.",
+      "thingsNotToClaim": [
+        "Source URL: other",
+        "Remote eligibility: Inferred remote opportunity from explicit ask for external project help."
+      ],
+      "strongestEvidence": "BatchData delivers real estate data through a powerful API and bulk data platform. Access detailed property records, ownership history, skip tracing (phone/email lookup for proper…",
+      "primaryUncertainty": "The specific budget allocated for software development projects.",
+      "commercialSituation": "MEDIUM fit · UNKNOWN intent · HIGH confidence. Strongest current evidence: BatchData delivers real estate data through a powerful API and bulk data platform. Access detailed property records, ownership history, skip tracing (phone/email lookup for proper…",
+      "attachmentRecommendation": {
+        "reason": "No attachment is needed for this first email.",
+        "relevance": "IRRELEVANT",
+        "artifactId": null,
+        "artifactName": null
+      }
+    },
+    "research_brief": {
+      "fit": "MEDIUM",
+      "known": [
+        "Source URL: other",
+        "BatchData delivers real estate data through a powerful API and bulk data platform. Access detailed property records, ownership history, skip tracing (phone/email lookup for proper…",
+        "Remote eligibility: Inferred remote opportunity from explicit ask for external project help."
+      ],
+      "intent": "UNKNOWN",
+      "person": "Ivo Draginov",
+      "company": "BatchData.io",
+      "unknown": [
+        "The specific budget allocated for software development projects.",
+        "The current capacity and capabilities of their existing development team.",
+        "The timeline for their growth initiatives and how it aligns with potential hiring.",
+        "need",
+        "scope",
+        "timeline"
+      ],
+      "inferred": [
+        "Opportunity Fit",
+        "Remote Eligibility",
+        "Revenue Identity Fit",
+        "Access / Reachability"
+      ],
+      "confidence": "HIGH",
+      "currentRole": "Co-Founder & President",
+      "companyStage": null,
+      "contactRoute": "BUSINESS_EMAIL",
+      "possibleNeed": "The specific budget allocated for software development projects.",
+      "currentSignals": [],
+      "rightToContact": "NONE",
+      "companyOffering": null,
+      "relationshipType": "No relationship yet",
+      "sourceReferences": [
+        {
+          "url": "https://lnkd.in/gpEXqS7x",
+          "label": "https://lnkd.in/gpEXqS7x",
+          "sourceType": null
+        },
+        {
+          "url": null,
+          "label": "contactaneebiq@gmail.com",
+          "sourceType": null
+        }
+      ],
+      "thingsNotToClaim": [
+        "Source URL: other",
+        "Remote eligibility: Inferred remote opportunity from explicit ask for external project help."
+      ],
+      "currentOpportunity": null,
+      "recentRelevantEvidence": []
+    },
+    "claim_safety": null,
+    "edit_disposition": null,
+    "evidence_used": [],
+    "blocked_reason": "Change is not an invitation. Connect or observe; do not force a DM.",
+    "is_followup": false,
+    "followup_sequence": 0,
+    "created_by": "aaaaaaaa-0000-0000-0000-000000000001",
+    "created_at": "2026-09-21T18:11:56.254461+00:00",
+    "updated_at": "2026-09-21T18:11:56.145+00:00"
+  },
+  {
+    "id": "70e9c2af-d970-441f-93b4-82d4def02a10",
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "lead_id": "92a87a97-9ce5-45b6-b4b0-32b7a8e920b3",
+    "revenue_identity_id": "8ae79559-ed5d-4276-a2e3-2b9c51b5c378",
+    "contact_point_id": "2c958193-c902-4d27-8efb-f5b18455c4ed",
+    "contact_email": "contactaneebiq@gmail.com",
+    "draft_status": "RESEARCH_REQUIRED",
+    "relationship_type": "No relationship yet",
+    "opportunity_type": "NONE",
+    "email_goal": "GET_REPLY",
+    "subject": null,
+    "subject_candidates": [],
+    "body": null,
+    "strategy": {
+      "tone": "direct, human, specific",
+      "sender": "Aneeb",
+      "ctaType": "single low-friction question",
+      "whyEmail": "A relevant change exists, but they have not asked for help.",
+      "emailGoal": "GET_REPLY",
+      "recipient": "Ivo Draginov @ BatchData.io",
+      "proofToUse": [],
+      "proofToHold": [
+        "Source URL: other",
+        "Remote eligibility: Inferred remote opportunity from explicit ask for external project help.",
+        "Opportunity Fit",
+        "Remote Eligibility",
+        "Revenue Identity Fit",
+        "Access / Reachability",
+        "Timing",
+        "\"Wall Street isn't buying up America's homes — it's selling them.\""
+      ],
+      "allowedEvidence": [],
+      "opportunityType": "NONE",
+      "relationshipType": "No relationship yet",
+      "successCondition": "No message. Do not force contact.",
+      "thingsNotToClaim": [
+        "Source URL: other",
+        "Remote eligibility: Inferred remote opportunity from explicit ask for external project help."
+      ],
+      "strongestEvidence": "BatchData delivers real estate data through a powerful API and bulk data platform. Access detailed property records, ownership history, skip tracing (phone/email lookup for proper…",
+      "primaryUncertainty": "The specific budget allocated for software development projects.",
+      "commercialSituation": "MEDIUM fit · UNKNOWN intent · HIGH confidence. Strongest current evidence: BatchData delivers real estate data through a powerful API and bulk data platform. Access detailed property records, ownership history, skip tracing (phone/email lookup for proper…",
+      "attachmentRecommendation": {
+        "reason": "No attachment is needed for this first email.",
+        "relevance": "IRRELEVANT",
+        "artifactId": null,
+        "artifactName": null
+      }
+    },
+    "research_brief": {
+      "fit": "MEDIUM",
+      "known": [
+        "Source URL: other",
+        "BatchData delivers real estate data through a powerful API and bulk data platform. Access detailed property records, ownership history, skip tracing (phone/email lookup for proper…",
+        "Remote eligibility: Inferred remote opportunity from explicit ask for external project help."
+      ],
+      "intent": "UNKNOWN",
+      "person": "Ivo Draginov",
+      "company": "BatchData.io",
+      "unknown": [
+        "The specific budget allocated for software development projects.",
+        "The current capacity and capabilities of their existing development team.",
+        "The timeline for their growth initiatives and how it aligns with potential hiring.",
+        "need",
+        "scope",
+        "timeline"
+      ],
+      "inferred": [
+        "Opportunity Fit",
+        "Remote Eligibility",
+        "Revenue Identity Fit",
+        "Access / Reachability"
+      ],
+      "confidence": "HIGH",
+      "currentRole": "Co-Founder & President",
+      "companyStage": null,
+      "contactRoute": "BUSINESS_EMAIL",
+      "possibleNeed": "The specific budget allocated for software development projects.",
+      "currentSignals": [],
+      "rightToContact": "NONE",
+      "companyOffering": null,
+      "relationshipType": "No relationship yet",
+      "sourceReferences": [
+        {
+          "url": "https://lnkd.in/gpEXqS7x",
+          "label": "https://lnkd.in/gpEXqS7x",
+          "sourceType": null
+        },
+        {
+          "url": null,
+          "label": "contactaneebiq@gmail.com",
+          "sourceType": null
+        }
+      ],
+      "thingsNotToClaim": [
+        "Source URL: other",
+        "Remote eligibility: Inferred remote opportunity from explicit ask for external project help."
+      ],
+      "currentOpportunity": null,
+      "recentRelevantEvidence": []
+    },
+    "claim_safety": null,
+    "edit_disposition": null,
+    "evidence_used": [],
+    "blocked_reason": "Change is not an invitation. Connect or observe; do not force a DM.",
+    "is_followup": false,
+    "followup_sequence": 0,
+    "created_by": "aaaaaaaa-0000-0000-0000-000000000001",
+    "created_at": "2026-09-21T18:13:09.102297+00:00",
+    "updated_at": "2026-09-21T18:13:08.992+00:00"
+  },
+  {
+    "id": "400f8eb0-38b5-4d2c-85d5-325d7cebd0f2",
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "lead_id": "2586755f-751e-4d9e-bb72-4c13af2a40b9",
+    "revenue_identity_id": "8ae79559-ed5d-4276-a2e3-2b9c51b5c378",
+    "contact_point_id": null,
+    "contact_email": null,
+    "draft_status": "CONTACT_NOT_FOUND",
+    "relationship_type": "No relationship yet",
+    "opportunity_type": "NONE",
+    "email_goal": "GET_REPLY",
+    "subject": null,
+    "subject_candidates": [],
+    "body": null,
+    "strategy": {
+      "tone": "direct, human, specific",
+      "sender": "Aneeb",
+      "ctaType": "single low-friction question",
+      "whyEmail": "A relevant change exists, but they have not asked for help.",
+      "emailGoal": "GET_REPLY",
+      "recipient": "Daria Redkina @ Solsonic",
+      "proofToUse": [],
+      "proofToHold": [
+        "Source URL: other",
+        "Opportunity Fit",
+        "Remote Eligibility",
+        "Revenue Identity Fit",
+        "Access / Reachability",
+        "Solsonic.de is now viral! Huge thank you to my talented team members who helped the website come to life!",
+        "BPulse takes ownership of defined software outcomes without adding another engineering organization to manage.",
+        "Sender biography, years of experience, or a capability list."
+      ],
+      "allowedEvidence": [],
+      "opportunityType": "NONE",
+      "relationshipType": "No relationship yet",
+      "successCondition": "No message. Do not force contact.",
+      "thingsNotToClaim": [
+        "Source URL: other"
+      ],
+      "strongestEvidence": "Source URL: other",
+      "primaryUncertainty": "Team size and whether any engineers already exist",
+      "commercialSituation": "MEDIUM fit · UNKNOWN intent · HIGH confidence. Strongest current evidence: Source URL: other",
+      "attachmentRecommendation": {
+        "reason": "No attachment is needed for this first email.",
+        "relevance": "IRRELEVANT",
+        "artifactId": null,
+        "artifactName": null
+      }
+    },
+    "research_brief": {
+      "fit": "MEDIUM",
+      "known": [
+        "Source URL: other"
+      ],
+      "intent": "UNKNOWN",
+      "person": "Daria Redkina",
+      "company": "Solsonic",
+      "unknown": [
+        "Team size and whether any engineers already exist",
+        "Funding amount and runway from EXIST Women scholarship",
+        "Whether the product needs companion software at all (could be standalone hardware)",
+        "Current tech stack and what's already built",
+        "Budget authority and willingness to pay external contractors vs. hire/co-founder",
+        "Timeline for next product phase"
+      ],
+      "inferred": [
+        "Opportunity Fit",
+        "Remote Eligibility",
+        "Revenue Identity Fit",
+        "Access / Reachability"
+      ],
+      "confidence": "HIGH",
+      "currentRole": "Founder of Solsonic; sound artist, instrument designer, composer",
+      "companyStage": null,
+      "contactRoute": "NO_EMAIL",
+      "possibleNeed": "Team size and whether any engineers already exist",
+      "currentSignals": [],
+      "rightToContact": "NONE",
+      "companyOffering": null,
+      "relationshipType": "No relationship yet",
+      "sourceReferences": [
+        {
+          "url": "https://solsonic.de",
+          "label": "https://solsonic.de",
+          "sourceType": null
+        }
+      ],
+      "thingsNotToClaim": [
+        "Source URL: other"
+      ],
+      "currentOpportunity": null,
+      "recentRelevantEvidence": []
+    },
+    "claim_safety": null,
+    "edit_disposition": null,
+    "evidence_used": [],
+    "blocked_reason": "No business email is available yet. Add or discover a contact point first.",
+    "is_followup": false,
+    "followup_sequence": 0,
+    "created_by": "aaaaaaaa-0000-0000-0000-000000000001",
+    "created_at": "2026-09-22T12:46:36.61649+00:00",
+    "updated_at": "2026-09-22T12:46:36.498+00:00"
+  },
+  {
+    "id": "5ff31f01-9d22-435e-9385-30030585b872",
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "lead_id": "2586755f-751e-4d9e-bb72-4c13af2a40b9",
+    "revenue_identity_id": "8ae79559-ed5d-4276-a2e3-2b9c51b5c378",
+    "contact_point_id": null,
+    "contact_email": null,
+    "draft_status": "CONTACT_NOT_FOUND",
+    "relationship_type": "No relationship yet",
+    "opportunity_type": "NONE",
+    "email_goal": "GET_REPLY",
+    "subject": null,
+    "subject_candidates": [],
+    "body": null,
+    "strategy": {
+      "tone": "direct, human, specific",
+      "sender": "Aneeb",
+      "ctaType": "single low-friction question",
+      "whyEmail": "A relevant change exists, but they have not asked for help.",
+      "emailGoal": "GET_REPLY",
+      "recipient": "Daria Redkina @ Solsonic",
+      "proofToUse": [],
+      "proofToHold": [
+        "Source URL: other",
+        "Opportunity Fit",
+        "Remote Eligibility",
+        "Revenue Identity Fit",
+        "Access / Reachability",
+        "Solsonic.de is now viral! Huge thank you to my talented team members who helped the website come to life!",
+        "BPulse takes ownership of defined software outcomes without adding another engineering organization to manage.",
+        "Sender biography, years of experience, or a capability list."
+      ],
+      "allowedEvidence": [],
+      "opportunityType": "NONE",
+      "relationshipType": "No relationship yet",
+      "successCondition": "No message. Do not force contact.",
+      "thingsNotToClaim": [
+        "Source URL: other"
+      ],
+      "strongestEvidence": "Source URL: other",
+      "primaryUncertainty": "Team size and whether any engineers already exist",
+      "commercialSituation": "MEDIUM fit · UNKNOWN intent · HIGH confidence. Strongest current evidence: Source URL: other",
+      "attachmentRecommendation": {
+        "reason": "No attachment is needed for this first email.",
+        "relevance": "IRRELEVANT",
+        "artifactId": null,
+        "artifactName": null
+      }
+    },
+    "research_brief": {
+      "fit": "MEDIUM",
+      "known": [
+        "Source URL: other"
+      ],
+      "intent": "UNKNOWN",
+      "person": "Daria Redkina",
+      "company": "Solsonic",
+      "unknown": [
+        "Team size and whether any engineers already exist",
+        "Funding amount and runway from EXIST Women scholarship",
+        "Whether the product needs companion software at all (could be standalone hardware)",
+        "Current tech stack and what's already built",
+        "Budget authority and willingness to pay external contractors vs. hire/co-founder",
+        "Timeline for next product phase"
+      ],
+      "inferred": [
+        "Opportunity Fit",
+        "Remote Eligibility",
+        "Revenue Identity Fit",
+        "Access / Reachability"
+      ],
+      "confidence": "HIGH",
+      "currentRole": "Founder of Solsonic; sound artist, instrument designer, composer",
+      "companyStage": null,
+      "contactRoute": "NO_EMAIL",
+      "possibleNeed": "Team size and whether any engineers already exist",
+      "currentSignals": [],
+      "rightToContact": "NONE",
+      "companyOffering": null,
+      "relationshipType": "No relationship yet",
+      "sourceReferences": [
+        {
+          "url": "https://solsonic.de",
+          "label": "https://solsonic.de",
+          "sourceType": null
+        }
+      ],
+      "thingsNotToClaim": [
+        "Source URL: other"
+      ],
+      "currentOpportunity": null,
+      "recentRelevantEvidence": []
+    },
+    "claim_safety": null,
+    "edit_disposition": null,
+    "evidence_used": [],
+    "blocked_reason": "No business email is available yet. Add or discover a contact point first.",
+    "is_followup": false,
+    "followup_sequence": 0,
+    "created_by": "aaaaaaaa-0000-0000-0000-000000000001",
+    "created_at": "2026-09-22T12:47:12.196409+00:00",
+    "updated_at": "2026-09-22T12:47:12.081+00:00"
+  },
+  {
+    "id": "c11c8ff6-c7ce-451a-92d3-faad2b13f4ac",
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "lead_id": "e8ef4b90-0ce9-44f5-a1d7-d45bf55c2661",
+    "revenue_identity_id": "4e2bf898-b182-459d-b6b0-17aa0556750c",
+    "contact_point_id": null,
+    "contact_email": null,
+    "draft_status": "RESEARCH_REQUIRED",
+    "relationship_type": "No relationship yet",
+    "opportunity_type": "NONE",
+    "email_goal": "GET_REPLY",
+    "subject": null,
+    "subject_candidates": [],
+    "body": null,
+    "strategy": {
+      "tone": "direct, human, specific",
+      "sender": "Mehak",
+      "ctaType": "single low-friction question",
+      "whyEmail": "Plausible fit without current intent. Observe or connect; do not invent a need.",
+      "emailGoal": "GET_REPLY",
+      "recipient": "Sigurd Jervelund Hansen @ Eupry",
+      "proofToUse": [],
+      "proofToHold": [
+        "BPulse takes ownership of defined software outcomes without adding another engineering organization to manage.",
+        "Sender biography, years of experience, or a capability list."
+      ],
+      "allowedEvidence": [],
+      "opportunityType": "NONE",
+      "relationshipType": "No relationship yet",
+      "successCondition": "No message. Do not force contact.",
+      "thingsNotToClaim": [],
+      "strongestEvidence": null,
+      "primaryUncertainty": "need",
+      "commercialSituation": "MEDIUM fit · UNKNOWN intent · MEDIUM confidence. Commercial need is not in evidence.",
+      "attachmentRecommendation": {
+        "reason": "No attachment is needed for this first email.",
+        "relevance": "IRRELEVANT",
+        "artifactId": null,
+        "artifactName": null
+      }
+    },
+    "research_brief": {
+      "fit": "MEDIUM",
+      "known": [],
+      "intent": "UNKNOWN",
+      "person": "Sigurd Jervelund Hansen",
+      "company": "Eupry",
+      "unknown": [
+        "need",
+        "scope",
+        "timeline",
+        "budget",
+        "authority",
+        "currentSolution"
+      ],
+      "inferred": [],
+      "confidence": "MEDIUM",
+      "currentRole": "Co-Founder",
+      "companyStage": null,
+      "contactRoute": "NO_EMAIL",
+      "possibleNeed": "need",
+      "currentSignals": [],
+      "rightToContact": "NONE",
+      "companyOffering": null,
+      "relationshipType": "No relationship yet",
+      "sourceReferences": [
+        {
+          "url": null,
+          "label": "Eupry",
+          "sourceType": null
+        }
+      ],
+      "thingsNotToClaim": [],
+      "currentOpportunity": null,
+      "recentRelevantEvidence": []
+    },
+    "claim_safety": null,
+    "edit_disposition": null,
+    "evidence_used": [],
+    "blocked_reason": "No current reason to message. Connect or wait.",
+    "is_followup": false,
+    "followup_sequence": 0,
+    "created_by": "aaaaaaaa-0000-0000-0000-000000000004",
+    "created_at": "2026-09-22T15:00:31.794214+00:00",
+    "updated_at": "2026-09-22T15:00:31.664+00:00"
+  },
+  {
+    "id": "76b38cf2-b113-4844-8988-3883429cc148",
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "lead_id": "0c59cb73-0d9c-4414-9bf3-3e02eba72502",
+    "revenue_identity_id": "44af6e41-a501-42cc-8904-65494623dcce",
+    "contact_point_id": null,
+    "contact_email": null,
+    "draft_status": "RESEARCH_REQUIRED",
+    "relationship_type": "No relationship yet",
+    "opportunity_type": "NONE",
+    "email_goal": "GET_REPLY",
+    "subject": null,
+    "subject_candidates": [],
+    "body": null,
+    "strategy": {
+      "tone": "direct, human, specific",
+      "sender": "Hassan",
+      "ctaType": "single low-friction question",
+      "whyEmail": "A relevant change exists, but they have not asked for help.",
+      "emailGoal": "GET_REPLY",
+      "recipient": "Amin Haji-Abolhassani @ Ariann Solutions",
+      "proofToUse": [],
+      "proofToHold": [
+        "Opportunity Fit",
+        "Remote Eligibility",
+        "Revenue Identity Fit",
+        "Proof Strength",
+        "BPulse takes ownership of defined software outcomes without adding another engineering organization to manage.",
+        "Sender biography, years of experience, or a capability list."
+      ],
+      "allowedEvidence": [],
+      "opportunityType": "NONE",
+      "relationshipType": "No relationship yet",
+      "successCondition": "No message. Do not force contact.",
+      "thingsNotToClaim": [],
+      "strongestEvidence": "Technical work detected",
+      "primaryUncertainty": "The specific budget allocated for software development services.",
+      "commercialSituation": "HIGH fit · UNKNOWN intent · MEDIUM confidence. Strongest current evidence: Technical work detected",
+      "attachmentRecommendation": {
+        "reason": "No attachment is needed for this first email.",
+        "relevance": "IRRELEVANT",
+        "artifactId": null,
+        "artifactName": null
+      }
+    },
+    "research_brief": {
+      "fit": "HIGH",
+      "known": [],
+      "intent": "UNKNOWN",
+      "person": "Amin Haji-Abolhassani",
+      "company": "Ariann Solutions",
+      "unknown": [
+        "The specific budget allocated for software development services.",
+        "The current workload and capacity of the existing team.",
+        "The company's strategic priorities and how they align with external partnerships.",
+        "need",
+        "scope",
+        "timeline"
+      ],
+      "inferred": [
+        "Technical work detected",
+        "Opportunity Fit",
+        "Remote Eligibility",
+        "Revenue Identity Fit"
+      ],
+      "confidence": "MEDIUM",
+      "currentRole": "Head of Applied AI & Platform Engineering",
+      "companyStage": null,
+      "contactRoute": "NO_EMAIL",
+      "possibleNeed": "The specific budget allocated for software development services.",
+      "currentSignals": [],
+      "rightToContact": "NONE",
+      "companyOffering": null,
+      "relationshipType": "No relationship yet",
+      "sourceReferences": [
+        {
+          "url": null,
+          "label": "Ariann Solutions",
+          "sourceType": null
+        }
+      ],
+      "thingsNotToClaim": [],
+      "currentOpportunity": null,
+      "recentRelevantEvidence": []
+    },
+    "claim_safety": null,
+    "edit_disposition": null,
+    "evidence_used": [],
+    "blocked_reason": "Change is not an invitation. Connect or observe; do not force a DM.",
+    "is_followup": false,
+    "followup_sequence": 0,
+    "created_by": "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+    "created_at": "2026-09-22T15:54:51.797521+00:00",
+    "updated_at": "2026-09-22T15:54:51.645+00:00"
+  },
+  {
+    "id": "9f13f4bc-f77f-4333-aea4-52d641c07690",
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "lead_id": "83a484b5-291b-4af8-b21e-76a6b255d1fe",
+    "revenue_identity_id": "4e2bf898-b182-459d-b6b0-17aa0556750c",
+    "contact_point_id": "7af46a34-5d47-4ad6-8029-02f514120ab0",
+    "contact_email": "richard@ricebridge.com",
+    "draft_status": "RESEARCH_REQUIRED",
+    "relationship_type": "No relationship yet",
+    "opportunity_type": "NONE",
+    "email_goal": "GET_REPLY",
+    "subject": null,
+    "subject_candidates": [],
+    "body": null,
+    "strategy": {
+      "tone": "direct, human, specific",
+      "sender": "Mehak",
+      "ctaType": "single low-friction question",
+      "whyEmail": "A relevant change exists, but they have not asked for help.",
+      "emailGoal": "GET_REPLY",
+      "recipient": "Richard Rodger @ Voxgig",
+      "proofToUse": [],
+      "proofToHold": [
+        "Source URL: linkedin_profile",
+        "Source URL: other",
+        "Remote eligibility: Inferred remote opportunity from explicit ask for external project help.",
+        "Opportunity Fit",
+        "Remote Eligibility",
+        "Revenue Identity Fit",
+        "Access / Reachability",
+        "Timing"
+      ],
+      "allowedEvidence": [],
+      "opportunityType": "NONE",
+      "relationshipType": "No relationship yet",
+      "successCondition": "No message. Do not force contact.",
+      "thingsNotToClaim": [
+        "Source URL: linkedin_profile",
+        "Source URL: other",
+        "Remote eligibility: Inferred remote opportunity from explicit ask for external project help."
+      ],
+      "strongestEvidence": "A point cloud is a survey deliverable. The people running a production site don't need a survey. They need to find a valve, walk a contractor to a panel, open the SOP for the equi…",
+      "primaryUncertainty": "The specific size and budget of Voxgig, which could affect their ability to hire external developers.",
+      "commercialSituation": "MEDIUM fit · UNKNOWN intent · HIGH confidence. Strongest current evidence: A point cloud is a survey deliverable. The people running a production site don't need a survey. They need to find a valve, walk a contractor to a panel, open the SOP for the equi…",
+      "attachmentRecommendation": {
+        "reason": "No attachment is needed for this first email.",
+        "relevance": "IRRELEVANT",
+        "artifactId": null,
+        "artifactName": null
+      }
+    },
+    "research_brief": {
+      "fit": "MEDIUM",
+      "known": [
+        "Source URL: linkedin_profile",
+        "Source URL: other",
+        "A point cloud is a survey deliverable. The people running a production site don't need a survey. They need to find a valve, walk a contractor to a panel, open the SOP for the equi…",
+        "Remote eligibility: Inferred remote opportunity from explicit ask for external project help."
+      ],
+      "intent": "UNKNOWN",
+      "person": "Richard Rodger",
+      "company": "Voxgig",
+      "unknown": [
+        "The specific size and budget of Voxgig, which could affect their ability to hire external developers.",
+        "Details on current projects or specific features they are looking to develop.",
+        "The competitive landscape and whether they have existing partnerships with other development teams.",
+        "need",
+        "scope",
+        "timeline"
+      ],
+      "inferred": [
+        "Opportunity Fit",
+        "Remote Eligibility",
+        "Revenue Identity Fit",
+        "Access / Reachability"
+      ],
+      "confidence": "HIGH",
+      "currentRole": "CEO at Voxgig",
+      "companyStage": null,
+      "contactRoute": "BUSINESS_EMAIL",
+      "possibleNeed": "The specific size and budget of Voxgig, which could affect their ability to hire external developers.",
+      "currentSignals": [],
+      "rightToContact": "NONE",
+      "companyOffering": null,
+      "relationshipType": "No relationship yet",
+      "sourceReferences": [
+        {
+          "url": "https://www.linkedin.com/in/richardrodger/",
+          "label": "https://www.linkedin.com/in/richardrodger/",
+          "sourceType": null
+        },
+        {
+          "url": null,
+          "label": "richard@ricebridge.com",
+          "sourceType": null
+        }
+      ],
+      "thingsNotToClaim": [
+        "Source URL: linkedin_profile",
+        "Source URL: other",
+        "Remote eligibility: Inferred remote opportunity from explicit ask for external project help."
+      ],
+      "currentOpportunity": null,
+      "recentRelevantEvidence": []
+    },
+    "claim_safety": null,
+    "edit_disposition": null,
+    "evidence_used": [],
+    "blocked_reason": "Change is not an invitation. Connect or observe; do not force a DM.",
+    "is_followup": false,
+    "followup_sequence": 0,
+    "created_by": "aaaaaaaa-0000-0000-0000-000000000004",
+    "created_at": "2026-09-23T23:21:01.606414+00:00",
+    "updated_at": "2026-09-23T23:21:01.465+00:00"
+  },
+  {
+    "id": "99b2b3e9-1dec-4e06-b388-33b563caf304",
+    "organization_id": "11111111-1111-1111-1111-111111111111",
+    "lead_id": "ded86d0c-efc9-4fc1-9fd7-9e7c61078045",
+    "revenue_identity_id": "4e2bf898-b182-459d-b6b0-17aa0556750c",
+    "contact_point_id": null,
+    "contact_email": null,
+    "draft_status": "RESEARCH_REQUIRED",
+    "relationship_type": "No relationship yet",
+    "opportunity_type": "NONE",
+    "email_goal": "GET_REPLY",
+    "subject": null,
+    "subject_candidates": [],
+    "body": null,
+    "strategy": {
+      "tone": "direct, human, specific",
+      "sender": "Mehak",
+      "ctaType": "single low-friction question",
+      "whyEmail": "Plausible fit without current intent. Observe or connect; do not invent a need.",
+      "emailGoal": "GET_REPLY",
+      "recipient": "Ramone Smith @ NODE",
+      "proofToUse": [],
+      "proofToHold": [
+        "Hello Job Seekers, below is a link to job search and career development resources:",
+        "BPulse takes ownership of defined software outcomes without adding another engineering organization to manage.",
+        "Sender biography, years of experience, or a capability list."
+      ],
+      "allowedEvidence": [],
+      "opportunityType": "NONE",
+      "relationshipType": "No relationship yet",
+      "successCondition": "No message. Do not force contact.",
+      "thingsNotToClaim": [],
+      "strongestEvidence": null,
+      "primaryUncertainty": "need",
+      "commercialSituation": "MEDIUM fit · UNKNOWN intent · HIGH confidence. Commercial need is not in evidence.",
+      "attachmentRecommendation": {
+        "reason": "No attachment is needed for this first email.",
+        "relevance": "IRRELEVANT",
+        "artifactId": null,
+        "artifactName": null
+      }
+    },
+    "research_brief": {
+      "fit": "MEDIUM",
+      "known": [],
+      "intent": "UNKNOWN",
+      "person": "Ramone Smith",
+      "company": "NODE",
+      "unknown": [
+        "need",
+        "scope",
+        "timeline",
+        "budget",
+        "authority",
+        "currentSolution"
+      ],
+      "inferred": [
+        "Job Description 2 Skills, Job Market Economist, Outplacement Career Coach, Certified Digital Career Strategist, Certified Student Career Coach, PhD (ABD), Information Studies"
+      ],
+      "confidence": "HIGH",
+      "currentRole": "Job Description 2 Skills,  Job Market Economist, Outplacement Career Coach, Certified Digital Career Strategist, Certified Student Career Coach, PhD (ABD), Information Studies",
+      "companyStage": null,
+      "contactRoute": "NO_EMAIL",
+      "possibleNeed": "need",
+      "currentSignals": [],
+      "rightToContact": "NONE",
+      "companyOffering": null,
+      "relationshipType": "No relationship yet",
+      "sourceReferences": [
+        {
+          "url": "https://www.linkedin.com/in/ramone-smith/",
+          "label": "https://www.linkedin.com/in/ramone-smith/",
+          "sourceType": null
+        }
+      ],
+      "thingsNotToClaim": [],
+      "currentOpportunity": null,
+      "recentRelevantEvidence": []
+    },
+    "claim_safety": null,
+    "edit_disposition": null,
+    "evidence_used": [],
+    "blocked_reason": "No current reason to message. Connect or wait.",
+    "is_followup": false,
+    "followup_sequence": 0,
+    "created_by": "aaaaaaaa-0000-0000-0000-000000000004",
+    "created_at": "2026-09-23T23:25:19.646654+00:00",
+    "updated_at": "2026-09-23T23:25:19.511+00:00"
+  }
+]

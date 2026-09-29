@@ -39,6 +39,7 @@ import {
 import { generate } from '@/lib/ai/runtime'
 import { classifyBusinessModel, classifySentence, deriveRelationship, isNonBuyerRelationship, stripThirdPartyRepostBlocks } from './subject-attribution'
 import { applyBuyerIntentBoundary } from './commercial-reading'
+import { classifyNeedOwnership } from './need-ownership'
 
 // ── Pipeline Options ───────────────────────────────────────────────────────
 
@@ -608,6 +609,7 @@ function normalizePassA(
   passA: PassAOutput,
   sourceUrls: string[],
   _remoteEligibility: RemoteEligibility,
+  rawText?: string,
 ): {
   intelligence: Omit<NormalizedIntelligence, 'remoteEligibility'>
   evidenceLedger: EvidenceEntry[]
@@ -737,6 +739,7 @@ function normalizePassA(
       : undefined)
 
   if (content.hiringSignals.length > 0) {
+    const quote = content.hiringSignals[0]
     evidenceLedger.push({
       signal: 'Hiring activity detected',
       source: 'pasted_text',
@@ -744,18 +747,20 @@ function normalizePassA(
       ownership: 'HIRING_INTENT',
       confidence: 'HIGH',
       safeForOutreach: true,
-      verbatimQuote: content.hiringSignals[0].slice(0, 200),
+      verbatimQuote: quote.slice(0, 200),
       subjectType: 'OPPORTUNITY',
       organizationName: opportunityOrg,
       organizationId: opportunity.organizationId,
       relationshipToProspect: opportunityRelationship,
       temporalScope: opportunity.temporalScope ?? 'UNKNOWN',
       polarity: opportunity.polarity ?? 'ACTIVE',
+      needOwnership: classifyNeedOwnership(quote),
     })
   }
   if (content.technicalSignals.length > 0) {
+    const techSummary = content.technicalSignals.slice(0, 3).join(', ')
     evidenceLedger.push({
-      signal: 'Technical work detected',
+      signal: `Technical work detected: ${techSummary}`,
       source: 'pasted_text',
       evidenceType: 'STRONG_INFERENCE',
       ownership: 'BUYER_INTENT',
@@ -767,9 +772,11 @@ function normalizePassA(
       relationshipToProspect: opportunityRelationship,
       temporalScope: opportunity.temporalScope ?? 'UNKNOWN',
       polarity: opportunity.polarity ?? 'ACTIVE',
+      needOwnership: classifyNeedOwnership(rawText ?? ''),
     })
   }
   if (content.explicitProblems.length > 0) {
+    const problem = content.explicitProblems[0]
     evidenceLedger.push({
       signal: 'Explicit problem stated',
       source: 'pasted_text',
@@ -777,13 +784,14 @@ function normalizePassA(
       ownership: 'BUYER_INTENT',
       confidence: 'HIGH',
       safeForOutreach: true,
-      verbatimQuote: content.explicitProblems[0].slice(0, 200),
+      verbatimQuote: problem.slice(0, 200),
       subjectType: 'OPPORTUNITY',
       organizationName: opportunityOrg,
       organizationId: opportunity.organizationId,
       relationshipToProspect: opportunityRelationship,
       temporalScope: opportunity.temporalScope ?? 'UNKNOWN',
       polarity: opportunity.polarity ?? 'ACTIVE',
+      needOwnership: classifyNeedOwnership(problem),
     })
   }
 
@@ -1939,7 +1947,7 @@ export async function runIntelligencePipeline(
 
   // Pass B: Normalize
   opts.onStatus?.('Normalizing extraction')
-  const { intelligence: partialIntelligence, evidenceLedger, normalizedSourceUrls } = normalizePassA(passA, sourceUrls, remoteEligibility)
+  const { intelligence: partialIntelligence, evidenceLedger, normalizedSourceUrls } = normalizePassA(passA, sourceUrls, remoteEligibility, rawText)
 
   // Repost scoping refined with the FINAL extracted name (Pass A may know
   // better than the pre-Pass-A heuristic, e.g. via "Name:" fields or AI

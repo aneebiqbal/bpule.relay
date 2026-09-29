@@ -1,0 +1,1798 @@
+[
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "6e40c20c",
+    "name": "Adil Mahmood",
+    "company": "Code Graphers",
+    "score": 61,
+    "competitorKeywords": [
+      "software development",
+      "custom software",
+      "web development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "6e40c20c",
+    "name": "Adil Mahmood",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "afdbfbad",
+    "name": "Yousif Thonee",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "92a87a97",
+    "name": "Ivo Draginov",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "03b73bb0",
+    "name": "Marco Lombardo",
+    "count": 3
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "778d7d08",
+    "name": "Andrew Sheh",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "1fd8e90d",
+    "name": "Colton Adamski",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "ec8ae1d4",
+    "name": "Igor Smirnov",
+    "count": 2
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "99451b43",
+    "name": "Yani Iliev",
+    "company": "ServMask Inc.",
+    "score": 82,
+    "competitorKeywords": [
+      "software development",
+      "mobile development",
+      "web design"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "99451b43",
+    "name": "Yani Iliev",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "806d0d06",
+    "name": "Richard (Rick) Stannå",
+    "count": 4
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "f1180175",
+    "name": "Mark Darcy",
+    "count": 4
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "5aad8018",
+    "name": "Marcello Fabiano",
+    "count": 5
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "824696e9",
+    "name": "Anar Abbas",
+    "company": "MeikSense",
+    "score": 51,
+    "competitorKeywords": [
+      "software development",
+      "software solutions",
+      "software testing"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "824696e9",
+    "name": "Anar Abbas",
+    "count": 6
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "83a484b5",
+    "name": "Richard Rodger",
+    "company": "Voxgig",
+    "score": 64,
+    "competitorKeywords": [
+      "software development",
+      "application development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "83a484b5",
+    "name": "Richard Rodger",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "266bd6d5",
+    "name": "Rabia J. Baig",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "b403b3db",
+    "name": "David McQue",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "411f8d8f",
+    "name": "Firat Talipler",
+    "count": 4
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "944919fd",
+    "name": "Imogen Hough",
+    "company": "Launch Group",
+    "score": 65,
+    "competitorKeywords": [
+      "full stack",
+      "fullstack",
+      "building software"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "944919fd",
+    "name": "Imogen Hough",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "af5c0e23",
+    "name": "Mike Price",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "2586755f",
+    "name": "Daria Redkina",
+    "count": 4
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "5c379539",
+    "name": "Sławek Foryś",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "ded04019",
+    "name": "Davide Fioranelli",
+    "count": 7
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "e8c58e95",
+    "name": "Gil Eyni",
+    "company": "ShopLevers",
+    "score": 64,
+    "competitorKeywords": [
+      "software development",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "e8c58e95",
+    "name": "Gil Eyni",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "b06272f8",
+    "name": "Cosmin Drimba",
+    "count": 6
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "5e2f183f",
+    "name": "Costel Closca",
+    "company": "Datahost.ro",
+    "score": 64,
+    "competitorKeywords": [
+      "software development",
+      "fullstack",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "5e2f183f",
+    "name": "Costel Closca",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "e9ab6c71",
+    "name": "Tushar Nair",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "8642b221",
+    "name": null,
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "bba8045d",
+    "name": "Aarón Munguía",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "7b101bc5",
+    "name": "Yohann Prigent",
+    "company": "Shadow",
+    "score": 63,
+    "competitorKeywords": [
+      "software consulting",
+      "freelance developer",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "7b101bc5",
+    "name": "Yohann Prigent",
+    "count": 6
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "ae8ec990",
+    "name": "Nicholas Miller",
+    "company": "Qualia",
+    "score": 89,
+    "competitorKeywords": [
+      "full stack",
+      "fullstack",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "ae8ec990",
+    "name": "Nicholas Miller",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "0c59cb73",
+    "name": "Amin Haji-Abolhassani",
+    "count": 4
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "47b12b5d",
+    "name": "Andrew Tam",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "b9fd13a8",
+    "name": "Zachary Runyan",
+    "company": "TRAVV",
+    "score": 72,
+    "competitorKeywords": [
+      "software development",
+      "tech company",
+      "application development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "b9fd13a8",
+    "name": "Zachary Runyan",
+    "count": 7
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "9ca9fe45",
+    "name": "Vít Lupínek",
+    "company": "Centry",
+    "score": 60,
+    "competitorKeywords": [
+      "software development",
+      "product development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "9ca9fe45",
+    "name": "Vít Lupínek",
+    "count": 4
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "8f7769de",
+    "name": "Francisco Bobadilla",
+    "company": "Southern Lights LLC",
+    "score": 62,
+    "competitorKeywords": [
+      "software development",
+      "software solutions",
+      "product development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "8f7769de",
+    "name": "Francisco Bobadilla",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "53f4e837",
+    "name": "Kristine Vikle",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "4c9d53cd",
+    "name": "Gabriel Rios",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "3b1110f7",
+    "name": "Lee Morgan",
+    "count": 4
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "1f0adcb2",
+    "name": "Gustavo Dalmonte",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "5882fe7e",
+    "name": "Jessica Robert",
+    "count": 5
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "b7afbb3f",
+    "name": "Steve Aspinall",
+    "company": "HOMEE, Inc.",
+    "score": 78,
+    "competitorKeywords": [
+      "software development",
+      "full stack",
+      "it services"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "b7afbb3f",
+    "name": "Steve Aspinall",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "b10a2a63",
+    "name": "Justin Ferl",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "e54679fa",
+    "name": "Leandro Ferreira",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "913be72e",
+    "name": "yonatan altaye",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "3ff36e33",
+    "name": "Nick Smith",
+    "company": "ZipRecruiter",
+    "score": 84,
+    "competitorKeywords": [
+      "software development",
+      "full stack"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "3ff36e33",
+    "name": "Nick Smith",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "1608be75",
+    "name": "Kazım Uzar",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "5b511389",
+    "name": "Carlos Pliego",
+    "company": "NetDocuments",
+    "score": 87,
+    "competitorKeywords": [
+      "software development",
+      "web development",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "5b511389",
+    "name": "Carlos Pliego",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "3d69eb67",
+    "name": "Mohamed Sameh",
+    "count": 5
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "7ee668ca",
+    "name": "Samuel James Bliss",
+    "company": "Jane Technologies, Inc.",
+    "score": 78,
+    "competitorKeywords": [
+      "app development",
+      "full stack"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "7ee668ca",
+    "name": "Samuel James Bliss",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "8543b7d7",
+    "name": "Gabriel Leonildo Berlot Peralta",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "8e81eb5f",
+    "name": "Nate Weldon",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "f7d2a94c",
+    "name": "Victor Cohen",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "ad2b1637",
+    "name": "Shikha Chawla",
+    "count": 9
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "e361ca17",
+    "name": "Esteban S",
+    "company": "Unknown company",
+    "score": 70,
+    "competitorKeywords": [
+      "dev team",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "e361ca17",
+    "name": "Esteban S",
+    "count": 6
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "1a69c934",
+    "name": "Manuel Tuero",
+    "company": "BlackBox Vision",
+    "score": 71,
+    "competitorKeywords": [
+      "software development",
+      "custom software",
+      "web development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "1a69c934",
+    "name": "Manuel Tuero",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "30c864e0",
+    "name": "Diana Todea",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "93e5340b",
+    "name": "Lautaro Acosta",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "1a0ed76a",
+    "name": "Samuel Adegunju",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "90f3ee79",
+    "name": "Bleu Bombade",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "f23e5f85",
+    "name": "Colin Das",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "2ed06c88",
+    "name": "Juan Bourgois",
+    "count": 4
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "05056f1f",
+    "name": "David McElin MBCS MIET",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "4ed79bd1",
+    "name": "Hiwot Teshome",
+    "company": "Addis Ababa Science and Technology University",
+    "score": 74,
+    "competitorKeywords": [
+      "software development",
+      "application development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "4ed79bd1",
+    "name": "Hiwot Teshome",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "9a9d7a57",
+    "name": "Valentin Chartier",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "1410d407",
+    "name": "Guillaume Dury",
+    "count": 6
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "a69784eb",
+    "name": "Andreas Leicher",
+    "company": "Kotaicode GmbH",
+    "score": 89,
+    "competitorKeywords": [
+      "software development",
+      "custom software",
+      "cloud management"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "a69784eb",
+    "name": "Andreas Leicher",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "6fea293a",
+    "name": "Autumn Wang",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "6050fd98",
+    "name": "Kumaraswamy Namburu",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "302da632",
+    "name": "Jeff Munowitch",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "a4fa38d9",
+    "name": "Ramez Saour",
+    "count": 4
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "02c781f3",
+    "name": "Agata Skorupka, PhD",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "3a169ddb",
+    "name": "Ricardo Junior",
+    "company": "BTG Pactual",
+    "score": 66,
+    "competitorKeywords": [
+      "full stack",
+      "fullstack"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "3a169ddb",
+    "name": "Ricardo Junior",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "e65e1df5",
+    "name": "Dan Mueller",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "645f9526",
+    "name": "Rob Truxler",
+    "count": 7
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "850e41d6",
+    "name": "Lance Allison",
+    "company": "Ruby Digital Agency",
+    "score": 83,
+    "competitorKeywords": [
+      "digital agency",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "850e41d6",
+    "name": "Lance Allison",
+    "count": 7
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "2d36e5ca",
+    "name": "Anderson Martin",
+    "company": "Unelma Platforms",
+    "score": 75,
+    "competitorKeywords": [
+      "software development",
+      "custom software",
+      "application development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "2d36e5ca",
+    "name": "Anderson Martin",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "8e528f7f",
+    "name": "Dylan Walter",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "b5a2dbcc",
+    "name": "Manny Morales",
+    "company": "101domain.com",
+    "score": 90,
+    "competitorKeywords": [
+      "digital solutions",
+      "product development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "b5a2dbcc",
+    "name": "Manny Morales",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "cafd1529",
+    "name": "Aaron Moore",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "f30ff96f",
+    "name": "Michel Borges",
+    "count": 9
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "33d57745",
+    "name": "Vadim Delendik",
+    "company": "Solvd, Inc.",
+    "score": 86,
+    "competitorKeywords": [
+      "software development",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "33d57745",
+    "name": "Vadim Delendik",
+    "count": 10
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "7b488835",
+    "name": "Piotr Gołofit",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "7a2360f8",
+    "name": "Jacob Schatz",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "a4abdb74",
+    "name": "Ran Endelman",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "61c0f40e",
+    "name": "Morten Krogh",
+    "count": 5
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "8b6ff95a",
+    "name": "Gabriel Tokushev",
+    "company": "LogicDesk",
+    "score": 82,
+    "competitorKeywords": [
+      "full stack",
+      "it services",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "8b6ff95a",
+    "name": "Gabriel Tokushev",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "b8c768c3",
+    "name": "Daniel Protopopov",
+    "company": "PipeForm",
+    "score": 85,
+    "competitorKeywords": [
+      "software development",
+      "application development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "b8c768c3",
+    "name": "Daniel Protopopov",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "984740e7",
+    "name": "Richard Wilson",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "7201af28",
+    "name": "Otto Seiskari",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "a15bc707",
+    "name": "Erdem Alkan",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "5581a4e8",
+    "name": "Danylo Vyslotskyi",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "1e27f8b7",
+    "name": "Burak Yuce",
+    "count": 9
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "63c5d01e",
+    "name": "Mustafa D.",
+    "company": "Azteron",
+    "score": 66,
+    "competitorKeywords": [
+      "software development",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "63c5d01e",
+    "name": "Mustafa D.",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "fbc1cad8",
+    "name": "James Della Valle",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "41674ec6",
+    "name": "Fatih C.",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "1f4a505e",
+    "name": "Alexandr Topilski",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "7ef0fecc",
+    "name": "Konrad Palak",
+    "company": "Dropbox",
+    "score": 84,
+    "competitorKeywords": [
+      "software development",
+      "it services",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "7ef0fecc",
+    "name": "Konrad Palak",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "5e2962c5",
+    "name": "Itay Karat",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "27554969",
+    "name": "Katarzyna Rostkowski",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "63b0664a",
+    "name": "Kosta Jordanov",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "6041c030",
+    "name": "Michelle Linares",
+    "count": 6
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "37b4026f",
+    "name": "Ertuğrul Yalanız",
+    "company": "Menra AI",
+    "score": 85,
+    "competitorKeywords": [
+      "software development",
+      "web development",
+      "full stack"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "37b4026f",
+    "name": "Ertuğrul Yalanız",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "63f5580e",
+    "name": "Nicolas Pustilnick",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "23a15288",
+    "name": "Tomas Roaldsnes",
+    "count": 7
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "3d68fd2f",
+    "name": "Nail Vali",
+    "company": "Youzu",
+    "score": 77,
+    "competitorKeywords": [
+      "software company",
+      "engineering team",
+      "product development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "3d68fd2f",
+    "name": "Nail Vali",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "53bc65fb",
+    "name": "Santeri Lahdelma",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "cef4e2cd",
+    "name": "Samandar Tolibov",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "a1bad50b",
+    "name": "Eldaniz Babayev",
+    "count": 9
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "9c0e3d34",
+    "name": "Byron S.",
+    "company": "UMNIII",
+    "score": 68,
+    "competitorKeywords": [
+      "software development",
+      "web development",
+      "fullstack"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "9c0e3d34",
+    "name": "Byron S.",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "e9a37966",
+    "name": "Mike Goynes",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "bbc69594",
+    "name": "Tomasz Fidecki",
+    "company": "uninterrupted Sp. z o.o.",
+    "score": 85,
+    "competitorKeywords": [
+      "software development",
+      "custom software",
+      "application development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "bbc69594",
+    "name": "Tomasz Fidecki",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "00e4cf33",
+    "name": "Jos Gheerardyn",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "523c3caf",
+    "name": "Gabriele Feudo",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "f8f055fe",
+    "name": "Albion B.",
+    "count": 7
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "f7fead50",
+    "name": "Chris Bier",
+    "company": "RVO Health",
+    "score": 69,
+    "competitorKeywords": [
+      "software development",
+      "engineering team",
+      "product development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "f7fead50",
+    "name": "Chris Bier",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "24000ce5",
+    "name": "Mattias Norling",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "58907b3e",
+    "name": "Angelo Gallarello",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "ee6088ad",
+    "name": "André Luiz Marcon Dutra",
+    "company": "Grupo Boticário",
+    "score": 84,
+    "competitorKeywords": [
+      "fullstack",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "ee6088ad",
+    "name": "André Luiz Marcon Dutra",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "4489b497",
+    "name": "Ray Fallon",
+    "company": "Cisco",
+    "score": 64,
+    "competitorKeywords": [
+      "software solutions",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "4489b497",
+    "name": "Ray Fallon",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "3e539856",
+    "name": "Chris Maryan",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "a50a446c",
+    "name": "Fazan Habib",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "b95abccd",
+    "name": "Alex Tacescu",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "33529d77",
+    "name": "Olena Holubenko",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "bed67a25",
+    "name": "Wisam Jaddo",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "bfc7b49d",
+    "name": "Lukasz Slabinski",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "9516218a",
+    "name": "Fernando Sanches",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "9d66a703",
+    "name": "Wilson Lee",
+    "count": 1
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "ecae5183",
+    "name": "Otto Paaso",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "f3e7c5a1",
+    "name": "Michele Fiscalini",
+    "company": "Red Rock Technology FZ-LLC",
+    "score": 74,
+    "competitorKeywords": [
+      "building software",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "f3e7c5a1",
+    "name": "Michele Fiscalini",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "50841984",
+    "name": "David McCormick",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "2dd6f898",
+    "name": "Linus Hakansson",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "c70ee35f",
+    "name": "Rashid Tangirbergen",
+    "company": "Hypersync (WKCorp Inc)",
+    "score": 67,
+    "competitorKeywords": [
+      "software development",
+      "custom software"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "c70ee35f",
+    "name": "Rashid Tangirbergen",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "41e417bc",
+    "name": "Samuel Jesús Patino López",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "cf09b15b",
+    "name": "Aaron Parton",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "8a1aeced",
+    "name": "Gastón Darío Carballo",
+    "count": 5
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "8989149c",
+    "name": "Patrick Stone",
+    "company": "FM Global",
+    "score": 85,
+    "competitorKeywords": [
+      "software testing",
+      "application development",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "8989149c",
+    "name": "Patrick Stone",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "94dfc202",
+    "name": "Erik Francis L.",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "adf01a2e",
+    "name": "Velmurugan Sivaprakasam",
+    "company": "LTM",
+    "score": 69,
+    "competitorKeywords": [
+      "software development",
+      "offshore development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "adf01a2e",
+    "name": "Velmurugan Sivaprakasam",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "e575a2b9",
+    "name": "Simon A.",
+    "count": 5
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "29fe2362",
+    "name": "Hernan De Lahitte",
+    "company": "Amperity",
+    "score": 66,
+    "competitorKeywords": [
+      "software development",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "29fe2362",
+    "name": "Hernan De Lahitte",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "66d629da",
+    "name": "Milan Pede",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "edbf8213",
+    "name": "Arthur Granacher",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "69fc6185",
+    "name": "Nick Polk",
+    "count": 9
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "b10eb1d0",
+    "name": "Emma (Cancelliere) Stanton, PhD",
+    "company": "Odie Pet Insurance",
+    "score": 81,
+    "competitorKeywords": [
+      "fullstack",
+      "product development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "b10eb1d0",
+    "name": "Emma (Cancelliere) Stanton, PhD",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "c6e16a37",
+    "name": "Eugene Storchevyi",
+    "company": "Centric Software",
+    "score": 70,
+    "competitorKeywords": [
+      "software development",
+      "fullstack",
+      "software solutions"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "c6e16a37",
+    "name": "Eugene Storchevyi",
+    "count": 6
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "9b10b151",
+    "name": "Martin Reynolds",
+    "company": "Harness",
+    "score": 74,
+    "competitorKeywords": [
+      "web development",
+      "application development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "9b10b151",
+    "name": "Martin Reynolds",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "2f442cc1",
+    "name": "Charles Packer",
+    "count": 9
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "c4eb646a",
+    "name": "Massab Iftikhar",
+    "company": "InvoZone",
+    "score": 87,
+    "competitorKeywords": [
+      "software development",
+      "saas development",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "c4eb646a",
+    "name": "Massab Iftikhar",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "c50bbc61",
+    "name": "Junior R.",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "969c745f",
+    "name": "Federico Castañeda",
+    "company": "AceUp",
+    "score": 70,
+    "competitorKeywords": [
+      "software development",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "969c745f",
+    "name": "Federico Castañeda",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "30b7e756",
+    "name": "Aleksandr Stepanov",
+    "count": 6
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "415a0a2d",
+    "name": "Rhys Luxford",
+    "company": "Mont Ford",
+    "score": 65,
+    "competitorKeywords": [
+      "full stack",
+      "building software"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "415a0a2d",
+    "name": "Rhys Luxford",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "2fb1578a",
+    "name": "Aswath Sridhar",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "66fc8ac2",
+    "name": "Andreas Aagaard",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "611d313a",
+    "name": "Shaun Taylor",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "d7ace8f3",
+    "name": "Mathew Eason",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "4812795f",
+    "name": "Steven Quan",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "5fb3dc45",
+    "name": "Frank Lombardo",
+    "company": "IPQS",
+    "score": 70,
+    "competitorKeywords": [
+      "software development",
+      "full stack",
+      "software solutions"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "5fb3dc45",
+    "name": "Frank Lombardo",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "b5a00db7",
+    "name": "Noureldin Essa",
+    "count": 6
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "5d9d70c6",
+    "name": "Vasile Ovidiu Ichim",
+    "company": "Valerdat",
+    "score": 69,
+    "competitorKeywords": [
+      "software development",
+      "full stack"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "5d9d70c6",
+    "name": "Vasile Ovidiu Ichim",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "18598daf",
+    "name": "Carlo Nicora",
+    "count": 7
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "64ae291d",
+    "name": "Mike Hoogendyk",
+    "company": "Planet DDS",
+    "score": 85,
+    "competitorKeywords": [
+      "software development",
+      "full stack",
+      "application development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "64ae291d",
+    "name": "Mike Hoogendyk",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "075bb777",
+    "name": "Himani Santoshi",
+    "count": 9
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "a307aecf",
+    "name": "Chip Needham",
+    "company": "Laravel",
+    "score": 58,
+    "competitorKeywords": [
+      "web development",
+      "full stack",
+      "fullstack"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "a307aecf",
+    "name": "Chip Needham",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "8e30e8b5",
+    "name": "Anthony Narcise",
+    "count": 9
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "73c41915",
+    "name": "Maurizio Caltabiano",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "a96af15f",
+    "name": "Kyrylo Mykhailov",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "24d45ef5",
+    "name": "Jen Kellogg",
+    "count": 6
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "db3e00d5",
+    "name": "Lyzelle Dagum",
+    "company": "Jimzel Software",
+    "score": 60,
+    "competitorKeywords": [
+      "custom software",
+      "software solutions"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "db3e00d5",
+    "name": "Lyzelle Dagum",
+    "count": 4
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "767e3c85",
+    "name": "Leandro Pereira",
+    "count": 5
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "d843745e",
+    "name": "Billy M.",
+    "company": "Zippd",
+    "score": 68,
+    "competitorKeywords": [
+      "web development",
+      "mobile development",
+      "application development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "d843745e",
+    "name": "Billy M.",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "9473d7fa",
+    "name": "Kenneth Weatherford",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "3fb73673",
+    "name": "Alberto Geronutti",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "c5296425",
+    "name": "Vishal",
+    "count": 4
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "a0bd48ce",
+    "name": "Sergi Laurent",
+    "company": "Thalio",
+    "score": 69,
+    "competitorKeywords": [
+      "web design",
+      "product development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "a0bd48ce",
+    "name": "Sergi Laurent",
+    "count": 6
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "da28761e",
+    "name": "Maja Alghanmi Golob",
+    "company": "Almadar.io",
+    "score": 78,
+    "competitorKeywords": [
+      "software development",
+      "mobile development",
+      "product development"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "da28761e",
+    "name": "Maja Alghanmi Golob",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "5a6a7e68",
+    "name": "Noelia Á.",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "1041961e",
+    "name": "Luis Coutinho",
+    "company": "C-MORE | Beyond the Obvious",
+    "score": 69,
+    "competitorKeywords": [
+      "full stack",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "1041961e",
+    "name": "Luis Coutinho",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "87feebe9",
+    "name": "Dr. Melissa Dabb",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "6a397c81",
+    "name": "Amy Yang",
+    "count": 8
+  },
+  {
+    "type": "COMPETITOR_HIGH_SCORE",
+    "leadId": "e22da4e4",
+    "name": "Leonard K.",
+    "company": "Titus",
+    "score": 87,
+    "competitorKeywords": [
+      "full stack",
+      "engineering team"
+    ]
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "e22da4e4",
+    "name": "Leonard K.",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "b2252b7e",
+    "name": "Zachary Shute",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "08295e07",
+    "name": "Daniel Faghihnia",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "9482409e",
+    "name": "Logan Bohlender",
+    "count": 6
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "8a436dc3",
+    "name": "Laura Harrington",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "0bdf703e",
+    "name": "Mitchell Manuel",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "2569ff13",
+    "name": "Jessica Werlin",
+    "count": 5
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "ed90a9bb",
+    "name": "Zihao (Alan) Wang",
+    "count": 7
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "fc10c9c9",
+    "name": "Jaden Wang",
+    "count": 8
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "886ccbb3",
+    "name": "Jonathan Kopnick",
+    "count": 1
+  },
+  {
+    "type": "SCORING_DIM_AS_EVIDENCE",
+    "leadId": "7b7d482a",
+    "name": "Dave Walker",
+    "count": 2
+  }
+]
