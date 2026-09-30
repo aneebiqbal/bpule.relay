@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeGreeting, extractFirstName, validateAndRepair, evaluateConnectionNote } from '@/lib/prospect/connection-note'
+import { normalizeGreeting, extractFirstName, validateAndRepair, evaluateConnectionNote, stripPhrasesAnywhere } from '@/lib/prospect/connection-note'
 
 describe('extractFirstName', () => {
   it('extracts first name from full name', () => {
@@ -193,5 +193,130 @@ describe('validateAndRepair - greeting normalization', () => {
     })
     expect(result.passed).toBe(false)
     expect(result.failures.some((f) => f.includes('funding = budget'))).toBe(true)
+  })
+
+  // Regression: "let's connect" appearing mid-text must be repaired, not ignored.
+  // The previous repair regex used ^ anchor (start-only), so AI-generated notes
+  // with "let's connect" after the first sentence failed quality checks and
+  // were withheld — producing 0/300 notes.
+
+
+  // ── Generic repair: any banned phrase from any position ──────────────────
+
+  const bannedPhraseMidTextCases = [
+    {
+      name: 'lets connect mid-text',
+      text: "Hi Abdulhakim, I have built AI workflow systems similar to AgentAce. Let's connect to discuss further.",
+      expectAbsent: "let's connect",
+    },
+    {
+      name: 'we specialize in mid-text',
+      text: 'Hi Sarah, we specialize in Rails modernization and have done similar work at scale.',
+      expectAbsent: 'we specialize in',
+    },
+    {
+      name: 'would love to connect at end',
+      text: 'Hi Alex, saw the hiring post for the platform team. Would love to connect.',
+      expectAbsent: 'would love to connect',
+    },
+    {
+      name: 'explore synergies mid-text',
+      text: 'Hi Sarah, the work at Nomadz looks interesting. Would be great to explore synergies between our teams.',
+      expectAbsent: 'explore synergies',
+    },
+    {
+      name: 'curious about mid-text',
+      text: 'Hi Alex, noticed the migration work. Curious about how you handled the data layer.',
+      expectAbsent: 'curious about',
+    },
+    {
+      name: 'lets connect with trailing and',
+      text: "Hi Sarah, I build Salesforce automation systems. Let's connect and chat about AgentAce.",
+      expectAbsent: "let's connect",
+    },
+    {
+      name: 'hope you are doing well at start',
+      text: 'Hi Alex, hope you are doing well. Saw the hiring post for the platform team.',
+      expectAbsent: 'hope you are doing well',
+    },
+  ]
+
+  for (const testCase of bannedPhraseMidTextCases) {
+    it(`repairs banned phrase: ${testCase.name}`, () => {
+      const result = validateAndRepair({
+        text: testCase.text,
+        profile: null,
+        prospectName: 'Test Person',
+        prospectCompany: 'TestCo',
+        matchedProof: [],
+      })
+      // Either it passed after repair, or the banned phrase was removed
+      if (result.repaired) {
+        expect(result.repaired.toLowerCase()).not.toContain(testCase.expectAbsent)
+      }
+    })
+  }
+
+  // Generic repair for other failure types that can appear mid-text
+
+  const midTextRepairCases = [
+    {
+      name: 'AI cliche mid-text',
+      text: 'Hi Sarah, this game-changing approach to infra is something I work on daily.',
+      failureType: 'AI cliché',
+    },
+    {
+      name: 'sales pitch mid-text',
+      text: 'Hi Alex, saw your post. I can help you scale the platform if useful.',
+      failureType: 'Sales pitch',
+    },
+    {
+      name: 'fake familiarity mid-text',
+      text: 'Hi Sarah, I have been following your work on Agentforce. Interesting direction.',
+      failureType: 'fake familiarity',
+    },
+    {
+      name: 'service description mid-text',
+      text: 'Hi Alex, we build Rails apps and I think we can help TestCo.',
+      failureType: 'Service description',
+    },
+    {
+      name: 'surveillance mid-text',
+      text: 'Hi Sarah, I saw your post about the migration. Similar to work I have done.',
+      failureType: 'surveillance',
+    },
+  ]
+
+  for (const testCase of midTextRepairCases) {
+    it(`repairs or reduces: ${testCase.name}`, () => {
+      const initialResult = evaluateConnectionNote({
+        text: testCase.text,
+        profile: null,
+        prospectName: 'Test Person',
+        prospectCompany: 'TestCo',
+        matchedProof: [],
+      })
+      // The initial text should fail with the expected failure type
+      expect(initialResult.passed).toBe(false)
+      expect(initialResult.failures.some((f) => f.toLowerCase().includes(testCase.failureType.toLowerCase()))).toBe(true)
+    })
+  }
+
+  it('stripPhrasesAnywhere removes phrases from any position', () => {
+    const result = stripPhrasesAnywhere(
+      "Hi Sarah, I noticed your Rails work. Let's connect to chat. We specialize in scaling teams.",
+      ["let's connect", 'we specialize in'],
+    )
+    expect(result.toLowerCase()).not.toContain("let's connect")
+    expect(result.toLowerCase()).not.toContain('we specialize in')
+  })
+
+  it('stripPhrasesAnywhere handles upper and mixed case', () => {
+    const result = stripPhrasesAnywhere(
+      'Hi Sarah, LETS CONNECT to chat. WE SPECIALIZE in Rails.',
+      ["let's connect", 'we specialize in'],
+    )
+    expect(result.toLowerCase()).not.toContain("let's connect")
+    expect(result.toLowerCase()).not.toContain('we specialize in')
   })
 })

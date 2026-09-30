@@ -20,7 +20,7 @@ export interface ConnectionNoteResult {
   repaired: string | null
 }
 
-const SURVEILLANCE_OPENERS = [
+export const SURVEILLANCE_OPENERS = [
   /^(hey|hi|hello)\s+\w+,?\s*(i noticed|i saw|i came across|i was looking at|i found your)/i,
   /^(i came across your profile)/i,
   /^(i was impressed by)/i,
@@ -29,7 +29,7 @@ const SURVEILLANCE_OPENERS = [
   /^(congrats on (your|the|landing))/i,
 ]
 
-const BANNED_PHRASES_CONNECTION = [
+export const BANNED_PHRASES_CONNECTION = [
   'i came across your profile',
   'i noticed your impressive',
   'i would love to connect',
@@ -307,19 +307,16 @@ export function evaluateConnectionNote(input: ConnectionNoteInput): ConnectionNo
 export function repairConnectionNote(text: string, failures: string[]): string {
   let repaired = text
 
-  // Remove surveillance openings
+  // Remove surveillance openings — strip from any position, not just start.
   if (failures.some((f) => f.includes('surveillance'))) {
-    repaired = repaired.replace(
-      /^(hey|hi|hello)\s+\w+,?\s*(i noticed|i saw|i came across|i was looking at|i found your)\s+/i,
-      '',
-    )
+    repaired = stripSurveillanceAnywhere(repaired)
   }
 
-  // Remove banned openings
+  // Remove banned phrases — strip from ANY position in the text.
+  // The AI model may place "let's connect", "we specialize in", etc.
+  // mid-sentence, so we must remove them globally, not just at ^.
   if (failures.some((f) => f.includes('Banned phrase'))) {
-    repaired = repaired.replace(/^i came across your profile[,.\s]*/i, '')
-    repaired = repaired.replace(/^i would love to connect[,.\s]*/i, '')
-    repaired = repaired.replace(/^let's connect!?\s*/i, '')
+    repaired = stripPhrasesAnywhere(repaired, BANNED_PHRASES_CONNECTION)
   }
 
   // Remove praise
@@ -328,11 +325,60 @@ export function repairConnectionNote(text: string, failures: string[]): string {
     repaired = repaired.replace(/\blove what you\b/gi, 'interested in what you')
   }
 
-  // Remove sales pitch
+  // Remove sales pitch — all patterns from the detection regex, globally
   if (failures.some((f) => f.includes('Sales pitch'))) {
-    repaired = repaired.replace(/\bi can help you\b/gi, '')
-    repaired = repaired.replace(/\bwe can help you\b/gi, '')
-    repaired = repaired.replace(/\blet me help\b/gi, '')
+    repaired = repaired.replace(/\b(?:i can help|we can help|let me help)\b/gi, '')
+    repaired = repaired.replace(/\bhappy to help you (?:ship|build|grow|scale)\b/gi, '')
+  }
+
+  // Remove AI clichés — strip from any position
+  if (failures.some((f) => f.includes('AI cliché'))) {
+    repaired = repaired.replace(/\bgame[- ]?chang\w*\b/gi, '')
+    repaired = repaired.replace(/\brevolutioni[sz]\w*\b/gi, '')
+    repaired = repaired.replace(/\bcutting[- ]?edge\b/gi, '')
+    repaired = repaired.replace(/\bleverage (?:our|my) expertise\b/gi, '')
+    repaired = repaired.replace(/\bsynerg\w*\b/gi, '')
+    repaired = repaired.replace(/\bpassionate about\b/gi, '')
+    repaired = repaired.replace(/\bthrilled to\b/gi, '')
+    repaired = repaired.replace(/\bhonored to\b/gi, '')
+    repaired = repaired.replace(/\bexcited to reach out\b/gi, '')
+  }
+
+  // Remove fake familiarity claims
+  if (failures.some((f) => f.includes('fake familiarity'))) {
+    repaired = repaired.replace(/\bi have been following\b/gi, '')
+    repaired = repaired.replace(/\bi have been watching\b/gi, '')
+    repaired = repaired.replace(/\bbig fan of your\b/gi, '')
+  }
+
+  // Remove service descriptions
+  if (failures.some((f) => f.includes('Service description'))) {
+    repaired = repaired.replace(/\bwe (?:build|ship|deliver|help)\b/gi, '')
+    repaired = repaired.replace(/\bi (?:build|ship|deliver|help)\b/gi, '')
+    repaired = repaired.replace(/\bour (?:work|focus|practice)\b/gi, '')
+  }
+
+  // Remove manufactured personalization / discovery language
+  if (failures.some((f) => f.includes('Manufactured personalization'))) {
+    repaired = repaired.replace(/\bcurious about\b/gi, '')
+    repaired = repaired.replace(/\bhow do you\b/gi, '')
+    repaired = repaired.replace(/\bwould love to learn\b/gi, '')
+    repaired = repaired.replace(/\bwould love to hear\b/gi, '')
+    repaired = repaired.replace(/\bwhat your thoughts\b/gi, '')
+    repaired = repaired.replace(/\bwould be great to learn\b/gi, '')
+  }
+
+  // Remove generic CTAs from anywhere (not just end-of-string)
+  if (failures.some((f) => f.includes('Generic or forced CTA'))) {
+    repaired = stripPhrasesAnywhere(repaired, [
+      "let's connect",
+      'would love to connect',
+      'connect with me',
+      'looking forward to connecting',
+      'happy to connect',
+      "let me know if you're interested",
+      'would love to pick your brain',
+    ])
   }
 
   // Remove budget/funding inference — strip the inference phrase but keep the rest
@@ -364,9 +410,15 @@ export function repairConnectionNote(text: string, failures: string[]): string {
   // Remove emojis
   repaired = repaired.replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
 
-  // Clean up double spaces and trailing punctuation
+  // Clean up artifacts from mid-text stripping:
+  // double spaces, double periods, dangling commas before periods,
+  // orphaned sentence fragments ("word. ."), leading punctuation.
   repaired = repaired.replace(/  +/g, ' ').trim()
   repaired = repaired.replace(/\.\s*\./g, '.')
+  repaired = repaired.replace(/,\s*\./g, '.')
+  repaired = repaired.replace(/^\.\s*/, '')
+  repaired = repaired.replace(/^\,\s*/, '')
+  repaired = repaired.replace(/\s+\.$/g, '.')
 
   // Shorten if over limit
   if (repaired.length > CONNECTION_NOTE_MAX_CHARS) {
@@ -374,6 +426,55 @@ export function repairConnectionNote(text: string, failures: string[]): string {
   }
 
   return repaired.trim()
+}
+
+/**
+ * Strip any banned phrase from anywhere in the text. The banned phrases list
+ * contains regex patterns (not plain strings), so each entry is compiled as
+ * a regex. Also removes dangling connector words (and, to, commas) left
+ * behind after the phrase is removed.
+ */
+export function stripPhrasesAnywhere(
+  text: string,
+  phrases: string[],
+): string {
+  let result = text
+  for (const phrase of phrases) {
+    // Each phrase is a regex pattern. Compile it with global + case-insensitive
+    // flags so it matches anywhere in the text, not just at boundaries.
+    const re = new RegExp(
+      `[,.\\s]*${phrase}\\s*(?:and\\s+|to\\s+)?`,
+      'gi',
+    )
+    result = result.replace(re, '. ')
+  }
+  // Clean up artifacts: double spaces, double periods, leading/trailing dots
+  result = result.replace(/  +/g, ' ')
+  result = result.replace(/\.\s*\./g, '.')
+  result = result.replace(/^\.\s*/, '')
+  return result.trim()
+}
+
+/**
+ * Strip any surveillance opener from anywhere in the text, not just the start.
+ */
+function stripSurveillanceAnywhere(text: string): string {
+  let result = text
+  // Match surveillance patterns with optional leading text/greeting
+  const surveillancePatterns = [
+    /(?:hey|hi|hello)\s+\w+,?\s*(?:i noticed|i saw|i came across|i was looking at|i found your)\s*/gi,
+    /i came across your profile/gi,
+    /i was impressed by/gi,
+    /i noticed your impressive/gi,
+    /your work at\s+\w+\s+caught my attention/gi,
+    /congrats on (?:(?:your|the|landing)\s+)?/gi,
+  ]
+  for (const re of surveillancePatterns) {
+    result = result.replace(re, '')
+  }
+  // Remove orphaned greetings that are now at start with nothing after
+  result = result.replace(/^(?:hi|hey|hello)\s*,?\s*$/i, '')
+  return result.trim()
 }
 
 /**
