@@ -139,10 +139,17 @@ export async function createEnrichmentRun(
     const { data: priorRuns } = await client.from('profile_enrichment_runs').select('id').eq('profile_id', profileId).neq('id', run.id)
     const priorIds = (priorRuns ?? []).map((r) => r.id)
     if (priorIds.length > 0) {
-      const { data: pending } = await client.from('profile_sources').select('id').eq('organization_id', orgId)
+      const { data: pending } = await client.from('profile_sources').select('id, extraction_status, extraction_result').eq('organization_id', orgId)
         .is('profile_id', null).eq('file_hash', hash).in('enrichment_run_id', priorIds).limit(1).maybeSingle()
       if (pending) {
-        await client.from('profile_sources').update({ enrichment_run_id: run.id, import_batch_id: batch.id, updated_at: new Date().toISOString() }).eq('id', pending.id)
+        // Reuse the row (no duplicate source). A successful extraction is kept
+        // as a cache; a FAILED one must be retried, not replayed — otherwise the
+        // old error is reported forever and extraction never runs again.
+        const retry = !pending.extraction_result || pending.extraction_status !== 'extracted'
+        await client.from('profile_sources').update({
+          enrichment_run_id: run.id, import_batch_id: batch.id, updated_at: new Date().toISOString(),
+          ...(retry ? { parsing_status: 'pending', extraction_status: 'pending', extraction_result: null, error_message: null } : {}),
+        }).eq('id', pending.id)
         sourceIds.push(pending.id)
         continue
       }
