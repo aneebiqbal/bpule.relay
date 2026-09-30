@@ -4,6 +4,7 @@ import { can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { recordHumanEdits } from '@/lib/profile-intelligence/enrichment-service'
+import { effectiveReadiness, LIVE_COUNT_SELECT, liveCounts, profileDisplayName, profileDisplayRole } from '@/lib/profile-intelligence/legacy-display'
 
 export async function GET(
   request: Request,
@@ -26,7 +27,9 @@ export async function GET(
       claims:profile_claims(id, claim_key, claim_value, evidence_type, is_inferred, user_corrected, user_rejected),
       proof_cards:proof_cards(id, capability, strength, safe_claim, source_type, tags, verified, forbidden_claims),
       portfolio_projects:portfolio_projects(id, project_title, my_role, description, skills, technologies, client_company, start_date, end_date, outcome),
-      experience:profile_experience(id, role, company, start_date, end_date, is_current, authority)
+      experience:profile_experience(id, role, company, start_date, end_date, is_current, authority),
+      proof_items:proof_items(id, project_summary, review_quote, client_name, client_named),
+      ${LIVE_COUNT_SELECT}
     `)
     .eq('id', id)
     .eq('organization_id', authCtx.orgId)
@@ -42,13 +45,15 @@ export async function GET(
 // The detail UI reads camelCase (matching the list route). Raw snake_case
 // rows previously rendered as an empty "Unnamed" profile.
 function toProfileDetail(p: any) {
+  const counts = liveCounts(p)
   return {
     id: p.id,
-    fullName: p.full_name ?? null,
+    // Pre-V2 profiles: fall back to label / headline for display only.
+    fullName: profileDisplayName(p),
     displayName: p.display_name ?? null,
     label: p.label ?? null,
     headline: p.headline ?? null,
-    currentRole: p.current_role ?? null,
+    currentRole: profileDisplayRole(p),
     company: p.company ?? null,
     location: p.location ?? null,
     bio: p.bio ?? null,
@@ -63,10 +68,10 @@ function toProfileDetail(p: any) {
     positioning: p.positioning ?? null,
     differentiators: p.differentiators ?? [],
     languages: p.languages ?? [],
-    readiness: p.readiness,
+    readiness: effectiveReadiness(p, counts),
     profileConfidence: p.profile_confidence ?? null,
-    sourceCount: p.source_count ?? 0,
-    proofCount: p.proof_count ?? 0,
+    sourceCount: counts.sourceCount,
+    proofCount: counts.proofCount,
     aiContext: p.ai_context ?? {},
     archivedAt: p.archived_at ?? null,
     mergedIntoProfileId: p.merged_into_profile_id ?? null,
@@ -82,9 +87,17 @@ function toProfileDetail(p: any) {
     claims: (p.claims ?? []).map((c: any) => ({
       id: c.id, claimKey: c.claim_key, claimValue: c.claim_value, evidenceType: c.evidence_type, userCorrected: c.user_corrected,
     })),
-    proofCards: (p.proof_cards ?? []).map((pc: any) => ({
-      id: pc.id, capability: pc.capability, strength: pc.strength, safeClaim: pc.safe_claim, verified: pc.verified,
-    })),
+    proofCards: [
+      ...(p.proof_cards ?? []).map((pc: any) => ({
+        id: pc.id, capability: pc.capability, strength: pc.strength, safeClaim: pc.safe_claim, verified: pc.verified,
+      })),
+      // Legacy proof (pre-V2 proof_items) shown alongside proof cards.
+      ...(p.proof_items ?? []).map((pi: any) => ({
+        id: pi.id, capability: 'Project', strength: 'moderate',
+        safeClaim: [pi.project_summary, pi.client_named && pi.client_name ? `(${pi.client_name})` : null].filter(Boolean).join(' '),
+        verified: false,
+      })),
+    ],
     portfolioProjects: (p.portfolio_projects ?? []).map((pp: any) => ({
       id: pp.id, projectTitle: pp.project_title, myRole: pp.my_role, description: pp.description, technologies: pp.technologies ?? [],
       clientCompany: pp.client_company ?? null, startDate: pp.start_date ?? null, endDate: pp.end_date ?? null, outcome: pp.outcome ?? null,
