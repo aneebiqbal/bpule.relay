@@ -130,6 +130,21 @@ export function EnrichPanel({ profileId, onApplied, onClose }: { profileId: stri
     }
   }, [base, decisions, onApplied, run, startReview])
 
+  const choosePerson = useCallback(async (person: string | null) => {
+    if (!run) return
+    setError(null)
+    try {
+      const res = await fetch(`${base}/${run.id}/person`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ person }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Could not update the person.')
+      startReview(data.run)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update the person.')
+    }
+  }, [base, run, startReview])
+
   const discard = useCallback(async () => {
     if (run) await fetch(`${base}/${run.id}/discard`, { method: 'POST' }).catch(() => {})
     onClose()
@@ -217,6 +232,30 @@ export function EnrichPanel({ profileId, onApplied, onClose }: { profileId: stri
               </div>
             ))}
           </div>
+
+          {(proposal.identity.otherPeople.length > 0 || proposal.identity.selectedPerson) && (
+            <div data-testid="person-picker" className="rounded border border-orange/20 px-3 py-2 text-[11px]">
+              <p className="text-[color:var(--console-text)]">
+                {proposal.identity.selectedPerson
+                  ? <>Importing data for <span className="font-medium">{proposal.identity.selectedPerson}</span> only.</>
+                  : proposal.identity.matchedPeople.length > 0
+                    ? <>Matched <span className="font-medium">{proposal.identity.matchedPeople.join(', ')}</span>. The source also mentions other people.</>
+                    : 'This source describes several people. Which one is this profile?'}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {[...new Set([...proposal.identity.matchedPeople, ...proposal.identity.otherPeople])].filter(Boolean).map((name) => (
+                  <button key={name} onClick={() => choosePerson(name)} disabled={phase === 'applying'}
+                    className={`rounded px-2 py-0.5 ${proposal.identity.selectedPerson === name ? 'bg-orange text-white' : 'border border-orange/30 text-orange hover:bg-orange/5'}`}>
+                    {name}
+                  </button>
+                ))}
+                {proposal.identity.selectedPerson && (
+                  <button onClick={() => choosePerson(null)} className="px-2 py-0.5 text-[color:var(--console-mute)] hover:text-orange">Auto-match</button>
+                )}
+              </div>
+              <p className="mt-1 text-[10px] text-[color:var(--console-mute)]">Only the chosen person&apos;s facts, projects, proof and reviews are imported. Everyone else is ignored.</p>
+            </div>
+          )}
 
           {[...proposal.identity.warnings,
             ...(run?.audit?.upload?.already_imported ?? []).map((f) => `${f.filename}: already imported into this profile — skipped (no duplicate source).`),

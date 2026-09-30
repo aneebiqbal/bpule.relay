@@ -220,8 +220,17 @@ export async function processNextEnrichmentSource(
 }
 
 /** Builds (or rebuilds against fresh state) the dry-run diff. Never mutates the profile. */
-export async function proposeRun(client: SupabaseClient, orgId: string, runId: string) {
+export async function proposeRun(
+  client: SupabaseClient,
+  orgId: string,
+  runId: string,
+  options: { selectedPerson?: string | null } = {},
+) {
   const run = await getRunOrThrow(client, orgId, runId)
+  // Keep an earlier explicit person choice across re-proposals (e.g. stale refresh).
+  const selectedPerson = options.selectedPerson !== undefined
+    ? options.selectedPerson
+    : ((run.proposal as EnrichmentProposal | null)?.identity?.selectedPerson ?? null)
   const state = await loadProfileState(client, orgId, run.profile_id)
   if (!state) throw new EnrichmentError('Profile not found.', 404)
 
@@ -240,7 +249,7 @@ export async function proposeRun(client: SupabaseClient, orgId: string, runId: s
     return data
   }
 
-  const proposal = buildProposal(runId, state, extractions)
+  const proposal = buildProposal(runId, state, extractions, new Date(), { selectedPerson })
   const { data } = await client.from('profile_enrichment_runs').update({
     status: 'proposed', proposal: { ...proposal, failedSources: failed, alreadyImported },
     proposed_at: new Date().toISOString(), updated_at: new Date().toISOString(), error_message: null,
@@ -315,6 +324,21 @@ export async function applyEnrichmentRun(
   await client.from('profile_import_batches').update({ status: 'ready', merged_profiles: 1, updated_at: new Date().toISOString() }).eq('id', run.import_batch_id)
 
   return { profileId: idBefore, result, derivedRecomputed: recomputed, audit: plan.audit }
+}
+
+/**
+ * A human states which person in a multi-person source this profile is.
+ * Only rebuilds the dry-run diff; nothing on the profile changes.
+ */
+export async function selectEnrichmentPerson(client: SupabaseClient, orgId: string, runId: string, personName: string | null) {
+  const run = await getRunOrThrow(client, orgId, runId)
+  if (run.status !== 'proposed') throw new EnrichmentError(`Import is ${run.status}; cannot change the person now.`, 409)
+  const known = new Set([
+    ...((run.proposal as EnrichmentProposal | null)?.identity?.matchedPeople ?? []),
+    ...((run.proposal as EnrichmentProposal | null)?.identity?.otherPeople ?? []),
+  ])
+  if (personName !== null && !known.has(personName)) throw new EnrichmentError('That person is not in the uploaded sources.', 400)
+  return proposeRun(client, orgId, runId, { selectedPerson: personName })
 }
 
 export async function discardEnrichmentRun(client: SupabaseClient, orgId: string, runId: string) {

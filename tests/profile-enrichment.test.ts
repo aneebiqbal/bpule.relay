@@ -199,3 +199,28 @@ describe('profile enrichment — plan', () => {
     expect(moved.experience_current_fingerprint).toBe(fingerprint('exp', 'Staff Engineer', 'NovaPay', '2024'))
   })
 })
+
+describe('profile enrichment — explicit person choice', () => {
+  const multi = () => source([
+    { name: 'Fizza', facts: facts({ fullName: 'Fizza', location: 'Lahore', primarySkills: ['Astro'] }), projects: [], proofs: [] },
+    { name: 'Hassan', facts: facts({ fullName: 'Hassan', location: 'Karachi', primarySkills: ['Terraform'] }), projects: [], proofs: [] },
+  ], { reviews: [{ reviewText: 'Hassan fixed our infra.', assignedPersonName: 'Hassan', reviewerName: null, reviewerCompany: null, relevantSkills: [], projectContext: null, confidence: 0.9, evidenceType: 'explicit_claim', ownershipStatus: 'clear' }] })
+  const nameless = state({}, { full_name: null, display_name: null, label: null, current_role: null, company: null, professional_summary: null, primary_skills: [] })
+
+  it('imports nothing from a multi-person source when the profile has no name', () => {
+    const p = buildProposal('run', nameless, [multi()])
+    expect(p.changes.filter((c) => c.defaultDecision === 'apply')).toHaveLength(0)
+    expect(p.identity.otherPeople.sort()).toEqual(['Fizza', 'Hassan'])
+  })
+
+  it('imports only the chosen person', () => {
+    const p = buildProposal('run', nameless, [multi()], new Date(0), { selectedPerson: 'Hassan' })
+    const applied = p.changes.filter((c) => c.defaultDecision === 'apply').map((c) => String(c.incomingValue))
+    expect(applied).toContain('Karachi')
+    expect(applied).toContain('Terraform')
+    expect(applied).toContain('Hassan fixed our infra.')
+    expect(applied).not.toContain('Lahore')
+    expect(applied).not.toContain('Astro')
+    expect(p.identity.selectedPerson).toBe('Hassan')
+  })
+})

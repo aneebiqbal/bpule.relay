@@ -116,6 +116,8 @@ export interface EnrichmentProposal {
     matchedPeople: string[]
     otherPeople: string[]
     warnings: string[]
+    /** Person a human explicitly chose as this profile (multi-person sources). */
+    selectedPerson: string | null
   }
   changes: ProposedChange[]
   summary: DiffSummary
@@ -253,8 +255,10 @@ export function buildProposal(
   state: ExistingProfileState,
   extractions: SourceExtraction[],
   now: Date = new Date(),
+  options: { selectedPerson?: string | null } = {},
 ): EnrichmentProposal {
   const profile = state.profile
+  const selected = options.selectedPerson ? norm(options.selectedPerson) : null
   const profileNames = [profile.full_name, profile.display_name, profile.label].filter(Boolean) as string[]
   const changes: ProposedChange[] = []
   const warnings: string[] = []
@@ -296,7 +300,10 @@ export function buildProposal(
 
     // Which extracted people are this profile?
     const people = ex.people.filter((p) => {
-      const isTarget = personMatchesProfile(p.name, p.facts, profile, ex.people.length)
+      // A human choice overrides name matching: exactly that person, nobody else.
+      const isTarget = selected !== null
+        ? { match: norm(p.name) === selected, warning: undefined }
+        : personMatchesProfile(p.name, p.facts, profile, ex.people.length)
       if (isTarget.match) {
         matchedPeople.add(p.name)
         if (isTarget.warning) warnings.push(`${ex.filename}: ${isTarget.warning}`)
@@ -501,7 +508,9 @@ export function buildProposal(
   }
 
   if (matchedPeople.size === 0 && extractions.some((e) => e.people.length > 0)) {
-    warnings.push('No person in the uploaded sources matched this profile. Nothing will be applied unless you confirm.')
+    warnings.push(selected
+      ? `"${options.selectedPerson}" was not found in these sources.`
+      : 'No person in the uploaded sources matched this profile. Choose which person this profile is to import their data.')
   }
 
   return {
@@ -509,7 +518,7 @@ export function buildProposal(
     profileId: profile.id,
     runId,
     generatedAt: now.toISOString(),
-    identity: { matchedPeople: [...matchedPeople], otherPeople: [...otherPeople], warnings },
+    identity: { matchedPeople: [...matchedPeople], otherPeople: [...otherPeople], warnings, selectedPerson: options.selectedPerson ?? null },
     changes,
     summary: summarize(changes),
   }
