@@ -29,7 +29,9 @@ import { buildEpisodes } from './graph/episode-builder'
 import {
   getDecisionRegistry,
   type V3ProviderContext,
+  type V3ProviderResult,
 } from './decision/decision-provider'
+import type { V3Person, V3Event } from './types'
 import { assembleDecisionPacket } from './decision/decision-assembler'
 import type { V3ScoreInput } from './scoring/score-v3'
 
@@ -125,6 +127,14 @@ export async function runV3Decision(
   let providerResult
   if (provider && providerContext) {
     providerResult = await provider.decide(providerContext)
+
+    // Cascade: escalate to gpt-4.1 when primary model is uncertain
+    if (bestEpisode && shouldCascadeEscalate(providerResult, bestEpisode)) {
+      const escalationResult = await runEscalationDecision(providerContext)
+      if (escalationResult) {
+        providerResult = escalationResult
+      }
+    }
   } else {
     // Fallback: deterministic decision from graph analysis
     providerResult = deterministicDecision(providerContext ?? {
@@ -162,6 +172,157 @@ export async function runV3Decision(
       totalMs: Date.now() - startTime,
     },
   }
+}
+
+// ── Cascade Escalation ────────────────────────────────────────────────────────
+
+const UNCERTAIN_MIN = 0.3
+const UNCERTAIN_MAX = 0.7
+
+/**
+ * Determine if the primary model's decision is uncertain enough to escalate.
+ * Escalate when:
+ * - Relationship is UNKNOWN or MIXED
+ * - Service provider / competitor identity with buyer signal
+ * - Buyer probability in uncertain zone
+ * - Low confidence
+ * - Need owner is unknown
+ */
+function shouldCascadeEscalate(
+  result: V3ProviderResult,
+  episode: V3OpportunityEpisode,
+): boolean {
+  const prob = result.answers.buyerRequestProbability
+  const rel = result.answers.relationship
+  const conf = result.confidence
+
+  // Service provider with buyer event — needs careful verification
+  if (['SERVICE_PROVIDER', 'COMPETITOR'].includes(rel) && prob >= 0.3) return true
+
+  // Unknown or mixed relationship with medium buyer signal
+  if ((rel === 'UNKNOWN' || rel === 'MIXED') && prob >= 0.2 && prob < 0.7) return true
+
+  // Buyer probability near decision boundary
+  if (prob >= 0.35 && prob < 0.55 && !episode.explicitRequest) return true
+
+  // Low confidence
+  if (conf < 0.3) return true
+
+  return false
+}
+
+/**
+ * Run escalation decision using gpt-4.1 via direct API call.
+ * Falls back to primary result if escalation fails.
+ */
+async function runEscalationDecision(
+  context: V3ProviderContext,
+): Promise<V3ProviderResult | null> {
+  try {
+    const systemPrompt = `You are a senior commercial decision reviewer for a software development agency.
+You review an OPPORTUNITY EPISODE that the primary classifier found uncertain.
+Your job: provide a definitive bounded classification.
+Rules:
+1. Score the EPISODE, not the person's identity
+2. A SERVICE_PROVIDER relationship does NOT disqualify an explicit BUYER_REQUEST episode
+3. An agency CAN hire another agency — verify this distinction carefully
+4. Explicit apply instructions (email, DM, link) are strong buyer evidence
+5. If evidence is genuinely weak, probabilities should be low`
+
+    const userPrompt = `Review this uncertain opportunity episode and provide a definitive classification:\n\n${context.person ? `Person: ${context.person.fullName || 'Unknown'}\n` : ''}${context.organization ? `Organization: ${context.organization.name || 'Unknown'}\n` : ''}\n## Evidence:\n${context.evidence.map((e) => `  [${e.needOwner}] ${e.quote}`).join('\n')}\n\nRemember: A person can be a service provider AND have a separate buyer event. Score the episode, not the person.`
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4.1',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'v3_escalation',
+            schema: {
+              type: 'object',
+              properties: {
+                relationship: { type: 'string', enum: ['BUYER', 'SERVICE_PROVIDER', 'COMPETITOR', 'PARTNER', 'CANDIDATE', 'MIXED', 'UNKNOWN'] },
+                buyerRequestProbability: { type: 'number', minimum: 0, maximum: 1 },
+                needOwner: { type: 'string', enum: ['SELF_NEED', 'ORGANIZATION_NEED', 'HIRING_NEED', 'CUSTOMER_NEED', 'MARKET_PROBLEM', 'SERVICE_OFFERING', 'PRODUCT_PROBLEM', 'UNKNOWN'] },
+                timing: { type: 'string', enum: ['CURRENT', 'AGING', 'STALE', 'UNKNOWN'] },
+                fit: { type: 'string', enum: ['POOR', 'WEAK', 'MEDIUM', 'STRONG', 'EXCELLENT'] },
+                access: { type: 'string', enum: ['NONE', 'INDIRECT', 'CONNECTION', 'DIRECT'] },
+                messageEligible: { type: 'number', minimum: 0, maximum: 1 },
+              },
+              required: ['relationship', 'buyerRequestProbability', 'needOwner', 'timing', 'fit', 'access', 'messageEligible'],
+              additionalProperties: false,
+            },
+            strict: true,
+          },
+        },
+        temperature: 0.1,
+        max_tokens: 300,
+      }),
+    })
+
+    if (!response.ok) return null
+
+    const data = await response.json() as { choices: Array<{ message: { content: string } }> }
+    const content = data.choices[0]?.message?.content
+    if (!content) return null
+
+    const parsed = JSON.parse(content) as Record<string, unknown>
+
+    return {
+      answers: {
+        relationship: validateEscalRel(parsed.relationship),
+        buyerRequestProbability: clampEscalProb(parsed.buyerRequestProbability),
+        externalNeedProbability: clampEscalProb(parsed.externalNeedProbability ?? parsed.buyerRequestProbability),
+        needOwner: validateEscalOwner(parsed.needOwner),
+        fit: validateEscalFit(parsed.fit),
+        timing: validateEscalTiming(parsed.timing),
+        access: validateEscalAccess(parsed.access),
+        messageEligible: clampEscalProb(parsed.messageEligible),
+      },
+      providerId: 'openai_gpt-4.1',
+      modelVersion: 'openai_gpt-4.1_v3',
+      latencyMs: 0,
+      confidence: 1 - 2 * Math.abs(clampEscalProb(parsed.buyerRequestProbability) - 0.5),
+    }
+  } catch {
+    return null
+  }
+}
+
+function clampEscalProb(v: unknown): number {
+  if (typeof v !== 'number' || isNaN(v)) return 0.5
+  return Math.max(0, Math.min(1, v))
+}
+
+function validateEscalRel(v: unknown): import('./types').V3Relationship {
+  const valid = ['BUYER', 'SERVICE_PROVIDER', 'COMPETITOR', 'PARTNER', 'CANDIDATE', 'MIXED', 'UNKNOWN']
+  return typeof v === 'string' && valid.includes(v) ? v as import('./types').V3Relationship : 'UNKNOWN'
+}
+
+function validateEscalOwner(v: unknown): import('./types').V3NeedOwner {
+  const valid = ['SELF_NEED', 'ORGANIZATION_NEED', 'HIRING_NEED', 'CUSTOMER_NEED', 'MARKET_PROBLEM', 'SERVICE_OFFERING', 'PRODUCT_PROBLEM', 'UNKNOWN']
+  return typeof v === 'string' && valid.includes(v) ? v as import('./types').V3NeedOwner : 'UNKNOWN'
+}
+
+function validateEscalTiming(v: unknown): import('./types').V3TimingLevel {
+  return typeof v === 'string' && ['CURRENT', 'AGING', 'STALE', 'UNKNOWN'].includes(v) ? v as import('./types').V3TimingLevel : 'UNKNOWN'
+}
+
+function validateEscalFit(v: unknown): import('./types').V3FitLevel {
+  return typeof v === 'string' && ['POOR', 'WEAK', 'MEDIUM', 'STRONG', 'EXCELLENT'].includes(v) ? v as import('./types').V3FitLevel : 'MEDIUM'
+}
+
+function validateEscalAccess(v: unknown): import('./types').V3AccessLevel {
+  return typeof v === 'string' && ['NONE', 'INDIRECT', 'CONNECTION', 'DIRECT'].includes(v) ? v as import('./types').V3AccessLevel : 'INDIRECT'
 }
 
 // ── V2 Bridge ────────────────────────────────────────────────────────────────
@@ -272,14 +433,21 @@ function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
     markOrganizationAsServiceProvider(graph, primaryOrg.id)
   }
 
-  // Create evidence from ledger
+  // Create evidence from ledger — scope each entry to its own organization
+  // This prevents the bug where Tayo360 hiring evidence gets scoped to AgentAce
   for (const entry of v2.evidenceLedger) {
+    // Use the entry's organizationName if available, else fall back to primary
+    const entryOrgName = entry.organizationName || primaryOrg.name
+    const entryOrg = entryOrgName !== primaryOrg.name
+      ? upsertOrganization(graph, entryOrgName, null, null)
+      : primaryOrg
+
     addEvidence(graph, {
       sourceType: mapSourceType(entry.source),
       quote: entry.signal,
       subjectPersonId: person.id,
-      subjectOrganizationId: primaryOrg.id,
-      subjectOrganizationName: primaryOrg.name,
+      subjectOrganizationId: entryOrg.id,
+      subjectOrganizationName: entryOrg.name,
       confidence: mapConfidence(entry.confidence),
       evidenceType: mapEvidenceType(entry.evidenceType),
       needOwner: mapNeedOwner(entry.needOwnership),
@@ -288,34 +456,45 @@ function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
     })
   }
 
-  // Create events from opportunity signals
+  // Create events from opportunity signals — scope to opportunity org if specified
   if (v2.opportunity.signals.length > 0) {
+    const opportunityOrgName = v2.opportunity.organizationName || primaryOrg.name
+    const opportunityOrg = opportunityOrgName !== primaryOrg.name
+      ? upsertOrganization(graph, opportunityOrgName, null, null)
+      : primaryOrg
+
     const event = addEvent(graph, {
       eventType: mapOpportunitySignals(v2.opportunity.signals),
       personId: person.id,
-      organizationId: primaryOrg.id,
-      organizationName: primaryOrg.name,
+      organizationId: opportunityOrg.id,
+      organizationName: opportunityOrg.name,
       requestedCapability: v2.job?.skills || [],
       explicitness: v2.commercialReading?.buyerEvidenceKinds.length ? 'EXPLICIT' : 'IMPLIED',
       polarity: mapPolarity(v2.opportunity.polarity),
     })
 
-    // Link evidence to event
+    // Link evidence to event only if same organization
     for (const ev of Array.from(graph.evidence.values())) {
-      if (ev.subjectOrganizationId === primaryOrg.id) {
+      if (ev.subjectOrganizationId === opportunityOrg.id) {
         linkEvidenceToEvent(graph, event.id, ev.id)
       }
     }
   }
 
-  // Create events from posts
+  // Create events from posts — scope each post to its organization
   for (const post of v2.content.recentPosts) {
     if (post.signals.length > 0) {
+      // Try to detect organization from post content (may differ from primary)
+      const postOrgName = detectPostOrganization(post.paraphrase, v2.person.affiliations)
+      const postOrg = postOrgName !== primaryOrg.name
+        ? upsertOrganization(graph, postOrgName, null, null)
+        : primaryOrg
+
       const postEvent = addEvent(graph, {
         eventType: mapOpportunitySignals(post.signals),
         personId: person.id,
-        organizationId: primaryOrg.id,
-        organizationName: primaryOrg.name,
+        organizationId: postOrg.id,
+        organizationName: postOrg.name,
         targetAudience: 'PUBLIC',
         explicitness: 'IMPLIED',
       })
@@ -324,8 +503,8 @@ function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
         sourceType: 'linkedin_post',
         quote: post.paraphrase,
         subjectPersonId: person.id,
-        subjectOrganizationId: primaryOrg.id,
-        subjectOrganizationName: primaryOrg.name,
+        subjectOrganizationId: postOrg.id,
+        subjectOrganizationName: postOrg.name,
         evidenceType: 'STRONG_INFERENCE',
         needOwner: 'UNKNOWN',
       })
@@ -464,6 +643,24 @@ function createEmptyPacket(
         }
       : null,
   }
+}
+
+// ── Organization Detection ─────────────────────────────────────────────────
+
+/**
+ * Detect which organization a LinkedIn post is about by looking for company
+ * names mentioned in the post text. Falls back to the primary org.
+ */
+function detectPostOrganization(postText: string, affiliations?: Array<{ organizationName: string }>): string {
+  if (!postText || !affiliations) return affiliations?.[0]?.organizationName || 'Unknown'
+
+  const lower = postText.toLowerCase()
+  for (const aff of affiliations) {
+    if (aff.organizationName && lower.includes(aff.organizationName.toLowerCase())) {
+      return aff.organizationName
+    }
+  }
+  return affiliations[0]?.organizationName || 'Unknown'
 }
 
 // ── Mapping Helpers ──────────────────────────────────────────────────────────

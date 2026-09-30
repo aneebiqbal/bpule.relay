@@ -184,3 +184,24 @@ export const V3_DECISION_PROVIDER_CONFIG = {
   jevEnabled: process.env.JEV_API_KEY !== undefined,
   kevEnabled: process.env.KEV_API_KEY !== undefined || process.env.KEV_ENDPOINT !== undefined,
 } as const
+
+// ── Canonical Mode ────────────────────────────────────────────────────────
+
+/**
+ * When true, V3 becomes the authoritative lead decision system.
+ * When false, V2 remains canonical and V3 runs in shadow only.
+ */
+export const V3_CANONICAL = process.env.V3_CANONICAL === 'true'
+
+/**
+ * Model escalation chain:
+ * Primary: gpt-4o-mini (fast, cheap, good enough for most cases)
+ * Escalation: gpt-4.1 (for uncertain cases, SP conflicts, mixed roles)
+ */
+export const V3_PRIMARY_MODEL = process.env.V3_OPENAI_MODEL || 'gpt-4o-mini'
+export const V3_ESCALATION_MODEL = process.env.V3_ESCALATION_MODEL || 'gpt-4.1'
+
+/**
+ * Cascade escalation: when primary model is uncertain, use escalation model.
+ */
+export const V3_CASCADE_ENABLED = process.env.V3_CASCADE_ENABLED !== 'false'

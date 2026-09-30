@@ -4,6 +4,8 @@ import { sseStream } from '@/lib/sse/sse'
 import { createScoutStore } from '@/lib/store'
 import { produceCanonicalIntelligence, getDisplayScore, deriveSignalEvidenceFallback } from '@/lib/intelligence-v2/orchestrator'
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
+import { produceV3Intelligence } from '@/lib/intelligence-v3/bridge'
+import { V3_CANONICAL } from '@/lib/intelligence-v3/config'
 import type { ExtractedLead } from '@/lib/domain/types'
 
 export const maxDuration = 120
@@ -75,7 +77,7 @@ export async function POST(request: Request) {
     emit({ type: 'status', message: 'Extracting prospect intelligence' })
 
     try {
-      const canonicalResult = await produceCanonicalIntelligence(rawText, {
+      let canonicalResult = await produceCanonicalIntelligence(rawText, {
         onStatus: (msg) => emit({ type: 'status', message: msg }),
         forceReanalyze: body.forceReanalyze === true,
         reuseIfUnchanged: store
@@ -86,6 +88,19 @@ export async function POST(request: Request) {
             }
           : undefined,
       })
+
+      // V3: run decision pipeline on top of V2 extraction when canonical
+      if (V3_CANONICAL) {
+        const v3Result = await produceV3Intelligence(rawText, [], (msg) => emit({ type: 'status', message: msg }))
+        canonicalResult = {
+          intelligence: v3Result.intelligence,
+          gatePassed: true,
+          gateNotes: v3Result.v2Fallback ? ['V3 failed, V2 fallback'] : [],
+          repairAttempted: false,
+          repairImproved: false,
+          reused: false,
+        }
+      }
 
       const canonical = canonicalResult.intelligence
       const latencyMs = Date.now() - started
@@ -156,6 +171,11 @@ export async function POST(request: Request) {
         repairAttempted: canonicalResult.repairAttempted,
         repairImproved: canonicalResult.repairImproved,
         reused: canonicalResult.reused,
+        // V3 telemetry
+        decisionVersion: V3_CANONICAL ? 'decision_v3' : 'relay_qualification_v2',
+        scoreVersion: V3_CANONICAL ? 'score_v3' : (canonical as CanonicalProspectIntelligence).scoreVersion,
+        decisionProvider: V3_CANONICAL ? (canonical as CanonicalProspectIntelligence & { v3DecisionPacket?: { decisionProvider?: string } }).v3DecisionPacket?.decisionProvider : undefined,
+        decisionModel: V3_CANONICAL ? (canonical as CanonicalProspectIntelligence & { v3DecisionPacket?: { decisionModel?: string } }).v3DecisionPacket?.decisionModel : undefined,
       })
     } catch (err) {
       void safeLog({

@@ -21,6 +21,8 @@ import { isLinkedInChromeText } from '@/lib/intelligence-v2/role-signals'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
 import { produceCanonicalIntelligence, getDisplayScore, deriveSignalEvidenceFallback, isClientCanonicalStillValid } from '@/lib/intelligence-v2/orchestrator'
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
+import { produceV3Intelligence } from '@/lib/intelligence-v3/bridge'
+import { V3_CANONICAL } from '@/lib/intelligence-v3/config'
 import { resolveTimezoneFromLocation } from '@/lib/timezone/resolve'
 import {
   applyRevenueStrategyToOutreach,
@@ -45,6 +47,23 @@ const PITCHING_MESSAGING_POLICIES: ReadonlySet<MessagingPolicy> = new Set([
 
 function isPitchingPolicy(policy: MessagingPolicy): boolean {
   return PITCHING_MESSAGING_POLICIES.has(policy)
+}
+
+/**
+ * Map V3 action to revenue-strategy MessagingPolicy.
+ * V3 actions are richer than V2 verdicts — collapse to policy for gating.
+ */
+function mapV3ActionToMessagingPolicy(v3Action: string): MessagingPolicy {
+  switch (v3Action) {
+    case 'CONTACT_NOW': return 'CONNECT_WITH_NOTE'
+    case 'CONNECT_WITH_NOTE': return 'CONNECT_WITH_NOTE'
+    case 'CONNECT_WITHOUT_NOTE': return 'CONNECT_WITHOUT_NOTE'
+    case 'OBSERVE': return 'OBSERVE'
+    case 'WAIT': return 'RESEARCH_MORE'
+    case 'HUMAN_REVIEW': return 'SKIP'
+    case 'SKIP': return 'SKIP'
+    default: return 'SKIP'
+  }
 }
 
 /**
@@ -194,19 +213,42 @@ export async function POST(request: Request) {
       try {
         // Dedup: same rawText within 30s window reuses in-flight extraction
         const dedupKey = `analyze:${rawText.slice(0, 200)}`
-        canonicalResult = await deduplicated(dedupKey, () =>
-          produceCanonicalIntelligence(rawText, {
-            onStatus: (msg) => emit({ type: 'status', message: msg }),
-            forceReanalyze: body.forceReanalyze === true,
-            reuseIfUnchanged: store
-              ? async (hash) => {
-                  const existing = await store!.findLeadByIntelligenceInputHash(hash)
-                  const canonical = existing?.canonicalIntelligence as CanonicalProspectIntelligence | null | undefined
-                  return canonical ?? null
-                }
-              : undefined,
-          }),
-        )
+        if (V3_CANONICAL) {
+          // V3 is canonical: run V2 extraction + V3 decision pipeline
+          canonicalResult = await deduplicated(dedupKey, () =>
+            produceCanonicalIntelligence(rawText, {
+              onStatus: (msg) => emit({ type: 'status', message: msg }),
+              forceReanalyze: body.forceReanalyze === true,
+              reuseIfUnchanged: undefined, // V3 always re-decides from fresh extraction
+            }),
+          )
+          // Build V3 decision on top of V2 extraction
+          const senderCaps: string[] = [] // sender capabilities loaded later in the pipeline
+          const v3Result = await produceV3Intelligence(rawText, senderCaps, (msg) => emit({ type: 'status', message: msg }))
+          canonicalResult = {
+            intelligence: v3Result.intelligence,
+            gatePassed: true,
+            gateNotes: v3Result.v2Fallback ? ['V3 failed, V2 fallback'] : [],
+            repairAttempted: false,
+            repairImproved: false,
+            reused: false,
+          }
+        } else {
+          // V2 canonical path (legacy)
+          canonicalResult = await deduplicated(dedupKey, () =>
+            produceCanonicalIntelligence(rawText, {
+              onStatus: (msg) => emit({ type: 'status', message: msg }),
+              forceReanalyze: body.forceReanalyze === true,
+              reuseIfUnchanged: store
+                ? async (hash) => {
+                    const existing = await store!.findLeadByIntelligenceInputHash(hash)
+                    const canonical = existing?.canonicalIntelligence as CanonicalProspectIntelligence | null | undefined
+                    return canonical ?? null
+                  }
+                : undefined,
+            }),
+          )
+        }
       } catch {
         emit({ type: 'error', message: 'Intelligence extraction failed.' })
         return
@@ -214,6 +256,7 @@ export async function POST(request: Request) {
     }
 
     const canonical = canonicalResult.intelligence
+    const v3Packet = (canonical as CanonicalProspectIntelligence & { v3DecisionPacket?: unknown }).v3DecisionPacket ?? null
     const extracted: ExtractedLead = {
       name: canonical.intelligence.person.fullName,
       title: canonical.intelligence.person.title,
@@ -243,8 +286,23 @@ export async function POST(request: Request) {
       ],
     }
 
+    // Build revenue strategy from canonical intelligence.
+    // When V3 is canonical, the revenue strategy reads V3-derived data
+    // (score, qualification, relationship) from the canonical blob.
     const revenue = buildRevenueStrategy(sourceFromCanonical(canonical, { channel: 'connection' }))
     const loop = toUiSnapshot(revenue)
+
+    // When V3 is canonical, override loop with V3's authoritative decision.
+    // This prevents dual-truth: score=0 + HIGH intent + CONTACT_NOW + message.
+    const v3Action = v3Packet ? (v3Packet as { action: string }).action : null
+    const v3MessageEligible = v3Packet ? (v3Packet as { messageEligible: boolean }).messageEligible : null
+
+    if (V3_CANONICAL && v3Packet) {
+      // V3 is the single source of truth for action + message eligibility
+      ;(loop as { act: string }).act = v3Action!
+      ;(loop as { messageRecommended: boolean }).messageRecommended = v3MessageEligible!
+      ;(loop as { messagingPolicy: string }).messagingPolicy = mapV3ActionToMessagingPolicy(v3Action!)
+    }
 
     if (store) {
       try {
@@ -348,6 +406,14 @@ export async function POST(request: Request) {
         repairAttempted: canonicalResult.repairAttempted,
         repairImproved: canonicalResult.repairImproved,
         reused: canonicalResult.reused,
+        // V3 telemetry
+        decisionVersion: V3_CANONICAL ? 'decision_v3' : 'relay_qualification_v2',
+        scoreVersion: V3_CANONICAL ? 'score_v3' : (canonical as CanonicalProspectIntelligence).scoreVersion,
+        decisionProvider: V3_CANONICAL ? (v3Packet as { decisionProvider?: string })?.decisionProvider ?? 'openai' : undefined,
+        decisionModel: V3_CANONICAL ? (v3Packet as { decisionModel?: string })?.decisionModel : undefined,
+        selectedEpisodeId: V3_CANONICAL ? (v3Packet as { selectedEpisodeId?: string | null })?.selectedEpisodeId : undefined,
+        v3Action: V3_CANONICAL ? (v3Packet as { action: string }).action : undefined,
+        messageEligible: V3_CANONICAL ? (v3Packet as { messageEligible: boolean }).messageEligible : undefined,
       })
       return
     }

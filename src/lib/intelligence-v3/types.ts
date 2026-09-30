@@ -183,7 +183,7 @@ export type V3Relationship =
   | 'UNKNOWN'
 
 export type V3FitLevel = 'POOR' | 'WEAK' | 'MEDIUM' | 'STRONG' | 'EXCELLENT'
-export type V3TimingLevel = 'STALE' | 'WEAK' | 'CURRENT' | 'URGENT'
+export type V3TimingLevel = 'STALE' | 'WEAK' | 'CURRENT' | 'URGENT' | 'UNKNOWN'
 export type V3AccessLevel = 'NONE' | 'INDIRECT' | 'CONNECTION' | 'DIRECT'
 
 export interface V3BoundedDecision {
