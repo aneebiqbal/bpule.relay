@@ -3,6 +3,7 @@ import { getAuthContext } from '@/lib/auth/organization'
 import { can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 import { createServiceSupabase } from '@/lib/supabase/service'
+import { recordHumanEdits } from '@/lib/profile-intelligence/enrichment-service'
 
 export async function GET(
   request: Request,
@@ -24,7 +25,8 @@ export async function GET(
       reviews:profile_reviews(id, review_text, reviewer_name, reviewer_company, relevant_skills, confidence, safe_for_outreach, ownership_status),
       claims:profile_claims(id, claim_key, claim_value, evidence_type, is_inferred, user_corrected, user_rejected),
       proof_cards:proof_cards(id, capability, strength, safe_claim, source_type, tags, verified, forbidden_claims),
-      portfolio_projects:portfolio_projects(id, project_title, my_role, description, skills, technologies)
+      portfolio_projects:portfolio_projects(id, project_title, my_role, description, skills, technologies, client_company, start_date, end_date, outcome),
+      experience:profile_experience(id, role, company, start_date, end_date, is_current, authority)
     `)
     .eq('id', id)
     .eq('organization_id', authCtx.orgId)
@@ -34,7 +36,63 @@ export async function GET(
     return NextResponse.json({ error: 'Profile not found.' }, { status: 404 })
   }
 
-  return NextResponse.json({ profile })
+  return NextResponse.json({ profile: toProfileDetail(profile) })
+}
+
+// The detail UI reads camelCase (matching the list route). Raw snake_case
+// rows previously rendered as an empty "Unnamed" profile.
+function toProfileDetail(p: any) {
+  return {
+    id: p.id,
+    fullName: p.full_name ?? null,
+    displayName: p.display_name ?? null,
+    label: p.label ?? null,
+    headline: p.headline ?? null,
+    currentRole: p.current_role ?? null,
+    company: p.company ?? null,
+    location: p.location ?? null,
+    bio: p.bio ?? null,
+    professionalSummary: p.professional_summary ?? null,
+    seniority: p.seniority ?? null,
+    yearsExperience: p.years_experience != null ? Number(p.years_experience) : null,
+    primarySkills: p.primary_skills ?? [],
+    secondarySkills: p.secondary_skills ?? [],
+    technologies: p.technologies ?? [],
+    industries: p.industries ?? [],
+    specialties: p.specialties ?? [],
+    positioning: p.positioning ?? null,
+    differentiators: p.differentiators ?? [],
+    languages: p.languages ?? [],
+    readiness: p.readiness,
+    profileConfidence: p.profile_confidence ?? null,
+    sourceCount: p.source_count ?? 0,
+    proofCount: p.proof_count ?? 0,
+    aiContext: p.ai_context ?? {},
+    archivedAt: p.archived_at ?? null,
+    mergedIntoProfileId: p.merged_into_profile_id ?? null,
+    rep: p.rep ?? null,
+    assignments: (p.assignments ?? []).map((a: any) => ({ id: a.id, rep: a.reps ?? { id: a.rep_id, name: 'Unknown' } })),
+    sources: (p.sources ?? []).map((s: any) => ({
+      id: s.id, originalFilename: s.original_filename, mimeType: s.mime_type, parsingStatus: s.parsing_status,
+      extractionStatus: s.extraction_status, uploadedAt: s.uploaded_at,
+    })),
+    reviews: (p.reviews ?? []).map((r: any) => ({
+      id: r.id, reviewText: r.review_text, reviewerName: r.reviewer_name, reviewerCompany: r.reviewer_company, safeForOutreach: r.safe_for_outreach,
+    })),
+    claims: (p.claims ?? []).map((c: any) => ({
+      id: c.id, claimKey: c.claim_key, claimValue: c.claim_value, evidenceType: c.evidence_type, userCorrected: c.user_corrected,
+    })),
+    proofCards: (p.proof_cards ?? []).map((pc: any) => ({
+      id: pc.id, capability: pc.capability, strength: pc.strength, safeClaim: pc.safe_claim, verified: pc.verified,
+    })),
+    portfolioProjects: (p.portfolio_projects ?? []).map((pp: any) => ({
+      id: pp.id, projectTitle: pp.project_title, myRole: pp.my_role, description: pp.description, technologies: pp.technologies ?? [],
+      clientCompany: pp.client_company ?? null, startDate: pp.start_date ?? null, endDate: pp.end_date ?? null, outcome: pp.outcome ?? null,
+    })),
+    experience: (p.experience ?? [])
+      .map((e: any) => ({ id: e.id, role: e.role, company: e.company, startDate: e.start_date, endDate: e.end_date, isCurrent: e.is_current }))
+      .sort((a: any, b: any) => Number(b.isCurrent) - Number(a.isCurrent) || String(b.startDate ?? '').localeCompare(String(a.startDate ?? ''))),
+  }
 }
 
 export async function PATCH(
@@ -63,6 +121,9 @@ export async function PATCH(
     'service_capabilities', 'specialties', 'differentiators', 'languages',
   ]
 
+  const { data: before } = await client.from('profiles').select('*').eq('id', id).eq('organization_id', authCtx.orgId).maybeSingle()
+  if (!before) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 })
+
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
   for (const field of editableFields) {
     if (body[field] !== undefined) updates[field] = body[field]
@@ -81,6 +142,10 @@ export async function PATCH(
     .single()
 
   if (error) return safeErrorResponse(error, 500, 'Failed to update profile.', 'profile-intelligence/[id]')
+
+  // Manual edits are HUMAN_VERIFIED: future imports can never override them.
+  await recordHumanEdits(client, { orgId: authCtx.orgId, profileId: id, repId: authCtx.repId, before, after: updates })
+    .catch((err) => console.warn('[profile-intelligence] failed to record human-verified claims:', err))
 
   return NextResponse.json({ profile: data })
 }

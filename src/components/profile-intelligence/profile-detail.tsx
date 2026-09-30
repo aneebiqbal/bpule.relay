@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { EnrichPanel } from './enrich-panel'
+import { MergeTool } from './merge-tool'
 
 interface ProfileData {
   id: string
@@ -33,15 +35,29 @@ interface ProfileData {
   sources: Array<{ id: string; originalFilename: string; parsingStatus: string; uploadedAt: string }>
   reviews: Array<{ id: string; reviewText: string; reviewerName: string | null; safeForOutreach: boolean }>
   proofCards: Array<{ id: string; capability: string; strength: string; safeClaim: string; verified: boolean }>
-  portfolioProjects: Array<{ id: string; projectTitle: string; myRole: string | null; description: string | null }>
+  portfolioProjects: Array<{ id: string; projectTitle: string; myRole: string | null; description: string | null; startDate?: string | null; endDate?: string | null }>
+  experience: Array<{ id: string; role: string | null; company: string | null; startDate: string | null; endDate: string | null; isCurrent: boolean }>
+  archivedAt: string | null
+  mergedIntoProfileId: string | null
 }
 
-export function ProfileDetail({ profileId }: { profileId: string }) {
+interface ImportRun {
+  id: string
+  status: string
+  created_at: string
+  applied_at: string | null
+  source_ids: string[]
+  summary: { fieldsToAdd: number; fieldsToEnrich: number; conflictsRequiringReview: number; duplicatesIgnored: number } | null
+}
+
+export function ProfileDetail({ profileId, canImport = false, isAdmin = false }: { profileId: string; canImport?: boolean; isAdmin?: boolean }) {
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showImport, setShowImport] = useState(false)
+  const [runs, setRuns] = useState<ImportRun[]>([])
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetch(`/api/profile-intelligence/profiles/${profileId}`)
       .then((r) => r.json())
       .then((data) => {
@@ -53,7 +69,15 @@ export function ProfileDetail({ profileId }: { profileId: string }) {
         setError(err.message)
         setLoading(false)
       })
-  }, [profileId])
+    if (canImport) {
+      fetch(`/api/profile-intelligence/profiles/${profileId}/enrich`)
+        .then((r) => r.json())
+        .then((d) => setRuns(d.runs ?? []))
+        .catch(() => setRuns([]))
+    }
+  }, [profileId, canImport])
+
+  useEffect(() => { load() }, [load])
 
   if (loading) return <div className="p-6 text-[12px] text-[color:var(--console-mute)]">Loading...</div>
   if (error) return <div className="p-6 text-[12px] text-red-500">{error}</div>
@@ -70,9 +94,22 @@ export function ProfileDetail({ profileId }: { profileId: string }) {
       {/* Identity */}
       <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
         <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Identity</p>
-        <h1 className="mt-2 text-[24px] leading-[1.1] tracking-[-0.02em] text-[color:var(--console-text)]">
-          {profile.fullName ?? profile.displayName ?? 'Unnamed'}
-        </h1>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-[24px] leading-[1.1] tracking-[-0.02em] text-[color:var(--console-text)]">
+            {profile.fullName ?? profile.displayName ?? 'Unnamed'}
+          </h1>
+          {canImport && !profile.archivedAt && (
+            <button onClick={() => setShowImport(true)} data-testid="add-import-data"
+              className="rounded bg-orange px-3 py-1.5 text-[12px] font-medium text-white hover:bg-orange/90">
+              Add / Import Data
+            </button>
+          )}
+        </div>
+        {profile.archivedAt && (
+          <p className="mt-2 rounded bg-yellow-500/10 px-2 py-1 text-[11px] text-yellow-700">
+            Archived{profile.mergedIntoProfileId ? <> — merged into <Link className="underline" href={`/profile-intelligence/${profile.mergedIntoProfileId}`}>another profile</Link></> : ''}.
+          </p>
+        )}
         {profile.currentRole && (
           <p className="mt-1 text-[13px] text-[color:var(--console-mute)]">
             {profile.currentRole}{profile.company ? ` · ${profile.company}` : ''}
@@ -96,6 +133,10 @@ export function ProfileDetail({ profileId }: { profileId: string }) {
           </span>
         </div>
       </section>
+
+      {showImport && (
+        <EnrichPanel profileId={profile.id} onApplied={load} onClose={() => setShowImport(false)} />
+      )}
 
       {/* Capabilities */}
       {(profile.primarySkills?.length > 0 || profile.technologies?.length > 0) && (
@@ -124,6 +165,27 @@ export function ProfileDetail({ profileId }: { profileId: string }) {
           <p className="mt-2 text-[13px] leading-relaxed text-[color:var(--console-text)]">
             {profile.professionalSummary ?? profile.bio}
           </p>
+        </section>
+      )}
+
+      {/* Role history */}
+      {profile.experience?.length > 0 && (
+        <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Role History</p>
+          <ul className="mt-3 space-y-1.5" data-testid="role-history">
+            {profile.experience.map((e) => (
+              <li key={e.id} className="text-[12px] text-[color:var(--console-text)]">
+                {e.role ?? 'Role'}{e.company ? ` · ${e.company}` : ''}
+                <span className="ml-2 text-[11px] text-[color:var(--console-mute)]">
+                  {[e.startDate, e.endDate ?? (e.isCurrent ? 'present' : null)].filter(Boolean).join(' – ')}
+                </span>
+                {e.isCurrent && <span className="ml-2 rounded bg-green-500/10 px-1 text-[9px] text-green-600">current</span>}
+                {e.isCurrent && e.endDate && (
+                  <span className="ml-2 text-[10px] text-yellow-700">a source lists this role as ended {e.endDate} — current per profile; review conflicts to change</span>
+                )}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
@@ -214,6 +276,29 @@ export function ProfileDetail({ profileId }: { profileId: string }) {
             : 'Not assigned'}
         </p>
       </section>
+
+      {/* Import history */}
+      {canImport && runs.length > 0 && (
+        <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Import History</p>
+          <ul className="mt-3 space-y-1" data-testid="import-history">
+            {runs.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--console-text)]">
+                <span>{new Date(r.created_at).toLocaleString()}</span>
+                <span className={`rounded px-1 text-[9px] ${r.status === 'applied' ? 'bg-green-500/10 text-green-600' : 'bg-gray-500/10 text-gray-500'}`}>{r.status}</span>
+                <span className="text-[color:var(--console-mute)]">
+                  {r.source_ids.length} source{r.source_ids.length === 1 ? '' : 's'}
+                  {r.summary ? ` · +${r.summary.fieldsToAdd} added · ${r.summary.fieldsToEnrich} enriched · ${r.summary.conflictsRequiringReview} conflicts · ${r.summary.duplicatesIgnored} duplicates` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {isAdmin && !profile.archivedAt && (
+        <MergeTool targetProfileId={profile.id} targetName={profile.fullName ?? profile.displayName ?? 'this profile'} onMerged={load} />
+      )}
     </div>
   )
 }

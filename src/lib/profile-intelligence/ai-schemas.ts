@@ -33,6 +33,7 @@ export const PROFILE_FACT_EXTRACT_SCHEMA: ShapeSchema = {
   differentiators: { type: 'array', required: false },
   languages: { type: 'array', required: false },
   communicationStyle: { type: 'object', required: false },
+  employmentHistory: { type: 'array', required: false, description: 'Array of {role, company, startDate, endDate, isCurrent} in chronological order' },
   projects: { type: 'array', required: false },
   proofs: { type: 'array', required: false },
   reviews: { type: 'array', required: false },

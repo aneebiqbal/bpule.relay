@@ -10,7 +10,7 @@
 
 alter table profiles add column if not exists full_name text;
 alter table profiles add column if not exists display_name text;
-alter table profiles add column if not exists current_role text;
+alter table profiles add column if not exists "current_role" text;
 alter table profiles add column if not exists company text;
 alter table profiles add column if not exists location text;
 alter table profiles add column if not exists bio text;
@@ -62,8 +62,8 @@ create table if not exists profile_import_batches (
   updated_at timestamptz not null default now()
 );
 
-create index if not import_batches_org_idx on profile_import_batches (organization_id, created_at desc);
-create index if not import_batches_status_idx on profile_import_batches (organization_id, status);
+create index if not exists import_batches_org_idx on profile_import_batches (organization_id, created_at desc);
+create index if not exists import_batches_status_idx on profile_import_batches (organization_id, status);
 
 alter table profile_import_batches enable row level security;
 drop policy if exists "import_batches_select" on profile_import_batches;
@@ -99,10 +99,10 @@ create table if not exists profile_sources (
   extracted_at timestamptz
 );
 
-create index if not sources_org_idx on profile_sources (organization_id);
-create index if not sources_profile_idx on profile_sources (profile_id);
-create index if not sources_batch_idx on profile_sources (import_batch_id);
-create index if not sources_hash_idx on profile_sources (organization_id, file_hash);
+create index if not exists sources_org_idx on profile_sources (organization_id);
+create index if not exists sources_profile_idx on profile_sources (profile_id);
+create index if not exists sources_batch_idx on profile_sources (import_batch_id);
+create index if not exists sources_hash_idx on profile_sources (organization_id, file_hash);
 
 alter table profile_sources enable row level security;
 drop policy if exists "sources_select" on profile_sources;
@@ -138,9 +138,9 @@ create table if not exists profile_reviews (
   created_at timestamptz not null default now()
 );
 
-create index if not reviews_profile_idx on profile_reviews (profile_id);
-create index if not reviews_org_idx on profile_reviews (organization_id);
-create index if not reviews_source_idx on profile_reviews (source_id);
+create index if not exists reviews_profile_idx on profile_reviews (profile_id);
+create index if not exists reviews_org_idx on profile_reviews (organization_id);
+create index if not exists reviews_source_idx on profile_reviews (source_id);
 
 alter table profile_reviews enable row level security;
 drop policy if exists "reviews_select" on profile_reviews;
@@ -176,9 +176,9 @@ create table if not exists profile_claims (
   updated_at timestamptz not null default now()
 );
 
-create index if not claims_profile_idx on profile_claims (profile_id);
-create index if not claims_org_idx on profile_claims (organization_id);
-create index if not claims_key_idx on profile_claims (profile_id, claim_key);
+create index if not exists claims_profile_idx on profile_claims (profile_id);
+create index if not exists claims_org_idx on profile_claims (organization_id);
+create index if not exists claims_key_idx on profile_claims (profile_id, claim_key);
 
 alter table profile_claims enable row level security;
 drop policy if exists "claims_select" on profile_claims;
@@ -210,7 +210,7 @@ drop policy if exists "profile_sources_select" on storage.objects;
 create policy "profile_sources_select" on storage.objects
   for select using (
     bucket_id = 'profile-sources'
-    and storage.foldername(name) = (select organization_id::text from reps where auth_user_id = auth.uid() limit 1)
+    and (storage.foldername(name))[1] = (select organization_id::text from reps where auth_user_id = auth.uid() limit 1)
   );
 
 -- INSERT: org members can upload to their org folder
@@ -218,7 +218,7 @@ drop policy if exists "profile_sources_insert" on storage.objects;
 create policy "profile_sources_insert" on storage.objects
   for insert with check (
     bucket_id = 'profile-sources'
-    and storage.foldername(name) = (select organization_id::text from reps where auth_user_id = auth.uid() limit 1)
+    and (storage.foldername(name))[1] = (select organization_id::text from reps where auth_user_id = auth.uid() limit 1)
   );
 
 -- DELETE: admin only
@@ -226,6 +226,6 @@ drop policy if exists "profile_sources_delete" on storage.objects;
 create policy "profile_sources_delete" on storage.objects
   for delete using (
     bucket_id = 'profile-sources'
-    and storage.foldername(name) = (select organization_id::text from reps where auth_user_id = auth.uid() limit 1)
+    and (storage.foldername(name))[1] = (select organization_id::text from reps where auth_user_id = auth.uid() limit 1)
     and (select role from reps where auth_user_id = auth.uid() limit 1) = 'admin'
   );

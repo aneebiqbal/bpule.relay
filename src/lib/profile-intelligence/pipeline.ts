@@ -94,6 +94,19 @@ export async function runExtractionPipeline(
   }
 }
 
+/**
+ * Extraction for a source the user explicitly attached to ONE known profile
+ * (enrichment). Used when classification finds no named person — e.g. a
+ * portfolio or case study that never states the owner's name.
+ */
+export async function extractForSinglePerson(text: string, organizationId: string) {
+  const facts = await extractFacts(text, organizationId)
+  const projects = await extractProjects(text, organizationId)
+  const proofs = await buildProofs(text, facts, projects, organizationId)
+  const reviews = await extractReviews(text, [], organizationId)
+  return { facts, projects, proofs, reviews }
+}
+
 async function classifyDocument(content: string, orgId: string) {
   const truncated = content.slice(0, 8000)
   const result = await generate<{
@@ -161,6 +174,9 @@ async function extractFacts(text: string, orgId: string): Promise<ExtractedFacts
     differentiators: facts.differentiators ?? [],
     languages: facts.languages ?? [],
     communicationStyle: facts.communicationStyle ?? {},
+    ...(Array.isArray((facts as { employmentHistory?: unknown }).employmentHistory)
+      ? { employmentHistory: (facts as unknown as { employmentHistory: unknown[] }).employmentHistory }
+      : {}),
     projects: [],
     proofs: [],
     reviews: [],
