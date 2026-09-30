@@ -389,6 +389,21 @@ export interface V2BridgeInput {
     organizationName?: string
   }>
   rawInput: string
+  /** Source-level events parsed directly from raw text (bypasses V2 evidence ledger degradation) */
+  sourceEvents?: Array<{
+    organizationName: string
+    eventType: string
+    description: string
+    explicitRequest: boolean
+    requestedCapabilities: string[]
+    requestedAssets: string[]
+    applicationChannels: string[]
+    applyInstructions: string[]
+    contactRoute: string | null
+    occurredAt: string | null
+    ageDays: number | null
+    evidenceType: string
+  }>
 }
 
 function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
@@ -454,6 +469,59 @@ function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
       polarity: mapPolarity(entry.polarity),
       temporalScope: mapTemporalScope(entry.temporalScope),
     })
+  }
+
+  // Create events from source-level parsing (richer than V2 evidence ledger)
+  // These preserve organization scoping, temporal data, and apply instructions
+  if (v2.sourceEvents && v2.sourceEvents.length > 0) {
+    for (const srcEvent of v2.sourceEvents) {
+      const eventOrg = upsertOrganization(graph, srcEvent.organizationName, null, null)
+
+      const event = addEvent(graph, {
+        eventType: mapSourceEventType(srcEvent.eventType),
+        personId: person.id,
+        organizationId: eventOrg.id,
+        organizationName: srcEvent.organizationName,
+        requestedCapability: srcEvent.requestedCapabilities,
+        targetAudience: 'PUBLIC',
+        explicitness: srcEvent.explicitRequest ? 'EXPLICIT' : 'IMPLIED',
+        applyInstructions: srcEvent.applyInstructions,
+        occurredAt: srcEvent.occurredAt,
+        polarity: 'ACTIVE',
+      })
+
+      // Create evidence for this event
+      const evidence = addEvidence(graph, {
+        sourceType: 'linkedin_post',
+        quote: srcEvent.description,
+        subjectPersonId: person.id,
+        subjectOrganizationId: eventOrg.id,
+        subjectOrganizationName: srcEvent.organizationName,
+        confidence: 0.9,
+        evidenceType: srcEvent.evidenceType as 'FACT' | 'STRONG_INFERENCE' | 'WEAK_INFERENCE',
+        needOwner: 'HIRING_NEED',
+        polarity: 'ACTIVE',
+        temporalScope: srcEvent.ageDays === null ? 'UNKNOWN' : srcEvent.ageDays <= 14 ? 'CURRENT' : srcEvent.ageDays <= 45 ? 'RECENT' : 'HISTORICAL',
+        occurredAt: srcEvent.occurredAt,
+      })
+
+      linkEvidenceToEvent(graph, event.id, evidence.id)
+
+      // Create evidence for requested assets
+      for (const asset of srcEvent.requestedAssets) {
+        addEvidence(graph, {
+          sourceType: 'linkedin_post',
+          quote: `Requested: ${asset}`,
+          subjectPersonId: person.id,
+          subjectOrganizationId: eventOrg.id,
+          subjectOrganizationName: srcEvent.organizationName,
+          confidence: 0.95,
+          evidenceType: 'FACT',
+          needOwner: 'HIRING_NEED',
+          polarity: 'ACTIVE',
+        })
+      }
+    }
   }
 
   // Create events from opportunity signals — scope to opportunity org if specified
@@ -664,6 +732,16 @@ function detectPostOrganization(postText: string, affiliations?: Array<{ organiz
 }
 
 // ── Mapping Helpers ──────────────────────────────────────────────────────────
+
+function mapSourceEventType(type: string): import('./types').V3EventType {
+  const valid: import('./types').V3EventType[] = [
+    'HIRING', 'FREELANCE_REQUEST', 'AGENCY_REQUEST', 'PROJECT_REQUEST',
+    'VENDOR_EVALUATION', 'PRODUCT_LAUNCH', 'FUNDING', 'TECHNICAL_BUILD',
+    'SERVICE_OFFERING', 'JOB_SEEKING', 'PARTNERSHIP', 'CUSTOMER_PROBLEM',
+    'MARKET_COMMENTARY', 'OTHER',
+  ]
+  return valid.includes(type as import('./types').V3EventType) ? type as import('./types').V3EventType : 'OTHER'
+}
 
 function mapRelationship(rel: string): import('./types').V3Affiliation['relationship'] {
   switch (rel.toLowerCase()) {

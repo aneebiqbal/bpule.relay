@@ -23,10 +23,16 @@ import { runV3Decision, type V2BridgeInput } from '@/lib/intelligence-v3/orchest
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 import type { V3LeadDecisionPacket } from '@/lib/intelligence-v3/types'
 import { V3_CANONICAL } from '@/lib/intelligence-v3/config'
+import { initializeV3 } from '@/lib/intelligence-v3/index'
+import { parseEventsFromSource, type SourceEvent } from './source-parser'
 
 // ── V2-to-V3 bridge input builder ────────────────────────────────────────────
 
-function buildV3BridgeInput(canonical: CanonicalProspectIntelligence, rawText: string): V2BridgeInput {
+function buildV3BridgeInput(
+  canonical: CanonicalProspectIntelligence,
+  rawText: string,
+  sourceEvents: SourceEvent[],
+): V2BridgeInput {
   const intel = canonical.intelligence
   return {
     person: {
@@ -90,6 +96,20 @@ function buildV3BridgeInput(canonical: CanonicalProspectIntelligence, rawText: s
       organizationName: e.organizationName ?? undefined,
     })),
     rawInput: rawText,
+    sourceEvents: sourceEvents.map((e) => ({
+      organizationName: e.organizationName,
+      eventType: e.eventType,
+      description: e.description,
+      explicitRequest: e.explicitRequest,
+      requestedCapabilities: e.requestedCapabilities,
+      requestedAssets: e.requestedAssets,
+      applicationChannels: e.applicationChannels,
+      applyInstructions: e.applyInstructions,
+      contactRoute: e.contactRoute,
+      occurredAt: e.occurredAt,
+      ageDays: e.ageDays,
+      evidenceType: e.evidenceType,
+    })),
   }
 }
 
@@ -184,7 +204,13 @@ export async function produceV3Intelligence(
   onStatus?.('Running V3 opportunity analysis...')
 
   try {
-    const bridgeInput = buildV3BridgeInput(v2Canonical, rawText)
+    // Initialize providers (registers OpenAI, LongCat, etc.)
+    initializeV3()
+
+    // Parse events directly from raw source to avoid V2 evidence ledger degradation
+    const sourceEvents = parseEventsFromSource(rawText, v2Canonical)
+
+    const bridgeInput = buildV3BridgeInput(v2Canonical, rawText, sourceEvents)
 
     const v3Result = await runV3Decision(bridgeInput, {
       senderCapabilities,
