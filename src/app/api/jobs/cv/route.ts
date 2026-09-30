@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { extractIdentityFromSource } from '@/lib/content/onboarding-extract'
 import type { ExtractedCv } from '@/lib/jobs/types'
+import { loadPdfParse } from '@/lib/pdf/load-pdf-parse'
 
 export const maxDuration = 30
 
@@ -64,8 +65,8 @@ export async function POST(request: Request) {
     type PdfParser = InstanceType<typeof import('pdf-parse')['PDFParse']>
     let parser: PdfParser | null = null
     try {
-      const { PDFParse } = await import('pdf-parse')
-      parser = new PDFParse({ data: new Uint8Array(buffer) })
+      const { PDFParse, CanvasFactory } = await loadPdfParse()
+      parser = new PDFParse({ data: new Uint8Array(buffer), CanvasFactory })
       const result = await parser.getText()
       text = result.text
     } catch {

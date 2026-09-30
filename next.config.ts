@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
+  // pdf-parse → pdfjs-dist → @napi-rs/canvas (native binary). Bundling them
+  // breaks the DOMMatrix polyfill and the .node binary; load from node_modules.
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "@napi-rs/canvas"],
+
   // Allow Playwright WebKit to load dev resources from 127.0.0.1
   allowedDevOrigins: ["127.0.0.1", "localhost"],
 

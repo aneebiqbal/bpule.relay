@@ -1,5 +1,5 @@
-import { PDFParse } from 'pdf-parse'
 import mammoth from 'mammoth'
+import { loadPdfParse } from '@/lib/pdf/load-pdf-parse'
 
 export interface ParsedDocument {
   content: string
@@ -33,9 +33,10 @@ async function parsePdf(buffer: ArrayBuffer): Promise<ParsedDocument> {
   const warnings: string[] = []
   try {
     const uint8 = new Uint8Array(buffer)
+    const { PDFParse, CanvasFactory } = await loadPdfParse()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parser = new PDFParse({ data: uint8 as any, withCredentials: false, verbosity: 0 })
-    const textResult = await parser.getText()
+    const parser = new PDFParse({ data: uint8 as any, withCredentials: false, verbosity: 0, CanvasFactory })
+    const textResult = await parser.getText().finally(() => parser.destroy().catch(() => {}))
     const result = { text: textResult.text, numpages: textResult.total }
 
     const pages = splitPdfPages(result.text, result.numpages)
