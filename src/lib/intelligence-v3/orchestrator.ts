@@ -1,0 +1,555 @@
+/**
+ * Decision Intelligence V3 — Orchestrator
+ *
+ * Single entry point for the V3 pipeline:
+ *
+ * RAW SOURCE → FACT/EVENT EXTRACTION → ENTITY RESOLUTION → EVIDENCE GRAPH
+ * → OPPORTUNITY EPISODES → BOUNDED DECISION MODEL → CALIBRATED SCORE
+ * → CANONICAL DECISION PACKET → ACTION POLICY
+ *
+ * In shadow mode, runs alongside V2 without changing user-visible results.
+ */
+
+import type {
+  V3LeadDecisionPacket,
+  V3OpportunityEpisode,
+} from './types'
+import type { V3EvidenceGraph } from './graph/evidence-graph'
+import { V3_CONFIG_VERSION, V3_SHADOW_CONFIG } from './config'
+import {
+  createEvidenceGraph,
+  upsertPerson,
+  upsertOrganization,
+  addEvidence,
+  addEvent,
+  linkEvidenceToEvent,
+  markOrganizationAsServiceProvider,
+} from './graph/evidence-graph'
+import { buildEpisodes } from './graph/episode-builder'
+import {
+  getDecisionRegistry,
+  type V3ProviderContext,
+} from './decision/decision-provider'
+import { assembleDecisionPacket } from './decision/decision-assembler'
+import type { V3ScoreInput } from './scoring/score-v3'
+
+// ── Public API ──────────────────────────────────────────────────────────────
+
+export interface V3OrchestratorOptions {
+  /** Override decision provider */
+  providerId?: string
+  /** Sender capabilities for proof matching */
+  senderCapabilities?: string[]
+  /** Current production score for shadow comparison */
+  productionScore?: number
+  productionAction?: string
+  /** Force reanalysis even if cache exists */
+  forceReanalyze?: boolean
+  /** Reference date for staleness (defaults to now) */
+  referenceDate?: Date
+  /** Callback for status updates */
+  onStatus?: (msg: string) => void
+}
+
+export interface V3OrchestratorResult {
+  packet: V3LeadDecisionPacket
+  graph: V3EvidenceGraph
+  episodes: V3OpportunityEpisode[]
+  /** Version of the V3 pipeline */
+  version: string
+  /** Whether this was a shadow run */
+  shadowMode: boolean
+  /** Timing */
+  timing: {
+    extractionMs: number
+    episodeBuildMs: number
+    decisionMs: number
+    totalMs: number
+  }
+}
+
+/**
+ * Run the full V3 pipeline on a V2 intelligence result.
+ * Bridges from existing V2 extraction to V3 event/episode model.
+ */
+export async function runV3Decision(
+  v2Intelligence: V2BridgeInput,
+  options: V3OrchestratorOptions = {},
+): Promise<V3OrchestratorResult> {
+  const startTime = Date.now()
+  const refDate = options.referenceDate ?? new Date()
+  const shadowMode = V3_SHADOW_CONFIG.enabled
+
+  options.onStatus?.('Building evidence graph...')
+
+  // Phase 1: Build evidence graph from V2 intelligence
+  const t1 = Date.now()
+  const graph = buildV3GraphFromV2(v2Intelligence)
+  const extractionMs = Date.now() - t1
+
+  // Phase 2: Build opportunity episodes
+  options.onStatus?.('Building opportunity episodes...')
+  const t2 = Date.now()
+  const episodes = buildEpisodes(graph, { referenceDate: refDate })
+  const episodeBuildMs = Date.now() - t2
+
+  if (episodes.length === 0) {
+    // No episodes — return empty packet
+    return {
+      packet: createEmptyPacket(v2Intelligence, shadowMode, options),
+      graph,
+      episodes: [],
+      version: V3_CONFIG_VERSION,
+      shadowMode,
+      timing: {
+        extractionMs,
+        episodeBuildMs,
+        decisionMs: 0,
+        totalMs: Date.now() - startTime,
+      },
+    }
+  }
+
+  // Phase 3: Select best episode for decision model
+  const bestEpisode = selectBestEpisodeForDecision(episodes)
+
+  // Phase 4: Run decision provider
+  options.onStatus?.('Running decision model...')
+  const t3 = Date.now()
+  const providerContext = bestEpisode
+    ? buildProviderContext(graph, bestEpisode, v2Intelligence, options)
+    : null
+  const registry = getDecisionRegistry()
+  const provider = registry.getAvailable(options.providerId)
+
+  let providerResult
+  if (provider && providerContext) {
+    providerResult = await provider.decide(providerContext)
+  } else {
+    // Fallback: deterministic decision from graph analysis
+    providerResult = deterministicDecision(providerContext ?? {
+      person: Array.from(graph.persons.values())[0] ?? { id: 'unknown', fullName: null, firstName: null, linkedinUrl: null, location: null, affiliations: [] },
+      organization: null,
+      episode: episodes[0] ?? { id: 'empty', anchorEvent: { id: 'empty', eventType: 'OTHER', personId: null, organizationId: null, organizationName: null, occurredAt: null, channel: null, requestedCapability: [], targetAudience: 'PUBLIC', explicitness: 'INFERRED', applyInstructions: [], evidenceRefs: [], polarity: 'UNKNOWN' }, organizationId: null, organizationName: null, needOwnerPersonId: null, needOwnerType: 'UNKNOWN', explicitRequest: false, requestedCapabilities: [], applicationChannels: [], evidenceRefs: [], eventRefs: [], status: 'UNKNOWN', detectedAt: new Date().toISOString(), lastActivityAt: null, ageDays: null },
+      anchorEvent: { id: 'empty', eventType: 'OTHER', personId: null, organizationId: null, organizationName: null, occurredAt: null, channel: null, requestedCapability: [], targetAudience: 'PUBLIC', explicitness: 'INFERRED', applyInstructions: [], evidenceRefs: [], polarity: 'UNKNOWN' },
+      evidence: [],
+      currentDate: (options.referenceDate ?? new Date()).toISOString(),
+      senderCapabilities: options.senderCapabilities ?? [],
+    })
+  }
+  const decisionMs = Date.now() - t3
+
+  // Phase 5: Assemble decision packet
+  const { packet } = assembleDecisionPacket({
+    graph,
+    episodes,
+    providerResult,
+    productionScore: options.productionScore,
+    productionAction: options.productionAction,
+    senderCapabilities: options.senderCapabilities,
+  })
+
+  return {
+    packet,
+    graph,
+    episodes,
+    version: V3_CONFIG_VERSION,
+    shadowMode,
+    timing: {
+      extractionMs,
+      episodeBuildMs,
+      decisionMs,
+      totalMs: Date.now() - startTime,
+    },
+  }
+}
+
+// ── V2 Bridge ────────────────────────────────────────────────────────────────
+
+export interface V2BridgeInput {
+  person: {
+    fullName: string | null
+    firstName: string | null
+    title: string | null
+    location: string | null
+    linkedinUrl: string | null
+    affiliations?: Array<{
+      organizationName: string
+      role?: string
+      relationship: string
+      isCurrent: boolean
+    }>
+  }
+  company: {
+    name: string | null
+    domain: string | null
+    industry: string | null
+    size: string | null
+  }
+  opportunity: {
+    signals: string[]
+    description: string | null
+    organizationName?: string
+    temporalScope?: string
+    polarity?: string
+  }
+  job: {
+    title: string | null
+    skills: string[]
+    workplaceType: string
+    employmentType: string
+  } | null
+  content: {
+    recentPosts: Array<{
+      paraphrase: string
+      verbatimQuote: string | null
+      signals: string[]
+    }>
+    hiringSignals: string[]
+    technicalSignals: string[]
+  }
+  businessModel: string
+  relationship: string
+  commercialReading?: {
+    serviceBuyerIntent: string
+    externalEngineeringNeed: string
+    buyerEvidenceKinds: string[]
+  }
+  evidenceLedger: Array<{
+    signal: string
+    source: string
+    evidenceType: string
+    ownership: string
+    confidence: string
+    verbatimQuote?: string
+    needOwnership?: string
+    temporalScope?: string
+    polarity?: string
+    organizationName?: string
+  }>
+  rawInput: string
+}
+
+function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
+  const graph = createEvidenceGraph()
+
+  // Create person
+  const person = upsertPerson(graph, v2.person.fullName, v2.person.linkedinUrl, v2.person.location)
+
+  // Create organizations from affiliations
+  if (v2.person.affiliations) {
+    for (const aff of v2.person.affiliations) {
+      const org = upsertOrganization(graph, aff.organizationName, null, null)
+      // Add affiliation to person
+      const personRef = graph.persons.get(person.id)!
+      const existingAff = personRef.affiliations.find((a) => a.organizationId === org.id)
+      if (!existingAff) {
+        personRef.affiliations.push({
+          organizationId: org.id,
+          organizationName: aff.organizationName,
+          role: aff.role ?? null,
+          relationship: mapRelationship(aff.relationship),
+          isCurrent: aff.isCurrent,
+          startedAt: null,
+          endedAt: null,
+        })
+      }
+    }
+  }
+
+  // Create primary company
+  const primaryOrg = upsertOrganization(
+    graph,
+    v2.company.name || v2.person.affiliations?.[0]?.organizationName || null,
+    v2.company.domain,
+    null,
+    v2.company.industry,
+    v2.company.size,
+  )
+
+  // Mark service provider if V2 classified it
+  if (v2.businessModel === 'SERVICE_PROVIDER') {
+    markOrganizationAsServiceProvider(graph, primaryOrg.id)
+  }
+
+  // Create evidence from ledger
+  for (const entry of v2.evidenceLedger) {
+    addEvidence(graph, {
+      sourceType: mapSourceType(entry.source),
+      quote: entry.signal,
+      subjectPersonId: person.id,
+      subjectOrganizationId: primaryOrg.id,
+      subjectOrganizationName: primaryOrg.name,
+      confidence: mapConfidence(entry.confidence),
+      evidenceType: mapEvidenceType(entry.evidenceType),
+      needOwner: mapNeedOwner(entry.needOwnership),
+      polarity: mapPolarity(entry.polarity),
+      temporalScope: mapTemporalScope(entry.temporalScope),
+    })
+  }
+
+  // Create events from opportunity signals
+  if (v2.opportunity.signals.length > 0) {
+    const event = addEvent(graph, {
+      eventType: mapOpportunitySignals(v2.opportunity.signals),
+      personId: person.id,
+      organizationId: primaryOrg.id,
+      organizationName: primaryOrg.name,
+      requestedCapability: v2.job?.skills || [],
+      explicitness: v2.commercialReading?.buyerEvidenceKinds.length ? 'EXPLICIT' : 'IMPLIED',
+      polarity: mapPolarity(v2.opportunity.polarity),
+    })
+
+    // Link evidence to event
+    for (const ev of Array.from(graph.evidence.values())) {
+      if (ev.subjectOrganizationId === primaryOrg.id) {
+        linkEvidenceToEvent(graph, event.id, ev.id)
+      }
+    }
+  }
+
+  // Create events from posts
+  for (const post of v2.content.recentPosts) {
+    if (post.signals.length > 0) {
+      const postEvent = addEvent(graph, {
+        eventType: mapOpportunitySignals(post.signals),
+        personId: person.id,
+        organizationId: primaryOrg.id,
+        organizationName: primaryOrg.name,
+        targetAudience: 'PUBLIC',
+        explicitness: 'IMPLIED',
+      })
+
+      const postEvidence = addEvidence(graph, {
+        sourceType: 'linkedin_post',
+        quote: post.paraphrase,
+        subjectPersonId: person.id,
+        subjectOrganizationId: primaryOrg.id,
+        subjectOrganizationName: primaryOrg.name,
+        evidenceType: 'STRONG_INFERENCE',
+        needOwner: 'UNKNOWN',
+      })
+
+      linkEvidenceToEvent(graph, postEvent.id, postEvidence.id)
+    }
+  }
+
+  return graph
+}
+
+function selectBestEpisodeForDecision(episodes: V3OpportunityEpisode[]): V3OpportunityEpisode | null {
+  // Prefer explicit, current episodes
+  const sorted = [...episodes].sort((a, b) => {
+    // Current > aging > stale
+    const statusOrder = { CURRENT: 0, AGING: 1, STALE: 2, UNKNOWN: 3, CLOSED: 4 }
+    const statusDiff = (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3)
+    if (statusDiff !== 0) return statusDiff
+
+    // Explicit > implied
+    if (a.explicitRequest && !b.explicitRequest) return -1
+    if (!a.explicitRequest && b.explicitRequest) return 1
+
+    // More recent first
+    const aTime = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0
+    const bTime = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0
+    return bTime - aTime
+  })
+
+  return sorted[0] ?? null
+}
+
+function buildProviderContext(
+  graph: V3EvidenceGraph,
+  episode: V3OpportunityEpisode,
+  v2: V2BridgeInput,
+  options: V3OrchestratorOptions,
+): V3ProviderContext {
+  const person = Array.from(graph.persons.values())[0]!
+  const org = episode.organizationId ? graph.organizations.get(episode.organizationId) ?? null : null
+
+  const evidence = episode.evidenceRefs
+    .map((id) => graph.evidence.get(id))
+    .filter(Boolean)
+    .map((ev) => ({
+      quote: ev!.quote,
+      needOwner: ev!.needOwner,
+      confidence: ev!.confidence,
+      temporalScope: ev!.temporalScope,
+    }))
+
+  return {
+    person,
+    organization: org,
+    episode,
+    anchorEvent: episode.anchorEvent,
+    evidence,
+    currentDate: (options.referenceDate ?? new Date()).toISOString(),
+    senderCapabilities: options.senderCapabilities ?? [],
+  }
+}
+
+function deterministicDecision(context: V3ProviderContext): {
+  answers: import('./decision/bounded-questions').V3DecisionAnswers
+  providerId: string
+  modelVersion: string
+  latencyMs: number
+  confidence: number
+} {
+  const ep = context.episode
+  const isExplicit = ep.explicitRequest
+  const isHiring = ep.anchorEvent.eventType === 'HIRING'
+  const isCurrent = ep.status === 'CURRENT' || ep.status === 'AGING'
+
+  return {
+    answers: {
+      relationship: isHiring ? 'BUYER' : 'UNKNOWN',
+      buyerRequestProbability: isExplicit ? 0.7 : isHiring ? 0.4 : 0.2,
+      externalNeedProbability: isHiring || isExplicit ? 0.6 : 0.3,
+      needOwner: ep.needOwnerType,
+      fit: 'MEDIUM',
+      timing: isCurrent ? 'CURRENT' : 'WEAK',
+      access: 'INDIRECT',
+      messageEligible: isExplicit && isCurrent ? 0.6 : 0.2,
+    },
+    providerId: 'deterministic_fallback',
+    modelVersion: 'v3_fallback',
+    latencyMs: 0,
+    confidence: 0.3,
+  }
+}
+
+function createEmptyPacket(
+  v2: V2BridgeInput,
+  shadowMode: boolean,
+  options: V3OrchestratorOptions,
+): V3LeadDecisionPacket {
+  return {
+    version: 'relay_decision_v3',
+    decisionRunId: `v3run_empty_${Date.now().toString(36)}`,
+    selectedEpisodeId: null,
+    episodes: [],
+    decision: {
+      relationship: 'UNKNOWN',
+      buyerRequestProbability: 0,
+      externalNeedProbability: 0,
+      needOwnerType: 'UNKNOWN',
+      fit: 'POOR',
+      timing: 'STALE',
+      access: 'NONE',
+      messageEligible: 0,
+      providerConfidence: 0,
+    },
+    score: 0,
+    scoreVersion: V3_CONFIG_VERSION,
+    label: 'Not a fit',
+    qualification: 'SKIP',
+    action: 'SKIP',
+    messageEligible: false,
+    reasons: ['No opportunity episodes found'],
+    watchOut: [],
+    evidenceRefs: [],
+    proofStrength: 0,
+    confidence: 0,
+    decisionProvider: 'none',
+    decisionModel: 'none',
+    shadowComparison: shadowMode && options.productionScore !== undefined
+      ? {
+          productionScore: options.productionScore,
+          productionAction: options.productionAction ?? 'UNKNOWN',
+          v3Score: 0,
+          v3Action: 'SKIP',
+          scoreDelta: 0 - options.productionScore,
+          actionChanged: true,
+          productionDecision: options.productionAction ?? null,
+        }
+      : null,
+  }
+}
+
+// ── Mapping Helpers ──────────────────────────────────────────────────────────
+
+function mapRelationship(rel: string): import('./types').V3Affiliation['relationship'] {
+  switch (rel.toLowerCase()) {
+    case 'founded_company':
+    case 'founded': return 'FOUNDED'
+    case 'current_employer':
+    case 'employed': return 'EMPLOYED'
+    case 'advisory': return 'ADVISORY'
+    case 'client': return 'CONTRACTOR'
+    default: return 'UNKNOWN'
+  }
+}
+
+function mapSourceType(source: string): import('./types').V3EvidenceSourceType {
+  switch (source) {
+    case 'linkedin_profile': return 'linkedin_profile'
+    case 'linkedin_post': return 'linkedin_post'
+    case 'job_posting': return 'job_posting'
+    case 'company_website': return 'company_website'
+    case 'user_provided': return 'user_provided'
+    case 'inferred': return 'inferred'
+    default: return 'pasted_text'
+  }
+}
+
+function mapConfidence(conf: string): number {
+  switch (conf) {
+    case 'HIGH': return 0.9
+    case 'MEDIUM': return 0.6
+    case 'LOW': return 0.3
+    default: return 0.5
+  }
+}
+
+function mapEvidenceType(type: string): import('./types').V3EvidenceType {
+  switch (type) {
+    case 'FACT': return 'FACT'
+    case 'STRONG_INFERENCE': return 'STRONG_INFERENCE'
+    case 'WEAK_INFERENCE': return 'WEAK_INFERENCE'
+    default: return 'WEAK_INFERENCE'
+  }
+}
+
+function mapNeedOwner(owner?: string): import('./types').V3NeedOwner {
+  if (!owner) return 'UNKNOWN'
+  const valid = ['SELF_NEED', 'ORGANIZATION_NEED', 'HIRING_NEED', 'CUSTOMER_NEED', 'MARKET_PROBLEM', 'SERVICE_OFFERING', 'PRODUCT_PROBLEM', 'UNKNOWN']
+  return valid.includes(owner) ? owner as import('./types').V3NeedOwner : 'UNKNOWN'
+}
+
+function mapPolarity(pol?: string): import('./types').V3Evidence['polarity'] {
+  switch (pol) {
+    case 'ACTIVE': return 'ACTIVE'
+    case 'NEGATED': return 'NEGATED'
+    case 'CLOSED': return 'CLOSED'
+    case 'FUTURE': return 'FUTURE'
+    default: return 'ACTIVE'
+  }
+}
+
+function mapTemporalScope(scope?: string): import('./types').V3Evidence['temporalScope'] {
+  switch (scope) {
+    case 'CURRENT': return 'CURRENT'
+    case 'RECENT': return 'RECENT'
+    case 'HISTORICAL': return 'HISTORICAL'
+    case 'FUTURE': return 'FUTURE'
+    default: return 'UNKNOWN'
+  }
+}
+
+function mapOpportunitySignals(signals: string[]): import('./types').V3EventType {
+  for (const s of signals) {
+    switch (s) {
+      case 'hiring': return 'HIRING'
+      case 'freelance_project_need': return 'FREELANCE_REQUEST'
+      case 'explicit_ask': return 'PROJECT_REQUEST'
+      case 'technical_problem': return 'TECHNICAL_BUILD'
+      case 'growth_signal': return 'FUNDING'
+      case 'funding': return 'FUNDING'
+      case 'launch': return 'PRODUCT_LAUNCH'
+      case 'migration': return 'TECHNICAL_BUILD'
+      case 'rebuild': return 'TECHNICAL_BUILD'
+      case 'hiring_pressure': return 'HIRING'
+    }
+  }
+  return 'OTHER'
+}
