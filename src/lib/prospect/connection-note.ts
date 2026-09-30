@@ -192,8 +192,22 @@ export function evaluateConnectionNote(input: ConnectionNoteInput): ConnectionNo
     failures.push('Sales pitch in connection note')
   }
 
-  // 8. Budget / funding inference
-  if (/\b(budget|spend|afford)\b/i.test(lower) || /\b(raised|funding|series [abc]|closed a round|just closed)\b/i.test(lower)) {
+  // 8. Budget / funding inference — only flag when the note infers that
+  // the prospect has budget/spending power because of a funding event.
+  // Do NOT flag general mentions of budget/spend in the sender's own
+  // context (e.g., "reduce cloud spend", "budget-friendly", "cost optimization").
+  const fundingInference = [
+    /\b(gives?|gave)\s+(you|them|the\s+team)\s+(some\s+)?budget\b/i,
+    /\bbudget\s+to\s+spend\b/i,
+    /\bwith\s+that\s+(budget|funding|raise)\b/i,
+    /\bnow\s+that\s+you.*(?:raised|closed|funded)\b/i,
+    /\byour\s+(?:series\s*[abc]|funding|raise)\s+(?:gives?|means|allows?)\b/i,
+    /\bjust\s+closed\s+(?:a\s+)?(?:round|series|funding)\b.{0,40}\b(?:budget|spend|afford)\b/i,
+    /\b(?:raised|closed)\s+(?:a\s+)?(?:round|series|funding)\b.{0,40}\b(?:budget|spend|afford)\b/i,
+    /\bafford\s+(?:to\s+(?:hire|build|ship|spend))\b/i,
+    /\bspend\s+(?:some\s+)?(?:of\s+)?(?:that|your)\s+(?:budget|funding|raise)\b/i,
+  ]
+  if (fundingInference.some((p) => p.test(lower))) {
     failures.push('Assumes funding = budget')
   }
 
@@ -319,6 +333,19 @@ export function repairConnectionNote(text: string, failures: string[]): string {
     repaired = repaired.replace(/\bi can help you\b/gi, '')
     repaired = repaired.replace(/\bwe can help you\b/gi, '')
     repaired = repaired.replace(/\blet me help\b/gi, '')
+  }
+
+  // Remove budget/funding inference — strip the inference phrase but keep the rest
+  if (failures.some((f) => f.includes('funding = budget'))) {
+    repaired = repaired.replace(/\bwhich likely gives you some budget to spend\b/gi, '')
+    repaired = repaired.replace(/\bgives you some budget\b/gi, '')
+    repaired = repaired.replace(/\bbudget to spend\b/gi, '')
+    repaired = repaired.replace(/\bwith that (budget|funding|raise)\b/gi, '')
+    repaired = repaired.replace(/\bnow that you (have )?(raised|closed|funded)\b/gi, 'you')
+    repaired = repaired.replace(/\byour (series [abc]|funding|raise) (gives|means|allows)\b/gi, '')
+    repaired = repaired.replace(/\b(just )?closed (a )?(round|series|funding)\b.{0,40}\b(budget|spend|afford)\b/gi, '')
+    repaired = repaired.replace(/\braised (a )?(round|series|funding)\b.{0,40}\b(budget|spend|afford)\b/gi, '')
+    repaired = repaired.replace(/\bafford to (hire|build|ship|spend)\b/gi, 'can $1')
   }
 
   // Fix "we" → "I"

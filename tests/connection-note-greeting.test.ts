@@ -130,4 +130,68 @@ describe('validateAndRepair - greeting normalization', () => {
     })
     expect(result.passed).toBe(true)
   })
+
+  // Regression: budget/funding inference must be contextual, not a blanket word ban.
+  // Notes that mention "budget", "spend", or "funding" in the sender's own context
+  // (e.g., reducing cloud spend, budget-friendly approach) must NOT be flagged.
+
+  it('does NOT flag a note mentioning cloud spend in sender context', () => {
+    const result = evaluateConnectionNote({
+      text: 'Hi Erick, cloud platform architecture at scale is what I work on daily. Helping teams reduce cloud spend without sacrificing reliability. Worth connecting.',
+      profile: null,
+      prospectName: 'Erick Albuquerque',
+      prospectCompany: 'Microsoft',
+      matchedProof: [],
+    })
+    expect(result.passed).toBe(true)
+    expect(result.failures.some((f) => f.includes('funding = budget'))).toBe(false)
+  })
+
+  it('does NOT flag a note mentioning budget-friendly approach', () => {
+    const result = evaluateConnectionNote({
+      text: 'Hi Sarah, platform engineering at scale is what I work on. Budget-friendly approaches to infra automation. Worth connecting.',
+      profile: null,
+      prospectName: 'Sarah Chen',
+      prospectCompany: 'Acme',
+      matchedProof: [],
+    })
+    expect(result.passed).toBe(true)
+    expect(result.failures.some((f) => f.includes('funding = budget'))).toBe(false)
+  })
+
+  it('does NOT flag a note mentioning cost optimization', () => {
+    const result = evaluateConnectionNote({
+      text: 'Hi Ben, infra cost optimization is a space I work in daily. Always keen to connect with peers building in that world.',
+      profile: null,
+      prospectName: 'Ben Stone',
+      prospectCompany: 'FanDuel',
+      matchedProof: [],
+    })
+    expect(result.passed).toBe(true)
+    expect(result.failures.some((f) => f.includes('funding = budget'))).toBe(false)
+  })
+
+  it('STILL flags actual funding-to-budget inference', () => {
+    const result = evaluateConnectionNote({
+      text: 'Hi Sarah, congrats on the Series A. That gives you some budget to spend on delivery. I can help.',
+      profile: null,
+      prospectName: 'Sarah Chen',
+      prospectCompany: 'Acme',
+      matchedProof: [],
+    })
+    expect(result.passed).toBe(false)
+    expect(result.failures.some((f) => f.includes('funding = budget'))).toBe(true)
+  })
+
+  it('STILL flags inference from "closed a round" + budget', () => {
+    const result = evaluateConnectionNote({
+      text: 'Hi Sarah, you just closed a round which likely gives you budget to spend. I can help ship faster.',
+      profile: null,
+      prospectName: 'Sarah Chen',
+      prospectCompany: 'Acme',
+      matchedProof: [],
+    })
+    expect(result.passed).toBe(false)
+    expect(result.failures.some((f) => f.includes('funding = budget'))).toBe(true)
+  })
 })
