@@ -290,6 +290,31 @@ export interface Profile {
   headline: string | null
   cvPath: string | null
   createdAt: string
+  // ── Profile Intelligence V2 ──
+  fullName?: string | null
+  displayName?: string | null
+  currentRole?: string | null
+  company?: string | null
+  location?: string | null
+  bio?: string | null
+  professionalSummary?: string | null
+  seniority?: string | null
+  yearsExperience?: number | null
+  primarySkills?: string[]
+  secondarySkills?: string[]
+  technologies?: string[]
+  industries?: string[]
+  serviceCapabilities?: string[]
+  specialties?: string[]
+  positioning?: string | null
+  differentiators?: string[]
+  languages?: string[]
+  profileConfidence?: number | null
+  readiness?: string
+  aiContext?: Record<string, unknown>
+  archivedAt?: string | null
+  sourceCount?: number
+  proofCount?: number
 }
 
 export interface ProofItem {
@@ -2338,4 +2363,221 @@ export interface PersonaIntelligenceProfile {
   contentBoundaries: string[]
   confidence: number
   fieldConfidence: FieldConfidence
+}
+
+// ── Profile Intelligence V2 ──────────────────────────────────────────────────
+
+export type ProfileReadiness = 'ready' | 'needs_source' | 'needs_review' | 'incomplete'
+
+export type ImportBatchStatus =
+  | 'uploaded' | 'parsing' | 'identifying_people' | 'extracting'
+  | 'matching' | 'synthesizing' | 'review_required' | 'ready'
+  | 'partial_failure' | 'failed'
+
+export type ParsingStatus = 'pending' | 'parsing' | 'parsed' | 'ocr_required' | 'failed' | 'unsupported'
+export type ExtractionStatus = 'pending' | 'extracting' | 'extracted' | 'partial_failure' | 'failed'
+
+export type EvidenceType = 'fact' | 'explicit_claim' | 'strong_inference' | 'weak_inference' | 'unknown'
+
+export type ClaimOwnershipStatus = 'clear' | 'ambiguous' | 'disputed'
+
+export type IdentityResolution = 'match_existing' | 'create_new' | 'possible_duplicate' | 'needs_review'
+
+export interface ProfileIntelligence {
+  id: string
+  organizationId: string
+  repId: string
+  fullName: string | null
+  displayName: string | null
+  headline: string | null
+  currentRole: string | null
+  company: string | null
+  location: string | null
+  bio: string | null
+  professionalSummary: string | null
+  seniority: string | null
+  yearsExperience: number | null
+  primarySkills: string[]
+  secondarySkills: string[]
+  technologies: string[]
+  industries: string[]
+  serviceCapabilities: string[]
+  specialties: string[]
+  positioning: string | null
+  preferredEngagementTypes: string[]
+  audienceClientFit: string[]
+  differentiators: string[]
+  communicationStyle: Record<string, unknown>
+  languages: string[]
+  profileConfidence: number | null
+  readiness: ProfileReadiness
+  aiContext: Record<string, unknown>
+  archivedAt: string | null
+  sourceCount: number
+  proofCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProfileImportBatch {
+  id: string
+  organizationId: string
+  uploadedBy: string
+  status: ImportBatchStatus
+  totalFiles: number
+  processedFiles: number
+  failedFiles: number
+  detectedPeople: number
+  createdProfiles: number
+  mergedProfiles: number
+  errorMessage: string | null
+  metadata: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProfileSource {
+  id: string
+  organizationId: string
+  profileId: string | null
+  importBatchId: string | null
+  storagePath: string
+  originalFilename: string
+  mimeType: string
+  fileSizeBytes: number
+  fileHash: string
+  parsingStatus: ParsingStatus
+  extractionStatus: ExtractionStatus
+  parsedContent: string | null
+  pageCount: number | null
+  detectedPeople: Array<DetectedPerson>
+  errorMessage: string | null
+  uploadedBy: string
+  uploadedAt: string
+  parsedAt: string | null
+  extractedAt: string | null
+}
+
+export interface DetectedPerson {
+  name: string
+  confidence: number
+  sectionStart: number
+  sectionEnd: number
+  role: string | null
+  company: string | null
+  aliases: string[]
+  clues: string[]
+}
+
+export interface ProfileReview {
+  id: string
+  organizationId: string
+  profileId: string
+  sourceId: string | null
+  reviewText: string
+  reviewerName: string | null
+  reviewerRole: string | null
+  reviewerCompany: string | null
+  projectContext: string | null
+  relevantSkills: string[]
+  evidenceType: EvidenceType
+  confidence: number | null
+  safeForOutreach: boolean
+  ownershipStatus: ClaimOwnershipStatus
+  createdAt: string
+}
+
+export interface ProfileClaim {
+  id: string
+  organizationId: string
+  profileId: string
+  sourceId: string | null
+  claimKey: string
+  claimValue: string
+  evidenceType: EvidenceType
+  sourceSection: string | null
+  sourcePage: number | null
+  confidence: number | null
+  isInferred: boolean
+  userCorrected: boolean
+  userRejected: boolean
+  extractionVersion: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface IdentityCandidate {
+  normalizedName: string
+  email: string | null
+  linkedinUrl: string | null
+  company: string | null
+  role: string | null
+  aliases: string[]
+  sourceEvidence: string[]
+}
+
+export interface ExtractedProject {
+  name: string
+  clientCompany: string | null
+  role: string | null
+  summary: string
+  technologies: string[]
+  responsibilities: string[]
+  problem: string | null
+  workPerformed: string | null
+  outcome: string | null
+  startDate: string | null
+  endDate: string | null
+  evidenceType: EvidenceType
+  confidence: number
+  sourceReferences: Array<{ sourceId: string; section: string; page?: number }>
+}
+
+export interface ExtractedProof {
+  claim: string
+  whyItMatters: string
+  supportingEvidence: string
+  technologyDomain: string | null
+  confidence: number
+  safeForOutreach: boolean
+  evidenceType: EvidenceType
+}
+
+export interface ExtractedReview {
+  reviewText: string
+  assignedPersonName: string | null
+  reviewerName: string | null
+  reviewerCompany: string | null
+  relevantSkills: string[]
+  projectContext: string | null
+  confidence: number
+  evidenceType: EvidenceType
+  ownershipStatus: ClaimOwnershipStatus
+}
+
+export interface ExtractedFacts {
+  fullName: string | null
+  displayName: string | null
+  currentRole: string | null
+  company: string | null
+  location: string | null
+  headline: string | null
+  bio: string | null
+  professionalSummary: string | null
+  seniority: string | null
+  yearsExperience: number | null
+  primarySkills: string[]
+  secondarySkills: string[]
+  technologies: string[]
+  industries: string[]
+  serviceCapabilities: string[]
+  specialties: string[]
+  positioning: string | null
+  differentiators: string[]
+  languages: string[]
+  communicationStyle: Record<string, unknown>
+  projects: ExtractedProject[]
+  proofs: ExtractedProof[]
+  reviews: ExtractedReview[]
+  people: DetectedPerson[]
 }

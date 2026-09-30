@@ -51,9 +51,20 @@ export function buildProfileIntelligence(
     }
   }
 
-  const capabilities = [...new Set(cards.map((c) => c.capability))]
-  const technologies = [...new Set(cards.flatMap((c) => c.tags))]
-  const industries = extractIndustries(cards)
+  const v2Capabilities = [
+    ...new Set([
+      ...cards.map((c) => c.capability),
+      ...(profile.primarySkills ?? []),
+      ...(profile.serviceCapabilities ?? []),
+    ]),
+  ]
+  const v2Technologies = [
+    ...new Set([
+      ...cards.flatMap((c) => c.tags),
+      ...(profile.technologies ?? []),
+    ]),
+  ]
+  const v2Industries = extractIndustriesV2(cards, profile.industries ?? [])
   const forbiddenClaims = [...new Set(cards.flatMap((c) => c.forbiddenClaims))]
 
   const strongestProof = cards
@@ -63,15 +74,15 @@ export function buildProfileIntelligence(
   return {
     profile,
     proofCards: cards,
-    capabilities,
-    industries,
-    technologies,
+    capabilities: v2Capabilities,
+    industries: v2Industries,
+    technologies: v2Technologies,
     strongestProof,
     forbiddenClaims,
   }
 }
 
-function extractIndustries(cards: ProofCard[]): string[] {
+function extractIndustriesV2(cards: ProofCard[], profileIndustries: string[]): string[] {
   const industryKeywords: Record<string, string[]> = {
     fintech: ['fintech', 'payments', 'banking', 'trading', 'defi'],
     healthcare: ['healthcare', 'health', 'medical', 'pharma'],
@@ -84,15 +95,15 @@ function extractIndustries(cards: ProofCard[]): string[] {
   }
 
   const allTags = cards.flatMap((c) => c.tags.map((t) => t.toLowerCase()))
-  const found: string[] = []
+  const found = new Set(profileIndustries.map((i) => i.toLowerCase()))
 
   for (const [industry, keywords] of Object.entries(industryKeywords)) {
     if (keywords.some((kw) => allTags.some((t) => t.includes(kw)))) {
-      found.push(industry)
+      found.add(industry)
     }
   }
 
-  return found
+  return [...found]
 }
 
 /**
