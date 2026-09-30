@@ -37,6 +37,8 @@ export interface ExtractionResult {
   proofsByPerson: Map<string, ExtractedProof[]>
   reviews: ExtractedReview[]
   qualityGate: { passed: boolean; issues: string[] }
+  /** Steps that failed but did not sink the whole source (partial extraction). */
+  warnings: string[]
 }
 
 export async function runExtractionPipeline(
@@ -57,6 +59,7 @@ export async function runExtractionPipeline(
       proofsByPerson: new Map(),
       reviews: [],
       qualityGate: { passed: true, issues: ['No people detected in document.'] },
+      warnings: [],
     }
   }
 
@@ -66,21 +69,26 @@ export async function runExtractionPipeline(
   const projectsByPerson = new Map<string, ExtractedProject[]>()
   const proofsByPerson = new Map<string, ExtractedProof[]>()
 
-  for (const [personName, text] of segmentText.entries()) {
-    const facts = await extractFacts(text, organizationId)
-    facts.people = [{ name: personName, confidence: 0.9, sectionStart: 0, sectionEnd: text.length, role: facts.currentRole, company: facts.company, aliases: [], clues: [] }]
-    factsByPerson.set(personName, facts)
-
-    const projects = await extractProjects(text, organizationId)
-    projectsByPerson.set(personName, projects)
-
-    const proofs = await buildProofs(text, facts, projects, organizationId)
-    proofsByPerson.set(personName, proofs)
+  // Independent calls run in parallel (bounded) so multi-person documents fit
+  // within the route's time limit.
+  const warnings: string[] = []
+  const reviewsPromise = settle(extractReviews(rawContent, people, organizationId), [] as ExtractedReview[], 'reviews', warnings)
+  await mapLimit([...segmentText.entries()], PERSON_CONCURRENCY, async ([personName, text]) => {
+    const person = await extractPerson(text, organizationId, warnings, personName)
+    if (!person) return
+    person.facts.people = [{ name: personName, confidence: 0.9, sectionStart: 0, sectionEnd: text.length, role: person.facts.currentRole, company: person.facts.company, aliases: [], clues: [] }]
+    factsByPerson.set(personName, person.facts)
+    projectsByPerson.set(personName, person.projects)
+    proofsByPerson.set(personName, person.proofs)
+  })
+  const reviews = await reviewsPromise
+  if (factsByPerson.size === 0 && people.length > 0) {
+    throw new Error(`Extraction failed for every person in the document. ${warnings.join(' ')}`.trim())
   }
 
-  const reviews = await extractReviews(rawContent, people, organizationId)
-
+  // Advisory only: a failed quality check must not discard a good extraction.
   const qualityGate = await runQualityGate(rawContent, factsByPerson, projectsByPerson, proofsByPerson, organizationId)
+    .catch((err) => ({ passed: true, issues: [`Quality gate unavailable: ${err instanceof Error ? err.message : 'error'}`] }))
 
   return {
     documentType: classification.documentType,
@@ -91,6 +99,7 @@ export async function runExtractionPipeline(
     proofsByPerson,
     reviews,
     qualityGate,
+    warnings,
   }
 }
 
@@ -100,11 +109,69 @@ export async function runExtractionPipeline(
  * portfolio or case study that never states the owner's name.
  */
 export async function extractForSinglePerson(text: string, organizationId: string) {
-  const facts = await extractFacts(text, organizationId)
-  const projects = await extractProjects(text, organizationId)
-  const proofs = await buildProofs(text, facts, projects, organizationId)
-  const reviews = await extractReviews(text, [], organizationId)
-  return { facts, projects, proofs, reviews }
+  const warnings: string[] = []
+  const [person, reviews] = await Promise.all([
+    extractPerson(text, organizationId, warnings),
+    settle(extractReviews(text, [], organizationId), [] as ExtractedReview[], 'reviews', warnings),
+  ])
+  if (!person) throw new Error(`Extraction failed. ${warnings.join(' ')}`.trim())
+  return { ...person, reviews, warnings }
+}
+
+/**
+ * Facts + projects in parallel, then proofs. A failed step degrades to empty
+ * (recorded in `warnings`); only when BOTH facts and projects fail is the
+ * person dropped.
+ */
+async function extractPerson(text: string, orgId: string, warnings: string[], label?: string) {
+  const who = label ? ` (${label})` : ''
+  const [factsR, projectsR] = await Promise.allSettled([extractFacts(text, orgId), extractProjects(text, orgId)])
+  if (factsR.status === 'rejected' && projectsR.status === 'rejected') {
+    warnings.push(`Could not extract${who}: ${reason(factsR.reason)}`)
+    return null
+  }
+  if (factsR.status === 'rejected') warnings.push(`Profile facts unavailable${who}: ${reason(factsR.reason)}`)
+  if (projectsR.status === 'rejected') warnings.push(`Projects unavailable${who}: ${reason(projectsR.reason)}`)
+  const facts = factsR.status === 'fulfilled' ? factsR.value : emptyFacts()
+  const projects = projectsR.status === 'fulfilled' ? projectsR.value : []
+  const proofs = await settle(buildProofs(text, facts, projects, orgId), [] as ExtractedProof[], `proof${who}`, warnings)
+  return { facts, projects, proofs }
+}
+
+async function settle<T>(p: Promise<T>, fallback: T, what: string, warnings: string[]): Promise<T> {
+  try {
+    return await p
+  } catch (err) {
+    warnings.push(`${what[0].toUpperCase()}${what.slice(1)} unavailable: ${reason(err)}`)
+    return fallback
+  }
+}
+
+function reason(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err)
+  return msg.length > 160 ? `${msg.slice(0, 160)}…` : msg
+}
+
+function emptyFacts(): ExtractedFacts {
+  return {
+    fullName: null, displayName: null, currentRole: null, company: null, location: null, headline: null, bio: null,
+    professionalSummary: null, seniority: null, yearsExperience: null, primarySkills: [], secondarySkills: [], technologies: [],
+    industries: [], serviceCapabilities: [], specialties: [], positioning: null, differentiators: [], languages: [],
+    communicationStyle: {}, projects: [], proofs: [], reviews: [], people: [],
+  }
+}
+
+const PERSON_CONCURRENCY = 3
+
+async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++]
+      await fn(item)
+    }
+  })
+  await Promise.all(workers)
 }
 
 async function classifyDocument(content: string, orgId: string) {
@@ -120,6 +187,9 @@ async function classifyDocument(content: string, orgId: string) {
     user: `Classify this document and list all people mentioned:\n\n${truncated}`,
     outputSchema: PROFILE_DOCUMENT_CLASSIFY_SCHEMA,
     organizationId: orgId,
+    // Long documents → large JSON output; FAST_STRUCTURED defaults (1024 tokens / 8s)
+    // truncate or time out, which surfaced as 'Unable to normalize JSON' / 'aborted'.
+    maxTokens: 2048, timeoutMs: 45_000,
     callSite: 'profile-intelligence:classifyDocument',
     feature: 'profile_extraction',
     promptVersion: 'v2',
@@ -136,6 +206,9 @@ async function extractFacts(text: string, orgId: string): Promise<ExtractedFacts
     user: `Extract professional facts from this person's section:\n\n${truncated}`,
     outputSchema: PROFILE_FACT_EXTRACT_SCHEMA,
     organizationId: orgId,
+    // Long documents → large JSON output; FAST_STRUCTURED defaults (1024 tokens / 8s)
+    // truncate or time out, which surfaced as 'Unable to normalize JSON' / 'aborted'.
+    maxTokens: 3072, timeoutMs: 60_000,
     callSite: 'profile-intelligence:extractFacts',
     feature: 'profile_extraction',
     promptVersion: 'v2',
@@ -192,6 +265,9 @@ async function extractProjects(text: string, orgId: string): Promise<ExtractedPr
     user: `Extract all projects and work engagements from this text:\n\n${truncated}`,
     outputSchema: PROFILE_PROJECT_EXTRACT_SCHEMA,
     organizationId: orgId,
+    // Long documents → large JSON output; FAST_STRUCTURED defaults (1024 tokens / 8s)
+    // truncate or time out, which surfaced as 'Unable to normalize JSON' / 'aborted'.
+    maxTokens: 4096, timeoutMs: 60_000,
     callSite: 'profile-intelligence:extractProjects',
     feature: 'profile_extraction',
     promptVersion: 'v2',
@@ -225,6 +301,9 @@ async function buildProofs(text: string, facts: ExtractedFacts, projects: Extrac
     user: `Build safe outreach proof from this evidence:\n\n${evidenceContext.slice(0, 8000)}`,
     outputSchema: PROFILE_PROOF_BUILD_SCHEMA,
     organizationId: orgId,
+    // Long documents → large JSON output; FAST_STRUCTURED defaults (1024 tokens / 8s)
+    // truncate or time out, which surfaced as 'Unable to normalize JSON' / 'aborted'.
+    maxTokens: 3072, timeoutMs: 60_000,
     callSite: 'profile-intelligence:buildProofs',
     feature: 'profile_extraction',
     promptVersion: 'v2',
@@ -251,6 +330,9 @@ async function extractReviews(text: string, people: DetectedPerson[], orgId: str
     user: `Extract reviews/testimonials. People in document: ${peopleNames}\n\n${truncated}`,
     outputSchema: PROFILE_REVIEW_EXTRACT_SCHEMA,
     organizationId: orgId,
+    // Long documents → large JSON output; FAST_STRUCTURED defaults (1024 tokens / 8s)
+    // truncate or time out, which surfaced as 'Unable to normalize JSON' / 'aborted'.
+    maxTokens: 3072, timeoutMs: 60_000,
     callSite: 'profile-intelligence:extractReviews',
     feature: 'profile_extraction',
     promptVersion: 'v2',
@@ -299,6 +381,9 @@ async function runQualityGate(
     user: gateInput,
     outputSchema: PROFILE_QUALITY_GATE_SCHEMA,
     organizationId: orgId,
+    // Long documents → large JSON output; FAST_STRUCTURED defaults (1024 tokens / 8s)
+    // truncate or time out, which surfaced as 'Unable to normalize JSON' / 'aborted'.
+    maxTokens: 1024, timeoutMs: 30_000,
     callSite: 'profile-intelligence:qualityGate',
     feature: 'profile_extraction',
     promptVersion: 'v2',

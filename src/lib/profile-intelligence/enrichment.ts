@@ -158,6 +158,8 @@ export interface SourceExtraction {
     proofs: ExtractedProof[]
   }>
   reviews: ExtractedReview[]
+  /** Extraction steps that failed without sinking the source. */
+  warnings?: string[]
 }
 
 // ── Normalisation + fingerprints ────────────────────────────────────────────
@@ -290,6 +292,7 @@ export function buildProposal(
   }
 
   for (const ex of extractions) {
+    for (const w of ex.warnings ?? []) warnings.push(`${ex.filename}: partial extraction, ${w}`)
     const baseProv = (confidence: number | null): Provenance => ({
       sourceId: ex.sourceId, filename: ex.filename, fingerprint: ex.fingerprint,
       runId, extractedAt: ex.extractedAt, confidence,

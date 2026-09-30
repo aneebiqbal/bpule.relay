@@ -143,6 +143,8 @@ export interface GenerateOptions {
   schema?: Record<string, unknown>
   schemaName?: string
   maxTokens?: number
+  /** Per-call timeout override (ms). Defaults to the task profile's timeout. */
+  timeoutMs?: number
   temperature?: number
   stream?: boolean
   onChunk?: (delta: string) => void
@@ -188,7 +190,7 @@ export async function generate<T = Record<string, unknown>>(
   const profile = TASK_PROFILES[options.task]
   const maxTokens = options.maxTokens || profile.maxTokens
   const temperature = options.temperature ?? defaultTemperature(options.task)
-  const timeoutMs = profile.timeoutMs
+  const timeoutMs = options.timeoutMs ?? profile.timeoutMs
   const taskId = generateTaskId()
   const traceBase = {
     taskId,

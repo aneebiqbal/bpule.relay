@@ -30,6 +30,7 @@ export const aiSourceExtractor: SourceExtractor = async (input) => {
     const sheet = await parseSpreadsheet(input.buffer, input.mimeType, input.filename)
     const people: SourceExtraction['people'] = []
     const reviews: SourceExtraction['reviews'] = []
+    const warnings: string[] = []
     const cellValues: string[] = []
     const groups = [...sheet.personGroups.entries()]
     const named = groups.filter(([n]) => !n.startsWith('__unassigned'))
@@ -39,11 +40,12 @@ export const aiSourceExtractor: SourceExtractor = async (input) => {
       for (const row of rows) for (const v of Object.values(row.raw)) if (v != null && String(v).trim()) cellValues.push(String(v))
       const text = spreadsheetToText(personName || (input.profileName ?? 'Profile'), [...rows])
       const single = await extractForSinglePerson(text, input.organizationId)
+      warnings.push(...single.warnings)
       people.push({ name: personName || (single.facts.fullName ?? ''), facts: single.facts, projects: single.projects, proofs: single.proofs })
       reviews.push(...single.reviews.map((r) => ({ ...r, assignedPersonName: r.assignedPersonName ?? (personName || null) })))
     }
     return {
-      extraction: { ...base, isSpreadsheet: true, cellValues, people, reviews },
+      extraction: { ...base, isSpreadsheet: true, cellValues, people, reviews, warnings },
       parsedContent: JSON.stringify({ headers: sheet.headers, row_count: sheet.rows.length, warnings: sheet.warnings }).slice(0, 50000),
       pageCount: sheet.rows.length,
     }
@@ -58,14 +60,16 @@ export const aiSourceExtractor: SourceExtractor = async (input) => {
     proofs: pipeline.proofsByPerson.get(name) ?? [],
   }))
   let reviews = pipeline.reviews
+  const warnings = [...pipeline.warnings]
   if (people.length === 0 && parsed.content.trim().length > 0) {
     // Unnamed single-owner source (portfolio, case study, testimonial page).
     const single = await extractForSinglePerson(parsed.content, input.organizationId)
     people = [{ name: '', facts: single.facts, projects: single.projects, proofs: single.proofs }]
     reviews = single.reviews
+    warnings.push(...single.warnings)
   }
   return {
-    extraction: { ...base, isSpreadsheet: false, people, reviews },
+    extraction: { ...base, isSpreadsheet: false, people, reviews, warnings },
     parsedContent: parsed.content.slice(0, 50000),
     pageCount: parsed.pageCount,
   }

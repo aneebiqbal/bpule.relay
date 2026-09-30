@@ -16,7 +16,8 @@ const SPREADSHEET_MIMES = new Set([
   'application/vnd.ms-excel',
 ])
 
-export const maxDuration = 120
+// One source per call; long multi-person PDFs need several parallel AI calls.
+export const maxDuration = 300
 
 export async function POST(
   request: Request,

@@ -3,7 +3,8 @@ import { processNextEnrichmentSource } from '@/lib/profile-intelligence/enrichme
 import { aiSourceExtractor } from '@/lib/profile-intelligence/enrichment-extract'
 import { assertRunForProfile, enrichmentErrorResponse, requireProfileManager } from '@/lib/profile-intelligence/enrichment-http'
 
-export const maxDuration = 120
+// One source per call; long multi-person PDFs need several parallel AI calls.
+export const maxDuration = 300
 
 /**
  * Extracts ONE source per call (the client polls until done), then builds the
