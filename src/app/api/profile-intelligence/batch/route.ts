@@ -3,6 +3,7 @@ import { getAuthContext } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import type { ProfileImportBatch } from '@/lib/domain/types'
+import { profileAccess } from '@/lib/profile-intelligence/access'
 
 const MAX_FILES = 20
 const MAX_BYTES = 20 * 1024 * 1024
@@ -21,6 +22,7 @@ const ALLOWED_MIME = new Set([
 export async function GET(request: Request) {
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!profileAccess(authCtx).canManage) return NextResponse.json({ error: 'Only admins and managers can manage profiles.' }, { status: 403 })
 
   const url = new URL(request.url)
   const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '20', 10), 100)
@@ -41,6 +43,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!profileAccess(authCtx).canManage) return NextResponse.json({ error: 'Only admins and managers can manage profiles.' }, { status: 403 })
 
   let files: File[]
   try {

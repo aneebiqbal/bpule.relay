@@ -4,6 +4,9 @@ import { deduplicated } from '@/lib/ai/dedup'
 import { createScoutStore } from '@/lib/store'
 import { sseStream } from '@/lib/sse/sse'
 import { buildProfileIntelligence, matchProofToLead } from '@/lib/relay/profile-intelligence'
+import { loadSenderCandidates, pickSuggestion, type SenderSuggestion } from '@/lib/relay/sender-suggestion'
+import { getAuthContext } from '@/lib/auth/organization'
+import { createServiceSupabase } from '@/lib/supabase/service'
 import { createOutreachStrategy } from '@/lib/relay/outreach-strategy'
 import { streamDraft } from '@/lib/ai/draft-stream'
 import { type DraftMessageType } from '@/lib/ai/draft'
@@ -399,6 +402,22 @@ export async function POST(request: Request) {
     const bestSender = bestMatch?.profile ?? null
     const bestSenderProof = bestMatch?.matchedProof ?? []
 
+    // Org-wide: is there a profile this rep doesn't hold with clearly stronger
+    // proof for this lead? Read-only suggestion; never blocks analysis.
+    let senderSuggestion: SenderSuggestion | null = null
+    try {
+      const auth = await getAuthContext()
+      if (auth) {
+        const candidates = await loadSenderCandidates(createServiceSupabase(), auth.orgId, auth.repId)
+        senderSuggestion = pickSuggestion(candidates, [
+          ...tagsForMatching,
+          ...(extracted.title ? [extracted.title] : []),
+        ], { platform: RECOMMENDED_CHANNEL_PLATFORM, currentProfileId: bestSender?.id ?? null })
+      }
+    } catch (err) {
+      console.warn('[prospect/analyze] sender suggestion skipped:', err instanceof Error ? err.message : err)
+    }
+
     if (store) {
       try {
         const captured = await store.captureProspect({
@@ -722,6 +741,7 @@ export async function POST(request: Request) {
       },
       draftFailed,
       demoMode: !hasProvider(),
+      senderSuggestion,
       alternativeSenders: profileMatches
         .filter((pm) => pm.profile.id !== bestSender?.id)
         .slice(0, 3)

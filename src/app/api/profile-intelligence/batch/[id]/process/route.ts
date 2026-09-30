@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
-import { can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { parseDocument } from '@/lib/profile-intelligence/parse-document'
@@ -9,6 +8,7 @@ import { runExtractionPipeline, synthesizeAiContext } from '@/lib/profile-intell
 import { resolveIdentity } from '@/lib/profile-intelligence/identity-resolution'
 import { mergeSkillLists } from '@/lib/profile-intelligence/skill-normalization'
 import type { ExtractedFacts, ExtractedProject, ExtractedProof } from '@/lib/domain/types'
+import { profileAccess } from '@/lib/profile-intelligence/access'
 
 const SPREADSHEET_MIMES = new Set([
   'text/csv',
@@ -25,7 +25,7 @@ export async function POST(
   const { id: batchId } = await params
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
+  if (!profileAccess(authCtx).canManage) {
     return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
   }
 

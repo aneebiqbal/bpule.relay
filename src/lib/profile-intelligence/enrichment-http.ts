@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getAuthContext, can, type AuthContext } from '@/lib/auth/organization'
+import { getAuthContext, type AuthContext } from '@/lib/auth/organization'
+import { profileAccess } from './access'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { EnrichmentError, type AiContextSynthesizer } from './enrichment-service'
 import { synthesizeAiContext } from './pipeline'
@@ -7,7 +8,7 @@ import { synthesizeAiContext } from './pipeline'
 export async function requireProfileManager(): Promise<{ auth: AuthContext } | { response: NextResponse }> {
   const auth = await getAuthContext()
   if (!auth) return { response: NextResponse.json({ error: 'Not signed in.' }, { status: 401 }) }
-  if (!can(auth, 'MANAGE_REVENUE_IDENTITIES')) return { response: NextResponse.json({ error: 'Not authorized.' }, { status: 403 }) }
+  if (!profileAccess(auth).canManage) return { response: NextResponse.json({ error: 'Only admins and managers can import or change profile data.' }, { status: 403 }) }
   return { auth }
 }
 

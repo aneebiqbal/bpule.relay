@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
-import { can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { recordHumanEdits } from '@/lib/profile-intelligence/enrichment-service'
 import { effectiveReadiness, LIVE_COUNT_SELECT, liveCounts, profileDisplayName, profileDisplayRole } from '@/lib/profile-intelligence/legacy-display'
+import { canViewProfile, profileAccess } from '@/lib/profile-intelligence/access'
 
 export async function GET(
   request: Request,
@@ -15,6 +15,11 @@ export async function GET(
   if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
 
   const client = createServiceSupabase()
+
+  // Reps: only owned / assigned profiles. 404 (not 403) so ids don't leak.
+  if (!(await canViewProfile(client, authCtx, id))) {
+    return NextResponse.json({ error: 'Profile not found.' }, { status: 404 })
+  }
 
   const { data: profile, error } = await client
     .from('profiles')
@@ -39,7 +44,7 @@ export async function GET(
     return NextResponse.json({ error: 'Profile not found.' }, { status: 404 })
   }
 
-  return NextResponse.json({ profile: toProfileDetail(profile) })
+  return NextResponse.json({ profile: toProfileDetail(profile), access: profileAccess(authCtx) })
 }
 
 // The detail UI reads camelCase (matching the list route). Raw snake_case
@@ -115,7 +120,7 @@ export async function PATCH(
   const { id } = await params
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
+  if (!profileAccess(authCtx).canManage) {
     return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
   }
 
@@ -170,7 +175,7 @@ export async function DELETE(
   const { id } = await params
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
+  if (!profileAccess(authCtx).canManage) {
     return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
   }
 

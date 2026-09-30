@@ -5,7 +5,7 @@ import { UploadBatchUploader } from './upload-batch'
 import { ProfileList } from './profile-list'
 import type { ProfileImportBatch } from '@/lib/domain/types'
 
-export function ProfileIntelligenceDashboard({ orgId, isAdmin }: { orgId: string; isAdmin: boolean }) {
+export function ProfileIntelligenceDashboard({ orgId, isAdmin, canManage = isAdmin }: { orgId: string; isAdmin: boolean; canManage?: boolean }) {
   const [refreshKey, setRefreshKey] = useState(0)
   const [activeBatch, setActiveBatch] = useState<ProfileImportBatch | null>(null)
   const [processing, setProcessing] = useState(false)
@@ -56,31 +56,46 @@ export function ProfileIntelligenceDashboard({ orgId, isAdmin }: { orgId: string
 
   const handleBatchCreated = useCallback((batch: ProfileImportBatch) => {
     setActiveBatch(batch)
-    if (isAdmin) {
+    if (canManage) {
       processBatch(batch.id)
     }
-  }, [isAdmin, processBatch])
+  }, [canManage, processBatch])
 
   return (
     <div className="space-y-6">
+      {canManage ? (
+        <>
       <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">
-          Profile Intelligence V2
-        </p>
-        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
-          Upload documents. Relay builds your team.
-        </h1>
-        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
-          Drop CVs, reviews, project summaries, or a combined team PDF. Relay identifies each person,
-          extracts experience and proof, and builds identities your reps can use in outreach.
-        </p>
-      </section>
-
-      <UploadBatchUploader
-        orgId={orgId}
-        isAdmin={isAdmin}
-        onBatchCreated={handleBatchCreated}
-      />
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">
+            Profile Intelligence V2
+          </p>
+          <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+            Upload documents. Relay builds your team.
+          </h1>
+          <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+            Drop CVs, reviews, project summaries, or a combined team PDF. Relay identifies each person,
+            extracts experience and proof, and builds identities your reps can use in outreach.
+          </p>
+        </section>
+  
+        <UploadBatchUploader
+          orgId={orgId}
+          isAdmin={isAdmin}
+          onBatchCreated={handleBatchCreated}
+        />
+        </>
+      ) : (
+        <section data-testid="rep-profiles-header" className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Your profiles</p>
+          <h1 className="mt-2 text-[24px] leading-[1.1] tracking-[-0.02em] text-[color:var(--console-text)]">
+            Profiles assigned to you
+          </h1>
+          <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+            Open a profile to see its skills, proof and projects for your outreach. Profile data is managed by your admins —
+            ask them to upload new sources or correct anything.
+          </p>
+        </section>
+      )}
 
       {activeBatch && processing && (
         <section className="srf-console srf-console-edge overflow-hidden px-5 py-4 sm:px-6">

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
-import { can } from '@/lib/auth/organization'
 import { createServiceSupabase } from '@/lib/supabase/service'
+import { profileAccess } from '@/lib/profile-intelligence/access'
 
 export async function GET(request: Request) {
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
+  if (!profileAccess(authCtx).canManage) {
     return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
   }
 
@@ -105,7 +105,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
+  if (!profileAccess(authCtx).canManage) {
     return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
   }
 

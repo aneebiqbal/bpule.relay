@@ -105,6 +105,11 @@ export function ProfileDetail({ profileId, canImport = false, isAdmin = false }:
             </button>
           )}
         </div>
+        {!canImport && (
+          <p data-testid="view-only-note" className="mt-2 text-[11px] text-[color:var(--console-mute)]">
+            View only · assigned to you for outreach. Ask an admin to add or correct profile data.
+          </p>
+        )}
         {profile.archivedAt && (
           <p className="mt-2 rounded bg-yellow-500/10 px-2 py-1 text-[11px] text-yellow-700">
             Archived{profile.mergedIntoProfileId ? <> — merged into <Link className="underline" href={`/profile-intelligence/${profile.mergedIntoProfileId}`}>another profile</Link></> : ''}.

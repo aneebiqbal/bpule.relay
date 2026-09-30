@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 import { createServiceSupabase } from '@/lib/supabase/service'
+import { profileAccess, visibleProfileIds } from '@/lib/profile-intelligence/access'
 import { effectiveReadiness, LIVE_COUNT_SELECT, liveCounts, profileDisplayName, profileDisplayRole } from '@/lib/profile-intelligence/legacy-display'
 
 export async function GET(request: Request) {
@@ -34,6 +35,14 @@ export async function GET(request: Request) {
 
   if (!includeArchived) {
     query = query.is('archived_at', null)
+  }
+
+  // Reps see only the profiles they own or are assigned to.
+  const access = profileAccess(authCtx)
+  const allowed = await visibleProfileIds(client, authCtx)
+  if (allowed !== null) {
+    if (allowed.length === 0) return NextResponse.json({ profiles: [], count: 0, access })
+    query = query.in('id', allowed)
   }
 
   // readiness is filtered after computing the effective value (legacy
@@ -75,5 +84,5 @@ export async function GET(request: Request) {
     }
   }).filter((p) => !readiness || p.readiness === readiness)
 
-  return NextResponse.json({ profiles, count: profiles.length })
+  return NextResponse.json({ profiles, count: profiles.length, access })
 }

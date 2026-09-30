@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
-import { getAuthContext, can } from '@/lib/auth/organization'
+import { getAuthContext } from '@/lib/auth/organization'
+import { profileAccess } from '@/lib/profile-intelligence/access'
 import { ProfileDetail } from '@/components/profile-intelligence/profile-detail'
 
 export const dynamic = 'force-dynamic'
@@ -13,11 +14,6 @@ export default async function ProfileDetailPage({ params }: { params: Promise<{ 
   const authCtx = await getAuthContext()
   if (!authCtx) redirect('/login')
 
-  return (
-    <ProfileDetail
-      profileId={id}
-      canImport={can(authCtx, 'MANAGE_REVENUE_IDENTITIES')}
-      isAdmin={authCtx.isAdmin || authCtx.isOwner}
-    />
-  )
+  const access = profileAccess(authCtx)
+  return <ProfileDetail profileId={id} canImport={access.canManage} isAdmin={access.canMerge} />
 }

@@ -57,6 +57,7 @@ type AnalyzeEvent =
       draftFailed: boolean
       demoMode: boolean
       alternativeSenders: Array<{ profile: Profile; matchScore: number; topProof: string | null }>
+  senderSuggestion?: { profileId: string; name: string | null; role: string | null; platform: string | null; score: number; currentBestScore: number; matchedTerms: string[]; topProof: string | null; holders: string[]; reason: string } | null
       qualification: ProspectQualificationAssessment
       revenue?: RevenueLoopSnapshot
     }
@@ -82,6 +83,7 @@ interface AnalysisState {
   quality: { passed: boolean; failures: string[]; wasRepaired: boolean }
   strategy: { whyConnect: string; relevantObservation: string; forbidden: string[]; candidateAngles: string[] }
   alternativeSenders: Array<{ profile: Profile; matchScore: number; topProof: string | null }>
+  senderSuggestion?: { profileId: string; name: string | null; role: string | null; platform: string | null; score: number; currentBestScore: number; matchedTerms: string[]; topProof: string | null; holders: string[]; reason: string } | null
   draftFailed: boolean
   demoMode: boolean
   qualification: ProspectQualificationAssessment
@@ -226,6 +228,7 @@ export default function ProspectCheckPage() {
               quality: event.quality,
               strategy: event.strategy,
               alternativeSenders: event.alternativeSenders,
+              senderSuggestion: event.senderSuggestion ?? null,
               draftFailed: event.draftFailed,
               demoMode: event.demoMode,
               qualification: event.qualification,
@@ -603,6 +606,15 @@ export default function ProspectCheckPage() {
             </div>
           )}
 
+          {result.score && !result.bestSender && result.senderSuggestion && (
+            <div data-testid="sender-suggestion" className="rounded-md border border-orange/30 bg-orange/5 p-2.5">
+              <p className="text-[11px] font-medium text-ink">
+                You have no profile that fits this lead. Relay suggests: {result.senderSuggestion.name ?? 'another profile'}
+              </p>
+              <p className="mt-0.5 text-[11px] text-graphite">{result.senderSuggestion.reason}</p>
+            </div>
+          )}
+
           {result.score && result.bestSender && (
             <div>
               <div className="flex items-center justify-between">
@@ -631,6 +643,25 @@ export default function ProspectCheckPage() {
                 <p className="mt-1 text-[11px] text-status-warning">
                   No verified proof matches for this sender.
                 </p>
+              )}
+
+              {result.senderSuggestion && (
+                <div data-testid="sender-suggestion" className="mt-2 rounded-md border border-orange/30 bg-orange/5 p-2.5">
+                  <p className="text-[11px] font-medium text-ink">
+                    Relay suggests: {result.senderSuggestion.name ?? 'another profile'}
+                    {result.senderSuggestion.role ? <span className="font-normal text-graphite"> · {result.senderSuggestion.role}</span> : null}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-graphite">{result.senderSuggestion.reason}</p>
+                  {result.senderSuggestion.topProof && (
+                    <p className="mt-1 text-[11px] text-graphite">
+                      Strongest proof: {result.senderSuggestion.topProof.slice(0, 120)}
+                    </p>
+                  )}
+                  <p className="mt-1 text-[10px] text-stone">
+                    Match {result.senderSuggestion.score} vs your best {result.senderSuggestion.currentBestScore}
+                    {result.senderSuggestion.holders.length > 0 ? ` · held by ${result.senderSuggestion.holders.join(', ')}` : ''}
+                  </p>
+                </div>
               )}
 
               {showSenders && Array.isArray(result.alternativeSenders) && result.alternativeSenders.length > 0 && (

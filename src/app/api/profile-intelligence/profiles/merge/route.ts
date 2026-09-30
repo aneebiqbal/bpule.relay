@@ -3,6 +3,7 @@ import { getAuthContext } from '@/lib/auth/organization'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { executeProfileMerge, previewProfileMerge } from '@/lib/profile-intelligence/enrichment-service'
 import { enrichmentErrorResponse } from '@/lib/profile-intelligence/enrichment-http'
+import { profileAccess } from '@/lib/profile-intelligence/access'
 
 /**
  * Safe duplicate-profile merge: Profile B (source) → Profile A (target).
@@ -17,7 +18,7 @@ import { enrichmentErrorResponse } from '@/lib/profile-intelligence/enrichment-h
 export async function POST(request: Request) {
   const auth = await getAuthContext()
   if (!auth) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (!auth.isAdmin && !auth.isOwner) return NextResponse.json({ error: 'Only admins can merge profiles.' }, { status: 403 })
+  if (!profileAccess(auth).canMerge) return NextResponse.json({ error: 'Only admins can merge profiles.' }, { status: 403 })
 
   const body = await request.json().catch(() => null)
   const sourceId = typeof body?.sourceProfileId === 'string' ? body.sourceProfileId : null

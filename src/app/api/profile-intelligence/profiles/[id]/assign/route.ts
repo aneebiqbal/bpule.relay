@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
-import { can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 import { createServiceSupabase } from '@/lib/supabase/service'
+import { profileAccess } from '@/lib/profile-intelligence/access'
 
 export async function POST(
   request: Request,
@@ -11,7 +11,7 @@ export async function POST(
   const { id: profileId } = await params
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
+  if (!profileAccess(authCtx).canManage) {
     return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
   }
 
@@ -54,7 +54,7 @@ export async function DELETE(
   const { id: profileId } = await params
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-  if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) {
+  if (!profileAccess(authCtx).canManage) {
     return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
   }
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 import { createServiceSupabase } from '@/lib/supabase/service'
+import { profileAccess } from '@/lib/profile-intelligence/access'
 
 export async function GET(
   request: Request,
@@ -10,6 +11,7 @@ export async function GET(
   const { id } = await params
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!profileAccess(authCtx).canManage) return NextResponse.json({ error: 'Only admins and managers can manage profiles.' }, { status: 403 })
 
   const client = createServiceSupabase()
 
