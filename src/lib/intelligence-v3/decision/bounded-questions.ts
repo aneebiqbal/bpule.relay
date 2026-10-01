@@ -79,7 +79,7 @@ export const V3_DECISION_SCHEMA = {
     relationship: {
       type: 'string',
       enum: ['BUYER', 'SERVICE_PROVIDER', 'COMPETITOR', 'PARTNER', 'CANDIDATE', 'MIXED', 'UNKNOWN'],
-      description: 'The commercial relationship category for this specific opportunity episode.',
+      description: 'BUYER=looking to buy services, SERVICE_PROVIDER=sells services, COMPETITOR=similar services no buy, RECRUITER=places candidates, CANDIDATE=seeking work, PARTNER=potential partner, MIXED=multiple roles, UNKNOWN=unclear',
     },
     buyerRequestProbability: {
       type: 'number',
@@ -143,7 +143,37 @@ You only see ONE episode at a time.
 
 Your output is typed classification only. No explanations. No business impact analysis.
 
-Rules:
+RELATIONSHIP CLASSIFICATION (choose exactly one):
+- BUYER: The organization/person is looking to buy/acquire software development services.
+  Signals: "hiring a developer", "looking for a team", "need help building", "send resume/portfolio",
+  explicit apply instructions, requests for outside help, vendor evaluation, outsourcing needs.
+  Note: A service provider CAN also be a buyer if they're hiring for their own company or outsourcing overflow.
+
+- SERVICE_PROVIDER: The person/company SELLS software development services to clients.
+  Signals: "we provide development services", "we help companies build", "our agency/firm",
+  "we offer React/Node development", "contact us for your project", portfolios of client work,
+  "we're a development shop/studio/agency", "outsourcing to us".
+  Note: If they're ALSO hiring, classify as MIXED.
+
+- COMPETITOR: A direct competitor offering similar services, NOT buying.
+  Signals: Same services as the agency but no buying intent, similar client base, competing for same work.
+
+- RECRUITER: Places candidates or hires for other companies (not buying development services).
+  Signals: "we help companies hire", "talent placement", "recruiting for clients", "we find developers for you".
+
+- CANDIDATE: Seeking employment or contract work (not buying services).
+  Signals: "open to work", "looking for a role", "seeking opportunities", "available for hire",
+  job-seeking language directed at potential employers.
+
+- PARTNER: Potential delivery partner, subcontractor, or strategic alliance.
+  Signals: "looking for a partner", "revenue share", "co-build", "embedded team partnership".
+
+- MIXED: Multiple distinct roles in this episode (e.g., service provider posting their own hiring need).
+  Use when BOTH service-provider-signals AND buyer-signals are clearly present for the same organization.
+
+- UNKNOWN: Cannot determine relationship from evidence.
+
+KEY RULES:
 1. Score the EPISODE, not the person's identity
 2. A SERVICE_PROVIDER relationship does NOT disqualify an explicit BUYER_REQUEST episode
 3. An agency can hire another agency. A founder can sell services AND hire developers.
@@ -151,7 +181,8 @@ Rules:
 5. Timing is separate from intent — high intent + stale timing = aging opportunity, not "no opportunity"
 6. Organization scoping: only evaluate the episode for the specified organization
 7. If evidence is weak, probabilities should be low
-8. Relationship classification describes the PRIMARY role in THIS episode, not the person globally`
+8. Relationship classification describes the PRIMARY role in THIS episode, not the person globally
+9. When in doubt between BUYER and SERVICE_PROVIDER, look for EXPLICIT apply instructions or direct asks for help — those make it BUYER`
 
 // ── User Prompt Builder ─────────────────────────────────────────────────────
 

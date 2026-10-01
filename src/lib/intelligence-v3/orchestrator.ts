@@ -127,27 +127,44 @@ export async function runV3Decision(
   const provider = registry.getAvailable(options.providerId)
 
   let providerResult
-  if (provider && providerContext) {
-    providerResult = await provider.decide(providerContext)
+  if (providerContext) {
+    // Try primary provider with built-in retry
+    if (provider) {
+      try {
+        providerResult = await provider.decide(providerContext)
 
-    // Cascade: escalate to gpt-4.1 when primary model is uncertain
-    if (bestEpisode && shouldCascadeEscalate(providerResult, bestEpisode)) {
-      const escalationResult = await runEscalationDecision(providerContext)
-      if (escalationResult) {
-        providerResult = escalationResult
+        // Cascade: escalate to gpt-4.1 when primary model is uncertain
+        if (bestEpisode && shouldCascadeEscalate(providerResult, bestEpisode)) {
+          const escalationResult = await runEscalationDecision(providerContext)
+          if (escalationResult) {
+            providerResult = escalationResult
+          }
+        }
+      } catch (e) {
+        // Primary provider failed after retry — try LongCat fallback
+        const longcat = registry.getAvailable('longcat_structured')
+        if (longcat && longcat.id !== provider.id) {
+          try {
+            providerResult = await longcat.decide(providerContext)
+          } catch {
+            // LongCat also failed — fall through to deterministic
+          }
+        }
       }
     }
-  } else {
-    // Fallback: deterministic decision from graph analysis
-    providerResult = deterministicDecision(providerContext ?? {
-      person: Array.from(graph.persons.values())[0] ?? { id: 'unknown', fullName: null, firstName: null, linkedinUrl: null, location: null, affiliations: [] },
-      organization: null,
-      episode: episodes[0] ?? { id: 'empty', anchorEvent: { id: 'empty', eventType: 'OTHER', personId: null, organizationId: null, organizationName: null, occurredAt: null, channel: null, requestedCapability: [], targetAudience: 'PUBLIC', explicitness: 'INFERRED', applyInstructions: [], evidenceRefs: [], polarity: 'UNKNOWN' }, organizationId: null, organizationName: null, needOwnerPersonId: null, needOwnerType: 'UNKNOWN', explicitRequest: false, requestedCapabilities: [], applicationChannels: [], evidenceRefs: [], eventRefs: [], status: 'UNKNOWN', detectedAt: new Date().toISOString(), lastActivityAt: null, ageDays: null },
-      anchorEvent: { id: 'empty', eventType: 'OTHER', personId: null, organizationId: null, organizationName: null, occurredAt: null, channel: null, requestedCapability: [], targetAudience: 'PUBLIC', explicitness: 'INFERRED', applyInstructions: [], evidenceRefs: [], polarity: 'UNKNOWN' },
-      evidence: [],
-      currentDate: (options.referenceDate ?? new Date()).toISOString(),
-      senderCapabilities: options.senderCapabilities ?? [],
-    })
+
+    // Final fallback: deterministic decision from graph analysis
+    if (!providerResult) {
+      providerResult = deterministicDecision(providerContext ?? {
+        person: Array.from(graph.persons.values())[0] ?? { id: 'unknown', fullName: null, firstName: null, linkedinUrl: null, location: null, affiliations: [] },
+        organization: null,
+        episode: episodes[0] ?? { id: 'empty', anchorEvent: { id: 'empty', eventType: 'OTHER', personId: null, organizationId: null, organizationName: null, occurredAt: null, channel: null, requestedCapability: [], targetAudience: 'PUBLIC', explicitness: 'INFERRED', applyInstructions: [], evidenceRefs: [], polarity: 'UNKNOWN' }, organizationId: null, organizationName: null, needOwnerPersonId: null, needOwnerType: 'UNKNOWN', explicitRequest: false, requestedCapabilities: [], applicationChannels: [], evidenceRefs: [], eventRefs: [], status: 'UNKNOWN', detectedAt: new Date().toISOString(), lastActivityAt: null, ageDays: null },
+        anchorEvent: { id: 'empty', eventType: 'OTHER', personId: null, organizationId: null, organizationName: null, occurredAt: null, channel: null, requestedCapability: [], targetAudience: 'PUBLIC', explicitness: 'INFERRED', applyInstructions: [], evidenceRefs: [], polarity: 'UNKNOWN' },
+        evidence: [],
+        currentDate: (options.referenceDate ?? new Date()).toISOString(),
+        senderCapabilities: options.senderCapabilities ?? [],
+      })
+    }
   }
   const decisionMs = Date.now() - t3
 
@@ -155,7 +172,7 @@ export async function runV3Decision(
   const { packet } = await assembleDecisionPacket({
     graph,
     episodes,
-    providerResult,
+    providerResult: providerResult!,
     productionScore: options.productionScore,
     productionAction: options.productionAction,
     senderCapabilities: options.senderCapabilities,

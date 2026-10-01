@@ -7,6 +7,38 @@
 
 import { segmentLinkedInSource, type SourceSegment } from './source-segmenter'
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
+import { withRetry, fetchOpenAI } from './retry-utils'
+
+// ── Event Extraction Schema ──────────────────────────────────────────────────
+
+const EVENT_EXTRACTION_SCHEMA = {
+  type: 'object',
+  properties: {
+    events: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          eventType: { type: 'string', enum: ['HIRING', 'FREELANCE_REQUEST', 'PROJECT_REQUEST', 'AGENCY_REQUEST', 'VENDOR_EVALUATION', 'FUNDING', 'PRODUCT_LAUNCH', 'TECHNICAL_BUILD', 'SERVICE_OFFERING', 'PARTNERSHIP', 'CUSTOMER_PROBLEM', 'OTHER'] },
+          organizationName: { type: 'string', description: 'Must be explicitly named in the text.' },
+          organizationEvidence: { type: 'string', description: 'Exact text naming the organization.' },
+          requestedCapabilities: { type: 'array', items: { type: 'string' } },
+          requestedAssets: { type: 'array', items: { type: 'string' }, description: 'What to submit: resume, GitHub, portfolio, rate, availability.' },
+          applicationChannels: { type: 'array', items: { type: 'string', enum: ['LINKEDIN', 'EMAIL', 'APPLICATION_LINK', 'CAREERS_PAGE', 'UPWORK', 'DM', 'PHONE'] } },
+          applyInstructions: { type: 'array', items: { type: 'string' }, description: 'Verbatim apply instructions.' },
+          explicitness: { type: 'string', enum: ['EXPLICIT', 'IMPLIED', 'INFERRED'] },
+          needOwner: { type: 'string', enum: ['SELF_NEED', 'ORGANIZATION_NEED', 'HIRING_NEED', 'CUSTOMER_NEED', 'MARKET_PROBLEM', 'SERVICE_OFFERING', 'PRODUCT_PROBLEM', 'UNKNOWN'] },
+          evidenceQuote: { type: 'string', description: 'Key evidence sentence from source.' },
+          confidence: { type: 'number', minimum: 0, maximum: 1 },
+        },
+        required: ['eventType', 'organizationName', 'organizationEvidence', 'requestedCapabilities', 'requestedAssets', 'applicationChannels', 'applyInstructions', 'explicitness', 'needOwner', 'evidenceQuote', 'confidence'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['events'],
+  additionalProperties: false,
+} as const
 
 export interface ExtractedEvent {
   eventType: 'HIRING' | 'FREELANCE_REQUEST' | 'PROJECT_REQUEST' | 'AGENCY_REQUEST' | 'VENDOR_EVALUATION' | 'FUNDING' | 'PRODUCT_LAUNCH' | 'TECHNICAL_BUILD' | 'SERVICE_OFFERING' | 'PARTNERSHIP' | 'CUSTOMER_PROBLEM' | 'OTHER'
@@ -60,81 +92,25 @@ ${p.text.slice(0, 2000)}
 Extract all commercial events from these posts. Each event must reference an organization explicitly named in the text.`
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'event_extraction',
-            schema: {
-              type: 'object',
-              properties: {
-                events: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      eventType: {
-                        type: 'string',
-                        enum: ['HIRING', 'FREELANCE_REQUEST', 'PROJECT_REQUEST', 'AGENCY_REQUEST', 'VENDOR_EVALUATION', 'FUNDING', 'PRODUCT_LAUNCH', 'TECHNICAL_BUILD', 'SERVICE_OFFERING', 'PARTNERSHIP', 'CUSTOMER_PROBLEM', 'OTHER'],
-                      },
-                      organizationName: { type: 'string', description: 'Must be explicitly named in the text.' },
-                      organizationEvidence: { type: 'string', description: 'Exact text naming the organization.' },
-                      requestedCapabilities: { type: 'array', items: { type: 'string' } },
-                      requestedAssets: { type: 'array', items: { type: 'string' }, description: 'What to submit: resume, GitHub, portfolio, rate, availability.' },
-                      applicationChannels: {
-                        type: 'array',
-                        items: { type: 'string', enum: ['LINKEDIN', 'EMAIL', 'APPLICATION_LINK', 'CAREERS_PAGE', 'UPWORK', 'DM', 'PHONE'] },
-                      },
-                      applyInstructions: { type: 'array', items: { type: 'string' }, description: 'Verbatim apply instructions.' },
-                      explicitness: { type: 'string', enum: ['EXPLICIT', 'IMPLIED', 'INFERRED'] },
-                      needOwner: {
-                        type: 'string',
-                        enum: ['SELF_NEED', 'ORGANIZATION_NEED', 'HIRING_NEED', 'CUSTOMER_NEED', 'MARKET_PROBLEM', 'SERVICE_OFFERING', 'PRODUCT_PROBLEM', 'UNKNOWN'],
-                      },
-                      evidenceQuote: { type: 'string', description: 'Key evidence sentence from source.' },
-                      confidence: { type: 'number', minimum: 0, maximum: 1 },
-                    },
-                    required: ['eventType', 'organizationName', 'organizationEvidence', 'requestedCapabilities', 'requestedAssets', 'applicationChannels', 'applyInstructions', 'explicitness', 'needOwner', 'evidenceQuote', 'confidence'],
-                    additionalProperties: false,
-                  },
-                },
-              },
-              required: ['events'],
-              additionalProperties: false,
-            },
-            strict: true,
-          },
-        },
-        temperature: 0.1,
-        max_tokens: 2000,
-      }),
-    })
+    const result = await withRetry(
+      () => fetchOpenAI(
+        process.env.OPENAI_API_KEY || '',
+        'gpt-4o-mini',
+        'https://api.openai.com/v1',
+        systemPrompt,
+        userPrompt,
+        EVENT_EXTRACTION_SCHEMA,
+        2000,
+      ),
+      { maxRetries: 1, baseDelayMs: 1000 },
+    )
 
-    if (!response.ok) {
-      const errorBody = await response.text()
-      console.warn('[V3 Event Extraction] API error:', response.status, errorBody.slice(0, 1000))
+    if (result.error || !result.data) {
+      console.warn('[V3 Event Extraction] API failed after retry:', result.error?.slice(0, 200))
       return []
     }
 
-    const data = await response.json() as { choices: Array<{ message: { content: string } }> }
-    const content = data.choices[0]?.message?.content
-    if (!content) {
-      console.warn('[V3 Event Extraction] Empty response')
-      return []
-    }
-
-    const parsed = JSON.parse(content) as { events: ExtractedEvent[] }
+    const parsed = JSON.parse(result.data) as { events: ExtractedEvent[] }
     if (!parsed?.events?.length) {
       console.warn('[V3 Event Extraction] No events in parsed response')
       return []

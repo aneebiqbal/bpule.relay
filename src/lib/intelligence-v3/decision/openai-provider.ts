@@ -8,6 +8,7 @@
 import type { V3DecisionProvider, V3ProviderContext, V3ProviderResult } from './decision-provider'
 import type { V3DecisionAnswers } from './bounded-questions'
 import { V3_DECISION_SCHEMA, V3_DECISION_SYSTEM_PROMPT, buildDecisionUserPrompt } from './bounded-questions'
+import { withRetry, fetchOpenAI } from '../retry-utils'
 
 // Reuse the existing AI runtime if available, or make direct API calls
 export class OpenAIDecisionProvider implements V3DecisionProvider {
@@ -65,48 +66,24 @@ export class OpenAIDecisionProvider implements V3DecisionProvider {
       senderCapabilities: context.senderCapabilities,
     })
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: this.model,
-        messages: [
-          { role: 'system', content: V3_DECISION_SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'v3_decision',
-            schema: V3_DECISION_SCHEMA,
-            strict: true,
-          },
-        },
-        temperature: 0.1,
-        max_tokens: 300,
-      }),
-    })
+    const result = await withRetry(
+      () => fetchOpenAI(
+        this.apiKey,
+        this.model,
+        this.baseUrl,
+        V3_DECISION_SYSTEM_PROMPT,
+        userPrompt,
+        V3_DECISION_SCHEMA,
+        300,
+      ),
+      { maxRetries: 1, baseDelayMs: 1000 },
+    )
 
-    if (!response.ok) {
-      const body = await response.text()
-      throw new Error(`OpenAI decision call failed: ${response.status} ${body}`)
+    if (result.error || !result.data) {
+      throw new Error(`OpenAI decision call failed: ${result.error}`)
     }
 
-    const result = await response.json() as {
-      choices: Array<{ message: { content: string } }>
-      model: string
-      usage?: { prompt_tokens: number; completion_tokens: number }
-    }
-
-    const content = result.choices[0]?.message?.content
-    if (!content) {
-      throw new Error('OpenAI returned empty decision content')
-    }
-
-    const parsed = JSON.parse(content) as Record<string, unknown>
+    const parsed = JSON.parse(result.data) as Record<string, unknown>
     const answers = normalizeAnswers(parsed)
 
     return {
