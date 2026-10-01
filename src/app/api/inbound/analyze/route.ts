@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { scanForSecrets } from '@/lib/ai/secrets'
 import { produceCanonicalIntelligence } from '@/lib/intelligence-v2/orchestrator'
+import { produceV3Intelligence } from '@/lib/intelligence-v3/bridge'
+import { V3_CANONICAL } from '@/lib/intelligence-v3/config'
 import { buildProfileIntelligence, matchProofToLead } from '@/lib/relay/profile-intelligence'
 import { hasProvider } from '@/lib/ai/config'
 import type { InboundInput } from '@/lib/domain/types'
@@ -38,10 +40,16 @@ export async function POST(req: NextRequest) {
       store.listAllProofItems(),
     ])
 
-    const canonicalResult = await produceCanonicalIntelligence(body.message, {
-      onStatus: () => {},
-    })
-    const canonical = canonicalResult.intelligence
+    let canonical
+    if (V3_CANONICAL) {
+      const v3Result = await produceV3Intelligence(body.message, [], () => {})
+      canonical = v3Result.intelligence
+    } else {
+      const canonicalResult = await produceCanonicalIntelligence(body.message, {
+        onStatus: () => {},
+      })
+      canonical = canonicalResult.intelligence
+    }
 
     const tagsForMatching = [
       ...canonical.intelligence.content.topics,

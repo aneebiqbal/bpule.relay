@@ -211,19 +211,11 @@ export async function POST(request: Request) {
     } else {
       emit({ type: 'status', message: 'Extracting prospect intelligence' })
       try {
-        // Dedup: same rawText within 30s window reuses in-flight extraction
         const dedupKey = `analyze:${rawText.slice(0, 200)}`
+
         if (V3_CANONICAL) {
-          // V3 is canonical: run V2 extraction + V3 decision pipeline
-          canonicalResult = await deduplicated(dedupKey, () =>
-            produceCanonicalIntelligence(rawText, {
-              onStatus: (msg) => emit({ type: 'status', message: msg }),
-              forceReanalyze: body.forceReanalyze === true,
-              reuseIfUnchanged: undefined, // V3 always re-decides from fresh extraction
-            }),
-          )
-          // Build V3 decision on top of V2 extraction
-          const senderCaps: string[] = [] // sender capabilities loaded later in the pipeline
+          // V3 is canonical: V3 bridge runs its own extraction + decision pipeline
+          const senderCaps: string[] = []
           const v3Result = await produceV3Intelligence(rawText, senderCaps, (msg) => emit({ type: 'status', message: msg }))
           canonicalResult = {
             intelligence: v3Result.intelligence,
@@ -234,7 +226,7 @@ export async function POST(request: Request) {
             reused: false,
           }
         } else {
-          // V2 canonical path (legacy)
+          // Legacy V2 path
           canonicalResult = await deduplicated(dedupKey, () =>
             produceCanonicalIntelligence(rawText, {
               onStatus: (msg) => emit({ type: 'status', message: msg }),

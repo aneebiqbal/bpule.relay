@@ -116,8 +116,7 @@ export {
 
 export { OpenAIDecisionProvider } from './decision/openai-provider'
 export { LongCatDecisionProvider } from './decision/longcat-provider'
-export { JevDecisionProvider } from './decision/jev-provider'
-export { KevDecisionProvider } from './decision/kev-provider'
+// Jeff/Jev/Kev providers moved to experiments/ — not in production runtime
 
 // ── Decision Assembly ────────────────────────────────────────────────────────
 
@@ -164,8 +163,6 @@ export type { V3ShadowResult } from './decision/shadow-runner'
 import { getDecisionRegistry } from './decision/decision-provider'
 import { OpenAIDecisionProvider } from './decision/openai-provider'
 import { LongCatDecisionProvider } from './decision/longcat-provider'
-import { JevDecisionProvider } from './decision/jev-provider'
-import { KevDecisionProvider } from './decision/kev-provider'
 import { V3_DECISION_PROVIDER_CONFIG } from './config'
 
 // ── Initialization ──────────────────────────────────────────────────────────
@@ -174,7 +171,7 @@ let _initialized = false
 
 /**
  * Initialize the V3 decision provider registry.
- * Registers all available providers based on environment configuration.
+ * Registers OpenAI (primary) and LongCat (fallback).
  * Safe to call multiple times.
  */
 export function initializeV3(): void {
@@ -188,12 +185,6 @@ export function initializeV3(): void {
 
   const longcat = new LongCatDecisionProvider()
   if (longcat.isAvailable()) registry.register(longcat)
-
-  const jev = new JevDecisionProvider()
-  if (jev.isAvailable()) registry.register(jev)
-
-  const kev = new KevDecisionProvider()
-  if (kev.isAvailable()) registry.register(kev)
 
   // Set primary
   const primary = V3_DECISION_PROVIDER_CONFIG.primary

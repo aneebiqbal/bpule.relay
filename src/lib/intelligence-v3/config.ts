@@ -180,9 +180,6 @@ export const V3_SHADOW_CONFIG = {
 export const V3_DECISION_PROVIDER_CONFIG = {
   primary: process.env.V3_DECISION_PROVIDER || 'openai_structured',
   fallback: 'longcat_structured',
-  /** Feature flags */
-  jevEnabled: process.env.JEV_API_KEY !== undefined,
-  kevEnabled: process.env.KEV_API_KEY !== undefined || process.env.KEV_ENDPOINT !== undefined,
 } as const
 
 // ── Canonical Mode ────────────────────────────────────────────────────────

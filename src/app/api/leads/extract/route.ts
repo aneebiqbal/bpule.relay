@@ -2,7 +2,7 @@ import { hasProvider } from '@/lib/ai/config'
 import { scanForSecrets } from '@/lib/ai/secrets'
 import { sseStream } from '@/lib/sse/sse'
 import { createScoutStore } from '@/lib/store'
-import { produceCanonicalIntelligence, getDisplayScore, deriveSignalEvidenceFallback } from '@/lib/intelligence-v2/orchestrator'
+import { produceCanonicalIntelligence, getDisplayScore, deriveSignalEvidenceFallback, type OrchestratorResult } from '@/lib/intelligence-v2/orchestrator'
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 import { produceV3Intelligence } from '@/lib/intelligence-v3/bridge'
 import { V3_CANONICAL } from '@/lib/intelligence-v3/config'
@@ -77,20 +77,10 @@ export async function POST(request: Request) {
     emit({ type: 'status', message: 'Extracting prospect intelligence' })
 
     try {
-      let canonicalResult = await produceCanonicalIntelligence(rawText, {
-        onStatus: (msg) => emit({ type: 'status', message: msg }),
-        forceReanalyze: body.forceReanalyze === true,
-        reuseIfUnchanged: store
-          ? async (hash) => {
-              const existing = await store!.findLeadByIntelligenceInputHash(hash)
-              const canonical = existing?.canonicalIntelligence as CanonicalProspectIntelligence | null | undefined
-              return canonical ?? null
-            }
-          : undefined,
-      })
+      let canonicalResult: OrchestratorResult
 
-      // V3: run decision pipeline on top of V2 extraction when canonical
       if (V3_CANONICAL) {
+        // V3 is canonical: V3 bridge runs its own extraction + decision pipeline
         const v3Result = await produceV3Intelligence(rawText, [], (msg) => emit({ type: 'status', message: msg }))
         canonicalResult = {
           intelligence: v3Result.intelligence,
@@ -100,6 +90,19 @@ export async function POST(request: Request) {
           repairImproved: false,
           reused: false,
         }
+      } else {
+        // Legacy V2 path
+        canonicalResult = await produceCanonicalIntelligence(rawText, {
+          onStatus: (msg) => emit({ type: 'status', message: msg }),
+          forceReanalyze: body.forceReanalyze === true,
+          reuseIfUnchanged: store
+            ? async (hash) => {
+                const existing = await store!.findLeadByIntelligenceInputHash(hash)
+                const canonical = existing?.canonicalIntelligence as CanonicalProspectIntelligence | null | undefined
+                return canonical ?? null
+              }
+            : undefined,
+        })
       }
 
       const canonical = canonicalResult.intelligence
