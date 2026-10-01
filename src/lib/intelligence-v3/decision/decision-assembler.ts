@@ -23,6 +23,8 @@ import { V3_CONFIG_VERSION } from '../config'
 import { scoreEpisode, type V3ScoreInput } from '../scoring/score-v3'
 import { determineAction } from '../action/action-policy'
 import type { V3ProviderResult } from './decision-provider'
+import { assessLatentOpportunity, computeLatentScore, latentActionFromPotential } from '../latent-opportunity'
+import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 
 export interface V3AssemblerInput {
   graph: V3EvidenceGraph
@@ -38,6 +40,8 @@ export interface V3AssemblerInput {
   proofRelevanceMap?: Record<string, number>
   /** Evidence quality per episode */
   evidenceQualityMap?: Record<string, number>
+  /** V2 canonical intelligence for latent opportunity assessment */
+  v2Canonical?: CanonicalProspectIntelligence
 }
 
 export interface V3AssemblerOutput {
@@ -48,7 +52,7 @@ export interface V3AssemblerOutput {
   episodeScores: Array<{ episodeId: string; score: number }>
 }
 
-export function assembleDecisionPacket(input: V3AssemblerInput): V3AssemblerOutput {
+export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V3AssemblerOutput> {
   const {
     graph,
     episodes,
@@ -103,12 +107,12 @@ export function assembleDecisionPacket(input: V3AssemblerInput): V3AssemblerOutp
       }
     : null
 
-  const selectedScore = selectedScoreInput
+  let selectedScore = selectedScoreInput
     ? scoreEpisode(selectedScoreInput)
     : { score: 0, label: 'Not a fit', qualification: 'SKIP' as const, reasons: ['No episodes found'], watchOut: [], dimensions: [] }
 
   // Determine action
-  const actionOutput = bestEpisode
+  let actionOutput = bestEpisode
     ? determineAction({
         score: selectedScore.score,
         buyerRequestProbability: decision.buyerRequestProbability,
@@ -122,6 +126,33 @@ export function assembleDecisionPacket(input: V3AssemblerInput): V3AssemblerOutp
         status: bestEpisode.status,
       })
     : { action: 'SKIP' as const, messageEligible: false, reason: 'No active episodes', needsReview: false }
+
+  // Latent opportunity: when no active buyer episode exists, assess potential
+  let latentAssessment = null
+  if (!bestEpisode && input.v2Canonical) {
+    latentAssessment = await assessLatentOpportunity(input.v2Canonical)
+    const latentScore = computeLatentScore(latentAssessment)
+    const latentAction = latentActionFromPotential(latentAssessment.overallPotential, latentAssessment.confidence)
+
+    if (latentAssessment.overallPotential !== 'LOW') {
+      selectedScore = {
+        score: latentScore,
+        label: `Latent opportunity (${latentAssessment.overallPotential.toLowerCase()} potential)`,
+        qualification: latentAssessment.overallPotential === 'HIGH' ? 'MAYBE' : 'SKIP',
+        reasons: latentAssessment.signals.length > 0
+          ? latentAssessment.signals
+          : ['No explicit buyer signal detected'],
+        watchOut: [`Current intent: UNKNOWN. ${latentAssessment.signals.join(', ')}`],
+        dimensions: [],
+      }
+      actionOutput = {
+        action: latentAction.action as import('../types').V3Action,
+        messageEligible: latentAction.messageEligible,
+        reason: `Latent ${latentAssessment.overallPotential.toLowerCase()} potential: ${latentAssessment.signals.join(', ')}`,
+        needsReview: false,
+      }
+    }
+  }
 
   // Shadow comparison
   const shadowComparison: V3ShadowComparison | null = productionScore !== undefined
@@ -158,10 +189,12 @@ export function assembleDecisionPacket(input: V3AssemblerInput): V3AssemblerOutp
     watchOut: selectedScore.watchOut,
     evidenceRefs,
     proofStrength: proofRelevanceMap[bestEpisode?.id ?? ''] ?? 0.5,
-    confidence,
+    confidence: latentAssessment ? latentAssessment.confidence : confidence,
     decisionProvider: providerResult.providerId,
     decisionModel: providerResult.modelVersion,
     shadowComparison,
+    latentPotential: latentAssessment?.overallPotential ?? null,
+    latentSignals: latentAssessment?.signals ?? [],
   }
 
   return {
@@ -192,22 +225,29 @@ function computeOverallConfidence(
   episode: V3OpportunityEpisode | null,
   providerResult: V3ProviderResult,
 ): number {
-  let confidence = providerResult.confidence
+  // Base confidence: how decisive is the model's prediction?
+  // Prob near 0 or 1 = decisive (high confidence). Prob near 0.5 = uncertain.
+  const buyerConfidence = 2 * Math.abs(decision.buyerRequestProbability - 0.5)
+  let confidence = buyerConfidence
 
-  // Reduce confidence for weak evidence
+  // Boost for explicit requests (clearer signal)
+  if (episode?.explicitRequest) {
+    confidence = Math.min(1, confidence + 0.15)
+  }
+
+  // Reduce for weak evidence
   if (episode && episode.evidenceRefs.length < 2) {
-    confidence *= 0.7
-  }
-
-  // Reduce confidence for aging episodes
-  if (episode && episode.ageDays !== null && episode.ageDays > 30) {
-    confidence *= 0.85
-  }
-
-  // Reduce confidence if model probabilities are uncertain
-  const buyerUncertainty = 1 - 2 * Math.abs(decision.buyerRequestProbability - 0.5)
-  if (buyerUncertainty < 0.3) {
     confidence *= 0.8
+  }
+
+  // Reduce slightly for aging episodes (not zero — still valid signal)
+  if (episode && episode.ageDays !== null && episode.ageDays > 60) {
+    confidence *= 0.9
+  }
+
+  // Reduce for UNKNOWN timing (less certainty about current relevance)
+  if (episode && episode.ageDays === null) {
+    confidence *= 0.85
   }
 
   return Math.round(Math.max(0, Math.min(1, confidence)) * 100) / 100

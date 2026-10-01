@@ -51,6 +51,8 @@ export interface V3OrchestratorOptions {
   referenceDate?: Date
   /** Callback for status updates */
   onStatus?: (msg: string) => void
+  /** V2 canonical intelligence for latent opportunity assessment */
+  v2Canonical?: import('@/lib/intelligence-v2/types').CanonicalProspectIntelligence
 }
 
 export interface V3OrchestratorResult {
@@ -150,13 +152,14 @@ export async function runV3Decision(
   const decisionMs = Date.now() - t3
 
   // Phase 5: Assemble decision packet
-  const { packet } = assembleDecisionPacket({
+  const { packet } = await assembleDecisionPacket({
     graph,
     episodes,
     providerResult,
     productionScore: options.productionScore,
     productionAction: options.productionAction,
     senderCapabilities: options.senderCapabilities,
+    v2Canonical: options.v2Canonical,
   })
 
   return {
@@ -585,24 +588,59 @@ function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
 }
 
 function selectBestEpisodeForDecision(episodes: V3OpportunityEpisode[]): V3OpportunityEpisode | null {
-  // Prefer explicit, current episodes
-  const sorted = [...episodes].sort((a, b) => {
-    // Current > aging > stale
-    const statusOrder = { CURRENT: 0, AGING: 1, STALE: 2, UNKNOWN: 3, CLOSED: 4 }
-    const statusDiff = (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3)
-    if (statusDiff !== 0) return statusDiff
+  if (episodes.length === 0) return null
+  if (episodes.length === 1) return episodes[0]
 
-    // Explicit > implied
-    if (a.explicitRequest && !b.explicitRequest) return -1
-    if (!a.explicitRequest && b.explicitRequest) return 1
+  // Score each episode by commercial strength
+  const scored = episodes.map(ep => ({
+    episode: ep,
+    score: scoreEpisodeCommercialStrength(ep),
+  }))
 
-    // More recent first
-    const aTime = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0
-    const bTime = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0
-    return bTime - aTime
-  })
+  scored.sort((a, b) => b.score - a.score)
+  return scored[0].episode
+}
 
-  return sorted[0] ?? null
+/**
+ * Score an episode's commercial strength for selection.
+ * Higher = more commercially valuable = should be the selected episode.
+ */
+function scoreEpisodeCommercialStrength(ep: V3OpportunityEpisode): number {
+  let score = 0
+
+  // Explicit request is strongest signal
+  if (ep.explicitRequest) score += 40
+
+  // Has capabilities = real technical need
+  score += Math.min(20, ep.requestedCapabilities.length * 4)
+
+  // Has application channels = direct access
+  score += Math.min(15, ep.applicationChannels.length * 5)
+
+  // Timing: current > aging > stale > unknown
+  if (ep.ageDays !== null) {
+    if (ep.ageDays <= 14) score += 15
+    else if (ep.ageDays <= 45) score += 10
+    else if (ep.ageDays <= 90) score += 5
+    else score += 2
+  } else {
+    score += 3 // unknown timing
+  }
+
+  // Status bonus
+  if (ep.status === 'CURRENT') score += 10
+  else if (ep.status === 'AGING') score += 7
+  else if (ep.status === 'STALE') score += 3
+
+  // Need owner: HIRING_NEED and ORGANIZATION_NEED are most buyer-directional
+  if (ep.needOwnerType === 'HIRING_NEED') score += 10
+  else if (ep.needOwnerType === 'ORGANIZATION_NEED') score += 8
+  else if (ep.needOwnerType === 'SELF_NEED') score += 6
+
+  // Service offering is NOT a buyer signal (penalty)
+  if (ep.needOwnerType === 'SERVICE_OFFERING') score -= 20
+
+  return score
 }
 
 function buildProviderContext(
@@ -710,6 +748,8 @@ function createEmptyPacket(
           productionDecision: options.productionAction ?? null,
         }
       : null,
+    latentPotential: null,
+    latentSignals: [],
   }
 }
 

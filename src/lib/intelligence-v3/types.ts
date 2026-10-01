@@ -263,6 +263,10 @@ export interface V3LeadDecisionPacket {
   decisionModel: string
   /** Shadow comparison data (if running in shadow mode) */
   shadowComparison: V3ShadowComparison | null
+  /** Latent commercial potential (when no active buyer episode) */
+  latentPotential: 'LOW' | 'MEDIUM' | 'HIGH' | null
+  /** Signals detected in latent assessment */
+  latentSignals: string[]
 }
 
 export interface V3ShadowComparison {

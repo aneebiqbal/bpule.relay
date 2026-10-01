@@ -24,14 +24,14 @@ import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 import type { V3LeadDecisionPacket } from '@/lib/intelligence-v3/types'
 import { V3_CANONICAL } from '@/lib/intelligence-v3/config'
 import { initializeV3 } from '@/lib/intelligence-v3/index'
-import { parseEventsFromSource, type SourceEvent } from './source-parser'
+import { extractEventsFromSource } from './event-extractor'
 
 // ── V2-to-V3 bridge input builder ────────────────────────────────────────────
 
 function buildV3BridgeInput(
   canonical: CanonicalProspectIntelligence,
   rawText: string,
-  sourceEvents: SourceEvent[],
+  extractedEvents: Awaited<ReturnType<typeof extractEventsFromSource>>,
 ): V2BridgeInput {
   const intel = canonical.intelligence
   return {
@@ -96,19 +96,19 @@ function buildV3BridgeInput(
       organizationName: e.organizationName ?? undefined,
     })),
     rawInput: rawText,
-    sourceEvents: sourceEvents.map((e) => ({
+    sourceEvents: extractedEvents.map((e) => ({
       organizationName: e.organizationName,
       eventType: e.eventType,
-      description: e.description,
-      explicitRequest: e.explicitRequest,
+      description: e.evidenceQuote,
+      explicitRequest: e.explicitness === 'EXPLICIT',
       requestedCapabilities: e.requestedCapabilities,
       requestedAssets: e.requestedAssets,
       applicationChannels: e.applicationChannels,
       applyInstructions: e.applyInstructions,
-      contactRoute: e.contactRoute,
-      occurredAt: e.occurredAt,
+      contactRoute: null,
+      occurredAt: e.ageDays ? new Date(Date.now() - e.ageDays * 86400000).toISOString() : null,
       ageDays: e.ageDays,
-      evidenceType: e.evidenceType,
+      evidenceType: e.confidence > 0.7 ? 'FACT' as const : e.confidence > 0.4 ? 'STRONG_INFERENCE' as const : 'WEAK_INFERENCE' as const,
     })),
   }
 }
@@ -207,16 +207,17 @@ export async function produceV3Intelligence(
     // Initialize providers (registers OpenAI, LongCat, etc.)
     initializeV3()
 
-    // Parse events directly from raw source to avoid V2 evidence ledger degradation
-    const sourceEvents = parseEventsFromSource(rawText, v2Canonical)
+    // Extract events using structured LLM (avoids V2 evidence ledger degradation)
+    const extractedEvents = await extractEventsFromSource(rawText, v2Canonical)
 
-    const bridgeInput = buildV3BridgeInput(v2Canonical, rawText, sourceEvents)
+    const bridgeInput = buildV3BridgeInput(v2Canonical, rawText, extractedEvents)
 
     const v3Result = await runV3Decision(bridgeInput, {
       senderCapabilities,
       productionScore: v2Canonical.canonicalScore ?? undefined,
       productionAction: v2Canonical.qualification,
       onStatus: (msg) => emitV3Status(msg, onStatus),
+      v2Canonical,
     })
 
     const packet = v3Result.packet
