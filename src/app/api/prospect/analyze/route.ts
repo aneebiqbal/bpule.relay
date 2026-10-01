@@ -298,10 +298,35 @@ export async function POST(request: Request) {
     const v3MessageEligible = v3Packet ? (v3Packet as { messageEligible: boolean }).messageEligible : null
 
     if (V3_CANONICAL && v3Packet) {
-      // V3 is the single source of truth for action + message eligibility
+      // V3 is the single source of truth for ALL display fields
+      const v3Fit = (v3Packet as { decision?: { fit?: string } })?.decision?.fit || 'MEDIUM'
+      const v3Intent = (v3Packet as { decision?: { buyerRequestProbability?: number } })?.decision?.buyerRequestProbability || 0
+      const v3Confidence = (v3Packet as { confidence?: number })?.confidence || 0.5
+
+      // Map V3 dimensions to V2 display fields
+      ;(loop as { fit: string }).fit = v3Fit
+      ;(loop as { intent: string }).intent = v3Intent > 0.4 ? 'HIGH' : v3Intent > 0.2 ? 'MEDIUM' : 'UNKNOWN'
+      ;(loop as { confidence: string }).confidence = v3Confidence > 0.6 ? 'HIGH' : v3Confidence > 0.3 ? 'MEDIUM' : 'LOW'
       ;(loop as { act: string }).act = v3Action!
       ;(loop as { messageRecommended: boolean }).messageRecommended = v3MessageEligible!
       ;(loop as { messagingPolicy: string }).messagingPolicy = mapV3ActionToMessagingPolicy(v3Action!)
+
+      // Override V2 text with V3 reasoning
+      const v3Reasons = (v3Packet as { reasons?: string[] })?.reasons || []
+      const v3WatchOut = (v3Packet as { watchOut?: string[] })?.watchOut || []
+      const v3Latent = (v3Packet as { latentPotential?: string | null })?.latentPotential
+      const v3LatentSignals = (v3Packet as { latentSignals?: string[] })?.latentSignals || []
+
+      if (v3Latent) {
+        ;(loop as { why: string }).why = `Current intent: UNKNOWN. Latent commercial potential: ${v3Latent}. ${v3LatentSignals.join(', ')}`
+        ;(loop as { nextAction: string }).nextAction = `${v3Latent} latent potential detected. ${v3Action === 'CONNECT_WITHOUT_NOTE' ? 'Send a connection request — no pitch.' : v3Action === 'OBSERVE' ? 'Add to observation list.' : 'No outreach recommended.'}`
+      } else if (v3Reasons.length > 0) {
+        ;(loop as { why: string }).why = v3Reasons.join('. ')
+      }
+
+      if (v3WatchOut.length > 0) {
+        ;(loop as { reason: string }).reason = v3WatchOut.join('. ')
+      }
     }
 
     if (store) {

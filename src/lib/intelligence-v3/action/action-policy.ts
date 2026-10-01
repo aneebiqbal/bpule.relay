@@ -119,8 +119,8 @@ function applySafetyGate(
   const isContactAction = rawAction === 'CONTACT_NOW' || rawAction === 'CONNECT_WITH_NOTE'
   const isConnectAction = isContactAction || rawAction === 'CONNECT_WITHOUT_NOTE'
 
-  // Never message from uncertain zone without explicit request
-  if (isConnectAction && input.buyerRequestProbability >= UNCERTAIN_ZONE_MIN && input.buyerRequestProbability < UNCERTAIN_ZONE_MAX && !input.explicitRequest) {
+  // Uncertain zone without explicit request → HUMAN_REVIEW (regardless of action type)
+  if (input.buyerRequestProbability >= UNCERTAIN_ZONE_MIN && input.buyerRequestProbability < UNCERTAIN_ZONE_MAX && !input.explicitRequest) {
     return {
       action: 'HUMAN_REVIEW',
       needsReview: true,
