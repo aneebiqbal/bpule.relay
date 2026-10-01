@@ -435,7 +435,7 @@ export async function POST(request: Request) {
       return
     }
 
-    // ── Step 2: Load profiles + match best sender ──
+    // ── Step 2: Load profiles + compute V3 profile match + match best sender ──
     emit({ type: 'status', message: 'Matching sender profiles' })
     let profiles: Profile[] = []
     let fewShotPool: Array<{ id: string; messageId: string; leadId: string; playId: string | null; signalType: number | null; sentText: string; company: string; signalEvidence: string | null; tags: string[]; createdAt: string }> = []
@@ -484,6 +484,60 @@ export async function POST(request: Request) {
     const bestMatch = explicitMatch ?? profileMatches[0] ?? null
     const bestSender = bestMatch?.profile ?? null
     const bestSenderProof = bestMatch?.matchedProof ?? []
+
+    // V3 Profile Match: evaluate opportunity quality independent of assigned profile
+    let v3ProfileMatch: {
+      currentProfileId: string | null
+      currentScore: number
+      bestProfileId: string | null
+      bestScore: number
+      bestProfileName: string | null
+      improvement: number
+      matches: Array<{ profileId: string; identityName: string; score: number; reason: string }>
+    } | null = null
+
+    if (V3_CANONICAL && v3Packet && profiles.length > 0) {
+      const v3Episodes = (v3Packet as { episodes?: Array<Record<string, unknown>> }).episodes || []
+      const allCaps = new Set<string>()
+      for (const ep of v3Episodes) {
+        const caps = ep.requestedCapabilities as string[] || []
+        caps.forEach(c => allCaps.add(c))
+      }
+
+      if (allCaps.size > 0) {
+        const { rankProfilesForOpportunity } = await import('@/lib/profile-match')
+        const ranked = rankProfilesForOpportunity(
+          { opportunityCapabilities: [...allCaps], opportunityIndustries: [], opportunityType: 'lead' },
+          profiles.map(p => ({
+            profileId: p.id,
+            identityName: p.displayName || p.fullName || p.label || 'Unknown',
+            skills: [...(p.primarySkills || []), ...(p.secondarySkills || [])],
+            technologies: p.technologies || [],
+            expertise: p.serviceCapabilities || [],
+            industries: p.industries || [],
+            allowedClaims: p.differentiators || [],
+          })),
+        )
+
+        const currentProfile = ranked.find(r => r.profileId === bestSender?.id) || null
+        const bestProfile = ranked[0] || null
+
+        v3ProfileMatch = {
+          currentProfileId: bestSender?.id || null,
+          currentScore: currentProfile?.matchScore || 0,
+          bestProfileId: bestProfile?.profileId || null,
+          bestScore: bestProfile?.matchScore || 0,
+          bestProfileName: bestProfile?.identityName || null,
+          improvement: bestProfile && currentProfile ? bestProfile.matchScore - currentProfile.matchScore : 0,
+          matches: ranked.slice(0, 5).map(r => ({
+            profileId: r.profileId,
+            identityName: r.identityName,
+            score: r.matchScore,
+            reason: r.reason,
+          })),
+        }
+      }
+    }
 
     // Org-wide: is there a profile this rep doesn't hold with clearly stronger
     // proof for this lead? Read-only suggestion; never blocks analysis.
@@ -833,6 +887,7 @@ export async function POST(request: Request) {
           matchScore: pm.totalScore,
           topProof: pm.matchedProof[0]?.safeClaim ?? null,
         })),
+      v3ProfileMatch: V3_CANONICAL ? v3ProfileMatch : undefined,
       qualification: evaluateProspectQualification({ rawText, extracted, canonicalQualification: canonical.qualification }),
       gateNotes: canonicalResult.gateNotes,
       repairAttempted: canonicalResult.repairAttempted,

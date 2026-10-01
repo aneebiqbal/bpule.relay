@@ -1,220 +1,222 @@
-import { Suspense } from 'react'
-import Link from 'next/link'
-import { createScoutStore } from '@/lib/store'
-import { Plus, Briefcase, ArrowRight, Clock, Users, CheckCircle2 } from 'lucide-react'
-import { cn } from 'cn'
-import type { UpworkJob } from '@/lib/domain/types'
+/**
+ * Upwork V2 — focused proposal workspace.
+ *
+ * Replaces the legacy Jobs section. Paste a job page, select a profile,
+ * generate proposal + screening answers.
+ */
 
+'use client'
 
-export const dynamic = 'force-dynamic'
+import { useState } from 'react'
 
-const VERDICT_STYLE: Record<string, { bg: string; text: string; label: string }> = {
-  apply: { bg: 'bg-status-success/10', text: 'text-status-success', label: 'Apply' },
-  apply_if_connects: { bg: 'bg-status-warning/10', text: 'text-status-warning', label: 'If Connects' },
-  skip: { bg: 'bg-bone', text: 'text-stone', label: 'Skip' },
+interface UpworkJob {
+  id: string
+  title: string
+  description: string
+  skills: string[]
+  budget: number | null
+  budgetType: string | null
+  hourlyRateMin: number | null
+  hourlyRateMax: number | null
+  experienceLevel: string | null
+  screeningQuestions: string[]
 }
 
-type JobsPromise = Promise<UpworkJob[]>
-
-function loadJobs(): JobsPromise {
-  return createScoutStore().then((store) => store.listUpworkJobs())
+interface UpworkApplication {
+  coverLetter: string
+  questionAnswers: Array<{ question: string; answer: string }>
+  fitScore: number
+  fitReason: string
+  risks: string[]
+  matchedProof: Array<{ title: string; description: string }>
 }
 
-export default function UpworkListPage() {
-  const jobsPromise = loadJobs()
-
-  return (
-    <div className="space-y-5">
-      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
-        <div className="flex flex-wrap items-start justify-between gap-6">
-          <div className="space-y-2">
-            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Opportunity / Upwork Lanes</p>
-            <h1 className="text-[30px] font-medium leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">Spend Connects where win probability is real.</h1>
-            <p className="max-w-2xl text-[13px] text-[color:var(--console-mute)]">
-              Relay scores each job by fit, competition, and urgency so reps focus on high-return applications.
-            </p>
-          </div>
-          <Link
-            href="/upwork/new"
-            className="group inline-flex items-center gap-2.5 rounded-md bg-orange px-4 py-2 text-sm font-medium text-on-accent transition-all hover:bg-orange/90"
-          >
-            <Plus className="size-4 transition-transform duration-300 group-hover:rotate-90" aria-hidden="true" />
-            New job
-          </Link>
-        </div>
-        <Suspense fallback={<UpworkMetricsSkeleton />}>
-          <UpworkMetrics jobsPromise={jobsPromise} />
-        </Suspense>
-      </section>
-
-      <Suspense fallback={<UpworkListSkeleton />}>
-        <UpworkList jobsPromise={jobsPromise} />
-      </Suspense>
-    </div>
-  )
+interface Profile {
+  id: string
+  identity_name: string
+  skills: string[]
 }
 
-async function UpworkMetrics({ jobsPromise }: { jobsPromise: JobsPromise }) {
-  const jobs = await jobsPromise
-  const applyCount = jobs.filter((j) => j.verdict === 'apply').length
-  const ifConnectsCount = jobs.filter((j) => j.verdict === 'apply_if_connects').length
-  const totalConnects = jobs.reduce((sum, j) => sum + j.connectsCost, 0)
-  return (
-    <div className="mt-4 grid gap-3 sm:grid-cols-4">
-      <ConsoleMetric icon={<Briefcase className="size-3.5" />} label="Total jobs" value={jobs.length} />
-      <ConsoleMetric icon={<CheckCircle2 className="size-3.5" />} label="Apply now" value={applyCount} />
-      <ConsoleMetric icon={<Users className="size-3.5" />} label="Apply if connects" value={ifConnectsCount} />
-      <ConsoleMetric icon={<Clock className="size-3.5" />} label="Connects at stake" value={totalConnects} />
-    </div>
-  )
-}
+export default function UpworkPage() {
+  const [rawText, setRawText] = useState('')
+  const [job, setJob] = useState<UpworkJob | null>(null)
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
+  const [application, setApplication] = useState<UpworkApplication | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [step, setStep] = useState<'paste' | 'profile' | 'result'>('paste')
 
-async function UpworkList({ jobsPromise }: { jobsPromise: JobsPromise }) {
-  const jobs = await jobsPromise
+  async function handleExtract() {
+    if (rawText.length < 50) return
+    setLoading(true)
+    try {
+      const res = await fetch('/api/upwork/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawText }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setJob(data.job)
+        setStep('profile')
+        // Load profiles
+        const profRes = await fetch('/api/profiles')
+        if (profRes.ok) {
+          const profData = await profRes.json()
+          setProfiles(profData.profiles || [])
+        }
+      }
+    } catch (err) {
+      console.error('Extract failed:', err)
+    }
+    setLoading(false)
+  }
 
-  if (jobs.length === 0) {
-    return (
-      <section className="rounded-lg border border-dashed border-line bg-bone-raised/40 px-6 py-10 text-center">
-        <div className="mx-auto max-w-sm space-y-3">
-          <div className="mx-auto flex size-10 items-center justify-center rounded-full border border-line">
-            <Briefcase className="size-4 text-muted" aria-hidden="true" />
-          </div>
-          <div>
-            <p className="text-[14px] font-medium text-ink">No Upwork jobs yet.</p>
-            <p className="mt-1 text-[13px] text-graphite">
-              Paste a job post and Relay scores it so you know whether it&apos;s worth the Connects.
-            </p>
-          </div>
-          <Link
-            href="/upwork/new"
-            className="inline-flex items-center gap-2 rounded-md bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-            Add the first job
-          </Link>
-        </div>
-      </section>
-    )
+  async function handleGenerate() {
+    if (!job || !selectedProfileId) return
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/upwork/${job.id}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id, profileId: selectedProfileId }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setApplication(data.application)
+        setStep('result')
+      }
+    } catch (err) {
+      console.error('Generate failed:', err)
+    }
+    setLoading(false)
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-bone-raised">
-      <ul className="divide-y divide-line">
-        {jobs.map((job, i) => {
-          const verdict = job.verdict ? VERDICT_STYLE[job.verdict] : VERDICT_STYLE.skip
-          return (
-            <li
-              key={job.id}
-              className="slide-in-right"
-              style={{ animationDelay: `${0.03 + i * 0.03}s` }}
+    <div className="min-h-screen bg-neutral-50 p-6">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl font-semibold text-neutral-900 mb-2">Upwork</h1>
+        <p className="text-sm text-neutral-500 mb-6">Paste a job page, select a profile, generate your proposal.</p>
+
+        {/* Step 1: Paste */}
+        {step === 'paste' && (
+          <div className="bg-white rounded-lg border border-neutral-200 p-6">
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Paste the complete Upwork job page
+            </label>
+            <textarea
+              value={rawText}
+              onChange={(e) => setRawText(e.target.value)}
+              placeholder="Paste the full Upwork job description here..."
+              className="w-full h-64 px-3 py-2 border border-neutral-200 rounded-lg text-sm resize-none"
+            />
+            <button
+              onClick={handleExtract}
+              disabled={rawText.length < 50 || loading}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
             >
-              <Link
-                href={`/upwork/${job.id}`}
-                className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-bone/40"
+              {loading ? 'Extracting...' : 'Extract Job'}
+            </button>
+          </div>
+        )}
+
+        {/* Step 2: Select Profile */}
+        {step === 'profile' && job && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-lg border border-neutral-200 p-4">
+              <h2 className="font-medium text-neutral-900">{job.title}</h2>
+              <div className="flex gap-4 mt-2 text-sm text-neutral-500">
+                {job.budget && <span>Budget: ${job.budget} {job.budgetType}</span>}
+                {job.experienceLevel && <span>Level: {job.experienceLevel}</span>}
+                {job.skills.length > 0 && <span>Skills: {job.skills.slice(0, 5).join(', ')}</span>}
+              </div>
+              {job.screeningQuestions.length > 0 && (
+                <div className="mt-3 p-3 bg-amber-50 rounded border border-amber-200">
+                  <span className="text-sm font-medium text-amber-800">
+                    {job.screeningQuestions.length} screening question(s) detected
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white rounded-lg border border-neutral-200 p-4">
+              <label className="block text-sm font-medium text-neutral-700 mb-3">
+                Apply as profile:
+              </label>
+              <div className="space-y-2">
+                {profiles.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedProfileId(p.id)}
+                    className={`w-full text-left px-3 py-2 rounded border text-sm ${
+                      selectedProfileId === p.id
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-neutral-200 hover:bg-neutral-50'
+                    }`}
+                  >
+                    <span className="font-medium">{p.identity_name}</span>
+                    <span className="text-neutral-500 ml-2">({p.skills?.slice(0, 3).join(', ')})</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={handleGenerate}
+                disabled={!selectedProfileId || loading}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
               >
-                {/* Score */}
-                <div
-                  className={cn(
-                    'flex size-11 shrink-0 items-center justify-center rounded-xl font-mono text-sm font-medium',
-                    verdict.bg,
-                    verdict.text,
-                  )}
-                >
-                  {job.score ?? '—'}
-                </div>
-
-                {/* Content */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-[13px] font-medium text-ink transition-colors group-hover:text-orange">
-                      {job.title}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-graphite">
-                    <span>
-                      {job.budgetMin && job.budgetMax
-                        ? `$${job.budgetMin}–$${job.budgetMax}`
-                        : job.hourlyRateMin && job.hourlyRateMax
-                          ? `$${job.hourlyRateMin}–$${job.hourlyRateMax}/hr`
-                          : 'Budget not stated'}
-                    </span>
-                    <span className="text-line">·</span>
-                    <span>{job.proposalCount !== null ? `${job.proposalCount} proposals` : 'unknown'}</span>
-                    <span className="text-line">·</span>
-                    <span>{job.connectsCost} Connects</span>
-                  </div>
-                </div>
-
-                {/* Verdict + arrow */}
-                <span
-                  className={cn(
-                    'hidden shrink-0 rounded-full px-2.5 py-1 text-xs font-medium sm:inline-flex',
-                    verdict.bg,
-                    verdict.text,
-                  )}
-                >
-                  {verdict.label}
-                </span>
-                <ArrowRight
-                  className="size-4 shrink-0 text-line transition-all duration-200 group-hover:text-orange group-hover:translate-x-0.5"
-                  aria-hidden="true"
-                />
-              </Link>
-            </li>
-          )
-        })}
-      </ul>
-    </div>
-  )
-}
-
-function UpworkMetricsSkeleton() {
-  return (
-    <div className="mt-4 grid gap-3 sm:grid-cols-4">
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
-          <div className="h-2.5 w-20 rounded bg-bone" />
-          <div className="mt-2 h-5 w-10 rounded bg-bone" />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function UpworkListSkeleton() {
-  return (
-    <div className="overflow-hidden rounded-lg border border-line bg-bone-raised">
-      <div className="divide-y divide-line">
-        {[0, 1, 2, 3, 4].map((row) => (
-          <div key={row} className="flex items-center gap-4 px-5 py-3">
-            <div className="size-11 shrink-0 rounded-xl bg-bone" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <div className="h-3.5 w-52 max-w-full rounded bg-bone" />
-              <div className="h-3 w-72 max-w-full rounded bg-bone" />
+                {loading ? 'Generating...' : 'Generate Proposal'}
+              </button>
             </div>
           </div>
-        ))}
-      </div>
-    </div>
-  )
-}
+        )}
 
-function ConsoleMetric({
-  label,
-  value,
-  icon,
-}: {
-  label: string
-  value: number
-  icon: React.ReactNode
-}) {
-  return (
-    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
-      <div className="flex items-center gap-1.5 text-orange-light/80">
-        {icon}
-        <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em]">{label}</p>
+        {/* Step 3: Result */}
+        {step === 'result' && application && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-lg border border-neutral-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-medium text-neutral-900">Proposal</h2>
+                <span className="text-sm px-2 py-1 bg-neutral-100 rounded">
+                  Fit: {application.fitScore}/100
+                </span>
+              </div>
+              <div className="text-sm text-neutral-700 whitespace-pre-wrap">
+                {application.coverLetter}
+              </div>
+            </div>
+
+            {application.questionAnswers.length > 0 && (
+              <div className="bg-white rounded-lg border border-neutral-200 p-4">
+                <h3 className="font-medium text-neutral-900 mb-3">Screening Questions</h3>
+                <div className="space-y-3">
+                  {application.questionAnswers.map((qa, i) => (
+                    <div key={i}>
+                      <p className="text-sm font-medium text-neutral-700">{i + 1}. {qa.question}</p>
+                      <p className="text-sm text-neutral-600 mt-1">{qa.answer}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {application.risks.length > 0 && (
+              <div className="bg-amber-50 rounded-lg border border-amber-200 p-4">
+                <h3 className="font-medium text-amber-800 mb-2">Risks</h3>
+                <ul className="text-sm text-amber-700 space-y-1">
+                  {application.risks.map((r, i) => <li key={i}>• {r}</li>)}
+                </ul>
+              </div>
+            )}
+
+            <button
+              onClick={() => { setStep('paste'); setJob(null); setApplication(null); setRawText('') }}
+              className="text-sm text-neutral-500 hover:text-neutral-700"
+            >
+              ← New job
+            </button>
+          </div>
+        )}
       </div>
-      <p className="mt-1 text-[20px] font-medium text-[color:var(--console-text)]">{value}</p>
     </div>
   )
 }
