@@ -37,12 +37,12 @@ export async function assessLatentOpportunity(
   const intel = v2Canonical.intelligence
   const textSource = rawText || buildTextSource(intel)
 
-  // Evaluate each dimension deterministically
+  // Evaluate each dimension deterministically (with text context)
   const capabilityFit = evaluateCapabilityFit(intel)
-  const buyerRoleLikelihood = evaluateBuyerRoleLikelihood(intel)
-  const decisionInfluence = evaluateDecisionInfluence(intel)
-  const companyBuildIntensity = evaluateCompanyBuildIntensity(intel)
-  const technicalRelevance = evaluateTechnicalRelevance(intel)
+  const buyerRoleLikelihood = evaluateBuyerRoleLikelihood(intel, textSource)
+  const decisionInfluence = evaluateDecisionInfluence(intel, textSource)
+  const companyBuildIntensity = evaluateCompanyBuildIntensity(intel, textSource)
+  const technicalRelevance = evaluateTechnicalRelevance(intel, textSource)
   const likelyExternalCapacityNeed = evaluateCapacityNeed(intel)
   const reachability = evaluateReachability(intel)
   const relationshipPotential = evaluateRelationshipPotential(intel)
@@ -107,7 +107,7 @@ function evaluateCapabilityFit(intel: CanonicalProspectIntelligence['intelligenc
   return Math.min(1, matchCount / 4)
 }
 
-function evaluateBuyerRoleLikelihood(intel: CanonicalProspectIntelligence['intelligence']): number {
+function evaluateBuyerRoleLikelihood(intel: CanonicalProspectIntelligence['intelligence'], text: string): number {
   const title = (intel.person.title || '').toLowerCase()
   const seniority = (intel.person.seniority || '').toLowerCase()
 
@@ -115,10 +115,21 @@ function evaluateBuyerRoleLikelihood(intel: CanonicalProspectIntelligence['intel
   const buyerTitles = ['founder', 'co-founder', 'cto', 'ceo', 'vp', 'head', 'director', 'lead', 'principal']
   const isBuyer = buyerTitles.some(bt => title.includes(bt) || seniority.includes(bt))
 
-  return isBuyer ? 0.8 : 0.2
+  // Founders (even of side projects) have buyer intent
+  const isFounder = text.includes('founder') || text.includes('co-founder') || text.includes('startup') || text.includes('started')
+
+  // Developers at product companies also buy services (they decide what to outsource)
+  const isDeveloperAtProductCompany = (
+    title.includes('developer') || title.includes('engineer') ||
+    seniority.includes('senior') || seniority.includes('staff')
+  ) && isProductCompany(intel)
+
+  if (isBuyer || isFounder) return 0.8
+  if (isDeveloperAtProductCompany) return 0.5
+  return 0.2
 }
 
-function evaluateDecisionInfluence(intel: CanonicalProspectIntelligence['intelligence']): number {
+function evaluateDecisionInfluence(intel: CanonicalProspectIntelligence['intelligence'], text: string): number {
   const title = (intel.person.title || '').toLowerCase()
   const seniority = (intel.person.seniority || '').toLowerCase()
 
@@ -128,10 +139,14 @@ function evaluateDecisionInfluence(intel: CanonicalProspectIntelligence['intelli
   if (title.includes('vp') || title.includes('vice president')) return 0.7
   if (title.includes('director') || title.includes('head')) return 0.6
   if (title.includes('lead') || title.includes('senior') || seniority.includes('senior')) return 0.4
+
+  // Text-based influence signals
+  if (text.includes('founder') || text.includes('architect') || text.includes('lead')) return 0.4
+
   return 0.2
 }
 
-function evaluateCompanyBuildIntensity(intel: CanonicalProspectIntelligence['intelligence']): number {
+function evaluateCompanyBuildIntensity(intel: CanonicalProspectIntelligence['intelligence'], text: string): number {
   const launches = intel.content.launches || []
   const initiatives = intel.content.initiatives || []
   const hasProduct = intel.company.product && intel.company.product !== 'Unknown'
@@ -144,18 +159,27 @@ function evaluateCompanyBuildIntensity(intel: CanonicalProspectIntelligence['int
   if (stage.includes('seed') || stage.includes('series') || stage.includes('growth')) score += 0.3
   if (stage.includes('mvp') || stage.includes('beta') || stage.includes('early')) score += 0.25
 
+  // Text-based building signals
+  if (text.includes('building') || text.includes('developing') || text.includes('growing') || text.includes('scaling')) score += 0.15
+  if (text.includes('saas') || text.includes('platform') || text.includes('product')) score += 0.1
+
   return Math.min(1, score)
 }
 
-function evaluateTechnicalRelevance(intel: CanonicalProspectIntelligence['intelligence']): number {
+function evaluateTechnicalRelevance(intel: CanonicalProspectIntelligence['intelligence'], text: string): number {
   const techSignals = intel.content.technicalSignals || []
   const topics = intel.content.topics || []
 
-  // Count relevant technical signals
+  // Count relevant technical signals from structured data
   const relevant = ['react', 'node', 'next.js', 'typescript', 'python', 'api', 'saas', 'ai', 'automation', 'aws', 'cloud']
-  const matchCount = [...techSignals, ...topics].filter(t =>
+  let matchCount = [...techSignals, ...topics].filter(t =>
     relevant.some(r => t.toLowerCase().includes(r))
   ).length
+
+  // Also scan raw text for tech stack
+  const textTech = ['javascript', 'typescript', 'react', 'node', 'python', '.net', 'java', 'azure', 'aws', 'api', 'postgresql', 'mongodb']
+  const textMatches = textTech.filter(t => text.includes(t)).length
+  matchCount = Math.max(matchCount, textMatches)
 
   return Math.min(1, matchCount / 3)
 }
@@ -241,6 +265,21 @@ export function latentActionFromPotential(
     return { action: 'OBSERVE', messageEligible: false }
   }
   return { action: 'SKIP', messageEligible: false }
+}
+
+function isProductCompany(intel: CanonicalProspectIntelligence['intelligence']): boolean {
+  const stage = (intel.company.stage || '').toLowerCase()
+  const size = (intel.company.size || '').toLowerCase()
+  const product = (intel.company.product || '').toLowerCase()
+
+  if (stage.includes('seed') || stage.includes('series') || stage.includes('growth')) return true
+  if (product.includes('saas') || product.includes('platform') || product.includes('product')) return true
+  if (size.includes('self-employed') || size.includes('1-10') || size.includes('11-50')) return true
+
+  const expText = JSON.stringify(intel.person.affiliations || []).toLowerCase()
+  if (expText.includes('building') || expText.includes('founding') || expText.includes('product') || expText.includes('saas')) return true
+
+  return false
 }
 
 function buildTextSource(intel: CanonicalProspectIntelligence['intelligence']): string {

@@ -129,9 +129,16 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
       })
     : { action: 'SKIP' as const, messageEligible: false, reason: 'No active episodes', needsReview: false }
 
-  // Latent opportunity: when no active buyer episode exists, assess potential
+  // Latent opportunity: when no meaningful buyer episode exists, assess potential
+  // An episode is "meaningful" if it has explicit request, known org, or specific event type
+  const hasMeaningfulEpisode = bestEpisode && (
+    bestEpisode.explicitRequest ||
+    (bestEpisode.organizationName && bestEpisode.organizationName !== 'UNKNOWN' && bestEpisode.organizationName !== 'Unknown') ||
+    !['OTHER', 'SERVICE_OFFERING', 'MARKET_COMMENTARY'].includes(bestEpisode.anchorEvent.eventType)
+  )
+
   let latentAssessment = null
-  if (!bestEpisode && input.v2Canonical) {
+  if (!hasMeaningfulEpisode && input.v2Canonical) {
     latentAssessment = await assessLatentOpportunity(input.v2Canonical, input.rawText)
     const latentScore = computeLatentScore(latentAssessment)
     const latentAction = latentActionFromPotential(latentAssessment.overallPotential, latentAssessment.confidence)
@@ -154,6 +161,19 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
         needsReview: false,
       }
     }
+  }
+
+  // If no meaningful episode and no latent potential, ensure score reflects reality
+  if (!hasMeaningfulEpisode && latentAssessment?.overallPotential === 'LOW' && selectedScore.score < 10) {
+    selectedScore = {
+      score: 0,
+      label: 'Not a fit',
+      qualification: 'SKIP',
+      reasons: ['No explicit buyer signal detected'],
+      watchOut: ['No meaningful commercial opportunity identified'],
+      dimensions: [],
+    }
+    actionOutput = { action: 'SKIP', messageEligible: false, reason: 'No buyer intent and low latent potential', needsReview: false }
   }
 
   // Shadow comparison
