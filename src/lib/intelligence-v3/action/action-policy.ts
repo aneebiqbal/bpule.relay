@@ -119,28 +119,17 @@ function applySafetyGate(
   const isContactAction = rawAction === 'CONTACT_NOW' || rawAction === 'CONNECT_WITH_NOTE'
   const isConnectAction = isContactAction || rawAction === 'CONNECT_WITHOUT_NOTE'
 
-  // Never message from uncertain zone
-  if (isConnectAction && input.buyerRequestProbability >= UNCERTAIN_ZONE_MIN && input.buyerRequestProbability < UNCERTAIN_ZONE_MAX) {
-    // If no explicit request, demote to HUMAN_REVIEW
-    if (!input.explicitRequest) {
-      return {
-        action: 'HUMAN_REVIEW',
-        needsReview: true,
-        reviewReason: `Buyer request probability ${input.buyerRequestProbability.toFixed(2)} is in uncertain zone (${UNCERTAIN_ZONE_MIN}-${UNCERTAIN_ZONE_MAX}) without explicit request — human review required`,
-      }
-    }
-    // Explicit request in uncertain zone → downgrade one level
-    if (rawAction === 'CONTACT_NOW') {
-      return {
-        action: 'CONNECT_WITH_NOTE',
-        needsReview: false,
-        reviewReason: undefined,
-      }
+  // Never message from uncertain zone without explicit request
+  if (isConnectAction && input.buyerRequestProbability >= UNCERTAIN_ZONE_MIN && input.buyerRequestProbability < UNCERTAIN_ZONE_MAX && !input.explicitRequest) {
+    return {
+      action: 'HUMAN_REVIEW',
+      needsReview: true,
+      reviewReason: `Buyer request probability ${input.buyerRequestProbability.toFixed(2)} is in uncertain zone without explicit request — human review required`,
     }
   }
 
-  // Low confidence → HUMAN_REVIEW for any contact
-  if (isContactAction && (input.confidence ?? 1) < MIN_CONFIDENCE_FOR_CONTACT) {
+  // Low confidence → HUMAN_REVIEW for CONTACT_NOW (but allow CONNECT_WITH_NOTE)
+  if (rawAction === 'CONTACT_NOW' && (input.confidence ?? 1) < MIN_CONFIDENCE_FOR_CONTACT && !input.explicitRequest) {
     return {
       action: 'HUMAN_REVIEW',
       needsReview: true,
@@ -148,8 +137,8 @@ function applySafetyGate(
     }
   }
 
-  // Weak evidence → downgrade contact
-  if (isContactAction && (input.evidenceQuality ?? 1) < MIN_EVIDENCE_FOR_CONTACT) {
+  // Weak evidence → downgrade only if no explicit request
+  if (isContactAction && (input.evidenceQuality ?? 1) < MIN_EVIDENCE_FOR_CONTACT && !input.explicitRequest) {
     return {
       action: 'HUMAN_REVIEW',
       needsReview: true,
@@ -157,23 +146,13 @@ function applySafetyGate(
     }
   }
 
-  // Non-buyer relationship with contact → HUMAN_REVIEW
-  // Service provider + buyer event = identity conflict that needs human verification
-  if (rawAction === 'CONTACT_NOW' && input.relationship !== 'BUYER') {
+  // Non-buyer relationship + explicit buyer request → allow with note
+  // An agency CAN hire another agency — explicit request overrides identity concern
+  if (rawAction === 'CONTACT_NOW' && input.relationship !== 'BUYER' && !input.explicitRequest) {
     return {
       action: 'HUMAN_REVIEW',
       needsReview: true,
       reviewReason: `Relationship is ${input.relationship}, not BUYER — verify before contact`,
-    }
-  }
-
-  // Service provider / competitor / unknown + CONNECT_WITH_NOTE → HUMAN_REVIEW
-  // Identity conflict or uncertainty needs human verification before contact
-  if (rawAction === 'CONNECT_WITH_NOTE' && input.relationship !== 'BUYER' && input.relationship !== 'PARTNER') {
-    return {
-      action: 'HUMAN_REVIEW',
-      needsReview: true,
-      reviewReason: `Relationship is ${input.relationship} with contact action — verify before outreach`,
     }
   }
 
@@ -216,11 +195,12 @@ function classifyIntentLevel(input: V3ActionInput): 'high_intent' | 'medium_inte
 }
 
 function computeMessageEligibility(input: V3ActionInput): boolean {
+  // Explicit buyer request with high probability → always eligible
+  if (input.explicitRequest && input.buyerRequestProbability >= 0.6) return true
+
   if (input.score < V3_MESSAGE_POLICY.MIN_SCORE) return false
   if (input.buyerRequestProbability < V3_MESSAGE_POLICY.MIN_BUYER_PROBABILITY) return false
   if (input.messageEligible < V3_MESSAGE_POLICY.MIN_MODEL_ELIGIBLE) return false
-  // Never message HUMAN_REVIEW cases
-  if (input.buyerRequestProbability >= UNCERTAIN_ZONE_MIN && input.buyerRequestProbability < UNCERTAIN_ZONE_MAX && !input.explicitRequest) return false
   return true
 }
 

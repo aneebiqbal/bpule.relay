@@ -143,7 +143,7 @@ export const ACCESS_INTENT_ACTION_MATRIX: Record<string, Record<string, string>>
   },
   // access: NONE
   NONE: {
-    high_intent: 'OBSERVE',
+    high_intent: 'CONNECT_WITHOUT_NOTE',
     medium_intent: 'WAIT',
     low_intent: 'SKIP',
     no_intent: 'SKIP',

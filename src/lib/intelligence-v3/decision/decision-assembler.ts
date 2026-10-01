@@ -113,13 +113,18 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
     ? scoreEpisode(selectedScoreInput)
     : { score: 0, label: 'Not a fit', qualification: 'SKIP' as const, reasons: ['No episodes found'], watchOut: [], dimensions: [] }
 
-  // Determine action
+  // Determine action — boost access if episode has application channels
+  // LinkedIn profiles always have at least CONNECTION access (you can message them)
+  const effectiveAccess = (bestEpisode && bestEpisode.applicationChannels.length > 0)
+    ? (decision.access === 'NONE' ? 'CONNECTION' : decision.access)
+    : decision.access
+
   let actionOutput = bestEpisode
     ? determineAction({
         score: selectedScore.score,
         buyerRequestProbability: decision.buyerRequestProbability,
         externalNeedProbability: decision.externalNeedProbability,
-        access: decision.access,
+        access: effectiveAccess,
         timing: decision.timing,
         relationship: decision.relationship,
         fit: decision.fit,
