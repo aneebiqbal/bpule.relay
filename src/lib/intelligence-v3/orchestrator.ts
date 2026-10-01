@@ -160,6 +160,7 @@ export async function runV3Decision(
     productionAction: options.productionAction,
     senderCapabilities: options.senderCapabilities,
     v2Canonical: options.v2Canonical,
+    rawText: v2Intelligence?.rawInput,
   })
 
   return {

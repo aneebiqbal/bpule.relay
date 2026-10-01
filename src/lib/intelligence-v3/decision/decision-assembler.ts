@@ -42,6 +42,8 @@ export interface V3AssemblerInput {
   evidenceQualityMap?: Record<string, number>
   /** V2 canonical intelligence for latent opportunity assessment */
   v2Canonical?: CanonicalProspectIntelligence
+  /** Raw source text for latent signal scanning */
+  rawText?: string
 }
 
 export interface V3AssemblerOutput {
@@ -130,7 +132,7 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
   // Latent opportunity: when no active buyer episode exists, assess potential
   let latentAssessment = null
   if (!bestEpisode && input.v2Canonical) {
-    latentAssessment = await assessLatentOpportunity(input.v2Canonical)
+    latentAssessment = await assessLatentOpportunity(input.v2Canonical, input.rawText)
     const latentScore = computeLatentScore(latentAssessment)
     const latentAction = latentActionFromPotential(latentAssessment.overallPotential, latentAssessment.confidence)
 

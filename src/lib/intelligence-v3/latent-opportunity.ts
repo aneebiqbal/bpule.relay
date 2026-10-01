@@ -32,8 +32,10 @@ export interface LatentOpportunityAssessment {
  */
 export async function assessLatentOpportunity(
   v2Canonical: CanonicalProspectIntelligence,
+  rawText?: string,
 ): Promise<LatentOpportunityAssessment> {
   const intel = v2Canonical.intelligence
+  const textSource = rawText || buildTextSource(intel)
 
   // Evaluate each dimension deterministically
   const capabilityFit = evaluateCapabilityFit(intel)
@@ -47,13 +49,19 @@ export async function assessLatentOpportunity(
 
   // Count independent signals
   const signals: string[] = []
-  if (capabilityFit > 0.6) signals.push('Strong capability fit')
-  if (buyerRoleLikelihood > 0.6) signals.push('Likely buyer role')
-  if (decisionInfluence > 0.5) signals.push('Decision influence')
-  if (companyBuildIntensity > 0.5) signals.push('Active product building')
-  if (technicalRelevance > 0.6) signals.push('Technical stack overlap')
-  if (likelyExternalCapacityNeed > 0.5) signals.push('Likely capacity need')
-  if (reachability > 0.5) signals.push('Reachable')
+  if (capabilityFit > 0.5) signals.push('Strong capability fit')
+  if (buyerRoleLikelihood > 0.4) signals.push('Likely buyer role')
+  if (decisionInfluence > 0.3) signals.push('Decision influence')
+  if (companyBuildIntensity > 0.3) signals.push('Active product building')
+  if (technicalRelevance > 0.5) signals.push('Technical stack overlap')
+  if (likelyExternalCapacityNeed > 0.4) signals.push('Likely capacity need')
+  if (reachability > 0.4) signals.push('Reachable')
+
+  // Scan raw text for additional signals
+  const textSignals = scanTextForSignals(textSource)
+  for (const sig of textSignals) {
+    if (!signals.includes(sig)) signals.push(sig)
+  }
 
   // Overall potential requires MULTIPLE independent signals
   const signalCount = signals.length
@@ -63,8 +71,10 @@ export async function assessLatentOpportunity(
     likelyExternalCapacityNeed + reachability + relationshipPotential
   ) / 8
 
+  // Signal-based scoring: strong text signals can override low structured scores
   let overallPotential: LatentPotentialLevel = 'LOW'
-  if (signalCount >= 3 && avgScore > 0.5) overallPotential = 'HIGH'
+  if (signalCount >= 3 && avgScore > 0.3) overallPotential = 'HIGH'
+  else if (signalCount >= 3) overallPotential = 'MEDIUM'
   else if (signalCount >= 2 && avgScore > 0.35) overallPotential = 'MEDIUM'
 
   // Confidence based on evidence completeness
@@ -231,4 +241,48 @@ export function latentActionFromPotential(
     return { action: 'OBSERVE', messageEligible: false }
   }
   return { action: 'SKIP', messageEligible: false }
+}
+
+function buildTextSource(intel: CanonicalProspectIntelligence['intelligence']): string {
+  const parts: string[] = []
+  if (intel.person.title) parts.push(intel.person.title)
+  if (intel.company.name) parts.push(intel.company.name)
+  if (intel.company.product) parts.push(intel.company.product)
+  parts.push(...(intel.content.topics || []))
+  parts.push(...(intel.content.technicalSignals || []))
+  parts.push(...(intel.content.initiatives || []))
+  parts.push(...(intel.content.launches || []))
+  return parts.join(' ').toLowerCase()
+}
+
+function scanTextForSignals(text: string): string[] {
+  const signals: string[] = []
+  if (!text) return signals
+
+  if (/\b(saas|platform|product|app|application)\b/.test(text)) {
+    signals.push('Building product/platform')
+  }
+
+  const techKeywords = ['react', 'node', 'typescript', 'next.js', 'python', 'azure', 'aws', 'api', 'frontend', 'backend', 'fullstack', 'full-stack', 'javascript', 'csharp', 'c#', 'cosmos', 'postgresql', 'mongodb', 'docker', 'kubernetes']
+  const techMatches = techKeywords.filter(t => text.includes(t))
+  if (techMatches.length >= 3) {
+    signals.push('Strong technical stack')
+  }
+
+  if (/\b(building|developing|growing|scaling|launching|started|founded|creating)\b/.test(text)) {
+    signals.push('Active development')
+  }
+
+  if (/\b(self-employed|solo|freelance|small team|just me|1-10|personal project)\b/.test(text)) {
+    signals.push('Small team — likely needs help')
+  }
+
+  if (/\b(developer|engineer|architect|technical lead|cto|founder|co-founder)\b/.test(text)) {
+    const productSignals = ['saas', 'platform', 'product', 'startup', 'building', 'growing']
+    if (productSignals.some(p => text.includes(p))) {
+      signals.push('Technical role at product company')
+    }
+  }
+
+  return signals
 }
