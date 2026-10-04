@@ -30,5 +30,6 @@ export async function GET(req: NextRequest) {
     findings,
     feedback,
     generatedToday,
+    plan: user.organization.plan,
   }))
 }

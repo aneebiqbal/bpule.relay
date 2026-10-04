@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { canonicalUrl, siteConfig } from "@/lib/site-config";
+import { getCurrentUser } from "@/lib/auth/current";
+import { isPremium } from "@/lib/billing/premium";
+import { CheckoutButton } from "./checkout-button";
 
 export const metadata: Metadata = {
   title: `Pricing | ${siteConfig.name}`,
@@ -48,11 +51,16 @@ const PLANS = [
     ],
   },
   {
-    name: "Pro",
-    price: "—",
-    period: "",
+    name: "Premium",
+    // Price is configured server-side via STRIPE_PREMIUM_PRICE_ID — never
+    // hardcoded in source. The displayed $10/mo is the published price for
+    // the configured Stripe recurring Price; the actual charge comes from
+    // Stripe. The checkout session sends the Price ID to Stripe, which is
+    // the source of truth for amount and currency.
+    price: "$10",
+    period: "mo",
     desc: "For professionals using Relay consistently.",
-    cta: "Coming soon",
+    cta: "Subscribe",
     href: null,
     featured: true,
     features: [
@@ -73,7 +81,7 @@ const PLANS = [
     href: null,
     featured: false,
     features: [
-      "Everything in Pro",
+      "Everything in Premium",
       "Multiple reps",
       "Shared voice profiles",
       "Admin controls",
@@ -90,7 +98,7 @@ const FAQ = [
   },
   {
     q: "Can I change plans later?",
-    a: "Yes. Start free and upgrade to Pro when you need more capacity. No lock-in.",
+    a: "Yes. Start free and upgrade to Premium when you need more capacity. No lock-in.",
   },
   {
     q: "Is there a credit card required for free?",
@@ -102,7 +110,12 @@ const FAQ = [
   },
 ];
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  // Server-side auth — never trust client state for premium status.
+  const user = await getCurrentUser()
+  const userPlan = user?.organization.plan ?? null
+  const premium = isPremium(userPlan)
+
   return (
     <div>
       {/* Hero */}
@@ -161,7 +174,23 @@ export default function PricingPage() {
                 </div>
 
                 <div className="mt-8">
-                  {plan.href ? (
+                  {plan.name === "Premium" ? (
+                    premium ? (
+                      <div className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-status-success/10 text-[14px] font-medium text-status-success">
+                        <CheckCircle2 className="size-4" />
+                        Current plan
+                      </div>
+                    ) : user ? (
+                      <CheckoutButton />
+                    ) : (
+                      <Link
+                        href="/login?redirect=/pricing"
+                        className="flex h-11 w-full items-center justify-center rounded-lg border border-dashed border-line text-[14px] font-medium text-stone hover:text-ink"
+                      >
+                        Sign in to upgrade
+                      </Link>
+                    )
+                  ) : plan.href ? (
                     <Link
                       href={plan.href}
                       className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-orange text-[14px] font-medium text-on-accent transition-all hover:bg-orange-dark"
@@ -190,7 +219,7 @@ export default function PricingPage() {
             </h2>
             <p className="mt-4 text-[15px] leading-relaxed text-graphite">
               Studio generations and daily sends reset every 24 hours. Prospect
-              checks are a lifetime allowance for free accounts. Pro accounts get
+              checks are a lifetime allowance for free accounts. Premium accounts get
               unlimited checks.
             </p>
           </div>

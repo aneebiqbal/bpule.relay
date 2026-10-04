@@ -61,6 +61,7 @@ describe('Content Studio: cold start', () => {
       findings: [],
       feedback: [],
       generatedToday: 0,
+      plan: 'trial',
     })
 
     expect(decision.decisionType).toBe('none')
@@ -79,6 +80,7 @@ describe('Content Studio: cold start', () => {
       findings: [],
       feedback: [],
       generatedToday: 2,
+      plan: 'trial',
     })
     expect(decision.reason).toBe('Daily cap reached for this persona.')
   })
@@ -94,6 +96,7 @@ describe('Content Studio: cold start', () => {
       findings: [],
       feedback: [],
       generatedToday: 0,
+      plan: 'trial',
     })
 
     expect(decision.decisionType).not.toBe('none')
@@ -110,6 +113,7 @@ describe('Content Studio: cold start', () => {
       findings: [],
       feedback: [],
       generatedToday: 0,
+      plan: 'trial',
     })
 
     expect(decision.decisionType).not.toBe('none')
@@ -182,6 +186,7 @@ describe('Content Studio: accept/reject learning signal actually shifts what get
       findings: [],
       feedback,
       generatedToday: 0,
+      plan: 'trial',
     })
 
     // The suggested topic must be B (the kept one), not A (the repeatedly
@@ -202,6 +207,7 @@ describe('Content Studio: accept/reject learning signal actually shifts what get
       findings: [],
       feedback: [],
       generatedToday: 0,
+      plan: 'trial',
     })
 
     expect(decision.contextId).toBe(clusterA.id)

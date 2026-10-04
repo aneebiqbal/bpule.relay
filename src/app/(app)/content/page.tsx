@@ -59,7 +59,7 @@ export default async function ContentPage({
             store.listContentDraftFeedback(p.id, 100),
             store.countContentDraftsToday(p.id),
           ])
-          const decision = buildDailyDecision({ persona: p, clusters: topicClusters, findings, feedback, generatedToday })
+          const decision = buildDailyDecision({ persona: p, clusters: topicClusters, findings, feedback, generatedToday, plan: user.organization.plan })
           dailyStatus = decision.decisionType === 'none' ? 'none' : 'asked'
         }
 

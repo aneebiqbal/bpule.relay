@@ -87,6 +87,7 @@ export default async function AppLayout({
             demo={isDemoMode()}
             todaySends={queue.todaySends}
             dailyLimit={queue.dailyLimit}
+            plan={user.organization.plan}
             revenueIdentities={revenueIdentities}
           />
           <main className="mx-auto w-full max-w-6xl px-5 pt-6 pb-24 lg:px-8 lg:pt-8 lg:pb-8">

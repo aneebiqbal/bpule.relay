@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
+import { studioGenerationLimit } from '@/lib/billing/premium'
 import { generateDailyIdeas } from '@/lib/content/daily-ideas'
 import { generateContent } from '@/lib/ai/content'
 import { checkHumanization, rewriteToHumanize } from '@/lib/ai/humanization'
@@ -46,6 +47,21 @@ export async function POST(req: NextRequest) {
   if (!persona) return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
   if (persona.repId !== user.rep.id && user.rep.role !== 'admin') {
     return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+  }
+
+  // Studio generation cap: free orgs are capped at 2/day. Premium orgs are
+  // unlimited. The limit comes from the centralized billing module. This
+  // prevents the generate-draft endpoint from bypassing the cap enforced by
+  // the other content routes.
+  const studioLimit = studioGenerationLimit(user.organization.plan)
+  if (studioLimit !== Infinity) {
+    const generatedToday = await store.countContentDraftsToday(body.personaId)
+    if (generatedToday >= studioLimit) {
+      return NextResponse.json(
+        { error: `Daily cap reached: up to ${studioLimit} generated drafts per persona.` },
+        { status: 429 },
+      )
+    }
   }
 
   const profile = persona.contentProfileId ? await store.getContentProfile(persona.contentProfileId) : null

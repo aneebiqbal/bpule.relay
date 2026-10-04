@@ -3,6 +3,7 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { createScoutStore } from '@/lib/store'
 import { prepareEmailDraft } from '@/lib/email/service'
 import { safeErrorResponse } from '@/lib/errors'
+import { isPremium } from '@/lib/billing/premium'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,7 +42,11 @@ export async function POST(request: Request) {
           repId: store.getCurrentRepId(),
           leadId,
           preferredIdentityId: body.revenueIdentityId ?? null,
-          generationMode: body.generationMode === 'premium' ? 'premium' : 'standard',
+          // Premium generation mode gate: only premium orgs may use the
+          // stronger AI model. A free user requesting 'premium' is downgraded.
+          generationMode: body.generationMode === 'premium' && isPremium(store.getPlan())
+            ? 'premium'
+            : 'standard',
         })
         prepared.push({
           leadId,

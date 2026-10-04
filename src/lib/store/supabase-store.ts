@@ -86,6 +86,7 @@ import type {
   VisualType,
   TrendInterestProfile,
   FieldConfidence,
+  OrganizationPlan,
   PersonaIntelligenceProfile,
 } from '@/lib/domain/types'
 import type {
@@ -109,6 +110,11 @@ import type {
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
 import { businessDaysBetween, FOLLOWUP_DUE_BUSINESS_DAYS } from '@/lib/leads/followup'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
+import {
+  dailySendLimit as planDailySendLimit,
+  dailyConnectionLimit as planDailyConnectionLimit,
+  messageTypeLimitForPlan,
+} from '@/lib/billing/premium'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
@@ -920,7 +926,7 @@ export class SupabaseStore implements ScoutStore {
     ])
     const queue = owned.filter((l) => l.status === 'new' || l.status === 'contacted')
     const replies = owned.filter((l) => l.status === 'replied')
-    return { todaySends, dailyLimit: dailySendLimit(), queue, replies }
+    return { todaySends, dailyLimit: planDailySendLimit(this.organization.plan), queue, replies }
   }
 
   async saveDraft(input: SaveDraftInput): Promise<Message> {
@@ -969,12 +975,12 @@ export class SupabaseStore implements ScoutStore {
       // block a real send.
       if (!existingError && existing) {
         const todaySendsNow = await this.countTodaysSends(type)
-        return { allowed: true, todaySends: todaySendsNow, limit: messageTypeLimit(type), messageId: existing.id as string, idempotent: true }
+        return { allowed: true, todaySends: todaySendsNow, limit: messageTypeLimitForPlan(this.organization.plan, type), messageId: existing.id as string, idempotent: true }
       }
     }
 
     const todaySends = await this.countTodaysSends(type)
-    const limit = messageTypeLimit(type)
+    const limit = messageTypeLimitForPlan(this.organization.plan, type)
     if (todaySends >= limit) {
       return {
         allowed: false,
@@ -1048,7 +1054,7 @@ export class SupabaseStore implements ScoutStore {
         .maybeSingle()
       if (winner) {
         const todaySendsNow = await this.countTodaysSends(type)
-        return { allowed: true, todaySends: todaySendsNow, limit: messageTypeLimit(type), messageId: winner.id as string, idempotent: true }
+        return { allowed: true, todaySends: todaySendsNow, limit: messageTypeLimitForPlan(this.organization.plan, type), messageId: winner.id as string, idempotent: true }
       }
     }
     if (insertError) throw insertError
@@ -1946,13 +1952,13 @@ export class SupabaseStore implements ScoutStore {
         label: 'DM & follow-up',
         types: ['dm', 'followup'],
         used: dmFollowupSent,
-        limit: dailySendLimit(),
+        limit: planDailySendLimit(this.organization.plan),
       },
       {
         label: 'Connection & Upwork',
         types: ['connection', 'upwork'],
         used: connectionSent + upworkApplies,
-        limit: dailyConnectionSendLimit(),
+        limit: planDailyConnectionLimit(this.organization.plan),
       },
     ]
     return { mine, team, sendBudgets, notifications, followupsDue, myRank, upwork }
@@ -4746,6 +4752,25 @@ export class SupabaseStore implements ScoutStore {
       .order('last_activity_at', { ascending: false })
     if (error) throw error
     return (data ?? []).map((r) => this.mapCapturedProspect(r as Row))
+  }
+
+  /**
+   * Count non-discarded captured prospects for this org (lifetime). Used to
+   * enforce the free-plan prospect-check cap. Non-blocking: callers decide
+   * whether to skip capture based on the count.
+   */
+  getPlan(): OrganizationPlan {
+    return this.organization.plan
+  }
+
+  async countOrgCapturedProspects(): Promise<number> {
+    const { count, error } = await this.client
+      .from('captured_prospects')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', this.orgId)
+      .neq('status', 'discarded')
+    if (error) throw error
+    return count ?? 0
   }
 
   async getCapturedProspect(id: string): Promise<CapturedProspect | null> {

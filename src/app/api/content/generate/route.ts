@@ -8,6 +8,7 @@ import { buildContentDnaPromptBlock } from '@/lib/content/content-dna'
 import type { ContentGenerationInput } from '@/lib/ai/content'
 import type { TrendingAngle, ContentResearchFinding, ContentDraftFeedback } from '@/lib/domain/types'
 import { sanitizeContentCaption } from '@/lib/facts/sanitize'
+import { studioGenerationLimit } from '@/lib/billing/premium'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,8 +52,12 @@ export async function POST(req: NextRequest) {
   }
 
   const generatedToday = await store.countContentDraftsToday(personaId)
-  if (generatedToday >= 2) {
-    return NextResponse.json({ error: 'Daily cap reached: up to 2 generated drafts per persona.' }, { status: 429 })
+  // Studio generation cap: free orgs are capped at 2/day (the existing
+  // enforced limit). Premium orgs are unlimited. The limit comes from the
+  // centralized billing module — never hardcoded here.
+  const studioLimit = studioGenerationLimit(user.organization.plan)
+  if (studioLimit !== Infinity && generatedToday >= studioLimit) {
+    return NextResponse.json({ error: `Daily cap reached: up to ${studioLimit} generated drafts per persona.` }, { status: 429 })
   }
 
   let angle: TrendingAngle | null = null
