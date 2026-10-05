@@ -20,7 +20,7 @@ const ABDULHAKIM_TEXT = [
 
 describe('V3 Live: Abdulhakim Regression', () => {
   it('scores the buyer opportunity, not zero', async () => {
-    const result = await produceV3Intelligence(ABDULHAKIM_TEXT, [])
+    const result = await produceV3Intelligence(ABDULHAKIM_TEXT, {})
     const v3 = (result.intelligence as unknown as Record<string, unknown>).v3DecisionPacket as Record<string, unknown> | undefined
     const decision = v3?.decision as Record<string, unknown> | undefined
 

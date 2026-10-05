@@ -123,8 +123,12 @@ function pasteGuard(raw: string): string | null {
 
 export default function ProspectCheckPage() {
   const router = useRouter()
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
   const errorRef = useRef<HTMLDivElement | null>(null)
-  const [rawInput, setRawInput] = useState('')
+  const [rawInput, setRawInput] = useState(() => {
+    const paste = searchParams?.get('paste')
+    return paste ? decodeURIComponent(paste) : ''
+  })
   const [analyzing, setAnalyzing] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -152,6 +156,15 @@ export default function ProspectCheckPage() {
       abortRef.current?.abort()
     }
   }, [])
+
+  // Auto-analyze if paste param provided
+  useEffect(() => {
+    const paste = searchParams?.get('paste')
+    if (paste && !analyzing && !result) {
+      void analyze()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   // Clicking "Create lead" happens near the bottom of a long results panel,
   // but the error banner renders at the top of the page — without this, a

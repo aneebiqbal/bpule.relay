@@ -240,7 +240,7 @@ function isMissingColumnError(err: unknown): boolean {
 }
 
 const LEAD_LIST_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, connection_accepted_at, locked_until, locked_reason, archived, archived_at, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, remote_eligibility, connection_accepted_at, locked_until, locked_reason, archived, archived_at, decision_provider, decision_model, decision_run_id, selected_episode_id, profile_match_score, profile_match_version, best_profile_id, best_profile_match_score, intelligence_input_hash, fallback_reason, created_at'
 
 function mapLead(r: Row): Lead {
   return {
@@ -287,6 +287,17 @@ function mapLead(r: Row): Lead {
     lockedReason: (r.locked_reason as string) ?? null,
     archived: (r.archived as boolean) ?? false,
     archivedAt: (r.archived_at as string) ?? null,
+    // Score observability
+    decisionProvider: (r.decision_provider as string) ?? null,
+    decisionModel: (r.decision_model as string) ?? null,
+    decisionRunId: (r.decision_run_id as string) ?? null,
+    selectedEpisodeId: (r.selected_episode_id as string) ?? null,
+    profileMatchScore: (r.profile_match_score as number) ?? null,
+    profileMatchVersion: (r.profile_match_version as string) ?? null,
+    bestProfileId: (r.best_profile_id as string) ?? null,
+    bestProfileMatchScore: (r.best_profile_match_score as number) ?? null,
+    intelligenceInputHash: (r.intelligence_input_hash as string) ?? null,
+    fallbackReason: (r.fallback_reason as string) ?? null,
     createdAt: r.created_at as string,
   }
 }
@@ -535,6 +546,39 @@ export class SupabaseStore implements ScoutStore {
     return count ?? 0
   }
 
+  private async _insertLeadRow(insertRow: Record<string, unknown>): Promise<{ data: { id?: string } | null; error: unknown }> {
+    // First attempt: insert with all columns (including observability).
+    const first = await this.client
+      .from('leads')
+      .insert(insertRow)
+      .select('id')
+      .single()
+
+    if (!first.error) return first
+
+    // If the error is about a missing column, strip observability columns
+    // and retry. This handles the case where the migration hasn't been applied yet.
+    const msg = (first.error as { message?: string }).message ?? ''
+    const code = (first.error as { code?: string }).code ?? ''
+    const isMissingCol = code === '42703' || /does not exist|column .* does not exist/i.test(msg)
+
+    if (!isMissingCol) return first
+
+    // Fallback triggered — observability columns missing from schema.
+    // Track this so we know when it's safe to remove the compatibility path.
+    console.warn('[store] _insertLeadRow fallback: observability columns missing, retrying without them.')
+
+    const { decision_provider, decision_model, decision_run_id, selected_episode_id,
+      profile_match_score, profile_match_version, best_profile_id, best_profile_match_score,
+      v3_reuse_key, fallback_reason, ...coreRow } = insertRow
+
+    return await this.client
+      .from('leads')
+      .insert(coreRow)
+      .select('id')
+      .single()
+  }
+
   async createLead(input: NewLeadInput): Promise<CreateLeadResult> {
     const key = companyKey(input.company)
     const fuzzy = companyFuzzyKey(input.company)
@@ -623,20 +667,28 @@ export class SupabaseStore implements ScoutStore {
       remote_eligibility: input.remoteEligibility ?? null,
       evidence_ledger: input.evidenceLedger ?? null,
       extraction_completeness: input.extractionCompleteness ?? null,
+      // Score observability — these columns may not exist yet if the migration
+      // hasn't been applied. They're stripped automatically by the insert
+      // wrapper below to avoid 42703 errors.
+      decision_provider: input.decisionProvider ?? null,
+      decision_model: input.decisionModel ?? null,
+      decision_run_id: input.decisionRunId ?? null,
+      selected_episode_id: input.selectedEpisodeId ?? null,
+      profile_match_score: input.profileMatchScore ?? null,
+      profile_match_version: input.profileMatchVersion ?? null,
+      best_profile_id: input.bestProfileId ?? null,
+      best_profile_match_score: input.bestProfileMatchScore ?? null,
+      intelligence_input_hash: input.intelligenceInputHash ?? null,
+      v3_reuse_key: input.v3ReuseKey ?? null,
+      fallback_reason: input.fallbackReason ?? null,
     }
 
-    // Return only `id` from the insert. PostgREST runs insert().select(cols)
-    // as one INSERT ... RETURNING statement: if any selected column is
-    // missing (intelligence_input_hash, locked_until, archived, …), Postgres
-    // rolls the insert back and the lead is never saved. The previous
-    // fallback then looked the row up by company and found nothing, so
-    // Create lead looked like a dead button. Optional columns are read in a
-    // second query and dropped if this database does not have them yet.
-    const inserted = await this.client
-      .from('leads')
-      .insert(insertRow)
-      .select('id')
-      .single()
+    // Insert with graceful column handling. PostgREST runs insert().select(cols)
+    // as one INSERT ... RETURNING statement: if any inserted column doesn't exist
+    // yet (observability columns from the migration), Postgres rejects the whole
+    // insert. We strip unknown columns and retry, so lead creation never fails
+    // due to pending DDL.
+    const inserted = await this._insertLeadRow(insertRow)
     if (inserted.error) {
       const code = (inserted.error as { code?: string }).code
       if (code === '23505') {
@@ -912,6 +964,56 @@ export class SupabaseStore implements ScoutStore {
     }
     if (!data) return null
     return { ...mapLead(data as Row), messages: [], outcomes: [], followupCount: 0 }
+  }
+
+  async findLeadByV3ReuseKey(reuseKey: string): Promise<Lead | null> {
+    if (!reuseKey) return null
+    const { data, error } = await this.client
+      .from('leads')
+      .select(LEAD_LIST_COLUMNS)
+      .eq('organization_id', this.orgId)
+      .eq('v3_reuse_key', reuseKey)
+      .not('canonical_intelligence', 'is', null)
+      .order('scored_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) {
+      if (isOptionalSearchError(error)) return null
+      throw error
+    }
+    if (!data) return null
+    return mapLead(data as Row)
+  }
+
+  async getReferredLeads(repId: string): Promise<Lead[]> {
+    const { data, error } = await this.client
+      .from('leads')
+      .select(LEAD_LIST_COLUMNS)
+      .eq('organization_id', this.orgId)
+      .eq('referred_to_rep_id', repId)
+      .eq('status', 'new')
+      .order('referral_at', { ascending: false })
+      .limit(10)
+    if (error) {
+      if (isOptionalSearchError(error)) return []
+      throw error
+    }
+    return (data as Row[]).map(mapLead)
+  }
+
+  async getRecentLeads(repId: string, limit: number): Promise<Lead[]> {
+    const { data, error } = await this.client
+      .from('leads')
+      .select(LEAD_LIST_COLUMNS)
+      .eq('organization_id', this.orgId)
+      .eq('owner_rep_id', repId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) {
+      if (isOptionalSearchError(error)) return []
+      throw error
+    }
+    return (data as Row[]).map(mapLead)
   }
 
   async listOwnedLeads(includeArchived = false): Promise<Lead[]> {

@@ -6,6 +6,7 @@ import { Progress } from '@/components/ui/progress'
 import { DailyJobs, jobsFromTargets } from './daily-jobs'
 import { DoThisNext } from './do-this-next'
 import { UpNext } from './up-next'
+import { BdDailyDesk } from './bd-daily-desk'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
 
@@ -63,6 +64,8 @@ export interface RepWorkspaceData {
   isManager?: boolean
   teamName?: string
   teamMembers?: any[]
+  referredLeads?: Array<{ id: string; company: string; score: number | null; canonicalScore: number | null; referredAt: string | null }>
+  recentLeads?: Array<{ id: string; company: string; score: number | null; canonicalScore: number | null; createdAt: string }>
 }
 
 interface RepWorkspaceProps {
@@ -147,6 +150,15 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
       {data.hasAssignments && (
         <>
           <DoThisNext action={data.nextAction} />
+
+          <BdDailyDesk
+            yourMove={data.upNext.filter(a => ['reply_needed', 'followup_due', 'connection_dm_due', 'high_fit_lead', 'new_opportunity', 'inbound_opportunity'].includes(a.kind))}
+            theirMove={data.upNext.filter(a => ['lead_going_cold', 'proposal_ready'].includes(a.kind))}
+            repliesWaiting={data.day.repliesWaiting}
+            followUpsDue={data.day.followUpsDue}
+            referredLeads={data.referredLeads ?? []}
+            recentLeads={data.recentLeads ?? []}
+          />
 
           {data.notifications.length > 0 && (
             <section className="rounded-lg border border-line bg-bone-raised px-4 py-3">

@@ -1,45 +1,51 @@
 /**
  * ScoreRing — displays a prospect score as a circular progress indicator.
  *
- * Supports both legacy 0-12 scores and canonical 0-100 scores.
- * When a canonical score is provided, the display shows /10 (rounded).
- * The /10 display is ALWAYS a conversion of the canonical score — never
- * an independent scoring system.
+ * SCORE CONTRACT:
+ * - canonicalScore (0-100) → displays as /10 (0-10). This is the OPPORTUNITY SCORE.
+ * - score (0-12) → displays as-is. This is the LEGACY RUBRIC SCORE.
+ * - These two scales must never be mixed. The `score` column stores legacy only.
+ * - The /10 display is ALWAYS a conversion of the canonical score — never
+ *   an independent scoring system.
  */
 export function ScoreRing({
   score,
   canonicalScore,
   size = 76,
   max,
+  label,
 }: {
-  /** Legacy 0-12 score (fallback if no canonical score) */
+  /** Legacy 0-12 rubric score. Only used when canonicalScore is null. */
   score?: number | null
-  /** Canonical 0-100 score (preferred) */
+  /** Canonical 0-100 opportunity score (preferred). */
   canonicalScore?: number | null
   size?: number
   /** Max value for the ring. Auto-detected from score type if not provided. */
   max?: number
+  /** Optional aria-label for accessibility (e.g. "Opportunity score 7/10") */
+  label?: string
 }) {
-  // Use canonical score if available, otherwise fall back to legacy
-  const displayMax = max ?? (canonicalScore != null ? 100 : 12)
-  const rawScore = canonicalScore ?? score ?? 0
+  const hasCanonical = canonicalScore != null
+  const displayMax = max ?? (hasCanonical ? 100 : 12)
+  const rawScore = hasCanonical ? canonicalScore : (score ?? 0)
   const pct = Math.min(Math.max(rawScore, 0) / displayMax, 1)
   const strokeWidth = Math.max(size * 0.07, 2)
   const r = (size - strokeWidth * 2) / 2
   const c = 2 * Math.PI * r
   const color =
-    pct >= 0.83
+    pct >= 0.7
       ? 'var(--status-success)'
-      : pct >= 0.58
+      : pct >= 0.4
         ? 'var(--bone)'
         : 'var(--line)'
   const fontSize = Math.max(size * 0.36, 11)
 
-  // Display value: canonical scores show /10, legacy shows raw
-  const displayValue = canonicalScore != null ? Math.round(canonicalScore / 10) : rawScore
+  // Canonical scores display as /10 (0-10 scale), legacy shows raw (0-12)
+  const displayValue = hasCanonical ? Math.round(canonicalScore / 10) : rawScore
+  const ariaLabel = label ?? (hasCanonical ? `Opportunity score ${displayValue}/10` : `Legacy score ${displayValue}/12`)
 
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
+    <div className="relative shrink-0" style={{ width: size, height: size }} role="img" aria-label={ariaLabel}>
       <svg width={size} height={size} className="-rotate-90">
         <circle
           cx={size / 2}

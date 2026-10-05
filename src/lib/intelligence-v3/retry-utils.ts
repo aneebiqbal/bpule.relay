@@ -68,7 +68,7 @@ export async function fetchOpenAI(
           type: 'json_schema',
           json_schema: { name: 'v3_call', schema, strict: true },
         },
-        temperature: 0.1,
+        temperature: 0,
         max_tokens: maxTokens,
       }),
     })

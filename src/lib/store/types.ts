@@ -122,6 +122,18 @@ export interface NewLeadInput {
   remoteEligibility?: Record<string, unknown> | null
   evidenceLedger?: Record<string, unknown> | null
   extractionCompleteness?: Record<string, unknown> | null
+  // ── Score observability ────────────────────────────────────────────
+  decisionProvider?: string | null
+  decisionModel?: string | null
+  decisionRunId?: string | null
+  selectedEpisodeId?: string | null
+  profileMatchScore?: number | null
+  profileMatchVersion?: string | null
+  bestProfileId?: string | null
+  bestProfileMatchScore?: number | null
+  intelligenceInputHash?: string | null
+  v3ReuseKey?: string | null
+  fallbackReason?: string | null
 }
 
 export interface ExtractionMetrics {
@@ -340,9 +352,12 @@ export interface ScoutStore {
    * Returns null if no match, or if the match predates canonical intelligence
    * (no canonicalIntelligence on file).
    */
-  findLeadByIntelligenceInputHash(hash: string): Promise<LeadDetail | null>
-  /** @param includeArchived defaults to false — archived leads are excluded from the default read path. */
-  listOwnedLeads(includeArchived?: boolean): Promise<Lead[]>
+   findLeadByIntelligenceInputHash(hash: string): Promise<LeadDetail | null>
+   findLeadByV3ReuseKey(reuseKey: string): Promise<Lead | null>
+   getReferredLeads(repId: string): Promise<Lead[]>
+   getRecentLeads(repId: string, limit: number): Promise<Lead[]>
+   /** @param includeArchived defaults to false — archived leads are excluded from the default read path. */
+   listOwnedLeads(includeArchived?: boolean): Promise<Lead[]>
   /** @param includeArchived defaults to false — archived leads are excluded from the default read path. */
   fetchLeadsAll(scopeToUser?: boolean, includeArchived?: boolean): Promise<Lead[]>
   getQueue(): Promise<QueueData>

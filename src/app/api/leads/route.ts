@@ -168,12 +168,11 @@ export async function POST(request: Request) {
     )
   }
 
-  // ── Score: Use canonical if available, else fall back to rubric ───────
+  // ── Score: legacy rubric for `score` column, canonical for `canonical_score`
   const legacyRulebook = await store.getRulebook()
   const legacyScore = legacyRulebook ? computeScore(extracted, legacyRulebook) : null
 
-  // Canonical score takes precedence — it is the single source of truth
-  const finalScore = canonical?.canonicalScore ?? legacyScore?.total ?? null
+  const canonicalScoreValue = canonical?.canonicalScore ?? null
   const finalVerdict: Verdict | null =
     canonical?.qualification === 'strong' || canonical?.qualification === 'worth_pursuing'
       ? 'send'
@@ -196,7 +195,7 @@ export async function POST(request: Request) {
     signalEvidence,
     verbatimQuote: extracted.verbatimQuote,
     tags: extracted.tags,
-    score: finalScore,
+    score: legacyScore?.total ?? null,
     verdict: finalVerdict,
     titleRaw: extracted.titleRaw ?? extracted.title,
     locationRaw: extracted.locationRaw ?? null,
@@ -262,13 +261,13 @@ export async function POST(request: Request) {
     {
       lead: {
         ...lead,
-        score: lead.score ?? finalScore,
+        score: lead.score ?? legacyScore?.total ?? null,
         verdict: lead.verdict ?? finalVerdict,
         canonicalScore: lead.canonicalScore ?? canonical?.canonicalScore ?? null,
         scoreVersion: lead.scoreVersion ?? canonical?.scoreVersion ?? null,
       },
       score: {
-        total: finalScore,
+        total: canonical?.canonicalScore ?? legacyScore?.total ?? null,
         verdict: finalVerdict,
         breakdown: canonical?.scoreBreakdown?.dimensions ?? legacyScore?.breakdown ?? [],
         label: canonical?.scoreBreakdown.label ?? null,

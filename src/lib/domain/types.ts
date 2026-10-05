@@ -103,6 +103,24 @@ export interface Lead {
   remoteEligibility?: Record<string, unknown> | null
   evidenceLedger?: Record<string, unknown> | null
   extractionCompleteness?: Record<string, unknown> | null
+  // ── Score observability ────────────────────────────────────────────
+  decisionProvider?: string | null
+  decisionModel?: string | null
+  decisionRunId?: string | null
+  selectedEpisodeId?: string | null
+  profileMatchScore?: number | null
+  profileMatchVersion?: string | null
+  bestProfileId?: string | null
+  bestProfileMatchScore?: number | null
+  intelligenceInputHash?: string | null
+  v3ReuseKey?: string | null
+  fallbackReason?: string | null
+  // ── Referral ──────────────────────────────────────────────────────
+  referredByRepId?: string | null
+  referredToRepId?: string | null
+  referredByProfileId?: string | null
+  referralReason?: string | null
+  referralAt?: string | null
   /** Set by explicit rep action once the LinkedIn connection request is observed accepted. Null means not accepted / not applicable. Never inferred. */
   connectionAcceptedAt?: string | null
   /** Set when a connection note is sent on a good-profile lead. Lead is locked from further outreach until this timestamp. Null = unlocked. */

@@ -131,6 +131,10 @@ export function verdictFor(total: number, rulebook: OrganizationRulebook): Verdi
  * Normalize any lead score to a 0-100 comparable scale.
  * Canonical scores are already 0-100; legacy rubric scores are 0-12.
  * Use this for ALL sorting, filtering, and comparison.
+ *
+ * The `score` column stores ONLY legacy rubric scores (0-12).
+ * The `canonical_score` column stores canonical scores (0-100).
+ * These must never be mixed — see score contract in score-ring.tsx.
  */
 export function getComparableLeadScore(record: { canonicalScore?: number | null; score?: number | null }): number {
   if (record.canonicalScore != null) return record.canonicalScore

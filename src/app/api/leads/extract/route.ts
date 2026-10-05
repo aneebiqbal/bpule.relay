@@ -6,6 +6,7 @@ import { produceCanonicalIntelligence, getDisplayScore, deriveSignalEvidenceFall
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 import { produceV3Intelligence } from '@/lib/intelligence-v3/bridge'
 import { V3_CANONICAL } from '@/lib/intelligence-v3/config'
+import type { V3LeadDecisionPacket } from '@/lib/intelligence-v3/types'
 import type { ExtractedLead } from '@/lib/domain/types'
 
 export const maxDuration = 120
@@ -81,7 +82,17 @@ export async function POST(request: Request) {
 
       if (V3_CANONICAL) {
         // V3 is canonical: V3 bridge runs its own extraction + decision pipeline
-        const v3Result = await produceV3Intelligence(rawText, [], (msg) => emit({ type: 'status', message: msg }))
+        const v3Result = await produceV3Intelligence(rawText, {
+          onStatus: (msg) => emit({ type: 'status', message: msg }),
+          reuseIfUnchanged: store
+            ? async (reuseKey) => {
+                const existing = await store!.findLeadByV3ReuseKey(reuseKey)
+                const packet = existing?.canonicalIntelligence as Record<string, unknown> | null | undefined
+                const v3Packet = packet?.v3DecisionPacket as V3LeadDecisionPacket | null | undefined
+                return v3Packet ?? null
+              }
+            : undefined,
+        })
         canonicalResult = {
           intelligence: v3Result.intelligence,
           gatePassed: true,

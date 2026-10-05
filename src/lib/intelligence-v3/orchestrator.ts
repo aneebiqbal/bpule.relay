@@ -285,7 +285,7 @@ Rules:
             strict: true,
           },
         },
-        temperature: 0.1,
+        temperature: 0,
         max_tokens: 300,
       }),
     })

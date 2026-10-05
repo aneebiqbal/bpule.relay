@@ -872,7 +872,27 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         ...match,
         messages: [],
         outcomes: [],
+        followupCount: 0,
       }
+    },
+    async findLeadByV3ReuseKey(reuseKey: string) {
+      if (!reuseKey) return null
+      const match = leads.find((l) => l.v3ReuseKey === reuseKey && l.organizationId === rep.organizationId)
+      return match ? { ...match } : null
+    },
+    async getReferredLeads(repId: string) {
+      return leads
+        .filter(l => l.referredToRepId === repId && l.status === 'new')
+        .sort((a, b) => (b.referralAt || '').localeCompare(a.referralAt || ''))
+        .slice(0, 10)
+        .map(l => ({ ...l }))
+    },
+    async getRecentLeads(repId: string, limit: number) {
+      return leads
+        .filter(l => l.ownerRepId === repId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, limit)
+        .map(l => ({ ...l }))
     },
     async listOwnedLeads(includeArchived = false) {
       return leads

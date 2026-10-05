@@ -5,6 +5,7 @@ import { computeScore } from '@/lib/score/rubric'
 import type { SignalId, ExtractedLead, RoleCategory, MarketRegion } from '@/lib/domain/types'
 import { classifyRoleFromTitle, mapLocationToRegion } from '@/lib/leads/targeting'
 import { evaluateProspectQualification } from '@/lib/prospect/qualification-gate'
+import { buildV3ReuseKey } from '@/lib/intelligence-v3/decision-reuse'
 
 /**
  * Save Prospect as Lead
@@ -132,16 +133,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Organization rulebook not found.' }, { status: 500 })
     }
 
-    const score = computeScore(extracted, rulebook)
-
     const canonical = canonicalForGate
-    // Derive from the canonical object itself, not a separately-sent
-    // body.canonicalScore field — the client currently sends both and they
-    // should always agree, but trusting a second, unverified number instead
-    // of the ground truth embedded in the canonical object is itself a
-    // duplicate-source-of-truth risk (Relay team bug bash — TEAM-002/004).
-    // Falls back to the legacy top-level field only for callers that don't
-    // send a canonical object at all.
     const canonicalScore =
       typeof canonical?.canonicalScore === 'number'
         ? canonical.canonicalScore
@@ -155,14 +147,21 @@ export async function POST(request: Request) {
           : canonicalQualification === 'skip'
             ? 'skip'
             : null
+
+    // Compute legacy rubric score ONLY for the `score` column (legacy 0-12).
+    // When canonical intelligence exists, the `canonical_score` column is
+    // the authority. Save must PERSIST the canonical result, not recompute.
+    const score = computeScore(extracted, rulebook)
     const verdict = verdictFromCanonical ?? score.verdict
-    // Persisted `score` must not independently disagree with a canonical
-    // score that exists for this same lead — mirrors the pattern used by
-    // /api/leads ("Score: Use canonical if available, else fall back to
-    // rubric"). Store canonical's raw 0-100 value directly rather than a
-    // locally-converted scale, so `leads.score` means the same thing
-    // regardless of which endpoint created the lead.
-    const legacyScoreTotal = canonicalScore ?? score.total
+
+    // Extract observability from canonical intelligence
+    const v3Packet = canonical && typeof canonical === 'object'
+      ? (canonical as Record<string, unknown>).v3DecisionPacket as Record<string, unknown> | null
+      : null
+    const decisionProvider = v3Packet && typeof v3Packet.decisionProvider === 'string' ? v3Packet.decisionProvider : null
+    const decisionModel = v3Packet && typeof v3Packet.decisionModel === 'string' ? v3Packet.decisionModel : null
+    const decisionRunId = v3Packet && typeof v3Packet.decisionRunId === 'string' ? v3Packet.decisionRunId : null
+    const selectedEpisodeId = v3Packet && typeof v3Packet.selectedEpisodeId === 'string' ? v3Packet.selectedEpisodeId : null
 
     const result = await store.createLead({
       company,
@@ -174,10 +173,12 @@ export async function POST(request: Request) {
       signalEvidence,
       verbatimQuote: extracted.verbatimQuote,
       tags: extracted.tags,
-      score: legacyScoreTotal,
+      score: score.total,
       verdict,
       canonicalScore,
       canonicalIntelligence: canonical,
+      scoreVersion: canonicalScore ? (typeof canonical?.scoreVersion === 'string' ? canonical.scoreVersion : 'relay_decision_v3.0.0') : null,
+      scoredAt: canonicalScore ? new Date().toISOString() : null,
       titleRaw: extracted.titleRaw ?? extracted.title,
       locationRaw: extracted.locationRaw ?? null,
       roleCategory: extracted.roleCategory ?? classifyRoleFromTitle(extracted.title),
@@ -195,6 +196,15 @@ export async function POST(request: Request) {
         connectionNote,
         source: 'prospect_check',
       },
+      // Observability
+      decisionProvider,
+      decisionModel,
+      decisionRunId,
+      selectedEpisodeId,
+      v3ReuseKey: typeof body.rawInput === 'string' ? buildV3ReuseKey({
+        rawText: body.rawInput,
+        profileId: senderProfileId,
+      }) : null,
     })
 
     if (result.blocked) {

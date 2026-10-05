@@ -320,5 +320,5 @@ function estimateEvidenceQuality(
 }
 
 function generateDecisionRunId(): string {
-  return `v3run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+  return `v3run_${Date.now().toString(36)}`
 }

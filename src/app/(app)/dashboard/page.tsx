@@ -267,6 +267,10 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   const visibleTasks = filterQueueByRole(queue, roleContext.role)
 
   const profilesPulled = await countProfilesPulled(user.organization.id, user.rep.id)
+  const [referredLeads, recentLeads] = await Promise.all([
+    store.getReferredLeads(user.rep.id),
+    store.getRecentLeads(user.rep.id, 5),
+  ])
 
   const actions: RelayTodayAction[] = visibleTasks.slice(0, 10).map((task) => ({
     id: task.id,
@@ -303,6 +307,20 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     upNext: actions.slice(1),
     notifications: [],
     profilesPulled,
+    referredLeads: referredLeads.map(l => ({
+      id: l.id,
+      company: l.company,
+      score: l.score,
+      canonicalScore: l.canonicalScore ?? null,
+      referredAt: l.referralAt ?? null,
+    })),
+    recentLeads: recentLeads.map(l => ({
+      id: l.id,
+      company: l.company,
+      score: l.score,
+      canonicalScore: l.canonicalScore ?? null,
+      createdAt: l.createdAt,
+    })),
   }
 }
 

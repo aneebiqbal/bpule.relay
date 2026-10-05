@@ -57,7 +57,7 @@ for (let i = 0; i < sample.length; i++) {
   const start = Date.now()
 
   try {
-    const result = await produceV3Intelligence(ex.rawText, [])
+    const result = await produceV3Intelligence(ex.rawText, {})
     const latency = Date.now() - start
     totalLatency += latency
 

@@ -25,6 +25,7 @@ import type { V3LeadDecisionPacket } from '@/lib/intelligence-v3/types'
 import { V3_CANONICAL } from '@/lib/intelligence-v3/config'
 import { initializeV3 } from '@/lib/intelligence-v3/index'
 import { extractEventsFromSource } from './event-extractor'
+import { buildV3ReuseKey, buildV3ReuseCacheKey } from './decision-reuse'
 
 // ── V2-to-V3 bridge input builder ────────────────────────────────────────────
 
@@ -172,15 +173,37 @@ export interface V3BridgeResult {
   v2Fallback: boolean
 }
 
+export interface V3IntelligenceOptions {
+  senderCapabilities?: string[]
+  onStatus?: (msg: string) => void
+  /** Selected profile ID for sender context */
+  profileId?: string | null
+  /** Profile intelligence version for cache key */
+  profileIntelligenceVersion?: string | null
+  /** Reuse callback — looks up cached DecisionPacket by reuse key */
+  reuseIfUnchanged?: (reuseKey: string) => Promise<V3LeadDecisionPacket | null>
+  /** Force reanalysis even if cache match exists */
+  forceReanalyze?: boolean
+}
+
 /**
  * Produce intelligence using V3 as canonical when enabled.
  * Falls back to V2 if V3 fails or is disabled.
+ * Reuses cached DecisionPacket when inputs + versions are unchanged.
  */
 export async function produceV3Intelligence(
   rawText: string,
-  senderCapabilities: string[] = [],
-  onStatus?: (msg: string) => void,
+  options: V3IntelligenceOptions = {},
 ): Promise<V3BridgeResult> {
+  const {
+    senderCapabilities = [],
+    onStatus,
+    profileId = null,
+    profileIntelligenceVersion = null,
+    reuseIfUnchanged,
+    forceReanalyze = false,
+  } = options
+
   // Step 1: Always run V2 extraction first (provides normalized input + fallback)
   onStatus?.('Extracting prospect intelligence (V2)...')
 
@@ -200,7 +223,30 @@ export async function produceV3Intelligence(
     }
   }
 
-  // Step 3: Run V3 decision on top of V2 extraction
+  // Step 3: Check for reusable DecisionPacket
+  const reuseKey = buildV3ReuseKey({
+    rawText,
+    profileId,
+    profileIntelligenceVersion,
+    senderCapabilities,
+  })
+
+  if (reuseIfUnchanged && !forceReanalyze) {
+    onStatus?.('Checking for existing decision...')
+    const cached = await reuseIfUnchanged(reuseKey)
+    if (cached) {
+      onStatus?.('Reusing existing decision — inputs unchanged.')
+      const canonical = v3PacketToCanonical(cached, v2Canonical)
+      return {
+        intelligence: canonical,
+        v3Packet: cached,
+        v3Canonical: true,
+        v2Fallback: false,
+      }
+    }
+  }
+
+  // Step 4: Run V3 decision on top of V2 extraction
   onStatus?.('Running V3 opportunity analysis...')
 
   try {
@@ -222,7 +268,7 @@ export async function produceV3Intelligence(
 
     const packet = v3Result.packet
 
-    // Step 4: Map V3 packet to canonical output
+    // Step 5: Map V3 packet to canonical output
     const canonical = v3PacketToCanonical(packet, v2Canonical)
 
     return {

@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
     let canonical
     if (V3_CANONICAL) {
-      const v3Result = await produceV3Intelligence(body.message, [], () => {})
+      const v3Result = await produceV3Intelligence(body.message, {})
       canonical = v3Result.intelligence
     } else {
       const canonicalResult = await produceCanonicalIntelligence(body.message, {
