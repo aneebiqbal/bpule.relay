@@ -8,12 +8,21 @@ import { isProductAdmin } from '@/lib/auth/admin-page'
 import { PageHeader } from '@/components/ui/page-header'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SkeletonText, SkeletonCircle } from '@/components/ui/skeleton'
-import { LeadsTabView } from '@/components/leads-tab-view'
+import { LeadsPipeline } from '@/components/leads/leads-pipeline'
 import type { Lead } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
 
-type LeadRow = Lead & { ownerName?: string; lastActivityAt?: string | null; senderProfileName?: string | null }
+type LeadRow = Lead & {
+  ownerName?: string
+  lastActivityAt?: string | null
+  senderProfileName?: string | null
+  lastOutboundText?: string | null
+  lastOutboundAt?: string | null
+  lastInboundText?: string | null
+  lastInboundAt?: string | null
+  followupCount?: number
+}
 type LeadsPayload = { leads: LeadRow[]; orgView: boolean }
 
 async function loadLeads(): Promise<LeadsPayload> {
@@ -21,24 +30,36 @@ async function loadLeads(): Promise<LeadsPayload> {
   const authCtx = await getAuthContext()
   const store = await createScoutStore()
   const orgView = isProductAdmin(user, authCtx)
-  const [leads, repsRes, messagesRes] = await Promise.all([
-    orgView ? store.fetchLeadsAll() : store.listOwnedLeads(),
+  const ownedLeads = orgView ? await store.fetchLeadsAll() : await store.listOwnedLeads()
+  const leadIds = ownedLeads.map((l) => l.id)
+
+  const [repsRes, messagesRes, followupCountsRes] = await Promise.all([
     orgView ? store.listAllReps() : Promise.resolve([]),
-    // Lightweight last-activity: latest message per lead for the rep's leads.
-    // Done via a single bounded query on messages (owner-scoped).
     (async () => {
+      if (!authCtx || leadIds.length === 0) return []
       try {
         const client = await (await import('@/lib/supabase/server')).createServerSupabase()
-        const ids = (orgView ? await store.fetchLeadsAll() : await store.listOwnedLeads()).map((l) => l.id)
-        if (!authCtx) return []
-        if (ids.length === 0) return []
         const { data } = await client
           .from('messages')
-          .select('lead_id, sent_at, created_at')
+          .select('lead_id, sent_at, created_at, sent_text, direction, type')
           .eq('organization_id', authCtx.orgId)
-          .in('lead_id', ids)
+          .in('lead_id', leadIds)
           .order('sent_at', { ascending: false })
-          .limit(1000)
+          .limit(2000)
+        return data ?? []
+      } catch {
+        return []
+      }
+    })(),
+    (async () => {
+      if (!authCtx || leadIds.length === 0) return []
+      try {
+        const client = await (await import('@/lib/supabase/server')).createServerSupabase()
+        const { data } = await client
+          .from('conversation_states')
+          .select('lead_id, followup_count')
+          .eq('organization_id', authCtx.orgId)
+          .in('lead_id', leadIds)
         return data ?? []
       } catch {
         return []
@@ -50,15 +71,35 @@ async function loadLeads(): Promise<LeadsPayload> {
   const ownerByRepId = Object.fromEntries(reps.map((rep) => [rep.id, rep.name]))
 
   const messages = Array.isArray(messagesRes) ? messagesRes : []
+
   const lastActivityByLead = new Map<string, string>()
+  const lastOutboundByLead = new Map<string, { text: string; at: string }>()
+  const lastInboundByLead = new Map<string, { text: string; at: string }>()
+
   for (const m of messages) {
     const leadId = m.lead_id as string
     const ts = (m.sent_at ?? m.created_at) as string
     if (ts && !lastActivityByLead.has(leadId)) lastActivityByLead.set(leadId, ts)
+
+    const direction = m.direction as string
+    const text = m.sent_text as string
+    const at = (m.sent_at ?? m.created_at) as string
+
+    if (direction !== 'inbound' && text && !lastOutboundByLead.has(leadId)) {
+      lastOutboundByLead.set(leadId, { text, at })
+    }
+    if (direction === 'inbound' && text && !lastInboundByLead.has(leadId)) {
+      lastInboundByLead.set(leadId, { text, at })
+    }
   }
 
-  // Batch-fetch sender profile names
-  const senderProfileIds = [...new Set(leads.map((l) => l.senderProfileId).filter(Boolean) as string[])]
+  const followupCountByLead = new Map<string, number>()
+  const followupCounts = Array.isArray(followupCountsRes) ? followupCountsRes : []
+  for (const fc of followupCounts) {
+    followupCountByLead.set(fc.lead_id as string, (fc.followup_count as number) ?? 0)
+  }
+
+  const senderProfileIds = [...new Set(ownedLeads.map((l) => l.senderProfileId).filter(Boolean) as string[])]
   const profileById = new Map<string, string>()
   if (senderProfileIds.length > 0 && authCtx) {
     try {
@@ -76,12 +117,21 @@ async function loadLeads(): Promise<LeadsPayload> {
     } catch { }
   }
 
-  const rows: LeadRow[] = leads.map((lead) => ({
-    ...lead,
-    ownerName: orgView && lead.ownerRepId ? ownerByRepId[lead.ownerRepId] : undefined,
-    lastActivityAt: lastActivityByLead.get(lead.id) ?? null,
-    senderProfileName: lead.senderProfileId ? profileById.get(lead.senderProfileId) ?? undefined : undefined,
-  }))
+  const rows: LeadRow[] = ownedLeads.map((lead) => {
+    const outbound = lastOutboundByLead.get(lead.id)
+    const inbound = lastInboundByLead.get(lead.id)
+    return {
+      ...lead,
+      ownerName: orgView && lead.ownerRepId ? ownerByRepId[lead.ownerRepId] : undefined,
+      lastActivityAt: lastActivityByLead.get(lead.id) ?? null,
+      senderProfileName: lead.senderProfileId ? profileById.get(lead.senderProfileId) ?? undefined : undefined,
+      lastOutboundText: outbound?.text ?? null,
+      lastOutboundAt: outbound?.at ?? null,
+      lastInboundText: inbound?.text ?? null,
+      lastInboundAt: inbound?.at ?? null,
+      followupCount: followupCountByLead.get(lead.id) ?? 0,
+    }
+  })
 
   return { leads: rows, orgView }
 }
@@ -92,8 +142,8 @@ export default function LeadsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Leads"
-        description="The org pipeline. Work the highest-intent prospects first."
+        title="Leads Pipeline"
+        description="Every prospect. Organized by where they are in your outreach lifecycle."
         action={
           <Link
             href="/leads/new"
@@ -134,38 +184,33 @@ async function LeadsBody({ leadsPromise }: { leadsPromise: Promise<LeadsPayload>
     )
   }
 
-  // Conversations = leads that have at least one message row (tracked outbound/inbound).
-  const conversationIds = new Set<string>()
-  for (const l of leads) if (l.lastActivityAt) conversationIds.add(l.id)
-  const conversationLeads = leads.filter((l) => conversationIds.has(l.id))
-
-  return (
-    <LeadsTabView
-      allLeads={leads}
-      conversationLeads={conversationLeads}
-      orgView={orgView}
-    />
-  )
+  return <LeadsPipeline leads={leads} orgView={orgView} />
 }
 
 function LeadsBodySkeleton() {
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-4 gap-3">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="rounded-lg border border-line bg-bone-raised px-3 py-2.5">
-            <SkeletonText className="h-2.5 w-16" />
-            <SkeletonText className="mt-2 h-5 w-10" />
-          </div>
-        ))}
-      </div>
-      <div className="overflow-hidden rounded-lg border border-line bg-bone-raised">
+      <div className="h-8 w-full rounded-md bg-bone-raised" />
+      <div className="flex gap-3 overflow-hidden">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 border-b border-line/60 px-4 py-3 last:border-b-0">
-            <SkeletonCircle className="size-[36px]" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <SkeletonText className="h-3.5 w-40" />
-              <SkeletonText className="h-3 w-28" />
+          <div key={i} className="w-[280px] shrink-0 rounded-xl border border-line bg-bone">
+            <div className="border-b border-line/40 px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <SkeletonCircle className="size-2" />
+                <SkeletonText className="h-3 w-20" />
+              </div>
+            </div>
+            <div className="space-y-2 p-2">
+              {Array.from({ length: 2 }).map((__, j) => (
+                <div key={j} className="rounded-lg border border-line/60 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <SkeletonCircle className="size-8" />
+                    <SkeletonText className="h-3 w-24" />
+                  </div>
+                  <SkeletonText className="h-2.5 w-full" />
+                  <SkeletonText className="h-2.5 w-3/4" />
+                </div>
+              ))}
             </div>
           </div>
         ))}
