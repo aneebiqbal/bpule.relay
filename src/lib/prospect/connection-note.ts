@@ -253,7 +253,7 @@ export function evaluateConnectionNote(input: ConnectionNoteInput): ConnectionNo
   // A question requires effort to respond to and turns a low-friction accept
   // into a conversation the prospect did not ask for.
   if (/[?]/.test(text)) {
-    failures.push('Contains a question — connection notes must not ask anything')
+    failures.push('Contains a question — connection notes must ask nothing')
   }
 
   // 17. Manufactured personalization — "curious about", "how do you", etc.
@@ -399,6 +399,20 @@ export function repairConnectionNote(text: string, failures: string[]): string {
     repaired = repaired.replace(/\bwe can help\b/gi, 'I can share')
     repaired = repaired.replace(/\bour team\b/gi, 'I')
     repaired = repaired.replace(/\bwe have\b/gi, 'I have')
+  }
+
+  // Strip questions — convert to statements. Replace ? with period,
+  // then fix common question patterns ("Have you considered" → "Consider").
+  if (failures.some((f) => f.includes('question'))) {
+    repaired = repaired.replace(/\?/g, '.')
+    repaired = repaired.replace(/\bhave you considered\b/gi, 'consider')
+    repaired = repaired.replace(/\bhave you thought about\b/gi, 'think about')
+    repaired = repaired.replace(/\bdo you need\b/gi, 'you may need')
+    repaired = repaired.replace(/\bwould you be open to\b/gi, 'open to')
+    repaired = repaired.replace(/\bcan we\b/gi, 'we can')
+    repaired = repaired.replace(/\bcould you\b/gi, 'you could')
+    repaired = repaired.replace(/\bwould you\b/gi, 'you would')
+    repaired = repaired.replace(/\bare you looking\b/gi, 'looking')
   }
 
   // Remove em dashes

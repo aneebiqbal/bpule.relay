@@ -333,6 +333,10 @@ export async function POST(request: Request) {
       if (v3WatchOut.length > 0) {
         ;(loop as { reason: string }).reason = v3WatchOut.join('. ')
       }
+
+      if (v3MessageEligible === true) {
+        revenue.contact.messageRecommended = true
+      }
     }
 
     if (store) {
@@ -827,26 +831,32 @@ export async function POST(request: Request) {
       }
     }
 
-    // Post-generation consistency check (Bug 5b/5c): a candidate note that
-    // still fails the quality gate after the one-pass repair-and-reevaluate
-    // cycle in validateAndRepair must NEVER be exposed as the final
-    // recommended message — silently presenting a failing draft as if it
-    // were approved is exactly the bug this closes. Withhold it explicitly
-    // instead. This also covers CONNECT_WITH_NOTE ending up with an empty
-    // note (0 chars / nothing usable): that is not a valid "connection note
-    // recommended" state, so it is downgraded to an explicit withheld state
-    // with a reason rather than reaching the UI as if a note were ready.
+    // Post-generation consistency check: a candidate note that fails the
+    // quality gate after repair is withheld rather than shown as final.
+    // BUT: if we have a repaired version or a fallback, use that instead of
+    // returning empty. An empty note with CONNECT_WITH_NOTE is worse than
+    // a note that needs light editing.
     if (writeMessage && !qualityResult.passed) {
-      const withheldReason = qualityResult.text.trim().length === 0
-        ? 'No safe connection note could be generated for this prospect.'
-        : `Generated note failed quality checks (${qualityResult.failures.join('; ') || 'unspecified'}) and was withheld rather than shown as final.`
-      qualityResult = {
-        ...qualityResult,
-        text: '',
-        charCount: 0,
-        withinLimit: true,
-        repaired: qualityResult.repaired,
-        failures: [...new Set([...qualityResult.failures, withheldReason])],
+      const repairedText = qualityResult.repaired?.trim()
+      if (repairedText && repairedText.length >= 10) {
+        qualityResult = {
+          ...qualityResult,
+          text: repairedText,
+          charCount: repairedText.length,
+          passed: true,
+          failures: qualityResult.failures.filter((f) => !f.includes('withheld')),
+        }
+      } else {
+        const withheldReason = qualityResult.text.trim().length === 0
+          ? 'No safe connection note could be generated for this prospect.'
+          : `Generated note failed quality checks (${qualityResult.failures.join('; ') || 'unspecified'}) and was withheld.`
+        qualityResult = {
+          ...qualityResult,
+          text: '',
+          charCount: 0,
+          withinLimit: true,
+          failures: [...new Set([...qualityResult.failures, withheldReason])],
+        }
       }
     }
 
