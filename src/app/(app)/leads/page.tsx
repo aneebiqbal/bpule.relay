@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { SkeletonText, SkeletonCircle } from '@/components/ui/skeleton'
 import { LeadsPipeline } from '@/components/leads/leads-pipeline'
 import type { Lead } from '@/lib/domain/types'
+import { computeLifecycleState, type LifecycleResult } from '@/lib/leads/lifecycle-policy'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,7 @@ type LeadRow = Lead & {
   lastInboundText?: string | null
   lastInboundAt?: string | null
   followupCount?: number
+  lifecycle?: LifecycleResult
 }
 type LeadsPayload = { leads: LeadRow[]; orgView: boolean }
 
@@ -120,6 +122,17 @@ async function loadLeads(): Promise<LeadsPayload> {
   const rows: LeadRow[] = ownedLeads.map((lead) => {
     const outbound = lastOutboundByLead.get(lead.id)
     const inbound = lastInboundByLead.get(lead.id)
+    const lifecycle = computeLifecycleState({
+      status: lead.status,
+      createdAt: lead.createdAt,
+      connectionAcceptedAt: lead.connectionAcceptedAt,
+      lockedReason: lead.lockedReason,
+      lockedUntil: lead.lockedUntil,
+      lastOutboundAt: outbound?.at ?? null,
+      lastInboundAt: inbound?.at ?? null,
+      followupCount: followupCountByLead.get(lead.id) ?? 0,
+      archived: lead.archived,
+    })
     return {
       ...lead,
       ownerName: orgView && lead.ownerRepId ? ownerByRepId[lead.ownerRepId] : undefined,
@@ -130,6 +143,7 @@ async function loadLeads(): Promise<LeadsPayload> {
       lastInboundText: inbound?.text ?? null,
       lastInboundAt: inbound?.at ?? null,
       followupCount: followupCountByLead.get(lead.id) ?? 0,
+      lifecycle,
     }
   })
 

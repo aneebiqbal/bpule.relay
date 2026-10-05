@@ -13,6 +13,7 @@ import { Target } from 'lucide-react'
 import type { Lead } from '@/lib/domain/types'
 import {
   PIPELINE_COLUMNS,
+  TERMINAL_COLUMNS,
   derivePipelineStage,
   filterLeads,
   sortLeads,
@@ -22,6 +23,7 @@ import {
   type PipelineStage,
   type SortMode,
 } from './pipeline-utils'
+import { getStalenessColor } from '@/lib/leads/lifecycle-policy'
 
 interface LeadsPipelineProps {
   leads: LeadRow[]
@@ -33,6 +35,7 @@ interface GroupedLeads {
   waiting: LeadRow[]
   needs_reply: LeadRow[]
   done: LeadRow[]
+  cold: LeadRow[]
 }
 
 export function LeadsPipeline({ leads, orgView }: LeadsPipelineProps) {
@@ -49,7 +52,7 @@ export function LeadsPipeline({ leads, orgView }: LeadsPipelineProps) {
   const filtered = useMemo(() => filterLeads(leads, search), [leads, search])
 
   const grouped = useMemo<GroupedLeads>(() => {
-    const groups: GroupedLeads = { to_contact: [], waiting: [], needs_reply: [], done: [] }
+    const groups: GroupedLeads = { to_contact: [], waiting: [], needs_reply: [], done: [], cold: [] }
     for (const lead of filtered) {
       const stage = derivePipelineStage(lead)
       groups[stage].push(lead)
@@ -127,71 +130,96 @@ export function LeadsPipeline({ leads, orgView }: LeadsPipelineProps) {
         <div className="ml-auto text-[11px] text-stone">{totalActive} active</div>
       </div>
 
-      {/* Kanban */}
+      {/* Kanban — Active pipeline */}
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
-          {PIPELINE_COLUMNS.map((col) => {
-            const items = displayGroups[col.id] ?? []
-            return (
-              <div
-                key={col.id}
-                className={cn(
-                  'flex w-[300px] shrink-0 flex-col rounded-xl border border-line overflow-hidden',
-                  col.borderColor,
-                  'border-t-[3px]',
-                )}
-              >
-                {/* Column header */}
-                <div className={cn('flex items-center justify-between px-3 py-2.5', col.headerBg)}>
-                  <div className="flex items-center gap-2">
-                    <span className={cn('size-2 rounded-full', col.dotColor)} />
-                    <h3 className="text-[12px] font-medium text-ink">{col.label}</h3>
-                  </div>
-                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-bone px-1.5 text-[10px] font-medium text-stone">
-                    {items.length}
-                  </span>
-                </div>
-
-                {/* Cards */}
-                <Droppable droppableId={col.id}>
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={cn(
-                        'flex-1 space-y-2 p-2 min-h-[120px] transition-colors duration-150',
-                        snapshot.isDraggingOver ? 'bg-orange/[0.02]' : 'bg-bone',
-                      )}
-                    >
-                      {items.length === 0 ? (
-                        <div className="flex items-center justify-center rounded-lg border border-dashed border-line/60 py-8">
-                          <p className="text-[11px] text-stone/60">Drop here</p>
-                        </div>
-                      ) : (
-                        items.map((lead, index) => (
-                          <Draggable key={lead.id} draggableId={lead.id} index={index}>
-                            {(dragProvided, dragSnapshot) => (
-                              <LeadCard
-                                lead={lead}
-                                orgView={orgView}
-                                now={now}
-                                provided={dragProvided}
-                                isDragging={dragSnapshot.isDragging}
-
-                              />
-                            )}
-                          </Draggable>
-                        ))
-                      )}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </div>
-            )
-          })}
+          {PIPELINE_COLUMNS.map((col) => (
+            <PipelineColumn
+              key={col.id}
+              column={col}
+              leads={displayGroups[col.id] ?? []}
+              now={now}
+              orgView={orgView}
+            />
+          ))}
         </div>
       </DragDropContext>
+
+      {/* Terminal columns */}
+      <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
+        {TERMINAL_COLUMNS.map((col) => (
+          <PipelineColumn
+            key={col.id}
+            column={col}
+            leads={displayGroups[col.id] ?? []}
+            now={now}
+            orgView={orgView}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+interface PipelineColumnProps {
+  column: { id: PipelineStage; label: string; description: string; dotColor: string; borderColor: string; headerBg: string }
+  leads: LeadRow[]
+  now: number
+  orgView: boolean
+}
+
+function PipelineColumn({ column, leads, now, orgView }: PipelineColumnProps) {
+  return (
+    <div
+      className={cn(
+        'flex w-[300px] shrink-0 flex-col rounded-xl border border-line overflow-hidden',
+        column.borderColor,
+        'border-t-[3px]',
+      )}
+    >
+      <div className={cn('flex items-center justify-between px-3 py-2.5', column.headerBg)}>
+        <div className="flex items-center gap-2">
+          <span className={cn('size-2 rounded-full', column.dotColor)} />
+          <h3 className="text-[12px] font-medium text-ink">{column.label}</h3>
+        </div>
+        <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-bone px-1.5 text-[10px] font-medium text-stone">
+          {leads.length}
+        </span>
+      </div>
+
+      <Droppable droppableId={column.id}>
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className={cn(
+              'flex-1 space-y-2 p-2 min-h-[120px] transition-colors duration-150',
+              snapshot.isDraggingOver ? 'bg-orange/[0.02]' : 'bg-bone',
+            )}
+          >
+            {leads.length === 0 ? (
+              <div className="flex items-center justify-center rounded-lg border border-dashed border-line/60 py-8">
+                <p className="text-[11px] text-stone/60">Drop here</p>
+              </div>
+            ) : (
+              leads.map((lead, index) => (
+                <Draggable key={lead.id} draggableId={lead.id} index={index}>
+                  {(dragProvided, dragSnapshot) => (
+                    <LeadCard
+                      lead={lead}
+                      orgView={orgView}
+                      now={now}
+                      provided={dragProvided}
+                      isDragging={dragSnapshot.isDragging}
+                    />
+                  )}
+                </Draggable>
+              ))
+            )}
+            {provided.placeholder}
+          </div>
+        )}
+      </Droppable>
     </div>
   )
 }
@@ -207,13 +235,18 @@ interface LeadCardProps {
 function LeadCard({ lead, orgView, now, provided, isDragging }: LeadCardProps) {
   const signal = signalById(lead.signalType)
   const score = lead.canonicalScore ?? lead.score ?? null
+  const lifecycleState = lead.lifecycle?.state ?? 'active'
+  const isCold = lifecycleState === 'cold' || lifecycleState === 'frozen'
+
   return (
     <div
       ref={provided.innerRef}
       {...provided.draggableProps}
       className={cn(
         'rounded-lg border bg-bone-raised transition-all duration-150',
-        isDragging ? 'shadow-md border-orange/40 ring-1 ring-orange/20' : 'border-line/60 hover:border-line hover:shadow-sm',
+        isDragging && 'shadow-md border-orange/40 ring-1 ring-orange/20',
+        !isDragging && 'border-line/60 hover:border-line hover:shadow-sm',
+        isCold && !isDragging && 'opacity-80',
       )}
     >
       <div className="p-3">
@@ -244,7 +277,7 @@ function LeadCard({ lead, orgView, now, provided, isDragging }: LeadCardProps) {
           </div>
         </div>
 
-        {/* Sender + signal */}
+        {/* Sender + signal + staleness */}
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {lead.senderProfileName && (
             <span className="inline-flex items-center gap-0.5 rounded-md bg-bone px-1.5 py-0.5 text-[9px] text-stone">
@@ -257,6 +290,12 @@ function LeadCard({ lead, orgView, now, provided, isDragging }: LeadCardProps) {
           )}
           {orgView && lead.ownerName && (
             <span className="text-[9px] text-stone/60">{lead.ownerName}</span>
+          )}
+          {isCold && lead.lifecycle && (
+            <span className="inline-flex items-center gap-0.5 rounded-md bg-status-warning/10 px-1.5 py-0.5 text-[9px] text-status-warning">
+              <span className={cn('size-1.5 rounded-full', getStalenessColor(lifecycleState))} />
+              {lead.lifecycle.reason}
+            </span>
           )}
         </div>
 
@@ -282,9 +321,14 @@ function LeadCard({ lead, orgView, now, provided, isDragging }: LeadCardProps) {
             <Clock className="size-2.5" />
             {formatRelativeTime(lead.lastActivityAt ?? lead.createdAt, now)}
           </div>
-          {lead.followupCount != null && lead.followupCount > 0 && (
-            <span className="text-[9px] text-stone/60">F{lead.followupCount}/3</span>
-          )}
+          <div className="flex items-center gap-1.5">
+            {lead.followupCount != null && lead.followupCount > 0 && (
+              <span className="text-[9px] text-stone/60">F{lead.followupCount}/3</span>
+            )}
+            {lifecycleState !== 'active' && (
+              <span className={cn('size-1.5 rounded-full', getStalenessColor(lifecycleState))} />
+            )}
+          </div>
         </div>
       </div>
 
@@ -297,6 +341,14 @@ function LeadCard({ lead, orgView, now, provided, isDragging }: LeadCardProps) {
           <PenLine className="size-2.5" />
           Open
         </Link>
+        {isCold && (
+          <Link
+            href={`/leads/${lead.id}`}
+            className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] text-orange hover:bg-orange/10 transition-colors ml-auto"
+          >
+            Reactivate
+          </Link>
+        )}
       </div>
     </div>
   )

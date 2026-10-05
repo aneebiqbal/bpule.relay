@@ -42,14 +42,14 @@ export async function GET(request: Request) {
   let skipped = 0
 
   try {
-    // Candidate leads: active, not already archived, not terminal (no/dead —
-    // those are excluded from outreach entirely already, and 'new' leads
-    // have never been contacted so can never meet the eligibility rule).
+    // Candidate leads: active, not already archived, not terminal (no/dead).
+    // Includes contacted, followed_up, AND new leads (new leads that have
+    // sat untouched for 30+ days are archive-eligible).
     const { data: leads, error: leadsError } = await supabase
       .from('leads')
-      .select('id, organization_id, status')
+      .select('id, organization_id, status, created_at, locked_reason, connection_accepted_at')
       .eq('archived', false)
-      .in('status', ['contacted', 'followed_up'])
+      .in('status', ['contacted', 'followed_up', 'new'])
       .order('created_at', { ascending: true })
       .limit(BATCH_SIZE)
 
@@ -113,15 +113,35 @@ export async function GET(request: Request) {
     const now = new Date()
     const toArchive: string[] = []
 
+    const nowMs = now.getTime()
+    const NEW_LEAD_ARCHIVE_DAYS = 30
+    const CONNECTION_PENDING_ARCHIVE_DAYS = 21
+
     for (const lead of leads) {
       try {
         const leadId = lead.id as string
-        const eligible = isArchiveEligible({
-          followupCount: followupCountByLead.get(leadId) ?? 0,
-          lastSendAt: lastOutboundSendByLead.get(leadId) ?? null,
-          hasRepliedSinceLastSend: (lead.status === 'replied') || (repliedSinceByLead.get(leadId) ?? false),
-          now,
-        })
+        let eligible = false
+
+        if (lead.status === 'new') {
+          // New leads untouched for 30+ days → archive
+          const daysSinceCreated = (nowMs - new Date(lead.created_at as string).getTime()) / (1000 * 60 * 60 * 24)
+          eligible = daysSinceCreated >= NEW_LEAD_ARCHIVE_DAYS
+        } else if (lead.status === 'contacted' && !lead.connection_accepted_at && lead.locked_reason === 'connection_note_sent') {
+          // Connection sent but not accepted for 21+ days → archive
+          const lastSend = lastOutboundSendByLead.get(leadId)
+          if (lastSend) {
+            const daysPending = (nowMs - new Date(lastSend).getTime()) / (1000 * 60 * 60 * 24)
+            eligible = daysPending >= CONNECTION_PENDING_ARCHIVE_DAYS
+          }
+        } else {
+          eligible = isArchiveEligible({
+            followupCount: followupCountByLead.get(leadId) ?? 0,
+            lastSendAt: lastOutboundSendByLead.get(leadId) ?? null,
+            hasRepliedSinceLastSend: (lead.status === 'replied') || (repliedSinceByLead.get(leadId) ?? false),
+            now,
+          })
+        }
+
         if (eligible) {
           toArchive.push(leadId)
         } else {

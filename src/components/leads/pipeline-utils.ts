@@ -1,6 +1,7 @@
 import type { Lead } from '@/lib/domain/types'
 import { getComparableLeadScore } from '@/lib/score/rubric'
 import { isLeadLocked } from '@/lib/leads/lock'
+import { computeLifecycleState, type LifecycleState, type LifecycleResult } from '@/lib/leads/lifecycle-policy'
 
 export type LeadRow = Lead & {
   ownerName?: string
@@ -11,6 +12,7 @@ export type LeadRow = Lead & {
   lastInboundText?: string | null
   lastInboundAt?: string | null
   followupCount?: number
+  lifecycle?: LifecycleResult
 }
 
 export type PipelineStage =
@@ -18,6 +20,7 @@ export type PipelineStage =
   | 'waiting'
   | 'needs_reply'
   | 'done'
+  | 'cold'
 
 export interface PipelineColumnDef {
   id: PipelineStage
@@ -32,12 +35,21 @@ export const PIPELINE_COLUMNS: PipelineColumnDef[] = [
   { id: 'to_contact', label: 'To Contact', description: 'Not yet reached out', dotColor: 'bg-stone', borderColor: 'border-t-stone', headerBg: 'bg-bone-raised' },
   { id: 'waiting', label: 'Waiting', description: 'Sent, awaiting reply', dotColor: 'bg-cobalt', borderColor: 'border-t-cobalt', headerBg: 'bg-cobalt/[0.03]' },
   { id: 'needs_reply', label: 'Needs Reply', description: 'They wrote back', dotColor: 'bg-orange', borderColor: 'border-t-orange', headerBg: 'bg-orange/[0.03]' },
+]
+
+export const TERMINAL_COLUMNS: PipelineColumnDef[] = [
   { id: 'done', label: 'Done', description: 'Won or closed', dotColor: 'bg-status-success', borderColor: 'border-t-status-success', headerBg: 'bg-status-success/[0.03]' },
+  { id: 'cold', label: 'Cold', description: 'Unresponsive — reactivate or archive', dotColor: 'bg-status-warning', borderColor: 'border-t-status-warning', headerBg: 'bg-status-warning/[0.03]' },
 ]
 
 export function derivePipelineStage(lead: LeadRow): PipelineStage {
   if (lead.status === 'won' || lead.status === 'lost' || lead.status === 'dead' || lead.status === 'no') return 'done'
   if (lead.status === 'replied') return 'needs_reply'
+
+  // Cold/frozen leads go to the cold section regardless of their status
+  if (lead.lifecycle && (lead.lifecycle.state === 'cold' || lead.lifecycle.state === 'frozen')) {
+    return 'cold'
+  }
 
   const hasOutbound = !!lead.lastOutboundAt
   const hasInbound = !!lead.lastInboundAt
