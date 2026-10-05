@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceSupabase, requireCronSecret } from '@/lib/supabase/service'
 import { isArchiveEligible } from '@/lib/leads/followup'
+import { emitAction } from '@/lib/action-ledger'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -166,6 +167,20 @@ export async function GET(request: Request) {
         failed += toArchive.length
       } else {
         archived = updatedRows?.length ?? 0
+        try {
+          for (const lead of leads) {
+            if (toArchive.includes(lead.id as string)) {
+              await emitAction({
+                orgId: lead.organization_id as string,
+                actionType: 'LEAD_ARCHIVED',
+                actorType: 'system',
+                actorId: null,
+                leadId: lead.id as string,
+                metadata: { source: 'auto_archive', reason: 'stale_lead' },
+              }).catch(() => {})
+            }
+          }
+        } catch { }
       }
     }
 

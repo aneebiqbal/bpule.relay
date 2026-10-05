@@ -22,6 +22,7 @@ type ActionEventType =
   | 'UPWORK_APPLIED'
   | 'OPPORTUNITY_CREATED'
   | 'CLIENT_WON'
+  | 'LEAD_ARCHIVED'
 
 interface EmitActionParams {
   orgId: string
@@ -182,7 +183,11 @@ export async function getDailySummary(orgId: string, date: string): Promise<Dail
         summary.leadsExtracted++
         break
       case 'UPWORK_APPLIED':
+      case 'UPWORK_PROPOSAL_PREPARED':
         summary.upworkProposals++
+        break
+      case 'UPWORK_JOB_EXTRACTED':
+        summary.leadsExtracted++
         break
       case 'OPPORTUNITY_CREATED':
       case 'CLIENT_WON':
@@ -190,6 +195,8 @@ export async function getDailySummary(orgId: string, date: string): Promise<Dail
         break
       case 'LEAD_REFERRED':
         summary.referrals++
+        break
+      case 'LEAD_ARCHIVED':
         break
     }
   }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { extractUpworkJob } from '@/lib/upwork-v2'
+import { emitAction } from '@/lib/action-ledger'
 
 export const maxDuration = 120
 
@@ -74,7 +75,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to save job.' }, { status: 500 })
   }
 
-  return NextResponse.json({ job: { ...job, id: savedJob?.id }, duplicate: false })
+
+  try {
+    await emitAction({
+      orgId: rep.organization_id,
+      actionType: 'UPWORK_JOB_EXTRACTED',
+      actorType: 'rep',
+      actorId: rep.id,
+      jobId: savedJob.id as string,
+      metadata: { title: job.title },
+    })
+  } catch { }
+
+  return NextResponse.json({ job: { ...job, id: savedJob.id }, duplicate: false })
 }
 
 function hashContent(text: string): string {

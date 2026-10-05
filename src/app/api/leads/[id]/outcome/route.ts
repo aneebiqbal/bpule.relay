@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { sseStream } from '@/lib/sse/sse'
+import { emitAction } from '@/lib/action-ledger'
 
 export const maxDuration = 30
 
@@ -65,6 +66,20 @@ export async function POST(
     })
 
     await store.updateLeadStatus(id, body.outcome)
+
+    if (body.outcome === 'won') {
+      try {
+        await emitAction({
+          orgId: detail.organizationId,
+          actionType: 'CLIENT_WON',
+          actorType: 'rep',
+          actorId: detail.ownerRepId,
+          leadId: id,
+          senderProfileId: detail.senderProfileId,
+          metadata: { source: 'outcome_update', reason: body.reason ?? null },
+        })
+      } catch { }
+    }
 
     emit({ type: 'status', message: `Outcome recorded: ${body.outcome}` })
     emit({ type: 'done', outcome: body.outcome, stage: body.outcome })

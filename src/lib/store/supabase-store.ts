@@ -2587,6 +2587,43 @@ export class SupabaseStore implements ScoutStore {
           channel: 'upwork',
         })
       } catch { }
+      try {
+        const { data: targets } = await this.client
+          .from('daily_targets')
+          .select('revenue_identity_id')
+          .eq('rep_id', this.rep.id)
+          .eq('activity_type', 'application')
+          .eq('active', true)
+        if (targets && targets.length > 0) {
+          for (const t of targets) {
+            try {
+              await this.client.rpc('record_activity_event', {
+                p_rep_id: this.rep.id,
+                p_identity_id: t.revenue_identity_id as string,
+                p_activity_type: 'application',
+                p_org_id: this.orgId,
+                p_source_event_id: `activity:upwork_draft:${input.jobId}:${t.revenue_identity_id}`,
+              })
+            } catch { }
+          }
+          try {
+            const sourceEventId = `canonical:upwork_draft:${input.jobId}:${this.rep.id}`
+            for (const t of targets) {
+              try {
+                await this.client.rpc('record_canonical_progress', {
+                  p_org_id: this.orgId,
+                  p_person_id: this.rep.id,
+                  p_revenue_identity_id: t.revenue_identity_id as string,
+                  p_event_type: 'OUTREACH_RECORDED',
+                  p_metric_key: 'applications',
+                  p_source_event_id: sourceEventId,
+                  p_date: new Date().toISOString().slice(0, 10),
+                })
+              } catch { }
+            }
+          } catch { }
+        }
+      } catch { }
     }
     return msg
   }

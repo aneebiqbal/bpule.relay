@@ -737,7 +737,7 @@ export default function ProspectCheckPage() {
                 {copied ? <Check className="size-3" aria-hidden="true" /> : <Copy className="size-3" aria-hidden="true" />}
                 {copied ? 'Copied' : 'Copy note'}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => void analyze('try-another-angle')} disabled={analyzing}>
+               <Button variant="outline" size="sm" onClick={() => void analyze('analyze')} disabled={analyzing}>
                 <RefreshCw className="size-3" aria-hidden="true" />
                 Try another angle
               </Button>
