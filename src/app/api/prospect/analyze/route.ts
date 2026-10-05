@@ -654,6 +654,24 @@ export async function POST(request: Request) {
         }),
         revenue,
       )
+    } else if (revenue.messageJob) {
+      outreachStrategy = {
+        leadContext: `${extracted.company} — ${extracted.title ?? extracted.name}`,
+        safeTrigger: extracted.signalEvidence?.slice(0, 120) ?? 'Shared interest area',
+        probableNeed: revenue.commercialSituation ?? 'Potential fit',
+        sender: 'Our team',
+        relevantProof: [],
+        messageGoal: 'Earn connection',
+        relationshipStage: 'first_touch',
+        channel: 'connection',
+        tone: 'Warm, specific, low-pressure',
+        risk: 'Low',
+        ctaStrategy: 'Brief, no-commitment connection',
+        mode: 'warm_conversational',
+        assessment: revenue.assessment,
+        messageJob: revenue.messageJob,
+        wordBudget: { min: 15, max: 35, label: 'connection' },
+      }
     }
 
     let conversationContext: string | null = null
