@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Search, GripVertical, MessageSquare, Clock, User, PenLine } from 'lucide-react'
 import { cn } from 'cn'
-import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
+// Native HTML5 drag-and-drop — no Redux needed
 import { ScoreRing } from '@/components/score-ring'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { signalById } from '@/lib/score/signals'
@@ -67,33 +67,56 @@ export function LeadsPipeline({ leads, orgView }: LeadsPipelineProps) {
 
   const totalActive = displayGroups.to_contact.length + displayGroups.waiting.length + displayGroups.needs_reply.length
 
-  const handleDragEnd = useCallback(async (result: DropResult) => {
-    if (!result.destination) return
-    const sourceStage = result.source.droppableId as PipelineStage
-    const destStage = result.destination.droppableId as PipelineStage
-    if (sourceStage === destStage) return
+  const [draggedLead, setDraggedLead] = useState<string | null>(null)
+  const [dragOverColumn, setDragOverColumn] = useState<PipelineStage | null>(null)
 
-    const leadId = result.draggableId
-    const lead = filtered.find((l) => l.id === leadId)
+  function handleDragStart(leadId: string) {
+    setDraggedLead(leadId)
+  }
+
+  function handleDragOver(e: React.DragEvent, stage: PipelineStage) {
+    e.preventDefault()
+    setDragOverColumn(stage)
+  }
+
+  function handleDragLeave() {
+    setDragOverColumn(null)
+  }
+
+  async function handleDrop(e: React.DragEvent, destStage: PipelineStage) {
+    e.preventDefault()
+    setDragOverColumn(null)
+    setDraggedLead(null)
+    if (!draggedLead) return
+
+    const sourceStage = findLeadStage(draggedLead, displayGroups)
+    if (!sourceStage || sourceStage === destStage) return
+
+    const lead = filtered.find((l) => l.id === draggedLead)
     if (!lead) return
 
     const updatedGroups = { ...displayGroups }
-    const leadItem = updatedGroups[sourceStage].find((l) => l.id === leadId)
+    const leadItem = updatedGroups[sourceStage].find((l) => l.id === draggedLead)
     if (!leadItem) return
 
-    updatedGroups[sourceStage] = updatedGroups[sourceStage].filter((l) => l.id !== leadId)
-    const newArr = [...updatedGroups[destStage]]
-    newArr.splice(result.destination.index, 0, leadItem)
-    updatedGroups[destStage] = newArr
+    updatedGroups[sourceStage] = updatedGroups[sourceStage].filter((l) => l.id !== draggedLead)
+    updatedGroups[destStage] = [...updatedGroups[destStage], leadItem]
     setLocalGroups(updatedGroups)
 
-    const success = await executeStageTransition(leadId, sourceStage, destStage, lead)
+    const success = await executeStageTransition(draggedLead, sourceStage, destStage, lead)
     if (!success) {
       setLocalGroups(null)
     } else {
       setTimeout(() => setLocalGroups(null), 300)
     }
-  }, [displayGroups, filtered])
+  }
+
+  function findLeadStage(leadId: string, groups: GroupedLeads): PipelineStage | null {
+    for (const stage of Object.keys(groups) as PipelineStage[]) {
+      if (groups[stage].some((l) => l.id === leadId)) return stage
+    }
+    return null
+  }
 
   if (leads.length === 0) {
     return (
@@ -131,19 +154,22 @@ export function LeadsPipeline({ leads, orgView }: LeadsPipelineProps) {
       </div>
 
       {/* Kanban — Active pipeline */}
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
-          {PIPELINE_COLUMNS.map((col) => (
-            <PipelineColumn
-              key={col.id}
-              column={col}
-              leads={displayGroups[col.id] ?? []}
-              now={now}
-              orgView={orgView}
-            />
-          ))}
-        </div>
-      </DragDropContext>
+      <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
+        {PIPELINE_COLUMNS.map((col) => (
+          <PipelineColumn
+            key={col.id}
+            column={col}
+            leads={displayGroups[col.id] ?? []}
+            now={now}
+            orgView={orgView}
+            dragOverColumn={dragOverColumn}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          />
+        ))}
+      </div>
 
       {/* Terminal columns */}
       <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
@@ -154,6 +180,11 @@ export function LeadsPipeline({ leads, orgView }: LeadsPipelineProps) {
             leads={displayGroups[col.id] ?? []}
             now={now}
             orgView={orgView}
+            dragOverColumn={dragOverColumn}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
           />
         ))}
       </div>
@@ -166,16 +197,29 @@ interface PipelineColumnProps {
   leads: LeadRow[]
   now: number
   orgView: boolean
+  dragOverColumn: PipelineStage | null
+  onDragStart: (leadId: string) => void
+  onDragOver: (e: React.DragEvent, stage: PipelineStage) => void
+  onDragLeave: () => void
+  onDrop: (e: React.DragEvent, stage: PipelineStage) => void
 }
 
-function PipelineColumn({ column, leads, now, orgView }: PipelineColumnProps) {
+
+
+function PipelineColumn({ column, leads, now, orgView, dragOverColumn, onDragStart, onDragOver, onDragLeave, onDrop }: PipelineColumnProps) {
+  const isOver = dragOverColumn === column.id
+
   return (
     <div
       className={cn(
-        'flex w-[300px] shrink-0 flex-col rounded-xl border border-line overflow-hidden',
+        'flex w-[300px] shrink-0 flex-col rounded-xl border overflow-hidden transition-colors duration-150',
         column.borderColor,
         'border-t-[3px]',
+        isOver ? 'border-orange/40 bg-orange/[0.02]' : 'border-line bg-bone',
       )}
+      onDragOver={(e) => onDragOver(e, column.id)}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => onDrop(e, column.id)}
     >
       <div className={cn('flex items-center justify-between px-3 py-2.5', column.headerBg)}>
         <div className="flex items-center gap-2">
@@ -187,39 +231,23 @@ function PipelineColumn({ column, leads, now, orgView }: PipelineColumnProps) {
         </span>
       </div>
 
-      <Droppable droppableId={column.id}>
-        {(provided, snapshot) => (
-          <div
-            ref={provided.innerRef}
-            {...provided.droppableProps}
-            className={cn(
-              'flex-1 space-y-2 p-2 min-h-[120px] transition-colors duration-150',
-              snapshot.isDraggingOver ? 'bg-orange/[0.02]' : 'bg-bone',
-            )}
-          >
-            {leads.length === 0 ? (
-              <div className="flex items-center justify-center rounded-lg border border-dashed border-line/60 py-8">
-                <p className="text-[11px] text-stone/60">Drop here</p>
-              </div>
-            ) : (
-              leads.map((lead, index) => (
-                <Draggable key={lead.id} draggableId={lead.id} index={index}>
-                  {(dragProvided, dragSnapshot) => (
-                    <LeadCard
-                      lead={lead}
-                      orgView={orgView}
-                      now={now}
-                      provided={dragProvided}
-                      isDragging={dragSnapshot.isDragging}
-                    />
-                  )}
-                </Draggable>
-              ))
-            )}
-            {provided.placeholder}
+      <div className="flex-1 space-y-2 p-2 min-h-[120px]">
+        {leads.length === 0 ? (
+          <div className="flex items-center justify-center rounded-lg border border-dashed border-line/60 py-8">
+            <p className="text-[11px] text-stone/60">Drop here</p>
           </div>
+        ) : (
+          leads.map((lead) => (
+            <LeadCard
+              key={lead.id}
+              lead={lead}
+              orgView={orgView}
+              now={now}
+              onDragStart={() => onDragStart(lead.id)}
+            />
+          ))
         )}
-      </Droppable>
+      </div>
     </div>
   )
 }
@@ -228,11 +256,10 @@ interface LeadCardProps {
   lead: LeadRow
   orgView: boolean
   now: number
-  provided: any
-  isDragging: boolean
+  onDragStart: () => void
 }
 
-function LeadCard({ lead, orgView, now, provided, isDragging }: LeadCardProps) {
+function LeadCard({ lead, orgView, now, onDragStart }: LeadCardProps) {
   const signal = signalById(lead.signalType)
   const score = lead.canonicalScore ?? lead.score ?? null
   const lifecycleState = lead.lifecycle?.state ?? 'active'
@@ -240,19 +267,18 @@ function LeadCard({ lead, orgView, now, provided, isDragging }: LeadCardProps) {
 
   return (
     <div
-      ref={provided.innerRef}
-      {...provided.draggableProps}
+      draggable
+      onDragStart={onDragStart}
       className={cn(
-        'rounded-lg border bg-bone-raised transition-all duration-150',
-        isDragging && 'shadow-md border-orange/40 ring-1 ring-orange/20',
-        !isDragging && 'border-line/60 hover:border-line hover:shadow-sm',
-        isCold && !isDragging && 'opacity-80',
+        'rounded-lg border bg-bone-raised transition-all duration-150 cursor-grab active:cursor-grabbing',
+        'border-line/60 hover:border-line hover:shadow-sm',
+        isCold && 'opacity-80',
       )}
     >
       <div className="p-3">
         {/* Header row */}
         <div className="flex items-start gap-2.5">
-          <div {...provided.dragHandleProps} className="mt-0.5 shrink-0 cursor-grab text-stone/40 hover:text-stone active:cursor-grabbing">
+          <div className="mt-0.5 shrink-0 cursor-grab text-stone/40 hover:text-stone">
             <GripVertical className="size-3.5" />
           </div>
           <div className="shrink-0">
