@@ -108,6 +108,7 @@ import type {
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
 import { businessDaysBetween, FOLLOWUP_DUE_BUSINESS_DAYS } from '@/lib/leads/followup'
+import { emitAction } from '@/lib/action-ledger'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
@@ -737,6 +738,20 @@ export class SupabaseStore implements ScoutStore {
       // Event emission must never break domain operations
     }
 
+    try {
+      await emitAction({
+        orgId: this.orgId,
+        actionType: 'LEAD_EXTRACTED',
+        actorType: 'rep',
+        actorId: this.rep.id,
+        leadId: lead.id,
+        senderProfileId: lead.senderProfileId ?? null,
+        metadata: { company: lead.company, signalType: lead.signalType },
+      })
+    } catch {
+      // Action ledger must never break domain operations
+    }
+
     return { blocked: false, lead }
   }
 
@@ -986,7 +1001,7 @@ export class SupabaseStore implements ScoutStore {
 
     const { data: leadRow, error: leadError } = await this.client
       .from('leads')
-      .select('id, status, verdict, locked_until, owner_rep_id')
+      .select('id, status, verdict, locked_until, owner_rep_id, sender_profile_id')
       .eq('id', leadId)
       .maybeSingle()
     if (leadError) throw leadError
@@ -1196,6 +1211,30 @@ export class SupabaseStore implements ScoutStore {
       // Event emission must never break domain operations
     }
 
+    // Emit Action Ledger event (non-fatal)
+    try {
+      const actionType = type === 'connection' ? 'CONNECTION_SENT'
+        : type === 'dm' ? 'DM_SENT'
+        : type === 'followup' ? 'FOLLOWUP_SENT'
+        : type === 'reply' ? 'REPLY_SENT'
+        : null
+      if (actionType) {
+        await emitAction({
+          orgId: this.orgId,
+          actionType: actionType as 'CONNECTION_SENT' | 'DM_SENT' | 'FOLLOWUP_SENT' | 'REPLY_SENT',
+          actorType: 'rep',
+          actorId: this.rep.id,
+          leadId,
+          senderProfileId: leadRow.sender_profile_id ?? null,
+          messageId: inserted?.id as string | null,
+          executionStatus: 'sent',
+          metadata: { messageType: type },
+        })
+      }
+    } catch {
+      // Action ledger must never break domain operations
+    }
+
     // Record accountability increment (non-fatal, only for outbound activity)
     // Finds all active targets for this rep+activity and increments each.
     if (type !== 'reply') {
@@ -1290,7 +1329,7 @@ export class SupabaseStore implements ScoutStore {
   async recordProspectReply(leadId: string, replyText: string): Promise<Message> {
     const { data: leadRow, error: leadError } = await this.client
       .from('leads')
-      .select('id, status')
+      .select('id, status, sender_profile_id')
       .eq('id', leadId)
       .eq('owner_rep_id', this.rep.id)
       .maybeSingle()
@@ -1353,6 +1392,22 @@ export class SupabaseStore implements ScoutStore {
       })
     } catch {
       // Non-fatal
+    }
+
+    try {
+      await emitAction({
+        orgId: this.orgId,
+        actionType: 'REPLY_RECEIVED',
+        actorType: 'rep',
+        actorId: this.rep.id,
+        leadId,
+        senderProfileId: leadRow.sender_profile_id ?? null,
+        messageId: inserted.id as string | null,
+        executionStatus: 'delivered',
+        metadata: { direction: 'inbound', source: 'paste' },
+      })
+    } catch {
+      // Action ledger must never break domain operations
     }
 
     return { id: inserted.id as string, organizationId: this.orgId, leadId, repId: this.rep.id, type: 'reply', draftText: null, sentText: replyText, sentAt: now, modelUsed: null, direction: 'inbound', createdAt: now }
@@ -2341,7 +2396,18 @@ export class SupabaseStore implements ScoutStore {
       .select('*')
       .single()
     if (error) throw error
-    return mapUpworkJob(data as Row)
+    const job = mapUpworkJob(data as Row)
+    try {
+      await emitAction({
+        orgId: this.orgId,
+        actionType: 'UPWORK_JOB_EXTRACTED',
+        actorType: 'rep',
+        actorId: this.rep.id,
+        jobId: job.id,
+        metadata: { title: job.title },
+      })
+    } catch { }
+    return job
   }
 
   async getUpworkJob(id: string) {
@@ -2405,7 +2471,22 @@ export class SupabaseStore implements ScoutStore {
       .select('*')
       .single()
     if (error) throw error
-    return mapUpworkMessage(data as Row)
+    const msg = mapUpworkMessage(data as Row)
+    if (input.type === 'cover') {
+      try {
+        await emitAction({
+          orgId: this.orgId,
+          actionType: 'UPWORK_PROPOSAL_PREPARED',
+          actorType: 'rep',
+          actorId: this.rep.id,
+          jobId: input.jobId,
+          messageId: msg.id,
+          executionStatus: 'generated',
+          channel: 'upwork',
+        })
+      } catch { }
+    }
+    return msg
   }
 
   async markUpworkApplied(
@@ -2491,6 +2572,20 @@ export class SupabaseStore implements ScoutStore {
         }
       })(),
     ])
+
+    try {
+      await emitAction({
+        orgId: this.orgId,
+        actionType: 'UPWORK_APPLIED',
+        actorType: 'rep',
+        actorId: this.rep.id,
+        jobId,
+        executionStatus: 'sent',
+        channel: 'upwork',
+      })
+    } catch {
+      // Action ledger must never break domain operations
+    }
   }
 
   // ==========================================================================

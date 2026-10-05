@@ -177,7 +177,7 @@ export async function POST(
           priorMessages: detail.messages,
           conversationStage: detail.status,
           senderProfileId: profile.id,
-          followupCount: detail.status === 'followed_up' ? 1 : 0,
+          followupCount: detail.followupCount ?? 0,
           lastSentAt: detail.messages.filter((m) => m.sentAt).sort((a, b) => (a.sentAt ?? '').localeCompare(b.sentAt ?? '')).at(-1)?.sentAt ?? null,
           lastReplyAt: null,
         })
@@ -190,7 +190,7 @@ export async function POST(
           priorMessages: detail.messages,
           conversationStage: detail.status,
           senderProfileId: profile.id,
-          followupCount: 0,
+          followupCount: detail.followupCount ?? 0,
           lastSentAt: detail.messages.filter((m) => m.sentAt).at(-1)?.sentAt ?? null,
           lastReplyAt: null,
         }, followup)

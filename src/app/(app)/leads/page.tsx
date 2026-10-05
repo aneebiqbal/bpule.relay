@@ -13,7 +13,7 @@ import type { Lead } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
 
-type LeadRow = Lead & { ownerName?: string; lastActivityAt?: string | null }
+type LeadRow = Lead & { ownerName?: string; lastActivityAt?: string | null; senderProfileName?: string | null }
 type LeadsPayload = { leads: LeadRow[]; orgView: boolean }
 
 async function loadLeads(): Promise<LeadsPayload> {
@@ -57,10 +57,30 @@ async function loadLeads(): Promise<LeadsPayload> {
     if (ts && !lastActivityByLead.has(leadId)) lastActivityByLead.set(leadId, ts)
   }
 
+  // Batch-fetch sender profile names
+  const senderProfileIds = [...new Set(leads.map((l) => l.senderProfileId).filter(Boolean) as string[])]
+  const profileById = new Map<string, string>()
+  if (senderProfileIds.length > 0 && authCtx) {
+    try {
+      const client = await (await import('@/lib/supabase/server')).createServerSupabase()
+      const { data: profiles } = await client
+        .from('profiles')
+        .select('id, display_name, full_name')
+        .eq('organization_id', authCtx.orgId)
+        .in('id', senderProfileIds)
+      if (profiles) {
+        for (const p of profiles) {
+          profileById.set(p.id as string, (p.display_name ?? p.full_name ?? 'Profile') as string)
+        }
+      }
+    } catch { }
+  }
+
   const rows: LeadRow[] = leads.map((lead) => ({
     ...lead,
     ownerName: orgView && lead.ownerRepId ? ownerByRepId[lead.ownerRepId] : undefined,
     lastActivityAt: lastActivityByLead.get(lead.id) ?? null,
+    senderProfileName: lead.senderProfileId ? profileById.get(lead.senderProfileId) ?? undefined : undefined,
   }))
 
   return { leads: rows, orgView }

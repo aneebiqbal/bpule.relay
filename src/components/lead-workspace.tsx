@@ -1214,22 +1214,35 @@ function timeAgoInline(iso: string | null, now: number): string {
   return timeAgo(iso, now)
 }
 
+interface LogUpdateOption {
+  show: string[]
+  label: string
+  value: string
+  isMessageAction: boolean
+}
+
 function LogUpdateOptions({ phase, leadId, onLogged }: { phase: string; leadId: string; onLogged?: () => void }) {
   const [selected, setSelected] = useState<string | null>(null)
+  const [messageText, setMessageText] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const options: Array<{ show: string[]; label: string; value: string }> = [
-    { show: ['connection_sent', 'connection_due', 'connection_accepted'], label: 'They accepted my connection', value: 'connection_accepted' },
-    { show: ['dm_sent', 'waiting_for_reply', 'replied', 'follow_up_due', 'conversation'], label: 'They replied', value: 'client_replied' },
-    { show: ['connection_due', 'connection_sent', 'connection_accepted'], label: 'I sent a connection request', value: 'connection_sent' },
-    { show: ['connection_accepted', 'dm_sent', 'waiting_for_reply'], label: 'I sent a message', value: 'dm_sent' },
-    { show: ['conversation', 'meeting'], label: 'Meeting booked', value: 'meeting_booked' },
-    { show: ['conversation', 'meeting', 'proposal'], label: 'They are interested', value: 'interested' },
-    { show: ['conversation', 'meeting', 'proposal'], label: 'Not interested', value: 'not_interested' },
-    { show: ['dm_sent', 'waiting_for_reply'], label: 'No response yet', value: 'no_response' },
-    { show: ['*'], label: 'Something else', value: 'other' },
+  const options: LogUpdateOption[] = [
+    { show: ['connection_sent', 'connection_due', 'connection_accepted'], label: 'They accepted my connection', value: 'connection_accepted', isMessageAction: false },
+    { show: ['dm_sent', 'waiting_for_reply', 'replied', 'follow_up_due', 'conversation'], label: 'They replied', value: 'client_replied', isMessageAction: false },
+    { show: ['connection_due', 'connection_sent', 'connection_accepted'], label: 'I sent a connection request', value: 'connection', isMessageAction: true },
+    { show: ['connection_accepted', 'dm_sent', 'waiting_for_reply'], label: 'I sent a message', value: 'dm', isMessageAction: true },
+    { show: ['dm_sent', 'waiting_for_reply', 'replied'], label: 'I followed up', value: 'followup', isMessageAction: true },
+    { show: ['replied', 'conversation'], label: 'I sent a reply', value: 'reply', isMessageAction: true },
+    { show: ['conversation', 'meeting'], label: 'Meeting booked', value: 'meeting_booked', isMessageAction: false },
+    { show: ['conversation', 'meeting', 'proposal'], label: 'They are interested', value: 'interested', isMessageAction: false },
+    { show: ['conversation', 'meeting', 'proposal'], label: 'Not interested', value: 'not_interested', isMessageAction: false },
+    { show: ['dm_sent', 'waiting_for_reply'], label: 'No response yet', value: 'no_response', isMessageAction: false },
+    { show: ['*'], label: 'Something else', value: 'reviewed', isMessageAction: false },
   ]
+
+  const selectedOption = options.find((o) => o.value === selected)
+  const requiresText = selectedOption?.isMessageAction === true
 
   const visible = options.filter((o) => o.show.includes(phase) || o.show.includes('*'))
 
@@ -1241,16 +1254,29 @@ function LogUpdateOptions({ phase, leadId, onLogged }: { phase: string; leadId: 
       let res: Response
       if (selected === 'connection_accepted') {
         res = await fetch(`/api/leads/${leadId}/connection-accepted`, { method: 'POST' })
-      } else {
+      } else if (requiresText) {
+        const text = messageText.trim()
+        if (!text) {
+          setError('Paste the message you actually sent.')
+          setSaving(false)
+          return
+        }
         res = await fetch(`/api/leads/${leadId}/contact`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: selected, sentText: '', direction: 'inbound' }),
+          body: JSON.stringify({ type: selected, sentText: text, direction: 'outbound' }),
+        })
+      } else {
+        res = await fetch(`/api/leads/${leadId}/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status_type: selected }),
         })
       }
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? 'Could not log update.')
       setSelected(null)
+      setMessageText('')
       onLogged?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not log update.')
@@ -1280,11 +1306,38 @@ function LogUpdateOptions({ phase, leadId, onLogged }: { phase: string; leadId: 
             {selected === opt.value && <Check className="size-2.5 text-on-accent" />}
           </span>
           {opt.label}
+          {opt.isMessageAction && (
+            <span className="ml-auto text-[10px] text-stone">text required</span>
+          )}
         </button>
       ))}
+
+      {requiresText && (
+        <div className="mt-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="size-3.5 text-orange" />
+            <p className="text-[12px] font-medium text-ink">Paste the message you actually sent</p>
+          </div>
+          <Textarea
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
+            rows={4}
+            className="text-[13px] bg-bone-raised/30 border-line focus:border-orange/40"
+            placeholder="Paste the exact message text here..."
+            disabled={saving}
+          />
+        </div>
+      )}
+
       {error && <p className="mt-2 text-[12px] text-status-danger" role="alert">{error}</p>}
       <div className="mt-2 flex items-center gap-2">
-        <Button variant="orange" size="sm" onClick={() => void handleLog()} disabled={saving || !selected} loading={saving}>
+        <Button
+          variant="orange"
+          size="sm"
+          onClick={() => void handleLog()}
+          disabled={saving || !selected || (requiresText && !messageText.trim())}
+          loading={saving}
+        >
           Log this
         </Button>
       </div>

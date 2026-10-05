@@ -4,7 +4,7 @@ import type { MessageType } from '@/lib/domain/types'
 import { computeEditDelta, classifySendDisposition, inferFeedbackReasons } from '@/lib/relay/edit-learning'
 import { safeErrorResponse } from '@/lib/errors'
 
-const TYPES: MessageType[] = ['dm', 'connection', 'upwork', 'followup', 'reply']
+const TYPES: MessageType[] = ['dm', 'connection', 'followup', 'reply']
 
 export async function POST(
   request: Request,
@@ -27,9 +27,14 @@ export async function POST(
     )
   }
 
-  const type: MessageType = TYPES.includes(body.type as MessageType)
-    ? (body.type as MessageType)
-    : 'dm'
+  const rawType = body.type?.trim() ?? ''
+  if (!TYPES.includes(rawType as MessageType)) {
+    return NextResponse.json(
+      { error: `Invalid type. Must be one of: ${TYPES.join(', ')}` },
+      { status: 400 },
+    )
+  }
+  const type: MessageType = rawType as MessageType
 
   let store
   try {

@@ -387,9 +387,15 @@ function buildInboundTask(lead: Lead, input: QueueInput): RelayTask {
 
 function buildFollowupTask(lead: Lead, daysSince: number, input: QueueInput): RelayTask {
   const messages = input.messagesByLead.get(lead.id) ?? []
+  const convo = input.conversations.get(lead.id)
   const lastSent = messages.filter((m) => m.sentText && m.sentAt).sort((a, b) =>
     (a.sentAt ?? '').localeCompare(b.sentAt ?? '')
   ).at(-1)
+
+  const senderProfileId = convo?.senderProfileId ?? lead.senderProfileId ?? null
+  const senderProfile = senderProfileId
+    ? input.assignedProfiles.find((p) => p.id === senderProfileId) ?? null
+    : null
 
   const evidence: RelayEvidence[] = [
     {
@@ -406,6 +412,12 @@ function buildFollowupTask(lead: Lead, daysSince: number, input: QueueInput): Re
       timestamp: null,
       verified: true,
     },
+    ...(senderProfile ? [{
+      source: 'profile' as const,
+      detail: `Sender profile: ${senderProfile.displayName ?? senderProfile.fullName ?? 'Unknown'}`,
+      timestamp: null,
+      verified: true,
+    }] : []),
   ]
 
   const rec: RelayRecommendation = {

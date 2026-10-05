@@ -7,11 +7,12 @@ import { cn } from 'cn'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { ScoreRing } from '@/components/score-ring'
 import { signalById } from '@/lib/score/signals'
+import { getComparableLeadScore } from '@/lib/score/rubric'
 import { isLeadLocked, lockCountdownMs } from '@/lib/leads/lock'
 import { LogReplyDialog } from '@/components/log-reply-dialog'
 import type { Lead } from '@/lib/domain/types'
 
-type LeadRow = Lead & { ownerName?: string; lastActivityAt?: string | null }
+type LeadRow = Lead & { ownerName?: string; lastActivityAt?: string | null; senderProfileName?: string | null }
 
 const STATUS_VARIANT: Record<string, 'success' | 'orange' | 'warning' | 'neutral' | 'cobalt' | 'danger' | 'info'> = {
   replied: 'success',
@@ -136,8 +137,8 @@ export function LeadsBoard({ leads, orgView }: { leads: LeadRow[]; orgView: bool
         const bT = b.lastActivityAt ?? b.createdAt
         return new Date(bT).getTime() - new Date(aT).getTime()
       }
-      const aScore = a.canonicalScore ?? a.score ?? 0
-      const bScore = b.canonicalScore ?? b.score ?? 0
+      const aScore = getComparableLeadScore(a)
+      const bScore = getComparableLeadScore(b)
       if (bScore !== aScore) return bScore - aScore
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     })
@@ -258,10 +259,13 @@ export function LeadsBoard({ leads, orgView }: { leads: LeadRow[]; orgView: bool
                       </div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] text-graphite">
                         {lead.contactName && <span className="truncate">{lead.contactName}</span>}
-                        {orgView && lead.ownerName && (
-                          <span className="shrink-0 text-stone">· {lead.ownerName}</span>
-                        )}
-                        {signal && <span className="shrink-0 text-stone">· {signal.short}</span>}
+                         {orgView && lead.ownerName && (
+                           <span className="shrink-0 text-stone">· {lead.ownerName}</span>
+                         )}
+                         {lead.senderProfileName && (
+                           <span className="shrink-0 rounded-full bg-bone-raised px-1.5 py-0.5 text-[10px] text-stone">{lead.senderProfileName}</span>
+                         )}
+                         {signal && <span className="shrink-0 text-stone">· {signal.short}</span>}
                         {nextAction && (
                           <span className={cn(
                             'shrink-0',

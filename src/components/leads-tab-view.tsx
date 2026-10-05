@@ -9,7 +9,7 @@ import { LeadsBoard } from '@/components/leads-board'
 import { rowRelationshipLabel } from '@/components/leads-board'
 import type { Lead } from '@/lib/domain/types'
 
-type LeadRow = Lead & { ownerName?: string; lastActivityAt?: string | null }
+type LeadRow = Lead & { ownerName?: string; lastActivityAt?: string | null; senderProfileName?: string | null }
 
 type ConversationGroup = 'needs_reply' | 'followup_due' | 'waiting' | 'recent'
 

@@ -127,6 +127,17 @@ export function verdictFor(total: number, rulebook: OrganizationRulebook): Verdi
   return 'skip'
 }
 
+/**
+ * Normalize any lead score to a 0-100 comparable scale.
+ * Canonical scores are already 0-100; legacy rubric scores are 0-12.
+ * Use this for ALL sorting, filtering, and comparison.
+ */
+export function getComparableLeadScore(record: { canonicalScore?: number | null; score?: number | null }): number {
+  if (record.canonicalScore != null) return record.canonicalScore
+  if (record.score != null) return (record.score / 12) * 100
+  return 0
+}
+
 /** Deterministic check: does the evidence cite a number or a 4-digit year? */
 function evidenceIsSpecific(evidence: string | null | undefined): boolean {
   if (!evidence) return false

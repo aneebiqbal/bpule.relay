@@ -13,6 +13,7 @@ type ActionEventType =
   | 'DM_PREPARED'
   | 'DM_SENT'
   | 'FOLLOWUP_SENT'
+  | 'REPLY_SENT'
   | 'REPLY_RECEIVED'
   | 'LEAD_REFERRED'
   | 'PROFILE_RECOMMENDED'
@@ -46,6 +47,7 @@ interface DailySummary {
   connectionsSent: number
   dmsSent: number
   followupsSent: number
+  repliesSent: number
   repliesReceived: number
   leadsExtracted: number
   upworkProposals: number
@@ -147,6 +149,7 @@ export async function getDailySummary(orgId: string, date: string): Promise<Dail
         connectionsSent: 0,
         dmsSent: 0,
         followupsSent: 0,
+        repliesSent: 0,
         repliesReceived: 0,
         leadsExtracted: 0,
         upworkProposals: 0,
@@ -168,6 +171,9 @@ export async function getDailySummary(orgId: string, date: string): Promise<Dail
         break
       case 'FOLLOWUP_SENT':
         summary.followupsSent++
+        break
+      case 'REPLY_SENT':
+        summary.repliesSent++
         break
       case 'REPLY_RECEIVED':
         summary.repliesReceived++
@@ -252,6 +258,7 @@ export async function getTodayCounts(orgId: string): Promise<Record<string, numb
     connectionsSent: 0,
     dmsSent: 0,
     followupsSent: 0,
+    repliesSent: 0,
     repliesReceived: 0,
     leadsExtracted: 0,
     upworkProposals: 0,
@@ -262,6 +269,7 @@ export async function getTodayCounts(orgId: string): Promise<Record<string, numb
     totals.connectionsSent += rep.connectionsSent
     totals.dmsSent += rep.dmsSent
     totals.followupsSent += rep.followupsSent
+    totals.repliesSent += rep.repliesSent
     totals.repliesReceived += rep.repliesReceived
     totals.leadsExtracted += rep.leadsExtracted
     totals.upworkProposals += rep.upworkProposals

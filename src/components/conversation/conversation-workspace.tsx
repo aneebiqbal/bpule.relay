@@ -117,6 +117,7 @@ export function ConversationWorkspace({
   embedded = false,
 }: ConversationWorkspaceProps) {
   const [tellRelay, setTellRelay] = useState('')
+  const [composerMode, setComposerMode] = useState<'none' | 'paste_reply'>('none')
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom when new messages arrive
@@ -262,7 +263,7 @@ export function ConversationWorkspace({
       {/* Composer area */}
       {!isTerminal && (
         <div className="border-t border-line pt-3 space-y-3">
-          {/* Waiting state */}
+          {/* Waiting state — always show paste reply + log update */}
           {isWaiting && !draftText && (
             <ConversationWaitingState
               contactName={contactName}
@@ -270,7 +271,7 @@ export function ConversationWorkspace({
               waitingSince={relationshipState.waitingSince}
               lastActionLabel={relationshipState.lastActionLabel}
               lastActionAt={relationshipState.lastActionAt}
-              onPasteReply={() => {}}
+              onPasteReply={() => setComposerMode('paste_reply')}
               onLogUpdate={undefined}
               now={now}
             />
@@ -282,6 +283,26 @@ export function ConversationWorkspace({
               <FollowUpDue
                 contactName={contactName}
                 onPrepareFollowUp={onPrepareFollowUp ?? (() => {})}
+              />
+            </div>
+          )}
+
+          {/* Paste reply composer (when waiting + not drafting) */}
+          {isWaiting && !draftText && composerMode === 'paste_reply' && (
+            <div className="space-y-2">
+              <ReplyComposer
+                mode="paste_reply"
+                draftText=""
+                onDraftChange={() => {}}
+                onCopy={onCopy}
+                onLogSent={() => {}}
+                onPasteSave={(text) => { onPasteSave(text); setComposerMode('none') }}
+                contactName={contactName}
+                channel={channel}
+                wordLimit={wordLimit}
+                canSend={false}
+                isThinking={false}
+                loading={isLoggingSent}
               />
             </div>
           )}
@@ -320,7 +341,7 @@ export function ConversationWorkspace({
           )}
 
           {/* Tell Relay input + Write yourself */}
-          {(draftText || canDraft) && (
+          {(draftText || canDraft || isWaiting) && (
             <div className="flex items-center justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <TellRelayInput
