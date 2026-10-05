@@ -67,6 +67,7 @@ import type {
   TrendInterestProfile,
   FieldConfidence,
   PersonaIntelligenceProfile,
+  OrganizationPlan,
 } from '@/lib/domain/types'
 import type {
   CreateLeadResult,
@@ -87,6 +88,7 @@ import type {
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
+import { UNLIMITED } from '@/lib/billing/premium'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
@@ -915,7 +917,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const replies = owned
         .filter((l) => l.status === 'replied')
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      return { todaySends, dailyLimit: dailySendLimit(), queue, replies }
+      // Demo mode is premium (org plan = 'active') → unlimited. The mock
+      // store doesn't receive an org, so we short-circuit to unlimited for
+      // demo mode. Supabase mode uses plan-aware limits via the billing module.
+      return { todaySends, dailyLimit: UNLIMITED, queue, replies }
     },
     async saveDraft(input: SaveDraftInput) {
       const msg: Message = {
@@ -961,7 +966,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
             const now = new Date()
             return s.getFullYear() === now.getFullYear() && s.getMonth() === now.getMonth() && s.getDate() === now.getDate()
           }).length
-          return { allowed: true, todaySends: todaySendsNow, limit: messageTypeLimit(type), messageId: existing.id, idempotent: true }
+          // Demo mode is premium → unlimited.
+          return { allowed: true, todaySends: todaySendsNow, limit: UNLIMITED, messageId: existing.id, idempotent: true }
         }
       }
       const type = messageType
@@ -974,15 +980,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         }).length
       })()
 
-      const limit = messageTypeLimit(type)
-      if (todaySends >= limit) {
-        return {
-          allowed: false,
-          todaySends,
-          limit,
-          message: `Daily ceiling of ${limit} reached for ${type} messages.`,
-        }
-      }
+      // Demo mode is premium → unlimited. Never blocks a send.
+      const limit = UNLIMITED
 
       // When a client replies, mark the lead as replied and create an outcome
       if (type === 'reply') {
@@ -1342,18 +1341,19 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         (m) => m.repId === rep.id && isToday(m.sentAt),
       ).length
 
+      // Demo mode is premium → unlimited on all budgets.
       const sendBudgets: SendBudget[] = [
         {
           label: 'DM & follow-up',
           types: ['dm', 'followup'],
           used: dmFollowupSent,
-          limit: dailySendLimit(),
+          limit: UNLIMITED,
         },
         {
           label: 'Connection & Upwork',
           types: ['connection', 'upwork'],
           used: connectionSent + upworkApplies,
-          limit: dailyConnectionSendLimit(),
+          limit: UNLIMITED,
         },
       ]
 
@@ -2104,6 +2104,14 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
           return created >= start.getTime() && created <= end.getTime()
         })
         .length
+    },
+    // Demo mode: org is premium (active). Used to gate premium generation mode.
+    getPlan(): OrganizationPlan {
+      return 'active'
+    },
+    async countOrgCapturedProspects() {
+      // Demo mode: always return 0 (demo org is premium, no cap applies).
+      return 0
     },
     async createTopicCluster(input) {
       const now = new Date().toISOString()

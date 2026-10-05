@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
+import { studioGenerationLimit } from '@/lib/billing/premium'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,8 @@ export async function GET(req: NextRequest) {
   }
 
   const generatedToday = await store.countContentDraftsToday(personaId)
-  if (generatedToday >= 2) {
+  const studioLimit = studioGenerationLimit(user.organization.plan)
+  if (studioLimit !== Infinity && generatedToday >= studioLimit) {
     return NextResponse.json({ suggestions: [], capped: true })
   }
 
@@ -37,7 +39,7 @@ export async function GET(req: NextRequest) {
   const filtered = candidates
     .filter((a) => !recentPillarIds.has(a.pillarId))
     .filter((a) => !matchesRecentOpening(a.angleDescription, recentOpenings))
-    .slice(0, Math.max(0, 2 - generatedToday))
+    .slice(0, Math.max(0, studioLimit === Infinity ? candidates.length : studioLimit - generatedToday))
     .map((a) => ({
       id: a.id,
       pillarId: a.pillarId,

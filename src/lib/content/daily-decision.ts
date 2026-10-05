@@ -1,4 +1,6 @@
 import type { ContentDraftFeedback, ContentPersona, ContentResearchFinding, TopicCluster } from '@/lib/domain/types'
+import type { OrganizationPlan } from '@/lib/domain/types'
+import { studioGenerationLimit } from '@/lib/billing/premium'
 
 export type DailyDecision = {
   decisionType: 'question' | 'react' | 'ready' | 'none' | 'ask_uncertain'
@@ -22,8 +24,10 @@ export function buildDailyDecision(input: {
   findings: ContentResearchFinding[]
   feedback: ContentDraftFeedback[]
   generatedToday: number
+  plan: OrganizationPlan
 }): DailyDecision {
-  if (input.generatedToday >= 2) {
+  const studioLimit = studioGenerationLimit(input.plan)
+  if (studioLimit !== Infinity && input.generatedToday >= studioLimit) {
     return { decisionType: 'none', reason: 'Daily cap reached for this persona.' }
   }
 

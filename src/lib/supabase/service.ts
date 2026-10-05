@@ -3,9 +3,12 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 /**
  * Service-role Supabase client. Bypasses RLS entirely — never expose this to
  * a route that serves a browser request. Scoped to system actions that
- * genuinely have no signed-in rep to bind a session to: the off-peak
- * scheduled jobs (eval harness run, few-shot pool refresh), gated by
- * requireCronSecret() below, never by rep auth.
+ * genuinely have no signed-in rep to bind a session to:
+ *   - Off-peak scheduled jobs (eval harness run, few-shot pool refresh),
+ *     gated by requireCronSecret() below.
+ *   - Stripe webhook handler — authenticated by Stripe signature verification
+ *     (constructEvent), not a user session.
+ *   - Stripe customer creation during checkout (server-side, no browser).
  */
 export function createServiceSupabase(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

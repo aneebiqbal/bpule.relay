@@ -28,7 +28,8 @@ import { RelayBrand } from '@/components/brand'
 import { IdentityChip } from '@/components/identity-chip'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { APP_VERSION } from '@/lib/version'
-import type { RepRole } from '@/lib/domain/types'
+import type { OrganizationPlan, RepRole } from '@/lib/domain/types'
+import { isPremium } from '@/lib/billing/premium'
 
 const PRIMARY_NAV = [
   { href: '/dashboard', label: 'Today', icon: CalendarDays, exact: true },
@@ -182,6 +183,7 @@ export interface AppRailProps {
   demo: boolean
   todaySends: number
   dailyLimit: number
+  plan: OrganizationPlan
   revenueIdentities: Array<{
     id: string
     identityName: string
@@ -197,6 +199,7 @@ export function AppRail({
   demo,
   todaySends,
   dailyLimit,
+  plan,
   revenueIdentities,
 }: AppRailProps) {
   const pathname = usePathname()
@@ -248,7 +251,8 @@ export function AppRail({
     }
   }, [])
 
-  const atCeiling = sends >= dailyLimit
+  const isPremiumOrg = isPremium(plan)
+  const atCeiling = !isPremiumOrg && sends >= dailyLimit
   const isAdmin = role === 'admin'
 
   function isActive(href: string, exact: boolean) {
@@ -265,7 +269,11 @@ export function AppRail({
     router.refresh()
   }
 
-  const sendPct = Math.min(sends / dailyLimit, 1)
+  // Premium orgs have no send ceiling (dailyLimit is Infinity) — show sends
+  // without the limit ring. isFinite guards against the Infinity sentinel.
+  const sendPct = dailyLimit > 0 && isFinite(dailyLimit)
+    ? Math.min(sends / dailyLimit, 1)
+    : 0
   const circumference = 2 * Math.PI * 11
 
   function selectIdentity(identityId: string) {
@@ -496,8 +504,29 @@ export function AppRail({
             </nav>
             <div className="border-t border-line px-3 py-3 space-y-2">
               {identityPicker}
-              <div className="flex items-center justify-between gap-2 px-1">
-                <IdentityChip name={repName} subtitle={`${ROLE_LABEL[role]} · ${organizationName}`} />
+              <div className="px-1 space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <IdentityChip name={repName} />
+                  {isPremiumOrg ? (
+                    <span
+                      className="shrink-0 rounded-full bg-orange/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-orange"
+                      aria-label="Premium plan"
+                    >
+                      Premium
+                    </span>
+                  ) : (
+                    <Link
+                      href="/pricing"
+                      className="shrink-0 rounded-full bg-orange px-2 py-0.5 text-[11px] font-medium text-on-accent transition-colors hover:bg-orange-dark focus-visible:outline-2 focus-visible:outline-orange/50"
+                      title="Go Premium"
+                    >
+                      Go Premium
+                    </Link>
+                  )}
+                </div>
+                <span className="block truncate text-[11px] text-graphite">
+                  {ROLE_LABEL[role]} · {organizationName}
+                </span>
               </div>
             </div>
           </div>
@@ -557,16 +586,39 @@ export function AppRail({
         <div className="border-t border-line px-3 py-3 space-y-2">
           {identityPicker}
 
-          <div className="flex items-center justify-between gap-2 px-1">
-            <IdentityChip name={repName} subtitle={`${ROLE_LABEL[role]} · ${organizationName}`} />
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className="rounded-md p-1.5 text-graphite transition-colors hover:bg-bone-raised hover:text-ink"
-              title="Sign out"
-            >
-              <LogOut className="size-3.5" />
-            </button>
+          <div className="px-1 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <IdentityChip name={repName} />
+              {isPremiumOrg ? (
+                <span
+                  className="shrink-0 rounded-full bg-orange/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-orange"
+                  aria-label="Premium plan"
+                >
+                  Premium
+                </span>
+              ) : (
+                <Link
+                  href="/pricing"
+                  className="shrink-0 rounded-full bg-orange px-2 py-0.5 text-[11px] font-medium text-on-accent transition-colors hover:bg-orange-dark focus-visible:outline-2 focus-visible:outline-orange/50"
+                  title="Go Premium"
+                >
+                  Go Premium
+                </Link>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-[11px] text-graphite">
+                {ROLE_LABEL[role]} · {organizationName}
+              </span>
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="shrink-0 rounded-md p-1.5 text-graphite transition-colors hover:bg-bone-raised hover:text-ink"
+                title="Sign out"
+              >
+                <LogOut className="size-3.5" />
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-2 px-1">

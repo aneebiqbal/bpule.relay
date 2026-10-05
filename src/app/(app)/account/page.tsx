@@ -12,8 +12,10 @@ import {
 } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
+import { isPremium } from '@/lib/billing/premium'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { SignOutButton } from '@/components/sign-out-button'
+import { CancelPremium } from './cancel-premium'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +26,7 @@ export default async function AccountPage() {
   const store = await createScoutStore()
   const queue = await store.getTodayDashboard()
 
-  const planLabel = user.organization.plan === 'active' ? 'Pro' : user.organization.plan === 'trial' ? 'Free' : 'Free'
+  const planLabel = isPremium(user.organization.plan) ? 'Premium' : 'Free'
   const totalLimit = queue.sendBudgets.reduce((s, b) => s + b.limit, 0)
   const totalUsed = queue.sendBudgets.reduce((s, b) => s + b.used, 0)
   const sendsLeft = Math.max(0, totalLimit - totalUsed)
@@ -153,6 +155,10 @@ export default async function AccountPage() {
           <ThemeToggle />
         </div>
       </section>
+
+      {isPremium(user.organization.plan) && (
+        <CancelPremium />
+      )}
 
       <section className="rounded-lg border border-line bg-bone-raised shadow-sm">
         <Link

@@ -162,8 +162,8 @@ export interface BenchmarkMetrics {
   needOwnerAccuracy: number
   timingAccuracy: number
   messageEligibleAccuracy: number
-  falseBuyerRate:           // service providers classified as buyers
-  falseMessageRate:         // service providers eligible for message
+  falseBuyerRate: number    // service providers classified as buyers
+  falseMessageRate: number  // service providers eligible for message
   medianLatencyMs: number
   avgLatencyMs: number
 }

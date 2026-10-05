@@ -10,6 +10,7 @@ import { analyzePerformance, buildPerformancePromptBlock } from '@/lib/content/i
 import { findMostSimilar, areEmbeddingsEnabled } from '@/lib/content/intelligence/semantic'
 import { requiresResearch, buildResearchPromptBlock, generateConstraints, noopResearchProvider, performResearch } from '@/lib/content/intelligence/research'
 import { injectStyleCard } from '@/lib/style/inject'
+import { studioGenerationLimit } from '@/lib/billing/premium'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,8 +47,9 @@ export async function POST(req: NextRequest) {
   }
 
   const generatedToday = await store.countContentDraftsToday(personaId)
-  if (generatedToday >= 2) {
-    return NextResponse.json({ error: 'Daily cap reached: up to 2 generated drafts per persona.' }, { status: 429 })
+  const studioLimit = studioGenerationLimit(user.organization.plan)
+  if (studioLimit !== Infinity && generatedToday >= studioLimit) {
+    return NextResponse.json({ error: `Daily cap reached: up to ${studioLimit} generated drafts per persona.` }, { status: 429 })
   }
 
   const profile = persona.contentProfileId ? await store.getContentProfile(persona.contentProfileId) : null

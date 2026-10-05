@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { createScoutStore } from '@/lib/store'
+import { isPremium } from '@/lib/billing/premium'
 import { generate } from '@/lib/ai/runtime'
 import { injectStyleCard } from '@/lib/style/inject'
 import { sanitizeDraft } from '@/lib/facts/sanitize'
@@ -33,12 +34,16 @@ export async function POST(
     body = {}
   }
 
-  const generationMode = body.generationMode === 'premium' ? 'premium' : 'standard'
-
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
   const store = await createScoutStore()
+
+  // Premium generation mode gate: only premium orgs may use the stronger
+  // AI model. A free user requesting 'premium' is silently downgraded.
+  const generationMode = body.generationMode === 'premium' && isPremium(store.getPlan())
+    ? 'premium'
+    : 'standard'
   const job = await store.getUpworkJob(id)
   if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
 

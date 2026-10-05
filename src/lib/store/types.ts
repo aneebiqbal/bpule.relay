@@ -78,6 +78,7 @@ import type {
   TrendInterestProfile,
   FieldConfidence,
   PersonaIntelligenceProfile,
+  OrganizationPlan,
 } from '@/lib/domain/types'
 
 export interface StoreContext {
@@ -627,6 +628,12 @@ export interface ScoutStore {
   listTrendingAnglesByPillarIds(pillarIds: string[], opts?: { unusedOnly?: boolean }): Promise<TrendingAngle[]>
   markTrendingAngleUsed(angleId: string): Promise<TrendingAngle>
   countContentDraftsToday(personaId: string): Promise<number>
+  countOrgCapturedProspects(): Promise<number>
+  /**
+   * Returns the organization's current plan. Used by endpoints that need to
+   * gate features (e.g. premium generation mode) on the entitlement.
+   */
+  getPlan(): OrganizationPlan
   createTopicCluster(input: {
     personaId: string
     clusterName: string

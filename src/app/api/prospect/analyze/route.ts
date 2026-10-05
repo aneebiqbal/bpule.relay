@@ -1,4 +1,6 @@
 import { hasProvider } from '@/lib/ai/config'
+import { getCurrentUser } from '@/lib/auth/current'
+import { prospectCheckLimit } from '@/lib/billing/premium'
 import { scanForSecrets } from '@/lib/ai/secrets'
 import { deduplicated } from '@/lib/ai/dedup'
 import { createScoutStore } from '@/lib/store'
@@ -557,44 +559,63 @@ export async function POST(request: Request) {
 
     if (store) {
       try {
-        const captured = await store.captureProspect({
-          rawInput: rawText,
-          extractedName: canonical.intelligence.person.fullName,
-          extractedCompany: canonical.intelligence.company.name ?? null,
-          extractedTitle: canonical.intelligence.person.title,
-          extractedLocation: canonical.intelligence.person.location,
-          linkedinUrl: canonical.intelligence.person.linkedinUrl ?? canonical.rawSource.sourceUrl ?? null,
-          companyUrl: canonical.rawSource.companyUrl ?? null,
-          canonicalScore: canonical.canonicalScore,
-          canonicalIntelligence: canonical as unknown as Record<string, unknown>,
-          scoreBreakdown: canonical.scoreBreakdown as unknown as Record<string, unknown>,
-          revenueIdentityId: bestSender ? (bestSender as Profile & { revenueIdentityId?: string | null }).revenueIdentityId ?? null : null,
-          senderProfileId: bestSender?.id ?? null,
-        })
-        await store.emitRelayEvent({
-          eventType: 'PROSPECT_CAPTURED',
-          entityType: 'captured_prospect',
-          entityId: captured.id,
-          actorType: 'rep',
-          actorId: store.getCurrentRepId(),
-          revenueIdentityId: captured.revenueIdentityId,
-          source: 'app',
-          sourceEventId: `prospect_captured:${captured.id}`,
-          payload: {
-            company: captured.extractedCompany,
-            score: captured.canonicalScore,
-          },
-        })
-        // Credit toward the rep's daily "prospects captured" target — only
-        // on a genuine new capture, never on a reuse/cache hit for input
-        // already analyzed, so re-analyzing the same paste can't be farmed
-        // for repeat credit.
-        if (captured.isNewCapture) {
-          await store.recordProspectExtracted(captured.revenueIdentityId)
+        // Prospect check cap: free orgs get a lifetime allowance. Premium
+        // orgs (plan === 'active') get unlimited. This is NON-blocking: the
+        // analysis result is always returned in full; we only skip the
+        // capture (persisting the prospect) when the cap is reached.
+        const currentUser = await getCurrentUser()
+        let skipCapture = false
+        if (currentUser) {
+          const cap = prospectCheckLimit(currentUser.organization.plan)
+          if (cap !== null) {
+            const capturedCount = await store.countOrgCapturedProspects()
+            if (capturedCount >= cap) {
+              skipCapture = true
+              emit({ type: 'prospect_check_limit', message: `Free plan limit of ${cap} prospect checks reached. Upgrade to Premium for unlimited checks.` })
+            }
+          }
+        }
+
+        if (!skipCapture) {
+          const captured = await store.captureProspect({
+            rawInput: rawText,
+            extractedName: canonical.intelligence.person.fullName,
+            extractedCompany: canonical.intelligence.company.name ?? null,
+            extractedTitle: canonical.intelligence.person.title,
+            extractedLocation: canonical.intelligence.person.location,
+            linkedinUrl: canonical.intelligence.person.linkedinUrl ?? canonical.rawSource.sourceUrl ?? null,
+            companyUrl: canonical.rawSource.companyUrl ?? null,
+            canonicalScore: canonical.canonicalScore,
+            canonicalIntelligence: canonical as unknown as Record<string, unknown>,
+            scoreBreakdown: canonical.scoreBreakdown as unknown as Record<string, unknown>,
+            revenueIdentityId: bestSender ? (bestSender as Profile & { revenueIdentityId?: string | null }).revenueIdentityId ?? null : null,
+            senderProfileId: bestSender?.id ?? null,
+          })
+          await store.emitRelayEvent({
+            eventType: 'PROSPECT_CAPTURED',
+            entityType: 'captured_prospect',
+            entityId: captured.id,
+            actorType: 'rep',
+            actorId: store.getCurrentRepId(),
+            revenueIdentityId: captured.revenueIdentityId,
+            source: 'app',
+            sourceEventId: `prospect_captured:${captured.id}`,
+            payload: {
+              company: captured.extractedCompany,
+              score: captured.canonicalScore,
+            },
+          })
+          if (captured.isNewCapture) {
+            await store.recordProspectExtracted(captured.revenueIdentityId)
+          }
         }
       } catch {
         // Non-fatal: captured prospect must not block analysis
       }
+    }
+
+    if (explicitProfileId && !explicitMatch && profiles.length > 0) {
+      emit({ type: 'status', message: 'Requested profile unavailable, using best match.' })
     }
 
     if (explicitProfileId && !explicitMatch && profiles.length > 0) {

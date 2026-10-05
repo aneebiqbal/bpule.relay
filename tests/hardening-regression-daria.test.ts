@@ -1,7 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeEach } from 'vitest'
 import { produceCanonicalIntelligence } from '@/lib/intelligence-v2/orchestrator'
 import { deriveSignalEvidenceFallback } from '@/lib/intelligence-v2/orchestrator'
 import { DARIA_REDKINA_SOLSONIC_RAW } from './fixtures/hardening-regressions/daria-redkina-solsonic'
+
+// Force the deterministic demo path regardless of any provider keys present
+// in the local environment — streamDraft's demo path requires no strategy,
+// while the real path throws STRATEGY_REQUIRED on the null-strategy input.
+beforeEach(() => {
+  delete process.env.OPENAI_API_KEY
+  delete process.env.GROQ_API_KEY
+  delete process.env.GROQ_API_KEY_2
+  delete process.env.OPENCODE_API_KEY
+  delete process.env.LONGCAT_API_KEY
+  delete process.env.DEEPSEEK_API_KEY
+  delete process.env.FIREWORKS_API_KEY
+  delete process.env.SCOUT_DEEPSEEK_ENABLED
+})
 
 /**
  * Hardening regression fixture — Daria Redkina / Solsonic.

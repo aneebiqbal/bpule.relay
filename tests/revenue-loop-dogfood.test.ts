@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeEach } from 'vitest'
 import { generateDraft, type DraftInput } from '@/lib/ai/draft'
 import { evaluateMessage } from '@/lib/relay/message-forge'
 import { classifySendDisposition } from '@/lib/relay/edit-learning'
@@ -12,6 +12,19 @@ import type { ExtractedLead, Lead, Profile } from '@/lib/domain/types'
  *
  * Asserts systemic behavior, not exact wording.
  */
+
+// Force the deterministic demo writer regardless of any provider keys present
+// in the local environment — this suite asserts on demo output, not live AI.
+beforeEach(() => {
+  delete process.env.OPENAI_API_KEY
+  delete process.env.GROQ_API_KEY
+  delete process.env.GROQ_API_KEY_2
+  delete process.env.OPENCODE_API_KEY
+  delete process.env.LONGCAT_API_KEY
+  delete process.env.DEEPSEEK_API_KEY
+  delete process.env.FIREWORKS_API_KEY
+  delete process.env.SCOUT_DEEPSEEK_ENABLED
+})
 
 const PROFILE: Profile = {
   id: 'p1',

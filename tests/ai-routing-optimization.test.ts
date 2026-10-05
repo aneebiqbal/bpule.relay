@@ -85,6 +85,9 @@ describe('Groq-first extraction routing', () => {
     delete process.env.SCOUT_DEEPSEEK_ENABLED
     delete process.env.DEEPSEEK_API_KEY
     delete process.env.GROQ_API_KEY
+    delete process.env.GROQ_API_KEY_2
+    delete process.env.OPENCODE_API_KEY
+    delete process.env.FIREWORKS_API_KEY
     delete process.env.OPENAI_API_KEY
     delete process.env.LONGCAT_API_KEY
   })
@@ -212,6 +215,9 @@ describe('shouldEscalateToPremium', () => {
 describe('hasProvider', () => {
   beforeEach(() => {
     delete process.env.GROQ_API_KEY
+    delete process.env.GROQ_API_KEY_2
+    delete process.env.OPENCODE_API_KEY
+    delete process.env.FIREWORKS_API_KEY
     delete process.env.LONGCAT_API_KEY
     delete process.env.OPENAI_API_KEY
     delete process.env.SCOUT_DEEPSEEK_ENABLED

@@ -1,4 +1,5 @@
 import type { ExtractedLead, OutreachStrategy, SafeFact, MatchedProof, Profile } from '@/lib/domain/types'
+import { isPremium } from '@/lib/billing/premium'
 import { computeScore } from '@/lib/score/rubric'
 import { canonicalToLegacyScoreResult } from '@/lib/intelligence-v2/orchestrator'
 import { streamDraft } from '@/lib/ai/draft-stream'
@@ -42,7 +43,8 @@ export async function POST(
   const type = body.type ?? 'dm'
   const profileId = body.profileId ?? null
   const proofId = body.proofId ?? null
-  const generationMode = body.generationMode === 'premium' ? 'premium' : 'standard'
+  // generationMode is resolved AFTER auth below — a non-premium org cannot
+  // access the premium (stronger) AI model even if the client requests it.
 
   if (!['dm', 'connection', 'upwork', 'followup', 'reply'].includes(type)) {
     return new Response(JSON.stringify({ error: 'Unknown message type.' }), {
@@ -69,6 +71,13 @@ export async function POST(
       { status: 401, headers: { 'Content-Type': 'application/json' } },
     )
   }
+
+  // Premium generation mode gate: only premium orgs may use the stronger
+  // AI model. A free user requesting 'premium' is silently downgraded — we
+  // never trust the client's generationMode claim.
+  const generationMode = body.generationMode === 'premium' && isPremium(store.getPlan())
+    ? 'premium'
+    : 'standard'
 
   const detail = await store.getLead(id)
   if (!detail) {

@@ -9,7 +9,7 @@ export const maxDuration = 120
  * POST /api/upwork/extract
  * Extract structured job data from pasted Upwork job text.
  */
-export async function POST_extract(req: NextRequest) {
+export async function POST(req: NextRequest) {
   const store = createServiceSupabase()
   const { data: auth } = await store.auth.getUser()
   if (!auth.user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
