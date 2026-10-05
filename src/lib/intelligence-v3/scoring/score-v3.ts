@@ -290,7 +290,13 @@ function getScoreLabel(score: number): { label: string; qualification: V3ScoreOu
 }
 
 // ── Backward-compatible display ─────────────────────────────────────────────
-
+// Maps V3 0-100 score to a 0-10 display value using qualification bands
+// rather than blind division. V3 42 ("Maybe" / CONTACT_NOW) → 5/10 (medium),
+// not 4/10 (which reads as "very weak" and contradicts the action).
 export function v3ToDisplay(score: number): number {
-  return Math.round(score / 10)
+  if (score >= 80) return 9
+  if (score >= 60) return 7
+  if (score >= 40) return 5
+  if (score >= 20) return 3
+  return 1
 }

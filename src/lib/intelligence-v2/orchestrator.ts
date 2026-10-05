@@ -669,11 +669,23 @@ export function getCanonicalScore(
 
 /**
  * Get the display score (/10). This is a UI-only conversion.
+ *
+ * For V3 canonical scores, we map the qualification to a meaningful /10 value
+ * instead of blindly dividing by 10. V3 score 42 = "Maybe" = 5/10 (medium),
+ * not 4/10 (which reads as "very weak" and contradicts CONTACT_NOW).
  */
 export function getDisplayScore(
   canonical: CanonicalProspectIntelligence | null,
 ): number | null {
   if (!canonical) return null
+  if (canonical.intelligenceVersion?.startsWith('relay_decision_v3')) {
+    const qualification = canonical.qualification
+    if (qualification === 'strong') return 9
+    if (qualification === 'worth_pursuing') return 7
+    if (qualification === 'maybe') return 5
+    if (qualification === 'skip') return 2
+    return Math.round(canonical.canonicalScore / 10)
+  }
   return Math.round(canonical.canonicalScore / 10)
 }
 
