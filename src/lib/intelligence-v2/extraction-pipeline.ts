@@ -368,7 +368,18 @@ function stabilizePassA(rawText: string, sourceUrls: string[], modelPassA: PassA
 
   if (!out.person.fullName && heuristic.person.fullName) out.person.fullName = heuristic.person.fullName
   if (!out.person.firstName && heuristic.person.firstName) out.person.firstName = heuristic.person.firstName
-  if (!out.person.title && heuristic.person.title) out.person.title = heuristic.person.title
+  // Prefer the title that carries company affiliation ("CEO at Bio-marker.ai")
+  // over a bare role ("ceo"). The AI often returns just the role keyword,
+  // which drops the organization context needed for identity resolution.
+  if (!out.person.title) {
+    out.person.title = heuristic.person.title
+  } else if (heuristic.person.title) {
+    const aiHasAffiliation = /\s+(?:at|@|of)\s+/i.test(out.person.title)
+    const heurHasAffiliation = /\s+(?:at|@|of)\s+/i.test(heuristic.person.title)
+    if (heurHasAffiliation && !aiHasAffiliation) {
+      out.person.title = heuristic.person.title
+    }
+  }
   if (!out.person.seniority && heuristic.person.seniority) out.person.seniority = heuristic.person.seniority
   if (!out.person.location && heuristic.person.location) out.person.location = heuristic.person.location
   if (!out.person.linkedinUrl && heuristic.person.linkedinUrl) out.person.linkedinUrl = heuristic.person.linkedinUrl

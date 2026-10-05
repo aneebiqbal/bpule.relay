@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import fs from 'fs'
+import path from 'path'
 
 // ── Provider Chain Order ─────────────────────────────────────────────────────
 
@@ -251,6 +253,12 @@ describe('AI key security', () => {
   beforeEach(() => {
     delete process.env.OPENAI_API_KEY
     delete process.env.GROQ_API_KEY
+    delete process.env.GROQ_API_KEY_2
+    delete process.env.OPENCODE_API_KEY
+    delete process.env.LONGCAT_API_KEY
+    delete process.env.DEEPSEEK_API_KEY
+    delete process.env.FIREWORKS_API_KEY
+    delete process.env.SCOUT_DEEPSEEK_ENABLED
   })
 
   it('hasProvider returns false with no keys', () => {
@@ -258,8 +266,6 @@ describe('AI key security', () => {
   })
 
   it('no NEXT_PUBLIC_ exposes AI keys', () => {
-    const fs = require('fs')
-    const path = require('path')
     const envExample = fs.readFileSync(path.join(process.cwd(), '.env.local.example'), 'utf8')
     const nextPublicLines = envExample.split('\n').filter((l: string) => l.includes('NEXT_PUBLIC'))
     for (const line of nextPublicLines) {
@@ -306,8 +312,6 @@ describe('budget enforcement', () => {
 
 describe('telemetry trace structure', () => {
   it('ai_traces table has required columns defined in migration', () => {
-    const fs = require('fs')
-    const path = require('path')
     const migration = fs.readFileSync(
       path.join(process.cwd(), 'supabase/migrations/20260920000000_add_ai_traces.sql'),
       'utf8',
@@ -322,8 +326,6 @@ describe('telemetry trace structure', () => {
   })
 
   it('migration enables RLS', () => {
-    const fs = require('fs')
-    const path = require('path')
     const migration = fs.readFileSync(
       path.join(process.cwd(), 'supabase/migrations/20260920000000_add_ai_traces.sql'),
       'utf8',

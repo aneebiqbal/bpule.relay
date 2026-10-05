@@ -72,7 +72,7 @@ let supabase: SupabaseClient | null = null
 
 function getClient() {
   if (!supabase) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { createServiceSupabase } = require('@/lib/supabase/service')
     supabase = createServiceSupabase()
   }

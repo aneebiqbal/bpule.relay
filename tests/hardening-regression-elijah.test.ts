@@ -1,7 +1,22 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { produceCanonicalIntelligence } from '@/lib/intelligence-v2/orchestrator'
 import { buildRevenueStrategy, sourceFromCanonical } from '@/lib/relay/revenue-strategy'
 import { ELIJAH_GUTMAN_HARTFORD_AI_RAW } from './fixtures/hardening-regression-elijah-gutman-hartford'
+
+// Force the deterministic demo path regardless of any provider keys present
+// in the local environment. The identity assertion needs the full title
+// ("CEO at Hartford AI Partners") which demo extraction preserves; expired
+// local keys produce a truncated "ceo" via the degraded real-AI path.
+beforeEach(() => {
+  delete process.env.OPENAI_API_KEY
+  delete process.env.GROQ_API_KEY
+  delete process.env.GROQ_API_KEY_2
+  delete process.env.OPENCODE_API_KEY
+  delete process.env.LONGCAT_API_KEY
+  delete process.env.DEEPSEEK_API_KEY
+  delete process.env.FIREWORKS_API_KEY
+  delete process.env.SCOUT_DEEPSEEK_ENABLED
+})
 
 /**
  * Hardening regression fixture — Elijah Gutman / Hartford AI Partners.

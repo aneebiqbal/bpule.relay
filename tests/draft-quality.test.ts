@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { runEval, type GoldenCase } from '@/lib/ai/eval'
 import { sanitizeDraft, requestsCall } from '@/lib/facts/sanitize'
 import type { DraftInput } from '@/lib/ai/draft'
@@ -11,6 +11,19 @@ import type { ExtractedLead, Fact, Lead, Play, StyleCard } from '@/lib/domain/ty
  * generateDraft's deterministic demo path (no AI provider configured in
  * this environment), so this is a real CI-safe gate, not a one-off.
  */
+
+// Force the deterministic demo path regardless of any provider keys present
+// in the local environment — these tests assert on demo output, not live AI.
+beforeEach(() => {
+  delete process.env.OPENAI_API_KEY
+  delete process.env.GROQ_API_KEY
+  delete process.env.GROQ_API_KEY_2
+  delete process.env.OPENCODE_API_KEY
+  delete process.env.LONGCAT_API_KEY
+  delete process.env.DEEPSEEK_API_KEY
+  delete process.env.FIREWORKS_API_KEY
+  delete process.env.SCOUT_DEEPSEEK_ENABLED
+})
 
 const FACTS: Fact[] = [
   { id: 'fact-price', organizationId: 'org-test', label: 'Price', value: '1500', factType: 'price', addedBy: null, createdAt: new Date().toISOString() },

@@ -2,6 +2,7 @@
  * Live quality test — 15 diverse profiles.
  * Run with: node scripts/quality-test.cjs
  */
+/* eslint-disable @typescript-eslint/no-require-imports */
 
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');

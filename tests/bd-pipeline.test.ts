@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { extractLead } from '@/lib/demo-extract'
 import { computeScore, verdictFor } from '@/lib/score/rubric'
 import { generateDraft } from '@/lib/ai/draft'
@@ -11,6 +11,19 @@ import type { ExtractedLead, Fact, Lead, OrganizationRulebook, Play, StyleCard }
  * AI provider is configured), so this suite needs no API keys and makes no
  * network calls.
  */
+
+// Force the deterministic demo path regardless of any provider keys present
+// in the local environment — these tests assert on demo output, not live AI.
+beforeEach(() => {
+  delete process.env.OPENAI_API_KEY
+  delete process.env.GROQ_API_KEY
+  delete process.env.GROQ_API_KEY_2
+  delete process.env.OPENCODE_API_KEY
+  delete process.env.LONGCAT_API_KEY
+  delete process.env.DEEPSEEK_API_KEY
+  delete process.env.FIREWORKS_API_KEY
+  delete process.env.SCOUT_DEEPSEEK_ENABLED
+})
 
 const RULEBOOK: OrganizationRulebook = {
   organizationId: 'org-test',

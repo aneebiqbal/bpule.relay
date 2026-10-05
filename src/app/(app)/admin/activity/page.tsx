@@ -59,10 +59,6 @@ export default function AdminActivityPage() {
   const [repLog, setRepLog] = useState<ActionLogEntry[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchData()
-  }, [date])
-
   async function fetchData() {
     setLoading(true)
     try {
@@ -78,6 +74,10 @@ export default function AdminActivityPage() {
     }
     setLoading(false)
   }
+
+  useEffect(() => {
+    fetchData()
+  }, [date])
 
   async function expandRep(repId: string) {
     if (expandedRep === repId) {
