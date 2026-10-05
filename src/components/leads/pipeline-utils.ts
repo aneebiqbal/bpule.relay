@@ -14,102 +14,54 @@ export type LeadRow = Lead & {
 }
 
 export type PipelineStage =
-  | 'new'
-  | 'connection_pending'
-  | 'message_draft'
-  | 'waiting_for_reply'
-  | 'they_replied'
-  | 'followup_due'
-  | 'in_conversation'
-  | 'won'
-  | 'closed'
+  | 'to_contact'
+  | 'waiting'
+  | 'needs_reply'
+  | 'done'
 
 export interface PipelineColumnDef {
   id: PipelineStage
   label: string
   description: string
-  color: 'neutral' | 'warning' | 'cobalt' | 'orange' | 'info' | 'success'
   dotColor: string
+  borderColor: string
+  headerBg: string
 }
 
 export const PIPELINE_COLUMNS: PipelineColumnDef[] = [
-  { id: 'new', label: 'New', description: 'Extracted, no outreach yet', color: 'neutral', dotColor: 'bg-stone' },
-  { id: 'connection_pending', label: 'Connection Pending', description: 'Waiting for acceptance', color: 'warning', dotColor: 'bg-status-warning' },
-  { id: 'message_draft', label: 'Message Draft', description: 'Ready to send first message', color: 'cobalt', dotColor: 'bg-cobalt' },
-  { id: 'waiting_for_reply', label: 'Waiting for Reply', description: 'Message sent, no response yet', color: 'cobalt', dotColor: 'bg-cobalt' },
-  { id: 'they_replied', label: 'They Replied', description: 'Client responded — needs reply', color: 'orange', dotColor: 'bg-orange' },
-  { id: 'followup_due', label: 'Follow-Up Due', description: '5+ days, no reply', color: 'warning', dotColor: 'bg-status-warning' },
-  { id: 'in_conversation', label: 'In Conversation', description: 'Active back-and-forth', color: 'info', dotColor: 'bg-status-info' },
-  { id: 'won', label: 'Won', description: 'Converted / meeting booked', color: 'success', dotColor: 'bg-status-success' },
-  { id: 'closed', label: 'Closed', description: 'Lost / not interested / dead', color: 'neutral', dotColor: 'bg-stone' },
+  { id: 'to_contact', label: 'To Contact', description: 'Not yet reached out', dotColor: 'bg-stone', borderColor: 'border-t-stone', headerBg: 'bg-bone-raised' },
+  { id: 'waiting', label: 'Waiting', description: 'Sent, awaiting reply', dotColor: 'bg-cobalt', borderColor: 'border-t-cobalt', headerBg: 'bg-cobalt/[0.03]' },
+  { id: 'needs_reply', label: 'Needs Reply', description: 'They wrote back', dotColor: 'bg-orange', borderColor: 'border-t-orange', headerBg: 'bg-orange/[0.03]' },
+  { id: 'done', label: 'Done', description: 'Won or closed', dotColor: 'bg-status-success', borderColor: 'border-t-status-success', headerBg: 'bg-status-success/[0.03]' },
 ]
 
-export function derivePipelineStage(lead: LeadRow, now: number = Date.now()): PipelineStage {
-  if (lead.status === 'won') return 'won'
-  if (lead.status === 'lost' || lead.status === 'dead' || lead.status === 'no') return 'closed'
+export function derivePipelineStage(lead: LeadRow): PipelineStage {
+  if (lead.status === 'won' || lead.status === 'lost' || lead.status === 'dead' || lead.status === 'no') return 'done'
+  if (lead.status === 'replied') return 'needs_reply'
 
-  const locked = isLeadLocked(lead.lockedUntil ?? null, now)
   const hasOutbound = !!lead.lastOutboundAt
   const hasInbound = !!lead.lastInboundAt
 
-  if (lead.status === 'replied') {
-    if (hasOutbound && hasInbound) {
-      const outboundTime = new Date(lead.lastOutboundAt!).getTime()
-      const inboundTime = new Date(lead.lastInboundAt!).getTime()
-      if (inboundTime > outboundTime) return 'they_replied'
-    }
-    if (hasInbound && !hasOutbound) return 'they_replied'
-    return 'they_replied'
-  }
-
   if (lead.status === 'followed_up') {
-    if (hasInbound) {
-      const outboundTime = lead.lastOutboundAt ? new Date(lead.lastOutboundAt).getTime() : 0
+    if (hasInbound && hasOutbound) {
       const inboundTime = new Date(lead.lastInboundAt!).getTime()
-      if (inboundTime > outboundTime) return 'in_conversation'
+      const outboundTime = new Date(lead.lastOutboundAt!).getTime()
+      if (inboundTime > outboundTime) return 'needs_reply'
     }
-    return 'followup_due'
+    return 'waiting'
   }
 
   if (lead.status === 'contacted') {
-    if (!lead.connectionAcceptedAt && lead.lockedReason === 'connection_note_sent') {
-      return 'connection_pending'
-    }
-    if (!lead.connectionAcceptedAt && locked) {
-      return 'connection_pending'
-    }
-    if (lead.connectionAcceptedAt && !hasOutbound) {
-      return 'message_draft'
-    }
-    if (hasOutbound && !hasInbound) {
-      return 'waiting_for_reply'
-    }
-    if (hasOutbound && hasInbound) {
-      const outboundTime = new Date(lead.lastOutboundAt!).getTime()
+    if (hasOutbound && !hasInbound) return 'waiting'
+    if (hasInbound && hasOutbound) {
       const inboundTime = new Date(lead.lastInboundAt!).getTime()
-      if (inboundTime > outboundTime) return 'they_replied'
-      return 'in_conversation'
+      const outboundTime = new Date(lead.lastOutboundAt!).getTime()
+      if (inboundTime > outboundTime) return 'needs_reply'
     }
-    return 'connection_pending'
+    return 'waiting'
   }
 
-  if (lead.status === 'new') {
-    return 'new'
-  }
-
-  return 'new'
-}
-
-export function groupLeadsByStage(leads: LeadRow[], now: number = Date.now()): Map<PipelineStage, LeadRow[]> {
-  const groups = new Map<PipelineStage, LeadRow[]>()
-  for (const col of PIPELINE_COLUMNS) {
-    groups.set(col.id, [])
-  }
-  for (const lead of leads) {
-    const stage = derivePipelineStage(lead, now)
-    groups.get(stage)!.push(lead)
-  }
-  return groups
+  return 'to_contact'
 }
 
 export type SortMode = 'score' | 'recent' | 'activity'
@@ -151,20 +103,20 @@ export function filterLeads(leads: LeadRow[], search: string): LeadRow[] {
 }
 
 export function formatRelativeTime(iso: string | null | undefined, now: number): string {
-  if (!iso) return '—'
+  if (!iso) return ''
   const diff = now - new Date(iso).getTime()
   if (diff < 0) return 'just now'
   if (diff < 60_000) return 'just now'
   const mins = Math.floor(diff / 60_000)
-  if (mins < 60) return `${mins}m ago`
+  if (mins < 60) return `${mins}m`
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
+  if (hrs < 24) return `${hrs}h`
   const days = Math.floor(hrs / 24)
-  if (days < 7) return `${days}d ago`
-  return `${Math.floor(days / 7)}w ago`
+  if (days < 7) return `${days}d`
+  return `${Math.floor(days / 7)}w`
 }
 
-export function truncate(text: string | null | undefined, max: number = 60): string | null {
+export function truncate(text: string | null | undefined, max: number = 80): string | null {
   if (!text) return null
   if (text.length <= max) return text
   return text.slice(0, max).trimEnd() + '…'
