@@ -49,6 +49,7 @@ function makeProfile(overrides: Partial<ContentProfile> = {}): ContentProfile {
     confidence: 0.85,
     territories: ['kubernetes', 'observability', 'reliability engineering', 'incident response'],
     audiences: ['platform engineers', 'sre teams'],
+    lastLearnedAt: null,
     createdAt: '2025-01-01',
     updatedAt: '2025-06-01',
     ...overrides,
@@ -266,7 +267,7 @@ describe('QA 4: Growth brand persona', () => {
       ],
     })
 
-    expect(relayProfile.territories.length).toBeGreaterThanOrEqual(5)
+    expect(relayProfile.territories?.length ?? 0).toBeGreaterThanOrEqual(5)
     expect(relayProfile.role).toBe('Revenue Intelligence Platform')
     expect(relayProfile.opinions.some(o => o.belief.includes('harder problem'))).toBe(true)
   })
