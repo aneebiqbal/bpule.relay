@@ -6,6 +6,7 @@
  */
 
 import { fetchOpenAI, withRetry } from '@/lib/intelligence-v3/retry-utils'
+import { generate } from '@/lib/ai/runtime'
 
 export interface UpworkJobInput {
   rawText: string
@@ -70,6 +71,39 @@ If questions are present, extract ALL of them verbatim.`
 
 ${input.rawText.slice(0, 8000)}`
 
+  // Try runtime router first (supports Groq, OpenAI, LongCat with failover)
+  try {
+    const result = await generate<Record<string, unknown>>({
+      task: 'FAST_STRUCTURED',
+      system: systemPrompt,
+      user: userPrompt,
+      schema: UPWORK_EXTRACTION_SCHEMA as unknown as Record<string, unknown>,
+      schemaName: 'upwork_extraction',
+      maxTokens: 2000,
+      callSite: 'upwork-v2:extract',
+      feature: 'upwork_extraction',
+    })
+
+    if (result.data) {
+      const parsed = result.data
+      return {
+        title: (parsed.title as string) || 'Unknown Job',
+        description: (parsed.description as string) || input.rawText.slice(0, 2000),
+        skills: Array.isArray(parsed.skills) ? (parsed.skills as string[]) : [],
+        budget: (parsed.budget as number) || null,
+        budgetType: (parsed.budgetType as 'fixed' | 'hourly' | null) || null,
+        hourlyRateMin: (parsed.hourlyRateMin as number) || null,
+        hourlyRateMax: (parsed.hourlyRateMax as number) || null,
+        experienceLevel: (parsed.experienceLevel as string) || null,
+        projectLength: (parsed.projectLength as string) || null,
+        locationRestrictions: Array.isArray(parsed.locationRestrictions) ? (parsed.locationRestrictions as string[]) : [],
+        clientName: (parsed.clientName as string) || null,
+        screeningQuestions: Array.isArray(parsed.screeningQuestions) ? (parsed.screeningQuestions as string[]) : [],
+      }
+    }
+  } catch { /* fall through to direct OpenAI */ }
+
+  // Fallback: direct OpenAI call
   const result = await withRetry(
     () => fetchOpenAI(
       process.env.OPENAI_API_KEY || '',
