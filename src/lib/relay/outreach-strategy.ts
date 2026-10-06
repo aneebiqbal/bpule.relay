@@ -157,9 +157,10 @@ function buildSafeTrigger(input: StrategyInput): string {
     return safe[0].fact
   }
 
-  // Fall back to signal evidence but mark it as observed
+  // Fall back to signal evidence but truncate — full paste overwhelms the AI
   if (input.signalEvidence && input.signalEvidence.trim().length > 10) {
-    return input.signalEvidence.trim()
+    const truncated = input.signalEvidence.trim().slice(0, 150)
+    return truncated + (input.signalEvidence.trim().length > 150 ? '...' : '')
   }
 
   return 'their current focus'

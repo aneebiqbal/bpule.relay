@@ -606,17 +606,17 @@ export class SupabaseStore implements ScoutStore {
 
     const exact = isUnknownCompany
       ? undefined
-      : all.find((l) => l.companyKey === key && l.status !== 'dead')
-    const urlHit = normalizedUrl
-      ? all.find((l) => normalizeLeadUrl(l.url ?? null) === normalizedUrl && l.status !== 'dead')
+      : all.find((l) => l.companyKey === key && l.status !== 'dead' && !l.archived)
+    const urlHit = normalizedUrl && !isUnknownCompany
+      ? all.find((l) => normalizeLeadUrl(l.url ?? null) === normalizedUrl && l.companyKey === key && l.status !== 'dead' && !l.archived)
       : null
     const contactHit = isUnknownCompany || !normalizedContact
       ? undefined
-      : all.find((l) => l.companyKey === key && contactKey(l.contactName) === normalizedContact && l.status !== 'dead')
+      : all.find((l) => l.companyKey === key && contactKey(l.contactName) === normalizedContact && l.status !== 'dead' && !l.archived)
     const fuzzyHit = isUnknownCompany
       ? undefined
       : all.find(
-        (l) => l.companyKey !== key && companyFuzzyKey(l.company) === fuzzy && l.status !== 'dead',
+        (l) => l.companyKey !== key && companyFuzzyKey(l.company) === fuzzy && l.status !== 'dead' && !l.archived,
       )
     const hit = urlHit ?? contactHit ?? exact ?? fuzzyHit
     if (hit) {
