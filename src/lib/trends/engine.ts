@@ -4,6 +4,9 @@ import { contentFingerprint, canonicalizeUrl } from './fingerprint'
 import { hackernewsTopAdapter, hackernewsBestAdapter, hackernewsNewAdapter } from './adapters/hackernews'
 import { devtoPopularAdapter, devtoLatestAdapter } from './adapters/devto'
 import { githubTrendingAdapter } from './adapters/github'
+import { redditProgrammingAdapter, redditTechNewsAdapter } from './adapters/reddit'
+import { lobstersHotAdapter, lobstersNewestAdapter } from './adapters/lobsters'
+import { productHuntAdapter } from './adapters/producthunt'
 
 const ADAPTER_REGISTRY: Record<string, () => SourceAdapter> = {
   'hackernews-top': hackernewsTopAdapter,
@@ -12,6 +15,11 @@ const ADAPTER_REGISTRY: Record<string, () => SourceAdapter> = {
   'devto-popular': devtoPopularAdapter,
   'devto-latest': devtoLatestAdapter,
   'github-trending': githubTrendingAdapter,
+  'reddit-programming': redditProgrammingAdapter,
+  'reddit-technews': redditTechNewsAdapter,
+  'lobsters-hot': lobstersHotAdapter,
+  'lobsters-newest': lobstersNewestAdapter,
+  'producthunt-today': productHuntAdapter,
 }
 
 export function getSourceAdapters(sourceKeys?: string[]): SourceAdapter[] {
@@ -290,9 +298,13 @@ function evidenceQualityFor(sourceType: TrendSourceType): 'high' | 'medium' | 'l
     case 'hackernews': return 'medium'
     case 'devto': return 'medium'
     case 'github': return 'high'
+    case 'reddit': return 'medium'
+    case 'lobsters': return 'medium'
+    case 'producthunt': return 'high'
     case 'stackoverflow': return 'medium'
     case 'rss': return 'high'
     case 'arxiv': return 'high'
+    default: return 'low'
   }
 }
 

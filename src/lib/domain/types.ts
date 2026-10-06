@@ -2215,7 +2215,7 @@ export interface DailyEditorResult {
 
 // ─── Studio V2: Trend Intelligence ───
 
-export type TrendSourceType = 'hackernews' | 'devto' | 'github' | 'stackoverflow' | 'rss' | 'arxiv'
+export type TrendSourceType = 'hackernews' | 'devto' | 'github' | 'reddit' | 'lobsters' | 'producthunt' | 'stackoverflow' | 'rss' | 'arxiv'
 export type EvidenceQuality = 'high' | 'medium' | 'low'
 
 export interface TrendSource {
