@@ -94,16 +94,32 @@ function normalizeText(text: string): string {
     .trim()
 }
 
+const STOP_WORDS = new Set([
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'shall', 'can', 'need', 'dare', 'ought',
+  'used', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from',
+  'as', 'into', 'through', 'during', 'before', 'after', 'above', 'below',
+  'between', 'out', 'off', 'over', 'under', 'again', 'further', 'then',
+  'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'both',
+  'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor',
+  'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just',
+  'because', 'but', 'and', 'or', 'if', 'while', 'that', 'this', 'it',
+  'its', 'i', 'me', 'my', 'we', 'our', 'you', 'your', 'they', 'them',
+  'what', 'which', 'who', 'whom', 'these', 'those', 'am', 'about', 'up',
+])
+
 function computeSimilarity(a: string, b: string): number {
   if (!a || !b) return 0
   if (a === b) return 1
 
-  // Prefix match (30 chars)
-  if (a.slice(0, 30) === b.slice(0, 30)) return 0.9
+  // Filter stop words for meaningful comparison
+  const aWords = new Set(a.split(' ').filter(w => !STOP_WORDS.has(w) && w.length > 2))
+  const bWords = new Set(b.split(' ').filter(w => !STOP_WORDS.has(w) && w.length > 2))
+
+  if (aWords.size === 0 || bWords.size === 0) return 0
 
   // Word overlap (Jaccard)
-  const aWords = new Set(a.split(' '))
-  const bWords = new Set(b.split(' '))
   let intersection = 0
   for (const word of aWords) {
     if (bWords.has(word)) intersection++
@@ -112,7 +128,6 @@ function computeSimilarity(a: string, b: string): number {
   const jaccard = union === 0 ? 0 : intersection / union
 
   // Key-phrase overlap: check if important bigrams overlap
-  // Use containment (what fraction of the shorter text's bigrams appear in the longer)
   const aBigrams = getKeyGrams(a, 2)
   const bBigrams = getKeyGrams(b, 2)
   const [shorter, longer] = aBigrams.size <= bBigrams.size ? [aBigrams, bBigrams] : [bBigrams, aBigrams]
@@ -122,8 +137,8 @@ function computeSimilarity(a: string, b: string): number {
   }
   const bigramContainment = shorter.size === 0 ? 0 : bigramIntersection / shorter.size
 
-  // Use the higher of word-level Jaccard and phrase-level containment
-  return Math.max(jaccard, bigramContainment)
+  // Weighted blend: Jaccard for overall topic, bigrams for specific phrasing
+  return (jaccard * 0.6) + (bigramContainment * 0.4)
 }
 
 function getKeyGrams(text: string, n: number): Set<string> {

@@ -87,6 +87,8 @@ import type {
   TrendInterestProfile,
   FieldConfidence,
   PersonaIntelligenceProfile,
+  ContentSource,
+  VoiceSample,
 } from '@/lib/domain/types'
 import type {
   CreateLeadResult,
@@ -7994,6 +7996,15 @@ function mapContentPersona(r: Record<string, unknown>): ContentPersona {
     valuesAndOpinions: normalizeStringArray(r.values_and_opinions),
     admiredExamples: normalizeStringArray(r.admired_examples),
     contentProfileId: (r.content_profile_id as string) ?? null,
+    personaRole: (r.persona_role as string) ?? undefined,
+    personaCompany: (r.persona_company as string) ?? undefined,
+    personaLocation: (r.persona_location as string) ?? undefined,
+    contentComfort: normalizeStringArray(r.content_comfort),
+    onboardingStep: (r.onboarding_step as string) ?? undefined,
+    onboardingCompleted: (r.onboarding_completed as boolean) ?? undefined,
+    onboardingData: (r.onboarding_data as Record<string, unknown>) ?? undefined,
+    trendInterestProfile: (r.trend_interest_profile as TrendInterestProfile) ?? undefined,
+    lastBriefAt: (r.last_brief_at as string) ?? undefined,
     createdAt: r.created_at as string,
   }
 }
@@ -8164,6 +8175,12 @@ function mapContentProfile(r: Record<string, unknown>): ContentProfile {
     storytellingTendencies: parseJsonArray(r.storytelling_tendencies) as ContentProfile['storytellingTendencies'],
     confidence: (r.confidence as number) ?? 0,
     lastLearnedAt: (r.last_learned_at as string) ?? null,
+    sources: (r.sources as ContentProfile['sources']) ?? undefined,
+    audiences: normalizeStringArray(r.audiences),
+    territories: normalizeStringArray(r.territories),
+    voiceSamples: (r.voice_samples as ContentProfile['voiceSamples']) ?? undefined,
+    voiceSelection: (r.voice_selection as string) ?? undefined,
+    contentGoals: normalizeStringArray(r.content_goals),
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   }

@@ -25,7 +25,7 @@ export default async function ContentPage({
 }) {
   const params = await searchParams
   const user = await getCurrentUser()
-  if (!user) return null
+   if (!user) redirect('/login')
 
   let personas: PersonaWithExtras[] = []
 

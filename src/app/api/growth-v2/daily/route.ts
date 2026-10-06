@@ -3,7 +3,7 @@ import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import type { TrendRelevanceProfile } from '@/lib/trends/types'
 import { rankTrendsForPersona } from '@/lib/trends/engine'
-import { generateDailyGrowthBrief } from '@/lib/growth/v2/daily-growth-engine'
+import { generateGrowthBriefViaStudioEngine } from '@/lib/growth/v2/relay-brand-adapter'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -62,27 +62,24 @@ async function generateAndRespond(
     const trendItems = await store.listTrendItems({ limit: 50 })
     const trendCandidates = rankTrendsForPersona(trendItems, RELAY_TREND_PROFILE)
 
-    const recentTopics: string[] = []
-    const recentHooks: string[] = []
-    const recentAngles: string[] = []
-
     try {
-      const brief = await generateDailyGrowthBrief(store, orgId, {
+      const brief = await generateGrowthBriefViaStudioEngine({
+        store,
+        orgId,
         trendCandidates,
-        recentTopics,
-        recentHooks,
-        recentAngles,
+        recentGrowthTopics: [],
+        recentGrowthHooks: [],
+        recentGrowthAngles: [],
         localDate,
+        timezone,
       })
 
-      // If AI produced a post with no caption, trigger fallback
       if (!brief.postCaption || brief.postCaption.length < 20) {
-        throw new Error('AI returned empty post')
+        throw new Error('Studio engine returned empty post')
       }
 
       return NextResponse.json({ brief })
     } catch (aiErr) {
-      // AI providers failed — create a fallback brief so the page always works
       try {
         const fallbackTrend = trendCandidates[0]
         const fallbackBrief = await store.createDailyGrowthBrief({

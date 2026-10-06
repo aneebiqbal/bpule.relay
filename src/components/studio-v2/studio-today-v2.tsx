@@ -25,18 +25,22 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [activeIdeaId, setActiveIdeaId] = useState<string | null>(null)
 
-  const fetchBrief = useCallback(async () => {
+  const fetchBrief = useCallback(async (): Promise<boolean> => {
     setLoading(true)
     setError('')
     try {
       const res = await fetch(`/api/content/intelligence/v2/daily-brief?personaId=${personaId}`)
       if (!res.ok) throw new Error('Failed to load')
       const json = await res.json()
-      setData(json)
-      const recommended = json.ideas?.find((i: DailyContentIdea) => i.ideaType === 'recommended')
-      if (recommended) setActiveIdeaId(recommended.id)
+      if (json.ideas && json.ideas.length > 0) {
+        setData(json)
+        const recommended = json.ideas?.find((i: DailyContentIdea) => i.ideaType === 'recommended')
+        if (recommended) setActiveIdeaId(recommended.id)
+        return true
+      }
+      return false
     } catch {
-      setError('Could not load today\'s brief. Pull to refresh.')
+      return false
     } finally {
       setLoading(false)
     }
@@ -56,9 +60,13 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
         throw new Error(errJson.message || 'Generation failed')
       }
       const json = await res.json()
-      setData(json)
-      const recommended = json.ideas?.find((i: DailyContentIdea) => i.ideaType === 'recommended')
-      if (recommended) setActiveIdeaId(recommended.id)
+      if (json.ideas && json.ideas.length > 0) {
+        setData(json)
+        const recommended = json.ideas?.find((i: DailyContentIdea) => i.ideaType === 'recommended')
+        if (recommended) setActiveIdeaId(recommended.id)
+      } else {
+        throw new Error('No ideas generated')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed. Try again in a moment.')
     } finally {
@@ -67,8 +75,10 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
   }, [personaId])
 
   useEffect(() => {
-    fetchBrief()
-  }, [fetchBrief])
+    fetchBrief().then(ok => {
+      if (!ok && !error) generateBrief()
+    })
+  }, [fetchBrief, generateBrief])
 
   const handleCopy = async (caption: string, ideaId: string) => {
     try {
@@ -125,10 +135,26 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
           </div>
         )}
 
-        {error && (
-          <div className="mb-6 flex items-center gap-2 rounded-md border border-status-danger/20 bg-status-danger/5 px-4 py-3">
-            <AlertCircle className="h-4 w-4 text-status-danger" />
-            <p className="text-sm text-ink/70">{error}</p>
+        {error && !generating && (
+          <div className="mb-6 rounded-md border border-status-danger/20 bg-status-danger/5 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-status-danger" />
+              <p className="text-sm text-ink/70">{error}</p>
+            </div>
+            <button
+              onClick={generateBrief}
+              className="mt-3 flex items-center gap-1.5 rounded-md bg-cobalt px-4 py-2 text-sm text-on-accent transition-colors hover:bg-cobalt-dark"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Generate today&apos;s post
+            </button>
+          </div>
+        )}
+
+        {generating && !data && (
+          <div className="flex flex-col items-center justify-center py-32">
+            <div className="mb-4 h-5 w-5 animate-spin rounded-full border-2 border-cobalt/30 border-t-cobalt" />
+            <p className="text-sm text-ink/50">Preparing your editorial brief...</p>
           </div>
         )}
 

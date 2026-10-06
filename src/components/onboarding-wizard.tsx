@@ -429,13 +429,13 @@ function StepImport({ state, update, onExtract, extracting }: { state: Onboardin
       <div className="flex items-center gap-3">
         <button
           onClick={onExtract}
-          disabled={state.sourceText.trim().length < 20 && state.sourceText.trim().length > 0}
+          disabled={extracting || (state.sourceText.trim().length > 0 && state.sourceText.trim().length < 20)}
           className="rounded-lg bg-solid px-4 py-2 text-sm font-medium text-on-solid hover:bg-solid/90 disabled:opacity-50"
         >
           {extracting ? 'Analyzing...' : 'Analyze'}
         </button>
         <button
-          onClick={onExtract}
+          onClick={() => update({ identity: state.identity })}
           className="text-sm text-graphite underline underline-offset-2 hover:text-ink"
         >
           Skip this step
