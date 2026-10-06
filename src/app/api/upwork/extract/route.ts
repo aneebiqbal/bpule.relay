@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { extractUpworkJob } from '@/lib/upwork-v2'
-import { emitAction } from '@/lib/action-ledger'
 
 export const maxDuration = 120
 
 /**
  * POST /api/upwork/extract
  * Extract structured job data from pasted Upwork job text.
+ * Returns SSE stream for compatibility with the upwork/new page.
  * Uses createScoutStore() for proper user-session auth (not service role).
  */
 export async function POST(request: Request) {
@@ -29,35 +29,70 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Job text too short.' }, { status: 400 })
   }
 
-  const job = await extractUpworkJob({ rawText: body.rawText, url: body.url })
-  if (!job) {
-    return NextResponse.json({ error: 'Failed to extract job data.' }, { status: 500 })
-  }
+  const rawText = body.rawText
+  const rawUrl = body.url
+  const encoder = new TextEncoder()
 
-  const savedJob = await store.createUpworkJob({
-    title: job.title,
-    description: job.description,
-    budgetMin: job.budget ?? null,
-    budgetMax: null,
-    hourlyRateMin: job.hourlyRateMin ?? null,
-    hourlyRateMax: job.hourlyRateMax ?? null,
-    connectsCost: 0,
-    requiredSkills: job.skills ?? [],
-    urgencySignal: null,
-    rawInput: body.rawText,
-    tags: [],
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (obj: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
+      }
+
+      try {
+        send({ type: 'status', message: 'Extracting job data...' })
+
+        const job = await extractUpworkJob({ rawText, url: rawUrl })
+        if (!job) {
+          send({ type: 'error', message: 'Failed to extract job data.' })
+          controller.close()
+          return
+        }
+
+        const savedJob = await store.createUpworkJob({
+          title: job.title,
+          description: job.description,
+          budgetMin: job.budget ?? null,
+          budgetMax: null,
+          hourlyRateMin: job.hourlyRateMin ?? null,
+          hourlyRateMax: job.hourlyRateMax ?? null,
+          connectsCost: 0,
+          requiredSkills: job.skills ?? [],
+          urgencySignal: null,
+          rawInput: body.rawText,
+          tags: [],
+        })
+
+        send({
+          type: 'done',
+          extracted: {
+            title: job.title,
+            description: job.description,
+            budgetMin: job.budget?.toString() ?? '',
+            budgetMax: '',
+            hourlyRateMin: job.hourlyRateMin?.toString() ?? '',
+            hourlyRateMax: job.hourlyRateMax?.toString() ?? '',
+            proposalCount: '',
+            connectsCost: '0',
+            requiredSkills: (job.skills ?? []).join(', '),
+            urgencySignal: '',
+            tags: [],
+          },
+          demoMode: false,
+        })
+      } catch (err) {
+        send({ type: 'error', message: err instanceof Error ? err.message : 'Extraction failed.' })
+      } finally {
+        controller.close()
+      }
+    },
   })
 
-  return NextResponse.json({ job: { ...job, id: savedJob.id }, duplicate: false })
-}
-
-function hashContent(text: string): string {
-  let hash = 0
-  const normalized = text.replace(/\s+/g, ' ').trim().slice(0, 1000)
-  for (let i = 0; i < normalized.length; i++) {
-    const char = normalized.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash
-  }
-  return Math.abs(hash).toString(36)
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  })
 }

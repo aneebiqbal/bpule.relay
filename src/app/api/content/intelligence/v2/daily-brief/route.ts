@@ -118,6 +118,7 @@ async function generateAndRespond(
 
       return NextResponse.json({ brief: result.brief, ideas: result.ideas, cost: result.cost })
     } catch (aiErr) {
+      console.error('[daily-brief] AI generation failed:', aiErr instanceof Error ? aiErr.message : String(aiErr))
       // AI providers failed — fall back to deterministic brief from trends + profile
       try {
         const fallbackIdeas = generateFallbackIdeas(profile, trendCandidates, persona)
@@ -132,19 +133,27 @@ async function generateAndRespond(
         const ideaRecords: DailyContentIdea[] = []
         for (let i = 0; i < fallbackIdeas.length; i++) {
           const idea = fallbackIdeas[i]
-          const record = await store.createDailyContentIdea({
-            briefId: brief.id,
-            organizationId: persona.organizationId,
-            personaId: persona.id,
-            ideaType: i === 0 ? 'recommended' : 'alternate',
-            title: idea.title,
-            angle: idea.angle,
-            whyNow: idea.whyNow,
-            territory: idea.territory,
-            trendGrounded: idea.trendGrounded,
-            formatSuggestion: idea.formatSuggestion,
-          })
-          ideaRecords.push(record)
+          try {
+            const record = await store.createDailyContentIdea({
+              briefId: brief.id,
+              organizationId: persona.organizationId,
+              personaId: persona.id,
+              ideaType: i === 0 ? 'recommended' : 'alternate',
+              title: idea.title,
+              angle: idea.angle,
+              whyNow: idea.whyNow,
+              territory: idea.territory,
+              trendGrounded: idea.trendGrounded,
+              formatSuggestion: idea.formatSuggestion,
+            })
+            ideaRecords.push(record)
+          } catch (ideaErr) {
+            console.error('[daily-brief] Failed to create fallback idea:', ideaErr instanceof Error ? ideaErr.message : String(ideaErr))
+          }
+        }
+
+        if (ideaRecords.length === 0) {
+          throw new Error('All fallback ideas failed to save')
         }
 
         if (ideaRecords[0]) {
@@ -154,10 +163,24 @@ async function generateAndRespond(
 
         return NextResponse.json({ brief, ideas: ideaRecords, fromFallback: true })
       } catch (fallbackErr) {
-        return NextResponse.json(
-          { error: 'Generation failed', message: aiErr instanceof Error ? aiErr.message : 'AI providers unavailable' },
-          { status: 503 },
-        )
+        console.error('[daily-brief] Fallback also failed:', fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr))
+        // Last resort: return ideas directly without persisting
+        const emergencyIdeas = generateFallbackIdeas(profile, trendCandidates, persona).map((idea, i) => ({
+          id: `emergency-${Date.now()}-${i}`,
+          briefId: 'emergency',
+          organizationId: persona.organizationId,
+          personaId: persona.id,
+          ideaType: i === 0 ? 'recommended' : 'alternate',
+          title: idea.title,
+          angle: idea.angle,
+          whyNow: idea.whyNow,
+          territory: idea.territory,
+          trendGrounded: idea.trendGrounded,
+          formatSuggestion: idea.formatSuggestion,
+          postCaption: idea.angle,
+          createdAt: new Date().toISOString(),
+        }))
+        return NextResponse.json({ brief: { id: 'emergency', status: 'ready', localDate }, ideas: emergencyIdeas, fromFallback: true })
       }
     }
   } catch (err) {
