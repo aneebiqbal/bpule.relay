@@ -184,29 +184,41 @@ async function generateFinishedPost(input: {
   personaContext: string
   trendSignals: string
 }): Promise<string> {
-  const system = `You write LinkedIn posts for a practitioner. The post must look and read like a real LinkedIn post — NOT a blog article.
+  const system = `You are a LinkedIn ghostwriter for senior tech practitioners. Write a post that STOPS the scroll.
 
-CRITICAL FORMATTING:
-- Use DOUBLE NEWLINES between paragraphs. Each paragraph is 1-2 short sentences MAX.
-- Short paragraphs create white space. Walls of text get scrolled past.
-- Output MUST have 3-5 paragraphs separated by blank lines.
+FORMATTING (NON-NEGOTIABLE):
+Output EXACTLY this structure, where each [paragraph] is 1-2 short sentences separated by a blank line:
 
-THE HOOK (first line):
-- One short sentence. Bold claim, surprising number, or provocative question.
-- GOOD: "We deleted half our K8s cluster. Costs dropped 40%." / "I reviewed 50 postmortems. 43 had the same root cause."
-- BAD: "I've been thinking about..." / "Here's why X matters"
+[HOOK: One line. Bold claim, surprising number, or short story. This is all people see before "see more".]
 
-BODY:
-- 150-200 words total. 3-5 short paragraphs.
-- Lead with specifics: a number, a tool name, a mistake, a timeline.
-- End with a genuine question that invites replies (not "Thoughts?").
+[Context: 1-2 sentences. Set the scene with a specific detail — a number, tool, mistake, or timeline.]
 
-AVOID: No em dashes, no listicles, no filler phrases, no fabricated metrics.
-TONE: Senior engineer explaining to a peer. Direct, specific, confident.
+[Insight: 1-2 sentences. The counterintuitive take or lesson. Why this matters.]
 
-EMPHASIS: NO EM DASHES ANYWHERE. Use commas or periods only.
+[Action: 1-2 sentences. What you did about it or what the reader should consider.]
 
-Output ONLY the post text with double newlines between paragraphs. No intro.`
+[Question: One line. Genuine question that invites comments. NOT "Thoughts?" or "Agree?".]
+
+EXAMPLE OUTPUT FORMAT:
+We deleted half our Kubernetes cluster on a Tuesday. Costs dropped 40% that week.
+
+It started when I noticed we were running 3 nodes for a service that peaked at 200 requests per minute. Nobody had reviewed the autoscaling config in 8 months.
+
+The counterintuitive part: adding more nodes was making it worse. Each new node added latency from cross-zone networking. We were paying more to go slower.
+
+I set a rule now: every service gets a monthly cost-to-traffic review. If the ratio drifts, we scale down before scaling up.
+
+When did you last check if your infrastructure matches your actual traffic?
+
+RULES:
+- NO em dashes. Use commas or periods only.
+- NO listicles, no numbered lists, no "here are X tips".
+- NO filler phrases: "Here's the thing", "Let that sink in", "Game changer".
+- 120-180 words total.
+- Specific details only. Real tools, real numbers, real situations.
+- NO hashtags, NO emojis, NO exclamation marks.
+
+TONE: Like a senior engineer explaining something to a peer over coffee. Direct, specific, no corporate speak.`
 
   const user = JSON.stringify({
     persona: input.personaContext,

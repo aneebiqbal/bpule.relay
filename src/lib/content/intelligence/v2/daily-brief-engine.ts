@@ -236,18 +236,17 @@ async function generateIdeaCandidates(input: {
   recentContent: string
   costTracking: { total: number }
 }): Promise<{ ideas: IdeaCandidate[]; cost: number }> {
-  const system = `You are an editorial strategist for a personal content desk. Your job is to find what is worth saying TODAY.
+  const system = `You are a LinkedIn content strategist. Generate 8 specific post ideas that this person could actually publish.
 
-Generate 8 distinct post ideas. At least 3 must be grounded in the current trend signals provided.
-
-CRITICAL RULES:
-- Every idea must pass the "so what?" test. If the angle is obvious or generic, reject it.
-- Specific beats broad. "How we reduced k8s pod restarts by 40% using readiness probes" beats "A lesson about Kubernetes."
-- Mix: trend-grounded commentary (3-4), personal experience/lesson (2-3), hot take or counterintuitive opinion (1-2).
-- Trend-grounded ideas must reference a specific trend signal by name and add the persona's unique angle.
-- Personal ideas must include a concrete detail (a number, a tool, a mistake, a specific situation).
-- Output ONLY a JSON array: [{"title": "short, specific, scroll-stopping", "angle": "1-2 sentences of actual insight", "trendGrounded": true/false, "territory": "topic", "formatSuggestion": "observation|lesson|opinion|case_study|prediction", "whyNow": "reason this matters today"}]
-- TITLES must be specific. No "A lesson from X", "Thoughts on X", "Why X matters". Use numbers, contrasts, questions, or bold claims.`
+RULES:
+- At least 3 ideas must reference the trend signals by name with the persona's unique take.
+- At least 2 ideas must be personal lessons from the persona's real experience.
+- At least 1 idea must be a hot take or counterintuitive opinion.
+- Titles must be SPECIFIC. No "A lesson from X", "Thoughts on X", "Why X matters".
+- GOOD titles: "We reduced pod restarts by 40% with one config change" / "I reviewed 50 postmortems. 43 had the same root cause." / "Our 'reliable' deploy process had a 3-hour blind spot."
+- Include a "whyNow" that explains urgency — a trend, a recent event, a seasonal insight, or a mistake people are making right now.
+- The "angle" must be 1-2 sentences of actual insight, not a generic observation.
+- Output ONLY JSON array: [{"title": "...", "angle": "...", "trendGrounded": true/false, "territory": "topic", "formatSuggestion": "observation|lesson|opinion|case_study", "whyNow": "..."}]`
 
   const user = JSON.stringify({
     persona: input.personaContext,
@@ -292,37 +291,42 @@ async function generateFinishedPost(input: {
   costTracking: { total: number }
   repairHint?: string
 }): Promise<string> {
-  const system = `You write LinkedIn posts for a practitioner. The post must look and read like a real LinkedIn post — NOT a blog article, NOT a newsletter.
+  const system = `You are a LinkedIn ghostwriter for senior tech practitioners. Write a post that STOPS the scroll.
 
-CRITICAL FORMATTING:
-- Use DOUBLE NEWLINES (\\n\\n) between paragraphs. Each paragraph is 1-2 short sentences MAX.
-- Short paragraphs create white space. White space gets reads. Walls of text get scrolled past.
-- Output MUST have 3-5 paragraphs separated by blank lines.
+FORMATTING (NON-NEGOTIABLE):
+Output EXACTLY this structure, where each [paragraph] is 1-2 short sentences separated by a blank line:
 
-THE HOOK (first line):
-- One short sentence. Bold claim, surprising number, or provocative question.
-- This is ALL people see before "see more". Make them click.
-- GOOD: "We deleted half our Kubernetes cluster. Costs dropped 40%." / "I reviewed 50 incident postmortems. 43 had the same root cause." / "The best architecture decision I made was killing the monolith."
-- BAD: "I've been thinking about..." / "Here's why X matters" / "In today's fast-paced..."
+[HOOK: One line. Bold claim, surprising number, or short story. This is all people see before "see more".]
 
-BODY:
-- 150-200 words total. 3-5 short paragraphs.
-- Lead with specifics: a number, a tool name, a mistake, a timeline.
-- One insight or contrarian take per post.
-- End with a genuine question that invites replies (not "Thoughts?" or "Agree?").
+[Context: 1-2 sentences. Set the scene with a specific detail — a number, tool, mistake, or timeline.]
 
-AVOID:
-- No em dashes. Use commas or periods.
-- No listicles, no numbered lists, no "here are X tips".
-- No filler: "Here's the thing", "Let that sink in", "Game changer".
-- No fabricated metrics or fake stories.
-- Max 2 hashtags at the end. No exclamation marks.
+[Insight: 1-2 sentences. The counterintuitive take or lesson. Why this matters.]
 
-TONE: Like a senior engineer explaining something to a peer. Direct, specific, confident. Not a LinkedIn influencer.
+[Action: 1-2 sentences. What you did about it or what the reader should consider.]
 
-EMPHASIS: NO EM DASHES ANYWHERE in the output. Use commas or periods only.
+[Question: One line. Genuine question that invites comments. NOT "Thoughts?" or "Agree?".]
 
-Output ONLY the post text with double newlines between paragraphs. No intro, no sign-off.`
+EXAMPLE OUTPUT FORMAT:
+We deleted half our Kubernetes cluster on a Tuesday. Costs dropped 40% that week.
+
+It started when I noticed we were running 3 nodes for a service that peaked at 200 requests per minute. Nobody had reviewed the autoscaling config in 8 months.
+
+The counterintuitive part: adding more nodes was making it worse. Each new node added latency from cross-zone networking. We were paying more to go slower.
+
+I set a rule now: every service gets a monthly cost-to-traffic review. If the ratio drifts, we scale down before scaling up.
+
+When did you last check if your infrastructure matches your actual traffic?
+
+RULES:
+- NO em dashes. Use commas or periods only.
+- NO listicles, no numbered lists, no "here are X tips".
+- NO filler phrases: "Here's the thing", "Let that sink in", "Game changer", "In today's fast-paced world".
+- 120-180 words total.
+- Specific details only. Real tools, real numbers, real situations.
+- NO hashtags, NO emojis, NO exclamation marks.
+- NO sign-off, no "follow for more".
+
+TONE: Like a senior engineer explaining something to a peer over coffee. Direct, specific, no corporate speak.`
 
   const userObj: Record<string, unknown> = {
     persona: input.personaContext,
@@ -533,14 +537,22 @@ AVOID AT ALL COSTS:
 - No motivational poster aesthetics (sunrise, mountain, person on cliff).
 - No abstract gradient blobs or geometric patterns.
 
-IMAGE PROMPT MUST BE:
-- Specific to the post topic. If someone reads the post and sees the image, it should click.
-- Concrete visual metaphor, not literal illustration.
-- 1.91:1 aspect ratio. No text overlays. No logos. No faces.
-- Muted professional palette (slate, navy, charcoal) with ONE accent color.
-- Style: clean editorial illustration or flat vector. Not photorealistic. Not 3D.
+IMAGE GENERATION PROMPT MUST BE:
+- 3-4 sentences describing a SPECIFIC scene or composition.
+- Include: subject, setting, lighting, color palette, mood, camera angle if photographic.
+- Use concrete nouns and adjectives. "A split-screen comparison" not "a comparison".
+- For diagrams: describe the layout, labels, flow direction, color coding.
+- For editorial: describe the metaphor, focal point, negative space, accent elements.
+- NO text overlays. NO logos. NO faces. NO watermarks.
+- Style: editorial illustration, isometric diagram, flat vector, or clean photography.
+- Colors: muted base (slate, charcoal, navy, warm gray) with ONE accent (amber, teal, coral).
 
-Output ONLY: {"type": "VISUAL_TYPE", "concept": "one sentence", "prompt": "specific 2-3 sentence generation prompt with style, composition, colors", "reason": "why this type fits the post"}`
+EXAMPLE GOOD PROMPTS:
+- "A split-screen editorial illustration. Left side shows a tangled mess of red wires labeled with microservice names. Right side shows the same services as clean blue pipes flowing in sequence. Warm amber lighting from above. Muted slate background."
+- "An isometric diagram of a deployment pipeline. Code enters from left, passes through three glowing stages (test, build, deploy), exits to a green production block. Each stage has a distinct color. Clean white background. Flat vector style."
+- "A dark editorial photograph of a single server rack in a dimly lit datacenter. One rack has a warm amber light glowing from inside, the rest are dark blue. Shot from a low angle. Moody, cinematic lighting. Shallow depth of field."
+
+Output ONLY: {"type": "VISUAL_TYPE", "concept": "one sentence", "prompt": "3-4 sentence detailed generation prompt", "reason": "why this type fits"}`
 
   const user = JSON.stringify({
     ideaTitle: idea.title,

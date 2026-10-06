@@ -24,9 +24,9 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model: 'gpt-image-1',
-        prompt: prompt.slice(0, 1000),
+        prompt: prompt.slice(0, 4000),
         n: 1,
-        size: '1024x1024',
+        size: '1536x1024',
         quality: 'high',
       }),
     })
