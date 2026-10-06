@@ -10,8 +10,8 @@ export async function GET() {
   return NextResponse.json({
     status: 'ok',
     env: {
-      OPENAI_API_KEY: hasOpenAi ? `set (${process.env.OPENAI_API_KEY.slice(0, 8)}...)` : 'MISSING',
-      OPENAI_API_KEY_IMAGE: hasOpenAiImage ? `set (${process.env.OPENAI_API_KEY_IMAGE.slice(0, 8)}...)` : 'MISSING',
+      OPENAI_API_KEY: hasOpenAi ? `set (${process.env.OPENAI_API_KEY?.slice(0, 8)}...)` : 'MISSING',
+      OPENAI_API_KEY_IMAGE: hasOpenAiImage ? `set (${process.env.OPENAI_API_KEY_IMAGE?.slice(0, 8)}...)` : 'MISSING',
       SCOUT_AI_PREFERRED_PROVIDER: preferred,
     },
   })
