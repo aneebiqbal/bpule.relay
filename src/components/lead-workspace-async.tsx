@@ -1,18 +1,16 @@
 'use client'
 
 import { use } from 'react'
-import { LeadWorkspace } from './lead-workspace'
+import { LeadWorkspaceSimple } from './lead-workspace-simple'
 import type { LeadDetail } from '@/lib/store/types'
-import type { Profile, ProofItem, ScoreResult } from '@/lib/domain/types'
+import type { Profile } from '@/lib/domain/types'
 
 interface LeadData {
   lead: LeadDetail
-  score: ScoreResult
   profiles: Profile[]
-  matchedProofs: ProofItem[]
 }
 
 export function LeadWorkspaceAsync({ dataPromise }: { dataPromise: Promise<LeadData> }) {
-  const props = use(dataPromise)
-  return <LeadWorkspace {...props} />
+  const { lead, profiles } = use(dataPromise)
+  return <LeadWorkspaceSimple lead={lead} profiles={profiles} />
 }

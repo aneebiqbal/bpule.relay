@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createServiceSupabase } from '@/lib/supabase/service'
+import { NextResponse } from 'next/server'
+import { createScoutStore } from '@/lib/store'
 import { extractUpworkJob } from '@/lib/upwork-v2'
 import { emitAction } from '@/lib/action-ledger'
 
@@ -8,23 +8,19 @@ export const maxDuration = 120
 /**
  * POST /api/upwork/extract
  * Extract structured job data from pasted Upwork job text.
+ * Uses createScoutStore() for proper user-session auth (not service role).
  */
-export async function POST(req: NextRequest) {
-  const store = createServiceSupabase()
-  const { data: auth } = await store.auth.getUser()
-  if (!auth.user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-
-  const { data: rep } = await store
-    .from('reps')
-    .select('id, organization_id')
-    .eq('user_id', auth.user.id)
-    .single()
-
-  if (!rep) return NextResponse.json({ error: 'Not a rep.' }, { status: 401 })
+export async function POST(request: Request) {
+  let store
+  try {
+    store = await createScoutStore()
+  } catch {
+    return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  }
 
   let body: { rawText?: string; url?: string }
   try {
-    body = await req.json()
+    body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON.' }, { status: 400 })
   }
@@ -38,54 +34,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to extract job data.' }, { status: 500 })
   }
 
-  // Persist job
-  const { data: savedJob, error: saveError } = await store
-    .from('upwork_jobs')
-    .insert({
-      organization_id: rep.organization_id,
-      owner_rep_id: rep.id,
-      title: job.title,
-      description: job.description,
-      skills: job.skills,
-      budget: job.budget,
-      budget_type: job.budgetType,
-      hourly_rate_min: job.hourlyRateMin,
-      hourly_rate_max: job.hourlyRateMax,
-      experience_level: job.experienceLevel,
-      project_length: job.projectLength,
-      location_restrictions: job.locationRestrictions,
-      client_name: job.clientName || null,
-      url: body.url || null,
-      raw_content_hash: hashContent(body.rawText),
-      screening_questions: job.screeningQuestions,
-    })
-    .select('id')
-    .single()
-
-  if (saveError) {
-    // Duplicate content hash — return existing job
-    if (saveError.code === '23505') {
-      const { data: existing } = await store
-        .from('upwork_jobs')
-        .select('*')
-        .eq('raw_content_hash', hashContent(body.rawText))
-        .single()
-      if (existing) return NextResponse.json({ job: existing, duplicate: true })
-    }
-    return NextResponse.json({ error: 'Failed to save job.' }, { status: 500 })
-  }
-
-
-  try {
-    await emitAction({
-      orgId: rep.organization_id,
-      actionType: 'UPWORK_JOB_EXTRACTED',
-      actorType: 'rep',
-      actorId: rep.id,
-      jobId: savedJob.id as string,
-      metadata: { title: job.title },
-    })
-  } catch { }
+  const savedJob = await store.createUpworkJob({
+    title: job.title,
+    description: job.description,
+    budgetMin: job.budget ?? null,
+    budgetMax: null,
+    hourlyRateMin: job.hourlyRateMin ?? null,
+    hourlyRateMax: job.hourlyRateMax ?? null,
+    connectsCost: 0,
+    requiredSkills: job.skills ?? [],
+    urgencySignal: null,
+    rawInput: body.rawText,
+    tags: [],
+  })
 
   return NextResponse.json({ job: { ...job, id: savedJob.id }, duplicate: false })
 }

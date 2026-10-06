@@ -405,7 +405,7 @@ export function DailyJobs({
       <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-line bg-bone-raised/95 px-4 py-3 backdrop-blur lg:bottom-0">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-[0.12em] text-stone">Keep going · N</p>
+            <p className="text-[11px] uppercase tracking-[0.12em] text-stone">Keep going</p>
             <p className="truncate text-[14px] font-medium text-ink">{firstOpen.title} · {firstOpen.goal - firstOpen.done} left</p>
           </div>
           <Link href={firstOpen.href} className={buttonVariants({ variant: 'orange', size: 'sm' })}>

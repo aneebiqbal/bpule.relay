@@ -41,29 +41,29 @@ export default async function UpworkJobPage({
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <header className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Opportunity / Job Dossier</p>
-        <h1 className="mt-2 text-[30px] font-medium leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">{job.title}</h1>
-        <p className="mt-2 text-[13px] text-[color:var(--console-mute)]">
+      <header className="rounded-xl border border-line bg-bone-raised/30 px-5 py-5 sm:px-6">
+        <p className="text-[10px] font-medium uppercase tracking-[0.14em text-stone">Opportunity / Job Dossier</p>
+        <h1 className="mt-2 text-[22px] font-medium text-ink">{job.title}</h1>
+        <p className="mt-2 text-[13px] text-graphite">
           Relay prepared a score and proposal lane. You decide whether to apply and when to spend Connects.
         </p>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <HeroMetric label="Verdict" value={<span className={cn('rounded px-2 py-0.5 text-[11px] font-medium', verdict.bg, verdict.text)}>{verdict.label}</span>} />
-          <HeroMetric label="Score" value={<span className="text-[18px] font-medium text-[color:var(--console-text)]">{score.total} / 10</span>} />
-          <HeroMetric label="Connects" value={<span className="text-[18px] font-medium text-[color:var(--console-text)]">{job.connectsCost}</span>} />
+          <HeroMetric label="Score" value={<span className="text-[18px] font-medium text-ink">{score.total} / 10</span>} />
+          <HeroMetric label="Connects" value={<span className="text-[18px] font-medium text-ink">{job.connectsCost}</span>} />
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <Link href="/upwork" className="inline-flex items-center gap-1.5 rounded border border-orange/30 bg-orange/10 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-text)]">
-            Back to job lanes
-          </Link>
-          <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded border border-line/30 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-mute)] hover:text-[color:var(--console-text)]">
-            Return to Relay Today
-          </Link>
-        </div>
+           <Link href="/upwork" className="inline-flex items-center gap-1.5 rounded border border-orange/30 bg-orange/10 px-3 py-1.5 text-[12px] font-medium text-orange">
+             Back to job lanes
+           </Link>
+           <Link href="/leads" className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-1.5 text-[12px] font-medium text-graphite hover:text-ink">
+             Return to leads
+           </Link>
+         </div>
 
-        <div className="mt-4 flex items-center gap-3 text-[12px] text-[color:var(--console-mute)]">
+         <div className="mt-4 flex items-center gap-3 text-[12px] text-graphite">
           <span>{job.messages.length} message{job.messages.length === 1 ? '' : 's'} logged</span>
           <span>·</span>
           <span>{job.proposalCount !== null ? `${job.proposalCount} proposals observed` : 'proposal count unknown'}</span>
