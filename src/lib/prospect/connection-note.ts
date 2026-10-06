@@ -133,161 +133,41 @@ export function evaluateConnectionNote(input: ConnectionNoteInput): ConnectionNo
     failures.push('Too short to be meaningful')
   }
 
-  // Semantic truth before style. A fluent note that invents the prospect's
-  // pain still fails. Evidence may excuse a phrase only when that same
-  // claim is already in the supplied canonical evidence.
+  // 2. Over character limit
+  const charCount = text.length
+  const withinLimit = charCount <= CONNECTION_NOTE_MAX_CHARS
+  if (!withinLimit) {
+    failures.push(`Over character limit (${charCount}/${CONNECTION_NOTE_MAX_CHARS})`)
+  }
+
+  // 3. Semantic truth — flag invented pain claims NOT in evidence
   const evidence = (input.evidenceText ?? '').toLowerCase()
-  const painClaims = [...GENERALIZED_PAIN_CLAIMS, ...UNSUPPORTED_PROSPECT_PAIN]
-  for (const pattern of painClaims) {
+  for (const pattern of UNSUPPORTED_PROSPECT_PAIN) {
     if (pattern.test(lower) && !pattern.test(evidence)) {
-      failures.push('Unsupported prospect pain (claim is not in canonical evidence)')
-      break
-    }
-  }
-  if (GENERALIZED_PAIN_CLAIMS.some((p) => p.test(lower) && !p.test(evidence))) {
-    failures.push('Unsupported generalized-pain claim (general pattern presented as prospect-specific fact)')
-  }
-
-  // 2. Surveillance opening
-  for (const pattern of SURVEILLANCE_OPENERS) {
-    if (pattern.test(lower)) {
-      failures.push('Opens with surveillance language')
+      failures.push('Unsupported prospect pain claim')
       break
     }
   }
 
-  // 3. Banned phrases
-  for (const phrase of BANNED_PHRASES_CONNECTION) {
-    const re = new RegExp(phrase, 'i')
-    if (re.test(lower)) {
-      failures.push(`Banned phrase: "${phrase.replace(/\\+/g, '').slice(0, 30)}..."`)
-      break
-    }
-  }
-
-  // 4. Generic CTA
-  for (const pattern of GENERIC_CTAS_CONNECTION) {
-    if (pattern.test(lower)) {
-      failures.push('Generic or forced CTA')
-      break
-    }
-  }
-
-  // 5. AI clichés
-  for (const phrase of AI_CLICHES_CONNECTION) {
-    const re = new RegExp(phrase, 'i')
-    if (re.test(lower)) {
-      failures.push(`AI cliché: "${phrase.slice(0, 20)}..."`)
-      break
-    }
-  }
-
-  // 6. Excessive praise
-  if (/\b(amazing|incredible|impressive|fantastic|brilliant|love what you)\b/i.test(lower)) {
-    failures.push('Excessive praise')
-  }
-
-  // 7. Sales pitch too early
-  if (/\b(i can help|we can help|let me help|happy to help you (ship|build|grow|scale))\b/i.test(lower)) {
-    failures.push('Sales pitch in connection note')
-  }
-
-  // 8. Budget / funding inference — only flag when the note infers that
-  // the prospect has budget/spending power because of a funding event.
-  // Do NOT flag general mentions of budget/spend in the sender's own
-  // context (e.g., "reduce cloud spend", "budget-friendly", "cost optimization").
-  const fundingInference = [
-    /\b(gives?|gave)\s+(you|them|the\s+team)\s+(some\s+)?budget\b/i,
-    /\bbudget\s+to\s+spend\b/i,
-    /\bwith\s+that\s+(budget|funding|raise)\b/i,
-    /\bnow\s+that\s+you.*(?:raised|closed|funded)\b/i,
-    /\byour\s+(?:series\s*[abc]|funding|raise)\s+(?:gives?|means|allows?)\b/i,
-    /\bjust\s+closed\s+(?:a\s+)?(?:round|series|funding)\b.{0,40}\b(?:budget|spend|afford)\b/i,
-    /\b(?:raised|closed)\s+(?:a\s+)?(?:round|series|funding)\b.{0,40}\b(?:budget|spend|afford)\b/i,
-    /\bafford\s+(?:to\s+(?:hire|build|ship|spend))\b/i,
-    /\bspend\s+(?:some\s+)?(?:of\s+)?(?:that|your)\s+(?:budget|funding|raise)\b/i,
+  // 4. Hard spam gates — always wrong in connection notes
+  const spamPatterns = [
+    /\b(i can help you|we can help you|let me help you|happy to help you (ship|build|grow|scale))\b/i,
+    /\b(game[-]?chang|revolutioniz|cutting[-]?edge|leverage (our|my) expertise|synerg|passionate about|thrilled to|excited to|delighted to)\b/i,
+    /\b(i have been following|i have been watching|big fan of your)\b/i,
+    /\b(we can help|our team|we have|we are a|our expertise)\b/i,
   ]
-  if (fundingInference.some((p) => p.test(lower))) {
-    failures.push('Assumes funding = budget')
+  for (const pattern of spamPatterns) {
+    if (pattern.test(lower)) {
+      failures.push('Contains spam-like language')
+      break
+    }
   }
 
-  // 9. Emoji check
-  if (/[\u{1F300}-\u{1F9FF}]/u.test(text)) {
-    failures.push('Contains emoji')
-  }
-
-  // 10. Exclamation marks
-  if (/!/.test(text)) {
-    failures.push('Contains exclamation mark')
-  }
-
-  // 11. Em dash abuse
-  const emDashCount = (text.match(/[\u2014\u2013]/g) ?? []).length
-  if (emDashCount > 1) {
-    failures.push(`Em dash abuse (${emDashCount})`)
-  }
-
-  // 12. "We" for solo sender
-  if (/\b(we can help|our team|we have|we are a|our expertise)\b/i.test(lower)) {
-    failures.push('Uses "we" for a solo sender')
-  }
-
-  // 13. Fake familiarity
-  if (/\b(i have been following|i have been watching|big fan of your)\b/i.test(lower)) {
-    failures.push('Claims fake familiarity')
-  }
-
-  // 14. Sender mismatch — mentions a capability not in proof
+  // 5. Sender mismatch — claims experience without proof
   if (input.profile && input.matchedProof.length === 0) {
     if (/\b(i built|i helped|i worked on|my experience with)\b/i.test(lower)) {
       failures.push('Claims experience without verified proof match')
     }
-  }
-
-  // 15. Could send to 100 prospects?
-  if (couldSendTo100Prospects(text, input.prospectCompany)) {
-    failures.push('Generic enough to send to 100 prospects')
-  }
-
-  // 16. No questions — connection notes earn access, not start discovery.
-  // A question requires effort to respond to and turns a low-friction accept
-  // into a conversation the prospect did not ask for.
-  if (/[?]/.test(text)) {
-    failures.push('Contains a question — connection notes must ask nothing')
-  }
-
-  // 17. Manufactured personalization — "curious about", "how do you", etc.
-  const manufactured = [
-    /\bcurious about\b/i,
-    /\bhow do you\b/i,
-    /\bwould love to learn\b/i,
-    /\bwould love to hear\b/i,
-    /\bwhat your thoughts\b/i,
-  ]
-  for (const re of manufactured) {
-    if (re.test(lower)) {
-      failures.push('Manufactured personalization / discovery language')
-      break
-    }
-  }
-
-  // 18. Service description / capability pitch (not a connection note)
-  if (/\b(we (build|ship|deliver|help)|i (build|ship|deliver|help)|our (work|focus|practice))\b/i.test(lower)) {
-    failures.push('Service description — not a connection note')
-  }
-
-  // 16. Uses "I" but sender name mismatch
-  // (handled by prompt, but check here too)
-  if (input.profile?.label && !text.toLowerCase().includes(input.profile.label.toLowerCase())) {
-    // Not required to use the name — connection notes are from the sender identity
-    // This is informational, not a failure
-  }
-
-  const charCount = text.length
-  const withinLimit = charCount <= CONNECTION_NOTE_MAX_CHARS
-
-  if (!withinLimit) {
-    failures.push(`Over character limit (${charCount}/${CONNECTION_NOTE_MAX_CHARS})`)
   }
 
   return {

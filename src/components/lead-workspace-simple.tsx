@@ -333,7 +333,7 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
                     await fetch(`/api/leads/${lead.id}/contact`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ type: 'connection', sentText: '', direction: 'outbound' }),
+                      body: JSON.stringify({ type: 'connection', sentText: '', sendWithoutNote: true, direction: 'outbound' }),
                     })
                     setLeadVersion((v) => v + 1)
                   } catch { /* non-fatal */ }

@@ -12,7 +12,7 @@ export async function POST(
 ) {
   const { id } = await params
 
-  let body: { sentText?: string; type?: string; originalDraft?: string; rejected?: boolean; rejectReasons?: string[]; idempotencyKey?: string }
+  let body: { sentText?: string; type?: string; originalDraft?: string; rejected?: boolean; rejectReasons?: string[]; idempotencyKey?: string; sendWithoutNote?: boolean; direction?: string }
   try {
     body = await request.json()
   } catch {
@@ -20,7 +20,8 @@ export async function POST(
   }
 
   const sentText = body.sentText?.trim() ?? ''
-  if (!sentText && body.rejected !== true) {
+  const sendWithoutNote = body.sendWithoutNote === true
+  if (!sentText && body.rejected !== true && !sendWithoutNote) {
     return NextResponse.json(
       { error: 'Paste the message text you actually sent.' },
       { status: 400 },

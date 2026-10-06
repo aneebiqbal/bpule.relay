@@ -1,0 +1,63 @@
+import Link from 'next/link'
+import { Plus, Briefcase, ArrowRight } from 'lucide-react'
+import { createScoutStore } from '@/lib/store'
+import { PageHeader } from '@/components/ui/page-header'
+import { EmptyState } from '@/components/ui/empty-state'
+
+export const dynamic = 'force-dynamic'
+
+export default async function UpworkPage() {
+  const store = await createScoutStore()
+  const jobs = await store.listUpworkJobs()
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="Upwork"
+        description="Extract jobs, generate proposals, apply — all in one flow."
+        action={
+          <Link
+            href="/upwork/new"
+            className="inline-flex items-center gap-2 rounded-md bg-orange px-3 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            Extract job
+          </Link>
+        }
+      />
+
+      {jobs.length === 0 ? (
+        <EmptyState
+          icon={Briefcase}
+          title="No Upwork jobs yet"
+          description="Paste a Upwork job URL or text. Relay extracts the details, scores fit, and helps you write a proposal."
+          action={
+            <Link
+              href="/upwork/new"
+              className="inline-flex items-center gap-2 rounded-md bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              Extract your first job
+            </Link>
+          }
+        />
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-line">
+          <ul className="divide-y divide-line/60">
+            {jobs.map((job) => (
+              <li key={job.id}>
+                <Link href={`/upwork/${job.id}`} className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-bone-raised">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-medium text-ink">{job.title}</p>
+                    <p className="text-[11px] text-graphite capitalize">{job.status}</p>
+                  </div>
+                  <ArrowRight className="size-3.5 shrink-0 text-stone" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
