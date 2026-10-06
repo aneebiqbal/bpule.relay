@@ -28,6 +28,8 @@ import {
   RELATIONSHIP_CONTEXT,
   NEED_OWNER_BUYER_RELEVANCE,
 } from '../config'
+import { extractSignals } from '@/lib/scoring/signal-extractor'
+import { computeCompositeScore } from '@/lib/scoring/composite-scorer'
 
 // ── Single Episode Scoring ──────────────────────────────────────────────────
 
@@ -38,6 +40,10 @@ export interface V3ScoreInput {
   proofRelevance?: number
   /** Overall evidence quality (0-1) */
   evidenceQuality?: number
+  /** Raw source text for deterministic signal extraction (enriches score) */
+  rawText?: string
+  /** Sender capabilities for fit assessment */
+  senderCapabilities?: string[]
 }
 
 export interface V3ScoreOutput {
@@ -180,7 +186,56 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
   // ── Compute Final Score ─────────────────────────────────────────────────
   const rawTotal = dimensions.reduce((sum, d) => sum + d.contribution, 0)
   const adjustedTotal = rawTotal * statusMultiplier * relationshipMultiplier
-  const score = Math.round(Math.max(0, Math.min(100, adjustedTotal)))
+  let score = Math.round(Math.max(0, Math.min(100, adjustedTotal)))
+
+  // ── Composite Score Enrichment ─────────────────────────────────────────
+  // When rawText is available, blend V3's AI-based score with deterministic
+  // signals from the composite scorer. This catches signals the AI missed
+  // (tech stack overlap, company growth, hiring velocity, etc.)
+  if (input.rawText && input.rawText.length > 50) {
+    try {
+      const signals = extractSignals(input.rawText)
+      const composite = computeCompositeScore({
+        aiBuyerProbability: decision.buyerRequestProbability,
+        aiFitLevel: decision.fit,
+        aiAccessLevel: decision.access,
+        aiIntentLevel: decision.buyerRequestProbability >= 0.6 ? 'HIGH' : decision.buyerRequestProbability >= 0.3 ? 'MEDIUM' : 'LOW',
+        signals,
+        proofScore: input.proofRelevance,
+        senderCapabilities: input.senderCapabilities,
+      })
+
+      // Blend: 60% V3 (AI context) + 40% composite (deterministic signals)
+      // When V3 is uncertain (score 30-60 range), composite has more influence
+      const v3Weight = score >= 70 || score <= 20 ? 0.7 : 0.5
+      const compositeWeight = 1 - v3Weight
+      score = Math.round(score * v3Weight + composite.total * compositeWeight)
+
+      // Merge evidence from composite dimensions
+      const topCompositeEvidence = composite.dimensions
+        .filter((d) => d.score >= 60)
+        .flatMap((d) => d.evidence)
+        .filter((e) => !reasons.includes(e))
+        .slice(0, 3)
+      reasons.push(...topCompositeEvidence)
+
+      // Add composite dimensions to output
+      for (const dim of composite.dimensions) {
+        if (!dimensions.find((d) => d.key === dim.key)) {
+          dimensions.push({
+            key: dim.key,
+            label: dim.label,
+            contribution: dim.weighted,
+            raw: dim.score / 100,
+            weight: dim.weight,
+            note: dim.evidence[0] || '',
+          })
+        }
+      }
+    } catch {
+      // Composite scoring is best-effort; V3 score stands alone
+    }
+  }
 
   // ── Label & Qualification ───────────────────────────────────────────────
   const { label, qualification } = getScoreLabel(score)

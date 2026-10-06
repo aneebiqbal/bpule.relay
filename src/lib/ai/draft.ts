@@ -202,7 +202,7 @@ Write the draft first, then honestly run the tests on it, then the marker and th
     CTA_RULES,
     SPECIFICITY_RULES,
     ANTI_AI_RULES,
-    'Sound like a real person who read their profile, not a template. Vary sentence length.',
+    'Sound like a real person who read their profile, not a template. Vary sentence length. Start with something specific about THEM — not "I" or "we". Make it easy to say yes to. Zero corporate speak.',
     SURVEILLANCE_RULES,
     'Relay knows more than it says. Use only ALLOWED_NOW evidence. One message, one job. If no job is specified, return an empty draft.',
     'Do not pitch BPulse, headcount leverage, or pricing unless the job is PROVIDE_PROOF and they asked. Never invent a rate. NEVER ask for a call on first touch.',

@@ -65,6 +65,7 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
     senderCapabilities = [],
     proofRelevanceMap = {},
     evidenceQualityMap = {},
+    rawText,
   } = input
 
   // Build bounded decision from provider result
@@ -106,6 +107,8 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
         decision,
         proofRelevance: proofRelevanceMap[bestEpisode.id] ?? estimateProofRelevance(bestEpisode, senderCapabilities),
         evidenceQuality: evidenceQualityMap[bestEpisode.id] ?? estimateEvidenceQuality(bestEpisode, graph),
+        rawText,
+        senderCapabilities,
       }
     : null
 
