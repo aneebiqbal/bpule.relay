@@ -308,8 +308,8 @@ export async function POST(
 
       if (type !== 'reply' && !shouldWriteMessage(revenue)) {
         emit({
-          type: 'error',
-          message: revenue.contact.noMessageReason ?? 'No message recommended. Silence is the correct result.',
+          type: 'status',
+          message: revenue.contact.noMessageReason ?? 'No message recommended for this lead.',
         })
         return
       }

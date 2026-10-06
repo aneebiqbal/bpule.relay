@@ -320,10 +320,28 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
           <PrimaryAction
             icon={<Send className="size-5 text-orange" />}
             label="Send connection request"
-            description="Reach out to connect. No pitch yet."
-            buttonText="Generate connection note"
+            description="Reach out to connect. Add a note or send without one."
+            buttonText="Generate note"
             onClick={() => { setMode('connection'); generateDraft('connection') }}
             loading={generating && mode === 'connection'}
+            secondaryButton={(
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await fetch(`/api/leads/${lead.id}/contact`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ type: 'connection', sentText: '', direction: 'outbound' }),
+                    })
+                    setLeadVersion((v) => v + 1)
+                  } catch { /* non-fatal */ }
+                }}
+              >
+                Send without note
+              </Button>
+            )}
           />
         )}
 
@@ -551,8 +569,8 @@ function LogUpdateOptionsCompact({ phase, leadId, onLogged }: { phase: string; l
   )
 }
 
-function PrimaryAction({ icon, label, description, buttonText, onClick, loading }: {
-  icon: React.ReactNode; label: string; description: string; buttonText: string; onClick: () => void; loading?: boolean
+function PrimaryAction({ icon, label, description, buttonText, onClick, loading, secondaryButton }: {
+  icon: React.ReactNode; label: string; description: string; buttonText: string; onClick: () => void; loading?: boolean; secondaryButton?: React.ReactNode
 }) {
   return (
     <div className="rounded-lg border border-orange/20 bg-orange/[0.02] p-4">
@@ -563,11 +581,12 @@ function PrimaryAction({ icon, label, description, buttonText, onClick, loading 
           <p className="mt-1 text-[12px] text-graphite leading-relaxed">{description}</p>
         </div>
       </div>
-      <div className="mt-3">
+      <div className="mt-3 flex items-center gap-2">
         <Button variant="orange" size="sm" onClick={onClick} disabled={loading} loading={loading}>
           {buttonText}
           {!loading && <ChevronRight className="size-3" />}
         </Button>
+        {secondaryButton}
       </div>
     </div>
   )
