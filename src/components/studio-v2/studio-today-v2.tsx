@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Copy, Shuffle, Check, ChevronRight, AlertCircle, Sparkles, RefreshCw, Plus, Users } from 'lucide-react'
+import { Copy, Shuffle, Check, AlertCircle, Plus, Users, RefreshCw, Download, Image } from 'lucide-react'
 import type { DailyContentIdea } from '@/lib/domain/types'
 
-interface StudioTodayV2Props {
+interface Props {
   personaId: string
   personaName?: string
   displayName: string
@@ -16,7 +16,7 @@ interface BriefData {
   ideas: DailyContentIdea[]
 }
 
-export function StudioTodayV2({ personaId, displayName }: StudioTodayV2Props) {
+export function StudioTodayV2({ personaId, displayName }: Props) {
   const router = useRouter()
   const [data, setData] = useState<BriefData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -25,10 +25,13 @@ export function StudioTodayV2({ personaId, displayName }: StudioTodayV2Props) {
   const [copied, setCopied] = useState(false)
   const [posted, setPosted] = useState(false)
   const [activeIdeaId, setActiveIdeaId] = useState<string | null>(null)
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [imageLoading, setImageLoading] = useState(false)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  // ── Data fetching ──
 
   const fetchBrief = useCallback(async (): Promise<boolean> => {
-    setLoading(true)
-    setError('')
     try {
       const res = await fetch(`/api/content/intelligence/v2/daily-brief?personaId=${personaId}`)
       if (!res.ok) return false
@@ -40,16 +43,13 @@ export function StudioTodayV2({ personaId, displayName }: StudioTodayV2Props) {
         return true
       }
       return false
-    } catch {
-      return false
-    } finally {
-      setLoading(false)
-    }
+    } catch { return false }
   }, [personaId])
 
   const generateBrief = useCallback(async () => {
     setGenerating(true)
     setError('')
+    setImageUrl(null)
     try {
       const res = await fetch('/api/content/intelligence/v2/daily-brief', {
         method: 'POST',
@@ -62,16 +62,14 @@ export function StudioTodayV2({ personaId, displayName }: StudioTodayV2Props) {
         setData(json)
         setActiveIdeaId(json.ideas[0].id)
       }
-    } catch {
-      setError('Could not generate. Try again.')
-    } finally {
-      setGenerating(false)
-    }
+    } catch { setError('Generation failed. Try again.') }
+    finally { setGenerating(false) }
   }, [personaId])
 
   const tryAnother = useCallback(async () => {
     if (!data) return
     setGenerating(true)
+    setImageUrl(null)
     try {
       const res = await fetch('/api/content/intelligence/v2/daily-brief/idea', {
         method: 'POST',
@@ -89,63 +87,142 @@ export function StudioTodayV2({ personaId, displayName }: StudioTodayV2Props) {
         setPosted(false)
         setCopied(false)
       }
-    } catch {
-      // Silent — keep current content visible
-    } finally {
-      setGenerating(false)
-    }
+    } catch { /* keep current */ }
+    finally { setGenerating(false) }
   }, [personaId, data])
 
   useEffect(() => {
-    fetchBrief().then(ok => { if (!ok) generateBrief() })
+    fetchBrief().then(ok => { if (!ok) generateBrief() }).finally(() => setLoading(false))
   }, [fetchBrief, generateBrief])
 
-  const activeIdea = data?.ideas.find(i => i.id === activeIdeaId) ?? data?.ideas[0]
-  const alternates = (data?.ideas ?? []).filter(i => i.id !== activeIdea?.id).slice(0, 4)
+  // ── Actions ──
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text)
+  const handleCopy = () => {
+    if (!activeIdea?.postCaption) return
+    navigator.clipboard.writeText(activeIdea.postCaption)
     setCopied(true)
     fetch(`/api/content/intelligence/v2/daily-brief/copied`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ideaId: activeIdea?.id }),
+      body: JSON.stringify({ ideaId: activeIdea.id }),
     }).catch(() => {})
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handlePosted = (ideaId: string) => {
+  const handlePosted = () => {
+    if (!activeIdea) return
     setPosted(true)
     fetch(`/api/content/intelligence/v2/daily-brief/copied`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ideaId, markPosted: true }),
+      body: JSON.stringify({ ideaId: activeIdea.id, markPosted: true }),
     }).catch(() => {})
     setTimeout(() => setPosted(false), 2000)
   }
 
+  // ── Derived state ──
+
+  const activeIdea = data?.ideas.find(i => i.id === activeIdeaId) ?? data?.ideas[0]
+  const trendLabel = activeIdea?.trendGrounded ? 'Trending topic' : 'Editorial'
+
+  const generateImage = useCallback(() => {
+    if (!canvasRef.current || !activeIdea) return
+    setImageLoading(true)
+
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) { setImageLoading(false); return }
+
+    const W = 1200
+    const H = 630
+    canvas.width = W
+    canvas.height = H
+
+    // Background gradient
+    const grad = ctx.createLinearGradient(0, 0, W, H)
+    grad.addColorStop(0, '#1a1a2e')
+    grad.addColorStop(1, '#16213e')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, W, H)
+
+    // Subtle pattern
+    ctx.fillStyle = 'rgba(255,255,255,0.03)'
+    for (let i = 0; i < 20; i++) {
+      ctx.fillRect(Math.random() * W, Math.random() * H, 2, 2)
+    }
+
+    // Accent line
+    ctx.fillStyle = '#3b82f6'
+    ctx.fillRect(60, 100, 60, 4)
+
+    // Title text
+    ctx.fillStyle = '#ffffff'
+    ctx.font = 'bold 36px system-ui, -apple-system, sans-serif'
+    const title = activeIdea.title
+    const words = title.split(' ')
+    let line = ''
+    let y = 180
+    const maxWidth = W - 120
+    for (const word of words) {
+      const test = line + word + ' '
+      if (ctx.measureText(test).width > maxWidth && line) {
+        ctx.fillText(line.trim(), 60, y)
+        line = word + ' '
+        y += 50
+      } else {
+        line = test
+      }
+    }
+    ctx.fillText(line.trim(), 60, y)
+
+    // Subtitle / handle
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'
+    ctx.font = '20px system-ui, -apple-system, sans-serif'
+    ctx.fillText(displayName, 60, H - 60)
+
+    // Brand mark
+    ctx.fillStyle = '#3b82f6'
+    ctx.font = 'bold 16px system-ui, -apple-system, sans-serif'
+    ctx.fillText('RELAY', W - 100, H - 60)
+
+    const url = canvas.toDataURL('image/png')
+    setImageUrl(url)
+    setImageLoading(false)
+  }, [activeIdea, displayName])
+
+  const downloadImage = () => {
+    if (!imageUrl) return
+    const a = document.createElement('a')
+    a.href = imageUrl
+    a.download = `relay-post-${Date.now()}.png`
+    a.click()
+  }
+
+  // ── Render ──
+
   return (
     <div className="min-h-screen bg-bone">
-      <header className="sticky top-0 z-10 border-b border-line bg-bone/80 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
+      {/* Header */}
+      <header className="sticky top-0 z-10 border-b border-line bg-bone/90 backdrop-blur-md">
+        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <span className="font-mono text-xs uppercase tracking-[0.15em] text-cobalt">Studio</span>
             <span className="h-3 w-px bg-line" />
-            <span className="text-sm text-ink/60">{displayName}</span>
+            <span className="text-sm font-medium text-ink/70">{displayName}</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => router.push('/content?manage=1')}
-              className="interactive flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-ink/50 transition-colors hover:bg-bone-raised hover:text-cobalt"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-ink/50 transition-colors hover:bg-bone-raised hover:text-cobalt"
             >
-              <Users className="h-3 w-3" />
+              <Users className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Switch</span>
             </button>
             <button
               onClick={() => router.push('/content/new')}
-              className="interactive flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-ink/50 transition-colors hover:bg-bone-raised hover:text-cobalt"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-ink/50 transition-colors hover:bg-bone-raised hover:text-cobalt"
             >
-              <Plus className="h-3 w-3" />
+              <Plus className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Persona</span>
             </button>
             <span className="font-mono text-[11px] text-ink/30 hidden sm:block">
@@ -155,113 +232,141 @@ export function StudioTodayV2({ personaId, displayName }: StudioTodayV2Props) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-6">
+      <main className="mx-auto max-w-4xl px-4 py-6 sm:py-8">
+        {/* Loading state */}
         {loading && !data && (
           <div className="flex flex-col items-center justify-center py-32">
-            <div className="mb-3 h-5 w-5 animate-spin rounded-full border-2 border-cobalt/30 border-t-cobalt" />
-            <p className="text-sm text-ink/40">Finding today&apos;s best post...</p>
+            <div className="mb-4 h-6 w-6 animate-spin rounded-full border-2 border-cobalt/30 border-t-cobalt" />
+            <p className="text-sm text-ink/40">Preparing today&apos;s post...</p>
           </div>
         )}
 
+        {/* Error state */}
         {error && !generating && (
-          <div className="flex items-center gap-3 rounded-lg border border-status-danger/20 bg-status-danger/5 px-4 py-3 mb-6">
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-status-danger/20 bg-status-danger/5 px-4 py-3">
             <AlertCircle className="h-4 w-4 shrink-0 text-status-danger" />
             <p className="text-sm text-ink/70 flex-1">{error}</p>
-            <button onClick={generateBrief} className="text-sm text-cobalt hover:underline">Retry</button>
+            <button onClick={generateBrief} className="text-sm font-medium text-cobalt hover:underline">Retry</button>
           </div>
         )}
 
+        {/* Main content */}
         {activeIdea && (
           <div className="space-y-6">
-            <div className="rounded-xl border border-line bg-bone-raised p-5 sm:p-6">
-              {activeIdea.trendGrounded && (
-                <span className="mb-3 inline-flex items-center gap-1 rounded-md bg-cobalt/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-cobalt">
-                  <Sparkles className="h-2.5 w-2.5" /> Trending
-                </span>
-              )}
-              <h2 className="mb-2 text-lg sm:text-xl font-medium text-ink leading-snug">{activeIdea.title}</h2>
-              {activeIdea.postCaption && (
-                <p className="whitespace-pre-wrap text-[15px] leading-[1.7] text-ink/80">{activeIdea.postCaption}</p>
-              )}
-              {activeIdea.visualPrompt && activeIdea.visualType !== 'NO_VISUAL' && (
-                <details className="mt-4 group">
-                  <summary className="cursor-pointer text-[11px] text-ink/40 hover:text-ink/60">Visual direction</summary>
-                  <p className="mt-2 text-xs text-ink/50 leading-relaxed">{activeIdea.visualPrompt}</p>
-                </details>
-              )}
-              <div className="mt-5 flex items-center gap-2">
+            {/* Post preview card */}
+            <div className="rounded-2xl border border-line bg-bone-raised overflow-hidden">
+              {/* Post header */}
+              <div className="flex items-center gap-3 border-b border-line px-5 py-3">
+                <div className="h-10 w-10 rounded-full bg-cobalt/10 flex items-center justify-center text-cobalt font-semibold text-sm">
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-ink">{displayName}</p>
+                  <p className="text-[11px] text-ink/40">Original Creator · 1st</p>
+                </div>
+                <div className="ml-auto">
+                  <span className="rounded-full bg-cobalt/8 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-cobalt">
+                    {trendLabel}
+                  </span>
+                </div>
+              </div>
+
+              {/* Post body */}
+              <div className="px-5 py-5">
+                <h2 className="mb-3 text-xl font-semibold text-ink leading-snug">{activeIdea.title}</h2>
+                {activeIdea.postCaption && (
+                  <div className="whitespace-pre-wrap text-[15px] leading-[1.7] text-ink/80">
+                    {activeIdea.postCaption}
+                  </div>
+                )}
+                {activeIdea.angle && !activeIdea.postCaption && (
+                  <p className="text-sm leading-relaxed text-ink/60">{activeIdea.angle}</p>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 border-t border-line px-5 py-3 bg-bone/50">
                 <button
-                  onClick={() => activeIdea.postCaption && handleCopy(activeIdea.postCaption)}
-                  className="flex items-center gap-1.5 rounded-lg bg-cobalt px-4 py-2 text-sm text-on-accent hover:bg-cobalt-dark transition-colors"
+                  onClick={handleCopy}
+                  className="flex items-center gap-2 rounded-lg bg-cobalt px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-cobalt-dark"
                 >
-                  <Copy className="h-3.5 w-3.5" />
+                  <Copy className="h-4 w-4" />
                   {copied ? 'Copied!' : 'Copy post'}
                 </button>
                 <button
-                  onClick={() => handlePosted(activeIdea.id)}
-                  className="flex items-center gap-1.5 rounded-lg border border-line px-4 py-2 text-sm text-ink/60 hover:border-status-success/40 hover:text-status-success transition-colors"
+                  onClick={handlePosted}
+                  className="flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink/60 transition-colors hover:border-status-success/40 hover:text-status-success"
                 >
-                  <Check className="h-3.5 w-3.5" />
-                  {posted ? 'Done!' : 'Posted'}
+                  <Check className="h-4 w-4" />
+                  {posted ? 'Posted!' : 'Mark posted'}
+                </button>
+                <button
+                  onClick={tryAnother}
+                  disabled={generating}
+                  className="flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink/60 transition-colors hover:border-cobalt/40 hover:text-cobalt disabled:opacity-50"
+                >
+                  <Shuffle className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} />
+                  {generating ? 'Generating...' : 'Try another'}
                 </button>
                 <button
                   onClick={() => router.push(`/studio/drafts/new?personaId=${personaId}&ideaId=${activeIdea.id}`)}
-                  className="rounded-lg px-3 py-2 text-sm text-ink/40 hover:text-ink/70 transition-colors"
+                  className="ml-auto rounded-lg px-3 py-2 text-sm text-ink/40 transition-colors hover:text-ink/70"
                 >
                   Edit
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[11px] uppercase tracking-wider text-ink/30">More ideas</span>
-              <button
-                onClick={tryAnother}
-                disabled={generating}
-                className="flex items-center gap-1.5 rounded-lg bg-cobalt px-3 py-2 text-sm text-on-accent hover:bg-cobalt-dark disabled:opacity-50 transition-colors"
-              >
-                <Shuffle className={`h-3.5 w-3.5 ${generating ? 'animate-spin' : ''}`} />
-                {generating ? 'Generating...' : 'New idea'}
-              </button>
+            {/* Image generation */}
+            <div className="rounded-2xl border border-line bg-bone-raised p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Image className="h-4 w-4 text-cobalt" />
+                  <span className="text-sm font-medium text-ink">Post Image</span>
+                </div>
+                <button
+                  onClick={generateImage}
+                  disabled={imageLoading}
+                  className="flex items-center gap-1.5 rounded-lg bg-cobalt px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-cobalt-dark disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3 w-3 ${imageLoading ? 'animate-spin' : ''}`} />
+                  {imageLoading ? 'Creating...' : imageUrl ? 'Regenerate' : 'Generate'}
+                </button>
+              </div>
+
+              {imageUrl ? (
+                <div className="space-y-3">
+                  <img src={imageUrl} alt="Post visual" className="w-full rounded-lg border border-line" />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={downloadImage}
+                      className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-ink/60 hover:border-cobalt/40 hover:text-cobalt"
+                    >
+                      <Download className="h-3 w-3" />
+                      Download
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-line/50 py-12 text-center">
+                  <Image className="mb-3 h-8 w-8 text-ink/20" />
+                  <p className="text-sm text-ink/40">Generate an image for this post</p>
+                  <p className="mt-1 text-[11px] text-ink/30">Creates a 1200×630 branded visual</p>
+                </div>
+              )}
+
+              <canvas ref={canvasRef} className="hidden" />
             </div>
 
-            {alternates.length > 0 && (
-              <div className="space-y-2">
-                {alternates.map(idea => (
-                  <button
-                    key={idea.id}
-                    onClick={() => { setActiveIdeaId(idea.id); setCopied(false); setPosted(false) }}
-                    className={`interactive flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-all ${
-                      idea.id === activeIdea?.id
-                        ? 'border-cobalt/30 bg-cobalt/5'
-                        : 'border-line bg-bone-raised hover:border-cobalt/20'
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-ink leading-snug">{idea.title}</p>
-                      {idea.whyNow && (
-                        <p className="mt-0.5 text-[11px] text-ink/40">{idea.whyNow}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {idea.trendGrounded && <span className="h-1.5 w-1.5 rounded-full bg-cobalt" />}
-                      <ChevronRight className="h-4 w-4 text-ink/20" />
-                    </div>
-                  </button>
-                ))}
+            {/* Source context */}
+            {activeIdea.whyNow && activeIdea.trendGrounded && (
+              <div className="flex items-center gap-2 rounded-xl bg-cobalt/5 px-4 py-3">
+                <span className="h-2 w-2 rounded-full bg-cobalt" />
+                <p className="text-xs text-ink/50">
+                  <span className="font-medium text-cobalt">Why now:</span> {activeIdea.whyNow}
+                </p>
               </div>
             )}
-
-            <div className="pt-4 border-t border-line">
-              <button
-                onClick={generateBrief}
-                disabled={generating}
-                className="flex items-center gap-2 text-sm text-ink/40 hover:text-cobalt transition-colors"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${generating ? 'animate-spin' : ''}`} />
-                Regenerate all ideas
-              </button>
-            </div>
           </div>
         )}
       </main>
