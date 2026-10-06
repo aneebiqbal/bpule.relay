@@ -1229,7 +1229,7 @@ function LogUpdateOptions({ phase, leadId, onLogged }: { phase: string; leadId: 
 
   const options: LogUpdateOption[] = [
     { show: ['connection_sent', 'connection_due', 'connection_accepted'], label: 'They accepted my connection', value: 'connection_accepted', isMessageAction: false },
-    { show: ['dm_sent', 'waiting_for_reply', 'replied', 'follow_up_due', 'conversation'], label: 'They replied', value: 'client_replied', isMessageAction: false },
+    { show: ['dm_sent', 'waiting_for_reply', 'replied', 'follow_up_due', 'conversation'], label: 'They replied', value: 'client_replied', isMessageAction: true },
     { show: ['connection_due', 'connection_sent', 'connection_accepted'], label: 'I sent a connection request', value: 'connection', isMessageAction: true },
     { show: ['connection_accepted', 'dm_sent', 'waiting_for_reply'], label: 'I sent a message', value: 'dm', isMessageAction: true },
     { show: ['dm_sent', 'waiting_for_reply', 'replied'], label: 'I followed up', value: 'followup', isMessageAction: true },
@@ -1254,6 +1254,18 @@ function LogUpdateOptions({ phase, leadId, onLogged }: { phase: string; leadId: 
       let res: Response
       if (selected === 'connection_accepted') {
         res = await fetch(`/api/leads/${leadId}/connection-accepted`, { method: 'POST' })
+      } else if (selected === 'client_replied') {
+        const text = messageText.trim()
+        if (!text) {
+          setError('Paste their reply text to log it.')
+          setSaving(false)
+          return
+        }
+        res = await fetch(`/api/leads/${leadId}/reply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        })
       } else if (requiresText) {
         const text = messageText.trim()
         if (!text) {
@@ -1316,14 +1328,16 @@ function LogUpdateOptions({ phase, leadId, onLogged }: { phase: string; leadId: 
         <div className="mt-3 space-y-2">
           <div className="flex items-center gap-2">
             <MessageSquare className="size-3.5 text-orange" />
-            <p className="text-[12px] font-medium text-ink">Paste the message you actually sent</p>
+            <p className="text-[12px] font-medium text-ink">
+              {selected === 'client_replied' ? 'Paste their reply' : 'Paste the message you actually sent'}
+            </p>
           </div>
           <Textarea
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
             rows={4}
             className="text-[13px] bg-bone-raised/30 border-line focus:border-orange/40"
-            placeholder="Paste the exact message text here..."
+            placeholder={selected === 'client_replied' ? 'Paste their message here...' : 'Paste the exact message text here...'}
             disabled={saving}
           />
         </div>
