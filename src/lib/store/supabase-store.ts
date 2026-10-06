@@ -601,16 +601,23 @@ export class SupabaseStore implements ScoutStore {
       }
     }
 
-    const exact = all.find((l) => l.companyKey === key && l.status !== 'dead')
+    // Skip dedup for unknown/empty company names — they collide trivially
+    const isUnknownCompany = !input.company || input.company === 'Unknown company' || key === 'unknowncompany'
+
+    const exact = isUnknownCompany
+      ? undefined
+      : all.find((l) => l.companyKey === key && l.status !== 'dead')
     const urlHit = normalizedUrl
       ? all.find((l) => normalizeLeadUrl(l.url ?? null) === normalizedUrl && l.status !== 'dead')
       : null
-    const contactHit = normalizedContact
-      ? all.find((l) => l.companyKey === key && contactKey(l.contactName) === normalizedContact && l.status !== 'dead')
-      : null
-    const fuzzyHit = all.find(
-      (l) => l.companyKey !== key && companyFuzzyKey(l.company) === fuzzy && l.status !== 'dead',
-    )
+    const contactHit = isUnknownCompany || !normalizedContact
+      ? undefined
+      : all.find((l) => l.companyKey === key && contactKey(l.contactName) === normalizedContact && l.status !== 'dead')
+    const fuzzyHit = isUnknownCompany
+      ? undefined
+      : all.find(
+        (l) => l.companyKey !== key && companyFuzzyKey(l.company) === fuzzy && l.status !== 'dead',
+      )
     const hit = urlHit ?? contactHit ?? exact ?? fuzzyHit
     if (hit) {
       const duplicateKind: 'hard' | 'potential' = fuzzyHit && !urlHit && !contactHit && !exact ? 'potential' : 'hard'
