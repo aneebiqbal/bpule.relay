@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Copy, Shuffle, Check, AlertCircle, Plus, Users, RefreshCw, Download, Image, Sparkles } from 'lucide-react'
 import type { DailyContentIdea } from '@/lib/domain/types'
-import { generatePostImage } from '@/lib/ai/openai-image'
+
 
 interface Props {
   personaId: string
@@ -134,15 +134,24 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
     setImageError('')
     try {
       const prompt = activeIdea.visualPrompt || `${activeIdea.title}. ${activeIdea.angle || ''}`
-      const result = await generatePostImage(prompt)
-      setImageUrl(result.url)
+      const res = await fetch('/api/content/intelligence/v2/daily-brief/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      })
+      if (!res.ok) throw new Error('Image generation failed')
+      const json = await res.json()
+      if (json.url) {
+        setImageUrl(json.url)
+      } else {
+        throw new Error(json.error || 'No image')
+      }
     } catch {
-      // Fallback: generate branded image via canvas
       generateCanvasImage()
     } finally {
       setImageLoading(false)
     }
-  }, [activeIdea, displayName])
+  }, [activeIdea])
 
   const generateCanvasImage = useCallback(() => {
     if (!canvasRef.current || !activeIdea) return
