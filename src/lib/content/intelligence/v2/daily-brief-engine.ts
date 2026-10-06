@@ -241,18 +241,18 @@ async function generateIdeaCandidates(input: {
   recentContent: string
   costTracking: { total: number }
 }): Promise<{ ideas: IdeaCandidate[]; cost: number }> {
-  const system = `You are an editorial strategist for a personal content desk. Generate 8 distinct post ideas for today.
+  const system = `You are an editorial strategist for a personal content desk. Your job is to find what is worth saying TODAY.
 
-RULES:
-- Each idea must contain an actual insight, not a generic observation.
-- Daily mix: MAX 2 trend-grounded (from signals), MIN 3 evergreen (expertise/opinion/practical lesson/wildcard).
-- Do not restate news headlines — add persona-specific interpretation.
-- Reject ideas too similar to recent content.
-- Timely ideas must reference real trend signals provided.
-- Evergreen ideas must NOT reference trends — draw from persona expertise, experience, opinions.
-- Output ONLY a JSON array of objects: [{"title": "...", "angle": "...", "trendGrounded": true/false, "territory": "...", "formatSuggestion": "...", "whyNow": "..."}]
-- The "angle" field is a 1-2 sentence explanation of the insight.
-- The "trendGrounded" field must be true only if the idea references a specific current trend from the signals above.`
+Generate 8 distinct post ideas. At least 3 must be grounded in the current trend signals provided.
+
+CRITICAL RULES:
+- Every idea must pass the "so what?" test. If the angle is obvious or generic, reject it.
+- Specific beats broad. "How we reduced k8s pod restarts by 40% using readiness probes" beats "A lesson about Kubernetes."
+- Mix: trend-grounded commentary (3-4), personal experience/lesson (2-3), hot take or counterintuitive opinion (1-2).
+- Trend-grounded ideas must reference a specific trend signal by name and add the persona's unique angle.
+- Personal ideas must include a concrete detail (a number, a tool, a mistake, a specific situation).
+- Output ONLY a JSON array: [{"title": "short, specific, scroll-stopping", "angle": "1-2 sentences of actual insight", "trendGrounded": true/false, "territory": "topic", "formatSuggestion": "observation|lesson|opinion|case_study|prediction", "whyNow": "reason this matters today"}]
+- TITLES must be specific. No "A lesson from X", "Thoughts on X", "Why X matters". Use numbers, contrasts, questions, or bold claims.`
 
   const user = JSON.stringify({
     persona: input.personaContext,
@@ -297,26 +297,26 @@ async function generateFinishedPost(input: {
   costTracking: { total: number }
   repairHint?: string
 }): Promise<string> {
-  const system = `You write viral LinkedIn posts for a B2B practitioner. The post must stop the scroll.
+  const system = `You write LinkedIn posts that sound like a smart practitioner sharing something they actually learned. Not a content marketer. Not a journalist. A person.
 
-FORMAT RULES (NON-NEGOTIABLE):
-- Line 1 is the HOOK. It must be a bold claim, surprising number, or contrarian take. This is all LinkedIn shows before "see more".
-- Max 250 words total. Short paragraphs: 1-2 sentences each. White space between paragraphs.
-- NO em dashes. Use commas or periods instead.
-- NO listicles. No numbered lists. No "here are X tips".
-- NO generic openers: "In today's fast-paced...", "As X continues to evolve...", "The future is...".
-- NO filler phrases: "Here's the thing", "Let that sink in", "Game changer", "It goes without saying".
+THE HOOK (Line 1):
+- This is the only thing people see before "see more". It must earn the click.
+- Use: a surprising number, a counterintuitive claim, a specific observation, or a short story opener.
+- NEVER use: "I've been thinking...", "Here's why...", "The truth is...", "Most people don't realize..."
+- Example good hooks: "We reduced our k8s costs by 60% by deleting things, not optimizing them." / "I reviewed 50 incident postmortems. 43 had the same root cause." / "The best engineering decision I made was saying no to a rewrite."
+
+BODY RULES:
+- Max 200 words. Short paragraphs. 1-2 sentences each. White space matters.
+- Lead with specifics, not abstractions. "Our p99 latency dropped from 2s to 200ms" not "We improved performance significantly."
+- Include at least one concrete detail: a number, a tool name, a timeline, a specific mistake.
+- NO em dashes. Use commas or periods.
+- NO listicles. No numbered lists. No "here are 3 things".
+- NO filler: "Here's the thing", "Let that sink in", "Game changer", "It goes without saying", "At the end of the day".
 - NO fake stories or fabricated metrics. Write from the persona's real expertise only.
-- NO "Thoughts?", "Agree?", "What do you think?" at the end.
+- NO engagement bait: "Thoughts?", "Agree?", "What do you think?" at the end.
 - Max 2 hashtags. Zero exclamation marks. Zero emojis.
 
-STRUCTURE:
-1. Hook (1 line, bold claim or surprising insight)
-2. Context (2-3 short paragraphs max)
-3. Specific insight or contrarian take
-4. End with a question that invites replies
-
-TONE: Direct, confident, specific. Like a founder sharing a real lesson, not a journalist writing an article.
+TONE: Direct, specific, confident. Like a senior engineer explaining something to a peer over coffee. Not a LinkedIn influencer. Not a blog post.
 
 Output ONLY the post text. No intro, no sign-off, no meta-commentary.`
 
@@ -488,23 +488,33 @@ async function generateVisualDirection(
   persona: ContentPersona,
   costTracking: { total: number },
 ): Promise<VisualDirection | null> {
-  const system = `Design a visual for a LinkedIn post. Default to GENERATED_IMAGE unless text is clearly stronger.
+  const system = `Design a visual direction for a LinkedIn post. Choose the RIGHT type for the content.
 
 VISUAL TYPES: PRODUCT_SCREENSHOT, EDITORIAL_GRAPHIC, TECHNICAL_DIAGRAM, TYPOGRAPHIC_CONCEPT, DATA_VISUAL, GENERATED_IMAGE, NO_VISUAL
 
-RULES:
-- Use GENERATED_IMAGE for most posts. Only use NO_VISUAL if the post is purely conversational.
-- Use PRODUCT_SCREENSHOT only for Relay/Studio product posts.
-- Avoid AI clichés: no robots, no glowing brains, no 3D spheres, no stock people, no floating code.
-- The image should support the hook, not illustrate it literally.
-- Output ONLY this JSON: {"type": "VISUAL_TYPE", "concept": "one sentence describing the image", "prompt": "detailed image generation prompt, 2-3 sentences, specific style and composition", "reason": "why this visual fits"}
+SELECTION RULES:
+- NO_VISUAL: for opinion/rant/personal story posts where text is the whole point.
+- TYPOGRAPHIC_CONCEPT: for posts with a single powerful stat or quote. Big number + minimal design.
+- TECHNICAL_DIAGRAM: for how-to, architecture, or comparison posts. System maps, flow diagrams.
+- DATA_VISUAL: for posts with metrics. Charts, graphs, before/after comparisons.
+- EDITORIAL_GRAPHIC: for conceptual posts. Metaphors, tradeoffs, decision trees.
+- GENERATED_IMAGE: only when a photographic scene genuinely adds value.
+- PRODUCT_SCREENSHOT: only for Relay/Studio product posts.
 
-IMAGE PROMPT STYLE:
-- Concrete, not random. The image must relate to the post topic.
-- For sales/data topics: signal paths, before/after comparisons, funnel diagrams, clean dashboards.
-- For leadership topics: minimal scenes, single objects, metaphorical compositions.
-- Specify 1.91:1 aspect ratio. No text. No logos. No faces.
-- Use a muted, professional color palette. One accent color max.`
+AVOID AT ALL COSTS:
+- No robots, no glowing brains, no 3D spheres, no stock people, no floating code.
+- No generic "tech office" scenes (laptop on desk, person staring at screen).
+- No motivational poster aesthetics (sunrise, mountain, person on cliff).
+- No abstract gradient blobs or geometric patterns.
+
+IMAGE PROMPT MUST BE:
+- Specific to the post topic. If someone reads the post and sees the image, it should click.
+- Concrete visual metaphor, not literal illustration.
+- 1.91:1 aspect ratio. No text overlays. No logos. No faces.
+- Muted professional palette (slate, navy, charcoal) with ONE accent color.
+- Style: clean editorial illustration or flat vector. Not photorealistic. Not 3D.
+
+Output ONLY: {"type": "VISUAL_TYPE", "concept": "one sentence", "prompt": "specific 2-3 sentence generation prompt with style, composition, colors", "reason": "why this type fits the post"}`
 
   const user = JSON.stringify({
     ideaTitle: idea.title,

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Copy, RefreshCw, ChevronRight, Sparkles, AlertCircle, Plus, Shuffle, Check, Users } from 'lucide-react'
+import { Copy, RefreshCw, ChevronRight, Sparkles, AlertCircle, Plus, Shuffle, Check, Users, Eye, ThumbsUp, TrendingUp } from 'lucide-react'
 import type { DailyContentIdea } from '@/lib/domain/types'
 
 interface StudioTodayV2Props {
@@ -16,7 +16,7 @@ interface BriefData {
   ideas: DailyContentIdea[]
 }
 
-export function StudioTodayV2({ personaId, personaName, displayName }: StudioTodayV2Props) {
+export function StudioTodayV2({ personaId, displayName }: StudioTodayV2Props) {
   const router = useRouter()
   const [data, setData] = useState<BriefData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -26,6 +26,8 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [postedId, setPostedId] = useState<string | null>(null)
   const [activeIdeaId, setActiveIdeaId] = useState<string | null>(null)
+  const [showFeedback, setShowFeedback] = useState<string | null>(null)
+  const [feedbackData, setFeedbackData] = useState<Record<string, { likes?: number; views?: number }>>({})
 
   const fetchBrief = useCallback(async (): Promise<boolean> => {
     setLoading(true)
@@ -131,7 +133,21 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ideaId, markPosted: true }),
     }).catch(() => {})
-    setTimeout(() => setPostedId(null), 2000)
+    setTimeout(() => {
+      setPostedId(null)
+      setShowFeedback(ideaId)
+    }, 1000)
+  }
+
+  const submitFeedback = async (ideaId: string) => {
+    const fb = feedbackData[ideaId]
+    if (!fb) return
+    await fetch('/api/content/intelligence/v2/daily-brief/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ideaId, ...fb }),
+    }).catch(() => {})
+    setShowFeedback(null)
   }
 
   const activeIdea = data?.ideas.find(i => i.id === activeIdeaId)
@@ -237,7 +253,7 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
               <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
                 {/* Post content */}
                 <div className="rounded-lg border border-line bg-bone-raised p-4 sm:p-6">
-                  <h3 className="mb-3 text-base sm:text-lg font-medium text-ink">{activeIdea.title}</h3>
+                  <h3 className="mb-3 text-base sm:text-lg font-medium text-ink leading-snug">{activeIdea.title}</h3>
                   {activeIdea.angle && (
                     <p className="mb-4 text-sm leading-relaxed text-ink/60">{activeIdea.angle}</p>
                   )}
@@ -305,6 +321,56 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
                   <span>{activeIdea.whyNow}</span>
                 </div>
               )}
+
+              {/* Feedback prompt after marking posted */}
+              {showFeedback === activeIdea.id && (
+                <div className="mt-4 rounded-md border border-cobalt/20 bg-cobalt/5 p-4">
+                  <p className="mb-3 text-sm font-medium text-ink">How did this post perform?</p>
+                  <p className="mb-3 text-xs text-ink/50">This helps Studio learn what works for your audience.</p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-2 text-sm text-ink/70">
+                      <ThumbsUp className="h-3.5 w-3.5" />
+                      <span>Likes</span>
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="0"
+                        onChange={e => setFeedbackData(prev => ({
+                          ...prev,
+                          [activeIdea.id]: { ...prev[activeIdea.id], likes: parseInt(e.target.value) || 0 },
+                        }))}
+                        className="w-16 rounded border border-line px-2 py-1 text-sm"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-ink/70">
+                      <Eye className="h-3.5 w-3.5" />
+                      <span>Views</span>
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="0"
+                        onChange={e => setFeedbackData(prev => ({
+                          ...prev,
+                          [activeIdea.id]: { ...prev[activeIdea.id], views: parseInt(e.target.value) || 0 },
+                        }))}
+                        className="w-16 rounded border border-line px-2 py-1 text-sm"
+                      />
+                    </label>
+                    <button
+                      onClick={() => submitFeedback(activeIdea.id)}
+                      className="rounded-md bg-cobalt px-3 py-1.5 text-sm text-on-accent hover:bg-cobalt-dark"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setShowFeedback(null)}
+                      className="text-sm text-ink/40 hover:text-ink/60"
+                    >
+                      Skip
+                    </button>
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* Alternate Ideas */}
@@ -321,7 +387,11 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
                     <button
                       key={idea.id}
                       onClick={() => setActiveIdeaId(idea.id)}
-                      className="interactive flex w-full items-center justify-between rounded-md border border-line bg-bone-raised px-4 py-3 text-left transition-colors hover:border-cobalt/30"
+                      className={`interactive flex w-full items-center justify-between rounded-md border px-4 py-3 text-left transition-colors ${
+                        idea.id === activeIdea?.id
+                          ? 'border-cobalt/40 bg-cobalt/5'
+                          : 'border-line bg-bone-raised hover:border-cobalt/30'
+                      }`}
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-ink">{idea.title}</p>
@@ -329,7 +399,12 @@ export function StudioTodayV2({ personaId, personaName, displayName }: StudioTod
                           <p className="mt-0.5 truncate text-xs text-ink/40">{idea.whyNow}</p>
                         )}
                       </div>
-                      <ChevronRight className="ml-3 h-4 w-4 shrink-0 text-ink/30" />
+                      <div className="ml-3 flex items-center gap-2 shrink-0">
+                        {idea.trendGrounded && (
+                          <TrendingUp className="h-3 w-3 text-cobalt" />
+                        )}
+                        <ChevronRight className="h-4 w-4 text-ink/30" />
+                      </div>
                     </button>
                   ))}
                 </div>

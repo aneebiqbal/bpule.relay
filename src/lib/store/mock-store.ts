@@ -3331,6 +3331,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async listDailyContentIdeas(_briefId: string): Promise<DailyContentIdea[]> { return [] },
     async markDailyContentIdeaCopied(_ideaId: string): Promise<void> {},
     async markDailyContentIdeaRejected(_ideaId: string): Promise<void> {},
+    async markDailyContentIdeaPosted(_ideaId: string): Promise<void> {},
     async synthesizePersonaIntelligence(_input: any): Promise<PersonaIntelligenceProfile> {
       return { identity: '', currentRole: '', expertise: [], credibleExperience: [],
         products: [], audience: '', audienceProblems: [], knowledgeTerritories: [],

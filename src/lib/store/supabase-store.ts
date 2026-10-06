@@ -7643,6 +7643,13 @@ export class SupabaseStore implements ScoutStore {
       .eq('id', ideaId)
   }
 
+  async markDailyContentIdeaPosted(ideaId: string): Promise<void> {
+    await this.client
+      .from('daily_content_ideas')
+      .update({ posted_at: new Date().toISOString() })
+      .eq('id', ideaId)
+  }
+
   async updatePersonaTrendInterest(personaId: string, profile: TrendInterestProfile): Promise<void> {
     await this.client
       .from('content_personas')

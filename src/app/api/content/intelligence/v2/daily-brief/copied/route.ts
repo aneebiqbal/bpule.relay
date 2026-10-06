@@ -10,10 +10,15 @@ export async function POST(request: Request) {
 
   const body = await request.json()
   const ideaId = body.ideaId as string
+  const markPosted = body.markPosted as boolean | undefined
   if (!ideaId) return NextResponse.json({ error: 'ideaId required' }, { status: 400 })
 
   const store = await createScoutStore()
   await store.markDailyContentIdeaCopied(ideaId)
+
+  if (markPosted) {
+    await store.markDailyContentIdeaPosted(ideaId)
+  }
 
   return NextResponse.json({ ok: true })
 }

@@ -1434,6 +1434,7 @@ export interface ScoutStore {
   listDailyContentIdeas(briefId: string): Promise<DailyContentIdea[]>
   markDailyContentIdeaCopied(ideaId: string): Promise<void>
   markDailyContentIdeaRejected(ideaId: string): Promise<void>
+  markDailyContentIdeaPosted(ideaId: string): Promise<void>
 
   // ─── Studio V2: Persona Intelligence ───
 
