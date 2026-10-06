@@ -184,26 +184,27 @@ async function generateFinishedPost(input: {
   personaContext: string
   trendSignals: string
 }): Promise<string> {
-  const system = `You write LinkedIn posts that sound like a smart practitioner sharing something they actually learned.
+  const system = `You write LinkedIn posts for a practitioner. The post must look and read like a real LinkedIn post — NOT a blog article.
 
-THE HOOK (Line 1):
-- This is the only thing people see before "see more". It must earn the click.
-- Use: a surprising number, a counterintuitive claim, a specific observation.
-- NEVER use: "I've been thinking...", "Here's why...", "The truth is...", "Most people don't realize..."
+CRITICAL FORMATTING:
+- Use DOUBLE NEWLINES between paragraphs. Each paragraph is 1-2 short sentences MAX.
+- Short paragraphs create white space. Walls of text get scrolled past.
+- Output MUST have 3-5 paragraphs separated by blank lines.
 
-BODY RULES:
-- Max 200 words. Short paragraphs. 1-2 sentences each.
-- Lead with specifics, not abstractions. Include at least one concrete detail.
-- NO em dashes. Use commas or periods.
-- NO listicles. No numbered lists.
-- NO filler: "Here's the thing", "Let that sink in", "Game changer".
-- NO fake stories or fabricated metrics.
-- NO engagement bait: "Thoughts?", "Agree?", "What do you think?" at the end.
-- Max 2 hashtags. Zero exclamation marks. Zero emojis.
+THE HOOK (first line):
+- One short sentence. Bold claim, surprising number, or provocative question.
+- GOOD: "We deleted half our K8s cluster. Costs dropped 40%." / "I reviewed 50 postmortems. 43 had the same root cause."
+- BAD: "I've been thinking about..." / "Here's why X matters"
 
-TONE: Direct, specific, confident. Like a senior engineer explaining something to a peer.
+BODY:
+- 150-200 words total. 3-5 short paragraphs.
+- Lead with specifics: a number, a tool name, a mistake, a timeline.
+- End with a genuine question that invites replies (not "Thoughts?").
 
-Output ONLY the post text. No intro, no sign-off.`
+AVOID: No em dashes, no listicles, no filler phrases, no fabricated metrics.
+TONE: Senior engineer explaining to a peer. Direct, specific, confident.
+
+Output ONLY the post text with double newlines between paragraphs.`
 
   const user = JSON.stringify({
     persona: input.personaContext,
@@ -226,15 +227,17 @@ Output ONLY the post text. No intro, no sign-off.`
 
 function cleanPost(raw: string): string {
   let text = raw.trim()
-  text = text.replace(/—|–/g, ',')
+  text = text.replace(/—|–/g, '-')
+  text = text.replace(/\n{3,}/g, '\n\n')
   text = text.replace(/\.\s+([a-z])/g, (_, c) => `. ${c.toUpperCase()}`)
+  text = text.split('\n\n').map(p => p.trim()).filter(Boolean).join('\n\n')
   const words = text.split(/\s+/)
-  if (words.length > 200) {
-    text = words.slice(0, 200).join(' ')
+  if (words.length > 250) {
+    text = words.slice(0, 250).join(' ')
     const lastPeriod = text.lastIndexOf('.')
     if (lastPeriod > text.length * 0.7) text = text.slice(0, lastPeriod + 1)
   }
-  text = text.replace(/\s*(Thoughts\?|Agree\?|What do you think\?)\s*$/i, '')
+  text = text.replace(/\s*(Thoughts\?|Agree\?|What do you think\?|Let that sink in\.?)\s*$/i, '')
   return text.trim()
 }
 

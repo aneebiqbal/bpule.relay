@@ -292,28 +292,35 @@ async function generateFinishedPost(input: {
   costTracking: { total: number }
   repairHint?: string
 }): Promise<string> {
-  const system = `You write LinkedIn posts that sound like a smart practitioner sharing something they actually learned. Not a content marketer. Not a journalist. A person.
+  const system = `You write LinkedIn posts for a practitioner. The post must look and read like a real LinkedIn post — NOT a blog article, NOT a newsletter.
 
-THE HOOK (Line 1):
-- This is the only thing people see before "see more". It must earn the click.
-- Use: a surprising number, a counterintuitive claim, a specific observation, or a short story opener.
-- NEVER use: "I've been thinking...", "Here's why...", "The truth is...", "Most people don't realize..."
-- Example good hooks: "We reduced our k8s costs by 60% by deleting things, not optimizing them." / "I reviewed 50 incident postmortems. 43 had the same root cause." / "The best engineering decision I made was saying no to a rewrite."
+CRITICAL FORMATTING:
+- Use DOUBLE NEWLINES (\\n\\n) between paragraphs. Each paragraph is 1-2 short sentences MAX.
+- Short paragraphs create white space. White space gets reads. Walls of text get scrolled past.
+- Output MUST have 3-5 paragraphs separated by blank lines.
 
-BODY RULES:
-- Max 200 words. Short paragraphs. 1-2 sentences each. White space matters.
-- Lead with specifics, not abstractions. "Our p99 latency dropped from 2s to 200ms" not "We improved performance significantly."
-- Include at least one concrete detail: a number, a tool name, a timeline, a specific mistake.
-- NO em dashes. Use commas or periods.
-- NO listicles. No numbered lists. No "here are 3 things".
-- NO filler: "Here's the thing", "Let that sink in", "Game changer", "It goes without saying", "At the end of the day".
-- NO fake stories or fabricated metrics. Write from the persona's real expertise only.
-- NO engagement bait: "Thoughts?", "Agree?", "What do you think?" at the end.
-- Max 2 hashtags. Zero exclamation marks. Zero emojis.
+THE HOOK (first line):
+- One short sentence. Bold claim, surprising number, or provocative question.
+- This is ALL people see before "see more". Make them click.
+- GOOD: "We deleted half our Kubernetes cluster. Costs dropped 40%." / "I reviewed 50 incident postmortems. 43 had the same root cause." / "The best architecture decision I made was killing the monolith."
+- BAD: "I've been thinking about..." / "Here's why X matters" / "In today's fast-paced..."
 
-TONE: Direct, specific, confident. Like a senior engineer explaining something to a peer over coffee. Not a LinkedIn influencer. Not a blog post.
+BODY:
+- 150-200 words total. 3-5 short paragraphs.
+- Lead with specifics: a number, a tool name, a mistake, a timeline.
+- One insight or contrarian take per post.
+- End with a genuine question that invites replies (not "Thoughts?" or "Agree?").
 
-Output ONLY the post text. No intro, no sign-off, no meta-commentary.`
+AVOID:
+- No em dashes. Use commas or periods.
+- No listicles, no numbered lists, no "here are X tips".
+- No filler: "Here's the thing", "Let that sink in", "Game changer".
+- No fabricated metrics or fake stories.
+- Max 2 hashtags at the end. No exclamation marks.
+
+TONE: Like a senior engineer explaining something to a peer. Direct, specific, confident. Not a LinkedIn influencer.
+
+Output ONLY the post text with double newlines between paragraphs. No intro, no sign-off.`
 
   const userObj: Record<string, unknown> = {
     persona: input.personaContext,
@@ -347,25 +354,21 @@ export function cleanPost(raw: string): string {
   let text = raw.trim()
 
   // Remove em dashes
-  text = text.replace(/\u2014|\u2013/g, ',').replace(/—|–/g, ',')
+  text = text.replace(/—|–/g, '-')
 
-  // Fix broken sentences: "word. word" -> "word. Word" (but not "e. g.")
+  // Normalize paragraph breaks: ensure double newline between paragraphs
+  text = text.replace(/\n{3,}/g, '\n\n')
+
+  // Fix broken sentences within paragraphs (lowercase after period)
   text = text.replace(/\.\s+([a-z])/g, (_, c) => `. ${c.toUpperCase()}`)
 
-  // Remove sentences that end mid-word (trailing fragment)
-  const sentences = text.split(/\.\s+/).filter(s => {
-    const words = s.trim().split(/\s+/)
-    // Remove if last word is clearly a fragment (1-2 chars, no verb)
-    if (words.length <= 2 && /^(in|the|for|to|of|and|but|or|with|on|at|by)$/i.test(words[0])) return false
-    return true
-  })
-  text = sentences.join('. ')
+  // Trim each paragraph's trailing whitespace
+  text = text.split('\n\n').map(p => p.trim()).filter(Boolean).join('\n\n')
 
-  // Trim to 250 words max
+  // Trim to ~250 words max (count across all paragraphs)
   const words = text.split(/\s+/)
   if (words.length > 250) {
     text = words.slice(0, 250).join(' ')
-    // End at last complete sentence
     const lastPeriod = text.lastIndexOf('.')
     if (lastPeriod > text.length * 0.7) {
       text = text.slice(0, lastPeriod + 1)
