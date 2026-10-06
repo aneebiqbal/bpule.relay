@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   const localDate = getLocalDate(user.rep.timezone ?? 'UTC')
 
   const existing = await store.getDailyContentBriefWithIdeas(personaId, localDate)
-  if (existing && existing.brief.status === 'ready') {
+  if (existing && existing.ideas.length > 0) {
     return NextResponse.json({ brief: existing.brief, ideas: existing.ideas, fromCache: true })
   }
 
