@@ -92,6 +92,24 @@ function mapV3ActionToMessagingPolicy(v3Action: string): MessagingPolicy {
 // consistent with a reported production-only symptom.
 export const maxDuration = 120
 
+// In-memory cache: content hash → analyze result. Avoids re-running the
+// full AI pipeline when the same paste is analyzed twice (common during
+// "Try Another Angle" or page refresh). TTL 5 minutes.
+const analyzeCache = new Map<string, { data: Record<string, unknown>; ts: number }>()
+const CACHE_TTL_MS = 5 * 60 * 1000
+
+function cacheKey(rawText: string, profileId: string | null): string {
+  return `${rawText.slice(0, 200).toLowerCase().replace(/\s+/g, ' ').trim()}:${rawText.length}:${profileId ?? ''}`
+}
+
+// Periodic cache cleanup to prevent memory leaks
+function cleanupCache() {
+  const now = Date.now()
+  for (const [k, v] of analyzeCache) {
+    if (now - v.ts > CACHE_TTL_MS) analyzeCache.delete(k)
+  }
+}
+
 export async function POST(request: Request) {
   let body: {
     rawText?: string
@@ -159,6 +177,17 @@ export async function POST(request: Request) {
     tags: [],
   }
   const precheck = evaluateProspectQualification({ rawText, extracted: minimumExtracted })
+
+  // Cache check: same content already analyzed recently
+  cleanupCache()
+  const ck = cacheKey(rawText, typeof body.profileId === 'string' ? body.profileId : null)
+  const cached = analyzeCache.get(ck)
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+    return sseStream(async (emit) => {
+      emit({ type: 'status', message: 'Using cached analysis' })
+      emit({ type: 'done', ...cached.data })
+    })
+  }
 
   return sseStream(async (emit) => {
     if (precheck.inputHardFail) {
@@ -879,8 +908,7 @@ export async function POST(request: Request) {
     }
 
     // ── Emit final result with canonical intelligence ──
-    emit({
-      type: 'done',
+    const finalResult = {
       extracted,
       canonical,
       revenue: loop,
@@ -935,7 +963,11 @@ export async function POST(request: Request) {
       repairAttempted: canonicalResult.repairAttempted,
       repairImproved: canonicalResult.repairImproved,
       reused: canonicalResult.reused,
-    })
+    }
+
+    // Cache & emit
+    analyzeCache.set(ck, { data: finalResult as unknown as Record<string, unknown>, ts: Date.now() })
+    emit({ type: 'done', ...finalResult })
   })
 }
 

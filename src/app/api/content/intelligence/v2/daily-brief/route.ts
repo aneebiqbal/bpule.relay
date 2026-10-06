@@ -208,37 +208,45 @@ function generateFallbackIdeas(
   const ideas: FallbackIdea[] = []
   const territories = profile?.territories ?? []
   const expertise = (profile?.expertise ?? []).map(e => e.area).filter(Boolean)
+  const role = persona.personaRole ?? profile?.role ?? 'your role'
+  const topicsCared = (profile?.topicsCared ?? []).map(t => t.topic)
 
-  // 1. Top trend-grounded ideas (max 2)
-  for (const candidate of trendCandidates.slice(0, 2)) {
+  // 1. Trend ideas — only include trends RELEVANT to this persona
+  for (const candidate of trendCandidates.slice(0, 8)) {
+    if (ideas.length >= 2) break
+    const trendTopics = candidate.item.topics
+    const isRelevant = territories.some(t => trendTopics.includes(t)) ||
+      expertise.some(e => trendTopics.includes(e)) ||
+      topicsCared.some(t => trendTopics.includes(t))
+    if (!isRelevant) continue
     ideas.push({
-      title: `What "${candidate.item.title}" means for ${expertise[0] ?? 'your work'}`,
-      angle: `A current development relevant to ${persona.personaRole ?? 'your role'}. Consider what this means for your audience.`,
+      title: `What "${candidate.item.title}" means for ${role}`,
+      angle: `A current development relevant to ${role}. Connect this trend to your audience's daily challenges.`,
       whyNow: candidate.whyNow,
-      territory: territories[0],
+      territory: territories[0] ?? candidate.item.topics[0],
       trendGrounded: true,
       formatSuggestion: 'observation',
     })
   }
 
-  // 2. Expertise-based ideas
-  for (const area of expertise.slice(0, 2)) {
-    ideas.push({
-      title: `A lesson from ${area}`,
-      angle: `Share a specific insight or lesson from your experience in ${area}. What would you tell someone starting out?`,
-      whyNow: 'Evergreen expertise',
-      territory: area,
-      trendGrounded: false,
-      formatSuggestion: 'practical_lesson',
-    })
+  // 2. Expertise-based ideas (persona-specific hooks)
+  const expertiseHooks = [
+    (area: string) => ({ title: `The ${area} mistake I see every team make`, angle: `A specific recurring pattern you have observed. Name the mistake, why it happens, and what to do instead.`, format: 'practical_lesson' }),
+    (area: string) => ({ title: `What nobody tells you about ${area}`, angle: `An insider perspective that contradicts common advice.`, format: 'opinion' }),
+    (area: string) => ({ title: `I changed my mind about ${area}`, angle: `A genuine shift in perspective. What changed your mind and what you think now.`, format: 'opinion' }),
+  ]
+  for (let i = 0; i < Math.min(expertise.length, 3); i++) {
+    const area = expertise[i]
+    const hook = expertiseHooks[i % expertiseHooks.length](area)
+    ideas.push({ ...hook, whyNow: 'Evergreen expertise', territory: area, trendGrounded: false, formatSuggestion: hook.format })
   }
 
-  // 3. Territory wildcards
+  // 3. Territory opinions
   for (const territory of territories.slice(0, 2)) {
     if (ideas.length >= 5) break
     ideas.push({
-      title: `Why ${territory} matters more than people think`,
-      angle: `An opinion or contrarian take on ${territory} that challenges common assumptions.`,
+      title: `Why most teams underestimate ${territory}`,
+      angle: `A contrarian take that challenges common assumptions about ${territory}.`,
       whyNow: 'Evergreen territory',
       territory,
       trendGrounded: false,
@@ -246,12 +254,12 @@ function generateFallbackIdeas(
     })
   }
 
-  // Ensure at least 3 ideas
-  if (ideas.length === 0) {
+  // Ensure at least 3 diverse ideas
+  if (ideas.length < 3) {
     ideas.push(
-      { title: `A thought on ${expertise[0] ?? 'your work'}`, angle: 'Share a specific insight from your experience today.', whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'observation' },
-      { title: `What's changing in ${territories[0] ?? 'your field'}`, angle: 'An observation about a current development.', whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'observation' },
-      { title: `A lesson worth sharing`, angle: 'Share a practical lesson from your work.', whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'practical_lesson' },
+      { title: `A lesson from ${expertise[0] ?? territories[0] ?? 'your work'}`, angle: `Share a specific insight from your experience. What would you tell someone starting out?`, whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'practical_lesson' },
+      { title: `What's changing in ${territories[0] ?? 'your field'}`, angle: `An observation about a trend or shift you are seeing.`, whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'observation' },
+      { title: `The ${role} timing problem`, angle: `A specific challenge you face and how you approach it.`, whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'observation' },
     )
   }
 
