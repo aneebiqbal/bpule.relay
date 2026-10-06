@@ -92,6 +92,7 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
   const followupGate = evaluateFollowupGate({
     status: lead.status, messages: lead.messages, followupCount: lead.followupCount, now,
   })
+  const lastInboundMessage = lead.messages.filter((m) => m.direction === 'inbound').at(-1) ?? null
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
@@ -102,6 +103,12 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
     setDraftResult(null)
     let buffer = ''
     try {
+      let replyText: string | undefined
+      let replyToMessageId: string | undefined
+      if (type === 'reply') {
+        replyText = capturedReplyText || lastInboundMessage?.sentText || undefined
+        replyToMessageId = lastInboundMessage?.id || undefined
+      }
       const res = await fetch(`/api/leads/${lead.id}/draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -109,7 +116,8 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
           type,
           profileId: selectedProfileId,
           proofId: proofList[0]?.id ?? null,
-          replyText: type === 'reply' ? capturedReplyText : undefined,
+          replyText,
+          replyToMessageId,
         }),
       })
       await readSse<{ type: string; message?: string; items?: ProofItem[]; chunk?: string; draft?: DraftResult }>(res, {
@@ -127,7 +135,7 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
     } finally {
       setGenerating(false)
     }
-  }, [lead.id, selectedProfileId, proofList, capturedReplyText])
+  }, [lead.id, selectedProfileId, proofList, capturedReplyText, lastInboundMessage])
 
   const logSend = useCallback(async () => {
     if (!sentText.trim()) return
@@ -259,82 +267,107 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
         </div>
       )}
 
-      {/* Next actions — always visible, always clear */}
+      {/* PRIMARY ACTION — one clear next step */}
       <div className="rounded-xl border border-line bg-bone p-4">
-        <h2 className="text-[12px] font-medium text-stone uppercase tracking-wider mb-3">What to do next</h2>
-        <div className="space-y-2">
-          {/* Reply to client */}
-          {showReplyOption && (
-            <ActionTile
-              icon={<MessageSquare className="size-4 text-orange" />}
-              label="Reply to their message"
-              description="Generate a response to what they said"
-              onClick={() => { setMode('reply'); generateDraft('reply') }}
-              loading={generating && mode === 'reply'}
-            />
-          )}
+        <h2 className="text-[12px] font-medium text-stone uppercase tracking-wider mb-3">Your next move</h2>
 
-          {/* Follow-up */}
-          {showFollowupOption && (
-            <ActionTile
-              icon={<Send className="size-4 text-cobalt" />}
-              label="Send follow-up"
-              description={`No reply yet · ${3 - (lead.followupCount ?? 0)} follow-ups remaining`}
-              onClick={() => { setMode('followup'); generateDraft('followup') }}
-              loading={generating && mode === 'followup'}
-            />
-          )}
-
-          {/* Send DM */}
-          {showDmOption && lead.status !== 'contacted' && lead.status !== 'followed_up' && lead.status !== 'replied' && (
-            <ActionTile
-              icon={<MessageSquare className="size-4 text-cobalt" />}
-              label="Send first message"
-              description="Connection accepted — start the conversation"
-              onClick={() => { setMode('dm'); generateDraft('dm') }}
-              loading={generating && mode === 'dm'}
-            />
-          )}
-
-          {/* Connection note */}
-          {!lead.connectionAcceptedAt && lead.status === 'new' && (
-            <ActionTile
-              icon={<Send className="size-4 text-stone" />}
-              label="Send connection request"
-              description="Reach out to connect"
-              onClick={() => { setMode('connection'); generateDraft('connection') }}
-              loading={generating && mode === 'connection'}
-            />
-          )}
-
-          {/* Mark accepted */}
-          {!lead.connectionAcceptedAt && lead.status !== 'new' && relationshipState.kind === 'their_move' && (
-            <ActionTile
-              icon={<Trophy className="size-4 text-status-success" />}
-              label="Connection accepted"
-              description="Mark if they accepted off-platform"
-              onClick={markAccepted}
-            />
-          )}
-
-          {/* Log client reply */}
-          {relationshipState.kind === 'their_move' && (
-            <ActionTile
-              icon={<Pencil className="size-4 text-graphite" />}
-              label="They replied (log inbound)"
-              description="Paste their message to unlock reply"
-              onClick={() => setShowPasteReply(true)}
-            />
-          )}
-
-          {/* Log update */}
-          <ActionTile
-            icon={<Pencil className="size-4 text-stone" />}
-            label="Log an update"
-            description="Meeting booked, not interested, etc."
-            onClick={() => setShowLogUpdate(true)}
+        {/* Single primary action based on relationship state */}
+        {relationshipState.phase === 'replied' && showReplyOption && (
+          <PrimaryAction
+            icon={<MessageSquare className="size-5 text-orange" />}
+            label={`Reply to ${lead.contactName ?? 'them'}`}
+            description={relationshipState.lastClientMessage?.sentText ? `They said: "${relationshipState.lastClientMessage.sentText.slice(0, 80)}..."` : 'They wrote back — respond while it is fresh'}
+            buttonText="Generate reply"
+            onClick={() => { setMode('reply'); generateDraft('reply') }}
+            loading={generating && mode === 'reply'}
           />
-        </div>
+        )}
+
+        {relationshipState.phase === 'follow_up_due' && showFollowupOption && (
+          <PrimaryAction
+            icon={<Send className="size-5 text-cobalt" />}
+            label="Send follow-up"
+            description={`No reply after 5 business days. ${3 - (lead.followupCount ?? 0)} follow-ups remaining.`}
+            buttonText="Generate follow-up"
+            onClick={() => { setMode('followup'); generateDraft('followup') }}
+            loading={generating && mode === 'followup'}
+          />
+        )}
+
+        {relationshipState.phase === 'dm_sent' && showFollowupOption && (
+          <PrimaryAction
+            icon={<Clock className="size-5 text-cobalt" />}
+            label="Waiting for reply"
+            description={`Sent ${timeAgo(relationshipState.waitingSince, now)}. ${3 - (lead.followupCount ?? 0)} follow-ups available if they go quiet.`}
+            buttonText="Send follow-up now"
+            onClick={() => { setMode('followup'); generateDraft('followup') }}
+            loading={generating && mode === 'followup'}
+          />
+        )}
+
+        {(showDmOption && (relationshipState.phase === 'connection_accepted' || relationshipState.phase === 'dm_due')) && (
+          <PrimaryAction
+            icon={<MessageSquare className="size-5 text-cobalt" />}
+            label="Send first message"
+            description="Connection accepted. Start the conversation."
+            buttonText="Generate DM"
+            onClick={() => { setMode('dm'); generateDraft('dm') }}
+            loading={generating && mode === 'dm'}
+          />
+        )}
+
+        {relationshipState.phase === 'connection_due' && !lead.connectionAcceptedAt && (
+          <PrimaryAction
+            icon={<Send className="size-5 text-orange" />}
+            label="Send connection request"
+            description="Reach out to connect. No pitch yet."
+            buttonText="Generate connection note"
+            onClick={() => { setMode('connection'); generateDraft('connection') }}
+            loading={generating && mode === 'connection'}
+          />
+        )}
+
+        {relationshipState.kind === 'their_move' && relationshipState.phase !== 'replied' && (
+          <div className="rounded-lg border border-line bg-bone-raised/30 p-4 text-center">
+            <Clock className="size-5 mx-auto text-stone" />
+            <p className="mt-2 text-[14px] font-medium text-ink">Waiting on them</p>
+            <p className="mt-1 text-[12px] text-graphite">{relationshipState.detail}</p>
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowPasteReply(true)}>
+                <MessageSquare className="size-3" /> They replied
+              </Button>
+              {!lead.connectionAcceptedAt && (
+                <Button variant="outline" size="sm" onClick={markAccepted}>
+                  <Trophy className="size-3" /> Mark accepted
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {(relationshipState.kind === 'won' || relationshipState.kind === 'lost') && (
+          <div className={cn(
+            'rounded-lg border p-4 text-center',
+            relationshipState.kind === 'won' ? 'border-status-success/20 bg-status-success/5' : 'border-line bg-bone-raised/30',
+          )}>
+            <p className={cn('text-[14px] font-medium', relationshipState.kind === 'won' ? 'text-status-success' : 'text-stone')}>
+              {relationshipState.kind === 'won' ? 'Opportunity won' : 'Opportunity closed'}
+            </p>
+            <p className="mt-1 text-[12px] text-graphite">{relationshipState.detail}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Secondary actions */}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="ghost" size="sm" onClick={() => setShowLogUpdate(true)}>
+          <Pencil className="size-3" /> Log update
+        </Button>
+        {relationshipState.kind === 'their_move' && (
+          <Button variant="ghost" size="sm" onClick={() => setShowPasteReply(true)}>
+            <MessageSquare className="size-3" /> Paste reply
+          </Button>
+        )}
       </div>
 
       {/* Paste reply panel */}
@@ -514,6 +547,28 @@ function LogUpdateOptionsCompact({ phase, leadId, onLogged }: { phase: string; l
       )}
       {error && <p className="text-[11px] text-status-danger">{error}</p>}
       <Button variant="orange" size="sm" onClick={handleLog} disabled={saving || !selected} loading={saving}>Log this</Button>
+    </div>
+  )
+}
+
+function PrimaryAction({ icon, label, description, buttonText, onClick, loading }: {
+  icon: React.ReactNode; label: string; description: string; buttonText: string; onClick: () => void; loading?: boolean
+}) {
+  return (
+    <div className="rounded-lg border border-orange/20 bg-orange/[0.02] p-4">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 shrink-0">{icon}</div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium text-ink">{label}</p>
+          <p className="mt-1 text-[12px] text-graphite leading-relaxed">{description}</p>
+        </div>
+      </div>
+      <div className="mt-3">
+        <Button variant="orange" size="sm" onClick={onClick} disabled={loading} loading={loading}>
+          {buttonText}
+          {!loading && <ChevronRight className="size-3" />}
+        </Button>
+      </div>
     </div>
   )
 }
