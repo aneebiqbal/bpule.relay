@@ -225,6 +225,42 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
         </div>
       </div>
 
+      {/* Scoring dimensions */}
+      {(() => {
+        const ci = lead.canonicalIntelligence as Record<string, unknown> | null
+        const breakdown = ci?.scoreBreakdown as Record<string, unknown> | null
+        const dimensions = Array.isArray(breakdown?.dimensions) ? breakdown.dimensions as Array<Record<string, unknown>> : []
+        const revenue = ci?.revenue as Record<string, unknown> | null
+        const noMessageReason = revenue?.noMessageReason as string | null
+        if (dimensions.length === 0) return null
+        return (
+          <div className="rounded-xl border border-line bg-bone-raised/20 p-4">
+            <h2 className="text-[12px] font-medium text-stone uppercase tracking-wider mb-2">Score breakdown</h2>
+            <div className="space-y-1.5">
+              {dimensions.map((dim) => (
+                <div key={dim.key as string} className="flex items-center gap-2">
+                  <div className="w-20 shrink-0">
+                    <div className="h-1.5 rounded-full bg-line overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-orange"
+                        style={{ width: `${Math.min(100, ((dim.contribution as number) / ((dim.weight as number) * 100)) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-[11px] text-graphite shrink-0 w-24">{dim.label as string}</span>
+                  <span className="text-[11px] text-stone truncate">{dim.note as string}</span>
+                </div>
+              ))}
+            </div>
+            {noMessageReason && (
+              <div className="mt-3 rounded-md bg-status-warning/5 border border-status-warning/20 px-3 py-2">
+                <p className="text-[11px] text-status-warning">{noMessageReason}</p>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
       {/* What's happening — always visible */}
       <div className="rounded-xl border border-line bg-bone-raised/30 p-4">
         <div className="flex items-center gap-2 text-[11px] font-medium text-stone uppercase tracking-wider">
