@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Copy, Shuffle, Check, ChevronRight, AlertCircle, Sparkles, RefreshCw } from 'lucide-react'
+import { Copy, Shuffle, Check, ChevronRight, AlertCircle, Sparkles, RefreshCw, Plus, Users } from 'lucide-react'
 import type { DailyContentIdea } from '@/lib/domain/types'
 
 interface StudioTodayV2Props {
@@ -130,13 +130,28 @@ export function StudioTodayV2({ personaId, displayName }: StudioTodayV2Props) {
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <span className="font-mono text-xs uppercase tracking-[0.15em] text-cobalt">Studio</span>
-            <button onClick={() => router.push('/content?manage=1')} className="text-xs text-ink/40 hover:text-cobalt">
-              {displayName} →
-            </button>
+            <span className="h-3 w-px bg-line" />
+            <span className="text-sm text-ink/60">{displayName}</span>
           </div>
-          <span className="font-mono text-[11px] text-ink/30">
-            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push('/content?manage=1')}
+              className="interactive flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-ink/50 transition-colors hover:bg-bone-raised hover:text-cobalt"
+            >
+              <Users className="h-3 w-3" />
+              <span className="hidden sm:inline">Switch</span>
+            </button>
+            <button
+              onClick={() => router.push('/content/new')}
+              className="interactive flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-ink/50 transition-colors hover:bg-bone-raised hover:text-cobalt"
+            >
+              <Plus className="h-3 w-3" />
+              <span className="hidden sm:inline">Persona</span>
+            </button>
+            <span className="font-mono text-[11px] text-ink/30 hidden sm:block">
+              {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -158,9 +173,9 @@ export function StudioTodayV2({ personaId, displayName }: StudioTodayV2Props) {
 
         {activeIdea && (
           <div className="space-y-6">
-            <div className="rounded-xl border border-line bg-white p-5 sm:p-6">
+            <div className="rounded-xl border border-line bg-bone-raised p-5 sm:p-6">
               {activeIdea.trendGrounded && (
-                <span className="mb-3 inline-flex items-center gap-1 rounded-md bg-cobalt/8 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-cobalt">
+                <span className="mb-3 inline-flex items-center gap-1 rounded-md bg-cobalt/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-cobalt">
                   <Sparkles className="h-2.5 w-2.5" /> Trending
                 </span>
               )}
@@ -219,7 +234,7 @@ export function StudioTodayV2({ personaId, displayName }: StudioTodayV2Props) {
                     className={`interactive flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-all ${
                       idea.id === activeIdea?.id
                         ? 'border-cobalt/30 bg-cobalt/5'
-                        : 'border-line bg-white hover:border-cobalt/20 hover:bg-bone-raised'
+                        : 'border-line bg-bone-raised hover:border-cobalt/20'
                     }`}
                   >
                     <div className="min-w-0 flex-1">
