@@ -176,12 +176,12 @@ export default function NewUpworkJobPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <section className="srf-console srf-console-edge overflow-hidden px-5 py-5 sm:px-6">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Intake / Upwork Opportunity</p>
-        <h1 className="mt-2 text-[30px] leading-[1.05] tracking-[-0.03em] text-[color:var(--console-text)]">
+      <section className="rounded-xl border border-line bg-bone-raised/30 px-5 py-5 sm:px-6">
+        <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Intake / Upwork Opportunity</p>
+        <h1 className="mt-2 text-[22px] font-medium text-ink">
           Qualify job posts before spending Connects.
         </h1>
-        <p className="mt-2 max-w-2xl text-[13px] text-[color:var(--console-mute)]">
+        <p className="mt-2 max-w-2xl text-[13px] text-graphite">
           Relay extracts budget and urgency, scores the job with rubric math, and keeps the apply decision explicit.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -190,12 +190,12 @@ export default function NewUpworkJobPage() {
           <UpworkSignal label="Observed proposals" value={proposalsPreview > 0 ? String(proposalsPreview) : 'Unknown'} />
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Link href="/upwork" className="inline-flex items-center gap-1.5 rounded border border-orange/30 bg-orange/10 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-text)]">
-            Back to job lanes
-          </Link>
-          <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded border border-line/30 px-3 py-1.5 text-[12px] font-medium text-[color:var(--console-mute)] hover:text-[color:var(--console-text)]">
-            Return to Relay Today
-          </Link>
+          <Link href="/upwork/new" className="inline-flex items-center gap-1.5 rounded border border-orange/30 bg-orange/10 px-3 py-1.5 text-[12px] font-medium text-orange">
+             New job
+           </Link>
+           <Link href="/leads" className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-1.5 text-[12px] font-medium text-graphite hover:text-ink">
+             Back to leads
+           </Link>
         </div>
       </section>
 
@@ -329,7 +329,7 @@ function UpworkSignal({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
       <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
-      <p className="mt-1 text-[14px] font-medium text-[color:var(--console-text)]">{value}</p>
+      <p className="mt-1 text-[14px] font-medium text-ink">{value}</p>
     </div>
   )
 }

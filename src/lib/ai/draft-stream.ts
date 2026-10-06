@@ -148,7 +148,7 @@ export async function streamDraft(
     attemptCount: callLog.length,
   })
 
-  if (escalationDecision.shouldEscalate || isHighValue) {
+  if (escalationDecision.shouldEscalate || (isHighValue && !variantA?.passed)) {
     emit({ type: 'status', message: 'Refining draft...' })
 
     const feedback = variantA ? buildCorrectiveFeedback(

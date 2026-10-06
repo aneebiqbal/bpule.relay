@@ -5,10 +5,17 @@
  * that the existing API routes expect. When V3_CANONICAL=true, this
  * replaces V2 as the authoritative lead decision system.
  *
- * Flow:
- *   Raw Input → V2 Extraction (unchanged) → V3 Graph → V3 Episodes
+ * Flow (V3_CANONICAL=true):
+ *   Raw Input → Lightweight deterministic parse → V3 Graph → V3 Episodes
  *   → GPT-4o-mini decisions → GPT-4.1 escalation → V3 DecisionPacket
  *   → Score V3 → Action Policy → HUMAN_REVIEW gate → Output
+ *
+ * Flow (V3_CANONICAL=false):
+ *   Raw Input → Full V2 Extraction (AI) → Score V2 → Action V2 → Output
+ *
+ * AI Savings:
+ *   V3 mode skips the full V2 extraction (2-3 AI calls). V3's event extractor
+ *   works directly from raw text, so no AI-heavy normalization is needed.
  *
  * Organization scoping:
  *   The V2 evidence ledger contains per-entry organizationName. The V3 bridge
@@ -185,6 +192,65 @@ export interface V3IntelligenceOptions {
 }
 
 /**
+ * Build a minimal V2 canonical structure WITHOUT AI calls.
+ * Used only when V3 is canonical — V3's event extractor works from raw text,
+ * so we only need basic normalization (not full AI extraction).
+ * Saves 2-3 AI calls per extraction.
+ */
+function buildMinimalV2Canonical(rawText: string): CanonicalProspectIntelligence {
+  const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean)
+  const firstLine = lines[0] || ''
+  const hasTitleAtCompany = firstLine.includes(' at ') || firstLine.includes(' · ')
+  const name = hasTitleAtCompany ? firstLine.split(/\s+at\s+/)[0].trim() : firstLine.split(' ')[0] || null
+  const title = hasTitleAtCompany
+    ? firstLine.split(/\s+at\s+/)[1]?.replace(/^[·\s]+/, '').trim() || null
+    : null
+
+  return {
+    version: 'relay_qualification_v2',
+    intelligenceRunId: `v3light_${Date.now().toString(36)}`,
+    intelligenceInputHash: rawText.slice(0, 100),
+    intelligenceVersion: 'relay_decision_v3_light',
+    computedAt: new Date().toISOString(),
+    canonicalScore: 50,
+    scoreVersion: 'relay_decision_v3_light',
+    scoredAt: new Date().toISOString(),
+    scoreBreakdown: { dimensions: [], hardNegatives: [], missingInfo: [], total: 50, label: 'Unknown — V3 will assess', reasons: [], watchOut: [] },
+    confidence: 50,
+    qualification: 'maybe',
+    intelligence: {
+      person: { fullName: name || null, firstName: name?.split(' ')[0] || null, title, seniority: null, location: null, linkedinUrl: null, otherUrls: [] },
+      company: { name: title?.split(' at ')[1]?.trim() || null, domain: null, linkedinUrl: null, industry: null, size: null, sizeEvidence: null, product: null, stage: null, stageEvidence: null },
+      opportunity: { signals: [], primarySignal: null, description: rawText.slice(0, 200), urgency: 'unknown' },
+      job: { title: null, employmentType: 'unknown', workplaceType: 'UNKNOWN', allowedGeography: null, timezone: null, compensation: null, skills: [], seniority: 'unknown', source: null, postedDate: null },
+      content: { recentPosts: [], topics: [], explicitProblems: [], initiatives: [], launches: [], technicalSignals: [], hiringSignals: [] },
+      probableNeed: null,
+      opportunityTrigger: null,
+      timingSignal: null,
+      risks: [],
+      unknowns: [],
+      resolvedContradictions: [],
+      businessModel: 'PRODUCT',
+      relationship: 'UNKNOWN',
+      commercialReading: { serviceBuyerIntent: 'MEDIUM', externalEngineeringNeed: 'NONE_DETECTED', immediateBuyerNeed: false, buyerTiming: 'UNKNOWN', productMomentum: 'MEDIUM', customerDiscovery: 'NONE', preLaunchActivity: 'NONE', technicalRelevance: 'MEDIUM', buyerEvidenceKinds: [] },
+      remoteEligibility: { workplaceType: 'REMOTE', remoteScope: 'UNKNOWN', eligibility: 'ELIGIBLE', reason: 'No restrictions stated', evidence: [] },
+      needOwnershipSummary: { dominant: 'UNKNOWN', counts: { SELF_NEED: 0, CUSTOMER_NEED: 0, MARKET_PROBLEM: 0, SERVICE_OFFERING: 0, PRODUCT_PROBLEM: 0, EMPLOYER_NEED: 0, UNKNOWN: 0 } },
+    },
+    rawSource: { rawInput: rawText, sourceType: 'mixed' as const, sourceUrl: null, profileUrl: null, companyUrl: null, jobUrl: null, postUrls: [], rawPosts: [], rawJobDescription: null, rawProfileText: rawText.slice(0, 500), rawCompanyText: null, capturedAt: new Date().toISOString() },
+    evidenceLedger: [],
+    remoteEligibility: { workplaceType: 'REMOTE', remoteScope: 'UNKNOWN', eligibility: 'ELIGIBLE', reason: 'No restrictions stated', evidence: [] },
+    extractionCompleteness: { score: 0, presentFields: [], missingFields: [], weakFields: [], repairAttempted: false, repairImproved: false, sourceUrlsFound: [], urlsPreserved: [] },
+    rescoreEvents: [],
+    recommendedIdentityId: null,
+    recommendedProofIds: [],
+    personalizationAngle: null,
+    outreachContext: { whyNow: null, probableNeed: null, bestProof: null, personalizationAnchor: null, messageGoal: null, cta: null, thingsNotToClaim: [] },
+    extractionCallLog: [],
+    extractionTrace: [{ stage: 'v3_light_extraction', ms: 0, provider: 'deterministic' }],
+  }
+}
+
+/**
  * Produce intelligence using V3 as canonical when enabled.
  * Falls back to V2 if V3 fails or is disabled.
  * Reuses cached DecisionPacket when inputs + versions are unchanged.
@@ -202,17 +268,16 @@ export async function produceV3Intelligence(
     forceReanalyze = false,
   } = options
 
-  // Step 1: Always run V2 extraction first (provides normalized input + fallback)
-  onStatus?.('Extracting prospect intelligence (V2)...')
+  // Step 1: Run V2 extraction (V3 mode uses it for normalization + fallback)
+  onStatus?.('Analyzing prospect...')
 
-  const v2Result = await produceCanonicalIntelligence(rawText, {
-    onStatus: (msg) => emitV3Status(msg, onStatus),
-  })
+  let v2Canonical: CanonicalProspectIntelligence
 
-  const v2Canonical = v2Result.intelligence
-
-  // Step 2: If V3 is not canonical, return V2 as-is
   if (!V3_CANONICAL) {
+    const v2Result = await produceCanonicalIntelligence(rawText, {
+      onStatus: (msg) => emitV3Status(msg, onStatus),
+    })
+    v2Canonical = v2Result.intelligence
     return {
       intelligence: v2Canonical,
       v3Packet: null,
@@ -220,6 +285,12 @@ export async function produceV3Intelligence(
       v2Fallback: false,
     }
   }
+
+  // V3 canonical mode: Build minimal V2 structure deterministically (no AI calls).
+  // V3's extractEventsFromSource re-extracts events from raw text independently,
+  // so we only need the basic normalization here — not a full AI extraction.
+  // This saves 2-3 AI calls per extraction.
+  v2Canonical = buildMinimalV2Canonical(rawText)
 
   // Step 3: Check for reusable DecisionPacket
   const reuseKey = buildV3ReuseKey({
