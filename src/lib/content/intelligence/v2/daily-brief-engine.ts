@@ -320,6 +320,8 @@ AVOID:
 
 TONE: Like a senior engineer explaining something to a peer. Direct, specific, confident. Not a LinkedIn influencer.
 
+EMPHASIS: NO EM DASHES ANYWHERE in the output. Use commas or periods only.
+
 Output ONLY the post text with double newlines between paragraphs. No intro, no sign-off.`
 
   const userObj: Record<string, unknown> = {
@@ -353,32 +355,48 @@ Output ONLY the post text with double newlines between paragraphs. No intro, no 
 export function cleanPost(raw: string): string {
   let text = raw.trim()
 
-  // Remove em dashes
-  text = text.replace(/—|–/g, '-')
+  // Remove ALL em dashes, en dashes, and dash-like characters
+  text = text.replace(/[\u2014\u2013\u2015\uFE58\uFF0D\u2500\u2212\u2E3A\u2E3B]/g, ' ')
+  text = text.replace(/\s{2,}/g, ' ')
 
-  // Normalize paragraph breaks: ensure double newline between paragraphs
+  // Normalize paragraph breaks
   text = text.replace(/\n{3,}/g, '\n\n')
+  text = text.replace(/\r\n/g, '\n')
 
-  // Fix broken sentences within paragraphs (lowercase after period)
+  // Fix broken sentences within paragraphs
   text = text.replace(/\.\s+([a-z])/g, (_, c) => `. ${c.toUpperCase()}`)
 
-  // Trim each paragraph's trailing whitespace
-  text = text.split('\n\n').map(p => p.trim()).filter(Boolean).join('\n\n')
+  // Trim each paragraph
+  const paragraphs = text.split('\n\n').map(p => p.trim()).filter(Boolean)
 
-  // Trim to ~250 words max (count across all paragraphs)
-  const words = text.split(/\s+/)
-  if (words.length > 250) {
-    text = words.slice(0, 250).join(' ')
-    const lastPeriod = text.lastIndexOf('.')
-    if (lastPeriod > text.length * 0.7) {
-      text = text.slice(0, lastPeriod + 1)
+  // If AI returned one big block, split into paragraphs by sentence groups
+  if (paragraphs.length < 2) {
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
+    const chunks: string[] = []
+    let current = ''
+    for (const s of sentences) {
+      if (current.split(/[.!?]+/).length > 2 && current.trim()) {
+        chunks.push(current.trim())
+        current = s.trim()
+      } else {
+        current = current ? `${current} ${s.trim()}` : s.trim()
+      }
     }
+    if (current.trim()) chunks.push(current.trim())
+    if (chunks.length > 1) return chunks.join('\n\n')
   }
 
-  // Remove trailing filler phrases
-  text = text.replace(/\s*(Thoughts\?|Agree\?|What do you think\?|Let that sink in\.?)\s*$/i, '')
+  // Trim to ~200 words
+  const fullText = paragraphs.join('\n\n')
+  const words = fullText.split(/\s+/)
+  if (words.length > 200) {
+    let trimmed = words.slice(0, 200).join(' ')
+    const lastPeriod = trimmed.lastIndexOf('.')
+    if (lastPeriod > trimmed.length * 0.7) trimmed = trimmed.slice(0, lastPeriod + 1)
+    return trimmed
+  }
 
-  return text.trim()
+  return fullText.replace(/\s*(Thoughts\?|Agree\?|What do you think\?|Let that sink in\.?)\s*$/i, '').trim()
 }
 
 async function generatePostWithQualityGate(input: {
@@ -435,8 +453,18 @@ function evaluatePostQuality(caption: string): PostQualityResult {
   }
 
   // Hard rule: no em dashes
-  if (/\u2014|\u2013/.test(caption) || caption.includes('—') || caption.includes('–')) {
+  if (/[\u2014\u2013\u2015]/.test(caption) || caption.includes('—') || caption.includes('–')) {
     failures.push('EM_DASH')
+  }
+
+  // Hard rule: must have paragraph breaks (not a wall of text)
+  const paragraphs = caption.split('\n\n').filter(p => p.trim().length > 0)
+  if (paragraphs.length < 3) failures.push('NEEDS_PARAGRAPHS')
+
+  // Hard rule: no paragraph should be longer than 3 sentences
+  for (const p of paragraphs) {
+    const sentences = p.split(/[.!?]+/).filter(s => s.trim().length > 5)
+    if (sentences.length > 3) failures.push('PARAGRAPH_TOO_LONG')
   }
 
   // Hard rule: max 250 words

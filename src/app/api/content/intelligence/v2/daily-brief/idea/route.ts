@@ -204,7 +204,9 @@ BODY:
 AVOID: No em dashes, no listicles, no filler phrases, no fabricated metrics.
 TONE: Senior engineer explaining to a peer. Direct, specific, confident.
 
-Output ONLY the post text with double newlines between paragraphs.`
+EMPHASIS: NO EM DASHES ANYWHERE. Use commas or periods only.
+
+Output ONLY the post text with double newlines between paragraphs. No intro.`
 
   const user = JSON.stringify({
     persona: input.personaContext,
@@ -227,18 +229,51 @@ Output ONLY the post text with double newlines between paragraphs.`
 
 function cleanPost(raw: string): string {
   let text = raw.trim()
-  text = text.replace(/—|–/g, '-')
+
+  // Remove ALL em dashes, en dashes, and dash-like characters
+  text = text.replace(/[\u2014\u2013\u2015\uFE58\uFF0D\u2500\u2212\u2E3A\u2E3B]/g, ' ')
+  // Clean up multiple spaces from dash removal
+  text = text.replace(/\s{2,}/g, ' ')
+
+  // Normalize paragraph breaks
   text = text.replace(/\n{3,}/g, '\n\n')
+  text = text.replace(/\r\n/g, '\n')
+
+  // Fix broken sentences within paragraphs
   text = text.replace(/\.\s+([a-z])/g, (_, c) => `. ${c.toUpperCase()}`)
-  text = text.split('\n\n').map(p => p.trim()).filter(Boolean).join('\n\n')
-  const words = text.split(/\s+/)
-  if (words.length > 250) {
-    text = words.slice(0, 250).join(' ')
-    const lastPeriod = text.lastIndexOf('.')
-    if (lastPeriod > text.length * 0.7) text = text.slice(0, lastPeriod + 1)
+
+  // Trim each paragraph
+  const paragraphs = text.split('\n\n').map(p => p.trim()).filter(Boolean)
+
+  // If AI returned one big block, try to split into paragraphs by sentence count
+  if (paragraphs.length < 2) {
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
+    const chunks: string[] = []
+    let current = ''
+    for (const s of sentences) {
+      if (current.split(/[.!?]+/).length > 2 && current.trim()) {
+        chunks.push(current.trim())
+        current = s.trim()
+      } else {
+        current = current ? `${current} ${s.trim()}` : s.trim()
+      }
+    }
+    if (current.trim()) chunks.push(current.trim())
+    if (chunks.length > 1) return chunks.join('\n\n')
   }
-  text = text.replace(/\s*(Thoughts\?|Agree\?|What do you think\?|Let that sink in\.?)\s*$/i, '')
-  return text.trim()
+
+  // Trim to ~200 words
+  const fullText = paragraphs.join('\n\n')
+  const words = fullText.split(/\s+/)
+  if (words.length > 200) {
+    let trimmed = words.slice(0, 200).join(' ')
+    const lastPeriod = trimmed.lastIndexOf('.')
+    if (lastPeriod > trimmed.length * 0.7) trimmed = trimmed.slice(0, lastPeriod + 1)
+    return trimmed
+  }
+
+  // Remove trailing filler
+  return fullText.replace(/\s*(Thoughts\?|Agree\?|What do you think\?|Let that sink in\.?)\s*$/i, '').trim()
 }
 
 function buildPersonaContextString(persona: ContentPersona, profile: ContentProfile | null): string {
