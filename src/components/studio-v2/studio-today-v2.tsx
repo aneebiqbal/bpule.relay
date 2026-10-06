@@ -28,6 +28,7 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
   const [activeIdeaId, setActiveIdeaId] = useState<string | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [imageLoading, setImageLoading] = useState(false)
+  const [imageError, setImageError] = useState('')
 
 
   // ── Data fetching ──
@@ -129,12 +130,13 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
   const generateImage = useCallback(async () => {
     if (!activeIdea) return
     setImageLoading(true)
+    setImageError('')
     try {
-      const prompt = activeIdea.visualPrompt || `${activeIdea.title}. ${activeIdea.angle || ''}. Professional editorial photography, clean composition, muted tones.`
+      const prompt = activeIdea.visualPrompt || `${activeIdea.title}. ${activeIdea.angle || ''}`
       const result = await generatePostImage(prompt, { aspectRatio: '16:9' })
       setImageUrl(result.url)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Image generation failed')
+      setImageError(err instanceof Error ? err.message : 'Image generation failed')
     } finally {
       setImageLoading(false)
     }
@@ -284,6 +286,13 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
                 </button>
               </div>
 
+              {imageError && (
+                <div className="mb-3 flex items-center gap-2 rounded-lg bg-status-danger/5 px-3 py-2">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 text-status-danger" />
+                  <p className="text-xs text-ink/60">{imageError}</p>
+                </div>
+              )}
+
               {imageUrl ? (
                 <div className="space-y-3">
                   <img src={imageUrl} alt="Post visual" className="w-full rounded-lg border border-line" />
@@ -301,7 +310,7 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
                 <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-line/50 py-12 text-center">
                   <Image className="mb-3 h-8 w-8 text-ink/20" />
                   <p className="text-sm text-ink/40">Generate an image for this post</p>
-                  <p className="mt-1 text-[11px] text-ink/30">Creates a 1200×630 branded visual</p>
+                  <p className="mt-1 text-[11px] text-ink/30">1200×630 branded visual via FAL.AI</p>
                 </div>
               )}
 
