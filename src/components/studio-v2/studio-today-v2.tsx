@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Copy, Shuffle, Check, AlertCircle, Plus, Users, RefreshCw, Download, Image } from 'lucide-react'
+import { Copy, Shuffle, Check, AlertCircle, Plus, Users, RefreshCw, Download, Image, Sparkles } from 'lucide-react'
 import type { DailyContentIdea } from '@/lib/domain/types'
+import { generatePostImage } from '@/lib/ai/fal-image'
 
 interface Props {
   personaId: string
@@ -27,7 +28,7 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
   const [activeIdeaId, setActiveIdeaId] = useState<string | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [imageLoading, setImageLoading] = useState(false)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+
 
   // ── Data fetching ──
 
@@ -125,70 +126,19 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
   const activeIdea = data?.ideas.find(i => i.id === activeIdeaId) ?? data?.ideas[0]
   const trendLabel = activeIdea?.trendGrounded ? 'Trending topic' : 'Editorial'
 
-  const generateImage = useCallback(() => {
-    if (!canvasRef.current || !activeIdea) return
+  const generateImage = useCallback(async () => {
+    if (!activeIdea) return
     setImageLoading(true)
-
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
-    if (!ctx) { setImageLoading(false); return }
-
-    const W = 1200
-    const H = 630
-    canvas.width = W
-    canvas.height = H
-
-    // Background gradient
-    const grad = ctx.createLinearGradient(0, 0, W, H)
-    grad.addColorStop(0, '#1a1a2e')
-    grad.addColorStop(1, '#16213e')
-    ctx.fillStyle = grad
-    ctx.fillRect(0, 0, W, H)
-
-    // Subtle pattern
-    ctx.fillStyle = 'rgba(255,255,255,0.03)'
-    for (let i = 0; i < 20; i++) {
-      ctx.fillRect(Math.random() * W, Math.random() * H, 2, 2)
+    try {
+      const prompt = activeIdea.visualPrompt || `${activeIdea.title}. ${activeIdea.angle || ''}. Professional editorial photography, clean composition, muted tones.`
+      const result = await generatePostImage(prompt, { aspectRatio: '16:9' })
+      setImageUrl(result.url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Image generation failed')
+    } finally {
+      setImageLoading(false)
     }
-
-    // Accent line
-    ctx.fillStyle = '#3b82f6'
-    ctx.fillRect(60, 100, 60, 4)
-
-    // Title text
-    ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 36px system-ui, -apple-system, sans-serif'
-    const title = activeIdea.title
-    const words = title.split(' ')
-    let line = ''
-    let y = 180
-    const maxWidth = W - 120
-    for (const word of words) {
-      const test = line + word + ' '
-      if (ctx.measureText(test).width > maxWidth && line) {
-        ctx.fillText(line.trim(), 60, y)
-        line = word + ' '
-        y += 50
-      } else {
-        line = test
-      }
-    }
-    ctx.fillText(line.trim(), 60, y)
-
-    // Subtitle / handle
-    ctx.fillStyle = 'rgba(255,255,255,0.5)'
-    ctx.font = '20px system-ui, -apple-system, sans-serif'
-    ctx.fillText(displayName, 60, H - 60)
-
-    // Brand mark
-    ctx.fillStyle = '#3b82f6'
-    ctx.font = 'bold 16px system-ui, -apple-system, sans-serif'
-    ctx.fillText('RELAY', W - 100, H - 60)
-
-    const url = canvas.toDataURL('image/png')
-    setImageUrl(url)
-    setImageLoading(false)
-  }, [activeIdea, displayName])
+  }, [activeIdea])
 
   const downloadImage = () => {
     if (!imageUrl) return
@@ -355,7 +305,7 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
                 </div>
               )}
 
-              <canvas ref={canvasRef} className="hidden" />
+
             </div>
 
             {/* Source context */}
