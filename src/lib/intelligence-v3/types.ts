@@ -251,6 +251,8 @@ export interface V3LeadDecisionPacket {
   reasons: string[]
   /** Cautions */
   watchOut: string[]
+  /** Per-dimension scoring breakdown */
+  dimensions: Array<{ key: string; label: string; contribution: number; raw: number; weight: number; note: string }>
   /** Evidence used */
   evidenceRefs: string[]
   /** Semantic proof strength 0-1 */

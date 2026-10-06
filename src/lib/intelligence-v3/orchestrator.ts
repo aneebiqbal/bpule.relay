@@ -750,6 +750,7 @@ function createEmptyPacket(
     messageEligible: false,
     reasons: ['No opportunity episodes found'],
     watchOut: [],
+    dimensions: [],
     evidenceRefs: [],
     proofStrength: 0,
     confidence: 0,

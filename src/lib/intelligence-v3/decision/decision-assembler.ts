@@ -214,6 +214,7 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
     messageEligible: actionOutput.messageEligible,
     reasons: selectedScore.reasons,
     watchOut: selectedScore.watchOut,
+    dimensions: selectedScore.dimensions,
     evidenceRefs,
     proofStrength: proofRelevanceMap[bestEpisode?.id ?? ''] ?? 0.5,
     confidence: latentAssessment ? latentAssessment.confidence : confidence,

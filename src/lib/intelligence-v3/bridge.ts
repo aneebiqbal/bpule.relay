@@ -133,10 +133,8 @@ function v3PacketToCanonical(
   })()
 
   // Build a score breakdown that reflects V3 dimensions
-  const v3Dimensions = (packet as unknown as { dimensions?: Array<{ key: string; label: string; note: string }> }).dimensions ?? []
-
   const scoreBreakdown = {
-    dimensions: v3Dimensions,
+    dimensions: packet.dimensions ?? [],
     hardNegatives: [],
     missingInfo: [],
     total: packet.score,

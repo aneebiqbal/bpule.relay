@@ -68,9 +68,19 @@ export async function POST(req: NextRequest) {
 
     const bestMatch = profileMatches[0] ?? null
 
+    const v3Packet = (canonical as unknown as { v3DecisionPacket?: { decision?: Record<string, unknown> } }).v3DecisionPacket
+    const v3Decision = v3Packet?.decision as Record<string, unknown> | undefined
+
     const intelligence = {
-      wants: canonical.intelligence.opportunity.description ?? 'Unknown',
-      intent: canonical.intelligence.opportunityTrigger ?? 'Unknown',
+      wants: canonical.intelligence.opportunity.description
+        ?? (v3Decision?.commercialReading as Record<string, unknown>)?.probableNeed as string
+        ?? canonical.intelligence.opportunityTrigger
+        ?? 'Not specified — ask clarifying questions',
+      intent: (v3Decision?.buyerRequestProbability as number) >= 0.6
+        ? 'Explicit buyer request'
+        : (v3Decision?.externalNeedProbability as number) >= 0.5
+          ? 'External need detected'
+          : canonical.intelligence.opportunityTrigger ?? 'Unknown — needs research',
       fit_score: canonical.canonicalScore,
       fit_relevance: canonical.qualification,
       opportunity_quality: canonical.canonicalScore >= 70 ? 'high' as const : canonical.canonicalScore >= 50 ? 'medium' as const : 'low' as const,

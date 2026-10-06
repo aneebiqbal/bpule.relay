@@ -331,11 +331,12 @@ function buildDeterministicFallback(input: DraftInput, callLog: DraftCallLog[]):
 function fallbackText(input: DraftInput): string {
   const name = input.extracted.name ?? input.lead.contactName ?? 'there'
   const company = input.lead.company
-  const evidence = input.extracted.signalEvidence?.trim() || `current priorities at ${company}`
+  const evidence = input.extracted.signalEvidence?.trim() || input.strategy?.safeTrigger || `recent activity at ${company}`
   const lastSent = (input.history ?? [])
     .filter((m) => m.sentText && m.sentAt)
     .sort((a, b) => (a.sentAt ?? '').localeCompare(b.sentAt ?? ''))
     .at(-1)
+  const angle = input.strategy?.probableNeed || input.strategy?.mode || ''
 
   if (input.type === 'followup') {
     return [
@@ -345,7 +346,10 @@ function fallbackText(input: DraftInput): string {
   }
 
   if (input.type === 'connection') {
-    return `Hi ${name} — noticed ${evidence}. Close to work I've done. Worth connecting.`
+    const hook = angle
+      ? `Hi ${name} — ${evidence}. Working on ${angle} and thought it was worth connecting.`
+      : `Hi ${name} — ${evidence}. Close to work I have done. Worth connecting.`
+    return hook
   }
 
   if (input.type === 'upwork') {
