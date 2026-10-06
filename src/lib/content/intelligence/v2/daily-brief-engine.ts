@@ -143,6 +143,12 @@ export async function generateDailyBrief(
 
     // Fallback: if AI returned 0 ideas, generate from profile + trends
     if (scoredIdeas.length === 0) {
+      console.warn('[daily-brief] AI returned 0 ideas — using deterministic fallback', {
+        personaId: input.persona.id,
+        localDate: input.localDate,
+        trendCount: input.trendCandidates.length,
+        expertiseCount: (input.profile?.expertise ?? []).length,
+      })
       scoredIdeas = generateDeterministicIdeas(input)
     }
 
@@ -407,6 +413,12 @@ async function generatePostWithQualityGate(input: {
     }
 
     if (attempt >= maxAttempts) {
+      console.warn('[daily-brief] Post quality gate failed after max attempts', {
+        failures: gate.failures,
+        warnings: gate.warnings,
+        wordCount: gate.wordCount,
+        attempt,
+      })
       return { caption, gateResult: gate }
     }
   }
@@ -604,54 +616,143 @@ function buildPersonaContext(
   return parts.join('\n')
 }
 
+const FALLBACK_TEMPLATES = [
+  (area: string) => ({
+    title: `The ${area} mistake I see every team make`,
+    angle: `A specific, recurring pattern you have observed. Name the mistake, explain why it happens, and what to do instead.`,
+    formatSuggestion: 'practical_lesson',
+  }),
+  (area: string) => ({
+    title: `What nobody tells you about ${area}`,
+    angle: `An insider perspective that contradicts common advice or surface-level tutorials.`,
+    formatSuggestion: 'opinion',
+  }),
+  (area: string) => ({
+    title: `I changed my mind about ${area}`,
+    angle: `A genuine shift in perspective. What you used to believe, what changed your mind, and what you think now.`,
+    formatSuggestion: 'opinion',
+  }),
+  (area: string) => ({
+    title: `The ${area} decision I got wrong (and what it cost)`,
+    angle: `A specific mistake with concrete consequences. Vulnerable, specific, useful.`,
+    formatSuggestion: 'case_study',
+  }),
+  (area: string) => ({
+    title: `Two years of ${area} in one lesson`,
+    angle: `Distill a hard-won insight into a single actionable takeaway. Specific, not abstract.`,
+    formatSuggestion: 'practical_lesson',
+  }),
+  (area: string) => ({
+    title: `${area} is not what you think it is`,
+    angle: `A counterintuitive reframe. Challenge the default assumption your audience holds.`,
+    formatSuggestion: 'opinion',
+  }),
+  (area: string) => ({
+    title: `The question I wish someone asked me about ${area}`,
+    angle: `Pose a specific, uncomfortable question that forces the reader to examine their own approach.`,
+    formatSuggestion: 'observation',
+  }),
+  (area: string) => ({
+    title: `What worked in ${area} last year vs what works now`,
+    angle: `A concrete before/after. Tactics that stopped working and what replaced them.`,
+    formatSuggestion: 'observation',
+  }),
+]
+
+const FALLBACK_TERRITORY_TEMPLATES = [
+  (t: string) => ({
+    title: `Why most teams underestimate ${t}`,
+    angle: `A contrarian take. Explain the gap between how people think about ${t} and the reality.`,
+    formatSuggestion: 'opinion',
+  }),
+  (t: string) => ({
+    title: `${t} is a symptom, not the problem`,
+    angle: `Reframe a common issue. The surface-level fix everyone tries vs the root cause.`,
+    formatSuggestion: 'opinion',
+  }),
+  (t: string) => ({
+    title: `The ${t} playbook I actually use`,
+    angle: `Concrete, specific steps — not generic advice. A mini case study from real work.`,
+    formatSuggestion: 'practical_lesson',
+  }),
+]
+
 function generateDeterministicIdeas(input: DailyBriefInput): IdeaCandidate[] {
   const ideas: IdeaCandidate[] = []
   const territories = input.profile?.territories ?? []
   const expertise = (input.profile?.expertise ?? []).map(e => e.area).filter(Boolean) as string[]
+  const opinions = (input.profile?.opinions ?? []).filter(o => o.strength === 'strong').map(o => o.belief)
+  const projects = (input.profile?.projects ?? []).map(p => p.name).filter(Boolean)
+  const experiences = (input.profile?.experiences ?? []).filter(e => e.type === 'mistake' || e.type === 'lesson').map(e => e.description).filter(Boolean)
   const role = input.profile?.role ?? ''
 
-  // 1. Trend-grounded ideas (max 2)
+  // 1. Trend-grounded ideas (max 2) — use opinion to personalize
   for (const candidate of input.trendCandidates.slice(0, 2)) {
+    const opinionHook = opinions.length > 0 ? ` — and here is why it matters: ${opinions[0].slice(0, 80)}` : ''
     ideas.push({
-      title: `What "${candidate.item.title}" means for ${expertise[0] ?? role}`,
-      angle: `A current development relevant to ${role || 'your field'}. What does this mean for how you work?`,
+      title: `What "${candidate.item.title}" means for ${expertise[0] ?? role}${opinionHook.slice(0, 40)}`,
+      angle: `${opinions[0] ?? 'A current development with real consequences for ' + (role || 'your field')}. What this means specifically for how you work, not in general.`,
       whyNow: candidate.whyNow,
-      territory: territories[0],
+      territory: territories[0] ?? candidate.item.topics?.[0],
       trendGrounded: true,
       formatSuggestion: 'observation',
       novelty: 0.8,
       relevance: 0.9,
       credibility: 0.85,
-      insight: 0.7,
+      insight: 0.75,
     })
   }
 
-  // 2. Expertise-based
-  for (const area of expertise.slice(0, 2)) {
+  // 2. Expertise-based using diverse templates
+  const expertiseAreas = expertise.length > 0 ? expertise : territories
+  for (let i = 0; i < Math.min(expertiseAreas.length, 3); i++) {
+    const area = expertiseAreas[i]
+    const template = FALLBACK_TEMPLATES[i % FALLBACK_TEMPLATES.length]
+    const t = template(area)
     ideas.push({
-      title: `A lesson from working in ${area}`,
-      angle: `Share a specific insight from your experience. What would you tell someone starting out?`,
+      title: t.title,
+      angle: t.angle,
       whyNow: 'Evergreen',
       territory: area,
       trendGrounded: false,
-      formatSuggestion: 'practical_lesson',
-      novelty: 0.6,
-      relevance: 0.8,
+      formatSuggestion: t.formatSuggestion,
+      novelty: 0.65 + (i * 0.05),
+      relevance: 0.85,
       credibility: 0.9,
       insight: 0.8,
     })
   }
 
-  // 3. Territory opinions
-  for (const territory of territories.slice(0, 2)) {
+  // 3. Experience-based (real stories from profile)
+  for (const exp of experiences.slice(0, 1)) {
     if (ideas.length >= 5) break
     ideas.push({
-      title: `Why ${territory} matters more than people think`,
-      angle: `A contrarian take on ${territory} that challenges common assumptions.`,
+      title: `What "${exp.slice(0, 60)}" taught me`,
+      angle: `A first-person lesson from a real situation. Specific details, no abstractions.`,
+      whyNow: 'Evergreen',
+      territory: territories[0],
+      trendGrounded: false,
+      formatSuggestion: 'case_study',
+      novelty: 0.85,
+      relevance: 0.8,
+      credibility: 0.95,
+      insight: 0.85,
+    })
+  }
+
+  // 4. Territory opinions
+  for (let i = 0; i < Math.min(territories.length, 2); i++) {
+    if (ideas.length >= 5) break
+    const territory = territories[i]
+    const template = FALLBACK_TERRITORY_TEMPLATES[i % FALLBACK_TERRITORY_TEMPLATES.length]
+    const t = template(territory)
+    ideas.push({
+      title: t.title,
+      angle: t.angle,
       whyNow: 'Evergreen',
       territory,
       trendGrounded: false,
-      formatSuggestion: 'opinion',
+      formatSuggestion: t.formatSuggestion,
       novelty: 0.7,
       relevance: 0.8,
       credibility: 0.8,
@@ -659,12 +760,23 @@ function generateDeterministicIdeas(input: DailyBriefInput): IdeaCandidate[] {
     })
   }
 
-  // Ensure at least 3
-  if (ideas.length < 3) {
-    ideas.push(
-      { title: `A thought on ${expertise[0] ?? 'your work'}`, angle: 'Share a specific insight from your experience.', whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'observation', novelty: 0.5, relevance: 0.7, credibility: 0.8, insight: 0.7 },
-      { title: `What is changing in ${territories[0] ?? 'your field'}`, angle: 'An observation about a trend or shift you are seeing.', whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'observation', novelty: 0.5, relevance: 0.7, credibility: 0.8, insight: 0.7 },
-    )
+  // Ensure at least 4 diverse ideas
+  let fallbackIdx = 0
+  while (ideas.length < 4) {
+    const area = expertiseAreas[fallbackIdx % expertiseAreas.length] ?? territories[0] ?? 'your work'
+    const template = FALLBACK_TEMPLATES[(3 + fallbackIdx) % FALLBACK_TEMPLATES.length]
+    const t = template(area)
+    ideas.push({
+      ...t,
+      whyNow: 'Evergreen',
+      territory: area,
+      trendGrounded: false,
+      novelty: 0.5 + (fallbackIdx * 0.05),
+      relevance: 0.7,
+      credibility: 0.8,
+      insight: 0.7,
+    })
+    fallbackIdx++
   }
 
   return ideas.slice(0, 5)
