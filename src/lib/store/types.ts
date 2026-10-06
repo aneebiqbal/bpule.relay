@@ -1432,6 +1432,7 @@ export interface ScoutStore {
     qualityResult?: Record<string, unknown>
   }): Promise<DailyContentIdea>
   listDailyContentIdeas(briefId: string): Promise<DailyContentIdea[]>
+  getDailyContentIdeaById(ideaId: string): Promise<DailyContentIdea | null>
   markDailyContentIdeaCopied(ideaId: string): Promise<void>
   markDailyContentIdeaRejected(ideaId: string): Promise<void>
   markDailyContentIdeaPosted(ideaId: string): Promise<void>

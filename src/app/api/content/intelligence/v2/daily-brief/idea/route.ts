@@ -51,10 +51,9 @@ export async function POST(request: Request) {
     const idea = await generateSingleIdea(persona, profile, trendCandidates, excludeTitles)
 
     const latestBrief = await store.getLatestDailyContentBrief(personaId)
-    const briefId = latestBrief?.id ?? ''
 
     const ideaRecord = await store.createDailyContentIdea({
-      briefId,
+      briefId: latestBrief?.id ?? '00000000-0000-0000-0000-000000000000',
       organizationId: persona.organizationId,
       personaId: persona.id,
       ideaType: 'alternate',
