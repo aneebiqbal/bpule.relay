@@ -199,11 +199,18 @@ export interface V3IntelligenceOptions {
  */
 function buildMinimalV2Canonical(rawText: string): CanonicalProspectIntelligence {
   const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean)
-  const firstLine = lines[0] || ''
-  const hasTitleAtCompany = firstLine.includes(' at ') || firstLine.includes(' · ')
-  const name = hasTitleAtCompany ? firstLine.split(/\s+at\s+/)[0].trim() : firstLine.split(' ')[0] || null
-  const title = hasTitleAtCompany
-    ? firstLine.split(/\s+at\s+/)[1]?.replace(/^[·\s]+/, '').trim() || null
+  const sectionHeaders = /^(about|activity|experience|posts?|comments?|education|skills|highlights|contact\s*info|show\s*all)$/i
+  const identityLines = lines.slice(0, lines.findIndex((l) => sectionHeaders.test(l)))
+
+  // Name is the first line
+  const name = identityLines[0]?.split(/\s+·\s+/)[0]?.split(/\s+at\s+/)[0]?.trim() || null
+
+  // Title: find the line with role keywords (founder, engineer, etc.)
+  const titleLine = identityLines.find((line) =>
+    /\b(founder|ceo|cto|cfo|chief|officer|vp|head|director|manager|lead|engineer|developer|architect|recruiter|consultant|president|owner|partner)\b/i.test(line),
+  )
+  const title = titleLine
+    ? titleLine.split(/\s*\|\s*/)[0].replace(/·/g, '').trim().slice(0, 120) || null
     : null
 
   return {
