@@ -13,7 +13,7 @@ export async function generatePostImage(
   const model = opts?.model || 'fal-ai/flux/dev'
   const imageSize = opts?.aspectRatio === '16:9' ? 'landscape_16_9' : opts?.aspectRatio === '1:1' ? 'square' : 'landscape_16_9'
 
-  const res = await fetch(`https://fal.ai/api/${model}`, {
+  const res = await fetch(`https://fal.run/${model}`, {
     method: 'POST',
     headers: {
       Authorization: `Key ${apiKey}`,
@@ -24,7 +24,6 @@ export async function generatePostImage(
       image_size: imageSize,
       num_images: 1,
       enable_safety_checker: true,
-      safety_tolerance: '2',
     }),
   })
 
