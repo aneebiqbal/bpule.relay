@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Copy, Shuffle, Check, AlertCircle, Plus, Users, RefreshCw, Download, Image, Sparkles } from 'lucide-react'
 import type { DailyContentIdea } from '@/lib/domain/types'
-import { generatePostImage } from '@/lib/ai/fal-image'
+import { generatePostImage } from '@/lib/ai/openai-image'
 
 interface Props {
   personaId: string
@@ -134,7 +134,7 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
     setImageError('')
     try {
       const prompt = activeIdea.visualPrompt || `${activeIdea.title}. ${activeIdea.angle || ''}`
-      const result = await generatePostImage(prompt, { aspectRatio: '16:9' })
+      const result = await generatePostImage(prompt)
       setImageUrl(result.url)
     } catch {
       // Fallback: generate branded image via canvas
