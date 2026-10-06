@@ -60,13 +60,27 @@ export function classifyInput(rawText: string): ClassificationResult {
   const text = rawText.trim()
   const reasons: string[] = []
 
+  // Check LinkedIn structure FIRST — if the paste has clear LinkedIn
+  // profile markers, it's a valid prospect regardless of any UI fragments
+  // that might also be present (browser chrome, navigation, etc.)
+  const hasStructure = hasLinkedInProfileStructure(text)
+
+  let markerHits = 0
+  for (const pattern of PROSPECT_CONTENT_MARKERS) {
+    if (pattern.test(text)) markerHits++
+  }
+
+  if (hasStructure && markerHits >= 1) {
+    return { classification: 'PERSON_PROFILE', confidence: 65, reasons: ['LinkedIn profile structure and prospect content detected.'] }
+  }
+
+  // Only check for UI fragments if LinkedIn structure is NOT detected
   let uiFragmentHits = 0
   for (const pattern of UI_FRAGMENT_PATTERNS) {
     if (pattern.test(text)) uiFragmentHits++
   }
 
   // Login form detection: email + password fields with sign-in language
-  // Use [\s\S]{0,200}? to match across newlines (UI paste often has line breaks)
   const hasLoginForm = /(?:email|password|username)\b[\s\S]{0,200}?(?:password|email|username)\b/i.test(text) &&
     /\bsign\s*in\b|\blog\s*in\b|\blogin\b/i.test(text)
 
@@ -86,12 +100,6 @@ export function classifyInput(rawText: string): ClassificationResult {
     }
   }
 
-  let markerHits = 0
-  for (const pattern of PROSPECT_CONTENT_MARKERS) {
-    if (pattern.test(text)) markerHits++
-  }
-
-  const hasStructure = hasLinkedInProfileStructure(text)
   const hasPersonMarkers = /\b(he|she|they|his|her|their|i|my|me)\b/i.test(text) ||
     /\b\d+\+?\s*years?\s*(of\s*)?experience\b/i.test(text) ||
     hasStructure
@@ -106,16 +114,6 @@ export function classifyInput(rawText: string): ClassificationResult {
 
   if (hasProjectNeed || hasHiringIntent) {
     return { classification: 'BUSINESS_OPPORTUNITY', confidence: 70, reasons: ['Active hiring or project need detected.'] }
-  }
-
-  // A real LinkedIn profile paste (connection-degree badge, Experience/
-  // Education section headers, a connections count) is direct structural
-  // evidence of a person profile even with a single keyword hit — a
-  // resume-style third-person bio with a job title and one skill mention
-  // should not need two independent keyword categories to avoid being
-  // treated as irrelevant.
-  if (hasStructure && markerHits >= 1) {
-    return { classification: 'PERSON_PROFILE', confidence: 65, reasons: ['LinkedIn profile structure and prospect content detected.'] }
   }
 
   if (hasPersonMarkers && markerHits >= 2) {
