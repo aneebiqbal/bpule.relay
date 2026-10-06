@@ -7,7 +7,7 @@ import { generate } from '@/lib/ai/runtime'
 import type { ContentPersona, ContentProfile, DailyContentIdea, VisualType } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 90
 
 export async function POST(request: Request) {
   const user = await getCurrentUser()
@@ -50,6 +50,19 @@ export async function POST(request: Request) {
   try {
     const idea = await generateSingleIdea(persona, profile, trendCandidates, excludeTitles)
 
+    // Generate full post caption for the new idea
+    const personaContext = buildPersonaContextString(persona, profile)
+    const trendSignals = trendCandidates.slice(0, 5).map(c => `- ${c.item.title} (${c.whyNow})`).join('\n')
+
+    const postCaption = await generateFinishedPost({
+      title: idea.title,
+      angle: idea.angle,
+      territory: idea.territory,
+      format: idea.formatSuggestion,
+      personaContext,
+      trendSignals: trendSignals || 'No strong trends — draw from expertise',
+    })
+
     const latestBrief = await store.getLatestDailyContentBrief(personaId)
 
     const ideaRecord = await store.createDailyContentIdea({
@@ -67,6 +80,7 @@ export async function POST(request: Request) {
       relevanceScore: idea.relevance,
       credibilityScore: idea.credibility,
       insightScore: idea.insight,
+      postCaption: postCaption,
       visualType: idea.visualType,
       visualConcept: idea.visualConcept,
       visualPrompt: idea.visualPrompt,
@@ -139,7 +153,7 @@ AVOID in visual: robots, glowing brains, stock photos, 3D spheres, floating code
     task: 'FAST_STRUCTURED',
     system,
     user,
-    promptVersion: 'studio-new-idea-v1',
+    promptVersion: 'studio-new-idea-v2',
     callSite: 'studio:newIdea',
     feature: 'studio_v2',
   })
@@ -160,6 +174,85 @@ AVOID in visual: robots, glowing brains, stock photos, 3D spheres, floating code
     visualPrompt: result.data.visualPrompt,
     visualReason: result.data.visualReason,
   }
+}
+
+async function generateFinishedPost(input: {
+  title: string
+  angle: string
+  territory?: string
+  format?: string
+  personaContext: string
+  trendSignals: string
+}): Promise<string> {
+  const system = `You write LinkedIn posts that sound like a smart practitioner sharing something they actually learned.
+
+THE HOOK (Line 1):
+- This is the only thing people see before "see more". It must earn the click.
+- Use: a surprising number, a counterintuitive claim, a specific observation.
+- NEVER use: "I've been thinking...", "Here's why...", "The truth is...", "Most people don't realize..."
+
+BODY RULES:
+- Max 200 words. Short paragraphs. 1-2 sentences each.
+- Lead with specifics, not abstractions. Include at least one concrete detail.
+- NO em dashes. Use commas or periods.
+- NO listicles. No numbered lists.
+- NO filler: "Here's the thing", "Let that sink in", "Game changer".
+- NO fake stories or fabricated metrics.
+- NO engagement bait: "Thoughts?", "Agree?", "What do you think?" at the end.
+- Max 2 hashtags. Zero exclamation marks. Zero emojis.
+
+TONE: Direct, specific, confident. Like a senior engineer explaining something to a peer.
+
+Output ONLY the post text. No intro, no sign-off.`
+
+  const user = JSON.stringify({
+    persona: input.personaContext,
+    idea: { title: input.title, angle: input.angle, territory: input.territory, format: input.format },
+    sources: input.trendSignals,
+  })
+
+  const result = await generate<string>({
+    task: 'DEEP_WRITING',
+    system,
+    user,
+    maxTokens: 500,
+    promptVersion: 'studio-idea-post-v1',
+    callSite: 'studio:generatePost',
+    feature: 'studio_v2',
+  })
+
+  return cleanPost(result.data)
+}
+
+function cleanPost(raw: string): string {
+  let text = raw.trim()
+  text = text.replace(/—|–/g, ',')
+  text = text.replace(/\.\s+([a-z])/g, (_, c) => `. ${c.toUpperCase()}`)
+  const words = text.split(/\s+/)
+  if (words.length > 200) {
+    text = words.slice(0, 200).join(' ')
+    const lastPeriod = text.lastIndexOf('.')
+    if (lastPeriod > text.length * 0.7) text = text.slice(0, lastPeriod + 1)
+  }
+  text = text.replace(/\s*(Thoughts\?|Agree\?|What do you think\?)\s*$/i, '')
+  return text.trim()
+}
+
+function buildPersonaContextString(persona: ContentPersona, profile: ContentProfile | null): string {
+  const parts: string[] = []
+  if (profile?.role) parts.push(`Role: ${profile.role}`)
+  if (profile?.seniority) parts.push(`Seniority: ${profile.seniority}`)
+  if (profile?.industries?.length) parts.push(`Industries: ${profile.industries.join(', ')}`)
+  if (profile?.audience) parts.push(`Audience: ${profile.audience}`)
+  if (profile?.expertise?.length) {
+    const top = profile.expertise.sort((a, b) => (b.level === 'expert' ? 1 : 0) - (a.level === 'expert' ? 1 : 0)).slice(0, 5).map(e => e.area)
+    parts.push(`Expertise: ${top.join(', ')}`)
+  }
+  if (profile?.opinions?.length) {
+    const strong = profile.opinions.filter(o => o.strength === 'strong').slice(0, 3).map(o => o.belief)
+    if (strong.length) parts.push(`Strong opinions: ${strong.join('; ')}`)
+  }
+  return parts.join('\n')
 }
 
 function inferTrendInterestFromProfile(profile: ContentProfile | null): TrendRelevanceProfile {

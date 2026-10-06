@@ -159,20 +159,15 @@ export async function generateDailyBrief(
     let recommendedIdea: DailyContentIdea | null = null
 
     for (const idea of selectedIdeas) {
-      let postCaption: string | null = null
-      if (idea === recommended) {
-        const gateResult = await generatePostWithQualityGate({
-          idea,
-          personaContext,
-          trendSignals,
-          costTracking,
-        })
-        postCaption = gateResult.caption
-      }
+      const gateResult = await generatePostWithQualityGate({
+        idea,
+        personaContext,
+        trendSignals,
+        costTracking,
+      })
+      const postCaption = gateResult.caption
 
-      const visualDirection = idea === recommended
-        ? await generateVisualDirection(idea, input.persona, costTracking)
-        : null
+      const visualDirection = await generateVisualDirection(idea, input.persona, costTracking)
 
       const ideaRecord = await store.createDailyContentIdea({
         briefId: brief.id,
