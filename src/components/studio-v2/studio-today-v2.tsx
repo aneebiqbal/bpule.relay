@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Copy, Shuffle, Check, AlertCircle, Plus, Users, RefreshCw, Download, Image, Sparkles } from 'lucide-react'
 import type { DailyContentIdea } from '@/lib/domain/types'
@@ -29,6 +29,7 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [imageLoading, setImageLoading] = useState(false)
   const [imageError, setImageError] = useState('')
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
 
   // ── Data fetching ──
@@ -135,12 +136,52 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
       const prompt = activeIdea.visualPrompt || `${activeIdea.title}. ${activeIdea.angle || ''}`
       const result = await generatePostImage(prompt, { aspectRatio: '16:9' })
       setImageUrl(result.url)
-    } catch (err) {
-      setImageError(err instanceof Error ? err.message : 'Image generation failed')
+    } catch {
+      // Fallback: generate branded image via canvas
+      generateCanvasImage()
     } finally {
       setImageLoading(false)
     }
-  }, [activeIdea])
+  }, [activeIdea, displayName])
+
+  const generateCanvasImage = useCallback(() => {
+    if (!canvasRef.current || !activeIdea) return
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const W = 1200, H = 630
+    canvas.width = W
+    canvas.height = H
+    const grad = ctx.createLinearGradient(0, 0, W, H)
+    grad.addColorStop(0, '#1a1a2e')
+    grad.addColorStop(1, '#16213e')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, W, H)
+    ctx.fillStyle = '#3b82f6'
+    ctx.fillRect(60, 100, 60, 4)
+    ctx.fillStyle = '#ffffff'
+    ctx.font = 'bold 36px system-ui, sans-serif'
+    const title = activeIdea.title
+    const words = title.split(' ')
+    let line = '', y = 180
+    const maxW = W - 120
+    for (const word of words) {
+      const test = line + word + ' '
+      if (ctx.measureText(test).width > maxW && line) {
+        ctx.fillText(line.trim(), 60, y)
+        line = word + ' '
+        y += 50
+      } else { line = test }
+    }
+    ctx.fillText(line.trim(), 60, y)
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'
+    ctx.font = '20px system-ui, sans-serif'
+    ctx.fillText(displayName, 60, H - 60)
+    ctx.fillStyle = '#3b82f6'
+    ctx.font = 'bold 16px system-ui, sans-serif'
+    ctx.fillText('RELAY', W - 100, H - 60)
+    setImageUrl(canvas.toDataURL('image/png'))
+  }, [activeIdea, displayName])
 
   const downloadImage = () => {
     if (!imageUrl) return
@@ -316,6 +357,8 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
 
 
             </div>
+
+            <canvas ref={canvasRef} className="hidden" />
 
             {/* Source context */}
             {activeIdea.whyNow && activeIdea.trendGrounded && (
