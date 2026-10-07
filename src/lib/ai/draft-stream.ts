@@ -330,25 +330,25 @@ function buildDeterministicFallback(input: DraftInput, callLog: DraftCallLog[]):
 
 function fallbackText(input: DraftInput): string {
   const name = input.extracted.name ?? input.lead.contactName ?? 'there'
+  const firstName = name.split(' ')[0]
   const company = input.lead.company
   const evidence = input.extracted.signalEvidence?.trim() || input.strategy?.safeTrigger || `recent activity at ${company}`
-  const lastSent = (input.history ?? [])
-    .filter((m) => m.sentText && m.sentAt)
-    .sort((a, b) => (a.sentAt ?? '').localeCompare(b.sentAt ?? ''))
-    .at(-1)
   const angle = input.strategy?.probableNeed || input.strategy?.mode || ''
+  const title = input.extracted.title ?? input.lead.contactTitle ?? ''
 
   if (input.type === 'followup') {
     return [
-      `Hi ${name}, following up on my last note about ${evidence}.`,
+      `Hi ${firstName}, following up on my last note about ${evidence}.`,
       `If this is not a priority for ${company} right now, a quick \"not now\" is perfect and I will close the loop.`,
     ].join(' ')
   }
 
   if (input.type === 'connection') {
-    const hook = angle
-      ? `Hi ${name} — ${evidence}. Working on ${angle} and thought it was worth connecting.`
-      : `Hi ${name} — ${evidence}. Close to work I have done. Worth connecting.`
+    const hook = angle && angle !== 'recent activity at ' + company
+      ? `Hi ${firstName} — noticed ${evidence.toLowerCase()}. Working on ${angle.toLowerCase()} and thought it worth connecting.`
+      : title
+        ? `Hi ${firstName} — noticed your work as ${title.toLowerCase()} at ${company}. Thought it worth connecting given the overlap in what we are both building.`
+        : `Hi ${firstName} — came across your profile and noticed you are building at ${company}. Thought it worth connecting.`
     return hook
   }
 
@@ -356,13 +356,6 @@ function fallbackText(input: DraftInput): string {
     return [
       `Hi ${name}, I read your brief and noticed ${evidence}.`,
       `I can help ${company} ship this cleanly and can share a short, concrete approach in one reply if useful.`,
-    ].join(' ')
-  }
-
-  if (lastSent?.sentText) {
-    return [
-      `Hi ${name}, quick note after my previous message.`,
-      `Given ${evidence}, I can share a focused plan for ${company} in one short reply if that helps.`,
     ].join(' ')
   }
 

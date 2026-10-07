@@ -25,3 +25,9 @@ export function notifyError(description: string, title = 'Something failed') {
   if (!message) return
   notify({ title, description: message, variant: 'destructive' })
 }
+
+export function notifySuccess(description: string, title = 'Done') {
+  const message = description.trim()
+  if (!message) return
+  notify({ title, description: message, variant: 'success' })
+}

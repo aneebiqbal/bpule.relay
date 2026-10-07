@@ -14,7 +14,7 @@ import { signalById } from '@/lib/score/signals'
 import { computeRelationshipState } from '@/lib/relay/relationship-state'
 import { evaluateDmGate, evaluateFollowupGate } from '@/lib/relay/message-eligibility'
 import { readSse } from '@/lib/sse/client'
-import { notifyError } from '@/lib/ui/notify'
+import { notifyError, notifySuccess } from '@/lib/ui/notify'
 import type { LeadDetail } from '@/lib/store/types'
 import type { ProofItem } from '@/lib/domain/types'
 import type { DraftResult } from '@/lib/ai/draft'
@@ -138,7 +138,8 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
   }, [lead.id, selectedProfileId, proofList, capturedReplyText, lastInboundMessage])
 
   const logSend = useCallback(async () => {
-    if (!sentText.trim()) return
+    const text = sentText.trim() || draftText.trim()
+    if (!text) return
     setSending(true)
     setSendError(null)
     setSentOk(false)
@@ -146,20 +147,24 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
       const res = await fetch(`/api/leads/${lead.id}/contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sentText: sentText.trim(), type: mode, idempotencyKey: idempotencyKeyRef.current }),
+        body: JSON.stringify({ sentText: text, type: mode, idempotencyKey: idempotencyKeyRef.current }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to log send.')
       setSentOk(true)
       setSentText('')
+      setDraftText('')
+      setDraftResult(null)
       setMode(null)
       setLeadVersion((v) => v + 1)
+      notifySuccess(`${mode === 'connection' ? 'Connection' : mode === 'dm' ? 'Message' : mode === 'followup' ? 'Follow-up' : 'Reply'} logged.`)
     } catch (err) {
       setSendError(err instanceof Error ? err.message : 'Failed to log send.')
+      notifyError('Failed to log send.')
     } finally {
       setSending(false)
     }
-  }, [lead.id, sentText, mode])
+  }, [lead.id, sentText, draftText, mode])
 
   const saveReply = useCallback(async () => {
     if (!capturedReplyText.trim()) return

@@ -202,6 +202,7 @@ Write the draft first, then honestly run the tests on it, then the marker and th
     CTA_RULES,
     SPECIFICITY_RULES,
     ANTI_AI_RULES,
+    'CRITICAL: Do NOT echo back the prospect\'s profile data as the message. The message must be ORIGINAL — a short, specific observation about them + why connecting. Never copy their title, company, location, or bio text into the draft.',
     'Sound like a real person who read their profile, not a template. Vary sentence length. Start with something specific about THEM — not "I" or "we". Make it easy to say yes to. Zero corporate speak.',
     SURVEILLANCE_RULES,
     'Relay knows more than it says. Use only ALLOWED_NOW evidence. One message, one job. If no job is specified, return an empty draft.',
