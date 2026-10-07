@@ -184,8 +184,11 @@ export async function POST(
       disposition,
     })
   } catch (err) {
-    if (err instanceof Error && /locked|owner|unavailable/i.test(err.message)) {
-      return NextResponse.json({ error: 'This lead is locked or not assigned to you.' }, { status: 409 })
+    if (err instanceof Error && /locked|owner|unavailable|not yours/i.test(err.message)) {
+      if (/locked|no or dead/i.test(err.message)) {
+        return NextResponse.json({ error: 'This lead is locked (status: no/dead).' }, { status: 409 })
+      }
+      return NextResponse.json({ error: lead ? 'This lead is not assigned to you.' : 'Lead not found.' }, { status: 409 })
     }
     return safeErrorResponse(err, 500, 'Failed to log send.', 'leads/[id]/contact')
   }

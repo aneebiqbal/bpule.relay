@@ -1124,7 +1124,7 @@ export class SupabaseStore implements ScoutStore {
     // so a freshly-extracted lead never blocks the send/log workflow.
     const leadOwnerId = (leadRow as unknown as { owner_rep_id: string | null }).owner_rep_id
     if (this.rep.role !== 'admin' && leadOwnerId !== null && leadOwnerId !== this.rep.id) {
-      throw new Error('You are not the owner of this lead, so it could not be marked contacted.')
+      throw new Error('NOT_OWNER: This lead is assigned to another rep.')
     }
     if (leadOwnerId === null) {
       // Claim the unowned lead for this rep.

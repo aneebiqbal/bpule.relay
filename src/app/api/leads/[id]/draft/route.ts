@@ -307,11 +307,19 @@ export async function POST(
       }))
 
       if (type !== 'reply' && !shouldWriteMessage(revenue)) {
-        emit({
-          type: 'status',
-          message: revenue.contact.noMessageReason ?? 'No message recommended for this lead.',
-        })
-        return
+        if (type === 'connection') {
+          // Connection notes are always allowed — they earn access
+          revenue.contact.messageRecommended = true
+          revenue.messageJob = 'EARN_CONNECTION'
+        } else {
+          // For DM/follow-up on non-recommended leads: still generate but warn
+          emit({
+            type: 'status',
+            message: `${revenue.contact.noMessageReason ?? 'No message recommended.'} Generating anyway — edit before sending.`,
+          })
+          revenue.contact.messageRecommended = true
+          revenue.messageJob = 'DISCOVER_NEED'
+        }
       }
 
       strategy = applyRevenueStrategyToOutreach(

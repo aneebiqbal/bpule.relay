@@ -364,13 +364,19 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
               <Button
                 variant="outline"
                 size="sm"
+                loading={sending}
+                disabled={sending}
                 onClick={async () => {
                   try {
-                    await fetch(`/api/leads/${lead.id}/contact`, {
+                    const res = await fetch(`/api/leads/${lead.id}/contact`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ type: 'connection', sentText: '', sendWithoutNote: true, direction: 'outbound' }),
                     })
+                    if (!res.ok) {
+                      const data = await res.json().catch(() => ({}))
+                      notifyError(data.error ?? 'Failed to log connection.')
+                    }
                     setLeadVersion((v) => v + 1)
                   } catch { /* non-fatal */ }
                 }}
@@ -464,6 +470,16 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
             leadId={lead.id}
             onLogged={() => { setShowLogUpdate(false); setLeadVersion((v) => v + 1) }}
           />
+        </div>
+      )}
+
+      {/* Generation in progress */}
+      {generating && !draftText && (
+        <div className="rounded-xl border border-orange/20 bg-orange/[0.02] p-4">
+          <div className="flex items-center gap-3">
+            <div className="size-5 animate-spin rounded-full border-2 border-orange/30 border-t-orange" />
+            <span className="text-[13px] text-ink">{generationStatus ?? 'Generating...'}</span>
+          </div>
         </div>
       )}
 
