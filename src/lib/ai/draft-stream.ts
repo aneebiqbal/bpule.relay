@@ -136,8 +136,15 @@ export async function streamDraft(
   // Attempt 2: Corrective retry with feedback
   if (!hasTimeForAttempt(4_000)) {
     emit({ type: 'status', message: 'Finalizing...' })
-    const best = variantA ?? null
-    if (best) return await streamFinalDraft(input, emit, matchedProof, best, null, 'Best effort (time budget exhausted).', callLog)
+    if (variantA?.passed) {
+      return await streamFinalDraft(input, emit, matchedProof, variantA, null, 'Passed quality gates (time budget exhausted).', callLog)
+    }
+    emit({ type: 'status', message: 'Model output failed quality gates, using safe fallback draft' })
+    const fallback = buildDeterministicFallback(input, callLog)
+    emit({ type: 'draft', chunk: fallback.draftText })
+    emit({ type: 'selfcheck', pass: fallback.passed, selfCheck: fallback.selfCheck })
+    emit({ type: 'done', draft: fallback, matchedProof })
+    return fallback
   }
 
   const escalationDecision = shouldEscalateToPremium({
@@ -187,18 +194,17 @@ export async function streamDraft(
     }
   }
 
-  // Return best effort
-  const best = variantA ?? null
-  if (!best) {
-    emit({ type: 'status', message: 'Model output failed, using safe fallback draft' })
-    const fallback = buildDeterministicFallback(input, callLog)
-    emit({ type: 'draft', chunk: fallback.draftText })
-    emit({ type: 'selfcheck', pass: fallback.passed, selfCheck: fallback.selfCheck })
-    emit({ type: 'done', draft: fallback, matchedProof })
-    return fallback
+  // Return best effort: only use AI output if it passed quality gates
+  if (variantA?.passed) {
+    return await streamFinalDraft(input, emit, matchedProof, variantA, null, 'Passed quality gates.', callLog, escalationDecision.reason)
   }
 
-  return await streamFinalDraft(input, emit, matchedProof, best, null, 'Best effort from available providers.', callLog, escalationDecision.reason)
+  emit({ type: 'status', message: 'Model output failed quality gates, using safe fallback draft' })
+  const fallback = buildDeterministicFallback(input, callLog)
+  emit({ type: 'draft', chunk: fallback.draftText })
+  emit({ type: 'selfcheck', pass: fallback.passed, selfCheck: fallback.selfCheck })
+  emit({ type: 'done', draft: fallback, matchedProof })
+  return fallback
 }
 
 async function streamFinalDraft(
@@ -332,37 +338,27 @@ function fallbackText(input: DraftInput): string {
   const name = input.extracted.name ?? input.lead.contactName ?? 'there'
   const firstName = name.split(' ')[0]
   const company = input.lead.company
-  const evidence = input.extracted.signalEvidence?.trim() || input.strategy?.safeTrigger || `recent activity at ${company}`
-  const angle = input.strategy?.probableNeed || input.strategy?.mode || ''
-  const title = input.extracted.title ?? input.lead.contactTitle ?? ''
+  const title = (input.extracted.title ?? input.lead.contactTitle ?? '').split(/\s*[·|\-–]\s+/)[0].trim()
+  const strategy = input.strategy
 
-  if (input.type === 'followup') {
-    return [
-      `Hi ${firstName}, following up on my last note about ${evidence}.`,
-      `If this is not a priority for ${company} right now, a quick \"not now\" is perfect and I will close the loop.`,
-    ].join(' ')
-  }
+  // Build a one-line observation from STRUCTURED fields only — never use raw signalEvidence
+  const observation = title
+    ? `${title.toLowerCase()} at ${company}`
+    : `you are building at ${company}`
 
   if (input.type === 'connection') {
-    const hook = angle && angle !== 'recent activity at ' + company
-      ? `Hi ${firstName} — noticed ${evidence.toLowerCase()}. Working on ${angle.toLowerCase()} and thought it worth connecting.`
-      : title
-        ? `Hi ${firstName} — noticed your work as ${title.toLowerCase()} at ${company}. Thought it worth connecting given the overlap in what we are both building.`
-        : `Hi ${firstName} — came across your profile and noticed you are building at ${company}. Thought it worth connecting.`
-    return hook
+    return `Hi ${firstName} — saw your work as ${observation}. Thought it was worth connecting given the overlap in what we are both building.`
+  }
+
+  if (input.type === 'followup') {
+    return `Hi ${firstName} — following up on my last note. If this is not a priority for ${company} right now, a quick "not now" is perfect.`
   }
 
   if (input.type === 'upwork') {
-    return [
-      `Hi ${name}, I read your brief and noticed ${evidence}.`,
-      `I can help ${company} ship this cleanly and can share a short, concrete approach in one reply if useful.`,
-    ].join(' ')
+    return `Hi ${firstName} — read your brief and noticed ${observation}. I can help ${company} ship this cleanly and can share a short approach in one reply if useful.`
   }
 
-  return [
-    `Hi ${name}, noticed ${evidence}.`,
-    `If useful, I can send one practical idea for ${company} in a short reply.`,
-  ].join(' ')
+  return `Hi ${firstName} — noticed ${observation}. If useful, I can send one practical idea for ${company} in a short reply.`
 }
 
 function variantScore(v: {
