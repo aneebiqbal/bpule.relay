@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { extractIdentityFromSource } from '@/lib/content/onboarding-extract'
+import { extractIdentityWithAI } from '@/lib/content/onboarding-ai-extract'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +9,7 @@ export const dynamic = 'force-dynamic'
  * POST /api/content/onboarding/extract
  * Body: { sourceText, sourceType }
  * Returns extracted identity for user confirmation
+ * Uses AI for rich extraction when text is available, deterministic for short text
  */
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser()
@@ -21,16 +23,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'sourceText required (min 20 chars)' }, { status: 400 })
   }
 
-  let identity
-  try {
-    identity = extractIdentityFromSource(sourceText)
-  } catch (err) {
-    console.error('[onboarding/extract] extraction failed:', err)
-    return NextResponse.json({ error: 'Failed to extract identity from source. Please try shorter or simpler text.' }, { status: 422 })
+  // Use AI extraction for rich text (LinkedIn bio, CV, etc.)
+  if (sourceText.length > 100) {
+    try {
+      const identity = await extractIdentityWithAI(sourceText)
+      return NextResponse.json({
+        identity,
+        sourceType,
+        extractedWithAI: true,
+      })
+    } catch (err) {
+      console.error('[onboarding/extract] AI extraction failed, falling back to deterministic:', err)
+      // Fall through to deterministic extraction
+    }
   }
 
-  return NextResponse.json({
-    identity,
-    sourceType,
-  })
+  // Deterministic fallback for short text or AI failure
+  try {
+    const identity = extractIdentityFromSource(sourceText)
+    return NextResponse.json({
+      identity,
+      sourceType,
+      extractedWithAI: false,
+    })
+  } catch (err) {
+    console.error('[onboarding/extract] deterministic extraction failed:', err)
+    return NextResponse.json({ error: 'Failed to extract identity from source. Please try shorter or simpler text.' }, { status: 422 })
+  }
 }
