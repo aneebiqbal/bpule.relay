@@ -346,6 +346,19 @@ export async function POST(request: Request) {
       ;(loop as { messageRecommended: boolean }).messageRecommended = v3MessageEligible!
       ;(loop as { messagingPolicy: string }).messagingPolicy = mapV3ActionToMessagingPolicy(v3Action!)
 
+      // V3 overrides messageRecommended but NOT messageJob — sync them so the
+      // draft route does not throw STRATEGY_REQUIRED when V3 says "eligible".
+      if (v3MessageEligible === true) {
+        const v3Channel = 'connection'
+        const v3HasHiring = (v3Packet as { reasons?: string[] })?.reasons?.some((r: string) => /hiring|urgently/i.test(r)) ?? false
+        if (v3HasHiring) {
+          ;(loop as { messageJob: string }).messageJob = 'TEST_DELIVERY_MODEL'
+        } else {
+          ;(loop as { messageJob: string }).messageJob = 'EARN_CONNECTION'
+        }
+        revenue.messageJob = loop.messageJob as typeof revenue.messageJob
+      }
+
       // Override V2 text with V3 reasoning
       const v3Reasons = (v3Packet as { reasons?: string[] })?.reasons || []
       const v3WatchOut = (v3Packet as { watchOut?: string[] })?.watchOut || []
