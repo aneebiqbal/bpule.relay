@@ -13,6 +13,7 @@ import type { ScoutStore } from '@/lib/store/types'
 import type { TrendCandidate } from '@/lib/trends/types'
 import { generate } from '@/lib/ai/runtime'
 import type { ShapeSchema } from '@/lib/ai/runtime/schemas'
+import { checkContentQuality, repairPost } from '../quality/content-quality-engine'
 
 // ── AI Output Schemas ──
 
@@ -159,13 +160,45 @@ export async function generateDailyBrief(
     let recommendedIdea: DailyContentIdea | null = null
 
     for (const idea of selectedIdeas) {
-      const gateResult = await generatePostWithQualityGate({
+      let gateResult = await generatePostWithQualityGate({
         idea,
         personaContext,
         trendSignals,
         costTracking,
       })
-      const postCaption = gateResult.caption
+      let postCaption = gateResult.caption
+
+      // Content Quality Engine gate
+      const qualityCheck = checkContentQuality(postCaption, {
+        personaRole: input.persona.personaRole,
+        territories: input.profile?.territories,
+        expertise: input.profile?.expertise?.map(e => e.area),
+        trendGrounded: idea.trendGrounded,
+      })
+
+      if (!qualityCheck.passed && qualityCheck.score.overall < 5) {
+        // Try to repair and re-check
+        const repaired = repairPost(postCaption)
+        const reCheck = checkContentQuality(repaired, {
+          personaRole: input.persona.personaRole,
+          territories: input.profile?.territories,
+          expertise: input.profile?.expertise?.map(e => e.area),
+          trendGrounded: idea.trendGrounded,
+        })
+        if (reCheck.passed) {
+          postCaption = repaired
+        } else if (qualityCheck.score.grammar < 5) {
+          // Grammar too broken — regenerate once with repair hint
+          const retry = await generateFinishedPost({
+            idea,
+            personaContext,
+            trendSignals,
+            costTracking,
+            repairHint: `Fix these grammar issues: ${qualityCheck.score.failures.join(', ')}`,
+          })
+          postCaption = retry
+        }
+      }
 
       const visualDirection = await generateVisualDirection(idea, input.persona, costTracking)
 
