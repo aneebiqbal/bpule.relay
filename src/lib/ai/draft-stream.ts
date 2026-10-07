@@ -341,13 +341,12 @@ function fallbackText(input: DraftInput): string {
   const title = (input.extracted.title ?? input.lead.contactTitle ?? '').split(/\s*[·|\-–]\s+/)[0].trim()
   const strategy = input.strategy
 
-  // Build a one-line observation from STRUCTURED fields only — never use raw signalEvidence
   const observation = title
     ? `${title.toLowerCase()} at ${company}`
     : `you are building at ${company}`
 
   if (input.type === 'connection') {
-    return `Hi ${firstName} — saw your work as ${observation}. Thought it was worth connecting given the overlap in what we are both building.`
+    return `Hi ${firstName} — came across your work as ${observation}. Thought it was worth reaching out to connect. Open to it?`
   }
 
   if (input.type === 'followup') {
@@ -355,10 +354,10 @@ function fallbackText(input: DraftInput): string {
   }
 
   if (input.type === 'upwork') {
-    return `Hi ${firstName} — read your brief and noticed ${observation}. I can help ${company} ship this cleanly and can share a short approach in one reply if useful.`
+    return `Hi ${firstName} — read your brief and noticed ${observation}. I can help ${company} ship this cleanly. Happy to share a short approach in one reply if useful.`
   }
 
-  return `Hi ${firstName} — noticed ${observation}. If useful, I can send one practical idea for ${company} in a short reply.`
+  return `Hi ${firstName} — noticed ${observation}. Want to share one practical idea for ${company}?`
 }
 
 function variantScore(v: {
