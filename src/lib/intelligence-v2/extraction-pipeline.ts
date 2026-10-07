@@ -388,6 +388,13 @@ function stabilizePassA(rawText: string, sourceUrls: string[], modelPassA: PassA
   if (!out.company.size && heuristic.company.size) out.company.size = heuristic.company.size
   if (!out.company.sizeEvidence && heuristic.company.sizeEvidence) out.company.sizeEvidence = heuristic.company.sizeEvidence
 
+  // LinkedIn-specific fallback: parse company from the known paste structure.
+  // Format: "Name\n· Nth\nRole @ Company | Description\nLocation"
+  if (!out.company.name) {
+    const linkedinCompany = extractCompanyFromLinkedInHeadline(rawText)
+    if (linkedinCompany) out.company.name = linkedinCompany
+  }
+
   const mergedSignals = mergeUnique([
     ...out.opportunity.signals,
     ...heuristic.opportunity.signals,
@@ -1273,31 +1280,33 @@ function extractCompany(lines: string[], title: string | null, rawText: string):
   const companyLine = lines.find((line) => /^company:\s*/i.test(line))
   if (companyLine) return companyLine.replace(/^company:\s*/i, '').trim()
 
+  // LinkedIn headline: "Role @ Company | Description" — most common format.
+  // Pipe-separated: role+company is always the first segment.
   if (title) {
-    // "Role @ Company" and "Role at Company" — LinkedIn headlines use both.
-    // @ is a non-word char so \b won't anchor before it; allow start/comma/space.
-    const atMatch = title.match(/(?:^|[\s,])(?:at|@)\s+([^|,]+)/i)
-    if (atMatch?.[1]) return atMatch[1].trim()
+    const firstSegment = title.split('|')[0].trim()
 
-    // "Founder of X" / "Co-founder of X" / "Owner of X" — common LinkedIn
-    // headline pattern for founders that "at Company" doesn't cover.
-    // Deliberately scoped to these specific role words, NOT a general
-    // "\bof\s+(...)" match: "Head of Engineering", "VP of Sales", "Director
-    // of Product" use "of" to introduce a function/department, not a
-    // company, and must NOT be parsed as a company name.
-    const founderOfMatch = title.match(/\b(?:founder|co-?founder|owner|proprietor)\s+of\s+([^|,]+)/i)
+    // "Founder @ Art of Cyber" — @ separator
+    const atMatch = firstSegment.match(/(?:^|[\s,])@\s+([^,\s]+(?:\s+[^,\s]+)*)/)
+    if (atMatch?.[1]) {
+      const cleaned = atMatch[1].trim().replace(/\s+(?:and|&)\s+.*$/, '')
+      if (cleaned && !NON_COMPANY_WORD.test(cleaned)) return cleaned
+    }
+
+    // "Co-Founder & CEO at XRAI" — "at" separator
+    const wordAtMatch = firstSegment.match(/(?:^|[\s,])at\s+([^,\s]+(?:\s+[^,\s]+)*)/i)
+    if (wordAtMatch?.[1]) {
+      const cleaned = wordAtMatch[1].trim()
+      if (cleaned && !NON_COMPANY_WORD.test(cleaned)) return cleaned
+    }
+
+    // "Founder of X" / "Co-founder of X" / "Owner of X"
+    const founderOfMatch = firstSegment.match(/\b(?:founder|co-?founder|owner|proprietor)\s+of\s+([^|,]+)/i)
     if (founderOfMatch?.[1]) return founderOfMatch[1].trim()
 
-    // "Role, Company" — comma-separated headline (e.g. "CEO, CometHire"),
-    // at least as common as "Role at Company" in real LinkedIn exports and
-    // CSV-style pastes. Only fires when the title has exactly two
-    // comma-separated segments and the second looks like a proper noun
-    // (starts capitalized) that ISN'T itself a role/function/department
-    // word — otherwise "CEO, Founder" or "Engineer, Backend Team" would be
-    // misread as a company name.
-    const commaSegments = title.split(',').map((s) => s.trim()).filter(Boolean)
-    if (commaSegments.length === 2) {
-      const candidate = commaSegments[1]
+    // "Role, Company" — comma-separated headline
+    const commaSegments = firstSegment.split(',').map((s) => s.trim()).filter(Boolean)
+    if (commaSegments.length >= 2) {
+      const candidate = commaSegments[commaSegments.length - 1]
       if (candidate && /^[A-Z]/.test(candidate) && !NON_COMPANY_WORD.test(candidate)) {
         return candidate
       }
@@ -1323,6 +1332,61 @@ function extractCompany(lines: string[], title: string | null, rawText: string):
   const worksForMatch = rawText.match(/\bworks?(?:ing)?\s+for\s+([A-Z][A-Za-z0-9&.'-]{1,40})\b/)
   if (worksForMatch?.[1] && !NON_COMPANY_WORD.test(worksForMatch[1])) {
     return worksForMatch[1].trim()
+  }
+
+  return null
+}
+
+/**
+ * LinkedIn paste format is deterministic:
+ *   Name
+ *   · Nth                          ← connection degree (1st/2nd/3rd)
+ *   Role @ Company | Description   ← headline with @ separator
+ *   Role at Company | Description  ← or "at" separator
+ *   City, State/Country
+ *
+ * This parser understands that structure and extracts the company
+ * from the headline line (the one with @ or "at") regardless of
+ * what the AI extraction produced.
+ */
+function extractCompanyFromLinkedInHeadline(rawText: string): string | null {
+  const lines = splitLines(rawText)
+
+  // Find the headline line: it's the first line after the name that
+  // contains @ or " at " with a company name.
+  for (const line of lines) {
+    const trimmed = line.trim()
+
+    // Skip connection degree markers ("· 2nd", "· 1st")
+    if (/^·\s*\d+(st|nd|rd|th)$/i.test(trimmed)) continue
+
+    // Skip the name line (First Last) — headlines have @ or " at "
+    if (/^[A-Z][a-z]+\s+[A-Z][a-z]+$/.test(trimmed)) continue
+
+    // Skip location lines
+    if (/^[\w\s]+,\s*(Israel|United States|UK|India|Canada|Australia|Germany|France|Singapore|UAE)/i.test(trimmed)) continue
+
+    // "Founder @ Art of Cyber | Description" — extract from first pipe segment
+    const firstSegment = trimmed.split('|')[0].trim()
+
+    // @ separator: "Founder @ Art of Cyber"
+    const atMatch = firstSegment.match(/@\s+([A-Za-z0-9][A-Za-z0-9&.' -]{2,60}?)(?:\s*$|\s+(?:and|&|\|))/i)
+    if (atMatch?.[1]) {
+      const cleaned = atMatch[1].trim()
+      // Exclude role/department words
+      if (!/^(founder|ceo|cto|cfo|chief|officer|vp|head|director|manager|lead|owner|president|partner|consultant|senior|junior|principal|staff|associate|coordinator|specialist|analyst|designer|developer|engineer|architect|recruiter|recruiting|operations|sales|marketing|product|finance|hr|people|talent|team|department|division|group|unit)$/i.test(cleaned)) {
+        return cleaned
+      }
+    }
+
+    // "at" separator: "Co-Founder & CEO at XRAI"
+    const atWordMatch = firstSegment.match(/\bat\s+([A-Za-z0-9][A-Za-z0-9&.' -]{2,60}?)$/i)
+    if (atWordMatch?.[1]) {
+      const cleaned = atWordMatch[1].trim()
+      if (!/^(founder|ceo|cto|cfo|chief|officer|vp|head|director|manager|lead|owner|president|partner|consultant|senior|junior|principal|staff|associate|coordinator|specialist|analyst|designer|developer|engineer|architect|recruiter|recruiting|operations|sales|marketing|product|finance|hr|people|talent|team|department|division|group|unit)$/i.test(cleaned)) {
+        return cleaned
+      }
+    }
   }
 
   return null
