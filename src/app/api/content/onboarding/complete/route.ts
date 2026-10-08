@@ -69,93 +69,101 @@ export async function POST(req: NextRequest) {
   const store = await createScoutStore()
   const now = new Date().toISOString()
 
-  // Create the persona
-  const persona = await store.createContentPersona({
-    repId: user.rep.id,
-    displayName: normalized.displayName,
-    platforms: normalized.platforms as ContentPersona['platforms'],
-    humorStyle: normalized.humorStyle,
-    valuesAndOpinions: normalized.identity.opinions.map((o) => o.belief),
-  })
-
-  // Create the Content Profile with full identity
-  const profile = await store.createContentProfile({
-    personaId: persona.id,
-    role: normalized.identity.role,
-    seniority: normalized.identity.seniority,
-    industries: normalized.identity.industries,
-    audience: normalized.selectedAudiences[0] ?? normalized.identity.audiences[0] ?? '',
-  })
-
-  const territories = normalized.selectedTerritories
-  const audiences = normalized.selectedAudiences
-  const goals = normalized.selectedGoals
-
-  // Update profile with all extracted data
-  await store.updateContentProfile(profile.id, {
-    expertise: normalized.identity.expertise,
-    opinions: normalized.identity.opinions,
-    projects: normalized.identity.projects,
-    experiences: normalized.identity.experiences,
-    technologies: normalized.identity.technologies.map((name) => ({
-      name,
-      proficiency: 'proficient' as const,
-      context: '',
-    })),
-    goals: goals.map((description) => ({
-      description,
-      type: 'authority' as const,
-      updatedAt: now,
-    })),
-    topicsCared: territories.map((topic) => ({
-      topic,
-      intensity: 'interested' as const,
-      source: 'onboarding' as const,
-    })),
-    audiences,
-    territories,
-    voiceSelection: normalized.voiceSelection,
-  })
-
-  // Create topic clusters from territories
-  for (const territory of territories.slice(0, 6)) {
-    await store.createTopicCluster({
-      personaId: persona.id,
-      clusterName: territory,
-      description: '',
-      sourceType: 'profile',
+  try {
+    // Create the persona
+    const persona = await store.createContentPersona({
+      repId: user.rep.id,
+      displayName: normalized.displayName,
+      platforms: normalized.platforms as ContentPersona['platforms'],
+      humorStyle: normalized.humorStyle,
+      valuesAndOpinions: normalized.identity.opinions.map((o) => o.belief),
     })
-  }
 
-  // Create journey entries from experiences
-  for (const exp of normalized.identity.experiences.slice(0, 4)) {
-    await store.createContentJourneyEntry({
+    // Create the Content Profile with full identity
+    const profile = await store.createContentProfile({
       personaId: persona.id,
-      eventType: exp.type === 'success' ? 'milestone' : exp.type === 'mistake' ? 'learned' : 'project',
-      title: exp.description.slice(0, 80),
-      description: exp.lesson || exp.description,
-      eventDate: null,
-      source: 'imported',
+      role: normalized.identity.role,
+      seniority: normalized.identity.seniority,
+      industries: normalized.identity.industries,
+      audience: normalized.selectedAudiences[0] ?? normalized.identity.audiences[0] ?? '',
     })
+
+    const territories = normalized.selectedTerritories
+    const audiences = normalized.selectedAudiences
+    const goals = normalized.selectedGoals
+
+    // Update profile with all extracted data
+    await store.updateContentProfile(profile.id, {
+      expertise: normalized.identity.expertise,
+      opinions: normalized.identity.opinions,
+      projects: normalized.identity.projects,
+      experiences: normalized.identity.experiences,
+      technologies: normalized.identity.technologies.map((name) => ({
+        name,
+        proficiency: 'proficient' as const,
+        context: '',
+      })),
+      goals: goals.map((description) => ({
+        description,
+        type: 'authority' as const,
+        updatedAt: now,
+      })),
+      topicsCared: territories.map((topic) => ({
+        topic,
+        intensity: 'interested' as const,
+        source: 'onboarding' as const,
+      })),
+      audiences,
+      territories,
+      voiceSelection: normalized.voiceSelection,
+    })
+
+    // Create topic clusters from territories
+    for (const territory of territories.slice(0, 6)) {
+      await store.createTopicCluster({
+        personaId: persona.id,
+        clusterName: territory,
+        description: '',
+        sourceType: 'profile',
+      })
+    }
+
+    // Create journey entries from experiences
+    for (const exp of normalized.identity.experiences.slice(0, 4)) {
+      await store.createContentJourneyEntry({
+        personaId: persona.id,
+        eventType: exp.type === 'success' ? 'milestone' : exp.type === 'mistake' ? 'learned' : 'project',
+        title: exp.description.slice(0, 80),
+        description: exp.lesson || exp.description,
+        eventDate: null,
+        source: 'imported',
+      })
+    }
+
+    // Update persona with onboarding data
+    await store.updateContentPersona({
+      personaId: persona.id,
+      personaRole: normalized.personaRole || normalized.identity.role,
+      personaCompany: normalized.personaCompany,
+      personaLocation: normalized.personaLocation,
+      contentComfort: normalized.contentComfort,
+      onboardingStep: 'complete',
+      onboardingCompleted: true,
+    })
+
+    // Get updated persona
+    const updatedPersona = await store.getContentPersona(persona.id)
+
+    return NextResponse.json({
+      persona: updatedPersona,
+      profile: await store.getContentProfile(profile.id),
+      redirectTo: `/content/${persona.id}/today`,
+    })
+  } catch (err) {
+    console.error('[onboarding/complete] Failed:', err instanceof Error ? err.message : String(err), err instanceof Error ? err.stack : '')
+    return NextResponse.json(
+      { error: 'Failed to complete onboarding', detail: err instanceof Error ? err.message : 'Unknown error' },
+      { status: 500 },
+    )
   }
-
-  // Update persona with onboarding data
-  await store.updateContentPersona({
-    personaId: persona.id,
-    personaRole: normalized.personaRole || normalized.identity.role,
-    personaCompany: normalized.personaCompany,
-    personaLocation: normalized.personaLocation,
-    contentComfort: normalized.contentComfort,
-    onboardingStep: 'complete',
-    onboardingCompleted: true,
-  })
-
-  // Get updated persona
-  const updatedPersona = await store.getContentPersona(persona.id)
-
-  return NextResponse.json({
-    persona: updatedPersona,
-    profile: await store.getContentProfile(profile.id),
-    redirectTo: `/content/${persona.id}/today`,
-  })
 }
