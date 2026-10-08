@@ -537,9 +537,23 @@ function StepGoals({ state, update }: { state: OnboardingState; update: (p: Part
   )
 }
 
+// Default audiences based on role — always show something
+function defaultAudiences(role: string): string[] {
+  const r = role.toLowerCase()
+  if (/founder|ceo|cto|chief|president|owner/.test(r)) return ['founders', 'investors', 'tech leaders', 'potential hires']
+  if (/engineer|developer|architect|devops|sre/.test(r)) return ['software engineers', 'engineering managers', 'CTOs', 'peers in tech']
+  if (/designer|ux|ui|creative/.test(r)) return ['designers', 'product managers', 'founders', 'creative professionals']
+  if (/product|pm/.test(r)) return ['product managers', 'founders', 'engineers', 'startup community']
+  if (/sales|account|business.dev|growth/.test(r)) return ['sales leaders', 'founders', 'B2B buyers', 'revenue teams']
+  if (/marketing|content/.test(r)) return ['marketers', 'founders', 'content creators', 'growth leaders']
+  if (/consultant|freelance/.test(r)) return ['potential clients', 'peers in my industry', 'decision makers', 'founders']
+  if (/recruiter|talent|hr/.test(r)) return ['hiring managers', 'job seekers', 'HR leaders', 'founders']
+  return ['peers in my field', 'industry professionals', 'decision makers', 'thought leaders']
+}
+
 function StepAudience({ state, update }: { state: OnboardingState; update: (p: Partial<OnboardingState>) => void }) {
-  const suggested = state.identity?.audiences ?? []
-  const [custom, setCustom] = useState('')
+  const suggested = state.identity?.audiences ?? defaultAudiences(state.personaRole)
+    const [custom, setCustom] = useState('')
 
   const toggleAudience = (aud: string) => {
     const selected = state.selectedAudiences.includes(aud)
@@ -593,8 +607,23 @@ function StepAudience({ state, update }: { state: OnboardingState; update: (p: P
   )
 }
 
+// Default territories based on role
+function defaultTerritories(role: string): string[] {
+  const r = role.toLowerCase()
+  if (/founder|ceo|cto|chief|president|owner/.test(r)) return ['startup lessons', 'fundraising', 'team building', 'product strategy', 'leadership']
+  if (/engineer|developer|architect/.test(r)) return ['software engineering', 'system design', 'coding best practices', 'tech leadership', 'developer tools']
+  if (/devops|sre|platform|infra/.test(r)) return ['infrastructure', 'reliability', 'cloud architecture', 'automation', 'observability']
+  if (/designer|ux|ui|creative/.test(r)) return ['design systems', 'user experience', 'product design', 'accessibility', 'design leadership']
+  if (/product|pm/.test(r)) return ['product management', 'user research', 'product strategy', 'roadmap planning', 'stakeholder management']
+  if (/sales|account|business.dev/.test(r)) return ['sales strategy', 'B2B sales', 'closing techniques', 'sales operations', 'relationship building']
+  if (/marketing|content/.test(r)) return ['content marketing', 'growth strategy', 'brand building', 'SEO', 'social media']
+  if (/consultant|freelance/.test(r)) return ['consulting insights', 'client management', 'niche expertise', 'personal branding', 'industry trends']
+  if (/recruiter|talent|hr/.test(r)) return ['hiring strategy', 'talent acquisition', 'employer branding', 'career development', 'team culture']
+  return ['industry insights', 'professional development', 'leadership', 'trends', 'lessons learned']
+}
+
 function StepTerritories({ state, update }: { state: OnboardingState; update: (p: Partial<OnboardingState>) => void }) {
-  const suggested = state.identity?.territories ?? []
+  const suggested = state.identity?.territories ?? defaultTerritories(state.personaRole)
   const [custom, setCustom] = useState('')
 
   const toggleTerritory = (terr: string) => {
