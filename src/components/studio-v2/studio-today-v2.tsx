@@ -340,16 +340,17 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
                 </button>
                  <button
                    onClick={() => {
-                     // Store full idea data so draft page can load it even if not persisted
+                     // Store full idea data for the editor
                      try {
                        sessionStorage.setItem(`studio-idea-${activeIdea.id}`, JSON.stringify({
+                         id: activeIdea.id,
                          title: activeIdea.title,
                          angle: activeIdea.angle,
                          whyNow: activeIdea.whyNow,
                          postCaption: activeIdea.postCaption,
                          territory: activeIdea.territory,
                          trendGrounded: activeIdea.trendGrounded,
-                         formatSuggestion: activeIdea.formatSuggestion,
+                         platform: activeIdea.postPlatform,
                          visualType: activeIdea.visualType,
                          visualConcept: activeIdea.visualConcept,
                          visualPrompt: activeIdea.visualPrompt,
@@ -357,7 +358,7 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
                          qualityResult: (activeIdea as any).qualityResult,
                        }))
                      } catch { /* sessionStorage unavailable */ }
-                     router.push(`/studio/drafts/new?personaId=${personaId}&ideaId=${activeIdea.id}`)
+                     router.push(`/studio/post-detail?ideaId=${activeIdea.id}`)
                    }}
                    className="ml-auto rounded-lg px-3 py-2 text-sm text-ink/40 transition-colors hover:text-ink/70"
                  >
