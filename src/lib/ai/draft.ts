@@ -370,7 +370,8 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
 
   const verdict = input.score.verdict
   const strategyAllowsWrite = input.strategy?.contact?.messageRecommended === true || input.type === 'reply'
-  if (verdict === 'skip' && !strategyAllowsWrite) {
+  const connectionEstablished = input.lead.connectionAcceptedAt != null
+  if (verdict === 'skip' && !strategyAllowsWrite && !connectionEstablished) {
     throw new Error(
       'This lead scored skip. Drafting is only allowed for send and research_more leads.',
     )

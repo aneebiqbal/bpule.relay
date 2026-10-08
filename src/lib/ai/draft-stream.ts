@@ -82,7 +82,8 @@ export async function streamDraft(
   }
 
   const verdict = input.score.verdict
-  if (verdict === 'skip') {
+  const connectionEstablished = input.lead.connectionAcceptedAt != null
+  if (verdict === 'skip' && !connectionEstablished) {
     throw new Error(
       'This lead scored skip. Drafting is only allowed for send and research_more leads.',
     )
