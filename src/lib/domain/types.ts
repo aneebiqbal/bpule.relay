@@ -2258,7 +2258,7 @@ export interface TrendItem {
 }
 
 export type SourceFreshness = 'new_today' | 'recent' | 'active_discussion' | 'growing_attention' | 'fresh_announcement' | 'evergreen'
-export type VisualType = 'PRODUCT_SCREENSHOT' | 'EDITORIAL_GRAPHIC' | 'TECHNICAL_DIAGRAM' | 'TYPOGRAPHIC_CONCEPT' | 'DATA_VISUAL' | 'GENERATED_IMAGE' | 'NO_VISUAL'
+export type VisualType = 'PRODUCT_SCREENSHOT' | 'EDITORIAL_GRAPHIC' | 'TECHNICAL_DIAGRAM' | 'TYPOGRAPHIC_CONCEPT' | 'DATA_VISUAL' | 'GENERATED_IMAGE' | 'NO_VISUAL' | 'EDITORIAL_PHOTOGRAPH' | 'PRODUCT_ENVIRONMENT' | 'CONCEPTUAL_PHOTOGRAPH' | 'DATA_COMPOSITION' | 'TYPOGRAPHIC_STATEMENT' | 'TECHNICAL_COMPOSITION' | 'UI_COMPOSITION'
 export type IdeaType = 'recommended' | 'alternate'
 export type BriefStatus = 'generating' | 'ready' | 'failed' | 'stale'
 
@@ -2316,6 +2316,7 @@ export interface DailyContentIdea {
   visualAllowedText: string | null
   visualScreenshotTarget: string | null
   visualAvoid: string | null
+  visualRealism?: string | null
   visualReason: string | null
   qualityResult: Record<string, unknown> | null
   copiedAt: string | null

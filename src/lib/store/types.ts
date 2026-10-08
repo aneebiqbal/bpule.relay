@@ -1438,6 +1438,7 @@ export interface ScoutStore {
      visualAllowedText?: string
      visualScreenshotTarget?: string
      visualAvoid?: string
+     visualRealism?: string
      visualReason?: string
      qualityResult?: Record<string, unknown>
    }): Promise<DailyContentIdea>

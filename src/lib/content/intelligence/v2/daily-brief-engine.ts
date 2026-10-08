@@ -14,6 +14,7 @@ import type { TrendCandidate } from '@/lib/trends/types'
 import { generate } from '@/lib/ai/runtime'
 import type { ShapeSchema } from '@/lib/ai/runtime/schemas'
 import { checkContentQuality, repairPost } from '../quality/content-quality-engine'
+import { scorePostQuality } from '../quality/post-quality-scorer'
 import { embedContentMemory, checkForDuplicatesCombined } from '../memory'
 import { hasEmbeddingProvider } from '@/lib/ai/config'
 import { buildPerformanceProfile, derivePerformanceSignals, type PerformanceSignal } from '../performance'
@@ -284,37 +285,47 @@ export async function generateDailyBrief(
         postCaption = idea.angle || idea.title
       }
 
-      // Content Quality Engine gate
-      const qualityCheck = checkContentQuality(postCaption, {
-        personaRole: input.persona.personaRole,
-        territories: input.profile?.territories,
-        expertise: input.profile?.expertise?.map(e => e.area),
-        trendGrounded: idea.trendGrounded,
-      })
 
-      if (!qualityCheck.passed && qualityCheck.score.overall < 5) {
-        // Try to repair and re-check
-        const repaired = repairPost(postCaption)
-        const reCheck = checkContentQuality(repaired, {
-          personaRole: input.persona.personaRole,
-          territories: input.profile?.territories,
-          expertise: input.profile?.expertise?.map(e => e.area),
-          trendGrounded: idea.trendGrounded,
-        })
-        if (reCheck.passed) {
-          postCaption = repaired
-        } else if (qualityCheck.score.grammar < 5) {
-          // Grammar too broken — regenerate once with repair hint
-          const retry = await generateFinishedPost({
-            idea,
-            personaContext,
-            trendSignals,
-            costTracking,
-            repairHint: `Fix these grammar issues: ${qualityCheck.score.failures.join(', ')}`,
-          })
-          postCaption = retry
-        }
-      }
+       // Premium quality scoring
+       const qualityResult = scorePostQuality({
+         caption: postCaption,
+         title: idea.title,
+         angle: idea.angle,
+         personaRole: input.persona.personaRole ?? input.profile?.role ?? '',
+         expertise: (input.profile?.expertise ?? []).map(e => e.area),
+         territories: input.profile?.territories ?? [],
+         platform: input.platform,
+         trendGrounded: idea.trendGrounded,
+       })
+
+       // Regenerate once if quality is too low
+       if (!qualityResult.passed && qualityResult.overall < 5) {
+         try {
+           const retry = await generateFinishedPost({
+             idea,
+             personaContext,
+             trendSignals,
+             costTracking,
+             diversificationBlock,
+             repairHint: `Quality issues: ${qualityResult.failures.join(', ')}. Suggestions: ${qualityResult.suggestions.join(', ')}. Rewrite to fix these.`,
+           })
+           const retryQuality = scorePostQuality({
+             caption: retry,
+             title: idea.title,
+             angle: idea.angle,
+             personaRole: input.persona.personaRole ?? input.profile?.role ?? '',
+             expertise: (input.profile?.expertise ?? []).map(e => e.area),
+             territories: input.profile?.territories ?? [],
+             platform: input.platform,
+             trendGrounded: idea.trendGrounded,
+           })
+           if (retryQuality.overall > qualityResult.overall) {
+             postCaption = retry
+           }
+         } catch {
+           // Keep original caption if retry fails
+         }
+       }
 
       let visualDirection: VisualDirection | null = null
        try {
@@ -323,7 +334,7 @@ export async function generateDailyBrief(
          console.warn('[daily-brief] Visual direction failed:', visErr instanceof Error ? visErr.message : String(visErr))
        }
 
-      const ideaRecord = await store.createDailyContentIdea({
+       const ideaRecord = await store.createDailyContentIdea({
          briefId: brief.id,
          organizationId: input.persona.organizationId,
          personaId: input.persona.id,
@@ -341,6 +352,12 @@ export async function generateDailyBrief(
          insightScore: idea.insight,
          trendGrounded: idea.trendGrounded,
          postCaption: postCaption ?? undefined,
+         qualityResult: qualityResult.overall > 0 ? {
+           overall: qualityResult.overall,
+           passed: qualityResult.passed,
+           dimensions: qualityResult.dimensions,
+           failures: qualityResult.failures,
+         } : undefined,
          visualType: visualDirection?.type ?? undefined,
          visualConcept: visualDirection?.concept ?? undefined,
          visualPrompt: visualDirection?.prompt ?? undefined,
@@ -356,8 +373,9 @@ export async function generateDailyBrief(
          visualFocalPoint: visualDirection?.focalPoint ?? undefined,
          visualAllowedText: visualDirection?.allowedText ?? undefined,
          visualScreenshotTarget: visualDirection?.screenshotTarget ?? undefined,
-         visualAvoid: visualDirection?.avoid?.join(', ') ?? undefined,
-         visualReason: visualDirection?.reason ?? undefined,
+          visualAvoid: visualDirection?.avoid?.join(', ') ?? undefined,
+          visualRealism: visualDirection?.realism ?? undefined,
+          visualReason: visualDirection?.reason ?? undefined,
        })
 
       if (idea === recommended) recommendedIdea = ideaRecord
@@ -429,17 +447,22 @@ async function generateIdeaCandidates(input: {
 
   const platformCount = input.platform === 'x' ? 6 : 8
 
-  const system = `You are a content strategist. Generate ${platformCount} specific post ideas that this person could actually publish.
+  const system = `You are an editorial strategist who creates high-reach LinkedIn/X content ideas for experienced professionals. Your ideas must be sharp, specific, and credible — never generic content advice.
 
-RULES:
-- At least 3 ideas must reference the trend signals by name with the persona's unique take.
-- At least 2 ideas must be personal lessons from the persona's real experience.
-- At least 1 idea must be a hot take or counterintuitive opinion.
-- Titles must be SPECIFIC. No "A lesson from X", "Thoughts on X", "Why X matters".
-- GOOD titles: "We reduced pod restarts by 40% with one config change" / "I reviewed 50 postmortems. 43 had the same root cause."
-- Include a "whyNow" that explains urgency — a trend, a recent event, a seasonal insight, or a mistake people are making right now.
-- The "angle" must be 1-2 sentences of actual insight, not a generic observation.${perfBlock}${strategyBlock}${angleBlock}
-- Output ONLY JSON array: [{"title": "...", "angle": "...", "trendGrounded": true/false, "territory": "topic", "formatSuggestion": "observation|lesson|opinion|case_study", "whyNow": "..."}]`
+Generate ${platformCount} post ideas that this person could actually publish and that would perform well.
+
+HARD RULES:
+- At least 3 ideas must reference the trend signals by name with the persona's unique angle or take.
+- At least 2 ideas must be grounded in real experience (first-person, specific situations, lessons learned).
+- At least 1 idea must be a contrarian opinion or counterintuitive take that challenges common wisdom.
+- At least 1 idea must include a specific metric, number, or concrete detail.
+- Titles must be SPECIFIC and STOP the scroll. No "A lesson from X", "Thoughts on X", "Why X matters", "My experience with X".
+- GOOD titles: "We reduced pod restarts by 40% with one config change" / "I reviewed 50 postmortems. 43 had the same root cause." / "After 3 years of K8s, I stopped using Helm. Here's why." / "Our 'reliable' deploy had a 3-hour blind spot."
+- The "angle" must be 1-2 sentences of INSIGHT — not a description, not a summary. What's the counterintuitive take? What's the specific lesson? What should the reader think differently about after reading?
+- "whyNow" must explain urgency: a current trend, a recent industry event, a seasonal mistake, a shift in the market, or a problem people are facing right now.
+- Each idea must pass this test: "Would a senior professional in this field find this genuinely useful or thought-provoking?" If not, reject it.${perfBlock}${strategyBlock}${angleBlock}
+
+Output ONLY JSON array: [{"title": "...", "angle": "...", "trendGrounded": true/false, "territory": "topic area", "formatSuggestion": "observation|lesson|opinion|case_study|contrarian", "whyNow": "..."}]`
 
   const user = JSON.stringify({
     persona: input.personaContext,
@@ -487,22 +510,30 @@ async function generateFinishedPost(input: {
   diversificationBlock?: string
 }): Promise<string> {
   const divBlock = input.diversificationBlock ? `\n\n${input.diversificationBlock}` : ''
-  const system = `You are a LinkedIn ghostwriter for senior tech practitioners. Write a post that STOPS the scroll.${divBlock}
+  const system = `You write LinkedIn posts for experienced professionals that get high engagement because they teach something real, challenge assumptions, or share a specific insight earned through practice.
 
-FORMATTING (NON-NEGOTIABLE):
-Output EXACTLY this structure, where each [paragraph] is 1-2 short sentences separated by a blank line:
+${divBlock}
 
-[HOOK: One line. Bold claim, surprising number, or short story. This is all people see before "see more".]
+QUALITY BAR — every post MUST pass these tests:
+1. HOOK: Would this first line make someone stop scrolling? It should contain a surprising number, a contrarian claim, a short story, or a bold statement. NOT a question about "how do you..." or "have you ever..."
+2. SPECIFICITY: Real numbers, real tools, real situations. If the post could have been written by anyone in the field, it fails.
+3. INSIGHT: The reader should think differently after reading. What's the counterintuitive take? What did you learn that others haven't?
+4. VOICE: Sounds like a smart professional sharing something real — not a brand, not a journalist, not a motivational speaker.
 
-[Context: 1-2 sentences. Set the scene with a specific detail — a number, tool, mistake, or timeline.]
+STRUCTURE:
+Write 4-6 short paragraphs (1-2 sentences each) separated by blank lines:
 
-[Insight: 1-2 sentences. The counterintuitive take or lesson. Why this matters.]
+[HOOK: Surprising number, contrarian claim, or specific story. 1 line.]
 
-[Action: 1-2 sentences. What you did about it or what the reader should consider.]
+[CONTEXT: Set the scene. What was the situation? Use specifics — numbers, tools, timelines. 1-2 sentences.]
 
-[Question: One line. Genuine question that invites comments. NOT "Thoughts?" or "Agree?".]
+[INSIGHT: The counterintuitive take or lesson. What should the reader reconsider? 1-2 sentences.]
 
-EXAMPLE OUTPUT FORMAT:
+[ACTION: What you did about it, or what the reader should consider doing. 1-2 sentences.]
+
+[CLOSE: End with a genuine question that invites specific answers. NOT "Thoughts?" or "Agree?"]
+
+EXAMPLE (study this quality level):
 We deleted half our Kubernetes cluster on a Tuesday. Costs dropped 40% that week.
 
 It started when I noticed we were running 3 nodes for a service that peaked at 200 requests per minute. Nobody had reviewed the autoscaling config in 8 months.
@@ -516,13 +547,12 @@ When did you last check if your infrastructure matches your actual traffic?
 RULES:
 - NO em dashes. Use commas or periods only.
 - NO listicles, no numbered lists, no "here are X tips".
-- NO filler phrases: "Here's the thing", "Let that sink in", "Game changer", "In today's fast-paced world".
-- 120-180 words total.
-- Specific details only. Real tools, real numbers, real situations.
-- NO hashtags, NO emojis, NO exclamation marks.
-- NO sign-off, no "follow for more".
+- NO filler: "Here's the thing", "Let that sink in", "Game changer", "In today's fast-paced world", "leverage", "synergy".
+- 100-220 words for LinkedIn.
+- Named tools/metrics required when relevant.
+- NO hashtags, NO emojis, NO exclamation marks, NO sign-off.
 
-TONE: Like a senior engineer explaining something to a peer over coffee. Direct, specific, no corporate speak.`
+TONE: Like a senior professional explaining something to a peer. Direct, specific, slightly opinionated. Human.`
 
   const userObj: Record<string, unknown> = {
     persona: input.personaContext,
@@ -561,30 +591,36 @@ async function generateXPost(input: {
   diversificationBlock?: string
 }): Promise<string> {
   const divBlock = input.diversificationBlock ? `\n\n${input.diversificationBlock}` : ''
-  const system = `You write sharp, quotable posts for X (Twitter) by senior tech practitioners.${divBlock}
+  const system = `You write X (Twitter) posts for experienced professionals that get quote-tweets and replies because they're sharp, specific, and opinion-forward.
 
-WRITING RULES:
-- One post. No threads unless the idea genuinely requires 2-3 posts to land.
-- Lead with the opinion, the number, or the contrarian take. No throat-clearing.
-- Compress. Every word must earn its place. If it doesn't add information, cut it.
-- Sound like a smart person talking — not a brand, not a newsletter, not a blog.
-- Timeliness matters. If a trend is referenced, make it clear why it matters right now.
-- End with either a punchline, a question, or nothing. Never "Thoughts?" or "Agree?".
+${divBlock}
 
-HARD RULES:
+QUALITY BAR:
+1. LEAD: First word must grab attention. Lead with the take, the number, or the tension. Never "I think..." or "Just finished..."
+2. COMPRESSION: Every word earns its place. If deleting a word doesn't change meaning, delete it.
+3. SPECIFICITY: Real details, not platitudes. "Cut deploy time from 4h to 12min with ArgoCD" not "streamline your workflows"
+4. VOICE: Like a smart person at a conference bar explaining something they care about — not a brand, not a blog.
+
+FORMAT:
+- Single post (280 chars max). Thread only if the idea genuinely needs 2-3 posts.
+- No intro, no conclusion, no "Here's why:" setup.
+- End with a punchline, a provocative question, or nothing.
+
+EXAMPLES (study this level):
+"Your team doesn't need another monitoring tool. They need to stop alerting on symptoms and start alerting on user impact."
+
+"Hot take: 80% of 'platform engineering' is just ops teams that got a redesign budget. The other 20% is actually worth it."
+
+"We replaced our $4k/mo logging stack with a 200-line script and S3. Not everything needs a dashboard."
+
+RULES:
 - NO em dashes. Use commas or periods.
-- NO "In today's fast-paced..." or any AI filler.
-- NO listicles, no numbered tips, no "here are X things".
-- NO hashtags, NO emojis, NO exclamation marks.
-- NO sign-off, no "follow for more".
-- Max 280 characters for single posts.
-- Threads: max 3 posts, each max 280 chars. Number as "1/", "2/", "3/".
-- Never fabricate numbers, metrics, or named examples.
+- NO filler: "In today's fast-paced...", "leveraging", "synergy", "game-changer".
+- NO hashtags, NO emojis, NO exclamation marks, NO sign-off.
+- Max 280 chars. Never fabricate numbers.
+- Controversial takes welcome IF the persona can credibly hold the opinion.
 
-TONE:
-- Confident. Specific. Human.
-- A senior engineer sharing a real insight they'd tell a peer — not presenting to an audience.
-- Controversial takes are fine if the person can credibly hold the opinion.
+TONE: Confident, specific, human. A peer sharing a real insight — not presenting.
 - If the post is about a trend, the take must be the persona's own — not a summary of the article.
 
 FORMAT:
@@ -864,51 +900,74 @@ async function generateVisualDirection(
   persona: ContentPersona,
   costTracking: { total: number },
 ): Promise<VisualDirection | null> {
-  const system = `You are a creative director for social media content visuals. Your job is not to "generate an image" — it is to decide the right visual medium and direct it like a creative director.
+  const system = `You are a senior art director for premium social media content. You direct visuals like a creative agency — never default to flat vector clip art.
 
-STEP 1: Choose the RIGHT medium for this post.
-- NO_VISUAL: Opinion, rants, personal stories where text IS the content. Adding an image dilutes it.
-- TYPOGRAPHIC_CONCEPT: One powerful number or quote. Big text, minimal design, high contrast.
-- TECHNICAL_DIAGRAM: Architecture, flows, comparisons. Isometric or flat vector diagrams.
-- DATA_VISUAL: Metrics, before/after, trends. Charts, graphs with real data feel.
-- EDITORIAL_GRAPHIC: Concepts, metaphors, tradeoffs. Illustrated, metaphorical, conceptual.
-- REALISTIC_PHOTOGRAPH: ONLY when a real scene adds genuine value. Must be editorial photography — not stock.
-- PRODUCT_SCREENSHOT: Only when showing a real product UI.
+STEP 1: Choose the RIGHT visual strategy for this post.
 
-STEP 2: If the medium is visual, produce a full creative direction.
-- communication_goal: What should the viewer understand in 3 seconds?
-- subject: The literal thing shown (no abstractions).
-- scene: Where is this happening? What is the environment?
-- composition: Layout, focal point, visual hierarchy.
-- lighting: Natural, studio, cinematic, flat, ambient.
-- palette: Specific colors. Muted base + ONE accent.
-- mood: The feeling. Tense, calm, confident, analytical, urgent.
-- style: Editorial photography, isometric diagram, flat vector, technical illustration.
+STRATEGY OPTIONS:
+- NO_VISUAL: Strong opinions, rants, personal stories where text IS the content.
+- EDITORIAL_PHOTOGRAPH: Real scene that communicates the post idea. Believable, professional, editorial-grade.
+- PRODUCT_ENVIRONMENT: Real working environment — desk, server room, workspace, tools in context.
+- CONCEPTUAL_PHOTOGRAPH: Staged scene that communicates a metaphor or idea through real photography.
+- DATA_COMPOSITION: Beautiful data visualization or metrics composition — not a generic chart, a designed graphic.
+- TYPOGRAPHIC_STATEMENT: One powerful number or quote as the visual. Minimal, high-impact, designed.
+- TECHNICAL_COMPOSITION: Architecture or system visualization that looks designed, not clip-art.
+- UI_COMPOSITION: Annotated product interface or dashboard screenshot, professionally presented.
+
+STEP 2: Produce a director-grade creative brief.
+- communication_goal: What should the viewer understand in 2 seconds?
+- subject: The literal thing shown (concrete nouns only, no abstractions).
+- scene: Where is this happening? Describe a real environment.
+- composition: Layout, focal point, depth, visual hierarchy, negative space.
+- lighting: Natural window light, studio key light, cinematic side-lit, soft diffused, moody low-key, golden hour.
+- palette: Specific named colors. Muted base + ONE accent color.
+- mood: The emotional tone — confident, calm, urgent, analytical, warm, tense, optimistic.
+- style: Editorial photography, documentary style, commercial product shot, cinematic still, architectural photography, fine art conceptual.
+- realism: Photorealistic, hyperrealistic, stylized realism, or editorial illustration.
 - aspect_ratio: 1.91:1 for LinkedIn, 1:1 or 16:9 for X.
-- avoid: List specific clichés to avoid for THIS concept.
+- avoid: List specific visual clichés to avoid for THIS concept.
 
-AVOID GLOBALLY:
-- No robots, no glowing brains, no 3D spheres, no stock people, no floating code.
-- No generic "tech office" scenes. No motivational posters (sunrise, cliff, mountain).
-- No abstract gradient blobs. No fake dashboards. No holographic UI.
-- If the topic is Docker, show a real system concept. If infrastructure, make it feel infrastructural.
+QUALITY STANDARDS:
+- NO flat vector illustrations as default. Only use for truly abstract concepts.
+- NO robots, glowing brains, 3D spheres, stock photo poses, floating code.
+- NO generic "laptop on desk in coffee shop" unless the post is specifically about that.
+- NO abstract gradient blobs, fake dashboards, holographic UI, geometric patterns.
+- Every visual should look like it was art-directed by a professional designer.
+- If the topic is DevOps/infrastructure, show real technical environments or designed compositions that feel infrastructural.
+- If the topic is leadership/culture, show real human moments in professional settings.
+- If the topic is data/metrics, show designed data compositions, not generic charts.
+
+EXAMPLE GOOD PROMPHS:
+- "A split-screen editorial photograph. Left: a tangled mess of red ethernet cables on a server room floor. Right: the same cables organized in clean blue cable management. Warm overhead fluorescent lighting. Muted steel gray background with amber accent. Shot from above, flat lay style. Photorealistic."
+- "A dimly lit server room with rows of black racks. One rack glows with warm amber status lights while others are dark blue. Low angle shot, cinematic composition, shallow depth of field. Moody, professional atmosphere."
+- "A clean white desk with a single monitor displaying a simple terminal showing 'Deploy: SUCCESS'. A cup of coffee sits beside it. Natural window light from the left. Minimal composition with strong negative space. Warm, confident mood."
+
+AVOID AT ALL COSTS:
+- Flat vector illustrations as default
+- Robots, glowing brains, 3D abstract shapes
+- Stock photo poses (people staring at laptops, high-fiving in offices)
+- Generic gradient backgrounds
+- Abstract geometric patterns or blobs
+- Fake or holographic dashboards
+- Floating code or text in 3D space
 
 Output ONLY JSON:
 {
-  "type": "NO_VISUAL|TYPOGRAPHIC_CONCEPT|TECHNICAL_DIAGRAM|DATA_VISUAL|EDITORIAL_GRAPHIC|REALISTIC_PHOTOGRAPH|PRODUCT_SCREENSHOT",
+  "type": "NO_VISUAL|EDITORIAL_PHOTOGRAPH|PRODUCT_ENVIRONMENT|CONCEPTUAL_PHOTOGRAPH|DATA_COMPOSITION|TYPOGRAPHIC_STATEMENT|TECHNICAL_COMPOSITION|UI_COMPOSITION",
   "concept": "One sentence. What this visual communicates.",
-  "communication_goal": "What the viewer understands in 3 seconds",
+  "communication_goal": "What the viewer understands in 2 seconds",
   "subject": "The literal thing shown",
   "scene": "Environment/setting",
   "composition": "Layout and focal point",
   "lighting": "Type and quality of light",
   "palette": "Specific colors",
-  "mood": "Feeling",
-  "style": "Medium style",
+  "mood": "Emotional tone",
+  "style": "Photography or design style",
+  "realism": "Photorealistic, stylized, or editorial",
   "aspect_ratio": "1.91:1",
-  "prompt": "3-4 sentence generation prompt. Concrete nouns only.",
-  "avoid": ["specific thing 1", "specific thing 2"],
-  "reason": "Why this medium fits this idea"
+  "prompt": "4-5 sentence generation prompt. Concrete nouns. Director-grade.",
+  "avoid": ["specific cliché 1", "specific cliché 2"],
+  "reason": "Why this strategy fits this idea"
 }`
 
   const user = JSON.stringify({
@@ -1360,5 +1419,6 @@ interface VisualDirection {
   allowedText?: string
   screenshotTarget?: string
   avoid?: string[]
+  realism?: string
   reason: string
 }

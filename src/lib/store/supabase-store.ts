@@ -7632,6 +7632,7 @@ export class SupabaseStore implements ScoutStore {
      visualAllowedText?: string
      visualScreenshotTarget?: string
      visualAvoid?: string
+     visualRealism?: string
      visualReason?: string
      qualityResult?: Record<string, unknown>
    }): Promise<DailyContentIdea> {
@@ -7672,6 +7673,7 @@ export class SupabaseStore implements ScoutStore {
          visual_allowed_text: input.visualAllowedText ?? null,
          visual_screenshot_target: input.visualScreenshotTarget ?? null,
          visual_avoid: input.visualAvoid ?? null,
+         visual_realism: input.visualRealism ?? null,
          visual_reason: input.visualReason ?? null,
          quality_result: input.qualityResult ?? null,
        })
@@ -7940,6 +7942,7 @@ function mapDailyContentIdea(r: Record<string, unknown>): DailyContentIdea {
      visualAllowedText: r.visual_allowed_text as string | null,
      visualScreenshotTarget: r.visual_screenshot_target as string | null,
      visualAvoid: r.visual_avoid as string | null,
+     visualRealism: r.visual_realism as string | null,
      visualReason: r.visual_reason as string | null,
     qualityResult: r.quality_result as Record<string, unknown> | null,
     copiedAt: r.copied_at as string | null,
