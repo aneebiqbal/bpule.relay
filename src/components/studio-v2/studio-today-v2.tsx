@@ -338,12 +338,31 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
                   <Shuffle className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} />
                   {generating ? 'Generating...' : 'Try another'}
                 </button>
-                <button
-                  onClick={() => router.push(`/studio/drafts/new?personaId=${personaId}&ideaId=${activeIdea.id}`)}
-                  className="ml-auto rounded-lg px-3 py-2 text-sm text-ink/40 transition-colors hover:text-ink/70"
-                >
-                  Edit
-                </button>
+                 <button
+                   onClick={() => {
+                     // Store full idea data so draft page can load it even if not persisted
+                     try {
+                       sessionStorage.setItem(`studio-idea-${activeIdea.id}`, JSON.stringify({
+                         title: activeIdea.title,
+                         angle: activeIdea.angle,
+                         whyNow: activeIdea.whyNow,
+                         postCaption: activeIdea.postCaption,
+                         territory: activeIdea.territory,
+                         trendGrounded: activeIdea.trendGrounded,
+                         formatSuggestion: activeIdea.formatSuggestion,
+                         visualType: activeIdea.visualType,
+                         visualConcept: activeIdea.visualConcept,
+                         visualPrompt: activeIdea.visualPrompt,
+                         visualReason: activeIdea.visualReason,
+                         qualityResult: (activeIdea as any).qualityResult,
+                       }))
+                     } catch { /* sessionStorage unavailable */ }
+                     router.push(`/studio/drafts/new?personaId=${personaId}&ideaId=${activeIdea.id}`)
+                   }}
+                   className="ml-auto rounded-lg px-3 py-2 text-sm text-ink/40 transition-colors hover:text-ink/70"
+                 >
+                   Edit
+                 </button>
               </div>
             </div>
 

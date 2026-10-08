@@ -29,15 +29,24 @@ export default async function NewDraftPage({
   let ideaTitle = ''
 
   if (params.ideaId) {
+    // Try database first, then sessionStorage fallback for emergency/unpersisted ideas
+    let idea = null
     try {
-      const idea = await store.getDailyContentIdeaById(params.ideaId)
-      if (idea) {
-        initialCaption = idea.postCaption ?? ''
-        initialSourceMaterial = idea.angle ?? idea.title
-        ideaTitle = idea.title
-      }
-    } catch {
-      // Idea not found — continue with empty draft
+      idea = await store.getDailyContentIdeaById(params.ideaId)
+    } catch { /* not in DB */ }
+
+    // Fallback: read from sessionStorage (for ideas not yet persisted)
+    if (!idea && typeof window !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem(`studio-idea-${params.ideaId}`)
+        if (stored) idea = JSON.parse(stored)
+      } catch { /* sessionStorage unavailable */ }
+    }
+
+    if (idea) {
+      initialCaption = idea.postCaption ?? ''
+      initialSourceMaterial = idea.angle ?? idea.title
+      ideaTitle = idea.title
     }
   }
 
