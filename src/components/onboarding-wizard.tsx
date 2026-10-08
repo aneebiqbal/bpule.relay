@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation'
 import type { ContentProfile, ContentIdeaCard } from '@/lib/domain/types'
 import { generateDailyIdeas } from '@/lib/content/daily-ideas'
 
-type OnboardingStep = 'identity' | 'import' | 'understanding' | 'goals' | 'audience' | 'territories' | 'voice' | 'comfort' | 'complete'
-
 interface OnboardingState {
   displayName: string
   personaRole: string
@@ -29,12 +27,15 @@ interface OnboardingState {
   } | null
   selectedGoals: string[]
   selectedAudiences: string[]
+  selectedInterests: string[]
   selectedTerritories: string[]
   voiceSelection: string
   selectedComfort: string[]
 }
 
-const STEPS: OnboardingStep[] = ['identity', 'import', 'understanding', 'goals', 'audience', 'territories', 'voice', 'comfort']
+type OnboardingStep = 'identity' | 'import' | 'understanding' | 'goals' | 'audience' | 'interests' | 'territories' | 'voice' | 'comfort' | 'complete'
+
+const STEPS: OnboardingStep[] = ['identity', 'import', 'understanding', 'goals', 'audience', 'interests', 'territories', 'voice', 'comfort']
 
 const ROLE_OPTIONS = [
   'Software Engineer', 'Senior Software Engineer', 'Staff Engineer',
@@ -85,10 +86,11 @@ export function OnboardingWizard() {
     sourceType: 'bio',
     identity: null,
     selectedGoals: [],
-    selectedAudiences: [],
-    selectedTerritories: [],
-    voiceSelection: '',
-    selectedComfort: [],
+     selectedAudiences: [],
+     selectedInterests: [],
+     selectedTerritories: [],
+     voiceSelection: '',
+     selectedComfort: [],
   })
   const [extracting, setExtracting] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -144,6 +146,7 @@ export function OnboardingWizard() {
       case 'understanding': return true // Can proceed after viewing
       case 'goals': return state.selectedGoals.length > 0
       case 'audience': return state.selectedAudiences.length > 0
+      case 'interests': return state.selectedInterests.length > 0
       case 'territories': return state.selectedTerritories.length >= 2
       case 'voice': return state.voiceSelection !== ''
       case 'comfort': return true // Can skip
@@ -311,6 +314,9 @@ export function OnboardingWizard() {
         )}
         {step === 'audience' && (
           <StepAudience state={state} update={update} />
+        )}
+        {step === 'interests' && (
+          <StepInterests state={state} update={update} />
         )}
         {step === 'territories' && (
           <StepTerritories state={state} update={update} />
@@ -620,6 +626,71 @@ function defaultTerritories(role: string): string[] {
   if (/consultant|freelance/.test(r)) return ['consulting insights', 'client management', 'niche expertise', 'personal branding', 'industry trends']
   if (/recruiter|talent|hr/.test(r)) return ['hiring strategy', 'talent acquisition', 'employer branding', 'career development', 'team culture']
   return ['industry insights', 'professional development', 'leadership', 'trends', 'lessons learned']
+}
+
+const INTEREST_OPTIONS = [
+  'AI & Machine Learning', 'Building Products', 'Startups & Founding',
+  'Developer Tools', 'Open Source', 'Cloud & Infrastructure',
+  'Security & Privacy', 'Data Engineering', 'Web3 & Crypto',
+  'Remote Work & Culture', 'Hiring & Teams', 'Technical Leadership',
+  'Side Projects', 'No-Code / Low-Code', 'Mobile Dev', 'DevOps & SRE',
+]
+
+function StepInterests({ state, update }: { state: OnboardingState; update: (p: Partial<OnboardingState>) => void }) {
+  const [custom, setCustom] = useState('')
+
+  const toggleInterest = (interest: string) => {
+    const selected = state.selectedInterests.includes(interest)
+      ? state.selectedInterests.filter((i) => i !== interest)
+      : [...state.selectedInterests, interest]
+    update({ selectedInterests: selected })
+  }
+
+  const addCustom = () => {
+    if (custom.trim() && !state.selectedInterests.includes(custom.trim())) {
+      update({ selectedInterests: [...state.selectedInterests, custom.trim()] })
+      setCustom('')
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-semibold text-ink">What do you follow on the internet?</h2>
+        <p className="mt-1 text-sm text-graphite">Select topics you read about, not just your job. This is where your best content angles come from.</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {INTEREST_OPTIONS.map((interest) => {
+           const selected = state.selectedInterests.includes(interest)
+           return (
+            <button
+              key={interest}
+              onClick={() => toggleInterest(interest)}
+              className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                selected ? 'border-ink bg-solid text-on-solid' : 'border-ink/15 hover:border-ink/30'
+              }`}
+            >
+              {interest}
+            </button>
+           )
+          })}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          placeholder="Add another interest (e.g. 'rust programming')..."
+          className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm focus:border-ink/30 focus:outline-none"
+          onKeyDown={(e) => { if (e.key === 'Enter') addCustom() }}
+        />
+        <button onClick={addCustom} className="rounded-lg border border-ink/15 px-3 py-2 text-sm hover:border-ink/30">
+          Add
+        </button>
+      </div>
+      <p className="text-xs text-graphite">{state.selectedInterests.length} selected</p>
+    </div>
+  )
 }
 
 function StepTerritories({ state, update }: { state: OnboardingState; update: (p: Partial<OnboardingState>) => void }) {

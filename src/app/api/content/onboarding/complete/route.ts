@@ -89,34 +89,35 @@ export async function POST(req: NextRequest) {
     })
 
     const territories = normalized.selectedTerritories
-    const audiences = normalized.selectedAudiences
-    const goals = normalized.selectedGoals
+     const audiences = normalized.selectedAudiences
+     const goals = normalized.selectedGoals
+     const interests = normalized.selectedInterests
 
-    // Update profile with all extracted data
-    await store.updateContentProfile(profile.id, {
-      expertise: normalized.identity.expertise,
-      opinions: normalized.identity.opinions,
-      projects: normalized.identity.projects,
-      experiences: normalized.identity.experiences,
-      technologies: normalized.identity.technologies.map((name) => ({
-        name,
-        proficiency: 'proficient' as const,
-        context: '',
-      })),
-      goals: goals.map((description) => ({
-        description,
-        type: 'authority' as const,
-        updatedAt: now,
-      })),
-      topicsCared: territories.map((topic) => ({
-        topic,
-        intensity: 'interested' as const,
-        source: 'onboarding' as const,
-      })),
-      audiences,
-      territories,
-      voiceSelection: normalized.voiceSelection,
-    })
+     // Update profile with all extracted data
+     await store.updateContentProfile(profile.id, {
+       expertise: normalized.identity.expertise,
+       opinions: normalized.identity.opinions,
+       projects: normalized.identity.projects,
+       experiences: normalized.identity.experiences,
+       technologies: normalized.identity.technologies.map((name) => ({
+         name,
+         proficiency: 'proficient' as const,
+         context: '',
+       })),
+       goals: goals.map((description) => ({
+         description,
+         type: 'authority' as const,
+         updatedAt: now,
+       })),
+       topicsCared: [...territories, ...interests].map((topic) => ({
+         topic,
+         intensity: 'interested' as const,
+         source: 'onboarding' as const,
+       })),
+       audiences,
+       territories: [...territories, ...interests],
+       voiceSelection: normalized.voiceSelection,
+     })
 
     // Create topic clusters from territories
     for (const territory of territories.slice(0, 6)) {

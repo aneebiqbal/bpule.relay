@@ -23,6 +23,7 @@ export interface OnboardingCompleteInput {
   contentComfort?: string[]
   selectedGoals?: string[]
   selectedAudiences?: string[]
+  selectedInterests?: string[]
   selectedTerritories?: string[]
   voiceSelection?: string
   humorStyle?: string
@@ -38,6 +39,7 @@ export interface NormalizedOnboardingPayload {
   contentComfort: string[]
   selectedGoals: string[]
   selectedAudiences: string[]
+  selectedInterests: string[]
   selectedTerritories: string[]
   voiceSelection: string
   humorStyle: string
@@ -61,9 +63,14 @@ export function normalizeOnboardingPayload(input: OnboardingCompleteInput): Norm
   const personaRole = normalizeText(input.personaRole)
   const identity = normalizeIdentity(input.identity ?? {}, personaRole)
 
+  const selectedInterests = uniqueTextList(
+    input.selectedInterests,
+  )
+
   const selectedTerritories = uniqueTextList(
     input.selectedTerritories,
     identity.territories,
+    selectedInterests, // Also include user's selected interests as territories
   )
 
   const selectedAudiences = uniqueTextList(
@@ -89,6 +96,7 @@ export function normalizeOnboardingPayload(input: OnboardingCompleteInput): Norm
     contentComfort: uniqueTextList(input.contentComfort),
     selectedGoals,
     selectedAudiences,
+    selectedInterests,
     selectedTerritories,
     voiceSelection: normalizeText(input.voiceSelection),
     humorStyle: normalizeText(input.humorStyle) || (roleForVoice.toLowerCase().includes('founder') ? 'conversational' : 'professional'),

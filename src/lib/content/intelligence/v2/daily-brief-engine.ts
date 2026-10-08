@@ -190,6 +190,7 @@ export async function generateDailyBrief(
          personaAngle,
          contentStrategy,
          platform: input.platform,
+         profile: input.profile,
        })
        costTracking.total += ideaCost
        scoredIdeas = scoreIdeas(rawIdeas, input)
@@ -424,15 +425,16 @@ export async function generateDailyBrief(
 }
 
 async function generateIdeaCandidates(input: {
-  personaContext: string
-  trendSignals: string
-  recentContent: string
-  costTracking: { total: number }
-  performanceSignals?: PerformanceSignal
-  personaAngle?: ReturnType<typeof getPersonaAngleProfile>
-  contentStrategy?: 'trend-led' | 'evergreen'
-  platform?: PostPlatform
-}): Promise<{ ideas: IdeaCandidate[]; cost: number }> {
+   personaContext: string
+   trendSignals: string
+   recentContent: string
+   costTracking: { total: number }
+   performanceSignals?: PerformanceSignal
+   personaAngle?: ReturnType<typeof getPersonaAngleProfile>
+   contentStrategy?: 'trend-led' | 'evergreen'
+   platform?: PostPlatform
+   profile?: ContentProfile | null
+ }): Promise<{ ideas: IdeaCandidate[]; cost: number }> {
   const perfBlock = input.performanceSignals && input.performanceSignals.guidance.length > 0
     ? `\n\nPERFORMANCE INSIGHTS from this persona's past posts:\n${input.performanceSignals.guidance.map(g => `- ${g}`).join('\n')}`
     : ''
@@ -447,20 +449,29 @@ async function generateIdeaCandidates(input: {
 
   const platformCount = input.platform === 'x' ? 6 : 8
 
-  const system = `You are an editorial strategist who creates high-reach LinkedIn/X content ideas for experienced professionals. Your ideas must be sharp, specific, and credible — never generic content advice.
+  const interestBlock = input.profile?.territories?.length
+    ? `\n\nTHIS PERSON FOLLOWS: ${input.profile.territories.join(', ')}. Create ideas at the intersection of these interests + current trends + their expertise. NOT just "DevOps tips" — think "What does AI mean for infrastructure?" or "What can builders learn from platform engineering?"`
+    : ''
 
-Generate ${platformCount} post ideas that this person could actually publish and that would perform well.
+  const system = `You are an editorial strategist who creates high-reach LinkedIn/X content ideas. Your ideas must be sharp, specific, and credible — never generic content advice.
+
+Generate ${platformCount} post ideas that this person could actually publish and that would get engagement.
+
+CRITICAL: This person is NOT just their job title. They follow topics they care about. Create ideas at the INTERSECTION of:
+1. What's trending on the internet right now (HN, GitHub, tech Twitter)
+2. Their professional expertise
+3. Their personal interests and the topics they follow
 
 HARD RULES:
-- At least 3 ideas must reference the trend signals by name with the persona's unique angle or take.
-- At least 2 ideas must be grounded in real experience (first-person, specific situations, lessons learned).
-- At least 1 idea must be a contrarian opinion or counterintuitive take that challenges common wisdom.
+- At least 3 ideas must reference the trend signals by name with the persona's unique angle.
+- At least 2 ideas must blend their expertise with topics they follow (e.g., a DevOps engineer who follows AI writes about "What K8s teaches us about AI infra scaling").
+- At least 1 idea must be a contrarian opinion or counterintuitive take.
 - At least 1 idea must include a specific metric, number, or concrete detail.
-- Titles must be SPECIFIC and STOP the scroll. No "A lesson from X", "Thoughts on X", "Why X matters", "My experience with X".
-- GOOD titles: "We reduced pod restarts by 40% with one config change" / "I reviewed 50 postmortems. 43 had the same root cause." / "After 3 years of K8s, I stopped using Helm. Here's why." / "Our 'reliable' deploy had a 3-hour blind spot."
-- The "angle" must be 1-2 sentences of INSIGHT — not a description, not a summary. What's the counterintuitive take? What's the specific lesson? What should the reader think differently about after reading?
-- "whyNow" must explain urgency: a current trend, a recent industry event, a seasonal mistake, a shift in the market, or a problem people are facing right now.
-- Each idea must pass this test: "Would a senior professional in this field find this genuinely useful or thought-provoking?" If not, reject it.${perfBlock}${strategyBlock}${angleBlock}
+- Titles must be SPECIFIC. No "A lesson from X", "Thoughts on X", "Why X matters".
+- GOOD titles: "After 3 years of K8s, I stopped using Helm. Here's why." / "The DevOps patterns that AI coding assistants get wrong." / "Why the next wave of AI tools will be built by infra people." / "We cut deploy time from 4h to 12min. The tool nobody talks about."
+- The "angle" must be 1-2 sentences of INSIGHT — what's the counterintuitive take? What should the reader reconsider?
+- "whyNow" must explain urgency: a current trend, a recent event, a shift in the market.
+- REJECT ideas that are generic advice anyone could write. If it sounds like a LinkedIn bot, reject it.${interestBlock}${perfBlock}${strategyBlock}${angleBlock}
 
 Output ONLY JSON array: [{"title": "...", "angle": "...", "trendGrounded": true/false, "territory": "topic area", "formatSuggestion": "observation|lesson|opinion|case_study|contrarian", "whyNow": "..."}]`
 
