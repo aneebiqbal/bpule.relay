@@ -17,14 +17,51 @@ import type {
   V3OpportunityEpisode,
   V3BoundedDecision,
   V3ShadowComparison,
+  CommercialPotentialAssessment,
 } from '../types'
 import type { V3EvidenceGraph } from '../graph/evidence-graph'
 import { V3_CONFIG_VERSION } from '../config'
 import { scoreEpisode, type V3ScoreInput } from '../scoring/score-v3'
 import { determineAction } from '../action/action-policy'
 import type { V3ProviderResult } from './decision-provider'
-import { assessLatentOpportunity, computeLatentScore, latentActionFromPotential } from '../latent-opportunity'
+import {
+  assessLatentOpportunity,
+  assessCommercialPotential,
+  computeLatentScore,
+  latentActionFromPotential,
+} from '../latent-opportunity'
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
+
+// ── Helper: Scope Commercial Potential to Organization ──────────────────────
+// Defined before use to avoid hoisting issues with Next.js build checker.
+
+function scopeCommercialPotentialToOrg(
+  cp: CommercialPotentialAssessment,
+  orgName: string,
+  graph: V3EvidenceGraph,
+): CommercialPotentialAssessment {
+  const orgEvidences = Array.from(graph.evidence.values()).filter(
+    e => e.subjectOrganizationName?.toLowerCase() === orgName.toLowerCase()
+  )
+
+  if (orgEvidences.length === 0) return cp
+
+  const orgText = orgEvidences.map(e => e.quote).join(' ').toLowerCase()
+  const hasProductBuilding = /\b(launch|product|platform|saas|mvp|beta|building|developing)\b/.test(orgText)
+  const hasServiceOffering = /\b(agency|services|help companies|we build for|client work|outsourcing)\b/.test(orgText)
+
+  if (hasProductBuilding && !hasServiceOffering) {
+    return {
+      ...cp,
+      buildIntensity: cp.buildIntensity,
+      signals: cp.signals.filter(s =>
+        !s.toLowerCase().includes('service') || s.toLowerCase().includes('product')
+      ),
+    }
+  }
+
+  return cp
+}
 
 export interface V3AssemblerInput {
   graph: V3EvidenceGraph
@@ -71,6 +108,13 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
   // Build bounded decision from provider result
   const decision = buildBoundedDecision(providerResult)
 
+  // Assess commercial potential once (deterministic, no AI call)
+  // This is separate from buyer intent and used as a scoring dimension.
+  let commercialPotential = null
+  if (input.v2Canonical) {
+    commercialPotential = await assessCommercialPotential(input.v2Canonical, rawText)
+  }
+
   // Score each episode
   const episodeScores: Array<{ episodeId: string; score: number }> = []
   let bestEpisode: V3OpportunityEpisode | null = null
@@ -82,6 +126,9 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
       decision,
       proofRelevance: proofRelevanceMap[episode.id] ?? estimateProofRelevance(episode, senderCapabilities),
       evidenceQuality: evidenceQualityMap[episode.id] ?? estimateEvidenceQuality(episode, graph),
+      commercialPotential: episode.organizationName && commercialPotential
+        ? scopeCommercialPotentialToOrg(commercialPotential, episode.organizationName, graph)
+        : commercialPotential ?? undefined,
     }
 
     const scoreOutput = scoreEpisode(scoreInput)
@@ -100,7 +147,7 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
     bestScore = episodeScores[0]?.score ?? 0
   }
 
-  // Score the selected episode
+  // Score the selected episode with full context
   const selectedScoreInput: V3ScoreInput | null = bestEpisode
     ? {
         episode: bestEpisode,
@@ -109,6 +156,9 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
         evidenceQuality: evidenceQualityMap[bestEpisode.id] ?? estimateEvidenceQuality(bestEpisode, graph),
         rawText,
         senderCapabilities,
+        commercialPotential: bestEpisode.organizationName && commercialPotential
+          ? scopeCommercialPotentialToOrg(commercialPotential, bestEpisode.organizationName, graph)
+          : commercialPotential ?? undefined,
       }
     : null
 
@@ -134,11 +184,15 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
         messageEligible: decision.messageEligible,
         explicitRequest: bestEpisode.explicitRequest,
         status: bestEpisode.status,
+        confidence: providerResult.confidence,
+        evidenceQuality: proofRelevanceMap[bestEpisode.id] ?? estimateProofRelevance(bestEpisode, senderCapabilities),
+        commercialPotential: commercialPotential?.overallPotential ?? null,
       })
     : { action: 'SKIP' as const, messageEligible: false, reason: 'No active episodes', needsReview: false }
 
-  // Latent opportunity: when no meaningful buyer episode exists, assess potential
-  // An episode is "meaningful" if it has explicit request, known org, or specific event type
+  // Commercial potential is already factored into the score via the
+  // commercialPotential dimension in scoreEpisode. This section handles
+  // the case where no meaningful episode was found at all.
   const hasMeaningfulEpisode = bestEpisode && (
     bestEpisode.explicitRequest ||
     (bestEpisode.organizationName && bestEpisode.organizationName !== 'UNKNOWN' && bestEpisode.organizationName !== 'Unknown') ||
@@ -146,33 +200,34 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
   )
 
   let latentAssessment = null
-  if (!hasMeaningfulEpisode && input.v2Canonical) {
-    latentAssessment = await assessLatentOpportunity(input.v2Canonical, input.rawText)
+  if (!hasMeaningfulEpisode && commercialPotential) {
+    // Convert commercial potential to latent assessment for backward compat
+    latentAssessment = await assessLatentOpportunity(input.v2Canonical!, input.rawText)
     const latentScore = computeLatentScore(latentAssessment)
     const latentAction = latentActionFromPotential(latentAssessment.overallPotential, latentAssessment.confidence)
 
     if (latentAssessment.overallPotential !== 'LOW') {
       selectedScore = {
         score: latentScore,
-        label: `Latent opportunity (${latentAssessment.overallPotential.toLowerCase()} potential)`,
+        label: `Commercial potential (${latentAssessment.overallPotential.toLowerCase()})`,
         qualification: latentAssessment.overallPotential === 'HIGH' ? 'MAYBE' : 'SKIP',
         reasons: latentAssessment.signals.length > 0
           ? latentAssessment.signals
           : ['No explicit buyer signal detected'],
-        watchOut: [`Current intent: UNKNOWN. ${latentAssessment.signals.join(', ')}`],
+        watchOut: [`Current buyer intent: UNKNOWN. ${latentAssessment.signals.join(', ')}`],
         dimensions: [],
       }
       actionOutput = {
         action: latentAction.action as import('../types').V3Action,
         messageEligible: latentAction.messageEligible,
-        reason: `Latent ${latentAssessment.overallPotential.toLowerCase()} potential: ${latentAssessment.signals.join(', ')}`,
+        reason: `Commercial ${latentAssessment.overallPotential.toLowerCase()} potential: ${latentAssessment.signals.join(', ')}`,
         needsReview: false,
       }
     }
   }
 
-  // If no meaningful episode and no latent potential, ensure score reflects reality
-  if (!hasMeaningfulEpisode && latentAssessment?.overallPotential === 'LOW' && selectedScore.score < 10) {
+  // If no meaningful episode and no commercial potential, ensure score reflects reality
+  if (!hasMeaningfulEpisode && (latentAssessment?.overallPotential === 'LOW' || !latentAssessment) && selectedScore.score < 10) {
     selectedScore = {
       score: 0,
       label: 'Not a fit',
@@ -181,7 +236,7 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
       watchOut: ['No meaningful commercial opportunity identified'],
       dimensions: [],
     }
-    actionOutput = { action: 'SKIP', messageEligible: false, reason: 'No buyer intent and low latent potential', needsReview: false }
+    actionOutput = { action: 'SKIP', messageEligible: false, reason: 'No buyer intent and low commercial potential', needsReview: false }
   }
 
   // Shadow comparison
@@ -326,3 +381,4 @@ function estimateEvidenceQuality(
 function generateDecisionRunId(): string {
   return `v3run_${Date.now().toString(36)}`
 }
+

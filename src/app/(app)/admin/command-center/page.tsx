@@ -1,9 +1,7 @@
-import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
-import { loadOrgCommandSnapshot } from '@/lib/admin/org-command-snapshot'
-import { OwnerCommandCenter, OwnerCommandCenterSkeleton } from '@/components/admin/owner-command-center'
+import { CommandCenterV2 } from '@/components/admin/command-center-v2'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,11 +14,5 @@ export default async function CommandCenterPage() {
     redirect('/dashboard')
   }
 
-  const dataPromise = loadOrgCommandSnapshot()
-
-  return (
-    <Suspense fallback={<OwnerCommandCenterSkeleton />}>
-      <OwnerCommandCenter dataPromise={dataPromise} />
-    </Suspense>
-  )
+  return <CommandCenterV2 />
 }

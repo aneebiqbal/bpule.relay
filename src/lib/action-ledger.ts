@@ -75,7 +75,7 @@ let supabase: SupabaseClient | null = null
 
 function getClient() {
   if (!supabase) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    /* eslint-disable-next-line @typescript-eslint/no-require-imports */
     const { createServiceSupabase } = require('@/lib/supabase/service')
     supabase = createServiceSupabase()
   }
@@ -117,9 +117,8 @@ export async function emitAction(params: EmitActionParams): Promise<string | nul
 /**
  * Get daily summary for admin operating view.
  */
-export async function getDailySummary(orgId: string, date: string): Promise<DailySummary[]> {
-  const startOfDay = `${date}T00:00:00.000Z`
-  const endOfDay = `${date}T23:59:59.999Z`
+export async function getDailySummary(orgId: string, date: string, timezone: string = 'UTC'): Promise<DailySummary[]> {
+  const { start: startOfDay, end: endOfDay } = tzDateRange(date, timezone)
 
   const { data, error } = await getClient()
     .from('action_events')
@@ -212,9 +211,9 @@ export async function getRepDailyLog(
   repId: string,
   date: string,
   limit: number = 100,
+  timezone: string = 'UTC',
 ): Promise<ActionLogEntry[]> {
-  const startOfDay = `${date}T00:00:00.000Z`
-  const endOfDay = `${date}T23:59:59.999Z`
+  const { start: startOfDay, end: endOfDay } = tzDateRange(date, timezone)
 
   const { data, error } = await getClient()
     .from('action_events')
@@ -299,4 +298,33 @@ export async function getPendingForRep(orgId: string, repId: string): Promise<nu
 
   if (error) return 0
   return count || 0
+}
+
+/**
+ * Compute UTC timestamps for a local-date boundary in a given timezone.
+ * Ensures "2026-10-08" means the business's full day, not UTC's day.
+ */
+function tzDateRange(date: string, timezone: string): { start: string; end: string } {
+  if (timezone === 'UTC') {
+    return { start: `${date}T00:00:00.000Z`, end: `${date}T23:59:59.999Z` }
+  }
+  try {
+    const startLocal = new Date(`${date}T00:00:00`)
+    const endLocal = new Date(`${date}T23:59:59.999`)
+
+    const startUtc = new Date(startLocal.toLocaleString('en-US', { timeZone: timezone })).toISOString()
+    const endUtc = new Date(endLocal.toLocaleString('en-US', { timeZone: timezone })).toISOString()
+
+    // If conversion shifted the day (common with positive UTC offsets), correct it
+    if (startUtc.split('T')[0] !== date) {
+      const offsetMs = new Date(endUtc.split('T')[0]).getTime() - new Date(date).getTime()
+      return {
+        start: new Date(startLocal.getTime() - offsetMs).toISOString(),
+        end: new Date(endLocal.getTime() - offsetMs).toISOString(),
+      }
+    }
+    return { start: startUtc, end: endUtc }
+  } catch {
+    return { start: `${date}T00:00:00.000Z`, end: `${date}T23:59:59.999Z` }
+  }
 }
