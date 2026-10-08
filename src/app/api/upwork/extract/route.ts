@@ -83,7 +83,7 @@ export async function POST(request: Request) {
             title: job.title,
             description: job.description,
             budgetMin: job.budget?.toString() ?? '',
-            budgetMax: job.hourlyRateMax?.toString() ?? '',
+            budgetMax: '',
             hourlyRateMin: job.hourlyRateMin?.toString() ?? '',
             hourlyRateMax: job.hourlyRateMax?.toString() ?? '',
             proposalCount: '',

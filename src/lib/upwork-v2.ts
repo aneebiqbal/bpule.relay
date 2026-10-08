@@ -267,6 +267,8 @@ function extractEngagementType(text: string): string | null {
   if (/\bfull[- ]time\b/i.test(text)) return 'Full-time'
   if (/\bpart[- ]time\b/i.test(text)) return 'Part-time'
   if (/\bcontract\b/i.test(text)) return 'Contract'
+  // Upwork "Hourly" engagement type
+  if (/\bhourly\b/i.test(text)) return 'Hourly'
   return null
 }
 
