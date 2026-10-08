@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const { data: rep } = await store
     .from('reps')
     .select('id, organization_id, role')
-    .eq('user_id', auth.user.id)
+    .eq('auth_user_id', auth.user.id)
     .single()
 
   if (!rep) return NextResponse.json({ error: 'Not found.' }, { status: 401 })
