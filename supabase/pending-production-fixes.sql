@@ -3,6 +3,48 @@
 -- https://console.neuro.tech → SQL Editor → New Query
 -- =============================================================================
 
+-- 0. CRITICAL: Add missing revenue_identity_id column to relay_runs
+--    Migration 20260917180000 was not applied to production, causing
+--    "column revenue_identity_id of relation relay_runs does not exist" on save.
+alter table relay_runs
+  add column if not exists status text not null default 'detected';
+
+alter table relay_runs
+  add column if not exists current_step text not null default 'detect';
+
+alter table relay_runs
+  add column if not exists revenue_identity_id uuid references revenue_identities(id) on delete set null;
+
+alter table relay_runs
+  add column if not exists correlation_id uuid not null default gen_random_uuid();
+
+alter table relay_runs
+  add column if not exists waiting_until timestamptz;
+
+alter table relay_runs
+  add column if not exists completed_at timestamptz;
+
+alter table relay_runs
+  add column if not exists failed_at timestamptz;
+
+alter table relay_runs
+  add column if not exists failure_category text;
+
+alter table relay_runs
+  add column if not exists failure_reason text;
+
+alter table relay_runs
+  add column if not exists context jsonb not null default '{}'::jsonb;
+
+alter table relay_runs
+  add column if not exists metadata jsonb not null default '{}'::jsonb;
+
+create index if not exists rr_org_status_idx on relay_runs (organization_id, status);
+create index if not exists rr_active_idx on relay_runs (organization_id, status) where status not in ('completed', 'failed', 'cancelled', 'rejected');
+create index if not exists rr_entity_idx on relay_runs (primary_entity_type, primary_entity_id) where primary_entity_id is not null;
+create index if not exists rr_rep_idx on relay_runs (assigned_rep_id) where assigned_rep_id is not null;
+create index if not exists rr_correlation_idx on relay_runs (correlation_id);
+
 -- 1. Fix timestamptz typo in emit_relay_event (migration 20261001000004 was applied
 --    with the typo "timestamz" which would cause runtime errors when called)
 create or replace function public.emit_relay_event(
@@ -93,4 +135,10 @@ order by ordinal_position;
 select column_name, data_type, is_nullable
 from information_schema.columns
 where table_name = 'ai_traces'
+order by ordinal_position;
+
+-- Verify relay_runs has revenue_identity_id (fix #0 above)
+select column_name, data_type, is_nullable
+from information_schema.columns
+where table_name = 'relay_runs'
 order by ordinal_position;
