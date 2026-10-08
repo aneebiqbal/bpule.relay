@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceSupabase } from '@/lib/supabase/service'
+import { createServerSupabase } from '@/lib/supabase/server'
 
 export const maxDuration = 30
 
@@ -8,7 +8,7 @@ export const maxDuration = 30
  * Get specific action events for drill-down.
  */
 export async function GET(req: NextRequest) {
-  const store = createServiceSupabase()
+  const store = await createServerSupabase()
   const { data: auth } = await store.auth.getUser()
   if (!auth.user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
 

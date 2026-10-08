@@ -1,5 +1,6 @@
 import type { LeadDetail } from '@/lib/store/types'
 import type { Message } from '@/lib/domain/types'
+import { deriveNextLeadAction, type LeadAction } from './lead-state-machine'
 import { evaluateDmGate, evaluateFollowupGate } from './message-eligibility'
 import { isFollowupDue } from '@/lib/leads/followup'
 

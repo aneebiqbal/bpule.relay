@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceSupabase } from '@/lib/supabase/service'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { loadCommandCenterData } from '@/lib/admin/command-center-v2'
 
 export const maxDuration = 30
 
 export async function GET(req: NextRequest) {
-  const store = createServiceSupabase()
+  const store = await createServerSupabase()
   const { data: auth } = await store.auth.getUser()
   if (!auth.user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
 
