@@ -255,15 +255,21 @@ export async function generateDailyBrief(
         : null
       const diversificationBlock = diversifiedAngle ? buildDiversificationPromptBlock(diversifiedAngle) : ''
 
-      let gateResult = await generatePostWithQualityGate({
-        idea,
-        personaContext,
-        trendSignals: sourcePromptBlock + '\n\n' + trendSignals,
-        costTracking,
-        platform: input.platform,
-        diversificationBlock,
-      })
-      let postCaption = gateResult.caption
+      let postCaption: string
+      try {
+        const gateResult = await generatePostWithQualityGate({
+          idea,
+          personaContext,
+          trendSignals: sourcePromptBlock + '\n\n' + trendSignals,
+          costTracking,
+          platform: input.platform,
+          diversificationBlock,
+        })
+        postCaption = gateResult.caption
+      } catch {
+        // All AI providers failed — use angle as fallback caption
+        postCaption = idea.angle || idea.title
+      }
 
       // Content Quality Engine gate
       const qualityCheck = checkContentQuality(postCaption, {

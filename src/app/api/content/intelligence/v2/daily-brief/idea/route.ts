@@ -49,53 +49,59 @@ export async function POST(request: Request) {
   const excludeTitles = excludeIdeas.map(i => i.title).join('\n')
 
   try {
-    const idea = await generateSingleIdea(persona, profile, trendCandidates, excludeTitles)
+     const idea = await generateSingleIdea(persona, profile, trendCandidates, excludeTitles)
 
-    // Generate full post caption for the new idea
-    const personaContext = buildPersonaContextString(persona, profile)
-    const trendSignals = trendCandidates.slice(0, 5).map(c => `- ${c.item.title} (${c.whyNow})`).join('\n')
+     // Generate full post caption for the new idea
+     const personaContext = buildPersonaContextString(persona, profile)
+     const trendSignals = trendCandidates.slice(0, 5).map(c => `- ${c.item.title} (${c.whyNow})`).join('\n')
 
-    const postCaption = await generateFinishedPost({
+     let postCaption: string | null = null
+     try {
+       postCaption = await generateFinishedPost({
+         title: idea.title,
+         angle: idea.angle,
+         territory: idea.territory,
+         format: idea.formatSuggestion,
+         personaContext,
+         trendSignals: trendSignals || 'No strong trends — draw from expertise',
+         platform,
+       })
+     } catch {
+       // AI generation failed — use angle as fallback caption
+       postCaption = idea.angle || idea.title
+     }
+
+     const latestBrief = await store.getLatestDailyContentBrief(personaId)
+
+     const ideaRecord = await store.createDailyContentIdea({
+       briefId: latestBrief?.id ?? '00000000-0000-0000-0000-000000000000',
+       organizationId: persona.organizationId,
+       personaId: persona.id,
+       ideaType: 'alternate',
        title: idea.title,
        angle: idea.angle,
+       whyNow: idea.whyNow,
        territory: idea.territory,
-       format: idea.formatSuggestion,
-       personaContext,
-       trendSignals: trendSignals || 'No strong trends — draw from expertise',
-       platform,
+       trendGrounded: idea.trendGrounded,
+       formatSuggestion: idea.formatSuggestion,
+       noveltyScore: idea.novelty,
+       relevanceScore: idea.relevance,
+       credibilityScore: idea.credibility,
+       insightScore: idea.insight,
+       postCaption: postCaption,
+       visualType: idea.visualType,
+       visualConcept: idea.visualConcept,
+       visualPrompt: idea.visualPrompt,
+       visualReason: idea.visualReason,
      })
 
-    const latestBrief = await store.getLatestDailyContentBrief(personaId)
-
-    const ideaRecord = await store.createDailyContentIdea({
-      briefId: latestBrief?.id ?? '00000000-0000-0000-0000-000000000000',
-      organizationId: persona.organizationId,
-      personaId: persona.id,
-      ideaType: 'alternate',
-      title: idea.title,
-      angle: idea.angle,
-      whyNow: idea.whyNow,
-      territory: idea.territory,
-      trendGrounded: idea.trendGrounded,
-      formatSuggestion: idea.formatSuggestion,
-      noveltyScore: idea.novelty,
-      relevanceScore: idea.relevance,
-      credibilityScore: idea.credibility,
-      insightScore: idea.insight,
-      postCaption: postCaption,
-      visualType: idea.visualType,
-      visualConcept: idea.visualConcept,
-      visualPrompt: idea.visualPrompt,
-      visualReason: idea.visualReason,
-    })
-
-    return NextResponse.json({ idea: ideaRecord })
-  } catch (err) {
-    return NextResponse.json(
-      { error: 'Failed to generate idea', message: err instanceof Error ? err.message : 'Unknown' },
-      { status: 503 },
-    )
-  }
+     return NextResponse.json({ idea: ideaRecord })
+   } catch (err) {
+     return NextResponse.json(
+       { error: 'Failed to generate idea', message: err instanceof Error ? err.message : String(err) },
+       { status: 503 },
+     )
+   }
 }
 
 async function generateSingleIdea(
