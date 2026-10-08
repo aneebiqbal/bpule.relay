@@ -2,18 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useHotkeys } from 'react-hotkeys-hook'
 import {
-  ArrowLeft, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, Flame,
-  MessageSquare, Pencil, Send, Trophy, X,
+  ArrowLeft, CalendarDays, Check, Clock, Copy, ExternalLink, Flame,
+  MessageSquare, Send, Trophy, X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from 'cn'
 import { ScoreRing } from '@/components/score-ring'
 import { signalById } from '@/lib/score/signals'
-import { computeRelationshipState } from '@/lib/relay/relationship-state'
+import { computeRelationshipState, type RelationshipState } from '@/lib/relay/relationship-state'
 import { evaluateDmGate, evaluateFollowupGate } from '@/lib/relay/message-eligibility'
 import { readSse } from '@/lib/sse/client'
 import { notifyError, notifySuccess } from '@/lib/ui/notify'
@@ -35,6 +35,7 @@ type WorkspaceMode = 'dm' | 'connection' | 'reply' | 'followup' | 'upwork' | nul
 
 export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [lead, setLead] = useState(initialLead)
   const [leadVersion, setLeadVersion] = useState(0)
 
@@ -47,6 +48,7 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
   const [draftResult, setDraftResult] = useState<DraftResult | null>(null)
   const [generating, setGenerating] = useState(false)
   const [generationStatus, setGenerationStatus] = useState<string | null>(null)
+  const [showLogUpdate, setShowLogUpdate] = useState(false)
 
   // Send
   const [sentText, setSentText] = useState('')
@@ -55,8 +57,7 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
   const [sentOk, setSentOk] = useState(false)
 
   // Panels
-  const [showLogUpdate, setShowLogUpdate] = useState(false)
-  const [showPasteReply, setShowPasteReply] = useState(false)
+
   const [capturedReplyText, setCapturedReplyText] = useState('')
   const [savingReply, setSavingReply] = useState(false)
 
@@ -203,7 +204,6 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
       })
       if (!res.ok) throw new Error('Failed to save reply.')
       setCapturedReplyText('')
-      setShowPasteReply(false)
       setLeadVersion((v) => v + 1)
     } catch {
       notifyError('Failed to save reply.')
@@ -285,17 +285,21 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
     }
   }, [lead.id, lead.status])
 
-  // One-click continuation from Save Lead — auto-trigger connection generation
+  // One-click continuation from Save Lead — auto-trigger connection generation ONCE
   const hasAutoTriggered = useRef(false)
   useEffect(() => {
     if (hasAutoTriggered.current) return
+    // Only trigger if no connection has already been logged
+    const hasConnection = lead.messages.some((m) => m.type === 'connection' && m.sentText)
     const next = searchParams.get('next')
-    if (next === 'generate-connection' && relationshipState.phase === 'connection_due' && !lead.connectionAcceptedAt) {
+    if (!hasConnection && next === 'generate-connection' && relationshipState.phase === 'connection_due' && !lead.connectionAcceptedAt) {
       hasAutoTriggered.current = true
+      // Clear the URL param so refresh doesn't re-trigger
+      router.replace(`/leads/${lead.id}`)
       setMode('connection')
       generateDraft('connection')
     }
-  }, [searchParams, relationshipState.phase, lead.connectionAcceptedAt, generateDraft])
+  }, [searchParams, relationshipState.phase, lead.connectionAcceptedAt, lead.messages, generateDraft, router, lead.id])
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -308,7 +312,7 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
 
   const showFollowupOption = relationshipState.phase === 'dm_sent' && !followupGate.alreadyUsed
   const showReplyOption = relationshipState.phase === 'replied' || sentMessages.some((m) => m.direction === 'inbound')
-  const showDmOption = dmGate.connectionAccepted || lead.connectionAcceptedAt
+  const showDmOption = Boolean(dmGate.connectionAccepted || lead.connectionAcceptedAt)
 
   // Keyboard shortcuts for rapid processing
   useHotkeys('g', () => {
@@ -329,9 +333,7 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
 
   useHotkeys('escape', () => {
     if (mode) { setMode(null); setDraftText('') }
-    if (showLogUpdate) setShowLogUpdate(false)
-    if (showPasteReply) setShowPasteReply(false)
-  }, { preventDefault: false, useKey: true }, [mode, showLogUpdate, showPasteReply])
+  }, { preventDefault: false, useKey: true }, [mode])
 
   return (
     <div className="space-y-3 mx-auto max-w-3xl sm:space-y-4">
@@ -532,377 +534,35 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
         </div>
       )}
 
-      {/* PRIMARY ACTION — one clear next step */}
-      <div className={cn(
-        'rounded-lg p-4',
-        relationshipState.kind === 'your_move' ? 'border border-orange/30 bg-bone' : 'border border-line bg-bone-raised/40'
-      )}>
-        <h2 className="text-[10px] font-medium text-stone uppercase tracking-[0.12em] mb-3">Next move</h2>
+      {/* COMMAND STATION — all operations in one place */}
+      <CommandStation
+        lead={lead}
+        relationshipState={relationshipState}
+        showReplyOption={showReplyOption}
+        showFollowupOption={showFollowupOption}
+        showDmOption={showDmOption}
+        showLogUpdate={showLogUpdate}
+        setShowLogUpdate={setShowLogUpdate}
+        generating={generating}
+        mode={mode}
+        setMode={setMode}
+        generateDraft={generateDraft}
+        draftText={draftText}
+        setDraftText={setDraftText}
+        sentText={sentText}
+        setSentText={setSentText}
+        sending={sending}
+        logSend={logSend}
+        sentOk={sentOk}
+        sendError={sendError}
+        generationStatus={generationStatus}
+        setGenerationStatus={setGenerationStatus}
+        markAccepted={markAccepted}
+        markNotInterested={markNotInterested}
+        onLeadUpdate={() => setLeadVersion((v) => v + 1)}
+      />
 
-        {/* Single primary action based on relationship state */}
-        {relationshipState.phase === 'replied' && showReplyOption && (
-          <PrimaryAction
-            icon={<MessageSquare className="size-5 text-orange" />}
-            label={`Reply to ${lead.contactName ?? 'them'}`}
-            description={relationshipState.lastClientMessage?.sentText ? `They said: "${relationshipState.lastClientMessage.sentText.slice(0, 80)}..."` : 'They wrote back — respond while it is fresh'}
-            buttonText="Generate reply"
-            onClick={() => { setMode('reply'); generateDraft('reply') }}
-            loading={generating && mode === 'reply'}
-          />
-        )}
 
-        {relationshipState.phase === 'follow_up_due' && showFollowupOption && (
-          <PrimaryAction
-            icon={<Send className="size-5 text-cobalt" />}
-            label="Send follow-up"
-            description={`No reply after 5 business days. ${3 - (lead.followupCount ?? 0)} follow-ups remaining.`}
-            buttonText="Generate follow-up"
-            onClick={() => { setMode('followup'); generateDraft('followup') }}
-            loading={generating && mode === 'followup'}
-          />
-        )}
-
-        {relationshipState.phase === 'dm_sent' && showFollowupOption && (
-          <PrimaryAction
-            icon={<Clock className="size-5 text-cobalt" />}
-            label="Waiting for reply"
-            description={`Sent ${timeAgo(relationshipState.waitingSince, now)}. ${3 - (lead.followupCount ?? 0)} follow-ups available if they go quiet.`}
-            buttonText="Send follow-up now"
-            onClick={() => { setMode('followup'); generateDraft('followup') }}
-            loading={generating && mode === 'followup'}
-          />
-        )}
-
-        {(showDmOption && (relationshipState.phase === 'connection_accepted' || relationshipState.phase === 'dm_due')) && (
-          <PrimaryAction
-            icon={<MessageSquare className="size-5 text-cobalt" />}
-            label="Send first message"
-            description="Connection accepted. Start the conversation."
-            buttonText="Generate DM"
-            onClick={() => { setMode('dm'); generateDraft('dm') }}
-            loading={generating && mode === 'dm'}
-          />
-        )}
-
-        {relationshipState.phase === 'connection_due' && !lead.connectionAcceptedAt && (
-          <PrimaryAction
-            icon={<Send className="size-5 text-orange" />}
-            label="Send connection request"
-            description="Reach out to connect. Add a note or send without one."
-            buttonText="Generate note"
-            onClick={() => { setMode('connection'); generateDraft('connection') }}
-            loading={generating && mode === 'connection'}
-            secondaryButton={(
-              <Button
-                variant="outline"
-                size="sm"
-                loading={sending}
-                disabled={sending}
-                onClick={async () => {
-                  try {
-                    const res = await fetch(`/api/leads/${lead.id}/contact`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ type: 'connection', sentText: '', sendWithoutNote: true, direction: 'outbound' }),
-                    })
-                    if (!res.ok) {
-                      const data = await res.json().catch(() => ({}))
-                      notifyError(data.error ?? 'Failed to log connection.')
-                    }
-                    setLeadVersion((v) => v + 1)
-                  } catch { /* non-fatal */ }
-                }}
-              >
-                Send without note
-              </Button>
-            )}
-          />
-        )}
-
-        {relationshipState.kind === 'their_move' && relationshipState.phase !== 'replied' && (
-          <div className="rounded-lg border border-line bg-bone-raised/30 p-4 text-center">
-            <Clock className="size-5 mx-auto text-stone" />
-            <p className="mt-2 text-[14px] font-medium text-ink">Waiting on them</p>
-            <p className="mt-1 text-[12px] text-graphite">{relationshipState.detail}</p>
-            <div className="mt-3 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-center">
-              <Button variant="outline" size="sm" onClick={() => setShowPasteReply(true)} className="w-full justify-center sm:w-auto">
-                <MessageSquare className="size-3" /> They replied
-              </Button>
-              {!lead.connectionAcceptedAt && (
-                <Button variant="outline" size="sm" onClick={markAccepted} className="w-full justify-center sm:w-auto">
-                  <Trophy className="size-3" /> Mark accepted
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {(relationshipState.kind === 'won' || relationshipState.kind === 'lost') && (
-          <div className={cn(
-            'rounded-lg border p-4 text-center',
-            relationshipState.kind === 'won' ? 'border-status-success/20 bg-status-success/5' : 'border-line bg-bone-raised/30',
-          )}>
-            <p className={cn('text-[14px] font-medium', relationshipState.kind === 'won' ? 'text-status-success' : 'text-stone')}>
-              {relationshipState.kind === 'won' ? 'Opportunity won' : 'Opportunity closed'}
-            </p>
-            <p className="mt-1 text-[12px] text-graphite">{relationshipState.detail}</p>
-          </div>
-        )}
-      </div>
-
-      {/* Failure state — preserves context, offers retry */}
-      {generationStatus && generationStatus.includes('failed') && !generating && (
-        <div className="rounded-lg border border-status-danger/20 bg-status-danger/[0.03] p-4">
-          <p className="text-[12px] font-medium text-status-danger">Generation failed</p>
-          <p className="mt-1 text-[11px] text-graphite">{generationStatus}</p>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <Button
-              variant="orange"
-              size="sm"
-              className="w-full justify-center sm:w-auto"
-              onClick={() => generateDraft(mode ?? 'connection')}
-            >
-              <Send className="size-3" /> Retry
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-center sm:w-auto"
-              onClick={() => { setGenerationStatus(null); setMode(null) }}
-            >
-              Dismiss
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Secondary actions */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Button variant="ghost" size="sm" onClick={() => setShowLogUpdate(true)} className="w-full justify-center sm:w-auto">
-          <Pencil className="size-3" /> Log update
-        </Button>
-        {relationshipState.kind === 'their_move' && (
-          <Button variant="ghost" size="sm" onClick={() => setShowPasteReply(true)} className="w-full justify-center sm:w-auto">
-            <MessageSquare className="size-3" /> Paste reply
-          </Button>
-        )}
-        {(relationshipState.kind === 'your_move' || relationshipState.kind === 'their_move') && lead.status !== 'won' && lead.status !== 'lost' && lead.status !== 'dead' && (
-          <Button variant="ghost" size="sm" onClick={markNotInterested} className="w-full justify-center sm:w-auto text-graphite">
-            <X className="size-3" /> Not interested
-          </Button>
-        )}
-      </div>
-
-      {/* Paste reply panel */}
-      {showPasteReply && (
-        <div className="rounded-xl border border-orange/20 bg-orange/[0.02] p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-[12px] font-medium text-ink">Paste their reply</p>
-            <button type="button" onClick={() => setShowPasteReply(false)} className="text-stone hover:text-ink"><X className="size-4" /></button>
-          </div>
-          <Textarea
-            value={capturedReplyText}
-            onChange={(e) => setCapturedReplyText(e.target.value)}
-            rows={4}
-            className="mt-3 text-[13px]"
-            placeholder="Paste their message here..."
-            disabled={savingReply}
-          />
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <Button variant="orange" size="sm" onClick={saveReply} disabled={savingReply || !capturedReplyText.trim()} loading={savingReply} className="w-full justify-center sm:w-auto">
-              Save & unlock reply
-            </Button>
-            {capturedReplyText.trim() && (
-              <Button variant="outline" size="sm" onClick={() => { saveReply().then(() => { setMode('reply'); generateDraft('reply') }) }} disabled={savingReply} className="w-full justify-center sm:w-auto">
-                Save & generate reply
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Log update panel */}
-      {showLogUpdate && (
-        <div className="rounded-xl border border-line bg-bone p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-[12px] font-medium text-ink">Log an update</p>
-            <button type="button" onClick={() => setShowLogUpdate(false)} className="text-stone hover:text-ink"><X className="size-4" /></button>
-          </div>
-          <LogUpdateOptionsCompact
-            phase={relationshipState.phase}
-            leadId={lead.id}
-            onLogged={() => { setShowLogUpdate(false); setLeadVersion((v) => v + 1) }}
-          />
-        </div>
-      )}
-
-      {/* Generation in progress */}
-      {generating && !draftText && (
-        <div className="rounded-xl border border-orange/20 bg-orange/[0.02] p-4">
-          <div className="flex items-center gap-3">
-            <div className="size-5 animate-spin rounded-full border-2 border-orange/30 border-t-orange" />
-            <span className="text-[13px] text-ink">{generationStatus ?? 'Generating...'}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Draft workspace */}
-      {mode && draftText && (
-        <div className="rounded-xl border border-line bg-bone-raised/20 p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[12px] font-medium text-ink capitalize">
-              {mode === 'connection' ? 'Connection note' : mode === 'dm' ? 'Your message' : mode === 'reply' ? 'Reply' : mode === 'followup' ? 'Follow-up' : 'Upwork'}
-            </h2>
-            <button type="button" onClick={() => { setMode(null); setDraftText('') }} className="text-stone hover:text-ink"><X className="size-4" /></button>
-          </div>
-          <Textarea
-            value={sentText || draftText}
-            onChange={(e) => setSentText(e.target.value)}
-            rows={6}
-            className="mt-3 text-[13px]"
-            placeholder="Edit before sending..."
-          />
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button variant="orange" size="sm" onClick={logSend} disabled={sending || !(sentText || draftText).trim()} loading={sending} className="w-full justify-center sm:w-auto">
-              <Send className="size-3" /> Log as sent
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText((sentText || draftText).trim()) }} className="w-full justify-center sm:w-auto">
-              <Copy className="size-3" /> Copy
-            </Button>
-            {sentOk && <span className="text-[11px] text-status-success">✓ Sent</span>}
-            {sendError && <span className="text-[11px] text-status-danger">{sendError}</span>}
-          </div>
-          {generationStatus && <p className="mt-2 text-[11px] text-stone">{generationStatus}</p>}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Sub-components ──────────────────────────────────────────────────────────
-
-function ActionTile({ icon, label, description, onClick, loading }: {
-  icon: React.ReactNode; label: string; description: string; onClick: () => void; loading?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={loading}
-      className="flex w-full items-center gap-3 rounded-lg border border-line bg-bone px-3 py-2.5 text-left transition-colors hover:border-orange/30 hover:bg-orange/[0.02] disabled:opacity-50"
-    >
-      <div className="shrink-0 mt-0.5">{icon}</div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-medium text-ink">{label}</p>
-        <p className="text-[11px] text-graphite truncate">{description}</p>
-      </div>
-      {loading ? (
-        <div className="size-4 animate-spin rounded-full border-2 border-line border-t-orange" />
-      ) : (
-        <ChevronRight className="size-3.5 shrink-0 text-stone" />
-      )}
-    </button>
-  )
-}
-
-function LogUpdateOptionsCompact({ phase, leadId, onLogged }: { phase: string; leadId: string; onLogged?: () => void }) {
-  const [selected, setSelected] = useState<string | null>(null)
-  const [messageText, setMessageText] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const options: Array<{ show: string[]; label: string; value: string; needsText: boolean }> = [
-    { show: ['connection_sent', 'connection_due', 'connection_accepted'], label: 'Connection accepted', value: 'connection_accepted', needsText: false },
-    { show: ['dm_sent', 'waiting_for_reply', 'replied', 'follow_up_due', 'conversation'], label: 'They replied', value: 'client_replied', needsText: true },
-    { show: ['connection_due', 'connection_sent', 'connection_accepted'], label: 'Sent connection', value: 'connection', needsText: true },
-    { show: ['connection_accepted', 'dm_sent', 'waiting_for_reply'], label: 'Sent message', value: 'dm', needsText: true },
-    { show: ['dm_sent', 'waiting_for_reply', 'replied'], label: 'Followed up', value: 'followup', needsText: true },
-    { show: ['replied', 'conversation'], label: 'Sent reply', value: 'reply', needsText: true },
-    { show: ['conversation', 'meeting'], label: 'Meeting booked', value: 'meeting_booked', needsText: false },
-    { show: ['conversation', 'meeting', 'proposal'], label: 'Interested', value: 'interested', needsText: false },
-    { show: ['conversation', 'meeting', 'proposal'], label: 'Not interested', value: 'not_interested', needsText: false },
-    { show: ['*'], label: 'Something else', value: 'reviewed', needsText: false },
-  ]
-
-  const visible = options.filter((o) => o.show.includes(phase) || o.show.includes('*'))
-  const selectedOpt = options.find((o) => o.value === selected)
-
-  async function handleLog() {
-    if (!selected) return
-    setSaving(true)
-    setError(null)
-    try {
-      let res: Response
-      if (selected === 'connection_accepted') {
-        res = await fetch(`/api/leads/${leadId}/connection-accepted`, { method: 'POST' })
-      } else if (selected === 'client_replied') {
-        const text = messageText.trim()
-        if (!text) { setError('Paste their reply.'); setSaving(false); return }
-        res = await fetch(`/api/leads/${leadId}/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
-      } else if (selectedOpt?.needsText) {
-        const text = messageText.trim()
-        if (!text) { setError('Paste the message text.'); setSaving(false); return }
-        res = await fetch(`/api/leads/${leadId}/contact`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: selected, sentText: text, direction: 'outbound' }) })
-      } else {
-        res = await fetch(`/api/leads/${leadId}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status_type: selected }) })
-      }
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error ?? 'Failed.')
-      setSelected(null)
-      setMessageText('')
-      onLogged?.()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="mt-3 space-y-2">
-      {visible.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          onClick={() => setSelected(opt.value)}
-          className={cn(
-            'flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-[12px]',
-            selected === opt.value ? 'border-orange/40 bg-orange/5 text-ink' : 'border-line text-graphite hover:bg-bone-raised',
-          )}
-        >
-          <span className={cn('size-3.5 rounded-full border flex items-center justify-center', selected === opt.value ? 'border-orange bg-orange' : 'border-line')} />
-          {opt.label}
-          {opt.needsText && <span className="ml-auto text-[9px] text-stone">text</span>}
-        </button>
-      ))}
-      {selectedOpt?.needsText && (
-        <Textarea value={messageText} onChange={(e) => setMessageText(e.target.value)} rows={3} className="text-[12px]" placeholder="Paste message text..." disabled={saving} />
-      )}
-      {error && <p className="text-[11px] text-status-danger">{error}</p>}
-      <Button variant="orange" size="sm" onClick={handleLog} disabled={saving || !selected} loading={saving}>Log this</Button>
-    </div>
-  )
-}
-
-function PrimaryAction({ icon, label, description, buttonText, onClick, loading, secondaryButton }: {
-  icon: React.ReactNode; label: string; description: string; buttonText: string; onClick: () => void; loading?: boolean; secondaryButton?: React.ReactNode
-}) {
-  return (
-    <div className="rounded-lg border border-orange/20 bg-orange/[0.02] p-4">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 shrink-0">{icon}</div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium text-ink">{label}</p>
-          <p className="mt-1 text-[12px] text-graphite leading-relaxed">{description}</p>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <Button variant="orange" size="sm" onClick={onClick} disabled={loading} loading={loading} className="w-full justify-center sm:w-auto">
-          {buttonText}
-          {!loading && <ChevronRight className="size-3" />}
-        </Button>
-        {secondaryButton}
-      </div>
     </div>
   )
 }
@@ -917,4 +577,333 @@ function timeAgo(iso: string | null, now: number): string {
   if (hrs < 24) return `${hrs}h ago`
   const days = Math.floor(hrs / 24)
   return `${days}d ago`
+}
+
+// ── Unified Command Station ─────────────────────────────────────────────────
+// One surface for ALL lead operations. No panel hunting, no scrolling.
+
+interface CommandStationProps {
+  lead: LeadDetail
+  relationshipState: RelationshipState
+  showReplyOption: boolean
+  showFollowupOption: boolean
+  showDmOption: boolean
+  showLogUpdate: boolean
+  setShowLogUpdate: (v: boolean) => void
+  generating: boolean
+  mode: WorkspaceMode
+  setMode: (m: WorkspaceMode) => void
+  generateDraft: (type: string) => void
+  draftText: string
+  setDraftText: (t: string) => void
+  sentText: string
+  setSentText: (t: string) => void
+  sending: boolean
+  logSend: () => void
+  sentOk: boolean
+  sendError: string | null
+  generationStatus: string | null
+  setGenerationStatus: (s: string | null) => void
+  markAccepted: () => void
+  markNotInterested: () => void
+  onLeadUpdate: () => void
+}
+
+function CommandStation({
+  lead,
+  relationshipState,
+  showReplyOption,
+  showFollowupOption,
+  showDmOption,
+  generating,
+  mode,
+  setMode,
+  generateDraft,
+  draftText,
+  setDraftText,
+  sentText,
+  setSentText,
+  sending,
+  logSend,
+  sentOk,
+  sendError,
+  generationStatus,
+  setGenerationStatus,
+  markAccepted,
+  markNotInterested,
+  onLeadUpdate,
+}: CommandStationProps) {
+  const [quickLog, setQuickLog] = useState<string | null>(null)
+  const [logText, setLogText] = useState('')
+  const [logSaving, setLogSaving] = useState(false)
+  const [logError, setLogError] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15_000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Quick-log options based on current phase
+  const quickLogOptions: Array<{ value: string; label: string; needsText: boolean; icon: React.ReactNode }> = []
+  const phase = relationshipState.phase
+
+  if (phase === 'connection_due' || phase === 'connection_sent') {
+    quickLogOptions.push({ value: 'connection_accepted', label: 'Connection accepted', needsText: false, icon: <Trophy className="size-3.5" /> })
+  }
+  quickLogOptions.push({ value: 'client_replied', label: 'They replied', needsText: true, icon: <MessageSquare className="size-3.5" /> })
+  if (phase === 'connection_due' || phase === 'connection_sent' || phase === 'connection_accepted') {
+    quickLogOptions.push({ value: 'connection', label: 'Sent connection', needsText: true, icon: <Send className="size-3.5" /> })
+  }
+  if (phase !== 'connection_due') {
+    quickLogOptions.push({ value: 'dm', label: 'Sent message', needsText: true, icon: <MessageSquare className="size-3.5" /> })
+  }
+  if (phase === 'dm_sent' || phase === 'replied') {
+    quickLogOptions.push({ value: 'followup', label: 'Followed up', needsText: true, icon: <Clock className="size-3.5" /> })
+  }
+  quickLogOptions.push({ value: 'meeting_booked', label: 'Meeting booked', needsText: false, icon: <CalendarDays className="size-3.5" /> })
+  quickLogOptions.push({ value: 'interested', label: 'Interested', needsText: false, icon: <Flame className="size-3.5" /> })
+  quickLogOptions.push({ value: 'not_interested', label: 'Not interested', needsText: false, icon: <X className="size-3.5" /> })
+
+  async function handleQuickLog(value: string) {
+    setLogSaving(true)
+    setLogError(null)
+    try {
+      let res: Response
+      if (value === 'connection_accepted') {
+        res = await fetch(`/api/leads/${lead.id}/connection-accepted`, { method: 'POST' })
+      } else if (value === 'client_replied') {
+        res = await fetch(`/api/leads/${lead.id}/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: logText.trim() }) })
+      } else if (value === 'not_interested' || value === 'interested' || value === 'meeting_booked') {
+        res = await fetch(`/api/leads/${lead.id}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status_type: value }) })
+      } else {
+        res = await fetch(`/api/leads/${lead.id}/contact`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: value, sentText: logText.trim(), direction: 'outbound' }) })
+      }
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? 'Failed.')
+      setQuickLog(null)
+      setLogText('')
+      onLeadUpdate()
+    } catch (err) {
+      setLogError(err instanceof Error ? err.message : 'Failed.')
+    } finally {
+      setLogSaving(false)
+    }
+  }
+
+  const selectedQuickLog = quickLogOptions.find(o => o.value === quickLog)
+  const isTheirMove = relationshipState.kind === 'their_move' && relationshipState.phase !== 'replied'
+  const isTerminal = relationshipState.kind === 'won' || relationshipState.kind === 'lost'
+
+  return (
+    <div className="rounded-xl border border-line bg-bone overflow-hidden">
+      {/* State header */}
+      <div className={cn(
+        'px-4 py-3 border-b',
+        isTheirMove ? 'border-line/60 bg-bone-raised/40' : isTerminal ? 'border-line/60 bg-bone-raised/30' : 'border-orange/20 bg-orange/[0.03]'
+      )}>
+        <div className="flex items-center gap-2">
+          {!isTerminal && !isTheirMove && <span className="size-2 rounded-full bg-orange animate-pulse" />}
+          {isTheirMove && <Clock className="size-3.5 text-stone" />}
+          {relationshipState.kind === 'won' && <Trophy className="size-3.5 text-status-success" />}
+          <span className={cn(
+            'text-[13px] font-medium',
+            isTheirMove ? 'text-stone' : isTerminal ? (relationshipState.kind === 'won' ? 'text-status-success' : 'text-stone') : 'text-ink'
+          )}>
+            {isTheirMove ? 'Waiting on them' : isTerminal ? relationshipState.title : relationshipState.detail}
+          </span>
+        </div>
+        {relationshipState.lastActionLabel && (isTheirMove || isTerminal) && (
+          <p className="mt-1 text-[11px] text-stone">
+            {relationshipState.lastActionLabel} {relationshipState.lastActionAt && timeAgo(relationshipState.lastActionAt, now)}
+          </p>
+        )}
+      </div>
+
+      {/* Terminal state */}
+      {isTerminal && (
+        <div className="px-4 py-3">
+          <p className="text-[12px] text-graphite">{relationshipState.detail}</p>
+        </div>
+      )}
+
+      {/* Active: Generation in progress */}
+      {!isTerminal && generating && !draftText && (
+        <div className="px-4 py-3 flex items-center gap-3">
+          <div className="size-5 animate-spin rounded-full border-2 border-orange/30 border-t-orange" />
+          <span className="text-[13px] text-ink">{generationStatus ?? 'Generating...'}</span>
+        </div>
+      )}
+
+      {/* Active: Draft workspace */}
+      {!isTerminal && mode && draftText && (
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">
+              {mode === 'connection' ? 'Connection note' : mode === 'dm' ? 'Your message' : mode === 'reply' ? 'Reply' : 'Follow-up'}
+            </span>
+            <button type="button" onClick={() => { setMode(null); setDraftText('') }} className="text-stone hover:text-ink"><X className="size-3.5" /></button>
+          </div>
+          <Textarea
+            value={sentText || draftText}
+            onChange={(e) => setSentText(e.target.value)}
+            rows={5}
+            className="text-[13px]"
+            placeholder="Edit before sending..."
+          />
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Button variant="orange" size="sm" onClick={logSend} disabled={sending || !(sentText || draftText).trim()} loading={sending} className="w-full justify-center sm:w-auto">
+              <Send className="size-3" /> Log as sent
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText((sentText || draftText).trim()) }} className="w-full justify-center sm:w-auto">
+              <Copy className="size-3" /> Copy
+            </Button>
+            {sentOk && <span className="text-[11px] text-status-success">✓ Sent</span>}
+            {sendError && <span className="text-[11px] text-status-danger">{sendError}</span>}
+          </div>
+        </div>
+      )}
+
+      {/* Active: Primary action + quick log (when no draft open) */}
+      {!isTerminal && !generating && !(mode && draftText) && (
+        <div className="px-4 py-3 space-y-3">
+          {/* Primary generate action */}
+          {phase === 'connection_due' && !lead.connectionAcceptedAt && (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button variant="orange" size="sm" onClick={() => { setMode('connection'); generateDraft('connection') }} className="w-full justify-center sm:flex-1">
+                <Send className="size-3.5" /> Generate connection note
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-center sm:w-auto"
+                onClick={async () => {
+                  try {
+                    await fetch(`/api/leads/${lead.id}/contact`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ type: 'connection', sentText: '', sendWithoutNote: true, direction: 'outbound' }),
+                    })
+                    onLeadUpdate()
+                  } catch { /* non-fatal */ }
+                }}
+              >
+                Send without note
+              </Button>
+            </div>
+          )}
+
+          {phase === 'replied' && showReplyOption && (
+            <Button variant="orange" size="sm" onClick={() => { setMode('reply'); generateDraft('reply') }} className="w-full justify-center">
+              <MessageSquare className="size-3.5" /> {relationshipState.lastClientMessage?.sentText ? `Reply to "${relationshipState.lastClientMessage.sentText.slice(0, 40)}..."` : 'Generate reply'}
+            </Button>
+          )}
+
+          {phase === 'follow_up_due' && showFollowupOption && (
+            <Button variant="orange" size="sm" onClick={() => { setMode('followup'); generateDraft('followup') }} className="w-full justify-center">
+              <Send className="size-3.5" /> Send follow-up
+            </Button>
+          )}
+
+          {(showDmOption && (phase === 'connection_accepted' || phase === 'dm_due')) && (
+            <Button variant="orange" size="sm" onClick={() => { setMode('dm'); generateDraft('dm') }} className="w-full justify-center">
+              <MessageSquare className="size-3.5" /> Send first message
+            </Button>
+          )}
+
+          {phase === 'dm_sent' && showFollowupOption && (
+            <Button variant="outline" size="sm" onClick={() => { setMode('followup'); generateDraft('followup') }} className="w-full justify-center">
+              <Clock className="size-3.5" /> Send follow-up now
+            </Button>
+          )}
+
+          {/* THEIR MOVE: quick actions */}
+          {isTheirMove && (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button variant="outline" size="sm" onClick={() => setQuickLog('client_replied')} className="w-full justify-center">
+                <MessageSquare className="size-3.5" /> They replied
+              </Button>
+              {!lead.connectionAcceptedAt && (
+                <Button variant="outline" size="sm" onClick={markAccepted} className="w-full justify-center">
+                  <Trophy className="size-3.5" /> Mark accepted
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Quick-log strip */}
+          <div className="flex flex-wrap gap-1.5">
+            {quickLogOptions.filter(o => {
+              if (phase === 'connection_due') return ['connection_accepted', 'client_replied', 'connection'].includes(o.value)
+              if (phase === 'connection_sent') return ['connection_accepted', 'client_replied'].includes(o.value)
+              return true
+            }).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => { setQuickLog(quickLog === opt.value ? null : opt.value); setLogError(null) }}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors',
+                  quickLog === opt.value
+                    ? 'border-orange/40 bg-orange/5 text-ink'
+                    : 'border-line text-graphite hover:border-orange/30 hover:text-ink',
+                )}
+              >
+                {opt.icon}
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Quick-log text input + submit */}
+          {quickLog && selectedQuickLog && (
+            <div className="space-y-2 pt-1">
+              {selectedQuickLog.needsText && (
+                <Textarea
+                  value={logText}
+                  onChange={(e) => setLogText(e.target.value)}
+                  rows={3}
+                  className="text-[12px]"
+                  placeholder={quickLog === 'client_replied' ? 'Paste their reply...' : 'Paste message text...'}
+                  disabled={logSaving}
+                />
+              )}
+              {logError && <p className="text-[11px] text-status-danger">{logError}</p>}
+              <div className="flex gap-2">
+                <Button
+                  variant="orange"
+                  size="sm"
+                  onClick={() => handleQuickLog(quickLog)}
+                  disabled={logSaving || (selectedQuickLog.needsText && !logText.trim())}
+                  loading={logSaving}
+                  className="w-full justify-center sm:w-auto"
+                >
+                  <Check className="size-3" /> Log this
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => { setQuickLog(null); setLogText('') }} className="w-full justify-center sm:w-auto">
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Failure state */}
+      {generationStatus && generationStatus.includes('failed') && !generating && !isTerminal && (
+        <div className="px-4 py-3 border-t border-status-danger/20 bg-status-danger/[0.03]">
+          <p className="text-[12px] font-medium text-status-danger">Generation failed</p>
+          <p className="mt-0.5 text-[11px] text-graphite">{generationStatus}</p>
+          <div className="mt-2 flex gap-2">
+            <Button variant="orange" size="sm" onClick={() => generateDraft(mode ?? 'connection')} className="w-full justify-center sm:w-auto">
+              <Send className="size-3" /> Retry
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { setGenerationStatus(null); setMode(null) }} className="w-full justify-center sm:w-auto">
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
