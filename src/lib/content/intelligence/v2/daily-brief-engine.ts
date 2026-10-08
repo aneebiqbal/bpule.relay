@@ -137,89 +137,102 @@ export async function generateDailyBrief(
     promptVersion: DAILY_BRIEF_PROMPT_VERSION,
   })
 
-  try {
-    const recentContent = buildRecentContentSummary(input.memories, input.recentIdeas)
-    const personaContext = buildPersonaContext(input.persona, input.profile, input.tasteProfile)
+   try {
+     const recentContent = buildRecentContentSummary(input.memories, input.recentIdeas)
+     const personaContext = buildPersonaContext(input.persona, input.profile, input.tasteProfile)
 
-    // ── Phase 3: Trend velocity + saturation analysis ──
-    const velocityAnalyses = new Map<string, VelocityAnalysis>()
-    const candidatesWithVelocity = input.trendCandidates.map(tc => {
-      const vel = analyzeTrendVelocity(tc.item)
-      velocityAnalyses.set(tc.item.id, vel)
-      return applyVelocityScoring(tc, vel)
-    })
-    const trendSignals = buildTrendSignals(candidatesWithVelocity.slice(0, 8))
+     // ── Phase 3: Trend velocity + saturation analysis ──
+     const velocityAnalyses = new Map<string, VelocityAnalysis>()
+     const candidatesWithVelocity = input.trendCandidates.map(tc => {
+       const vel = analyzeTrendVelocity(tc.item)
+       velocityAnalyses.set(tc.item.id, vel)
+       return applyVelocityScoring(tc, vel)
+     })
+     const trendSignals = buildTrendSignals(candidatesWithVelocity.slice(0, 8))
 
-    // ── Phase 3: Evergreen fallback detection ──
-    const trendPoolWeak = isTrendPoolWeak(candidatesWithVelocity.slice(0, 5))
-    const contentStrategy = trendPoolWeak ? 'evergreen' : 'trend-led'
+     // ── Phase 3: Evergreen fallback detection ──
+     const trendPoolWeak = isTrendPoolWeak(candidatesWithVelocity.slice(0, 5))
+     const contentStrategy = trendPoolWeak ? 'evergreen' : 'trend-led'
 
-    if (trendPoolWeak) {
-      console.info('[daily-brief] Trend pool weak — favoring evergreen content', {
-        personaId: input.persona.id,
-        localDate: input.localDate,
-        topCandidatePhase: candidatesWithVelocity[0]?.trendPhase ?? 'none',
-      })
-    }
+     if (trendPoolWeak) {
+       console.info('[daily-brief] Trend pool weak — favoring evergreen content', {
+         personaId: input.persona.id,
+         localDate: input.localDate,
+         topCandidatePhase: candidatesWithVelocity[0]?.trendPhase ?? 'none',
+       })
+     }
 
-    // ── Performance signals — what has actually worked ──
-    const performanceProfile = await buildPerformanceProfile(store, input.persona.id)
-    const performanceSignals = derivePerformanceSignals(performanceProfile)
+     // ── Performance signals — what has actually worked ──
+     let performanceSignals: PerformanceSignal | undefined
+     try {
+       const performanceProfile = await buildPerformanceProfile(store, input.persona.id)
+       performanceSignals = derivePerformanceSignals(performanceProfile)
+     } catch (perfErr) {
+       console.warn('[daily-brief] Performance profile failed:', perfErr instanceof Error ? perfErr.message : String(perfErr))
+     }
 
-    // ── Phase 3: Trend diversification angle ──
-    const personaAngle = getPersonaAngleProfile(
-      input.persona.personaRole ?? input.profile.role ?? '',
-      input.profile.seniority,
-    )
+     // ── Phase 3: Trend diversification angle ──
+     const personaAngle = getPersonaAngleProfile(
+       input.persona.personaRole ?? input.profile?.role ?? '',
+       input.profile?.seniority,
+     )
 
-    const { ideas: rawIdeas, cost: ideaCost } = await generateIdeaCandidates({
-      personaContext,
-      trendSignals,
-      recentContent,
-      costTracking,
-      performanceSignals,
-      personaAngle,
-      contentStrategy,
-      platform: input.platform,
-    })
-    costTracking.total += ideaCost
+     // ── AI Idea Generation (with deterministic fallback) ──
+     let scoredIdeas: IdeaCandidate[]
+     try {
+       const { ideas: rawIdeas, cost: ideaCost } = await generateIdeaCandidates({
+         personaContext,
+         trendSignals,
+         recentContent,
+         costTracking,
+         performanceSignals,
+         personaAngle,
+         contentStrategy,
+         platform: input.platform,
+       })
+       costTracking.total += ideaCost
+       scoredIdeas = scoreIdeas(rawIdeas, input)
+     } catch (ideaGenErr) {
+       console.warn('[daily-brief] AI idea generation failed, using deterministic ideas:', ideaGenErr instanceof Error ? ideaGenErr.message : String(ideaGenErr))
+       scoredIdeas = []
+     }
 
-    let scoredIdeas = scoreIdeas(rawIdeas, input)
-
-    // Fallback: if AI returned 0 ideas, generate from profile + trends
-    if (scoredIdeas.length === 0) {
-      console.warn('[daily-brief] AI returned 0 ideas — using deterministic fallback', {
-        personaId: input.persona.id,
-        localDate: input.localDate,
-        trendCount: input.trendCandidates.length,
-        expertiseCount: (input.profile?.expertise ?? []).length,
-      })
-      scoredIdeas = generateDeterministicIdeas(input)
-    }
+     // Fallback: if AI returned 0 ideas or failed, generate from profile + trends
+     if (scoredIdeas.length === 0) {
+       scoredIdeas = generateDeterministicIdeas(input)
+     }
 
     // ── Phase 2: Semantic novelty penalty (embedding-based dedup) ──
-    if (hasEmbeddingProvider() && scoredIdeas.length > 1) {
-      scoredIdeas = await applySemanticNoveltyPenalty(scoredIdeas, store, input.persona.id)
-    }
+     if (hasEmbeddingProvider() && scoredIdeas.length > 1) {
+       try {
+         scoredIdeas = await applySemanticNoveltyPenalty(scoredIdeas, store, input.persona.id)
+       } catch (embedErr) {
+         console.warn('[daily-brief] Semantic penalty failed, skipping:', embedErr instanceof Error ? embedErr.message : String(embedErr))
+       }
+     }
 
-    // ── Phase 3: Reach scoring — "why this could perform" ──
-    scoredIdeas = scoredIdeas.map(idea => {
-      const trendCandidate = candidatesWithVelocity.find(tc =>
-        idea.trendGrounded && tc.item.title.toLowerCase().includes(idea.title.toLowerCase().slice(0, 20)),
-      )
-      const reachScore = scoreReachPotential({
-        ideaTitle: idea.title,
-        ideaAngle: idea.angle,
-        territory: idea.territory,
-        trendCandidate,
-        persona: input.persona,
-        profile: input.profile,
-        platform: input.platform,
-        isTrendGrounded: idea.trendGrounded,
-      })
-      const adjustedScore = applyReachScoring(idea.relevance ?? 0.5, reachScore)
-      return { ...idea, relevance: adjustedScore, reachScore: reachScore.overall }
-    })
+     // ── Phase 3: Reach scoring — "why this could perform" ──
+     scoredIdeas = scoredIdeas.map(idea => {
+       try {
+         const trendCandidate = candidatesWithVelocity.find(tc =>
+           idea.trendGrounded && tc.item.title.toLowerCase().includes(idea.title.toLowerCase().slice(0, 20)),
+         )
+         const reachScore = scoreReachPotential({
+           ideaTitle: idea.title,
+           ideaAngle: idea.angle,
+           territory: idea.territory,
+           trendCandidate,
+           persona: input.persona,
+           profile: input.profile ?? { role: input.persona.personaRole } as ContentProfile,
+           platform: input.platform,
+           isTrendGrounded: idea.trendGrounded,
+         })
+         const adjustedScore = applyReachScoring(idea.relevance ?? 0.5, reachScore)
+         return { ...idea, relevance: adjustedScore, reachScore: reachScore.overall }
+       } catch {
+         return { ...idea, relevance: idea.relevance ?? 0.5, reachScore: 0.5 }
+       }
+     })
 
     // ── Phase 3: Platform-specific ranking adjustment ──
     scoredIdeas = applyPlatformSpecificRanking(scoredIdeas, input.platform)
@@ -303,7 +316,12 @@ export async function generateDailyBrief(
         }
       }
 
-      const visualDirection = await generateVisualDirection(idea, input.persona, costTracking)
+      let visualDirection: VisualDirection | null = null
+       try {
+         visualDirection = await generateVisualDirection(idea, input.persona, costTracking)
+       } catch (visErr) {
+         console.warn('[daily-brief] Visual direction failed:', visErr instanceof Error ? visErr.message : String(visErr))
+       }
 
       const ideaRecord = await store.createDailyContentIdea({
          briefId: brief.id,
@@ -354,25 +372,29 @@ export async function generateDailyBrief(
     // Record content memories for anti-repetition (with semantic embeddings)
     for (const idea of selectedIdeas) {
       // Compute semantic fingerprint for combined title+angle+territory
-      const embedding = await embedContentMemory({
-        title: idea.title,
-        angle: idea.angle,
-        territory: idea.territory,
-      })
+      try {
+         const embedding = await embedContentMemory({
+           title: idea.title,
+           angle: idea.angle,
+           territory: idea.territory,
+         })
 
-      await store.createContentMemory({
-        personaId: input.persona.id,
-        memoryType: 'topic_covered',
-        content: idea.title,
-        embedding,
-      })
-      if (idea.territory) {
-        await store.createContentMemory({
-          personaId: input.persona.id,
-          memoryType: 'angle_used',
-          content: idea.territory,
-        })
-      }
+         await store.createContentMemory({
+           personaId: input.persona.id,
+           memoryType: 'topic_covered',
+           content: idea.title,
+           embedding,
+         })
+         if (idea.territory) {
+           await store.createContentMemory({
+             personaId: input.persona.id,
+             memoryType: 'angle_used',
+             content: idea.territory,
+           })
+         }
+       } catch (memErr) {
+         console.warn('[daily-brief] Content memory recording failed:', memErr instanceof Error ? memErr.message : String(memErr))
+       }
     }
 
     const ideas = await store.listDailyContentIdeas(brief.id)

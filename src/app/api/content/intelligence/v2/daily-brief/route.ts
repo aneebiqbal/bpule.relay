@@ -169,25 +169,26 @@ async function generateAndRespond(
 
         return NextResponse.json({ brief, ideas: ideaRecords, fromFallback: true })
       } catch (fallbackErr) {
-        console.error('[daily-brief] Fallback also failed:', fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr))
-        // Last resort: return ideas directly without persisting
-        const emergencyIdeas = generateFallbackIdeas(profile, trendCandidates, persona).map((idea, i) => ({
-          id: `emergency-${Date.now()}-${i}`,
-          briefId: 'emergency',
-          organizationId: persona.organizationId,
-          personaId: persona.id,
-          ideaType: i === 0 ? 'recommended' : 'alternate',
-          title: idea.title,
-          angle: idea.angle,
-          whyNow: idea.whyNow,
-          territory: idea.territory,
-          trendGrounded: idea.trendGrounded,
-          formatSuggestion: idea.formatSuggestion,
-          postCaption: idea.angle,
-          createdAt: new Date().toISOString(),
-        }))
-        return NextResponse.json({ brief: { id: 'emergency', status: 'ready', localDate }, ideas: emergencyIdeas, fromFallback: true })
-      }
+         const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : (fallbackErr && typeof fallbackErr === 'object' ? JSON.stringify(fallbackErr) : String(fallbackErr))
+         console.error('[daily-brief] Fallback also failed:', fallbackMsg)
+         // Last resort: return ideas directly without persisting
+         const emergencyIdeas = generateFallbackIdeas(profile, trendCandidates, persona).map((idea, i) => ({
+           id: `emergency-${Date.now()}-${i}`,
+           briefId: 'emergency',
+           organizationId: persona.organizationId,
+           personaId: persona.id,
+           ideaType: i === 0 ? 'recommended' : 'alternate',
+           title: idea.title,
+           angle: idea.angle,
+           whyNow: idea.whyNow,
+           territory: idea.territory,
+           trendGrounded: idea.trendGrounded,
+           formatSuggestion: idea.formatSuggestion,
+           postCaption: idea.angle,
+           createdAt: new Date().toISOString(),
+         }))
+         return NextResponse.json({ brief: { id: 'emergency', status: 'ready', localDate }, ideas: emergencyIdeas, fromFallback: true })
+       }
     }
   } catch (err) {
      const message = err instanceof Error ? err.message : (err && typeof err === 'object' ? JSON.stringify(err) : String(err))

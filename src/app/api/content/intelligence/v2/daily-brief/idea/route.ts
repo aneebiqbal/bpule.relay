@@ -96,9 +96,11 @@ export async function POST(request: Request) {
      })
 
      return NextResponse.json({ idea: ideaRecord })
-   } catch (err) {
+  } catch (err) {
+     const message = err instanceof Error ? err.message : (err && typeof err === 'object' ? JSON.stringify(err) : String(err))
+     console.error('[daily-brief/idea] Failed:', message)
      return NextResponse.json(
-       { error: 'Failed to generate idea', message: err instanceof Error ? err.message : String(err) },
+       { error: 'Failed to generate idea', message },
        { status: 503 },
      )
    }
