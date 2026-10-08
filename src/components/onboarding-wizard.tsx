@@ -463,7 +463,7 @@ function StepUnderstanding({ state, update: _update }: { state: OnboardingState;
             <p className="text-xs font-medium uppercase tracking-wider text-graphite">You are</p>
             <p className="mt-1 text-sm font-medium text-ink">{identity.role} · {identity.seniority}</p>
           </div>
-          {identity.expertise.length > 0 && (
+          {(identity.expertise?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs font-medium uppercase tracking-wider text-graphite">Strongest expertise</p>
               <div className="mt-1 flex flex-wrap gap-1.5">
@@ -475,7 +475,7 @@ function StepUnderstanding({ state, update: _update }: { state: OnboardingState;
               </div>
             </div>
           )}
-          {identity.industries.length > 0 && (
+          {(identity.industries?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs font-medium uppercase tracking-wider text-graphite">Experience</p>
               <div className="mt-1 flex flex-wrap gap-1.5">
@@ -487,7 +487,7 @@ function StepUnderstanding({ state, update: _update }: { state: OnboardingState;
               </div>
             </div>
           )}
-          {identity.territories.length > 0 && (
+          {(identity.territories?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs font-medium uppercase tracking-wider text-graphite">You could credibly talk about</p>
               <div className="mt-1 flex flex-wrap gap-1.5">
