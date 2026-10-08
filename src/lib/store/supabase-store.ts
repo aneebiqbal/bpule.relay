@@ -7520,9 +7520,9 @@ export class SupabaseStore implements ScoutStore {
         generation_started_at: new Date().toISOString(),
       })
       .select('*')
-      .single()
+      .limit(1)
     if (error) throw error
-    return mapDailyContentBrief(data)
+    return mapDailyContentBrief(data[0])
   }
 
   async getDailyContentBrief(personaId: string, localDate: string): Promise<DailyContentBrief | null> {
@@ -7563,9 +7563,9 @@ export class SupabaseStore implements ScoutStore {
       .update(update)
       .eq('id', briefId)
       .select('*')
-      .single()
+      .limit(1)
     if (error) throw error
-    return mapDailyContentBrief(data)
+    return mapDailyContentBrief(data[0])
   }
 
   async updateDailyContentBriefRecommended(briefId: string, ideaId: string): Promise<DailyContentBrief> {
@@ -7574,9 +7574,9 @@ export class SupabaseStore implements ScoutStore {
       .update({ recommended_idea_id: ideaId, updated_at: new Date().toISOString() })
       .eq('id', briefId)
       .select('*')
-      .single()
+      .limit(1)
     if (error) throw error
-    return mapDailyContentBrief(data)
+    return mapDailyContentBrief(data[0])
   }
 
   async getLatestDailyContentBrief(personaId: string): Promise<DailyContentBrief | null> {
@@ -7669,11 +7669,11 @@ export class SupabaseStore implements ScoutStore {
          visual_reason: input.visualReason ?? null,
          quality_result: input.qualityResult ?? null,
        })
-       .select('*')
-       .single()
-     if (error) throw error
-     return mapDailyContentIdea(data)
-   }
+        .select('*')
+        .limit(1)
+      if (error) throw error
+      return mapDailyContentIdea(data[0])
+    }
 
   async listDailyContentIdeas(briefId: string): Promise<DailyContentIdea[]> {
     const { data, error } = await this.client
