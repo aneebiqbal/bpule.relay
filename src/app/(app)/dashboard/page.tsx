@@ -10,8 +10,6 @@ import { buildRelayQueue } from '@/lib/relay/queue-engine'
 import { loadAccountabilityDashboard } from '@/lib/relay/dashboard-loader'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
 import { RepWorkspace, type RepWorkspaceData } from '@/components/rep/rep-workspace'
-import { type CommandCenterData } from '@/components/admin/admin-command-center'
-import { LiveCommandCenter } from '@/components/admin/live-command-center'
 
 export const dynamic = 'force-dynamic'
 
@@ -117,38 +115,40 @@ function AdminTodayViewWithAccountability({
 }: {
   acData: Awaited<ReturnType<typeof loadAccountabilityDashboard>>
 }) {
-  const ccData: CommandCenterData = acData?.commandCenter ? {
-    date: acData.date,
-    teamHealth: acData.commandCenter.teamHealth,
-    attentionItems: acData.commandCenter.attentionItems,
-    team: acData.commandCenter.team,
-  } : {
-    date: new Date().toISOString().slice(0, 10),
-    teamHealth: { working: 0, onTrack: 0, atRisk: 0, behind: 0, blocked: 0, closed: 0 },
-    attentionItems: [],
-    team: [],
-  }
+  const attentionCount = acData?.commandCenter?.attentionItems?.length ?? 0
 
   return (
     <div className="space-y-6 pb-8">
       <header className="space-y-1.5">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Command Center</p>
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Today</p>
         <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink">
-          {ccData && ccData.attentionItems.length > 0
-            ? `${ccData.attentionItems.length} item${ccData.attentionItems.length === 1 ? '' : 's'} need attention`
+          {attentionCount > 0
+            ? `${attentionCount} item${attentionCount === 1 ? '' : 's'} need attention`
             : 'Team overview'}
         </h1>
         <p className="text-[13px] text-graphite">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
       </header>
 
-      {ccData.team.length > 0 && (
+      <div className="flex items-center justify-between rounded-lg border border-line bg-bone-raised px-5 py-4">
+        <div>
+          <p className="text-[14px] font-medium text-ink">Command Center</p>
+          <p className="mt-0.5 text-[12px] text-graphite">Full team activity, exceptions, and opportunities.</p>
+        </div>
+        <Link
+          href="/admin/command-center"
+          className="shrink-0 rounded-md border border-orange/30 bg-orange/10 px-4 py-2 text-[12px] font-medium text-orange hover:bg-orange/20"
+        >
+          Open →
+        </Link>
+      </div>
+
+      {acData?.commandCenter?.team && acData.commandCenter.team.length > 0 && (
         <section className="overflow-hidden rounded-lg border border-line bg-bone-raised">
           <div className="px-4 py-3">
             <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Who covered their day</p>
-            <p className="mt-1 text-[14px] text-graphite">Green means every number is done. Everyone else still has work.</p>
           </div>
           <ul className="divide-y divide-line/70 border-t border-line">
-            {[...ccData.team].sort((a, b) => b.remaining - a.remaining).map((person) => {
+            {[...acData.commandCenter.team].sort((a, b) => b.remaining - a.remaining).map((person) => {
               const won = person.remaining === 0 && person.status === 'completed'
               return (
                 <li key={person.personId} className="flex items-center justify-between gap-3 px-4 py-3">
@@ -165,14 +165,6 @@ function AdminTodayViewWithAccountability({
           </ul>
         </section>
       )}
-
-      <Suspense fallback={<div className="h-64 animate-pulse rounded-xl border border-line bg-bone-raised" />}>
-        <LiveCommandCenter />
-      </Suspense>
-
-      <Link href="/admin/command-center" className="inline-flex items-center gap-1 text-[12px] font-medium text-ink">
-        Open full command center →
-      </Link>
     </div>
   )
 }
@@ -267,10 +259,42 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   const visibleTasks = filterQueueByRole(queue, roleContext.role)
 
   const profilesPulled = await countProfilesPulled(user.organization.id, user.rep.id)
-  const [referredLeads, recentLeads] = await Promise.all([
+  const [referredLeads, recentLeads, allUpworkJobs] = await Promise.all([
     store.getReferredLeads(user.rep.id),
     store.getRecentLeads(user.rep.id, 5),
+    store.listUpworkJobs().catch(() => []),
   ])
+  const upworkJobs = allUpworkJobs
+    .filter((j) => j.verdict === 'apply' && j.status !== 'applied')
+    .slice(0, 3)
+    .map((j) => ({
+      id: j.id,
+      title: j.title,
+      company: j.clientName ?? j.tags[0] ?? 'Client',
+      canonicalScore: j.score,
+      fitScore: j.score,
+    }))
+
+  // Compute daily completion from targets
+  const totalTarget = workspace.targetSummary?.totalTarget ?? 0
+  const totalRemaining = workspace.targetSummary?.totalRemaining ?? 0
+  const completionDone = Math.max(0, totalTarget - totalRemaining)
+
+  // Derive resume work: leads with drafts started but not yet sent
+  const resumeWork = recentLeads
+    .filter((l) => {
+      const hasDraft = (l as any).messages?.some((m: any) => m.draftText && !m.sentText)
+      const isTerminal = l.status === 'won' || l.status === 'lost' || l.status === 'dead'
+      return hasDraft && !isTerminal
+    })
+    .slice(0, 3)
+    .map((l) => ({
+      id: l.id,
+      company: l.company,
+      contactName: (l as any).contactName ?? null,
+      lastAction: (l as any).messages?.find((m: any) => m.draftText && !m.sentText)?.type ?? 'draft',
+      state: (l as any).status === 'new' ? 'Draft started' : 'In progress',
+    }))
 
   const actions: RelayTodayAction[] = visibleTasks.slice(0, 10).map((task) => ({
     id: task.id,
@@ -320,6 +344,15 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
       score: l.score,
       canonicalScore: l.canonicalScore ?? null,
       createdAt: l.createdAt,
+    })),
+    upworkJobs,
+    completion: { done: completionDone, remaining: totalRemaining },
+    resumeWork: resumeWork.map(r => ({
+      id: r.id,
+      company: r.company,
+      contactName: r.contactName,
+      lastAction: r.lastAction,
+      state: r.state,
     })),
   }
 }

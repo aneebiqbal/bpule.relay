@@ -28,6 +28,7 @@ import type { ProspectQualificationAssessment } from '@/lib/prospect/qualificati
 import { describeVerdictForDisplay, type RevenueLoopSnapshot } from '@/lib/relay/revenue-strategy'
 import { duplicateNotice } from '@/lib/ui/api-error-toast'
 import { notifyError } from '@/lib/ui/notify'
+import { trackEvent } from '@/lib/analytics/tracker'
 
 type AnalyzeEvent =
   | { type: 'status'; message: string }
@@ -203,6 +204,8 @@ export default function ProspectCheckPage() {
     resetResult()
     setAnalyzing(true)
     abortRef.current = new AbortController()
+    const analysisTiming = performance.now()
+    trackEvent({ event: 'prospect_analysis_started' })
 
     try {
       const res = await fetch('/api/prospect/analyze', {
@@ -250,6 +253,13 @@ export default function ProspectCheckPage() {
             if (event.bestSender) {
               setSelectedProfileId(event.bestSender.id)
             }
+            // Track completed analysis
+            const durationMs = Math.round(performance.now() - analysisTiming)
+            trackEvent({
+              event: 'prospect_analysis_completed',
+              durationMs,
+              metadata: { qualification: event.score?.qualification ?? '', score: event.score?.total ?? 0 },
+            })
           }
         },
         onError(message) {
@@ -339,7 +349,8 @@ export default function ProspectCheckPage() {
         return
       }
       if (!res.ok) throw new Error(data.error ?? 'Failed to save lead.')
-      router.push(`/leads/${data.leadId}`)
+      trackEvent({ event: 'lead_saved', leadId: data.leadId })
+      router.push(`/leads/${data.leadId}?next=generate-connection`)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save lead.'
       setError(message)

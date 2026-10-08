@@ -1,7 +1,9 @@
 'use client'
 
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Shield } from 'lucide-react'
+import { trackEvent } from '@/lib/analytics/tracker'
 import { Progress } from '@/components/ui/progress'
 import { DailyJobs, jobsFromTargets } from './daily-jobs'
 import { DoThisNext } from './do-this-next'
@@ -66,6 +68,9 @@ export interface RepWorkspaceData {
   teamMembers?: any[]
   referredLeads?: Array<{ id: string; company: string; score: number | null; canonicalScore: number | null; referredAt: string | null }>
   recentLeads?: Array<{ id: string; company: string; score: number | null; canonicalScore: number | null; createdAt: string }>
+  upworkJobs?: Array<{ id: string; title: string; company: string; canonicalScore: number | null; fitScore: number | null }>
+  completion?: { done: number; remaining: number }
+  resumeWork?: Array<{ id: string; company: string; contactName: string | null; lastAction: string; state: string }>
 }
 
 interface RepWorkspaceProps {
@@ -106,6 +111,13 @@ interface RepWorkspaceProps {
 }
 
 export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps) {
+  // Track home opened
+  useEffect(() => {
+    if (mode === 'rep') {
+      trackEvent({ event: 'home_opened' })
+    }
+  }, [mode])
+
   const members = teamData?.teams.flatMap((team) => team.members) ?? []
 
   if (!data.hasAssignments && mode !== 'manager') {
@@ -149,6 +161,48 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
 
       {data.hasAssignments && (
         <>
+          {/* Daily completion context */}
+          {data.completion && data.completion.done + data.completion.remaining > 0 && (
+            <div className="flex items-center gap-3 rounded-lg border border-line bg-bone-raised px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-medium text-ink">
+                  {data.completion.remaining === 0
+                    ? 'Day complete — nothing left'
+                    : `${data.completion.remaining} action${data.completion.remaining === 1 ? '' : 's'} left today`}
+                </p>
+                <p className="text-[11px] text-graphite">{data.completion.done} done</p>
+              </div>
+              <div className="h-2 w-20 overflow-hidden rounded-full bg-line/60">
+                <div
+                  className="h-full rounded-full bg-orange transition-all duration-500"
+                  style={{ width: `${data.completion.done + data.completion.remaining > 0 ? Math.round((data.completion.done / (data.completion.done + data.completion.remaining)) * 100) : 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Resume Work — continue where you left off */}
+          {data.resumeWork && data.resumeWork.length > 0 && (
+            <section className="rounded-lg border border-orange/20 bg-orange/[0.02] p-4">
+              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone mb-2">Continue where you left off</p>
+              <div className="space-y-1.5">
+                {data.resumeWork.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={`/leads/${item.id}`}
+                    className="flex items-center gap-3 rounded-lg border border-line/60 bg-bone-raised/60 px-3 py-2.5 transition-colors hover:border-orange/30 hover:bg-bone"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium text-ink truncate">{item.company}{item.contactName ? ` · ${item.contactName}` : ''}</p>
+                      <p className="text-[11px] text-graphite">{item.state}</p>
+                    </div>
+                    <span className="shrink-0 text-[11px] text-orange">Continue →</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
           <DoThisNext action={data.nextAction} />
 
           <BdDailyDesk
@@ -158,6 +212,7 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
             followUpsDue={data.day.followUpsDue}
             referredLeads={data.referredLeads ?? []}
             recentLeads={data.recentLeads ?? []}
+            hasAnyWork={(data.upNext?.length > 0) || (data.referredLeads && data.referredLeads.length > 0) || (data.day.repliesWaiting > 0) || (data.day.followUpsDue > 0)}
           />
 
           {data.notifications.length > 0 && (
@@ -173,6 +228,33 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
                   </li>
                 ))}
               </ul>
+            </section>
+          )}
+
+          {/* Upwork opportunities */}
+          {data.upworkJobs && data.upworkJobs.length > 0 && (
+            <section className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Upwork</p>
+                <Link href="/upwork" className="text-[11px] text-graphite hover:text-ink">View all →</Link>
+              </div>
+              <div className="space-y-1">
+                {data.upworkJobs.slice(0, 3).map((job) => (
+                  <Link
+                    key={job.id}
+                    href={`/upwork/${job.id}`}
+                    className="flex items-center justify-between rounded-lg border border-line bg-bone-raised/40 px-3 py-2.5 transition-colors hover:bg-bone"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] font-medium text-ink">{job.title}</p>
+                      <p className="truncate text-[11px] text-graphite">{job.company}</p>
+                    </div>
+                    {job.fitScore != null && (
+                      <span className="shrink-0 text-[11px] font-mono text-orange">{Math.round(job.fitScore)}% fit</span>
+                    )}
+                  </Link>
+                ))}
+              </div>
             </section>
           )}
 
