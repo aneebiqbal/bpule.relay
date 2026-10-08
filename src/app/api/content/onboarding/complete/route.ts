@@ -160,9 +160,10 @@ export async function POST(req: NextRequest) {
       redirectTo: `/content/${persona.id}/today`,
     })
   } catch (err) {
-    console.error('[onboarding/complete] Failed:', err instanceof Error ? err.message : String(err), err instanceof Error ? err.stack : '')
+    const detail = err instanceof Error ? err.message : (err && typeof err === 'object' ? JSON.stringify(err) : String(err))
+    console.error('[onboarding/complete] Failed:', detail, err instanceof Error ? err.stack : '')
     return NextResponse.json(
-      { error: 'Failed to complete onboarding', detail: err instanceof Error ? err.message : 'Unknown error' },
+      { error: 'Failed to complete onboarding', detail },
       { status: 500 },
     )
   }
