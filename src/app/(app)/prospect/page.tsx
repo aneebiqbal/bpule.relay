@@ -128,7 +128,13 @@ export default function ProspectCheckPage() {
   const errorRef = useRef<HTMLDivElement | null>(null)
   const [rawInput, setRawInput] = useState(() => {
     const paste = searchParams?.get('paste')
-    return paste ? decodeURIComponent(paste) : ''
+    if (!paste) return ''
+    try {
+      return decodeURIComponent(paste)
+    } catch {
+      // URI malformed — paste contains raw % chars from LinkedIn data
+      return paste
+    }
   })
   const [analyzing, setAnalyzing] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
