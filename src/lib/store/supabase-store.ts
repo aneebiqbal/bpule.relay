@@ -3583,15 +3583,15 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getContentPersona(personaId: string): Promise<ContentPersona | null> {
-    const { data, error } = await this.client
-      .from('content_personas')
-      .select('*')
-      .eq('id', personaId)
-      .eq('organization_id', this.orgId)
-      .single()
-    if (error) return null
-    return mapContentPersona(data)
-  }
+     const { data, error } = await this.client
+       .from('content_personas')
+       .select('*')
+       .eq('id', personaId)
+       .eq('organization_id', this.orgId)
+       .maybeSingle()
+     if (error) return null
+     return data ? mapContentPersona(data) : null
+   }
 
   async deleteContentPersona(personaId: string): Promise<void> {
     const { error } = await this.client
