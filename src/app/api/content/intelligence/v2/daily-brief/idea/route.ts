@@ -7,7 +7,8 @@ import { generate } from '@/lib/ai/runtime'
 import type { ContentPersona, ContentProfile, DailyContentIdea, VisualType } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 90
+ export const runtime = 'nodejs'
+ export const maxDuration = 90
 
 export async function POST(request: Request) {
   const user = await getCurrentUser()

@@ -8,7 +8,8 @@ import type { ContentPersona, ContentProfile, DailyContentIdea } from '@/lib/dom
 import type { ScoutStore } from '@/lib/store/types'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 120
+ export const runtime = 'nodejs'
+ export const maxDuration = 120
 
 function getLocalDate(timezone: string): string {
   try {
