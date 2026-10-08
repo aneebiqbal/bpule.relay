@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
-import { extractUpworkJob } from '@/lib/upwork-v2'
+import { extractUpworkJob, type ExtractedUpworkJob } from '@/lib/upwork-v2'
 
 export const maxDuration = 120
 
@@ -61,6 +61,8 @@ export async function POST(request: Request) {
         }
 
         const job = result.job
+        const tags = buildTags(job)
+        const urgencySignal = deriveUrgency(job)
         const savedJob = await store.createUpworkJob({
           title: job.title,
           description: job.description,
@@ -70,9 +72,9 @@ export async function POST(request: Request) {
           hourlyRateMax: job.hourlyRateMax ?? null,
           connectsCost: 0,
           requiredSkills: job.skills ?? [],
-          urgencySignal: null,
+          urgencySignal,
           rawInput: body.rawText,
-          tags: [],
+          tags,
         })
 
         send({
@@ -81,14 +83,20 @@ export async function POST(request: Request) {
             title: job.title,
             description: job.description,
             budgetMin: job.budget?.toString() ?? '',
-            budgetMax: '',
+            budgetMax: job.hourlyRateMax?.toString() ?? '',
             hourlyRateMin: job.hourlyRateMin?.toString() ?? '',
             hourlyRateMax: job.hourlyRateMax?.toString() ?? '',
             proposalCount: '',
             connectsCost: '0',
             requiredSkills: (job.skills ?? []).join(', '),
-            urgencySignal: '',
-            tags: [],
+            urgencySignal,
+            tags,
+            screeningQuestions: job.screeningQuestions ?? [],
+            applicationRequirements: job.applicationRequirements ?? [],
+            engagementType: job.engagementType ?? '',
+            weeklyHours: job.weeklyHours ?? '',
+            duration: job.duration ?? '',
+            experienceLevel: job.experienceLevel ?? '',
           },
           degraded: result.degraded,
           demoMode: false,
@@ -109,4 +117,32 @@ export async function POST(request: Request) {
       'Connection': 'keep-alive',
     },
   })
+}
+
+function buildTags(job: ExtractedUpworkJob): string[] {
+  const tags: string[] = []
+  const text = job.description.toLowerCase()
+
+  // Domain tags
+  if (/\b(mobile|ios|android|react native|flutter)\b/.test(text)) tags.push('mobile')
+  if (/\b(web|frontend|backend|full[- ]?stack)\b/.test(text)) tags.push('web')
+  if (/\b(devops|ci\/cd|cloud|aws|gcp|azure)\b/.test(text)) tags.push('devops')
+  if (/\b(erp|crm|admin|dashboard)\b/.test(text)) tags.push('enterprise')
+  if (/\b(maintenance|support|troubleshoot|bug fix)\b/.test(text)) tags.push('maintenance')
+  if (/\b(launch|mvp|beta|pre[- ]?launch)\b/.test(text)) tags.push('launch')
+
+  // Engagement tags
+  if (job.engagementType) tags.push(job.engagementType.toLowerCase().replace(/[\s-]/g, '_'))
+  if (job.experienceLevel?.toLowerCase().includes('expert')) tags.push('senior')
+
+  return [...new Set(tags)]
+}
+
+function deriveUrgency(job: ExtractedUpworkJob): string {
+  const text = job.description.toLowerCase()
+  if (/\b(urgent|asap|immediately|right now|this week)\b/.test(text)) return 'urgent'
+  if (/\b(incident response|emergency|production (?:down|issue|problem))\b/.test(text)) return 'high'
+  if (/\b(pre[- ]?launch|commercial launch|going live|production (?:ready|preparation))\b/.test(text)) return 'high'
+  if (/\b(ongoing|maintenance|support)\b/.test(text)) return 'medium'
+  return 'medium'
 }
