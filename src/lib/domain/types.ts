@@ -209,6 +209,12 @@ export interface UpworkJob {
   extractedFields: Record<string, unknown> | null
   rawInput: string | null
   tags: string[]
+  screeningQuestions: string[]
+  applicationRequirements: string[]
+  engagementType: string | null
+  weeklyHours: string | null
+  duration: string | null
+  experienceLevel: string | null
   createdAt: string
   postedAt?: string | null
   remoteStatus?: string | null

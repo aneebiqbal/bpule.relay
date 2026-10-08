@@ -75,6 +75,12 @@ export async function POST(request: Request) {
           urgencySignal,
           rawInput: body.rawText,
           tags,
+          screeningQuestions: job.screeningQuestions ?? [],
+          applicationRequirements: job.applicationRequirements ?? [],
+          engagementType: job.engagementType ?? null,
+          weeklyHours: job.weeklyHours ?? null,
+          duration: job.duration ?? null,
+          experienceLevel: job.experienceLevel ?? null,
         })
 
         send({

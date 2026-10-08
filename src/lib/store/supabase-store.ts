@@ -2492,6 +2492,12 @@ export class SupabaseStore implements ScoutStore {
     urgencySignal?: string | null
     rawInput?: string | null
     tags?: string[]
+    screeningQuestions?: string[]
+    applicationRequirements?: string[]
+    engagementType?: string | null
+    weeklyHours?: string | null
+    duration?: string | null
+    experienceLevel?: string | null
   }): Promise<UpworkJob> {
     const { data, error } = await this.client
       .from('upwork_jobs')
@@ -2510,6 +2516,12 @@ export class SupabaseStore implements ScoutStore {
         urgency_signal: input.urgencySignal ?? null,
         raw_input: input.rawInput ?? null,
         tags: input.tags ?? [],
+        screening_questions: input.screeningQuestions ?? [],
+        application_requirements: input.applicationRequirements ?? [],
+        engagement_type: input.engagementType ?? null,
+        weekly_hours: input.weeklyHours ?? null,
+        duration: input.duration ?? null,
+        experience_level: input.experienceLevel ?? null,
       })
       .select('*')
       .single()
@@ -8049,6 +8061,12 @@ function mapUpworkJob(r: Row): UpworkJob {
     extractedFields: (r.extracted_fields as Record<string, unknown>) ?? null,
     rawInput: (r.raw_input as string) ?? null,
     tags: (r.tags as string[]) ?? [],
+    screeningQuestions: (r.screening_questions as string[]) ?? [],
+    applicationRequirements: (r.application_requirements as string[]) ?? [],
+    engagementType: (r.engagement_type as string) ?? null,
+    weeklyHours: (r.weekly_hours as string) ?? null,
+    duration: (r.duration as string) ?? null,
+    experienceLevel: (r.experience_level as string) ?? null,
     createdAt: r.created_at as string,
     postedAt: (r.posted_at as string) ?? null,
     remoteStatus: (r.remote_status as string) ?? null,

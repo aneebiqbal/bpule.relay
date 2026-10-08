@@ -509,6 +509,12 @@ export interface ScoutStore {
     urgencySignal?: string | null
     rawInput?: string | null
     tags?: string[]
+    screeningQuestions?: string[]
+    applicationRequirements?: string[]
+    engagementType?: string | null
+    weeklyHours?: string | null
+    duration?: string | null
+    experienceLevel?: string | null
   }): Promise<UpworkJob>
   getUpworkJob(id: string): Promise<(UpworkJob & { messages: UpworkMessage[] }) | null>
   listUpworkJobs(): Promise<UpworkJob[]>
