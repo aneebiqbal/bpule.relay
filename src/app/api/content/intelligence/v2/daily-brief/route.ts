@@ -190,11 +190,13 @@ async function generateAndRespond(
       }
     }
   } catch (err) {
-    return NextResponse.json(
-      { error: 'Generation failed', message: err instanceof Error ? err.message : 'Unknown error' },
-      { status: 500 },
-    )
-  }
+     const message = err instanceof Error ? err.message : (err && typeof err === 'object' ? JSON.stringify(err) : String(err))
+     console.error('[daily-brief] Outer error:', message)
+     return NextResponse.json(
+       { error: 'Generation failed', message },
+       { status: 500 },
+     )
+   }
 }
 
 interface FallbackIdea {
