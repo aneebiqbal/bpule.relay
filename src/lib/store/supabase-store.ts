@@ -602,7 +602,11 @@ export class SupabaseStore implements ScoutStore {
     }
 
     // Skip dedup for unknown/empty company names — they collide trivially
-    const isUnknownCompany = !input.company || input.company === 'Unknown company' || key === 'unknowncompany'
+    const isUnknownCompany = !input.company
+      || input.company === 'Unknown company'
+      || input.company === 'Unnamed company'
+      || key === 'unknowncompany'
+      || key === 'unnamedcompany'
 
     const exact = isUnknownCompany
       ? undefined
