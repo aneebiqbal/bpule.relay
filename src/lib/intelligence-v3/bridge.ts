@@ -192,6 +192,180 @@ export interface V3IntelligenceOptions {
 }
 
 /**
+ * Comprehensive company extraction from LinkedIn profile text.
+ * Tries every possible location and format. Never returns null if
+ * a company name exists anywhere in the profile.
+ */
+function extractCompanyFromProfile(
+  rawText: string,
+  lines: string[],
+  title: string | null,
+  identityLines: string[],
+): string | null {
+  // ── Strategy 1: "Role at Company" in title/headline ──
+  if (title) {
+    const atMatch = title.match(/\s+at\s+([A-Z][A-Za-z0-9._&\-\s,]+?)(?:\s*[|·—]|$)/i)
+    if (atMatch) return cleanOrgName(atMatch[1])
+  }
+
+  // ── Strategy 2: "Role, Company | Description" (comma-separated) ──
+  if (title) {
+    const commaParts = title.split(',').map(p => p.trim())
+    if (commaParts.length >= 2) {
+      const candidate = commaParts[1].split(/\s*[|·—]/)[0].trim()
+      if (isLikelyCompanyName(candidate)) return cleanOrgName(candidate)
+    }
+  }
+
+  // ── Strategy 3: "Role @ Company" ──
+  if (title) {
+    const atSymbolMatch = title.match(/@\s*([A-Z][A-Za-z0-9._&\-]+)/i)
+    if (atSymbolMatch) return cleanOrgName(atSymbolMatch[1])
+  }
+
+  // ── Strategy 4: "Role — Company" or "Role - Company" ──
+  if (title) {
+    const dashMatch = title.match(/[—–-]\s*([A-Z][A-Za-z0-9._&\-\s]+)$/i)
+    if (dashMatch) return cleanOrgName(dashMatch[1])
+  }
+
+  // ── Strategy 5: "Company | Role" (company first in headline) ──
+  if (title) {
+    const pipeParts = title.split(/\s*\|\s*/).map(p => p.trim())
+    if (pipeParts.length >= 2) {
+      for (const part of pipeParts) {
+        if (isLikelyCompanyName(part) && !looksLikeRole(part)) {
+          return cleanOrgName(part)
+        }
+      }
+    }
+  }
+
+  // ── Strategy 6: Experience section — "Company · Duration" or "Company | Duration" ──
+  const expIdx = lines.findIndex((l) => /^experience$/i.test(l))
+  if (expIdx >= 0) {
+    for (let i = expIdx + 1; i < Math.min(expIdx + 10, lines.length); i++) {
+      const line = lines[i]
+      if (/^(education|skills|licenses?|projects|recommendations|about|activity|show\s+all)$/i.test(line)) break
+
+      // Pattern: "Company · Full-time" or "Company | Full-time"
+      const sepMatch = line.match(/^([A-Z][A-Za-z0-9._&\-\s]+?)\s*[·|]\s*(Full-time|Part-time|Contract|Freelance|Self-employed)/i)
+      if (sepMatch) return cleanOrgName(sepMatch[1])
+
+      // Pattern: "Company, Location" (experience header)
+      const commaMatch = line.match(/^([A-Z][A-Za-z0-9._&\-\s]+?)\s*,\s*[A-Z][a-z]+/)
+      if (commaMatch && isLikelyCompanyName(commaMatch[1])) return cleanOrgName(commaMatch[1])
+
+      // Pattern: "Company" standalone line (organization name only)
+      const standaloneMatch = line.match(/^([A-Z][A-Za-z0-9._&\-\s]{2,40})$/)
+      if (standaloneMatch && isLikelyCompanyName(standaloneMatch[1]) && !looksLikeRole(standaloneMatch[1])) {
+        return cleanOrgName(standaloneMatch[1])
+      }
+    }
+  }
+
+  // ── Strategy 7: About section — look for "at Company" or "founder of Company" ──
+  const aboutIdx = lines.findIndex((l) => /^about$/i.test(l))
+  if (aboutIdx >= 0) {
+    const aboutText = lines.slice(aboutIdx + 1, aboutIdx + 10).join(' ')
+    const aboutPatterns = [
+      /(?:founder|co-founder|ceo|cto|chief|president|vp|head|director|manager|lead|engineer|developer)\s+(?:of|at|@)\s+([A-Z][A-Za-z0-9._&\-\s,]+?)(?:\.|,|\s+and|\s+with|\s+serving|\s+based|\s+that|\s+which|\s+—)/i,
+      /(?:started|built|launched|joined)\s+(?:@?\s*)?([A-Z][A-Za-z0-9._&\-]+)/i,
+      /(?:my\s+(?:company|firm|agency|startup|business))\s+(?:is|called|named)?\s*([A-Z][A-Za-z0-9._&\-]+)/i,
+    ]
+    for (const pattern of aboutPatterns) {
+      const match = aboutText.match(pattern)
+      if (match && isLikelyCompanyName(match[1])) return cleanOrgName(match[1])
+    }
+  }
+
+  // ── Strategy 8: Identity lines (below name, before sections) ──
+  for (const line of identityLines) {
+    // Skip the name line and title line
+    if (line === identityLines[0]) continue
+    if (looksLikeRole(line)) continue
+
+    // Look for company-like patterns in identity lines
+    const cleanLine = line.replace(/·/g, '|').trim()
+    const parts = cleanLine.split(/\s*[|]\s*/)
+    for (const part of parts) {
+      if (isLikelyCompanyName(part) && !looksLikeRole(part)) {
+        return cleanOrgName(part)
+      }
+    }
+  }
+
+  // ── Strategy 9: Raw text scan for known company indicators ──
+  const rawPatterns = [
+    /(?:^|\n)\s*([A-Z][A-Za-z0-9._&\-]+(?:\s+[A-Z][a-z]+)*)\s*[·]\s*(?:Full-time|Part-time|Contract)/m,
+    /(?:Company|Organization|Employer):\s*([A-Z][A-Za-z0-9._&\-\s]+)/i,
+  ]
+  for (const pattern of rawPatterns) {
+    const match = rawText.match(pattern)
+    if (match && isLikelyCompanyName(match[1])) return cleanOrgName(match[1])
+  }
+
+  return null
+}
+
+/** Clean up extracted organization name */
+function cleanOrgName(name: string): string {
+  return name
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[,;]+$/, '')
+    .replace(/\s*[|·—–-]+\s*$/, '')
+    .trim()
+    .slice(0, 80)
+}
+
+/** Check if a string looks like a company name (not a role or noise) */
+function isLikelyCompanyName(candidate: string): boolean {
+  if (!candidate || candidate.length < 2 || candidate.length > 60) return false
+  const lower = candidate.toLowerCase().trim()
+
+  // Reject if it's clearly a role
+  if (looksLikeRole(candidate)) return false
+
+  // Reject common non-company words
+  const rejectPatterns = [
+    /^(the|a|an|this|that|my|our|their|his|her|its)$/i,
+    /^(open|close|view|show|more|less|edit|delete|add|create)$/i,
+    /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i,
+    /^(present|current|former|previous)$/i,
+    /^(remote|hybrid|on-site|onsite)$/i,
+    /^\d+$/,
+  ]
+  for (const p of rejectPatterns) {
+    if (p.test(lower)) return false
+  }
+
+  // Must start with uppercase or be a known acronym
+  if (!/^[A-Z]/.test(candidate) && !/^[A-Z]{2,}$/.test(candidate)) return false
+
+  return true
+}
+
+/** Check if a string looks like a job role (not a company) */
+function looksLikeRole(text: string): boolean {
+  const roleKeywords = [
+    'founder', 'co-founder', 'ceo', 'cto', 'cfo', 'cio', 'coo', 'chief',
+    'officer', 'president', 'vp', 'vice', 'head', 'director', 'manager',
+    'lead', 'senior', 'junior', 'principal', 'staff', 'engineer', 'developer',
+    'architect', 'designer', 'analyst', 'consultant', 'recruiter', 'specialist',
+    'coordinator', 'administrator', 'assistant', 'associate', 'intern',
+    'talent', 'acquisition', 'hiring', 'human', 'resources', 'marketing',
+    'sales', 'operations', 'product', 'project', 'program', 'account',
+    'business', 'customer', 'success', 'support', 'quality', 'assurance',
+    'full-stack', 'front-end', 'back-end', 'fullstack', 'frontend', 'backend',
+    'software', 'hardware', 'systems', 'network', 'security', 'data', 'science',
+    'machine', 'learning', 'artificial', 'intelligence', 'devops', 'sre',
+    'infrastructure', 'platform', 'cloud', 'site', 'reliability',
+  ]
+  const lower = text.toLowerCase()
+  return roleKeywords.some(kw => lower.includes(kw))
+}
+
+/**
  * Build a minimal V2 canonical structure WITHOUT AI calls.
  * Used only when V3 is canonical — V3's event extractor works from raw text,
  * so we only need basic normalization (not full AI extraction).
@@ -213,30 +387,8 @@ function buildMinimalV2Canonical(rawText: string): CanonicalProspectIntelligence
     ? titleLine.split(/\s*\|\s*/)[0].replace(/·/g, '').trim().slice(0, 120) || null
     : null
 
-  // Company: extract from title (after " at "), headline (after role), or experience section
-  let companyName = title?.split(' at ')[1]?.trim() || null
-  if (!companyName && title) {
-    // Try extracting from "Role, Company | Description" pattern (e.g., "Founder, Dashr.ai | AI-Powered...")
-    const commaSplit = title.split(',')
-    if (commaSplit.length >= 2) {
-      companyName = commaSplit[1].split(/\s*\|\s*/)[0].trim() || null
-    }
-  }
-  if (!companyName) {
-    // Try extracting from experience section (e.g., "Dashr.AI · Full-time")
-    const expIdx = lines.findIndex((l) => /^experience$/i.test(l))
-    if (expIdx >= 0) {
-      for (let i = expIdx + 1; i < Math.min(expIdx + 5, lines.length); i++) {
-        const line = lines[i]
-        if (/^(education|skills|licenses|projects|recommendations|about|activity)$/i.test(line)) break
-        const orgMatch = line.match(/^([A-Z][A-Za-z0-9._&\-]+)/)
-        if (orgMatch && !/^(Full-time|Part-time|Contract|Freelance|Self-employed|Present|mos|yrs)$/.test(orgMatch[1])) {
-          companyName = orgMatch[1].trim()
-          break
-        }
-      }
-    }
-  }
+  // Company: multi-strategy extraction from every possible location
+  const companyName = extractCompanyFromProfile(rawText, lines, title, identityLines)
 
   return {
     version: 'relay_qualification_v2',
