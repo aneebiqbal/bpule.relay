@@ -213,6 +213,31 @@ function buildMinimalV2Canonical(rawText: string): CanonicalProspectIntelligence
     ? titleLine.split(/\s*\|\s*/)[0].replace(/·/g, '').trim().slice(0, 120) || null
     : null
 
+  // Company: extract from title (after " at "), headline (after role), or experience section
+  let companyName = title?.split(' at ')[1]?.trim() || null
+  if (!companyName && title) {
+    // Try extracting from "Role, Company | Description" pattern (e.g., "Founder, Dashr.ai | AI-Powered...")
+    const commaSplit = title.split(',')
+    if (commaSplit.length >= 2) {
+      companyName = commaSplit[1].split(/\s*\|\s*/)[0].trim() || null
+    }
+  }
+  if (!companyName) {
+    // Try extracting from experience section (e.g., "Dashr.AI · Full-time")
+    const expIdx = lines.findIndex((l) => /^experience$/i.test(l))
+    if (expIdx >= 0) {
+      for (let i = expIdx + 1; i < Math.min(expIdx + 5, lines.length); i++) {
+        const line = lines[i]
+        if (/^(education|skills|licenses|projects|recommendations|about|activity)$/i.test(line)) break
+        const orgMatch = line.match(/^([A-Z][A-Za-z0-9._&\-]+)/)
+        if (orgMatch && !/^(Full-time|Part-time|Contract|Freelance|Self-employed|Present|mos|yrs)$/.test(orgMatch[1])) {
+          companyName = orgMatch[1].trim()
+          break
+        }
+      }
+    }
+  }
+
   return {
     version: 'relay_qualification_v2',
     intelligenceRunId: `v3light_${Date.now().toString(36)}`,
@@ -227,7 +252,7 @@ function buildMinimalV2Canonical(rawText: string): CanonicalProspectIntelligence
     qualification: 'maybe',
     intelligence: {
       person: { fullName: name || null, firstName: name?.split(' ')[0] || null, title, seniority: null, location: null, linkedinUrl: null, otherUrls: [] },
-      company: { name: title?.split(' at ')[1]?.trim() || null, domain: null, linkedinUrl: null, industry: null, size: null, sizeEvidence: null, product: null, stage: null, stageEvidence: null },
+      company: { name: companyName, domain: null, linkedinUrl: null, industry: null, size: null, sizeEvidence: null, product: null, stage: null, stageEvidence: null },
       opportunity: { signals: [], primarySignal: null, description: rawText.slice(0, 200), urgency: 'unknown' },
       job: { title: null, employmentType: 'unknown', workplaceType: 'UNKNOWN', allowedGeography: null, timezone: null, compensation: null, skills: [], seniority: 'unknown', source: null, postedDate: null },
       content: { recentPosts: [], topics: [], explicitProblems: [], initiatives: [], launches: [], technicalSignals: [], hiringSignals: [] },
