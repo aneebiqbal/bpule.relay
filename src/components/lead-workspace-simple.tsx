@@ -213,12 +213,18 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, t
     }
   }, [lead.id, capturedReplyText])
 
+  const [markingAccepted, setMarkingAccepted] = useState(false)
   const markAccepted = useCallback(async () => {
+    if (markingAccepted || lead.connectionAcceptedAt) return // prevent double-trigger
+    setMarkingAccepted(true)
     try {
       await fetch(`/api/leads/${lead.id}/connection-accepted`, { method: 'POST' })
       setLeadVersion((v) => v + 1)
-    } catch { /* non-fatal */ }
-  }, [lead.id])
+      notifySuccess('Connection accepted — send DM next.')
+    } catch { /* non-fatal */ } finally {
+      setMarkingAccepted(false)
+    }
+  }, [lead.id, lead.connectionAcceptedAt, markingAccepted])
 
   const [undoAction, setUndoAction] = useState<{ label: string; onUndo: () => void } | null>(null)
 
@@ -559,6 +565,7 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, t
         generationStatus={generationStatus}
         setGenerationStatus={setGenerationStatus}
         markAccepted={markAccepted}
+        markingAccepted={markingAccepted}
         markNotInterested={markNotInterested}
         onLeadUpdate={() => setLeadVersion((v) => v + 1)}
       />
@@ -606,6 +613,7 @@ interface CommandStationProps {
   generationStatus: string | null
   setGenerationStatus: (s: string | null) => void
   markAccepted: () => void
+  markingAccepted: boolean
   markNotInterested: () => void
   onLeadUpdate: () => void
 }
@@ -633,6 +641,7 @@ function CommandStation({
   generationStatus,
   setGenerationStatus,
   markAccepted,
+  markingAccepted,
   markNotInterested,
   onLeadUpdate,
 }: CommandStationProps) {
@@ -833,8 +842,8 @@ function CommandStation({
           {isTheirMove && (
             <div className="space-y-2">
               {phase === 'connection_sent' && !lead.connectionAcceptedAt && (
-                <Button variant="orange" size="sm" onClick={markAccepted} className="w-full justify-center">
-                  <Trophy className="size-3.5" /> Connection accepted — send DM
+                <Button variant="orange" size="sm" onClick={markAccepted} loading={markingAccepted} disabled={markingAccepted} className="w-full justify-center">
+                  <Trophy className="size-3.5" /> {markingAccepted ? 'Updating...' : 'Connection accepted — send DM'}
                 </Button>
               )}
               <div className="flex flex-col gap-2 sm:flex-row">
@@ -842,7 +851,7 @@ function CommandStation({
                   <MessageSquare className="size-3.5" /> They replied
                 </Button>
                 {phase !== 'connection_sent' && !lead.connectionAcceptedAt && (
-                  <Button variant="outline" size="sm" onClick={markAccepted} className="w-full justify-center sm:flex-1">
+                  <Button variant="outline" size="sm" onClick={markAccepted} loading={markingAccepted} disabled={markingAccepted} className="w-full justify-center sm:flex-1">
                     <Trophy className="size-3.5" /> Mark accepted
                   </Button>
                 )}
