@@ -69,7 +69,7 @@ const VOICE_OPTIONS = [
   { id: 'educational', label: 'Educational', example: 'Teaching something useful.' },
 ]
 
-const ONBOARDING_STORAGE_KEY = 'studio-onboarding-v1'
+const ONBOARDING_STORAGE_KEY = 'studio-onboarding-v2'
 
 export function OnboardingWizard() {
   const router = useRouter()
