@@ -105,6 +105,8 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
   // 2b. Connection message due — a good-profile lead whose 6h connection-pacing
   // lock has just expired. The DM is now the next priority, but the existing
   // gate still applies: it is only appropriate once the connection is accepted.
+  // CRITICAL: Only create DM task if connection has been accepted. Otherwise
+  // the lead should appear as "waiting for connection", not "DM due".
   for (const lead of input.queueData.queue) {
     if (
       lead.status === 'contacted' &&
@@ -113,7 +115,7 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
       new Date(lead.lockedUntil).getTime() <= Date.now()
     ) {
       const already = tasks.some((t) => t.entityId === lead.id)
-      if (!already) {
+      if (!already && lead.connectionAcceptedAt) {
         tasks.push(buildConnectionDmTask(lead, input))
       }
     }

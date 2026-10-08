@@ -99,6 +99,7 @@ export async function POST(
           leadId: id,
           senderProfileId: lead.senderProfileId,
           metadata: { source: 'status_update', status_type: statusType },
+          idempotencyKey: `${actionType.toLowerCase()}:${id}:${statusType}`,
         })
       } catch { }
     }

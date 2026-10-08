@@ -63,6 +63,7 @@ export async function referLead(params: ReferralParams): Promise<ReferralResult>
       fromRepId: params.fromRepId,
       toRepId: params.toRepId,
     },
+    idempotencyKey: `lead_referred:${params.leadId}:${params.toRepId ?? params.toProfileId ?? 'none'}`,
   })
 
   return { success: true, actionEventId: actionEventId || undefined }

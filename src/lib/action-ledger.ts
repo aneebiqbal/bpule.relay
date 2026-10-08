@@ -39,6 +39,8 @@ interface EmitActionParams {
   referralReason?: string | null
   messageId?: string | null
   metadata?: Record<string, unknown>
+  /** Deterministic idempotency key. Same key = same event, no duplicates. */
+  idempotencyKey?: string | null
 }
 
 interface DailySummary {
@@ -84,26 +86,46 @@ function getClient() {
 
 /**
  * Emit an action event. Append-only — never updates or deletes.
+ *
+ * Idempotency: if `idempotencyKey` is provided, uses ON CONFLICT DO NOTHING
+ * so the same business action can be retried safely without creating duplicates.
  */
 export async function emitAction(params: EmitActionParams): Promise<string | null> {
+  const payload: Record<string, unknown> = {
+    organization_id: params.orgId,
+    action_type: params.actionType,
+    actor_type: params.actorType || 'system',
+    actor_id: params.actorId || null,
+    sender_profile_id: params.senderProfileId || null,
+    lead_id: params.leadId || null,
+    job_id: params.jobId || null,
+    execution_status: params.executionStatus || 'generated',
+    channel: params.channel || null,
+    referred_to_rep_id: params.referredToRepId || null,
+    referred_to_profile_id: params.referredToProfileId || null,
+    referral_reason: params.referralReason || null,
+    message_id: params.messageId || null,
+    metadata: params.metadata || {},
+  }
+  if (params.idempotencyKey) {
+    payload.idempotency_key = params.idempotencyKey
+  }
+
+  // With idempotency key: use upsert with ignoreDuplicates for safe retries
+  if (params.idempotencyKey) {
+    const { error } = await getClient()
+      .from('action_events')
+      .upsert(payload, { onConflict: 'organization_id,idempotency_key', ignoreDuplicates: true })
+    if (error) {
+      console.error('[Action Ledger] Failed to emit:', error.message)
+      return null
+    }
+    return null // idempotency upsert does not return the row id
+  }
+
   const { data, error } = await getClient()
     .from('action_events')
-    .insert({
-      organization_id: params.orgId,
-      action_type: params.actionType,
-      actor_type: params.actorType || 'system',
-      actor_id: params.actorId || null,
-      sender_profile_id: params.senderProfileId || null,
-      lead_id: params.leadId || null,
-      job_id: params.jobId || null,
-      execution_status: params.executionStatus || 'generated',
-      channel: params.channel || null,
-      referred_to_rep_id: params.referredToRepId || null,
-      referred_to_profile_id: params.referredToProfileId || null,
-      referral_reason: params.referralReason || null,
-      message_id: params.messageId || null,
-      metadata: params.metadata || {},
-    })
+    .insert(payload)
     .select('id')
     .single()
 

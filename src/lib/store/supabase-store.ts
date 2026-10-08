@@ -812,6 +812,7 @@ export class SupabaseStore implements ScoutStore {
         leadId: lead.id,
         senderProfileId: lead.senderProfileId ?? null,
         metadata: { company: lead.company, signalType: lead.signalType },
+        idempotencyKey: `lead_extracted:${lead.id}`,
       })
     } catch {
       // Action ledger must never break domain operations
@@ -1333,7 +1334,7 @@ export class SupabaseStore implements ScoutStore {
         : type === 'followup' ? 'FOLLOWUP_SENT'
         : type === 'reply' ? 'REPLY_SENT'
         : null
-      if (actionType) {
+      if (actionType && inserted?.id) {
         await emitAction({
           orgId: this.orgId,
           actionType: actionType as 'CONNECTION_SENT' | 'DM_SENT' | 'FOLLOWUP_SENT' | 'REPLY_SENT',
@@ -1341,9 +1342,10 @@ export class SupabaseStore implements ScoutStore {
           actorId: this.rep.id,
           leadId,
           senderProfileId: leadRow.sender_profile_id ?? null,
-          messageId: inserted?.id as string | null,
+          messageId: inserted.id as string,
           executionStatus: 'sent',
           metadata: { messageType: type },
+          idempotencyKey: `${actionType}:${inserted.id}`,
         })
       }
     } catch {
@@ -1517,9 +1519,10 @@ export class SupabaseStore implements ScoutStore {
         actorId: this.rep.id,
         leadId,
         senderProfileId: leadRow.sender_profile_id ?? null,
-        messageId: inserted.id as string | null,
+        messageId: inserted.id as string,
         executionStatus: 'delivered',
         metadata: { direction: 'inbound', source: 'paste' },
+        idempotencyKey: `reply_received:${inserted.id}`,
       })
     } catch {
       // Action ledger must never break domain operations
@@ -2520,6 +2523,7 @@ export class SupabaseStore implements ScoutStore {
         actorId: this.rep.id,
         jobId: job.id,
         metadata: { title: job.title },
+        idempotencyKey: `upwork_extracted:${job.id}`,
       })
     } catch { }
     return job
@@ -2598,6 +2602,7 @@ export class SupabaseStore implements ScoutStore {
           messageId: msg.id,
           executionStatus: 'generated',
           channel: 'upwork',
+          idempotencyKey: `upwork_proposal:${msg.id}`,
         })
       } catch { }
       try {
@@ -2734,6 +2739,7 @@ export class SupabaseStore implements ScoutStore {
         jobId,
         executionStatus: 'sent',
         channel: 'upwork',
+        idempotencyKey: `upwork_applied:${jobId}`,
       })
     } catch {
       // Action ledger must never break domain operations

@@ -42,13 +42,25 @@ export async function POST(request: Request) {
       try {
         send({ type: 'status', message: 'Extracting job data...' })
 
-        const job = await extractUpworkJob({ rawText, url: rawUrl })
-        if (!job) {
-          send({ type: 'error', message: 'Failed to extract job data.' })
+        const result = await extractUpworkJob({ rawText, url: rawUrl })
+        if (result.error || !result.job) {
+          const errorMessages: Record<string, string> = {
+            INVALID_INPUT: 'Job text is too short or invalid.',
+            AI_PROVIDER_FAILED: 'AI service temporarily unavailable. Please retry.',
+            SCHEMA_FAILURE: 'Could not parse job structure. Please try again or enter manually.',
+            TIMEOUT: 'Extraction timed out. Please try with shorter text.',
+          }
+          send({
+            type: 'error',
+            message: errorMessages[result.error ?? ''] ?? 'Extraction failed. Please retry.',
+            errorCode: result.error,
+            degraded: result.degraded,
+          })
           controller.close()
           return
         }
 
+        const job = result.job
         const savedJob = await store.createUpworkJob({
           title: job.title,
           description: job.description,
@@ -78,10 +90,12 @@ export async function POST(request: Request) {
             urgencySignal: '',
             tags: [],
           },
+          degraded: result.degraded,
           demoMode: false,
         })
       } catch (err) {
-        send({ type: 'error', message: err instanceof Error ? err.message : 'Extraction failed.' })
+        console.error('[upwork-extract] Unexpected error:', err instanceof Error ? err.message : String(err))
+        send({ type: 'error', message: 'Unexpected error. Please retry.' })
       } finally {
         controller.close()
       }

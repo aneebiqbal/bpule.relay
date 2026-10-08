@@ -3,7 +3,14 @@
 -- https://console.neuro.tech → SQL Editor → New Query
 -- =============================================================================
 
--- 0. CRITICAL: Add missing revenue_identity_id column to relay_runs
+-- 0. CRITICAL: Add idempotency_key column to action_events for dedup
+alter table action_events
+  add column if not exists idempotency_key text;
+create unique index if not exists action_events_idempotency_key_uniq
+  on action_events (organization_id, idempotency_key)
+  where idempotency_key is not null;
+
+-- 0b. CRITICAL: Add missing revenue_identity_id column to relay_runs
 --    Migration 20260917180000 was not applied to production, causing
 --    "column revenue_identity_id of relation relay_runs does not exist" on save.
 alter table relay_runs

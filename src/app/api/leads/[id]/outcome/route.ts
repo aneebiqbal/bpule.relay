@@ -77,6 +77,7 @@ export async function POST(
           leadId: id,
           senderProfileId: detail.senderProfileId,
           metadata: { source: 'outcome_update', reason: body.reason ?? null },
+          idempotencyKey: `client_won:${id}`,
         })
       } catch { }
     }

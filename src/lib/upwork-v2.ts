@@ -57,10 +57,34 @@ const UPWORK_EXTRACTION_SCHEMA = {
   additionalProperties: false,
 } as const
 
+export type UpworkExtractionError =
+  | 'INVALID_INPUT'
+  | 'AI_PROVIDER_FAILURE'
+  | 'SCHEMA_FAILURE'
+  | 'TIMEOUT'
+
+export interface UpworkExtractionResult {
+  job: ExtractedUpworkJob | null
+  error: UpworkExtractionError | null
+  degraded: boolean
+  diagnostics: {
+    provider: string
+    textLength: number
+    stage: string
+  }
+}
+
 /**
  * Extract structured data from raw Upwork job paste.
+ *
+ * Returns typed failure with diagnostics instead of silent null.
  */
-export async function extractUpworkJob(input: UpworkJobInput): Promise<ExtractedUpworkJob | null> {
+export async function extractUpworkJob(input: UpworkJobInput): Promise<UpworkExtractionResult> {
+  const textLength = input.rawText.trim().length
+  if (textLength < 50) {
+    return { job: null, error: 'INVALID_INPUT', degraded: false, diagnostics: { provider: 'none', textLength, stage: 'validation' } }
+  }
+
   const systemPrompt = `Extract structured data from an Upwork job posting.
 Remove navigation, UI elements, and irrelevant content.
 Preserve all job requirements, skills, budget info, and screening questions.
@@ -70,6 +94,27 @@ If questions are present, extract ALL of them verbatim.`
   const userPrompt = `Extract from this Upwork job posting:
 
 ${input.rawText.slice(0, 8000)}`
+
+  // Helper: parse AI output into structured job
+  const parseJob = (data: Record<string, unknown>, provider: string, degraded: boolean): UpworkExtractionResult => ({
+    job: {
+      title: (data.title as string) || 'Unknown Job',
+      description: (data.description as string) || input.rawText.slice(0, 2000),
+      skills: Array.isArray(data.skills) ? (data.skills as string[]) : [],
+      budget: (data.budget as number) ?? null,
+      budgetType: (data.budgetType as 'fixed' | 'hourly' | null) ?? null,
+      hourlyRateMin: (data.hourlyRateMin as number) ?? null,
+      hourlyRateMax: (data.hourlyRateMax as number) ?? null,
+      experienceLevel: (data.experienceLevel as string) ?? null,
+      projectLength: (data.projectLength as string) ?? null,
+      locationRestrictions: Array.isArray(data.locationRestrictions) ? (data.locationRestrictions as string[]) : [],
+      clientName: (data.clientName as string) ?? null,
+      screeningQuestions: Array.isArray(data.screeningQuestions) ? (data.screeningQuestions as string[]) : [],
+    },
+    error: null,
+    degraded,
+    diagnostics: { provider, textLength, stage: 'parsed' },
+  })
 
   // Try runtime router first (supports Groq, OpenAI, LongCat with failover)
   try {
@@ -85,59 +130,41 @@ ${input.rawText.slice(0, 8000)}`
     })
 
     if (result.data) {
-      const parsed = result.data
-      return {
-        title: (parsed.title as string) || 'Unknown Job',
-        description: (parsed.description as string) || input.rawText.slice(0, 2000),
-        skills: Array.isArray(parsed.skills) ? (parsed.skills as string[]) : [],
-        budget: (parsed.budget as number) || null,
-        budgetType: (parsed.budgetType as 'fixed' | 'hourly' | null) || null,
-        hourlyRateMin: (parsed.hourlyRateMin as number) || null,
-        hourlyRateMax: (parsed.hourlyRateMax as number) || null,
-        experienceLevel: (parsed.experienceLevel as string) || null,
-        projectLength: (parsed.projectLength as string) || null,
-        locationRestrictions: Array.isArray(parsed.locationRestrictions) ? (parsed.locationRestrictions as string[]) : [],
-        clientName: (parsed.clientName as string) || null,
-        screeningQuestions: Array.isArray(parsed.screeningQuestions) ? (parsed.screeningQuestions as string[]) : [],
-      }
+      return parseJob(result.data, 'runtime', false)
     }
-  } catch { /* fall through to direct OpenAI */ }
+  } catch (err) {
+    console.error('[upwork-extract] Runtime router failed:', err instanceof Error ? err.message : String(err))
+  }
 
   // Fallback: direct OpenAI call
-  const result = await withRetry(
-    () => fetchOpenAI(
-      process.env.OPENAI_API_KEY || '',
-      'gpt-4o-mini',
-      'https://api.openai.com/v1',
-      systemPrompt,
-      userPrompt,
-      UPWORK_EXTRACTION_SCHEMA,
-      2000,
-    ),
-    { maxRetries: 1, baseDelayMs: 1000 },
-  )
-
-  if (result.error || !result.data) return null
-
   try {
-    const parsed = JSON.parse(result.data) as Record<string, unknown>
-    return {
-      title: (parsed.title as string) || 'Unknown Job',
-      description: (parsed.description as string) || input.rawText.slice(0, 2000),
-      skills: Array.isArray(parsed.skills) ? (parsed.skills as string[]) : [],
-      budget: (parsed.budget as number) || null,
-      budgetType: (parsed.budgetType as 'fixed' | 'hourly' | null) || null,
-      hourlyRateMin: (parsed.hourlyRateMin as number) || null,
-      hourlyRateMax: (parsed.hourlyRateMax as number) || null,
-      experienceLevel: (parsed.experienceLevel as string) || null,
-      projectLength: (parsed.projectLength as string) || null,
-      locationRestrictions: Array.isArray(parsed.locationRestrictions) ? (parsed.locationRestrictions as string[]) : [],
-      clientName: (parsed.clientName as string) || null,
-      screeningQuestions: Array.isArray(parsed.screeningQuestions) ? (parsed.screeningQuestions as string[]) : [],
+    const result = await withRetry(
+      () => fetchOpenAI(
+        process.env.OPENAI_API_KEY || '',
+        'gpt-4o-mini',
+        'https://api.openai.com/v1',
+        systemPrompt,
+        userPrompt,
+        UPWORK_EXTRACTION_SCHEMA,
+        2000,
+      ),
+      { maxRetries: 1, baseDelayMs: 1000 },
+    )
+
+    if (result.data) {
+      try {
+        const parsed = JSON.parse(result.data) as Record<string, unknown>
+        return parseJob(parsed, 'openai-fallback', true)
+      } catch {
+        console.error('[upwork-extract] Schema parse failure')
+        return { job: null, error: 'SCHEMA_FAILURE', degraded: false, diagnostics: { provider: 'openai', textLength, stage: 'parse' } }
+      }
     }
-  } catch {
-    return null
+  } catch (err) {
+    console.error('[upwork-extract] OpenAI fallback failed:', err instanceof Error ? err.message : String(err))
   }
+
+  return { job: null, error: 'AI_PROVIDER_FAILURE', degraded: false, diagnostics: { provider: 'all', textLength, stage: 'all-providers-failed' } }
 }
 
 /**
