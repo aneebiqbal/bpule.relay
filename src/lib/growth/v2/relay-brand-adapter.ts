@@ -145,22 +145,23 @@ export async function generateGrowthBriefViaStudioEngine(
   }))
 
   const briefInput: DailyBriefInput = {
-    persona,
-    profile,
-    tasteProfile: {
-      preferences: {
-        opinionVsEducational: 0.4,
-        timelyVsEvergreen: -0.2,
-        shortVsDeep: 0.3,
-      },
-      territoryAffinity: Object.fromEntries(RELAY_BRAND_TERRITORIES.map(t => [t, 0.8])),
-    },
-    memories: memoryContent,
-    trendCandidates: input.trendCandidates,
-    recentIdeas,
-    localDate: input.localDate,
-    timezone: input.timezone,
-  }
+     persona,
+     profile,
+     tasteProfile: {
+       preferences: {
+         opinionVsEducational: 0.4,
+         timelyVsEvergreen: -0.2,
+         shortVsDeep: 0.3,
+       },
+       territoryAffinity: Object.fromEntries(RELAY_BRAND_TERRITORIES.map(t => [t, 0.8])),
+     },
+     memories: memoryContent,
+     trendCandidates: input.trendCandidates,
+     recentIdeas,
+     localDate: input.localDate,
+     timezone: input.timezone,
+     platform: 'linkedin',
+   }
 
   const result = await generateDailyBrief(input.store, briefInput)
 

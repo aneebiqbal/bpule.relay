@@ -724,6 +724,8 @@ export interface ContentMemory {
   sourceDraftId: string | null
   sourceHistoryId: string | null
   createdAt: string
+  embedding?: number[] | null
+  contentFingerprint?: string | null
 }
 
 export type ContentOpportunityType =
@@ -2301,11 +2303,19 @@ export interface DailyContentIdea {
   visualType: VisualType | null
   visualConcept: string | null
   visualPrompt: string | null
+  visualCommunicationGoal: string | null
+  visualSubject: string | null
+  visualScene: string | null
   visualComposition: string | null
+  visualLighting: string | null
+  visualPalette: string | null
+  visualMood: string | null
+  visualStyle: string | null
   visualAspectRatio: string
   visualFocalPoint: string | null
   visualAllowedText: string | null
   visualScreenshotTarget: string | null
+  visualAvoid: string | null
   visualReason: string | null
   qualityResult: Record<string, unknown> | null
   copiedAt: string | null

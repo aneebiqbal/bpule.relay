@@ -14,6 +14,13 @@ import type { TrendCandidate } from '@/lib/trends/types'
 import { generate } from '@/lib/ai/runtime'
 import type { ShapeSchema } from '@/lib/ai/runtime/schemas'
 import { checkContentQuality, repairPost } from '../quality/content-quality-engine'
+import { embedContentMemory, checkForDuplicatesCombined } from '../memory'
+import { hasEmbeddingProvider } from '@/lib/ai/config'
+import { buildPerformanceProfile, derivePerformanceSignals, type PerformanceSignal } from '../performance'
+import { analyzeTrendVelocity, applyVelocityScoring, isTrendPoolWeak, type VelocityAnalysis } from '@/lib/trends/velocity'
+import { scoreReachPotential, applyReachScoring } from '../reach'
+import { buildSourceProvenance, buildSourcePromptBlock, groundIdeaAgainstSources } from '../sources'
+import { getPersonaAngleProfile, generateDiversifiedAngle, buildDiversificationPromptBlock } from '../diversification'
 
 // ── AI Output Schemas ──
 
@@ -88,6 +95,8 @@ const FARED_EXPERIENCE_PATTERNS = [
   /I've been using/i,
 ]
 
+export type PostPlatform = 'linkedin' | 'x'
+
 export interface DailyBriefInput {
   persona: ContentPersona
   profile: ContentProfile
@@ -104,6 +113,7 @@ export interface DailyBriefInput {
   recentIdeas: Array<{ title: string; territory: string; angle: string }>
   localDate: string
   timezone: string
+  platform: PostPlatform
 }
 
 export interface DailyBriefResult {
@@ -128,15 +138,49 @@ export async function generateDailyBrief(
   })
 
   try {
-    const trendSignals = buildTrendSignals(input.trendCandidates.slice(0, 8))
     const recentContent = buildRecentContentSummary(input.memories, input.recentIdeas)
     const personaContext = buildPersonaContext(input.persona, input.profile, input.tasteProfile)
+
+    // ── Phase 3: Trend velocity + saturation analysis ──
+    const velocityAnalyses = new Map<string, VelocityAnalysis>()
+    const candidatesWithVelocity = input.trendCandidates.map(tc => {
+      const vel = analyzeTrendVelocity(tc.item)
+      velocityAnalyses.set(tc.item.id, vel)
+      return applyVelocityScoring(tc, vel)
+    })
+    const trendSignals = buildTrendSignals(candidatesWithVelocity.slice(0, 8))
+
+    // ── Phase 3: Evergreen fallback detection ──
+    const trendPoolWeak = isTrendPoolWeak(candidatesWithVelocity.slice(0, 5))
+    const contentStrategy = trendPoolWeak ? 'evergreen' : 'trend-led'
+
+    if (trendPoolWeak) {
+      console.info('[daily-brief] Trend pool weak — favoring evergreen content', {
+        personaId: input.persona.id,
+        localDate: input.localDate,
+        topCandidatePhase: candidatesWithVelocity[0]?.trendPhase ?? 'none',
+      })
+    }
+
+    // ── Performance signals — what has actually worked ──
+    const performanceProfile = await buildPerformanceProfile(store, input.persona.id)
+    const performanceSignals = derivePerformanceSignals(performanceProfile)
+
+    // ── Phase 3: Trend diversification angle ──
+    const personaAngle = getPersonaAngleProfile(
+      input.persona.personaRole ?? input.profile.role ?? '',
+      input.profile.seniority,
+    )
 
     const { ideas: rawIdeas, cost: ideaCost } = await generateIdeaCandidates({
       personaContext,
       trendSignals,
       recentContent,
       costTracking,
+      performanceSignals,
+      personaAngle,
+      contentStrategy,
+      platform: input.platform,
     })
     costTracking.total += ideaCost
 
@@ -153,6 +197,41 @@ export async function generateDailyBrief(
       scoredIdeas = generateDeterministicIdeas(input)
     }
 
+    // ── Phase 2: Semantic novelty penalty (embedding-based dedup) ──
+    if (hasEmbeddingProvider() && scoredIdeas.length > 1) {
+      scoredIdeas = await applySemanticNoveltyPenalty(scoredIdeas, store, input.persona.id)
+    }
+
+    // ── Phase 3: Reach scoring — "why this could perform" ──
+    scoredIdeas = scoredIdeas.map(idea => {
+      const trendCandidate = candidatesWithVelocity.find(tc =>
+        idea.trendGrounded && tc.item.title.toLowerCase().includes(idea.title.toLowerCase().slice(0, 20)),
+      )
+      const reachScore = scoreReachPotential({
+        ideaTitle: idea.title,
+        ideaAngle: idea.angle,
+        territory: idea.territory,
+        trendCandidate,
+        persona: input.persona,
+        profile: input.profile,
+        platform: input.platform,
+        isTrendGrounded: idea.trendGrounded,
+      })
+      const adjustedScore = applyReachScoring(idea.relevance ?? 0.5, reachScore)
+      return { ...idea, relevance: adjustedScore, reachScore: reachScore.overall }
+    })
+
+    // ── Phase 3: Platform-specific ranking adjustment ──
+    scoredIdeas = applyPlatformSpecificRanking(scoredIdeas, input.platform)
+
+    // ── Phase 3: Evergreen boost when trend pool is weak ──
+    if (trendPoolWeak) {
+      scoredIdeas = scoredIdeas.map(idea => ({
+        ...idea,
+        relevance: (idea.relevance ?? 0.5) * (idea.trendGrounded ? 0.8 : 1.2),
+      }))
+    }
+
     const selectedIdeas = selectDiverseSet(scoredIdeas, 5)
     const recommended = selectedIdeas[0]
     const alternates = selectedIdeas.slice(1)
@@ -160,11 +239,29 @@ export async function generateDailyBrief(
     let recommendedIdea: DailyContentIdea | null = null
 
     for (const idea of selectedIdeas) {
+      // Phase 3: Source grounding for trend-led posts
+      const sourceProvenance = idea.trendGrounded
+        ? buildSourceProvenance(
+            candidatesWithVelocity.find(tc => tc.item.title.toLowerCase().includes(idea.title.toLowerCase().slice(0, 20)))?.item ?? input.trendCandidates[0]?.item,
+            input.profile.territories ?? [],
+          )
+        : null
+
+      const sourcePromptBlock = sourceProvenance ? buildSourcePromptBlock([sourceProvenance]) : ''
+
+      // Phase 3: Diversified angle for this persona
+      const diversifiedAngle = idea.trendGrounded
+        ? generateDiversifiedAngle(personaAngle, idea.title, [idea.territory ?? ''])
+        : null
+      const diversificationBlock = diversifiedAngle ? buildDiversificationPromptBlock(diversifiedAngle) : ''
+
       let gateResult = await generatePostWithQualityGate({
         idea,
         personaContext,
-        trendSignals,
+        trendSignals: sourcePromptBlock + '\n\n' + trendSignals,
         costTracking,
+        platform: input.platform,
+        diversificationBlock,
       })
       let postCaption = gateResult.caption
 
@@ -203,32 +300,41 @@ export async function generateDailyBrief(
       const visualDirection = await generateVisualDirection(idea, input.persona, costTracking)
 
       const ideaRecord = await store.createDailyContentIdea({
-        briefId: brief.id,
-        organizationId: input.persona.organizationId,
-        personaId: input.persona.id,
-        ideaType: idea === recommended ? 'recommended' : 'alternate',
-        title: idea.title,
-        angle: idea.angle,
-        whyNow: idea.whyNow,
-        sourceIds: idea.sourceIds,
-        sourceFreshness: idea.sourceFreshness,
-        formatSuggestion: idea.formatSuggestion,
-        territory: idea.territory,
-        noveltyScore: idea.novelty,
-        relevanceScore: idea.relevance,
-        credibilityScore: idea.credibility,
-        insightScore: idea.insight,
-        trendGrounded: idea.trendGrounded,
-        postCaption: postCaption ?? undefined,
-        visualType: visualDirection?.type ?? undefined,
-        visualConcept: visualDirection?.concept ?? undefined,
-        visualPrompt: visualDirection?.prompt ?? undefined,
-        visualComposition: visualDirection?.composition ?? undefined,
-        visualFocalPoint: visualDirection?.focalPoint ?? undefined,
-        visualAllowedText: visualDirection?.allowedText ?? undefined,
-        visualScreenshotTarget: visualDirection?.screenshotTarget ?? undefined,
-        visualReason: visualDirection?.reason ?? undefined,
-      })
+         briefId: brief.id,
+         organizationId: input.persona.organizationId,
+         personaId: input.persona.id,
+         ideaType: idea === recommended ? 'recommended' : 'alternate',
+         title: idea.title,
+         angle: idea.angle,
+         whyNow: idea.whyNow,
+         sourceIds: idea.sourceIds,
+         sourceFreshness: idea.sourceFreshness,
+         formatSuggestion: idea.formatSuggestion,
+         territory: idea.territory,
+         noveltyScore: idea.novelty,
+         relevanceScore: idea.relevance,
+         credibilityScore: idea.credibility,
+         insightScore: idea.insight,
+         trendGrounded: idea.trendGrounded,
+         postCaption: postCaption ?? undefined,
+         visualType: visualDirection?.type ?? undefined,
+         visualConcept: visualDirection?.concept ?? undefined,
+         visualPrompt: visualDirection?.prompt ?? undefined,
+         visualCommunicationGoal: visualDirection?.communicationGoal ?? undefined,
+         visualSubject: visualDirection?.subject ?? undefined,
+         visualScene: visualDirection?.scene ?? undefined,
+         visualComposition: visualDirection?.composition ?? undefined,
+         visualLighting: visualDirection?.lighting ?? undefined,
+         visualPalette: visualDirection?.palette ?? undefined,
+         visualMood: visualDirection?.mood ?? undefined,
+         visualStyle: visualDirection?.style ?? undefined,
+         visualAspectRatio: visualDirection?.aspectRatio ?? undefined,
+         visualFocalPoint: visualDirection?.focalPoint ?? undefined,
+         visualAllowedText: visualDirection?.allowedText ?? undefined,
+         visualScreenshotTarget: visualDirection?.screenshotTarget ?? undefined,
+         visualAvoid: visualDirection?.avoid?.join(', ') ?? undefined,
+         visualReason: visualDirection?.reason ?? undefined,
+       })
 
       if (idea === recommended) recommendedIdea = ideaRecord
     }
@@ -239,12 +345,20 @@ export async function generateDailyBrief(
 
     await store.updateDailyContentBriefStatus(brief.id, 'ready', costTracking.total)
 
-    // Record content memories for anti-repetition
+    // Record content memories for anti-repetition (with semantic embeddings)
     for (const idea of selectedIdeas) {
+      // Compute semantic fingerprint for combined title+angle+territory
+      const embedding = await embedContentMemory({
+        title: idea.title,
+        angle: idea.angle,
+        territory: idea.territory,
+      })
+
       await store.createContentMemory({
         personaId: input.persona.id,
         memoryType: 'topic_covered',
         content: idea.title,
+        embedding,
       })
       if (idea.territory) {
         await store.createContentMemory({
@@ -268,24 +382,43 @@ async function generateIdeaCandidates(input: {
   trendSignals: string
   recentContent: string
   costTracking: { total: number }
+  performanceSignals?: PerformanceSignal
+  personaAngle?: ReturnType<typeof getPersonaAngleProfile>
+  contentStrategy?: 'trend-led' | 'evergreen'
+  platform?: PostPlatform
 }): Promise<{ ideas: IdeaCandidate[]; cost: number }> {
-  const system = `You are a LinkedIn content strategist. Generate 8 specific post ideas that this person could actually publish.
+  const perfBlock = input.performanceSignals && input.performanceSignals.guidance.length > 0
+    ? `\n\nPERFORMANCE INSIGHTS from this persona's past posts:\n${input.performanceSignals.guidance.map(g => `- ${g}`).join('\n')}`
+    : ''
+
+  const strategyBlock = input.contentStrategy === 'evergreen'
+    ? '\n\nTODAY\'S STRATEGY: Trends are weak — prioritize evergreen expertise, lessons, and authoritative opinions over trend-chasing.'
+    : ''
+
+  const angleBlock = input.personaAngle
+    ? `\n\nEDITORIAL LENS: As a ${input.personaAngle.type}, focus on: ${input.personaAngle.lenses.slice(0, 2).join(', ')}. Avoid: ${input.personaAngle.avoidAngles[0]}.`
+    : ''
+
+  const platformCount = input.platform === 'x' ? 6 : 8
+
+  const system = `You are a content strategist. Generate ${platformCount} specific post ideas that this person could actually publish.
 
 RULES:
 - At least 3 ideas must reference the trend signals by name with the persona's unique take.
 - At least 2 ideas must be personal lessons from the persona's real experience.
 - At least 1 idea must be a hot take or counterintuitive opinion.
 - Titles must be SPECIFIC. No "A lesson from X", "Thoughts on X", "Why X matters".
-- GOOD titles: "We reduced pod restarts by 40% with one config change" / "I reviewed 50 postmortems. 43 had the same root cause." / "Our 'reliable' deploy process had a 3-hour blind spot."
+- GOOD titles: "We reduced pod restarts by 40% with one config change" / "I reviewed 50 postmortems. 43 had the same root cause."
 - Include a "whyNow" that explains urgency — a trend, a recent event, a seasonal insight, or a mistake people are making right now.
-- The "angle" must be 1-2 sentences of actual insight, not a generic observation.
+- The "angle" must be 1-2 sentences of actual insight, not a generic observation.${perfBlock}${strategyBlock}${angleBlock}
 - Output ONLY JSON array: [{"title": "...", "angle": "...", "trendGrounded": true/false, "territory": "topic", "formatSuggestion": "observation|lesson|opinion|case_study", "whyNow": "..."}]`
 
   const user = JSON.stringify({
     persona: input.personaContext,
     trends: input.trendSignals,
     avoid: input.recentContent,
-    count: 8,
+    count: platformCount,
+    favorTopics: input.performanceSignals?.favorTopics ?? [],
   })
 
   const result = await generate<IdeaCandidate[] | { ideas: IdeaCandidate[] }>({
@@ -323,8 +456,10 @@ async function generateFinishedPost(input: {
   trendSignals: string
   costTracking: { total: number }
   repairHint?: string
+  diversificationBlock?: string
 }): Promise<string> {
-  const system = `You are a LinkedIn ghostwriter for senior tech practitioners. Write a post that STOPS the scroll.
+  const divBlock = input.diversificationBlock ? `\n\n${input.diversificationBlock}` : ''
+  const system = `You are a LinkedIn ghostwriter for senior tech practitioners. Write a post that STOPS the scroll.${divBlock}
 
 FORMATTING (NON-NEGOTIABLE):
 Output EXACTLY this structure, where each [paragraph] is 1-2 short sentences separated by a blank line:
@@ -389,6 +524,149 @@ TONE: Like a senior engineer explaining something to a peer over coffee. Direct,
   return cleanPost(result.data)
 }
 
+async function generateXPost(input: {
+  idea: IdeaCandidate
+  personaContext: string
+  trendSignals: string
+  costTracking: { total: number }
+  repairHint?: string
+  diversificationBlock?: string
+}): Promise<string> {
+  const divBlock = input.diversificationBlock ? `\n\n${input.diversificationBlock}` : ''
+  const system = `You write sharp, quotable posts for X (Twitter) by senior tech practitioners.${divBlock}
+
+WRITING RULES:
+- One post. No threads unless the idea genuinely requires 2-3 posts to land.
+- Lead with the opinion, the number, or the contrarian take. No throat-clearing.
+- Compress. Every word must earn its place. If it doesn't add information, cut it.
+- Sound like a smart person talking — not a brand, not a newsletter, not a blog.
+- Timeliness matters. If a trend is referenced, make it clear why it matters right now.
+- End with either a punchline, a question, or nothing. Never "Thoughts?" or "Agree?".
+
+HARD RULES:
+- NO em dashes. Use commas or periods.
+- NO "In today's fast-paced..." or any AI filler.
+- NO listicles, no numbered tips, no "here are X things".
+- NO hashtags, NO emojis, NO exclamation marks.
+- NO sign-off, no "follow for more".
+- Max 280 characters for single posts.
+- Threads: max 3 posts, each max 280 chars. Number as "1/", "2/", "3/".
+- Never fabricate numbers, metrics, or named examples.
+
+TONE:
+- Confident. Specific. Human.
+- A senior engineer sharing a real insight they'd tell a peer — not presenting to an audience.
+- Controversial takes are fine if the person can credibly hold the opinion.
+- If the post is about a trend, the take must be the persona's own — not a summary of the article.
+
+FORMAT:
+Output ONLY the post text. No JSON, no intro, no "Here's your post:".`
+
+  const userObj: Record<string, unknown> = {
+    persona: input.personaContext,
+    idea: {
+      title: input.idea.title,
+      angle: input.idea.angle,
+      territory: input.idea.territory,
+      format: input.idea.formatSuggestion,
+    },
+    sources: input.trendSignals,
+  }
+  if (input.repairHint) {
+    userObj.repair = input.repairHint
+  }
+  const user = JSON.stringify(userObj)
+
+  const result = await generate<string>({
+    task: 'DEEP_WRITING',
+    system,
+    user,
+    maxTokens: 300,
+    promptVersion: DAILY_BRIEF_PROMPT_VERSION + '-x-v1',
+    callSite: 'daily-brief:generateXPost',
+    feature: 'studio_v2_daily_x',
+  })
+
+  return cleanXPost(result.data)
+}
+
+function cleanXPost(raw: string): string {
+  let text = raw.trim()
+
+  // Remove ALL em dashes and dash-like characters
+  text = text.replace(/[\u2014\u2013\u2015\uFE58\uFF0D\u2500\u2212\u2E3A\u2E3B]/g, ' ')
+
+  // Remove emojis
+  text = text.replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
+  text = text.replace(/[\u{1F600}-\u{1F64F}]/gu, '')
+  text = text.replace(/[\u{2600}-\u{26FF}]/gu, '')
+
+  // Remove hashtags
+  text = text.replace(/#[a-zA-Z][a-zA-Z0-9]*/g, '')
+
+  // Remove trailing filler
+  text = text.replace(/\s*(Thoughts\?|Agree\?|Let that sink in\.?)\s*$/i, '')
+
+  // Collapse whitespace
+  text = text.replace(/\s{2,}/g, ' ').trim()
+
+  // Enforce 280 char limit for non-thread posts
+  const lines = text.split('\n').filter(l => l.trim())
+  const isThread = lines.some(l => /^\d+\/\s/.test(l.trim()))
+
+  if (!isThread && text.length > 280) {
+    // Try to cut at sentence boundary
+    const lastPeriod = text.lastIndexOf('.', 277)
+    if (lastPeriod > 200) {
+      text = text.slice(0, lastPeriod + 1)
+    } else {
+      text = text.slice(0, 277) + '...'
+    }
+  }
+
+  return text.trim()
+}
+
+function evaluateXPostQuality(caption: string): PostQualityResult {
+  const failures: string[] = []
+  const warnings: string[] = []
+
+  const lines = caption.split('\n').filter(l => l.trim())
+  const isThread = lines.some(l => /^\d+\/\s/.test(l.trim()))
+
+  // Hard rule: no em dashes
+  if (/[\u2014\u2013\u2015]/.test(caption) || caption.includes('—') || caption.includes('–')) {
+    failures.push('EM_DASH')
+  }
+
+  // Hard rule: character limit
+  if (!isThread && caption.length > 280) {
+    failures.push('TOO_LONG')
+  }
+  if (isThread) {
+    for (const line of lines) {
+      const content = line.replace(/^\d+\/\s*/, '').trim()
+      if (content.length > 280) failures.push('THREAD_POST_TOO_LONG')
+    }
+  }
+
+  // Anti-slop: banned phrases
+  for (const phrase of BANNED_PHRASES) {
+    if (caption.toLowerCase().includes(phrase.toLowerCase())) {
+      failures.push(`BANNED: "${phrase}"`)
+    }
+  }
+
+  // Formatting
+  if ((caption.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length > 0) failures.push('EMOJI')
+  if ((caption.match(/#[a-zA-Z]/g) || []).length > 0) failures.push('HASHTAGS')
+  if (/!$/.test(caption.trim())) failures.push('EXCLAMATION')
+
+  const wordCount = caption.split(/\s+/).length
+  const passed = failures.length === 0
+  return { passed, failures, warnings, wordCount }
+}
+
 export function cleanPost(raw: string): string {
   let text = raw.trim()
 
@@ -441,7 +719,12 @@ async function generatePostWithQualityGate(input: {
   personaContext: string
   trendSignals: string
   costTracking: { total: number }
+  platform: PostPlatform
+  diversificationBlock?: string
 }): Promise<{ caption: string; gateResult: PostQualityResult }> {
+  const evaluateQuality = input.platform === 'x' ? evaluateXPostQuality : evaluatePostQuality
+  const generatePost = input.platform === 'x' ? generateXPost : generateFinishedPost
+
   let attempt = 0
   const maxAttempts = 2
   let lastCaption = ''
@@ -449,15 +732,16 @@ async function generatePostWithQualityGate(input: {
 
   while (attempt < maxAttempts) {
     attempt++
-    const caption = await generateFinishedPost({
+    const caption = await generatePost({
       idea: input.idea,
       personaContext: input.personaContext,
       trendSignals: input.trendSignals,
       costTracking: input.costTracking,
       repairHint: lastGate ? buildRepairHint(lastGate) : undefined,
+      diversificationBlock: input.diversificationBlock,
     })
 
-    const gate = evaluatePostQuality(caption)
+    const gate = evaluateQuality(caption)
     lastCaption = caption
     lastGate = gate
 
@@ -467,6 +751,7 @@ async function generatePostWithQualityGate(input: {
 
     if (attempt >= maxAttempts) {
       console.warn('[daily-brief] Post quality gate failed after max attempts', {
+        platform: input.platform,
         failures: gate.failures,
         warnings: gate.warnings,
         wordCount: gate.wordCount,
@@ -551,41 +836,52 @@ async function generateVisualDirection(
   persona: ContentPersona,
   costTracking: { total: number },
 ): Promise<VisualDirection | null> {
-  const system = `Design a visual direction for a LinkedIn post. Choose the RIGHT type for the content.
+  const system = `You are a creative director for social media content visuals. Your job is not to "generate an image" — it is to decide the right visual medium and direct it like a creative director.
 
-VISUAL TYPES: PRODUCT_SCREENSHOT, EDITORIAL_GRAPHIC, TECHNICAL_DIAGRAM, TYPOGRAPHIC_CONCEPT, DATA_VISUAL, GENERATED_IMAGE, NO_VISUAL
+STEP 1: Choose the RIGHT medium for this post.
+- NO_VISUAL: Opinion, rants, personal stories where text IS the content. Adding an image dilutes it.
+- TYPOGRAPHIC_CONCEPT: One powerful number or quote. Big text, minimal design, high contrast.
+- TECHNICAL_DIAGRAM: Architecture, flows, comparisons. Isometric or flat vector diagrams.
+- DATA_VISUAL: Metrics, before/after, trends. Charts, graphs with real data feel.
+- EDITORIAL_GRAPHIC: Concepts, metaphors, tradeoffs. Illustrated, metaphorical, conceptual.
+- REALISTIC_PHOTOGRAPH: ONLY when a real scene adds genuine value. Must be editorial photography — not stock.
+- PRODUCT_SCREENSHOT: Only when showing a real product UI.
 
-SELECTION RULES:
-- NO_VISUAL: for opinion/rant/personal story posts where text is the whole point.
-- TYPOGRAPHIC_CONCEPT: for posts with a single powerful stat or quote. Big number + minimal design.
-- TECHNICAL_DIAGRAM: for how-to, architecture, or comparison posts. System maps, flow diagrams.
-- DATA_VISUAL: for posts with metrics. Charts, graphs, before/after comparisons.
-- EDITORIAL_GRAPHIC: for conceptual posts. Metaphors, tradeoffs, decision trees.
-- GENERATED_IMAGE: only when a photographic scene genuinely adds value.
-- PRODUCT_SCREENSHOT: only for Relay/Studio product posts.
+STEP 2: If the medium is visual, produce a full creative direction.
+- communication_goal: What should the viewer understand in 3 seconds?
+- subject: The literal thing shown (no abstractions).
+- scene: Where is this happening? What is the environment?
+- composition: Layout, focal point, visual hierarchy.
+- lighting: Natural, studio, cinematic, flat, ambient.
+- palette: Specific colors. Muted base + ONE accent.
+- mood: The feeling. Tense, calm, confident, analytical, urgent.
+- style: Editorial photography, isometric diagram, flat vector, technical illustration.
+- aspect_ratio: 1.91:1 for LinkedIn, 1:1 or 16:9 for X.
+- avoid: List specific clichés to avoid for THIS concept.
 
-AVOID AT ALL COSTS:
+AVOID GLOBALLY:
 - No robots, no glowing brains, no 3D spheres, no stock people, no floating code.
-- No generic "tech office" scenes (laptop on desk, person staring at screen).
-- No motivational poster aesthetics (sunrise, mountain, person on cliff).
-- No abstract gradient blobs or geometric patterns.
+- No generic "tech office" scenes. No motivational posters (sunrise, cliff, mountain).
+- No abstract gradient blobs. No fake dashboards. No holographic UI.
+- If the topic is Docker, show a real system concept. If infrastructure, make it feel infrastructural.
 
-IMAGE GENERATION PROMPT MUST BE:
-- 3-4 sentences describing a SPECIFIC scene or composition.
-- Include: subject, setting, lighting, color palette, mood, camera angle if photographic.
-- Use concrete nouns and adjectives. "A split-screen comparison" not "a comparison".
-- For diagrams: describe the layout, labels, flow direction, color coding.
-- For editorial: describe the metaphor, focal point, negative space, accent elements.
-- NO text overlays. NO logos. NO faces. NO watermarks.
-- Style: editorial illustration, isometric diagram, flat vector, or clean photography.
-- Colors: muted base (slate, charcoal, navy, warm gray) with ONE accent (amber, teal, coral).
-
-EXAMPLE GOOD PROMPTS:
-- "A split-screen editorial illustration. Left side shows a tangled mess of red wires labeled with microservice names. Right side shows the same services as clean blue pipes flowing in sequence. Warm amber lighting from above. Muted slate background."
-- "An isometric diagram of a deployment pipeline. Code enters from left, passes through three glowing stages (test, build, deploy), exits to a green production block. Each stage has a distinct color. Clean white background. Flat vector style."
-- "A dark editorial photograph of a single server rack in a dimly lit datacenter. One rack has a warm amber light glowing from inside, the rest are dark blue. Shot from a low angle. Moody, cinematic lighting. Shallow depth of field."
-
-Output ONLY: {"type": "VISUAL_TYPE", "concept": "one sentence", "prompt": "3-4 sentence detailed generation prompt", "reason": "why this type fits"}`
+Output ONLY JSON:
+{
+  "type": "NO_VISUAL|TYPOGRAPHIC_CONCEPT|TECHNICAL_DIAGRAM|DATA_VISUAL|EDITORIAL_GRAPHIC|REALISTIC_PHOTOGRAPH|PRODUCT_SCREENSHOT",
+  "concept": "One sentence. What this visual communicates.",
+  "communication_goal": "What the viewer understands in 3 seconds",
+  "subject": "The literal thing shown",
+  "scene": "Environment/setting",
+  "composition": "Layout and focal point",
+  "lighting": "Type and quality of light",
+  "palette": "Specific colors",
+  "mood": "Feeling",
+  "style": "Medium style",
+  "aspect_ratio": "1.91:1",
+  "prompt": "3-4 sentence generation prompt. Concrete nouns only.",
+  "avoid": ["specific thing 1", "specific thing 2"],
+  "reason": "Why this medium fits this idea"
+}`
 
   const user = JSON.stringify({
     ideaTitle: idea.title,
@@ -599,7 +895,7 @@ Output ONLY: {"type": "VISUAL_TYPE", "concept": "one sentence", "prompt": "3-4 s
     task: 'FAST_STRUCTURED',
     system,
     user,
-    promptVersion: DAILY_BRIEF_PROMPT_VERSION + '-visual',
+    promptVersion: DAILY_BRIEF_PROMPT_VERSION + '-visual-v2',
     callSite: 'daily-brief:generateVisual',
     feature: 'studio_v2_daily',
   })
@@ -902,6 +1198,68 @@ function scoreIdeas(
   })
 }
 
+/**
+ * Apply semantic novelty penalty using embedding-based similarity.
+ * Ideas that are semantically close to existing content get their novelty
+ * score reduced, making them less likely to be selected as recommended.
+ */
+async function applySemanticNoveltyPenalty(
+  ideas: IdeaCandidate[],
+  store: ScoutStore,
+  personaId: string,
+): Promise<IdeaCandidate[]> {
+  return Promise.all(
+    ideas.map(async (idea) => {
+      const embedding = await embedContentMemory({
+        title: idea.title,
+        angle: idea.angle,
+        territory: idea.territory,
+      })
+      if (!embedding) return idea
+
+      const similar = await store.findSimilarMemories(embedding, personaId, 0.75, 3)
+      if (similar.length === 0) return idea
+
+      const maxSim = Math.max(...similar.map(s => s.similarity))
+      const penalty = maxSim * 0.4
+      const newNovelty = Math.max(0.1, (idea.novelty ?? 0.5) - penalty)
+
+      return { ...idea, novelty: newNovelty }
+    }),
+  )
+}
+
+/**
+ * Platform-specific ranking adjustment.
+ *
+ * Same pool of ideas, different winner for LinkedIn vs X.
+ * LinkedIn: favors depth, expertise, conversation, specificity
+ * X: favors compression, immediacy, quotability, timeliness
+ */
+function applyPlatformSpecificRanking(ideas: IdeaCandidate[], platform: PostPlatform): IdeaCandidate[] {
+  return ideas.map(idea => {
+    let adjustment = 0
+
+    if (platform === 'x') {
+      // X favors: timely, opinionated, short titles, high emotional tension
+      if (idea.trendGrounded) adjustment += 0.05
+      if (idea.formatSuggestion === 'opinion') adjustment += 0.04
+      if (idea.title.length < 60) adjustment += 0.03
+      // X disfavors: long-form, educational, case studies
+      if (idea.formatSuggestion === 'case_study') adjustment -= 0.03
+    } else {
+      // LinkedIn favors: expertise, depth, specificity, conversation
+      if (idea.formatSuggestion === 'case_study') adjustment += 0.04
+      if (idea.formatSuggestion === 'practical_lesson') adjustment += 0.03
+      if (idea.credibility ?? 0 > 0.7) adjustment += 0.03
+      // LinkedIn disfavors: overly short, purely timely without depth
+      if (idea.title.length < 30) adjustment -= 0.02
+    }
+
+    return { ...idea, relevance: (idea.relevance ?? 0.5) + adjustment }
+  })
+}
+
 function selectDiverseSet(candidates: IdeaCandidate[], count: number): IdeaCandidate[] {
   const selected: IdeaCandidate[] = []
   const usedTerritories = new Set<string>()
@@ -961,9 +1319,18 @@ interface VisualDirection {
   type: VisualType
   concept: string
   prompt?: string
+  communicationGoal?: string
+  subject?: string
+  scene?: string
   composition?: string
+  lighting?: string
+  palette?: string
+  mood?: string
+  style?: string
+  aspectRatio?: string
   focalPoint?: string
   allowedText?: string
   screenshotTarget?: string
+  avoid?: string[]
   reason: string
 }

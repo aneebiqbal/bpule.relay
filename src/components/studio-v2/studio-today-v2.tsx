@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Copy, Shuffle, Check, AlertCircle, Plus, Users, RefreshCw, Download, Image, Sparkles } from 'lucide-react'
 import type { DailyContentIdea } from '@/lib/domain/types'
 
+type Platform = 'linkedin' | 'x'
 
 interface Props {
   personaId: string
@@ -15,10 +16,12 @@ interface Props {
 interface BriefData {
   brief: { id: string; status: string; localDate: string }
   ideas: DailyContentIdea[]
+  platform?: Platform
 }
 
 export function StudioTodayV2({ personaId, displayName }: Props) {
   const router = useRouter()
+  const [platform, setPlatform] = useState<Platform>('linkedin')
   const [data, setData] = useState<BriefData | null>(null)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
@@ -36,18 +39,18 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
 
   const fetchBrief = useCallback(async (): Promise<boolean> => {
     try {
-      const res = await fetch(`/api/content/intelligence/v2/daily-brief?personaId=${personaId}`)
+      const res = await fetch(`/api/content/intelligence/v2/daily-brief?personaId=${personaId}&platform=${platform}`)
       if (!res.ok) return false
       const json = await res.json()
       if (json.ideas?.length > 0) {
-        setData(json)
+        setData({ ...json, platform })
         const rec = json.ideas.find((i: DailyContentIdea) => i.ideaType === 'recommended')
         setActiveIdeaId(rec?.id ?? json.ideas[0].id)
         return true
       }
       return false
     } catch { return false }
-  }, [personaId])
+  }, [personaId, platform])
 
   const generateBrief = useCallback(async () => {
     setGenerating(true)
@@ -57,17 +60,17 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
       const res = await fetch('/api/content/intelligence/v2/daily-brief', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personaId }),
+        body: JSON.stringify({ personaId, platform }),
       })
       if (!res.ok) throw new Error('Failed')
       const json = await res.json()
       if (json.ideas?.length > 0) {
-        setData(json)
+        setData({ ...json, platform })
         setActiveIdeaId(json.ideas[0].id)
       }
     } catch { setError('Generation failed. Try again.') }
     finally { setGenerating(false) }
-  }, [personaId])
+  }, [personaId, platform])
 
   const tryAnother = useCallback(async () => {
     if (!data) return
@@ -79,6 +82,7 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           personaId,
+          platform,
           excludeIdeas: data.ideas.map(i => ({ title: i.title, territory: i.territory ?? '', angle: i.angle ?? '' })),
         }),
       })
@@ -92,7 +96,7 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
       }
     } catch { /* keep current */ }
     finally { setGenerating(false) }
-  }, [personaId, data])
+  }, [personaId, data, platform])
 
   useEffect(() => {
     fetchBrief().then(ok => { if (!ok) generateBrief() }).finally(() => setLoading(false))
@@ -209,28 +213,43 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <span className="font-mono text-xs uppercase tracking-[0.15em] text-cobalt">Studio</span>
-            <span className="h-3 w-px bg-line" />
-            <span className="text-sm font-medium text-ink/70">{displayName}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.push('/content?manage=1')}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-ink/50 transition-colors hover:bg-bone-raised hover:text-cobalt"
-            >
-              <Users className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Switch</span>
-            </button>
-            <button
-              onClick={() => router.push('/content/new')}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-ink/50 transition-colors hover:bg-bone-raised hover:text-cobalt"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Persona</span>
-            </button>
-            <span className="font-mono text-[11px] text-ink/30 hidden sm:block">
-              {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-            </span>
-          </div>
+             <span className="h-3 w-px bg-line" />
+             <span className="text-sm font-medium text-ink/70">{displayName}</span>
+           </div>
+           <div className="flex items-center gap-2">
+             {/* Platform toggle */}
+             <div className="flex rounded-lg border border-line p-0.5">
+               <button
+                 onClick={() => setPlatform('linkedin')}
+                 className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${platform === 'linkedin' ? 'bg-cobalt text-on-accent' : 'text-ink/50 hover:text-ink/80'}`}
+               >
+                 LinkedIn
+               </button>
+               <button
+                 onClick={() => setPlatform('x')}
+                 className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${platform === 'x' ? 'bg-cobalt text-on-accent' : 'text-ink/50 hover:text-ink/80'}`}
+               >
+                 X
+               </button>
+             </div>
+             <button
+               onClick={() => router.push('/content?manage=1')}
+               className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-ink/50 transition-colors hover:bg-bone-raised hover:text-cobalt"
+             >
+               <Users className="h-3.5 w-3.5" />
+               <span className="hidden sm:inline">Switch</span>
+             </button>
+             <button
+               onClick={() => router.push('/content/new')}
+               className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-ink/50 transition-colors hover:bg-bone-raised hover:text-cobalt"
+             >
+               <Plus className="h-3.5 w-3.5" />
+               <span className="hidden sm:inline">Persona</span>
+             </button>
+             <span className="font-mono text-[11px] text-ink/30 hidden sm:block">
+               {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+             </span>
+           </div>
         </div>
       </header>
 
@@ -274,17 +293,26 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
               </div>
 
               {/* Post body */}
-              <div className="px-5 py-5">
-                <h2 className="mb-3 text-xl font-semibold text-ink leading-snug">{activeIdea.title}</h2>
-                {activeIdea.postCaption && (
-                  <div className="whitespace-pre-wrap text-[15px] leading-[1.7] text-ink/80">
-                    {activeIdea.postCaption}
-                  </div>
-                )}
-                {activeIdea.angle && !activeIdea.postCaption && (
-                  <p className="text-sm leading-relaxed text-ink/60">{activeIdea.angle}</p>
-                )}
-              </div>
+               <div className="px-5 py-5">
+                 <h2 className={`mb-3 font-semibold text-ink leading-snug ${platform === 'x' ? 'text-base' : 'text-xl'}`}>{activeIdea.title}</h2>
+                 {activeIdea.postCaption && (
+                   <>
+                     <div className={`whitespace-pre-wrap text-ink/80 ${platform === 'x' ? 'text-sm leading-[1.6]' : 'text-[15px] leading-[1.7]'}`}>
+                       {activeIdea.postCaption}
+                     </div>
+                     {platform === 'x' && (
+                       <div className="mt-2 flex items-center gap-2">
+                         <span className={`font-mono text-xs ${activeIdea.postCaption.length > 280 ? 'text-status-danger' : activeIdea.postCaption.length > 250 ? 'text-amber-500' : 'text-ink/30'}`}>
+                           {activeIdea.postCaption.length}/280
+                         </span>
+                       </div>
+                     )}
+                   </>
+                 )}
+                 {activeIdea.angle && !activeIdea.postCaption && (
+                   <p className="text-sm leading-relaxed text-ink/60">{activeIdea.angle}</p>
+                 )}
+               </div>
 
               {/* Actions */}
               <div className="flex items-center gap-2 border-t border-line px-5 py-3 bg-bone/50">

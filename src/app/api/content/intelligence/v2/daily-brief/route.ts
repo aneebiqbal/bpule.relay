@@ -19,55 +19,60 @@ function getLocalDate(timezone: string): string {
 }
 
 export async function GET(request: Request) {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+   const user = await getCurrentUser()
+   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
-  const url = new URL(request.url)
-  const personaId = url.searchParams.get('personaId')
-  if (!personaId) return NextResponse.json({ error: 'personaId required' }, { status: 400 })
+   const url = new URL(request.url)
+   const personaId = url.searchParams.get('personaId')
+   if (!personaId) return NextResponse.json({ error: 'personaId required' }, { status: 400 })
 
-  const store = await createScoutStore()
-  const persona = await store.getContentPersona(personaId)
-  if (!persona) return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
-  if (persona.repId !== user.rep.id && user.rep.role !== 'admin') {
-    return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
-  }
+   const platform = (url.searchParams.get('platform') === 'x' ? 'x' : 'linkedin') as 'linkedin' | 'x'
 
-  const localDate = getLocalDate(user.rep.timezone ?? 'UTC')
+   const store = await createScoutStore()
+   const persona = await store.getContentPersona(personaId)
+   if (!persona) return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+   if (persona.repId !== user.rep.id && user.rep.role !== 'admin') {
+     return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+   }
 
-  const existing = await store.getDailyContentBriefWithIdeas(personaId, localDate)
-  if (existing && existing.ideas.length > 0) {
-    return NextResponse.json({ brief: existing.brief, ideas: existing.ideas, fromCache: true })
-  }
+   const localDate = getLocalDate(user.rep.timezone ?? 'UTC')
 
-  return generateAndRespond(store, persona, localDate, user.rep.timezone ?? 'UTC')
-}
+   const existing = await store.getDailyContentBriefWithIdeas(personaId, localDate)
+   if (existing && existing.ideas.length > 0) {
+     return NextResponse.json({ brief: existing.brief, ideas: existing.ideas, fromCache: true, platform })
+   }
+
+   return generateAndRespond(store, persona, localDate, user.rep.timezone ?? 'UTC', platform)
+ }
 
 export async function POST(request: Request) {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+   const user = await getCurrentUser()
+   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
-  const body = await request.json()
-  const personaId = body.personaId as string
-  if (!personaId) return NextResponse.json({ error: 'personaId required' }, { status: 400 })
+   const body = await request.json()
+   const personaId = body.personaId as string
+   if (!personaId) return NextResponse.json({ error: 'personaId required' }, { status: 400 })
 
-  const store = await createScoutStore()
-  const persona = await store.getContentPersona(personaId)
-  if (!persona) return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
-  if (persona.repId !== user.rep.id && user.rep.role !== 'admin') {
-    return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
-  }
+   const platform = (body.platform === 'x' ? 'x' : 'linkedin') as 'linkedin' | 'x'
 
-  const localDate = getLocalDate(user.rep.timezone ?? 'UTC')
-  return generateAndRespond(store, persona, localDate, user.rep.timezone ?? 'UTC')
-}
+   const store = await createScoutStore()
+   const persona = await store.getContentPersona(personaId)
+   if (!persona) return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
+   if (persona.repId !== user.rep.id && user.rep.role !== 'admin') {
+     return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+   }
+
+   const localDate = getLocalDate(user.rep.timezone ?? 'UTC')
+   return generateAndRespond(store, persona, localDate, user.rep.timezone ?? 'UTC', platform)
+ }
 
 async function generateAndRespond(
-  store: ScoutStore,
-  persona: ContentPersona,
-  localDate: string,
-  timezone: string,
-) {
+   store: ScoutStore,
+   persona: ContentPersona,
+   localDate: string,
+   timezone: string,
+   platform: 'linkedin' | 'x',
+ ) {
   try {
     const profile: ContentProfile | null = persona.contentProfileId
       ? await store.getContentProfile(persona.contentProfileId)
@@ -96,20 +101,21 @@ async function generateAndRespond(
 
     try {
       const result = await generateDailyBrief(store, {
-        persona,
-        profile: profile ?? {
-          id: '',
-          organizationId: persona.organizationId,
-          personaId: persona.id,
-          confidence: 0,
-        } as ContentProfile,
-        tasteProfile,
-        memories,
-        trendCandidates,
-        recentIdeas,
-        localDate,
-        timezone,
-      })
+         persona,
+         profile: profile ?? {
+           id: '',
+           organizationId: persona.organizationId,
+           personaId: persona.id,
+           confidence: 0,
+         } as ContentProfile,
+         tasteProfile,
+         memories,
+         trendCandidates,
+         recentIdeas,
+         localDate,
+         timezone,
+         platform,
+       })
 
       // If AI produced 0 ideas, treat as failure to trigger fallback
       if (!result.ideas || result.ideas.length === 0) {

@@ -735,9 +735,11 @@ export interface ScoutStore {
     content: string
     sourceDraftId?: string | null
     sourceHistoryId?: string | null
+    embedding?: number[] | null
   }): Promise<ContentMemory>
   listContentMemories(personaId: string, opts?: { memoryType?: ContentMemoryType; limit?: number }): Promise<ContentMemory[]>
   deleteContentMemory(memoryId: string): Promise<void>
+  findSimilarMemories(embedding: number[], personaId: string, threshold?: number, limit?: number): Promise<Array<{ id: string; content: string; memoryType: string; similarity: number; createdAt: string }>>
   // content opportunities
   createContentOpportunity(input: {
     personaId: string
@@ -1420,17 +1422,25 @@ export interface ScoutStore {
     trendGrounded?: boolean
     postCaption?: string
     postPlatform?: string
-    visualType?: VisualType
-    visualConcept?: string
-    visualPrompt?: string
-    visualComposition?: string
-    visualAspectRatio?: string
-    visualFocalPoint?: string
-    visualAllowedText?: string
-    visualScreenshotTarget?: string
-    visualReason?: string
-    qualityResult?: Record<string, unknown>
-  }): Promise<DailyContentIdea>
+     visualType?: VisualType
+     visualConcept?: string
+     visualPrompt?: string
+     visualCommunicationGoal?: string
+     visualSubject?: string
+     visualScene?: string
+     visualComposition?: string
+     visualLighting?: string
+     visualPalette?: string
+     visualMood?: string
+     visualStyle?: string
+     visualAspectRatio?: string
+     visualFocalPoint?: string
+     visualAllowedText?: string
+     visualScreenshotTarget?: string
+     visualAvoid?: string
+     visualReason?: string
+     qualityResult?: Record<string, unknown>
+   }): Promise<DailyContentIdea>
   listDailyContentIdeas(briefId: string): Promise<DailyContentIdea[]>
   getDailyContentIdeaById(ideaId: string): Promise<DailyContentIdea | null>
   markDailyContentIdeaCopied(ideaId: string): Promise<void>

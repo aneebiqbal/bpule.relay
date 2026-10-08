@@ -39,6 +39,8 @@ export interface TrendStore {
   updateHealth(sourceKey: string, success: boolean, error?: string): Promise<void>
 }
 
+export type TrendPhase = 'breaking' | 'rising' | 'established' | 'saturated'
+
 export interface TrendCandidate {
   item: TrendItem
   relevanceScore: number
@@ -51,6 +53,10 @@ export interface TrendCandidate {
   credibilityScore: number
   overallScore: number
   whyNow: string
+  // Phase 3: velocity + saturation
+  velocityScore?: number
+  saturationScore?: number
+  trendPhase?: TrendPhase
 }
 
 export interface TrendRelevanceProfile {

@@ -4303,6 +4303,7 @@ export class SupabaseStore implements ScoutStore {
     content: string
     sourceDraftId?: string | null
     sourceHistoryId?: string | null
+    embedding?: number[] | null
   }): Promise<ContentMemory> {
     const { data, error } = await this.client
       .from('content_memories')
@@ -4313,6 +4314,8 @@ export class SupabaseStore implements ScoutStore {
         content: input.content,
         source_draft_id: input.sourceDraftId ?? null,
         source_history_id: input.sourceHistoryId ?? null,
+        embedding: input.embedding ?? null,
+        content_fingerprint: input.embedding ? null : null,
       })
       .select('*')
       .single()
@@ -4331,6 +4334,32 @@ export class SupabaseStore implements ScoutStore {
 
   async deleteContentMemory(memoryId: string): Promise<void> {
     await this.client.from('content_memories').delete().eq('id', memoryId)
+  }
+
+  async findSimilarMemories(
+    embedding: number[],
+    personaId: string,
+    threshold = 0.75,
+    limit = 5,
+  ): Promise<Array<{ id: string; content: string; memoryType: string; similarity: number; createdAt: string }>> {
+    const { data, error } = await this.client.rpc('match_memories_by_embedding', {
+      query_embedding: embedding,
+      match_persona_id: personaId,
+      match_threshold: threshold,
+      match_count: limit,
+    })
+    if (error) {
+      // pgvector not enabled or function missing — return empty (graceful degradation)
+      console.warn('[store] Semantic memory search unavailable:', error.message)
+      return []
+    }
+    return (data ?? []).map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      content: row.content as string,
+      memoryType: row.memory_type as string,
+      similarity: row.similarity as number,
+      createdAt: row.created_at as string,
+    }))
   }
 
   // ── content opportunities ──
@@ -7577,17 +7606,25 @@ export class SupabaseStore implements ScoutStore {
     trendGrounded?: boolean
     postCaption?: string
     postPlatform?: string
-    visualType?: VisualType
-    visualConcept?: string
-    visualPrompt?: string
-    visualComposition?: string
-    visualAspectRatio?: string
-    visualFocalPoint?: string
-    visualAllowedText?: string
-    visualScreenshotTarget?: string
-    visualReason?: string
-    qualityResult?: Record<string, unknown>
-  }): Promise<DailyContentIdea> {
+     visualType?: VisualType
+     visualConcept?: string
+     visualPrompt?: string
+     visualCommunicationGoal?: string
+     visualSubject?: string
+     visualScene?: string
+     visualComposition?: string
+     visualLighting?: string
+     visualPalette?: string
+     visualMood?: string
+     visualStyle?: string
+     visualAspectRatio?: string
+     visualFocalPoint?: string
+     visualAllowedText?: string
+     visualScreenshotTarget?: string
+     visualAvoid?: string
+     visualReason?: string
+     qualityResult?: Record<string, unknown>
+   }): Promise<DailyContentIdea> {
     const { data, error } = await this.client
       .from('daily_content_ideas')
       .insert({
@@ -7609,22 +7646,30 @@ export class SupabaseStore implements ScoutStore {
         trend_grounded: input.trendGrounded ?? false,
         post_caption: input.postCaption ?? null,
         post_platform: input.postPlatform ?? 'linkedin',
-        visual_type: input.visualType ?? null,
-        visual_concept: input.visualConcept ?? null,
-        visual_prompt: input.visualPrompt ?? null,
-        visual_composition: input.visualComposition ?? null,
-        visual_aspect_ratio: input.visualAspectRatio ?? '1.91:1',
-        visual_focal_point: input.visualFocalPoint ?? null,
-        visual_allowed_text: input.visualAllowedText ?? null,
-        visual_screenshot_target: input.visualScreenshotTarget ?? null,
-        visual_reason: input.visualReason ?? null,
-        quality_result: input.qualityResult ?? null,
-      })
-      .select('*')
-      .single()
-    if (error) throw error
-    return mapDailyContentIdea(data)
-  }
+         visual_type: input.visualType ?? null,
+         visual_concept: input.visualConcept ?? null,
+         visual_prompt: input.visualPrompt ?? null,
+         visual_communication_goal: input.visualCommunicationGoal ?? null,
+         visual_subject: input.visualSubject ?? null,
+         visual_scene: input.visualScene ?? null,
+         visual_composition: input.visualComposition ?? null,
+         visual_lighting: input.visualLighting ?? null,
+         visual_palette: input.visualPalette ?? null,
+         visual_mood: input.visualMood ?? null,
+         visual_style: input.visualStyle ?? null,
+         visual_aspect_ratio: input.visualAspectRatio ?? '1.91:1',
+         visual_focal_point: input.visualFocalPoint ?? null,
+         visual_allowed_text: input.visualAllowedText ?? null,
+         visual_screenshot_target: input.visualScreenshotTarget ?? null,
+         visual_avoid: input.visualAvoid ?? null,
+         visual_reason: input.visualReason ?? null,
+         quality_result: input.qualityResult ?? null,
+       })
+       .select('*')
+       .single()
+     if (error) throw error
+     return mapDailyContentIdea(data)
+   }
 
   async listDailyContentIdeas(briefId: string): Promise<DailyContentIdea[]> {
     const { data, error } = await this.client
@@ -7869,15 +7914,23 @@ function mapDailyContentIdea(r: Record<string, unknown>): DailyContentIdea {
     trendGrounded: r.trend_grounded as boolean,
     postCaption: r.post_caption as string | null,
     postPlatform: (r.post_platform as string) ?? 'linkedin',
-    visualType: r.visual_type as DailyContentIdea['visualType'],
-    visualConcept: r.visual_concept as string | null,
-    visualPrompt: r.visual_prompt as string | null,
-    visualComposition: r.visual_composition as string | null,
-    visualAspectRatio: (r.visual_aspect_ratio as string) ?? '1.91:1',
-    visualFocalPoint: r.visual_focal_point as string | null,
-    visualAllowedText: r.visual_allowed_text as string | null,
-    visualScreenshotTarget: r.visual_screenshot_target as string | null,
-    visualReason: r.visual_reason as string | null,
+     visualType: r.visual_type as DailyContentIdea['visualType'],
+     visualConcept: r.visual_concept as string | null,
+     visualPrompt: r.visual_prompt as string | null,
+     visualCommunicationGoal: r.visual_communication_goal as string | null,
+     visualSubject: r.visual_subject as string | null,
+     visualScene: r.visual_scene as string | null,
+     visualComposition: r.visual_composition as string | null,
+     visualLighting: r.visual_lighting as string | null,
+     visualPalette: r.visual_palette as string | null,
+     visualMood: r.visual_mood as string | null,
+     visualStyle: r.visual_style as string | null,
+     visualAspectRatio: (r.visual_aspect_ratio as string) ?? '1.91:1',
+     visualFocalPoint: r.visual_focal_point as string | null,
+     visualAllowedText: r.visual_allowed_text as string | null,
+     visualScreenshotTarget: r.visual_screenshot_target as string | null,
+     visualAvoid: r.visual_avoid as string | null,
+     visualReason: r.visual_reason as string | null,
     qualityResult: r.quality_result as Record<string, unknown> | null,
     copiedAt: r.copied_at as string | null,
     postedAt: r.posted_at as string | null,
@@ -8220,6 +8273,8 @@ function mapContentMemory(r: Record<string, unknown>): ContentMemory {
     sourceDraftId: (r.source_draft_id as string) ?? null,
     sourceHistoryId: (r.source_history_id as string) ?? null,
     createdAt: r.created_at as string,
+    embedding: (r.embedding as number[]) ?? null,
+    contentFingerprint: (r.content_fingerprint as string) ?? null,
   }
 }
 

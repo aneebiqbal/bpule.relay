@@ -2309,6 +2309,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         sourceDraftId: input.sourceDraftId ?? null,
         sourceHistoryId: input.sourceHistoryId ?? null,
         createdAt: new Date().toISOString(),
+        embedding: input.embedding ?? null,
+        contentFingerprint: null,
       }
       contentMemories.unshift(row)
       return row
@@ -2323,6 +2325,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async deleteContentMemory(memoryId) {
       const idx = contentMemories.findIndex((m) => m.id === memoryId)
       if (idx >= 0) contentMemories.splice(idx, 1)
+    },
+    async findSimilarMemories(_embedding, _personaId, _threshold, _limit) {
+      // Mock: no semantic search — return empty (graceful degradation)
+      return []
     },
     // ── content opportunities ──
     async createContentOpportunity(input) {
@@ -3321,10 +3327,12 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         formatSuggestion: null, territory: null, noveltyScore: null,
         relevanceScore: null, credibilityScore: null, insightScore: null,
         trendGrounded: false, postCaption: null, postPlatform: 'linkedin',
-        visualType: null, visualConcept: null, visualPrompt: null,
-        visualComposition: null, visualAspectRatio: '1.91:1',
-        visualFocalPoint: null, visualAllowedText: null,
-        visualScreenshotTarget: null, visualReason: null,
+         visualType: null, visualConcept: null, visualPrompt: null,
+         visualCommunicationGoal: null, visualSubject: null, visualScene: null,
+         visualComposition: null, visualLighting: null, visualPalette: null,
+         visualMood: null, visualStyle: null, visualAspectRatio: '1.91:1',
+         visualFocalPoint: null, visualAllowedText: null,
+         visualScreenshotTarget: null, visualAvoid: null, visualReason: null,
         qualityResult: null, copiedAt: null, postedAt: null, rejectedAt: null,
         createdAt: new Date().toISOString() }
     },

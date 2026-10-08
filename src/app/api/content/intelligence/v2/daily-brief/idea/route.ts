@@ -14,9 +14,10 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
   const body = await request.json()
-  const personaId = body.personaId as string
-  const excludeIdeas = (body.excludeIdeas ?? []) as Array<{ title: string; territory: string; angle: string }>
-  if (!personaId) return NextResponse.json({ error: 'personaId required' }, { status: 400 })
+   const personaId = body.personaId as string
+   const excludeIdeas = (body.excludeIdeas ?? []) as Array<{ title: string; territory: string; angle: string }>
+   if (!personaId) return NextResponse.json({ error: 'personaId required' }, { status: 400 })
+   const platform = (body.platform === 'x' ? 'x' : 'linkedin') as 'linkedin' | 'x'
 
   const store = await createScoutStore()
   const persona = await store.getContentPersona(personaId)
@@ -55,13 +56,14 @@ export async function POST(request: Request) {
     const trendSignals = trendCandidates.slice(0, 5).map(c => `- ${c.item.title} (${c.whyNow})`).join('\n')
 
     const postCaption = await generateFinishedPost({
-      title: idea.title,
-      angle: idea.angle,
-      territory: idea.territory,
-      format: idea.formatSuggestion,
-      personaContext,
-      trendSignals: trendSignals || 'No strong trends — draw from expertise',
-    })
+       title: idea.title,
+       angle: idea.angle,
+       territory: idea.territory,
+       format: idea.formatSuggestion,
+       personaContext,
+       trendSignals: trendSignals || 'No strong trends — draw from expertise',
+       platform,
+     })
 
     const latestBrief = await store.getLatestDailyContentBrief(personaId)
 
@@ -177,14 +179,37 @@ AVOID in visual: robots, glowing brains, stock photos, 3D spheres, floating code
 }
 
 async function generateFinishedPost(input: {
-  title: string
-  angle: string
-  territory?: string
-  format?: string
-  personaContext: string
-  trendSignals: string
-}): Promise<string> {
-  const system = `You are a LinkedIn ghostwriter for senior tech practitioners. Write a post that STOPS the scroll.
+   title: string
+   angle: string
+   territory?: string
+   format?: string
+   personaContext: string
+   trendSignals: string
+   platform: 'linkedin' | 'x'
+ }): Promise<string> {
+   const system = input.platform === 'x'
+     ? `You write sharp, quotable posts for X (Twitter) by senior tech practitioners.
+
+WRITING RULES:
+- One post. No threads unless the idea genuinely requires 2-3 posts to land.
+- Lead with the opinion, the number, or the contrarian take. No throat-clearing.
+- Compress. Every word must earn its place.
+- Sound like a smart person talking — not a brand, not a newsletter.
+- Timeliness matters. If a trend is referenced, make it clear why it matters now.
+- End with a punchline, a question, or nothing. Never "Thoughts?" or "Agree?".
+
+HARD RULES:
+- NO em dashes. Use commas or periods.
+- NO filler: "In today's fast-paced...", "Here's the thing", "Let that sink in".
+- NO listicles, no numbered tips, no "here are X things".
+- NO hashtags, NO emojis, NO exclamation marks.
+- Max 280 characters for single posts.
+- Never fabricate numbers, metrics, or named examples.
+
+TONE: Confident. Specific. Human. Senior engineer sharing a real insight.
+
+Output ONLY the post text. No JSON, no intro.`
+     : `You are a LinkedIn ghostwriter for senior tech practitioners. Write a post that STOPS the scroll.
 
 FORMATTING (NON-NEGOTIABLE):
 Output EXACTLY this structure, where each [paragraph] is 1-2 short sentences separated by a blank line:
@@ -220,24 +245,40 @@ RULES:
 
 TONE: Like a senior engineer explaining something to a peer over coffee. Direct, specific, no corporate speak.`
 
-  const user = JSON.stringify({
-    persona: input.personaContext,
-    idea: { title: input.title, angle: input.angle, territory: input.territory, format: input.format },
-    sources: input.trendSignals,
-  })
+   const user = JSON.stringify({
+     persona: input.personaContext,
+     idea: { title: input.title, angle: input.angle, territory: input.territory, format: input.format },
+     sources: input.trendSignals,
+   })
 
-  const result = await generate<string>({
-    task: 'DEEP_WRITING',
-    system,
-    user,
-    maxTokens: 500,
-    promptVersion: 'studio-idea-post-v1',
-    callSite: 'studio:generatePost',
-    feature: 'studio_v2',
-  })
+   const result = await generate<string>({
+     task: 'DEEP_WRITING',
+     system,
+     user,
+     maxTokens: input.platform === 'x' ? 300 : 500,
+     promptVersion: input.platform === 'x' ? 'studio-idea-x-v1' : 'studio-idea-post-v1',
+     callSite: 'studio:generatePost',
+     feature: input.platform === 'x' ? 'studio_v2_x' : 'studio_v2',
+   })
 
-  return cleanPost(result.data)
-}
+   return input.platform === 'x' ? cleanXPost(result.data) : cleanPost(result.data)
+ }
+
+ function cleanXPost(raw: string): string {
+   let text = raw.trim()
+   text = text.replace(/[\u2014\u2013\u2015\uFE58\uFF0D\u2500\u2212\u2E3A\u2E3B]/g, ' ')
+   text = text.replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
+   text = text.replace(/[\u{1F600}-\u{1F64F}]/gu, '')
+   text = text.replace(/[\u{2600}-\u{26FF}]/gu, '')
+   text = text.replace(/#[a-zA-Z][a-zA-Z0-9]*/g, '')
+   text = text.replace(/\s*(Thoughts\?|Agree\?|Let that sink in\.?)\s*$/i, '')
+   text = text.replace(/\s{2,}/g, ' ').trim()
+   if (text.length > 280) {
+     const lastPeriod = text.lastIndexOf('.', 277)
+     text = lastPeriod > 200 ? text.slice(0, lastPeriod + 1) : text.slice(0, 277) + '...'
+   }
+   return text.trim()
+ }
 
 function cleanPost(raw: string): string {
   let text = raw.trim()
