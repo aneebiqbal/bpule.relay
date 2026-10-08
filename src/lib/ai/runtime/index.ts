@@ -349,6 +349,19 @@ export async function generate<T = Record<string, unknown>>(
         }
       }
 
+      // ── Empty Output Guard ──────────────────────────────────────────────
+      // Model returned near-empty content (output_tokens=1 or empty string).
+      // Treat as a transient failure and fall back to next provider.
+      const isEmptyOutput = !result.data ||
+        (typeof result.data === 'string' && result.data.trim().length < 5) ||
+        (typeof result.data === 'object' && JSON.stringify(result.data) === '{}')
+
+      if (isEmptyOutput && !options.stream) {
+        errors.push({ provider: resolved.provider, model: resolved.model, error: 'empty_output' })
+        recordFailure(resolved.provider, resolved.model, step.credentialId, 'malformed')
+        continue
+      }
+
       const costTier = step.provider === 'openai' ? 'tier4' : step.provider === 'longcat' ? 'tier1' : 'tier1'
       const trace: AiTrace = {
         ...traceBase,
