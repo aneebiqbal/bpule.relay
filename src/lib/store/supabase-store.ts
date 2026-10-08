@@ -4322,9 +4322,9 @@ export class SupabaseStore implements ScoutStore {
         content_fingerprint: input.embedding ? null : null,
       })
       .select('*')
-      .single()
+      .limit(1)
     if (error) throw error
-    return mapContentMemory(data)
+    return mapContentMemory(data[0])
   }
 
   async listContentMemories(personaId: string, opts?: { memoryType?: ContentMemoryType; limit?: number }): Promise<ContentMemory[]> {
