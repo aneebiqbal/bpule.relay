@@ -37,6 +37,8 @@ export interface V3ActionInput {
   confidence?: number
   /** Evidence quality (0-1) */
   evidenceQuality?: number
+  /** Commercial potential level (from commercial potential assessment) */
+  commercialPotential?: 'LOW' | 'MEDIUM' | 'HIGH' | null
 }
 
 export interface V3ActionOutput {
@@ -173,12 +175,22 @@ function applySafetyGate(
     }
   }
 
-  // Service provider relationship + CONNECT → review unless explicit
+  // Service provider relationship + CONNECT without explicit request →
+  // downgrade UNLESS commercial potential is high (they may be building a product)
   if (input.relationship === 'SERVICE_PROVIDER' && isConnectAction && !input.explicitRequest) {
+    if (input.commercialPotential === 'HIGH') {
+      return { action: 'CONNECT_WITH_NOTE', needsReview: false }
+    }
     return {
       action: 'OBSERVE',
       needsReview: false,
     }
+  }
+
+  // High commercial potential + CONNECT action → allow with note
+  // (relationship dampening already handled in scoring, this is the action layer)
+  if (input.commercialPotential === 'HIGH' && rawAction === 'CONNECT_WITHOUT_NOTE' && !input.explicitRequest) {
+    return { action: 'CONNECT_WITH_NOTE', needsReview: false }
   }
 
   return { action: rawAction, needsReview: false }
@@ -245,5 +257,6 @@ export function actionFromDecisionPacket(packet: V3LeadDecisionPacket): V3Action
     status: episode?.status ?? 'UNKNOWN',
     confidence: packet.confidence,
     evidenceQuality: packet.proofStrength,
+    commercialPotential: packet.latentPotential,
   })
 }

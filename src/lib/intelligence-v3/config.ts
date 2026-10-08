@@ -14,12 +14,13 @@ export const V3_CONFIG_VERSION = 'relay_decision_v3.0.0'
 // ── Scoring Weights (must sum to 1.0) ──────────────────────────────────────
 
 export const V3_SCORING_WEIGHTS: V3ScoringWeights = {
-  buyerRequestProbability: 0.25,  // Strongest signal: explicit buyer request
-  externalNeedProbability: 0.15,  // External/commercial need present
+  buyerRequestProbability: 0.20,  // Explicit buyer request
+  commercialPotential: 0.20,      // Strategic worth without explicit intent
+  externalNeedProbability: 0.10,  // External/commercial need present
   fit: 0.20,                      // Capability fit
-  timing: 0.15,                   // Recency/urgency
+  timing: 0.10,                   // Recency/urgency
   access: 0.10,                   // Can we reach them
-  proofRelevance: 0.10,           // We have relevant proof
+  proofRelevance: 0.05,           // We have relevant proof
   evidenceQuality: 0.05,          // Evidence quality/completeness
 }
 
@@ -70,12 +71,17 @@ export const RELATIONSHIP_CONTEXT: Record<string, {
   messageBias: number
 }> = {
   BUYER: { multiplier: 1.0, allowsBuyerEpisodes: true, messageBias: 0.0 },
-  SERVICE_PROVIDER: { multiplier: 0.4, allowsBuyerEpisodes: true, messageBias: -0.2 },
-  COMPETITOR: { multiplier: 0.2, allowsBuyerEpisodes: true, messageBias: -0.3 },
-  PARTNER: { multiplier: 0.6, allowsBuyerEpisodes: true, messageBias: -0.1 },
-  CANDIDATE: { multiplier: 0.5, allowsBuyerEpisodes: true, messageBias: -0.2 },
-  MIXED: { multiplier: 0.7, allowsBuyerEpisodes: true, messageBias: -0.1 },
-  UNKNOWN: { multiplier: 0.6, allowsBuyerEpisodes: true, messageBias: -0.1 },
+  // Service provider who is ALSO building a product: relationship is context,
+  // not a gate. A founder with an agency building a SaaS product has legitimate
+  // commercial potential on the product side. Multiplier reduced from 0.4 → 0.7
+  // to avoid zeroing product-building episodes.
+  SERVICE_PROVIDER: { multiplier: 0.7, allowsBuyerEpisodes: true, messageBias: -0.1 },
+  // Competitor: still reduced but not zeroed — they may have a separate buyer episode
+  COMPETITOR: { multiplier: 0.4, allowsBuyerEpisodes: true, messageBias: -0.2 },
+  PARTNER: { multiplier: 0.7, allowsBuyerEpisodes: true, messageBias: -0.1 },
+  CANDIDATE: { multiplier: 0.6, allowsBuyerEpisodes: true, messageBias: -0.1 },
+  MIXED: { multiplier: 0.8, allowsBuyerEpisodes: true, messageBias: -0.05 },
+  UNKNOWN: { multiplier: 0.7, allowsBuyerEpisodes: true, messageBias: -0.05 },
 }
 
 // ── Episode Status Scoring ─────────────────────────────────────────────────

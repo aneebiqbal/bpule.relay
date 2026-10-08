@@ -285,6 +285,7 @@ export interface V3ShadowComparison {
 
 export interface V3ScoringWeights {
   buyerRequestProbability: number
+  commercialPotential: number
   externalNeedProbability: number
   fit: number
   timing: number
@@ -313,6 +314,27 @@ export interface V3MultiEpisodeResult {
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
+
+// ── Build Intensity ─────────────────────────────────────────────────────────
+
+export type BuildIntensity = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH'
+
+// ── Commercial Potential ─────────────────────────────────────────────────────
+
+export type CommercialPotentialLevel = 'LOW' | 'MEDIUM' | 'HIGH'
+
+export interface CommercialPotentialAssessment {
+  decisionAuthority: number        // 0-1: founder/CEO/CTO vs IC
+  buildIntensity: BuildIntensity   // active product/company building
+  technicalRelevance: number       // 0-1: stack overlap with our services
+  capacityNeedLikelihood: number   // 0-1: likely to need external help
+  reachability: number             // 0-1: how reachable
+  companyMaturity: number          // 0-1: funding, growth, team
+  commercialActivity: number       // 0-1: active commercial signals count
+  overallPotential: CommercialPotentialLevel
+  confidence: number               // 0-1
+  signals: string[]                // human-readable signals
+}
 
 export const V3_SCORE_LABELS: Array<{
   min: number

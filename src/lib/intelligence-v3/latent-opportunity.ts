@@ -1,94 +1,121 @@
 /**
- * Latent Opportunity Assessment — V3
+ * Commercial Potential Assessment — V3
  *
- * Separates CURRENT BUYER INTENT from LATENT COMMERCIAL POTENTIAL.
+ * Separates CURRENT BUYER INTENT from COMMERCIAL POTENTIAL.
  *
- * A lead can have intent = UNKNOWN while commercialPotential = MEDIUM/HIGH.
+ * A lead can have buyerIntent=UNKNOWN while commercialPotential=HIGH.
  * This layer answers: "Even without an explicit current request, is this
- * person worth starting a conversation with?"
+ * person/company strategically worth pursuing?"
+ *
+ * Key dimensions:
+ * - Decision authority (founder/CEO/CTO vs IC)
+ * - Build intensity (NONE/LOW/MEDIUM/HIGH/VERY_HIGH)
+ * - Technical relevance (stack overlap with our services)
+ * - Capacity need likelihood (will they need external help)
+ * - Reachability
+ * - Company maturity (funding, growth, team)
  */
 
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
+import type { CommercialPotentialAssessment, BuildIntensity, CommercialPotentialLevel } from './types'
 
 export type LatentPotentialLevel = 'LOW' | 'MEDIUM' | 'HIGH'
 
 export interface LatentOpportunityAssessment {
-  capabilityFit: number          // 0-1: how well sender capabilities match prospect
-  buyerRoleLikelihood: number    // 0-1: likelihood this person buys services
-  decisionInfluence: number      // 0-1: how much influence they have on buying
-  companyBuildIntensity: number  // 0-1: is their company/product actively building
-  technicalRelevance: number     // 0-1: technical stack overlap
-  likelyExternalCapacityNeed: number // 0-1: likely need outside help
-  reachability: number           // 0-1: how reachable is this person
-  relationshipPotential: number  // 0-1: long-term relationship value
+  capabilityFit: number
+  buyerRoleLikelihood: number
+  decisionInfluence: number
+  companyBuildIntensity: number
+  technicalRelevance: number
+  likelyExternalCapacityNeed: number
+  reachability: number
+  relationshipPotential: number
   overallPotential: LatentPotentialLevel
-  confidence: number             // 0-1: confidence in this assessment
-  signals: string[]              // human-readable signals found
+  confidence: number
+  signals: string[]
 }
 
 /**
- * Assess latent commercial potential when no active buyer episode exists.
- * Uses V2 extraction data (person, company, content) to evaluate.
+ * Assess commercial potential using V2 extraction data + raw text.
+ * Deterministic — no AI calls.
  */
 export async function assessLatentOpportunity(
   v2Canonical: CanonicalProspectIntelligence,
   rawText?: string,
 ): Promise<LatentOpportunityAssessment> {
+  const cp = await assessCommercialPotential(v2Canonical, rawText)
+  return {
+    capabilityFit: cp.technicalRelevance,
+    buyerRoleLikelihood: cp.decisionAuthority,
+    decisionInfluence: cp.decisionAuthority,
+    companyBuildIntensity: buildIntensityToScore(cp.buildIntensity),
+    technicalRelevance: cp.technicalRelevance,
+    likelyExternalCapacityNeed: cp.capacityNeedLikelihood,
+    reachability: cp.reachability,
+    relationshipPotential: cp.companyMaturity,
+    overallPotential: cp.overallPotential,
+    confidence: cp.confidence,
+    signals: cp.signals,
+  }
+}
+
+/**
+ * Primary commercial potential assessment.
+ * Uses V2 extraction data + raw text to evaluate strategic worth.
+ */
+export async function assessCommercialPotential(
+  v2Canonical: CanonicalProspectIntelligence,
+  rawText?: string,
+): Promise<CommercialPotentialAssessment> {
   const intel = v2Canonical.intelligence
-  const textSource = rawText || buildTextSource(intel)
+  const textSource = (rawText || buildTextSource(intel)).toLowerCase()
 
-  // Evaluate each dimension deterministically (with text context)
-  const capabilityFit = evaluateCapabilityFit(intel)
-  const buyerRoleLikelihood = evaluateBuyerRoleLikelihood(intel, textSource)
-  const decisionInfluence = evaluateDecisionInfluence(intel, textSource)
-  const companyBuildIntensity = evaluateCompanyBuildIntensity(intel, textSource)
+  const decisionAuthority = evaluateDecisionAuthority(intel, textSource)
+  const buildIntensity = evaluateBuildIntensity(intel, textSource)
   const technicalRelevance = evaluateTechnicalRelevance(intel, textSource)
-  const likelyExternalCapacityNeed = evaluateCapacityNeed(intel)
+  const capacityNeedLikelihood = evaluateCapacityNeed(intel, textSource)
   const reachability = evaluateReachability(intel)
-  const relationshipPotential = evaluateRelationshipPotential(intel)
+  const companyMaturity = evaluateCompanyMaturity(intel, textSource)
 
-  // Count independent signals
+  const commercialActivity = evaluateCommercialActivity(intel, textSource)
+
+  // Collect human-readable signals
   const signals: string[] = []
-  if (capabilityFit > 0.5) signals.push('Strong capability fit')
-  if (buyerRoleLikelihood > 0.4) signals.push('Likely buyer role')
-  if (decisionInfluence > 0.3) signals.push('Decision influence')
-  if (companyBuildIntensity > 0.3) signals.push('Active product building')
-  if (technicalRelevance > 0.5) signals.push('Technical stack overlap')
-  if (likelyExternalCapacityNeed > 0.4) signals.push('Likely capacity need')
-  if (reachability > 0.4) signals.push('Reachable')
+  if (decisionAuthority >= 0.7) signals.push('Decision-maker role')
+  if (buildIntensity !== 'NONE' && buildIntensity !== 'LOW') signals.push(`Active building (${buildIntensity})`)
+  if (technicalRelevance >= 0.4) signals.push('Technical stack overlap')
+  if (capacityNeedLikelihood >= 0.4) signals.push('Likely needs external help')
+  if (reachability >= 0.5) signals.push('Reachable')
+  if (companyMaturity >= 0.4) signals.push('Company growth signals')
+  if (commercialActivity >= 0.3) signals.push('Active commercial activity')
 
-  // Scan raw text for additional signals
-  const textSignals = scanTextForSignals(textSource)
-  for (const sig of textSignals) {
-    if (!signals.includes(sig)) signals.push(sig)
+  // Overall potential requires multiple independent dimensions
+  const dimAvg = (
+    decisionAuthority +
+    buildIntensityToScore(buildIntensity) +
+    technicalRelevance +
+    capacityNeedLikelihood +
+    reachability +
+    companyMaturity
+  ) / 6
+
+  let overallPotential: CommercialPotentialLevel = 'LOW'
+  if (dimAvg >= 0.45 || (decisionAuthority >= 0.7 && buildIntensityToScore(buildIntensity) >= 0.5 && technicalRelevance >= 0.3)) {
+    overallPotential = 'HIGH'
+  } else if (dimAvg >= 0.28 || (decisionAuthority >= 0.5 && buildIntensityToScore(buildIntensity) >= 0.3)) {
+    overallPotential = 'MEDIUM'
   }
 
-  // Overall potential requires MULTIPLE independent signals
-  const signalCount = signals.length
-  const avgScore = (
-    capabilityFit + buyerRoleLikelihood + decisionInfluence +
-    companyBuildIntensity + technicalRelevance +
-    likelyExternalCapacityNeed + reachability + relationshipPotential
-  ) / 8
-
-  // Signal-based scoring: strong text signals can override low structured scores
-  let overallPotential: LatentPotentialLevel = 'LOW'
-  if (signalCount >= 3 && avgScore > 0.3) overallPotential = 'HIGH'
-  else if (signalCount >= 3) overallPotential = 'MEDIUM'
-  else if (signalCount >= 2 && avgScore > 0.35) overallPotential = 'MEDIUM'
-
-  // Confidence based on evidence completeness
-  const confidence = Math.min(1, signalCount / 4)
+  const confidence = Math.min(1, signals.length / 4)
 
   return {
-    capabilityFit,
-    buyerRoleLikelihood,
-    decisionInfluence,
-    companyBuildIntensity,
+    decisionAuthority,
+    buildIntensity,
     technicalRelevance,
-    likelyExternalCapacityNeed,
+    capacityNeedLikelihood,
     reachability,
-    relationshipPotential,
+    companyMaturity,
+    commercialActivity,
     overallPotential,
     confidence,
     signals,
@@ -97,102 +124,107 @@ export async function assessLatentOpportunity(
 
 // ── Dimension Evaluators ─────────────────────────────────────────────────────
 
-function evaluateCapabilityFit(intel: CanonicalProspectIntelligence['intelligence']): number {
-  const techSignals = intel.content.technicalSignals || []
-  const topics = intel.content.topics || []
-  const relevantTopics = ['react', 'node', 'typescript', 'next.js', 'python', 'saas', 'ai', 'automation', 'api']
-  const matchCount = [...techSignals, ...topics].filter(t =>
-    relevantTopics.some(rt => t.toLowerCase().includes(rt))
-  ).length
-  return Math.min(1, matchCount / 4)
-}
-
-function evaluateBuyerRoleLikelihood(intel: CanonicalProspectIntelligence['intelligence'], text: string): number {
+function evaluateDecisionAuthority(intel: CanonicalProspectIntelligence['intelligence'], text: string): number {
   const title = (intel.person.title || '').toLowerCase()
   const seniority = (intel.person.seniority || '').toLowerCase()
 
-  // Roles that typically buy software development services
-  const buyerTitles = ['founder', 'co-founder', 'cto', 'ceo', 'vp', 'head', 'director', 'lead', 'principal']
-  const isBuyer = buyerTitles.some(bt => title.includes(bt) || seniority.includes(bt))
+  // C-level / founders — ultimate authority
+  if (/\b(ceo|founder|co-founder|coowner|owner|president)\b/.test(title)) return 0.9
+  if (/\b(cto|cfo|coo|chief)\b/.test(title)) return 0.85
+  // VP / Head — high authority
+  if (/\b(vp|vice president|head of)\b/.test(title)) return 0.75
+  // Director — significant authority
+  if (/\b(director)\b/.test(title)) return 0.65
+  // Senior IC / lead — moderate influence
+  if (/\b(lead|principal|staff|senior|sr\.)\b/.test(title) || seniority.includes('senior')) return 0.45
+  // Manager
+  if (/\b(manager)\b/.test(title)) return 0.5
 
-  // Founders (even of side projects) have buyer intent
-  const isFounder = text.includes('founder') || text.includes('co-founder') || text.includes('startup') || text.includes('started')
-
-  // Developers at product companies also buy services (they decide what to outsource)
-  const isDeveloperAtProductCompany = (
-    title.includes('developer') || title.includes('engineer') ||
-    seniority.includes('senior') || seniority.includes('staff')
-  ) && isProductCompany(intel)
-
-  if (isBuyer || isFounder) return 0.8
-  if (isDeveloperAtProductCompany) return 0.5
-  return 0.2
-}
-
-function evaluateDecisionInfluence(intel: CanonicalProspectIntelligence['intelligence'], text: string): number {
-  const title = (intel.person.title || '').toLowerCase()
-  const seniority = (intel.person.seniority || '').toLowerCase()
-
-  // Higher influence = higher score
-  if (title.includes('ceo') || title.includes('founder') || title.includes('co-founder')) return 0.9
-  if (title.includes('cto') || title.includes('chief')) return 0.85
-  if (title.includes('vp') || title.includes('vice president')) return 0.7
-  if (title.includes('director') || title.includes('head')) return 0.6
-  if (title.includes('lead') || title.includes('senior') || seniority.includes('senior')) return 0.4
-
-  // Text-based influence signals
-  if (text.includes('founder') || text.includes('architect') || text.includes('lead')) return 0.4
+  // Text-based signals
+  if (/\b(ceo|founder|co-founder)\b/.test(text)) return 0.8
+  if (/\b(cto|cfo|chief)\b/.test(text)) return 0.7
+  if (/\b(vp|vice president|director)\b/.test(text)) return 0.6
 
   return 0.2
 }
 
-function evaluateCompanyBuildIntensity(intel: CanonicalProspectIntelligence['intelligence'], text: string): number {
+function evaluateBuildIntensity(intel: CanonicalProspectIntelligence['intelligence'], text: string): BuildIntensity {
+  let score = 0
+
+  // Structured data signals
   const launches = intel.content.launches || []
   const initiatives = intel.content.initiatives || []
+  if (launches.length > 0) score += 2
+  if (initiatives.length > 0) score += 1
+
   const hasProduct = intel.company.product && intel.company.product !== 'Unknown'
+  if (hasProduct) score += 1
+
   const stage = (intel.company.stage || '').toLowerCase()
+  if (stage.includes('seed') || stage.includes('series') || stage.includes('growth')) score += 2
+  if (stage.includes('mvp') || stage.includes('beta') || stage.includes('early')) score += 1
 
-  let score = 0
-  if (launches.length > 0) score += 0.3
-  if (initiatives.length > 0) score += 0.2
-  if (hasProduct) score += 0.2
-  if (stage.includes('seed') || stage.includes('series') || stage.includes('growth')) score += 0.3
-  if (stage.includes('mvp') || stage.includes('beta') || stage.includes('early')) score += 0.25
+  // Text-based building signals (semantic, not keyword regex)
+  const buildPatterns = [
+    /\b(launch|launched|releasing|introducing)\b/,
+    /\b(mvp|beta|prototype|pilot)\b/,
+    /\b(building|developing|creating|founding)\b/,
+    /\b(new product|new platform|new company|new venture)\b/,
+    /\b(growing|scaling|expanding)\b/,
+    /\b(pricing|waitlist|early access|show hn|product hunt)\b/,
+    /\b(funding|raised|seed|series|investment)\b/,
+  ]
+  for (const p of buildPatterns) {
+    if (p.test(text)) score += 1
+  }
 
-  // Text-based building signals
-  if (text.includes('building') || text.includes('developing') || text.includes('growing') || text.includes('scaling')) score += 0.15
-  if (text.includes('saas') || text.includes('platform') || text.includes('product')) score += 0.1
+  // Number of affiliations (multiple companies = higher build)
+  const affiliations = intel.person.affiliations || []
+  if (affiliations.length >= 3) score += 2
+  else if (affiliations.length >= 2) score += 1
 
-  return Math.min(1, score)
+  // Multiple product mentions
+  const productMentions = (text.match(/\b(product|platform|saas|app|application|tool)\b/gi) || []).length
+  if (productMentions >= 3) score += 2
+  else if (productMentions >= 1) score += 1
+
+  if (score >= 8) return 'VERY_HIGH'
+  if (score >= 5) return 'HIGH'
+  if (score >= 3) return 'MEDIUM'
+  if (score >= 1) return 'LOW'
+  return 'NONE'
 }
 
 function evaluateTechnicalRelevance(intel: CanonicalProspectIntelligence['intelligence'], text: string): number {
   const techSignals = intel.content.technicalSignals || []
   const topics = intel.content.topics || []
 
-  // Count relevant technical signals from structured data
-  const relevant = ['react', 'node', 'next.js', 'typescript', 'python', 'api', 'saas', 'ai', 'automation', 'aws', 'cloud']
+  const relevant = ['react', 'node', 'next.js', 'typescript', 'python', 'api', 'saas', 'ai', 'automation', 'aws', 'cloud', 'javascript', 'java', '.net', 'postgresql', 'mongodb', 'docker']
   let matchCount = [...techSignals, ...topics].filter(t =>
     relevant.some(r => t.toLowerCase().includes(r))
   ).length
 
   // Also scan raw text for tech stack
-  const textTech = ['javascript', 'typescript', 'react', 'node', 'python', '.net', 'java', 'azure', 'aws', 'api', 'postgresql', 'mongodb']
+  const textTech = ['javascript', 'typescript', 'react', 'node', 'python', '.net', 'java', 'azure', 'aws', 'api', 'postgresql', 'mongodb', 'docker', 'kubernetes', 'nextjs', 'vue', 'angular']
   const textMatches = textTech.filter(t => text.includes(t)).length
   matchCount = Math.max(matchCount, textMatches)
 
-  return Math.min(1, matchCount / 3)
+  return Math.min(1, matchCount / 4)
 }
 
-function evaluateCapacityNeed(intel: CanonicalProspectIntelligence['intelligence']): number {
+function evaluateCapacityNeed(intel: CanonicalProspectIntelligence['intelligence'], text: string): number {
   const companySize = (intel.company.size || '').toLowerCase()
   const stage = (intel.company.stage || '').toLowerCase()
 
   // Small companies and early-stage startups are most likely to need outside help
   if (companySize.includes('self-employed') || companySize.includes('1-10') || companySize.includes('small')) return 0.7
-  if (companySize.includes('11-50') || companySize.includes('small')) return 0.5
+  if (companySize.includes('11-50')) return 0.5
   if (stage.includes('mvp') || stage.includes('beta') || stage.includes('early')) return 0.6
   if (stage.includes('seed') || stage.includes('series a')) return 0.5
+
+  // Text signals: solo founder, small team
+  if (/\b(solo|just me|small team|lean team|one person)\b/.test(text)) return 0.7
+  if (/\b(bootstrapped|self-funded|pre-revenue)\b/.test(text)) return 0.6
 
   return 0.2
 }
@@ -203,31 +235,60 @@ function evaluateReachability(intel: CanonicalProspectIntelligence['intelligence
   if (intel.person.linkedinUrl) score += 0.3
   if (intel.person.otherUrls && intel.person.otherUrls.length > 0) score += 0.2
 
-  // Active content suggests they're engaged
   const posts = intel.content.recentPosts || []
   if (posts.length > 0) score += 0.2
 
   return Math.min(1, score)
 }
 
-function evaluateRelationshipPotential(intel: CanonicalProspectIntelligence['intelligence']): number {
+function evaluateCompanyMaturity(intel: CanonicalProspectIntelligence['intelligence'], text: string): number {
   const stage = (intel.company.stage || '').toLowerCase()
   const size = (intel.company.size || '').toLowerCase()
 
-  // Early-stage companies have more relationship potential
-  if (stage.includes('seed') || stage.includes('series')) return 0.7
-  if (stage.includes('mvp') || stage.includes('beta')) return 0.6
-  if (size.includes('self-employed') || size.includes('1-10')) return 0.5
+  let score = 0.1
 
-  return 0.2
+  if (stage.includes('seed') || stage.includes('series')) score += 0.4
+  if (stage.includes('mvp') || stage.includes('beta')) score += 0.3
+  if (stage.includes('growth')) score += 0.5
+
+  if (size.includes('11-50') || size.includes('51-200')) score += 0.2
+  if (size.includes('201-500') || size.includes('500+')) score += 0.3
+
+  // Funding mention in text
+  if (/\b(raised|funding|series [abc]|seed|angel|venture)\b/.test(text)) score += 0.3
+
+  return Math.min(1, score)
 }
 
-// ── Latent Score Computation ──────────────────────────────────────────────────
+function evaluateCommercialActivity(intel: CanonicalProspectIntelligence['intelligence'], text: string): number {
+  let count = 0
 
-/**
- * Convert latent potential to a 0-100 score.
- * Latent scores are capped — they should never exceed active buyer scores.
- */
+  if ((intel.content.launches || []).length > 0) count++
+  if ((intel.content.initiatives || []).length > 0) count++
+  if ((intel.content.hiringSignals || []).length > 0) count++
+  if (/\b(launch|launching|released|announcing)\b/.test(text)) count++
+  if (/\b(growing|scaling|expanding|hiring)\b/.test(text)) count++
+  if (/\b(funding|raised|investment|backed)\b/.test(text)) count++
+  if (/\b(new (product|company|platform|venture))\b/.test(text)) count++
+
+  return Math.min(1, count / 5)
+}
+
+// ── Score Conversion ─────────────────────────────────────────────────────────
+
+function buildIntensityToScore(bi: BuildIntensity): number {
+  switch (bi) {
+    case 'NONE': return 0
+    case 'LOW': return 0.2
+    case 'MEDIUM': return 0.5
+    case 'HIGH': return 0.8
+    case 'VERY_HIGH': return 1.0
+    default: return 0
+  }
+}
+
+// ── Backward-Compatible Exports ──────────────────────────────────────────────
+
 export function computeLatentScore(assessment: LatentOpportunityAssessment): number {
   const baseScore = (
     assessment.capabilityFit * 20 +
@@ -240,25 +301,22 @@ export function computeLatentScore(assessment: LatentOpportunityAssessment): num
     assessment.relationshipPotential * 5
   )
 
-  // Cap latent scores — they should be meaningful but not inflated
-  // HIGH potential: 30-55, MEDIUM: 15-30, LOW: 0-15
   switch (assessment.overallPotential) {
-    case 'HIGH': return Math.min(55, Math.max(30, Math.round(baseScore)))
-    case 'MEDIUM': return Math.min(30, Math.max(15, Math.round(baseScore * 0.6)))
-    case 'LOW': return Math.min(15, Math.round(baseScore * 0.3))
+    case 'HIGH': return Math.min(70, Math.max(40, Math.round(baseScore)))
+    case 'MEDIUM': return Math.min(50, Math.max(25, Math.round(baseScore * 0.8)))
+    case 'LOW': return Math.min(20, Math.round(baseScore * 0.4))
     default: return 0
   }
 }
 
-/**
- * Map latent potential to an action.
- * Never CONTACT_NOW without current buyer evidence.
- */
 export function latentActionFromPotential(
   potential: LatentPotentialLevel,
   confidence: number,
 ): { action: string; messageEligible: boolean } {
-  if (potential === 'HIGH' && confidence > 0.4) {
+  if (potential === 'HIGH' && confidence > 0.3) {
+    return { action: 'CONNECT_WITH_NOTE', messageEligible: true }
+  }
+  if (potential === 'HIGH') {
     return { action: 'CONNECT_WITHOUT_NOTE', messageEligible: false }
   }
   if (potential === 'MEDIUM' && confidence > 0.3) {
@@ -266,6 +324,8 @@ export function latentActionFromPotential(
   }
   return { action: 'SKIP', messageEligible: false }
 }
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function isProductCompany(intel: CanonicalProspectIntelligence['intelligence']): boolean {
   const stage = (intel.company.stage || '').toLowerCase()
