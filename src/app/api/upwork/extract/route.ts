@@ -108,7 +108,7 @@ export async function POST(request: Request) {
           demoMode: false,
         })
       } catch (err) {
-        console.error('[upwork-extract] Unexpected error:', err instanceof Error ? err.message : String(err))
+        console.error('[upwork-extract] Unexpected error:', err instanceof Error ? err.stack : JSON.stringify(err))
         send({ type: 'error', message: 'Unexpected error. Please retry.' })
       } finally {
         controller.close()

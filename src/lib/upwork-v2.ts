@@ -228,12 +228,20 @@ function mergeSkills(aiSkills: string[], rawSkills: string[]): string[] {
 }
 
 function extractHourlyRate(text: string): { min: number | null; max: number | null } {
+  // Normalize whitespace (Upwork often splits across lines)
+  const normalized = text.replace(/\s+/g, ' ').trim()
+
   // Patterns: $5-$15/hour, $5 - $15 per hour, $10/hr, $10 per hour
-  const rangeMatch = text.match(/\$\s*(\d+(?:\.\d+)?)\s*[-–]\s*\$\s*(\d+(?:\.\d+)?)\s*(?:\/|per\s*)?(?:hour|hr)/i)
+  const rangeMatch = normalized.match(/\$\s*(\d+(?:\.\d+)?)\s*[-–]\s*\$\s*(\d+(?:\.\d+)?)\s*(?:\/|per\s*)?(?:hour|hr)?/i)
   if (rangeMatch) {
     return { min: parseFloat(rangeMatch[1]), max: parseFloat(rangeMatch[2]) }
   }
-  const singleMatch = text.match(/\$\s*(\d+(?:\.\d+)?)\s*(?:\/|per\s*)?(?:hour|hr)/i)
+  // Also check for separate lines: $25.00 / $60.00 with "Hourly" nearby
+  const looseMatch = normalized.match(/\$\s*(\d+(?:\.\d+)?)\s*[-–]\s*.*?\$\s*(\d+(?:\.\d+)?)/i)
+  if (looseMatch && /\b(hourly|hour|hr|per hour)\b/i.test(normalized)) {
+    return { min: parseFloat(looseMatch[1]), max: parseFloat(looseMatch[2]) }
+  }
+  const singleMatch = normalized.match(/\$\s*(\d+(?:\.\d+)?)\s*(?:\/|per\s*)?(?:hour|hr)/i)
   if (singleMatch) {
     const rate = parseFloat(singleMatch[1])
     return { min: rate, max: rate }
@@ -366,22 +374,42 @@ ${input.rawText.slice(0, 10000)}`
     const aiQuestions = Array.isArray(data.screeningQuestions) ? (data.screeningQuestions as string[]) : []
     const aiReqs = Array.isArray(data.applicationRequirements) ? (data.applicationRequirements as string[]) : []
 
-    // Backfill any fields the AI missed
-    const backfilled = backfillFromRawText({
-      rawText,
-      aiSkills,
-      aiQuestions,
-      aiReqs,
-      aiHourlyMin: (data.hourlyRateMin as number) ?? null,
-      aiHourlyMax: (data.hourlyRateMax as number) ?? null,
-      aiBudget: (data.budget as number) ?? null,
-      aiBudgetType: (data.budgetType as 'fixed' | 'hourly' | null) ?? null,
-      aiExperience: (data.experienceLevel as string) ?? null,
-      aiProjectLength: (data.projectLength as string) ?? null,
-      aiEngagement: (data.engagementType as string) ?? null,
-      aiWeeklyHours: (data.weeklyHours as string) ?? null,
-      aiDuration: (data.duration as string) ?? null,
-    })
+    // Backfill any fields the AI missed. Isolated in try-catch so a backfill
+    // failure never crashes the entire extraction.
+    let backfilled: BackfillResult
+    try {
+      backfilled = backfillFromRawText({
+        rawText,
+        aiSkills,
+        aiQuestions,
+        aiReqs,
+        aiHourlyMin: (data.hourlyRateMin as number) ?? null,
+        aiHourlyMax: (data.hourlyRateMax as number) ?? null,
+        aiBudget: (data.budget as number) ?? null,
+        aiBudgetType: (data.budgetType as 'fixed' | 'hourly' | null) ?? null,
+        aiExperience: (data.experienceLevel as string) ?? null,
+        aiProjectLength: (data.projectLength as string) ?? null,
+        aiEngagement: (data.engagementType as string) ?? null,
+        aiWeeklyHours: (data.weeklyHours as string) ?? null,
+        aiDuration: (data.duration as string) ?? null,
+      })
+    } catch (backfillErr) {
+      console.warn('[upwork-extract] Backfill failed, using AI data only:', backfillErr instanceof Error ? backfillErr.message : String(backfillErr))
+      backfilled = {
+        skills: aiSkills,
+        hourlyRateMin: (data.hourlyRateMin as number) ?? null,
+        hourlyRateMax: (data.hourlyRateMax as number) ?? null,
+        budget: (data.budget as number) ?? null,
+        budgetType: (data.budgetType as 'fixed' | 'hourly' | null) ?? null,
+        experienceLevel: (data.experienceLevel as string) ?? null,
+        projectLength: (data.projectLength as string) ?? null,
+        screeningQuestions: aiQuestions,
+        engagementType: (data.engagementType as string) ?? null,
+        weeklyHours: (data.weeklyHours as string) ?? null,
+        duration: (data.duration as string) ?? null,
+        applicationRequirements: aiReqs,
+      }
+    }
 
     return {
       job: {
@@ -421,11 +449,16 @@ ${input.rawText.slice(0, 10000)}`
       feature: 'upwork_extraction',
     })
 
-    if (result.data) {
-      return parseJob(result.data, 'runtime', false)
+    if (result.data && typeof result.data === 'object') {
+      try {
+        return parseJob(result.data, 'runtime', false)
+      } catch (parseErr) {
+        console.error('[upwork-extract] Runtime parse failed:', parseErr instanceof Error ? parseErr.message : JSON.stringify(parseErr))
+        // Fall through to raw extraction
+      }
     }
   } catch (err) {
-    console.error('[upwork-extract] Runtime router failed:', err instanceof Error ? err.message : String(err))
+    console.error('[upwork-extract] Runtime router failed:', err instanceof Error ? err.message : JSON.stringify(err))
   }
 
   // Fallback: direct OpenAI call
@@ -446,14 +479,16 @@ ${input.rawText.slice(0, 10000)}`
     if (result.data) {
       try {
         const parsed = JSON.parse(result.data) as Record<string, unknown>
-        return parseJob(parsed, 'openai-fallback', true)
+        if (parsed && typeof parsed === 'object') {
+          return parseJob(parsed, 'openai-fallback', true)
+        }
       } catch {
         console.error('[upwork-extract] Schema parse failure')
         return { job: null, error: 'SCHEMA_FAILURE', degraded: false, diagnostics: { provider: 'openai', textLength, stage: 'parse' } }
       }
     }
   } catch (err) {
-    console.error('[upwork-extract] OpenAI fallback failed:', err instanceof Error ? err.message : String(err))
+    console.error('[upwork-extract] OpenAI fallback failed:', err instanceof Error ? err.message : JSON.stringify(err))
   }
 
   return { job: null, error: 'AI_PROVIDER_FAILURE', degraded: false, diagnostics: { provider: 'all', textLength, stage: 'all-providers-failed' } }
