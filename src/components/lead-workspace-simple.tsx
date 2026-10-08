@@ -292,21 +292,8 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, t
     }
   }, [lead.id, lead.status])
 
-  // One-click continuation from Save Lead — auto-trigger connection generation ONCE
-  const hasAutoTriggered = useRef(false)
-  useEffect(() => {
-    if (hasAutoTriggered.current) return
-    // Only trigger if no connection has already been logged
-    const hasConnection = lead.messages.some((m) => m.type === 'connection' && m.sentText)
-    const next = searchParams.get('next')
-    if (!hasConnection && next === 'generate-connection' && relationshipState.phase === 'connection_due' && !lead.connectionAcceptedAt) {
-      hasAutoTriggered.current = true
-      // Clear the URL param so refresh doesn't re-trigger
-      router.replace(`/leads/${lead.id}`)
-      setMode('connection')
-      generateDraft('connection')
-    }
-  }, [searchParams, relationshipState.phase, lead.connectionAcceptedAt, lead.messages, generateDraft, router, lead.id])
+  // No auto-generate on page load — drafts are only created on explicit user action.
+  // Auto-generation was burning AI credits on every page visit.
 
   // ── Render ──────────────────────────────────────────────────────────────
 
