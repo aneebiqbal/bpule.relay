@@ -27,13 +27,15 @@ import type { DraftResult } from '@/lib/ai/draft'
 interface Props {
   lead: LeadDetail
   profiles: { id: string; label: string | null; platform: string; headline: string | null }[]
+  dailyLimit: number
+  todaySends: number
 }
 
 type WorkspaceMode = 'dm' | 'connection' | 'reply' | 'followup' | 'upwork' | null
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
+export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, todaySends }: Props) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [lead, setLead] = useState(initialLead)
@@ -48,7 +50,6 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
   const [draftResult, setDraftResult] = useState<DraftResult | null>(null)
   const [generating, setGenerating] = useState(false)
   const [generationStatus, setGenerationStatus] = useState<string | null>(null)
-  const [showLogUpdate, setShowLogUpdate] = useState(false)
 
   // Send
   const [sentText, setSentText] = useState('')
@@ -387,7 +388,7 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
               {signal && <span className="inline-flex items-center gap-1 text-orange"><Flame className="size-3" />{signal.short}</span>}
               {lead.url && (
                 <a href={lead.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-graphite hover:text-ink">
-                  Source <ExternalLink className="size-2.5" />
+                  Open on LinkedIn <ExternalLink className="size-2.5" />
                 </a>
               )}
             </div>
@@ -541,8 +542,8 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles }: Props) {
         showReplyOption={showReplyOption}
         showFollowupOption={showFollowupOption}
         showDmOption={showDmOption}
-        showLogUpdate={showLogUpdate}
-        setShowLogUpdate={setShowLogUpdate}
+        dailyLimit={dailyLimit}
+        todaySends={todaySends}
         generating={generating}
         mode={mode}
         setMode={setMode}
@@ -588,8 +589,8 @@ interface CommandStationProps {
   showReplyOption: boolean
   showFollowupOption: boolean
   showDmOption: boolean
-  showLogUpdate: boolean
-  setShowLogUpdate: (v: boolean) => void
+  dailyLimit: number
+  todaySends: number
   generating: boolean
   mode: WorkspaceMode
   setMode: (m: WorkspaceMode) => void
@@ -615,6 +616,8 @@ function CommandStation({
   showReplyOption,
   showFollowupOption,
   showDmOption,
+  dailyLimit,
+  todaySends,
   generating,
   mode,
   setMode,
@@ -751,16 +754,25 @@ function CommandStation({
             className="text-[13px]"
             placeholder="Edit before sending..."
           />
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button variant="orange" size="sm" onClick={logSend} disabled={sending || !(sentText || draftText).trim()} loading={sending} className="w-full justify-center sm:w-auto">
-              <Send className="size-3" /> Log as sent
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText((sentText || draftText).trim()) }} className="w-full justify-center sm:w-auto">
-              <Copy className="size-3" /> Copy
-            </Button>
-            {sentOk && <span className="text-[11px] text-status-success">✓ Sent</span>}
-            {sendError && <span className="text-[11px] text-status-danger">{sendError}</span>}
-          </div>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Button variant="orange" size="sm" onClick={logSend} disabled={sending || !(sentText || draftText).trim() || todaySends >= dailyLimit} loading={sending} className="w-full justify-center sm:w-auto">
+                <Send className="size-3" /> {todaySends >= dailyLimit ? 'Daily limit reached' : 'Log as sent'}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText((sentText || draftText).trim()) }} className="w-full justify-center sm:w-auto">
+                <Copy className="size-3" /> Copy
+              </Button>
+              {sentOk && <span className="text-[11px] text-status-success">✓ Sent</span>}
+              {sendError && <span className="text-[11px] text-status-danger">{sendError}</span>}
+            </div>
+            {dailyLimit > 0 && (
+              <p className="mt-2 text-[10px] text-stone">
+                {todaySends >= dailyLimit ? (
+                  <span className="text-status-danger">Daily send limit reached ({dailyLimit}/{dailyLimit})</span>
+                ) : (
+                  <span>{todaySends}/{dailyLimit} sends used today</span>
+                )}
+              </p>
+            )}
         </div>
       )}
 
@@ -817,17 +829,24 @@ function CommandStation({
             </Button>
           )}
 
-          {/* THEIR MOVE: quick actions */}
+          {/* THEIR MOVE: Mark Accepted is primary for LinkedIn */}
           {isTheirMove && (
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button variant="outline" size="sm" onClick={() => setQuickLog('client_replied')} className="w-full justify-center">
-                <MessageSquare className="size-3.5" /> They replied
-              </Button>
-              {!lead.connectionAcceptedAt && (
-                <Button variant="outline" size="sm" onClick={markAccepted} className="w-full justify-center">
-                  <Trophy className="size-3.5" /> Mark accepted
+            <div className="space-y-2">
+              {phase === 'connection_sent' && !lead.connectionAcceptedAt && (
+                <Button variant="orange" size="sm" onClick={markAccepted} className="w-full justify-center">
+                  <Trophy className="size-3.5" /> Connection accepted — send DM
                 </Button>
               )}
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button variant="outline" size="sm" onClick={() => setQuickLog('client_replied')} className="w-full justify-center sm:flex-1">
+                  <MessageSquare className="size-3.5" /> They replied
+                </Button>
+                {phase !== 'connection_sent' && !lead.connectionAcceptedAt && (
+                  <Button variant="outline" size="sm" onClick={markAccepted} className="w-full justify-center sm:flex-1">
+                    <Trophy className="size-3.5" /> Mark accepted
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 

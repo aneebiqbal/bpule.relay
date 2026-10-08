@@ -13,13 +13,14 @@ interface LeadPageProps {
 async function loadLeadData(id: string) {
   const store = await createScoutStore()
 
-  const [lead, profiles] = await Promise.all([
+  const [lead, profiles, queue] = await Promise.all([
     store.getLead(id),
     store.listProfiles(),
+    store.getQueue(),
   ])
   if (!lead) notFound()
 
-  return { lead, profiles }
+  return { lead, profiles, dailyLimit: queue.dailyLimit, todaySends: queue.todaySends }
 }
 
 export default function LeadPage({ params }: LeadPageProps) {
