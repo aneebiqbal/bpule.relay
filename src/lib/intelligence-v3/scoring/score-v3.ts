@@ -353,15 +353,18 @@ export function scoreAllEpisodes(
 
   for (const input of inputs) {
     const result = scoreEpisode(input)
+    const isBuilder = isHighPotentialBuilderEpisode(input)
+    // Builders with high commercial potential get upgraded qualification
+    // so the display score reflects their value (not just buyer intent)
+    const qualification = isBuilder && result.qualification === 'SKIP' ? 'MAYBE' : result.qualification
     episodeScores.push({
       episodeId: input.episode.id,
-      score: result.score,
-      label: result.label,
-      qualification: result.qualification,
-      action: deriveAction(result.score, input),
-      messageEligible: (result.score >= 40 && result.qualification !== 'SKIP')
-        || isHighPotentialBuilderEpisode(input),
-      reasons: result.reasons,
+      score: isBuilder ? Math.max(42, result.score) : result.score,
+      label: isBuilder ? 'Worth connecting' : result.label,
+      qualification,
+      action: isBuilder ? 'CONNECT_WITH_NOTE' : deriveAction(result.score, input),
+      messageEligible: (result.score >= 40 && result.qualification !== 'SKIP') || isBuilder,
+      reasons: isBuilder ? ['High commercial potential — worth connecting'] : result.reasons,
     })
   }
 
