@@ -333,18 +333,34 @@ export async function POST(request: Request) {
     const v3MessageEligible = v3Packet ? (v3Packet as { messageEligible: boolean }).messageEligible : null
 
     if (V3_CANONICAL && v3Packet) {
-      // V3 is the single source of truth for ALL display fields
+      // V3 is the single source of truth for MOST display fields, but the
+      // revenue strategy's messageRecommended can override for connection
+      // notes to founders/builders (high commercial potential, no explicit
+      // buyer request). The revenue strategy has channel context that V3 lacks.
       const v3Fit = (v3Packet as { decision?: { fit?: string } })?.decision?.fit || 'MEDIUM'
       const v3Intent = (v3Packet as { decision?: { buyerRequestProbability?: number } })?.decision?.buyerRequestProbability || 0
       const v3Confidence = (v3Packet as { confidence?: number })?.confidence || 0.5
+      const isConnectionNote = revenue.messagingPolicy === 'CONNECT_WITH_NOTE'
+        || (revenue.contact.action === 'CONNECT_OR_OBSERVE' && revenue.contact.messageRecommended)
 
       // Map V3 dimensions to V2 display fields
       ;(loop as { fit: string }).fit = v3Fit
       ;(loop as { intent: string }).intent = v3Intent > 0.4 ? 'HIGH' : v3Intent > 0.2 ? 'MEDIUM' : 'UNKNOWN'
       ;(loop as { confidence: string }).confidence = v3Confidence > 0.6 ? 'HIGH' : v3Confidence > 0.3 ? 'MEDIUM' : 'LOW'
-      ;(loop as { act: string }).act = v3Action!
-      ;(loop as { messageRecommended: boolean }).messageRecommended = v3MessageEligible!
-      ;(loop as { messagingPolicy: string }).messagingPolicy = mapV3ActionToMessagingPolicy(v3Action!)
+
+      // For connection notes, respect revenue strategy's messageRecommended
+      // if it says true (e.g., founder with high commercial potential).
+      // V3 lacks channel context, so its OBSERVE action shouldn't block
+      // relationship-building connection notes.
+      if (isConnectionNote && revenue.contact.messageRecommended && v3MessageEligible === false) {
+        ;(loop as { act: string }).act = 'CONNECT_OR_OBSERVE'
+        ;(loop as { messageRecommended: boolean }).messageRecommended = true
+        ;(loop as { messagingPolicy: string }).messagingPolicy = 'CONNECT_WITH_NOTE'
+      } else {
+        ;(loop as { act: string }).act = v3Action!
+        ;(loop as { messageRecommended: boolean }).messageRecommended = v3MessageEligible!
+        ;(loop as { messagingPolicy: string }).messagingPolicy = mapV3ActionToMessagingPolicy(v3Action!)
+      }
 
       // V3 overrides messageRecommended but NOT messageJob — sync them so the
       // draft route does not throw STRATEGY_REQUIRED when V3 says "eligible".
