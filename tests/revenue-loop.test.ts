@@ -210,7 +210,7 @@ describe('Right to contact — real cases', () => {
   // that real signal, not the raw score alone. See Ran Endelman / PlexAI
   // hardening report, where a 25/100 qualification ('skip') sat next to a
   // strategy card independently showing Fit/Intent/Confidence all HIGH with
-  // a DM recommended — canDraft in lead-workspace.tsx must not gate purely
+  // a DM recommended — canDraft in lead-workspace-simple.tsx must not gate purely
   // on the 'skip' qualification when the strategy layer disagrees.
   it('low qualification score does not suppress a genuine explicit project signal', () => {
     const strategy = buildRevenueStrategy(source({

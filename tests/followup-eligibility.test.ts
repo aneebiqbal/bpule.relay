@@ -7,11 +7,11 @@ import { businessDaysBetween, isFollowupDue, FOLLOWUP_DUE_BUSINESS_DAYS } from '
  * then never again. A NO is permanent. This matches the project's original
  * rule (stated repeatedly outside this repo's own history, since no spec
  * doc for it exists in-tree) — src/lib/leads/followup.ts and
- * src/components/lead-workspace.tsx are the real, current implementation of
+ * src/components/lead-workspace-simple.tsx are the real, current implementation of
  * that rule, and this file guards it.
  */
 
-// Mirrors src/components/lead-workspace.tsx:140-148 exactly. If that
+// Mirrors src/components/lead-workspace-simple.tsx:101-104 exactly. If that
 // component's logic changes, update this alongside it.
 function followupEligible(lead: Pick<Lead, 'status'>, messages: Pick<Message, 'sentText' | 'sentAt'>[]): boolean {
   const hasPriorSend = messages.some((m) => m.sentText && m.sentAt)

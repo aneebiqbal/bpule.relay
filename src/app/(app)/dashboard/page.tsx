@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { AlertTriangle } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
@@ -89,7 +90,7 @@ function ManagerTodayView({
   teamData,
 }: {
   repData: RepWorkspaceData
-  teamData: { teams: any[]; isOwner: boolean }
+  teamData: { teams: any[]; isOwner: boolean; error?: boolean }
 }) {
   return (
     <div className="space-y-6 pb-8">
@@ -98,6 +99,13 @@ function ManagerTodayView({
         <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink">Team overview</h1>
         <p className="text-[13px] text-graphite">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
       </header>
+
+      {teamData.error && (
+        <div className="flex items-center gap-3 rounded-lg border border-status-warning/30 bg-status-warning/5 px-4 py-3">
+          <AlertTriangle className="size-4 shrink-0 text-status-warning" />
+          <p className="text-[12px] text-graphite">Could not load team data. Refresh or try again later.</p>
+        </div>
+      )}
 
       <RepWorkspace data={repData} teamData={teamData} mode="manager" />
     </div>
@@ -215,8 +223,9 @@ async function loadManagerTeamTab() {
       }
     }))
     return { teams, isOwner: false }
-  } catch {
-    return { teams: [], isOwner: false }
+  } catch (err) {
+    console.error('loadManagerTeamTab failed:', err)
+    return { teams: [], isOwner: false, error: true }
   }
 }
 

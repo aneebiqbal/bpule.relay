@@ -2,6 +2,8 @@ import type { Lead } from '@/lib/domain/types'
 import { getComparableLeadScore } from '@/lib/score/rubric'
 import { isLeadLocked } from '@/lib/leads/lock'
 import { computeLifecycleState, type LifecycleState, type LifecycleResult } from '@/lib/leads/lifecycle-policy'
+import { formatRelativeTime } from '@/lib/ui/time'
+export { formatRelativeTime }
 
 export type LeadRow = Lead & {
   ownerName?: string
@@ -27,19 +29,20 @@ export interface PipelineColumnDef {
   label: string
   description: string
   dotColor: string
+  iconColor: string
   borderColor: string
   headerBg: string
 }
 
 export const PIPELINE_COLUMNS: PipelineColumnDef[] = [
-  { id: 'to_contact', label: 'To Contact', description: 'Not yet reached out', dotColor: 'bg-stone', borderColor: 'border-t-stone', headerBg: 'bg-bone-raised' },
-  { id: 'waiting', label: 'Waiting', description: 'Sent, awaiting reply', dotColor: 'bg-cobalt', borderColor: 'border-t-cobalt', headerBg: 'bg-cobalt/[0.03]' },
-  { id: 'needs_reply', label: 'Needs Reply', description: 'They wrote back', dotColor: 'bg-orange', borderColor: 'border-t-orange', headerBg: 'bg-orange/[0.03]' },
+  { id: 'to_contact', label: 'To Contact', description: 'Not yet reached out', dotColor: 'bg-stone', iconColor: 'text-stone', borderColor: 'border-t-stone', headerBg: 'bg-bone-raised' },
+  { id: 'waiting', label: 'Waiting', description: 'Sent, awaiting reply', dotColor: 'bg-cobalt', iconColor: 'text-cobalt', borderColor: 'border-t-cobalt', headerBg: 'bg-cobalt/[0.03]' },
+  { id: 'needs_reply', label: 'Needs Reply', description: 'They wrote back', dotColor: 'bg-orange', iconColor: 'text-orange', borderColor: 'border-t-orange', headerBg: 'bg-orange/[0.03]' },
 ]
 
 export const TERMINAL_COLUMNS: PipelineColumnDef[] = [
-  { id: 'done', label: 'Done', description: 'Won or closed', dotColor: 'bg-status-success', borderColor: 'border-t-status-success', headerBg: 'bg-status-success/[0.03]' },
-  { id: 'cold', label: 'Cold', description: 'Unresponsive — reactivate or archive', dotColor: 'bg-status-warning', borderColor: 'border-t-status-warning', headerBg: 'bg-status-warning/[0.03]' },
+  { id: 'done', label: 'Done', description: 'Won or closed', dotColor: 'bg-status-success', iconColor: 'text-status-success', borderColor: 'border-t-status-success', headerBg: 'bg-status-success/[0.03]' },
+  { id: 'cold', label: 'Cold', description: 'Unresponsive — reactivate or archive', dotColor: 'bg-status-warning', iconColor: 'text-status-warning', borderColor: 'border-t-status-warning', headerBg: 'bg-status-warning/[0.03]' },
 ]
 
 export function derivePipelineStage(lead: LeadRow): PipelineStage {
@@ -112,20 +115,6 @@ export function filterLeads(leads: LeadRow[], search: string): LeadRow[] {
     ].join(' ').toLowerCase()
     return hay.includes(q)
   })
-}
-
-export function formatRelativeTime(iso: string | null | undefined, now: number): string {
-  if (!iso) return ''
-  const diff = now - new Date(iso).getTime()
-  if (diff < 0) return 'just now'
-  if (diff < 60_000) return 'just now'
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 60) return `${mins}m`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h`
-  const days = Math.floor(hrs / 24)
-  if (days < 7) return `${days}d`
-  return `${Math.floor(days / 7)}w`
 }
 
 export function truncate(text: string | null | undefined, max: number = 80): string | null {

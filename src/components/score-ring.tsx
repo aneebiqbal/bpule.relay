@@ -26,8 +26,8 @@ export function ScoreRing({
     pct >= 0.7
       ? 'var(--status-success)'
       : pct >= 0.4
-        ? 'var(--bone)'
-        : 'var(--line)'
+        ? 'var(--orange)'
+        : 'var(--status-warning)'
   const fontSize = Math.max(size * 0.36, 11)
 
   // Canonical scores display as /10 (0-10 scale), legacy shows raw (0-12)

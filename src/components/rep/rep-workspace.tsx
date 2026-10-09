@@ -2,7 +2,8 @@
 
 import { useEffect } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Shield } from 'lucide-react'
+import { motion } from 'motion/react'
+import { AlertTriangle, Shield, Trophy, PartyPopper } from 'lucide-react'
 import { trackEvent } from '@/lib/analytics/tracker'
 import { Progress } from '@/components/ui/progress'
 import { DailyJobs, jobsFromTargets } from './daily-jobs'
@@ -11,6 +12,7 @@ import { UpNext } from './up-next'
 import { BdDailyDesk } from './bd-daily-desk'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
+import { cn } from 'cn'
 
 export interface RepWorkspaceData {
   rep: { id: string; name: string }
@@ -133,14 +135,22 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
             <p className="mt-1 text-[14px] text-graphite">Who has not covered their numbers.</p>
           </div>
           <ul className="divide-y divide-line/70 border-t border-line">
-            {[...members].sort((a, b) => b.totalRemaining - a.totalRemaining).map((member) => {
+            {[...members].sort((a, b) => b.totalRemaining - a.totalRemaining).map((member, i) => {
               const won = member.totalTarget > 0 && member.totalRemaining === 0
               return (
-                <li key={member.repId}>
-                  <Link href={`/team/${member.repId}`} className="block px-4 py-3 hover:bg-bone">
+                <motion.li
+                  key={member.repId}
+                  initial={{ opacity: 0, x: -4 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.04, duration: 0.2 }}
+                >
+                  <Link href={`/team/${member.repId}`} className="block px-4 py-3 hover:bg-bone transition-colors">
                     <span className="flex items-center justify-between gap-3">
-                      <span className="text-[14px] font-medium text-ink">{member.repName}</span>
-                      <span className={won ? 'text-[13px] font-medium text-status-success' : 'text-[13px] text-ink'}>
+                      <span className="flex items-center gap-2">
+                        {won && <Trophy className="size-3.5 text-status-success" />}
+                        <span className="text-[14px] font-medium text-ink">{member.repName}</span>
+                      </span>
+                      <span className={cn('text-[13px] font-medium', won ? 'text-status-success' : 'text-ink')}>
                         {won ? 'Day won' : `${member.totalCompleted} of ${member.totalTarget}`}
                       </span>
                     </span>
@@ -152,7 +162,7 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
                       variant={won ? 'success' : 'default'}
                     />
                   </Link>
-                </li>
+                </motion.li>
               )
             })}
           </ul>
@@ -162,45 +172,82 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
       {data.hasAssignments && (
         <>
           {/* Daily completion context */}
-          {data.completion && data.completion.done + data.completion.remaining > 0 && (
-            <div className="flex items-center gap-3 rounded-lg border border-line bg-bone-raised px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-medium text-ink">
-                  {data.completion.remaining === 0
-                    ? 'Day complete — nothing left'
-                    : `${data.completion.remaining} action${data.completion.remaining === 1 ? '' : 's'} left today`}
-                </p>
-                <p className="text-[11px] text-graphite">{data.completion.done} done</p>
-              </div>
-              <div className="h-2 w-20 overflow-hidden rounded-full bg-line/60">
-                <div
-                  className="h-full rounded-full bg-orange transition-all duration-500"
-                  style={{ width: `${data.completion.done + data.completion.remaining > 0 ? Math.round((data.completion.done / (data.completion.done + data.completion.remaining)) * 100) : 100}%` }}
-                />
-              </div>
-            </div>
-          )}
+          {data.completion && data.completion.done + data.completion.remaining > 0 && (() => {
+            const total = data.completion.done + data.completion.remaining
+            const pct = total > 0 ? Math.round((data.completion.done / total) * 100) : 100
+            const isComplete = data.completion.remaining === 0
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors',
+                  isComplete ? 'border-status-success/30 bg-status-success/[0.04]' : 'border-line bg-bone-raised'
+                )}
+              >
+                {isComplete ? (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                    className="flex size-8 items-center justify-center rounded-full bg-status-success/10"
+                  >
+                    <PartyPopper className="size-4 text-status-success" />
+                  </motion.div>
+                ) : (
+                  <div className="flex size-8 items-center justify-center rounded-full bg-orange/10">
+                    <span className="text-[13px] font-medium text-orange">{pct}%</span>
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className={cn('text-[12px] font-medium', isComplete ? 'text-status-success' : 'text-ink')}>
+                    {isComplete ? 'Day complete — nothing left!' : `${data.completion.remaining} action${data.completion.remaining === 1 ? '' : 's'} left today`}
+                  </p>
+                  <p className="text-[11px] text-graphite">{data.completion.done} of {total} done</p>
+                </div>
+                <div className="h-2 w-20 overflow-hidden rounded-full bg-line/40">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${pct}%` }}
+                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                    className={cn('h-full rounded-full', isComplete ? 'bg-status-success' : 'bg-orange')}
+                  />
+                </div>
+              </motion.div>
+            )
+          })()}
 
           {/* Resume Work — continue where you left off */}
           {data.resumeWork && data.resumeWork.length > 0 && (
-            <section className="rounded-lg border border-orange/20 bg-orange/[0.02] p-4">
+            <motion.section
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, duration: 0.3 }}
+              className="rounded-lg border border-orange/20 bg-orange/[0.02] p-4"
+            >
               <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone mb-2">Continue where you left off</p>
               <div className="space-y-1.5">
-                {data.resumeWork.map((item) => (
-                  <Link
+                {data.resumeWork.map((item, i) => (
+                  <motion.div
                     key={item.id}
-                    href={`/leads/${item.id}`}
-                    className="flex items-center gap-3 rounded-lg border border-line/60 bg-bone-raised/60 px-3 py-2.5 transition-colors hover:border-orange/30 hover:bg-bone"
+                    initial={{ opacity: 0, x: -4 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.15 + i * 0.05, duration: 0.2 }}
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-medium text-ink truncate">{item.company}{item.contactName ? ` · ${item.contactName}` : ''}</p>
-                      <p className="text-[11px] text-graphite">{item.state}</p>
-                    </div>
-                    <span className="shrink-0 text-[11px] text-orange">Continue →</span>
-                  </Link>
+                    <Link
+                      href={`/leads/${item.id}`}
+                      className="flex items-center gap-3 rounded-lg border border-line/60 bg-bone-raised/60 px-3 py-2.5 transition-colors hover:border-orange/30 hover:bg-bone"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-medium text-ink truncate">{item.company}{item.contactName ? ` · ${item.contactName}` : ''}</p>
+                        <p className="text-[11px] text-graphite">{item.state}</p>
+                      </div>
+                      <span className="shrink-0 text-[11px] text-orange">Continue →</span>
+                    </Link>
+                  </motion.div>
                 ))}
               </div>
-            </section>
+            </motion.section>
           )}
 
           <DoThisNext action={data.nextAction} />
@@ -216,7 +263,11 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
           />
 
           {data.notifications.length > 0 && (
-            <section className="rounded-lg border border-line bg-bone-raised px-4 py-3">
+            <motion.section
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-lg border border-line bg-bone-raised px-4 py-3"
+            >
               <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
                 <AlertTriangle className="size-3.5 text-stone" />
                 Recent signals
@@ -228,34 +279,44 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
                   </li>
                 ))}
               </ul>
-            </section>
+            </motion.section>
           )}
 
           {/* Upwork opportunities */}
           {data.upworkJobs && data.upworkJobs.length > 0 && (
-            <section className="space-y-2">
+            <motion.section
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-2"
+            >
               <div className="flex items-center justify-between">
                 <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Upwork</p>
-                <Link href="/upwork" className="text-[11px] text-graphite hover:text-ink">View all →</Link>
+                <Link href="/upwork" className="text-[11px] text-graphite hover:text-ink transition-colors">View all →</Link>
               </div>
               <div className="space-y-1">
-                {data.upworkJobs.slice(0, 3).map((job) => (
-                  <Link
+                {data.upworkJobs.slice(0, 3).map((job, i) => (
+                  <motion.div
                     key={job.id}
-                    href={`/upwork/${job.id}`}
-                    className="flex items-center justify-between rounded-lg border border-line bg-bone-raised/40 px-3 py-2.5 transition-colors hover:bg-bone"
+                    initial={{ opacity: 0, x: -4 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05, duration: 0.2 }}
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-medium text-ink">{job.title}</p>
-                      <p className="truncate text-[11px] text-graphite">{job.company}</p>
-                    </div>
-                    {job.fitScore != null && (
-                      <span className="shrink-0 text-[11px] font-mono text-orange">{Math.round(job.fitScore)}% fit</span>
-                    )}
-                  </Link>
+                    <Link
+                      href={`/upwork/${job.id}`}
+                      className="flex items-center justify-between rounded-lg border border-line bg-bone-raised/40 px-3 py-2.5 transition-colors hover:bg-bone"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-medium text-ink">{job.title}</p>
+                        <p className="truncate text-[11px] text-graphite">{job.company}</p>
+                      </div>
+                      {job.fitScore != null && (
+                        <span className="shrink-0 text-[11px] font-mono text-orange">{Math.round(job.fitScore)}% fit</span>
+                      )}
+                    </Link>
+                  </motion.div>
                 ))}
               </div>
-            </section>
+            </motion.section>
           )}
 
           <DailyJobs
@@ -272,20 +333,37 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
           <section className="space-y-2">
             <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Working as</p>
             <div className="grid gap-2 sm:grid-cols-2">
-              {data.identities.map((identity) => {
+              {data.identities.map((identity, i) => {
                 const left = identity.targets.reduce((sum, target) => sum + target.remaining, 0)
+                const total = identity.targets.reduce((sum, target) => sum + target.targetCount, 0)
+                const done = total - left
+                const pct = total > 0 ? Math.round((done / total) * 100) : 0
                 return (
-                  <Link
+                  <motion.div
                     key={identity.assignmentId}
-                    href={`/workspace/${identity.revenueIdentityId}`}
-                    className="flex items-center justify-between rounded-lg border border-line bg-bone-raised px-3 py-3"
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05, duration: 0.25 }}
                   >
-                    <span className="min-w-0">
-                      <span className="block truncate text-[14px] font-medium text-ink">{identity.identityName}</span>
-                      <span className="text-[12px] text-graphite">{identity.channel} · {identity.title || 'No title'}</span>
-                    </span>
-                    <span className="shrink-0 text-[12px] font-medium text-ink">{left === 0 ? 'Covered' : `${left} left`}</span>
-                  </Link>
+                    <Link
+                      href={`/workspace/${identity.revenueIdentityId}`}
+                      className="flex items-center justify-between rounded-lg border border-line bg-bone-raised px-3 py-3 transition-colors hover:border-line/80 hover:bg-bone"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-[14px] font-medium text-ink">{identity.identityName}</span>
+                        <span className="text-[12px] text-graphite">{identity.channel} · {identity.title || 'No title'}</span>
+                        <div className="mt-1.5 h-1 w-16 rounded-full bg-line/40 overflow-hidden">
+                          <div
+                            className={cn('h-full rounded-full transition-all duration-500', pct >= 80 ? 'bg-status-success' : pct > 0 ? 'bg-orange' : 'bg-line')}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </span>
+                      <span className={cn('shrink-0 text-[12px] font-medium', left === 0 ? 'text-status-success' : 'text-ink')}>
+                        {left === 0 ? '✓ Covered' : `${left} left`}
+                      </span>
+                    </Link>
+                  </motion.div>
                 )
               })}
             </div>
@@ -299,22 +377,31 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
 function NoAssignmentsState({ repName }: { repName: string }) {
   return (
     <div className="space-y-6 pb-8">
-      <section className="rounded-lg border border-line bg-bone-raised p-5">
+      <motion.section
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-lg border border-line bg-bone-raised p-5"
+      >
         <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">
           Your Day
         </p>
         <h2 className="mt-1 text-[24px] font-light tracking-[-0.02em] text-ink">
           Good day, {repName}
         </h2>
-      </section>
-      <section className="rounded-lg border border-dashed border-line bg-bone-raised/40 px-6 py-12 text-center">
+      </motion.section>
+      <motion.section
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.3 }}
+        className="rounded-lg border border-dashed border-line bg-bone-raised/40 px-6 py-12 text-center"
+      >
         <Shield className="mx-auto size-8 text-stone" />
         <p className="mt-3 text-[14px] font-medium text-ink">No work profile assigned yet</p>
         <p className="mt-1 max-w-xs mx-auto text-[13px] text-graphite">
           Your admin needs to assign a Revenue Identity before you can start revenue work.
           You don&apos;t need to do anything yet.
         </p>
-      </section>
+      </motion.section>
     </div>
   )
 }

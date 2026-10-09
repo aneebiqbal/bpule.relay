@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { motion } from 'motion/react'
 import {
   AlertTriangle,
   Calendar,
@@ -18,10 +19,15 @@ import {
   Settings,
   PenLine,
   TrendingUp,
+  Send,
+  Reply,
+  UserPlus,
 } from 'lucide-react'
 import { cn } from 'cn'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { EventsDrilldown } from '@/components/admin/events-drilldown'
+
+import { formatMinutesAgo } from '@/lib/ui/time'
 import type { CommandCenterData, TeamRow, ExceptionItem, OpportunityFeedItem, TeamMemberStatus, ExceptionSeverity } from '@/lib/admin/command-center-v2'
 
 
@@ -42,13 +48,6 @@ function formatDateLabel(date: string): string {
   const yestDate = yesterday()
   if (date === yestDate) return 'Yesterday'
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-}
-
-function formatMinutesAgo(min: number | null): string {
-  if (min === null) return '—'
-  if (min < 60) return `${min}m ago`
-  if (min < 1440) return `${Math.floor(min / 60)}h ago`
-  return `${Math.floor(min / 1440)}d ago`
 }
 
 
@@ -143,9 +142,39 @@ export function CommandCenterV2() {
 
       <main className="mx-auto max-w-6xl px-5 py-6 sm:px-6">
         {loading ? (
-          <div className="space-y-4">
-            <div className="h-24 animate-pulse rounded-lg bg-bone-raised" />
-            <div className="h-48 animate-pulse rounded-lg bg-bone-raised" />
+          <div className="space-y-6">
+            <div className="rounded-lg border border-line bg-bone-raised p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="size-4 animate-pulse rounded bg-bone" />
+                <div className="h-3 w-20 animate-pulse rounded bg-bone" />
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {[0,1,2,3,4,5].map(i => (
+                  <div key={i} className="animate-pulse rounded-lg border border-line/40 bg-bone p-3">
+                    <div className="h-3 w-12 rounded bg-bone-raised mb-2" />
+                    <div className="h-5 w-8 rounded bg-bone-raised mb-1.5" />
+                    <div className="h-4 w-full rounded bg-bone-raised" />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-lg border border-line bg-bone-raised p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="size-4 animate-pulse rounded bg-bone" />
+                <div className="h-3 w-16 animate-pulse rounded bg-bone" />
+              </div>
+              <div className="space-y-3">
+                {[0,1,2].map(i => (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className="size-16 animate-pulse rounded bg-bone" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3 w-32 animate-pulse rounded bg-bone" />
+                      <div className="h-2.5 w-48 animate-pulse rounded bg-bone" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         ) : data ? (
           <div className="space-y-6">
@@ -260,7 +289,12 @@ function SinceYesterdaySection({ diff }: { diff: NonNullable<CommandCenterData['
   if (items.length === 0) return null
 
   return (
-    <section className="rounded-lg border border-line bg-bone-raised p-5">
+    <motion.section
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="rounded-lg border border-line bg-bone-raised p-5"
+    >
       <div className="flex items-center gap-2">
         <Zap className="size-4 text-orange" />
         <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">
@@ -269,59 +303,66 @@ function SinceYesterdaySection({ diff }: { diff: NonNullable<CommandCenterData['
       </div>
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
         {items.map((item, i) => (
-          <span key={i} className={item.positive ? 'text-status-success' : 'text-status-warning'}>
+          <motion.span
+            key={i}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.05, duration: 0.2 }}
+            className={item.positive ? 'text-status-success' : 'text-status-warning'}
+          >
             {item.positive ? '+' : ''}{item.label}
-          </span>
+          </motion.span>
         ))}
       </div>
-    </section>
+    </motion.section>
   )
 }
 
 
 function DailyBriefSection({ brief, date, onDrilldown }: { brief: CommandCenterData['brief']; date: string; onDrilldown: (action: string) => void }) {
   const isToday = date === today()
+  const totalActivity = brief.connectionsSent + brief.dmsSent + brief.followupsSent + brief.repliesReceived + brief.leadsExtracted
+
+  const metrics = [
+    { key: 'activeReps', label: 'Active reps', value: brief.activeReps, icon: <Users className="size-3.5" /> },
+    { key: 'connectionsSent', label: 'Connections', value: brief.connectionsSent, icon: <UserPlus className="size-3.5" />, drilldown: 'CONNECTION_SENT' },
+    { key: 'dmsSent', label: 'DMs', value: brief.dmsSent, icon: <Send className="size-3.5" />, drilldown: 'DM_SENT' },
+    { key: 'followupsSent', label: 'Follow-ups', value: brief.followupsSent, icon: <MessageSquare className="size-3.5" />, drilldown: 'FOLLOWUP_SENT' },
+    { key: 'repliesReceived', label: 'Replies', value: brief.repliesReceived, icon: <Reply className="size-3.5" />, drilldown: 'REPLY_RECEIVED' },
+    { key: 'leadsExtracted', label: 'Leads', value: brief.leadsExtracted, icon: <Target className="size-3.5" />, drilldown: 'LEAD_EXTRACTED' },
+  ].filter(m => m.key === 'activeReps' || m.value > 0)
 
   return (
     <section className="rounded-lg border border-line bg-bone-raised p-5">
-      <div className="flex items-center gap-2">
-        <Zap className="size-4 text-orange" />
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">
-          {isToday ? 'Operating Brief' : `Operating Brief — ${formatDateLabel(date)}`}
-        </p>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Zap className="size-4 text-orange" />
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">
+            {isToday ? 'Operating Brief' : `Operating Brief — ${formatDateLabel(date)}`}
+          </p>
+        </div>
+        <span className="text-[11px] text-stone">{totalActivity} total actions</span>
       </div>
-      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-ink">
-        <span><strong>{brief.activeReps}</strong> {isToday ? 'active' : 'active'} reps</span>
-        {brief.connectionsSent > 0 && (
-          <button onClick={() => onDrilldown('CONNECTION_SENT')} className="hover:text-orange">
-            <strong>{brief.connectionsSent}</strong> connections
-          </button>
-        )}
-        {brief.dmsSent > 0 && (
-          <button onClick={() => onDrilldown('DM_SENT')} className="hover:text-orange">
-            <strong>{brief.dmsSent}</strong> DMs
-          </button>
-        )}
-        {brief.followupsSent > 0 && (
-          <button onClick={() => onDrilldown('FOLLOWUP_SENT')} className="hover:text-orange">
-            <strong>{brief.followupsSent}</strong> follow-ups
-          </button>
-        )}
-        {brief.repliesReceived > 0 && (
-          <button onClick={() => onDrilldown('REPLY_RECEIVED')} className="hover:text-orange">
-            <strong>{brief.repliesReceived}</strong> replies
-          </button>
-        )}
-        {brief.leadsExtracted > 0 && (
-          <button onClick={() => onDrilldown('LEAD_EXTRACTED')} className="hover:text-orange">
-            <strong>{brief.leadsExtracted}</strong> leads
-          </button>
-        )}
-        {brief.opportunities > 0 && (
-          <button onClick={() => onDrilldown('OPPORTUNITY_CREATED')} className="text-orange hover:text-orange-light">
-            <strong>{brief.opportunities}</strong> opportunities
-          </button>
-        )}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {metrics.map((metric, i) => (
+          <motion.button
+            key={metric.key}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05, duration: 0.3 }}
+            onClick={() => metric.drilldown && onDrilldown(metric.drilldown)}
+            className={cn(
+              'rounded-lg border border-line/60 bg-bone p-3 text-left transition-colors',
+              metric.drilldown && 'hover:border-orange/30 hover:bg-orange/[0.02] cursor-pointer',
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-stone">{metric.icon}</span>
+              <span className="text-[14px] font-medium text-ink count-pop">{metric.value}</span>
+            </div>
+            <p className="mt-1 text-[10px] text-stone">{metric.label}</p>
+          </motion.button>
+        ))}
       </div>
     </section>
   )
@@ -351,10 +392,16 @@ function ExceptionSection({ exceptions }: { exceptions: ExceptionItem[] }) {
         )}
       </div>
       <div className="divide-y divide-line/60">
-        {visible.map(item => {
+        {visible.map((item, i) => {
           const sev = severityConfig(item.severity)
           return (
-            <div key={item.id} className="flex items-start gap-3 px-5 py-3">
+            <motion.div
+              key={item.id}
+              initial={{ opacity: 0, x: -4 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.04, duration: 0.2 }}
+              className="flex items-start gap-3 px-5 py-3"
+            >
               <StatusBadge status={sev.label} variant={sev.variant} className="mt-0.5 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-[13px] font-medium text-ink">{item.title}</p>
@@ -363,12 +410,12 @@ function ExceptionSection({ exceptions }: { exceptions: ExceptionItem[] }) {
               {item.leadId && (
                 <Link
                   href={`/leads/${item.leadId}`}
-                  className="shrink-0 rounded-md border border-line px-2 py-1 text-[11px] text-graphite hover:border-ink/20 hover:text-ink"
+                  className="shrink-0 rounded-md border border-line px-2 py-1 text-[11px] text-graphite hover:border-ink/20 hover:text-ink transition-colors"
                 >
                   Open
                 </Link>
               )}
-            </div>
+            </motion.div>
           )
         })}
       </div>
@@ -390,23 +437,32 @@ function TeamSection({
 }) {
   return (
     <section className="rounded-lg border border-line bg-bone-raised">
-      <div className="flex items-center gap-2 border-b border-line px-5 py-3">
-        <Users className="size-4 text-stone" />
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">
-          Team · {team.length}
-        </p>
+      <div className="flex items-center justify-between border-b border-line px-5 py-3">
+        <div className="flex items-center gap-2">
+          <Users className="size-4 text-stone" />
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">
+            Team
+          </p>
+        </div>
+        <span className="text-[11px] text-stone">{team.length} member{team.length !== 1 ? 's' : ''}</span>
       </div>
       <div className="divide-y divide-line/60">
-        {team.map(row => {
+        {team.map((row, i) => {
           const cfg = statusConfig(row.status)
           const isExpanded = expandedRep === row.repId
+          const activityPct = row.actionsToday > 0 ? Math.min(100, (row.actionsToday / 10) * 100) : 0
           return (
-            <div key={row.repId}>
+            <motion.div
+              key={row.repId}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04, duration: 0.25 }}
+            >
               <div
-                className="flex cursor-pointer items-center gap-3 px-5 py-3 hover:bg-bone/50"
+                className="flex cursor-pointer items-center gap-3 px-5 py-3 hover:bg-bone/50 transition-colors"
                 onClick={() => onToggleExpand(row.repId)}
               >
-                <ChevronRight className={cn('size-3.5 text-stone transition-transform', isExpanded && 'rotate-90')} />
+                <ChevronRight className={cn('size-3.5 text-stone transition-transform duration-200', isExpanded && 'rotate-90')} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <Link
@@ -417,6 +473,12 @@ function TeamSection({
                       {row.repName}
                     </Link>
                     <StatusBadge status={cfg.label} variant={cfg.variant} />
+                  </div>
+                  <div className="mt-1.5 h-1 w-24 rounded-full bg-line/40 overflow-hidden">
+                    <div
+                      className={cn('h-full rounded-full transition-all duration-500', activityPct > 60 ? 'bg-status-success' : activityPct > 30 ? 'bg-orange' : 'bg-line')}
+                      style={{ width: `${activityPct}%` }}
+                    />
                   </div>
                 </div>
                 <div className="flex items-center gap-4 text-[12px] text-graphite">
@@ -437,7 +499,7 @@ function TeamSection({
                 </div>
               </div>
               {isExpanded && (
-                <div className="border-t border-line/40 bg-bone/30 px-5 py-3">
+                <div className="border-t border-line/40 bg-bone/30 px-5 py-3 drawer-slide-up">
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <MiniStat label="Actions" value={row.actionsToday} />
                     <MiniStat label="Assigned" value={row.assignedLeads} />
@@ -447,14 +509,14 @@ function TeamSection({
                   <div className="mt-3 flex gap-2">
                     <Link
                       href={`/team/${row.repId}?date=${date}`}
-                      className="rounded-md border border-line px-3 py-1.5 text-[12px] text-ink hover:border-ink/20"
+                      className="rounded-md border border-line px-3 py-1.5 text-[12px] text-ink hover:border-ink/20 transition-colors"
                     >
                       View timeline
                     </Link>
                     {row.pendingReplies > 0 && (
                       <Link
                         href={`/inbound?repId=${row.repId}`}
-                        className="rounded-md border border-status-warning/30 bg-status-warning/5 px-3 py-1.5 text-[12px] text-status-warning hover:bg-status-warning/10"
+                        className="rounded-md border border-status-warning/30 bg-status-warning/5 px-3 py-1.5 text-[12px] text-status-warning hover:bg-status-warning/10 transition-colors"
                       >
                         View replies
                       </Link>
@@ -462,7 +524,7 @@ function TeamSection({
                   </div>
                 </div>
               )}
-            </div>
+            </motion.div>
           )
         })}
       </div>
@@ -508,13 +570,19 @@ function OpportunitySection({ opportunities }: { opportunities: OpportunityFeedI
         )}
       </div>
       <div className="divide-y divide-line/60">
-        {visible.map(opp => {
+        {visible.map((opp, i) => {
           const hasWeakProfile = opp.recommendedProfileScore !== null &&
             opp.currentProfileScore !== null &&
             opp.recommendedProfileScore > opp.currentProfileScore + 15
 
           return (
-            <div key={opp.leadId} className="flex items-start gap-3 px-5 py-3">
+            <motion.div
+              key={opp.leadId}
+              initial={{ opacity: 0, x: -4 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.04, duration: 0.2 }}
+              className="flex items-start gap-3 px-5 py-3"
+            >
               <div className="mt-0.5 shrink-0 rounded bg-orange/10 px-2 py-0.5 text-mono-medium text-[11px] font-medium text-orange">
                 {opp.score}
               </div>
@@ -542,11 +610,11 @@ function OpportunitySection({ opportunities }: { opportunities: OpportunityFeedI
               </div>
               <Link
                 href={`/leads/${opp.leadId}`}
-                className="shrink-0 rounded-md border border-line px-2 py-1 text-[11px] text-graphite hover:border-ink/20 hover:text-ink"
+                className="shrink-0 rounded-md border border-line px-2 py-1 text-[11px] text-graphite hover:border-ink/20 hover:text-ink transition-colors"
               >
                 Open
               </Link>
-            </div>
+            </motion.div>
           )
         })}
       </div>
@@ -558,22 +626,28 @@ function OpportunitySection({ opportunities }: { opportunities: OpportunityFeedI
 function OperateSection() {
   return (
     <section>
-      <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Operate</p>
-      <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
-        {OPERATE_NAV.map(item => {
+      <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone mb-3">Operate</p>
+      <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        {OPERATE_NAV.map((item, i) => {
           const Icon = item.icon
           return (
-            <Link
+            <motion.div
               key={item.href}
-              href={item.href}
-              className="flex items-center gap-2.5 rounded-md border border-line bg-bone-raised px-3 py-2.5 transition-colors hover:border-ink/20"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.03, duration: 0.2 }}
             >
-              <Icon className="size-3.5 shrink-0 text-stone" />
-              <div className="min-w-0">
-                <p className="text-[12px] font-medium text-ink">{item.label}</p>
-                <p className="truncate text-[10px] text-graphite">{item.detail}</p>
-              </div>
-            </Link>
+              <Link
+                href={item.href}
+                className="flex items-center gap-2.5 rounded-lg border border-line bg-bone-raised px-3 py-2.5 transition-all hover:border-line/80 hover:bg-bone hover:shadow-sm"
+              >
+                <Icon className="size-3.5 shrink-0 text-stone" />
+                <div className="min-w-0">
+                  <p className="text-[12px] font-medium text-ink">{item.label}</p>
+                  <p className="truncate text-[10px] text-graphite">{item.detail}</p>
+                </div>
+              </Link>
+            </motion.div>
           )
         })}
       </div>

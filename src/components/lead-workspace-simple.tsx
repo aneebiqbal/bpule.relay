@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useHotkeys } from 'react-hotkeys-hook'
+import { motion } from 'motion/react'
 import {
   ArrowLeft, CalendarDays, Check, Clock, Copy, ExternalLink, Flame,
-  MessageSquare, Send, Trophy, X,
+  MessageSquare, Send, Trophy, X, Keyboard,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -18,6 +19,7 @@ import { evaluateDmGate, evaluateFollowupGate } from '@/lib/relay/message-eligib
 import { readSse } from '@/lib/sse/client'
 import { notifyError, notifySuccess } from '@/lib/ui/notify'
 import { trackEvent } from '@/lib/analytics/tracker'
+import { timeAgo } from '@/lib/ui/time'
 import type { LeadDetail } from '@/lib/store/types'
 import type { ProofItem } from '@/lib/domain/types'
 import type { DraftResult } from '@/lib/ai/draft'
@@ -351,22 +353,34 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, t
       )}
 
       {/* Header */}
-      <div>
+      <motion.div
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25 }}
+      >
         <div className="flex items-center justify-between">
-          <Link href="/leads" className="inline-flex items-center gap-1.5 text-[12px] text-graphite hover:text-ink">
-            <ArrowLeft className="size-3.5" /> Back
+          <Link href="/leads" className="inline-flex items-center gap-1.5 text-[12px] text-graphite hover:text-ink transition-colors">
+            <ArrowLeft className="size-3.5" /> Pipeline
           </Link>
-          <Link href="/dashboard" className="inline-flex items-center gap-1 text-[11px] text-graphite hover:text-ink">
-            Today
-          </Link>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline-flex items-center gap-1 rounded-md border border-line/60 px-2 py-0.5 text-[10px] text-stone">
+              <Keyboard className="size-2.5" />
+              <kbd className="font-mono">G</kbd> generate · <kbd className="font-mono">S</kbd> send
+            </span>
+            <Link href="/dashboard" className="inline-flex items-center gap-1 text-[11px] text-graphite hover:text-ink transition-colors">
+              Today
+            </Link>
+          </div>
         </div>
-        <div className="mt-2 flex items-start justify-between gap-3">
+        <div className="mt-3 flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <h1 className="text-[17px] font-medium leading-tight text-ink sm:text-[20px]">{lead.company}</h1>
-            <p className="text-[12px] text-graphite sm:text-[13px]">{lead.contactName}{lead.contactTitle ? ` · ${lead.contactTitle}` : ''}</p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+            <h1 className="text-[18px] font-medium leading-tight text-ink sm:text-[22px] tracking-tight">{lead.company}</h1>
+            {lead.contactName && (
+              <p className="mt-0.5 text-[13px] text-graphite sm:text-[14px]">{lead.contactName}{lead.contactTitle ? ` · ${lead.contactTitle}` : ''}</p>
+            )}
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px]">
               {senderProfile && (
-                <span className="inline-flex items-center gap-1.5 text-graphite">
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-bone px-2 py-0.5">
                   <span className="size-1.5 rounded-full bg-orange" />
                   <span className="font-medium text-ink">{senderProfile.label ?? 'Unnamed'}</span>
                   {profileMatchPct != null && (
@@ -374,24 +388,36 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, t
                   )}
                 </span>
               )}
-              {signal && <span className="inline-flex items-center gap-1 text-orange"><Flame className="size-3" />{signal.short}</span>}
+              {signal && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-orange/10 px-2 py-0.5 text-orange">
+                  <Flame className="size-3" />{signal.short}
+                </span>
+              )}
               {lead.url && (
-                <a href={lead.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-graphite hover:text-ink">
-                  Open on LinkedIn <ExternalLink className="size-2.5" />
+                <a href={lead.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-graphite hover:text-ink transition-colors">
+                  LinkedIn <ExternalLink className="size-2.5" />
                 </a>
               )}
             </div>
           </div>
-          <div className="flex flex-col items-center gap-1 shrink-0">
-            <ScoreRing score={lead.score} canonicalScore={lead.canonicalScore} size={40} />
-            <span className="text-[10px] font-medium text-ink sm:text-[11px]">{scoreLabel}</span>
+          <div className="flex flex-col items-center gap-1.5 shrink-0 rounded-lg border border-line/40 bg-bone-raised/30 px-3 py-2">
+            <ScoreRing score={lead.score} canonicalScore={lead.canonicalScore} size={44} />
+            <span className="text-[11px] font-medium text-ink">{scoreLabel}</span>
+            {canonicalScore > 0 && (
+              <span className="text-[10px] text-stone">{Math.round(canonicalScore)}/100</span>
+            )}
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Better profile recommendation — explains why */}
       {hasBetterProfile && betterProfile && betterProfileReason && (
-        <div className="rounded-lg border border-orange/20 bg-orange/[0.02] px-4 py-3">
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05, duration: 0.25 }}
+          className="rounded-lg border border-orange/20 bg-orange/[0.02] px-4 py-3"
+        >
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -413,17 +439,22 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, t
               Refer
             </Button>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Relationship state — YOUR MOVE / THEIR MOVE */}
-      <div className={cn(
-        'rounded-lg border p-4',
-        relationshipState.kind === 'your_move' ? 'border-orange/30 bg-orange/[0.03]' :
-        relationshipState.kind === 'their_move' ? 'border-line bg-bone-raised/40' :
-        relationshipState.kind === 'won' ? 'border-status-success/20 bg-status-success/[0.03]' :
-        'border-line bg-bone-raised/30'
-      )}>
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.3 }}
+        className={cn(
+          'rounded-lg border p-4',
+          relationshipState.kind === 'your_move' ? 'border-orange/30 bg-orange/[0.03]' :
+          relationshipState.kind === 'their_move' ? 'border-line bg-bone-raised/40' :
+          relationshipState.kind === 'won' ? 'border-status-success/20 bg-status-success/[0.03]' :
+          'border-line bg-bone-raised/30'
+        )}
+      >
         <div className="flex items-center gap-2">
           {relationshipState.kind === 'your_move' && <span className="size-2 rounded-full bg-orange animate-pulse" />}
           {relationshipState.kind === 'their_move' && <Clock className="size-3.5 text-stone" />}
@@ -451,9 +482,9 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, t
             {relationshipState.lastActionLabel} {relationshipState.lastActionAt && timeAgo(relationshipState.lastActionAt, now)}
           </p>
         )}
-      </div>
+      </motion.div>
 
-      {/* Score breakdown — compact, always visible */}
+      {/* Score breakdown — visual bars */}
       {(() => {
         const ci = lead.canonicalIntelligence as Record<string, unknown> | null
         const breakdown = ci?.scoreBreakdown as Record<string, unknown> | null
@@ -463,22 +494,36 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, t
         if (dimensions.length === 0) return null
         return (
           <div className="rounded-lg border border-line/60 bg-bone-raised/20 px-4 py-3">
-            <h2 className="text-[10px] font-medium uppercase tracking-[0.12em] text-stone mb-2">Score</h2>
-            <div className="space-y-1">
-              {dimensions.slice(0, 4).map((dim) => (
-                <div key={dim.key as string} className="flex items-center gap-2">
-                  <div className="w-16 shrink-0">
-                    <div className="h-1 rounded-full bg-line/60 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-orange"
-                        style={{ width: `${Math.min(100, ((dim.contribution as number) / ((dim.weight as number) * 100)) * 100)}%` }}
+            <h2 className="text-[10px] font-medium uppercase tracking-[0.12em] text-stone mb-2">Score breakdown</h2>
+            <div className="space-y-2">
+              {dimensions.slice(0, 4).map((dim, i) => {
+                const pct = Math.min(100, ((dim.contribution as number) / ((dim.weight as number) * 100)) * 100)
+                return (
+                  <motion.div
+                    key={dim.key as string}
+                    initial={{ opacity: 0, x: -4 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05, duration: 0.2 }}
+                  >
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[11px] text-graphite">{dim.label as string}</span>
+                      <span className="text-[10px] font-medium text-stone">{Math.round(pct)}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-line/40 overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ delay: i * 0.05 + 0.1, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                        className={cn(
+                          'h-full rounded-full',
+                          pct >= 70 ? 'bg-status-success' : pct >= 40 ? 'bg-orange' : 'bg-status-warning'
+                        )}
                       />
                     </div>
-                  </div>
-                  <span className="text-[10px] text-graphite shrink-0 w-20 truncate">{dim.label as string}</span>
-                  <span className="text-[10px] text-stone truncate">{dim.note as string}</span>
-                </div>
-              ))}
+                    {typeof dim.note === 'string' && <p className="mt-0.5 text-[10px] text-stone/60 truncate">{dim.note}</p>}
+                  </motion.div>
+                )
+              })}
             </div>
             {noMessageReason && (
               <p className="mt-2 text-[10px] text-status-warning">{noMessageReason}</p>
@@ -487,42 +532,75 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, t
         )
       })()}
 
-      {/* Conversation history — Generated / Sent / Received */}
-      {allMessages.length > 0 && (
-        <div className="rounded-xl border border-line p-4">
-          <h2 className="text-[12px] font-medium text-stone uppercase tracking-wider mb-3">History</h2>
-          <div className="space-y-2">
-            {allMessages.map((msg) => {
-              const isDraft = !msg.sentText && msg.draftText && msg.direction !== 'inbound'
-              const isReceived = msg.direction === 'inbound'
-              return (
-                <div key={msg.id} className={cn(
-                  'rounded-lg border p-3',
-                  isReceived ? 'border-status-success/20 bg-status-success/[0.03]' :
-                  isDraft ? 'border-orange/20 bg-orange/[0.02] border-dashed' :
-                  'border-line bg-bone-raised/20',
-                )}>
-                  <div className="flex items-center gap-2 text-[10px] text-stone">
-                    {isReceived && <span className="font-medium text-status-success">← Received</span>}
-                    {isDraft && <span className="font-medium text-orange">Generated draft</span>}
-                    {!isReceived && !isDraft && <span>→ Sent</span>}
-                    <span>·</span>
-                    <span className="capitalize">{msg.type}</span>
-                    {msg.sentAt && <span>· {timeAgo(msg.sentAt, now)}</span>}
-                    {msg.modelUsed && isDraft && <span>· AI</span>}
+      {/* Conversation history — grouped by day */}
+      {allMessages.length > 0 && (() => {
+        const grouped = new Map<string, typeof allMessages>()
+        for (const msg of allMessages) {
+          const raw = msg.sentAt ?? msg.createdAt
+          const dateKey = raw ? raw.slice(0, 10) : 'unknown'
+          if (!grouped.has(dateKey)) grouped.set(dateKey, [])
+          grouped.get(dateKey)!.push(msg)
+        }
+        const sortedEntries = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b))
+
+        return (
+          <div className="rounded-xl border border-line p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-[12px] font-medium text-stone uppercase tracking-wider">History</h2>
+              <span className="text-[10px] text-stone">{allMessages.length} message{allMessages.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="space-y-4">
+              {sortedEntries.map(([dateKey, msgs]) => (
+                <div key={dateKey}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-px flex-1 bg-line/40" />
+                    <span className="text-[10px] text-stone px-2">
+                      {dateKey === 'unknown' ? 'Earlier' : dateKey === new Date().toISOString().slice(0, 10) ? 'Today' : new Date(dateKey + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </span>
+                    <div className="h-px flex-1 bg-line/40" />
                   </div>
-                  <p className={cn(
-                    'mt-1.5 text-[13px] leading-relaxed whitespace-pre-wrap',
-                    isDraft ? 'text-graphite italic' : 'text-ink',
-                  )}>
-                    {msg.sentText || msg.draftText}
-                  </p>
+                  <div className="space-y-1.5">
+                    {msgs.map((msg, i) => {
+                      const isDraft = !msg.sentText && msg.draftText && msg.direction !== 'inbound'
+                      const isReceived = msg.direction === 'inbound'
+                      return (
+                        <motion.div
+                          key={msg.id}
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.03, duration: 0.2 }}
+                          className={cn(
+                            'rounded-lg border p-3',
+                            isReceived ? 'border-status-success/20 bg-status-success/[0.03]' :
+                            isDraft ? 'border-orange/20 bg-orange/[0.02] border-dashed' :
+                            'border-line bg-bone-raised/20',
+                          )}
+                        >
+                          <div className="flex items-center gap-2 text-[10px] text-stone">
+                            {isReceived && <span className="font-medium text-status-success">← Received</span>}
+                            {isDraft && <span className="font-medium text-orange">✦ Draft</span>}
+                            {!isReceived && !isDraft && <span>→ Sent</span>}
+                            <span className="text-line">·</span>
+                            <span className="capitalize">{msg.type}</span>
+                            {msg.sentAt && <span className="text-stone/50">· {timeAgo(msg.sentAt, now)}</span>}
+                            {msg.modelUsed && isDraft && <span className="text-stone/50">· AI</span>}
+                          </div>
+                          <p className={cn(
+                            'mt-1.5 text-[13px] leading-relaxed whitespace-pre-wrap',
+                            isDraft ? 'text-graphite italic' : 'text-ink',
+                          )}>
+                            {msg.sentText || msg.draftText}
+                          </p>
+                        </motion.div>
+                      )
+                    })}
+                  </div>
                 </div>
-              )
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* COMMAND STATION — all operations in one place */}
       <CommandStation
@@ -556,18 +634,6 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, t
 
     </div>
   )
-}
-
-function timeAgo(iso: string | null, now: number): string {
-  if (!iso) return ''
-  const diff = now - new Date(iso).getTime()
-  if (diff < 60_000) return 'just now'
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  return `${days}d ago`
 }
 
 // One surface for ALL lead operations. No panel hunting, no scrolling.

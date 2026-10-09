@@ -1,16 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Search, GripVertical, MessageSquare, Clock, User, PenLine } from 'lucide-react'
+import { motion, AnimatePresence } from 'motion/react'
+import { Search, GripVertical, Clock, User, PenLine, Inbox, Send, Reply, CheckCircle2, Snowflake, Target } from 'lucide-react'
 import { cn } from 'cn'
-// Native HTML5 drag-and-drop — no Redux needed
 import { ScoreRing } from '@/components/score-ring'
-import { StatusBadge } from '@/components/ui/status-badge'
 import { signalById } from '@/lib/score/signals'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Target } from 'lucide-react'
-import type { Lead } from '@/lib/domain/types'
 import {
   PIPELINE_COLUMNS,
   TERMINAL_COLUMNS,
@@ -36,6 +33,34 @@ interface GroupedLeads {
   needs_reply: LeadRow[]
   done: LeadRow[]
   cold: LeadRow[]
+}
+
+const COLUMN_ICONS: Record<PipelineStage, React.ReactNode> = {
+  to_contact: <Send className="size-3.5" />,
+  waiting: <Clock className="size-3.5" />,
+  needs_reply: <Reply className="size-3.5" />,
+  done: <CheckCircle2 className="size-3.5" />,
+  cold: <Snowflake className="size-3.5" />,
+}
+
+const EMPTY_MESSAGES: Record<PipelineStage, { title: string; hint: string }> = {
+  to_contact: { title: 'Nothing to contact', hint: 'New leads appear here' },
+  waiting: { title: 'No one waiting', hint: 'Sent messages will show here' },
+  needs_reply: { title: 'No replies yet', hint: 'Client responses land here' },
+  done: { title: 'Nothing closed', hint: 'Won or lost leads go here' },
+  cold: { title: 'No cold leads', hint: 'Unresponsive leads appear here' },
+}
+
+function getInitials(name: string): string {
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+}
+
+function getScoreColor(score: number | null): string {
+  if (score === null) return 'bg-line'
+  if (score >= 80) return 'bg-status-success/20 text-status-success'
+  if (score >= 60) return 'bg-orange/10 text-orange'
+  if (score >= 40) return 'bg-status-warning/10 text-status-warning'
+  return 'bg-line text-stone'
 }
 
 export function LeadsPipeline({ leads, orgView }: LeadsPipelineProps) {
@@ -129,7 +154,7 @@ export function LeadsPipeline({ leads, orgView }: LeadsPipelineProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Controls */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
@@ -137,20 +162,22 @@ export function LeadsPipeline({ leads, orgView }: LeadsPipelineProps) {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search…"
-            className="w-full rounded-lg border border-line bg-bone py-1.5 pl-8 pr-3 text-[13px] text-ink placeholder:text-stone focus:border-orange focus:outline-none"
+            placeholder="Search leads…"
+            className="w-full rounded-lg border border-line bg-bone py-1.5 pl-8 pr-3 text-[13px] text-ink placeholder:text-stone focus:border-orange focus:outline-none transition-colors"
           />
         </div>
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value as SortMode)}
-          className="rounded-lg border border-line bg-bone px-2 py-1.5 text-[12px] text-ink focus:border-orange focus:outline-none"
+          className="rounded-lg border border-line bg-bone px-2 py-1.5 text-[12px] text-ink focus:border-orange focus:outline-none transition-colors"
         >
           <option value="activity">Last activity</option>
           <option value="score">Highest score</option>
           <option value="recent">Newest</option>
         </select>
-        <div className="ml-auto text-[11px] text-stone">{totalActive} active</div>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="rounded-full bg-orange/10 px-2.5 py-0.5 text-[11px] font-medium text-orange count-pop">{totalActive} active</span>
+        </div>
       </div>
 
       {/* Kanban — Active pipeline */}
@@ -193,7 +220,7 @@ export function LeadsPipeline({ leads, orgView }: LeadsPipelineProps) {
 }
 
 interface PipelineColumnProps {
-  column: { id: PipelineStage; label: string; description: string; dotColor: string; borderColor: string; headerBg: string }
+  column: { id: PipelineStage; label: string; description: string; dotColor: string; iconColor: string; borderColor: string; headerBg: string }
   leads: LeadRow[]
   now: number
   orgView: boolean
@@ -204,18 +231,20 @@ interface PipelineColumnProps {
   onDrop: (e: React.DragEvent, stage: PipelineStage) => void
 }
 
-
-
 function PipelineColumn({ column, leads, now, orgView, dragOverColumn, onDragStart, onDragOver, onDragLeave, onDrop }: PipelineColumnProps) {
   const isOver = dragOverColumn === column.id
+  const emptyMsg = EMPTY_MESSAGES[column.id]
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       className={cn(
-        'flex w-[300px] shrink-0 flex-col rounded-xl border overflow-hidden transition-colors duration-150',
-        column.borderColor,
+        'flex w-[300px] shrink-0 flex-col rounded-xl border overflow-hidden transition-all duration-200',
         'border-t-[3px]',
-        isOver ? 'border-orange/40 bg-orange/[0.02]' : 'border-line bg-bone',
+        isOver ? 'border-orange/50 bg-orange/[0.03] shadow-sm shadow-orange/10' : 'border-line bg-bone',
+        column.borderColor,
       )}
       onDragOver={(e) => onDragOver(e, column.id)}
       onDragLeave={onDragLeave}
@@ -223,32 +252,51 @@ function PipelineColumn({ column, leads, now, orgView, dragOverColumn, onDragSta
     >
       <div className={cn('flex items-center justify-between px-3 py-2.5', column.headerBg)}>
         <div className="flex items-center gap-2">
-          <span className={cn('size-2 rounded-full', column.dotColor)} />
-          <h3 className="text-[12px] font-medium text-ink">{column.label}</h3>
+          <span className={cn('flex size-6 items-center justify-center rounded-md', column.headerBg, column.iconColor)}>
+            {COLUMN_ICONS[column.id]}
+          </span>
+          <div>
+            <h3 className="text-[12px] font-medium text-ink leading-tight">{column.label}</h3>
+            <p className="text-[10px] text-stone leading-tight">{column.description}</p>
+          </div>
         </div>
-        <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-bone px-1.5 text-[10px] font-medium text-stone">
+        <span className={cn(
+          'flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-medium transition-colors',
+          leads.length > 0 ? 'bg-orange/10 text-orange' : 'bg-bone text-stone'
+        )}>
           {leads.length}
         </span>
       </div>
 
       <div className="flex-1 space-y-2 p-2 min-h-[120px]">
-        {leads.length === 0 ? (
-          <div className="flex items-center justify-center rounded-lg border border-dashed border-line/60 py-8">
-            <p className="text-[11px] text-stone/60">Drop here</p>
-          </div>
-        ) : (
-          leads.map((lead) => (
-            <LeadCard
-              key={lead.id}
-              lead={lead}
-              orgView={orgView}
-              now={now}
-              onDragStart={() => onDragStart(lead.id)}
-            />
-          ))
-        )}
+        <AnimatePresence mode="popLayout">
+          {leads.length === 0 ? (
+            <motion.div
+              key="empty"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center justify-center rounded-lg border border-dashed border-line/50 py-8 text-center"
+            >
+              <Inbox className="size-5 text-stone/30 mb-1.5" />
+              <p className="text-[11px] text-stone/60">{emptyMsg.title}</p>
+              <p className="text-[10px] text-stone/40">{emptyMsg.hint}</p>
+            </motion.div>
+          ) : (
+            leads.map((lead, i) => (
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                orgView={orgView}
+                now={now}
+                onDragStart={() => onDragStart(lead.id)}
+                index={i}
+              />
+            ))
+          )}
+        </AnimatePresence>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -257,50 +305,62 @@ interface LeadCardProps {
   orgView: boolean
   now: number
   onDragStart: () => void
+  index: number
 }
 
-function LeadCard({ lead, orgView, now, onDragStart }: LeadCardProps) {
+function LeadCard({ lead, orgView, now, onDragStart, index }: LeadCardProps) {
   const signal = signalById(lead.signalType)
   const score = lead.canonicalScore ?? lead.score ?? null
   const lifecycleState = lead.lifecycle?.state ?? 'active'
   const isCold = lifecycleState === 'cold' || lifecycleState === 'frozen'
+  const scoreColor = getScoreColor(score)
 
   return (
-    <div
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.25, delay: Math.min(index * 0.03, 0.25), ease: [0.16, 1, 0.3, 1] }}
       draggable
       onDragStart={onDragStart}
       className={cn(
-        'rounded-lg border bg-bone-raised transition-all duration-150 cursor-grab active:cursor-grabbing',
-        'border-line/60 hover:border-line hover:shadow-sm',
-        isCold && 'opacity-80',
+        'group rounded-lg border bg-bone-raised transition-all duration-150 cursor-grab active:cursor-grabbing',
+        'border-line/50 hover:border-line hover:shadow-sm hover:shadow-black/[0.03]',
+        isCold && 'opacity-70',
       )}
     >
       <div className="p-3">
         {/* Header row */}
         <div className="flex items-start gap-2.5">
-          <div className="mt-0.5 shrink-0 cursor-grab text-stone/40 hover:text-stone">
+          <div className="mt-0.5 shrink-0 cursor-grab text-stone/30 hover:text-stone transition-colors">
             <GripVertical className="size-3.5" />
           </div>
           <div className="shrink-0">
             {score !== null ? (
-              <ScoreRing score={lead.score} canonicalScore={lead.canonicalScore} size={28} />
+              <ScoreRing score={lead.score} canonicalScore={lead.canonicalScore} size={32} />
             ) : (
-              <div className="flex size-7 items-center justify-center rounded-full border border-dashed border-line">
-                <MessageSquare className="size-3 text-stone" />
+              <div className="flex size-8 items-center justify-center rounded-full bg-bone border border-line/60">
+                <span className="text-[9px] font-medium text-stone">{getInitials(lead.company)}</span>
               </div>
             )}
           </div>
           <div className="min-w-0 flex-1">
             <Link
               href={`/leads/${lead.id}`}
-              className="truncate text-[12px] font-medium text-ink hover:text-orange transition-colors"
+              className="text-[12px] font-medium text-ink hover:text-orange transition-colors leading-snug"
             >
               {lead.company}
             </Link>
             {lead.contactName && (
-              <p className="truncate text-[10px] text-graphite">{lead.contactName}</p>
+              <p className="truncate text-[10px] text-graphite leading-tight mt-0.5">{lead.contactName}</p>
             )}
           </div>
+          {score !== null && (
+            <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium', scoreColor)}>
+              {Math.round(score)}
+            </span>
+          )}
         </div>
 
         {/* Sender + signal + staleness */}
@@ -359,7 +419,7 @@ function LeadCard({ lead, orgView, now, onDragStart }: LeadCardProps) {
       </div>
 
       {/* Quick actions */}
-      <div className="flex items-center gap-1 border-t border-line/40 px-2 py-1.5">
+      <div className="flex items-center gap-1 border-t border-line/30 px-2 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <Link
           href={`/leads/${lead.id}`}
           className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] text-graphite hover:bg-bone hover:text-ink transition-colors"
@@ -376,41 +436,31 @@ function LeadCard({ lead, orgView, now, onDragStart }: LeadCardProps) {
           </Link>
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }
 
-async function executeStageTransition(leadId: string, source: PipelineStage, dest: PipelineStage, lead: LeadRow): Promise<boolean> {
+async function executeStageTransition(leadId: string, _source: PipelineStage, dest: PipelineStage, lead: LeadRow): Promise<boolean> {
   try {
-    let endpoint: string | null = null
+    if (dest === 'to_contact') return true
 
-    if (dest === 'done') {
-      endpoint = `/api/leads/${leadId}/status`
-    } else if (dest === 'waiting') {
-      if (lead.status === 'new') {
-        endpoint = `/api/leads/${leadId}/contact`
-      } else if (lead.status === 'contacted' && !lead.lastOutboundAt) {
-        endpoint = `/api/leads/${leadId}/contact`
-      }
-    } else if (dest === 'needs_reply') {
-      endpoint = `/api/leads/${leadId}/reply`
-    } else if (dest === 'to_contact') {
-      return true
+    if (dest === 'cold') return true
+
+    const statusMap: Record<string, string> = {
+      done: lead.status === 'won' ? 'won' : 'lost',
+      waiting: lead.status === 'new' ? 'contacted' : lead.status,
+      needs_reply: 'replied',
     }
+    const nextStatus = statusMap[dest]
+    if (!nextStatus || nextStatus === lead.status) return true
 
-    if (!endpoint) return true
-
-    const body = dest === 'waiting'
-      ? JSON.stringify({ type: lead.status === 'new' ? 'connection' : 'dm', sentText: '[moved via pipeline]' })
-      : dest === 'needs_reply'
-        ? JSON.stringify({ text: '[client replied]' })
-        : JSON.stringify({ status_type: 'closed' })
-
-    const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+    const res = await fetch(`/api/leads/${leadId}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status_type: nextStatus }),
+    })
     return res.ok
   } catch {
     return false
   }
 }
-
-

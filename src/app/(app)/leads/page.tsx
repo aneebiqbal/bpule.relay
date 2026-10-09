@@ -41,14 +41,21 @@ async function loadLeads(): Promise<LeadsPayload> {
       if (!authCtx || leadIds.length === 0) return []
       try {
         const client = await (await import('@/lib/supabase/server')).createServerSupabase()
-        const { data } = await client
+        const { data: outbound } = await client
           .from('messages')
           .select('lead_id, sent_at, created_at, sent_text, direction, type')
           .eq('organization_id', authCtx.orgId)
           .in('lead_id', leadIds)
+          .neq('direction', 'inbound')
           .order('sent_at', { ascending: false })
-          .limit(2000)
-        return data ?? []
+        const { data: inbound } = await client
+          .from('messages')
+          .select('lead_id, sent_at, created_at, sent_text, direction, type')
+          .eq('organization_id', authCtx.orgId)
+          .in('lead_id', leadIds)
+          .eq('direction', 'inbound')
+          .order('sent_at', { ascending: false })
+        return [...(outbound ?? []), ...(inbound ?? [])]
       } catch {
         return []
       }

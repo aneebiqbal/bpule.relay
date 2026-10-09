@@ -84,12 +84,12 @@ describe('canonicalToLegacyScoreResult — single source of truth for lead score
 
   /**
    * Regression for a second, related display bug found on the same fixture
-   * (Daria Redkina / Solsonic): lead-workspace.tsx's "not eligible for
+   * (Daria Redkina / Solsonic): lead-workspace-simple.tsx's "not eligible for
    * drafting" message hardcoded "Scored {score.total}/12" regardless of
    * scale. Once canonicalToLegacyScoreResult() started returning the
    * canonical 0-100 total (correctly, per the tests above), that same
    * literal string started rendering nonsensical output like "Scored
-   * 47/12". The UI fix (lead-workspace.tsx) picks the denominator from
+   * 47/12". The UI fix (lead-workspace-simple.tsx) picks the denominator from
    * whether currentLead.canonicalScore is non-null — this test asserts the
    * underlying invariant that fix depends on: total is ALWAYS on the 0-100
    * scale whenever canonicalScore is present, never a 0-12 value smuggled
