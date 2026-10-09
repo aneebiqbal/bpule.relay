@@ -359,7 +359,8 @@ export function scoreAllEpisodes(
       label: result.label,
       qualification: result.qualification,
       action: deriveAction(result.score, input),
-      messageEligible: result.score >= 40 && result.qualification !== 'SKIP',
+      messageEligible: (result.score >= 40 && result.qualification !== 'SKIP')
+        || isHighPotentialBuilderEpisode(input),
       reasons: result.reasons,
     })
   }
@@ -379,6 +380,28 @@ export function scoreAllEpisodes(
     bestActiveScore: bestActive?.score ?? 0,
     bestActiveEpisodeId: bestActive?.episodeId ?? null,
   }
+}
+
+// ── High-potential builder detection ─────────────────────────────────────────
+// A founder/CEO/CTO with high commercial potential is eligible for a
+// connection note even with low buyer-intent score. Connection notes earn
+// access — they don't pitch. This aligns V3 eligibility with the revenue
+// strategy's builder-connection path.
+
+function isHighPotentialBuilderEpisode(input: V3ScoreInput): boolean {
+  const cp = input.commercialPotential
+  if (!cp) return false
+
+  // High commercial potential: founder/CEO/CTO with active building
+  const isHighAuthority = cp.decisionAuthority >= 0.7
+  const isActiveBuilding = cp.buildIntensity === 'HIGH' || cp.buildIntensity === 'VERY_HIGH'
+  const isReachable = cp.reachability >= 0.3
+
+  // Check raw text for founder/CEO/CTO patterns if authority not already detected
+  const rawText = input.rawText ?? ''
+  const hasFounderTitle = /\b(ceo|cto|cfo|founder|co[- ]?founder|owner|president|managing director)\b/i.test(rawText)
+
+  return (isHighAuthority || hasFounderTitle) && isActiveBuilding && isReachable
 }
 
 // ── Backward-compatible display ─────────────────────────────────────────────
