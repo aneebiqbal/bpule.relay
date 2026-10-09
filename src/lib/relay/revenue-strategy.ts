@@ -1079,6 +1079,31 @@ function decideContact(
     }
   }
 
+  // Founder/CEO/CTO/product builder with high commercial potential on LinkedIn
+  // connection: send a relationship-building connection note even without
+  // explicit buyer intent. Connection notes earn access — they don't pitch.
+  const isHighPotentialBuilder = (
+    source.channel === 'connection'
+    && !irrelevant
+    && !nonBuyerRelationship
+    && !hasBuyerRequest
+  ) && (
+    // Founder/CEO/CTO role signals
+    (source.title && /\b(ceo|cto|cfo|founder|co[- ]?founder|owner|president|managing director)\b/i.test(source.title))
+    // OR active product/company building signals
+    || (source.company !== 'Unknown company' && (source.opportunitySignals.includes('launch') || source.explicitProblems.length > 0 || source.recentPosts.length > 0))
+  )
+
+  if (isHighPotentialBuilder) {
+    return {
+      reason: 'RELATIONSHIP_VALUE',
+      action: 'CONNECT_OR_OBSERVE',
+      why: 'Active founder/builder with no explicit buyer request. Connection note earns access — do not pitch.',
+      messageRecommended: true,
+      noMessageReason: null,
+    }
+  }
+
   if (thin) {
     return {
       reason: 'NO_CREDIBLE_REASON',
