@@ -2,6 +2,7 @@ import type { Lead } from '@/lib/domain/types'
 import { getComparableLeadScore } from '@/lib/score/rubric'
 import { isLeadLocked } from '@/lib/leads/lock'
 import { computeLifecycleState, type LifecycleState, type LifecycleResult } from '@/lib/leads/lifecycle-policy'
+import { isFollowupDue } from '@/lib/leads/followup'
 import { formatRelativeTime } from '@/lib/ui/time'
 export { formatRelativeTime }
 
@@ -20,6 +21,7 @@ export type LeadRow = Lead & {
 export type PipelineStage =
   | 'to_contact'
   | 'waiting'
+  | 'follow_up_due'
   | 'needs_reply'
   | 'done'
   | 'cold'
@@ -37,6 +39,7 @@ export interface PipelineColumnDef {
 export const PIPELINE_COLUMNS: PipelineColumnDef[] = [
   { id: 'to_contact', label: 'To Contact', description: 'Not yet reached out', dotColor: 'bg-stone', iconColor: 'text-stone', borderColor: 'border-t-stone', headerBg: 'bg-bone-raised' },
   { id: 'waiting', label: 'Waiting', description: 'Sent, awaiting reply', dotColor: 'bg-cobalt', iconColor: 'text-cobalt', borderColor: 'border-t-cobalt', headerBg: 'bg-cobalt/[0.03]' },
+  { id: 'follow_up_due', label: 'Follow-Up Due', description: 'Time to follow up', dotColor: 'bg-orange', iconColor: 'text-orange', borderColor: 'border-t-orange', headerBg: 'bg-orange/[0.03]' },
   { id: 'needs_reply', label: 'Needs Reply', description: 'They wrote back', dotColor: 'bg-orange', iconColor: 'text-orange', borderColor: 'border-t-orange', headerBg: 'bg-orange/[0.03]' },
 ]
 
@@ -56,23 +59,24 @@ export function derivePipelineStage(lead: LeadRow): PipelineStage {
 
   const hasOutbound = !!lead.lastOutboundAt
   const hasInbound = !!lead.lastInboundAt
+  const hasRepliedSinceOutbound = hasInbound && hasOutbound && new Date(lead.lastInboundAt!).getTime() > new Date(lead.lastOutboundAt!).getTime()
+
+  // Follow-up due: contacted but no reply, and enough time has passed
+  if (hasOutbound && !hasRepliedSinceOutbound && lead.lastOutboundAt) {
+    const hasReplied = hasRepliedSinceOutbound
+    if (isFollowupDue(lead.lastOutboundAt, hasReplied)) {
+      return 'follow_up_due'
+    }
+  }
 
   if (lead.status === 'followed_up') {
-    if (hasInbound && hasOutbound) {
-      const inboundTime = new Date(lead.lastInboundAt!).getTime()
-      const outboundTime = new Date(lead.lastOutboundAt!).getTime()
-      if (inboundTime > outboundTime) return 'needs_reply'
-    }
+    if (hasRepliedSinceOutbound) return 'needs_reply'
     return 'waiting'
   }
 
   if (lead.status === 'contacted') {
     if (hasOutbound && !hasInbound) return 'waiting'
-    if (hasInbound && hasOutbound) {
-      const inboundTime = new Date(lead.lastInboundAt!).getTime()
-      const outboundTime = new Date(lead.lastOutboundAt!).getTime()
-      if (inboundTime > outboundTime) return 'needs_reply'
-    }
+    if (hasRepliedSinceOutbound) return 'needs_reply'
     return 'waiting'
   }
 

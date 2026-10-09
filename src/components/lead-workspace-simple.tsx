@@ -7,7 +7,7 @@ import { useHotkeys } from 'react-hotkeys-hook'
 import { motion } from 'motion/react'
 import {
   ArrowLeft, CalendarDays, Check, Clock, Copy, ExternalLink, Flame,
-  MessageSquare, Send, Trophy, X, Keyboard,
+  MessageSquare, Reply, Send, Trophy, X, Keyboard,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -139,12 +139,13 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, t
           replyToMessageId,
         }),
       })
-      await readSse<{ type: string; message?: string; items?: ProofItem[]; chunk?: string; draft?: DraftResult }>(res, {
+      await readSse<{ type: string; message?: string; items?: ProofItem[]; chunk?: string; draft?: DraftResult; reason?: string }>(res, {
         onEvent: (ev) => {
           if (ev.type === 'status') setGenerationStatus(ev.message ?? '')
           else if (ev.type === 'proof') setProofList(ev.items ?? [])
           else if (ev.type === 'draft') { buffer += ev.chunk ?? ''; setDraftText(buffer) }
           else if (ev.type === 'done' && ev.draft) { setDraftResult(ev.draft); setDraftText(ev.draft.draftText) }
+          else if (ev.type === 'needs_rescoring') { setGenerationStatus(ev.message ?? 'Lead needs rescoring'); notifyError(ev.message ?? 'This lead needs to be rescored before generating outreach.') }
           else if (ev.type === 'error') { setGenerationStatus(ev.message ?? ''); notifyError(ev.message ?? '') }
         },
         onError: (msg) => { setGenerationStatus(msg) },
@@ -718,6 +719,9 @@ function CommandStation({
   if (phase !== 'connection_due') {
     quickLogOptions.push({ value: 'dm', label: 'Sent message', needsText: true, icon: <MessageSquare className="size-3.5" /> })
   }
+  if (phase === 'replied') {
+    quickLogOptions.push({ value: 'reply', label: 'Sent reply', needsText: true, icon: <Reply className="size-3.5" /> })
+  }
   if (phase === 'dm_sent' || phase === 'replied') {
     quickLogOptions.push({ value: 'followup', label: 'Followed up', needsText: true, icon: <Clock className="size-3.5" /> })
   }
@@ -962,6 +966,19 @@ function CommandStation({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Needs rescoring state */}
+      {generationStatus && generationStatus.includes('rescor') && !generating && !isTerminal && (
+        <div className="px-4 py-3 border-t border-status-warning/20 bg-status-warning/[0.03]">
+          <p className="text-[12px] font-medium text-status-warning">Lead needs rescoring</p>
+          <p className="mt-0.5 text-[11px] text-graphite">{generationStatus}</p>
+          <div className="mt-2 flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => { setGenerationStatus(null); setMode(null) }} className="w-full justify-center sm:w-auto">
+              Dismiss
+            </Button>
+          </div>
         </div>
       )}
 

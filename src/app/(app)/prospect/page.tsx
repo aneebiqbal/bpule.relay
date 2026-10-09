@@ -192,7 +192,7 @@ export default function ProspectCheckPage() {
     setDuplicateConflict(null)
   }, [])
 
-  async function analyze(mode: 'analyze' | 'try-another-angle' = 'analyze') {
+  async function analyze(mode: 'analyze' | 'try-another-angle' = 'analyze', profileIdOverride?: string) {
     const guard = pasteGuard(rawInput)
     if (guard) {
       setError(guard)
@@ -208,6 +208,8 @@ export default function ProspectCheckPage() {
     // entirely. See BUG_LEDGER — TEAM-005.
     const existingCanonical = mode === 'try-another-angle' ? result?.canonical ?? null : null
 
+    const effectiveProfileId = profileIdOverride ?? selectedProfileId
+
     resetResult()
     setAnalyzing(true)
     abortRef.current = new AbortController()
@@ -220,7 +222,7 @@ export default function ProspectCheckPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rawText: rawInput,
-          profileId: selectedProfileId,
+          profileId: effectiveProfileId,
           ...(existingCanonical ? { existingCanonical } : {}),
         }),
         signal: abortRef.current.signal,
@@ -370,10 +372,8 @@ export default function ProspectCheckPage() {
 
   function changeSender(profileId: string) {
     setSelectedProfileId(profileId)
-    // Re-analyze with new sender
     if (rawInput.trim()) {
-      // Small delay to let state settle
-      setTimeout(() => analyze(), 50)
+      setTimeout(() => analyze('analyze', profileId), 50)
     }
   }
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'motion/react'
-import { Search, GripVertical, Clock, User, PenLine, Inbox, Send, Reply, CheckCircle2, Snowflake, Target } from 'lucide-react'
+import { Search, GripVertical, Clock, User, PenLine, Inbox, Send, Reply, CheckCircle2, Snowflake, Target, Bell } from 'lucide-react'
 import { cn } from 'cn'
 import { ScoreRing } from '@/components/score-ring'
 import { signalById } from '@/lib/score/signals'
@@ -30,6 +30,7 @@ interface LeadsPipelineProps {
 interface GroupedLeads {
   to_contact: LeadRow[]
   waiting: LeadRow[]
+  follow_up_due: LeadRow[]
   needs_reply: LeadRow[]
   done: LeadRow[]
   cold: LeadRow[]
@@ -38,6 +39,7 @@ interface GroupedLeads {
 const COLUMN_ICONS: Record<PipelineStage, React.ReactNode> = {
   to_contact: <Send className="size-3.5" />,
   waiting: <Clock className="size-3.5" />,
+  follow_up_due: <Bell className="size-3.5" />,
   needs_reply: <Reply className="size-3.5" />,
   done: <CheckCircle2 className="size-3.5" />,
   cold: <Snowflake className="size-3.5" />,
@@ -46,6 +48,7 @@ const COLUMN_ICONS: Record<PipelineStage, React.ReactNode> = {
 const EMPTY_MESSAGES: Record<PipelineStage, { title: string; hint: string }> = {
   to_contact: { title: 'Nothing to contact', hint: 'New leads appear here' },
   waiting: { title: 'No one waiting', hint: 'Sent messages will show here' },
+  follow_up_due: { title: 'No follow-ups due', hint: 'Waiting leads appear here after 5 days' },
   needs_reply: { title: 'No replies yet', hint: 'Client responses land here' },
   done: { title: 'Nothing closed', hint: 'Won or lost leads go here' },
   cold: { title: 'No cold leads', hint: 'Unresponsive leads appear here' },
@@ -77,7 +80,7 @@ export function LeadsPipeline({ leads, orgView }: LeadsPipelineProps) {
   const filtered = useMemo(() => filterLeads(leads, search), [leads, search])
 
   const grouped = useMemo<GroupedLeads>(() => {
-    const groups: GroupedLeads = { to_contact: [], waiting: [], needs_reply: [], done: [], cold: [] }
+    const groups: GroupedLeads = { to_contact: [], waiting: [], follow_up_due: [], needs_reply: [], done: [], cold: [] }
     for (const lead of filtered) {
       const stage = derivePipelineStage(lead)
       groups[stage].push(lead)
@@ -445,11 +448,13 @@ async function executeStageTransition(leadId: string, _source: PipelineStage, de
     if (dest === 'to_contact') return true
 
     if (dest === 'cold') return true
+    if (dest === 'follow_up_due') return true
 
     const statusMap: Record<string, string> = {
       done: lead.status === 'won' ? 'won' : 'lost',
       waiting: lead.status === 'new' ? 'contacted' : lead.status,
       needs_reply: 'replied',
+      follow_up_due: lead.status,
     }
     const nextStatus = statusMap[dest]
     if (!nextStatus || nextStatus === lead.status) return true
