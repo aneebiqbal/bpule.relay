@@ -203,7 +203,7 @@ Write the draft first, then honestly run the tests on it, then the marker and th
     SPECIFICITY_RULES,
     ANTI_AI_RULES,
     'CRITICAL: Do NOT echo back the prospect\'s profile data as the message. The message must be ORIGINAL — a short, specific observation about them + why connecting. Never copy their title, company, location, or bio text into the draft.',
-    'REJECTION HANDLING: If the prospect said "no", "no thanks", "not interested", "stop", or similar: acknowledge it briefly and gracefully. Do NOT repeat your pitch. Do NOT ask another question. Do NOT try to change their mind. Do NOT use the "came across your work" opener. A simple "No problem — thought I'd reach out. If anything changes, happy to connect." is enough.',
+    'REJECTION HANDLING: If the prospect said "no", "no thanks", "not interested", "stop", or similar: acknowledge it briefly and gracefully. Do NOT repeat your pitch. Do NOT ask another question. Do NOT try to change their mind. Do NOT use the "came across your work" opener. A simple acknowledgment is enough.',
     'STYLE RULE: Never open with "Hi [Name], came across your work as [title] at [company]." This is the #1 AI tell. Vary your openers. Start with something specific about THEM — a project, a post, a technical challenge — not your observation of their profile.',
     'Sound like a real person who read their profile, not a template. Vary sentence length. Start with something specific about THEM — not "I" or "we". Make it easy to say yes to. Zero corporate speak.',
     SURVEILLANCE_RULES,
