@@ -733,6 +733,15 @@ export function cleanPost(raw: string): string {
   text = text.replace(/\n{3,}/g, '\n\n')
   text = text.replace(/\r\n/g, '\n')
 
+  // Fix missing spaces between numbers and words: "under10" → "under 10"
+  text = text.replace(/(\d)([a-zA-Z]{2,})/g, '$1 $2')
+  // But don't break common patterns like "50%" or "2x"
+  text = text.replace(/(\d)\s+(%|x\b|min|hr|mo|yr)/gi, '$1$2')
+
+  // Fix grammar: "Each additional added points" → "Each additional point"
+  text = text.replace(/\b(each|every|all)\s+(\w+)\s+added\s+points?\b/gi, '$1 $2 point')
+  text = text.replace(/\bmore\s+layers\s+than\s+an,/g, 'more layers than an onion,')
+
   // Fix broken sentences within paragraphs
   text = text.replace(/\.\s+([a-z])/g, (_, c) => `. ${c.toUpperCase()}`)
 
@@ -845,6 +854,28 @@ function evaluatePostQuality(caption: string): PostQualityResult {
   const wordCount = caption.split(/\s+/).length
   if (wordCount < 50) failures.push('TOO_SHORT')
   if (wordCount > 250) failures.push('TOO_LONG')
+
+  // Broken content detection
+  // Truncated sentences (ends mid-word or with incomplete phrase)
+  if (/(\bthan\s+an?\s*$|\bwith\s+an?\s*$|\bfor\s+an?\s*$|\bof\s+an?\s*$)/m.test(caption)) {
+    failures.push('TRUNCATED')
+  }
+  // Missing space after number ("under10" → "under 10")
+  if (/\d+[a-zA-Z]{2,}/.test(caption) && !/\d+\s*(%|minutes?|hours?|days?|weeks?|months?|years?|x)/.test(caption)) {
+    const badSpacing = caption.match(/\d+[a-zA-Z]{2,}/g)
+    if (badSpacing && badSpacing.some(s => !/^\d+(%|min|hr|wk|mo|yr|x$)/.test(s))) {
+      failures.push('BAD_SPACING')
+    }
+  }
+  // Grammar: "Each additional added" type errors
+  if (/\b(each|every|all|both)\s+\w+\s+(added|made|had|has|was|were)\b/i.test(caption)) {
+    failures.push('GRAMMAR_ERROR')
+  }
+  // Sentence doesn't end with proper punctuation
+  const lastLine = caption.trim().split('\n').pop()?.trim() ?? ''
+  if (lastLine && !/[.!?]$/.test(lastLine) && lastLine.length > 10) {
+    failures.push('INCOMPLETE_END')
+  }
 
   // Anti-slop: banned phrases
   for (const phrase of BANNED_PHRASES) {
