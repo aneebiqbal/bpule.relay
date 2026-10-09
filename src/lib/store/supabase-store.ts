@@ -7831,6 +7831,54 @@ RULES:
       .update({ copied_at: new Date().toISOString() })
       .eq('id', briefId)
   }
+
+  async tryMarkContentDraftPosted(draftId: string): Promise<boolean> {
+    const { data, error } = await this.client
+      .from('content_drafts')
+      .update({ status: 'posted', posted_at: new Date().toISOString() })
+      .eq('id', draftId)
+      .eq('status', 'draft')
+      .select('id')
+      .maybeSingle()
+    if (error) throw error
+    return data !== null
+  }
+
+  async pruneContentMemories(personaId: string, retainDays: number): Promise<void> {
+    const cutoff = new Date(Date.now() - retainDays * 86400000).toISOString()
+    await this.client
+      .from('content_memories')
+      .delete()
+      .eq('persona_id', personaId)
+      .lt('created_at', cutoff)
+  }
+
+  async listEditorialDecisions(fromDate: string, toDate: string): Promise<import('@/lib/domain/types').RelayEditorialDecision[]> {
+    const { data, error } = await this.client
+      .from('editorial_decisions')
+      .select('*')
+      .eq('organization_id', this.orgId)
+      .gte('decision_date', fromDate)
+      .lte('decision_date', toDate)
+      .order('decision_date', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r: Record<string, unknown>) => ({
+      id: r.id as string,
+      organizationId: r.organization_id as string,
+      decisionDate: r.decision_date as string,
+      opportunityId: r.opportunity_id as string | null,
+      primaryReason: r.primary_reason as string,
+      audienceReason: r.audience_reason as string,
+      timelinessReason: r.timeliness_reason as string,
+      evidenceReason: r.evidence_reason as string,
+      takeaway: r.takeaway as string,
+      status: r.status as import('@/lib/domain/types').EditorialStatus,
+      adminFeedback: r.admin_feedback as import('@/lib/domain/types').AdminFeedback | null,
+      adminEdits: r.admin_edits as string | null,
+      createdAt: r.created_at as string,
+      decidedAt: r.decided_at as string | null,
+    }))
+  }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
