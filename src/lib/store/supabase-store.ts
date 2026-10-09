@@ -1248,7 +1248,6 @@ export class SupabaseStore implements ScoutStore {
       }
     }
 
-    // Update conversation state
     try {
       const convState = await this.getConversationState(leadId)
       await this.upsertConversationState({
@@ -1479,7 +1478,6 @@ export class SupabaseStore implements ScoutStore {
         .eq('id', leadId)
         .eq('owner_rep_id', this.rep.id)
     } catch {
-      // Non-fatal
     }
 
     try {
@@ -1487,13 +1485,11 @@ export class SupabaseStore implements ScoutStore {
         .from('outcomes')
         .insert({ organization_id: this.orgId, lead_id: leadId, stage: 'replied', occurred_at: now })
     } catch {
-      // Non-fatal
     }
 
     try {
       await this.upsertConversationState({ leadId, stage: 'replied', lastReplyAt: now })
     } catch {
-      // Non-fatal
     }
 
     try {
@@ -1508,7 +1504,6 @@ export class SupabaseStore implements ScoutStore {
         sourceEventId: `prospect_reply:${leadId}:${inserted.id}`,
       })
     } catch {
-      // Non-fatal
     }
 
     try {
@@ -3483,7 +3478,6 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
   }
 
-  // ── content engine ──
 
   async createContentPersona(input: {
     repId: string
@@ -4117,7 +4111,6 @@ export class SupabaseStore implements ScoutStore {
     return (data ?? []).map(mapContentDraftFeedback)
   }
 
-  // ── content profiles (Content DNA) ──
 
   async createContentProfile(input: {
     personaId: string
@@ -4237,7 +4230,6 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
   }
 
-  // ── content taste profiles ──
 
   async getTasteProfile(personaId: string): Promise<{
     personaId: string
@@ -4317,7 +4309,6 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
   }
 
-  // ── content memories ──
 
   async createContentMemory(input: {
     personaId: string
@@ -4384,7 +4375,6 @@ export class SupabaseStore implements ScoutStore {
     }))
   }
 
-  // ── content opportunities ──
 
   async createContentOpportunity(input: {
     personaId: string
@@ -4450,7 +4440,6 @@ export class SupabaseStore implements ScoutStore {
     await this.client.from('content_opportunities').delete().eq('id', opportunityId)
   }
 
-  // ── idea genomes ──
 
   async createIdeaGenome(input: {
     personaId: string
@@ -4517,7 +4506,6 @@ export class SupabaseStore implements ScoutStore {
     return mapContentIdeaGenome(data)
   }
 
-  // ── evaluations ──
 
   async createEvaluation(input: {
     draftId: string
@@ -4575,7 +4563,6 @@ export class SupabaseStore implements ScoutStore {
     return data ? mapContentEvaluation(data) : null
   }
 
-  // ── interview sessions ──
 
   async createInterviewSession(input: {
     personaId: string
@@ -4653,7 +4640,6 @@ export class SupabaseStore implements ScoutStore {
     return (data ?? []).map(mapContentInterviewAnswer)
   }
 
-  // ── Relay Revenue Intelligence Methods ──────────────────────────────────────
 
   async getAssignedProfiles(): Promise<Profile[]> {
     const { data, error } = await this.client
@@ -5088,7 +5074,6 @@ export class SupabaseStore implements ScoutStore {
     return this.rep.id
   }
 
-  // ── content journey ──
 
   async createContentJourneyEntry(input: {
     personaId: string
@@ -5155,7 +5140,6 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
   }
 
-  // ── quick capture ──
 
   async createContentQuickCapture(input: {
     personaId: string
@@ -7386,7 +7370,6 @@ export class SupabaseStore implements ScoutStore {
     })
   }
 
-  // ─── Studio V2: Trend Intelligence ───
 
   async listTrendSources(): Promise<TrendSource[]> {
     const { data, error } = await this.client
@@ -7515,7 +7498,6 @@ export class SupabaseStore implements ScoutStore {
     return (data ?? []).map(mapTrendItem)
   }
 
-  // ─── Studio V2: Daily Briefs ───
 
   async createDailyContentBrief(input: {
     organizationId: string
@@ -7788,7 +7770,6 @@ RULES:
     return result.data
   }
 
-  // ─── Relay Growth V2 ───
 
   async createDailyGrowthBrief(input: {
     organizationId: string
@@ -8090,7 +8071,6 @@ function mapUpworkMessage(r: Row): UpworkMessage {
   }
 }
 
-// ── content engine mappers ──
 
 function mapContentPersona(r: Record<string, unknown>): ContentPersona {
   return {

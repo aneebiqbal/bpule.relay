@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceSupabase, requireCronSecret } from '@/lib/supabase/service'
+import { canTransition } from '@/lib/orchestration/outbound-run'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -32,7 +33,6 @@ export async function GET(request: Request) {
   let skipped = 0
 
   try {
-    // Fetch active, non-terminal runs that are in waiting-like states
     // These are the states most likely to drift
     const { data: runs, error: runsError } = await supabase
       .from('relay_runs')
@@ -55,14 +55,12 @@ export async function GET(request: Request) {
 
     for (const run of runs) {
       try {
-        // Fetch the canonical lead state
         const { data: lead } = await supabase
           .from('leads')
           .select('id, status, sender_profile_id')
           .eq('id', run.primary_entity_id)
           .maybeSingle()
 
-        // Fetch conversation state
         const { data: convState } = await supabase
           .from('conversation_states')
           .select('stage, last_reply_at')
@@ -77,9 +75,14 @@ export async function GET(request: Request) {
           continue
         }
 
+        if (!canTransition(run.status as any, drift as any)) {
+          diagnostics.push(`Run ${run.id}: skip invalid transition ${run.status} -> ${drift}`)
+          skipped++
+          continue
+        }
+
         diagnostics.push(`Run ${run.id}: drift detected (${run.status} -> ${drift})`)
 
-        // Apply repair
         const { error: updateError } = await supabase
           .from('relay_runs')
           .update({
@@ -95,7 +98,6 @@ export async function GET(request: Request) {
           continue
         }
 
-        // Emit reconciliation event
         await supabase.from('relay_events').insert({
           organization_id: run.organization_id,
           event_type: 'RECONCILIATION_APPLIED',
@@ -115,7 +117,6 @@ export async function GET(request: Request) {
       } catch (err) {
         diagnostics.push(`Run ${run.id}: unexpected error - ${err instanceof Error ? err.message : 'unknown'}`)
         failed++
-        // Continue processing other runs — one failure doesn't stop all
       }
     }
 
@@ -148,22 +149,18 @@ function detectDrift(
   convStage: string | null,
   lastReplyAt: string | null,
 ): string | null {
-  // Case 1: Run says WAITING but lead has been replied to
   if (runStatus === 'waiting' && leadStatus === 'replied') {
     return 'response_received'
   }
 
-  // Case 2: Run says WAITING but conversation has reply
   if (runStatus === 'waiting' && lastReplyAt) {
     return 'response_received'
   }
 
-  // Case 3: Run says WAITING but conversation is in advanced stage
   if (runStatus === 'waiting' && convStage && ['qualifying', 'interested', 'meeting', 'proposal', 'won', 'lost'].includes(convStage)) {
     return 'conversation'
   }
 
-  // Case 4: Run says PREPARING/ROUTING/AWAITING_HUMAN but lead already contacted
   if (['preparing', 'routing', 'awaiting_human'].includes(runStatus) && leadStatus && leadStatus !== 'new') {
     return 'action_recorded'
   }

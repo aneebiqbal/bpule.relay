@@ -33,6 +33,8 @@ const CRON_SYSTEM_REP: Rep = {
  * this one unattended action, rather than the per-rep RLS client
  * /api/eval/run's POST handler uses for a human-triggered run.
  */
+export const maxDuration = 120
+
 export async function GET(request: Request) {
   const auth = requireCronSecret(request)
   if (!auth.ok) {

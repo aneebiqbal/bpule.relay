@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { getAuthContext, can } from '@/lib/auth/organization'
 
 export const maxDuration = 30
 
@@ -9,29 +10,20 @@ export const maxDuration = 30
  * Date boundaries use the org's timezone so "today" means the business's today.
  */
 export async function GET(req: NextRequest) {
-  const store = await createServerSupabase()
-  const { data: auth } = await store.auth.getUser()
-  if (!auth.user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-
-  const { data: rep } = await store
-    .from('reps')
-    .select('id, organization_id, role, timezone')
-    .eq('auth_user_id', auth.user.id)
-    .single()
-
-  if (!rep) return NextResponse.json({ error: 'Not found.' }, { status: 401 })
-  if (rep.role !== 'admin' && rep.role !== 'owner') {
+  const ctx = await getAuthContext()
+  if (!ctx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!can(ctx, 'VIEW_TEAM_ANALYTICS')) {
     return NextResponse.json({ error: 'Admin access required.' }, { status: 403 })
   }
 
+  const store = await createServerSupabase()
   const url = new URL(req.url)
   const repId = url.searchParams.get('repId')
   const date = url.searchParams.get('date') || new Date().toISOString().split('T')[0]
-  const timezone = (rep.timezone as string) || 'UTC'
+  const timezone = ctx.repId ? (await store.from('reps').select('timezone').eq('id', ctx.repId).maybeSingle()).data?.timezone as string || 'UTC' : 'UTC'
 
   if (!repId) return NextResponse.json({ error: 'repId required.' }, { status: 400 })
 
-  // Compute timezone-aware UTC boundaries for the local date
   const startUtc = localDateToUtcStart(date, timezone)
   const endUtc = localDateToUtcEnd(date, timezone)
 
@@ -48,7 +40,7 @@ export async function GET(req: NextRequest) {
       leads:lead_id (id, company, contact_name, status),
       upwork_jobs:job_id (title)
     `)
-    .eq('organization_id', rep.organization_id)
+    .eq('organization_id', ctx.orgId)
     .eq('actor_id', repId)
     .gte('occurred_at', startUtc)
     .lt('occurred_at', endUtc)
@@ -59,6 +51,7 @@ export async function GET(req: NextRequest) {
     .from('reps')
     .select('id, name')
     .eq('id', repId)
+    .eq('organization_id', ctx.orgId)
     .single()
 
   const { data: assignedLeads } = await store
@@ -71,7 +64,7 @@ export async function GET(req: NextRequest) {
       canonical_score,
       conversation_states (stage, last_sent_at, last_reply_at, next_followup_at)
     `)
-    .eq('organization_id', rep.organization_id)
+    .eq('organization_id', ctx.orgId)
     .eq('owner_rep_id', repId)
     .eq('archived', false)
     .order('created_at', { ascending: false })
@@ -100,7 +93,6 @@ export async function GET(req: NextRequest) {
  */
 function localDateToUtcStart(date: string, timezone: string): string {
   try {
-    // Create a date string that represents midnight in the target timezone
     const localMidnight = new Date(`${date}T00:00:00`)
     const localStr = localMidnight.toLocaleString('en-US', { timeZone: timezone })
     const localDate = new Date(localStr)

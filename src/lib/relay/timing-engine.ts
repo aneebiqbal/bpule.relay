@@ -168,6 +168,8 @@ export function calculateContactWindow(input: TimingInput): TimingOutput {
 }
 
 function getOffsetHours(timezone: string): number {
+  // shortcut: static map ignores DST; upgrade path is Intl-based offset
+  // (see isBusinessHours below) if timing precision matters.
   const map: Record<string, number> = {
     'Asia/Karachi': 5,
     'America/New_York': -5,

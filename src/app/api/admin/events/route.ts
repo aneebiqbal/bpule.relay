@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { getAuthContext, can } from '@/lib/auth/organization'
 
 export const maxDuration = 30
 
@@ -8,21 +9,13 @@ export const maxDuration = 30
  * Get specific action events for drill-down.
  */
 export async function GET(req: NextRequest) {
-  const store = await createServerSupabase()
-  const { data: auth } = await store.auth.getUser()
-  if (!auth.user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
-
-  const { data: rep } = await store
-    .from('reps')
-    .select('id, organization_id, role')
-    .eq('auth_user_id', auth.user.id)
-    .single()
-
-  if (!rep) return NextResponse.json({ error: 'Not found.' }, { status: 401 })
-  if (rep.role !== 'admin' && rep.role !== 'owner') {
+  const ctx = await getAuthContext()
+  if (!ctx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!can(ctx, 'VIEW_TEAM_ANALYTICS')) {
     return NextResponse.json({ error: 'Admin access required.' }, { status: 403 })
   }
 
+  const store = await createServerSupabase()
   const url = new URL(req.url)
   const date = url.searchParams.get('date') || new Date().toISOString().split('T')[0]
   const action = url.searchParams.get('action')
@@ -45,7 +38,7 @@ export async function GET(req: NextRequest) {
       leads:lead_id (id, company, contact_name),
       upwork_jobs:job_id (title)
     `)
-    .eq('organization_id', rep.organization_id)
+    .eq('organization_id', ctx.orgId)
     .eq('action_type', action)
     .gte('occurred_at', startOfDay)
     .lt('occurred_at', endOfDay)

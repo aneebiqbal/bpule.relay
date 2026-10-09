@@ -67,12 +67,11 @@ export async function GET() {
 
   const { data: reps } = await supabase
     .from('reps')
-    .select('id, name, auth_user_id')
+    .select('id, name')
     .eq('organization_id', authCtx.orgId)
   const repNameById = new Map<string, string>()
   for (const r of reps ?? []) {
     if (r.name) repNameById.set(r.id as string, r.name as string)
-    if (r.auth_user_id && r.name) repNameById.set(r.auth_user_id as string, r.name as string)
   }
 
   const stream = (events ?? []).map((e) => ({
@@ -95,7 +94,6 @@ export async function GET() {
     reps: (reps ?? []).map((rep) => ({
       id: rep.id as string,
       name: (rep.name as string) ?? null,
-      authUserId: (rep.auth_user_id as string) ?? null,
     })),
     messages: (todaysMessages ?? []).map((message) => ({
       repId: (message.rep_id as string) ?? null,

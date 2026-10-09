@@ -112,7 +112,6 @@ export interface NewLeadInput {
   senderProfileId?: string | null
   revenueIdentityId?: string | null
   allowPotentialDuplicate?: boolean
-  // ── Intelligence V2 ─────────────────────────────────────────────────
   canonicalScore?: number | null
   scoreVersion?: string | null
   scoredAt?: string | null
@@ -122,7 +121,6 @@ export interface NewLeadInput {
   remoteEligibility?: Record<string, unknown> | null
   evidenceLedger?: Record<string, unknown> | null
   extractionCompleteness?: Record<string, unknown> | null
-  // ── Score observability ────────────────────────────────────────────
   decisionProvider?: string | null
   decisionModel?: string | null
   decisionRunId?: string | null
@@ -608,6 +606,7 @@ export interface ScoutStore {
   getContentDraft(draftId: string): Promise<ContentDraft | null>
   updateContentDraftCaption(draftId: string, caption: string): Promise<ContentDraft>
   updateContentDraftStatus(draftId: string, status: ContentDraftStatus): Promise<ContentDraft>
+  tryMarkContentDraftPosted(draftId: string): Promise<boolean>
   updateContentDraft(input: {
     draftId: string
     caption?: string
@@ -746,6 +745,7 @@ export interface ScoutStore {
   listContentMemories(personaId: string, opts?: { memoryType?: ContentMemoryType; limit?: number }): Promise<ContentMemory[]>
   deleteContentMemory(memoryId: string): Promise<void>
   findSimilarMemories(embedding: number[], personaId: string, threshold?: number, limit?: number): Promise<Array<{ id: string; content: string; memoryType: string; similarity: number; createdAt: string }>>
+  pruneContentMemories(personaId: string, retainDays: number): Promise<void>
   // content opportunities
   createContentOpportunity(input: {
     personaId: string
@@ -1164,7 +1164,6 @@ export interface ScoutStore {
    */
   listActiveRunsForEntity(entityType: string, entityId: string): Promise<import('@/lib/domain/types').RelayRun[]>
 
-  // ── Tailored CV persistence ────────────────────────────────────────────────
 
   saveTailoredCV(input: {
     jobId: string
@@ -1188,7 +1187,6 @@ export interface ScoutStore {
 
   markTailoredCVApplied(id: string): Promise<void>
 
-  // ── Relay Growth Engine ───────────────────────────────────────────────────
 
   // Product Memory
   createGrowthMemory(input: {
@@ -1255,6 +1253,7 @@ export interface ScoutStore {
     takeaway: string
   }): Promise<import('@/lib/domain/types').RelayEditorialDecision>
 
+  listEditorialDecisions(fromDate: string, toDate: string): Promise<import('@/lib/domain/types').RelayEditorialDecision[]>
   getEditorialDecision(date: string): Promise<import('@/lib/domain/types').RelayEditorialDecision | null>
 
   updateEditorialDecision(id: string, patches: {
@@ -1314,7 +1313,6 @@ export interface ScoutStore {
 
   listOutcomes(publicationId: string): Promise<import('@/lib/domain/types').RelayContentOutcome[]>
 
-  // ── Team-scoped queries ───────────────────────────────────────────────────
 
   getTeamMembers(teamId: string): Promise<Array<{ repId: string; repName: string; role: string }>>
 
@@ -1359,7 +1357,6 @@ export interface ScoutStore {
     channel: string
   }>>
 
-  // ─── Studio V2: Trend Intelligence ───
 
   listTrendSources(): Promise<TrendSource[]>
   getTrendSource(sourceKey: string): Promise<TrendSource | null>
@@ -1390,7 +1387,6 @@ export interface ScoutStore {
   }): Promise<TrendItem>
   listTrendItems(opts?: { since?: string; topics?: string[]; limit?: number }): Promise<TrendItem[]>
 
-  // ─── Studio V2: Daily Briefs ───
 
   createDailyContentBrief(input: {
     organizationId: string
@@ -1454,7 +1450,6 @@ export interface ScoutStore {
   markDailyContentIdeaRejected(ideaId: string): Promise<void>
   markDailyContentIdeaPosted(ideaId: string): Promise<void>
 
-  // ─── Studio V2: Persona Intelligence ───
 
   synthesizePersonaIntelligence(input: {
     personaId: string
@@ -1467,7 +1462,6 @@ export interface ScoutStore {
   updatePersonaTrendInterest(personaId: string, profile: TrendInterestProfile): Promise<void>
   updatePersonaFieldConfidence(personaId: string, confidence: FieldConfidence): Promise<void>
 
-  // ─── Relay Growth V2 ───
 
   createDailyGrowthBrief(input: {
     organizationId: string

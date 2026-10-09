@@ -16,7 +16,6 @@ import {
   buildLongcatDraftChain,
   buildOpenaiDraftChain,
   pickDraftChain,
-  tier2Chain,
   shouldEscalateToPremium,
   type ChainStep,
   type CostTierName,
@@ -308,7 +307,6 @@ export function buildUserPrompt(
 
   const fewShotBlock = buildFewShotBlock(input.fewShotExamples ?? [])
 
-  // Build strategy block if available — this is the distilled context approach
   const strategyBlock = input.strategy
     ? strategyToPromptBlock(input.strategy)
     : ''
@@ -499,7 +497,6 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
     }
   }
 
-  // Return best effort (even if not passing)
   const best = resultA
   if (!best) {
     const draft = finishDraft(input, emptyResult('all-failed'), ['all-failed'], callLog.length, callLog)

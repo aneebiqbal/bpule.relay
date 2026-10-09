@@ -5,12 +5,9 @@ import { ingestAllSources } from '@/lib/trends/engine'
 
 export const dynamic = 'force-dynamic'
 
-export async function POST(request: Request) {
-  const auth = requireCronSecret(request)
-  if (!auth.ok) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: auth.status })
-  }
+export const maxDuration = 120
 
+async function runIngest(sourceKeys?: string[]) {
   const serviceClient = createServiceSupabase()
 
   const storeAdapter: TrendStore = {
@@ -72,9 +69,29 @@ export async function POST(request: Request) {
     },
   }
 
+  return ingestAllSources(storeAdapter, sourceKeys)
+}
+
+export async function POST(request: Request) {
+  const auth = requireCronSecret(request)
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: auth.status })
+  }
+
   const body = await request.json().catch(() => ({}))
   const sourceKeys = body.sourceKeys as string[] | undefined
-  const results = await ingestAllSources(storeAdapter, sourceKeys)
+  const results = await runIngest(sourceKeys)
+
+  return NextResponse.json({ ok: true, results })
+}
+
+export async function GET(request: Request) {
+  const auth = requireCronSecret(request)
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: auth.status })
+  }
+
+  const results = await runIngest()
 
   return NextResponse.json({ ok: true, results })
 }

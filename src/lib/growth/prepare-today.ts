@@ -28,16 +28,16 @@ export async function prepareTodaysPost(
     return { decision: null, draft: null, opportunities }
   }
 
+  const editor = runDailyEditor({ opportunities, recentDecisions: [], today })
+
   const chosen =
     (options.opportunityId
       ? opportunities.find((opp) => opp.id === options.opportunityId)
-      : null) ?? runDailyEditor({ opportunities, recentDecisions: [], today }).primary
+      : null) ?? editor.primary
 
   if (!chosen) {
     return { decision: null, draft: null, opportunities }
   }
-
-  const editor = runDailyEditor({ opportunities, recentDecisions: [], today })
   const postPlan = buildPostPlanFromOpportunity(chosen)
   const caption = generateFallbackPost(postPlan)
   const hook = chosen.title

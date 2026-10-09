@@ -1,5 +1,5 @@
 import type { ProviderHost } from '@/lib/ai/config'
-import { cheapModel, strongModel, longcatHost, tier0Host, tier0Hosts, tier1Hosts, tier2Hosts, tier4Host } from '@/lib/ai/config'
+import { longcatHost, tier0Host, tier0Hosts, tier1Hosts, tier2Hosts, tier4Host } from '@/lib/ai/config'
 
 // Re-export the host builders that drafting needs for its specialized chains.
 export { longcatHost, tier0Host, tier0Hosts, tier4Host } from '@/lib/ai/config'
@@ -42,7 +42,6 @@ export function buildLongcatDraftChain(): ChainStep[] {
   const lc = longcatHost()
   const chain: ChainStep[] = []
   if (lc) chain.push({ costTier: 'tier1', host: lc })
-  // Add both Groq keys (if configured) for double quota
   chain.push(...tier0Hosts('strong').map((host) => ({ costTier: 'tier1' as const, host })))
   // OpenAI escalation only
   const oai = tier4Host()
@@ -65,24 +64,6 @@ export function buildOpenaiDraftChain(): ChainStep[] {
   return chain
 }
 
-export type AiTask =
-  /** One-time style-card calibration from quiz answers and pasted samples. */
-  | 'calibrate'
-  /** Raw research paste -> structured fields. */
-  | 'extract'
-  /** Reply-type routing (scaffolded, not implemented). */
-  | 'classify'
-  /** Outreach message drafting. */
-  | 'draft'
-  /** Best-of-two variant drafting (parallel calls on tier 0). */
-  | 'draft-variant'
-
-export interface ModelChoice {
-  model: string
-  tier: 'cheap' | 'strong'
-  reason: string
-}
-
 export type CostTierName = 'tier1' | 'tier2' | 'tier3' | 'tier4'
 
 export interface ChainStep {
@@ -100,14 +81,6 @@ export interface ChainStep {
  */
 export function tier0Chain(kind: 'cheap' | 'strong'): ChainStep[] {
   return tier0Hosts(kind).map((host) => ({ costTier: 'tier1', host }))
-}
-
-export function tier1Chain(): ChainStep[] {
-  return tier1Hosts().map((host) => ({ costTier: 'tier2' as const, host }))
-}
-
-export function tier2Chain(): ChainStep[] {
-  return tier2Hosts().map((host) => ({ costTier: 'tier3' as const, host }))
 }
 
 export function fallbackChain(): ChainStep[] {
@@ -183,38 +156,4 @@ export function shouldEscalateToPremium(reason: {
   return { shouldEscalate: false, reason: '' }
 }
 
-/**
- * @deprecated Legacy single-model picker, kept only for call sites not yet
- * migrated to pickModelChain/pickDraftChain (the calibration and role-fallback
- * classification paths, which are low-volume enough that the multi-host/
- * multi-tier chain is not worth the added complexity yet).
- */
-export function pickModel(task: AiTask): ModelChoice {
-  switch (task) {
-    case 'calibrate':
-    case 'classify':
-      return {
-        model: cheapModel(),
-        tier: 'cheap',
-        reason: `${task} is a structuring task; the cheap model is capable and the call is not on the per-lead hot path.`,
-      }
-    case 'extract':
-      return {
-        model: cheapModel(),
-        tier: 'cheap',
-        reason: 'Legacy path; extraction now routes through pickModelChain("extract") in extract.ts.',
-      }
-    case 'draft':
-      return {
-        model: strongModel(),
-        tier: 'strong',
-        reason: 'Legacy path; drafting now routes through pickDraftChain() in draft.ts.',
-      }
-    case 'draft-variant':
-      return {
-        model: cheapModel(),
-        tier: 'cheap',
-        reason: 'Legacy path; best-of-two now routes through pickDraftChain() in draft.ts.',
-      }
-  }
-}
+

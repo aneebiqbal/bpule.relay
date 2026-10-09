@@ -2,8 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   pickModelChain,
   pickDraftChain,
-  tier1Chain,
-  tier2Chain,
   shouldEscalateToPremium,
   buildLongcatDraftChain,
   buildOpenaiDraftChain,
@@ -43,16 +41,6 @@ describe('DeepSeek removal', () => {
   it('tier2Hosts returns empty when DeepSeek disabled', () => {
     process.env.DEEPSEEK_API_KEY = 'test-key'
     expect(tier2Hosts()).toEqual([])
-  })
-
-  it('tier1Chain excludes DeepSeek when disabled', () => {
-    process.env.DEEPSEEK_API_KEY = 'test-key'
-    expect(tier1Chain()).toEqual([])
-  })
-
-  it('tier2Chain excludes DeepSeek when disabled', () => {
-    process.env.DEEPSEEK_API_KEY = 'test-key'
-    expect(tier2Chain()).toEqual([])
   })
 
   it('pickModelChain never includes DeepSeek hosts when disabled', () => {

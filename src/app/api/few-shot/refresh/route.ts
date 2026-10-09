@@ -43,14 +43,18 @@ export async function GET(request: Request) {
     if (orgsErr) throw orgsErr
 
     let total = 0
+    const failures: string[] = []
     for (const org of orgs ?? []) {
       const { data, error } = await client.rpc('refresh_few_shot_wins', {
         p_org_id: org.id,
       })
-      if (error) throw error
+      if (error) {
+        failures.push(org.id)
+        continue
+      }
       total += ((data as number) ?? 0)
     }
-    return NextResponse.json({ refreshed: total, organizations: orgs?.length ?? 0 })
+    return NextResponse.json({ refreshed: total, organizations: orgs?.length ?? 0, failures })
   } catch (err) {
     return safeErrorResponse(err, 500, 'Refresh failed.', 'few-shot/refresh')
   }

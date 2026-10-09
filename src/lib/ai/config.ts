@@ -265,22 +265,6 @@ export function isDeepseekPeakHour(date: Date = new Date()): boolean {
   return deepseekPeakWindowsUtc().some((w) => hour >= w.startHour && hour < w.endHour)
 }
 
-// ============================================================================
-// Legacy single-model accessors, kept only for call sites not yet migrated
-// to the tier chain (see routing.ts pickModelChain). New code should route
-// through pickModelChain, never these directly.
-// ============================================================================
-
-/** @deprecated use pickModelChain('classify') — kept for the calibration/role-fallback call sites. */
-export function cheapModel(): string {
-  return process.env.SCOUT_CHEAP_MODEL ?? groqCheapModel()
-}
-
-/** @deprecated use pickModelChain('draft') — kept until every drafting call site is migrated. */
-export function strongModel(): string {
-  return process.env.SCOUT_STRONG_MODEL ?? groqStrongModel()
-}
-
 export function dbMode(): 'supabase' | 'demo' {
   const override = process.env.SCOUT_DB
   if (override === 'supabase' || override === 'demo') return override
@@ -348,11 +332,4 @@ export function messageTypeLimit(type: string): number {
 export const REPLY_RATE_TARGET = 0.15
 export const READ_TO_CHECK_TARGET = 0.25
 
-// ── Intelligence Tier Accessors (mirror runtime/model-router.ts) ───────────────
-// Canonical tier model resolution lives in src/lib/ai/runtime/model-router.ts.
-// These accessors exist for call sites that need tier env vars without importing
-// the runtime (avoiding circular deps in config-only contexts).
 
-export function aiLunaModel(): string { return process.env.SCOUT_AI_LUNA_MODEL ?? 'gpt-4o-mini' }
-export function aiTerraModel(): string { return process.env.SCOUT_AI_TERRA_MODEL ?? 'gpt-4o' }
-export function aiSolModel(): string { return process.env.SCOUT_AI_SOL_MODEL ?? 'gpt-4.1' }

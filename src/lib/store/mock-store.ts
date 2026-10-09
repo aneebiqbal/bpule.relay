@@ -1016,7 +1016,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         }
       }
 
-      // When a client replies, mark the lead as replied and create an outcome
       if (type === 'reply') {
         lead.status = 'replied'
         // Auto-restore on reply — mirrors SupabaseStore.markContacted.
@@ -1056,7 +1055,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         lead.lockedReason = 'connection_note_sent'
       }
 
-      // Update conversation state
       const existingState = conversationStates.find((s) => s.leadId === leadId)
       if (existingState) {
         existingState.stage = type === 'reply' ? 'replied' : 'contacted'
@@ -1891,7 +1889,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const n = notifications.find((x) => x.id === id && x.repId === rep.id)
       if (n) n.read = true
     },
-    // ── content engine ──
     async createContentPersona(input) {
       const persona: ContentPersona = {
         id: nextId('cp'),
@@ -2031,6 +2028,36 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }
       return draft
     },
+    async tryMarkContentDraftPosted(draftId: string): Promise<boolean> {
+      const draft = contentDrafts.find((d) => d.id === draftId)
+      if (!draft) throw new Error('Draft not found')
+      if (draft.status === 'posted') return false
+      draft.status = 'posted'
+      if (draft.platform) {
+        contentHistoryEntries.push({
+          id: `ch-${Date.now()}`,
+          organizationId: 'org-demo',
+          personaId: draft.personaId,
+          pillarId: draft.pillarId,
+          topicClusterId: draft.topicClusterId,
+          platform: draft.platform,
+          openingLine: draft.caption.split('\n')[0] ?? '',
+          postedAt: new Date().toISOString(),
+          ledToRealOutcome: false,
+          outcomeNotedAt: null,
+          likes: null,
+          reach: null,
+          comments: null,
+          reposts: null,
+          saves: null,
+          profileVisits: null,
+          followerDelta: null,
+          metricsLoggedAt: null,
+        })
+      }
+      return true
+    },
+
     async updateContentDraft(input) {
       const draft = contentDrafts.find((d) => d.id === input.draftId)
       if (!draft) throw new Error('Draft not found')
@@ -2225,7 +2252,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, limit)
     },
-    // ── content profiles (Content DNA) ──
     async createContentProfile(input) {
       const now = new Date().toISOString()
       const profile: ContentProfile = {
@@ -2291,7 +2317,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const idx = contentProfiles.findIndex((p) => p.id === profileId)
       if (idx >= 0) contentProfiles.splice(idx, 1)
     },
-    // ── content taste profiles ──
     async getTasteProfile(personaId) {
       const existing = contentTasteProfiles.find((t) => t.personaId === personaId)
       if (!existing) return null
@@ -2316,7 +2341,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         contentTasteProfiles.push(row)
       }
     },
-    // ── content memories ──
     async createContentMemory(input) {
       const row: ContentMemory = {
         id: nextId('cm'),
@@ -2345,10 +2369,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       if (idx >= 0) contentMemories.splice(idx, 1)
     },
     async findSimilarMemories(_embedding, _personaId, _threshold, _limit) {
-      // Mock: no semantic search — return empty (graceful degradation)
       return []
     },
-    // ── content opportunities ──
+    async pruneContentMemories(_personaId: string, _retainDays: number): Promise<void> {},
     async createContentOpportunity(input) {
       const row: ContentOpportunity = {
         id: nextId('co'),
@@ -2394,7 +2417,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const idx = contentOpportunities.findIndex((o) => o.id === opportunityId)
       if (idx >= 0) contentOpportunities.splice(idx, 1)
     },
-    // ── idea genomes ──
     async createIdeaGenome(input) {
       const now = new Date().toISOString()
       const row: ContentIdeaGenome = {
@@ -2444,7 +2466,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       genome.updatedAt = new Date().toISOString()
       return genome
     },
-    // ── evaluations ──
     async createEvaluation(input) {
       const row: ContentEvaluation = {
         id: nextId('ce'),
@@ -2475,7 +2496,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async getEvaluation(evaluationId) {
       return contentEvaluations.find((e) => e.id === evaluationId) ?? null
     },
-    // ── interview sessions ──
     async createInterviewSession(input) {
       const row: ContentInterviewSession = {
         id: nextId('cis'),
@@ -2690,7 +2710,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }
       capturedProspects.push(entry)
       // Demo store never dedupes on rawInput (unlike SupabaseStore), so every
-      // call here is, in fact, a new row — isNewCapture is always true.
       return { ...entry, isNewCapture: true }
     },
     async recordProspectExtracted(_revenueIdentityId?: string | null): Promise<void> {
@@ -2756,7 +2775,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         assignedProfiles: [],
       }
     },
-    // ── Revenue Identity OS ─────────────────────────────────────────────────
     async listRevenueIdentitiesAdmin() {
       if (rep.role !== 'admin') throw new Error('Admin only')
       return demoRevenueIdentities
@@ -3086,7 +3104,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const previousStatus = run.status
       const step = input.newStep ?? input.newStatus
 
-      // Validate transition
       const validTransitions: Record<string, string[]> = {
         detected: ['qualifying', 'rejected', 'cancelled'],
         qualifying: ['qualified', 'rejected', 'cancelled'],
@@ -3137,7 +3154,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       )
     },
 
-    // ── Relay Growth Engine (demo stubs) ─────────────────────────────────────
 
     async createGrowthMemory(input: any): Promise<any> {
       const row = {
@@ -3220,6 +3236,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       demoDecisions.unshift(row)
       return row
     },
+    async listEditorialDecisions(fromDate: string, toDate: string): Promise<any[]> {
+      return demoDecisions.filter((d) => d.decisionDate >= fromDate && d.decisionDate <= toDate)
+    },
     async getEditorialDecision(date: string): Promise<any> {
       return demoDecisions.find((row) => row.decisionDate === date) ?? null
     },
@@ -3273,7 +3292,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async recordOutcome(_input: any): Promise<void> {},
     async listOutcomes(_publicationId: string): Promise<any[]> { return [] },
 
-    // ── Team-scoped queries (demo stubs) ─────────────────────────────────────
 
     async getTeamMembers(_teamId: string): Promise<any[]> { return [] },
     async getTeamTargets(_teamId: string, _date?: string): Promise<any[]> { return [] },
@@ -3285,7 +3303,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async getRepInfo(_repId: string): Promise<any> { return null },
     async getRepAssignments(_repId: string): Promise<any[]> { return [] },
 
-    // ── Studio V2 + Growth V2 (demo stubs) ─────────────────────────────────
 
     async listTrendSources(): Promise<TrendSource[]> { return [] },
     async getTrendSource(_sourceKey: string): Promise<TrendSource | null> { return null },

@@ -14,13 +14,12 @@ export async function GET() {
     const weekEnd = today.toISOString().slice(0, 10)
     const weekStart = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
-    const [publications] = await Promise.all([
+    const [publications, decisions] = await Promise.all([
       store.listPublications(),
+      store.listEditorialDecisions(weekStart, weekEnd),
     ])
 
-    const decisions: any[] = []
-
-    const review = generateWeeklyReview(decisions, publications, weekStart, weekEnd)
+    const review = generateWeeklyReview(decisions as any[], publications, weekStart, weekEnd)
 
     return NextResponse.json({ review })
   } catch (error) {

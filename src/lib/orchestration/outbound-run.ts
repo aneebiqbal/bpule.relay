@@ -86,10 +86,10 @@ export function eventToRunStatus(
       return currentStatus === 'conversation' ? 'completed' : null
 
     case 'RUN_COMPLETED':
-      return currentStatus !== 'completed' ? 'completed' : null
+      return currentStatus !== 'completed' && canTransition(currentStatus, 'completed') ? 'completed' : null
 
     case 'RUN_FAILED':
-      return currentStatus !== 'failed' ? 'failed' : null
+      return currentStatus !== 'failed' && canTransition(currentStatus, 'failed') ? 'failed' : null
 
     default:
       return null

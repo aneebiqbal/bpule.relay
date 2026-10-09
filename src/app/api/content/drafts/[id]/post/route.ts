@@ -22,7 +22,6 @@ export async function POST(
 
   const store = await createScoutStore()
 
-  // Get draft
   const draft = await store.getContentDraft(id)
   if (!draft) return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
 
@@ -39,14 +38,16 @@ export async function POST(
   const edited = typeof caption === 'string' && caption !== draft.caption
   const finalCaption = typeof caption === 'string' ? caption : draft.caption
 
-  // Update caption if provided
   if (edited) {
     await store.updateContentDraft({ draftId: id, caption: finalCaption })
   }
 
-  // Mark as posted
+  // Mark as posted — conditional update prevents duplicate posting on race
   try {
-    await store.updateContentDraftStatus(id, 'posted')
+    const wasUpdated = await store.tryMarkContentDraftPosted(id)
+    if (!wasUpdated) {
+      return NextResponse.json({ success: true, alreadyPosted: true })
+    }
 
     const openingLine = finalCaption.split('\n')[0]?.trim() || finalCaption.slice(0, 220)
     if (openingLine) {
@@ -80,6 +81,11 @@ export async function POST(
       }).catch(() => {})
     }
 
+    // Prune old memories — fire-and-forget, non-fatal
+    // shortcut: 90-day TTL per persona; upgrade path is a cron job if this
+    // per-post cleanup becomes a bottleneck at high posting volume.
+    store.pruneContentMemories(draft.personaId, 90).catch(() => {})
+
     // Record taste signal
     await store.createContentDraftFeedback({
       personaId: draft.personaId,
@@ -91,7 +97,6 @@ export async function POST(
       editSignals: [],
     }).catch(() => {})
 
-    // Update taste profile from posting (strongest positive signal)
     try {
       const postingSignalKey = `posting:${id}`
       const storedTaste = await store.getTasteProfile(draft.personaId)

@@ -125,7 +125,6 @@ export function evaluatePostQuality(input: {
   const lower = caption.toLowerCase()
   const words = caption.split(/\s+/).filter((w: string) => w.length > 2)
 
-  // ── 1. Fabricated experience check ─────────────────────────────────────
   const fabricatedPatterns = FABRICATED_EXPERIENCE_PATTERNS.filter((p) => p.test(lower))
   if (fabricatedPatterns.length > 0) {
     failures.push({
@@ -135,7 +134,6 @@ export function evaluatePostQuality(input: {
     })
   }
 
-  // ── 2. Generic insight check ──────────────────────────────────────────
   const genericInsights = GENERIC_INSIGHT_PATTERNS.filter((p) => p.test(lower))
   if (genericInsights.length > 0) {
     failures.push({
@@ -145,7 +143,6 @@ export function evaluatePostQuality(input: {
     })
   }
 
-  // ── 3. Low information density ────────────────────────────────────────
   const uniqueWords = new Set(words.map((w: string) => w.toLowerCase()))
   const informationDensity = uniqueWords.size / Math.max(words.length, 1)
   if (words.length > 15 && informationDensity < 0.5) {
@@ -156,8 +153,6 @@ export function evaluatePostQuality(input: {
     })
   }
 
-  // ── 3b. Keyword stuffing detection ────────────────────────────────────
-  // Check if the same short set of words dominates the post
   const wordFrequency = new Map<string, number>()
   for (const word of words) {
     const w = word.toLowerCase().replace(/[^a-z]/g, '')
@@ -175,7 +170,6 @@ export function evaluatePostQuality(input: {
     })
   }
 
-  // ── 4. Generic conclusion ────────────────────────────────────────────
   const genericConclusion = GENERIC_CONCLUSION_PATTERNS.some((p) => p.test(lower))
   if (genericConclusion) {
     warnings.push({
@@ -184,7 +178,6 @@ export function evaluatePostQuality(input: {
     })
   }
 
-  // ── 5. Garbled source handling ────────────────────────────────────────
   const garbledWords = findGarbledWords(caption)
   if (garbledWords.length > 0) {
     failures.push({
@@ -194,7 +187,6 @@ export function evaluatePostQuality(input: {
     })
   }
 
-  // ── 6. Persona specificity ───────────────────────────────────────────
   const personaFit = calculatePersonaFit(lower, input.personaContext)
   // Threshold: 0.1 for technical roles, 0.05 for non-technical (founder, designer, BD, etc.)
   const isNonTechnical = isNonTechnicalRole(input.personaContext.role)
@@ -207,7 +199,6 @@ export function evaluatePostQuality(input: {
     })
   }
 
-  // ── 7. Information gain ──────────────────────────────────────────────
   const informationGain = assessInformationGain(caption)
   if (informationGain < 0.3 && words.length > 10) {
     failures.push({
@@ -217,7 +208,6 @@ export function evaluatePostQuality(input: {
     })
   }
 
-  // ── 8. Opening quality ───────────────────────────────────────────────
   const opening = caption.split('\n')[0]?.toLowerCase() ?? ''
   const weakOpening = GENERIC_INSIGHT_PATTERNS.some((p) => p.test(opening)) ||
     /\b(i'?ve? been|here'?s|sometimes|the other day|in today'?s)\b/.test(opening)
@@ -228,7 +218,6 @@ export function evaluatePostQuality(input: {
     })
   }
 
-  // ── Calculate scores ──────────────────────────────────────────────────
   const scores: QualityScores = {
     informationDensity: Math.min(1, informationDensity * 2),
     personaFit,
@@ -243,6 +232,32 @@ export function evaluatePostQuality(input: {
   return { passed, failures, warnings, scores }
 }
 
+const KNOWN_TECHNICAL_VOCAB = new Set([
+  'postgresql', 'supabase', 'meilisearch', 'nextjs', 'reactjs', 'nodejs',
+  'typescript', 'javascript', 'web3', 'solana', 'spree', 'longcat',
+  'graphql', 'restful', 'middleware', 'frontend', 'backend', 'fullstack',
+  'devops', 'kubernetes', 'docker', 'terraform', 'ansible', 'redis',
+  'mongodb', 'mysql', 'sqlite', 'elasticsearch', 'kafka', 'rabbitmq',
+  'aws', 'gcp', 'azure', 'vercel', 'netlify', 'heroku', 'cloudflare',
+  'github', 'gitlab', 'bitbucket', 'jira', 'confluence', 'figma', 'sketch',
+  'tailwind', 'bootstrap', 'materialui', 'chakra', 'styledcomponents',
+  'webpack', 'vite', 'rollup', 'babel', 'eslint', 'prettier', 'jest',
+  'cypress', 'playwright', 'storybook', 'prisma', 'drizzle', 'typeorm',
+  'hibernate', 'springboot', 'django', 'flask', 'fastapi', 'express',
+  'nestjs', 'graphql', 'apollo', 'urql', 'trpc', 'zod', 'yup',
+  'responder', 'serializer', 'normalizer', 'denormalized', 'indexable',
+  'optimistic', 'pessimistic', 'idempotency', 'backoff', 'circuitbreaker',
+  'ratelimiter', 'middleware', 'preloader', 'prefetch', 'lazyload',
+  'webpack', 'code splitting', 'treeshaking', 'hotreload',
+])
+
+const KNOWN_MISSPELLINGS = new Set([
+  'basica', 'nothinig', 'alread', 'overcomplicate', 'somethign',
+  'anythign', 'nothign', 'whatevr', 'becuase', 'occured', 'recieve',
+  'seperate', 'definately', 'accomodate', 'occurence', 'independant',
+  'neccessary', 'succesful', 'enviroment', 'goverment', 'occassion',
+])
+
 function findGarbledWords(text: string): string[] {
   const garbled: string[] = []
   const words = text.split(/\s+/)
@@ -250,49 +265,18 @@ function findGarbledWords(text: string): string[] {
     if (!word) continue
     const cleaned = word.replace(/[^a-zA-Z]/g, '')
     if (cleaned.length < 3) continue
-    // Check for obvious typos: repeated consonants, missing vowels in long words
     if (/(.)\1{2,}/.test(cleaned) && cleaned.length > 4) {
       garbled.push(word)
     }
-    // Check for words with no vowels that are longer than 4 chars
     if (cleaned.length > 4 && !/[aeiou]/.test(cleaned.toLowerCase())) {
       garbled.push(word)
     }
-    // Check for obvious misspellings of common words
-const lower = cleaned.toLowerCase()
-
-  // Known technical vocabulary — NEVER flag as garbled
-  const knownTechnicalVocab = new Set([
-    'postgresql', 'supabase', 'meilisearch', 'nextjs', 'reactjs', 'nodejs',
-    'typescript', 'javascript', 'web3', 'solana', 'spree', 'longcat',
-    'graphql', 'restful', 'middleware', 'frontend', 'backend', 'fullstack',
-    'devops', 'kubernetes', 'docker', 'terraform', 'ansible', 'redis',
-    'mongodb', 'mysql', 'sqlite', 'elasticsearch', 'kafka', 'rabbitmq',
-    'aws', 'gcp', 'azure', 'vercel', 'netlify', 'heroku', 'cloudflare',
-    'github', 'gitlab', 'bitbucket', 'jira', 'confluence', 'figma', 'sketch',
-    'tailwind', 'bootstrap', 'materialui', 'chakra', 'styledcomponents',
-    'webpack', 'vite', 'rollup', 'babel', 'eslint', 'prettier', 'jest',
-    'cypress', 'playwright', 'storybook', 'prisma', 'drizzle', 'typeorm',
-    'hibernate', 'springboot', 'django', 'flask', 'fastapi', 'express',
-    'nestjs', 'graphql', 'apollo', 'urql', 'trpc', 'zod', 'yup',
-    'responder', 'serializer', 'normalizer', 'denormalized', 'indexable',
-    'optimistic', 'pessimistic', 'idempotency', 'backoff', 'circuitbreaker',
-    'ratelimiter', 'middleware', 'preloader', 'prefetch', 'lazyload',
-    'webpack', 'code splitting', 'treeshaking', 'hotreload',
-  ])
-  if (knownTechnicalVocab.has(lower)) continue
-
-  // Known misspellings that indicate garbled input
-  const knownMisspellings = new Set([
-    'basica', 'nothinig', 'alread', 'overcomplicate', 'somethign',
-    'anythign', 'nothign', 'whatevr', 'becuase', 'occured', 'recieve',
-    'seperate', 'definately', 'accomodate', 'occurence', 'independant',
-    'neccessary', 'succesful', 'enviroment', 'goverment', 'occassion',
-  ])
-  if (knownMisspellings.has(lower)) {
-    garbled.push(word)
+    const lower = cleaned.toLowerCase()
+    if (KNOWN_TECHNICAL_VOCAB.has(lower)) continue
+    if (KNOWN_MISSPELLINGS.has(lower)) {
+      garbled.push(word)
+    }
   }
-}
   return garbled
 }
 
