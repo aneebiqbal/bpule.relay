@@ -33,7 +33,6 @@ import {
 import { extractSignals } from '@/lib/scoring/signal-extractor'
 import { computeCompositeScore } from '@/lib/scoring/composite-scorer'
 
-// ── Helper Functions (defined first to avoid hoisting issues) ────────────────
 
 function computeTimingScore(episode: V3OpportunityEpisode, decision: V3BoundedDecision): number {
   const modelTiming = TIMING_SCORES[decision.timing] ?? 0.4
@@ -97,7 +96,6 @@ function getScoreLabel(score: number): { label: string; qualification: V3ScoreOu
   return { label: 'Not a fit', qualification: 'SKIP' }
 }
 
-// ── Single Episode Scoring ──────────────────────────────────────────────────
 
 export interface V3ScoreInput {
   episode: V3OpportunityEpisode
@@ -142,7 +140,6 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
   const watchOut: string[] = []
   const dimensions: V3ScoreDimension[] = []
 
-  // ── Dimension 1: Buyer Request Probability ──────────────────────────────
   const buyerRaw = decision.buyerRequestProbability
   const buyerContribution = buyerRaw * V3_SCORING_WEIGHTS.buyerRequestProbability * 100
   dimensions.push({
@@ -160,7 +157,6 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
   if (buyerRaw >= 0.7) reasons.push('Explicit buyer request detected')
   if (buyerRaw < 0.3) watchOut.push('No clear buyer request signal')
 
-  // ── Dimension 2: Commercial Potential ───────────────────────────────────
   // Separated from buyer intent. A founder building a product can have
   // buyerIntent=UNKNOWN but commercialPotential=HIGH.
   const cpRaw = computeCommercialPotentialScore(input.commercialPotential)
@@ -181,7 +177,6 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
     reasons.push('High commercial potential despite no explicit buyer request')
   }
 
-  // ── Dimension 3: External Need Probability ───────────────────────────────
   const needOwnerRelevance = NEED_OWNER_BUYER_RELEVANCE[episode.needOwnerType] ?? 0.4
   const externalRaw = decision.externalNeedProbability * needOwnerRelevance
   const externalContribution = externalRaw * V3_SCORING_WEIGHTS.externalNeedProbability * 100
@@ -194,7 +189,6 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
     note: externalRaw >= 0.6 ? 'Clear external need' : 'Need signal weak or internal-only',
   })
 
-  // ── Dimension 3: Fit ────────────────────────────────────────────────────
   const fitRaw = FIT_SCORES[decision.fit] ?? 0.5
   const fitContribution = fitRaw * V3_SCORING_WEIGHTS.fit * 100
   dimensions.push({
@@ -207,7 +201,6 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
   })
   if (fitRaw >= 0.8) reasons.push('Strong capability fit')
 
-  // ── Dimension 4: Timing ─────────────────────────────────────────────────
   const timingRaw = computeTimingScore(episode, decision)
   const timingContribution = timingRaw * V3_SCORING_WEIGHTS.timing * 100
   dimensions.push({
@@ -221,7 +214,6 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
   if (timingRaw >= 0.8) reasons.push('Current/recent opportunity')
   if (timingRaw <= 0.3) watchOut.push('Event may be stale or expired')
 
-  // ── Dimension 5: Access ─────────────────────────────────────────────────
   const accessRaw = ACCESS_SCORES[decision.access] ?? 0.3
   const accessContribution = accessRaw * V3_SCORING_WEIGHTS.access * 100
   dimensions.push({
@@ -234,7 +226,6 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
   })
   if (accessRaw >= 0.7) reasons.push('Direct access available')
 
-  // ── Dimension 6: Proof Relevance ────────────────────────────────────────
   const proofContribution = proofRelevance * V3_SCORING_WEIGHTS.proofRelevance * 100
   dimensions.push({
     key: 'proofRelevance',
@@ -245,7 +236,6 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
     note: proofRelevance >= 0.6 ? 'Relevant proof available' : 'Weak proof match',
   })
 
-  // ── Dimension 7: Evidence Quality ───────────────────────────────────────
   const evidenceContribution = evidenceQuality * V3_SCORING_WEIGHTS.evidenceQuality * 100
   dimensions.push({
     key: 'evidenceQuality',
@@ -256,17 +246,14 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
     note: evidenceQuality >= 0.6 ? 'Good evidence quality' : 'Limited evidence',
   })
 
-  // ── Episode Status Adjustment ───────────────────────────────────────────
   const statusMultiplier = EPISODE_STATUS_SCORES[episode.status] ?? 0.5
   if (statusMultiplier < 1.0) {
     watchOut.push(`Episode status: ${episode.status}`)
   }
 
-  // ── Relationship Context (NOT a gate) ───────────────────────────────────
   const relContext = RELATIONSHIP_CONTEXT[decision.relationship] ?? RELATIONSHIP_CONTEXT.UNKNOWN
   // Relationship multiplier is dampened when commercial potential is high.
   // A service provider building a real product has commercial worth independent
-  // of their service-provider identity. The multiplier blends between full
   // relationship penalty and 1.0 based on commercial potential strength.
   const cpStrength = cpRaw // 0-1
   const relationshipMultiplier = (buyerRaw >= 0.5)
@@ -277,13 +264,10 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
     watchOut.push(`Primary role: ${decision.relationship} (context, not gate)`)
   }
 
-  // ── Compute Final Score ─────────────────────────────────────────────────
   const rawTotal = dimensions.reduce((sum, d) => sum + d.contribution, 0)
   const adjustedTotal = rawTotal * statusMultiplier * relationshipMultiplier
   let score = Math.round(Math.max(0, Math.min(100, adjustedTotal)))
 
-  // ── Composite Score Enrichment ─────────────────────────────────────────
-  // When rawText is available, blend V3's AI-based score with deterministic
   // signals from the composite scorer. This catches signals the AI missed
   // (tech stack overlap, company growth, hiring velocity, etc.)
   if (input.rawText && input.rawText.length > 50) {
@@ -300,12 +284,10 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
       })
 
       // Blend: 60% V3 (AI context) + 40% composite (deterministic signals)
-      // When V3 is uncertain (score 30-60 range), composite has more influence
       const v3Weight = score >= 70 || score <= 20 ? 0.7 : 0.5
       const compositeWeight = 1 - v3Weight
       score = Math.round(score * v3Weight + composite.total * compositeWeight)
 
-      // Merge evidence from composite dimensions
       const topCompositeEvidence = composite.dimensions
         .filter((d) => d.score >= 60)
         .flatMap((d) => d.evidence)
@@ -313,7 +295,6 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
         .slice(0, 3)
       reasons.push(...topCompositeEvidence)
 
-      // Add composite dimensions to output
       for (const dim of composite.dimensions) {
         if (!dimensions.find((d) => d.key === dim.key)) {
           dimensions.push({
@@ -331,11 +312,9 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
     }
   }
 
-  // ── Label & Qualification ───────────────────────────────────────────────
   let { label, qualification } = getScoreLabel(score)
   let finalReasons = reasons
 
-  // ── High-potential builder upgrade ───────────────────────────────────────
   // Founders/CEOs with active building get upgraded qualification and score
   // so they're eligible for connection notes (relationship-building, not pitch)
   if (isHighPotentialBuilderEpisode(input) && qualification === 'SKIP') {
@@ -355,7 +334,6 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
   }
 }
 
-// ── Multi-Episode Scoring ───────────────────────────────────────────────────
 
 export function scoreAllEpisodes(
   inputs: V3ScoreInput[],
@@ -396,7 +374,6 @@ export function scoreAllEpisodes(
   }
 }
 
-// ── High-potential builder detection ─────────────────────────────────────────
 // A founder/CEO/CTO with high commercial potential is eligible for a
 // connection note even with low buyer-intent score. Connection notes earn
 // access — they don't pitch. This aligns V3 eligibility with the revenue
@@ -406,24 +383,22 @@ function isHighPotentialBuilderEpisode(input: V3ScoreInput): boolean {
   const cp = input.commercialPotential
   if (!cp) return false
 
-  // High commercial potential: founder/CEO/CTO with active building
-  const isHighAuthority = cp.decisionAuthority >= 0.7
-  const isActiveBuilding = cp.buildIntensity === 'HIGH' || cp.buildIntensity === 'VERY_HIGH'
-  const isReachable = cp.reachability >= 0.3
+  // Use the computed commercial potential score (matches the dimension score)
+  const cpScore = computeCommercialPotentialScore(cp)
+  const isHighCommercialPotential = cpScore >= 0.5
 
-  // Check raw text for founder/CEO/CTO patterns if authority not already detected
+  // Founder/CEO/CTO title in raw text as additional signal
   const rawText = input.rawText ?? ''
-  const hasFounderTitle = /\b(ceo|cto|cfo|founder|co[- ]?founder|owner|president|managing director)\b/i.test(rawText)
+  const hasFounderTitle = /(ceo|cto|cfo|founder|co[- ]?founder|owner|president|managing director)/i.test(rawText)
 
-  return (isHighAuthority || hasFounderTitle) && isActiveBuilding && isReachable
+  return isHighCommercialPotential || (hasFounderTitle && cpScore >= 0.35)
 }
 
-// ── Backward-compatible display ─────────────────────────────────────────────
+
 // Maps V3 0-100 score to a 0-10 display value using qualification bands
 // rather than blind division. V3 42 ("Maybe" / CONTACT_NOW) → 5/10 (medium),
 // not 4/10 (which reads as "very weak" and contradicts the action).
 export function v3ToDisplay(score: number, messageEligible?: boolean): number {
-  // For connection-eligible leads (high commercial potential builders),
   // show at least medium score so reps don't skip based on low buyer-intent score
   if (score >= 80) return 9
   if (score >= 60) return 7
