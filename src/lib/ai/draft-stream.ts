@@ -184,7 +184,7 @@ export async function streamDraft(
       feature: 'outbound_draft',
     })
       .then((r) => {
-        callLog.push({ costTier: (r.trace.costTier || 'tier1') as CostTierName, host: r.trace.provider, estimatedCostUsd: r.trace.estimatedCostUsd })
+        callLog.push({ costTier: (r.trace.costTier || 'tier1') as CostTierName, host: r.trace.provider,         estimatedCostUsd: r.trace.estimatedCostUsd })
         return r.data
       })
       .catch(() => null)
