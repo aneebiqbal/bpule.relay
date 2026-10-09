@@ -6,7 +6,8 @@ import { rankTrendsForPersona } from '@/lib/trends/engine'
 import { generateGrowthBriefViaStudioEngine } from '@/lib/growth/v2/relay-brand-adapter'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 120
+ export const runtime = 'nodejs'
+ export const maxDuration = 120
 
 const RELAY_TREND_PROFILE: TrendRelevanceProfile = {
   primaryTerritories: ['sales technology', 'revenue operations', 'ai', 'b2b saas', 'outreach'],
