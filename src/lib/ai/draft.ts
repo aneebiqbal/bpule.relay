@@ -168,8 +168,9 @@ function messageKind(input: DraftInput): string {
       return 'Upwork cover letter. Specific to the job. No biography dump.'
     case 'followup':
       return `Follow-up message. ${ceiling ?? '15–45 words'}. Add ONE new reason to reply or close the loop. Never "just following up".`
-    case 'reply':
-      return `Reply. Their latest message is first-party evidence. Answer first. ${ceiling ?? '20–70 words'}. Do not restart the pitch.`
+    case 'reply': {
+      return `Reply to their message. Their words are first-party evidence — address them directly. ${ceiling ?? '20–70 words'}. If they declined or said no: acknowledge it gracefully, leave the door open, do NOT restart the pitch or repeat your offer. If they asked a question: answer it first. If they showed interest: continue the conversation naturally.`
+    }
   }
 }
 
@@ -202,6 +203,8 @@ Write the draft first, then honestly run the tests on it, then the marker and th
     SPECIFICITY_RULES,
     ANTI_AI_RULES,
     'CRITICAL: Do NOT echo back the prospect\'s profile data as the message. The message must be ORIGINAL — a short, specific observation about them + why connecting. Never copy their title, company, location, or bio text into the draft.',
+    'REJECTION HANDLING: If the prospect said "no", "no thanks", "not interested", "stop", or similar: acknowledge it briefly and gracefully. Do NOT repeat your pitch. Do NOT ask another question. Do NOT try to change their mind. Do NOT use the "came across your work" opener. A simple "No problem — thought I'd reach out. If anything changes, happy to connect." is enough.',
+    'STYLE RULE: Never open with "Hi [Name], came across your work as [title] at [company]." This is the #1 AI tell. Vary your openers. Start with something specific about THEM — a project, a post, a technical challenge — not your observation of their profile.',
     'Sound like a real person who read their profile, not a template. Vary sentence length. Start with something specific about THEM — not "I" or "we". Make it easy to say yes to. Zero corporate speak.',
     SURVEILLANCE_RULES,
     'Relay knows more than it says. Use only ALLOWED_NOW evidence. One message, one job. If no job is specified, return an empty draft.',
@@ -288,7 +291,7 @@ export function buildUserPrompt(
     `Company: ${input.lead.company}`,
     `Contact: ${input.extracted.name ?? 'unknown'}${input.extracted.title ? `, ${input.extracted.title}` : ''}`,
     `Source URL: ${input.extracted.url ?? 'none'}`,
-    input.extracted.signalEvidence ? `Signal: ${input.extracted.signalEvidence.slice(0, 200)}${input.extracted.signalEvidence.length > 200 ? '...' : ''}` : '',
+    input.extracted.signalEvidence ? `Signal: ${input.extracted.signalEvidence.slice(0, 500)}${input.extracted.signalEvidence.length > 500 ? '...' : ''}` : '',
     input.strategy?.allowedNow?.length ? `Allowed evidence: ${input.strategy.allowedNow.slice(0, 2).join('; ')}` : '',
   ]
     .filter(Boolean)
