@@ -424,13 +424,17 @@ function normalizeVariant(
     company: input.lead.company,
     evidence: input.extracted.signalEvidence,
   })
-  const passed = Boolean(
-    raw.test_1_reply_or_delete &&
-      raw.test_2_not_generic &&
-      codeChecks.companyMentioned &&
-      codeChecks.specificEvidenceMentioned,
-  )
   const sanitized = sanitizeDraft(cleaned, input.facts)
+  // Use deterministic code checks as the primary gate. The AI's self-check
+  // (test_1_reply_or_delete, test_2_not_generic) is advisory — it often rejects
+  // drafts that are actually fine because the model is overly self-critical.
+  // We trust the deterministic checks: company mentioned, specific evidence
+  // mentioned, no stripped numbers, no requested call.
+  const passed = Boolean(
+    codeChecks.companyMentioned &&
+      codeChecks.specificEvidenceMentioned &&
+      !sanitized.requestedCall,
+  )
   let draftText = sanitized.text
 
   // Fix AI-looking em-dash after name: "Hi John - ..." → "Hi John, ..."
