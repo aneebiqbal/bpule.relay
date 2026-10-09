@@ -390,11 +390,15 @@ export function LeadWorkspace({
   const verdict = currentLead.verdict ?? score.verdict
 
   const dmSnapshot = toUiSnapshot(buildRevenueStrategy(sourceFromLead(currentLead, null, { channel: 'dm' })))
+  const connectionSnapshot = toUiSnapshot(buildRevenueStrategy(sourceFromLead(currentLead, null, { channel: 'connection' })))
   const verdictDisplay = verdict === 'skip'
     ? describeVerdictForDisplay('skip', dmSnapshot.act, dmSnapshot.messagingPolicyLabel)
     : null
 
-  const canDraft = verdict === 'send' || verdict === 'research_more' || dmSnapshot.act !== 'SKIP'
+  // Can draft if ANY channel recommends a message (DM, connection, etc.)
+  const canDraft = verdict === 'send' || verdict === 'research_more'
+    || dmSnapshot.act !== 'SKIP'
+    || connectionSnapshot.messageRecommended
 
   const [artifact, setArtifact] = useState<ArtifactId>('dm')
   const [drafting, setDrafting] = useState(false)

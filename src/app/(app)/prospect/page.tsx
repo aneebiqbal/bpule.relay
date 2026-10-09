@@ -108,7 +108,11 @@ function prospectCanBeSaved(
   // no-pitch early return used to omit it, so a scored prospect rendered
   // "Lead not eligible" and the button did nothing.
   const qualification = result.score?.qualification
-  return qualification === 'strong' || qualification === 'worth_pursuing' || qualification === 'maybe'
+  if (qualification === 'strong' || qualification === 'worth_pursuing' || qualification === 'maybe') return true
+  // Also allow leads with high commercial potential (builders/founders) that
+  // were upgraded from SKIP to MAYBE by the builder upgrade path
+  if (result.score?.label?.toLowerCase().includes('connecting')) return true
+  return false
 }
 
 function pasteGuard(raw: string): string | null {
