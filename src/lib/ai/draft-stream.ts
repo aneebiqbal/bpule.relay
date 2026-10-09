@@ -298,7 +298,9 @@ async function streamFinalDraft(
 }
 
 function buildDeterministicFallback(input: DraftInput, callLog: DraftCallLog[]): DraftResult {
-  const draftText = fallbackText(input)
+  let draftText = fallbackText(input)
+  // Safety net: fix any em-dash after name pattern
+  draftText = fixEmDashNameFormat(draftText, input.extracted.name ?? input.lead.contactName ?? null)
   const codeChecks = deterministicChecks(draftText, {
     company: input.lead.company,
     evidence: input.extracted.signalEvidence,
@@ -340,25 +342,60 @@ function fallbackText(input: DraftInput): string {
   const firstName = name.split(' ')[0]
   const company = input.lead.company
   const title = (input.extracted.title ?? input.lead.contactTitle ?? '').split(/\s*[·|\-–]\s+/)[0].trim()
-  const strategy = input.strategy
 
-  const observation = title
-    ? `${title.toLowerCase()} at ${company}`
-    : `you are building at ${company}`
+  // Build a specific observation from available evidence
+  const observation = buildSpecificObservation(input, title, company)
 
   if (input.type === 'connection') {
-    return `Hi ${firstName} — came across your work as ${observation}. Thought it was worth reaching out to connect. Open to it?`
+    return `Hi ${firstName}, ${observation} Thought it worth reaching out to connect.`
   }
 
   if (input.type === 'followup') {
-    return `Hi ${firstName} — following up on my last note. If this is not a priority for ${company} right now, a quick "not now" is perfect.`
+    return `Hi ${firstName}, following up on my last note. If this is not a priority for ${company} right now, a quick "not now" is perfect.`
   }
 
   if (input.type === 'upwork') {
-    return `Hi ${firstName} — read your brief and noticed ${observation}. I can help ${company} ship this cleanly. Happy to share a short approach in one reply if useful.`
+    return `Hi ${firstName}, read your brief and noticed ${observation}. I can help ${company} ship this cleanly. Happy to share a short approach in one reply if useful.`
   }
 
-  return `Hi ${firstName} — noticed ${observation}. Want to share one practical idea for ${company}?`
+  return `Hi ${firstName}, ${observation} Want to share one practical idea for ${company}?`
+}
+
+/**
+ * Build a specific observation from available evidence.
+ * Falls back to generic title+company only when no evidence exists.
+ */
+function buildSpecificObservation(input: DraftInput, title: string, company: string): string {
+  const evidence = input.extracted.signalEvidence ?? ''
+  const tags = input.lead.tags ?? []
+
+  // Use specific evidence if available (first meaningful sentence)
+  if (evidence.length > 20) {
+    const firstSentence = evidence.split(/[.!?]/).map(s => s.trim()).find(s => s.length > 15)
+    if (firstSentence) {
+      // Extract a specific observation from the evidence
+      const lower = firstSentence.toLowerCase()
+      if (lower.includes('building') || lower.includes('developing') || lower.includes('creating')) {
+        return `saw you are building at ${company}.`
+      }
+      if (lower.includes('founder') || lower.includes('ceo') || lower.includes('cto')) {
+        return `came across your work as ${title.toLowerCase()} at ${company}.`
+      }
+      return `came across your work at ${company}.`
+    }
+  }
+
+  // Use tags if available
+  if (tags.length > 0) {
+    return `noticed your work on ${tags.slice(0, 2).join(' and ')} at ${company}.`
+  }
+
+  // Fallback to title+company
+  if (title) {
+    return `came across your work as ${title.toLowerCase()} at ${company}.`
+  }
+
+  return `came across ${company}.`
 }
 
 function variantScore(v: {
