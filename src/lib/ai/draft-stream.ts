@@ -16,6 +16,7 @@ export type DraftStreamEvent =
   | { type: 'selfcheck'; pass: boolean; selfCheck: SelfCheck }
   | { type: 'done'; draft: DraftResult; matchedProof: ProofItem | null }
   | { type: 'error'; message: string }
+  | { type: 'needs_rescoring'; reason: string; leadId: string }
 
 const SELFCHECK_MARKER = '---SELFCHECK---'
 
@@ -89,9 +90,15 @@ export async function streamDraft(
     )
   }
 
-  // P0: Strategy is mandatory for revenue outreach. No strategy → no generation.
   if (!input.strategy || !input.strategy.messageJob) {
-    throw new Error('STRATEGY_REQUIRED: Revenue outreach generation requires a valid strategy with messageJob.')
+    emit({
+      type: 'needs_rescoring',
+      reason: !input.profile
+        ? 'No sender profile selected. Assign a profile to generate outreach.'
+        : 'Lead needs rescoring. Strategy could not be derived from current evidence.',
+      leadId: input.leadId,
+    })
+    return emptyDraftResult(input)
   }
 
   const system = baseDraftSystem(input.styleCard, input.facts)
@@ -126,7 +133,10 @@ export async function streamDraft(
       callLog.push({ costTier: (r.trace.costTier || 'tier1') as CostTierName, host: r.trace.provider, estimatedCostUsd: r.trace.estimatedCostUsd })
       return r.data
     })
-    .catch(() => null)
+    .catch((err) => {
+      console.error('[draft-stream] Attempt 1 failed:', err instanceof Error ? err.message : String(err))
+      return null
+    })
 
   const variantA = rawA ? normalizeVariant(rawA, input) : null
 
@@ -187,7 +197,10 @@ export async function streamDraft(
         callLog.push({ costTier: (r.trace.costTier || 'tier1') as CostTierName, host: r.trace.provider,         estimatedCostUsd: r.trace.estimatedCostUsd })
         return r.data
       })
-      .catch(() => null)
+      .catch((err) => {
+        console.error('[draft-stream] Attempt 2 (corrective retry) failed:', err instanceof Error ? err.message : String(err))
+        return null
+      })
 
     const variantB = rawB ? normalizeVariant(rawB, input) : null
     if (variantB?.passed) {
@@ -294,6 +307,29 @@ async function streamFinalDraft(
 
   emit({ type: 'done', draft, matchedProof })
   return draft
+}
+
+function emptyDraftResult(input: DraftInput): DraftResult {
+  return {
+    leadId: input.leadId,
+    type: input.type,
+    draftText: '',
+    selfCheck: {
+      test1ReplyOrDelete: false,
+      test1Note: 'No strategy — needs rescoring.',
+      test2NotGeneric: false,
+      test2Note: 'No strategy — needs rescoring.',
+      codeChecks: { companyMentioned: false, specificEvidenceMentioned: false },
+    },
+    passed: false,
+    modelUsed: 'none',
+    attempts: 0,
+    strippedNumbers: [],
+    hadEmDash: false,
+    hadExclamation: false,
+    requestedCall: false,
+    callLog: [],
+  }
 }
 
 function buildDeterministicFallback(input: DraftInput, callLog: DraftCallLog[]): DraftResult {

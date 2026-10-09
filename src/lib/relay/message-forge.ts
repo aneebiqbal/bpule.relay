@@ -307,6 +307,7 @@ export function evaluateMessage(
     score: Math.max(0, score),
     reasons: failures,
   }
+
 }
 
 /**
@@ -364,18 +365,15 @@ export function repairMessage(
 ): string {
   let repaired = text
 
-  // Fix surveillance openings
+  // Fix surveillance openings — only if meaning survives the strip
   if (reasons.some((r) => r.includes('surveillance'))) {
-    // Replace "Hey X, I noticed..." with something more natural
-    repaired = repaired.replace(
-      /^(hey|hi|hello)\s+\w+,?\s*(i noticed|i saw|i came across|i was looking at|i found your)\s+/i,
-      '',
-    )
-    // Replace "You've recently..." openings
-    repaired = repaired.replace(
-      /^you('ve| have)\s+(recently|just|currently)\s+[^.]+\.\s*/i,
-      '',
-    )
+    const stripped = repaired
+      .replace(/^(hey|hi|hello)\s+\w+,?\s*(i noticed|i saw|i came across|i was looking at|i found your)\s+/i, '')
+      .replace(/^you('ve| have)\s+(recently|just|currently)\s+[^.]+\.\s*/i, '')
+      .trim()
+    if (stripped.split(/\s+/).filter(Boolean).length >= 8) {
+      repaired = stripped
+    }
   }
 
   // Fix budget inferences

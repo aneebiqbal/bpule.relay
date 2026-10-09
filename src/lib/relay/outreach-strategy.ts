@@ -51,14 +51,9 @@ export function selectMessageMode(input: StrategyInput): MessageMode {
     return 'proof_led'
   }
 
-  // Technical founder — peer approach
+  // Technical founder or pain signal — peer approach
   if (signalType === 6 || signalType === 5) {
     return 'technical_peer'
-  }
-
-  // Pain signals — problem recognition (carefully)
-  if (signalType === 6) {
-    return 'problem_recognition'
   }
 
   // Hiring signal — offer a small win

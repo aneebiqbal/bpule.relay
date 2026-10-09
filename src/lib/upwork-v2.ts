@@ -479,6 +479,94 @@ ${input.rawText.slice(0, 10000)}`
   return { job: null, error: 'AI_PROVIDER_FAILURE', degraded: false, diagnostics: { provider: 'all', textLength, stage: 'all-providers-failed' } }
 }
 
+const UPWORK_BANNED_PHRASES = [
+  'i came across your profile', 'i noticed', 'i saw that you',
+  'game.chang', 'revolutioniz', 'cutting.edge', 'synerg',
+  'passionate about', 'thrilled to', 'honored to', 'excited to reach out',
+  'over the past', 'years of experience', 'i am confident',
+]
+
+function classifyQuestionType(question: string): 'availability_rate' | 'yes_no' | 'experience_example' | 'technical' {
+  const q = question.toLowerCase()
+  if (/\b(availability|available|rate|hourly|budget|hours per week|start|begin)\b/.test(q)) return 'availability_rate'
+  if (/\b(yes or no|do you|have you|can you|are you)\s/.test(q) && q.length < 80) return 'yes_no'
+  if (/\b(describe|example|approach|how would you|walk us through|explain your)\b/.test(q)) return 'technical'
+  return 'experience_example'
+}
+
+const QUESTION_LIMITS: Record<string, [number, number]> = {
+  availability_rate: [5, 40],
+  yes_no: [10, 60],
+  experience_example: [20, 120],
+  technical: [30, 150],
+}
+
+function wordCount(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length
+}
+
+/**
+ * Validate and repair screening question answers. Returns repaired answers
+ * and a list of issues found.
+ */
+function validateScreeningAnswers(
+  answers: Array<{ question: string; answer: string }>,
+  profile: { skills: string[]; technologies: string[]; expertise: string[]; allowedClaims: string[]; projects?: Array<{ title: string; description: string }> },
+  coverLetter: string,
+): { answers: Array<{ question: string; answer: string }>; issues: string[] } {
+  const issues: string[] = []
+  const profileTokens = new Set([
+    ...profile.skills.map(s => s.toLowerCase()),
+    ...profile.technologies.map(s => s.toLowerCase()),
+    ...profile.expertise.map(s => s.toLowerCase()),
+    ...profile.allowedClaims.map(c => c.toLowerCase()),
+    ...(profile.projects?.flatMap(p => [...p.title.toLowerCase().split(/\s+/), ...p.description.toLowerCase().split(/\s+/)]) ?? []),
+  ])
+
+  const repaired = answers.map(({ question, answer }) => {
+    let text = answer.trim()
+    const qType = classifyQuestionType(question)
+    const [minWords, maxWords] = QUESTION_LIMITS[qType] ?? [10, 100]
+    const wc = wordCount(text)
+
+    for (const phrase of UPWORK_BANNED_PHRASES) {
+      if (text.toLowerCase().includes(phrase)) {
+        text = text.replace(new RegExp(phrase, 'gi'), '')
+        issues.push(`Removed banned phrase from answer "${question.slice(0, 40)}": "${phrase}"`)
+      }
+    }
+
+    if (wc < minWords) {
+      issues.push(`Answer too short for "${question.slice(0, 40)}..." (${wc} words, min ${minWords})`)
+    }
+    if (wc > maxWords) {
+      text = text.split(/\s+/).slice(0, maxWords).join(' ') + '.'
+      issues.push(`Answer too long for "${question.slice(0, 40)}..." (${wc} words, max ${maxWords}) — truncated`)
+    }
+
+    if (/\bi\b.{0,30}\b(built|shipped|delivered|led|managed|specialized)\b/i.test(text)) {
+      const claimTokens = text.toLowerCase().split(/\W+/).filter(w => w.length >= 4)
+      const grounded = claimTokens.some(t => profileTokens.has(t))
+      if (!grounded) {
+        issues.push(`Answer for "${question.slice(0, 40)}..." makes claims not grounded in profile`)
+      }
+    }
+
+    const coverTokens = new Set(coverLetter.toLowerCase().split(/\W+/).filter(w => w.length >= 5))
+    const answerTokens = text.toLowerCase().split(/\W+/).filter(w => w.length >= 5)
+    const overlap = answerTokens.filter(t => coverTokens.has(t)).length
+    if (answerTokens.length > 3 && overlap / answerTokens.length > 0.7) {
+      issues.push(`Answer for "${question.slice(0, 40)}..." repeats cover letter content`)
+    }
+
+    text = text.replace(/[\u2014\u2013]/g, '-').replace(/!/g, '.').replace(/  +/g, ' ').trim()
+
+    return { question, answer: text }
+  })
+
+  return { answers: repaired, issues }
+}
+
 /**
  * Generate Upwork application (cover letter + screening answers).
  */
@@ -584,11 +672,17 @@ ${hasQuestions ? `\nScreening Questions:\n${job.screeningQuestions.map((q, i) =>
 
   try {
     const parsed = JSON.parse(result.data) as Record<string, unknown>
+    const coverLetter = (parsed.coverLetter as string) || ''
+    const rawAnswers = Array.isArray(parsed.questionAnswers)
+      ? (parsed.questionAnswers as Array<{ question: string; answer: string }>)
+      : []
+    const { answers: validatedAnswers, issues } = validateScreeningAnswers(rawAnswers, profile, coverLetter)
+    for (const issue of issues) {
+      console.warn(`[upwork-screening] ${issue}`)
+    }
     return {
-      coverLetter: (parsed.coverLetter as string) || '',
-      questionAnswers: Array.isArray(parsed.questionAnswers)
-        ? (parsed.questionAnswers as Array<{ question: string; answer: string }>)
-        : [],
+      coverLetter,
+      questionAnswers: validatedAnswers,
       fitScore: matchScore,
       fitReason: (parsed.fitReason as string) || '',
       risks: Array.isArray(parsed.risks) ? (parsed.risks as string[]) : [],

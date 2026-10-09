@@ -165,7 +165,7 @@ function messageKind(input: DraftInput): string {
     case 'connection':
       return `LinkedIn connection note. Earn access only. ${ceiling ?? '15–35 words'}. Specific observation + genuine overlap + simple reason to connect. No questions. No pitch. No praise. No service description. Sounds natural spoken aloud. Zero effort to respond to.`
     case 'upwork':
-      return 'Upwork cover letter. Specific to the job. No biography dump.'
+      return `Upwork cover letter. Specific to the job. No biography dump. ${ceiling ?? '50-150 words'}. One relevant project shape, one specific need from the job, one easy next step.`
     case 'followup':
       return `Follow-up message. ${ceiling ?? '15–45 words'}. Add ONE new reason to reply or close the loop. Never "just following up".`
     case 'reply': {
@@ -429,7 +429,10 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
   // Attempt 1: LongCat (primary writer)
   const longcatChain = buildLongcatDraftChain()
   const resultA = await runDraftAttemptWithFallback(longcatChain, 'longcat', systemPrompt, userPrompt, callLog)
-    .catch(() => null)
+    .catch((err) => {
+      console.error('[draft] LongCat attempt failed:', err instanceof Error ? err.message : String(err))
+      return null
+    })
 
   if (resultA?.passed) {
     const draft = finishDraft(input, resultA, [resultA.hostLabel], 1, callLog)
@@ -459,7 +462,10 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
       systemPrompt,
       feedback ? `${userPrompt}\n\n${feedback}` : userPrompt,
       callLog,
-    ).catch(() => null)
+    ).catch((err) => {
+      console.error('[draft] Groq retry failed:', err instanceof Error ? err.message : String(err))
+      return null
+    })
 
     if (resultB?.passed) {
       const modelsUsed = [resultA?.hostLabel, resultB.hostLabel].filter((x): x is string => Boolean(x))
@@ -484,7 +490,10 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
         systemPrompt,
         gptFeedback ? `${userPrompt}\n\n${gptFeedback}` : userPrompt,
         callLog,
-      ).catch(() => null)
+      ).catch((err) => {
+        console.error('[draft] GPT escalation failed:', err instanceof Error ? err.message : String(err))
+        return null
+      })
 
       if (gptResult) {
         const modelsUsed = [resultA?.hostLabel, resultB?.hostLabel, gptResult.hostLabel].filter((x): x is string => Boolean(x))
@@ -852,14 +861,30 @@ function demoDraft(input: DraftInput, userPrompt: string): DraftResult {
  * tagged for a specific industry or play is included only when it matches
  * this lead's situation.
  */
+const FACT_TYPE_RANK: Record<string, number> = {
+  price: 0,
+  credential: 1,
+  case: 2,
+}
 function filterFacts(facts: Fact[]): Fact[] {
-  const always = facts.filter((f) =>
-    ['credential', 'price', 'case'].includes(f.factType ?? ''),
-  )
-  const situation = facts.filter(
-    (f) => f.factType?.startsWith('industry:') || f.factType?.startsWith('play:'),
-  )
-  return [...always, ...situation].slice(0, 14)
+  const ranked = [...facts].sort((a, b) => {
+    const ra = a.factType ? (FACT_TYPE_RANK[a.factType] ?? 10) : 10
+    const rb = b.factType ? (FACT_TYPE_RANK[b.factType] ?? 10) : 10
+    if (ra !== rb) return ra - rb
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
+  const selected: Fact[] = []
+  let industryCount = 0
+  let playCount = 0
+  for (const f of ranked) {
+    if (selected.length >= 14) break
+    if (f.factType?.startsWith('industry:') && industryCount >= 2) continue
+    if (f.factType?.startsWith('play:') && playCount >= 2) continue
+    if (f.factType?.startsWith('industry:')) industryCount++
+    if (f.factType?.startsWith('play:')) playCount++
+    selected.push(f)
+  }
+  return selected
 }
 
 function extractCompanyFromUserPrompt(prompt: string): string | null {
