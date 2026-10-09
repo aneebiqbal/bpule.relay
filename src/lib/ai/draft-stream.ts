@@ -397,8 +397,13 @@ function normalizeVariant(
       codeChecks.specificEvidenceMentioned,
   )
   const sanitized = sanitizeDraft(cleaned, input.facts)
+  let draftText = sanitized.text
+
+  // Fix AI-looking em-dash after name: "Hi John - ..." → "Hi John, ..."
+  draftText = fixEmDashNameFormat(draftText, input.extracted.name)
+
   return {
-    draftText: sanitized.text,
+    draftText,
     selfCheck: {
       test1ReplyOrDelete: Boolean(raw.test_1_reply_or_delete),
       test1Note: raw.test_1_note || '',
@@ -412,6 +417,34 @@ function normalizeVariant(
     hadExclamation: sanitized.hadExclamation,
     requestedCall: sanitized.requestedCall,
   }
+}
+
+/**
+ * Fix AI-looking em-dash patterns after names.
+ * "Hi John - came across..." → "Hi John, came across..."
+ * "John - I noticed..." → "John, I noticed..."
+ */
+function fixEmDashNameFormat(text: string, prospectName: string | null): string {
+  if (!text || !prospectName) return text
+
+  const firstName = prospectName.split(/\s+/)[0]
+  if (!firstName || firstName.length < 2) return text
+
+  const escaped = firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  // "Hi/Hey/Hello Name -" → "Hi/Hey/Hello Name,"
+  text = text.replace(
+    new RegExp(`^(hi|hey|hello)\\s+${escaped}\\s*[\\u2014\\u2013-]\\s*`, 'i'),
+    `$1 ${firstName}, `,
+  )
+
+  // "Name -" at start of line → "Name,"
+  text = text.replace(
+    new RegExp(`(^|\\n)\\s*${escaped}\\s*[\\u2014\\u2013-]\\s*`, 'i'),
+    `$1${firstName}, `,
+  )
+
+  return text
 }
 
 function pickBestVariant(

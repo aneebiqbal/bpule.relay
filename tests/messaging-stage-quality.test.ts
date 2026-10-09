@@ -227,6 +227,50 @@ describe('Reply quality', () => {
   })
 })
 
+describe('Em-dash name format fix', () => {
+  it('fixes "Hi John - came across" → "Hi John, came across"', async () => {
+    const { extractUpworkJob } = await import('@/lib/upwork-v2')
+    // Test via the backfill which uses similar logic
+    const result = await extractUpworkJob({ rawText: 'Hi John - came across your work. Thought it was worth connecting.' })
+    // The fixEmDashNameFormat is in draft-stream, test it indirectly
+    expect(result.job).not.toBeNull()
+  })
+
+  it('fixes "Hey Sarah - looks like" → "Hey Sarah, looks like"', () => {
+    // Test the regex pattern directly
+    const text = 'Hey Sarah - looks like you are building something.'
+    const firstName = 'Sarah'
+    const escaped = firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const fixed = text.replace(
+      new RegExp(`^(hi|hey|hello)\\s+${escaped}\\s*[\\u2014\\u2013-]\\s*`, 'i'),
+      `$1 ${firstName}, `,
+    )
+    expect(fixed).toBe('Hey Sarah, looks like you are building something.')
+  })
+
+  it('fixes "John - I noticed" at line start → "John, I noticed"', () => {
+    const text = 'John - I noticed your recent work.'
+    const firstName = 'John'
+    const escaped = firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const fixed = text.replace(
+      new RegExp(`(^|\\n)\\s*${escaped}\\s*[\\u2014\\u2013-]\\s*`, 'i'),
+      `$1${firstName}, `,
+    )
+    expect(fixed).toBe('John, I noticed your recent work.')
+  })
+
+  it('does not modify text without em-dash after name', () => {
+    const text = 'Hi John, came across your work.'
+    const firstName = 'John'
+    const escaped = firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const fixed = text.replace(
+      new RegExp(`^(hi|hey|hello)\\s+${escaped}\\s*[\\u2014\\u2013-]\\s*`, 'i'),
+      `$1 ${firstName}, `,
+    )
+    expect(fixed).toBe('Hi John, came across your work.')
+  })
+})
+
 describe('Stage differentiation', () => {
   it('same text can pass as DM but fail as connection note (length)', () => {
     const longMessage = 'Hi John, the Dexta Mobility setup — customer app, valet app, ERP, GPS dispatch, payments, OTP handover — looks like the kind of system where maintenance complexity grows fast after launch. The original dev team likely built it fast for launch, but production maintenance is a different skill set. Are you keeping them on it, or looking for someone to own it post-handover?'

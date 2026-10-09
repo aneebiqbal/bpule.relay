@@ -18,7 +18,13 @@ export const SPECIFICITY_RULES = `Specificity rule: use at most one current fact
 
 export const VOICE_RULES = `Voice rule: the sender is ONE person. Write in first person singular. Never use 'we', 'our', or 'us' for the sender. Never mention a team, a headcount, or anyone else doing the work. Never echo a prospect quote in first person — if they said "we are hiring", do not write "we are hiring".`
 
-export const FORMATTING_RULES = `Do not use em dashes anywhere in the draft. No emojis. No exclamation marks. Write the shortest message that does the one job. Budgets: connection 15-35 words, first DM 20-55, follow-up 15-45, interested reply 30-70. These are ceilings, not targets. One observation. One question.`
+export const FORMATTING_RULES = `FORMATTING RULES:
+- Never use em dashes (— or –) anywhere. Use commas, periods, or plain sentences.
+- Never write "Hi Name —" or "Name —" — use a comma: "Hi Name,".
+- Never use emojis or exclamation marks.
+- Write the shortest message that does the one job.
+- Budgets: connection 15-35 words, first DM 20-55, follow-up 15-45, interested reply 30-70. These are ceilings, not targets.
+- One observation. One question.`
 
 export const BANNED_PHRASES_COMPACT = `"unpopular opinion:", "here's the thing", "let that sink in", "thread 🧵", "stop scrolling", "read that again", "let me tell you", "the truth is", "nobody talks about this"`
 
