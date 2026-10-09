@@ -1,5 +1,5 @@
 import type { OutreachStrategy, MessageMode } from '@/lib/domain/types'
-import { BANNED_PHRASES, AI_TELL_PHRASES } from '@/lib/writing/engine'
+import { BANNED_PHRASES, AI_TELL_PHRASES, evaluateMessageStage, type MessageStage } from '@/lib/writing/engine'
 import { ARTIFACT_LIMITS, countFor, type ArtifactLimitKey } from '@/lib/relay/artifact-limits'
 
 /**
@@ -97,11 +97,20 @@ export function evaluateMessage(
   text: string,
   strategy: OutreachStrategy | null,
   channel: string,
+  stage: MessageStage = 'first_dm',
+  stageContext: Parameters<typeof evaluateMessageStage>[2] = {},
 ): { passed: boolean; score: number; reasons: string[] } {
   const failures: string[] = []
   let score = 100
 
   const lower = text.toLowerCase()
+
+  // ── Stage-specific quality gate ──────────────────────────────────────────
+  const stageResult = evaluateMessageStage(text, stage, stageContext)
+  if (!stageResult.passed) {
+    failures.push(...stageResult.issues.map(i => `[${stage}] ${i}`))
+    score -= stageResult.issues.length * 10
+  }
 
   // ── Hard gates ─────────────────────────────────────────────────────────────
 

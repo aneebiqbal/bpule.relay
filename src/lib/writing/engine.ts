@@ -603,6 +603,169 @@ function checkSpecificityWords(text: string, sourceMaterial: string, minWords: n
   return false
 }
 
+// ── Message Stage Quality ────────────────────────────────────────────────────
+
+export type MessageStage = 'connection' | 'first_dm' | 'follow_up' | 'reply'
+
+export interface StageQualityResult {
+  passed: boolean
+  score: number
+  issues: string[]
+  stage: MessageStage
+}
+
+/**
+ * Stage-specific quality gates.
+ *
+ * Connection notes and DMs fail on different things.
+ * A connection note that's too long is a hard fail.
+ * A DM that's too short is a hard fail.
+ * A follow-up that repeats the connection note is a hard fail.
+ */
+export function evaluateMessageStage(
+  text: string,
+  stage: MessageStage,
+  context: {
+    prospectName?: string | null
+    priorMessages?: string[]
+    connectionNote?: string | null
+    firstDm?: string | null
+    followupCount?: number
+  } = {},
+): StageQualityResult {
+  const issues: string[] = []
+  const lower = text.toLowerCase().trim()
+
+  // ── Universal: em-dash name formatting (AI tell) ─────────────────────────
+  // "Hi John — ..." or "John — ..." is a common AI pattern
+  if (context.prospectName) {
+    const firstName = context.prospectName.split(/\s+/)[0]
+    if (firstName && firstName.length >= 2) {
+      // Build dynamic regex from actual first name
+      const escapedName = firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const greetingDashPattern = new RegExp(`^(hi|hey|hello)\\s+${escapedName}\\s*[\\u2014\\u2013-]\\s*`, 'i')
+      if (greetingDashPattern.test(text)) {
+        issues.push('Em-dash after name — use comma or restructure')
+      }
+      // Also detect "Name —" at start of line as a signature-like pattern
+      const lineStartDashPattern = new RegExp(`(^|\\n)\\s*${escapedName}\\s*[\\u2014\\u2013-]`, 'i')
+      if (lineStartDashPattern.test(text)) {
+        issues.push('Em-dash name formatting reads as AI-generated')
+      }
+    }
+  }
+
+  // ── Stage-specific gates ──────────────────────────────────────────────────
+
+  if (stage === 'connection') {
+    // Connection notes must be short
+    if (text.length > 300) {
+      issues.push(`Connection note too long (${text.length}/300 chars)`)
+    }
+    if (text.length < 15) {
+      issues.push('Connection note too short to be meaningful')
+    }
+    // Must not pitch services
+    if (/\b(we specialize|we offer|our services|we can help you|let me help you|i can help you (build|ship|grow|scale))\b/i.test(lower)) {
+      issues.push('Connection note pitches services — earn access instead')
+    }
+    // Must not ask for a meeting
+    if (/\b(schedule|hop on|call|meeting|chat to discuss)\b/i.test(lower)) {
+      issues.push('Connection note asks for meeting too early')
+    }
+    // Must have some specificity
+    if (text.length > 50 && !/\b(you|your)\b/i.test(lower)) {
+      issues.push('Connection note does not reference the prospect')
+    }
+  }
+
+  if (stage === 'first_dm') {
+    // DMs must be materially richer than connection notes
+    if (text.length < 40) {
+      issues.push('First DM too short to establish relevance')
+    }
+    // Must not be a generic "thanks for connecting"
+    if (/^thanks for connecting/i.test(lower) && text.length < 80) {
+      issues.push('First DM is just a generic acknowledgment')
+    }
+    // Must contain specific observation
+    if (context.connectionNote && text.length > 0) {
+      const similarity = computeTextSimilarity(text, context.connectionNote)
+      if (similarity > 0.6) {
+        issues.push('First DM too similar to connection note')
+      }
+    }
+    // Must not immediately pitch without context
+    if (/\b(we can help|let me help|i can help)\b/i.test(lower) && text.length < 100) {
+      issues.push('First DM pitches without establishing context')
+    }
+  }
+
+  if (stage === 'follow_up') {
+    // Follow-ups must introduce something new
+    if (/\b(just following up|checking in|bumping this|just wanted to follow up)\b/i.test(lower)) {
+      issues.push('Follow-up uses empty "following up" language')
+    }
+    // Must not repeat connection note
+    if (context.connectionNote) {
+      const similarity = computeTextSimilarity(text, context.connectionNote)
+      if (similarity > 0.5) {
+        issues.push('Follow-up repeats connection note content')
+      }
+    }
+    // Must not repeat first DM
+    if (context.firstDm) {
+      const similarity = computeTextSimilarity(text, context.firstDm)
+      if (similarity > 0.5) {
+        issues.push('Follow-up repeats first DM content')
+      }
+    }
+    // Must not repeat prior follow-ups
+    if (context.priorMessages && context.priorMessages.length > 0) {
+      for (const prior of context.priorMessages) {
+        const similarity = computeTextSimilarity(text, prior)
+        if (similarity > 0.5) {
+          issues.push('Follow-up repeats a previous message')
+          break
+        }
+      }
+    }
+    // Must not guilt-trip
+    if (/\b(i know you're busy|haven't heard back|just wondering if|did you see my)\b/i.test(lower)) {
+      issues.push('Follow-up uses guilt-tripping language')
+    }
+    // Must not create fake urgency
+    if (/\b(closing soon|last chance|final reminder|ending soon|limited spots)\b/i.test(lower)) {
+      issues.push('Follow-up creates fake urgency')
+    }
+  }
+
+  if (stage === 'reply') {
+    // Replies should be appropriate length for the inbound message
+    if (text.length < 10) {
+      issues.push('Reply too short')
+    }
+    // Must not be overly formal
+    if (/\b(dear| sincerely|regards)\b/i.test(lower)) {
+      issues.push('Reply uses overly formal business letter style')
+    }
+  }
+
+  // ── Universal: name punctuation ───────────────────────────────────────────
+  // Detect "Hi John —" pattern (em dash after greeting+name)
+  if (/^(hi|hey|hello)\s+\w+\s*[—–-]\s*/i.test(text)) {
+    issues.push('Em dash after name — use comma: "Hi John,"')
+  }
+
+  const score = Math.max(0, 1 - issues.length * 0.15)
+  return {
+    passed: issues.length === 0,
+    score,
+    issues,
+    stage,
+  }
+}
+
 // ── Platform Adaptation ─────────────────────────────────────────────────────
 
 export function adaptForLinkedIn(text: string): string {
