@@ -127,14 +127,16 @@ async function generateAndRespond(
       console.error('[daily-brief] AI generation failed:', aiErr instanceof Error ? aiErr.message : String(aiErr))
       // AI providers failed — fall back to deterministic brief from trends + profile
       try {
-        const fallbackIdeas = generateFallbackIdeas(profile, trendCandidates, persona)
-        const brief = await store.createDailyContentBrief({
-          organizationId: persona.organizationId,
-          personaId: persona.id,
-          localDate,
-          promptVersion: 'fallback-v1',
-          trendSnapshot: { source: 'fallback', count: fallbackIdeas.length },
-        })
+         const fallbackIdeas = generateFallbackIdeas(profile ?? null, trendCandidates, persona)
+         // Delete any failed brief for this persona+date to avoid unique constraint violation
+         await store.deleteDailyContentBriefByPersonaAndDate(persona.id, localDate).catch(() => {})
+         const brief = await store.createDailyContentBrief({
+           organizationId: persona.organizationId,
+           personaId: persona.id,
+           localDate,
+           promptVersion: 'fallback-v1',
+           trendSnapshot: { source: 'fallback', count: fallbackIdeas.length },
+         })
 
         const ideaRecords: DailyContentIdea[] = []
         for (let i = 0; i < fallbackIdeas.length; i++) {
@@ -168,11 +170,11 @@ async function generateAndRespond(
         await store.updateDailyContentBriefStatus(brief.id, 'ready')
 
         return NextResponse.json({ brief, ideas: ideaRecords, fromFallback: true })
-      } catch (fallbackErr) {
+       } catch (fallbackErr) {
          const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : (fallbackErr && typeof fallbackErr === 'object' ? JSON.stringify(fallbackErr) : String(fallbackErr))
          console.error('[daily-brief] Fallback also failed:', fallbackMsg)
-         // Last resort: return ideas directly without persisting
-         const emergencyIdeas = generateFallbackIdeas(profile, trendCandidates, persona).map((idea, i) => ({
+         // Last resort: return ideas directly without persisting — generate real captions from angles
+         const emergencyIdeas = generateFallbackIdeas(profile ?? null, trendCandidates, persona).map((idea, i) => ({
            id: `emergency-${Date.now()}-${i}`,
            briefId: 'emergency',
            organizationId: persona.organizationId,
@@ -184,7 +186,7 @@ async function generateAndRespond(
            territory: idea.territory,
            trendGrounded: idea.trendGrounded,
            formatSuggestion: idea.formatSuggestion,
-           postCaption: idea.angle,
+           postCaption: generateEmergencyCaption(idea, persona),
            createdAt: new Date().toISOString(),
          }))
          return NextResponse.json({ brief: { id: 'emergency', status: 'ready', localDate }, ideas: emergencyIdeas, fromFallback: true })
@@ -207,6 +209,23 @@ interface FallbackIdea {
   territory?: string
   trendGrounded: boolean
   formatSuggestion?: string
+}
+
+function generateEmergencyCaption(idea: FallbackIdea, persona: ContentPersona): string {
+  // Generate a real post caption from the idea data without AI
+  const role = persona.personaRole ?? 'professional'
+  const territory = idea.territory ?? 'your field'
+
+  switch (idea.formatSuggestion) {
+    case 'opinion':
+      return `${idea.angle}\n\nAfter years of working in ${territory}, I've seen this pattern repeat. The conventional advice doesn't hold up when you look at the data.\n\nWhat's your experience?`
+    case 'case_study':
+      return `${idea.title}.\n\n${idea.angle}\n\nHere's what happened and what I learned.\n\nWhat would you have done differently?`
+    case 'practical_lesson':
+      return `${idea.angle}\n\nThis is something the ${role} in me wishes I'd learned earlier.\n\n${idea.whyNow}.\n\nWhat's your approach?`
+    default:
+      return `${idea.title}.\n\n${idea.angle}\n\n${idea.whyNow}.\n\nWhat do you think?`
+  }
 }
 
 function generateFallbackIdeas(

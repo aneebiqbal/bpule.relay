@@ -7526,16 +7526,24 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getDailyContentBrief(personaId: string, localDate: string): Promise<DailyContentBrief | null> {
-    const { data, error } = await this.client
-      .from('daily_content_briefs')
-      .select('*')
-      .eq('persona_id', personaId)
-      .eq('local_date', localDate)
-      .order('generation_version', { ascending: false })
-      .maybeSingle()
-    if (error) throw error
-    return data ? mapDailyContentBrief(data) : null
-  }
+     const { data, error } = await this.client
+       .from('daily_content_briefs')
+       .select('*')
+       .eq('persona_id', personaId)
+       .eq('local_date', localDate)
+       .order('generation_version', { ascending: false })
+       .maybeSingle()
+     if (error) throw error
+     return data ? mapDailyContentBrief(data) : null
+   }
+
+  async deleteDailyContentBriefByPersonaAndDate(personaId: string, localDate: string): Promise<void> {
+     await this.client
+       .from('daily_content_briefs')
+       .delete()
+       .eq('persona_id', personaId)
+       .eq('local_date', localDate)
+   }
 
   async getDailyContentBriefWithIdeas(personaId: string, localDate: string): Promise<{
     brief: DailyContentBrief

@@ -1389,14 +1389,15 @@ export interface ScoutStore {
 
 
   createDailyContentBrief(input: {
-    organizationId: string
-    personaId: string
-    localDate: string
-    generationVersion?: number
-    trendSnapshot?: Record<string, unknown>
-    promptVersion?: string
-  }): Promise<DailyContentBrief>
-  getDailyContentBrief(personaId: string, localDate: string): Promise<DailyContentBrief | null>
+     organizationId: string
+     personaId: string
+     localDate: string
+     generationVersion?: number
+     trendSnapshot?: Record<string, unknown>
+     promptVersion?: string
+   }): Promise<DailyContentBrief>
+   deleteDailyContentBriefByPersonaAndDate(personaId: string, localDate: string): Promise<void>
+   getDailyContentBrief(personaId: string, localDate: string): Promise<DailyContentBrief | null>
   getDailyContentBriefWithIdeas(personaId: string, localDate: string): Promise<{
     brief: DailyContentBrief
     ideas: DailyContentIdea[]

@@ -3334,6 +3334,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         updatedAt: new Date().toISOString() }
     },
     async getDailyContentBrief(_personaId: string, _localDate: string): Promise<DailyContentBrief | null> { return null },
+    async deleteDailyContentBriefByPersonaAndDate(_personaId: string, _localDate: string): Promise<void> {},
     async getDailyContentBriefWithIdeas(personaId: string, localDate: string): Promise<any> { return null },
     async updateDailyContentBriefStatus(briefId: string, status: any, cost?: number): Promise<DailyContentBrief> {
       return { id: briefId, organizationId: 'org-demo', personaId: 'persona-demo',
