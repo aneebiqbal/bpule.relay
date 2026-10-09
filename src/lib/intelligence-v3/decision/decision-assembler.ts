@@ -32,7 +32,6 @@ import {
 } from '../latent-opportunity'
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 
-// ── Helper: Scope Commercial Potential to Organization ──────────────────────
 // Defined before use to avoid hoisting issues with Next.js build checker.
 
 function scopeCommercialPotentialToOrg(
@@ -105,11 +104,9 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
     rawText,
   } = input
 
-  // Build bounded decision from provider result
   const decision = buildBoundedDecision(providerResult)
 
   // Assess commercial potential once (deterministic, no AI call)
-  // This is separate from buyer intent and used as a scoring dimension.
   let commercialPotential = null
   if (input.v2Canonical) {
     commercialPotential = await assessCommercialPotential(input.v2Canonical, rawText)
@@ -141,7 +138,6 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
     }
   }
 
-  // If all closed, use the highest scoring one
   if (!bestEpisode && episodes.length > 0) {
     bestEpisode = episodes[0]
     bestScore = episodeScores[0]?.score ?? 0
@@ -166,7 +162,6 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
     ? scoreEpisode(selectedScoreInput)
     : { score: 0, label: 'Not a fit', qualification: 'SKIP' as const, reasons: ['No episodes found'], watchOut: [], dimensions: [] }
 
-  // Determine action — boost access if episode has application channels
   // LinkedIn profiles always have at least CONNECTION access (you can message them)
   const effectiveAccess = (bestEpisode && bestEpisode.applicationChannels.length > 0)
     ? (decision.access === 'NONE' ? 'CONNECTION' : decision.access)
@@ -201,7 +196,6 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
 
   let latentAssessment = null
   if (!hasMeaningfulEpisode && commercialPotential) {
-    // Convert commercial potential to latent assessment for backward compat
     latentAssessment = await assessLatentOpportunity(input.v2Canonical!, input.rawText)
     const latentScore = computeLatentScore(latentAssessment)
     const latentAction = latentActionFromPotential(latentAssessment.overallPotential, latentAssessment.confidence)
@@ -226,7 +220,6 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
     }
   }
 
-  // If no meaningful episode and no commercial potential, ensure score reflects reality
   if (!hasMeaningfulEpisode && (latentAssessment?.overallPotential === 'LOW' || !latentAssessment) && selectedScore.score < 10) {
     selectedScore = {
       score: 0,
@@ -290,7 +283,6 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
   }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function buildBoundedDecision(result: V3ProviderResult): V3BoundedDecision {
   return {
@@ -321,17 +313,14 @@ function computeOverallConfidence(
     confidence = Math.min(1, confidence + 0.15)
   }
 
-  // Reduce for weak evidence
   if (episode && episode.evidenceRefs.length < 2) {
     confidence *= 0.8
   }
 
-  // Reduce slightly for aging episodes (not zero — still valid signal)
   if (episode && episode.ageDays !== null && episode.ageDays > 60) {
     confidence *= 0.9
   }
 
-  // Reduce for UNKNOWN timing (less certainty about current relevance)
   if (episode && episode.ageDays === null) {
     confidence *= 0.85
   }

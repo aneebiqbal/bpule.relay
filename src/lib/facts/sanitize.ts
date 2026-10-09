@@ -90,7 +90,6 @@ export function stripUnauthorizedNumbers(
     stripped.push(token)
     return ''
   })
-  // Clean up any double spaces left by removal
   return { text: text.replace(/  +/g, ' ').trim(), stripped }
 }
 
@@ -100,7 +99,6 @@ export function stripEmDashes(text: string): string {
 }
 
 // The offer is always the free Read \u2014 a short written review. A draft must
-// never ask for a call, meeting, or chat; see baseDraftSystem's CTA rule.
 // Checked here in code because the prompt instruction alone is not
 // enforced anywhere once the model (or a fallback template) has responded.
 const CALL_REQUEST_RE = /\b(hop on|jump on|get on)\s+(a\s+)?(call|zoom|meeting)\b|\bquick\s+call\b|\bintro\s+call\b|\bschedule\s+a\s+(call|meeting)\b|\b(book|grab)\s+(a\s+)?(call|time|meeting)\b|\bcall\s+or\s+meeting\b/i

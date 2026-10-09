@@ -7,11 +7,9 @@
 
 import type { V3ScoringWeights } from './types'
 
-// ── Version ──────────────────────────────────────────────────────────────────
 
 export const V3_CONFIG_VERSION = 'relay_decision_v3.0.0'
 
-// ── Scoring Weights (must sum to 1.0) ──────────────────────────────────────
 
 export const V3_SCORING_WEIGHTS: V3ScoringWeights = {
   buyerRequestProbability: 0.20,  // Explicit buyer request
@@ -24,13 +22,11 @@ export const V3_SCORING_WEIGHTS: V3ScoringWeights = {
   evidenceQuality: 0.05,          // Evidence quality/completeness
 }
 
-// Verify weights sum to ~1.0
 const _weightSum = Object.values(V3_SCORING_WEIGHTS).reduce((a, b) => a + b, 0)
 if (Math.abs(_weightSum - 1.0) > 0.01) {
   throw new Error(`V3 scoring weights sum to ${_weightSum}, expected 1.0`)
 }
 
-// ── Fit Level Scoring ──────────────────────────────────────────────────────
 
 export const FIT_SCORES: Record<string, number> = {
   EXCELLENT: 1.0,
@@ -40,7 +36,6 @@ export const FIT_SCORES: Record<string, number> = {
   POOR: 0.0,
 }
 
-// ── Timing Level Scoring ───────────────────────────────────────────────────
 
 export const TIMING_SCORES: Record<string, number> = {
   URGENT: 1.0,
@@ -49,7 +44,6 @@ export const TIMING_SCORES: Record<string, number> = {
   STALE: 0.15,
 }
 
-// ── Access Level Scoring ───────────────────────────────────────────────────
 
 export const ACCESS_SCORES: Record<string, number> = {
   DIRECT: 1.0,
@@ -58,7 +52,6 @@ export const ACCESS_SCORES: Record<string, number> = {
   NONE: 0.0,
 }
 
-// ── Relationship Adjustments ───────────────────────────────────────────────
 // These are CONTEXT adjustments, not gates. A service provider with an
 // explicit hiring event should still score well on that episode.
 
@@ -84,7 +77,6 @@ export const RELATIONSHIP_CONTEXT: Record<string, {
   UNKNOWN: { multiplier: 0.7, allowsBuyerEpisodes: true, messageBias: -0.05 },
 }
 
-// ── Episode Status Scoring ─────────────────────────────────────────────────
 
 export const EPISODE_STATUS_SCORES: Record<string, number> = {
   CURRENT: 1.0,
@@ -94,8 +86,6 @@ export const EPISODE_STATUS_SCORES: Record<string, number> = {
   UNKNOWN: 0.5,
 }
 
-// ── Need Owner Scoring ────────────────────────────────────────────────────
-// How much does each need owner type contribute to buyer intent?
 
 export const NEED_OWNER_BUYER_RELEVANCE: Record<string, number> = {
   SELF_NEED: 1.0,
@@ -108,7 +98,6 @@ export const NEED_OWNER_BUYER_RELEVANCE: Record<string, number> = {
   UNKNOWN: 0.4,
 }
 
-// ── Action Policy Thresholds ───────────────────────────────────────────────
 
 export const ACTION_THRESHOLDS = {
   /** Score >= this + explicit buyer request + direct access → CONTACT_NOW */
@@ -123,7 +112,6 @@ export const ACTION_THRESHOLDS = {
   SKIP_MAX: 19,
 } as const
 
-// ── Access + Intent combinations for action ────────────────────────────────
 
 export const ACCESS_INTENT_ACTION_MATRIX: Record<string, Record<string, string>> = {
   // access: DIRECT
@@ -156,7 +144,6 @@ export const ACCESS_INTENT_ACTION_MATRIX: Record<string, Record<string, string>>
   },
 }
 
-// ── Message Eligibility ────────────────────────────────────────────────────
 
 export const V3_MESSAGE_POLICY = {
   /** Minimum composite score to message */
@@ -171,7 +158,6 @@ export const V3_MESSAGE_POLICY = {
   MAX_RELATIONSHIP_PENALTY: 0.5,
 } as const
 
-// ── Shadow Mode ─────────────────────────────────────────────────────────────
 
 export const V3_SHADOW_CONFIG = {
   enabled: process.env.V3_SHADOW_MODE === 'true',
@@ -181,14 +167,12 @@ export const V3_SHADOW_CONFIG = {
   flagThreshold: 15,
 } as const
 
-// ── Decision Provider Config ──────────────────────────────────────────────
 
 export const V3_DECISION_PROVIDER_CONFIG = {
   primary: process.env.V3_DECISION_PROVIDER || 'openai_structured',
   fallback: 'longcat_structured',
 } as const
 
-// ── Canonical Mode ────────────────────────────────────────────────────────
 
 /**
  * When true, V3 becomes the authoritative lead decision system.

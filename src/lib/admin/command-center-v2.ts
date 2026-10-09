@@ -3,7 +3,6 @@
 
 // Command Center V2 data layer
 
-// ── Types ───────────────────────────────────────────────────────────────────
 
 export type ExceptionSeverity = 'attention' | 'urgent' | 'critical'
 export type TeamMemberStatus = 'active' | 'waiting' | 'needs_attention' | 'inactive'
@@ -87,7 +86,6 @@ export interface CommandCenterData {
   opportunities: OpportunityFeedItem[]
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function getClient() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -128,7 +126,6 @@ function dateRange(date: string, timezone: string = 'UTC'): { start: string; end
     const startUtc = new Date(startStr).toISOString()
     const endUtc = new Date(endStr).toISOString()
 
-    // If the locale conversion gives us the wrong day (due to offset), adjust
     const startDate = startUtc.split('T')[0]
     const endDate = endUtc.split('T')[0]
 
@@ -166,7 +163,6 @@ function computeRepStatus(
     return 'active'
   }
   if (assignedLeads === 0) return 'waiting'
-  // If all leads are waiting on the client (their_move), rep has nothing to do
   if (actionableLeads === 0) return 'waiting'
   if (lastMin !== null && lastMin > 240) return 'inactive'
   return 'waiting'
@@ -199,13 +195,10 @@ function isLeadActionable(lead: {
   // Won/lost/dead — not actionable
   if (['won', 'lost', 'dead'].includes(stage)) return false
 
-  // If follow-up is due, it's actionable
   if (cs?.next_followup_at && new Date(cs.next_followup_at).getTime() <= Date.now()) return true
 
-  // If client replied and rep hasn't responded, it's actionable
   if (cs?.last_reply_at && cs?.last_sent_at && cs.last_reply_at > cs.last_sent_at) return true
 
-  // New or contacted — actionable (rep needs to send connection/DM)
   if (['new', 'contacted'].includes(stage)) return true
 
   // Waiting for reply after outbound — their_move
@@ -214,7 +207,6 @@ function isLeadActionable(lead: {
   return false
 }
 
-// ── Main Loader ────────────────────────────────────────────────────────────
 
 export async function loadCommandCenterData(
   orgId: string,
@@ -230,7 +222,6 @@ export async function loadCommandCenterData(
   const todayStr = new Date(todayInTz).toISOString().split('T')[0]
   const isToday = date === todayStr
 
-  // ── 1. All action events for the day ──
   const { data: events } = await client
     .from('action_events')
     .select('id, action_type, actor_id, actor_type, lead_id, occurred_at, sender_profile_id')
@@ -240,14 +231,12 @@ export async function loadCommandCenterData(
     .order('occurred_at', { ascending: false })
     .limit(1000)
 
-  // ── 2. All reps ──
   const { data: reps } = await client
     .from('reps')
     .select('id, name')
     .eq('organization_id', orgId)
     .order('name')
 
-  // ── 3. All leads with conversation states ──
   const { data: leads } = await client
     .from('leads')
     .select(`
@@ -265,7 +254,6 @@ export async function loadCommandCenterData(
     .eq('archived', false)
     .limit(500)
 
-  // ── 4. Profile names for sender profiles ──
   const senderProfileIds = new Set<string>()
   for (const lead of leads || []) {
     if (lead.sender_profile_id) senderProfileIds.add(lead.sender_profile_id as string)
@@ -275,7 +263,6 @@ export async function loadCommandCenterData(
     : { data: [] }
   const profileNameMap = new Map<string, string>((senderProfiles || []).map((p: { id: string; identity_name: string }) => [p.id, p.identity_name] as [string, string]))
 
-  // ── 5. Profile opportunity matches ──
   const { data: profileMatches } = await client
     .from('profile_opportunity_matches')
     .select('lead_id, profile_id, match_score')
@@ -283,7 +270,6 @@ export async function loadCommandCenterData(
     .order('match_score', { ascending: false })
     .limit(500)
 
-  // ── Build rep activity map from events ──
   // repNames available for future use
   void reps
 
@@ -322,7 +308,6 @@ export async function loadCommandCenterData(
     }
   }
 
-  // ── Group leads by rep ──
   const leadsByRep = new Map<string, typeof leads>()
   for (const lead of leads || []) {
     const repId = lead.owner_rep_id as string
@@ -332,7 +317,6 @@ export async function loadCommandCenterData(
     leadsByRep.set(repId, arr)
   }
 
-  // ── Best profile per lead ──
   const bestProfileByLead = new Map<string, { id: string; score: number }>()
   for (const match of profileMatches || []) {
     const leadId = match.lead_id as string
@@ -350,7 +334,6 @@ export async function loadCommandCenterData(
     : { data: [] }
   const bestProfileNameMap = new Map<string, string>((bestProfileData || []).map((p: { id: string; identity_name: string }) => [p.id, p.identity_name] as [string, string]))
 
-  // ── Team rows ──
   const team: TeamRow[] = (reps || []).map((rep: { id: string; name: string }) => {
     const ev = repEventMap.get(rep.id)
     const repLeads = leadsByRep.get(rep.id) || []
@@ -397,7 +380,6 @@ export async function loadCommandCenterData(
     }
   })
 
-  // ── Exceptions ──
   const exceptions: ExceptionItem[] = []
 
   for (const rep of reps || []) {
@@ -484,7 +466,6 @@ export async function loadCommandCenterData(
     }
   }
 
-  // ── High-value opportunities ──
   const opportunities: OpportunityFeedItem[] = []
   for (const rep of reps || []) {
     const repLeads = leadsByRep.get(rep.id) || []
@@ -547,7 +528,6 @@ export async function loadCommandCenterData(
     referrals: 0,
   }
 
-  // ── Since Yesterday diff (today only) ──
   let sinceYesterday: SinceYesterday | null = null
   if (isToday) {
     const prevDate = getPreviousDate(date)

@@ -1,10 +1,3 @@
-/**
- * Find Jobs — public engine entry point.
- *
- * Full pipeline: build CV/query -> parallel provider search -> dedupe ->
- * hard filters -> deterministic scoring -> optional AI refinement -> rank.
- * Used by the API route and directly by tests.
- */
 
 import type {
   CvProfile,

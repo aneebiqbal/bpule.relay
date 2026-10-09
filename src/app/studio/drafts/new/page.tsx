@@ -23,13 +23,11 @@ export default async function NewDraftPage({
   const persona = await store.getContentPersona(personaId)
   if (!persona) redirect('/content')
 
-  // If ideaId provided, load the pre-generated idea
   let initialCaption = ''
   let initialSourceMaterial = ''
   let ideaTitle = ''
 
   if (params.ideaId) {
-    // Try database first, then sessionStorage fallback for emergency/unpersisted ideas
     let idea = null
     try {
       idea = await store.getDailyContentIdeaById(params.ideaId)
@@ -50,7 +48,6 @@ export default async function NewDraftPage({
     }
   }
 
-  // Create a draft record
   const draft = await store.createContentDraft({
     personaId: persona.id,
     sourceKind: 'idea',

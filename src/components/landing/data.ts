@@ -1,13 +1,3 @@
-/**
- * Landing signal world — ONE deterministic dataset reused across every section.
- *
- * The whole page tells a single story:
- *   Studio publishes → Sarah Chen attends → Relay captures the signal →
- *   priority resolves → "Reply to Sarah" → the move becomes theirs.
- *
- * Positions are hand-placed percentages of the field container.
- * Nothing is generated at runtime.
- */
 
 export type SignalTone = 'bone' | 'orange' | 'cobalt'
 

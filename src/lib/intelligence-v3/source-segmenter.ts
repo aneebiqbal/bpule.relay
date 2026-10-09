@@ -65,7 +65,6 @@ export function segmentLinkedInSource(rawText: string): SourceSegment[] {
     // Detect relative timestamps (standalone lines like "5d •", "3mo •", "1mo •")
     const ageMatch = detectRelativeAgeLine(line)
     if (ageMatch) {
-      // If we already have post content, this timestamp starts a new post
       if (currentPostLines.length > 0) {
         flushPost()
       }
@@ -76,7 +75,6 @@ export function segmentLinkedInSource(rawText: string): SourceSegment[] {
     // Detect hiring/commercial keywords that indicate post content
     const hasCommercialSignal = /hiring|looking for|seeking|join our|we.?re hiring|open role|available for hire|need a |want to hire|opportunity/i.test(line)
 
-    // If we see a commercial signal and aren't in a structured section, switch to post mode
     if (hasCommercialSignal && currentSection !== 'about' && currentSection !== 'experience' && currentSection !== 'education') {
       if (currentPostLines.length > 0 && currentPostAge !== null) {
         flushPost()
@@ -99,7 +97,6 @@ export function segmentLinkedInSource(rawText: string): SourceSegment[] {
         currentSection = 'other' // Default to other until a section header is found
       }
     } else {
-      // This is post/activity/other content — accumulate as potential post
       currentPostLines.push(line)
     }
   }

@@ -109,8 +109,6 @@ function prospectCanBeSaved(
   // "Lead not eligible" and the button did nothing.
   const qualification = result.score?.qualification
   if (qualification === 'strong' || qualification === 'worth_pursuing' || qualification === 'maybe') return true
-  // Also allow leads with high commercial potential (builders/founders) that
-  // were upgraded from SKIP to MAYBE by the builder upgrade path
   if (result.score?.label?.toLowerCase().includes('connecting')) return true
   return false
 }
@@ -206,7 +204,6 @@ export default function ProspectCheckPage() {
     // "Try Another Angle" must never re-derive canonical evidence/score/
     // qualification/action — only a new message angle. Capture the
     // ALREADY-HELD canonical result before resetResult() clears it, and
-    // send it back so the server can verify (not just trust) it's still
     // valid for this exact input and skip re-extraction/re-scoring
     // entirely. See BUG_LEDGER — TEAM-005.
     const existingCanonical = mode === 'try-another-angle' ? result?.canonical ?? null : null

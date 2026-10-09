@@ -5,7 +5,6 @@
  * Once persisted, NO surface may independently recompute the lead score.
  */
 
-// ── Remote Eligibility ─────────────────────────────────────────────────────
 
 export type WorkplaceType = 'REMOTE' | 'HYBRID' | 'ONSITE' | 'UNKNOWN'
 
@@ -45,7 +44,6 @@ export interface RemoteEligibility {
   evidence?: string[]
 }
 
-// ── Source / Evidence Ledger ───────────────────────────────────────────────
 
 export type EvidenceType = 'FACT' | 'STRONG_INFERENCE' | 'WEAK_INFERENCE'
 
@@ -143,7 +141,6 @@ export interface EvidenceEntry {
   needOwnership?: NeedOwnership
 }
 
-// ── Extracted Entities (Pass A) ────────────────────────────────────────────
 
 export interface PersonAffiliation {
   organizationName: string
@@ -233,7 +230,6 @@ export interface ExtractedContent {
   hiringSignals: string[]
 }
 
-// ── Normalized Intelligence (Pass B → C) ───────────────────────────────────
 
 export type BusinessModel =
   | 'PRODUCT'
@@ -306,7 +302,6 @@ export interface NormalizedIntelligence {
   }
 }
 
-// ── Score Breakdown ────────────────────────────────────────────────────────
 
 export interface ScoreDimensionBreakdown {
   key: string
@@ -334,7 +329,6 @@ export interface CanonicalScoreBreakdown {
   watchOut: string[]
 }
 
-// ── Raw Source Data (never destroyed) ──────────────────────────────────────
 
 export interface RawSourceData {
   rawInput: string
@@ -351,7 +345,6 @@ export interface RawSourceData {
   capturedAt: string
 }
 
-// ── Extraction Completeness ────────────────────────────────────────────────
 
 export interface ExtractionCompleteness {
   /** Overall completeness 0-100 */
@@ -372,7 +365,6 @@ export interface ExtractionCompleteness {
   urlsPreserved: string[]
 }
 
-// ── Re-score Event ─────────────────────────────────────────────────────────
 
 export interface RescoreEvent {
   fromScore: number
@@ -383,7 +375,6 @@ export interface RescoreEvent {
   trigger: 'source_changed' | 'user_requested' | 'model_version_changed' | 'new_signal'
 }
 
-// ── Canonical Prospect Intelligence (the persisted object) ─────────────────
 
 export interface CanonicalProspectIntelligence {
   /** Schema version */
@@ -452,7 +443,6 @@ export interface CanonicalProspectIntelligence {
   extractionTrace?: Array<{ stage: string; ms: number; provider?: string }>
 }
 
-// ── Score Label Mapping ────────────────────────────────────────────────────
 
 export const SCORE_LABELS: Array<{ min: number; max: number; label: string; qualification: CanonicalProspectIntelligence['qualification'] }> = [
   { min: 85, max: 100, label: 'Strong opportunity', qualification: 'strong' },

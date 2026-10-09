@@ -254,7 +254,6 @@ export async function prepareEmailDraft(input: {
   let subjectCandidates: string[] = []
   let claimSafety: PreparedEmailDraft['claimSafety'] = null
 
-  // ── CAN_PREPARE_EMAIL: a content-strategy question — is there a
   // legitimate reason to reach out at all? This does NOT depend on whether
   // we have a verified recipient. Preparing is research/writing; only
   // sending needs a real, verified address.
@@ -292,7 +291,6 @@ export async function prepareEmailDraft(input: {
       draftStatus = 'FAILED'
       blockedReason = 'Claim safety failed. Edit evidence/claims before sending.'
     } else if (!isSendEligibleContact(selectedContact)) {
-      // ── CAN_SEND_EMAIL is a SEPARATE gate, checked only now that content
       // exists. A missing, unverified, or merely inferred contact still
       // yields a fully generated, reviewable draft — it just cannot be sent
       // until a verified/likely-valid recipient is on file. Never let an
@@ -412,9 +410,7 @@ export async function sendPreparedEmail(input: {
     throw new Error('Recipient email is invalid or bounced and cannot be contacted.')
   }
 
-  // ── CAN_SEND_EMAIL gate. Uses the same isSendEligibleContact() definition
   // prepareEmailDraft used to decide READY vs NEEDS_VERIFIED_CONTACT — this
-  // is the actual enforcement point, not just a UI hint. An inferred/
   // unverified contact must NEVER be sendable merely because a draft with
   // subject/body exists for it (see BUG_LEDGER — Daria Redkina / Solsonic
   // hardening fixture).

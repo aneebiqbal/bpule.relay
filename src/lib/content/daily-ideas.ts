@@ -50,7 +50,6 @@ export function generateDailyIdeas(input: {
       .map((m) => m.content.toLowerCase().slice(0, 40)),
   )
 
-  // ── From Expertise ────────────────────────────────────────────────────
   if (input.profile) {
     for (const exp of input.profile.expertise) {
       if (exp.level === 'expert' || exp.level === 'advanced') {
@@ -71,7 +70,6 @@ export function generateDailyIdeas(input: {
       }
     }
 
-    // ── From Opinions ──────────────────────────────────────────────────
     for (const opinion of input.profile.opinions) {
       const confidence = opinion.strength === 'strong' ? 0.8 : opinion.strength === 'moderate' ? 0.65 : 0.5
       ideas.push({
@@ -87,7 +85,6 @@ export function generateDailyIdeas(input: {
       })
     }
 
-    // ── From Projects ──────────────────────────────────────────────────
     for (const project of input.profile.projects) {
       if (project.lessons.length > 0) {
         ideas.push({
@@ -117,7 +114,6 @@ export function generateDailyIdeas(input: {
       }
     }
 
-    // ── From Experiences ───────────────────────────────────────────────
     for (const exp of input.profile.experiences) {
       if (exp.lesson.trim()) {
         const typeLabel = exp.type === 'mistake' ? 'mistake' : exp.type === 'success' ? 'win' : exp.type === 'decision' ? 'decision' : 'experience'
@@ -135,7 +131,6 @@ export function generateDailyIdeas(input: {
       }
     }
 
-    // ── From Technologies ──────────────────────────────────────────────
     for (const tech of input.profile.technologies) {
       if (tech.proficiency === 'expert' || tech.proficiency === 'proficient') {
         const alreadyCovered = [...coveredTopics].some((t) => t.includes(tech.name.toLowerCase()))
@@ -156,7 +151,6 @@ export function generateDailyIdeas(input: {
     }
   }
 
-  // ── From Journey ──────────────────────────────────────────────────────
   for (const event of input.journey) {
     if (event.eventType === 'shipped' || event.eventType === 'milestone') {
       ideas.push({
@@ -173,7 +167,6 @@ export function generateDailyIdeas(input: {
     }
   }
 
-  // ── From Topic Clusters ──────────────────────────────────────────────
   for (const cluster of input.clusters) {
     const alreadyCovered = [...coveredTopics].some((t) => t.includes(cluster.clusterName.toLowerCase()))
     if (!alreadyCovered) {
@@ -193,7 +186,6 @@ export function generateDailyIdeas(input: {
     }
   }
 
-  // ── From Goals ────────────────────────────────────────────────────────
   for (const goal of input.contentGoals) {
     const goalIdeas: ContentIdeaCard[] = []
 
@@ -240,12 +232,10 @@ export function generateDailyIdeas(input: {
     ideas.push(...goalIdeas)
   }
 
-  // ── Evergreen fallback ────────────────────────────────────────────────
   if (ideas.length === 0) {
     ideas.push(...getEvergreenIdeas(input.profile, input.audiences))
   }
 
-  // ── Dedup, rank, diversify ───────────────────────────────────────────
   return diversifyIdeas(ideas, usedHooks)
 }
 
@@ -299,10 +289,8 @@ function diversifyIdeas(ideas: ContentIdeaCard[], usedHooks: Set<string>): Conte
     deduped.push(idea)
   }
 
-  // Sort by confidence
   deduped.sort((a, b) => b.confidence - a.confidence)
 
-  // Ensure territory diversity — max 2 per territory
   const territoryCount = new Map<string, number>()
   const diversified: ContentIdeaCard[] = []
   for (const idea of deduped) {

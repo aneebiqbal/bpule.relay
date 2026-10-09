@@ -1,14 +1,3 @@
-/**
- * Semantic Reranking — V3
- *
- * Replaces keyword-overlap proof matching with semantic relevance scoring.
- *
- * Pipeline: retrieve candidates → rerank → keep top supported proof.
- * If no proof clears threshold: "No verified proof".
- *
- * Supports pluggable embedding providers. Falls back to deterministic
- * keyword scoring when no embedding provider is available.
- */
 
 import type { V3OpportunityEpisode } from '../types'
 
@@ -33,12 +22,10 @@ export interface V3Reranker {
   rerank(episode: V3OpportunityEpisode, candidates: V3ProofCandidate[]): Promise<V3RerankResult[]> | V3RerankResult[]
 }
 
-// ── Thresholds ──────────────────────────────────────────────────────────────
 
 const PROOF_RELEVANCE_THRESHOLD = 0.4
 const TOP_K = 3
 
-// ── Keyword-Based Fallback Reranker ──────────────────────────────────────────
 
 export class KeywordReranker implements V3Reranker {
   readonly id = 'keyword_fallback'
@@ -85,7 +72,6 @@ function computeKeywordRelevance(
     }
   }
 
-  // Also check partial matches
   for (const req of requestedCapabilities) {
     const reqWords = req.split(/\s+/)
     for (const word of reqWords) {
@@ -98,7 +84,6 @@ function computeKeywordRelevance(
   return Math.min(1, matches / requestedCapabilities.length)
 }
 
-// ── Semantic Embedding Reranker (placeholder for model integration) ─────────
 
 export class SemanticReranker implements V3Reranker {
   readonly id = 'semantic_embedding'
@@ -118,7 +103,6 @@ export class SemanticReranker implements V3Reranker {
       return fallback.rerank(episode, candidates)
     }
 
-    // Build query from episode context
     const query = buildEpisodeQuery(episode)
 
     try {
@@ -161,7 +145,6 @@ function buildEpisodeQuery(episode: V3OpportunityEpisode): string {
   return parts.join(' ')
 }
 
-// ── Registry ─────────────────────────────────────────────────────────────────
 
 let _reranker: V3Reranker | null = null
 

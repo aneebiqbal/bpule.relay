@@ -187,31 +187,26 @@ export function evaluateConnectionNote(input: ConnectionNoteInput): ConnectionNo
 export function repairConnectionNote(text: string, failures: string[]): string {
   let repaired = text
 
-  // Remove surveillance openings — strip from any position, not just start.
   if (failures.some((f) => f.includes('surveillance'))) {
     repaired = stripSurveillanceAnywhere(repaired)
   }
 
-  // Remove banned phrases — strip from ANY position in the text.
   // The AI model may place "let's connect", "we specialize in", etc.
   // mid-sentence, so we must remove them globally, not just at ^.
   if (failures.some((f) => f.includes('Banned phrase'))) {
     repaired = stripPhrasesAnywhere(repaired, BANNED_PHRASES_CONNECTION)
   }
 
-  // Remove praise
   if (failures.some((f) => f.includes('praise'))) {
     repaired = repaired.replace(/\bamazing|incredible|impressive|fantastic|brilliant\b/gi, '')
     repaired = repaired.replace(/\blove what you\b/gi, 'interested in what you')
   }
 
-  // Remove sales pitch — all patterns from the detection regex, globally
   if (failures.some((f) => f.includes('Sales pitch'))) {
     repaired = repaired.replace(/\b(?:i can help|we can help|let me help)\b/gi, '')
     repaired = repaired.replace(/\bhappy to help you (?:ship|build|grow|scale)\b/gi, '')
   }
 
-  // Remove AI clichés — strip from any position
   if (failures.some((f) => f.includes('AI cliché'))) {
     repaired = repaired.replace(/\bgame[- ]?chang\w*\b/gi, '')
     repaired = repaired.replace(/\brevolutioni[sz]\w*\b/gi, '')
@@ -224,21 +219,18 @@ export function repairConnectionNote(text: string, failures: string[]): string {
     repaired = repaired.replace(/\bexcited to reach out\b/gi, '')
   }
 
-  // Remove fake familiarity claims
   if (failures.some((f) => f.includes('fake familiarity'))) {
     repaired = repaired.replace(/\bi have been following\b/gi, '')
     repaired = repaired.replace(/\bi have been watching\b/gi, '')
     repaired = repaired.replace(/\bbig fan of your\b/gi, '')
   }
 
-  // Remove service descriptions
   if (failures.some((f) => f.includes('Service description'))) {
     repaired = repaired.replace(/\bwe (?:build|ship|deliver|help)\b/gi, '')
     repaired = repaired.replace(/\bi (?:build|ship|deliver|help)\b/gi, '')
     repaired = repaired.replace(/\bour (?:work|focus|practice)\b/gi, '')
   }
 
-  // Remove manufactured personalization / discovery language
   if (failures.some((f) => f.includes('Manufactured personalization'))) {
     repaired = repaired.replace(/\bcurious about\b/gi, '')
     repaired = repaired.replace(/\bhow do you\b/gi, '')
@@ -248,7 +240,6 @@ export function repairConnectionNote(text: string, failures: string[]): string {
     repaired = repaired.replace(/\bwould be great to learn\b/gi, '')
   }
 
-  // Remove generic CTAs from anywhere (not just end-of-string)
   if (failures.some((f) => f.includes('Generic or forced CTA'))) {
     repaired = stripPhrasesAnywhere(repaired, [
       "let's connect",
@@ -261,7 +252,6 @@ export function repairConnectionNote(text: string, failures: string[]): string {
     ])
   }
 
-  // Remove budget/funding inference — strip the inference phrase but keep the rest
   if (failures.some((f) => f.includes('funding = budget'))) {
     repaired = repaired.replace(/\bwhich likely gives you some budget to spend\b/gi, '')
     repaired = repaired.replace(/\bgives you some budget\b/gi, '')
@@ -281,8 +271,6 @@ export function repairConnectionNote(text: string, failures: string[]): string {
     repaired = repaired.replace(/\bwe have\b/gi, 'I have')
   }
 
-  // Strip questions — convert to statements. Replace ? with period,
-  // then fix common question patterns ("Have you considered" → "Consider").
   if (failures.some((f) => f.includes('question'))) {
     repaired = repaired.replace(/\?/g, '.')
     repaired = repaired.replace(/\bhave you considered\b/gi, 'consider')
@@ -295,16 +283,12 @@ export function repairConnectionNote(text: string, failures: string[]): string {
     repaired = repaired.replace(/\bare you looking\b/gi, 'looking')
   }
 
-  // Remove em dashes
   repaired = repaired.replace(/[\u2014\u2013]/g, '-')
 
-  // Remove exclamation marks
   repaired = repaired.replace(/!/g, '.')
 
-  // Remove emojis
   repaired = repaired.replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
 
-  // Clean up artifacts from mid-text stripping:
   // double spaces, double periods, dangling commas before periods,
   // orphaned sentence fragments ("word. ."), leading punctuation.
   repaired = repaired.replace(/  +/g, ' ').trim()
@@ -342,7 +326,6 @@ export function stripPhrasesAnywhere(
     )
     result = result.replace(re, '. ')
   }
-  // Clean up artifacts: double spaces, double periods, leading/trailing dots
   result = result.replace(/  +/g, ' ')
   result = result.replace(/\.\s*\./g, '.')
   result = result.replace(/^\.\s*/, '')
@@ -366,7 +349,6 @@ function stripSurveillanceAnywhere(text: string): string {
   for (const re of surveillancePatterns) {
     result = result.replace(re, '')
   }
-  // Remove orphaned greetings that are now at start with nothing after
   result = result.replace(/^(?:hi|hey|hello)\s*,?\s*$/i, '')
   return result.trim()
 }
@@ -377,7 +359,6 @@ function stripSurveillanceAnywhere(text: string): string {
 function shortenConnectionNote(text: string): string {
   if (text.length <= CONNECTION_NOTE_MAX_CHARS) return text
 
-  // Try to find the last sentence end within limit
   const withinLimit = text.slice(0, CONNECTION_NOTE_MAX_CHARS - 3)
   const lastPeriod = withinLimit.lastIndexOf('.')
   const lastSpace = withinLimit.lastIndexOf(' ')
@@ -473,7 +454,6 @@ export function extractFirstName(name: string | null): string | null {
   if (!name) return null
   const trimmed = name.trim()
   if (trimmed.length < 2 || trimmed.length > 40) return null
-  // Must have at least one space (first + last) or be a single reasonable name
   const parts = trimmed.split(/\s+/).filter(Boolean)
   if (parts.length === 0) return null
   const first = parts[0]
@@ -492,7 +472,6 @@ export function validateAndRepair(input: ConnectionNoteInput): ConnectionNoteRes
     const repaired = repairConnectionNote(input.text, result.failures)
     const reEval = evaluateConnectionNote({ ...input, text: repaired })
 
-    // If still over limit, force shorten
     let finalText = repaired
     if (!reEval.withinLimit) {
       finalText = shortenConnectionNote(repaired)

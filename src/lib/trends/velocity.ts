@@ -138,7 +138,6 @@ export function isTrendPoolWeak(candidates: TrendCandidate[]): boolean {
   return allSaturated || allLowVelocity
 }
 
-// ── Internal ─────────────────────────────────────────────────────────────────
 
 function computeVelocity(
   item: TrendItem,
@@ -156,7 +155,6 @@ function computeVelocity(
     return 0.1
   }
 
-  // Compute rate of change between snapshots
   const sorted = [...history].sort((a, b) =>
     new Date(a.fetchedAt).getTime() - new Date(b.fetchedAt).getTime(),
   )
@@ -171,7 +169,6 @@ function computeVelocity(
   const scoreDelta = getEngagementTotal(latest.metrics) - getEngagementTotal(earliest.metrics)
   const velocityPerHour = scoreDelta / timeDiffHours
 
-  // Normalize to -1 to 1 range
   // Typical: 0-50 engagement/hour = moderate, 50+ = fast, negative = declining
   return Math.max(-1, Math.min(1, velocityPerHour / 50))
 }

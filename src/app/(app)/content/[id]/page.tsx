@@ -17,7 +17,6 @@ export default async function PersonaPage({
   const persona = await store.getContentPersona(id)
   if (!persona) redirect('/content')
 
-  // Verify ownership
   if (persona.repId !== user.rep.id && user.rep.role !== 'admin') redirect('/content')
 
   // Redirect to Today — the proper Studio entry point

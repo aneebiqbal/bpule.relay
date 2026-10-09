@@ -70,7 +70,6 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString()
 
   try {
-    // Create the persona
     const persona = await store.createContentPersona({
       repId: user.rep.id,
       displayName: normalized.displayName,
@@ -79,7 +78,6 @@ export async function POST(req: NextRequest) {
       valuesAndOpinions: normalized.identity.opinions.map((o) => o.belief),
     })
 
-    // Create the Content Profile with full identity
     const profile = await store.createContentProfile({
       personaId: persona.id,
       role: normalized.identity.role,
@@ -93,7 +91,6 @@ export async function POST(req: NextRequest) {
      const goals = normalized.selectedGoals
      const interests = normalized.selectedInterests
 
-     // Update profile with all extracted data
      await store.updateContentProfile(profile.id, {
        expertise: normalized.identity.expertise,
        opinions: normalized.identity.opinions,
@@ -119,7 +116,6 @@ export async function POST(req: NextRequest) {
        voiceSelection: normalized.voiceSelection,
      })
 
-    // Create topic clusters from territories
     for (const territory of territories.slice(0, 6)) {
       await store.createTopicCluster({
         personaId: persona.id,
@@ -129,7 +125,6 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Create journey entries from experiences
     for (const exp of normalized.identity.experiences.slice(0, 4)) {
       await store.createContentJourneyEntry({
         personaId: persona.id,
@@ -141,7 +136,6 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Update persona with onboarding data
     await store.updateContentPersona({
       personaId: persona.id,
       personaRole: normalized.personaRole || normalized.identity.role,
@@ -152,7 +146,6 @@ export async function POST(req: NextRequest) {
       onboardingCompleted: true,
     })
 
-    // Get updated persona
     const updatedPersona = await store.getContentPersona(persona.id)
 
     return NextResponse.json({

@@ -133,18 +133,15 @@ export function ConversationWorkspace({
 
   const handleTellRelay = useCallback(() => {
     if (!tellRelay.trim()) return
-    // This would be passed to the parent for AI refinement
     setTellRelay('')
   }, [tellRelay])
 
-  // Determine if we have any messages to show
   const hasMessages = messages.some((m) => m.sentText)
   const sortedMessages = messages
     .filter((m) => m.sentText)
     .sort((a, b) => (a.sentAt ?? a.createdAt).localeCompare(b.sentAt ?? b.createdAt))
   const groupedMessages = groupMessagesByDate(sortedMessages)
 
-  // Determine composer mode
   const isWaiting = relationshipState.kind === 'their_move' || relationshipState.kind === 'won' || relationshipState.kind === 'lost'
   const isFollowUpDue = relationshipState.phase === 'follow_up_due'
 

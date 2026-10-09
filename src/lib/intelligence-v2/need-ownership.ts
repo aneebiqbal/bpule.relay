@@ -1,17 +1,3 @@
-/**
- * Need Ownership Classification — Phase 3
- *
- * Every problem/need statement must identify WHO owns the need.
- *
- * Examples:
- * - "I help companies hire engineers" → SERVICE_OFFERING (they sell this)
- * - "Our customers struggle with deployment" → CUSTOMER_NEED (their clients' problem)
- * - "We're hiring backend engineers" → SELF_NEED (their own company)
- * - "Currency exchange is difficult in emerging markets" → MARKET_PROBLEM (industry-level)
- * - "Our deployment pipeline is slow" → PRODUCT_PROBLEM (their own product)
- *
- * Only SELF_NEED or EMPLOYER_NEED should materially increase buyer intent.
- */
 
 import type { NeedOwnership } from './types'
 
@@ -86,7 +72,6 @@ export function classifyNeedOwnership(text: string): NeedOwnership {
   const normalized = text.toLowerCase().trim()
   if (!normalized) return 'UNKNOWN'
 
-  // Check service offering first — highest priority because it's the most
   // commonly misclassified (a fractional CTO offering services looks like
   // a buyer if we don't catch this)
   for (const pattern of SERVICE_OFFERING_PATTERNS) {

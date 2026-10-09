@@ -11,7 +11,6 @@ import type { ExceptionReason } from '@/lib/domain/types'
  * All eligibility logic lives in day-close-service.ts.
  */
 
-// ── GET: Day close eligibility + current state ──────────────────────────────
 
 export async function GET(req: NextRequest) {
   const ctx = await getAuthContext()
@@ -33,7 +32,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ dayClose })
   }
 
-  // Return all day closes for today
   const { data: dayCloses } = await supabase
     .from('day_closes')
     .select('*')
@@ -43,7 +41,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ dayCloses: dayCloses ?? [] })
 }
 
-// ── POST: Close the day (strict eligibility check) ──────────────────────────
 
 export async function POST(req: NextRequest) {
   const ctx = await getAuthContext()
@@ -61,7 +58,6 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createServerSupabase()
 
-  // Get existing day close
   const { data: existing } = await supabase
     .from('day_closes')
     .select('*')
@@ -75,7 +71,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ dayClose: existing, message: 'Day already closed.' })
   }
 
-  // Get contract for this identity
   const { data: contract } = await supabase
     .from('revenue_identity_contracts')
     .select('*')
@@ -85,7 +80,6 @@ export async function POST(req: NextRequest) {
     .limit(1)
     .maybeSingle()
 
-  // Get allocations
   const { data: allocations } = contract
     ? await supabase.from('contract_allocations').select('*').eq('contract_id', contract.id)
     : { data: [] }
@@ -93,7 +87,6 @@ export async function POST(req: NextRequest) {
   const myAlloc = (allocations ?? []).find((a: any) => a.person_id === ctx.repId)
   const pct = (myAlloc?.allocation_pct ?? ((allocations ?? []).length === 0 ? 100 : 0)) / 100
 
-  // Build progress from snapshot or compute target
   const snapshot = (existing?.completion_snapshot ?? {}) as Record<string, number>
   const qp = Math.round((contract?.qualified_prospects ?? 0) * pct)
   const conn = Math.round((contract?.connections ?? 0) * pct)
@@ -112,7 +105,6 @@ export async function POST(req: NextRequest) {
     logging: { completed: snapshot.logging ?? 0, target: contract?.logging_completeness_pct ?? 100, remaining: Math.max(0, (contract?.logging_completeness_pct ?? 100) - (snapshot.logging ?? 0)) },
   }
 
-  // Evaluate eligibility server-side
   const totalRemaining =
     progress.connections.remaining +
     progress.firstDms.remaining +
@@ -189,7 +181,6 @@ export async function POST(req: NextRequest) {
   })
 }
 
-// ── PATCH: Request or review exception ──────────────────────────────────────
 
 export async function PATCH(req: NextRequest) {
   const ctx = await getAuthContext()

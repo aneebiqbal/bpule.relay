@@ -13,7 +13,6 @@ import type { PostPlan } from '@/lib/content/post-plan'
  * structural (rejected and regenerated on match), not prompt suggestions.
  */
 
-// ── Banned phrases ──────────────────────────────────────────────────────────
 // The actual tells of generic AI-written content. Reject on match.
 const BANNED_PHRASES = [
   'unpopular opinion:',
@@ -37,7 +36,6 @@ const BANNED_HOOK_PATTERNS = [
   /^(unpopular\s+opinion|the\s+truth\s+about|nobody\s+talks\s+about)/i,
 ]
 
-// ── Types ──────────────────────────────────────────────────────────────────
 
 export interface ContentGenerationInput {
   personaName: string
@@ -84,7 +82,6 @@ interface ModelContentOutput {
   self_check_note: string
 }
 
-// ── Pipeline ────────────────────────────────────────────────────────────────
 
 export async function generateContent(
   input: ContentGenerationInput,
@@ -119,14 +116,12 @@ export async function generateContent(
   const caption = result.data.caption.trim()
   const hook = extractHook(caption)
 
-  // ── Anti-generic checks ──────────────────────────────────────────────
   const bannedHits = checkBannedPhrases(caption + '\n' + hook)
   const badHook = checkBadHook(hook)
   const specificityHit = checkSpecificity(hook + '\n' + caption, input.sourceMaterial)
   const repeats = checkRepetition(hook, input.recentOpenings)
   const fabricatedPersonalClaim = checkFabricatedPersonalClaim(caption, input.generationMode ?? 'personal')
 
-  // ── Humanization check (rhythm, hedging, listiness, transitions) ────
   let humanizationTells: string[] = []
   let humanizationPassed = true
   let finalCaption = caption
@@ -168,7 +163,6 @@ export async function generateContent(
   return { caption: finalCaption, hook: extractHook(finalCaption), hookScore: result.data.hook_score, hookFeedback: result.data.hook_feedback, selfCheckPassed, selfCheckNote, bannedHits, specificityHit, humanizationTells, humanizationPassed }
 }
 
-// ── Prompts ────────────────────────────────────────────────────────────────
 
 function buildContentSystemPrompt(input: ContentGenerationInput): string {
   const styleBlock = input.styleCard ?? ''
@@ -282,7 +276,6 @@ function buildPostPlanBlock(postPlan: PostPlan, personaName: string): string {
   return parts.join('\n')
 }
 
-// ── Checks ──────────────────────────────────────────────────────────────────
 
 function extractHook(caption: string): string {
   const lines = caption.split('\n').filter((l) => l.trim().length > 0)

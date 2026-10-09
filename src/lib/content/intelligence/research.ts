@@ -45,7 +45,6 @@ export function requiresResearch(input: {
 
   const lower = input.sourceMaterial.toLowerCase()
 
-  // Check for research triggers
   const researchTriggers = [
     { pattern: /\b(released|announced|launched|published)\s+(yesterday|last\s+week|this\s+week|recently)\b/i, reason: 'Recent release/event mentioned' },
     { pattern: /\b(\d+%|\d+x\s+faster|\d+\s+percent|\$\d+|\d+\s+users|\d+\s+developers)\b/, reason: 'Specific statistics or metrics cited' },
@@ -62,7 +61,6 @@ export function requiresResearch(input: {
     }
   }
 
-  // If there are supporting facts that look like external claims
   if (input.supportingFacts.length > 0) {
     for (const fact of input.supportingFacts) {
       if (/\d+%|\d+x|\b(released|announced|survey|study)\b/i.test(fact)) {
@@ -150,7 +148,6 @@ export async function performResearch(
 
   try {
     const results = await provider.search(query, 3)
-    // Filter by freshness if a date is specified
     if (publishedAfter) {
       const cutoff = new Date(publishedAfter).getTime()
       return results.filter((r) => {

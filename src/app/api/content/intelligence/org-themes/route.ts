@@ -18,7 +18,6 @@ export async function GET() {
   const store = await createScoutStore()
   const personas = await store.listContentPersonas(user.rep.id)
 
-  // Load public data only (no private DNA)
   const personaData = await Promise.all(
     personas.map(async (p) => ({
       persona: p,
@@ -28,7 +27,6 @@ export async function GET() {
 
   const themes = detectOrgThemes(personaData)
 
-  // Add similarity warnings to prevent duplicate content across personas
   for (const theme of themes) {
     for (let i = 0; i < theme.relevantPersonas.length; i++) {
       for (let j = i + 1; j < theme.relevantPersonas.length; j++) {

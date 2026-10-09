@@ -41,7 +41,6 @@ export function decideIfInterviewNeeded(input: {
 }): InterviewDecision {
   const missingDimensions: string[] = []
 
-  // Check if we have enough personal context
   if (!input.profile || input.profile.confidence < 0.3) {
     missingDimensions.push('basic professional context')
   }
@@ -170,17 +169,14 @@ export function shouldStopInterview(input: {
     return { shouldStop: true, reason: `Reached maximum of ${MAX_INTERVIEW_QUESTIONS} questions.` }
   }
 
-  // Stop if last answer was high quality and we have at least 1 answer
   if (input.lastAnswerQuality === 'high' && input.questionsAsked >= 1) {
     return { shouldStop: true, reason: 'Last answer provided strong unique material.' }
   }
 
-  // Stop if no missing dimensions remain
   if (input.missingDimensionsRemaining <= 0 && input.questionsAsked >= 1) {
     return { shouldStop: true, reason: 'No missing dimensions remain.' }
   }
 
-  // Stop if marginal information gain is low
   if (input.informationGain > 0.7 && input.questionsAsked >= 2) {
     return { shouldStop: true, reason: 'Information gain is high enough.' }
   }
@@ -232,7 +228,6 @@ function getFallbackQuestion(missingDimensions: string[], questionIndex: number)
     ],
   }
 
-  // Pick a question from the first missing dimension
   const dimension = missingDimensions[0] ?? 'specific personal detail or experience'
   const questions = fallbacks[dimension] ?? fallbacks['specific personal detail or experience']!
   const idx = Math.min(questionIndex, questions.length - 1)

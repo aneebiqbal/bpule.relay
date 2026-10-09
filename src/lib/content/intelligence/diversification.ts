@@ -1,14 +1,3 @@
-/**
- * Trend Diversification by Persona Type
- *
- * Same trend → genuinely different editorial contributions based on
- * who is posting. Prevents 100 AI engineers from posting the same
- * OpenAI announcement with the same angle.
- *
- * The diversification happens at the IDEA level, not the copy level.
- * Different angles for different persona types, then the writer
- * expresses each angle in the persona's voice.
- */
 
 export interface PersonaAngleProfile {
   type: 'cto' | 'engineer' | 'founder' | 'devops' | 'designer' | 'sales' | 'pm' | 'leader'
@@ -111,7 +100,6 @@ export function generateDiversifiedAngle(
   trendTitle: string,
   trendTopics: string[],
 ): DiversifiedAngle {
-  // Pick the lens based on the trend topic to ensure variety
   const lensIndex = hashString(trendTitle) % personaType.lenses.length
   const lens = personaType.lenses[lensIndex]
 
@@ -134,7 +122,6 @@ WHY THIS ANGLE: ${angle.whyThisPersona}
 Do NOT write about this from a generic perspective. Write specifically from this persona's professional viewpoint.`
 }
 
-// ── Utility ──────────────────────────────────────────────────────────────────
 
 function hashString(str: string): number {
   let hash = 0

@@ -1,21 +1,3 @@
-/**
- * AI Runtime V3 — Central Router
- *
- * Single entry point for ALL AI operations in Relay.
- *
- * Usage:
- *   import { generate } from '@/lib/ai/runtime'
- *   const result = await generate({
- *     task: 'FAST_STRUCTURED',
- *     system: '...',
- *     user: '...',
- *     schema: { ... },
- *   })
- *
- * Intelligence flow:
- *   deterministic guard → cache check → tier selection → provider chain
- *     → schema validate → cache store → budget record → trace persist
- */
 
 import type {
   TaskClass,
@@ -42,7 +24,6 @@ import {
 import { ContentCache } from '@/lib/ai/cache'
 import { isBudgetExceeded, recordCost } from '@/lib/ai/budget'
 
-// ── Task Profiles ────────────────────────────────────────────────────────────
 
 const TASK_PROFILES: Record<TaskClass, TaskProfile> = {
   FAST_STRUCTURED: {
@@ -83,7 +64,6 @@ const TASK_PROFILES: Record<TaskClass, TaskProfile> = {
   },
 }
 
-// ── Provider Chain per Task ─────────────────────────────────────────────────
 //
 // OpenAI is the primary intelligence layer. When OPENAI_API_KEY is present it
 // leads the chain so the tier model mapping (luna/terra/sol) takes effect.
@@ -134,7 +114,6 @@ function getChainForTask(taskClass: TaskClass): ChainEntry[] {
   }
 }
 
-// ── Public API ───────────────────────────────────────────────────────────────
 
 export interface GenerateOptions {
   task: TaskClass
@@ -173,7 +152,6 @@ export interface GenerateResult<T> {
   cacheHit?: boolean
 }
 
-// ── Cache ────────────────────────────────────────────────────────────────────
 
 const resultCache = new ContentCache<unknown>({ maxSize: 500, ttlMs: 15 * 60 * 1000, version: 'ai-runtime-v3' })
 
@@ -182,7 +160,6 @@ function cacheKey(opts: Pick<GenerateOptions, 'task' | 'system' | 'user' | 'prom
   return parts.join('::')
 }
 
-// ── Main Generate Function ──────────────────────────────────────────────────
 
 export async function generate<T = Record<string, unknown>>(
   options: GenerateOptions,
@@ -214,7 +191,6 @@ export async function generate<T = Record<string, unknown>>(
   }
   const useJson = Boolean(options.schema || options.outputSchema) && !options.onChunk && !options.stream
 
-  // ── Cache Check ───────────────────────────────────────────────────────────
   if (!options.skipCache) {
     const key = cacheKey({ task: options.task, system: options.system, user: options.user, promptVersion: options.promptVersion, schemaName: options.schemaName })
     const cached = resultCache.get(key)
@@ -248,19 +224,16 @@ export async function generate<T = Record<string, unknown>>(
     }
   }
 
-  // ── Budget Guard ──────────────────────────────────────────────────────────
   const tierConfig = getTierConfig(tier)
   if (tierConfig.budgetClass === 'expensive' && isBudgetExceeded()) {
     throw new Error('AI budget exceeded — expensive tier blocked')
   }
 
-  // ── Provider Chain ───────────────────────────────────────────────────────
   let currentTier: IntelligenceTier = tier
 
   for (let i = 0; i < chain.length; i++) {
     const step = chain[i]
 
-    // For OpenAI steps, use the intelligence tier model
     const resolved = step.provider === 'openai'
       ? { ...resolveModelForTier(currentTier), model: resolveModelForTier(currentTier).model, baseUrl: resolveModelForTier(currentTier).baseUrl, provider: 'openai' }
       : step.modelResolver(options.modelOverride)
@@ -316,7 +289,6 @@ export async function generate<T = Record<string, unknown>>(
         result = await callTextByProvider(step.provider, providerModel, params, timeoutMs)
       }
 
-      // ── Schema Validation ────────────────────────────────────────────────
       let schemaValid = true
       let validationRetries = 0
       if (options.outputSchema && useJson && typeof result.data === 'object' && result.data !== null) {
@@ -349,7 +321,6 @@ export async function generate<T = Record<string, unknown>>(
         }
       }
 
-      // ── Empty Output Guard ──────────────────────────────────────────────
       // Model returned near-empty content (output_tokens=1 or empty string).
       // Treat as a transient failure and fall back to next provider.
       const isEmptyOutput = !result.data ||
@@ -388,7 +359,6 @@ export async function generate<T = Record<string, unknown>>(
         promptVersion: options.promptVersion,
       }
 
-      // ── Budget Record ────────────────────────────────────────────────────
       recordCost({
         feature: options.feature ?? 'unknown',
         operation: options.task,
@@ -404,7 +374,6 @@ export async function generate<T = Record<string, unknown>>(
         costTier,
       })
 
-      // ── Cache Store ──────────────────────────────────────────────────────
       if (!options.skipCache && schemaValid) {
         const key = cacheKey({ task: options.task, system: options.system, user: options.user, promptVersion: options.promptVersion, schemaName: options.schemaName })
         resultCache.set(key, result.data)
@@ -470,7 +439,6 @@ export async function generate<T = Record<string, unknown>>(
   throw new Error(`All providers failed: ${trace.error}`)
 }
 
-// ── Provider Dispatch ────────────────────────────────────────────────────────
 
 async function callJsonByProvider(
   provider: string,
@@ -502,7 +470,6 @@ async function callTextByProvider(
   }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function providerHasCredentials(provider: string): boolean {
   switch (provider) {
@@ -546,7 +513,6 @@ function logTrace(trace: AiTrace): void {
   )
 }
 
-// ── Exports ──────────────────────────────────────────────────────────────────
 
 export { TASK_PROFILES }
 export type { TaskProfile } from './types'

@@ -38,7 +38,6 @@ export default function PostDetailPage() {
       return
     }
 
-    // Try sessionStorage first (always available for any idea)
     try {
       const stored = sessionStorage.getItem(`studio-idea-${ideaId}`)
       if (stored) {
@@ -48,7 +47,6 @@ export default function PostDetailPage() {
       }
     } catch { /* ignore */ }
 
-    // Try database fetch (for persisted ideas)
     fetch(`/api/content/personas/ideas/${ideaId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {

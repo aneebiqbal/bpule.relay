@@ -17,7 +17,6 @@ import type { ExtractedFacts, ExtractedProject, ExtractedProof, ExtractedReview 
 import { normalizeSkill } from './skill-normalization'
 import { resolveIdentity } from './identity-resolution'
 
-// ── Authority ────────────────────────────────────────────────────────────────
 
 export type Authority =
   | 'human_verified'
@@ -57,7 +56,6 @@ export function authorityFromEvidence(evidenceType: string | null | undefined): 
   }
 }
 
-// ── Classification ──────────────────────────────────────────────────────────
 
 export type ChangeClass = 'NEW_FACT' | 'UPDATE' | 'DUPLICATE' | 'CONFLICT' | 'UNKNOWN'
 export type ChangeKind = 'scalar' | 'list_item' | 'project' | 'proof' | 'review' | 'experience'
@@ -123,7 +121,6 @@ export interface EnrichmentProposal {
   summary: DiffSummary
 }
 
-// ── Inputs ──────────────────────────────────────────────────────────────────
 
 export interface ExistingProfileState {
   profile: Record<string, any>
@@ -162,7 +159,6 @@ export interface SourceExtraction {
   warnings?: string[]
 }
 
-// ── Normalisation + fingerprints ────────────────────────────────────────────
 
 export function norm(v: unknown): string {
   if (v === null || v === undefined) return ''
@@ -190,7 +186,6 @@ export function fingerprint(...parts: unknown[]): string {
   return sha256(parts.map(norm).join('|')).slice(0, 40)
 }
 
-// ── Field catalogue ─────────────────────────────────────────────────────────
 
 const SCALAR_FIELDS: Array<{ field: string; key: keyof ExtractedFacts; label: string; type: 'text' | 'longtext' | 'number' | 'seniority' | 'identity' }> = [
   { field: 'full_name', key: 'fullName', label: 'Full name', type: 'identity' },
@@ -227,7 +222,6 @@ function isEmpty(v: unknown): boolean {
   return v === null || v === undefined || (typeof v === 'string' && v.trim() === '') || (Array.isArray(v) && v.length === 0)
 }
 
-// ── Existing-value authority ────────────────────────────────────────────────
 
 function existingAuthority(state: ExistingProfileState, field: string, value: unknown): Authority | null {
   if (isEmpty(value)) return null
@@ -250,7 +244,6 @@ function existingAuthority(state: ExistingProfileState, field: string, value: un
   return authorityRank(corroborated) > authorityRank(base) ? corroborated : base
 }
 
-// ── Main: build proposal ────────────────────────────────────────────────────
 
 export function buildProposal(
   runId: string,
@@ -269,7 +262,6 @@ export function buildProposal(
   let seq = 0
   const nextId = (prefix: string) => `${prefix}_${++seq}`
 
-  // Merge key → change, so the same fact from several files yields ONE change
   // carrying every source as provenance.
   const byKey = new Map<string, ProposedChange>()
   const addOrCorroborate = (key: string, make: () => ProposedChange, prov: Provenance) => {
@@ -301,7 +293,6 @@ export function buildProposal(
     const incomingAuthority = (value: unknown, fallback: Authority): Authority =>
       ex.isSpreadsheet && cells.has(norm(value)) ? 'trusted_source_fact' : fallback
 
-    // Which extracted people are this profile?
     const people = ex.people.filter((p) => {
       // A human choice overrides name matching: exactly that person, nobody else.
       const isTarget = selected !== null
@@ -664,7 +655,6 @@ export function summarize(changes: ProposedChange[]): DiffSummary {
   return s
 }
 
-// ── Plan: proposal + decisions → additive RPC payload ───────────────────────
 
 export interface EnrichmentPlan {
   scalar_updates: Array<{ field: string; expected: string | null; value: string }>
@@ -827,7 +817,6 @@ export function buildPlan(
 
   for (const [field, items] of listAppends) plan.array_appends.push({ field, items })
 
-  // Which role is current after this merge? Only an approved current_role /
   // company change moves it; otherwise the existing current role stays current.
   if (roleChanged.role || roleChanged.company) {
     const newRole = roleChanged.role ? String(roleChanged.role.incomingValue) : null
@@ -891,7 +880,6 @@ export function withChronology(plan: EnrichmentPlan, state: ExistingProfileState
   return out
 }
 
-// ── Derived intelligence ────────────────────────────────────────────────────
 
 export function computeReadiness(profile: Record<string, any>, sourceCount: number): 'ready' | 'needs_review' | 'incomplete' | 'needs_source' {
   const hasIdentity = !isEmpty(profile.full_name) || !isEmpty(profile.display_name) || !isEmpty(profile.label)

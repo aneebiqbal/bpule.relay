@@ -248,7 +248,6 @@ export function buildMyDayFromActivity(input: {
   const dayCloseStatus = dayCloses[0]?.status ?? null
   // hasContract gates the FORMAL Day Close action specifically — you cannot
   // formally close a day against a contract that doesn't exist, regardless
-  // of whether daily_targets/daily_accountability data is present.
   const hasContract = contracts.length > 0
   // hasIdentity reflects whether the rep has an identity assignment at all
   // (identity_assignments). This is what "No revenue identity assigned" must
@@ -438,7 +437,6 @@ async function load(): Promise<AccountabilityDashboardData | null> {
 
   const role: 'rep' | 'manager' | 'admin' = ctx.isOwner || ctx.isAdmin ? 'admin' : ctx.isManager ? 'manager' : 'rep'
 
-  // ── Always load the rep's own day ──
   const { data: assignments } = await supabase
     .from('identity_assignments')
     .select('revenue_identity_id')
@@ -513,7 +511,6 @@ async function load(): Promise<AccountabilityDashboardData | null> {
     myDay,
   }
 
-  // ── Manager: load team data ──
   if (role === 'manager' && ctx.managedTeamIds.length > 0) {
     const teams = await Promise.all(ctx.managedTeamIds.map(async (teamId) => {
       const [teamInfo, members] = await Promise.all([
@@ -523,12 +520,10 @@ async function load(): Promise<AccountabilityDashboardData | null> {
 
       const memberIds = (members.data ?? []).map((m: any) => m.person_id)
 
-      // Get day closes for team members
       const { data: teamDayCloses } = memberIds.length > 0
         ? await supabase.from('day_closes').select('*').in('person_id', memberIds).eq('date', today)
         : { data: [] }
 
-      // Get contracts for team members' identities
       const teamIdentityIds = (teamDayCloses ?? []).map((dc: any) => dc.revenue_identity_id)
       const { data: teamContracts } = teamIdentityIds.length > 0
         ? await supabase.from('revenue_identity_contracts').select('*').in('revenue_identity_id', teamIdentityIds).eq('status', 'active')
@@ -610,9 +605,7 @@ async function load(): Promise<AccountabilityDashboardData | null> {
     result.team = { teams }
   }
 
-  // ── Admin: load command center ──
   //
-  // This used to be driven entirely by day_closes / revenue_identity_contracts
   // (the "formal daily contract" accountability system). In practice those
   // tables can be completely unprovisioned for an org — zero contracts ever
   // created — while reps are actively working and daily_targets /
@@ -623,7 +616,6 @@ async function load(): Promise<AccountabilityDashboardData | null> {
   // operators today" for a team that was demonstrably working — the admin
   // view was reading from a data source nothing had ever written to, not
   // reflecting an actual empty team. daily_targets/daily_accountability is
-  // now the primary source (it's populated for every rep who has ever
   // logged real activity); day_closes is still consulted, best-effort, to
   // enrich the "Day Close" column when that separate system IS in use.
   if (role === 'admin') {

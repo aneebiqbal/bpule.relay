@@ -15,7 +15,6 @@ import type {
   V3NeedOwner,
 } from '../types'
 
-// ── Decision Context (input to the model) ───────────────────────────────────
 
 export interface V3DecisionContext {
   /** Canonical person facts (name, affiliations, location) */
@@ -58,7 +57,6 @@ export interface V3DecisionContext {
   senderCapabilities: string[]
 }
 
-// ── Decision Output (typed answers) ─────────────────────────────────────────
 
 export interface V3DecisionAnswers {
   relationship: V3Relationship
@@ -71,7 +69,6 @@ export interface V3DecisionAnswers {
   messageEligible: number
 }
 
-// ── JSON Schema for structured output ──────────────────────────────────────
 
 export const V3_DECISION_SCHEMA = {
   type: 'object',
@@ -133,7 +130,6 @@ export const V3_DECISION_SCHEMA = {
   additionalProperties: false,
 } as const
 
-// ── System Prompt ────────────────────────────────────────────────────────────
 
 export const V3_DECISION_SYSTEM_PROMPT = `You are a bounded commercial decision classifier for a software development agency.
 
@@ -184,7 +180,6 @@ KEY RULES:
 8. Relationship classification describes the PRIMARY role in THIS episode, not the person globally
 9. When in doubt between BUYER and SERVICE_PROVIDER, look for EXPLICIT apply instructions or direct asks for help — those make it BUYER`
 
-// ── User Prompt Builder ─────────────────────────────────────────────────────
 
 export function buildDecisionUserPrompt(ctx: V3DecisionContext): string {
   const parts: string[] = []

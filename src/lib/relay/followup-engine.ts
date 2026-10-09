@@ -64,7 +64,6 @@ export function determineFollowup(context: FollowupContext): FollowupStrategy {
     }
   }
 
-  // Has replied = no follow-up needed
   if (lead.status === 'replied' || context.lastReplyAt) {
     return {
       shouldFollowUp: false,
@@ -77,7 +76,6 @@ export function determineFollowup(context: FollowupContext): FollowupStrategy {
     }
   }
 
-  // Check if enough time has passed (5 business days)
   const daysSince = businessDaysBetween(new Date(lastSentAt), now)
   if (daysSince < 5) {
     return {
@@ -91,7 +89,6 @@ export function determineFollowup(context: FollowupContext): FollowupStrategy {
     }
   }
 
-  // Determine the approach based on what was sent before
   const lastSent = priorMessages
     .filter((m) => m.sentText && m.sentAt)
     .sort((a, b) => (a.sentAt ?? '').localeCompare(b.sentAt ?? ''))
@@ -99,7 +96,6 @@ export function determineFollowup(context: FollowupContext): FollowupStrategy {
 
   const lastText = lastSent?.sentText ?? ''
 
-  // Choose approach based on the original message's content
   const approach = chooseFollowupApproach(lastText, lead)
 
   return {
@@ -124,7 +120,6 @@ function chooseFollowupApproach(
 } {
   const lower = lastSentText.toLowerCase()
 
-  // If the original offered a "free Read", the follow-up should NOT repeat that
   if (lower.includes('free read') || lower.includes('quick read')) {
     return {
       approach: 'Light nudge with a different angle. Do not repeat the Read offer.',
@@ -134,7 +129,6 @@ function chooseFollowupApproach(
     }
   }
 
-  // If the original asked a question, follow up on that
   if (lastSentText.includes('?')) {
     return {
       approach: 'Reference the original question. Make it easy to answer.',
@@ -144,7 +138,6 @@ function chooseFollowupApproach(
     }
   }
 
-  // If the original referenced a specific project/detail
   if (lower.includes('noticed') || lower.includes('saw') || lower.includes('building')) {
     return {
       approach: 'Add a small new observation or thought. Show you are paying attention.',

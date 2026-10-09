@@ -307,14 +307,12 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     return groups
   }, [filtered])
 
-  // Reset selection when query changes
   const [lastQuery, setLastQuery] = useState(query)
   if (query !== lastQuery) {
     setLastQuery(query)
     setSelectedIndex(0)
   }
 
-  // Reset state when palette closes
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)

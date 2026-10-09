@@ -77,7 +77,6 @@ export function AssignedProfilesView() {
       .finally(() => setLoading(false))
   }, [])
 
-  // Default the active identity to whatever was last selected, falling back
   // to the first assigned identity — so a rep with only one identity never
   // sees an "unset" state, and a rep with several always has a clear answer
   // to "which one am I working as right now."

@@ -80,7 +80,6 @@ export async function getReferralRecommendations(
   const { createServiceSupabase } = await import('@/lib/supabase/service')
   const supabase = createServiceSupabase()
 
-  // Get lead's opportunity capabilities from V3 decision
   const { data: lead } = await supabase
     .from('leads')
     .select('canonical_intelligence, sender_profile_id')
@@ -90,7 +89,6 @@ export async function getReferralRecommendations(
 
   if (!lead) return []
 
-  // Get all active profiles for this org
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, identity_name, skills, technologies, expertise, industries, allowed_first_person_claims')
@@ -99,7 +97,6 @@ export async function getReferralRecommendations(
 
   if (!profiles) return []
 
-  // Extract capabilities from lead's V3 intelligence
   const v3Packet = (lead.canonical_intelligence as Record<string, unknown>)?.v3DecisionPacket as Record<string, unknown> | undefined
   const capabilities = extractCapabilitiesFromV3(v3Packet)
 

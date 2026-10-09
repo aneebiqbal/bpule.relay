@@ -41,7 +41,6 @@ export function generateStrategyCandidates(
 ): StrategyCandidate[] {
   const candidates: StrategyCandidate[] = []
 
-  // Always include the auto-selected mode
   candidates.push({
     mode: strategy.mode,
     label: 'Primary',
@@ -49,7 +48,6 @@ export function generateStrategyCandidates(
     systemAddition: '',
   })
 
-  // Add alternatives based on what makes sense
   if (strategy.mode !== 'relevant_question' && strategy.relevantProof.length === 0) {
     candidates.push({
       mode: 'relevant_question',
@@ -105,14 +103,12 @@ export function evaluateMessage(
 
   const lower = text.toLowerCase()
 
-  // ── Stage-specific quality gate ──────────────────────────────────────────
   const stageResult = evaluateMessageStage(text, stage, stageContext)
   if (!stageResult.passed) {
     failures.push(...stageResult.issues.map(i => `[${stage}] ${i}`))
     score -= stageResult.issues.length * 10
   }
 
-  // ── Hard gates ─────────────────────────────────────────────────────────────
 
   // 1. Surveillance-like opening
   if (/^(hey|hi|hello)\s+\w+,?\s*(i noticed|i saw|i came across|i was looking at|i found your)/i.test(lower)) {
@@ -126,7 +122,6 @@ export function evaluateMessage(
     failures.push('Assumes funding = available budget')
     score -= 40
   }
-  // Also flag standalone budget assumptions ("gives you budget", "have some budget")
   else if (/\b(gives? you|have|has|with).*\b(some\s+)?budget\b/i.test(lower)) {
     failures.push('Assumes prospect has budget to spend')
     score -= 40
@@ -276,19 +271,15 @@ export function evaluateMessage(
   // anything from the lead context, safe trigger, or proof
   if (strategy && wordCount > 20) {
     const textLower = lower
-    // Check if company name appears in the message
     const companyReferenced = strategy.leadContext.split('.').some((s) => {
       const match = s.match(/company:\s*(.+)/i)
       return match?.[1] && textLower.includes(match[1].trim().toLowerCase())
     })
-    // Check if safe trigger content appears
     const triggerContent = strategy.safeTrigger.replace(/^Their own words: "?/, '').replace(/"$/, '').toLowerCase()
     const triggerWords = triggerContent.split(/\s+/).filter((w) => w.length >= 4)
     const triggerReferenced = triggerWords.length > 0 && triggerWords.some((w) => textLower.includes(w))
-    // Check if any proof is referenced (any 5+ char word from proof)
     const proofWords = strategy.relevantProof.flatMap((p) => p.toLowerCase().split(/\s+/).filter((w) => w.length >= 5))
     const proofReferenced = proofWords.length > 0 && proofWords.some((w) => textLower.includes(w))
-    // Check if the message contains any tag-matching content
     const hasSomeSpecificity = companyReferenced || triggerReferenced || proofReferenced
     if (!hasSomeSpecificity) {
       failures.push('No specific personalization carried through')
@@ -423,16 +414,12 @@ export function repairMessage(
     repaired = repaired.replace(/\bwe are\b/gi, 'I am')
   }
 
-  // Remove em dashes
   repaired = repaired.replace(/[\u2014\u2013]/g, '-')
 
-  // Remove exclamation marks
   repaired = repaired.replace(/!/g, '.')
 
-  // Remove emojis
   repaired = repaired.replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
 
-  // Clean up double spaces
   repaired = repaired.replace(/  +/g, ' ').trim()
 
   return repaired

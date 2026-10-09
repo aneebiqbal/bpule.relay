@@ -113,8 +113,6 @@ export function getAdminView(queue: RelayQueue, teamRate: RateMetric | null): Ad
 }
 
 function inferRepName(task: RelayTask, currentRep: Rep): string | null {
-  // In a real implementation, we'd have rep info per task
-  // For now, return null — the UI shows entity IDs
   return null
 }
 

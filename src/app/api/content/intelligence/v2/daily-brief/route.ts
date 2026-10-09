@@ -118,7 +118,6 @@ async function generateAndRespond(
          platform,
        })
 
-      // If AI produced 0 ideas, treat as failure to trigger fallback
       if (!result.ideas || result.ideas.length === 0) {
         throw new Error('AI returned 0 ideas')
       }
@@ -264,7 +263,6 @@ function generateFallbackIdeas(
     })
   }
 
-  // Ensure at least 3 diverse ideas
   if (ideas.length < 3) {
     ideas.push(
       { title: `A lesson from ${expertise[0] ?? territories[0] ?? 'your work'}`, angle: `Share a specific insight from your experience. What would you tell someone starting out?`, whyNow: 'Evergreen', trendGrounded: false, formatSuggestion: 'practical_lesson' },

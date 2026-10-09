@@ -1,14 +1,3 @@
-/**
- * Decision Intelligence V3 — Orchestrator
- *
- * Single entry point for the V3 pipeline:
- *
- * RAW SOURCE → FACT/EVENT EXTRACTION → ENTITY RESOLUTION → EVIDENCE GRAPH
- * → OPPORTUNITY EPISODES → BOUNDED DECISION MODEL → CALIBRATED SCORE
- * → CANONICAL DECISION PACKET → ACTION POLICY
- *
- * In shadow mode, runs alongside V2 without changing user-visible results.
- */
 
 import type {
   V3LeadDecisionPacket,
@@ -35,7 +24,6 @@ import type { V3Person, V3Event } from './types'
 import { assembleDecisionPacket } from './decision/decision-assembler'
 import type { V3ScoreInput } from './scoring/score-v3'
 
-// ── Public API ──────────────────────────────────────────────────────────────
 
 export interface V3OrchestratorOptions {
   /** Override decision provider */
@@ -128,7 +116,6 @@ export async function runV3Decision(
 
   let providerResult
   if (providerContext) {
-    // Try primary provider with built-in retry
     if (provider) {
       try {
         providerResult = await provider.decide(providerContext)
@@ -195,7 +182,6 @@ export async function runV3Decision(
   }
 }
 
-// ── Cascade Escalation ────────────────────────────────────────────────────────
 
 const UNCERTAIN_MIN = 0.3
 const UNCERTAIN_MAX = 0.7
@@ -346,7 +332,6 @@ function validateEscalAccess(v: unknown): import('./types').V3AccessLevel {
   return typeof v === 'string' && ['NONE', 'INDIRECT', 'CONNECTION', 'DIRECT'].includes(v) ? v as import('./types').V3AccessLevel : 'INDIRECT'
 }
 
-// ── V2 Bridge ────────────────────────────────────────────────────────────────
 
 export interface V2BridgeInput {
   person: {
@@ -430,14 +415,11 @@ export interface V2BridgeInput {
 function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
   const graph = createEvidenceGraph()
 
-  // Create person
   const person = upsertPerson(graph, v2.person.fullName, v2.person.linkedinUrl, v2.person.location)
 
-  // Create organizations from affiliations
   if (v2.person.affiliations) {
     for (const aff of v2.person.affiliations) {
       const org = upsertOrganization(graph, aff.organizationName, null, null)
-      // Add affiliation to person
       const personRef = graph.persons.get(person.id)!
       const existingAff = personRef.affiliations.find((a) => a.organizationId === org.id)
       if (!existingAff) {
@@ -454,7 +436,6 @@ function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
     }
   }
 
-  // Create primary company
   const primaryOrg = upsertOrganization(
     graph,
     v2.company.name || v2.person.affiliations?.[0]?.organizationName || null,
@@ -469,8 +450,6 @@ function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
     markOrganizationAsServiceProvider(graph, primaryOrg.id)
   }
 
-  // Create evidence from ledger — scope each entry to its own organization
-  // This prevents the bug where Tayo360 hiring evidence gets scoped to AgentAce
   for (const entry of v2.evidenceLedger) {
     // Use the entry's organizationName if available, else fall back to primary
     const entryOrgName = entry.organizationName || primaryOrg.name
@@ -492,7 +471,6 @@ function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
     })
   }
 
-  // Create events from source-level parsing (richer than V2 evidence ledger)
   // These preserve organization scoping, temporal data, and apply instructions
   if (v2.sourceEvents && v2.sourceEvents.length > 0) {
     for (const srcEvent of v2.sourceEvents) {
@@ -511,7 +489,6 @@ function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
         polarity: 'ACTIVE',
       })
 
-      // Create evidence for this event
       const evidence = addEvidence(graph, {
         sourceType: 'linkedin_post',
         quote: srcEvent.description,
@@ -528,7 +505,6 @@ function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
 
       linkEvidenceToEvent(graph, event.id, evidence.id)
 
-      // Create evidence for requested assets
       for (const asset of srcEvent.requestedAssets) {
         addEvidence(graph, {
           sourceType: 'linkedin_post',
@@ -545,7 +521,6 @@ function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
     }
   }
 
-  // Create events from opportunity signals — scope to opportunity org if specified
   if (v2.opportunity.signals.length > 0) {
     const opportunityOrgName = v2.opportunity.organizationName || primaryOrg.name
     const opportunityOrg = opportunityOrgName !== primaryOrg.name
@@ -570,10 +545,8 @@ function buildV3GraphFromV2(v2: V2BridgeInput): V3EvidenceGraph {
     }
   }
 
-  // Create events from posts — scope each post to its organization
   for (const post of v2.content.recentPosts) {
     if (post.signals.length > 0) {
-      // Try to detect organization from post content (may differ from primary)
       const postOrgName = detectPostOrganization(post.paraphrase, v2.person.affiliations)
       const postOrg = postOrgName !== primaryOrg.name
         ? upsertOrganization(graph, postOrgName, null, null)
@@ -629,10 +602,8 @@ function scoreEpisodeCommercialStrength(ep: V3OpportunityEpisode): number {
   // Explicit request is strongest signal
   if (ep.explicitRequest) score += 40
 
-  // Has capabilities = real technical need
   score += Math.min(20, ep.requestedCapabilities.length * 4)
 
-  // Has application channels = direct access
   score += Math.min(15, ep.applicationChannels.length * 5)
 
   // Timing: current > aging > stale > unknown
@@ -772,7 +743,6 @@ function createEmptyPacket(
   }
 }
 
-// ── Organization Detection ─────────────────────────────────────────────────
 
 /**
  * Detect which organization a LinkedIn post is about by looking for company
@@ -790,7 +760,6 @@ function detectPostOrganization(postText: string, affiliations?: Array<{ organiz
   return affiliations[0]?.organizationName || 'Unknown'
 }
 
-// ── Mapping Helpers ──────────────────────────────────────────────────────────
 
 function mapSourceEventType(type: string): import('./types').V3EventType {
   const valid: import('./types').V3EventType[] = [

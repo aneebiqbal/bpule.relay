@@ -16,7 +16,6 @@ export async function POST(req: NextRequest) {
   const date = typeof body.date === 'string' ? body.date : new Date().toISOString().slice(0, 10)
   const supabase = await createServerSupabase()
 
-  // Ensure day closes for all assigned identities
   const { data, error } = await supabase.rpc('ensure_day_closes_for_person', {
     p_org_id: ctx.orgId,
     p_person_id: ctx.repId,

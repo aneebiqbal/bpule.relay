@@ -40,7 +40,6 @@ export async function POST(request: Request) {
   const revenueIdentityId = rawIdentityId
   const today = new Date().toISOString().slice(0, 10)
 
-  // Find the target for this rep + identity + activity
   const { data: target } = await supabase
     .from('daily_targets')
     .select('*')
@@ -97,7 +96,6 @@ export async function POST(request: Request) {
     if (created) accId = created.id
   }
 
-  // Log to audit
   await supabase.from('accountability_audit_log').insert({
     organization_id: org.id,
     rep_id: rep.id,

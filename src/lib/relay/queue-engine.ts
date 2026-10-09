@@ -175,7 +175,6 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
     tasks.push(...buildAdminTasks(input))
   }
 
-  // Sort by priority score descending
   tasks.sort((a, b) => b.priorityScore - a.priorityScore)
 
   const byKind = {} as Record<RelayTaskKind, number>
@@ -680,7 +679,6 @@ function buildAdminTasks(input: QueueInput): RelayTask[] {
   const { allReps, allLeads } = input
   if (!allReps || !allLeads) return tasks
 
-  // Find reps with no sends in 14+ days
   const now = Date.now()
   const leadsByRep = new Map<string, Lead[]>()
   for (const lead of allLeads) {

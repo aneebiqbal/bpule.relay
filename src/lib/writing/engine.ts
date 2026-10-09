@@ -8,7 +8,6 @@
  * duplicating prompts.
  */
 
-// ── Anti-AI Patterns ─────────────────────────────────────────────────────────
 
 export const BANNED_PHRASES = [
   'unpopular opinion:',
@@ -142,7 +141,6 @@ export const AI_TELL_PHRASES = [
   'paradigm shift',
 ] as const
 
-// ── Voice & Style Rules ─────────────────────────────────────────────────────
 
 export interface VoiceRules {
   emoji: 'none' | 'light' | 'moderate'
@@ -186,7 +184,6 @@ export function buildVoiceRulesPrompt(rules: VoiceRules): string {
   return lines.join('\n')
 }
 
-// ── Structure Selection ──────────────────────────────────────────────────────
 
 export type ContentStructure =
   | 'observation'
@@ -266,12 +263,10 @@ export function selectStructure(
   candidates.push({ structure: 'short_insight', score: 1.5 - (usage.get('short_insight') ?? 0), reason: 'Short insight for concise material' })
   candidates.push({ structure: 'direct_teaching', score: 1 - (usage.get('direct_teaching') ?? 0), reason: 'Direct teaching' })
 
-  // For very short material, prefer short structures
   if (wordCount < 60) {
     candidates.push({ structure: 'short_insight', score: 2 - (usage.get('short_insight') ?? 0), reason: 'Short material suits a short insight' })
   }
 
-  // Sort by score descending
   candidates.sort((a, b) => b.score - a.score)
 
   const best = candidates[0]
@@ -317,7 +312,6 @@ export function structureToPrompt(structure: ContentStructure): string {
   }
 }
 
-// ── Originality Check ────────────────────────────────────────────────────────
 
 export interface OriginalityReport {
   isOriginal: boolean
@@ -337,26 +331,22 @@ export function checkOriginality(
   const issues: string[] = []
   const lower = text.toLowerCase()
 
-  // Check banned phrases
   for (const phrase of bannedPhrases) {
     if (lower.includes(phrase.toLowerCase())) {
       issues.push(`Contains banned phrase: "${phrase}"`)
     }
   }
 
-  // Check AI tell phrases
   for (const phrase of AI_TELL_PHRASES) {
     if (lower.includes(phrase.toLowerCase())) {
       issues.push(`Contains AI tell: "${phrase}"`)
     }
   }
 
-  // Check for "It's not X, it's Y" pattern (handles period or comma between clauses)
   if (/it'?s\s+not\s+[^.]+[.,]\s*it'?s\s+/i.test(text)) {
     issues.push('Contains cliché contrast pattern: "It\'s not X, it\'s Y"')
   }
 
-  // Check for excessive one-line paragraphs (>80% of lines are one-liners)
   const lines = text.split('\n').filter(l => l.trim().length > 0)
   if (lines.length >= 5) {
     const shortLines = lines.filter(l => l.trim().split(/\s+/).length <= 6)
@@ -365,7 +355,6 @@ export function checkOriginality(
     }
   }
 
-  // Check for repetition against recent content
   for (const recent of recentTexts) {
     const similarity = computeTextSimilarity(text, recent)
     if (similarity > 0.3) {
@@ -396,7 +385,6 @@ function computeTextSimilarity(a: string, b: string): number {
   return union === 0 ? 0 : intersection / union
 }
 
-// ── Insight Extraction ──────────────────────────────────────────────────────
 
 export interface InsightAnalysis {
   hasStrongAngle: boolean
@@ -434,7 +422,6 @@ export function analyzeForInsight(sourceMaterial: string): InsightAnalysis {
     }
   }
 
-  // Find the most specific detail (usually has numbers, names, or concrete nouns)
   for (const sentence of sentences) {
     if (/\d/.test(sentence) || /specific|exactly|precisely|particular/i.test(sentence)) {
       specificDetail = sentence.trim()
@@ -446,7 +433,6 @@ export function analyzeForInsight(sourceMaterial: string): InsightAnalysis {
     specificDetail = sentences.reduce((a, b) => a.length > b.length ? a : b)
   }
 
-  // Determine if there's a strong angle
   const hasStrongAngle = Boolean(
     (expectation && reality) ||
     (tension && specificDetail) ||
@@ -471,7 +457,6 @@ export function analyzeForInsight(sourceMaterial: string): InsightAnalysis {
   }
 }
 
-// ── Quality Gate ─────────────────────────────────────────────────────────────
 
 export interface QualityGateResult {
   passed: boolean
@@ -527,19 +512,16 @@ export function runQualityGate(
 
   // 3. Humanization check
   if (opts.checkStructure) {
-    // Check for excessive em dashes
     const emDashCount = (text.match(/[\u2014\u2013]/g) || []).length
     if (emDashCount > 2) {
       issues.push(`Excessive em dashes (${emDashCount}) — use plain punctuation`)
     }
 
-    // Check for excessive exclamation marks
     const exclamationCount = (text.match(/!/g) || []).length
     if (exclamationCount > 1) {
       issues.push(`Excessive exclamation marks (${exclamationCount})`)
     }
 
-    // Check for uniform sentence rhythm
     const sentences = text.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 5)
     if (sentences.length >= 3) {
       const lengths = sentences.map(s => s.split(/\s+/).length)
@@ -553,23 +535,19 @@ export function runQualityGate(
       }
     }
 
-    // Check for generic closing
     const lastLine = text.trim().split('\n').pop()?.trim().toLowerCase() ?? ''
     if (/^(thoughts\?|agree\?|what do you think\?|let me know|comment below|share your)/i.test(lastLine)) {
       issues.push('Generic engagement-bait closing — end on the idea itself')
     }
 
-    // Check for "In today's..." opening
     if (/^in today'/i.test(text.trim())) {
       issues.push('Generic "In today\'s..." opening')
     }
 
-    // Check for fabricated-sounding quotes
     if (/".*"\s*—\s*(he|she|they|the|a|my)/i.test(text)) {
       issues.push('Possible fabricated quote attribution')
     }
 
-    // Check for both-sides hedging
     const bothSidesCount = (text.match(/\bon the one hand\b|\bon the other hand\b|\bwhile it's true\b|\bthat said\b|\bnevertheless\b/gi) || []).length
     if (bothSidesCount >= 2) {
       issues.push('Excessive both-sides hedging — pick a side if there\'s a real opinion')
@@ -603,7 +581,6 @@ function checkSpecificityWords(text: string, sourceMaterial: string, minWords: n
   return false
 }
 
-// ── Message Stage Quality ────────────────────────────────────────────────────
 
 export type MessageStage = 'connection' | 'first_dm' | 'follow_up' | 'reply'
 
@@ -636,18 +613,15 @@ export function evaluateMessageStage(
   const issues: string[] = []
   const lower = text.toLowerCase().trim()
 
-  // ── Universal: em-dash name formatting (AI tell) ─────────────────────────
   // "Hi John — ..." or "John — ..." is a common AI pattern
   if (context.prospectName) {
     const firstName = context.prospectName.split(/\s+/)[0]
     if (firstName && firstName.length >= 2) {
-      // Build dynamic regex from actual first name
       const escapedName = firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       const greetingDashPattern = new RegExp(`^(hi|hey|hello)\\s+${escapedName}\\s*[\\u2014\\u2013-]\\s*`, 'i')
       if (greetingDashPattern.test(text)) {
         issues.push('Em-dash after name — use comma or restructure')
       }
-      // Also detect "Name —" at start of line as a signature-like pattern
       const lineStartDashPattern = new RegExp(`(^|\\n)\\s*${escapedName}\\s*[\\u2014\\u2013-]`, 'i')
       if (lineStartDashPattern.test(text)) {
         issues.push('Em-dash name formatting reads as AI-generated')
@@ -655,7 +629,6 @@ export function evaluateMessageStage(
     }
   }
 
-  // ── Stage-specific gates ──────────────────────────────────────────────────
 
   if (stage === 'connection') {
     // Connection notes must be short
@@ -665,15 +638,12 @@ export function evaluateMessageStage(
     if (text.length < 15) {
       issues.push('Connection note too short to be meaningful')
     }
-    // Must not pitch services
     if (/\b(we specialize|we offer|our services|we can help you|let me help you|i can help you (build|ship|grow|scale))\b/i.test(lower)) {
       issues.push('Connection note pitches services — earn access instead')
     }
-    // Must not ask for a meeting
     if (/\b(schedule|hop on|call|meeting|chat to discuss)\b/i.test(lower)) {
       issues.push('Connection note asks for meeting too early')
     }
-    // Must have some specificity
     if (text.length > 50 && !/\b(you|your)\b/i.test(lower)) {
       issues.push('Connection note does not reference the prospect')
     }
@@ -684,18 +654,15 @@ export function evaluateMessageStage(
     if (text.length < 40) {
       issues.push('First DM too short to establish relevance')
     }
-    // Must not be a generic "thanks for connecting"
     if (/^thanks for connecting/i.test(lower) && text.length < 80) {
       issues.push('First DM is just a generic acknowledgment')
     }
-    // Must contain specific observation
     if (context.connectionNote && text.length > 0) {
       const similarity = computeTextSimilarity(text, context.connectionNote)
       if (similarity > 0.6) {
         issues.push('First DM too similar to connection note')
       }
     }
-    // Must not immediately pitch without context
     if (/\b(we can help|let me help|i can help)\b/i.test(lower) && text.length < 100) {
       issues.push('First DM pitches without establishing context')
     }
@@ -706,21 +673,18 @@ export function evaluateMessageStage(
     if (/\b(just following up|checking in|bumping this|just wanted to follow up)\b/i.test(lower)) {
       issues.push('Follow-up uses empty "following up" language')
     }
-    // Must not repeat connection note
     if (context.connectionNote) {
       const similarity = computeTextSimilarity(text, context.connectionNote)
       if (similarity > 0.5) {
         issues.push('Follow-up repeats connection note content')
       }
     }
-    // Must not repeat first DM
     if (context.firstDm) {
       const similarity = computeTextSimilarity(text, context.firstDm)
       if (similarity > 0.5) {
         issues.push('Follow-up repeats first DM content')
       }
     }
-    // Must not repeat prior follow-ups
     if (context.priorMessages && context.priorMessages.length > 0) {
       for (const prior of context.priorMessages) {
         const similarity = computeTextSimilarity(text, prior)
@@ -730,11 +694,9 @@ export function evaluateMessageStage(
         }
       }
     }
-    // Must not guilt-trip
     if (/\b(i know you're busy|haven't heard back|just wondering if|did you see my)\b/i.test(lower)) {
       issues.push('Follow-up uses guilt-tripping language')
     }
-    // Must not create fake urgency
     if (/\b(closing soon|last chance|final reminder|ending soon|limited spots)\b/i.test(lower)) {
       issues.push('Follow-up creates fake urgency')
     }
@@ -745,13 +707,11 @@ export function evaluateMessageStage(
     if (text.length < 10) {
       issues.push('Reply too short')
     }
-    // Must not be overly formal
     if (/\b(dear| sincerely|regards)\b/i.test(lower)) {
       issues.push('Reply uses overly formal business letter style')
     }
   }
 
-  // ── Universal: name punctuation ───────────────────────────────────────────
   // Detect "Hi John —" pattern (em dash after greeting+name)
   if (/^(hi|hey|hello)\s+\w+\s*[—–-]\s*/i.test(text)) {
     issues.push('Em dash after name — use comma: "Hi John,"')
@@ -766,7 +726,6 @@ export function evaluateMessageStage(
   }
 }
 
-// ── Platform Adaptation ─────────────────────────────────────────────────────
 
 export function adaptForLinkedIn(text: string): string {
   // LinkedIn: professional, no hashtag stuffing, clean formatting
@@ -781,7 +740,6 @@ export function adaptForX(text: string): string {
   return result.trim()
 }
 
-// ── Prompt Assembly Helpers ──────────────────────────────────────────────────
 
 export function buildAntiSlopBlock(): string {
   return [

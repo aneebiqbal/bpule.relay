@@ -43,7 +43,6 @@ export function buildConnectionNoteStrategy(
   const forbidden: string[] = []
   const combined = `${extracted.signalEvidence} ${extracted.aboutSummary ?? ''} ${extracted.verbatimQuote ?? ''}`
 
-  // ── Why connect? ──
   let whyConnect = 'Professional relevance in a shared domain.'
   const title = extracted.titleRaw ?? extracted.title ?? ''
 
@@ -55,7 +54,6 @@ export function buildConnectionNoteStrategy(
     whyConnect = 'Technical peer with relevant domain expertise.'
   }
 
-  // ── Relevant observation ──
   let relevantObservation = ''
   if (extracted.verbatimQuote && extracted.verbatimQuote.length > 12) {
     relevantObservation = `Their words: "${extracted.verbatimQuote.slice(0, 100)}"`
@@ -65,7 +63,6 @@ export function buildConnectionNoteStrategy(
     relevantObservation = extracted.aboutSummary.slice(0, 120)
   }
 
-  // ── Strongest safe signal ──
   let strongestSafeSignal = ''
   if (/\bhiring\b/i.test(combined)) {
     strongestSafeSignal = 'They are currently hiring.'
@@ -75,7 +72,6 @@ export function buildConnectionNoteStrategy(
     strongestSafeSignal = 'They are openly seeking external help.'
   }
 
-  // ── Forbidden topics ──
   if (/\braised|funding|series|seed\b/i.test(combined)) {
     forbidden.push('Do NOT mention their funding or raise — this is surveillance.')
   }
@@ -86,7 +82,6 @@ export function buildConnectionNoteStrategy(
     forbidden.push('Do NOT guess or fabricate a name.')
   }
 
-  // ── Sender overlap ──
   let senderOverlap = ''
   if (profile && matchedProof.length > 0) {
     const topProof = matchedProof[0]
@@ -95,7 +90,6 @@ export function buildConnectionNoteStrategy(
     senderOverlap = `${profile.label ?? 'The sender'} will connect as a fellow professional.`
   }
 
-  // ── Tone ──
   let tone = 'warm, brief, professional'
   if (/\b(engineer|developer|cto|architect)\b/i.test(title)) {
     tone = 'peer-level, technical, no fluff'
@@ -103,7 +97,6 @@ export function buildConnectionNoteStrategy(
     tone = 'respectful, concise, business-aware'
   }
 
-  // ── Candidate angles (strategically different) ──
   const candidateAngles = buildCandidateAngles(extracted, profile, matchedProof, forbidden)
 
   return {
@@ -161,7 +154,6 @@ function buildCandidateAngles(
     })
   }
 
-  // Always respect forbidden topics
   if (forbidden.length > 0) {
     for (const angle of angles) {
       angle.systemDirective += ` ABSOLUTELY DO NOT mention: ${forbidden.join('; ')}.`

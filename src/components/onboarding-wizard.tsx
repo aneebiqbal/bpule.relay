@@ -203,7 +203,6 @@ export function OnboardingWizard() {
       }
 
       if (data.redirectTo) {
-        // Generate initial ideas
         if (data.profile) {
           const ideas = generateDailyIdeas({
             profile: data.profile,
@@ -543,7 +542,6 @@ function StepGoals({ state, update }: { state: OnboardingState; update: (p: Part
   )
 }
 
-// Default audiences based on role — always show something
 function defaultAudiences(role: string): string[] {
   const r = role.toLowerCase()
   if (/founder|ceo|cto|chief|president|owner/.test(r)) return ['founders', 'investors', 'tech leaders', 'potential hires']
@@ -613,7 +611,6 @@ function StepAudience({ state, update }: { state: OnboardingState; update: (p: P
   )
 }
 
-// Default territories based on role
 function defaultTerritories(role: string): string[] {
   const r = role.toLowerCase()
   if (/founder|ceo|cto|chief|president|owner/.test(r)) return ['startup lessons', 'fundraising', 'team building', 'product strategy', 'leadership']

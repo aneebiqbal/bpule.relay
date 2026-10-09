@@ -41,7 +41,6 @@ interface AnalyticsPayload {
 export function trackEvent(payload: AnalyticsPayload): void {
   if (typeof window === 'undefined') return
 
-  // Send to analytics endpoint (fire-and-forget)
   try {
     const body = JSON.stringify({
       ...payload,

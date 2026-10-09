@@ -77,7 +77,6 @@ export function ConversationRelay({
 }: ConversationRelayProps) {
 
 
-  // Find the last inbound message for analysis
   const lastInbound = useMemo(() => {
     return messages
       .filter((m) => m.direction === 'inbound' && m.sentText)
@@ -111,7 +110,6 @@ export function ConversationRelay({
     return analyzeReply(lastInbound.sentText, context)
   }, [lastInbound, company, contactName, messages, relationshipState.phase])
 
-  // Build Relay presence state from relationship state
   const presenceState: RelayPresenceState = useMemo(() => {
     if (isThinking) return 'thinking'
     if (relationshipState.kind === 'won' || relationshipState.kind === 'lost') return 'idle'
@@ -121,7 +119,6 @@ export function ConversationRelay({
     return 'idle'
   }, [isThinking, relationshipState.kind])
 
-  // Build Relay insight from analysis
   const relayInsight = useMemo(() => {
     if (!analysis || isThinking) return null
 
@@ -150,7 +147,6 @@ export function ConversationRelay({
     return null
   }, [analysis, isThinking])
 
-  // Determine relay variant
   const relayVariant = useMemo(() => {
     if (!analysis) return 'default' as const
     if (analysis.intent === 'not_interested') return 'warning' as const
@@ -158,7 +154,6 @@ export function ConversationRelay({
     return 'default' as const
   }, [analysis])
 
-  // Generate refinement chips based on analysis
   const refinementChips: RefinementChip[] = useMemo(() => {
     if (!analysis || isThinking) return []
     const chips: RefinementChip[] = []
@@ -180,7 +175,6 @@ export function ConversationRelay({
     return chips.slice(0, 5)
   }, [analysis, isThinking])
 
-  // Build conversation summary from messages
   const conversationSummary = useMemo(() => {
     const sentMessages = messages.filter((m) => m.sentText)
     if (sentMessages.length <= 4) return null

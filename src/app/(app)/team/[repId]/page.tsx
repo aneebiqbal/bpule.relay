@@ -75,19 +75,16 @@ async function loadDrillDownData(repId: string) {
       .eq('date', today),
   ])
 
-  // Load contracts for day closes
   const contractIds = [...new Set((dayCloses ?? []).map((dc: any) => dc.contract_id).filter(Boolean))]
   const { data: contracts } = contractIds.length > 0
     ? await supabase.from('revenue_identity_contracts').select('*').in('id', contractIds)
     : { data: [] }
 
-  // Load identities for day closes
   const dcIdentityIds = [...new Set((dayCloses ?? []).map((dc: any) => dc.revenue_identity_id))]
   const { data: dcIdentities } = dcIdentityIds.length > 0
     ? await supabase.from('revenue_identities').select('id, identity_name, channel').in('id', dcIdentityIds)
     : { data: [] }
 
-  // Load allocations
   const { data: allocations } = contractIds.length > 0
     ? await supabase.from('contract_allocations').select('*').in('contract_id', contractIds)
     : { data: [] }

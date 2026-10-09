@@ -1,12 +1,3 @@
-/**
- * Evidence Graph Builder — V3
- *
- * Transforms raw extracted intelligence into a structured graph of
- * Persons → Organizations → Evidence → Events.
- *
- * Key principle: every commercial fact is scoped to person + organization + time.
- * No global person-level classifications that erase event-level signals.
- */
 
 import type {
   V3Person,
@@ -16,7 +7,6 @@ import type {
   V3Affiliation,
 } from '../types'
 
-// ── Graph State ─────────────────────────────────────────────────────────────
 
 export interface V3EvidenceGraph {
   persons: Map<string, V3Person>
@@ -46,7 +36,6 @@ export function createEvidenceGraph(): V3EvidenceGraph {
   }
 }
 
-// ── ID Generation ───────────────────────────────────────────────────────────
 
 let _idCounter = 0
 
@@ -59,7 +48,6 @@ export function resetIdCounter(): void {
   _idCounter = 0
 }
 
-// ── Person Management ────────────────────────────────────────────────────────
 
 export function upsertPerson(
   graph: V3EvidenceGraph,
@@ -67,7 +55,6 @@ export function upsertPerson(
   linkedinUrl: string | null,
   location: string | null,
 ): V3Person {
-  // Try to find existing person by name or URL
   for (const person of graph.persons.values()) {
     if (linkedinUrl && person.linkedinUrl === linkedinUrl) return person
     if (fullName && person.fullName && normalizeName(person.fullName) === normalizeName(fullName)) {
@@ -102,12 +89,10 @@ export function addAffiliation(
   const person = graph.persons.get(personId)
   if (!person) return
 
-  // Check if affiliation already exists
   const existing = person.affiliations.find(
     (a) => a.organizationId === orgId && a.role === role
   )
   if (existing) {
-    // Update current status if needed
     if (isCurrent) existing.isCurrent = true
     return
   }
@@ -123,7 +108,6 @@ export function addAffiliation(
   })
 }
 
-// ── Organization Management ──────────────────────────────────────────────────
 
 export function upsertOrganization(
   graph: V3EvidenceGraph,
@@ -160,7 +144,6 @@ export function markOrganizationAsServiceProvider(
   if (org) org.appearsToBeServiceProvider = true
 }
 
-// ── Evidence Management ─────────────────────────────────────────────────────
 
 export function addEvidence(
   graph: V3EvidenceGraph,
@@ -202,7 +185,6 @@ export function addEvidence(
 
   graph.evidence.set(id, evidence)
 
-  // Update indices
   if (evidence.subjectOrganizationId) {
     const orgIdx = graph.orgEvidenceIndex.get(evidence.subjectOrganizationId) || []
     orgIdx.push(id)
@@ -224,7 +206,6 @@ export function addEvidence(
   return evidence
 }
 
-// ── Event Management ────────────────────────────────────────────────────────
 
 export function addEvent(
   graph: V3EvidenceGraph,
@@ -285,7 +266,6 @@ export function linkEvidenceToEvent(
   }
   evidence.eventId = eventId
 
-  // Update event evidence index
   const idx = graph.eventEvidenceIndex.get(eventId) || []
   if (!idx.includes(evidenceId)) {
     idx.push(evidenceId)
@@ -293,7 +273,6 @@ export function linkEvidenceToEvent(
   }
 }
 
-// ── Query Helpers ───────────────────────────────────────────────────────────
 
 export function getEvidenceForOrganization(
   graph: V3EvidenceGraph,
@@ -323,7 +302,6 @@ export function getActiveEvents(graph: V3EvidenceGraph): V3Event[] {
   )
 }
 
-// ── Utility ──────────────────────────────────────────────────────────────────
 
 function normalizeName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '').trim()

@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
    if (sourceText.length > 100) {
      try {
        const identity = await extractIdentityWithAI(sourceText)
-       // Merge deterministic fallback for any empty arrays AI missed
        const deterministic = extractIdentityFromSource(sourceText)
        const merged = {
          ...identity,

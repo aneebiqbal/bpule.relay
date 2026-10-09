@@ -10,7 +10,6 @@
  * Schema version: relay_decision_v3
  */
 
-// ── Entity Layer ────────────────────────────────────────────────────────────
 
 export interface V3Person {
   id: string
@@ -43,7 +42,6 @@ export interface V3Organization {
   appearsToBeServiceProvider: boolean
 }
 
-// ── Evidence Layer ──────────────────────────────────────────────────────────
 
 export type V3EvidenceType = 'FACT' | 'STRONG_INFERENCE' | 'WEAK_INFERENCE'
 
@@ -93,7 +91,6 @@ export interface V3Evidence {
   temporalScope: 'CURRENT' | 'RECENT' | 'HISTORICAL' | 'FUTURE' | 'UNKNOWN'
 }
 
-// ── Event Layer ─────────────────────────────────────────────────────────────
 
 export type V3EventType =
   | 'HIRING'
@@ -138,7 +135,6 @@ export interface V3Event {
   polarity: 'ACTIVE' | 'NEGATED' | 'CLOSED' | 'FUTURE' | 'UNKNOWN'
 }
 
-// ── Opportunity Episode ──────────────────────────────────────────────────────
 
 export type V3EpisodeStatus = 'CURRENT' | 'AGING' | 'STALE' | 'CLOSED' | 'UNKNOWN'
 
@@ -171,7 +167,6 @@ export interface V3OpportunityEpisode {
   ageDays: number | null
 }
 
-// ── Decision Provider ────────────────────────────────────────────────────────
 
 export type V3Relationship =
   | 'BUYER'
@@ -206,7 +201,6 @@ export interface V3BoundedDecision {
   providerConfidence: number
 }
 
-// ── Canonical Decision Packet ────────────────────────────────────────────────
 
 export type V3Action =
   | 'CONTACT_NOW'
@@ -281,7 +275,6 @@ export interface V3ShadowComparison {
   productionDecision: string | null
 }
 
-// ── Scoring Config ──────────────────────────────────────────────────────────
 
 export interface V3ScoringWeights {
   buyerRequestProbability: number
@@ -294,7 +287,6 @@ export interface V3ScoringWeights {
   evidenceQuality: number
 }
 
-// ── Episode-to-score mapping for multi-episode leads ────────────────────────
 
 export interface V3EpisodeScore {
   episodeId: string
@@ -313,13 +305,10 @@ export interface V3MultiEpisodeResult {
   bestActiveEpisodeId: string | null
 }
 
-// ── Constants ────────────────────────────────────────────────────────────────
 
-// ── Build Intensity ─────────────────────────────────────────────────────────
 
 export type BuildIntensity = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH'
 
-// ── Commercial Potential ─────────────────────────────────────────────────────
 
 export type CommercialPotentialLevel = 'LOW' | 'MEDIUM' | 'HIGH'
 
@@ -358,7 +347,6 @@ export function v3ScoreLabel(score: number): { label: string; qualification: V3Q
   return { label: 'Not a fit', qualification: 'SKIP' }
 }
 
-// ── Staleness thresholds ─────────────────────────────────────────────────────
 
 export const EPISODE_STALENESS = {
   /** Days before an episode is considered aging */
@@ -369,7 +357,6 @@ export const EPISODE_STALENESS = {
   CLOSED_DAYS: 90,
 } as const
 
-// ── Message eligibility thresholds ──────────────────────────────────────────
 
 export const MESSAGE_ELIGIBILITY = {
   /** Minimum score to send a message */

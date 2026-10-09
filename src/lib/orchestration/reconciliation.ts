@@ -54,7 +54,6 @@ export function reconcileRelayRun(input: ReconcileInput): ReconciliationResult {
     }
   }
 
-  // Case 1: Run says WAITING but lead has been replied to
   if (run.status === 'waiting' && lead.status === 'replied') {
     return {
       runId: run.id,
@@ -66,7 +65,6 @@ export function reconcileRelayRun(input: ReconcileInput): ReconciliationResult {
     }
   }
 
-  // Case 2: Run says WAITING but conversation state shows reply
   if (run.status === 'waiting' && conversationState?.lastReplyAt) {
     return {
       runId: run.id,
@@ -78,7 +76,6 @@ export function reconcileRelayRun(input: ReconcileInput): ReconciliationResult {
     }
   }
 
-  // Case 3: Run says PREPARING but lead has been contacted
   if ((run.status === 'preparing' || run.status === 'routing') && lead.status !== 'new') {
     return {
       runId: run.id,
@@ -90,7 +87,6 @@ export function reconcileRelayRun(input: ReconcileInput): ReconciliationResult {
     }
   }
 
-  // Case 4: Run says AWAITING_HUMAN but outreach has been recorded
   if (run.status === 'awaiting_human' && lead.status !== 'new') {
     return {
       runId: run.id,
@@ -102,7 +98,6 @@ export function reconcileRelayRun(input: ReconcileInput): ReconciliationResult {
     }
   }
 
-  // Case 5: Conversation is in advanced stage but run is still waiting
   if (
     run.status === 'waiting' &&
     conversationState &&

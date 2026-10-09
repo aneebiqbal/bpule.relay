@@ -4,7 +4,6 @@
  * Central types for the unified AI execution layer.
  */
 
-// ── Task Classification ─────────────────────────────────────────────────────
 
 export type TaskClass =
   | 'FAST_STRUCTURED'
@@ -28,7 +27,6 @@ export interface TaskProfile {
   allowDeterministicFallback: boolean
 }
 
-// ── Provider Types ───────────────────────────────────────────────────────────
 
 export interface ProviderModel {
   provider: string
@@ -101,7 +99,6 @@ export interface TextCallParams {
   signal?: AbortSignal
 }
 
-// ── Normalized Output ───────────────────────────────────────────────────────
 
 export interface NormalizedJsonOutput {
   data: Record<string, unknown>
@@ -111,7 +108,6 @@ export interface NormalizedJsonOutput {
   wasCoerced: boolean
 }
 
-// ── Trace / Observability ───────────────────────────────────────────────────
 
 export interface AiTrace {
   taskId: string

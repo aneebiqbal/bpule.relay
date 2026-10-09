@@ -1,15 +1,3 @@
-/**
- * DEMO-ONLY lead extraction utility.
- *
- * This file provides a deterministic, no-AI extraction path used by:
- * - Tests (bd-pipeline.test.ts) that need to run without API keys
- * - Demo mode when no AI provider is configured
- *
- * PRODUCTION extraction uses src/lib/intelligence-v2/extraction-pipeline.ts
- * which routes through Runtime V3 (OpenCode → Groq → OpenAI).
- *
- * DO NOT add AI calls here. DO NOT import this in production routes.
- */
 
 import type { ExtractedLead, SignalId } from '@/lib/domain/types'
 import { mapLocationToRegion } from '@/lib/leads/targeting'

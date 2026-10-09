@@ -33,7 +33,6 @@ export async function GET() {
     return 'other'
   }
 
-  // Map to clean response — strip org IDs from inner objects for rep view
   const profiles = (assignments ?? [])
     .filter((a) => {
       const row = Array.isArray(a.identity) ? a.identity[0] : a.identity

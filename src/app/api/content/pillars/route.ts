@@ -22,7 +22,6 @@ export async function POST(req: NextRequest) {
 
   const store = await createScoutStore()
 
-  // Verify persona ownership
   const persona = await store.getContentPersona(personaId)
   if (!persona) return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
   if (persona.repId !== user.rep.id && user.rep.role !== 'admin') {

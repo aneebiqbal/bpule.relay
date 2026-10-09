@@ -337,7 +337,6 @@ function tzDateRange(date: string, timezone: string): { start: string; end: stri
     const startUtc = new Date(startLocal.toLocaleString('en-US', { timeZone: timezone })).toISOString()
     const endUtc = new Date(endLocal.toLocaleString('en-US', { timeZone: timezone })).toISOString()
 
-    // If conversion shifted the day (common with positive UTC offsets), correct it
     if (startUtc.split('T')[0] !== date) {
       const offsetMs = new Date(endUtc.split('T')[0]).getTime() - new Date(date).getTime()
       return {

@@ -41,13 +41,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Identity not assigned to you.' }, { status: 403 })
   }
 
-  // Determine which metric this event counts toward
   const allowedMetrics = COUNTING_EVENTS[eventType]
   if (!allowedMetrics) {
     return NextResponse.json({ ok: true, message: 'Event type does not count toward progress.' })
   }
 
-  // Map activity_type to specific metric
   let metricKey: string | null = null
   if (eventType === 'OUTREACH_RECORDED') {
     if (activityType === 'connection_request') metricKey = 'connections'

@@ -51,13 +51,11 @@ export async function POST(request: Request) {
     )
   }
 
-  // ── Canonical Intelligence (Intelligence V2) ─────────────────────────
   const canonical: CanonicalProspectIntelligence | null =
     body.canonicalIntelligence && typeof body.canonicalIntelligence === 'object'
       ? body.canonicalIntelligence as CanonicalProspectIntelligence
       : null
 
-  // ── Build Extracted Lead ─────────────────────────────────────────────
   const extracted: ExtractedLead = {
     name:
       typeof body.contactName === 'string' && body.contactName.trim()
@@ -168,7 +166,6 @@ export async function POST(request: Request) {
     )
   }
 
-  // ── Score: legacy rubric for `score` column, canonical for `canonical_score`
   const legacyRulebook = await store.getRulebook()
   const legacyScore = legacyRulebook ? computeScore(extracted, legacyRulebook) : null
 

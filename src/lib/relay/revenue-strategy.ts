@@ -927,7 +927,6 @@ function decideContact(
     }
   }
 
-  // Check for explicit buyer need BEFORE non-buyer relationship suppression.
   // A recruiter/partner who is ALSO actively seeking help (e.g., "looking for
   // development partners") should get CONTACT_NOW, not CONNECT_OR_OBSERVE.
   const hasBuyerRequest = (source.buyerEvidenceKinds ?? []).includes('BUYER_REQUEST')
@@ -1164,7 +1163,6 @@ function selectMessageJob(
   if (source.channel === 'followup' || source.relationshipStage === 'followup') {
     // A lead can now receive up to MAX_FOLLOWUPS_PER_LEAD (3, see
     // src/lib/relay/message-eligibility.ts) follow-ups across its life —
-    // this must stay in sync with that cap, not the old 1-follow-up rule.
     return source.priorFollowupCount >= 3 ? null : 'CLOSE_LOOP'
   }
   if (source.channel === 'connection' || contact.action === 'CONNECT_OR_OBSERVE') {
@@ -1410,7 +1408,6 @@ export function toWriterSafeFact(text: string, company?: string | null): string 
   const role = inferRoleLabel(t)
   if (/\bhiring\b/i.test(t) && role) {
     // Preserve any organization already named in the evidence (e.g. "Tayo360 is hiring").
-    // Do NOT replace it with the prospect's current company — opportunity org may differ.
     const existingOrg = extractOrgName(t)
     if (existingOrg) return `${existingOrg} is hiring for a ${role}`
     const named = company && company !== 'Unknown company' ? company : null

@@ -142,7 +142,6 @@ function LeadLoopStrip({ lead }: { lead: LeadDetail }) {
   )
 }
 
-// ─── Relationship pipeline visualization ─────────────────────────
 
 const PIPELINE_PHASES = [
   { id: 'connected', label: 'Connected' },
@@ -183,7 +182,6 @@ function RelationshipPipeline({ phase }: { phase: string }) {
   )
 }
 
-// ─── Improved timeline ────────────────────────────────────────────
 
 function dateDayLabel(isoString: string): string {
   const d = new Date(isoString)
@@ -369,7 +367,6 @@ const Timeline = memo(function Timeline({ lead, now }: { lead: LeadDetail; now: 
   )
 })
 
-// ─── Main LeadWorkspace ───────────────────────────────────────────
 
 export function LeadWorkspace({
   lead,
@@ -395,7 +392,6 @@ export function LeadWorkspace({
     ? describeVerdictForDisplay('skip', dmSnapshot.act, dmSnapshot.messagingPolicyLabel)
     : null
 
-  // Can draft if ANY channel recommends a message (DM, connection, etc.)
   const canDraft = verdict === 'send' || verdict === 'research_more'
     || dmSnapshot.act !== 'SKIP'
     || connectionSnapshot.messageRecommended
@@ -652,7 +648,6 @@ export function LeadWorkspace({
     : 'No contact named yet'
   const host = hostOf(currentLead.url)
 
-  // Determine workspace from relationship phase
   useEffect(() => {
     if (activeWorkspace) return
     if (relationshipState.phase === 'connection_due' || relationshipState.phase === 'connection_sent') {
@@ -1182,7 +1177,6 @@ export function LeadWorkspace({
   )
 }
 
-// ─── Sub-components ──────────────────────────────────────────────
 
 function RelationshipHeader({ state, contactName }: { state: ReturnType<typeof computeRelationshipState>; contactName?: string | null }) {
   const isYourMove = state.kind === 'your_move'

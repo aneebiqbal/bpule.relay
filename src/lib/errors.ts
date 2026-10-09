@@ -40,7 +40,6 @@ export function reportError(error: unknown, context: ErrorContext = {}): void {
     ...context,
   }
 
-  // Always log locally so a dev or an attached log drain sees it immediately.
   console.error("[relay:error]", payload)
 
   const webhook = process.env.ERROR_WEBHOOK_URL
@@ -73,7 +72,6 @@ export function safeErrorResponse(
   const safeMessage =
     error instanceof AppError ? error.safeMessage : fallbackMessage
 
-  // In development or for 500s, include the actual error message for debugging
   const isDev = process.env.NODE_ENV === 'development'
   const finalMessage = isDev || status === 500
     ? `${fallbackMessage} (${describeError(error)})`

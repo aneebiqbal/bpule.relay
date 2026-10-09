@@ -59,7 +59,6 @@ export function ManagerTeamView({ data }: { data: ManagerTeamData }) {
   return (
     <div className="space-y-6">
       {data.teams.map((team) => {
-        // Sort members by priority (worst first)
         const sortedMembers = [...team.members].sort((a, b) => priorityRank(a.status) - priorityRank(b.status))
         const attentionCount = team.members.filter((m) => m.needsAttention).length
 

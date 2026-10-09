@@ -97,7 +97,6 @@ export class OpenAIDecisionProvider implements V3DecisionProvider {
   }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 // Inline to avoid circular import issues
 function normalizeAnswers(raw: Record<string, unknown>): V3DecisionAnswers {

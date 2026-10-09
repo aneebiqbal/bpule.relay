@@ -87,7 +87,6 @@ export function computeProfileMatch(
     }
   }
 
-  // Find matching capabilities
   const matching = oppCaps.filter(cap =>
     profileSkills.some(skill => skill.includes(cap) || cap.includes(skill) || fuzzyMatch(cap, skill))
   )
@@ -106,7 +105,6 @@ export function computeProfileMatch(
     matching.some(m => proj.technologies.some(t => normalize(t) === normalize(m)))
   ).slice(0, 3)
 
-  // Calculate score
   const matchRatio = oppCaps.length > 0 ? matching.length / oppCaps.length : 0.5
   const baseScore = Math.round(matchRatio * 70)  // Up to 70 from skills
   const industryBonus = Math.min(20, industryMatch * 7)  // Up to 20 from industry
@@ -117,7 +115,6 @@ export function computeProfileMatch(
   // Confidence based on evidence richness
   const confidence = Math.min(1, 0.3 + (profileSkills.length > 5 ? 0.2 : 0) + (relevantProof.length > 0 ? 0.3 : 0) + (industryMatch > 0 ? 0.2 : 0))
 
-  // Build reason
   const reason = buildMatchReason(matching, missing, industryMatch, relevantProof.length)
 
   return {
@@ -162,7 +159,6 @@ export function recommendBestProfile(
   return { best, current, improvement }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function normalize(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9.#+]/g, '').trim()

@@ -269,9 +269,7 @@ function deriveCompositionHint(
  * Strips quotes, names, and overly specific references that won't visualize well.
  */
 function summarizeForImage(text: string): string {
-  // Remove quotes
   let cleaned = text.replace(/[""]/g, '')
-  // Remove em dashes and their surrounding context
   cleaned = cleaned.replace(/\s*[—–]\s*/g, ' ')
   // Truncate to a reasonable length
   if (cleaned.length > 120) {

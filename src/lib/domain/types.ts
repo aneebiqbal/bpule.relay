@@ -93,7 +93,6 @@ export interface Lead {
   inboundRaw?: Record<string, unknown> | null
   senderProfileId?: string | null
   revenueIdentityId?: string | null
-  // ── Intelligence V2: Canonical Prospect Intelligence ─────────────────
   canonicalScore?: number | null
   scoreVersion?: string | null
   scoredAt?: string | null
@@ -103,7 +102,6 @@ export interface Lead {
   remoteEligibility?: Record<string, unknown> | null
   evidenceLedger?: Record<string, unknown> | null
   extractionCompleteness?: Record<string, unknown> | null
-  // ── Score observability ────────────────────────────────────────────
   decisionProvider?: string | null
   decisionModel?: string | null
   decisionRunId?: string | null
@@ -115,7 +113,6 @@ export interface Lead {
   intelligenceInputHash?: string | null
   v3ReuseKey?: string | null
   fallbackReason?: string | null
-  // ── Referral ──────────────────────────────────────────────────────
   referredByRepId?: string | null
   referredToRepId?: string | null
   referredByProfileId?: string | null
@@ -314,7 +311,6 @@ export interface Profile {
   headline: string | null
   cvPath: string | null
   createdAt: string
-  // ── Profile Intelligence V2 ──
   fullName?: string | null
   displayName?: string | null
   currentRole?: string | null
@@ -414,7 +410,6 @@ export interface ExtractedLead {
   tags: string[]
 }
 
-// ── Content Engine (decoupled — no references to bpulse-specific tables) ──
 
 export type ContentPlatform = 'linkedin' | 'x' | 'instagram'
 
@@ -715,7 +710,6 @@ export interface TrendingAngle {
   used: boolean
 }
 
-// ── Content Intelligence System types ──
 
 export type ContentMemoryType =
   | 'topic_covered' | 'angle_used' | 'hook_used' | 'story_used'
@@ -850,7 +844,6 @@ export interface ContentInterviewAnswer {
   createdAt: string
 }
 
-// ── Relay Revenue Intelligence System ───────────────────────────────────────
 
 export interface ProfileAssignment {
   id: string
@@ -1044,7 +1037,6 @@ export type SendFeedbackReason =
   | 'WRONG_PROOF'
   | 'WRONG_TIMING'
 
-// ── Relay Agentic Workspace ────────────────────────────────────────────────
 
 export type RelayTaskKind =
   | 'reply_needed'
@@ -1114,7 +1106,6 @@ export interface RelayQueue {
   }
 }
 
-// ── Inbound Client Flow ─────────────────────────────────────────────────────
 
 export interface InboundInput {
   message: string
@@ -1157,7 +1148,6 @@ export interface InboundLeadInput {
   assignedProfileId?: string | null
 }
 
-// ── Revenue Identity OS ─────────────────────────────────────────────────────
 
 export type RevenueIdentityChannel = 'linkedin' | 'email' | 'upwork' | 'other'
 export type RevenueIdentityStatus = 'active' | 'archived'
@@ -1599,7 +1589,6 @@ export interface IdentityPerformanceView {
   totalCompleted: number
 }
 
-// ── Accountability OS ────────────────────────────────────────────────────────
 
 export type AccountabilityTemplateName = 'LIGHT' | 'STANDARD' | 'HIGH_OUTPUT' | 'CUSTOM'
 
@@ -1983,7 +1972,6 @@ export interface NextAction {
   blockedReason: string | null
 }
 
-// ── Tailored CV persistence ────────────────────────────────────────────────
 
 export type TailoredCVStatus = 'generated' | 'applied' | 'archived'
 
@@ -2011,7 +1999,6 @@ export interface TailoredCV {
   updatedAt: string
 }
 
-// ── Relay Growth Engine ───────────────────────────────────────────────────────
 
 export type GrowthMemoryType =
   | 'product_fact' | 'product_decision' | 'experiment_result'
@@ -2221,7 +2208,6 @@ export interface DailyEditorResult {
   whyToday: string
 }
 
-// ─── Studio V2: Trend Intelligence ───
 
 export type TrendSourceType = 'hackernews' | 'devto' | 'github' | 'reddit' | 'lobsters' | 'producthunt' | 'stackoverflow' | 'rss' | 'arxiv'
 export type EvidenceQuality = 'high' | 'medium' | 'low'
@@ -2400,7 +2386,6 @@ export interface PersonaIntelligenceProfile {
   fieldConfidence: FieldConfidence
 }
 
-// ── Profile Intelligence V2 ──────────────────────────────────────────────────
 
 export type ProfileReadiness = 'ready' | 'needs_source' | 'needs_review' | 'incomplete'
 

@@ -49,7 +49,6 @@ export function scorePostQuality(input: PostQualityInput): PostQualityResult {
   const failures: string[] = []
   const suggestions: string[] = []
 
-  // ── 1. Hook Strength (0-10) ──
   const hook = caption.split('\n')[0]?.trim() ?? ''
   let hookStrength = 5
 
@@ -65,7 +64,6 @@ export function scorePostQuality(input: PostQualityInput): PostQualityResult {
   if (/^(I want to|I'm going to|let me|let's dive|in this post)/i.test(hook)) { hookStrength -= 2; failures.push('FILLER_HOOK') }
   hookStrength = Math.max(0, Math.min(10, hookStrength))
 
-  // ── 2. Specificity (0-10) ──
   let specificity = 3
   const evidencePatterns = [
     /\d+%/, /\d+x/, /\+\d+/, /\$\d+/, /saved \d+/, /reduced \d+/, /increased \d+/,
@@ -88,7 +86,6 @@ export function scorePostQuality(input: PostQualityInput): PostQualityResult {
   }
   specificity = Math.max(0, Math.min(10, specificity))
 
-  // ── 3. Opinion Strength (0-10) ──
   let opinionStrength = 3
   const opinionPatterns = [
     /\b(I think|I believe|I've found|in my experience|the truth is|actually|the reality is)\b/i,
@@ -104,7 +101,6 @@ export function scorePostQuality(input: PostQualityInput): PostQualityResult {
   opinionStrength = Math.max(0, Math.min(10, opinionStrength))
   if (opinionStrength < 4) suggestions.push('Take a stronger position or share a specific opinion')
 
-  // ── 4. Novelty (0-10) ──
   let novelty = 5
   const genericPatterns = [
     /\b(in today's fast[- ]?paced (world|environment|landscape))\b/i,
@@ -130,7 +126,6 @@ export function scorePostQuality(input: PostQualityInput): PostQualityResult {
   if (/\d+%|\d+x/.test(caption)) novelty += 1
   novelty = Math.max(0, Math.min(10, novelty))
 
-  // ── 5. Credibility (0-10) ──
   let credibility = 4
   // First-person evidence
   if (/\b(I |my |our |we )\b/i.test(caption)) credibility += 2
@@ -147,17 +142,14 @@ export function scorePostQuality(input: PostQualityInput): PostQualityResult {
   }
   credibility = Math.max(0, Math.min(10, credibility))
 
-  // ── 6. Persona Fit (0-10) ──
   let personaFit = 5
   const roleLower = personaRole.toLowerCase()
   const expertiseLower = expertise.map(e => e.toLowerCase())
   const territoryLower = territories.map(t => t.toLowerCase())
 
-  // Check if post mentions expertise areas
   for (const exp of expertiseLower) {
     if (text.includes(exp)) { personaFit += 1.5; break }
   }
-  // Check if post mentions territories
   for (const terr of territoryLower) {
     if (text.includes(terr.toLowerCase())) { personaFit += 1; break }
   }
@@ -167,7 +159,6 @@ export function scorePostQuality(input: PostQualityInput): PostQualityResult {
   if (/devops|sre/.test(roleLower) && /\b(infrastructure|deploy|monitoring|reliability|incident|uptime)\b/.test(text)) personaFit += 1
   personaFit = Math.max(0, Math.min(10, personaFit))
 
-  // ── 7. Platform Fit (0-10) ──
   let platformFit = 6
   const wordCount = caption.split(/\s+/).length
   if (platform === 'linkedin') {
@@ -187,7 +178,6 @@ export function scorePostQuality(input: PostQualityInput): PostQualityResult {
   }
   platformFit = Math.max(0, Math.min(10, platformFit))
 
-  // ── 8. Non-Genericness (0-10) ──
   let nonGenericness = 5
   // Unique specifics make it non-generic
   if (/\d+%|\d+x|\+\d+/.test(caption)) nonGenericness += 1.5
@@ -204,7 +194,6 @@ export function scorePostQuality(input: PostQualityInput): PostQualityResult {
   }
   nonGenericness = Math.max(0, Math.min(10, nonGenericness))
 
-  // ── Overall Score ──
   const overall = (
     hookStrength * 0.20 +
     specificity * 0.15 +
@@ -216,7 +205,6 @@ export function scorePostQuality(input: PostQualityInput): PostQualityResult {
     nonGenericness * 0.05
   )
 
-  // ── Pass/Fail ──
   const passed = failures.length === 0 && overall >= 5.5 && hookStrength >= 4 && specificity >= 3
 
   if (!passed && failures.length === 0) {

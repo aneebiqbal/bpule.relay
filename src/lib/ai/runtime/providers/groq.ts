@@ -9,7 +9,6 @@ import type { ProviderModel, JsonCallParams, TextCallParams, ProviderResult } fr
 import { recordSuccess, recordFailure } from '../health'
 import { normalizeJson, coerceNullStrings, extractAssistantText, extractDeltaText } from '../normalize'
 
-// ── Configuration ────────────────────────────────────────────────────────────
 
 interface GroqCredential {
   id: string
@@ -31,7 +30,6 @@ function getCredentials(): GroqCredential[] {
   return creds
 }
 
-// ── Models ────────────────────────────────────────────────────────────────────
 
 export const GROQ_MODELS: Record<string, ProviderModel> = {
   'gpt-oss-20b': {
@@ -65,7 +63,6 @@ function selectCredential(): GroqCredential | null {
   return getCredentials()[0] || null
 }
 
-// ── JSON Call ────────────────────────────────────────────────────────────────
 
 export async function callJson<T>(
   model: ProviderModel,
@@ -148,7 +145,6 @@ export async function callJson<T>(
   }
 }
 
-// ── Text Call ────────────────────────────────────────────────────────────────
 
 export async function callText(
   model: ProviderModel,

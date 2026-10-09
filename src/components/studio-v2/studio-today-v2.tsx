@@ -35,7 +35,6 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
 
-  // ── Data fetching ──
 
   const fetchBrief = useCallback(async (): Promise<boolean> => {
     try {
@@ -102,7 +101,6 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
     fetchBrief().then(ok => { if (!ok) generateBrief() }).finally(() => setLoading(false))
   }, [fetchBrief, generateBrief])
 
-  // ── Actions ──
 
   const handleCopy = () => {
     if (!activeIdea?.postCaption) return
@@ -127,7 +125,6 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
     setTimeout(() => setPosted(false), 2000)
   }
 
-  // ── Derived state ──
 
   const activeIdea = data?.ideas.find(i => i.id === activeIdeaId) ?? data?.ideas[0]
   const trendLabel = activeIdea?.trendGrounded ? 'Trending topic' : 'Editorial'
@@ -204,7 +201,6 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
     a.click()
   }
 
-  // ── Render ──
 
   return (
     <div className="min-h-screen bg-bone">

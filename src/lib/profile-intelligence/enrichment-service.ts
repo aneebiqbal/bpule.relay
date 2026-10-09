@@ -58,7 +58,6 @@ export function resolveMime(filename: string, declared: string | null | undefine
   return MIME_BY_EXT[ext] ?? null
 }
 
-// ── State ────────────────────────────────────────────────────────────────────
 
 export async function loadProfileState(client: SupabaseClient, orgId: string, profileId: string): Promise<ExistingProfileState | null> {
   const { data: profile } = await client.from('profiles').select('*').eq('id', profileId).eq('organization_id', orgId).maybeSingle()
@@ -83,7 +82,6 @@ export async function loadProfileState(client: SupabaseClient, orgId: string, pr
   }
 }
 
-// ── 1. Upload → run ─────────────────────────────────────────────────────────
 
 export interface UploadFile {
   name: string
@@ -135,7 +133,6 @@ export async function createEnrichmentRun(
     if (linked) { alreadyImported.push({ filename: file.name, source_id: linked.id }); continue }
 
     // Retry: same bytes uploaded for this profile in an earlier run that was
-    // never applied — reuse that source row (and its cached extraction).
     const { data: priorRuns } = await client.from('profile_enrichment_runs').select('id').eq('profile_id', profileId).neq('id', run.id)
     const priorIds = (priorRuns ?? []).map((r) => r.id)
     if (priorIds.length > 0) {
@@ -143,7 +140,6 @@ export async function createEnrichmentRun(
         .is('profile_id', null).eq('file_hash', hash).in('enrichment_run_id', priorIds).limit(1).maybeSingle()
       if (pending) {
         // Reuse the row (no duplicate source). A successful extraction is kept
-        // as a cache; a FAILED one must be retried, not replayed — otherwise the
         // old error is reported forever and extraction never runs again.
         const retry = !pending.extraction_result || pending.extraction_status !== 'extracted'
         await client.from('profile_sources').update({
@@ -183,7 +179,6 @@ export async function createEnrichmentRun(
   return { run: updated ?? run, sourceIds, alreadyImported, rejected }
 }
 
-// ── 2. Extract (one source per call) → proposal ────────────────────────────
 
 export async function processNextEnrichmentSource(
   client: SupabaseClient,
@@ -265,7 +260,6 @@ export async function proposeRun(
   return data
 }
 
-// ── 3. Apply (single transaction) ───────────────────────────────────────────
 
 export type AiContextSynthesizer = (profile: Record<string, any>, state: ExistingProfileState, orgId: string) => Promise<Record<string, unknown> | null>
 
@@ -295,7 +289,6 @@ export async function applyEnrichmentRun(
 
   if (error) {
     // Transaction rolled back — the profile is untouched. Record why, keep the
-    // run retryable.
     const stale = /stale proposal/i.test(error.message)
     await client.from('profile_enrichment_runs').update({ error_message: error.message, updated_at: new Date().toISOString() }).eq('id', run.id)
     if (stale) {
@@ -305,7 +298,6 @@ export async function applyEnrichmentRun(
     throw new EnrichmentError(`Import failed and was rolled back: ${error.message}`, 500)
   }
 
-  // ── Derived intelligence (outside the fact transaction; never touches facts).
   const after = await loadProfileState(client, args.orgId, run.profile_id)
   if (!after || after.profile.id !== idBefore) throw new EnrichmentError('INVARIANT VIOLATION: profile id changed.', 500)
   const derived: Record<string, unknown> = {}
@@ -362,7 +354,6 @@ export async function getRunOrThrow(client: SupabaseClient, orgId: string, runId
   return data
 }
 
-// ── Human edits are the highest authority ──────────────────────────────────
 
 const HUMAN_FIELDS = ['full_name', 'display_name', 'headline', 'current_role', 'company', 'location', 'bio', 'professional_summary', 'seniority', 'years_experience', 'positioning']
 
@@ -395,7 +386,6 @@ export async function recordHumanEdits(
   }
 }
 
-// ── Safe profile merge B → A (explicit only) ───────────────────────────────
 
 export async function identityCheck(client: SupabaseClient, orgId: string, sourceId: string, targetId: string) {
   const { data: rows } = await client.from('profiles').select('*').in('id', [sourceId, targetId]).eq('organization_id', orgId)

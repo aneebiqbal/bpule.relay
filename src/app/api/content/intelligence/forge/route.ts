@@ -90,13 +90,11 @@ export async function POST(req: NextRequest) {
 
   let genomeBlock = buildGenomePromptBlock(genomeResult.genome, sourceMaterial)
 
-  // Check for duplicate ideas using memory
   const dupCheck = checkMemoryForDuplicates(sourceMaterial, memories, 0.7)
   if (dupCheck.isDuplicate) {
     genomeBlock += `\n\nWARNING: This idea is very similar to previous content: "${dupCheck.similarMemories[0]?.content.slice(0, 100)}". Consider a different angle or more specific detail.`
   }
 
-  // Find most similar previous post for context
   const memoryContents = memories.map((m) => m.content)
   const mostSimilar = findMostSimilar(sourceMaterial, memoryContents)
   if (mostSimilar && mostSimilar.similarity > 0.5) {
@@ -151,7 +149,6 @@ export async function POST(req: NextRequest) {
     status: 'in_forge',
   })
 
-  // Run the forge
   const forgeResult = await runContentForge({
     personaName: persona.displayName,
     platform,
@@ -208,7 +205,6 @@ export async function POST(req: NextRequest) {
 
   await store.updateIdeaGenome(genome.id, { draftId: draft.id, status: 'published' })
 
-  // Update Content DNA from interview answers and source material
   if (persona.contentProfileId && interviewAnswers && interviewAnswers.length > 0) {
     const allCandidates = [...interviewAnswers, sourceMaterial]
       .flatMap((text) => extractDnaCandidatesFromAnswer(text, profile))

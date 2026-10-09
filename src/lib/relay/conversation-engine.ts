@@ -89,7 +89,6 @@ export function analyzeReply(replyText: string, _context: ReplyContext): ReplyAn
     knowledge: emptyConversationKnowledge(),
   }
 
-  // Extract questions
   const questionMatches = replyText.match(/[^.!?]+\?/g) ?? []
   analysis.questions = questionMatches.map((q) => q.trim())
 

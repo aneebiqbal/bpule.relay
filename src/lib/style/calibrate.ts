@@ -107,7 +107,6 @@ export async function calibrateStyleCard(
 
     return normalizeCard(result.data, quizSeed, sampleSource)
   } catch (err) {
-    // If the AI provider fails (invalid key, rate limit, model error),
     // fall back to the deterministic quiz-based card so onboarding never blocks.
     console.warn('[calibrateStyleCard] AI provider failed, falling back to quiz-based card:', err instanceof Error ? err.message : err)
     const card = hasSamples

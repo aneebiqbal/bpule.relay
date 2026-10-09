@@ -9,7 +9,6 @@ import { segmentLinkedInSource, type SourceSegment } from './source-segmenter'
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 import { withRetry, fetchOpenAI } from './retry-utils'
 
-// ── Event Extraction Schema ──────────────────────────────────────────────────
 
 const EVENT_EXTRACTION_SCHEMA = {
   type: 'object',

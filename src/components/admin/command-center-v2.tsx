@@ -24,7 +24,6 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import { EventsDrilldown } from '@/components/admin/events-drilldown'
 import type { CommandCenterData, TeamRow, ExceptionItem, OpportunityFeedItem, TeamMemberStatus, ExceptionSeverity } from '@/lib/admin/command-center-v2'
 
-// ── Date helpers ────────────────────────────────────────────────────────────
 
 function today(): string {
   return new Date().toISOString().split('T')[0]
@@ -52,7 +51,6 @@ function formatMinutesAgo(min: number | null): string {
   return `${Math.floor(min / 1440)}d ago`
 }
 
-// ── Status helpers ──────────────────────────────────────────────────────────
 
 function statusConfig(status: TeamMemberStatus): { label: string; variant: 'success' | 'warning' | 'danger' | 'orange' | 'neutral' } {
   switch (status) {
@@ -71,7 +69,6 @@ function severityConfig(severity: ExceptionSeverity): { label: string; variant: 
   }
 }
 
-// ── Navigation items ────────────────────────────────────────────────────────
 
 const OPERATE_NAV = [
   { href: '/admin/revenue-identities', label: 'Identities', icon: UserCircle2, detail: 'Sender identities' },
@@ -88,7 +85,6 @@ const OPERATE_NAV = [
   { href: '/admin/ai-usage', label: 'AI Runtime', icon: Settings, detail: 'Provider health' },
 ]
 
-// ── Main Component ──────────────────────────────────────────────────────────
 
 export function CommandCenterV2() {
   const [date, setDate] = useState(today())
@@ -190,7 +186,6 @@ export function CommandCenterV2() {
   )
 }
 
-// ── Date Navigator ──────────────────────────────────────────────────────────
 
 function DateNavigator({ date, onChange }: { date: string; onChange: (d: string) => void }) {
   const [open, setOpen] = useState(false)
@@ -250,7 +245,6 @@ function DateNavigator({ date, onChange }: { date: string; onChange: (d: string)
   )
 }
 
-// ── Since Yesterday ─────────────────────────────────────────────────────────
 
 function SinceYesterdaySection({ diff }: { diff: NonNullable<CommandCenterData['sinceYesterday']> }) {
   const items: Array<{ label: string; positive: boolean }> = []
@@ -284,7 +278,6 @@ function SinceYesterdaySection({ diff }: { diff: NonNullable<CommandCenterData['
   )
 }
 
-// ── Daily Brief ─────────────────────────────────────────────────────────────
 
 function DailyBriefSection({ brief, date, onDrilldown }: { brief: CommandCenterData['brief']; date: string; onDrilldown: (action: string) => void }) {
   const isToday = date === today()
@@ -334,7 +327,6 @@ function DailyBriefSection({ brief, date, onDrilldown }: { brief: CommandCenterD
   )
 }
 
-// ── Exception Section ───────────────────────────────────────────────────────
 
 function ExceptionSection({ exceptions }: { exceptions: ExceptionItem[] }) {
   const [showAll, setShowAll] = useState(false)
@@ -384,7 +376,6 @@ function ExceptionSection({ exceptions }: { exceptions: ExceptionItem[] }) {
   )
 }
 
-// ── Team Section ────────────────────────────────────────────────────────────
 
 function TeamSection({
   team,
@@ -493,7 +484,6 @@ function MiniStat({ label, value, highlight, isText }: { label: string; value: n
   )
 }
 
-// ── Opportunity Section ─────────────────────────────────────────────────────
 
 function OpportunitySection({ opportunities }: { opportunities: OpportunityFeedItem[] }) {
   const [showAll, setShowAll] = useState(false)
@@ -564,7 +554,6 @@ function OpportunitySection({ opportunities }: { opportunities: OpportunityFeedI
   )
 }
 
-// ── Operate Navigation ──────────────────────────────────────────────────────
 
 function OperateSection() {
   return (

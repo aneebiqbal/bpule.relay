@@ -45,7 +45,6 @@ export async function POST(req: NextRequest) {
   const persona = await store.getContentPersona(personaId)
   if (!persona) return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
 
-  // Verify ownership
   if (persona.repId !== user.rep.id && user.rep.role !== 'admin') {
     return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
   }
@@ -110,7 +109,6 @@ export async function POST(req: NextRequest) {
     if (found) structure = { id: found.id, structureName: found.structureName, shape: found.shape }
   }
 
-  // Get voice profile
   let styleCard: string | null = null
   if (persona.voiceProfileId) {
     const voiceProfile = await store.getVoiceProfile()
@@ -119,11 +117,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Get recent opening lines for repetition check
   const history = await store.listContentHistory(personaId, 10)
   const recentOpenings = history.map((h) => h.openingLine).filter(Boolean)
 
-  // Load Content DNA for persona-aware generation
   let contentDnaBlock: string | null = null
   if (persona.contentProfileId) {
     const contentProfile = await store.getContentProfile(persona.contentProfileId)

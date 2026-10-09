@@ -16,7 +16,6 @@ export async function POST(request: Request) {
 
   try {
     // Record performance signals in content memory for future generation tuning
-    // This teaches Studio what kind of posts get engagement for this persona
     if (likes && likes > 5) {
       await store.createContentMemory({
         personaId: user.rep.id,

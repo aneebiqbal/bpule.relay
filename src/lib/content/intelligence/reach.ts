@@ -116,7 +116,6 @@ export function applyReachScoring(
   return baseScore * reachMultiplier
 }
 
-// ── Scoring Functions ────────────────────────────────────────────────────────
 
 function scoreTimeliness(input: ReachInput, reasons: string[]): number {
   if (!input.trendCandidate) {

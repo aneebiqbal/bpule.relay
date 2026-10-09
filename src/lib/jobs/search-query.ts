@@ -91,7 +91,6 @@ function cleanRole(value: string | null | undefined): string | undefined {
   const withoutCompany = value
     .replace(/\s*(?:at|@|—|-)\s+[A-Z0-9].*$/i, '')
     .trim()
-  // Strip a trailing platform tag ("Fizza, LinkedIn", "Fizza Upwork").
   const withoutPlatform =
     withoutCompany
       .replace(/[\s,·|]*\b(upwork|linkedin|freelancer|freelance|profile|cv)\b.*$/i, '')

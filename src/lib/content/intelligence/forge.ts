@@ -121,7 +121,6 @@ export async function runContentForge(input: ForgeInput): Promise<ForgeResult> {
     }
   }
 
-  // Pick best by total score
   const candidates: Array<{ c: ForgeCandidate; e: ReturnType<typeof evaluateCandidate>; label: 'A' | 'B' | 'C' }> = [
     { c: candidateA, e: evalA, label: 'A' },
     { c: candidateB, e: evalB, label: 'B' },
@@ -170,7 +169,6 @@ async function buildForgeResult(
     tone: input.generationMode === 'personal' ? 'serious' : 'thoughtful',
   })
 
-  // When one candidate passes immediately, `other` may be null. In that case,
   // the loser slot must be null (not a duplicate of the winner) so downstream
   // UI/logic can detect that only one candidate was generated.
   const candidateA = winner === 'A' ? winning : (other?.writer === 'A' ? other : null)
@@ -238,7 +236,6 @@ async function generateCandidate(
   const caption = (result.data.caption ?? '').trim()
   const hook = extractHook(caption)
 
-  // Run anti-generic checks
   const bannedHits = checkBannedPhrases(caption + '\n' + hook)
   const badHook = checkBadHook(hook)
   const specificityHit = checkSpecificity(hook + '\n' + caption, input.sourceMaterial)
@@ -433,7 +430,6 @@ function evaluateCandidate(candidate: ForgeCandidate, input: ForgeInput): Candid
 async function applyAntiSlop(caption: string): Promise<string> {
   let result = caption
 
-  // Remove ALL em dashes (AI tell — banned everywhere)
   result = result.replace(/[\u2014\u2013]/g, (match, offset) => {
     const before = result.slice(0, offset)
     const dashesBefore = (before.match(/[\u2014\u2013]/g) || []).length
@@ -443,20 +439,16 @@ async function applyAntiSlop(caption: string): Promise<string> {
   // Remove "Thoughts?" / "Agree?" / "Am I right?" / "Who else?"
   result = result.replace(/\s*(Thoughts\?|Agree\?|Am I right\?|Who else\?|What do you think\?|Let me know\?)\s*$/gi, '')
 
-  // Remove empty conclusions
   result = result.replace(/\s*(In conclusion|To summarize|The takeaway is|In summary)[^.!?]*[.!?]\s*$/gi, '')
 
   // Remove "In today's..." openings
   result = result.replace(/^In today'?s[^,]*,\s*/i, '')
 
-  // Remove excessive exclamation marks
   result = result.replace(/!{2,}/g, '.')
   result = result.replace(/!(\s|$)/g, '.$1')
 
-  // Remove emoji-as-bullets
   result = result.replace(/^\s*[^\w\s\-:]\s*/gm, '')
 
-  // Remove thread markers
   result = result.replace(/^\d+\/\d+\s*/gm, '')
   result = result.replace(/🧵\s*/g, '')
 

@@ -98,7 +98,6 @@ function normalizeApplyUrl(url: string): string {
   try {
     const parsed = new URL(url)
     const host = parsed.hostname.replace(/^www\./, '').toLowerCase()
-    // Strip common tracking parameters.
     const cleaned = new URL(url)
     for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref', 'source', 'src', 'gh_src', 'mc_cid', 'mc_eid']) {
       cleaned.searchParams.delete(key)

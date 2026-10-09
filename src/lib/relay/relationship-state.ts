@@ -69,7 +69,6 @@ export function computeRelationshipState(lead: LeadDetail, now: number = Date.no
     .filter((m) => m.direction !== 'inbound' && m.sentText && m.sentAt)
     .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''))[0] ?? null
 
-  // Map canonical action to presentation state
   return mapCanonicalToPresentation(canonical, lead, lastClient, lastOutbound)
 }
 

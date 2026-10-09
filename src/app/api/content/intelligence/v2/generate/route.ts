@@ -60,7 +60,6 @@ export async function POST(req: NextRequest) {
     const profile = persona.contentProfileId ? await store.getContentProfile(persona.contentProfileId) : null
     const memories = await store.listContentMemories(personaId, { limit: 50 })
 
-    // ── Build source material from seed + grounding ─────────────────────
     const sourceMaterial = buildSourceMaterial({
       idea,
       angle,
@@ -70,7 +69,6 @@ export async function POST(req: NextRequest) {
       direction,
     })
 
-    // ── Build context blocks ────────────────────────────────────────────
     const contentDnaBlock = buildContentDnaPromptBlock(profile)
     const memoryBlock = buildMemoryPromptBlock(memories)
 
@@ -87,7 +85,6 @@ export async function POST(req: NextRequest) {
       .filter(Boolean)
       .map(() => 'observation') as string[]
 
-    // ── Construct genome ────────────────────────────────────────────────
     const genomeResult = await constructIdeaGenome({
       sourceMaterial,
       topic: idea.slice(0, 50),
@@ -99,11 +96,8 @@ export async function POST(req: NextRequest) {
 
     const genomeQualified = genomeResult.qualification.qualified
 
-    // ── Even if genome says "not qualified", proceed with adjusted grounding ──
-    // This implements the "never block on personal evidence" principle
     const genomeBlock = buildGenomePromptBlock(genomeResult.genome, sourceMaterial)
 
-    // ── Performance + Research ──────────────────────────────────────────
     const performanceInsights = analyzePerformance(history)
     const performanceBlock = buildPerformancePromptBlock(performanceInsights)
 
@@ -123,7 +117,6 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // ── Run the forge ───────────────────────────────────────────────────
     const forgeResult = await runContentForge({
       personaName: persona.displayName,
       platform,
@@ -141,7 +134,6 @@ export async function POST(req: NextRequest) {
       researchBlock,
     })
 
-    // ── Store draft ─────────────────────────────────────────────────────
     const draft = await store.createContentDraft({
       personaId,
       pillarId: null,
@@ -158,7 +150,6 @@ export async function POST(req: NextRequest) {
       status: forgeResult.evaluation.quality > 0.5 && forgeResult.evaluation.slopScore < 0.5 ? 'ready' : 'draft',
     })
 
-    // ── Store evaluation ────────────────────────────────────────────────
     await store.createEvaluation({
       draftId: draft.id,
       originality: forgeResult.evaluation.quality,
@@ -179,7 +170,6 @@ export async function POST(req: NextRequest) {
       genericProbability: forgeResult.evaluation.slopScore,
     })
 
-    // ── Record memories ─────────────────────────────────────────────────
     const draftMemories = extractMemoriesFromDraft(forgeResult.caption, forgeResult.hook)
     for (const mem of draftMemories) {
       await store.createContentMemory({
@@ -190,7 +180,6 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // ── Record taste signal (write_this) ────────────────────────────────
     try {
       const storedTaste = await store.getTasteProfile(personaId)
       const { createTasteProfile, applyTasteSignal } = await import('@/lib/content/intelligence/v2/taste')

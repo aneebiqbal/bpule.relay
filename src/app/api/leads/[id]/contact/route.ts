@@ -104,7 +104,6 @@ export async function POST(
     })
     if (result.idempotent) {
       // Duplicate call for the same logical send (double-click, retry) —
-      // return the already-recorded result as a success, but skip the
       // learning/memory/event side effects below, which already ran on the
       // original call. Re-running them would be harmless for most (they're
       // themselves best-effort/non-fatal) but pointless and would blur

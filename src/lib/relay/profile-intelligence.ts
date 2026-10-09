@@ -29,7 +29,6 @@ export function buildProfileIntelligence(
 ): ProfileIntelligence {
   const cards = [...proofCards]
 
-  // Convert legacy proof items to proof cards if not already present
   for (const item of proofItems) {
     const alreadyMapped = cards.some((c) => c.sourceReference === item.projectSummary)
     if (!alreadyMapped) {
@@ -157,14 +156,12 @@ export function classifyClaimSafety(
 ): ClaimSafety {
   const lower = claim.toLowerCase()
 
-  // Check forbidden claims first
   for (const forbidden of profileIntelligence.forbiddenClaims) {
     if (lower.includes(forbidden.toLowerCase())) {
       return 'UNSUPPORTED'
     }
   }
 
-  // Check verified proof cards — match if the claim contains a significant
   // word from the capability (4+ chars, exact word match or substring of claim word)
   for (const card of profileIntelligence.proofCards) {
     if (!card.verified) continue
@@ -175,7 +172,6 @@ export function classifyClaimSafety(
     if (hasMatch) return 'VERIFIED_PROFILE_PROOF'
   }
 
-  // Check safe claims
   for (const card of profileIntelligence.proofCards) {
     if (card.safeClaim && lower.includes(card.safeClaim.toLowerCase().slice(0, 30))) {
       return 'APPROVED_CLAIM'

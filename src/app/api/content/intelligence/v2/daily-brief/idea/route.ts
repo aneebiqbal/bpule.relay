@@ -52,7 +52,6 @@ export async function POST(request: Request) {
   try {
      const idea = await generateSingleIdea(persona, profile, trendCandidates, excludeTitles)
 
-     // Generate full post caption for the new idea
      const personaContext = buildPersonaContextString(persona, profile)
      const trendSignals = trendCandidates.slice(0, 5).map(c => `- ${c.item.title} (${c.whyNow})`).join('\n')
 
@@ -292,22 +291,17 @@ TONE: Like a senior engineer explaining something to a peer over coffee. Direct,
 function cleanPost(raw: string): string {
   let text = raw.trim()
 
-  // Remove ALL em dashes, en dashes, and dash-like characters
   text = text.replace(/[\u2014\u2013\u2015\uFE58\uFF0D\u2500\u2212\u2E3A\u2E3B]/g, ' ')
-  // Clean up multiple spaces from dash removal
   text = text.replace(/\s{2,}/g, ' ')
 
-  // Normalize paragraph breaks
   text = text.replace(/\n{3,}/g, '\n\n')
   text = text.replace(/\r\n/g, '\n')
 
   // Fix broken sentences within paragraphs
   text = text.replace(/\.\s+([a-z])/g, (_, c) => `. ${c.toUpperCase()}`)
 
-  // Trim each paragraph
   const paragraphs = text.split('\n\n').map(p => p.trim()).filter(Boolean)
 
-  // If AI returned one big block, try to split into paragraphs by sentence count
   if (paragraphs.length < 2) {
     const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
     const chunks: string[] = []
@@ -324,7 +318,6 @@ function cleanPost(raw: string): string {
     if (chunks.length > 1) return chunks.join('\n\n')
   }
 
-  // Trim to ~200 words
   const fullText = paragraphs.join('\n\n')
   const words = fullText.split(/\s+/)
   if (words.length > 200) {
@@ -334,7 +327,6 @@ function cleanPost(raw: string): string {
     return trimmed
   }
 
-  // Remove trailing filler
   return fullText.replace(/\s*(Thoughts\?|Agree\?|What do you think\?|Let that sink in\.?)\s*$/i, '').trim()
 }
 

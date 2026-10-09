@@ -20,7 +20,6 @@ import type {
  * or user confirmation.
  */
 
-// ── Prompt assembly ──────────────────────────────────────────────────────────
 
 export function buildContentDnaPromptBlock(profile: ContentProfile | null): string {
   if (!profile) return ''
@@ -117,7 +116,6 @@ export function buildContentDnaPromptBlock(profile: ContentProfile | null): stri
   return `ABOUT THIS PERSON (use to make this post sound like only they could have written it):\n${sections.join('\n')}`
 }
 
-// ── Confidence calculation ───────────────────────────────────────────────────
 
 export function calculateProfileConfidence(profile: ContentProfile): number {
   let score = 0
@@ -143,7 +141,6 @@ export function calculateProfileConfidence(profile: ContentProfile): number {
   return Math.min(score / maxScore, 1)
 }
 
-// ── Progressive profiling ────────────────────────────────────────────────────
 
 export interface DnaUpdateCandidate {
   type: 'expertise' | 'opinion' | 'experience' | 'project' | 'topic'
@@ -250,7 +247,6 @@ function similarity(a: string, b: string): number {
   return union === 0 ? 0 : intersection / union
 }
 
-// ── DNA merging ──────────────────────────────────────────────────────────────
 
 /**
  * Merge extracted candidates into an existing profile.
@@ -319,7 +315,6 @@ export function mergeDnaCandidates(
   return patches
 }
 
-// ── Initial profile from persona creation ────────────────────────────────────
 
 export function buildInitialDnaFromPersona(params: {
   profileSummary?: string

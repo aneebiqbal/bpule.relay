@@ -49,13 +49,10 @@ export function extractIdentityFromSource(text: string): ExtractedIdentity {
     rawText: text.slice(0, 200),
   }
 
-  // Build expertise from detected technologies + role
   identity.expertise = buildExpertise(identity.technologies, identity.role, text)
 
-  // Extract projects
   identity.projects = extractProjects(text)
 
-  // Extract experiences/lessons
   identity.experiences = extractExperiences(text)
 
   // Suggest audiences based on role + expertise
@@ -64,7 +61,6 @@ export function extractIdentityFromSource(text: string): ExtractedIdentity {
   // Suggest territories
   identity.territories = suggestTerritories(identity.role, identity.expertise, identity.industries)
 
-  // Extract opinions
   identity.opinions = extractOpinions(text)
 
   // Suggest goals
@@ -207,7 +203,6 @@ function buildExpertise(technologies: string[], role: string, text: string): Con
     })
   }
 
-  // Add role-based expertise
   if (role.includes('Architect') || role.includes('Staff')) {
     expertise.push({ area: 'System Architecture', level: 'expert', evidence: 'Inferred from role', updatedAt: now })
   }
@@ -334,7 +329,6 @@ function suggestAudiences(role: string, expertise: ContentProfileExpertise[], _t
     audiences.push('Clients', 'Business Leaders', 'Technical Decision Makers')
   }
 
-  // Add expertise-based audiences
   const expertAreas = expertise.filter((e) => e.level === 'expert').map((e) => e.area)
   if (someMatch(expertAreas, ['React', 'Next.js', 'JavaScript', 'TypeScript'])) {
     audiences.push('Frontend Developers', 'React Developers')

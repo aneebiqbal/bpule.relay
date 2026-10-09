@@ -23,7 +23,6 @@ export async function GET(request: Request) {
 
   if (admin) {
     // Reading every rep's profiles is open to any authenticated rep (same
-    // as the RLS select policy) so a rep can reference what proof exists.
     const profiles = await store.listAllProfiles()
     return NextResponse.json({ profiles })
   }

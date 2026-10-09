@@ -246,7 +246,6 @@ async function structuredJsonOnHost<T>(
   if (sysScan.blocked) throw new Error(`System prompt blocked: ${sysScan.reason}`)
   const userScan = scanForSecrets(opts.user)
   if (userScan.blocked) throw new Error(`Prompt blocked: ${userScan.reason}`)
-  // Create a per-call client with custom timeout instead of mutating the shared one
   const api = timeoutMs
     ? new OpenAI({ apiKey: host.apiKey, baseURL: host.baseUrl, timeout: timeoutMs })
     : clientFor(host.baseUrl, host.apiKey)

@@ -71,7 +71,6 @@ function passesLocation(job: Job, location: string | undefined, countryTarget: s
   }
   if (location) {
     // A remote job tagged worldwide still matches a location preference only
-    // when the location preference is a country that accepts remote candidates.
     if (job.remote && !job.location.toLowerCase().includes('remote')) {
       // treat as location-unknown -> pass (unknown passes)
       return true

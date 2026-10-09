@@ -54,7 +54,6 @@ export function detectOrgThemes(
       }
     }
 
-    // Also use the persona's display name keywords as a fallback
     const nameKeywords = extractKeywords(persona.displayName)
     for (const kw of nameKeywords) {
       if (kw.length > 3) {
@@ -65,7 +64,6 @@ export function detectOrgThemes(
     }
   }
 
-  // Find keywords shared by multiple personas
   const sharedThemes: OrgTheme[] = []
   for (const [keyword, personaIds] of themeKeywords) {
     if (personaIds.size >= 2 && keyword.length > 3) {

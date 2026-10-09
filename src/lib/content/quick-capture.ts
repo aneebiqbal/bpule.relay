@@ -11,7 +11,6 @@ export function parseQuickCapture(rawInput: string): QuickCaptureAngle[] {
   const angles: QuickCaptureAngle[] = []
   const lower = rawInput.toLowerCase()
 
-  // ── Technical work ──────────────────────────────────────────────────
   if (/\b(spent|debugged|fixed|built|shipped|deployed|refactored|migrated|optimized|solved|resolved)\b/.test(lower)) {
     const subject = extractSubject(rawInput, ['spent', 'debugged', 'fixed', 'built', 'shipped', 'deployed', 'refactored', 'migrated', 'optimized', 'solved', 'resolved'])
     angles.push({
@@ -26,7 +25,6 @@ export function parseQuickCapture(rawInput: string): QuickCaptureAngle[] {
     })
   }
 
-  // ── Learning / lesson ───────────────────────────────────────────────
   if (/\b(learned|lesson|mistake|failed|wrong|realized|discovered|found out|turns out)\b/.test(lower)) {
     angles.push({
       angle: `Share this as a lesson. What happened? What would you do differently?`,
@@ -40,7 +38,6 @@ export function parseQuickCapture(rawInput: string): QuickCaptureAngle[] {
     })
   }
 
-  // ── Opinion / belief ────────────────────────────────────────────────
   if (/\b(i think|i believe|in my opinion|hot take|unpopular|honestly|actually|the truth is|people don't)\b/.test(lower)) {
     angles.push({
       angle: `Share this opinion. What experiences back it up?`,
@@ -54,7 +51,6 @@ export function parseQuickCapture(rawInput: string): QuickCaptureAngle[] {
     })
   }
 
-  // ── Client / work situation ─────────────────────────────────────────
   if (/\b(client|customer|user|stakeholder|manager|team|meeting|requirement|deadline|project)\b/.test(lower)) {
     angles.push({
       angle: `Extract the professional lesson. What does this teach about working with people?`,
@@ -68,7 +64,6 @@ export function parseQuickCapture(rawInput: string): QuickCaptureAngle[] {
     })
   }
 
-  // ── Career / milestone ──────────────────────────────────────────────
   if (/\b(promoted|hired|joined|left|fired|started|quit|launched|graduated|certification)\b/.test(lower)) {
     angles.push({
       angle: `Share the journey. What led here? What's next?`,
@@ -77,7 +72,6 @@ export function parseQuickCapture(rawInput: string): QuickCaptureAngle[] {
     })
   }
 
-  // ── Numbers / metrics ───────────────────────────────────────────────
   if (/\b(\d+%|\d+x|\$\d+|\d+ hours|\d+ days|\d+ weeks|\d+ months|\d+ users|\d+ customers)\b/.test(lower)) {
     angles.push({
       angle: `Lead with the numbers. What do they mean? Why should people care?`,
@@ -86,7 +80,6 @@ export function parseQuickCapture(rawInput: string): QuickCaptureAngle[] {
     })
   }
 
-  // ── Fallback ────────────────────────────────────────────────────────
   if (angles.length === 0) {
     angles.push(
       {

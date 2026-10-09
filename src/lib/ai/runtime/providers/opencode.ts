@@ -19,7 +19,6 @@ import type { ProviderModel, JsonCallParams, TextCallParams, ProviderResult } fr
 import { recordSuccess, recordFailure } from '../health'
 import { normalizeJson, coerceNullStrings, extractAssistantText, extractDeltaText } from '../normalize'
 
-// ── Configuration ────────────────────────────────────────────────────────────
 
 const DEFAULT_BASE_URL = 'https://opencode.ai/zen/go/v1'
 
@@ -42,7 +41,6 @@ function getCredentials(): OpenCodeCredential[] {
   return creds
 }
 
-// ── Model Endpoint Classification ────────────────────────────────────────────
 /**
  * OpenCode Go models use different endpoints based on their provider family.
  * We classify them to route to the correct endpoint.
@@ -133,7 +131,6 @@ function supportsJson(modelId: string): boolean {
   return JSON_COMPATIBLE_MODELS.has(modelId)
 }
 
-// ── Credential Selection ─────────────────────────────────────────────────────
 
 function selectCredential(): OpenCodeCredential | null {
   return getCredentials()[0] || null
@@ -143,7 +140,6 @@ function getSessionHeader(): string {
   return process.env.OPENCODE_SESSION_ID || 'relay-ai-runtime-v3'
 }
 
-// ── JSON Call (Chat Completions) ────────────────────────────────────────────
 
 export async function callJson<T>(
   model: ProviderModel,
@@ -202,13 +198,11 @@ export async function callJson<T>(
 
     const json = await response.json()
 
-    // Handle error responses (OpenCode Go returns 200 with error body)
     if (json.type === 'error') {
       recordFailure(model.provider, model.model, cred.id, 'error', Date.now() - t0)
       throw new Error(`OpenCode Go error: ${json.error?.message || 'Unknown error'}`)
     }
 
-    // Some models (kimi, hy, glm) put output in reasoning_content instead of content
     const content = extractAssistantText(json.choices?.[0]?.message)
     const inputTokens = json.usage?.prompt_tokens || 0
     const outputTokens = json.usage?.completion_tokens || 0
@@ -245,7 +239,6 @@ export async function callJson<T>(
   }
 }
 
-// ── Text Call (Streaming) ───────────────────────────────────────────────────
 
 export async function callText(
   model: ProviderModel,
@@ -363,7 +356,6 @@ export async function callText(
   }
 }
 
-// ── Errors ────────────────────────────────────────────────────────────────────
 
 export class RateLimitedError extends Error {
   constructor() {

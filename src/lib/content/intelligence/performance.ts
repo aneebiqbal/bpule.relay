@@ -16,7 +16,6 @@ import type { ScoutStore } from '@/lib/store/types'
  * - Learn per-persona, not globally
  */
 
-// ─── Layer 1: Pattern Analysis (insights for humans) ─────────────────────────
 
 export interface PerformancePattern {
   dimension: string
@@ -191,7 +190,6 @@ function formatEngagement(score: number): string {
   return 'no measurable'
 }
 
-// ─── Layer 2: Performance Signals (automated brief generation) ────────────────
 
 export interface PerformanceProfile {
   totalPosts: number

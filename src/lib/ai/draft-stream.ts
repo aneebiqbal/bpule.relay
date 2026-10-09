@@ -195,7 +195,6 @@ export async function streamDraft(
     }
   }
 
-  // Return best effort: only use AI output if it passed quality gates
   if (variantA?.passed) {
     return await streamFinalDraft(input, emit, matchedProof, variantA, null, 'Passed quality gates.', callLog, escalationDecision.reason)
   }
@@ -343,7 +342,6 @@ function fallbackText(input: DraftInput): string {
   const company = input.lead.company
   const title = (input.extracted.title ?? input.lead.contactTitle ?? '').split(/\s*[·|\-–]\s+/)[0].trim()
 
-  // Build a specific observation from available evidence
   const observation = buildSpecificObservation(input, title, company)
 
   if (input.type === 'connection') {
@@ -373,7 +371,6 @@ function buildSpecificObservation(input: DraftInput, title: string, company: str
   if (evidence.length > 20) {
     const firstSentence = evidence.split(/[.!?]/).map(s => s.trim()).find(s => s.length > 15)
     if (firstSentence) {
-      // Extract a specific observation from the evidence
       const lower = firstSentence.toLowerCase()
       if (lower.includes('building') || lower.includes('developing') || lower.includes('creating')) {
         return `saw you are building at ${company}.`

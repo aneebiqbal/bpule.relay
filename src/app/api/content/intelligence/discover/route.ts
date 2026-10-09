@@ -39,7 +39,6 @@ export async function POST(req: NextRequest) {
     recentUserInput: body?.recentInput as string | undefined,
   })
 
-  // Apply performance-based confidence adjustment
   const performanceInsights = analyzePerformance(history)
   const opportunities = baseOpportunities.map((opp) => ({
     ...opp,

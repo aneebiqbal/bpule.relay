@@ -73,7 +73,6 @@ export function buildDailyDecision(input: {
   }
 
   if (input.persona.valuesAndOpinions.length >= 2 && input.clusters.length > 0) {
-    // ── Confidence check: do we have enough SPECIFIC material, or would we be guessing? ──
     const hasRecentInput = input.clusters.some((c) => {
       if (!c.lastInputAt) return false
       const daysSince = (nowMs - new Date(c.lastInputAt).getTime()) / 86_400_000

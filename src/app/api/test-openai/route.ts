@@ -9,7 +9,6 @@ export async function GET() {
     environment: {},
   }
 
-  // ── Test OpenAI ──
   const openaiKey = process.env.OPENAI_API_KEY
   if (!openaiKey) {
     results.providers.openai = { status: 'NO_KEY', message: 'OPENAI_API_KEY not set in environment' }
@@ -59,7 +58,6 @@ export async function GET() {
     }
   }
 
-  // ── Test OpenAI Image ──
   const imageKey = process.env.OPENAI_API_KEY_IMAGE || process.env.OPENAI_API_KEY
   if (!imageKey) {
     results.providers.openai_image = { status: 'NO_KEY' }
@@ -107,7 +105,6 @@ export async function GET() {
     }
   }
 
-  // ── Test LongCat ──
   const longcatKey = process.env.LONGCAT_API_KEY
   if (!longcatKey) {
     results.providers.longcat = { status: 'NO_KEY', message: 'LONGCAT_API_KEY not set' }
@@ -136,7 +133,6 @@ export async function GET() {
     }
   }
 
-  // ── Test Groq ──
   const groqKey = process.env.GROQ_API_KEY
   if (!groqKey) {
     results.providers.groq = { status: 'NO_KEY' }
@@ -170,7 +166,6 @@ export async function GET() {
     }
   }
 
-  // ── Environment summary ──
   results.environment = {
     nodeEnv: process.env.NODE_ENV,
     vercelEnv: process.env.VERCEL_ENV || 'unknown',

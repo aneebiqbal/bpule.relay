@@ -22,7 +22,6 @@ import type {
 } from '../types'
 import type { V3DecisionAnswers } from './bounded-questions'
 
-// ── Provider Interface ──────────────────────────────────────────────────────
 
 export interface V3DecisionProvider {
   readonly id: string
@@ -58,7 +57,6 @@ export interface V3ProviderResult {
   raw?: unknown       // raw response for debugging
 }
 
-// ── Provider Registry ───────────────────────────────────────────────────────
 
 export class V3DecisionProviderRegistry {
   private providers: Map<string, V3DecisionProvider> = new Map()
@@ -112,7 +110,6 @@ export class V3DecisionProviderRegistry {
   }
 }
 
-// ── Singleton ───────────────────────────────────────────────────────────────
 
 let _registry: V3DecisionProviderRegistry | null = null
 
@@ -123,7 +120,6 @@ export function getDecisionRegistry(): V3DecisionProviderRegistry {
   return _registry
 }
 
-// ── Answer Normalization ────────────────────────────────────────────────────
 
 export function normalizeAnswers(raw: Record<string, unknown>): V3DecisionAnswers {
   return {
@@ -138,7 +134,6 @@ export function normalizeAnswers(raw: Record<string, unknown>): V3DecisionAnswer
   }
 }
 
-// ── Validation Helpers ──────────────────────────────────────────────────────
 
 function validateRelationship(value: unknown): V3DecisionAnswers['relationship'] {
   const valid = ['BUYER', 'SERVICE_PROVIDER', 'COMPETITOR', 'PARTNER', 'CANDIDATE', 'MIXED', 'UNKNOWN']

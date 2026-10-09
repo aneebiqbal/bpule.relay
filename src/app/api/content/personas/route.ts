@@ -51,7 +51,6 @@ export async function POST(req: NextRequest) {
 
     // Real past posts are the stronger signal — they seed voice and topics
     // directly from ground truth, more accurately than a bio or Q&A answers.
-    // When given, they take priority; a pasted bio still supplements topics.
     const [pastPostsExtracted, profileExtracted] = await Promise.all([
       pastPostsText.length > 0 ? extractFromPastPosts(pastPostsText) : null,
       profileText.length > 0 ? extractProfileTopics(profileText) : null,

@@ -1,13 +1,3 @@
-/**
- * ScoreRing — displays a prospect score as a circular progress indicator.
- *
- * SCORE CONTRACT:
- * - canonicalScore (0-100) → displays as /10 (0-10). This is the OPPORTUNITY SCORE.
- * - score (0-12) → displays as-is. This is the LEGACY RUBRIC SCORE.
- * - These two scales must never be mixed. The `score` column stores legacy only.
- * - The /10 display is ALWAYS a conversion of the canonical score — never
- *   an independent scoring system.
- */
 export function ScoreRing({
   score,
   canonicalScore,

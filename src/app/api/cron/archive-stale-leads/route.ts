@@ -44,7 +44,6 @@ export async function GET(request: Request) {
 
   try {
     // Candidate leads: active, not already archived, not terminal (no/dead).
-    // Includes contacted, followed_up, AND new leads (new leads that have
     // sat untouched for 30+ days are archive-eligible).
     const { data: leads, error: leadsError } = await supabase
       .from('leads')
@@ -124,7 +123,6 @@ export async function GET(request: Request) {
         let eligible = false
 
         if (lead.status === 'new') {
-          // New leads untouched for 30+ days → archive
           const daysSinceCreated = (nowMs - new Date(lead.created_at as string).getTime()) / (1000 * 60 * 60 * 24)
           eligible = daysSinceCreated >= NEW_LEAD_ARCHIVE_DAYS
         } else if (lead.status === 'contacted' && !lead.connection_accepted_at && lead.locked_reason === 'connection_note_sent') {

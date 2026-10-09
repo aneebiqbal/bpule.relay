@@ -40,7 +40,6 @@ export async function POST(req: NextRequest) {
     const profile = persona.contentProfileId ? await store.getContentProfile(persona.contentProfileId) : null
     const memories = await store.listContentMemories(personaId, { limit: 50 })
 
-    // Load persisted taste profile from DB
     const storedTaste = await store.getTasteProfile(personaId)
     const tasteProfile = storedTaste ? {
       personaId: storedTaste.personaId,
@@ -66,12 +65,10 @@ export async function POST(req: NextRequest) {
       }
 
       // NOTE: surprise_me taste signal is NOT applied here.
-      // Just viewing surprise ideas should not teach taste — only actual
       // engagement (write_this when the user selects a surprise idea) should.
       // Applying surprise_me on every discover call would double-count with
       // write_this and distort the taste profile.
     } else {
-      // Generate seeds using loaded taste profile
       const result = generatePostSeeds(profile, memories, tasteProfile)
       ideas = result.selected.map(sanitizeSeed)
     }

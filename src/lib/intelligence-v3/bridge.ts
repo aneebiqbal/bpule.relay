@@ -1,29 +1,3 @@
-/**
- * V3 Intelligence Bridge — Production Entry Point
- *
- * Wraps the V3 Decision Intelligence pipeline into the same interface
- * that the existing API routes expect. When V3_CANONICAL=true, this
- * replaces V2 as the authoritative lead decision system.
- *
- * Flow (V3_CANONICAL=true):
- *   Raw Input → Lightweight deterministic parse → V3 Graph → V3 Episodes
- *   → GPT-4o-mini decisions → GPT-4.1 escalation → V3 DecisionPacket
- *   → Score V3 → Action Policy → HUMAN_REVIEW gate → Output
- *
- * Flow (V3_CANONICAL=false):
- *   Raw Input → Full V2 Extraction (AI) → Score V2 → Action V2 → Output
- *
- * AI Savings:
- *   V3 mode skips the full V2 extraction (2-3 AI calls). V3's event extractor
- *   works directly from raw text, so no AI-heavy normalization is needed.
- *
- * Organization scoping:
- *   The V2 evidence ledger contains per-entry organizationName. The V3 bridge
- *   uses this to separate events by organization, preventing the bug where
- *   a Tayo360 hiring post gets incorrectly scoped to AgentAce (the headline
- *   company). Each evidence entry's organizationName determines which episode
- *   it belongs to.
- */
 
 import { produceCanonicalIntelligence } from '@/lib/intelligence-v2/orchestrator'
 import { runV3Decision, type V2BridgeInput } from '@/lib/intelligence-v3/orchestrator'
@@ -34,7 +8,6 @@ import { initializeV3 } from '@/lib/intelligence-v3/index'
 import { extractEventsFromSource } from './event-extractor'
 import { buildV3ReuseKey, buildV3ReuseCacheKey } from './decision-reuse'
 
-// ── V2-to-V3 bridge input builder ────────────────────────────────────────────
 
 function buildV3BridgeInput(
   canonical: CanonicalProspectIntelligence,
@@ -121,13 +94,11 @@ function buildV3BridgeInput(
   }
 }
 
-// ── Map V3 packet to canonical output shape ──────────────────────────────────
 
 function v3PacketToCanonical(
   packet: V3LeadDecisionPacket,
   v2Canonical: CanonicalProspectIntelligence,
 ): CanonicalProspectIntelligence {
-  // Map V3 qualification to V2 qualification
   const v2Qualification: CanonicalProspectIntelligence['qualification'] = (() => {
     switch (packet.qualification) {
       case 'STRONG': return 'strong'
@@ -139,7 +110,6 @@ function v3PacketToCanonical(
     }
   })()
 
-  // Build a score breakdown that reflects V3 dimensions
   const scoreBreakdown = {
     dimensions: packet.dimensions ?? [],
     hardNegatives: [],
@@ -150,7 +120,6 @@ function v3PacketToCanonical(
     watchOut: packet.watchOut,
   }
 
-  // Merge V3 data into V2 canonical shape for downstream consumers
   return {
     ...v2Canonical,
     intelligenceRunId: packet.decisionRunId,
@@ -169,7 +138,6 @@ function v3PacketToCanonical(
   } as CanonicalProspectIntelligence
 }
 
-// ── Main entry point ─────────────────────────────────────────────────────────
 
 export interface V3BridgeResult {
   intelligence: CanonicalProspectIntelligence
@@ -202,13 +170,11 @@ function extractCompanyFromProfile(
   title: string | null,
   identityLines: string[],
 ): string | null {
-  // ── Strategy 1: "Role at Company" in title/headline ──
   if (title) {
     const atMatch = title.match(/\s+at\s+([A-Z][A-Za-z0-9._&\-\s,]+?)(?:\s*[|·—]|$)/i)
     if (atMatch) return cleanOrgName(atMatch[1])
   }
 
-  // ── Strategy 2: "Role, Company | Description" (comma-separated) ──
   if (title) {
     const commaParts = title.split(',').map(p => p.trim())
     if (commaParts.length >= 2) {
@@ -217,19 +183,16 @@ function extractCompanyFromProfile(
     }
   }
 
-  // ── Strategy 3: "Role @ Company" ──
   if (title) {
     const atSymbolMatch = title.match(/@\s*([A-Z][A-Za-z0-9._&\-]+)/i)
     if (atSymbolMatch) return cleanOrgName(atSymbolMatch[1])
   }
 
-  // ── Strategy 4: "Role — Company" or "Role - Company" ──
   if (title) {
     const dashMatch = title.match(/[—–-]\s*([A-Z][A-Za-z0-9._&\-\s]+)$/i)
     if (dashMatch) return cleanOrgName(dashMatch[1])
   }
 
-  // ── Strategy 5: "Company | Role" (company first in headline) ──
   if (title) {
     const pipeParts = title.split(/\s*\|\s*/).map(p => p.trim())
     if (pipeParts.length >= 2) {
@@ -241,7 +204,6 @@ function extractCompanyFromProfile(
     }
   }
 
-  // ── Strategy 6: Experience section — "Company · Duration" or "Company | Duration" ──
   const expIdx = lines.findIndex((l) => /^experience$/i.test(l))
   if (expIdx >= 0) {
     for (let i = expIdx + 1; i < Math.min(expIdx + 10, lines.length); i++) {
@@ -264,7 +226,6 @@ function extractCompanyFromProfile(
     }
   }
 
-  // ── Strategy 7: About section — look for "at Company" or "founder of Company" ──
   const aboutIdx = lines.findIndex((l) => /^about$/i.test(l))
   if (aboutIdx >= 0) {
     const aboutText = lines.slice(aboutIdx + 1, aboutIdx + 10).join(' ')
@@ -279,7 +240,6 @@ function extractCompanyFromProfile(
     }
   }
 
-  // ── Strategy 8: Identity lines (below name, before sections) ──
   for (const line of identityLines) {
     // Skip the name line and title line
     if (line === identityLines[0]) continue
@@ -295,7 +255,6 @@ function extractCompanyFromProfile(
     }
   }
 
-  // ── Strategy 9: Raw text scan for known company indicators ──
   const rawPatterns = [
     /(?:^|\n)\s*([A-Z][A-Za-z0-9._&\-]+(?:\s+[A-Z][a-z]+)*)\s*[·]\s*(?:Full-time|Part-time|Contract)/m,
     /(?:Company|Organization|Employer):\s*([A-Z][A-Za-z0-9._&\-\s]+)/i,
@@ -323,10 +282,8 @@ function isLikelyCompanyName(candidate: string): boolean {
   if (!candidate || candidate.length < 2 || candidate.length > 60) return false
   const lower = candidate.toLowerCase().trim()
 
-  // Reject if it's clearly a role
   if (looksLikeRole(candidate)) return false
 
-  // Reject common non-company words
   const rejectPatterns = [
     /^(the|a|an|this|that|my|our|their|his|her|its)$/i,
     /^(open|close|view|show|more|less|edit|delete|add|create)$/i,
@@ -339,7 +296,6 @@ function isLikelyCompanyName(candidate: string): boolean {
     if (p.test(lower)) return false
   }
 
-  // Must start with uppercase or be a known acronym
   if (!/^[A-Z]/.test(candidate) && !/^[A-Z]{2,}$/.test(candidate)) return false
 
   return true
@@ -473,7 +429,6 @@ export async function produceV3Intelligence(
   // V3 canonical mode: Build minimal V2 structure deterministically (no AI calls).
   // V3's extractEventsFromSource re-extracts events from raw text independently,
   // so we only need the basic normalization here — not a full AI extraction.
-  // This saves 2-3 AI calls per extraction.
   v2Canonical = buildMinimalV2Canonical(rawText)
 
   // Step 3: Check for reusable DecisionPacket
@@ -506,7 +461,6 @@ export async function produceV3Intelligence(
     // Initialize providers (registers OpenAI, LongCat, etc.)
     initializeV3()
 
-    // Extract events using structured LLM (avoids V2 evidence ledger degradation)
     const extractedEvents = await extractEventsFromSource(rawText, v2Canonical)
 
     const bridgeInput = buildV3BridgeInput(v2Canonical, rawText, extractedEvents)
@@ -543,7 +497,6 @@ export async function produceV3Intelligence(
 }
 
 function emitV3Status(v2Msg: string, onStatus?: (msg: string) => void) {
-  // Map V2 status messages to V3 equivalents for cleaner UX
   const mapped = v2Msg
     .replace('Extracting prospect intelligence', 'Analyzing opportunity')
     .replace('Scoring prospect', 'Scoring opportunity episode')

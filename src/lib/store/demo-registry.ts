@@ -4,7 +4,6 @@ import { buildMockStore } from '@/lib/store/mock-store'
 
 // Demo mode keeps one in-process store per rep so the queue, drafts, and
 // voice profiles persist across requests for the local dev server. This lives
-// in its own module so both getCurrentUser and createScoutStore can reach it
 // without a circular import.
 //
 // Stashed on globalThis (not just a module-level const) because Next.js dev

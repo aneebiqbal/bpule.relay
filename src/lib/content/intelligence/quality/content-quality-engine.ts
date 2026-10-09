@@ -30,7 +30,6 @@ export interface QualityCheckResult {
   wasRepaired: boolean
 }
 
-// ─── Language Gate ───
 
 const BROKEN_PATTERNS: [RegExp, string][] = [
   [/\bwe a function\b/gi, 'incomplete sentence: missing verb'],
@@ -52,7 +51,6 @@ const INCOMPLETE_SENTENCE_PATTERNS = [
   /\b[a-z]+s\s+to\s+[a-z]+\s+and\s*$/i,
 ]
 
-// ─── Insight Gate ───
 
 const GENERIC_PATTERNS: [RegExp, string][] = [
   [/\buse generators instead of list comprehensions\b/gi, 'generic Python tip from ~2015'],
@@ -67,7 +65,6 @@ const GENERIC_PATTERNS: [RegExp, string][] = [
   [/\bat the end of the day\b/gi, 'filler phrase'],
 ]
 
-// ─── Specificity Gate ───
 
 const EVIDENCE_PATTERNS = [
   /\b\d+%/,
@@ -90,7 +87,6 @@ const VAGUE_PATTERNS = [
   /\bit's important to\b/gi,
 ]
 
-// ─── Main Quality Check ───
 
 export function checkContentQuality(
   post: string,
@@ -111,7 +107,6 @@ export function checkContentQuality(
   let personaFit = 5
   let nonGenericness = 5
 
-  // ── Language Gate ──
   let languageFailures = 0
   for (const [pattern, msg] of BROKEN_PATTERNS) {
     if (pattern.test(post)) {
@@ -127,7 +122,6 @@ export function checkContentQuality(
       grammar -= 1.5
     }
   }
-  // Check for sentences starting with lowercase
   const sentences = post.split(/[.!?]+/).filter(s => s.trim().length > 5)
   for (const s of sentences) {
     const trimmed = s.trim()
@@ -138,7 +132,6 @@ export function checkContentQuality(
   }
   grammar = Math.max(0, grammar)
 
-  // ── Insight Gate ──
   let genericHits = 0
   for (const [pattern, msg] of GENERIC_PATTERNS) {
     if (pattern.test(post)) {
@@ -151,7 +144,6 @@ export function checkContentQuality(
   novelty = Math.max(0, novelty)
   nonGenericness = Math.max(0, nonGenericness)
 
-  // ── Specificity Gate ──
   let evidenceHits = 0
   for (const pattern of EVIDENCE_PATTERNS) {
     if (pattern.test(post)) evidenceHits++
@@ -171,14 +163,12 @@ export function checkContentQuality(
   }
   specificity = Math.max(0, specificity)
 
-  // ── Technical Depth ──
   const techTerms = post.match(/\b(function|class|method|api|database|query|cache|memory|cpu|thread|process|server|deploy|pipeline|test|debug|refactor|pattern|architecture|system|service|container|cluster|node|request|response|latency|throughput|bandwidth|storage|network|protocol|algorithm|data structure|optimization|benchmark|profiling)\b/gi)
   technicalDepth = Math.min(10, (techTerms?.length ?? 0) * 1.5)
   if (!techTerms || techTerms.length < 3) {
     failures.push('TECHNICAL: insufficient technical depth')
   }
 
-  // ── Credibility ──
   const hasFirstPerson = /\b(I|we|my|our)\b/i.test(post)
   const hasSpecificClaim = /\b\d+%|\d+x|\d+\s*(ms|mb|gb)/i.test(post)
   if (hasFirstPerson) credibility += 2
@@ -189,7 +179,6 @@ export function checkContentQuality(
   }
   credibility = Math.max(0, Math.min(10, credibility))
 
-  // ── Persona Fit ──
   if (options?.personaRole) {
     const roleLower = options.personaRole.toLowerCase()
     const postLower = post.toLowerCase()
@@ -202,7 +191,6 @@ export function checkContentQuality(
     }
   }
 
-  // ── Overall Score ──
   const overall = (
     grammar * 0.25 +
     specificity * 0.2 +
@@ -234,7 +222,6 @@ export function checkContentQuality(
   }
 }
 
-// ─── Auto-repair ──
 
 export function repairPost(text: string): string {
   let repaired = text

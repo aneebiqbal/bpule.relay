@@ -19,7 +19,6 @@
  *   console.log(result.packet.score, result.packet.action)
  */
 
-// ── Types ────────────────────────────────────────────────────────────────────
 
 export type {
   V3Person,
@@ -55,7 +54,6 @@ export {
   MESSAGE_ELIGIBILITY,
 } from './types'
 
-// ── Config ───────────────────────────────────────────────────────────────────
 
 export {
   V3_CONFIG_VERSION,
@@ -72,7 +70,6 @@ export {
   V3_DECISION_PROVIDER_CONFIG,
 } from './config'
 
-// ── Orchestrator ─────────────────────────────────────────────────────────────
 
 export {
   runV3Decision,
@@ -81,7 +78,6 @@ export {
   type V2BridgeInput,
 } from './orchestrator'
 
-// ── Evidence Graph ───────────────────────────────────────────────────────────
 
 export {
   createEvidenceGraph,
@@ -101,11 +97,9 @@ export {
 
 export type { V3EvidenceGraph } from './graph/evidence-graph'
 
-// ── Episode Builder ──────────────────────────────────────────────────────────
 
 export { buildEpisodes } from './graph/episode-builder'
 
-// ── Decision Provider ───────────────────────────────────────────────────────
 
 export {
   getDecisionRegistry,
@@ -118,11 +112,9 @@ export { OpenAIDecisionProvider } from './decision/openai-provider'
 export { LongCatDecisionProvider } from './decision/longcat-provider'
 // Jeff/Jev/Kev providers moved to experiments/ — not in production runtime
 
-// ── Decision Assembly ────────────────────────────────────────────────────────
 
 export { assembleDecisionPacket } from './decision/decision-assembler'
 
-// ── Scoring ─────────────────────────────────────────────────────────────────
 
 export {
   scoreEpisode,
@@ -132,11 +124,9 @@ export {
 
 export type { V3ScoreInput, V3ScoreOutput, V3ScoreDimension } from './scoring/score-v3'
 
-// ── Action Policy ───────────────────────────────────────────────────────────
 
 export { determineAction, actionFromDecisionPacket } from './action/action-policy'
 
-// ── Semantic Reranking ─────────────────────────────────────────────────────
 
 export {
   getReranker,
@@ -148,7 +138,6 @@ export {
 
 export type { V3ProofCandidate, V3RerankResult, V3Reranker } from './semantic/reranker'
 
-// ── Shadow Mode ─────────────────────────────────────────────────────────────
 
 export {
   compareShadow,
@@ -158,14 +147,12 @@ export {
 
 export type { V3ShadowResult } from './decision/shadow-runner'
 
-// ── Local imports for initializeV3 ────────────────────────────────────────
 
 import { getDecisionRegistry } from './decision/decision-provider'
 import { OpenAIDecisionProvider } from './decision/openai-provider'
 import { LongCatDecisionProvider } from './decision/longcat-provider'
 import { V3_DECISION_PROVIDER_CONFIG } from './config'
 
-// ── Initialization ──────────────────────────────────────────────────────────
 
 let _initialized = false
 
@@ -186,7 +173,6 @@ export function initializeV3(): void {
   const longcat = new LongCatDecisionProvider()
   if (longcat.isAvailable()) registry.register(longcat)
 
-  // Set primary
   const primary = V3_DECISION_PROVIDER_CONFIG.primary
   if (registry.get(primary)?.isAvailable()) {
     registry.setPrimary(primary)
@@ -195,7 +181,6 @@ export function initializeV3(): void {
   _initialized = true
 }
 
-// ── Bounded Questions ───────────────────────────────────────────────────────
 
 export {
   V3_DECISION_SCHEMA,

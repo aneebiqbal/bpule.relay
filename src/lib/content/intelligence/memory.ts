@@ -50,7 +50,6 @@ export function checkMemoryForDuplicates(
     const rawSimilarity = computeSimilarity(normalized, memNorm)
     if (rawSimilarity < threshold * 0.5) continue
 
-    // Apply time decay: memories older than 30 days count at reduced weight
     const decayedSimilarity = applyTimeDecay(rawSimilarity, memory.createdAt, now)
 
     if (decayedSimilarity >= threshold) {
@@ -103,7 +102,6 @@ export function extractMemoriesFromDraft(caption: string, hook: string): Array<{
     memories.push({ type: 'hook_used', content: hook.trim().slice(0, 200) })
   }
 
-  // Extract key phrases as topics (simple noun-phrase extraction)
   const sentences = caption.split(/[.!?]+/).filter((s) => s.trim().length > 10)
   for (const sentence of sentences.slice(0, 3)) {
     const topic = sentence.trim().slice(0, 100)
@@ -157,7 +155,6 @@ function computeSimilarity(a: string, b: string): number {
   if (!a || !b) return 0
   if (a === b) return 1
 
-  // Filter stop words for meaningful comparison
   const aWords = new Set(a.split(' ').filter(w => !STOP_WORDS.has(w) && w.length > 2))
   const bWords = new Set(b.split(' ').filter(w => !STOP_WORDS.has(w) && w.length > 2))
 
@@ -204,7 +201,6 @@ function getKeyGrams(text: string, n: number): Set<string> {
   return grams
 }
 
-// ── Semantic Memory (Embeddings) ────────────────────────────────────────────
 
 /**
  * Build the text that gets embedded for a content memory.
@@ -279,7 +275,6 @@ export async function checkForDuplicatesCombined(
     }
   }
 
-  // Merge results — lexical matches are tagged 'lexical', semantic 'semantic'
   const lexicalIds = new Set(lexicalResult.similarMemories.map(m => m.content))
   const additionalSemantic = semanticMatches
     .filter(m => !lexicalIds.has(m.content))

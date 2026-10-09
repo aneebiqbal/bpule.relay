@@ -7,7 +7,6 @@ import type { AccountabilityStatus, DailyProgress, DailyContract, DayCloseStatus
  * Used by both the API layer and any scheduled job that closes days.
  */
 
-// ── Working-day time model ──────────────────────────────────────────────────
 
 export interface WorkingDayConfig {
   startHour: number
@@ -51,7 +50,6 @@ export function workingMinutesRemaining(now: Date, timezone: string, config: Wor
   return Math.max(0, endMinutes - currentMinutes)
 }
 
-// ── Status computation ───────────────────────────────────────────────────────
 
 export type DailyStatus =
   | AccountabilityStatus
@@ -117,16 +115,13 @@ export function computeOverallStatus(
     progress.followups,
   ]
 
-  // Filter out categories with no target
   const activeCategories = categories.filter((c) => c.target > 0)
 
   if (activeCategories.length === 0) return 'completed'
 
-  // If all complete
   const allComplete = activeCategories.every((c) => c.remaining === 0)
   if (allComplete) return 'completed'
 
-  // Find the worst category status
   let worst: AccountabilityStatus = 'on_track'
   const priority: Record<string, number> = {
     at_risk: 3,
@@ -181,7 +176,6 @@ export function canCloseDay(
   }
 }
 
-// ── Close day ───────────────────────────────────────────────────────────────
 
 export function closeDayStatus(
   targetCount: number,
@@ -202,7 +196,6 @@ export function determineDayCloseStatus(
 ): DayCloseStatus {
   if (!isAvailable) return 'missed'
 
-  // Check if all work is actually done (no exception needed)
   const allWorkDone =
     progress.connections.remaining === 0 &&
     progress.firstDms.remaining === 0 &&
@@ -216,7 +209,6 @@ export function determineDayCloseStatus(
   return 'missed'
 }
 
-// ── Consecutive misses ──────────────────────────────────────────────────────
 
 export function countConsecutiveMisses(
   dailyResults: { date: string; status: AccountabilityStatus }[],
@@ -232,14 +224,12 @@ export function countConsecutiveMisses(
   return streak
 }
 
-// ── Working day ─────────────────────────────────────────────────────────────
 
 export function isWorkingDay(date: Date, workingDays: number[] = [1, 2, 3, 4, 5]): boolean {
   const dow = date.getDay()
   return workingDays.includes(dow)
 }
 
-// ── Notification / Warning helpers ─────────────────────────────────────────
 
 export function notificationDedupeKey(
   type: string,
@@ -290,7 +280,6 @@ export function needsAttention(
   return { needs: false, severity: null, reason: null }
 }
 
-// ── Multi-identity aggregation ──────────────────────────────────────────────
 
 /**
  * Aggregate progress across multiple contracts/identities.

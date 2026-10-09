@@ -1,13 +1,3 @@
-/**
- * Intelligence Orchestrator
- *
- * Ties the full pipeline together:
- *   Raw Input → Multi-Pass Extraction → Completeness Gate → Canonical Score → Canonical Prospect Intelligence
- *
- * This is the single entry point for producing the canonical persisted
- * intelligence object. Once produced, the score is immutable unless
- * re-scored through the proper channel.
- */
 
 import type {
   CanonicalProspectIntelligence,
@@ -22,7 +12,6 @@ import { isNonBuyerProfessional, isLinkedInChromeText } from './role-signals'
 import { buildIntelligenceInputHash, INTELLIGENCE_PIPELINE_VERSION } from './input-hash'
 import { classifyNeedOwnership, dominantNeedOwnership } from './need-ownership'
 
-// ── Orchestrator Options ───────────────────────────────────────────────────
 
 export interface OrchestratorOptions extends ExtractionPipelineOptions {
   onStatus?: (message: string) => void
@@ -81,7 +70,6 @@ export interface OrchestratorResult {
   reused: boolean
 }
 
-// ── Main Orchestrator ──────────────────────────────────────────────────────
 
 export async function produceCanonicalIntelligence(
   rawText: string,
@@ -235,8 +223,6 @@ export async function produceCanonicalIntelligence(
     const ownership = entry.needOwnership ?? 'UNKNOWN'
     needOwnershipCounts[ownership]++
   }
-  // Also classify the raw text directly — evidence may be thin or empty
-  // in fallback mode, but the raw text always has signal
   const textOwnership = classifyNeedOwnership(rawText)
   if (textOwnership !== 'UNKNOWN') {
     needOwnershipCounts[textOwnership]++
@@ -373,7 +359,6 @@ function inferPastWinResemblance(
   return hasBuyingSignal && intelligence.content.technicalSignals.length > 0
 }
 
-// ── Re-score Function ──────────────────────────────────────────────────────
 
 export interface RescoreOptions {
   trigger: 'source_changed' | 'user_requested' | 'model_version_changed' | 'new_signal'
@@ -413,13 +398,11 @@ export function rescoreIntelligence(
   }
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
 
 function buildScoringEvidence(scoreBreakdown: ReturnType<typeof computeCanonicalScore>): EvidenceEntry[] {
   // Scoring dimensions are NOT evidence — they are product-internal measurements.
   // Injecting them as BUYER_INTENT evidence pollutes the evidence ledger with
   // artifacts that didn't come from the source. Return empty: evidence must come
-  // from extraction, not from scoring.
   return []
 }
 
@@ -467,7 +450,6 @@ function buildOutreachContext(
     ? content.technicalSignals
     : (intelligence.job?.skills ?? [])
 
-  // Determine best proof angle
   let bestProof: string | null = null
   if (proofSignals.length > 0) {
     bestProof = `Relevant technical delivery in: ${proofSignals.slice(0, 3).join(', ')}`
@@ -475,7 +457,6 @@ function buildOutreachContext(
     bestProof = `Experience in ${intelligence.company.industry}`
   }
 
-  // Determine personalization anchor
   let personalizationAnchor: string | null = null
   if (content.recentPosts.length > 0) {
     personalizationAnchor = content.recentPosts[0].paraphrase.slice(0, 120)
@@ -490,7 +471,6 @@ function buildOutreachContext(
       personalizationAnchor = desc.slice(0, 120)
     }
   }
-  // If no meaningful anchor, leave null — the writer should not invent one
   if (personalizationAnchor && personalizationAnchor.length < 10) {
     personalizationAnchor = null
   }
@@ -565,7 +545,6 @@ function buildPersonalizationAngle(
   return angles.length > 0 ? angles.slice(0, 3).join(' • ') : null
 }
 
-// ── Irrelevant Input Intelligence ─────────────────────────────────────────
 
 function createIrrelevantIntelligence(
   rawText: string,
@@ -654,7 +633,6 @@ function createIrrelevantIntelligence(
   }
 }
 
-// ── Read helpers for surfaces ──────────────────────────────────────────────
 
 /**
  * Get the canonical score for display. All surfaces use this.
@@ -835,7 +813,6 @@ export function shouldRescore(
   existing: CanonicalProspectIntelligence,
   trigger: RescoreOptions['trigger'],
 ): boolean {
-  // Always allow user-requested re-score
   if (trigger === 'user_requested') return true
 
   // Re-score if model version changed

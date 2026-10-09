@@ -15,7 +15,6 @@ import type {
   EligibilityStatus,
 } from './types'
 
-// ── Workplace Type Detection ───────────────────────────────────────────────
 
 const REMOTE_FULL = /\b(remote|work from home|work from anywhere|fully remote|100% remote|location independent|distributed team|distributed workforce|fully distributed)\b/i
 const REMOTE_US_ANYWHERE = /\b(us[- ]?wide|anywhere in the us|anywhere in the usa|continental us|contiguous us|48 states|lower 48|us only|usa only|american[- ]only)\b/i
@@ -47,7 +46,6 @@ export function isJobSeekerAttribution(rawText: string): boolean {
     const subject = classifySentence(line)
     return subject === 'PROSPECT' || subject === 'UNKNOWN'
   })
-  // Also require first-person or self-reference for job-seeker markers — a
   // bare "looking for a job" with no "I/we/my" is ambiguous and more likely
   // audience language.
   const text = prospectLines.join('\n')
@@ -59,7 +57,6 @@ const ONSITE = /\b(on[- ]?site|onsite|in[- ]?person|in[- ]?office|at our (?:offi
 const IMPLICIT_REMOTE_ASK = /\b(looking for|need (?:a|an|someone|help)?|seeking|dm me|reach out|contract|freelance|engagement|project basis|upwork|proposal)\b/i
 const TECH_ROLE_HINT = /\b(developer|engineer|full[- ]?stack|backend|frontend|software|app|platform|rails|react(?!ion)|node|python|api|extension|devops|architect)\b/i
 
-// ── Timezone Detection ─────────────────────────────────────────────────────
 
 const TZ_PST_PDT = /\b(pst|pdt|pacific(?:\s+time)?|pacific standard|pacific daylight)\b/i
 const TZ_EST_EDT = /\b(est|edt|eastern time|eastern standard|eastern daylight)\b/i
@@ -69,7 +66,6 @@ const TZ_CET = /\b(cet|cest|central european)\b/i
 const TZ_OVERLAP = /\b(timezone overlap|overlapping hours|overlap with|similar time|close timezone|nearby timezone|within \d+ hours? (?:of|from))\b/i
 const TZ_FLEXIBLE = /\b(flexible hours|flexible schedule|async|asynchronous|work when you want|your own hours|results[- ]?oriented)\b/i
 
-// ── Country Restrictions ───────────────────────────────────────────────────
 
 const COUNTRY_RESTRICTIONS: Array<{ pattern: RegExp; country: string }> = [
   { pattern: /\b(?:united states|usa|us only|us[- ]?based)\b/i, country: 'US' },
@@ -87,7 +83,6 @@ const COUNTRY_RESTRICTIONS: Array<{ pattern: RegExp; country: string }> = [
 const EXPLICIT_PAKISTAN_ALLOWED = /\b(pakistan|pakistani|pkt)\b/i
 const WORLDWIDE_REMOTE = /\b(?:work from anywhere|no location restriction|no geographic restriction|regardless of location|all countries|hire[sd]? (?:worldwide|globally)|(?:fully\s+)?remote(?:ly)?(?:\W+\w+){0,4}\W+(?:worldwide|globally|anywhere)|worldwide\s+remote)\b/i
 
-// ── PKT Overlap Calculation ────────────────────────────────────────────────
 
 interface TimezoneOffset {
   label: string
@@ -128,7 +123,6 @@ function calculatePktOverlap(tzLabel: string): number {
   return 15 // Very poor overlap
 }
 
-// ── Main Assessment Function ───────────────────────────────────────────────
 
 export interface RemoteEligibilityInput {
   /** Raw text to analyze (job description, profile, etc.) */
@@ -156,7 +150,6 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
   const text = input.rawText
   const evidence: string[] = []
 
-  // ── Step 1: Determine Workplace Type ──────────────────────────────────
   let workplaceType: WorkplaceType = input.statedWorkplaceType ?? 'UNKNOWN'
 
   if (workplaceType === 'UNKNOWN') {
@@ -172,7 +165,6 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
     }
   }
 
-  // Extract office location from text for hybrid/onsite roles — SCOPED to the
   // current employment context. The office location must be near the HYBRID/
   // ONSITE keyword match (same role block) and must NOT be picked up from
   // historical experience lines elsewhere in the profile (e.g. "Advising
@@ -190,7 +182,6 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
     }
   }
 
-  // ── Step 2: Determine Remote Scope ────────────────────────────────────
   let remoteScope: RemoteScope = input.statedRemoteScope ?? 'UNKNOWN'
   const allowedCountries: string[] = []
   let restrictedCountries: string[] = []
@@ -277,8 +268,6 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
     evidence.push('Inferred remote opportunity from explicit ask for external project help.')
   }
 
-  // ── Defensive: Company location ≠ worker restriction ────────────────
-  // If the text explicitly says remote work is OK but we somehow ended up
   // with a COUNTRY_RESTRICTED scope, override it. Company HQ location does
   // NOT constitute a worker location restriction.
   const EXPLICIT_REMOTE_OK = /\b(remote[- ]?(?:ok|friendly|only|work|first|allowed)|work from (?:home|anywhere|wherever)|fully remote|100% remote|distributed team|location[- ]?independent)\b/i
@@ -288,10 +277,8 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
     evidence.push('Override: text explicitly says remote OK — company location is not a worker restriction.')
   }
 
-  // ── Step 3: Check for explicit Pakistan allowance ────────────────────
   const pakistanAllowed = EXPLICIT_PAKISTAN_ALLOWED.test(text)
 
-  // ── Step 4: Determine Eligibility ────────────────────────────────────
   let eligibility: EligibilityStatus
   let reason: string
   let pktOverlapFeasibility: number | undefined
@@ -423,7 +410,6 @@ export function assessRemoteEligibility(input: RemoteEligibilityInput): RemoteEl
   }
 }
 
-// ── Helper: Get eligibility score contribution ────────────────────────────
 
 export function eligibilityScoreContribution(eligibility: RemoteEligibility): number {
   switch (eligibility.eligibility) {
@@ -442,7 +428,6 @@ export function eligibilityScoreContribution(eligibility: RemoteEligibility): nu
   }
 }
 
-// ── Helper: Extract office location per-line ───────────────────────────────
 
 // Section boundaries in a pasted LinkedIn profile. When extracting the office
 // location for a current HYBRID/ONSITE role, we must stop at these boundaries
@@ -463,7 +448,6 @@ const PROFILE_SECTION_BOUNDARIES = /^(experience|education|licenses?\s*&\s*certi
 function extractOfficeLocationScoped(text: string, anchorPattern: RegExp): string | null {
   const lines = text.split(/\r?\n/)
 
-  // Find the anchor line (where HYBRID/ONSITE matched).
   let anchorIndex = -1
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim()
@@ -473,7 +457,6 @@ function extractOfficeLocationScoped(text: string, anchorPattern: RegExp): strin
     }
   }
 
-  // Determine the search window: from the earlier of (anchor - WINDOW) or the
   // last section boundary before the anchor, to the earlier of
   // (anchor + WINDOW) or the next section boundary after the anchor.
   const WINDOW = 8

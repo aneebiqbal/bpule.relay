@@ -44,7 +44,6 @@ export async function PATCH(
 
   const supabase = await createServerSupabase()
 
-  // Verify ownership
   const { data: existing } = await supabase
     .from('revenue_identities')
     .select('id')

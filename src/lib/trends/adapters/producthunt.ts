@@ -37,7 +37,6 @@ function inferPhTopics(post: PhPost): string[] {
     if (keywords.some(kw => text.includes(kw))) topics.push(topic)
   }
 
-  // Also use PH's own topics
   for (const edge of post.topics?.edges ?? []) {
     const t = edge.node.name.toLowerCase().replace(/\s+/g, '-')
     if (t) topics.push(t)

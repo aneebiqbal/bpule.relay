@@ -1,17 +1,3 @@
-/**
- * Multi-Pass Extraction Pipeline
- *
- * Flow:
- *   RAW INPUT → Pass A (Extract) → Pass B (Normalize) → Pass C (Intelligence)
- *
- * LongCat = primary intelligence engine
- * Groq = fast structured parsing where useful
- * GPT = escalation only
- *
- * Every call goes through existing central AI routing.
- * Code owns schemas, persistence, eligibility hard rules, score calculation.
- * AI does extraction, normalization, reasoning.
- */
 
 import type {
   ExtractedPerson,
@@ -41,7 +27,6 @@ import { classifyBusinessModel, classifySentence, deriveRelationship, isNonBuyer
 import { applyBuyerIntentBoundary } from './commercial-reading'
 import { classifyNeedOwnership } from './need-ownership'
 
-// ── Pipeline Options ───────────────────────────────────────────────────────
 
 export interface ExtractionPipelineOptions {
   onStatus?: (message: string) => void
@@ -64,7 +49,6 @@ export interface ExtractionPipelineResult {
   sourceUrls: string[]
 }
 
-// ── URL Extraction ─────────────────────────────────────────────────────────
 
 const URL_PATTERNS = [
   /https?:\/\/(?:www\.)?linkedin\.com\/in\/[a-zA-Z0-9_-]+/gi,
@@ -98,7 +82,6 @@ function categorizeUrl(url: string): 'linkedin_profile' | 'linkedin_company' | '
   return 'other'
 }
 
-// ── Source Type Detection ──────────────────────────────────────────────────
 
 function detectSourceType(text: string): RawSourceData['sourceType'] {
   const hasProfileMarkers = /\b(about|experience|education|skills|endorsements|recommendations|connections|followers)\b/i.test(text)
@@ -114,7 +97,6 @@ function detectSourceType(text: string): RawSourceData['sourceType'] {
   return types[0]
 }
 
-// ── Pass A: Extract ────────────────────────────────────────────────────────
 
 interface PassAOutput {
   person: {
@@ -470,7 +452,6 @@ function constrainNonBuyerPassA(out: PassAOutput, rawText = ''): PassAOutput {
   const clinician = isClinicianProfile(title, out.company.name, `${out.company.industry ?? ''} ${rawText}`)
   // Business-model detection: a career-coaching / recruiting business
   // (e.g. "Find a Job in Germany", "coached candidates") is a non-buyer even
-  // when the title alone isn't a recruiter title. The about/experience prose
   // describes helping OTHER people find jobs — not buying software delivery.
   const recruiterBusiness = !recruiter && !clinician && classifyBusinessModel(rawText) === 'RECRUITER'
   if (!recruiter && !clinician && !recruiterBusiness) return out
@@ -610,7 +591,6 @@ function validatePassA(raw: unknown): PassAOutput {
   return defaultOut
 }
 
-// ── Pass B: Normalize ──────────────────────────────────────────────────────
 
 function normalizePassA(
   passA: PassAOutput,
@@ -738,7 +718,6 @@ function normalizePassA(
     hiringSignals: passA.content.hiringSignals.map((h) => h.trim()).filter(Boolean),
   }
 
-  // Build evidence ledger from signals — attach entity context
   const opportunityOrg = opportunity.organizationName ?? company.name ?? undefined
   const opportunityRelationship: EvidenceRelationship | undefined = opportunity.organizationRelationship
     || (opportunity.organizationName && opportunity.organizationName !== company.name
@@ -823,7 +802,6 @@ function normalizePassA(
   }
 }
 
-// ── Pass C: Intelligence ───────────────────────────────────────────────────
 
 const PASS_C_SYSTEM = `You are a strategic sales intelligence analyst. Given extracted prospect data, determine WHY this person/company could realistically hire a software development team.
 
@@ -879,7 +857,6 @@ async function runPassC(
   strictLiveMode?: boolean,
 ): Promise<Pick<NormalizedIntelligence, 'probableNeed' | 'opportunityTrigger' | 'timingSignal' | 'risks' | 'unknowns'>> {
   // Pass C is only needed for risks/unknowns when deterministic fallback is insufficient.
-  // If Pass A produced signals + we have person/company, skip the AI call.
   const hasSignals = passA.opportunity.signals.length > 0
   const hasPersonOrCompany = Boolean(passA.person.fullName || passA.company.name)
   const deterministicPassC = stabilizePassC(demoPassC(passA), passA, intelligence)
@@ -1058,7 +1035,6 @@ function validatePassC(raw: unknown): Pick<NormalizedIntelligence, 'probableNeed
   }
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
 
 function normalizeUrl(url: string | null): string | null {
   if (!url) return null
@@ -1074,7 +1050,6 @@ function normalizeLinkedInUrl(url: string | null): string | null {
   if (!url) return null
   const normalized = normalizeUrl(url)
   if (!normalized) return null
-  // Ensure it looks like a LinkedIn URL
   if (!normalized.includes('linkedin.com/')) return null
   return normalized
 }
@@ -1108,7 +1083,6 @@ function normalizeStage(stage: string | null): string | null {
   return stage.trim()
 }
 
-// ── Demo Fallback ──────────────────────────────────────────────────────────
 
 const TECH_KEYWORDS = [
   'next.js',
@@ -1205,7 +1179,6 @@ function identityBlockLines(lines: string[]): string[] {
 function extractName(lines: string[]): string | null {
   for (const [index, line] of lines.slice(0, 8).entries()) {
     if (/^(job|description|skills|posted|budget|client|company)\b/i.test(line)) continue
-    // Check for explicit "Name:" field first
     const explicitName = line.match(/^name:\s*(.+)$/i)
     if (explicitName?.[1]) return explicitName[1].trim()
     // Skip section headers, labels, and all-caps structural labels
@@ -1352,7 +1325,6 @@ function extractCompany(lines: string[], title: string | null, rawText: string):
 function extractCompanyFromLinkedInHeadline(rawText: string): string | null {
   const lines = splitLines(rawText)
 
-  // Find the headline line: it's the first line after the name that
   // contains @ or " at " with a company name.
   for (const line of lines) {
     const trimmed = line.trim()
@@ -1576,7 +1548,6 @@ export function extractOpportunitySignals(rawText: string): { signals: Opportuni
   // not when they SOLVE it for others. "Earned $600K in bug bounty rewards"
   // (achievement/solver context) or "We find critical vulnerabilities in
   // protocols" (service offering) must NOT produce a buying signal. Check
-  // for solver/achievement/seller framing around the pain keyword.
   const hasPain = PAIN_PATTERNS.some((p) => p.test(rawText))
   if (hasPain && hasTechContext && !isSolverContext(rawText)) {
     signals.push('technical_problem')
@@ -1650,17 +1621,12 @@ function extractJobFromText(lines: string[], rawText: string, skills: string[], 
   // (e.g. an Experience entry like "SettWiz · Israel · Hybrid" for their
   // current role as Founder/CEO). That is a fact about the prospect's job,
   // not a location-constrained opportunity for BPulse to deliver into, and
-  // must not be conflated into one. Only treat these words as an opportunity
   // signal when they appear alongside an actual hiring/engagement ask —
-  // never from a bare workplace-type word alone.
   const hasExplicitEngagementAsk = /\b(hiring|we're looking for|we are looking for|open role|open position|job opening|now hiring|looking to hire|seeking a (?:developer|engineer|contractor|freelancer)|freelance project|contract role|apply now|apply by|send your resume|send your cv)\b/i.test(rawText)
-  // Also recognize the same general "looking for/need a developer" software-ask
   // shape used elsewhere in this file (SOFTWARE_ASK_PATTERNS) — e.g. "Looking
-  // for a development partner to help build our patient portal" — so a real
   // engagement ask phrased this way isn't dropped by the stricter gate above.
   const hasSoftwareAsk = SOFTWARE_ASK_PATTERNS.some((p) => p.test(rawText))
     && (DEV_ROLE_HINT.test(rawText) || TECH_KEYWORDS.some((k) => techKeywordMatches(rawText, k)))
-  // Also defer to the already-computed, subject-attribution-scoped opportunity
   // signals: an explicit_ask / freelance_project_need / hiring / technical_problem
   // signal already means real engagement language was found in the prospect's
   // OWN attributable text, even when its exact phrasing doesn't match the
@@ -1769,10 +1735,7 @@ function extractContentSignals(lines: string[], rawText: string): PassAOutput['c
     .filter((line) => {
       if (!PAIN_PATTERNS.some((p) => p.test(line)) || !DEV_ROLE_HINT.test(line)) return false
       const lower = line.toLowerCase()
-      // Reject third-party panel/event descriptions — "bug bounty platform"
-      // in a list of panelists is not the prospect's problem.
       if (THIRD_PARTY_PANEL.test(lower)) return false
-      // Reject solved/achievement/past framing — "solved vulnerabilities" or
       // "earned bounties" describes what the prospect SOLVES, not what they HAVE.
       if (SOLVED_NEGATION.test(lower)) return false
       // Require first-person current-ownership OR clear present-tense problem
@@ -1815,7 +1778,6 @@ function extractContentSignals(lines: string[], rawText: string): PassAOutput['c
  * language must not produce buyer signals for the prospect.
  */
 export function prospectAttributableText(rawText: string, prospectName?: string | null): string {
-  // Strip third-party repost blocks FIRST — a repost's "View <Other
   // Person>'s profile" block is authored by someone else entirely, so
   // line-level MARKET/AUDIENCE classification must never even see it as
   // "the prospect's own text" in the first place. See
@@ -1842,7 +1804,6 @@ function demoPassA(rawText: string): PassAOutput {
   const skills = extractSkills(lines, rawText)
 
   // Subject attribution: classify signals only from prospect-attributable text,
-  // never from market commentary, audience language, or a REPOST of someone
   // else's post. This prevents a recruiter's labor-market posts (or a
   // third party's repost content) from becoming buyer evidence.
   const attributableText = prospectAttributableText(rawText, name ?? clientName)
@@ -1890,7 +1851,6 @@ function demoPassA(rawText: string): PassAOutput {
 
 function classifyHiringRelevance(rawText: string): 'software' | 'product_design' | 'non_technical' | 'unknown' {
   const segments = rawText.split(/(?:\n{2,}|--- POST \d+ ---|Posts|Activity)/gi)
-  // Evaluate every hiring-context segment and prefer the STRONGEST signal
   // found anywhere in the document, rather than returning on the first
   // matching segment in document order. A profile header/About section can
   // legitimately mention "founder" (hiring-context) alongside an unrelated
@@ -1959,7 +1919,6 @@ function demoPassC(passA: PassAOutput): Pick<NormalizedIntelligence, 'probableNe
   }
 }
 
-// ── Main Pipeline Entry ────────────────────────────────────────────────────
 
 export async function runIntelligencePipeline(
   rawText: string,
@@ -1967,10 +1926,8 @@ export async function runIntelligencePipeline(
 ): Promise<ExtractionPipelineResult> {
   const callLog: ExtractionPipelineResult['callLog'] = []
 
-  // Extract URLs before any processing
   const sourceUrls = extractUrls(rawText)
 
-  // Build raw source data
   const rawSource: RawSourceData = {
     rawInput: rawText,
     sourceType: detectSourceType(rawText),
@@ -1989,7 +1946,6 @@ export async function runIntelligencePipeline(
   // Heuristic prospect name, computed early (before Pass A) purely so raw-text
   // scans below can exclude third-party repost blocks — a repost's "View
   // <Other Person>'s profile" block is authored by someone else, and must
-  // never be scanned as if it were the prospect's own text (workplace type,
   // location, opportunity signals, etc). See stripThirdPartyRepostBlocks.
   const heuristicName = extractName(splitLines(rawText))
   const ownRawText = stripThirdPartyRepostBlocks(rawText, heuristicName)
@@ -2042,7 +1998,6 @@ export async function runIntelligencePipeline(
   )
   const relationship = deriveRelationship(businessModel, passA, ownRawTextFinal)
 
-  // For any non-buyer relationship (recruiter, agency/partner, peer,
   // networking-only founder), strip market-derived opportunity signals. Their
   // posts about hiring demand, market growth, industry roadshows, or "moving
   // to"/"scaling" language describe THEIR SERVICE, THEIR CUSTOMERS, or THEIR
@@ -2099,7 +2054,6 @@ export async function runIntelligencePipeline(
   // rebuild signal), there is nothing for remote eligibility to be assessed
   // against — the correct state is NOT_APPLICABLE, not UNCLEAR. UNCLEAR is
   // reserved for when a real opportunity exists but geographic evidence is
-  // simply missing. Do not search for/apply workplace/location restrictions
   // until an opportunity type where geography is relevant has been
   // established.
   const LOCATION_RELEVANT_SIGNALS: OpportunitySignal[] = [
@@ -2117,7 +2071,6 @@ export async function runIntelligencePipeline(
   // opportunity and must not be discarded just because passA.job/opportunity
   // signals happen not to have populated.
   // A profile without an extracted job posting AND no detected workplace type
-  // has no engagement for which geography is relevant. The prospect's own
   // employment workplace type (e.g. "England · Remote") describes THEIR
   // arrangement, not a vendor restriction. ABSENCE OF RESTRICTION ≠ VERIFIED
   // ELIGIBILITY. Only when a job posting or location-relevant buying signal
@@ -2132,13 +2085,11 @@ export async function runIntelligencePipeline(
     && !hasLocationRelevantOpportunity
     && refinedEligibility.workplaceType === 'UNKNOWN'
 
-  // When overriding to NOT_APPLICABLE, workplaceType/remoteScope may still
   // reflect real detected-in-text reality (e.g. a job post genuinely says
   // ONSITE) and are kept as descriptive metadata — but `evidence` and
   // `reason` are reset, never carried through. `evidence` strings get
   // pushed into the evidence ledger as FACT/EMPLOYER_REQUIREMENT entries
   // (see below) and can leak into strategy/message grounding as if they
-  // were real actionable justification; several of them were fabricated by
   // heuristics pattern-matching generic vocabulary (e.g. "explicit ask for
   // external project help" from ordinary engineering language) rather than
   // a real employment/engagement ask. eligibility=NOT_APPLICABLE must never
@@ -2171,7 +2122,6 @@ export async function runIntelligencePipeline(
     intelligence.opportunity.urgency = 'unknown'
   }
 
-  // Merge evidence ledger with remote eligibility evidence
   if (finalEligibility.eligibility !== 'NOT_APPLICABLE' && finalEligibility.evidence) {
     for (const ev of finalEligibility.evidence) {
       evidenceLedger.push({

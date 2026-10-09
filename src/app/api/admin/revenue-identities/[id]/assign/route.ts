@@ -25,7 +25,6 @@ export async function POST(
 
   const supabase = await createServerSupabase()
 
-  // Verify identity belongs to org
   const { data: identity } = await supabase
     .from('revenue_identities')
     .select('id, identity_name')
@@ -35,7 +34,6 @@ export async function POST(
 
   if (!identity) return NextResponse.json({ error: 'Identity not found.' }, { status: 404 })
 
-  // Verify rep belongs to org
   const { data: rep } = await supabase
     .from('reps')
     .select('id, name')
@@ -71,7 +69,6 @@ export async function POST(
     detail: { rep_id: repId, rep_name: rep.name },
   })
 
-  // Emit WORK_ASSIGNED event (non-fatal)
   try {
     await supabase.rpc('emit_relay_event', {
       p_org_id: authCtx.orgId,

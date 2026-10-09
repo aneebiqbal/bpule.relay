@@ -42,7 +42,6 @@ const PROSPECT_CONTENT_MARKERS = [
 // wording — a person who writes their "About" section in resume-style third
 // person (no "I"/"my"/"he"/"she") is extremely common and must not be
 // treated the same as an empty/garbage/login-screen paste just because it
-// has no pronouns and few keyword hits. See hardening report: Eli Takele
 // (real LinkedIn profile, third-person bio) was misclassified IRRELEVANT.
 const LINKEDIN_STRUCTURE_PATTERNS = [
   /·\s*(1st|2nd|3rd)\b/i,
@@ -60,7 +59,6 @@ export function classifyInput(rawText: string): ClassificationResult {
   const text = rawText.trim()
   const reasons: string[] = []
 
-  // Check LinkedIn structure FIRST — if the paste has clear LinkedIn
   // profile markers, it's a valid prospect regardless of any UI fragments
   // that might also be present (browser chrome, navigation, etc.)
   const hasStructure = hasLinkedInProfileStructure(text)
@@ -482,7 +480,6 @@ export function evaluateProspectQualification(params: {
   // qualification other than 'skip' — the canonical pipeline's own verdict
   // that this is NOT a fit, which the legacy gate should not override
   // either, but that path already short-circuits before extraction/save in
-  // every caller). Input-sanity hardFail always still blocks.
   const canonicalVouches =
     params.canonicalQualification != null && params.canonicalQualification !== 'skip'
   const qualificationEligibility = !raw.hardFail && (canonicalVouches || legacyEligibility)

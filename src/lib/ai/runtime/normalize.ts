@@ -13,20 +13,16 @@
 export function normalizeJson(raw: string): Record<string, unknown> {
   let text = raw.trim()
 
-  // Strip code fences
   if (text.startsWith('```')) {
     text = text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/, '')
   }
 
-  // Try direct parse first
   try {
     const parsed = JSON.parse(text)
     if (isPlainObject(parsed)) return parsed
   } catch {
-    // Continue to repair attempts
   }
 
-  // Try to extract JSON object from surrounding text
   const firstBrace = text.indexOf('{')
   const lastBrace = text.lastIndexOf('}')
   if (firstBrace >= 0 && lastBrace > firstBrace) {
@@ -39,7 +35,6 @@ export function normalizeJson(raw: string): Record<string, unknown> {
     }
   }
 
-  // Try repairing common issues
   const repaired = repairJson(text)
   if (repaired) return repaired
 
@@ -49,10 +44,8 @@ export function normalizeJson(raw: string): Record<string, unknown> {
 function repairJson(text: string): Record<string, unknown> | null {
   let candidate = text.trim()
 
-  // Strip code fences again after trim
   candidate = candidate.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/, '')
 
-  // Remove trailing commas before } or ]
   candidate = candidate.replace(/,\s*([}\]])/g, '$1')
 
   // Replace "null" (string) with null (literal) for values
@@ -61,7 +54,6 @@ function repairJson(text: string): Record<string, unknown> | null {
   candidate = candidate.replace(/:\s*"None"\s*([,\}\]])/gi, ':null$1')
   candidate = candidate.replace(/:\s*""\s*([,\}\]])/gi, ':null$1')
 
-  // Extract JSON from surrounding text
   const firstBrace = candidate.indexOf('{')
   const lastBrace = candidate.lastIndexOf('}')
   if (firstBrace >= 0 && lastBrace > firstBrace) {

@@ -20,11 +20,9 @@ import { eligibilityScoreContribution, isJobSeekerAttribution } from './remote-e
 import { isBuyerLeadership, isClinicianProfile, isRecruiterTitle } from './role-signals'
 import { classifyNeedOwnership, isBuyerNeedOwnership, dominantNeedOwnership } from './need-ownership'
 
-// ── Scoring Model Version ──────────────────────────────────────────────────
 
 export const SCORE_VERSION = 'relay_qualification_v2'
 
-// ── Dimension Weights (centralized, versioned) ────────────────────────────
 
 export const DIMENSION_WEIGHTS = {
   opportunityFit: { max: 20, label: 'Opportunity Fit' },
@@ -37,7 +35,6 @@ export const DIMENSION_WEIGHTS = {
   conversionEvidence: { max: 5, label: 'Conversion Evidence' },
 } as const
 
-// ── Hard Negatives ─────────────────────────────────────────────────────────
 
 function splitCurrentEvidence(text: string): string {
   const pastMarkers = [
@@ -165,7 +162,6 @@ function computeRolePenalty(intelligence: NormalizedIntelligence, watchOut: stri
   // outlet without being an electrician" as an analogy. Only flag when the
   // micro-business term appears alongside ownership/operation language
   // ("my plumbing business", "I run a bakery", "owner of...") suggesting it
-  // IS the person's actual trade, OR in the profile header/title where it
   // describes the person's role — not buried in an analogy or third-party
   // reference deep in a post.
   const microBusinessTerms = /\b(plumb(?:er|ing)|electrician|baker|florist|bakery|restaurant|barber|salon|handyman|plumbing services)\b/i
@@ -180,7 +176,6 @@ function computeRolePenalty(intelligence: NormalizedIntelligence, watchOut: stri
   }
 
   // Company technicality — a small company is not automatically non-technical.
-  // If the profile shows technical product/engineering evidence (building
   // software, AI systems, security research), override any "small = non-tech"
   // assumption. Company size and technicality are independent dimensions.
   const hasTechnicalProductEvidence = /\b(?:building|built|developing|developed|shipped|architecture|proprietary|engineering|software|ai system|machine learning|security research|code|platform|saas|api|agent)\b/i.test(allContent)
@@ -210,7 +205,6 @@ function computeRolePenalty(intelligence: NormalizedIntelligence, watchOut: stri
   return penalty
 }
 
-// ── Main Scoring Function ──────────────────────────────────────────────────
 
 export interface ScoreInput {
   intelligence: NormalizedIntelligence
@@ -242,7 +236,6 @@ export function computeCanonicalScore(input: ScoreInput): CanonicalScoreBreakdow
   // Detect job seeker context if not explicitly provided
   const isJobSeeker = input.isJobSeekerContext ?? isJobSeekerText(rawText)
 
-  // ── Check Hard Negatives ─────────────────────────────────────────────
   // Only check geography hard negatives if NOT a job seeker context
   const hardNegatives = checkHardNegatives(rawText, isJobSeeker)
   if (intelligence.remoteEligibility.eligibility === 'INELIGIBLE' && !isJobSeeker) {
@@ -251,7 +244,6 @@ export function computeCanonicalScore(input: ScoreInput): CanonicalScoreBreakdow
     hardNegatives.push(intelligence.remoteEligibility.reason)
   }
 
-  // ── Role Quality Check ───────────────────────────────────────────────
   // Non-buyers (students, recruiters, non-technical roles) should score low
   // regardless of technical content in their profile
   const rolePenalty = computeRolePenalty(intelligence, watchOut, rawText)
@@ -259,45 +251,34 @@ export function computeCanonicalScore(input: ScoreInput): CanonicalScoreBreakdow
     hardNegatives.push(`Non-buyer role: ${rolePenalty} point penalty`)
   }
 
-  // ── Dimension 1: Opportunity Fit (0-20) ──────────────────────────────
   const oppDim = scoreOpportunityFit(intelligence, reasons, watchOut)
   dimensions.push(oppDim)
 
-  // ── Dimension 2: Remote Eligibility (0-20) ───────────────────────────
   const remoteDim = scoreRemoteEligibility(intelligence.remoteEligibility, reasons, watchOut)
   dimensions.push(remoteDim)
 
-  // ── Dimension 3: Need / Intent (0-20) ───────────────────────────────
   const needDim = scoreNeedIntent(intelligence, reasons, watchOut)
   dimensions.push(needDim)
 
-  // ── Dimension 4: Revenue Identity Fit (0-15) ─────────────────────────
   const identityDim = scoreRevenueIdentityFit(input.hasCredibleIdentity, reasons, watchOut)
   dimensions.push(identityDim)
 
-  // ── Dimension 5: Proof Strength (0-10) ───────────────────────────────
   const proofDim = scoreProofStrength(input.hasRelevantProof, input.proofMatchStrength, reasons, watchOut)
   dimensions.push(proofDim)
 
-  // ── Dimension 6: Access / Reachability (0-5) ─────────────────────────
   const accessDim = scoreAccessReachability(input.isReachable, intelligence, reasons, watchOut)
   dimensions.push(accessDim)
 
-  // ── Dimension 7: Timing (0-5) ────────────────────────────────────────
   const timingDim = scoreTiming(intelligence, reasons)
   dimensions.push(timingDim)
 
-  // ── Dimension 8: Conversion Evidence (0-5) ───────────────────────────
   const convDim = scoreConversionEvidence(input.resemblesPastWin, input.pastConversionSignal ?? null, reasons)
   dimensions.push(convDim)
 
-  // ── Compute Total ────────────────────────────────────────────────────
   let total = dimensions.reduce((sum, d) => sum + d.points, 0)
 
-  // Apply role quality penalty (non-buyers score low regardless of technical content)
   total = Math.max(0, total - rolePenalty)
 
-  // Apply need ownership penalty: if the dominant need is SERVICE_OFFERING
   // or CUSTOMER_NEED, the prospect is describing services they sell or their
   // customers' problems — NOT a buying intent for our services.
   const needPenalty = computeNeedOwnershipPenalty(intelligence, rawText, watchOut)
@@ -307,7 +288,6 @@ export function computeCanonicalScore(input: ScoreInput): CanonicalScoreBreakdow
   // No hard cap — other dimensions (remote eligibility, identity fit) contribute
   // naturally. The need ownership penalty handles SERVICE_OFFERING cases.
 
-  // Apply hard negative override
   if (hardNegatives.length > 0) {
     total = Math.min(total, 25) // Hard cap when hard negatives present
   }
@@ -315,7 +295,6 @@ export function computeCanonicalScore(input: ScoreInput): CanonicalScoreBreakdow
   // Clamp 0-100
   total = Math.max(0, Math.min(100, total))
 
-  // ── Identify Missing Info ────────────────────────────────────────────
   if (!intelligence.person.fullName) missingInfo.push('Contact name unknown')
   if (!intelligence.company.name) missingInfo.push('Company name unknown')
   if (!intelligence.person.title) missingInfo.push('Role/title unknown')
@@ -341,7 +320,6 @@ function scoreLabel(score: number): string {
   return 'Not a fit'
 }
 
-// ── Need Ownership Penalty ────────────────────────────────────────────────
 
 /**
  * Penalize scores when the dominant need ownership indicates the prospect
@@ -359,7 +337,6 @@ function computeNeedOwnershipPenalty(
   // Classify need ownership from raw text
   const textOwnership = classifyNeedOwnership(rawText)
 
-  // Also check evidence-level ownership if available
   const evidenceOwnerships: NeedOwnership[] =
     intelligence.needOwnershipSummary
       ? Object.entries(intelligence.needOwnershipSummary.counts)
@@ -377,7 +354,6 @@ function computeNeedOwnershipPenalty(
   const dominant = dominantNeedOwnership(allOwnerships)
 
   // SERVICE_OFFERING: The prospect describes services they provide.
-  // This is the #1 source of false positives — a fractional CTO saying
   // "I help companies modernize infrastructure" is NOT a buyer.
   if (dominant === 'SERVICE_OFFERING') {
     watchOut.push('Profile describes services they provide — likely a service provider, not a buyer.')
@@ -400,7 +376,6 @@ function computeNeedOwnershipPenalty(
   return 0
 }
 
-// ── Individual Dimension Scorers ───────────────────────────────────────────
 
 function scoreOpportunityFit(
   intelligence: NormalizedIntelligence,
@@ -442,7 +417,6 @@ function scoreOpportunityFit(
     reasons.push(`Strong opportunity signal: ${signals[0]}.`)
   } else if (signals.includes('hiring')) {
     // Hiring for own team — moderate signal. Could indicate capacity need
-    // if they can't find the right person, but not a strong buyer signal.
     points = 8
     note = 'Hiring signal — may indicate capacity need.'
     reasons.push('Hiring detected (moderate signal).')
@@ -558,7 +532,6 @@ function scoreNeedIntent(
   let points = 0
   let note = 'No strong need signal.'
 
-  // Check need ownership — if the dominant need is SERVICE_OFFERING or
   // CUSTOMER_NEED, suppress buyer-intent scoring regardless of signals
   const dominantOwnership = intelligence.needOwnershipSummary?.dominant ?? 'UNKNOWN'
   const isServiceProviderNeed =
@@ -574,7 +547,6 @@ function scoreNeedIntent(
     reasons.push('Explicitly seeking external help.')
   } else if (opportunity.signals.includes('hiring') && !isServiceProviderNeed) {
     // "Hiring" means they want EMPLOYEES, not outside contractors.
-    // This is a moderate signal — they may need outside help if hiring fails.
     points = 10
     note = 'Hiring for own team — moderate signal for outside services.'
     reasons.push('Hiring detected (may indicate capacity need).')
@@ -599,7 +571,6 @@ function scoreNeedIntent(
     points = Math.min(points + 2, 19)
   }
 
-  // If service provider need, cap at minimal points
   if (isServiceProviderNeed && points > 5) {
     points = 5
     note = 'Need signal suppressed — profile describes services they provide, not a buying need.'
@@ -629,7 +600,6 @@ function scoreRevenueIdentityFit(
   let note = 'No matching Revenue Identity.'
 
   // Wording note (Bug 4.3): this dimension purely reflects "we could route
-  // this to a sender if outreach were needed" — it does not and must not
   // imply a commercial opportunity has been established. "Compatible" avoids
   // the earlier "for this opportunity" phrasing, which contradicted a
   // simultaneous "no clear opportunity signal detected" watchOut on the same
@@ -640,12 +610,8 @@ function scoreRevenueIdentityFit(
     note = 'Compatible Revenue Identity available.'
     reasons.push('Compatible Revenue Identity available for outreach, if needed.')
   } else {
-    // This is informational, not necessarily a concern — whether it matters
     // depends on whether any outreach message is actually planned, which
-    // this scoring dimension has no visibility into (that is decided later,
-    // in the revenue-strategy layer, from qualification + action). Route.ts
     // and the UI are responsible for suppressing/rewording this watchOut
-    // when the recommended action carries no pitch — see Bug 4 (route.ts
     // sender/proof gating).
     watchOut.push('No Revenue Identity identified for this opportunity.')
   }

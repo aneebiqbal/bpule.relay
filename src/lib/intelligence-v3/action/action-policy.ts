@@ -51,7 +51,6 @@ export interface V3ActionOutput {
 }
 
 export function determineAction(input: V3ActionInput): V3ActionOutput {
-  // ── Hard disqualifiers ──────────────────────────────────────────────────
   if (input.status === 'CLOSED') {
     return {
       action: 'SKIP',
@@ -70,21 +69,16 @@ export function determineAction(input: V3ActionInput): V3ActionOutput {
     }
   }
 
-  // ── Intent classification ──────────────────────────────────────────────
   const intentLevel = classifyIntentLevel(input)
 
-  // ── Access × Intent matrix ──────────────────────────────────────────────
   const accessKey = input.access as keyof typeof ACCESS_INTENT_ACTION_MATRIX
   const matrix = ACCESS_INTENT_ACTION_MATRIX[accessKey] ?? ACCESS_INTENT_ACTION_MATRIX.NONE
   const rawAction = matrix[intentLevel] as V3Action ?? 'OBSERVE'
 
-  // ── SAFETY GATE: uncertain model → HUMAN_REVIEW, not CONTACT ──────────
   const safetyResult = applySafetyGate(input, rawAction)
 
-  // ── Message eligibility (conservative) ──────────────────────────────────
   const messageEligible = computeMessageEligibility(input) && safetyResult.action !== 'HUMAN_REVIEW'
 
-  // ── Build reason ───────────────────────────────────────────────────────
   const reason = buildReason(input, safetyResult.action, intentLevel)
 
   return {
@@ -96,7 +90,6 @@ export function determineAction(input: V3ActionInput): V3ActionOutput {
   }
 }
 
-// ── Safety Gate ──────────────────────────────────────────────────────────────
 //
 // The model can be uncertain. The action policy must be safe.
 //
@@ -240,7 +233,6 @@ function buildReason(input: V3ActionInput, action: V3Action, intentLevel: string
   return `${action} — ${parts.join(', ')}`
 }
 
-// ── Convert from full decision packet ────────────────────────────────────────
 
 export function actionFromDecisionPacket(packet: V3LeadDecisionPacket): V3ActionOutput {
   const episode = packet.episodes.find((e) => e.id === packet.selectedEpisodeId)

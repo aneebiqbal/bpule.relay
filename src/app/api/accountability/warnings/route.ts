@@ -18,7 +18,6 @@ export async function GET(req: NextRequest) {
   const today = now.toISOString().slice(0, 10)
   const supabase = await createServerSupabase()
 
-  // Get rep timezone
   const { data: repRow } = await supabase
     .from('reps')
     .select('timezone')
@@ -28,7 +27,6 @@ export async function GET(req: NextRequest) {
 
   const dayElapsed = dayProgress(now, timezone)
 
-  // Get availability
   const { data: availability } = await supabase
     .from('operator_availability')
     .select('status')
@@ -37,7 +35,6 @@ export async function GET(req: NextRequest) {
     .maybeSingle()
   const availabilityStatus = (availability?.status as 'working' | 'leave' | 'holiday' | 'approved_unavailable') ?? 'working'
 
-  // Get assignments
   const { data: assignments } = await supabase
     .from('identity_assignments')
     .select('revenue_identity_id')
@@ -69,7 +66,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ warnings, dayElapsed })
   }
 
-  // Get contracts for assigned identities
   const identityIds = assignments.map((a: any) => a.revenue_identity_id)
   const { data: contracts } = await supabase
     .from('revenue_identity_contracts')
@@ -78,13 +74,11 @@ export async function GET(req: NextRequest) {
     .eq('status', 'active')
     .order('effective_from', { ascending: false })
 
-  // Get allocations
   const contractIds = (contracts ?? []).map((c: any) => c.id)
   const { data: allocations } = contractIds.length > 0
     ? await supabase.from('contract_allocations').select('*').in('contract_id', contractIds)
     : { data: [] }
 
-  // Get day closes for today
   const { data: dayCloses } = await supabase
     .from('day_closes')
     .select('*')
@@ -92,7 +86,6 @@ export async function GET(req: NextRequest) {
     .eq('date', today)
     .in('revenue_identity_id', identityIds)
 
-  // Build progress for the first matching contract (or aggregate)
   const targetIdentityId = identityId && identityIds.includes(identityId) ? identityId : identityIds[0]
   const targetContract = (contracts ?? []).find((c: any) => c.revenue_identity_id === targetIdentityId) ?? contracts?.[0]
   const myAlloc = (allocations ?? []).find((a: any) => a.contract_id === targetContract?.id && a.person_id === ctx.repId)

@@ -21,7 +21,6 @@ import type {
 import { EPISODE_STALENESS } from '../types'
 import { getActiveEvents, getEvidenceForOrganization, type V3EvidenceGraph } from './evidence-graph'
 
-// ── Episode Construction ────────────────────────────────────────────────────
 
 export interface EpisodeBuildOptions {
   /** Reference date for staleness calculations (defaults to now) */
@@ -40,7 +39,6 @@ export function buildEpisodes(
 
   const activeEvents = getActiveEvents(graph)
 
-  // Group events by organization + eventType
   const eventGroups = groupEventsByOrganizationAndType(activeEvents)
 
   for (const [, events] of eventGroups) {
@@ -55,7 +53,6 @@ export function buildEpisodes(
     }
   }
 
-  // Also create episodes from evidence-only events (no explicit event)
   const evidenceOnlyEpisodes = buildEpisodesFromEvidenceOnly(graph, refDate, minEvidence)
   episodes.push(...evidenceOnlyEpisodes)
 
@@ -98,11 +95,9 @@ function buildEpisodeFromEvents(
 
     if (event.explicitness === 'EXPLICIT') explicitRequest = true
 
-    // Determine need owner from event type
     needOwner = eventNeedOwner(event.eventType)
   }
 
-  // Also gather evidence from the same organization that supports this episode
   if (orgId) {
     const orgEvidence = getEvidenceForOrganization(graph, orgId)
     for (const ev of orgEvidence) {
@@ -116,14 +111,12 @@ function buildEpisodeFromEvents(
     }
   }
 
-  // Determine status from age
   const lastActivity = getLastActivityDate(events, allEvidenceIds, graph)
   const ageDays = lastActivity
     ? daysBetween(lastActivity, refDate)
     : null
   const status = determineEpisodeStatus(ageDays, events)
 
-  // Extract person ID
   const personId = anchorEvent.personId
 
   return {
@@ -153,12 +146,10 @@ function buildEpisodesFromEvidenceOnly(
   const episodes: V3OpportunityEpisode[] = []
   const processedEvidence = new Set<string>()
 
-  // Get all evidence that isn't linked to an event
   const allEvidence = Array.from(graph.evidence.values()).filter(
     (e: V3Evidence) => !e.eventId && (e.polarity === 'ACTIVE' || e.polarity === 'FUTURE')
   )
 
-  // Group by organization
   const orgGroups = new Map<string, V3Evidence[]>()
   for (const ev of allEvidence) {
     if (!ev.subjectOrganizationId) continue
@@ -170,7 +161,6 @@ function buildEpisodesFromEvidenceOnly(
   for (const [orgId, evidence] of orgGroups) {
     if (evidence.length < minEvidence) continue
 
-    // Group by need owner type
     const needGroups = new Map<V3NeedOwner, V3Evidence[]>()
     for (const ev of evidence) {
       const group = needGroups.get(ev.needOwner) || []
@@ -181,7 +171,6 @@ function buildEpisodesFromEvidenceOnly(
     for (const [needOwner, needEvidence] of needGroups) {
       if (needEvidence.length < 1) continue
 
-      // Create a synthetic event for this evidence group
       const syntheticEvent: V3Event = {
         id: `evt_synthetic_${orgId}_${needOwner}`,
         eventType: eventTypeFromNeedOwner(needOwner),
@@ -233,7 +222,6 @@ function buildEpisodesFromEvidenceOnly(
   return episodes
 }
 
-// ── Grouping Logic ──────────────────────────────────────────────────────────
 
 function groupEventsByOrganizationAndType(
   events: V3Event[],
@@ -252,7 +240,6 @@ function groupEventsByTimeProximity(
   events: V3Event[],
   maxDaysGap: number,
 ): V3Event[][] {
-  // Sort by date
   const sorted = [...events].sort((a, b) => {
     const aTime = a.occurredAt ? new Date(a.occurredAt).getTime() : 0
     const bTime = b.occurredAt ? new Date(b.occurredAt).getTime() : 0
@@ -281,7 +268,6 @@ function groupEventsByTimeProximity(
   return groups
 }
 
-// ── Helper Functions ────────────────────────────────────────────────────────
 
 function eventNeedOwner(eventType: V3Event['eventType']): V3NeedOwner {
   switch (eventType) {
@@ -348,7 +334,6 @@ function determineEpisodeStatus(
   ageDays: number | null,
   events: V3Event[],
 ): V3EpisodeStatus {
-  // Check if any event is explicitly closed
   const hasClosed = events.some((e) => e.polarity === 'CLOSED' || e.polarity === 'NEGATED')
   if (hasClosed) return 'CLOSED'
 

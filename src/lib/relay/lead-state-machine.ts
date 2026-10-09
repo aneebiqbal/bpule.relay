@@ -1,16 +1,3 @@
-/**
- * Canonical Lead State Machine.
- *
- * SINGLE SOURCE OF TRUTH for lead workflow state.
- *
- * Every component that needs to know "what's next" for a lead MUST use this.
- * No component may independently infer next-action from raw message arrays.
- *
- * Lifecycle:
-   NEW → SEND_CONNECTION → WAIT_CONNECTION → SEND_DM → WAIT_REPLY
-   → SEND_REPLY → WAIT_REPLY → SEND_FOLLOWUP → WAIT_REPLY → ...
-   → CLOSED
- */
 
 import type { LeadDetail } from '@/lib/store/types'
 import type { Message } from '@/lib/domain/types'
@@ -61,7 +48,6 @@ export function deriveNextLeadAction(lead: LeadDetail): LeadActionResult {
   const now = Date.now()
   const messages = lead.messages
 
-  // ── Terminal states ──────────────────────────────────────────────
   if (lead.status === 'won') {
     return {
       action: 'CLOSED',
@@ -84,7 +70,6 @@ export function deriveNextLeadAction(lead: LeadDetail): LeadActionResult {
     }
   }
 
-  // ── Compute canonical facts from persisted state ─────────────────
   const connectionMsg = latestMessage(messages, 'connection')
   const connectionSent = Boolean(connectionMsg)
   const connectionAccepted = lead.connectionAcceptedAt != null
@@ -107,7 +92,6 @@ export function deriveNextLeadAction(lead: LeadDetail): LeadActionResult {
     .filter((m) => m.direction !== 'inbound' && m.sentText && m.sentAt)
     .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''))[0] ?? null
 
-  // ── State transitions (priority order) ───────────────────────────
 
   // 1. Connection not sent yet
   if (!connectionSent) {

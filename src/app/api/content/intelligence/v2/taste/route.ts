@@ -39,7 +39,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     }
 
-    // Load existing or create fresh
     const stored = await store.getTasteProfile(personaId)
     const tasteProfile = stored ? {
       personaId: stored.personaId,
@@ -64,7 +63,6 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Apply the signal
     const updated = applyTasteSignal(tasteProfile, signal)
 
     // Persist with signal key for deduplication

@@ -23,7 +23,6 @@ import { scoreReachPotential, applyReachScoring } from '../reach'
 import { buildSourceProvenance, buildSourcePromptBlock, groundIdeaAgainstSources } from '../sources'
 import { getPersonaAngleProfile, generateDiversifiedAngle, buildDiversificationPromptBlock } from '../diversification'
 
-// ── AI Output Schemas ──
 
 const IDEA_CANDIDATES_SCHEMA: ShapeSchema = {
   ideas: { type: 'array', required: true },
@@ -44,7 +43,6 @@ const VISUAL_DIRECTION_SCHEMA: ShapeSchema = {
   reason: { type: 'string', required: true },
 }
 
-// ── Anti-Slop Detection ──
 
 const BANNED_PHRASES = [
   "In today's fast-paced",
@@ -142,7 +140,6 @@ export async function generateDailyBrief(
      const recentContent = buildRecentContentSummary(input.memories, input.recentIdeas)
      const personaContext = buildPersonaContext(input.persona, input.profile, input.tasteProfile)
 
-     // ── Phase 3: Trend velocity + saturation analysis ──
      const velocityAnalyses = new Map<string, VelocityAnalysis>()
      const candidatesWithVelocity = input.trendCandidates.map(tc => {
        const vel = analyzeTrendVelocity(tc.item)
@@ -151,7 +148,6 @@ export async function generateDailyBrief(
      })
      const trendSignals = buildTrendSignals(candidatesWithVelocity.slice(0, 8))
 
-     // ── Phase 3: Evergreen fallback detection ──
      const trendPoolWeak = isTrendPoolWeak(candidatesWithVelocity.slice(0, 5))
      const contentStrategy = trendPoolWeak ? 'evergreen' : 'trend-led'
 
@@ -163,7 +159,6 @@ export async function generateDailyBrief(
        })
      }
 
-     // ── Performance signals — what has actually worked ──
      let performanceSignals: PerformanceSignal | undefined
      try {
        const performanceProfile = await buildPerformanceProfile(store, input.persona.id)
@@ -172,13 +167,11 @@ export async function generateDailyBrief(
        console.warn('[daily-brief] Performance profile failed:', perfErr instanceof Error ? perfErr.message : String(perfErr))
      }
 
-     // ── Phase 3: Trend diversification angle ──
      const personaAngle = getPersonaAngleProfile(
        input.persona.personaRole ?? input.profile?.role ?? '',
        input.profile?.seniority,
      )
 
-     // ── AI Idea Generation (with deterministic fallback) ──
      let scoredIdeas: IdeaCandidate[]
      try {
        const { ideas: rawIdeas, cost: ideaCost } = await generateIdeaCandidates({
@@ -204,7 +197,6 @@ export async function generateDailyBrief(
        scoredIdeas = generateDeterministicIdeas(input)
      }
 
-    // ── Phase 2: Semantic novelty penalty (embedding-based dedup) ──
      if (hasEmbeddingProvider() && scoredIdeas.length > 1) {
        try {
          scoredIdeas = await applySemanticNoveltyPenalty(scoredIdeas, store, input.persona.id)
@@ -213,7 +205,6 @@ export async function generateDailyBrief(
        }
      }
 
-     // ── Phase 3: Reach scoring — "why this could perform" ──
      scoredIdeas = scoredIdeas.map(idea => {
        try {
          const trendCandidate = candidatesWithVelocity.find(tc =>
@@ -236,10 +227,8 @@ export async function generateDailyBrief(
        }
      })
 
-    // ── Phase 3: Platform-specific ranking adjustment ──
     scoredIdeas = applyPlatformSpecificRanking(scoredIdeas, input.platform)
 
-    // ── Phase 3: Evergreen boost when trend pool is weak ──
     if (trendPoolWeak) {
       scoredIdeas = scoredIdeas.map(idea => ({
         ...idea,
@@ -390,7 +379,6 @@ export async function generateDailyBrief(
 
     // Record content memories for anti-repetition (with semantic embeddings)
     for (const idea of selectedIdeas) {
-      // Compute semantic fingerprint for combined title+angle+territory
       try {
          const embedding = await embedContentMemory({
            title: idea.title,
@@ -492,7 +480,6 @@ Output ONLY JSON array: [{"title": "...", "angle": "...", "trendGrounded": true/
     feature: 'studio_v2_daily',
   })
 
-  // Handle multiple response formats: array, {ideas}, {posts}, {suggestions}, {items}
   let rawIdeas: IdeaCandidate[] = []
   if (Array.isArray(result.data)) {
     rawIdeas = result.data
@@ -668,18 +655,14 @@ Output ONLY the post text. No JSON, no intro, no "Here's your post:".`
 function cleanXPost(raw: string): string {
   let text = raw.trim()
 
-  // Remove ALL em dashes and dash-like characters
   text = text.replace(/[\u2014\u2013\u2015\uFE58\uFF0D\u2500\u2212\u2E3A\u2E3B]/g, ' ')
 
-  // Remove emojis
   text = text.replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
   text = text.replace(/[\u{1F600}-\u{1F64F}]/gu, '')
   text = text.replace(/[\u{2600}-\u{26FF}]/gu, '')
 
-  // Remove hashtags
   text = text.replace(/#[a-zA-Z][a-zA-Z0-9]*/g, '')
 
-  // Remove trailing filler
   text = text.replace(/\s*(Thoughts\?|Agree\?|Let that sink in\.?)\s*$/i, '')
 
   // Collapse whitespace
@@ -690,7 +673,6 @@ function cleanXPost(raw: string): string {
   const isThread = lines.some(l => /^\d+\/\s/.test(l.trim()))
 
   if (!isThread && text.length > 280) {
-    // Try to cut at sentence boundary
     const lastPeriod = text.lastIndexOf('.', 277)
     if (lastPeriod > 200) {
       text = text.slice(0, lastPeriod + 1)
@@ -745,21 +727,17 @@ function evaluateXPostQuality(caption: string): PostQualityResult {
 export function cleanPost(raw: string): string {
   let text = raw.trim()
 
-  // Remove ALL em dashes, en dashes, and dash-like characters
   text = text.replace(/[\u2014\u2013\u2015\uFE58\uFF0D\u2500\u2212\u2E3A\u2E3B]/g, ' ')
   text = text.replace(/\s{2,}/g, ' ')
 
-  // Normalize paragraph breaks
   text = text.replace(/\n{3,}/g, '\n\n')
   text = text.replace(/\r\n/g, '\n')
 
   // Fix broken sentences within paragraphs
   text = text.replace(/\.\s+([a-z])/g, (_, c) => `. ${c.toUpperCase()}`)
 
-  // Trim each paragraph
   const paragraphs = text.split('\n\n').map(p => p.trim()).filter(Boolean)
 
-  // If AI returned one big block, split into paragraphs by sentence groups
   if (paragraphs.length < 2) {
     const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
     const chunks: string[] = []
@@ -776,7 +754,6 @@ export function cleanPost(raw: string): string {
     if (chunks.length > 1) return chunks.join('\n\n')
   }
 
-  // Trim to ~200 words
   const fullText = paragraphs.join('\n\n')
   const words = fullText.split(/\s+/)
   if (words.length > 200) {
@@ -998,14 +975,12 @@ Output ONLY JSON:
     feature: 'studio_v2_daily',
   })
 
-  // Handle both direct object and wrapped { visual: ... } formats
   if (result.data && typeof result.data === 'object') {
     const obj = result.data as Record<string, unknown>
     if (obj.type && obj.concept) return result.data as VisualDirection
     if (obj.visual && typeof obj.visual === 'object') return obj.visual as VisualDirection
   }
 
-  // If visual generation failed or returned garbage, default to NO_VISUAL
   return null
 }
 
@@ -1235,7 +1210,6 @@ function generateDeterministicIdeas(input: DailyBriefInput): IdeaCandidate[] {
     })
   }
 
-  // Ensure at least 4 diverse ideas
   let fallbackIdx = 0
   while (ideas.length < 4) {
     const area = expertiseAreas[fallbackIdx % expertiseAreas.length] ?? territories[0] ?? 'your work'
@@ -1262,7 +1236,6 @@ function scoreIdeas(
   input: DailyBriefInput,
 ): IdeaCandidate[] {
   return candidates.map(raw => {
-    // Normalize fields: AI may use 'insight' instead of 'angle'
     const idea: IdeaCandidate = {
       title: raw.title,
       angle: raw.angle ?? raw.whyNow ?? '',
@@ -1396,7 +1369,6 @@ function estimateCost(result: { trace?: { estimatedCostUsd?: number } }): number
   return result.trace?.estimatedCostUsd ?? 0.005
 }
 
-// ─── Internal types ───
 
 interface IdeaCandidate {
   title: string

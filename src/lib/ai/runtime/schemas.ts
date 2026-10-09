@@ -8,7 +8,6 @@
  * validation that catches missing fields and type mismatches.
  */
 
-// ── Schema Definition Format ──────────────────────────────────────────────────
 
 export type FieldType = 'string' | 'number' | 'boolean' | 'array' | 'object'
 
@@ -21,7 +20,6 @@ export interface FieldSpec {
 
 export type ShapeSchema = Record<string, FieldSpec>
 
-// ── Conversation Copilot Schema ───────────────────────────────────────────────
 
 export const CONVERSATION_UNDERSTAND_SCHEMA: ShapeSchema = {
   intent: { type: 'string', required: true, description: 'interested|objection|question|pricing|not_interested|meeting_request|unclear' },
@@ -43,7 +41,6 @@ export const CONVERSATION_REPLY_SCHEMA: ShapeSchema = {
   cta_strategy: { type: 'string', required: false },
 }
 
-// ── Lead Intelligence Schema ──────────────────────────────────────────────────
 
 export const LEAD_INTERPRET_SCHEMA: ShapeSchema = {
   commercial_reading: { type: 'string', required: false },
@@ -56,7 +53,6 @@ export const LEAD_INTERPRET_SCHEMA: ShapeSchema = {
   confidence: { type: 'string', required: false },
 }
 
-// ── Validation Engine ─────────────────────────────────────────────────────────
 
 export interface ValidationResult {
   valid: boolean

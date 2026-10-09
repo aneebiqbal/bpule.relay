@@ -82,10 +82,8 @@ export function createOutreachStrategy(input: StrategyInput): OutreachStrategy {
   const mode = selectMessageMode(input)
   const channel = input.channel
 
-  // Build lead context from SAFE facts only
   const leadContext = buildLeadContext(input)
 
-  // Determine the safe trigger to reference
   const safeTrigger = buildSafeTrigger(input)
 
   // Infer probable need (for strategy only, not stated as fact)

@@ -22,7 +22,6 @@ import type { LeadDetail } from '@/lib/store/types'
 import type { ProofItem } from '@/lib/domain/types'
 import type { DraftResult } from '@/lib/ai/draft'
 
-// ── Types ───────────────────────────────────────────────────────────────────
 
 interface Props {
   lead: LeadDetail
@@ -33,7 +32,6 @@ interface Props {
 
 type WorkspaceMode = 'dm' | 'connection' | 'reply' | 'followup' | 'upwork' | null
 
-// ── Component ───────────────────────────────────────────────────────────────
 
 export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, todaySends }: Props) {
   const searchParams = useSearchParams()
@@ -114,7 +112,6 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, t
     : null
   const lastInboundMessage = lead.messages.filter((m) => m.direction === 'inbound').at(-1) ?? null
 
-  // ── Actions ─────────────────────────────────────────────────────────────
 
   const generateDraft = useCallback(async (type: string) => {
     setGenerating(true)
@@ -295,7 +292,6 @@ export function LeadWorkspaceSimple({ lead: initialLead, profiles, dailyLimit, t
   // No auto-generate on page load — drafts are only created on explicit user action.
   // Auto-generation was burning AI credits on every page visit.
 
-  // ── Render ──────────────────────────────────────────────────────────────
 
   // Full message history: drafts, sent, received — clearly distinguished
   const allMessages = lead.messages
@@ -574,7 +570,6 @@ function timeAgo(iso: string | null, now: number): string {
   return `${days}d ago`
 }
 
-// ── Unified Command Station ─────────────────────────────────────────────────
 // One surface for ALL lead operations. No panel hunting, no scrolling.
 
 interface CommandStationProps {

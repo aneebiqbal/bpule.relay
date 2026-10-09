@@ -76,7 +76,6 @@ export function computeLifecycleState(input: LifecycleInput, policy: LifecyclePo
     return { state: 'active', daysStale: 0, reason: 'Awaiting our reply' }
   }
 
-  // New lead — check how long it's sat untouched
   if (input.status === 'new') {
     const daysSinceCreated = Math.floor((now - new Date(input.createdAt).getTime()) / (1000 * 60 * 60 * 24))
     if (daysSinceCreated >= policy.newLeadColdDays) {
@@ -109,7 +108,6 @@ export function computeLifecycleState(input: LifecycleInput, policy: LifecyclePo
 
     const daysSinceOutbound = Math.floor((now - new Date(input.lastOutboundAt).getTime()) / (1000 * 60 * 60 * 24))
 
-    // Check archive eligibility — if eligible, mark as frozen
     if (isArchiveEligible({
       followupCount: input.followupCount ?? 0,
       lastSendAt: input.lastOutboundAt,

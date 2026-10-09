@@ -52,22 +52,16 @@ interface PlanInput {
 export function buildPostPlan(input: PlanInput): PostPlan {
   const { idea, profile, journey, platform } = input
 
-  // Determine grounding mode
   const groundingMode = determineGroundingMode(idea, journey)
 
-  // Build core insight from angle + expertise
   const coreInsight = buildCoreInsight(idea, profile)
 
-  // Determine what personal claims are allowed
   const allowedPersonalClaims = buildAllowedClaims(profile, journey)
 
-  // Determine forbidden claims
   const forbiddenClaims = buildForbiddenClaims(allowedPersonalClaims, groundingMode)
 
-  // Choose structure based on territory + grounding
   const structure = chooseStructure(idea.territory, groundingMode, platform)
 
-  // Build supporting points
   const supportingPoints = buildSupportingPoints(idea, profile, journey)
 
   return {
@@ -97,10 +91,8 @@ function determineGroundingMode(idea: ContentIdeaCard, journey: ContentJourneyEn
 }
 
 function buildCoreInsight(idea: ContentIdeaCard, profile: ContentProfile | null): string {
-  // Start with the angle
   let insight = idea.angle
 
-  // Add expertise context if available
   if (profile && profile.expertise.length > 0) {
     const topExpertise = profile.expertise
       .filter((e) => e.level === 'expert' || e.level === 'advanced')
@@ -121,7 +113,6 @@ function buildAllowedClaims(profile: ContentProfile | null, journey: ContentJour
   const claims: string[] = []
   if (!profile) return claims
 
-  // From expertise
   for (const exp of profile.expertise) {
     if (exp.level === 'expert' || exp.level === 'advanced') {
       claims.push(`worked with ${exp.area}`)
@@ -129,7 +120,6 @@ function buildAllowedClaims(profile: ContentProfile | null, journey: ContentJour
     }
   }
 
-  // From projects
   for (const proj of profile.projects) {
     if (proj.name) claims.push(`delivered ${proj.name}`)
     for (const lesson of proj.lessons) {
@@ -137,13 +127,11 @@ function buildAllowedClaims(profile: ContentProfile | null, journey: ContentJour
     }
   }
 
-  // From journey
   for (const event of journey) {
     claims.push(`${event.eventType}: ${event.title.slice(0, 60)}`)
     if (event.description) claims.push(event.description.slice(0, 60))
   }
 
-  // From industries
   for (const ind of profile.industries) {
     claims.push(`has experience in ${ind}`)
   }
@@ -154,7 +142,6 @@ function buildAllowedClaims(profile: ContentProfile | null, journey: ContentJour
 function buildForbiddenClaims(allowedClaims: string[], groundingMode: GroundingMode): string[] {
   const forbidden: string[] = []
 
-  // Always forbid unsupported first-person events
   forbidden.push('specific client names without permission')
   forbidden.push('exact revenue/profit figures without confirmation')
   forbidden.push('exact team size without confirmation')
@@ -186,7 +173,6 @@ function chooseStructure(territory: string, grounding: GroundingMode, platform: 
 function buildSupportingPoints(idea: ContentIdeaCard, profile: ContentProfile | null, journey: ContentJourneyEntry[]): string[] {
   const points: string[] = []
 
-  // From profile expertise
   if (profile) {
     for (const exp of profile.expertise.slice(0, 3)) {
       points.push(`${exp.area} (${exp.level})`)
@@ -196,7 +182,6 @@ function buildSupportingPoints(idea: ContentIdeaCard, profile: ContentProfile | 
     }
   }
 
-  // From journey
   for (const event of journey.slice(0, 2)) {
     points.push(`Journey: ${event.title.slice(0, 60)}`)
   }
@@ -219,7 +204,6 @@ function buildWhyThisPerson(profile: ContentProfile | null, idea: ContentIdeaCar
 export function validateCoreInsight(insight: string): { valid: boolean; reason: string } {
   const lower = insight.toLowerCase()
 
-  // Check for generic motivational patterns
   const genericPatterns = [
     /\b(keep it simple|keeping things simple)\b/,
     /\b(focus on the basics)\b/,
@@ -246,7 +230,6 @@ export function validateCoreInsight(insight: string): { valid: boolean; reason: 
     }
   }
 
-  // Check for substantive information
   const substanceIndicators = [
     // Specific mechanism
     /\b(because|cause|reason|happens when|results in|leads to|creates|produces)\b/,

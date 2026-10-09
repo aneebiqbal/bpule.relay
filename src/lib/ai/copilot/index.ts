@@ -1,13 +1,3 @@
-/**
- * Conversation Copilot - flagship OpenAI experience
- *
- * Pipeline:
- *   incoming message -> understand (interpretation) -> strategy -> reply (generation)
- *
- * Single recommended reply. Internal structured reasoning never exposed to user.
- * Deterministic code owns state transitions and canonical knowledge.
- * AI interprets and drafts. Human approves and sends.
- */
 
 import { generate } from '@/lib/ai/runtime'
 import { CONVERSATION_UNDERSTAND_SCHEMA, CONVERSATION_REPLY_SCHEMA } from '@/lib/ai/runtime/schemas'

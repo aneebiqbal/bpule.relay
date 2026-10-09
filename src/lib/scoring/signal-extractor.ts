@@ -95,7 +95,6 @@ export interface AccessSignals {
   profileComplete: boolean
 }
 
-// ── Extraction Patterns ──────────────────────────────────────────────────────
 
 const SENIORITY_PATTERNS: Array<{ pattern: RegExp; level: PersonSignals['seniority'] }> = [
   { pattern: /\b(ceo|cto|cfo|coo|chief|founder|president|partner|managing director)\b/i, level: 'executive' },
@@ -173,7 +172,6 @@ const BUDGET_PATTERNS = [
   /\b(\$[\d,]+|\d+k|\d+ per hour|monthly retainer)\b/i,
 ]
 
-// ── Main Extraction Function ─────────────────────────────────────────────────
 
 export function extractSignals(rawText: string): ExtractedSignals {
   const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean)
@@ -189,7 +187,6 @@ export function extractSignals(rawText: string): ExtractedSignals {
   }
 }
 
-// ── Company Signals ─────────────────────────────────────────────────────────
 
 function extractCompanySignals(text: string, lines: string[], lower: string): CompanySignals {
   const firstLine = lines[0] || ''
@@ -263,7 +260,6 @@ function countHiringRoles(text: string): number {
   return matches ? Math.min(matches.length, 10) : 0
 }
 
-// ── Person Signals ──────────────────────────────────────────────────────────
 
 function extractPersonSignals(text: string, lines: string[], lower: string): PersonSignals {
   const firstLine = lines[0] || ''
@@ -312,7 +308,6 @@ function extractTenure(text: string): number | null {
   return null
 }
 
-// ── Intent Signals ──────────────────────────────────────────────────────────
 
 function extractIntentSignals(text: string, lower: string): IntentSignals {
   const explicitAsk = ASK_PATTERNS.some((p) => p.test(text))
@@ -332,7 +327,6 @@ function extractIntentSignals(text: string, lower: string): IntentSignals {
 
   const urgencyWords = URGENCY_WORDS.filter((w) => lower.includes(w))
 
-  // Determine overall intent strength
   let intentStrength: IntentSignals['intentStrength'] = 'none'
   if (explicitAsk || (hiring && hiringUrgency === 'immediate') || seekingVendor) {
     intentStrength = 'strong'
@@ -365,7 +359,6 @@ function extractProductName(text: string): string | null {
   return null
 }
 
-// ── Technology Signals ──────────────────────────────────────────────────────
 
 function extractTechnologySignals(lower: string): TechnologySignals {
   const languages = TECH_LANGUAGES.filter((l) => {
@@ -404,7 +397,6 @@ function extractTechnologySignals(lower: string): TechnologySignals {
   }
 }
 
-// ── Timing Signals ──────────────────────────────────────────────────────────
 
 function extractTimingSignals(text: string, lower: string): TimingSignals {
   const hasUrgencyWords = URGENCY_WORDS.some((w) => lower.includes(w))
@@ -443,7 +435,6 @@ function extractTimingSignals(text: string, lower: string): TimingSignals {
   }
 }
 
-// ── Access Signals ──────────────────────────────────────────────────────────
 
 function extractAccessSignals(text: string, lower: string): AccessSignals {
   const isFirstDegree = /\b1st\b/.test(text) || /·\s*1st/.test(text)

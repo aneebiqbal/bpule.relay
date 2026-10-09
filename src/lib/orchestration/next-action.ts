@@ -228,7 +228,6 @@ export function projectNextActionForLead(
     if (action) actions.push(action)
   }
 
-  // If no active runs and lead is qualified but not contacted, suggest starting one
   // Use canonicalScore (0-100); fall back to legacy score (0-12) converted
   const leadScore = lead.canonicalScore ?? (lead.score != null ? lead.score * (100 / 12) : null)
   if (actions.length === 0 && lead.status === 'new' && leadScore !== null && leadScore >= 70) {

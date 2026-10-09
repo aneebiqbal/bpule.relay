@@ -43,7 +43,6 @@ export async function POST(
       editSignals: reason ? [reason] : [],
     })
 
-    // Update taste profile from explicit feedback
     try {
       const isPosting = reaction === 'posting'
       const feedbackSignalKey = `feedback:${id}:${isPosting ? 'posting' : 'not_for_me'}`

@@ -24,7 +24,6 @@ async function isRateLimited(
   const now = Date.now()
   const windowStart = new Date(now - RATE_LIMIT_WINDOW_MS).toISOString()
 
-  // Clean up expired entries (best-effort, don't block on failure)
   try {
     await supabase.from('rate_limits').delete().lt('created_at', windowStart)
   } catch {

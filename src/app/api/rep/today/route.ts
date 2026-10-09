@@ -11,11 +11,9 @@ export async function GET() {
   const org = user.organization
   const rep = user.rep
 
-  // Check if today is a working day
   const now = new Date()
   const isWorking = isWorkingDay(now, org.workingDays)
 
-  // Get assigned identities
   const { data: assignments } = await supabase
     .from('identity_assignments')
     .select(`
@@ -41,7 +39,6 @@ export async function GET() {
     })
   }
 
-  // Get active targets for these assignments
   const identityIds = assignments.map((a) => a.revenue_identity_id)
   const { data: targets } = await supabase
     .from('daily_targets')
@@ -50,7 +47,6 @@ export async function GET() {
     .in('revenue_identity_id', identityIds)
     .eq('active', true)
 
-  // Get today's accountability
   const today = now.toISOString().slice(0, 10)
   const { data: accountability } = await supabase
     .from('daily_accountability')

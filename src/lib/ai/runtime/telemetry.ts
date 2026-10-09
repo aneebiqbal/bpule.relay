@@ -7,14 +7,12 @@
 
 import type { AiTrace } from './types'
 
-// ── Supabase Client (lazy import to avoid circular deps) ─────────────────────
 
 async function getSupabase() {
   const { createServerSupabase } = await import('@/lib/supabase/server')
   return createServerSupabase()
 }
 
-// ── Trace Persistence ────────────────────────────────────────────────────────
 
 export interface PersistedTrace {
   id: string
@@ -88,7 +86,6 @@ export async function persistTrace(
       console.warn('[ai/telemetry] Failed to persist trace:', error.message)
     }
   } catch (err) {
-    // Never let telemetry failures break AI operations
     console.warn('[ai/telemetry] Persistence error:', err instanceof Error ? err.message : String(err))
   }
 }

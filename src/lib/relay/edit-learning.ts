@@ -75,20 +75,16 @@ export function computeEditDelta(originalText: string, editedText: string): Edit
 
   const lengthDelta = editedWords.length - originalWords.length
 
-  // Compute Levenshtein-based edit distance (simplified)
   const editDistance = levenshteinDistance(originalText, editedText)
 
-  // Check greeting change
   const originalGreeting = extractGreeting(originalText)
   const editedGreeting = extractGreeting(editedText)
   const greetingChanged = originalGreeting !== editedGreeting
 
-  // Check CTA change
   const originalCta = extractCta(originalText)
   const editedCta = extractCta(editedText)
   const ctaChanged = originalCta !== editedCta
 
-  // Check if proof was removed
   const originalProofs = extractProofReferences(originalText)
   const editedProofs = extractProofReferences(editedText)
   const proofRemoved = originalProofs.some((p) => !editedProofs.includes(p))
@@ -102,7 +98,6 @@ export function computeEditDelta(originalText: string, editedText: string): Edit
       ? 'less_formal'
       : 'same'
 
-  // Extract removed/added phrases
   const removedPhrases = findRemovedPhrases(originalText, editedText)
   const addedPhrases = findAddedPhrases(originalText, editedText)
 
@@ -192,7 +187,6 @@ function levenshteinDistance(a: string, b: string): number {
   if (a.length === 0) return b.length
   if (b.length === 0) return a.length
 
-  // For performance, cap the comparison
   const maxLen = 500
   const sa = a.slice(0, maxLen)
   const sb = b.slice(0, maxLen)

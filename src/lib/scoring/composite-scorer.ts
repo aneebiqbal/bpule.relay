@@ -1,18 +1,3 @@
-/**
- * Composite Scoring Engine — Layer 2.
- *
- * Combines deterministic signals with AI-enriched data to produce
- * a world-class lead score. Uses 10 dimensions with learned weights.
- *
- * Architecture:
- *   Raw Text → SignalExtractor (deterministic) → signals
- *   signals + AI decision → CompositeScorer → score (0-100)
- *
- * Key innovation: deterministic signals fill in the gaps when AI is uncertain.
- * If AI says fit=MEDIUM but deterministic parsing shows exact tech stack match,
- * the composite score is higher. If AI says buyer=0.7 but deterministic shows
- * no explicit ask, the score is lower.
- */
 
 import { extractSignals, type ExtractedSignals } from './signal-extractor'
 
@@ -50,7 +35,6 @@ export interface CompositeScore {
   recommendedAction: 'CONTACT_NOW' | 'CONNECT_WITH_NOTE' | 'CONNECT_WITHOUT_NOTE' | 'OBSERVE' | 'SKIP'
 }
 
-// ── Weights (sum to 1.0) ───────────────────────────────────────────────────
 
 const WEIGHTS = {
   buyerIntent: 0.25,
@@ -65,7 +49,6 @@ const WEIGHTS = {
   competitiveGap: 0.01,
 }
 
-// ── Main Scoring Function ────────────────────────────────────────────────────
 
 export function computeCompositeScore(input: CompositeScoreInput): CompositeScore {
   const dims: CompositeDimension[] = []
@@ -100,7 +83,6 @@ export function computeCompositeScore(input: CompositeScoreInput): CompositeScor
   // Dimension 10: Competitive Gap (1%)
   dims.push(scoreCompetitiveGap(input))
 
-  // Compute weighted total
   const total = Math.round(
     dims.reduce((sum, d) => sum + d.weighted, 0),
   )
@@ -122,7 +104,6 @@ export function computeCompositeScore(input: CompositeScoreInput): CompositeScor
   }
 }
 
-// ── Dimension Scorers ────────────────────────────────────────────────────────
 
 function scoreBuyerIntent(input: CompositeScoreInput): CompositeDimension {
   const { signals, aiBuyerProbability } = input
@@ -525,7 +506,6 @@ function scoreCompetitiveGap(input: CompositeScoreInput): CompositeDimension {
   }
 }
 
-// ── Labels & Actions ─────────────────────────────────────────────────────────
 
 function getCompositeLabel(score: number): string {
   if (score >= 80) return 'Strong opportunity'

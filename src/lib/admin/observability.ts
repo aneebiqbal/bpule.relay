@@ -12,7 +12,6 @@ function getClient() {
   return createServiceSupabase()
 }
 
-// ── Types ───────────────────────────────────────────────────────────────────
 
 export interface ObservabilityReport {
   generatedAt: string
@@ -80,7 +79,6 @@ export interface LifecycleReport {
   byStage: Record<string, number>
 }
 
-// ── Integrity Checks ────────────────────────────────────────────────────────
 
 export async function checkIntegrity(orgId: string): Promise<IntegrityReport> {
   const client = getClient()
@@ -140,7 +138,6 @@ export async function checkIntegrity(orgId: string): Promise<IntegrityReport> {
   }
 }
 
-// ── Fallback Tracking ──────────────────────────────────────────────────────
 
 export async function getFallbackStats(orgId: string): Promise<FallbackReport> {
   const client = getClient()
@@ -167,7 +164,6 @@ export async function getFallbackStats(orgId: string): Promise<FallbackReport> {
   }
 }
 
-// ── Lifecycle Distribution ──────────────────────────────────────────────────
 
 export async function getLifecycleDistribution(orgId: string): Promise<LifecycleReport> {
   const client = getClient()
@@ -204,7 +200,6 @@ export async function getLifecycleDistribution(orgId: string): Promise<Lifecycle
   }
 }
 
-// ── Full Report ─────────────────────────────────────────────────────────────
 
 export async function generateObservabilityReport(orgId: string): Promise<ObservabilityReport> {
   const [integrity, fallbacks, lifecycle] = await Promise.all([

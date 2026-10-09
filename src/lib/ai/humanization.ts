@@ -111,7 +111,6 @@ export function checkHumanization(caption: string): { passed: boolean; flaggedTe
 export function rewriteToHumanize(caption: string, flaggedTells: string[]): string {
   let result = caption
 
-  // Break uniform rhythm: merge some sentences, fragment others.
   if (flaggedTells.some((t) => t.includes('uniform sentence rhythm'))) {
     const sentences = getSentences(result)
     if (sentences.length >= 3) {
@@ -130,7 +129,6 @@ export function rewriteToHumanize(caption: string, flaggedTells: string[]): stri
     }
   }
 
-  // Remove both-sides hedging: keep the stronger side.
   if (flaggedTells.some((t) => t.includes('both-sides hedging'))) {
     result = result
       .replace(/\s*,?\s*\bwhile\s+it'?s\s+true\s+that\b[^.]*\./gi, '.')
@@ -140,7 +138,6 @@ export function rewriteToHumanize(caption: string, flaggedTells: string[]): stri
       .replace(/\s*\.\s*On\s+the\s+other\s+hand\b[^.]*\./gi, '.')
   }
 
-  // Remove generic transitions, replace with a dash or period.
   if (flaggedTells.some((t) => t.includes('generic transitions'))) {
     result = result
       .replace(/\bMoreover,\s*/gi, '')

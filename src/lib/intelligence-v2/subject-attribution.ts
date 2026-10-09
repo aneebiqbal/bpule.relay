@@ -29,7 +29,6 @@ export type BusinessModel =
   | 'SERVICE_PROVIDER' // sells engineering/technical delivery or consulting TO clients (see types.ts BusinessModel for full doc)
   | 'UNKNOWN'
 
-// ── Market-commentary detection ─────────────────────────────────────────────
 
 /**
  * Third-person patterns that describe the broader market, other companies,
@@ -104,7 +103,6 @@ export function classifySentence(line: string): EvidenceSubject {
   if (!trimmed) return 'UNKNOWN'
 
   // Audience language takes priority: the prospect describing their audience
-  // must not be mistaken for the prospect's own intent.
   if (AUDIENCE_PATTERNS.some((p) => p.test(trimmed))) {
     // But if it's clearly first-person self-description, it's the prospect.
     if (PROSPECT_MARKERS.some((p) => p.test(trimmed))) return 'PROSPECT'
@@ -124,7 +122,6 @@ export function classifySentence(line: string): EvidenceSubject {
   return 'UNKNOWN'
 }
 
-// ── Business-model classification ───────────────────────────────────────────
 
 /**
  * Phrases describing a recruitment / career-coaching / talent-placement
@@ -193,7 +190,6 @@ const PRODUCT_MODEL_PATTERNS = [
 
 // Paired with the "I'm the founder of X" marker above: only counts as a
 // product-model signal when the profile ALSO names what that company sells
-// as a platform/tool/solution/app/software/product FOR some audience — this
 // keeps the check general (any founder + own-product description) without
 // matching an unrelated "founder of X" mention with no product description.
 const OWN_PRODUCT_FOR_AUDIENCE = /\ban?\s+[\w\s-]{0,40}?\b(?:platform|tool|solution|app|software|product)\b[\w\s-]{0,20}?\bfor\b/i
@@ -320,7 +316,6 @@ export function classifyBusinessModel(text: string): BusinessModel {
   return 'UNKNOWN'
 }
 
-// ── Section-aware extraction ────────────────────────────────────────────────
 
 /**
  * Split a pasted LinkedIn profile into named sections so attribution can
@@ -410,7 +405,6 @@ export function deriveRelationship(
 ): CommercialRelationship {
   if (businessModel === 'RECRUITER') return 'RECRUITER'
   // A company that SELLS engineering/technical delivery/consulting services
-  // is a potential partner (they could subcontract, co-deliver, or refer
   // work), never a straightforward buyer — their architecture/technical-debt
   // language describes what they diagnose and fix FOR CLIENTS, not a
   // problem their own company has. See SERVICE_PROVIDER_PATTERNS.
@@ -421,7 +415,6 @@ export function deriveRelationship(
   const blob = `${title} ${company} ${rawText}`.toLowerCase()
 
   // Agency / vendor / dev-shop → potential partner, not buyer. Bare "agency"
-  // is too broad on its own — it matches "Donor Agency", "Implementing
   // Agency", government/NGO stakeholder mentions with no commercial-services
   // meaning at all (see Mansur/XHYRE, a former government e-procurement
   // project naming "Donor Agency" as a meeting stakeholder). Require the
@@ -470,16 +463,13 @@ export function deriveRelationship(
   // company, with no explicit sign they are shopping for external software
   // delivery AND no independently-detected buyer/hiring opportunity signal.
   // Running/leading a product business is not, on its own, buyer evidence
-  // for BPulse — a technical decision-maker is not automatically an active
   // buyer (see Mansur/XHYRE: a CTO's own current company being a product
   // platform, with zero external-delivery-seeking language, must not
-  // default to POTENTIAL_BUYER just because no other non-buyer pattern
   // matched). This is the general fallback for the many profiles that
   // describe their OWN company in third person (a LinkedIn "Experience"
   // section) rather than in the first-person "we're building X" phrasing
   // PRODUCT_MODEL_PATTERNS also matches.
   //
-  // Must NOT fire when a real buyer/hiring opportunity signal already exists
   // (hiring, hiring_pressure, freelance_project_need, technical_problem,
   // explicit_ask) — a founder/CTO who is ALSO explicitly hiring engineers or
   // stating a technical need IS a real buyer signal (see Abdul Hakim/
@@ -511,7 +501,6 @@ export function isNonBuyerRelationship(relationship: CommercialRelationship): bo
   return relationship === 'RECRUITER' || relationship === 'POTENTIAL_PARTNER' || relationship === 'PEER' || relationship === 'NETWORKING'
 }
 
-// ── Repost / third-party-authorship scoping ─────────────────────────────────
 
 /**
  * Pasted LinkedIn activity feeds interleave the prospect's OWN posts with

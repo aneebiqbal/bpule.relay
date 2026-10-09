@@ -71,10 +71,8 @@ export function parseEventsFromSource(
   const events: SourceEvent[] = []
   const lines = rawText.split('\n')
 
-  // Extract all organization names mentioned in the text
   const organizations = extractOrganizations(rawText, v2Canonical)
 
-  // Parse each line/section for event signals
   let currentOrg = v2Canonical.intelligence.company.name || organizations[0] || null
   let currentSection = ''
 
@@ -101,7 +99,6 @@ export function parseEventsFromSource(
     }
   }
 
-  // Also scan the full text for events that span multiple lines
   const fullTextEvents = parseFullTextEvents(rawText, organizations, v2Canonical)
   for (const event of fullTextEvents) {
     // Avoid duplicates
@@ -116,17 +113,14 @@ export function parseEventsFromSource(
 function extractOrganizations(rawText: string, v2Canonical: CanonicalProspectIntelligence): string[] {
   const orgs: Set<string> = new Set()
 
-  // Start with V2 extraction
   if (v2Canonical.intelligence.company.name) {
     orgs.add(v2Canonical.intelligence.company.name)
   }
 
-  // Extract affiliations from V2
   for (const aff of v2Canonical.intelligence.person.affiliations || []) {
     if (aff.organizationName) orgs.add(aff.organizationName)
   }
 
-  // Extract organization names from raw text patterns:
   // "at Company", "Company is hiring", "Company raised", etc.
   const patterns = [
     /(?:at|@|with|from|for|of)\s+([A-Z][\w\s&.'-]{1,40}?)(?:\s*[,\.|]|$)/gm,
@@ -158,7 +152,6 @@ function detectOrganizationInLine(line: string, organizations: string[]): string
 }
 
 function parseRelativeAge(line: string): number | null {
-  // Parse patterns like: "5d", "1mo", "3mo", "4mo", "2w", "1y"
   const patterns = [
     /(\d+)\s*(?:months?|mo)\s+ago/i,
     /(\d+)\s*(?:weeks?|w)\s+ago/i,
@@ -200,13 +193,10 @@ function parseEventLine(
 
   if (!isHiring) return null
 
-  // Extract capabilities from the line
   const capabilities = TECH_KEYWORDS.filter(t => lower.includes(t))
 
-  // Extract requested assets
   const assets = ASSET_KEYWORDS.filter(t => lower.includes(t))
 
-  // Extract application channels
   const channels: string[] = []
   for (const [keyword, channel] of Object.entries(CHANNEL_KEYWORDS)) {
     if (lower.includes(keyword) && !channels.includes(channel)) {
@@ -214,10 +204,8 @@ function parseEventLine(
     }
   }
 
-  // Extract apply instructions
   const applyInstructions: string[] = []
   if (lower.includes('send') || lower.includes('apply') || lower.includes('reach out') || lower.includes('dm me') || lower.includes('email')) {
-    // Extract the instruction text
     const applyMatch = line.match(/(?:send|apply|reach out|contact|dm|email)\s+([^.\n]+)/i)
     if (applyMatch) {
       applyInstructions.push(applyMatch[1].trim())
@@ -234,7 +222,6 @@ function parseEventLine(
   const emailMatch = line.match(/[\w.+-]+@[\w-]+\.\w+/)
   const contactRoute = emailMatch ? emailMatch[0] : null
 
-  // Determine event type
   let eventType: SourceEvent['eventType'] = 'HIRING'
   if (lower.includes('freelance') || lower.includes('contractor') || lower.includes('contract')) {
     eventType = 'FREELANCE_REQUEST'
@@ -276,7 +263,6 @@ function parseFullTextEvents(
   for (const org of organizations) {
     if (org === v2Canonical.intelligence.company.name) continue
 
-    // Find sentences mentioning this org + hiring
     const orgPattern = new RegExp(`[^.\\n]*${escapeRegex(org)}[^.\\n]*`, 'gi')
     let match
     while ((match = orgPattern.exec(rawText)) !== null) {

@@ -94,31 +94,22 @@ export function scoreProspect(input: ProspectIntelligenceInput): ProspectScore {
   const why: string[] = []
   const watchOut: string[] = []
 
-  // ── Dimension 1: Person / relevance fit (0–20) ──
   const personDim = scorePersonFit(extracted, why, watchOut)
 
-  // ── Dimension 2: Company fit (0–15) ──
   const companyDim = scoreCompanyFit(extracted, why, watchOut)
 
-  // ── Dimension 3: Need / signal strength (0–20) ──
   const needDim = scoreNeedStrength(extracted, signals, why, watchOut)
 
-  // ── Dimension 4: Sender capability / proof match (0–20) ──
   const senderDim = scoreSenderMatch(bestSenderProof, input.bestSender, why, watchOut)
 
-  // ── Dimension 5: Timing (0–10) ──
   const timingDim = scoreTiming(extracted, signals)
 
-  // ── Dimension 6: Evidence confidence (0–10) ──
   const confidenceDim = scoreEvidenceConfidence(extracted)
 
-  // ── Dimension 7: Contact appropriateness (0–5) ──
   const accessDim = scoreContactAccess(extracted, why, watchOut)
 
-  // ── Low confidence warning ──
   pushLowConfidenceWarning(extracted, watchOut)
 
-  // ── Risk penalty ──
   const riskPenalty = computeRiskPenalty(extracted, why, watchOut)
 
   const dimensions: ScoreDimension[] = [
@@ -292,7 +283,6 @@ function scoreNeedStrength(
   if (extracted.signalType === 3) {
     points = Math.max(points + 3, 12)
     note += ' Funding detected (internal signal).'
-    // Do NOT add to "why" — funding is not a conversation starter
   }
 
   if (points < 8 && safeFacts.length === 0) {
@@ -377,7 +367,6 @@ function scoreTiming(
     note = 'Building something — relevant time.'
   }
 
-  // Do NOT fabricate urgency
   if (signals.some((s) => s.evidence === 'WEAK_SIGNAL')) {
     points = Math.min(points, 5)
     note = 'Timing unclear — no fabricated urgency.'

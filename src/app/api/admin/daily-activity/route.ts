@@ -13,7 +13,6 @@ export async function GET() {
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
   const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString()
 
-  // Get all reps in the org
   const { data: reps } = await supabase
     .from('reps')
     .select('id, name')
@@ -40,14 +39,12 @@ export async function GET() {
     .gte('sent_at', startOfDay)
     .lt('sent_at', endOfDay)
 
-  // Build activity per rep
   const activity = reps.map((rep) => {
     const repLeads = (leads ?? []).filter((l) => l.owner_rep_id === rep.id)
     const repMessages = (messages ?? []).filter((m) => m.rep_id === rep.id)
     const outreachCount = repMessages.filter((m) => m.type !== 'reply').length
     const replyCount = repMessages.filter((m) => m.type === 'reply').length
 
-    // Find last activity timestamp
     const allTimestamps = [
       ...repLeads.map((l) => l.created_at),
       ...repMessages.map((m) => m.sent_at),

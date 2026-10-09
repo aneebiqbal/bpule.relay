@@ -43,7 +43,6 @@ export function discoverOpportunities(input: {
   const candidates: OpportunityCandidate[] = []
   const now = Date.now()
 
-  // ── From Content DNA ──────────────────────────────────────────────────────
 
   if (input.profile) {
     // Projects with lessons
@@ -135,11 +134,9 @@ export function discoverOpportunities(input: {
     }
   }
 
-  // ── From topic clusters (staleness) ────────────────────────────────────────
 
   for (const cluster of input.clusters) {
     if (!cluster.lastInputAt) {
-      // Never posted about this cluster
       candidates.push({
         type: 'useful_explanation',
         title: `What's happening with ${cluster.clusterName}?`,
@@ -166,7 +163,6 @@ export function discoverOpportunities(input: {
     }
   }
 
-  // ── From recent user input ─────────────────────────────────────────────────
 
   if (input.recentUserInput) {
     const lower = input.recentUserInput.toLowerCase()
@@ -202,7 +198,6 @@ export function discoverOpportunities(input: {
     }
   }
 
-  // ── Evergreen fallback ────────────────────────────────────────────────────
   if (candidates.length === 0) {
     candidates.push({
       type: 'useful_explanation',
@@ -222,13 +217,11 @@ export function discoverOpportunities(input: {
     })
   }
 
-  // ── Dedup and rank ─────────────────────────────────────────────────────────
 
   return dedupAndRankOpportunities(candidates)
 }
 
 function dedupAndRankOpportunities(candidates: OpportunityCandidate[]): OpportunityCandidate[] {
-  // Remove duplicate types, keep highest confidence
   const byType = new Map<ContentOpportunityType, OpportunityCandidate>()
   for (const c of candidates) {
     const existing = byType.get(c.type)

@@ -108,7 +108,6 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
     }, 800)
   }, [processPendingSave])
 
-  // Load draft if not provided initially
   useEffect(() => {
     if (initialDraft) {
       lastSavedCaptionRef.current = initialDraft.caption

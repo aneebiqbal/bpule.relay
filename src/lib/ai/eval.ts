@@ -54,12 +54,10 @@ export async function runEval(
   const caseResults: EvalCaseResult[] = []
 
   for (const c of cases) {
-    // Run the draft pipeline (non-streaming) against the case input.
     let draft: DraftResult
     try {
       draft = await generateDraft(c.input)
     } catch {
-      // If drafting fails for a case, score it as a zero.
       caseResults.push({
         caseId: c.id,
         knownReplied: c.knownReplied,

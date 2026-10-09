@@ -1,20 +1,12 @@
-/**
- * AI Runtime V3 — Provider Health & Circuit Breaker
- *
- * Tracks rolling health metrics per provider + model + credential.
- * Implements circuit breaking: consecutive failures → cooldown.
- */
 
 import type { ProviderHealth } from './types'
 
-// ── Configuration ────────────────────────────────────────────────────────────
 
 const MAX_CONSECUTIVE_FAILURES = 3
 const COOLDOWN_MS = 30_000
 const P50_WINDOW = 50
 const MAX_LATENCY_HISTORY = 100
 
-// ── State ────────────────────────────────────────────────────────────────────
 
 interface HealthEntry extends ProviderHealth {
   latencyHistory: number[]
@@ -53,7 +45,6 @@ function getEntry(provider: string, model: string, credentialId: string): Health
   return entry
 }
 
-// ── Recording ─────────────────────────────────────────────────────────────────
 
 export type FailureType = 'error' | 'timeout' | 'rate_limit' | 'malformed'
 
@@ -115,7 +106,6 @@ export function recordFailure(
   updateLatencies(entry)
 }
 
-// ── Status ────────────────────────────────────────────────────────────────────
 
 function updateLatencies(entry: HealthEntry): void {
   if (entry.latencyHistory.length === 0) return
@@ -125,7 +115,6 @@ function updateLatencies(entry: HealthEntry): void {
 }
 
 function updateStatus(entry: HealthEntry): void {
-  // Check cooldown expiry
   if (entry.cooldownUntil && Date.now() >= entry.cooldownUntil) {
     entry.cooldownUntil = null
     entry.consecutiveFailures = 0

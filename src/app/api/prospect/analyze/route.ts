@@ -216,7 +216,6 @@ export async function POST(request: Request) {
       return
     }
 
-    // ── Step 1: Produce Canonical Intelligence ──
     // "Try Another Angle": if the client sent back its already-held
     // canonical result AND its recorded input hash still matches this exact
     // rawText under the CURRENT pipeline/score versions, reuse it directly —
@@ -321,14 +320,10 @@ export async function POST(request: Request) {
       ],
     }
 
-    // Build revenue strategy from canonical intelligence.
-    // When V3 is canonical, the revenue strategy reads V3-derived data
     // (score, qualification, relationship) from the canonical blob.
     const revenue = buildRevenueStrategy(sourceFromCanonical(canonical, { channel: 'connection' }))
     const loop = toUiSnapshot(revenue)
 
-    // When V3 is canonical, override loop with V3's authoritative decision.
-    // This prevents dual-truth: score=0 + HIGH intent + CONTACT_NOW + message.
     const v3Action = v3Packet ? (v3Packet as { action: string }).action : null
     const v3MessageEligible = v3Packet ? (v3Packet as { messageEligible: boolean }).messageEligible : null
 
@@ -343,13 +338,10 @@ export async function POST(request: Request) {
       const isConnectionNote = revenue.messagingPolicy === 'CONNECT_WITH_NOTE'
         || (revenue.contact.action === 'CONNECT_OR_OBSERVE' && revenue.contact.messageRecommended)
 
-      // Map V3 dimensions to V2 display fields
       ;(loop as { fit: string }).fit = v3Fit
       ;(loop as { intent: string }).intent = v3Intent > 0.4 ? 'HIGH' : v3Intent > 0.2 ? 'MEDIUM' : 'UNKNOWN'
       ;(loop as { confidence: string }).confidence = v3Confidence > 0.6 ? 'HIGH' : v3Confidence > 0.3 ? 'MEDIUM' : 'LOW'
 
-      // For connection notes, respect revenue strategy's messageRecommended
-      // if it says true (e.g., founder with high commercial potential).
       // V3 lacks channel context, so its OBSERVE action shouldn't block
       // relationship-building connection notes.
       if (isConnectionNote && revenue.contact.messageRecommended && v3MessageEligible === false) {
@@ -511,7 +503,6 @@ export async function POST(request: Request) {
       return
     }
 
-    // ── Step 2: Load profiles + compute V3 profile match + match best sender ──
     emit({ type: 'status', message: 'Matching sender profiles' })
     let profiles: Profile[] = []
     let fewShotPool: Array<{ id: string; messageId: string; leadId: string; playId: string | null; signalType: number | null; sentText: string; company: string; signalEvidence: string | null; tags: string[]; createdAt: string }> = []
@@ -664,7 +655,6 @@ export async function POST(request: Request) {
         // Credit toward the rep's daily "prospects captured" target — only
         // on a genuine new capture, never on a reuse/cache hit for input
         // already analyzed, so re-analyzing the same paste can't be farmed
-        // for repeat credit.
         if (captured.isNewCapture) {
           await store.recordProspectExtracted(captured.revenueIdentityId)
         }
@@ -677,14 +667,12 @@ export async function POST(request: Request) {
       emit({ type: 'status', message: 'Requested profile unavailable, using best match.' })
     }
 
-    // ── Step 3: Build connection note strategy ──
     const connectionStrategy = buildConnectionNoteStrategy(
       extracted,
       bestSender,
       bestSenderProof,
     )
 
-    // ── Step 4: Generate connection note ──
     emit({ type: 'status', message: 'Drafting the connection note' })
 
     const safeFact = classifyLeadFact(
@@ -819,7 +807,6 @@ export async function POST(request: Request) {
       // Proof matching optional
     }
 
-    // Generate the draft only when the strategy says a message is the right move.
     let draftText = ''
     let draftFailed = false
     let qualityResult: ReturnType<typeof validateAndRepair> | null = null
@@ -936,7 +923,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // ── Emit final result with canonical intelligence ──
     const finalResult = {
       extracted,
       canonical,

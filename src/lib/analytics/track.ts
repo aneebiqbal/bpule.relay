@@ -56,7 +56,6 @@ export function identifyUser(
   currentUser = { id: userId, orgId, role, plan: plan ?? "trial" };
 
   // Alias anonymous session to identified user for attribution continuity
-  // This links pre-signup UTM attribution to the authenticated user
   const anonId = posthogDistinctId();
   if (anonId && anonId !== userId) {
     posthogCapture("$create_alias", { alias: userId });
@@ -90,7 +89,6 @@ export function track(
 
   const cleaned = sanitizeProperties(properties ?? {});
 
-  // Always include current user context if authenticated
   if (currentUser) {
     cleaned.user_id = currentUser.id;
     cleaned.org_id = currentUser.orgId;
@@ -165,7 +163,6 @@ export function getAttribution(): AnalyticsProperties {
   }
 }
 
-// ── Internal ──
 
 function sanitizeProperties(
   props: AnalyticsProperties,

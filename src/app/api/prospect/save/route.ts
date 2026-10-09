@@ -148,13 +148,10 @@ export async function POST(request: Request) {
             ? 'skip'
             : null
 
-    // Compute legacy rubric score ONLY for the `score` column (legacy 0-12).
-    // When canonical intelligence exists, the `canonical_score` column is
     // the authority. Save must PERSIST the canonical result, not recompute.
     const score = computeScore(extracted, rulebook)
     const verdict = verdictFromCanonical ?? score.verdict
 
-    // Extract observability from canonical intelligence
     const v3Packet = canonical && typeof canonical === 'object'
       ? (canonical as Record<string, unknown>).v3DecisionPacket as Record<string, unknown> | null
       : null

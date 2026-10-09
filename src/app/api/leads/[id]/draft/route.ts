@@ -312,7 +312,6 @@ export async function POST(
           revenue.contact.messageRecommended = true
           revenue.messageJob = 'EARN_CONNECTION'
         } else {
-          // For DM/follow-up on non-recommended leads: still generate but warn
           emit({
             type: 'status',
             message: `${revenue.contact.noMessageReason ?? 'No message recommended.'} Generating anyway — edit before sending.`,
@@ -362,8 +361,6 @@ export async function POST(
       }
     }
 
-    // For reply types, use the reply strategy (which always has messageJob)
-    // This ensures we can always generate a reply, even when the revenue strategy says no message recommended
     const draftStrategy: OutreachStrategy | null = type === 'reply' && replyStrategy && strategy
       ? {
           ...strategy,

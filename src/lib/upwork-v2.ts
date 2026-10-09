@@ -1,13 +1,3 @@
-/**
- * Upwork V2 — structured job extraction + application generation.
- *
- * Flow: Paste job page → extract structured data → match against profile →
- * generate proposal + screening answers.
- *
- * Extraction uses AI first, then deterministic fallback to fill any fields
- * the AI missed. This ensures structured fields are never empty when the
- * raw text contains the information.
- */
 
 import { fetchOpenAI, withRetry } from '@/lib/intelligence-v3/retry-utils'
 import { generate } from '@/lib/ai/runtime'
@@ -86,8 +76,6 @@ export interface UpworkExtractionResult {
   }
 }
 
-// ── Deterministic Backfill ───────────────────────────────────────────────────
-// When AI extraction misses fields that are clearly present in the raw text,
 // these functions fill the gaps. Zero AI cost.
 
 const TECH_KEYWORDS = [
@@ -228,7 +216,6 @@ function mergeSkills(aiSkills: string[], rawSkills: string[]): string[] {
 }
 
 function extractHourlyRate(text: string): { min: number | null; max: number | null } {
-  // Normalize whitespace (Upwork often splits across lines)
   const normalized = text.replace(/\s+/g, ' ').trim()
 
   // Patterns: $5-$15/hour, $5 - $15 per hour, $10/hr, $10 per hour
@@ -236,7 +223,6 @@ function extractHourlyRate(text: string): { min: number | null; max: number | nu
   if (rangeMatch) {
     return { min: parseFloat(rangeMatch[1]), max: parseFloat(rangeMatch[2]) }
   }
-  // Also check for separate lines: $25.00 / $60.00 with "Hourly" nearby
   const looseMatch = normalized.match(/\$\s*(\d+(?:\.\d+)?)\s*[-–]\s*.*?\$\s*(\d+(?:\.\d+)?)/i)
   if (looseMatch && /\b(hourly|hour|hr|per hour)\b/i.test(normalized)) {
     return { min: parseFloat(looseMatch[1]), max: parseFloat(looseMatch[2]) }
@@ -436,7 +422,6 @@ ${input.rawText.slice(0, 10000)}`
     }
   }
 
-  // Try runtime router first (supports Groq, OpenAI, LongCat with failover)
   try {
     const result = await generate<Record<string, unknown>>({
       task: 'FAST_STRUCTURED',

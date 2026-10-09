@@ -72,7 +72,6 @@ export async function POST(
   // Screening questions from the job
   const screeningQuestions = job.screeningQuestions ?? []
 
-  // Build the proposal prompt
   const jobContext = [
     `Job Title: ${job.title}`,
     job.budgetMin || job.hourlyRateMin

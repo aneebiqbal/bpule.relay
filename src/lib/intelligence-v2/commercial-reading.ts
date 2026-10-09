@@ -99,7 +99,6 @@ const BUYER_ONLY_SIGNALS: OpportunitySignal[] = [
 // with a note, never a pitch). They are intentionally absent from
 // BUYER_ONLY_SIGNALS and never filtered by the hasBuyer check below — the
 // absence of buyer-request evidence says nothing about them, since they
-// were never buyer claims to begin with.
 
 export function deriveCommercialReading(rawText: string): CommercialReading {
   const buyerEvidenceKinds = BUYER_PATTERNS.filter((p) => p.re.test(rawText)).map((p) => p.kind)

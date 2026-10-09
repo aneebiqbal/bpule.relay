@@ -1,15 +1,3 @@
-/**
- * AI Runtime V3 — Intelligence Tier Router
- *
- * Three OpenAI intelligence tiers. Centralized, configurable, no feature
- * hardcodes its own model.
- *
- *   luna  (FAST)    → classification, extraction, summarization, labeling
- *   terra (BALANCED)→ copilot, replies, outreach, studio writing, proposals
- *   sol   (DEEP)    → ambiguous/high-value reasoning, escalation only
- *
- * Sol is never the default. Escalation rules live in the call sites.
- */
 
 import type { TaskClass, ReasoningLevel } from './types'
 
@@ -27,7 +15,6 @@ export interface TierConfig {
   budgetClass: 'cheap' | 'normal' | 'expensive'
 }
 
-// ── Tier Registry ─────────────────────────────────────────────────────────────
 
 // Intelligence tier -> real OpenAI model mapping.
 // Tier names (luna/terra/sol) are internal routing labels; the actual model
@@ -71,7 +58,6 @@ export const TIER_REGISTRY: Record<IntelligenceTier, TierConfig> = {
   },
 }
 
-// ── Task → Tier Mapping ────────────────────────────────────────────────────────
 
 export function defaultTierForTask(taskClass: TaskClass): IntelligenceTier {
   switch (taskClass) {
@@ -94,7 +80,6 @@ export function getTierConfig(tier: IntelligenceTier): TierConfig {
   return TIER_REGISTRY[tier]
 }
 
-// ── Escalation Rules ──────────────────────────────────────────────────────────
 // Terra → Sol only when genuinely warranted. Never automatic for every failure.
 
 export interface EscalationContext {
@@ -132,7 +117,6 @@ export function shouldEscalateTier(ctx: EscalationContext): { escalate: boolean;
   return { escalate: false, toTier: primaryTier, reason: '' }
 }
 
-// ── Deterministic Guard ───────────────────────────────────────────────────────
 // Before calling AI, ask: can deterministic code answer this?
 
 export function deterministicCanAnswer(taskClass: TaskClass, hasSchema: boolean): boolean {

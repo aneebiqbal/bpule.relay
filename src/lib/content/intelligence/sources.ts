@@ -73,7 +73,6 @@ export function groundIdeaAgainstSources(
   const groundedClaims: string[] = []
   const ungroundedWarnings: string[] = []
 
-  // Check if the idea's key claims appear in source claims
   const ideaClaims = extractClaimsFromText(ideaText)
 
   for (const claim of ideaClaims) {
@@ -123,7 +122,6 @@ export function isSourceStale(provenance: SourceProvenance, maxAgeHours: number)
   return ageHours > maxAgeHours
 }
 
-// ── Internal ─────────────────────────────────────────────────────────────────
 
 function extractClaims(trendItem: TrendItem): string[] {
   const text = `${trendItem.title}. ${trendItem.excerpt ?? ''}`
@@ -133,7 +131,6 @@ function extractClaims(trendItem: TrendItem): string[] {
 function extractClaimsFromText(text: string): string[] {
   const claims: string[] = []
 
-  // Extract sentences that contain factual assertions
   const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 15)
 
   for (const sentence of sentences) {

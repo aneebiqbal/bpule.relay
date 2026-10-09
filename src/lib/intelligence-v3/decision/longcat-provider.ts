@@ -118,7 +118,6 @@ export class LongCatDecisionProvider implements V3DecisionProvider {
   }
 }
 
-// ── Helpers (inline to avoid circular deps) ─────────────────────────────────
 
 function normalizeAnswers(raw: Record<string, unknown>): V3DecisionAnswers {
   const validRelationships = ['BUYER', 'SERVICE_PROVIDER', 'COMPETITOR', 'PARTNER', 'CANDIDATE', 'MIXED', 'UNKNOWN']

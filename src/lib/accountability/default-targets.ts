@@ -19,7 +19,6 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
 // Rebalance (approved product design, see AGENTS task notes): a lead can now
 // only ever receive 3 follow-ups total across its life (see
 // src/lib/relay/followup-engine.ts) — a per-rep daily target of 30 follow-ups
-// was never realistic against a lifetime cap of 3 per lead, so it is lowered
 // to 3/day, which is still generous headroom (a rep would need 3 leads
 // simultaneously due for their final follow-up on the same day to hit it).
 // connection_request/dm stay high because those are first-touch actions,
@@ -31,7 +30,6 @@ const LINKEDIN_PACK: DefaultDailyTarget[] = [
   // Extraction happens on both channels via /prospect (paste a LinkedIn
   // profile or an email lead and Relay scores it) — added to both the
   // LinkedIn and Email packs rather than as a separate universal pack, since
-  // there is no rep who works neither channel. 15/day is a sensible middle
   // ground: comfortably above what a rep sourcing manually would hit, but
   // not so high it turns extraction into a vanity-metric grind.
   { activityType: 'prospect_extracted', targetCount: 15 },

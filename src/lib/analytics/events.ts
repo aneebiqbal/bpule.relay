@@ -11,13 +11,11 @@
  */
 
 export const AnalyticsEvents = {
-  // ── Acquisition ──
   LANDING_VIEWED: "landing_viewed",
   PRICING_VIEWED: "pricing_viewed",
   PRODUCT_SECTION_VIEWED: "product_section_viewed",
   START_FREE_CLICKED: "start_free_clicked",
 
-  // ── Authentication ──
   SIGNUP_STARTED: "signup_started",
   SIGNUP_COMPLETED: "signup_completed",
   VERIFICATION_COMPLETED: "verification_completed",
@@ -25,7 +23,6 @@ export const AnalyticsEvents = {
   ACTIVATION_STARTED: "activation_started",
   ACTIVATION_COMPLETED: "activation_completed",
 
-  // ── Revenue / Prospect ──
   PROSPECT_CHECK_STARTED: "prospect_check_started",
   PROSPECT_CHECK_COMPLETED: "prospect_check_completed",
   LEAD_SAVED: "lead_saved",
@@ -35,11 +32,9 @@ export const AnalyticsEvents = {
   LEAD_STAGE_CHANGED: "lead_stage_changed",
   LEAD_WON: "lead_won",
 
-  // ── Jobs / Upwork ──
   JOB_OPENED: "job_opened",
   PROPOSAL_GENERATED: "proposal_generated",
 
-  // ── Studio ──
   PERSONA_CREATED: "persona_created",
   PERSONA_ONBOARDING_COMPLETED: "persona_onboarding_completed",
   STUDIO_TODAY_VIEWED: "studio_today_viewed",
@@ -51,13 +46,11 @@ export const AnalyticsEvents = {
   STUDIO_DRAFT_POSTED: "studio_draft_posted",
   STUDIO_VISUAL_USED: "studio_visual_used",
 
-  // ── Usage / Quota ──
   GENERATION_CONSUMED: "generation_consumed",
   PROSPECT_CONSUMED: "prospect_consumed",
   LIMIT_WARNING: "limit_warning",
   LIMIT_REACHED: "limit_reached",
 
-  // ── Failures ──
   GENERATION_FAILED: "generation_failed",
   AUTOSAVE_FAILED: "autosave_failed",
   ONBOARDING_FAILED: "onboarding_failed",
@@ -66,7 +59,6 @@ export const AnalyticsEvents = {
   QUOTA_REJECTED: "quota_rejected",
   PROVIDER_FALLBACK_USED: "provider_fallback_used",
 
-  // ── Navigation ──
   PAGE_VIEW: "page_view",
 } as const;
 

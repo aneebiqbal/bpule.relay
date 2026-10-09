@@ -20,7 +20,6 @@ export default async function TodayPage() {
   const authCtx = await getAuthContext()
   if (!authCtx) redirect('/login')
 
-  // Load accountability data (all roles)
   const acData = await loadAccountabilityDashboard()
 
   if (authCtx.isOwner || authCtx.isAdmin) {
@@ -31,7 +30,6 @@ export default async function TodayPage() {
     )
   }
 
-  // Check if manager (has managed teams)
   if (authCtx.isManager && authCtx.managedTeamIds.length > 0) {
     const [repData, teamData] = await Promise.all([
       loadRepWorkspaceData(user.rep.id),
@@ -64,7 +62,6 @@ export default async function TodayPage() {
   )
 }
 
-// ── Rep View with My Day ─────────────────────────────────────────────────────
 
 function RepTodayViewWithAccountability({
   repData,
@@ -86,7 +83,6 @@ function RepTodayViewWithAccountability({
   )
 }
 
-// ── Manager View ─────────────────────────────────────────────────────────────
 
 function ManagerTodayView({
   repData,
@@ -108,7 +104,6 @@ function ManagerTodayView({
   )
 }
 
-// ── Admin View with Command Center ───────────────────────────────────────────
 
 function AdminTodayViewWithAccountability({
   acData,
@@ -275,7 +270,6 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
       fitScore: j.score,
     }))
 
-  // Compute daily completion from targets
   const totalTarget = workspace.targetSummary?.totalTarget ?? 0
   const totalRemaining = workspace.targetSummary?.totalRemaining ?? 0
   const completionDone = Math.max(0, totalTarget - totalRemaining)

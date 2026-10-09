@@ -17,7 +17,6 @@ import { generate } from '@/lib/ai/runtime'
 
 const LONGCAT_REPAIR_TIMEOUT_MS = 8_000
 
-// ── Completeness Assessment ────────────────────────────────────────────────
 
 export interface CompletenessInput {
   intelligence: NormalizedIntelligence
@@ -88,7 +87,6 @@ export function assessExtractionCompleteness(input: CompletenessInput): Extracti
     weakFields.push({ field: 'person.linkedinUrl', reason: 'LinkedIn profile URL appears malformed' })
   }
 
-  // Calculate completeness score
   const totalChecks = presentFields.length + missingFields.length
   const score = totalChecks > 0
     ? Math.round((presentFields.length / totalChecks) * 100)
@@ -106,7 +104,6 @@ export function assessExtractionCompleteness(input: CompletenessInput): Extracti
   }
 }
 
-// ── Auto-Repair ────────────────────────────────────────────────────────────
 
 const REPAIR_SYSTEM = `You are an extraction repair engine. Given the original source text and a partial/incomplete extraction, produce a corrected and completed extraction.
 
@@ -188,7 +185,6 @@ export async function repairExtraction(
     let repaired = false
     const updated = { ...currentIntelligence }
 
-    // Apply person repairs
     if (repair.person) {
       if (!updated.person.fullName && repair.person.fullName) {
         updated.person = { ...updated.person, fullName: repair.person.fullName, firstName: repair.person.firstName }
@@ -207,7 +203,6 @@ export async function repairExtraction(
       }
     }
 
-    // Apply company repairs
     if (repair.company) {
       if (!updated.company.name && repair.company.name) {
         updated.company = { ...updated.company, name: repair.company.name }
@@ -221,7 +216,6 @@ export async function repairExtraction(
       }
     }
 
-    // Add missing URLs
     if (repair.missingUrls.length > 0) {
       repairNotes.push(`Found ${repair.missingUrls.length} missing URLs`)
     }
@@ -296,7 +290,6 @@ function validateRepair(raw: unknown): RepairOutput | null {
   }
 }
 
-// ── Gate Decision ──────────────────────────────────────────────────────────
 
 export interface GateDecision {
   /** Whether the extraction is good enough to proceed */

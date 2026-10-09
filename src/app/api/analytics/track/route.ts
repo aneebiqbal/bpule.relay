@@ -12,8 +12,6 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
 
-    // In production, write to analytics store
-    // For now, log internally (can be disabled in prod via env flag)
     if (process.env.NODE_ENV === 'development') {
       console.log('[analytics]', body.event, body.leadId ?? '', body.durationMs ? `${body.durationMs}ms` : '')
     }

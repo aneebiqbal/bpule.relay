@@ -56,12 +56,10 @@ export async function POST(req: NextRequest) {
   const platform = body.platform ?? persona.platforms[0] ?? 'linkedin'
   const workspacePlatform = normalizeDraftWorkspacePlatform(platform)
 
-  // Check memory for similar topics
   const usedHooks = memories
     .filter((m) => m.memoryType === 'hook_used')
     .map((m) => m.content)
 
-  // ── Step 1: Build PostPlan ────────────────────────────────────────────
   const idea: ContentIdeaCard = {
     id: `idea-${Date.now()}`,
     title: body.idea.title,
@@ -80,7 +78,6 @@ export async function POST(req: NextRequest) {
     platform,
   })
 
-  // ── Step 2: Validate Core Insight ─────────────────────────────────────
   const insightCheck = validateCoreInsight(postPlan.coreInsight)
   if (!insightCheck.valid) {
     return NextResponse.json({
@@ -90,7 +87,6 @@ export async function POST(req: NextRequest) {
     }, { status: 422 })
   }
 
-  // ── Step 3: Generate with PostPlan context ────────────────────────────
   let caption = ''
   let selfCheckPassed = false
   let selfCheckNote = ''
@@ -181,7 +177,6 @@ export async function POST(req: NextRequest) {
 
   caption = finalCaption
 
-  // NEVER persist a draft that failed quality gates
   if (!qualityPassed) {
     return NextResponse.json({
       error: 'Generated content did not meet quality standards after retry. Please try a different angle.',
@@ -192,7 +187,6 @@ export async function POST(req: NextRequest) {
     }, { status: 422 })
   }
 
-  // Generate visual concept
   let concept: ReturnType<typeof generateVisualConcept> | null = null
   let visualError: string | null = null
   try {
@@ -236,7 +230,6 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     console.error('[generate-draft] persistence failed:', err)
-    // Return generated content so user doesn't lose it
     return NextResponse.json({
       error: 'Could not save draft. Your content is preserved below.',
       caption,

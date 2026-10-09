@@ -122,7 +122,6 @@ export async function assessCommercialPotential(
   }
 }
 
-// ── Dimension Evaluators ─────────────────────────────────────────────────────
 
 function evaluateDecisionAuthority(intel: CanonicalProspectIntelligence['intelligence'], text: string): number {
   const title = (intel.person.title || '').toLowerCase()
@@ -204,7 +203,6 @@ function evaluateTechnicalRelevance(intel: CanonicalProspectIntelligence['intell
     relevant.some(r => t.toLowerCase().includes(r))
   ).length
 
-  // Also scan raw text for tech stack
   const textTech = ['javascript', 'typescript', 'react', 'node', 'python', '.net', 'java', 'azure', 'aws', 'api', 'postgresql', 'mongodb', 'docker', 'kubernetes', 'nextjs', 'vue', 'angular']
   const textMatches = textTech.filter(t => text.includes(t)).length
   matchCount = Math.max(matchCount, textMatches)
@@ -274,7 +272,6 @@ function evaluateCommercialActivity(intel: CanonicalProspectIntelligence['intell
   return Math.min(1, count / 5)
 }
 
-// ── Score Conversion ─────────────────────────────────────────────────────────
 
 function buildIntensityToScore(bi: BuildIntensity): number {
   switch (bi) {
@@ -287,7 +284,6 @@ function buildIntensityToScore(bi: BuildIntensity): number {
   }
 }
 
-// ── Backward-Compatible Exports ──────────────────────────────────────────────
 
 export function computeLatentScore(assessment: LatentOpportunityAssessment): number {
   const baseScore = (
@@ -325,7 +321,6 @@ export function latentActionFromPotential(
   return { action: 'SKIP', messageEligible: false }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function isProductCompany(intel: CanonicalProspectIntelligence['intelligence']): boolean {
   const stage = (intel.company.stage || '').toLowerCase()
