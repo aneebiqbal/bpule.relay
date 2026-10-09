@@ -114,6 +114,57 @@ Java
 API
 `
 
+describe('Dexa job full extraction (comprehensive)', () => {
+  it('populates ALL structured fields from raw text', async () => {
+    const { extractUpworkJob } = await import('@/lib/upwork-v2')
+    const result = await extractUpworkJob({ rawText: DEXA_JOB_TEXT })
+
+    expect(result.error).toBeNull()
+    expect(result.job).not.toBeNull()
+    if (!result.job) return
+
+    // Title
+    expect(result.job.title).toContain('Senior React Native')
+
+    // Rate — must extract $5-$15/hour even from multiline format
+    expect(result.job.hourlyRateMin).toBe(5)
+    expect(result.job.hourlyRateMax).toBe(15)
+    expect(result.job.budgetType).toBe('hourly')
+
+    // Engagement
+    expect(result.job.experienceLevel).toContain('5+')
+    expect(result.job.duration).toContain('6')
+    expect(result.job.weeklyHours).toContain('30')
+
+    // Skills — must contain core technologies
+    const skills = result.job.skills.map(s => s.toLowerCase())
+    expect(skills.some(s => s.includes('react native'))).toBe(true)
+    expect(skills.some(s => s.includes('typescript') || s.includes('javascript'))).toBe(true)
+    expect(skills.some(s => s.includes('node'))).toBe(true)
+    expect(skills.some(s => s.includes('ios') || s.includes('android'))).toBe(true)
+    expect(skills.some(s => s.includes('postgresql') || s.includes('mysql') || s.includes('mongodb') || s.includes('firebase'))).toBe(true)
+    expect(skills.some(s => s.includes('aws') || s.includes('gcp') || s.includes('azure'))).toBe(true)
+    expect(skills.some(s => s.includes('docker') || s.includes('kubernetes') || s.includes('ci/cd'))).toBe(true)
+    expect(skills.some(s => s.includes('gps') || s.includes('geolocation') || s.includes('maps'))).toBe(true)
+    expect(skills.some(s => s.includes('payment') || s.includes('stripe'))).toBe(true)
+    expect(skills.some(s => s.includes('erp'))).toBe(true)
+    expect(skills.some(s => s.includes('devops') || s.includes('monitoring'))).toBe(true)
+    expect(result.job.skills.length).toBeGreaterThan(10)
+
+    // Application requirements
+    const reqs = result.job.applicationRequirements.join(' ').toLowerCase()
+    expect(reqs).toContain('résumé')
+    expect(reqs).toContain('portfolio')
+    expect(reqs).toContain('rate')
+    expect(reqs).toContain('availability')
+    expect(reqs).toContain('references')
+    expect(result.job.applicationRequirements.length).toBeGreaterThan(4)
+
+    // Description should be substantial (not truncated to a few words)
+    expect(result.job.description.length).toBeGreaterThan(200)
+  }, 60000)
+})
+
 describe('Upwork extraction backfill', () => {
   it('extracts hourly rate from raw text pattern $5-$15/hour', async () => {
     const { extractUpworkJob } = await import('@/lib/upwork-v2')
