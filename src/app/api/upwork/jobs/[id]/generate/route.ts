@@ -87,32 +87,53 @@ export async function POST(
     : ''
 
   const systemPrompt = [
-    'You write Upwork proposals for a software consultant. The proposal is copy-pasted by a human; you never send anything yourself.',
+    'You are a senior Upwork proposal strategist. The proposal is copy-pasted by a human; you never send anything yourself.',
     '',
     styleCard ? `SENDER VOICE (mandatory):\n${styleCard}` : '',
     '',
-    'UPWORK PROPOSAL RULES:',
-    '1. Start with understanding of the client\'s problem, not credentials.',
-    '2. Reference ONE relevant proof item naturally. Never dump a list.',
-    '3. Show what you would do first (specific technical observation).',
-    '4. End with a useful question or clear next step.',
-    '5. Keep it under 350 words. Busy clients skim.',
+    '## UPWORK PROPOSAL STRATEGY',
     '',
-    'NEVER use:',
-    '- "I came across your job..."',
+    'Busy clients skim 50+ proposals. Yours must stand out in the first 2 lines.',
+    '',
+    '### STRUCTURE (follow exactly):',
+    '1. **HOOK (1-2 sentences):** Show you read THEIR specific job. Reference a technical detail from their description. Never generic.',
+    '2. **PROOF (2-3 sentences):** One specific project/experience that matches their need. Include a metric or outcome if available.',
+    '3. **PLAN (2-3 sentences):** What you would do in the first week. Be specific to their stack and problem.',
+    '4. **QUESTION (1 sentence):** End with a thoughtful question about their project. Shows engagement.',
+    '',
+    '### SCREENING QUESTIONS:',
+    '- Answer each question directly and specifically',
+    '- Use real examples from your experience, never generic statements',
+    '- Keep answers 2-4 sentences each',
+    '- If asked about availability/hours, be explicit',
+    '- If asked about approach, give a concrete methodology',
+    '',
+    '### SELF-CHECK (rate before outputting):',
+    '- Does the first line prove I read their specific job? (not generic)',
+    '- Is the proof directly relevant to their stated problem?',
+    '- Did I avoid all banned phrases and AI tells?',
+    '- Is the question at the end specific and useful?',
+    '- Would a busy client stop scrolling and read this?',
+    '',
+    '### WORD LIMIT: 200-300 words for the proposal body. Screening answers: 2-4 sentences each.',
+    '',
+    '### NEVER USE:',
+    '- "I came across your job posting..."',
     '- "I\'d love the opportunity..."',
     '- "With X+ years of experience..."',
-    '- "I am confident..."',
-    '- Generic technology lists without context.',
-    '- Emojis, em dashes, exclamation marks.',
+    '- "I am confident that..."',
+    '- "As you can see from my profile..."',
+    '- Generic technology lists without context',
+    '- Emojis, em dashes (!!!), exclamation marks',
+    '- Any phrase that could apply to any job',
     '',
     proofBlock,
     '',
-    'HARD RULES:',
-    `- Claim ONLY facts listed in the facts table. Never fabricate experience.`,
-    `- Do not claim experience you cannot prove.`,
-    `- No banned phrases: ${BANNED_PHRASES.slice(0, 10).join(', ')}.`,
-    `- No AI tells: ${AI_TELL_PHRASES.slice(0, 8).join(', ')}.`,
+    '### HARD RULES:',
+    `- Claim ONLY facts from the facts table. Never fabricate experience.`,
+    `- If a required skill is missing from your profile, acknowledge it honestly and explain how you'd ramp up.`,
+    `- No banned phrases: ${BANNED_PHRASES.slice(0, 12).join(', ')}.`,
+    `- No AI tells: ${AI_TELL_PHRASES.slice(0, 10).join(', ')}.`,
   ].filter(Boolean).join('\n\n')
 
   const screeningBlock = screeningQuestions.length > 0
@@ -124,18 +145,28 @@ export async function POST(
     : ''
 
   const userPrompt = [
-    `Write an Upwork proposal for this job:`,
+    `Write a world-class Upwork proposal for this job. Make it impossible to ignore.`,
     '',
+    '## JOB DETAILS',
     jobContext,
+    '',
     skillMatchBlock,
     screeningBlock,
     '',
-    'Output JSON: { "proposal": "the proposal text", "questionAnswers": [{"question": "...", "answer": "..."}], "self_check_passed": boolean, "self_check_note": "why this would/wouldn\'t win the job" }',
+    '## OUTPUT FORMAT',
+    'Return JSON:',
+    '{',
+    '  "proposal": "the proposal text — hook, proof, plan, question",',
+    '  "questionAnswers": [{"question": "...", "answer": "..."}],',
+    '  "self_check_passed": boolean,',
+    '  "self_check_note": "specific reasons this proposal would/wouldn\'t win — be critical",',
+    '  "quality_score": 1-10 — rate your own proposal on: hook specificity, proof relevance, plan actionability, question quality',
+    '}',
   ].filter(Boolean).join('\n')
 
   const schema = {
     type: 'object',
-    required: ['proposal', 'questionAnswers', 'self_check_passed', 'self_check_note'],
+    required: ['proposal', 'questionAnswers', 'self_check_passed', 'self_check_note', 'quality_score'],
     properties: {
       proposal: { type: 'string' },
       questionAnswers: {
@@ -151,6 +182,7 @@ export async function POST(
       },
       self_check_passed: { type: 'boolean' },
       self_check_note: { type: 'string' },
+      quality_score: { type: 'number', minimum: 1, maximum: 10 },
     },
   } as const
 
@@ -159,7 +191,13 @@ export async function POST(
     questionAnswers: Array<{ question: string; answer: string }>
     self_check_passed: boolean
     self_check_note: string
+    quality_score: number
   }
+
+  // Premium: use stronger model + client research
+  const clientResearch = generationMode === 'premium'
+    ? `\n## CLIENT RESEARCH\n- Hire rate: unknown (no history)\n- Avg spend: unknown\n- Note: Premium mode uses GPT-4o for stronger reasoning.\n`
+    : ''
 
   // Runtime V3 handles provider routing: OpenCode Go → Groq → GPT → LongCat
   let best: ProposalResult | null = null
@@ -167,11 +205,12 @@ export async function POST(
   try {
     const result = await generate<ProposalResult>({
       task: 'DEEP_WRITING',
-      system: systemPrompt,
+      system: systemPrompt + clientResearch,
       user: userPrompt,
       schema: schema as unknown as Record<string, unknown>,
-      maxTokens: 1536,
-      temperature: 0.6,
+      maxTokens: generationMode === 'premium' ? 2048 : 1536,
+      temperature: generationMode === 'premium' ? 0.5 : 0.6,
+      ...(generationMode === 'premium' ? { tier: 'sol' as const } : {}),
     })
     best = result.data
   } catch {
@@ -189,6 +228,7 @@ export async function POST(
       questionAnswers: best.questionAnswers ?? [],
       selfCheckPassed: best.self_check_passed,
       selfCheckNote: best.self_check_note,
+      qualityScore: best.quality_score ?? 5,
       matchedProof: matchedProof ? { id: matchedProof.id, projectSummary: matchedProof.projectSummary } : null,
     },
     profileSuggestion: bestProfileSuggestion ? {

@@ -38,6 +38,9 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [selfCheckNote, setSelfCheckNote] = useState<string | null>(null)
+  const [qualityScore, setQualityScore] = useState<number | null>(null)
+  const [questionAnswers, setQuestionAnswers] = useState<Array<{ question: string; answer: string }>>([])
+  const [generationMode, setGenerationMode] = useState<'standard' | 'premium'>('standard')
   const [applied, setApplied] = useState(false)
   const proofHint = matchedProofs[0]?.projectSummary ?? null
 
@@ -46,24 +49,28 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
       setError('Select a profile first.')
       return
     }
-    setGenerating(true)
-    setError(null)
-    setSelfCheckNote(null)
-    setProposal('')
-    try {
-      const res = await fetch(`/api/upwork/jobs/${jobId}/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileId: selectedProfileId }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(data?.error || 'Generation failed.')
-      }
-      const data = await res.json()
-      setProposal(data.draft.text)
-      setSelfCheckNote(data.draft.selfCheckNote)
-      setEditing(true)
+      setGenerating(true)
+      setError(null)
+      setSelfCheckNote(null)
+      setQualityScore(null)
+      setQuestionAnswers([])
+      setProposal('')
+      try {
+        const res = await fetch(`/api/upwork/jobs/${jobId}/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profileId: selectedProfileId, generationMode }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => null)
+          throw new Error(data?.error || 'Generation failed.')
+        }
+        const data = await res.json()
+        setProposal(data.draft.text)
+        setSelfCheckNote(data.draft.selfCheckNote)
+        setQualityScore(data.draft.qualityScore ?? null)
+        setQuestionAnswers(data.draft.questionAnswers ?? [])
+        setEditing(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed.')
     } finally {
@@ -153,6 +160,22 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
         </div>
       )}
 
+      {/* Generation mode */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => setGenerationMode(generationMode === 'standard' ? 'premium' : 'standard')}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-[12px] transition-colors',
+            generationMode === 'premium' ? 'border-cobalt/30 bg-cobalt/10 text-cobalt' : 'border-line text-graphite hover:bg-bone'
+          )}
+        >
+          {generationMode === 'premium' ? '★ Premium' : 'Standard'}
+        </button>
+        {generationMode === 'premium' && (
+          <span className="text-[11px] text-graphite">Stronger model + client research</span>
+        )}
+      </div>
+
       {/* Generate button */}
       <div className="flex items-center gap-3">
         <button
@@ -166,7 +189,7 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
               Writing proposal...
             </>
           ) : (
-            'Generate proposal'
+            generationMode === 'premium' ? 'Generate premium proposal' : 'Generate proposal'
           )}
         </button>
         {proposal && (
@@ -200,8 +223,39 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
             />
           </div>
 
+          {/* Quality score */}
+          {qualityScore !== null && (
+            <div className="flex items-center gap-2">
+              <span className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Proposal Quality</span>
+              <span className={cn(
+                'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                qualityScore >= 8 ? 'bg-status-success/15 text-status-success' :
+                qualityScore >= 5 ? 'bg-status-warning/15 text-status-warning' :
+                'bg-status-danger/15 text-status-danger'
+              )}>
+                {qualityScore}/10
+              </span>
+              {qualityScore < 7 && (
+                <span className="text-[11px] text-status-warning">Consider regenerating for a stronger proposal.</span>
+              )}
+            </div>
+          )}
+
           {selfCheckNote && (
             <p className="text-xs text-graphite italic">{selfCheckNote}</p>
+          )}
+
+          {/* Screening question answers */}
+          {questionAnswers.length > 0 && (
+            <div className="space-y-2 rounded border border-cobalt/15 bg-cobalt/[0.03] p-3">
+              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-cobalt">Screening Answers</p>
+              {questionAnswers.map((qa, i) => (
+                <div key={i} className="space-y-0.5">
+                  <p className="text-[12px] font-medium text-ink">Q: {qa.question}</p>
+                  <p className="text-[12px] text-graphite pl-3 border-l-2 border-cobalt/20">{qa.answer}</p>
+                </div>
+              ))}
+            </div>
           )}
 
           {belowGate && !applied && (
