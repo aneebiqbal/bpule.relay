@@ -574,13 +574,29 @@ ${rawText.slice(0, 10000)}`
       }
     }
 
+    // Post-validation: clear budget if it's actually an hourly rate
+    let finalBudget = backfilled.budget
+    let finalBudgetType = backfilled.budgetType
+    if (finalBudget !== null) {
+      // If budget equals hourly rate, it was misclassified
+      if (backfilled.hourlyRateMin !== null && Math.abs(finalBudget - backfilled.hourlyRateMin) < 1) {
+        finalBudget = null
+        finalBudgetType = 'hourly'
+      }
+      // If text says "Hourly" near the dollar amount but no "budget/fixed" keyword
+      else if (/\bhourly\b/i.test(rawText) && !/\b(budget|fixed[- ]?price|total[- ]?price|project[- ]?budget)\b/i.test(rawText)) {
+        finalBudget = null
+        finalBudgetType = null
+      }
+    }
+
     return {
       job: {
         title: cleanExtractedTitle((data.title as string) || extractTitleFromRaw(rawText)),
         description: (data.description as string) || rawText.slice(0, 3000),
         skills: backfilled.skills,
-        budget: backfilled.budget,
-        budgetType: backfilled.budgetType,
+        budget: finalBudget,
+        budgetType: finalBudgetType,
         hourlyRateMin: backfilled.hourlyRateMin,
         hourlyRateMax: backfilled.hourlyRateMax,
         experienceLevel: backfilled.experienceLevel,
