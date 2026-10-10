@@ -220,10 +220,32 @@ function extractSkillsFromRaw(text: string): string[] {
   return found
 }
 
+const SKILL_BLACKLIST = [
+  /business with \d+-\d+ employees/i,
+  /business with \d+\+? employees/i,
+  /rising talent/i,
+  /english level/i,
+  /fluent/i,
+  /featured job/i,
+  /promoted listing/i,
+  /contract-to-hire/i,
+  /ongoing project/i,
+  /complex project/i,
+]
+
+function isValidSkill(skill: string): boolean {
+  if (skill.length < 2 || skill.length > 50) return false
+  return !SKILL_BLACKLIST.some(re => re.test(skill))
+}
+
 function mergeSkills(aiSkills: string[], rawSkills: string[]): string[] {
   const all = new Map<string, string>()
-  for (const s of aiSkills) all.set(s.toLowerCase(), s)
-  for (const s of rawSkills) all.set(s.toLowerCase(), s)
+  for (const s of aiSkills) {
+    if (isValidSkill(s)) all.set(s.toLowerCase(), s)
+  }
+  for (const s of rawSkills) {
+    if (isValidSkill(s)) all.set(s.toLowerCase(), s)
+  }
   return Array.from(all.values())
 }
 
@@ -231,7 +253,7 @@ function extractHourlyRate(text: string): { min: number | null; max: number | nu
   const normalized = text.replace(/\s+/g, ' ').trim()
 
   // Monthly rate range: $1000-2000/month → convert to hourly (/160)
-  const monthlyRange = normalized.match(/\$\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s*[-–]\s*\$\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:\/|per\s*)?(?:month|mo)/i)
+  const monthlyRange = normalized.match(/\$\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s*[-–]\s*\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:\/|per\s*)?(?:month|mo)/i)
   if (monthlyRange) {
     const min = parseFloat(monthlyRange[1].replace(/,/g, '')) / 160
     const max = parseFloat(monthlyRange[2].replace(/,/g, '')) / 160
@@ -316,16 +338,24 @@ function extractDuration(text: string): string | null {
 
 function extractScreeningQuestions(text: string): string[] {
   const questions: string[] = []
-  // Look for "How to Apply" or "To Apply" sections
-  const applySection = text.match(/(?:how to apply|to apply|interested candidates should|applicants should submit)[:\s]*\n([\s\S]*?)(?:\n\n|\n#{3,}|_{10,})/i)
+  // Look for screening question sections in various formats
+  const applySection = text.match(/(?:how\s+to\s+apply|to\s+apply|you\s+will\s+be\s+asked\s+to\s+answer|interested\s+candidates\s+should|applicants\s+should\s+submit)[^\n]*\n([\s\S]*?)(?:\n\n|\n#{3,}|_{10,}|\nless|\nmore|\nskills\s+and\s+experience)/i)
   if (applySection) {
-    const lines = applySection[1].split('\n').map(l => l.trim()).filter(l => l.length > 10)
+    const lines = applySection[1].split('\n').map(l => l.trim()).filter(l => l.length > 5)
     for (const line of lines) {
+      // Strip leading "1. " "2. " "- " "• " prefixes
+      const cleaned = line.replace(/^\d+[.)]\s*/, '').replace(/^[-•]\s*/, '')
+      // Skip the section header itself
+      if (/^(please include|how to apply|to apply|you will be asked)/i.test(cleaned)) continue
       // Lines ending with ? are questions
-      if (line.endsWith('?')) questions.push(line)
+      if (cleaned.endsWith('?')) questions.push(cleaned)
       // Lines that ask for specific info
-      if (/\b(share|describe|provide|submit|include|tell us|explain)\b/i.test(line)) {
-        questions.push(line)
+      else if (/\b(share|describe|provide|submit|include|tell us|explain|include with)\b/i.test(cleaned)) {
+        questions.push(cleaned)
+      }
+      // Bullet points in "Please Include" section are all requirements
+      else if (line.startsWith('-') || line.startsWith('•')) {
+        questions.push(cleaned)
       }
     }
   }
@@ -359,16 +389,18 @@ function cleanExtractedTitle(title: string): string {
   t = t.replace(/^[^a-zA-Z0-9"'()[\]{<>]+/, '')
   // Strip "Posted X minutes/hours ago" prefixes
   t = t.replace(/^posted\s+\d+\s+(minutes?|hours?|days?)\s+ago\s*/i, '')
+  // Strip "Title:" prefix from Upwork page paste
+  t = t.replace(/^title:\s*/i, '')
   return t.slice(0, 150) || 'Unknown Job'
 }
 
 function extractProposalCount(text: string): number | null {
-  // "Proposals: 10 to 15", "10-15 proposals", "10+ proposals"
-  const rangeMatch = text.match(/proposals?:\s*(\d+)\s*(?:to|-|–)\s*(\d+)/i)
+  // "Proposals: 20 to 50" (number may be on same or next line)
+  const rangeMatch = text.match(/proposals?[:\s]+(\d+)\s*(?:to|-|–)\s*(\d+)/im)
   if (rangeMatch) return Math.round((parseInt(rangeMatch[1]) + parseInt(rangeMatch[2])) / 2)
-  const singleMatch = text.match(/proposals?:\s*(\d+)/i)
+  const singleMatch = text.match(/proposals?[:\s]+(\d+)/im)
   if (singleMatch) return parseInt(singleMatch[1])
-  const looseMatch = text.match(/(\d+)\s*(?:to|-|–)\s*(\d+)\s+proposals/i)
+  const looseMatch = text.match(/(\d+)\s*(?:to|-|–)\s*(\d+)\s+proposals/im)
   if (looseMatch) return Math.round((parseInt(looseMatch[1]) + parseInt(looseMatch[2])) / 2)
   return null
 }
@@ -384,16 +416,28 @@ function extractConnectsCost(text: string): number | null {
 }
 
 function cleanRawUpworkText(text: string): string {
-  // Strip Upwork page-level UI noise that leaks into pasted text
+  // Strip Upwork page-level UI noise that leaks into pasted text.
+  // NOTE: intentionally preserves "Proposals:", "Required Connects:",
+  // "Available Connects:" lines — those are extracted by regex before cleaning.
   let cleaned = text
   // "current page X" line
   cleaned = cleaned.replace(/^current\s+page.*$/gmi, '')
-  // "Required Connects to submit a proposal: X" and "Available Connects: X"
-  cleaned = cleaned.replace(/^(required|available)\s+connects.*$/gmi, '')
-  // "About the client" section and everything after
+  // "About the client" section and everything after (including client metadata)
   cleaned = cleaned.replace(/about\s+the\s+client[\s\S]*$/i, '')
-  // "Activity on this job" section
-  cleaned = cleaned.replace(/activity\s+on\s+this\s+job[\s\S]*$/i, '')
+  // Client metadata lines that might leak
+  cleaned = cleaned.replace(/^(payment\s+verified|phone\s+number\s+verified|verified)\s*$/gmi, '')
+  cleaned = cleaned.replace(/^\d+\s+jobs\s+posted\s*$/gmi, '')
+  cleaned = cleaned.replace(/^\d+%\s+hire\s+rate\s*$/gmi, '')
+  cleaned = cleaned.replace(/^\d+\s+open\s+job\s*$/gmi, '')
+  cleaned = cleaned.replace(/^member\s+since.*$/gmi, '')
+  // "Activity on this job" header
+  cleaned = cleaned.replace(/^activity\s+on\s+this\s+job\s*$/gmi, '')
+  // Metadata lines: interviewing, invites sent, unanswered invites
+  cleaned = cleaned.replace(/^interviewing:\s*\d*\s*$/gmi, '')
+  cleaned = cleaned.replace(/^invites\s+sent:\s*\d*\s*$/gmi, '')
+  cleaned = cleaned.replace(/^unanswered\s+invites:\s*\d*\s*$/gmi, '')
+  // "Available Connects:" (we extract from "Required Connects" line instead)
+  cleaned = cleaned.replace(/^available\s+connects:\s*\d*\s*$/gmi, '')
   // "Upgrade your membership" line
   cleaned = cleaned.replace(/upgrade\s+your\s+membership.*$/gmi, '')
   // "Job link" line
@@ -404,6 +448,26 @@ function cleanRawUpworkText(text: string): string {
   cleaned = cleaned.replace(/^\s*(less|more)\s*$/gmi, '')
   // "Send a proposal for: X Connects"
   cleaned = cleaned.replace(/send\s+a\s+proposal.*$/gmi, '')
+  // "Client's recent history" section with freelancer list
+  cleaned = cleaned.replace(/client'?s?\s+recent\s+history[\s\S]*$/i, '')
+  // "Other open jobs by this client" section
+  cleaned = cleaned.replace(/other\s+open\s+jobs[\s\S]*$/i, '')
+  // "Pagination" and page numbers
+  cleaned = cleaned.replace(/^pagination\s*$/gmi, '')
+  cleaned = cleaned.replace(/^\d+\s*$/gmi, '')
+  cleaned = cleaned.replace(/^page\s+\d+\s*$/gmi, '')
+  // "Learn more" toggle
+  cleaned = cleaned.replace(/^learn\s+more\s*$/gmi, '')
+  // "Featured Job" / "Promoted listing" badges
+  cleaned = cleaned.replace(/^featured\s+job\s*$/gmi, '')
+  cleaned = cleaned.replace(/^promoted\s+listing\s*$/gmi, '')
+  // "Attachment" line
+  cleaned = cleaned.replace(/^attachment\s*.*$/gmi, '')
+  // "Rising Talent" / "English level" metadata
+  cleaned = cleaned.replace(/^rising\s+talent.*$/gmi, '')
+  cleaned = cleaned.replace(/^english\s+level.*$/gmi, '')
+  // "Preferred qualifications" section
+  cleaned = cleaned.replace(/^preferred\s+qualifications\s*$/gmi, '')
   // Collapse multiple blank lines
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n')
   return cleaned.trim()
