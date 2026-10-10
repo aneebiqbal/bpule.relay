@@ -7696,14 +7696,14 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getDailyContentIdeaById(ideaId: string): Promise<DailyContentIdea | null> {
-    const { data, error } = await this.client
-      .from('daily_content_ideas')
-      .select('*')
-      .eq('id', ideaId)
-      .single()
-    if (error) return null
-    return data ? mapDailyContentIdea(data) : null
-  }
+     const { data, error } = await this.client
+       .from('daily_content_ideas')
+       .select('*')
+       .eq('id', ideaId)
+       .maybeSingle()
+     if (error) return null
+     return data ? mapDailyContentIdea(data) : null
+   }
 
   async markDailyContentIdeaCopied(ideaId: string): Promise<void> {
     await this.client
