@@ -353,11 +353,12 @@ function cleanExtractedTitle(title: string): string {
   let t = title.trim()
   // Strip common paste artifacts: "sf", "spS", etc. (Upwork UI noise)
   t = t.replace(/^(sf|spS|sp|sv|sb)\s*/i, '')
+  // Strip "current page X" prefix from Upwork page paste
+  t = t.replace(/^current\s+page\s+.*?(?=\n|$)/i, '')
   // Strip leading non-alphanumeric except common title chars
-  t = t.replace(/^[^a-zA-Z0-9"'()[\]{<>«»‘’“”]+/, '')
+  t = t.replace(/^[^a-zA-Z0-9"'()[\]{<>]+/, '')
   // Strip "Posted X minutes/hours ago" prefixes
   t = t.replace(/^posted\s+\d+\s+(minutes?|hours?|days?)\s+ago\s*/i, '')
-  // Strip "Web App Developer Needed for" → keep as-is, it's a real title
   return t.slice(0, 150) || 'Unknown Job'
 }
 
@@ -373,9 +374,39 @@ function extractProposalCount(text: string): number | null {
 }
 
 function extractConnectsCost(text: string): number | null {
-  // "Send a proposal for: 14 Connects", "14 Connects"
+  // "Required Connects to submit a proposal:15" or "Required Connects to submit a proposal: 15"
+  const requiredMatch = text.match(/required\s+connects.*?proposal[:\s]+(\d+)/i)
+  if (requiredMatch) return parseInt(requiredMatch[1])
+  // "15 Connects", "Connects: 15"
   const match = text.match(/(\d+)\s+connects?/i)
-  return match ? parseInt(match[1]) : null
+  if (match) return parseInt(match[1])
+  return null
+}
+
+function cleanRawUpworkText(text: string): string {
+  // Strip Upwork page-level UI noise that leaks into pasted text
+  let cleaned = text
+  // "current page X" line
+  cleaned = cleaned.replace(/^current\s+page.*$/gmi, '')
+  // "Required Connects to submit a proposal: X" and "Available Connects: X"
+  cleaned = cleaned.replace(/^(required|available)\s+connects.*$/gmi, '')
+  // "About the client" section and everything after
+  cleaned = cleaned.replace(/about\s+the\s+client[\s\S]*$/i, '')
+  // "Activity on this job" section
+  cleaned = cleaned.replace(/activity\s+on\s+this\s+job[\s\S]*$/i, '')
+  // "Upgrade your membership" line
+  cleaned = cleaned.replace(/upgrade\s+your\s+membership.*$/gmi, '')
+  // "Job link" line
+  cleaned = cleaned.replace(/job\s+link.*$/gmi, '')
+  // "Copy link" line
+  cleaned = cleaned.replace(/copy\s+link.*$/gmi, '')
+  // "Less" / "More" toggle words
+  cleaned = cleaned.replace(/^\s*(less|more)\s*$/gmi, '')
+  // "Send a proposal for: X Connects"
+  cleaned = cleaned.replace(/send\s+a\s+proposal.*$/gmi, '')
+  // Collapse multiple blank lines
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n')
+  return cleaned.trim()
 }
 
 function extractTitleFromRaw(text: string): string {
@@ -402,6 +433,8 @@ export async function extractUpworkJob(input: UpworkJobInput): Promise<UpworkExt
     return { job: null, error: 'INVALID_INPUT', degraded: false, diagnostics: { provider: 'none', textLength, stage: 'validation' } }
   }
 
+  const rawText = cleanRawUpworkText(input.rawText)
+
   const systemPrompt = `You are a structured data extractor for Upwork job postings.
 
 Your job: extract EVERY piece of structured information from the raw job text.
@@ -423,12 +456,11 @@ Be thorough. If information exists in the text, extract it. Do not leave fields 
 
   const userPrompt = `Extract ALL structured data from this Upwork job posting:
 
-${input.rawText.slice(0, 10000)}`
+${rawText.slice(0, 10000)}`
 
   // Helper: parse AI output into structured job
   const parseJob = (data: Record<string, unknown>, provider: string, degraded: boolean): UpworkExtractionResult => {
-    const rawText = input.rawText
-    const aiSkills = Array.isArray(data.skills) ? (data.skills as string[]) : []
+        const aiSkills = Array.isArray(data.skills) ? (data.skills as string[]) : []
     const aiQuestions = Array.isArray(data.screeningQuestions) ? (data.screeningQuestions as string[]) : []
     const aiReqs = Array.isArray(data.applicationRequirements) ? (data.applicationRequirements as string[]) : []
 
