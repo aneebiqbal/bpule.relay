@@ -70,7 +70,6 @@ export async function POST(request: Request) {
           budgetMax: null,
           hourlyRateMin: job.hourlyRateMin ?? null,
           hourlyRateMax: job.hourlyRateMax ?? null,
-          connectsCost: 0,
           requiredSkills: job.skills ?? [],
           urgencySignal,
           rawInput: body.rawText,
@@ -81,6 +80,8 @@ export async function POST(request: Request) {
           weeklyHours: job.weeklyHours ?? null,
           duration: job.duration ?? null,
           experienceLevel: job.experienceLevel ?? null,
+          proposalCount: job.proposalCount ?? undefined,
+          connectsCost: job.connectsCost ?? 0,
         })
 
         send({
@@ -92,8 +93,6 @@ export async function POST(request: Request) {
             budgetMax: '',
             hourlyRateMin: job.hourlyRateMin?.toString() ?? '',
             hourlyRateMax: job.hourlyRateMax?.toString() ?? '',
-            proposalCount: '',
-            connectsCost: '0',
             requiredSkills: (job.skills ?? []).join(', '),
             urgencySignal,
             tags,
@@ -103,6 +102,8 @@ export async function POST(request: Request) {
             weeklyHours: job.weeklyHours ?? '',
             duration: job.duration ?? '',
             experienceLevel: job.experienceLevel ?? '',
+            proposalCount: job.proposalCount != null ? String(job.proposalCount) : '',
+            connectsCost: job.connectsCost != null ? String(job.connectsCost) : '0',
           },
           degraded: result.degraded,
           demoMode: false,

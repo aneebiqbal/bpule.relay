@@ -24,6 +24,8 @@ export interface ExtractedUpworkJob {
   weeklyHours: string | null
   duration: string | null
   applicationRequirements: string[]
+  proposalCount: number | null
+  connectsCost: number | null
 }
 
 export interface UpworkApplication {
@@ -54,6 +56,8 @@ const UPWORK_EXTRACTION_SCHEMA = {
     weeklyHours: { type: 'string', nullable: true, description: 'Hours per week if stated' },
     duration: { type: 'string', nullable: true, description: 'Project duration if stated' },
     applicationRequirements: { type: 'array', items: { type: 'string' }, description: 'What the applicant must submit: resume, portfolio, rate, availability, references, etc.' },
+    proposalCount: { type: 'number', nullable: true, description: 'Number of existing proposals if stated (e.g. 10, 15, 20)' },
+    connectsCost: { type: 'number', nullable: true, description: 'Number of Connects required to submit a proposal' },
   },
   required: ['title', 'description', 'skills', 'screeningQuestions', 'applicationRequirements'],
   additionalProperties: false,
@@ -128,6 +132,8 @@ interface BackfillResult {
   weeklyHours: string | null
   duration: string | null
   applicationRequirements: string[]
+  proposalCount: number | null
+  connectsCost: number | null
 }
 
 function backfillFromRawText(input: BackfillInput): BackfillResult {
@@ -176,26 +182,32 @@ function backfillFromRawText(input: BackfillInput): BackfillResult {
     ? input.aiQuestions
     : extractScreeningQuestions(rawText)
 
-  // Application requirements
-  const applicationRequirements = input.aiReqs.length > 0
-    ? input.aiReqs
-    : extractApplicationRequirements(rawText)
+    // Application requirements
+    const applicationRequirements = input.aiReqs.length > 0
+      ? input.aiReqs
+      : extractApplicationRequirements(rawText)
 
-  return {
-    skills,
-    hourlyRateMin,
-    hourlyRateMax,
-    budget,
-    budgetType,
-    experienceLevel,
-    projectLength,
-    screeningQuestions,
-    engagementType,
-    weeklyHours,
-    duration,
-    applicationRequirements,
+    // Proposals and connects — pure regex, no AI
+    const proposalCount = extractProposalCount(rawText)
+    const connectsCost = extractConnectsCost(rawText)
+
+    return {
+      skills,
+      hourlyRateMin,
+      hourlyRateMax,
+      budget,
+      budgetType,
+      experienceLevel,
+      projectLength,
+      screeningQuestions,
+      engagementType,
+      weeklyHours,
+      duration,
+      applicationRequirements,
+      proposalCount,
+      connectsCost,
+    }
   }
-}
 
 function extractSkillsFromRaw(text: string): string[] {
   const lower = text.toLowerCase()
@@ -236,8 +248,13 @@ function extractHourlyRate(text: string): { min: number | null; max: number | nu
 }
 
 function extractFixedBudget(text: string): number | null {
-  const match = text.match(/\$\s*(\d{4,6})(?:\s*(?:budget|total|price))/i)
-  return match ? parseFloat(match[1]) : null
+  // Match $300, $300.00, $300 budget, $300 total, $5,000, etc.
+  const match = text.match(/\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:budget|total|price|fixed)?/i)
+  if (match) return parseFloat(match[1].replace(/,/g, ''))
+  // Fallback: standalone dollar amount near "fixed" or "price"
+  const fallback = text.match(/fixed[- ]?price.*?(\d{3,6})(?:\.\d{1,2})?/i)
+  if (fallback) return parseFloat(fallback[1])
+  return null
 }
 
 function extractExperience(text: string): string | null {
@@ -313,10 +330,46 @@ function extractApplicationRequirements(text: string): string[] {
   return reqs
 }
 
+function cleanExtractedTitle(title: string): string {
+  let t = title.trim()
+  // Strip common paste artifacts: "sf", "spS", etc. (Upwork UI noise)
+  t = t.replace(/^(sf|spS|sp|sv|sb)\s*/i, '')
+  // Strip leading non-alphanumeric except common title chars
+  t = t.replace(/^[^a-zA-Z0-9"'()[\]{<>«»‘’“”]+/, '')
+  // Strip "Posted X minutes/hours ago" prefixes
+  t = t.replace(/^posted\s+\d+\s+(minutes?|hours?|days?)\s+ago\s*/i, '')
+  // Strip "Web App Developer Needed for" → keep as-is, it's a real title
+  return t.slice(0, 150) || 'Unknown Job'
+}
+
+function extractProposalCount(text: string): number | null {
+  // "Proposals: 10 to 15", "10-15 proposals", "10+ proposals"
+  const rangeMatch = text.match(/proposals?:\s*(\d+)\s*(?:to|-|–)\s*(\d+)/i)
+  if (rangeMatch) return Math.round((parseInt(rangeMatch[1]) + parseInt(rangeMatch[2])) / 2)
+  const singleMatch = text.match(/proposals?:\s*(\d+)/i)
+  if (singleMatch) return parseInt(singleMatch[1])
+  const looseMatch = text.match(/(\d+)\s*(?:to|-|–)\s*(\d+)\s+proposals/i)
+  if (looseMatch) return Math.round((parseInt(looseMatch[1]) + parseInt(looseMatch[2])) / 2)
+  return null
+}
+
+function extractConnectsCost(text: string): number | null {
+  // "Send a proposal for: 14 Connects", "14 Connects"
+  const match = text.match(/(\d+)\s+connects?/i)
+  return match ? parseInt(match[1]) : null
+}
+
 function extractTitleFromRaw(text: string): string {
-  // First line is usually the title
-  const firstLine = text.split('\n').map(l => l.trim()).filter(Boolean)[0] || ''
-  return firstLine.slice(0, 120) || 'Unknown Job'
+  // First non-noise line is usually the title
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5)
+  for (const line of lines) {
+    // Skip metadata lines
+    if (/^(posted|proposals|interviewing|invites|connects|client|activity|skill|budget|hourly|fixed|expert|intermediate|entry|worldwide|united states|indianapolis)/i.test(line)) continue
+    if (/^\$/.test(line)) continue
+    if (/^\d+\s*(minutes?|hours?|days?)\s*(ago)?$/i.test(line)) continue
+    return cleanExtractedTitle(line)
+  }
+  return 'Unknown Job'
 }
 
 /**
@@ -394,12 +447,14 @@ ${input.rawText.slice(0, 10000)}`
         weeklyHours: (data.weeklyHours as string) ?? null,
         duration: (data.duration as string) ?? null,
         applicationRequirements: aiReqs,
+        proposalCount: null,
+        connectsCost: null,
       }
     }
 
     return {
       job: {
-        title: (data.title as string) || extractTitleFromRaw(rawText),
+        title: cleanExtractedTitle((data.title as string) || extractTitleFromRaw(rawText)),
         description: (data.description as string) || rawText.slice(0, 3000),
         skills: backfilled.skills,
         budget: backfilled.budget,
@@ -415,6 +470,8 @@ ${input.rawText.slice(0, 10000)}`
         weeklyHours: backfilled.weeklyHours,
         duration: backfilled.duration,
         applicationRequirements: backfilled.applicationRequirements,
+        proposalCount: backfilled.proposalCount,
+        connectsCost: backfilled.connectsCost,
       },
       error: null,
       degraded,
