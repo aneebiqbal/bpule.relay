@@ -43,7 +43,7 @@ const UPWORK_EXTRACTION_SCHEMA = {
     title: { type: 'string', description: 'Job title exactly as stated' },
     description: { type: 'string', description: 'Clean job description without navigation noise. Preserve all requirements, responsibilities, and application instructions.' },
     skills: { type: 'array', items: { type: 'string' }, description: 'ALL technical skills, technologies, frameworks, platforms mentioned. Be thorough — list every one.' },
-    budget: { type: 'number', nullable: true, description: 'Budget amount if fixed price' },
+    budget: { type: 'number', nullable: true, description: 'Fixed-price project budget only. Do NOT put monthly compensation here — use hourlyRateMin/Max for $/month or $/hour rates' },
     budgetType: { type: 'string', enum: ['fixed', 'hourly', null] },
     hourlyRateMin: { type: 'number', nullable: true, description: 'Minimum hourly rate in USD' },
     hourlyRateMax: { type: 'number', nullable: true, description: 'Maximum hourly rate in USD' },
@@ -230,14 +230,26 @@ function mergeSkills(aiSkills: string[], rawSkills: string[]): string[] {
 function extractHourlyRate(text: string): { min: number | null; max: number | null } {
   const normalized = text.replace(/\s+/g, ' ').trim()
 
-  // Patterns: $5-$15/hour, $5 - $15 per hour, $10/hr, $10 per hour
-  const rangeMatch = normalized.match(/\$\s*(\d+(?:\.\d+)?)\s*[-–]\s*\$\s*(\d+(?:\.\d+)?)\s*(?:\/|per\s*)?(?:hour|hr)?/i)
+  // Monthly rate range: $1000-2000/month → convert to hourly (/160)
+  const monthlyRange = normalized.match(/\$\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s*[-–]\s*\$\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:\/|per\s*)?(?:month|mo)/i)
+  if (monthlyRange) {
+    const min = parseFloat(monthlyRange[1].replace(/,/g, '')) / 160
+    const max = parseFloat(monthlyRange[2].replace(/,/g, '')) / 160
+    return { min: Math.round(min * 100) / 100, max: Math.round(max * 100) / 100 }
+  }
+
+  // Single monthly rate: $1500/month
+  const monthlySingle = normalized.match(/\$\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:\/|per\s*)?(?:month|mo)\b/i)
+  if (monthlySingle) {
+    const rate = parseFloat(monthlySingle[1].replace(/,/g, '')) / 160
+    const rounded = Math.round(rate * 100) / 100
+    return { min: rounded, max: rounded }
+  }
+
+  // Hourly rate range: $5-$15/hour, $5 - $15 per hour
+  const rangeMatch = normalized.match(/\$\s*(\d+(?:\.\d+)?)\s*[-–]\s*\$\s*(\d+(?:\.\d+)?)\s*(?:\/|per\s*)?(?:hour|hr)/i)
   if (rangeMatch) {
     return { min: parseFloat(rangeMatch[1]), max: parseFloat(rangeMatch[2]) }
-  }
-  const looseMatch = normalized.match(/\$\s*(\d+(?:\.\d+)?)\s*[-–]\s*.*?\$\s*(\d+(?:\.\d+)?)/i)
-  if (looseMatch && /\b(hourly|hour|hr|per hour)\b/i.test(normalized)) {
-    return { min: parseFloat(looseMatch[1]), max: parseFloat(looseMatch[2]) }
   }
   const singleMatch = normalized.match(/\$\s*(\d+(?:\.\d+)?)\s*(?:\/|per\s*)?(?:hour|hr)/i)
   if (singleMatch) {
@@ -248,12 +260,19 @@ function extractHourlyRate(text: string): { min: number | null; max: number | nu
 }
 
 function extractFixedBudget(text: string): number | null {
-  // Match $300, $300.00, $300 budget, $300 total, $5,000, etc.
-  const match = text.match(/\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:budget|total|price|fixed)?/i)
+  // Only match true fixed-price budgets — NOT monthly/hourly/weekly rates
+  const match = text.match(/\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:budget|total|price|fixed)/i)
   if (match) return parseFloat(match[1].replace(/,/g, ''))
-  // Fallback: standalone dollar amount near "fixed" or "price"
-  const fallback = text.match(/fixed[- ]?price.*?(\d{3,6})(?:\.\d{1,2})?/i)
-  if (fallback) return parseFloat(fallback[1])
+  // "Fixed price: $X" pattern (must not be followed by /month, /hour, etc.)
+  const fixedMatch = text.match(/fixed[- ]?price[:\s]*\$\s*(\d{3,6})(?:\.\d{1,2})?/i)
+  if (fixedMatch) {
+    const val = parseFloat(fixedMatch[1].replace(/,/g, ''))
+    // Reject if this is a range like "$1000-2000/month"
+    const contextStart = fixedMatch.index ?? 0
+    const context = text.slice(contextStart, contextStart + 40)
+    if (/\/(?:month|hour|hr|week)/i.test(context)) return null
+    return val
+  }
   return null
 }
 
@@ -389,9 +408,9 @@ Your job: extract EVERY piece of structured information from the raw job text.
 
 Rules:
 1. skills: List ALL technologies, frameworks, platforms, tools mentioned anywhere in the job. Include mobile, backend, database, cloud, DevOps, domain-specific. Never leave empty if tech is mentioned.
-2. hourlyRateMin/Max: Extract from patterns like "$5-$15/hour", "$10/hr", "budget: $20/hour". If only one number, use it for both min and max.
-3. budget: Extract fixed-price budget if stated.
-4. budgetType: "hourly" if hourly rates mentioned, "fixed" if fixed price, null if unclear.
+2. hourlyRateMin/Max: Extract from patterns like "$5-$15/hour", "$10/hr", "$1000-2000/month". For monthly rates, convert to hourly: divide by 160 (monthly hours). If only one number, use it for both min and max.
+3. budget: Extract fixed-price project budget ONLY. Do NOT extract monthly compensation ($1000-2000/month) as budget — that goes in hourlyRateMin/Max. Budget is for one-time project totals like "budget: $5000" or "fixed price: $3000".
+4. budgetType: "hourly" if hourly or monthly rates mentioned, "fixed" only if a true fixed-price project budget exists, null if unclear.
 5. experienceLevel: Extract "Expert", "Intermediate", "Entry", or years like "5+ years".
 6. projectLength / duration: Extract "3 months", "6+ months", "ongoing", "long-term".
 7. weeklyHours: Extract "30+ hrs/week", "40 hours per week", "part-time".
