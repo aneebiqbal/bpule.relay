@@ -268,8 +268,8 @@ function extractHourlyRate(text: string): { min: number | null; max: number | nu
     return { min: rounded, max: rounded }
   }
 
-  // Hourly rate range: $5-$15/hour, $5 - $15 per hour
-  const rangeMatch = normalized.match(/\$\s*(\d+(?:\.\d+)?)\s*[-–]\s*\$\s*(\d+(?:\.\d+)?)\s*(?:\/|per\s*)?(?:hour|hr)/i)
+  // Hourly rate range: $5-$15/hour, $5 - $15 per hour, $10.00 - $30.00
+  const rangeMatch = normalized.match(/\$\s*(\d+(?:\.\d+)?)\s*[-–]\s*\$?\s*(\d+(?:\.\d+)?)\s*(?:\/|per\s*)?(?:hour|hr)?/i)
   if (rangeMatch) {
     return { min: parseFloat(rangeMatch[1]), max: parseFloat(rangeMatch[2]) }
   }
@@ -468,6 +468,13 @@ function cleanRawUpworkText(text: string): string {
   cleaned = cleaned.replace(/^english\s+level.*$/gmi, '')
   // "Preferred qualifications" section
   cleaned = cleaned.replace(/^preferred\s+qualifications\s*$/gmi, '')
+  // "Hiring now" / "Client is online" badges
+  cleaned = cleaned.replace(/^hiring\s+now\s*$/gmi, '')
+  cleaned = cleaned.replace(/^client\s+is\s+online.*$/gmi, '')
+  // "Skills and experience" / "Mandatory skills" / "Nice-to-have" section headers
+  cleaned = cleaned.replace(/^skills\s+and\s+experience\s*$/gmi, '')
+  cleaned = cleaned.replace(/^mandatory\s+skills\s*$/gmi, '')
+  cleaned = cleaned.replace(/^nice-to-have\s+skills?\s*$/gmi, '')
   // Collapse multiple blank lines
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n')
   return cleaned.trim()
