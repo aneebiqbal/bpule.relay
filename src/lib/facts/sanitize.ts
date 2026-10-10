@@ -121,12 +121,23 @@ export function sanitizeDraft(
   const withoutDeadLinks = stripDeadSiteLinks(noNumbers, facts)
   // Exclamation marks are banned in Scout output — strip them
   const hadExclamation = /!/.test(withoutDeadLinks)
-  const clean = withoutDeadLinks
+  let clean = withoutDeadLinks
     .replace(/!/g, '.')
     .replace(/\.{2,}/g, '.')
     .replace(/\s+\./g, '.')
     .replace(/  +/g, ' ')
     .trim()
+  // Remove incomplete claims: lines ending with "by", "at", "of", "with" (number was stripped)
+  clean = clean.split('\n').map(l => l.trim()).filter(Boolean).filter(line => {
+    if (/\b(by|at|of|with|for)\s*\.?$/.test(line)) return false
+    if (/^\s*(improved|increased|reduced|enhanced|boosted|achieved|delivered|managed|led|grew)\s+(by|at|of|with|for)\s*\.?\s*$/i.test(line)) return false
+    return true
+  }).join('\n')
+  // Remove incomplete claims: "by/at/of/with/for + period" (number was stripped, leaving dangling preposition)
+  clean = clean.replace(/\s+(by|at|of|with|for)\s*\./g, '.')
+  clean = clean.replace(/\s+\./g, '.').replace(/\.\s*\./g, '.')
+  // Clean up double spaces and orphaned punctuation
+  clean = clean.replace(/  +/g, ' ').replace(/\s+\./g, '.').trim()
   return {
     text: clean,
     strippedNumbers: stripped,
