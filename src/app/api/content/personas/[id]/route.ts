@@ -15,15 +15,33 @@ export async function PATCH(
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
 
-  const { humorStyle, valuesAndOpinions, admiredExamples, contentDna } = body as {
+  const {
+    humorStyle,
+    valuesAndOpinions,
+    admiredExamples,
+    personaRole,
+    personaCompany,
+    personaLocation,
+    contentComfort,
+    onboardingStep,
+    onboardingCompleted,
+    contentDna,
+  } = body as {
     humorStyle?: string
     valuesAndOpinions?: string[]
     admiredExamples?: string[]
+    personaRole?: string
+    personaCompany?: string
+    personaLocation?: string
+    contentComfort?: string[]
+    onboardingStep?: string
+    onboardingCompleted?: boolean
     contentDna?: {
       role?: string
       seniority?: string
       industries?: string[]
       audience?: string
+      audiences?: string[]
       expertise?: Array<{ area: string; level: 'beginner' | 'intermediate' | 'advanced' | 'expert'; evidence: string }>
       technologies?: Array<{ name: string; proficiency: 'learning' | 'using' | 'proficient' | 'expert'; context: string }>
       goals?: Array<{ description: string; type: 'audience' | 'growth' | 'authority' | 'sales' | 'career' | 'other' }>
@@ -33,6 +51,8 @@ export async function PATCH(
       projects?: Array<{ name: string; description: string; role: string; outcome: string; lessons?: string[] }>
       experiences?: Array<{ type: 'project' | 'mistake' | 'success' | 'decision' | 'lesson' | 'career'; description: string; lesson: string }>
       writingCharacteristics?: Record<string, string>
+      territories?: string[]
+      voiceSelection?: string
     }
   }
 
@@ -54,6 +74,16 @@ export async function PATCH(
       : undefined,
   })
 
+  await store.updateContentPersona({
+    personaId: id,
+    personaRole: typeof personaRole === 'string' ? personaRole.trim() || undefined : undefined,
+    personaCompany: typeof personaCompany === 'string' ? personaCompany.trim() || undefined : undefined,
+    personaLocation: typeof personaLocation === 'string' ? personaLocation.trim() || undefined : undefined,
+    contentComfort: Array.isArray(contentComfort) ? contentComfort : undefined,
+    onboardingStep: typeof onboardingStep === 'string' ? onboardingStep : undefined,
+    onboardingCompleted: typeof onboardingCompleted === 'boolean' ? onboardingCompleted : undefined,
+  })
+
   if (contentDna && persona.contentProfileId) {
     const now = new Date().toISOString()
     await store.updateContentProfile(persona.contentProfileId, {
@@ -70,6 +100,9 @@ export async function PATCH(
       projects: contentDna.projects?.slice(0, 20).map((p) => ({ ...p, lessons: p.lessons ?? [], updatedAt: now })),
       experiences: contentDna.experiences?.slice(0, 20).map((e) => ({ ...e, date: null, updatedAt: now })),
       writingCharacteristics: contentDna.writingCharacteristics,
+      audiences: Array.isArray(contentDna.audiences) ? contentDna.audiences.slice(0, 20) : undefined,
+      territories: Array.isArray(contentDna.territories) ? contentDna.territories.slice(0, 20) : undefined,
+      voiceSelection: typeof contentDna.voiceSelection === 'string' ? contentDna.voiceSelection : undefined,
     })
   }
 

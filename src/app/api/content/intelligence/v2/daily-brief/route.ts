@@ -63,8 +63,20 @@ export async function POST(request: Request) {
      return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
    }
 
-   const localDate = getLocalDate(user.rep.timezone ?? 'UTC')
-   return generateAndRespond(store, persona, localDate, user.rep.timezone ?? 'UTC', platform)
+    const localDate = getLocalDate(user.rep.timezone ?? 'UTC')
+
+    if (!persona.contentProfileId) {
+      return NextResponse.json(
+        {
+          error: 'Persona has no content profile',
+          message: 'This persona needs to be set up before it can generate posts. Please complete the persona setup or choose a different persona.',
+          personaId,
+        },
+        { status: 422 },
+      )
+    }
+
+    return generateAndRespond(store, persona, localDate, user.rep.timezone ?? 'UTC', platform)
  }
 
 async function generateAndRespond(

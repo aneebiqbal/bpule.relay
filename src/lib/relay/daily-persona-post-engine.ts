@@ -4,6 +4,7 @@ import type { TrendRelevanceProfile, TrendCandidate } from '@/lib/trends/types'
 import { rankTrendsForPersona } from '@/lib/trends/engine'
 import { generate } from '@/lib/ai/runtime'
 import { generateHumanizedImagePrompt } from '@/lib/writing/visual'
+import { appendHashtags } from '@/lib/content/intelligence/v2/caption-utils'
 import type { HumanizedImageResult } from '@/lib/writing/visual'
 
 export interface PersonaDailyPostInput {
@@ -177,6 +178,7 @@ Output ONLY JSON:
     postCaption = cleanXPostCaption(postCaption)
   } else {
     postCaption = cleanLinkedInCaption(postCaption)
+    postCaption = appendHashtags(postCaption, { title, territory, angle }, input.persona.personaRole ?? 'professional', input.platform)
   }
 
   const alternatesRaw = (data.alternates as Array<Record<string, string>>) ?? []

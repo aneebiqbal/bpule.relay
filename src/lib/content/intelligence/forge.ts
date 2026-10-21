@@ -12,6 +12,7 @@ import {
   structureToPrompt,
 } from '@/lib/writing/engine'
 import { generateVisualConcept } from '@/lib/writing/visual'
+import { appendHashtags } from './v2/caption-utils'
 
 /**
  * Content Forge — multi-agent generation pipeline.
@@ -157,7 +158,7 @@ async function buildForgeResult(
   escalationReason?: string,
 ): Promise<ForgeResult> {
   const finalCaption = await applyAntiSlop(winning.caption)
-  const platformCaption = adaptForPlatform(finalCaption, input.platform)
+  const platformCaption = appendHashtags(adaptForPlatform(finalCaption, input.platform), { title: input.genomeBlock.split('\n')[0], angle: input.genomeBlock.slice(0, 100) }, input.personaName, input.platform)
 
   const visualConcept = generateVisualConcept({
     postText: platformCaption,

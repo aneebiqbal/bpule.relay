@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth/current'
 import type { TrendRelevanceProfile } from '@/lib/trends/types'
 import { rankTrendsForPersona } from '@/lib/trends/engine'
 import { generate } from '@/lib/ai/runtime'
+import { appendHashtags } from '@/lib/content/intelligence/v2/caption-utils'
 import type { ContentPersona, ContentProfile, DailyContentIdea, VisualType } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
@@ -270,8 +271,9 @@ TONE: Like a senior engineer explaining something to a peer over coffee. Direct,
      feature: input.platform === 'x' ? 'studio_v2_x' : 'studio_v2',
    })
 
-   return input.platform === 'x' ? cleanXPost(result.data) : cleanPost(result.data)
- }
+    const caption = input.platform === 'x' ? cleanXPost(result.data) : cleanPost(result.data)
+    return appendHashtags(caption, { title: input.title, territory: input.territory, angle: input.angle }, '', input.platform)
+  }
 
  function cleanXPost(raw: string): string {
    let text = raw.trim()

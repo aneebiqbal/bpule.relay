@@ -46,7 +46,7 @@ export function GrowthTodayV2() {
   }, [])
 
   useEffect(() => {
-    fetchBrief().then(ok => { if (!ok) generateBrief() }).finally(() => setLoading(false))
+    fetchBrief().finally(() => setLoading(false))
   }, [fetchBrief, generateBrief])
 
   const handleCopy = () => {

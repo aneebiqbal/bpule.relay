@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import { StudioTodayV2 } from '@/components/studio-v2/studio-today-v2'
@@ -17,7 +17,9 @@ export default async function StudioTodayV2Page({ params }: PageProps) {
 
   const store = await createScoutStore()
   const persona = await store.getContentPersona(id)
-  if (!persona) notFound()
+
+  if (!persona) redirect('/content?manage=1')
+
   if (persona.repId !== user.rep.id && user.rep.role !== 'admin') notFound()
 
   return (

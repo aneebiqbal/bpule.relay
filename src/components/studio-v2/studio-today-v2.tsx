@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Copy, Shuffle, Check, AlertCircle, Plus, Users, RefreshCw, Download, Image, Sparkles } from 'lucide-react'
 import type { DailyContentIdea } from '@/lib/domain/types'
+import { StudioQuickCapture } from '@/components/studio-quick-capture'
 
 type Platform = 'linkedin' | 'x'
 
@@ -34,9 +35,10 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
   const [briefExists, setBriefExists] = useState(false)
   const [copied, setCopied] = useState(false)
   const [posted, setPosted] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editCaption, setEditCaption] = useState('')
   const [activeIdeaId, setActiveIdeaId] = useState<string | null>(null)
   const [customMode, setCustomMode] = useState(false)
-  const [customText, setCustomText] = useState('')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [imageLoading, setImageLoading] = useState(false)
   const [imageError, setImageError] = useState('')
@@ -357,50 +359,23 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
                   or write your own
                 </button>
               </div>
-            ) : (
-              <div className="mt-4 w-full max-w-lg space-y-3">
-                <textarea
-                  value={customText}
-                  onChange={(e) => setCustomText(e.target.value)}
-                  rows={6}
-                  placeholder="Write your post idea, thought, or paste a draft to refine..."
-                  className="w-full rounded-lg border border-line bg-bone p-3 text-sm leading-relaxed text-ink focus:border-cobalt focus:outline-none resize-y"
-                />
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      if (!customText.trim()) return
-                      const id = `custom-${Date.now()}`
-                      setData({
-                        brief: { id, status: 'custom', localDate: new Date().toISOString().slice(0, 10) },
-                        ideas: [{
-                          id,
-                          title: customText.slice(0, 80),
-                          angle: '',
-                          whyNow: '',
-                          postCaption: customText,
-                          postPlatform: platform,
-                        } as DailyContentIdea],
-                        platform,
-                      })
-                      setActiveIdeaId(id)
-                      setCustomMode(false)
-                    }}
-                    disabled={!customText.trim()}
-                    className="flex items-center gap-2 rounded-lg bg-cobalt px-4 py-2 text-sm font-medium text-on-accent hover:bg-cobalt-dark disabled:opacity-50"
-                  >
-                    <Check className="h-4 w-4" />
-                    Use this post
-                  </button>
-                  <button
-                    onClick={() => { setCustomMode(false); setCustomText('') }}
-                    className="text-sm text-ink/40 hover:text-ink/70"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
+             ) : (
+               <div className="mt-4 w-full max-w-lg">
+                 <StudioQuickCapture
+                   personaId={personaId}
+                   title={`Write your own for ${displayName}`}
+                   subtitle="A rough thought, a lesson, or a work moment. Studio will turn it into a post you can edit and keep."
+                 />
+                 <div className="mt-3">
+                   <button
+                     onClick={() => { setCustomMode(false) }}
+                     className="text-sm text-ink/40 hover:text-ink/70"
+                   >
+                     Cancel
+                   </button>
+                 </div>
+               </div>
+             )}
           </div>
         )}
 
@@ -425,27 +400,68 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
                 </div>
               </div>
 
-              {/* Post body */}
-               <div className="px-5 py-5">
-                 <h2 className={`mb-3 font-semibold text-ink leading-snug ${platform === 'x' ? 'text-base' : 'text-xl'}`}>{activeIdea.title}</h2>
-                 {activeIdea.postCaption && (
-                   <>
-                     <div className={`whitespace-pre-wrap text-ink/80 ${platform === 'x' ? 'text-sm leading-[1.6]' : 'text-[15px] leading-[1.7]'}`}>
-                       {activeIdea.postCaption}
-                     </div>
-                     {platform === 'x' && (
-                       <div className="mt-2 flex items-center gap-2">
-                         <span className={`font-mono text-xs ${activeIdea.postCaption.length > 280 ? 'text-status-danger' : activeIdea.postCaption.length > 250 ? 'text-amber-500' : 'text-ink/30'}`}>
-                           {activeIdea.postCaption.length}/280
-                         </span>
-                       </div>
-                     )}
-                   </>
-                 )}
-                 {activeIdea.angle && !activeIdea.postCaption && (
-                   <p className="text-sm leading-relaxed text-ink/60">{activeIdea.angle}</p>
-                 )}
-               </div>
+               {/* Post body */}
+                <div className="px-5 py-5">
+                  <h2 className={`mb-3 font-semibold text-ink leading-snug ${platform === 'x' ? 'text-base' : 'text-xl'}`}>{activeIdea.title}</h2>
+                  {isEditing ? (
+                    <textarea
+                      value={editCaption}
+                      onChange={(e) => setEditCaption(e.target.value)}
+                      rows={8}
+                      className="w-full rounded-lg border border-line bg-bone p-3 text-sm leading-relaxed text-ink focus:border-cobalt focus:outline-none resize-y"
+                    />
+                  ) : (
+                    activeIdea.postCaption && (
+                      <>
+                        <div className={`whitespace-pre-wrap text-ink/80 ${platform === 'x' ? 'text-sm leading-[1.6]' : 'text-[15px] leading-[1.7]'}`}>
+                          {activeIdea.postCaption}
+                        </div>
+                        {platform === 'x' && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className={`font-mono text-xs ${activeIdea.postCaption.length > 280 ? 'text-status-danger' : activeIdea.postCaption.length > 250 ? 'text-amber-500' : 'text-ink/30'}`}>
+                              {activeIdea.postCaption.length}/280
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    )
+                  )}
+                  {!isEditing && activeIdea.angle && !activeIdea.postCaption && (
+                    <p className="text-sm leading-relaxed text-ink/60">{activeIdea.angle}</p>
+                  )}
+                  {isEditing && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          const updated = editCaption.trim()
+                          if (!updated) return
+                          try {
+                            sessionStorage.setItem(`studio-idea-${activeIdea.id}`, JSON.stringify({
+                              id: activeIdea.id,
+                              postCaption: updated,
+                            }))
+                          } catch { /* sessionStorage unavailable */ }
+                          setData(prev => prev ? {
+                            ...prev,
+                            ideas: prev.ideas.map(i => i.id === activeIdea.id ? { ...i, postCaption: updated } : i),
+                          } : prev)
+                          setIsEditing(false)
+                        }}
+                        disabled={!editCaption.trim()}
+                        className="flex items-center gap-2 rounded-lg bg-cobalt px-4 py-2 text-sm font-medium text-on-accent hover:bg-cobalt-dark disabled:opacity-50"
+                      >
+                        <Check className="h-4 w-4" />
+                        Okay
+                      </button>
+                      <button
+                        onClick={() => setIsEditing(false)}
+                        className="text-sm text-ink/40 hover:text-ink/70"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
 
               {/* Actions */}
               <div className="flex items-center gap-2 border-t border-line px-5 py-3 bg-bone/50">
@@ -471,32 +487,31 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
                   <Shuffle className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} />
                   {generating ? 'Generating...' : 'Try another'}
                 </button>
-                 <button
-                   onClick={() => {
-                     // Store full idea data for the editor
-                     try {
-                       sessionStorage.setItem(`studio-idea-${activeIdea.id}`, JSON.stringify({
-                         id: activeIdea.id,
-                         title: activeIdea.title,
-                         angle: activeIdea.angle,
-                         whyNow: activeIdea.whyNow,
-                         postCaption: activeIdea.postCaption,
-                         territory: activeIdea.territory,
-                         trendGrounded: activeIdea.trendGrounded,
-                         platform: activeIdea.postPlatform,
-                         visualType: activeIdea.visualType,
-                         visualConcept: activeIdea.visualConcept,
-                         visualPrompt: activeIdea.visualPrompt,
-                         visualReason: activeIdea.visualReason,
-                         qualityResult: (activeIdea as any).qualityResult,
-                       }))
-                     } catch { /* sessionStorage unavailable */ }
-                     router.push(`/studio/post-detail?ideaId=${activeIdea.id}`)
-                   }}
-                   className="ml-auto rounded-lg px-3 py-2 text-sm text-ink/40 transition-colors hover:text-ink/70"
-                 >
-                   Edit
-                 </button>
+                  <button
+                    onClick={() => {
+                      setEditCaption(activeIdea.postCaption ?? '')
+                      setIsEditing(true)
+                    }}
+                    className="ml-auto rounded-lg px-3 py-2 text-sm text-ink/40 transition-colors hover:text-ink/70"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      const text = (isEditing ? editCaption : activeIdea.postCaption) ?? ''
+                      if (!text) return
+                      const blob = new Blob([text], { type: 'text/plain' })
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = `relay-post-${Date.now()}.txt`
+                      a.click()
+                      URL.revokeObjectURL(url)
+                    }}
+                    className="rounded-lg px-3 py-2 text-sm text-ink/40 transition-colors hover:text-ink/70"
+                  >
+                    Download
+                  </button>
               </div>
             </div>
 

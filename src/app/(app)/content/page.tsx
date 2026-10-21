@@ -71,19 +71,6 @@ export default async function ContentPage({
     console.error('[content] Failed to load personas:', err)
   }
 
-  if (personas.length > 0 && params.manage !== '1') {
-    const ordered = [...personas].sort((a, b) => {
-      const score = (persona: PersonaWithExtras) => {
-        if (persona.dailyStatus === 'asked') return 3
-        if (persona.dailyStatus === 'drafted') return 2
-        if (persona.dailyStatus === 'none') return 1
-        return 0
-      }
-      return score(b) - score(a)
-    })
-    redirect(`/content-v2/${ordered[0].id}/today`)
-  }
-
   return (
     <StudioIntro>
       <ContentDashboard personas={personas} />
