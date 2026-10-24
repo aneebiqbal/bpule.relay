@@ -20,15 +20,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
 
 function loadEnv() {
+  // CI supplies the credentials as environment variables; local runs use
+  // .env.local. Prefer process.env so the CI job can provide them.
+  const env = { ...process.env }
   const file = path.join(root, '.env.local')
-  if (!fs.existsSync(file)) {
-    console.error('FAIL: missing .env.local')
-    process.exit(1)
-  }
-  const env = {}
-  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
-    const m = line.match(/^([A-Z0-9_]+)="?([^"]*)"?$/)
-    if (m) env[m[1]] = m[2]
+  if (fs.existsSync(file)) {
+    for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+      const m = line.match(/^([A-Z0-9_]+)="?([^"]*)"?$/)
+      if (m && !(m[1] in env)) env[m[1]] = m[2]
+    }
   }
   return env
 }
@@ -69,18 +69,18 @@ async function signUp(orgName, email, password) {
     process.exit(1)
   }
 
-  const { error: repErr } = await service.from('reps').insert({
+  const { data: repRow, error: repErr } = await service.from('reps').insert({
     name: email.split('@')[0],
     role: 'admin',
     organization_id: org.id,
     auth_user_id: authUser.user.id,
-  })
-  if (repErr) {
-    console.error(`FAIL: create rep for ${email}: ${repErr.message}`)
+  }).select('id').single()
+  if (repErr || !repRow) {
+    console.error(`FAIL: create rep for ${email}: ${repErr?.message}`)
     process.exit(1)
   }
 
-  return { orgId: org.id, email, password }
+  return { orgId: org.id, repId: repRow.id, email, password }
 }
 
 async function signIn(email, password) {
@@ -148,7 +148,7 @@ const { data: personaA } = await repA
   .from('content_personas')
   .insert({
     organization_id: orgA.orgId,
-    rep_id: '00000000-0000-0000-0000-000000000000',
+    rep_id: orgA.repId,
     display_name: `${stamp} Persona A`,
     platforms: ['linkedin'],
   })
@@ -181,7 +181,29 @@ const { data: factB } = await repB
   .select('id')
   .single()
 
-console.log(`Seeded org B: lead=${leadB?.id} fact=${factB?.id}`)
+const { data: playB } = await repB
+  .from('plays')
+  .insert({
+    organization_id: orgB.orgId,
+    name: `${stamp} Play B`,
+    situation: 'hiring',
+    template_shape: 'Test template.',
+  })
+  .select('id')
+  .single()
+
+const { data: personaB } = await repB
+  .from('content_personas')
+  .insert({
+    organization_id: orgB.orgId,
+    rep_id: orgB.repId,
+    display_name: `${stamp} Persona B`,
+    platforms: ['linkedin'],
+  })
+  .select('id')
+  .single()
+
+console.log(`Seeded org B: lead=${leadB?.id} fact=${factB?.id} play=${playB?.id} persona=${personaB?.id}`)
 
 // ── Cross-tenant isolation assertions ──────────────────────────────────────
 // Each table must return zero rows when queried by the other org's rep.
@@ -261,8 +283,8 @@ await service.from('content_personas').delete().ilike('display_name', `${stamp}%
 await service.from('organizations').delete().ilike('name', `${stamp}%`)
 
 // Delete test auth users.
-const { data: users } = await service.auth.admin.listUsers()
-for (const user of users ?? []) {
+const { data: listedUsers } = await service.auth.admin.listUsers()
+for (const user of listedUsers?.users ?? []) {
   if (user.email?.startsWith(`${stamp}-`) && user.email.endsWith('@test.dev')) {
     await service.auth.admin.deleteUser(user.id)
   }
