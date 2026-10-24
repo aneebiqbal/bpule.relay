@@ -21,6 +21,12 @@ vi.mock('@/lib/intelligence-v3/bridge', () => ({
   produceV3Intelligence: produceV3IntelligenceMock,
 }))
 
+// Pin the deployment switch so the test exercises the V3 path in CI, where
+// V3_CANONICAL is unset (no .env.local) and the deterministic V2 path would run.
+vi.mock('@/lib/intelligence-v3/config', () => ({
+  V3_CANONICAL: true,
+}))
+
 import { POST } from '@/app/api/inbound/lead/route'
 
 const MESSAGE = 'We need an engineering partner to rebuild our billing portal. Budget approved at $80,000.'
