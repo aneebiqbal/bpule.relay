@@ -2,6 +2,7 @@
 import type { LeadDetail } from '@/lib/store/types'
 import type { Message } from '@/lib/domain/types'
 import { followupDueInDays } from '@/lib/leads/followup'
+import { evaluateFollowUpPolicy } from '@/lib/conversation/follow-up-policy'
 import { resolveConversationIntent } from '@/lib/conversation/intent'
 
 export type LeadAction =
@@ -200,17 +201,25 @@ export function deriveNextLeadAction(lead: LeadDetail, now: number = Date.now())
     }
   }
 
-  // 5. Our move was last. Follow up once the spacing has passed — this
-  // applies mid-conversation too, when the client goes quiet after a reply.
+  // 5. Our move was last. The canonical policy decides whether a follow-up is
+  // due; this applies mid-conversation too, when the client goes quiet.
   if (lastOutbound?.sentAt) {
+    const policy = evaluateFollowUpPolicy({
+      leadStatus: lead.status as string | null,
+      lastOutboundAt: lastOutbound.sentAt ?? null,
+      lastInboundAt: lastInbound?.sentAt ?? null,
+      followupCount,
+      channel: 'dm',
+      deferralDate: null,
+      now: new Date(now),
+    })
     const daysSince = (now - new Date(lastOutbound.sentAt).getTime()) / DAY_MS
-    const dueIn = followupDueInDays(followupCount)
     // A client who asked to talk later is not chased on the normal schedule.
-    if (followupsRemaining > 0 && daysSince >= dueIn && !conversationIntent.deferred) {
+    if (policy.eligible && !conversationIntent.deferred) {
       return {
         action: 'SEND_FOLLOWUP',
         primaryLabel: 'Send follow-up',
-        reason: `No reply after ${Math.floor(daysSince)} days (due at ${dueIn}). ${followupsRemaining} follow-ups remaining.`,
+        reason: `${policy.reason} ${followupsRemaining} follow-ups remaining.`,
         requiresAction: true,
         followupDue: true,
         followupsRemaining,
@@ -224,7 +233,7 @@ export function deriveNextLeadAction(lead: LeadDetail, now: number = Date.now())
         ? `They asked to talk later ("${(conversationIntent.decidingText ?? '').slice(0, 60)}"). No follow-up until then.`
         : clientWrote
           ? `You replied ${timeAgo(lastOutbound.sentAt, now)}.`
-          : `Last message sent ${timeAgo(lastOutbound.sentAt, now)}.`,
+          : policy.reason || `Last message sent ${timeAgo(lastOutbound.sentAt, now)}.`,
       requiresAction: false,
       followupDue: false,
       followupsRemaining,

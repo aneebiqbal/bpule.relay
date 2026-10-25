@@ -47,8 +47,9 @@ export const LONGCAT_MODELS: Record<string, ProviderModel> = {
     provider: 'longcat',
     model: 'LongCat-2.0',
     baseUrl: 'https://api.longcat.chat/openai/v1',
-    costPerInputToken: 0,
-    costPerOutputToken: 0,
+    // Estimate in USD per 1M tokens (src/lib/ai/cost.ts, pricingVersion 'groq-gpt-oss-2026-10').
+    costPerInputToken: 0.10,
+    costPerOutputToken: 0.50,
     supportsStreaming: true,
     supportsJsonSchema: false,
     maxContextTokens: 1_000_000,

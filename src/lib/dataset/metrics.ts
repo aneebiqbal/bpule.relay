@@ -40,11 +40,13 @@ export async function computeDatasetMetrics(
     Array.isArray(r.capture_failures) && r.capture_failures.length > 0
   ).length
 
-  // Message preference pairs: count from events table (MESSAGE_EDITED events)
-  const { data: editEvents } = await client
+  // Message preference pairs: count from events table (MESSAGE_EDITED events).
+  // head:true returns no rows, so read the exact count; scope to the caller's org.
+  const { count: editEventCount } = await client
     .from('intelligence_sample_events')
     .select('id', { count: 'exact', head: true })
     .eq('event_type', 'MESSAGE_EDITED')
+    .eq('organization_id', orgId)
 
   return {
     totalSamples: total,
@@ -55,7 +57,7 @@ export async function computeDatasetMetrics(
     outcomeVerified,
     trainingEligible,
     trainingApproved,
-    messagePreferencePairs: editEvents ? (editEvents as unknown as []).length : 0,
+    messagePreferencePairs: editEventCount ?? 0,
     buyerExamples,
     sellerExamples,
     needsReview,

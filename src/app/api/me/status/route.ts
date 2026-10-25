@@ -11,9 +11,14 @@ export async function GET() {
   try {
     const store = await createScoutStore()
     const queue = await store.getQueue()
+    const { getAuthContext } = await import('@/lib/auth/organization')
+    const auth = await getAuthContext().catch(() => null)
     return Response.json({
       todaySends: queue.todaySends,
       dailyLimit: queue.dailyLimit,
+      // Canonical org role, so client surfaces never trust a stale reps.role.
+      isAdmin: auth?.isAdmin ?? false,
+      isManager: auth?.isManager ?? false,
     })
   } catch {
     try {

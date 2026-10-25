@@ -32,12 +32,13 @@ function getCredentials(): GroqCredential[] {
 
 
 export const GROQ_MODELS: Record<string, ProviderModel> = {
+  // Prices are estimates in USD per 1M tokens (see src/lib/ai/cost.ts, pricingVersion 'groq-gpt-oss-2026-10').
   'gpt-oss-20b': {
     provider: 'groq',
     model: 'openai/gpt-oss-20b',
     baseUrl: 'https://api.groq.com/openai/v1',
-    costPerInputToken: 0,
-    costPerOutputToken: 0,
+    costPerInputToken: 0.10,
+    costPerOutputToken: 0.50,
     supportsStreaming: true,
     supportsJsonSchema: false,
     maxContextTokens: 128_000,
@@ -46,8 +47,8 @@ export const GROQ_MODELS: Record<string, ProviderModel> = {
     provider: 'groq',
     model: 'openai/gpt-oss-120b',
     baseUrl: 'https://api.groq.com/openai/v1',
-    costPerInputToken: 0,
-    costPerOutputToken: 0,
+    costPerInputToken: 0.24,
+    costPerOutputToken: 1.20,
     supportsStreaming: true,
     supportsJsonSchema: false,
     maxContextTokens: 128_000,
@@ -132,7 +133,7 @@ export async function callJson<T>(
       ttfbMs: ttfb,
       inputTokens,
       outputTokens,
-      estimatedCostUsd: 0,
+      estimatedCostUsd: (inputTokens * model.costPerInputToken + outputTokens * model.costPerOutputToken) / 1_000_000,
       attempt: 1,
       fallback: false,
       fallbackReason: null,

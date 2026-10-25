@@ -6,8 +6,36 @@ import { computeEditDelta, classifySendDisposition, inferFeedbackReasons } from 
 import type { ComposeIntent, ComposerDraft, ConversationMemory, ConversationTurn } from './types'
 import { awaitingOurReply, buildThread } from './thread'
 import { refreshMemory } from './memory'
-import { composeMessage, loadComposeContext, type ComposeInput, type ComposeResult } from './composer'
+import { composeMessage, loadComposeContext, claimableText, assessMessageQuality, type ComposeInput, type ComposeResult } from './composer'
 import { DEAL_STAGE_LABEL } from './stage'
+import type { Profile, ProofItem } from '@/lib/domain/types'
+import type { MessageClassification } from './composer'
+
+export interface SentMessageAssessment {
+  classification: MessageClassification
+  blocked: boolean
+  reasons: string[]
+}
+
+/**
+ * Re-run the fabrication gate on the text a rep is about to log. The compose
+ * step already blocks its own drafts; this is the enforcement point on the
+ * send path, where a draft may have been edited or arrive from another route.
+ */
+export async function assessSentMessage(store: ScoutStore, leadId: string, text: string): Promise<SentMessageAssessment> {
+  const lead = await store.getLead(leadId).catch(() => null)
+  if (!lead || !text.trim()) return { classification: 'SALES_READY', blocked: false, reasons: [] }
+  try {
+    const profiles = await store.listProfiles().catch(() => [] as Profile[])
+    const profile = profiles.find((p) => p.id === lead.senderProfileId) ?? profiles[0] ?? null
+    const proof = await store.matchProofItems(lead.tags ?? [], 3, profile?.id ?? null).catch(() => [] as ProofItem[])
+    const claimable = `${claimableText({ profile, proof })}\n${lead.company}\n${lead.contactName ?? ''}`
+    return assessMessageQuality({ text, issues: [], claimable })
+  } catch {
+    // Never block a send because the check itself failed.
+    return { classification: 'SALES_READY', blocked: false, reasons: [] }
+  }
+}
 
 export interface ConversationView {
   leadId: string

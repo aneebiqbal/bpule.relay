@@ -211,6 +211,8 @@ export interface DatasetMetrics {
   captureFailures: number
 }
 
-export type ExportMode = 'FULL_AUDIT' | 'TRAINING' | 'MESSAGE_PREFERENCE' | 'SCORING_EVAL' | 'UPWORK_TRAINING'
+export type ExportMode =
+  | 'FULL_AUDIT' | 'TRAINING' | 'MESSAGE_PREFERENCE' | 'SCORING_EVAL' | 'UPWORK_TRAINING'
+  | 'PAIRWISE_RANKING' | 'ROUTING_EVAL' | 'MESSAGE_QUALITY' | 'THESIS_QUALITY' | 'OUTCOME_TRAINING'
 export type ExportFormat = 'jsonl' | 'csv' | 'json'
 export type PrivacyMode = 'REDACTED' | 'ANONYMIZED'

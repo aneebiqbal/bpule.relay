@@ -172,10 +172,10 @@ describe('Lead creation hardening flow', () => {
     expect(data.canCreateSeparate).toBe(true)
   })
 
-  it('passes score and verdict inside createLead payload (single write)', async () => {
+  it('writes only the canonical score; the legacy 0-12 column is not persisted', async () => {
     const createLeadMock = vi.fn().mockResolvedValue({
       blocked: false,
-      lead: makeLead({ id: 'lead-new', score: 11, verdict: 'send' }),
+      lead: makeLead({ id: 'lead-new', verdict: 'send' }),
     })
     const updateLeadScoreMock = vi.fn()
 
@@ -196,9 +196,10 @@ describe('Lead creation hardening flow', () => {
 
     expect(res.status).toBe(201)
     expect(createLeadMock).toHaveBeenCalledTimes(1)
+    // ONE LIVE SCORE WRITER: the canonical 0-100 score is the only score written.
     expect(createLeadMock.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
-        score: expect.any(Number),
+        score: null,
         verdict: expect.stringMatching(/send|research_more|skip/),
       }),
     )
@@ -255,8 +256,7 @@ describe('Lead creation hardening flow', () => {
     // rubric for pre-canonical surfaces; it is the route's own computation
     // (returned in the response), never a rescaled copy of the canonical.
     expect(payload.canonicalScore).toBe(79)
-    expect(payload.score).toBe(data.score.total)
-    expect(payload.score).toBeLessThanOrEqual(12)
+    expect(payload.score).toBeNull() // one live writer: the legacy 0-12 column is not persisted
     expect(payload.verdict).toBe('send') // 79 → STRONG band → 'send'
   })
 
@@ -289,7 +289,7 @@ describe('Lead creation hardening flow', () => {
     expect(payload.canonicalIntelligence.qualification).toBe('strong') // stored qualification follows the stored score
   })
 
-  it('/api/prospect/save falls back to the legacy rubric score when NO canonical intelligence is provided (pre-canonical / manual-entry compatibility path)', async () => {
+  it('/api/prospect/save leaves a lead with no canonical intelligence UNSCORED rather than inventing a legacy score', async () => {
     const createLeadMock = vi.fn().mockResolvedValue({
       blocked: false,
       lead: makeLead({ id: 'lead-legacy-only' }),
@@ -310,6 +310,6 @@ describe('Lead creation hardening flow', () => {
     expect(res.status).toBe(201)
     const payload = createLeadMock.mock.calls[0]?.[0]
     expect(payload.canonicalScore).toBeNull()
-    expect(typeof payload.score).toBe('number') // legacy computeScore() result, the only option available
+    expect(payload.score).toBeNull() // no invented score
   })
 })

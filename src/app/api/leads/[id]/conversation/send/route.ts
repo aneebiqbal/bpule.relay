@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { hasUnfilledValues, UNFILLED_VALUES_MESSAGE } from '@/lib/relay/unfilled-values'
 import { createScoutStore } from '@/lib/store'
 import { safeErrorResponse } from '@/lib/errors'
-import { loadConversation, logSentMessage } from '@/lib/conversation/service'
+import { loadConversation, logSentMessage, assessSentMessage } from '@/lib/conversation/service'
 import type { ComposeIntent } from '@/lib/conversation/types'
 import { captureSent, findLatestSampleForLead } from '@/lib/dataset/service'
 import { createServiceSupabase } from '@/lib/supabase/service'
@@ -31,6 +31,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const text = typeof body.text === 'string' ? body.text.slice(0, 8000) : ''
   if (text.trim() && hasUnfilledValues(text)) {
     return NextResponse.json({ error: UNFILLED_VALUES_MESSAGE }, { status: 400 })
+  }
+  // Fabrication gate: a draft with an unsupported claim or a placeholder is
+  // never sendable, however the rep edited it.
+  if (text.trim()) {
+    const assessment = await assessSentMessage(store, id, text)
+    if (assessment.blocked) {
+      return NextResponse.json(
+        { error: `DRAFT BLOCKED: ${assessment.reasons.join('; ')}`, classification: assessment.classification },
+        { status: 422 },
+      )
+    }
   }
   try {
     const outcome = await logSentMessage(store, id, text, intent, body.idempotencyKey ?? null)

@@ -41,9 +41,9 @@ export default async function AppLayout({
   const queue = await store.getQueue();
 
   let revenueIdentities: WorkspaceIdentity[] = [];
+  const authCtx = await getAuthContext().catch(() => null);
 
   try {
-    const authCtx = await getAuthContext();
     const identities = authCtx?.isOwner || authCtx?.isAdmin
       ? await store.listRevenueIdentitiesAdmin()
       : await store.listMyAssignedIdentities();
@@ -81,6 +81,7 @@ export default async function AppLayout({
               repName={user.rep.name}
               organizationName={user.organization.name}
               role={user.rep.role}
+              isAdmin={authCtx?.isAdmin ?? false}
               calibrated={Boolean(user.profile)}
               demo={isDemoMode()}
               todaySends={queue.todaySends}

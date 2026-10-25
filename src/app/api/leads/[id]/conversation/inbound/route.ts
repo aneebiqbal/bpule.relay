@@ -5,6 +5,7 @@ import { loadConversation } from '@/lib/conversation/service'
 import { captureClientReply, findLatestSampleForLead } from '@/lib/dataset/service'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { getAuthContext } from '@/lib/auth/organization'
+import { validateThreadIdentity } from '@/lib/conversation/thread-integrity'
 
 export const maxDuration = 60
 
@@ -15,7 +16,7 @@ export const maxDuration = 60
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  let body: { text?: string; receivedAt?: string | null }
+  let body: { text?: string; receivedAt?: string | null; senderUrl?: string; senderEmail?: string }
   try {
     body = await request.json()
   } catch {
@@ -27,6 +28,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (receivedAt && Number.isNaN(new Date(receivedAt).getTime())) {
     return NextResponse.json({ error: 'Invalid time for the client\'s message.' }, { status: 400 })
   }
+  const senderUrl = typeof body.senderUrl === 'string' ? body.senderUrl.trim() : ''
+  const senderEmail = typeof body.senderEmail === 'string' ? body.senderEmail.trim().toLowerCase() : ''
 
   let store
   try {
@@ -35,7 +38,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
   try {
-    await store.recordProspectReply(id, text, { receivedAt })
+    // Thread integrity: an inbound message must belong to this lead. If the
+    // caller supplies a sender identity, a mismatch refuses to attach silently.
+    if (senderUrl || senderEmail) {
+      const lead = await store.getLead(id)
+      const check = validateThreadIdentity({ senderUrl, senderEmail, leadUrl: lead?.url })
+      if (!check.ok) {
+        return NextResponse.json({ error: check.code, reason: check.reason }, { status: 409 })
+      }
+      // Identity verified against the lead.
+      await store.recordProspectReply(id, text, { receivedAt, threadStatus: 'VERIFIED' })
+    } else {
+      // No identity supplied: mark the thread UNVERIFIED so it is never
+      // treated as strongly linked.
+      await store.recordProspectReply(id, text, { receivedAt, threadStatus: 'UNVERIFIED' })
+    }
 
     // Dataset: capture CLIENT_REPLY event (uses service role for system capture).
     const datasetClient = createServiceSupabase()

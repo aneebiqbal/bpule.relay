@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { opportunityKey } from '@/lib/scoring-v4/opportunity-key'
 import { determineFollowup } from '@/lib/relay/followup-engine'
+import { isTerminalStoredStage, isTerminalLeadStatus, checkOutreachAllowed } from '@/lib/conversation/terminal'
+import { evaluateFollowUpPolicy } from '@/lib/conversation/follow-up-policy'
+import { classifyInboundReply, storedStageForOutcome } from '@/lib/sales/outcomes'
+import { extractConversationFacts } from '@/lib/conversation/conversation-intelligence-v2'
 import type {
   ContentDraft,
   ContentDraftFeedback,
@@ -1244,7 +1248,7 @@ export class SupabaseStore implements ScoutStore {
 
     const { data: leadRow, error: leadError } = await this.client
       .from('leads')
-      .select('id, status, verdict, locked_until, owner_rep_id, sender_profile_id')
+      .select('id, status, verdict, locked_until, owner_rep_id, sender_profile_id, revenue_identity_id')
       .eq('id', leadId)
       .maybeSingle()
     if (leadError) throw leadError
@@ -1272,10 +1276,25 @@ export class SupabaseStore implements ScoutStore {
       throw new Error('This lead is connection-locked. Wait for it to unlock before sending another outreach.')
     }
 
+    // A terminal opportunity may never be re-contacted. The rep's own reply to
+    // an active conversation is not cold outreach, so it stays allowed.
+    const terminalCheck = checkOutreachAllowed({
+      leadStatus: (leadRow.status as string | null) ?? null,
+      storedStages: [],
+      allowReply: type === 'reply',
+    })
+    if (terminalCheck.terminal) {
+      throw new Error(`TERMINAL: ${terminalCheck.reason ?? 'This opportunity is closed.'} No message was sent.`)
+    }
+
+    const senderProfileId = (leadRow as unknown as { sender_profile_id?: string | null }).sender_profile_id ?? null
     const insertPayload: Record<string, unknown> = {
       organization_id: this.orgId,
       lead_id: leadId,
       rep_id: this.rep.id,
+      sender_profile_id: senderProfileId,
+      revenue_identity_id: (leadRow as unknown as { revenue_identity_id?: string | null }).revenue_identity_id ?? null,
+      sender_attribution_status: senderProfileId ? 'KNOWN' : 'UNKNOWN',
       type,
       sent_text: sentText,
       sent_at: new Date().toISOString(),
@@ -1373,13 +1392,24 @@ export class SupabaseStore implements ScoutStore {
 
     try {
       const convState = await this.getConversationState(leadId)
+      const newFollowupCount = type === 'followup' ? (convState?.followupCount ?? 0) + 1 : (convState?.followupCount ?? 0)
+      // The canonical policy computes the next follow-up; the column is now live.
+      const policy = evaluateFollowUpPolicy({
+        leadStatus: (leadRow.status as string | null) ?? null,
+        lastOutboundAt: new Date().toISOString(),
+        lastInboundAt: null,
+        followupCount: newFollowupCount,
+        channel: type,
+        deferralDate: null,
+      })
       await this.upsertConversationState({
         leadId,
         // Our reply keeps the conversation at whatever stage it reached.
         stage: type === 'reply' ? (convState?.stage ?? 'replied') : 'contacted',
-        followupCount: type === 'followup' ? (convState?.followupCount ?? 0) + 1 : (convState?.followupCount ?? 0),
+        followupCount: newFollowupCount,
         lastSentAt: new Date().toISOString(),
         lastSentMessageId: inserted.id as string,
+        nextFollowupAt: policy.nextFollowupAt,
       })
     } catch {
       // Non-fatal: conversation state must not block the send
@@ -1589,10 +1619,10 @@ export class SupabaseStore implements ScoutStore {
     }
   }
 
-  async recordProspectReply(leadId: string, replyText: string, options?: { receivedAt?: string | null }): Promise<Message> {
+  async recordProspectReply(leadId: string, replyText: string, options?: { receivedAt?: string | null; threadStatus?: string | null }): Promise<Message> {
     const { data: leadRow, error: leadError } = await this.client
       .from('leads')
-      .select('id, status, sender_profile_id')
+      .select('id, status, sender_profile_id, revenue_identity_id')
       .eq('id', leadId)
       .eq('owner_rep_id', this.rep.id)
       .maybeSingle()
@@ -1607,10 +1637,22 @@ export class SupabaseStore implements ScoutStore {
     const nowMs = Date.now()
     const received = options?.receivedAt ? new Date(options.receivedAt).getTime() : NaN
     const now = new Date(Number.isFinite(received) && received <= nowMs ? received : nowMs).toISOString()
+    // A reply is never automatically success: an opt-out or refusal closes the
+    // lead, a real reply keeps it live. This is the single place the client's
+    // words decide the outcome.
+    const outcome = classifyInboundReply(replyText)
+    const storedStage = storedStageForOutcome(outcome)
+    const closed = outcome === 'DO_NOT_CONTACT' || outcome === 'NEGATIVE' || outcome === 'LOST'
+    const leadStatus = outcome === 'DO_NOT_CONTACT' ? 'dead' : closed ? 'lost' : 'replied'
+    const replySenderProfileId = (leadRow as unknown as { sender_profile_id?: string | null }).sender_profile_id ?? null
     const replyPayload: Record<string, unknown> = {
       organization_id: this.orgId,
       lead_id: leadId,
       rep_id: this.rep.id,
+      sender_profile_id: replySenderProfileId,
+      revenue_identity_id: (leadRow as unknown as { revenue_identity_id?: string | null }).revenue_identity_id ?? null,
+      sender_attribution_status: replySenderProfileId ? 'KNOWN' : 'UNKNOWN',
+      thread_status: options?.threadStatus ?? 'UNVERIFIED',
       type: 'reply',
       sent_text: replyText,
       sent_at: now,
@@ -1620,12 +1662,32 @@ export class SupabaseStore implements ScoutStore {
     if (insertError) throw insertError
     if (!inserted) throw new Error('Failed to record the reply.')
 
+    // Persist the facts the client stated (budget, meeting date, NDA, ...).
+    try {
+      const facts = extractConversationFacts(replyText, inserted.id as string)
+      for (const f of facts) {
+        await this.client.from('conversation_facts').insert({
+          organization_id: this.orgId,
+          lead_id: leadId,
+          message_id: f.sourceMessageId,
+          kind: f.kind,
+          value: f.value,
+          quote: f.quote,
+          confidence: f.confidence,
+          captured_at: f.capturedAt,
+        })
+      }
+    } catch {
+      // Fact capture is best-effort and must never block the reply.
+    }
+
     try {
       // Auto-restore on reply: see markContacted's identical handling for
       // why (a reply must bring an archived lead back to the live board).
+      // A terminal reply (opt-out/refusal) closes the lead instead.
       await this.client
         .from('leads')
-        .update({ status: 'replied', archived: false, archived_at: null })
+        .update({ status: leadStatus, archived: false, archived_at: null })
         .eq('id', leadId)
         .eq('owner_rep_id', this.rep.id)
     } catch {
@@ -1634,12 +1696,12 @@ export class SupabaseStore implements ScoutStore {
     try {
       await this.client
         .from('outcomes')
-        .insert({ organization_id: this.orgId, lead_id: leadId, stage: 'replied', occurred_at: now })
+        .insert({ organization_id: this.orgId, lead_id: leadId, stage: storedStage, occurred_at: now })
     } catch {
     }
 
     try {
-      await this.upsertConversationState({ leadId, stage: 'replied', lastReplyAt: now })
+      await this.upsertConversationState({ leadId, stage: closed ? 'lost' : 'replied', lastReplyAt: now })
     } catch {
     }
 
@@ -2001,7 +2063,39 @@ export class SupabaseStore implements ScoutStore {
       .select('*')
       .eq('profile_id', profileId)
     if (error) throw error
-    return (data ?? []).map(mapProofItem)
+    const items = (data ?? []).map(mapProofItem)
+    // proof_items is empty in production; proof_cards is the canonical
+    // verified proof store. Fall back to verified cards so routing and
+    // messaging actually get proof.
+    if (items.length > 0) return items
+    return this.listProofCardsAsItems(profileId)
+  }
+
+  /** Verified proof_cards mapped to the ProofItem shape (only APPROVED_REAL). */
+  private async listProofCardsAsItems(profileId: string): Promise<ProofItem[]> {
+    const { data, error } = await this.client
+      .from('proof_cards')
+      .select('*')
+      .eq('profile_id', profileId)
+      .eq('verified', true)
+    if (error) throw error
+    return (data ?? [])
+      .filter((c: Record<string, unknown>) => {
+        const forbidden = c.forbidden_claims
+        return !forbidden || (Array.isArray(forbidden) && forbidden.length === 0) || forbidden === '{}'
+      })
+      .map((c: Record<string, unknown>) => ({
+        id: String(c.id),
+        organizationId: String(c.organization_id),
+        profileId: String(c.profile_id),
+        clientNamed: false,
+        clientName: null,
+        permissionOnFile: true,
+        projectSummary: `${String(c.capability ?? 'Capability')}: ${String(c.safe_claim ?? '')}`.trim(),
+        reviewQuote: null,
+        tags: Array.isArray(c.tags) ? (c.tags as string[]) : [],
+        createdAt: String(c.created_at),
+      }))
   }
 
   async listProofItemsAdmin(profileId: string): Promise<ProofItem[]> {
@@ -2216,19 +2310,26 @@ export class SupabaseStore implements ScoutStore {
     const [{ data: msgRows, error: msgErr }, { data: outcomeRows, error: outcomeErr }] = await Promise.all([
       this.client
         .from('messages')
-        .select('lead_id, sent_at')
+        .select('lead_id, sent_at, direction')
         .in('lead_id', leadIds)
         .not('sent_at', 'is', null),
-      this.client.from('outcomes').select('lead_id').in('lead_id', leadIds).eq('stage', 'replied'),
+      this.client.from('outcomes').select('lead_id, stage').in('lead_id', leadIds),
     ])
     if (msgErr) throw msgErr
     if (outcomeErr) throw outcomeErr
 
-    const repliedLeadIds = new Set((outcomeRows ?? []).map((r) => r.lead_id as string))
-    const lastSentByLead = new Map<string, string>()
-    for (const row of (msgRows ?? []) as Array<{ lead_id: string; sent_at: string }>) {
-      const existing = lastSentByLead.get(row.lead_id)
-      if (!existing || row.sent_at > existing) lastSentByLead.set(row.lead_id, row.sent_at)
+    // A reply, a decline/opt-out or a closed deal all stop the follow-up queue.
+    const blockedLeadIds = new Set(
+      (outcomeRows ?? [])
+        .filter((r) => r.stage === 'replied' || isTerminalStoredStage(r.stage as string))
+        .map((r) => r.lead_id as string),
+    )
+    const lastOutboundByLead = new Map<string, string>()
+    const lastInboundByLead = new Map<string, string>()
+    for (const row of (msgRows ?? []) as Array<{ lead_id: string; sent_at: string; direction: string | null }>) {
+      const map = row.direction === 'inbound' ? lastInboundByLead : lastOutboundByLead
+      const existing = map.get(row.lead_id)
+      if (!existing || row.sent_at > existing) map.set(row.lead_id, row.sent_at)
     }
 
     // Bulk-fetch conversation states to avoid N+1
@@ -2244,14 +2345,20 @@ export class SupabaseStore implements ScoutStore {
     const now = new Date()
     const due: FollowupDue[] = []
     for (const lead of contacted) {
-      if (repliedLeadIds.has(lead.id)) continue
-      const lastSent = lastSentByLead.get(lead.id)
-      if (!lastSent) continue
+      if (blockedLeadIds.has(lead.id)) continue
+      const lastOutbound = lastOutboundByLead.get(lead.id)
+      if (!lastOutbound) continue
       const followupCount = followupCountByLead.get(lead.id) ?? 0
-      if (followupCount >= 3) continue
-      const daysSinceContact = calendarDaysBetween(new Date(lastSent), now)
-      if (daysSinceContact >= followupDueInDays(followupCount)) {
-        due.push({ lead, daysSinceContact })
+      const policy = evaluateFollowUpPolicy({
+        leadStatus: lead.status as string | null,
+        lastOutboundAt: lastOutbound,
+        lastInboundAt: lastInboundByLead.get(lead.id) ?? null,
+        followupCount,
+        channel: 'dm',
+        now,
+      })
+      if (policy.eligible) {
+        due.push({ lead, daysSinceContact: calendarDaysBetween(new Date(lastOutbound), now) })
       }
     }
     return due.sort((a, b) => b.daysSinceContact - a.daysSinceContact)

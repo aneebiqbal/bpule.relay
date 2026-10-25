@@ -396,7 +396,7 @@ export interface ScoutStore {
    * 'replied', record the outcome, and emit a CLIENT_REPLIED event. Returns
    * the inserted message. Owner-scoped.
    */
-  recordProspectReply(leadId: string, replyText: string, options?: { receivedAt?: string | null }): Promise<Message>
+  recordProspectReply(leadId: string, replyText: string, options?: { receivedAt?: string | null; threadStatus?: string | null }): Promise<Message>
   /**
    * Admin override: clear a lead's connection-pacing lock immediately. No-op
    * if the lead is not locked. Admin/owner-scoped.

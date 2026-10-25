@@ -76,6 +76,7 @@ const MORE_NAV: Array<{
   { href: '/admin/accountability', label: 'Accountability', icon: TrendingUp, exact: true, adminOnly: true, group: 'Admin' },
   { href: '/admin/revenue-intelligence', label: 'Revenue', icon: BarChart3, exact: true, adminOnly: true, group: 'Admin' },
   { href: '/admin/scoring-qa', label: 'Scoring QA', icon: Shield, exact: true, adminOnly: true, group: 'Admin' },
+  { href: '/admin/qa', label: 'QA & Trust', icon: Shield, exact: true, adminOnly: true, group: 'Admin' },
   { href: '/admin/targets', label: 'Targets', icon: Target, exact: true, adminOnly: true, group: 'Admin' },
   { href: '/admin/people', label: 'People', icon: Users, exact: true, adminOnly: true, group: 'Admin' },
   { href: '/admin/ai-usage', label: 'AI Usage', icon: Activity, exact: true, adminOnly: true, group: 'Admin' },
@@ -193,6 +194,8 @@ export interface AppRailProps {
   repName: string
   organizationName: string
   role: RepRole
+  /** Canonical org role — never trust a stale reps.role for admin surfaces. */
+  isAdmin?: boolean
   calibrated: boolean
   demo: boolean
   todaySends: number
@@ -203,6 +206,7 @@ export function AppRail({
   repName,
   organizationName,
   role,
+  isAdmin: isAdminProp,
   demo,
   todaySends,
   dailyLimit,
@@ -242,7 +246,7 @@ export function AppRail({
   }, [])
 
   const atCeiling = sends >= dailyLimit
-  const isAdmin = role === 'admin'
+  const isAdmin = isAdminProp ?? role === 'admin'
 
   function isActive(href: string, exact: boolean) {
     return exact ? pathname === href : pathname.startsWith(href)

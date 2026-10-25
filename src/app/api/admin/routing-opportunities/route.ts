@@ -11,7 +11,7 @@
 
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
-import { getAuthContext } from '@/lib/auth/organization'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import { loadSenderProfiles, parsePacket, routeLead } from '@/lib/relay/routing-context'
 import { ROUTING_MISMATCH_DELTA } from '@/lib/intelligence-v3/action/recommended-action'
 import { QUALIFICATION_BANDS } from '@/lib/scoring/qualification'
@@ -21,6 +21,9 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!can(authCtx, 'VIEW_TEAM_ANALYTICS')) {
+    return NextResponse.json({ error: 'Admin access required.' }, { status: 403 })
+  }
 
   const store = await createScoutStore()
   const client = store.getSupabaseClient()

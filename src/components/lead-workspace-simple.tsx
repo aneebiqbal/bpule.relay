@@ -26,6 +26,7 @@ import { DecisionExplainability } from '@/components/leads/decision-explain'
 import { DecisionTraceView } from '@/components/leads/decision-trace-view'
 import { buildDecisionTrace } from '@/lib/relay/decision-trace'
 import { LeadDecisionContextCard, type DecisionContext } from '@/components/lead-decision-context-card'
+import { LeadTrustAndThesis } from '@/components/leads/lead-trust-and-thesis'
 
 type Mode = 'connection' | 'dm' | 'reply' | 'followup' | null
 
@@ -374,6 +375,9 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends }: Pro
       {!isTerminal && decisionCtx && (
         <LeadDecisionContextCard context={decisionCtx} />
       )}
+
+      {/* Thread trust, score staleness and the sales thesis */}
+      <LeadTrustAndThesis lead={lead} />
 
       {/* Lead Status Control */}
       {!isTerminal && (

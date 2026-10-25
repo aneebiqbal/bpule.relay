@@ -6,6 +6,7 @@
  */
 
 import type { AiTrace } from './types'
+import { estimateCostUsd, type CostTier } from '@/lib/ai/cost'
 
 
 async function getSupabase() {
@@ -118,6 +119,9 @@ export async function recordScopedTrace(input: {
   attempt?: number
   fallback?: boolean
   estimatedCostUsd?: number
+  inputTokens?: number
+  outputTokens?: number
+  costTier?: CostTier
   organizationId?: string | null
   repId?: string | null
   leadId?: string | null
@@ -138,6 +142,8 @@ export async function recordScopedTrace(input: {
     }
   }
   if (!organizationId) return
+  const inputTokens = input.inputTokens ?? 0
+  const outputTokens = input.outputTokens ?? 0
   const trace: AiTrace = {
     taskId: `direct-${Date.now()}`,
     taskClass: 'FAST_STRUCTURED',
@@ -145,12 +151,14 @@ export async function recordScopedTrace(input: {
     model: input.model,
     credentialId: 'direct',
     attempt: input.attempt ?? 1,
-    inputTokens: 0,
-    outputTokens: 0,
+    inputTokens,
+    outputTokens,
     inputChars: 0,
     ttfbMs: null,
     latencyMs: input.latencyMs,
-    estimatedCostUsd: input.estimatedCostUsd ?? 0,
+    // Never a universal $0: derive cost from tokens + pricing when the caller
+    // did not already compute it.
+    estimatedCostUsd: input.estimatedCostUsd ?? (inputTokens + outputTokens > 0 ? estimateCostUsd(input.costTier ?? 'tier4', inputTokens, outputTokens) : 0),
     schemaValid: input.success,
     quality: input.success ? 'GOOD' : 'BAD',
     fallback: input.fallback ?? false,
@@ -206,13 +214,24 @@ export async function getAiUsageStats(
   try {
     const supabase = await getSupabase()
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
-    const { data: qdata, error } = await supabase
-      .from('ai_traces')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .gte('created_at', since)
-    if (error) return ZEROS
-    data = qdata
+    // Paginate: a single PostgREST page is capped at 1000 rows, so a range with
+    // more calls would silently report a partial total.
+    const rows: any[] = []
+    let from = 0
+    for (;;) {
+      const { data: batch, error } = await supabase
+        .from('ai_traces')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .gte('created_at', since)
+        .range(from, from + 999)
+      if (error) return ZEROS
+      if (!batch || batch.length === 0) break
+      rows.push(...batch)
+      if (batch.length < 1000) break
+      from += 1000
+    }
+    data = rows
   } catch {
     return ZEROS
   }

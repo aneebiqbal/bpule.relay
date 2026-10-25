@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
+import { hasUnfilledValues, UNFILLED_VALUES_MESSAGE } from '@/lib/relay/unfilled-values'
 
 // A job scoring below this is not recommended for a Connect spend — see
 // src/lib/score/upwork-rubric.ts's verdictFor() (6-10 apply, 3-5
@@ -32,6 +33,10 @@ export async function POST(
       { error: 'jobId and sentText are required.' },
       { status: 400 },
     )
+  }
+  // A proposal with a stripped number or placeholder is never sendable.
+  if (hasUnfilledValues(sentText)) {
+    return NextResponse.json({ error: UNFILLED_VALUES_MESSAGE }, { status: 400 })
   }
 
   let store

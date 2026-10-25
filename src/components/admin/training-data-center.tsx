@@ -16,6 +16,7 @@ import { ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
 import { cn } from 'cn'
 import { DashHeader, EmptyNote, Panel, Pill, StatTile, type Tone } from '@/components/dashboard/kit'
 import { LABEL_QUICK_ENUMS, type TrainingRow, type TrainingQueueSummary } from '@/lib/admin/training-data'
+import { reasonLabel } from '@/lib/admin/learning-health'
 
 interface Response {
   since: string
@@ -147,7 +148,7 @@ function Row({ row: r, open, onToggle, ranges, enums, mode, onLabelled }: { row:
             <Pill tone={r.priority.score >= 40 ? 'orange' : 'neutral'}>priority {r.priority.score}</Pill>
           </div>
           <p className="mt-0.5 truncate text-[11px] text-graphite">
-            {p.action ?? '—'} · {r.priority.reasons.join(', ') || 'routine'} · {r.candidates.map((c) => `${c.engine} ${c.score}`).join(' · ')} · {new Date(r.createdAt).toLocaleDateString()}
+            {p.action ?? '—'} · {r.priority.reasons.map(reasonLabel).join(', ') || 'routine'} · {r.candidates.map((c) => `${c.engine} ${c.score}`).join(' · ')} · {new Date(r.createdAt).toLocaleDateString()}
           </p>
         </div>
         <span className="text-stone">{open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}</span>
@@ -293,6 +294,20 @@ function QuickLabelForm({ row, onSaved }: { row: TrainingRow; onSaved: () => voi
   const [msg, setMsg] = useState<string | null>(null)
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
 
+  // Keyboard: 1–5 select prospect quality, Enter saves. Shortcuts never fire
+  // while the reviewer is typing in an input/textarea.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return
+      const idx = ['1', '2', '3', '4', '5'].indexOf(e.key)
+      if (idx >= 0) { e.preventDefault(); set('prospectQuality', LABEL_QUICK_ENUMS.prospectQuality[idx]!); return }
+      if (e.key === 'Enter') { e.preventDefault(); void submit() }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  })
+
   const submit = async () => {
     setSaving(true); setMsg(null)
     try {
@@ -321,11 +336,27 @@ function QuickLabelForm({ row, onSaved }: { row: TrainingRow; onSaved: () => voi
   return (
     <Section title="Quick label (under 15 seconds)">
       <div className="grid grid-cols-2 gap-2 text-[11px]">
-        <label className="flex flex-col gap-0.5"><span className="text-stone">Prospect quality</span>
-          <select value={form.prospectQuality ?? ''} onChange={(e) => set('prospectQuality', e.target.value)} className={selectCls} data-testid="quick-quality">
-            <option value="">—</option>{opts(LABEL_QUICK_ENUMS.prospectQuality)}
-          </select>
-        </label>
+        <fieldset className="col-span-2">
+          <legend className="text-stone">Prospect quality <span className="text-graphite">(keys 1–5)</span></legend>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {LABEL_QUICK_ENUMS.prospectQuality.map((v, i) => (
+              <button
+                key={v}
+                type="button"
+                data-quick-label={v}
+                aria-pressed={form.prospectQuality === v}
+                onClick={() => set('prospectQuality', v)}
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors',
+                  form.prospectQuality === v ? 'bg-solid text-on-solid' : 'border border-line text-graphite hover:text-ink',
+                )}
+              >
+                <span className="mr-1 text-stone">{i + 1}</span>
+                {v.replaceAll('_', ' ').toLowerCase()}
+              </button>
+            ))}
+          </div>
+        </fieldset>
         <label className="flex flex-col gap-0.5"><span className="text-stone">Likely opportunity</span>
           <select value={form.likelyOpportunity ?? ''} onChange={(e) => set('likelyOpportunity', e.target.value)} className={selectCls} data-testid="quick-opportunity">
             <option value="">—</option>{opts(LABEL_QUICK_ENUMS.likelyOpportunity)}

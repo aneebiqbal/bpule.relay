@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceSupabase } from '@/lib/supabase/service'
-import { getAuthContext } from '@/lib/auth/organization'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import {
   computeRepPerformance,
   generateCoachingInsights,
@@ -21,6 +21,9 @@ export async function GET(req: NextRequest) {
   // a service-role client (QA RQA-016).
   const auth = await getAuthContext()
   if (!auth) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!can(auth, 'VIEW_TEAM_ANALYTICS')) {
+    return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
+  }
 
   const store = createServiceSupabase()
   const url = new URL(req.url)

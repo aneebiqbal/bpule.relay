@@ -35,6 +35,7 @@ export interface TeamRow {
   repliesReceived: number
   leadsExtracted: number
   opportunities: number
+  wins: number
   assignedLeads: number
   pendingReplies: number
 }
@@ -337,7 +338,8 @@ export async function loadCommandCenterData(
       case 'FOLLOWUP_SENT': r.followupsSent++; break
       case 'REPLY_RECEIVED': r.repliesReceived++; break
       case 'LEAD_EXTRACTED': case 'UPWORK_JOB_EXTRACTED': r.leadsExtracted++; break
-      case 'OPPORTUNITY_CREATED': case 'CLIENT_WON': r.opportunities++; break
+      case 'OPPORTUNITY_CREATED': r.opportunities++; break
+      case 'CLIENT_WON': r.wins++; break
     }
   }
 
@@ -408,6 +410,7 @@ export async function loadCommandCenterData(
       repliesReceived: ev?.repliesReceived ?? 0,
       leadsExtracted: ev?.leadsExtracted ?? 0,
       opportunities: ev?.opportunities ?? 0,
+      wins: ev?.wins ?? 0,
       assignedLeads,
       pendingReplies,
     }
@@ -558,7 +561,7 @@ export async function loadCommandCenterData(
     repliesReceived: team.reduce((s, t) => s + t.repliesReceived, 0),
     leadsExtracted: team.reduce((s, t) => s + t.leadsExtracted, 0),
     opportunities: team.reduce((s, t) => s + t.opportunities, 0),
-    wins: 0,
+    wins: team.reduce((s, t) => s + t.wins, 0),
     referrals: 0,
   }
 
@@ -578,7 +581,8 @@ export async function loadCommandCenterData(
     const prevEvents = (prevSummary.data || []) as Array<{ action_type: string; actor_id: string | null; occurred_at: string }>
     const prevLeadExtractions = prevEvents.filter((e) => e.action_type === 'LEAD_EXTRACTED').length
     const prevRepliesReceived = prevEvents.filter((e) => e.action_type === 'REPLY_RECEIVED').length
-    const prevOpportunities = prevEvents.filter((e) => e.action_type === 'OPPORTUNITY_CREATED' || e.action_type === 'CLIENT_WON').length
+    const prevOpportunities = prevEvents.filter((e) => e.action_type === 'OPPORTUNITY_CREATED').length
+    const prevWins = prevEvents.filter((e) => e.action_type === 'CLIENT_WON').length
 
     // Count referrals that happened yesterday but receiving rep hasn't acted today
     const prevReferrals = prevEvents.filter((e) => e.action_type === 'LEAD_REFERRED')
@@ -597,7 +601,7 @@ export async function loadCommandCenterData(
       leadsWentStale: exceptions.filter(e => e.type === 'stale_lead').length,
       referralsUntouched,
       repsWentInactive: team.filter(t => t.status === 'inactive').length,
-      wins: 0,
+      wins: Math.max(0, brief.wins - prevWins),
     }
   }
 
