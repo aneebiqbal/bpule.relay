@@ -127,8 +127,9 @@ export async function POST(request: Request) {
       tags: row.tags?.split(/[,;]/).map((t) => t.trim()).filter(Boolean) ?? [],
     }
 
-    const score = computeScore(extracted, rulebook!)
-
+    // ONE LIVE SCORE WRITER: a CSV import does not run the canonical pipeline,
+    // so the lead is created UNSCORED rather than given a legacy 0-12 score.
+    // Score it through Re-analyze on the lead page (canonical pipeline).
     const createResult = await store.createLead({
       company: extracted.company,
       contactName: extracted.name,
@@ -147,7 +148,6 @@ export async function POST(request: Request) {
     }
 
     if (createResult.lead) {
-      await store.updateLeadScore(createResult.lead.id, score)
       results.push({ row: i + 2, status: 'imported', leadId: createResult.lead.id })
       imported++
     }

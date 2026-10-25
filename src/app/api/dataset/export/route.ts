@@ -10,9 +10,10 @@ import { getAuthContext } from '@/lib/auth/organization'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { querySamples } from '@/lib/dataset/service'
 import { exportSamples } from '@/lib/dataset/export'
+import { buildEvalExport, EVAL_EXPORT_MODES, type EvalExportMode } from '@/lib/dataset/eval-export'
 import type { ExportFormat, ExportMode, PrivacyMode } from '@/lib/dataset/types'
 
-const VALID_MODES: ExportMode[] = ['FULL_AUDIT', 'TRAINING', 'MESSAGE_PREFERENCE', 'SCORING_EVAL', 'UPWORK_TRAINING']
+const VALID_MODES: ExportMode[] = ['FULL_AUDIT', 'TRAINING', 'MESSAGE_PREFERENCE', 'SCORING_EVAL', 'UPWORK_TRAINING', ...EVAL_EXPORT_MODES]
 const VALID_FORMATS: ExportFormat[] = ['jsonl', 'csv', 'json']
 const VALID_PRIVACY: PrivacyMode[] = ['REDACTED', 'ANONYMIZED']
 
@@ -47,6 +48,24 @@ export async function GET(request: Request) {
   // Service role bypasses RLS, so the organisation scope is applied here —
   // an export is always and only the caller's organisation.
   const client = createServiceSupabase()
+
+  // Evaluation modes join the canonical evaluation tables rather than samples.
+  if ((EVAL_EXPORT_MODES as readonly string[]).includes(mode)) {
+    const rows = await buildEvalExport(client, auth.orgId, mode as EvalExportMode)
+    const body = format === 'csv' ? toCsv(rows) : JSON.stringify(rows, null, format === 'jsonl' ? undefined : 2)
+    const content = format === 'jsonl' ? rows.map((r) => JSON.stringify(r)).join('\n') : body
+    return new Response(content, {
+      status: 200,
+      headers: {
+        'Content-Type': format === 'csv' ? 'text/csv' : 'application/json',
+        'Content-Disposition': `attachment; filename="relay-${mode.toLowerCase()}-${auth.orgId.slice(0, 8)}.${format === 'csv' ? 'csv' : format === 'jsonl' ? 'jsonl' : 'json'}"`,
+        'X-Export-Mode': mode,
+        'X-Privacy-Mode': privacy,
+        'X-Row-Count': String(rows.length),
+      },
+    })
+  }
+
   const samples = await querySamples(client, auth.orgId, {
     platform: (sp.get('platform') === 'linkedin' || sp.get('platform') === 'upwork') ? sp.get('platform') as 'linkedin' | 'upwork' : undefined,
     limit: 1000,
@@ -67,4 +86,15 @@ export async function GET(request: Request) {
       'X-Sample-Count': String(samples.length),
     },
   })
+}
+
+/** Minimal CSV encoder for the evaluation exports (no external dependency). */
+function toCsv(rows: Array<Record<string, unknown>>): string {
+  if (rows.length === 0) return ''
+  const headers = Object.keys(rows[0]!)
+  const esc = (v: unknown) => {
+    const s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v)
+    return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s
+  }
+  return [headers.join(','), ...rows.map((r) => headers.map((h) => esc(r[h])).join(','))].join('\n')
 }

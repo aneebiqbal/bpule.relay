@@ -10,10 +10,15 @@ export function hasUnfilledValues(text: string): boolean {
   if (/\{\{[^}]*\}\}|\{[a-z_]+\}|\[(?:name|company|first ?name|title|role|product|x|placeholder|insert[^\]]*)\]/i.test(text)) return true
   // A unit with no number in front: " -month", " -day", " -week", " -year".
   if (/(?:^|[\s(])-\s?(?:month|day|week|year|hour|minute|person|user|seat)s?\b/i.test(text)) return true
+  // The same artifact with an en-dash/hyphen-minus that survived substitution
+  // ("your ‑month free trial").
+  if (/[\u2010-\u2015]\s?(?:month|day|week|year|hour|minute|person|user|seat)s?\b/i.test(text)) return true
   // A separator with nothing on at least one side: "with / support", "24/ support", " / ".
   if (/(?:^|\s)\/\s|\s\/(?:\s|$)/.test(text)) return true
   // A currency sign with no amount: "for $." or "$ per month".
   if (/[$€£]\s*(?:[.,;!?]|$|\s(?:per|a|an|each)\b)/m.test(text)) return true
+  // A stripped percentage: "by %.", "%", "up %".
+  if (/(?:^|\s)%\s*[.)]|\bby\s+%\b|\bup\s+%\b/.test(text)) return true
   // A connective immediately followed by punctuation or end: "offering a.", "with,".
   if (/\b(?:with|for|of|a|an|the)\s*[.,;!?](?:\s|$)/i.test(text)) return true
   return false

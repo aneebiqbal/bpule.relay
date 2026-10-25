@@ -112,7 +112,9 @@ describe('recordProspectReply', () => {
     expect(lead?.status).toBe('replied')
 
     const outcome = fake.tables.outcomes.find((o) => o.lead_id === LEAD_ID)
-    expect(outcome?.stage).toBe('replied')
+    // A reply is never automatically success: a commercial reply records the
+    // commercial outcome, not a generic "replied".
+    expect(outcome?.stage).toBe('positive_commercial_reply')
 
     const cs = fake.tables.conversation_states.find((c) => c.lead_id === LEAD_ID)
     expect(cs?.stage).toBe('replied')

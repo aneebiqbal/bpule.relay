@@ -89,18 +89,39 @@ export async function checkIntegrity(orgId: string): Promise<IntegrityReport> {
     p_window_minutes: 5,
   }).catch(() => ({ data: null }))
 
-  // Orphaned messages (no matching lead)
-  const { count: orphanedMessages } = await client
-    .from('messages')
-    .select('id', { count: 'exact', head: true })
+  // Orphans are rows whose lead_id has no matching lead. Counted by paginating
+  // the candidate rows against the org's lead ids, not by counting every row.
+  const { data: leadRows } = await client
+    .from('leads')
+    .select('id')
     .eq('organization_id', orgId)
-    .not('lead_id', 'is', null)
+    .limit(20000)
+  const leadIds = new Set((leadRows ?? []).map((r: { id: string }) => r.id))
 
-  // Orphaned conversation states (no matching lead)
-  const { count: orphanedConvStates } = await client
-    .from('conversation_states')
-    .select('id', { count: 'exact', head: true })
-    .eq('organization_id', orgId)
+  const countOrphans = async (table: 'messages' | 'conversation_states'): Promise<number> => {
+    let orphan = 0
+    let from = 0
+    for (;;) {
+      const { data: batch } = await client
+        .from(table)
+        .select('lead_id')
+        .eq('organization_id', orgId)
+        .not('lead_id', 'is', null)
+        .range(from, from + 999)
+      if (!batch || batch.length === 0) break
+      for (const row of batch) {
+        if (row.lead_id && !leadIds.has(row.lead_id)) orphan++
+      }
+      if (batch.length < 1000) break
+      from += 1000
+    }
+    return orphan
+  }
+
+  const [orphanedMessages, orphanedConvStates] = await Promise.all([
+    countOrphans('messages'),
+    countOrphans('conversation_states'),
+  ])
 
   // Leads that should have ledger events but don't
   const { data: contactedLeads } = await client
@@ -133,8 +154,8 @@ export async function checkIntegrity(orgId: string): Promise<IntegrityReport> {
   return {
     duplicateLedgerEvents: (dupes as DuplicateLedgerEvent[]) || [],
     missingLedgerEvents: missingEvents,
-    orphanedMessages: orphanedMessages || 0,
-    orphanedConversationStates: orphanedConvStates || 0,
+    orphanedMessages,
+    orphanedConversationStates: orphanedConvStates,
   }
 }
 

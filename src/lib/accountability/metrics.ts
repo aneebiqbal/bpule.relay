@@ -93,13 +93,21 @@ async function fetchMetricsForPeriod(
     .gte('sent_at', startDate)
     .lte('sent_at', endDate)
 
-  const { data: wonLeads } = await client
-    .from('leads')
-    .select('id')
-    .eq('owner_rep_id', repId)
-    .eq('status', 'won')
-    .gte('updated_at', startDate)
-    .lte('updated_at', endDate)
+  // leads has no updated_at; the win date is the outcome event, and the owner
+  // is read from the lead row at query time.
+  const { data: wonOutcomes } = await client
+    .from('outcomes')
+    .select('lead_id')
+    .eq('stage', 'won')
+    .gte('occurred_at', startDate)
+    .lte('occurred_at', endDate)
+
+  const wonLeadIds = Array.from(
+    new Set((wonOutcomes ?? []).map((o) => o.lead_id).filter((id): id is string => Boolean(id))),
+  )
+  const { data: wonLeads } = wonLeadIds.length
+    ? await client.from('leads').select('id').eq('owner_rep_id', repId).in('id', wonLeadIds)
+    : { data: [] as Array<{ id: string }> }
 
   let connectionsSent = 0
   let dmsSent = 0
@@ -166,13 +174,13 @@ export async function getRepLeadJourney(
 ): Promise<LeadJourney[]> {
   const { data: leads } = await client
     .from('leads')
-    .select('id, company, contact_name, status, score, updated_at, created_at')
+    .select('id, company, contact_name, status, score, created_at')
     .eq('owner_rep_id', repId)
     .neq('status', 'won')
     .neq('status', 'lost')
     .neq('status', 'dead')
     .neq('status', 'no')
-    .order('updated_at', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(50)
 
   if (!leads || leads.length === 0) return []
@@ -204,7 +212,7 @@ export async function getRepLeadJourney(
       dmSent: msgs.dm,
       hasReply: msgs.inbound,
       isWon: l.status === 'won',
-      lastActivityAt: l.updated_at as string,
+      lastActivityAt: l.created_at as string,
       score: (l.score as number) ?? 0,
     }
   })
@@ -251,8 +259,75 @@ export async function getTeamCalendar(
     days.push(d.toISOString().slice(0, 10))
   }
 
-  const promises = days.map((day) => getTeamDayView(client, repIds, repNames, day))
-  return Promise.all(promises)
+  const emptyTotal = () => ({ connectionsSent: 0, dmsSent: 0, followupsSent: 0, repliesReceived: 0, leadsWon: 0, totalActions: 0 })
+  const repFilter = repIds.length ? repIds : []
+  if (repFilter.length === 0) {
+    return days.map((date) => ({ date, reps: [], teamTotal: emptyTotal() }))
+  }
+
+  // One batched read for the whole range (was 252 queries for 18 reps x 7 days).
+  const startIso = `${startDate}T00:00:00.000Z`
+  const endIso = `${endDate}T23:59:59.999Z`
+  const [{ data: messages }, { data: wonOutcomes }, { data: leads }] = await Promise.all([
+    client.from('messages')
+      .select('rep_id, type, direction, sent_at')
+      .in('rep_id', repFilter)
+      .gte('sent_at', startIso)
+      .lte('sent_at', endIso),
+    client.from('outcomes')
+      .select('lead_id, occurred_at')
+      .eq('stage', 'won')
+      .gte('occurred_at', startIso)
+      .lte('occurred_at', endIso),
+    client.from('leads')
+      .select('id, owner_rep_id')
+      .in('owner_rep_id', repFilter),
+  ])
+
+  const ownerByLead = new Map<string, string>()
+  for (const l of (leads ?? []) as Array<{ id: string; owner_rep_id: string | null }>) {
+    if (l.owner_rep_id) ownerByLead.set(l.id, l.owner_rep_id)
+  }
+  const wonByOwnerDay = new Map<string, number>()
+  for (const o of (wonOutcomes ?? []) as Array<{ lead_id: string; occurred_at: string }>) {
+    const owner = ownerByLead.get(o.lead_id)
+    if (!owner) continue
+    const day = String(o.occurred_at).slice(0, 10)
+    const k = `${owner}|${day}`
+    wonByOwnerDay.set(k, (wonByOwnerDay.get(k) ?? 0) + 1)
+  }
+
+  const acc = new Map<string, Omit<DailyMetrics, 'date' | 'repId' | 'repName'>>()
+  for (const m of (messages ?? []) as Array<{ rep_id: string; type: string; direction: string; sent_at: string }>) {
+    const rep = m.rep_id
+    if (!repFilter.includes(rep)) continue
+    const k = `${rep}|${String(m.sent_at).slice(0, 10)}`
+    const cur = acc.get(k) ?? { ...EMPTY_METRICS }
+    if (m.direction === 'inbound') cur.repliesReceived++
+    else if (m.type === 'connection') cur.connectionsSent++
+    else if (m.type === 'dm') cur.dmsSent++
+    else if (m.type === 'followup') cur.followupsSent++
+    else if (m.type === 'reply') cur.repliesSent++
+    acc.set(k, cur)
+  }
+
+  return days.map((date) => {
+    const reps: DailyMetrics[] = repFilter.map((repId) => {
+      const cur = acc.get(`${repId}|${date}`) ?? { ...EMPTY_METRICS }
+      const won = wonByOwnerDay.get(`${repId}|${date}`) ?? 0
+      return { date, repId, repName: repNames.get(repId) ?? repId, ...withComputed({ ...cur, leadsWon: won }) }
+    })
+    const teamTotal = emptyTotal()
+    for (const r of reps) {
+      teamTotal.connectionsSent += r.connectionsSent
+      teamTotal.dmsSent += r.dmsSent
+      teamTotal.followupsSent += r.followupsSent
+      teamTotal.repliesReceived += r.repliesReceived
+      teamTotal.leadsWon += r.leadsWon
+      teamTotal.totalActions += r.totalActions
+    }
+    return { date, reps, teamTotal }
+  })
 }
 
 export async function getRepAccountability(

@@ -15,7 +15,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { getAuthContext } from '@/lib/auth/organization'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import {
   captureClientReply,
@@ -28,7 +28,6 @@ import {
   captureSent,
   createSample,
   flagForReview,
-  approveForTraining,
 } from '@/lib/dataset/service'
 import type { FunnelStage } from '@/lib/dataset/types'
 
@@ -82,6 +81,18 @@ export async function POST(request: Request) {
       organizationId: auth.orgId,
     })
     if (!sid) return NextResponse.json({ error: 'Failed to create sample.' }, { status: 500 })
+  }
+
+  // Human feedback feeds training truth: a rep may only leave it on a sample
+  // linked to a lead they own. Managers/admins may review any sample.
+  if (stage === 'HUMAN_FEEDBACK' && !can(auth, 'VIEW_TEAM_ANALYTICS')) {
+    const { data: sample } = await client.from('intelligence_samples').select('lead_id').eq('id', sid).maybeSingle()
+    if (sample?.lead_id) {
+      const { data: lead } = await client.from('leads').select('owner_rep_id').eq('id', sample.lead_id).maybeSingle()
+      if (lead?.owner_rep_id && lead.owner_rep_id !== auth.repId) {
+        return NextResponse.json({ error: 'You can only leave feedback on your own leads.' }, { status: 403 })
+      }
+    }
   }
 
   try {

@@ -14,7 +14,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createServiceSupabase } from '@/lib/supabase/service'
-import { LABEL_VERSION, validateLabel, validateQuickLabel } from '@/lib/admin/training-data'
+import { LABEL_VERSION, validateLabel, validateQuickLabel, validatePairwiseLabel } from '@/lib/admin/training-data'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +26,29 @@ export async function POST(request: Request) {
   let body: Record<string, unknown>
   try { body = await request.json() } catch { return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 }) }
 
-  const mode = body.mode === 'quick' ? 'quick' : 'detailed'
+  const mode = body.mode === 'quick' ? 'quick' : body.mode === 'pairwise' ? 'pairwise' : 'detailed'
+  if (mode === 'pairwise') {
+    const v = validatePairwiseLabel(body)
+    if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
+    const l = v.label
+    const client = createServiceSupabase()
+    const { data, error } = await client
+      .from('scoring_pairwise_labels')
+      .insert({
+        organization_id: auth.orgId,
+        opportunity_key_a: l.opportunityKeyA,
+        opportunity_key_b: l.opportunityKeyB,
+        winner: l.winner,
+        labeler_rep_id: auth.repId,
+        label_version: LABEL_VERSION,
+        reason: l.reason ?? null,
+      })
+      .select('id, created_at')
+      .single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, id: data.id, createdAt: data.created_at, labelVersion: LABEL_VERSION, mode: 'pairwise' }, { status: 201 })
+  }
+
   if (mode === 'quick') {
     const v = validateQuickLabel(body)
     if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })

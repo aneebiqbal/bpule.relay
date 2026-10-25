@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceSupabase } from '@/lib/supabase/service'
-import { getAuthContext } from '@/lib/auth/organization'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import {
   computeExecutionResult,
   mapActionEventToCanonical,
@@ -56,6 +56,12 @@ export async function GET(req: NextRequest) {
   const store = createServiceSupabase()
   const url = new URL(req.url)
   const repId = url.searchParams.get('repId') ?? auth.repId
+
+  // A rep may read their own execution health; reading another rep's needs the
+  // team-analytics capability (the same gate /api/admin/activity uses).
+  if (repId !== auth.repId && !can(auth, 'VIEW_TEAM_ANALYTICS')) {
+    return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
+  }
   const date = url.searchParams.get('date') ?? new Date().toISOString().slice(0, 10)
 
   // 1. Get org timezone and performance config

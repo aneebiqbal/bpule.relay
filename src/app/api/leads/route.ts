@@ -229,7 +229,9 @@ export async function POST(request: Request) {
     signalEvidence,
     verbatimQuote: extracted.verbatimQuote,
     tags: extracted.tags,
-    score: legacyScore?.total ?? null,
+    // ONE LIVE SCORE WRITER: canonical score only; the legacy 0-12 rubric is
+    // a fallback for the response and is never persisted for a new lead.
+    score: null,
     verdict: finalVerdict,
     titleRaw: extracted.titleRaw ?? extracted.title,
     locationRaw: extracted.locationRaw ?? null,
@@ -299,13 +301,13 @@ export async function POST(request: Request) {
     {
       lead: {
         ...lead,
-        score: lead.score ?? legacyScore?.total ?? null,
+        score: canonicalScoreValue,
         verdict: lead.verdict ?? finalVerdict,
         canonicalScore: lead.canonicalScore ?? canonical?.canonicalScore ?? null,
         scoreVersion: lead.scoreVersion ?? canonical?.scoreVersion ?? null,
       },
       score: {
-        total: canonical?.canonicalScore ?? legacyScore?.total ?? null,
+        total: canonical?.canonicalScore ?? null,
         verdict: finalVerdict,
         breakdown: canonical?.scoreBreakdown?.dimensions ?? legacyScore?.breakdown ?? [],
         label: canonical?.scoreBreakdown.label ?? null,

@@ -35,7 +35,7 @@ export async function POST(
 
   const { data: lead } = await store.getSupabaseClient()
     .from('leads')
-    .select('id, org_id, company, contact_name, contact_title, raw_input, canonical_score, canonical_intelligence, created_at, updated_at, verdict')
+    .select('id, org_id, company, contact_name, contact_title, raw_input, canonical_score, canonical_intelligence, created_at, scored_at, verdict')
     .eq('id', leadId)
     .eq('organization_id', store.organizationId)
     .single()
@@ -43,8 +43,9 @@ export async function POST(
   if (!lead) return NextResponse.json({ error: 'Lead not found.' }, { status: 404 })
 
   const now = Date.now()
-  const lastUpdated = lead.updated_at
-    ? new Date(lead.updated_at).getTime()
+  // leads carries no last-modified column; staleness is measured from scored_at.
+  const lastUpdated = lead.scored_at
+    ? new Date(lead.scored_at).getTime()
     : new Date(lead.created_at).getTime()
   const daysSinceUpdate = (now - lastUpdated) / (1000 * 60 * 60 * 24)
 

@@ -1,4 +1,5 @@
 import { resolveConversationIntent } from '@/lib/conversation/intent'
+import { evaluateFollowUpPolicy } from '@/lib/conversation/follow-up-policy'
 import type { Lead, Message, OutreachStrategy } from '@/lib/domain/types'
 import { calendarDaysBetween, followupDueInDays } from '@/lib/leads/followup'
 
@@ -102,13 +103,22 @@ export function determineFollowup(context: FollowupContext): FollowupStrategy {
     }
   }
 
-  // Only an UNANSWERED client message blocks a follow-up. Once the rep has
-  // answered, a quiet client can be followed up like any other thread.
+  // The canonical policy decides eligibility and the next due date; the
+  // engine only decides HOW to phrase the follow-up.
   const lastInboundAt = [
     context.lastReplyAt ?? '',
     ...priorMessages.filter((m) => m.direction === 'inbound' && m.sentAt).map((m) => m.sentAt ?? ''),
   ].sort().at(-1) || null
-  if (lastInboundAt && lastInboundAt >= lastSentAt) {
+  const policy = evaluateFollowUpPolicy({
+    leadStatus: lead.status as string | null,
+    lastOutboundAt: lastSentAt,
+    lastInboundAt,
+    followupCount,
+    channel: 'dm',
+    deferralDate: null,
+    now,
+  })
+  if (policy.cancelledByReply) {
     return {
       shouldFollowUp: false,
       reason: 'They already replied.',
@@ -123,7 +133,7 @@ export function determineFollowup(context: FollowupContext): FollowupStrategy {
   // A normal follow-up waits for the 3/6/6 calendar-day gap.
   const dueIn = followupDueInDays(followupCount)
   const daysSince = calendarDaysBetween(new Date(lastSentAt), now)
-  const isEarly = daysSince < dueIn
+  const isEarly = !policy.eligible
 
   const lastSent = priorMessages
     .filter((m) => m.sentText && m.sentAt)

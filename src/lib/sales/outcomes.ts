@@ -115,7 +115,7 @@ export function outcomeFromStoredStage(stage: string | null | undefined): SalesO
   }
 }
 
-const DO_NOT_CONTACT = /\b(?:stop\s+messaging|unsubscribe|remove\s+me|don'?t\s+(?:contact|message|email)|no\s+more\s+(?:messages|emails)|not\s+interested\s+in\s+being\s+contacted)\b/i
+const DO_NOT_CONTACT = /\b(?:stop\s+messaging|stop\s+contacting|unsubscribe|remove\s+me|don'?t\s+(?:contact|message|email)|do\s+not\s+(?:contact|message|email)|no\s+(?:more|further|additional)\s+(?:messages?|emails?|dms?|follow[- ]?ups?)|do\s+not\s+(?:send|message|contact|email|dm)\b[^.!?]{0,40}(?:messages?|emails?|dms?|follow[- ]?ups?)|not\s+interested\s+in\s+(?:being\s+)?contacted)\b/i
 const NEGATIVE = /\b(?:not\s+interested|no\s+thanks|thanks\s+but\s+no|not\s+a\s+fit|wrong\s+person|not\s+looking|we'?re\s+not\s+hiring|please\s+remove)\b/i
 const COMMERCIAL = /\b(?:budget|pricing|price|cost|rate|proposal|scope|timeline|start\s+date|meeting|call|demo|contract|team|developers?|engineers?|engagement)\b/i
 
@@ -151,3 +151,22 @@ export function currentOutcome(input: {
 export const COMMERCIAL_OUTCOMES: ReadonlySet<SalesOutcome> = new Set<SalesOutcome>([
   'WON', 'QUALIFIED_OPPORTUNITY', 'MEETING', 'PROPOSAL', 'POSITIVE_COMMERCIAL_REPLY',
 ])
+
+/** The canonical outcome → the `outcomes.stage` value stored in the DB. */
+export function storedStageForOutcome(outcome: SalesOutcome): string {
+  switch (outcome) {
+    case 'WON': return 'won'
+    case 'QUALIFIED_OPPORTUNITY': return 'qualified_opportunity'
+    case 'MEETING': return 'meeting'
+    case 'PROPOSAL': return 'proposal'
+    case 'POSITIVE_COMMERCIAL_REPLY': return 'positive_commercial_reply'
+    case 'CONNECTION_ACCEPTED': return 'connection_accepted'
+    case 'NO_RESPONSE': return 'no_response'
+    case 'NEGATIVE': return 'negative'
+    case 'LOST': return 'lost'
+    case 'DEFERRED': return 'deferred'
+    case 'DO_NOT_CONTACT': return 'do_not_contact'
+    case 'POSITIVE_REPLY':
+    default: return 'replied'
+  }
+}

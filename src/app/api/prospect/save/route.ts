@@ -213,7 +213,10 @@ export async function POST(request: Request) {
       signalEvidence,
       verbatimQuote: extracted.verbatimQuote,
       tags: extracted.tags,
-      score: score.total,
+      // ONE LIVE SCORE WRITER: the canonical 0-100 score below is the only
+      // score written for new rows. The legacy 0-12 rubric is computed for
+      // the response/preview only and is never persisted.
+      score: null,
       verdict,
       canonicalScore,
       canonicalIntelligence: canonical,
@@ -313,7 +316,7 @@ export async function POST(request: Request) {
       {
         lead: {
           ...lead,
-          score: lead.score ?? score.total,
+          score: canonicalScore,
           verdict: lead.verdict ?? verdict,
         },
         score,

@@ -53,12 +53,13 @@ export function useCommandPalette() {
   return { open, setOpen }
 }
 
-export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: boolean; onOpenChange: (open: boolean) => void; isAdmin?: boolean }) {
   const router = useRouter()
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
 
-  const commands: CommandItem[] = useMemo(() => [
+  const commands: CommandItem[] = useMemo(() => {
+    const all: CommandItem[] = [
     {
       id: 'check-prospect',
       label: 'Check a prospect',
@@ -268,18 +269,25 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       group: 'Admin',
       action: () => { router.push('/admin/targets'); onOpenChange(false) },
     },
-  ], [router, onOpenChange])
+    ]
+    return all
+  }, [router, onOpenChange])
+
+  const visibleCommands = useMemo(
+    () => (isAdmin ? commands : commands.filter((c) => c.group !== 'Admin')),
+    [commands, isAdmin],
+  )
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return commands
+    if (!query.trim()) return visibleCommands
     const q = query.toLowerCase()
-    return commands.filter(
+    return visibleCommands.filter(
       (c) =>
         c.label.toLowerCase().includes(q) ||
         c.description?.toLowerCase().includes(q) ||
         c.group.toLowerCase().includes(q),
     )
-  }, [commands, query])
+  }, [visibleCommands, query])
 
   const grouped = useMemo(() => {
     const groups: Record<string, CommandItem[]> = {}

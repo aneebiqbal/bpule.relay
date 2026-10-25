@@ -52,6 +52,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({
       draft: composed.draft,
       issues: composed.result.issues,
+      classification: composed.result.classification,
+      blocked: composed.result.blocked,
+      blockedReasons: composed.result.blockedReasons,
       repaired: composed.result.repaired,
       fallback: composed.result.fallback,
       model: composed.result.model,
