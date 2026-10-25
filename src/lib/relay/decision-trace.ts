@@ -4,6 +4,8 @@ export interface DecisionTraceNode {
   input: string
   decision: string
   evidence: string[]
+  /** Which scoring dimension each evidence snippet supports, if known. */
+  dimension?: string
   confidence: number | null
   version: string | null
   provider: string | null
@@ -67,6 +69,7 @@ export function buildDecisionTrace(
       input: `${evidenceLedger.length} evidence entries`,
       decision: `${verifiedQuotes.length} verbatim quotes confirmed`,
       evidence: verifiedQuotes.slice(0, 3).map(e => e.text.slice(0, 80)),
+      dimension: 'evidenceQuality',
       confidence: verifiedQuotes.length > 0 ? 80 : 40,
       version: null,
       provider: null,
@@ -88,6 +91,7 @@ export function buildDecisionTrace(
       input: `${(v3Packet.episodes as unknown[] ?? []).length} episodes found`,
       decision: `Selected episode with score ${score}`,
       evidence: reasons.slice(0, 2),
+      dimension: 'buyerIntent',
       confidence: v3Packet.confidence as number ?? null,
       version: v3Packet.version as string ?? null,
       provider: v3Packet.provider as string ?? null,
@@ -99,6 +103,7 @@ export function buildDecisionTrace(
       input: dimensions.map(d => `${d.label}: ${d.contribution}`).join(', '),
       decision: `Final score: ${score}/100`,
       evidence: dimensions.filter(d => d.contribution > 0).slice(0, 3).map(d => `${d.label} (${d.contribution})`),
+      dimension: 'composite',
       confidence: v3Packet.confidence as number ?? null,
       version: v3Packet.scoreVersion as string ?? null,
       provider: null,

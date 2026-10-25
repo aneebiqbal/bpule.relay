@@ -15,6 +15,21 @@ export type LeadAction =
   | 'CLOSED'
   | 'REVIEW'
 
+/**
+ * The canonical label/reason for every lead action. Every surface must derive
+ * its strings from here — no ad-hoc "Reach out to connect." phrasing.
+ */
+export const LEAD_ACTION_META: Record<LeadAction, { primaryLabel: string; reason: string }> = {
+  SEND_CONNECTION: { primaryLabel: 'Send connection request', reason: 'No connection has been sent yet.' },
+  WAIT_CONNECTION: { primaryLabel: 'Waiting for connection', reason: 'The connection request is pending acceptance.' },
+  SEND_DM: { primaryLabel: 'Send first message', reason: 'Connection accepted. Start the conversation.' },
+  WAIT_REPLY: { primaryLabel: 'Waiting for reply', reason: 'Waiting on the client.' },
+  SEND_REPLY: { primaryLabel: 'Reply to the client', reason: 'The client is waiting on your reply.' },
+  SEND_FOLLOWUP: { primaryLabel: 'Send follow-up', reason: 'A follow-up is due.' },
+  CLOSED: { primaryLabel: 'Closed', reason: 'This opportunity is closed.' },
+  REVIEW: { primaryLabel: 'Review lead', reason: 'This lead needs review.' },
+}
+
 export interface LeadActionResult {
   action: LeadAction
   /** Human-readable label for the primary CTA */
@@ -63,7 +78,7 @@ export function deriveNextLeadAction(lead: LeadDetail, now: number = Date.now())
   if (lead.status === 'won') {
     return {
       action: 'CLOSED',
-      primaryLabel: 'Opportunity won',
+      primaryLabel: LEAD_ACTION_META.CLOSED.primaryLabel,
       reason: 'This lead converted successfully.',
       requiresAction: false,
       followupDue: false,
@@ -74,8 +89,32 @@ export function deriveNextLeadAction(lead: LeadDetail, now: number = Date.now())
   if (lead.status === 'lost' || lead.status === 'dead' || lead.status === 'no') {
     return {
       action: 'CLOSED',
-      primaryLabel: lead.status === 'no' ? 'Closed' : 'Opportunity lost',
+      primaryLabel: LEAD_ACTION_META.CLOSED.primaryLabel,
       reason: 'This lead is no longer active.',
+      requiresAction: false,
+      followupDue: false,
+      followupsRemaining: 0,
+    }
+  }
+
+  // OBSERVE / SKIP must never offer outreach. A skipped lead is not a fit; a
+  // research_more lead is watched, not contacted, until it shows a need.
+  const verdict = (lead as { verdict?: string | null }).verdict ?? null
+  if (verdict === 'skip') {
+    return {
+      action: 'REVIEW',
+      primaryLabel: 'Not a fit — do not contact',
+      reason: 'Relay recommends skipping this opportunity. No outreach.',
+      requiresAction: false,
+      followupDue: false,
+      followupsRemaining: 0,
+    }
+  }
+  if (verdict === 'research_more' && !messages.some((m) => m.direction === 'inbound')) {
+    return {
+      action: 'REVIEW',
+      primaryLabel: 'Watch — not yet a fit',
+      reason: 'No buyer need yet. Observe until the opportunity matures; do not pitch.',
       requiresAction: false,
       followupDue: false,
       followupsRemaining: 0,
@@ -142,7 +181,7 @@ export function deriveNextLeadAction(lead: LeadDetail, now: number = Date.now())
     return {
       action: 'SEND_REPLY',
       primaryLabel: `Reply to ${lead.contactName ?? 'them'}`,
-      reason: at ? `Client replied ${timeAgo(at, now)}.` : 'Client wrote first and is waiting for an answer.',
+      reason: at ? `Client replied ${timeAgo(at, now)}.` : LEAD_ACTION_META.SEND_REPLY.reason,
       requiresAction: true,
       followupDue: false,
       followupsRemaining,
@@ -157,8 +196,8 @@ export function deriveNextLeadAction(lead: LeadDetail, now: number = Date.now())
     if (!connectionSent) {
       return {
         action: 'SEND_CONNECTION',
-        primaryLabel: 'Send connection request',
-        reason: 'Reach out to connect.',
+        primaryLabel: LEAD_ACTION_META.SEND_CONNECTION.primaryLabel,
+        reason: LEAD_ACTION_META.SEND_CONNECTION.reason,
         requiresAction: true,
         followupDue: false,
         followupsRemaining,
@@ -182,7 +221,7 @@ export function deriveNextLeadAction(lead: LeadDetail, now: number = Date.now())
       }
       return {
         action: 'WAIT_CONNECTION',
-        primaryLabel: 'Waiting for connection',
+        primaryLabel: LEAD_ACTION_META.WAIT_CONNECTION.primaryLabel,
         reason: `Connection sent ${connectionMsg?.sentAt ? timeAgo(connectionMsg.sentAt, now) : ''}. Waiting for acceptance.`,
         requiresAction: false,
         followupDue: false,
@@ -193,8 +232,8 @@ export function deriveNextLeadAction(lead: LeadDetail, now: number = Date.now())
     // 4. Connection accepted, DM not sent
     return {
       action: 'SEND_DM',
-      primaryLabel: 'Send first message',
-      reason: 'Connection accepted. Start the conversation.',
+      primaryLabel: LEAD_ACTION_META.SEND_DM.primaryLabel,
+      reason: LEAD_ACTION_META.SEND_DM.reason,
       requiresAction: true,
       followupDue: false,
       followupsRemaining,
@@ -218,7 +257,7 @@ export function deriveNextLeadAction(lead: LeadDetail, now: number = Date.now())
     if (policy.eligible && !conversationIntent.deferred) {
       return {
         action: 'SEND_FOLLOWUP',
-        primaryLabel: 'Send follow-up',
+        primaryLabel: LEAD_ACTION_META.SEND_FOLLOWUP.primaryLabel,
         reason: `${policy.reason} ${followupsRemaining} follow-ups remaining.`,
         requiresAction: true,
         followupDue: true,
@@ -228,7 +267,7 @@ export function deriveNextLeadAction(lead: LeadDetail, now: number = Date.now())
     }
     return {
       action: 'WAIT_REPLY',
-      primaryLabel: clientWrote ? 'Waiting for client' : 'Waiting for reply',
+      primaryLabel: clientWrote ? 'Waiting for client' : LEAD_ACTION_META.WAIT_REPLY.primaryLabel,
       reason: conversationIntent.deferred
         ? `They asked to talk later ("${(conversationIntent.decidingText ?? '').slice(0, 60)}"). No follow-up until then.`
         : clientWrote
@@ -244,8 +283,8 @@ export function deriveNextLeadAction(lead: LeadDetail, now: number = Date.now())
   // 6. Fallback
   return {
     action: 'REVIEW',
-    primaryLabel: 'Review lead',
-    reason: 'Lead state needs review.',
+    primaryLabel: LEAD_ACTION_META.REVIEW.primaryLabel,
+    reason: LEAD_ACTION_META.REVIEW.reason,
     requiresAction: true,
     followupDue: false,
     followupsRemaining,

@@ -24,6 +24,7 @@ export type PipelineStage =
   | 'waiting'
   | 'follow_up_due'
   | 'needs_reply'
+  | 'observe'
   | 'done'
   | 'cold'
 
@@ -38,7 +39,8 @@ export interface PipelineColumnDef {
 }
 
 export const PIPELINE_COLUMNS: PipelineColumnDef[] = [
-  { id: 'to_contact', label: 'To Contact', description: 'Not yet reached out', dotColor: 'bg-stone', iconColor: 'text-stone', borderColor: 'border-t-stone', headerBg: 'bg-bone-raised' },
+  { id: 'to_contact', label: 'To Contact', description: 'Contact now — a fit worth pursuing', dotColor: 'bg-stone', iconColor: 'text-stone', borderColor: 'border-t-stone', headerBg: 'bg-bone-raised' },
+  { id: 'observe', label: 'Observe', description: 'Not a fit yet — watch, do not contact', dotColor: 'bg-status-warning', iconColor: 'text-status-warning', borderColor: 'border-t-status-warning', headerBg: 'bg-status-warning/[0.03]' },
   { id: 'waiting', label: 'Waiting', description: 'Sent, awaiting reply', dotColor: 'bg-cobalt', iconColor: 'text-cobalt', borderColor: 'border-t-cobalt', headerBg: 'bg-cobalt/[0.03]' },
   { id: 'follow_up_due', label: 'Follow-Up Due', description: 'Time to follow up', dotColor: 'bg-orange', iconColor: 'text-orange', borderColor: 'border-t-orange', headerBg: 'bg-orange/[0.03]' },
   { id: 'needs_reply', label: 'Needs Reply', description: 'They wrote back', dotColor: 'bg-orange', iconColor: 'text-orange', borderColor: 'border-t-orange', headerBg: 'bg-orange/[0.03]' },
@@ -52,6 +54,11 @@ export const TERMINAL_COLUMNS: PipelineColumnDef[] = [
 export function derivePipelineStage(lead: LeadRow): PipelineStage {
   if (lead.status === 'won' || lead.status === 'lost' || lead.status === 'dead' || lead.status === 'no') return 'done'
   if (lead.status === 'replied') return 'needs_reply'
+
+  // OBSERVE / SKIP: not a fit yet. They never belong in "To Contact".
+  const verdict = lead.verdict ?? null
+  if (verdict === 'skip') return 'observe'
+  if (verdict === 'research_more' && !lead.lastOutboundAt) return 'observe'
 
   // Cold/frozen leads go to the cold section regardless of their status
   if (lead.lifecycle && (lead.lifecycle.state === 'cold' || lead.lifecycle.state === 'frozen')) {
@@ -134,6 +141,7 @@ export function truncate(text: string | null | undefined, max: number = 80): str
 
 const PIPELINE_STAGE_LABELS: Record<PipelineStage, string> = {
   to_contact: 'To Contact',
+  observe: 'Observe',
   needs_reply: 'Needs Reply',
   follow_up_due: 'Follow-Up',
   waiting: 'Waiting',
@@ -144,6 +152,7 @@ const PIPELINE_STAGE_LABELS: Record<PipelineStage, string> = {
 /** Empty-state copy per pipeline stage (no search involved). */
 export const STAGE_EMPTY_MESSAGES: Record<PipelineStage, { title: string; hint: string }> = {
   to_contact: { title: 'No leads to contact.', hint: 'New leads appear here.' },
+  observe: { title: 'No leads to observe.', hint: 'Opportunities that are not a fit yet appear here — watch, do not contact.' },
   waiting: { title: 'No leads are waiting here.', hint: 'Leads you have messaged show here until they answer.' },
   follow_up_due: { title: 'No follow-ups due.', hint: 'Leads come back here when a follow-up is due.' },
   needs_reply: { title: 'No replies waiting for you.', hint: 'Client replies land here.' },

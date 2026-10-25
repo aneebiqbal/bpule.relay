@@ -77,6 +77,9 @@ export function DecisionTraceView({ trace }: DecisionTraceViewProps) {
                 <p className="mt-0.5 text-[11px] text-graphite">{node.decision}</p>
                 {node.evidence.length > 0 && (
                   <div className="mt-1 space-y-0.5">
+                    <p className="text-[9px] font-medium uppercase tracking-[0.08em] text-stone">
+                      {node.dimension ? `${node.dimension.replace(/([A-Z])/g, ' $1').trim()} evidence` : 'supporting evidence'}
+                    </p>
                     {node.evidence.slice(0, 2).map((e, j) => (
                       <p key={j} className="text-[10px] text-stone italic truncate">&quot;{e}&quot;</p>
                     ))}
