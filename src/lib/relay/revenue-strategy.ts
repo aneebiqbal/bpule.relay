@@ -215,7 +215,7 @@ export function describeVerdictForDisplay(
     strong: 'Strong opportunity',
     worth_pursuing: 'Worth pursuing',
     maybe: 'Maybe — needs more signal',
-    low: 'Weak fit',
+    low: 'Low priority — limited opportunity',
     skip: 'Probably skip',
   }
 

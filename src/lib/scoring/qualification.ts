@@ -37,7 +37,7 @@ export const QUALIFICATION_BANDS: readonly QualificationBand[] = [
   { qualification: 'STRONG', min: 75, max: 100, label: 'Strong opportunity', headline: 'Strong' },
   { qualification: 'WORTH_PURSUING', min: 55, max: 74, label: 'Worth pursuing', headline: 'Worth pursuing' },
   { qualification: 'MAYBE', min: 35, max: 54, label: 'Maybe — needs more signal', headline: 'Maybe' },
-  { qualification: 'LOW', min: 15, max: 34, label: 'Weak fit', headline: 'Low' },
+  { qualification: 'LOW', min: 15, max: 34, label: 'Low priority — limited opportunity', headline: 'Low' },
   { qualification: 'SKIP', min: 0, max: 14, label: 'Not a fit', headline: 'Skip' },
 ] as const
 

@@ -123,7 +123,8 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
   // decline is read from the thread here.
   for (const lead of input.queueData.replies) {
     if (leadClosedForOutreach(lead, input.messagesByLead.get(lead.id) ?? [])) continue
-    tasks.push(buildReplyTask(lead, input))
+    const task = buildReplyTask(lead, input)
+    if (task) tasks.push(task)
   }
 
   // 2b. Connection message due — a good-profile lead whose 6h connection-pacing
@@ -221,29 +222,35 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
   }
 }
 
-function buildReplyTask(lead: Lead, input: QueueInput): RelayTask {
+function buildReplyTask(lead: Lead, input: QueueInput): RelayTask | null {
   const messages = input.messagesByLead.get(lead.id) ?? []
   const convo = input.conversations.get(lead.id)
-  const lastReply = messages.filter((m) => m.type === 'reply' && m.sentText).at(-1)
+  // Only an inbound message means "they replied". A lead whose status is
+  // 'replied' but whose only reply-type message is the rep's own outbound
+  // reply must never produce a "They replied" task.
+  const inbound = messages.filter(
+    (m) => m.direction === 'inbound' && (m.sentText ?? m.draftText ?? '').trim(),
+  )
+  const lastReply = inbound.at(-1)
+  if (!lastReply) return null
+  const replyText = (lastReply.sentText ?? lastReply.draftText ?? '').trim()
 
-  const analysis = lastReply
-    ? analyzeReply(lastReply.draftText ?? '', {
-        leadId: lead.id,
-        leadCompany: lead.company,
-        contactName: lead.contactName,
-        replyText: lastReply.draftText ?? '',
-        priorMessages: messages.filter((m) => m.sentText),
-        conversationStage: convo?.stage ?? 'new',
-        senderProfileId: convo?.senderProfileId ?? null,
-      })
-    : null
+  const analysis = analyzeReply(replyText, {
+    leadId: lead.id,
+    leadCompany: lead.company,
+    contactName: lead.contactName,
+    replyText,
+    priorMessages: messages.filter((m) => m.sentText),
+    conversationStage: convo?.stage ?? 'new',
+    senderProfileId: convo?.senderProfileId ?? null,
+  })
 
   const strategy = analysis
     ? buildReplyStrategy(analysis, {
         leadId: lead.id,
         leadCompany: lead.company,
         contactName: lead.contactName,
-        replyText: lastReply?.draftText ?? '',
+        replyText,
         priorMessages: messages.filter((m) => m.sentText),
         conversationStage: convo?.stage ?? 'new',
         senderProfileId: convo?.senderProfileId ?? null,
@@ -253,10 +260,10 @@ function buildReplyTask(lead: Lead, input: QueueInput): RelayTask {
   const evidence: RelayEvidence[] = [
     {
       source: 'message',
-      detail: lastReply?.draftText
-        ? `Their message: "${lastReply.draftText.slice(0, 120)}..."`
+      detail: replyText
+        ? `Their message: "${replyText.slice(0, 120)}..."`
         : 'They replied to your outreach',
-      timestamp: lastReply?.createdAt ?? null,
+      timestamp: lastReply.createdAt ?? null,
       verified: true,
     },
   ]

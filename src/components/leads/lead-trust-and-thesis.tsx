@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { AlertTriangle, CheckCircle2, HelpCircle, RefreshCw } from 'lucide-react'
 import { cn } from 'cn'
 import { SCORING_VERSION } from '@/lib/intelligence-v3/versions'
+import { deriveThreadStatus } from '@/lib/relay/thread-status'
 import type { LeadDetail } from '@/lib/store/types'
 
 interface Thesis {
@@ -36,6 +37,9 @@ function BasisTag({ basis }: { basis?: string | null }) {
  */
 export function LeadTrustAndThesis({ lead }: { lead: LeadDetail }) {
   const messages = (lead.messages ?? []) as Array<{ direction?: string; thread_status?: string | null }>
+
+  // Thread state is derived from the thread itself, not assumed.
+  const threadStatus = deriveThreadStatus(messages)
   const unverified = messages.filter((m) => m.direction === 'inbound' && m.thread_status === 'UNVERIFIED').length
 
   const version = (lead as { scoreVersion?: string | null }).scoreVersion ?? null
@@ -50,7 +54,7 @@ export function LeadTrustAndThesis({ lead }: { lead: LeadDetail }) {
     <section className="space-y-4 rounded-lg border border-line bg-bone-raised p-5" aria-label="Trust and sales thesis">
       {/* Thread trust */}
       <div className="flex items-start gap-3">
-        {unverified > 0 ? (
+        {threadStatus === 'UNVERIFIED' ? (
           <>
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-warning" aria-hidden="true" />
             <div className="min-w-0 flex-1">
@@ -60,9 +64,17 @@ export function LeadTrustAndThesis({ lead }: { lead: LeadDetail }) {
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <button type="button" className="rounded-md bg-solid px-2 py-1 text-[11px] font-medium text-on-solid hover:opacity-90">Confirm</button>
-                <button type="button" className="rounded-md border border-line px-2 py-1 text-[11px] font-medium text-graphite hover:text-ink">Reassign</button>
+                <Link href={`/leads/${lead.id}?tab=sender`} className="rounded-md border border-line px-2 py-1 text-[11px] font-medium text-graphite hover:text-ink">Reassign</Link>
                 <button type="button" className="rounded-md border border-line px-2 py-1 text-[11px] font-medium text-graphite hover:text-ink">Dismiss</button>
               </div>
+            </div>
+          </>
+        ) : threadStatus === 'NO_THREAD' ? (
+          <>
+            <HelpCircle className="mt-0.5 size-4 shrink-0 text-stone" aria-hidden="true" />
+            <div>
+              <p className="text-[13px] font-medium text-ink">No conversation thread</p>
+              <p className="text-[12px] text-graphite">This lead has no messages yet, so there is no thread to verify.</p>
             </div>
           </>
         ) : (

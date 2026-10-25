@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import {
   Search, ChevronDown, Clock, Send, Reply, Bell,
   CheckCircle2, Snowflake, Users, Building2, ExternalLink,
-  AlertTriangle, Archive,
+  AlertTriangle, Archive, Eye,
 } from 'lucide-react'
 import { cn } from 'cn'
 import { LeadScoreRing } from '@/components/score-ring'
@@ -22,6 +22,7 @@ const STAGE_META: Record<PipelineStage, {
   description: string
 }> = {
   to_contact: { label: 'To Contact', icon: <Send className="size-3.5" />, color: 'text-stone-500', description: 'New leads waiting for first contact' },
+  observe: { label: 'Observe', icon: <Eye className="size-3.5" />, color: 'text-status-warning', description: 'Not a fit yet — watch, do not contact' },
   needs_reply: { label: 'Needs Reply', icon: <Reply className="size-3.5" />, color: 'text-orange', description: 'Prospect replied — respond now' },
   follow_up_due: { label: 'Follow-Up Due', icon: <Bell className="size-3.5" />, color: 'text-orange', description: 'Time to re-engage' },
   waiting: { label: 'Waiting', icon: <Clock className="size-3.5" />, color: 'text-cobalt', description: 'Sent, awaiting response' },
@@ -32,6 +33,7 @@ const STAGE_META: Record<PipelineStage, {
 const FILTERS: Array<{ key: PipelineStage | 'all'; label: string }> = [
   { key: 'all', label: 'All' },
   { key: 'to_contact', label: 'To Contact' },
+  { key: 'observe', label: 'Observe' },
   { key: 'needs_reply', label: 'Needs Reply' },
   { key: 'follow_up_due', label: 'Follow-Up' },
   { key: 'waiting', label: 'Waiting' },
@@ -80,9 +82,10 @@ function smartSort(leads: LeadRow[]): LeadRow[] {
     needs_reply: 0,
     follow_up_due: 1,
     to_contact: 2,
-    waiting: 3,
-    cold: 4,
-    done: 5,
+    observe: 3,
+    waiting: 4,
+    cold: 5,
+    done: 6,
   }
   return [...leads].sort((a, b) => {
     const pa = priority[derivePipelineStage(a)]
@@ -127,7 +130,7 @@ export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
   }, [])
 
   const grouped = useMemo(() => {
-    const groups: Record<PipelineStage, LeadRow[]> = { to_contact: [], needs_reply: [], follow_up_due: [], waiting: [], done: [], cold: [] }
+    const groups: Record<PipelineStage, LeadRow[]> = { to_contact: [], observe: [], needs_reply: [], follow_up_due: [], waiting: [], done: [], cold: [] }
     for (const lead of displayed) {
       groups[derivePipelineStage(lead)].push(lead)
     }

@@ -199,7 +199,7 @@ function coldAction(input: DeriveActionInput): { action: RecommendedAction; reas
   }
   // LOW
   if (o.commercialPotential === 'HIGH' || o.commercialPotential === 'VERY_HIGH') return { action: 'OBSERVE', reason: 'Weak overall, but the organization is active — observe.' }
-  return { action: 'CLOSE', reason: 'Weak fit and no buying signal.' }
+  return { action: 'CLOSE', reason: 'Low priority and no buying signal.' }
 }
 
 function roleWord(role: ActionOpportunityInput['relationshipRole']): string {
