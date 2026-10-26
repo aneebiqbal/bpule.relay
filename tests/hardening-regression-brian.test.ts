@@ -39,8 +39,9 @@ describe('Hardening regression — Brian Maccaba / Bio-marker.ai', () => {
 
   it.skipIf(!HAS_AI_PROVIDER)('preserves correct person/company identity from the profile header', () => {
     expect(intel.intelligence.person.fullName).toBe('Brian Maccaba')
+    // Role and employer are separated by design (PRO-002): the title is the
+    // role, the employer is its own field. Asserting the company twice hid that.
     expect(intel.intelligence.person.title?.toLowerCase()).toContain('ceo')
-    expect(intel.intelligence.person.title?.toLowerCase()).toContain('bio-marker.ai')
     expect(intel.intelligence.company.name?.toLowerCase()).toContain('bio-marker.ai')
   })
 

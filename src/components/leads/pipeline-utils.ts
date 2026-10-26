@@ -69,6 +69,12 @@ export function derivePipelineStage(lead: LeadRow): PipelineStage {
   const hasInbound = !!lead.lastInboundAt
   const hasRepliedSinceOutbound = hasInbound && hasOutbound && new Date(lead.lastInboundAt!).getTime() > new Date(lead.lastOutboundAt!).getTime()
 
+  // An inbound-first lead is a live conversation, not a cold contact: with no
+  // outbound it is waiting on our reply; once we have replied, we are waiting.
+  const inboundFirst = lead.direction === 'inbound' && Boolean(lead.inboundMessage?.trim())
+  if (inboundFirst && !hasOutbound) return 'needs_reply'
+  if (inboundFirst && !hasRepliedSinceOutbound) return 'waiting'
+
   // Follow-up due: contacted but no reply, and enough time has passed
   if (hasOutbound && !hasRepliedSinceOutbound && lead.lastOutboundAt) {
     const hasReplied = hasRepliedSinceOutbound

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { SCORING_VERSION } from '@/lib/intelligence-v3/versions'
 import { BUYER_INTENT_VERSION } from '@/lib/intelligence-v3/buyer-intent'
+import { APP_VERSION } from '@/lib/version'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-static'
@@ -30,6 +31,7 @@ export function GET() {
       deploymentId,
       env: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? null,
       buildTime: process.env.BUILD_TIME ?? BUILT_AT,
+      appVersion: APP_VERSION,
       scoringVersion: SCORING_VERSION,
       buyerIntentVersion: BUYER_INTENT_VERSION,
     },

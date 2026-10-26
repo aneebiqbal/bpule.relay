@@ -2818,7 +2818,21 @@ export async function runIntelligencePipeline(
   // or "Remote OK", that IS real workplace evidence and the eligibility
   // assessment derived from it (ELIGIBLE for a distributed prospect) must be
   // preserved — overriding it would discard real signal (e.g. Emily Torres).
-  const noOpportunityAtAll = !passA.job
+  // A model-extracted "job" is only a real opportunity when it carries
+  // substance. The model can read a profile headline ("CEO, Founder & Principal
+  // Interior Designer") as a job with no skills, pay, date or source; that is
+  // the person's role, not an engagement to assess, so it must not block the
+  // NOT_APPLICABLE classification.
+  const job = passA.job
+  const extractedJobIsSubstantive = Boolean(job)
+    && (
+      (job?.skills?.length ?? 0) > 0
+      || Boolean(job?.compensation)
+      || Boolean(job?.postedDate)
+      || Boolean(job?.source)
+      || (job?.employmentType != null && job.employmentType !== 'unknown')
+    )
+  const noOpportunityAtAll = !extractedJobIsSubstantive
     && !hasLocationRelevantOpportunity
     && refinedEligibility.workplaceType === 'UNKNOWN'
 

@@ -15,6 +15,7 @@ export type BuyerQuestionTopic =
   | 'pricing'
   | 'process'
   | 'team'
+  | 'tech_stack'
   | 'other'
 
 export type BuyerQuestionStatus = 'ANSWERED' | 'ASK_CLARIFICATION' | 'NEEDS_VERIFICATION' | 'PENDING'
@@ -28,24 +29,29 @@ export interface BuyerQuestion {
 
 /** Topic detectors. Order matters: the first match wins. */
 const TOPIC_PATTERNS: ReadonlyArray<{ topic: BuyerQuestionTopic; pattern: RegExp }> = [
-  { topic: 'pricing', pattern: /\b(price|pricing|cost|rate|budget|how much|quote|ballpark)\b/i },
-  { topic: 'availability', pattern: /\b(availab|are you free|can you take|capacity|next week|when are you|start date|kick ?off)\b/i },
-  { topic: 'timeline', pattern: /\b(timeline|how long|deliver|estimate|turn ?around|deadline|when can|launch|roll ?out)\b/i },
-  { topic: 'experience', pattern: /\b(experience|worked with|portfolio|case stud|past project|reference|similar project|relevant)\b/i },
+  { topic: 'pricing', pattern: /\b(price|pricing|cost|rate|budget|how much|quote|ballpark|investment|fee)\b/i },
+  { topic: 'availability', pattern: /\b(availab|are you free|can you take|capacity|when are you|kick ?off|start next|begin next|next week|start date)\b/i },
+  { topic: 'timeline', pattern: /\b(timeline|how long|deliver|estimate|turn ?around|deadline|when can|launch|roll ?out|take to|duration)\b/i },
+  { topic: 'experience', pattern: /\b(experience|worked with|portfolio|case stud|past project|previous work|past work|reference|similar project|relevant|built something|like this|previously)\b/i },
   { topic: 'process', pattern: /\b(process|how do you work|approach|methodology|workflow|engagement model)\b/i },
+  { topic: 'tech_stack', pattern: /\b(tech stack|framework|language|react|node|python|typescript|postgres|aws|django|rails)\b/i },
   { topic: 'team', pattern: /\b(team|who would|which developer|designer|engineer|resourcing)\b/i },
 ]
 
 const QUESTION_MARKER = /\?|\b(can you|could you|do you|would you|what|how|when|where|are you|have you|is it)\b/i
 
+/** Requests phrased as statements — no question mark, still an ask. */
+const IMPLICIT_ASK = /\b(we'?d love to see|i'?d like to see|please share|send (us |over )?(some|your|the)|share some|can you send|could you send|let us know)\b/i
+
 /** Words that must appear in the draft for a topic to count as addressed. */
 const TOPIC_COVERAGE_KEYWORDS: Record<BuyerQuestionTopic, readonly string[]> = {
-  experience: ['experience', 'worked', 'portfolio', 'case stud', 'project', 'client', 'built', 'delivered', 'similar'],
-  timeline: ['week', 'weeks', 'month', 'months', 'timeline', 'deliver', 'estimate', 'start', 'phase', 'schedule'],
-  availability: ['availab', 'next week', 'capacity', 'free', 'schedule', 'coordinate', 'time next week', 'window'],
-  pricing: ['price', 'pricing', 'cost', 'rate', 'budget', 'quote', 'investment', 'fee'],
+  experience: ['experience', 'worked', 'portfolio', 'case stud', 'project', 'client', 'built', 'delivered', 'similar', 'like this', 'before'],
+  timeline: ['week', 'weeks', 'month', 'months', 'timeline', 'deliver', 'estimate', 'start', 'phase', 'schedule', 'long'],
+  availability: ['availab', 'next week', 'capacity', 'free', 'schedule', 'coordinate', 'time next week', 'window', 'start'],
+  pricing: ['price', 'pricing', 'cost', 'rate', 'budget', 'quote', 'investment', 'fee', 'ballpark'],
   process: ['process', 'approach', 'workflow', 'step', 'sprint', 'discovery', 'methodology'],
   team: ['team', 'developer', 'designer', 'engineer', 'specialist', 'who works'],
+  tech_stack: ['react', 'node', 'python', 'typescript', 'stack', 'framework', 'postgres', 'aws', 'django', 'rails'],
   other: [],
 }
 
@@ -57,13 +63,15 @@ const CLARIFICATION_MARKER = /\?|\b(what|which|when|how many|could you clarify|c
  */
 export function extractExplicitBuyerQuestions(replyText: string): BuyerQuestion[] {
   if (!replyText || !replyText.trim()) return []
+  // Split on sentence boundaries and on ", and …" / "; also …" so a compound
+  // ask ("case studies, and how long would it take?") yields two questions.
   const sentences = replyText
-    .split(/(?<=[.!?])\s+|\n+/)
+    .split(/(?<=[.!?])\s+|\n+|[,;]\s*(?:and|plus|also)\s+/i)
     .map((s) => s.trim())
     .filter((s) => s.length > 3)
   const questions: BuyerQuestion[] = []
   for (const sentence of sentences) {
-    if (!QUESTION_MARKER.test(sentence)) continue
+    if (!QUESTION_MARKER.test(sentence) && !IMPLICIT_ASK.test(sentence)) continue
     const topic = TOPIC_PATTERNS.find((t) => t.pattern.test(sentence))?.topic ?? 'other'
     questions.push({ topic, text: sentence, status: 'PENDING' })
   }

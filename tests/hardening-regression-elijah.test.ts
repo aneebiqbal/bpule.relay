@@ -77,8 +77,9 @@ describe('Hardening regression — Elijah Gutman / Hartford AI Partners', () => 
 
   it.skipIf(!HAS_AI_PROVIDER)('preserves correct person/company identity', () => {
     expect(intel.intelligence.person.fullName).toBe('Elijah Gutman')
+    // Role and employer are separated by design (PRO-002): the title is the
+    // role, the employer is its own field. Asserting the company twice hid that.
     expect(intel.intelligence.person.title?.toLowerCase()).toContain('ceo')
-    expect(intel.intelligence.person.title?.toLowerCase()).toContain('hartford ai partners')
     expect(intel.intelligence.company.name?.toLowerCase()).toContain('hartford ai partners')
   })
 

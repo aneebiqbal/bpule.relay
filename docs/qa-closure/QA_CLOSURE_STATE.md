@@ -347,3 +347,46 @@ never see verification state. Added `Message.threadStatus` + the mapping.
 
 **Verdict: NO-GO** — the fixes are unit-verified, but browser verification and the release
 SHA gate have not been run.
+
+---
+
+## Session 4 — release-candidate pass (26 Oct 2026)
+
+### Freeze + deploy
+
+- Committed the REL-QA-001..010 closure as `ae652cb110bde4fc4184da58c52bfac866bf4418`.
+- Deployed that exact tree as a **preview** (QA, not production):
+  `https://bpule-relay-ql2lpe6ue-aneeb-iqbals-projects.vercel.app`
+  (`dpl_4aKMmmSFTXPejWTDA5Cdk8k9hTC5`).
+- **Deployed SHA verified at runtime** via `GET /api/version`:
+  `{"sha":"ae652cb110bde4fc4184da58c52bfac866bf4418","ref":"sprint-post-mvp-activation","env":"preview"}`.
+  Production `relay.bpulse.dev` is on `65b9f91` (`main`) — not this build.
+
+### Added
+
+- `GET /api/version` already existed; extended with `appVersion`.
+- **Cross-surface parity suite** — `src/lib/relay/lead-parity.ts` +
+  `tests/qa-relay-cross-surface-parity.test.ts`. Computes every surface's view
+  of one lead (score, qualification, action, pipeline stage, relationship display,
+  conversation presence, thread) and reports divergence. Found and fixed a real
+  gap: an inbound-first lead was filed as `to_contact` while the lead detail said
+  `NEEDS_REPLY` (`derivePipelineStage` now treats inbound-first leads as a live
+  conversation).
+- **Named message-quality eval set** — `tests/qa-relay-message-quality-eval.test.ts`:
+  paraphrases, compound asks, implicit asks, pricing and technical requirements.
+  Broadened `extractExplicitBuyerQuestions` to split compound asks and read
+  paraphrases/implicit asks.
+
+### The 6 pre-existing failures — closed
+
+| Fixture | Root cause | Resolution |
+| --- | --- | --- |
+| `hardening-regression-brian` / `-elijah` | `separateRoleFromEmployer` (added in `43363b3`) strips "at Company" from the title. The assertions expecting the company in the title predate the deliberate PRO-002 separation (`56ff43d`, newer) and contradict it. | Test assertions corrected to the deliberate role-only title; the company is still asserted separately. |
+| `hardening-regression-avigail` (remote eligibility ×2) | The model extracted a bogus `job` from her headline ("CEO, Founder & Principal Interior Designer"), so the "no opportunity at all" guard did not fire and eligibility stayed UNCLEAR. | The guard now requires a *substantive* extracted job (skills/pay/date/source/employment type). A headline is not a job. |
+| `hardening-regression-avigail` (message recommended) | `isHighPotentialBuilder` (added in `11f55cf`) recommends a connection note for any CEO/Founder title, including a non-software one. | The builder rule now requires a product business model or technical signal — "high potential builder" means a product builder. The 5 builder-connection tests still pass. |
+| `hardening-regression-daria` (empty draft) | The test passed `strategy: null`, which is `streamDraft`'s legitimate "needs rescoring" path. | Test passes the derived strategy, as the real route does. |
+
+### Regression runs (this session)
+
+- Full `vitest run`: **237 files / 3498 tests, 0 failures.**
+- `npx tsc --noEmit`: clean. `eslint`: 0 errors.
