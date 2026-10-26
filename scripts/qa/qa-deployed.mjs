@@ -4,27 +4,20 @@
  * Calls GET /api/version on a deployment and fails immediately on a SHA, ref or
  * env mismatch. No browser acceptance may run against the wrong build.
  *
- *   npx tsx scripts/qa/qa-deployed.ts --url=<preview-url> --sha=<expected>
+ *   node scripts/qa/qa-deployed.mjs --url=<preview-url> --sha=<expected>
  */
-import { readApiVersion } from './release-lib'
+import { readApiVersion } from './release-lib.mjs'
 
-interface Args {
-  url?: string
-  sha?: string
-  ref?: string
-  env?: string
-}
-
-function parseArgs(argv: string[]): Args {
-  const args: Args = {}
+function parseArgs(argv) {
+  const args = {}
   for (const arg of argv) {
     const [key, value] = arg.replace(/^--/, '').split('=')
-    if (key && value) args[key as keyof Args] = value
+    if (key && value) args[key] = value
   }
   return args
 }
 
-function main(): void {
+function main() {
   const args = parseArgs(process.argv.slice(2))
   if (!args.url || !args.sha) {
     console.error('usage: qa:deployed --url=<preview-url> --sha=<expected> [--ref=<branch>] [--env=preview]')
@@ -41,7 +34,7 @@ function main(): void {
   console.log(`reported   : sha=${version.sha ?? 'null'} ref=${version.ref ?? 'null'} env=${version.env ?? 'null'}`)
   console.log(`expected   : sha=${args.sha} ref=${args.ref ?? '(any)'} env=${args.env ?? '(any)'}`)
 
-  const mismatches: string[] = []
+  const mismatches = []
   if (version.sha !== args.sha) mismatches.push(`sha ${version.sha ?? 'null'} != ${args.sha}`)
   if (args.ref && version.ref !== args.ref) mismatches.push(`ref ${version.ref ?? 'null'} != ${args.ref}`)
   if (args.env && version.env !== args.env) mismatches.push(`env ${version.env ?? 'null'} != ${args.env}`)

@@ -6,7 +6,7 @@
  *
  * Release blocker: ANY skipped contract test.
  *
- *   npx tsx scripts/qa/contract-coverage.ts
+ *   node scripts/qa/contract-coverage.mjs
  */
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -19,7 +19,7 @@ const CONTRACT_FILES = [
 ]
 
 /** Runtime owner per contract, kept in sync with docs/RELAY_CONTRACT_RUNTIME_MAP.md. */
-const OWNERS: Record<string, string> = {
+const OWNERS = {
   'Contract 1': 'separateRoleFromEmployer / formatRoleLine',
   'Contract 2': 'isHighPotentialBuilder (revenue-strategy)',
   'Contract 3': 'deriveNextLeadAction + lead-parity.ts',
@@ -30,26 +30,7 @@ const OWNERS: Record<string, string> = {
   unattributed: 'lead-parity.ts (cross-surface parity)',
 }
 
-interface VitestAssertion {
-  fullName?: string
-  title?: string
-  status: 'passed' | 'failed' | 'skipped' | 'todo'
-}
-
-interface VitestFile {
-  name: string
-  assertionResults?: VitestAssertion[]
-}
-
-interface VitestJson {
-  testResults?: VitestFile[]
-  numTotalTests?: number
-  numPassedTests?: number
-  numFailedTests?: number
-  numPendingTests?: number
-}
-
-function run(): VitestJson {
+function run() {
   const dir = mkdtempSync(path.join(tmpdir(), 'relay-contracts-'))
   const out = path.join(dir, 'results.json')
   try {
@@ -58,19 +39,18 @@ function run(): VitestJson {
       ['vitest', 'run', ...CONTRACT_FILES, '--reporter=json', `--outputFile=${out}`, '--silent'],
       { stdio: ['ignore', 'ignore', 'pipe'], maxBuffer: 64 * 1024 * 1024 },
     )
-  } catch (err) {
+  } catch {
     // vitest exits non-zero on failure; the JSON is still written.
-    if (!readFileSync) throw err
   }
   const raw = readFileSync(out, 'utf8')
   rmSync(dir, { recursive: true, force: true })
-  return JSON.parse(raw) as VitestJson
+  return JSON.parse(raw)
 }
 
-function main(): void {
+function main() {
   const result = run()
   const files = result.testResults ?? []
-  const byContract = new Map<string, { total: number; passed: number; failed: number; skipped: number }>()
+  const byContract = new Map()
   let totalSkipped = 0
 
   for (const file of files) {
@@ -94,7 +74,7 @@ function main(): void {
   const contracts = [...byContract.keys()].sort()
   let failures = 0
   for (const contract of contracts) {
-    const b = byContract.get(contract)!
+    const b = byContract.get(contract)
     const status = b.failed > 0 ? 'FAIL' : 'PASS'
     if (b.failed > 0) failures += 1
     const skipNote = b.skipped > 0 ? `  SKIPPED:${b.skipped}` : ''

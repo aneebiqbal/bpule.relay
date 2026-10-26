@@ -4,17 +4,17 @@
  * Generates release-manifest.json from the tree and, optionally, a deployment.
  * Nothing here is hand-maintained.
  *
- *   npx tsx scripts/qa/release-manifest.ts [--url=<preview-url>]
+ *   node scripts/qa/release-manifest.mjs [--url=<preview-url>]
  */
 import { execFileSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { gitSha, readApiVersion } from './release-lib'
+import { gitSha, readApiVersion } from './release-lib.mjs'
 
 const CONTRACT_VERSION = 'relay_contracts_v7'
 const OUT = 'release-manifest.json'
 
-function latestMigration(): string | null {
+function latestMigration() {
   try {
     const dir = path.join(process.cwd(), 'supabase', 'migrations')
     const files = execFileSync('ls', [dir], { encoding: 'utf8' })
@@ -28,34 +28,19 @@ function latestMigration(): string | null {
   }
 }
 
-interface TestCounts {
-  total: number
-  passed: number
-  failed: number
-  skipped: number
-  files: number
-}
-
-function runTests(): TestCounts {
-  const fallback: TestCounts = { total: 0, passed: 0, failed: 0, skipped: 0, files: 0 }
+function runTests() {
+  const fallback = { total: 0, passed: 0, failed: 0, skipped: 0, files: 0 }
   try {
-    const raw = execFileSync(
+    execFileSync(
       'npx',
       ['vitest', 'run', '--reporter=json', '--outputFile=/tmp/relay-release-tests.json', '--silent'],
       { stdio: ['ignore', 'ignore', 'pipe'], maxBuffer: 256 * 1024 * 1024 },
     )
-    void raw
   } catch {
     // vitest exits non-zero on failure; the JSON is still written.
   }
   try {
-    const parsed = JSON.parse(execFileSync('cat', ['/tmp/relay-release-tests.json'], { encoding: 'utf8' })) as {
-      numTotalTests?: number
-      numPassedTests?: number
-      numFailedTests?: number
-      numPendingTests?: number
-      testResults?: unknown[]
-    }
+    const parsed = JSON.parse(execFileSync('cat', ['/tmp/relay-release-tests.json'], { encoding: 'utf8' }))
     return {
       total: parsed.numTotalTests ?? 0,
       passed: parsed.numPassedTests ?? 0,
@@ -68,7 +53,7 @@ function runTests(): TestCounts {
   }
 }
 
-function main(): void {
+function main() {
   const urlArg = process.argv.slice(2).find((a) => a.startsWith('--url='))
   const url = urlArg?.split('=')[1]
   const deployed = url ? readApiVersion(url) : null

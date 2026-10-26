@@ -4,20 +4,13 @@
  * Runs every automated gate in order and prints one human-readable report.
  * Returns non-zero on any failure, so CI can gate on it.
  *
- *   npx tsx scripts/qa/qa-release.ts
+ *   node scripts/qa/qa-release.mjs
  */
 import { execFileSync } from 'node:child_process'
-import { gitSha, readApiVersion } from './release-lib'
+import { gitSha, readApiVersion } from './release-lib.mjs'
 
-interface Step {
-  name: string
-  command: string[]
-  /** Steps that need the network/build are allowed to be skipped with a reason. */
-  optional?: boolean
-}
-
-const STEPS: Step[] = [
-  { name: 'PRODUCT CONTRACTS', command: ['npx', 'tsx', 'scripts/qa/contract-coverage.ts'] },
+const STEPS = [
+  { name: 'PRODUCT CONTRACTS', command: ['node', 'scripts/qa/contract-coverage.mjs'] },
   { name: 'REGRESSION CORPUS', command: ['npx', 'vitest', 'run', 'tests/relay-regression-corpus.test.ts', '--silent'] },
   { name: 'LEAD PARITY', command: ['npx', 'vitest', 'run', 'tests/qa-relay-cross-surface-parity.test.ts', '--silent'] },
   { name: 'TYPECHECK', command: ['npx', 'tsc', '--noEmit'] },
@@ -26,21 +19,21 @@ const STEPS: Step[] = [
   { name: 'BUILD', command: ['npx', 'next', 'build'] },
 ]
 
-function runStep(step: Step): { ok: boolean; skipped: boolean; detail: string } {
+function runStep(step) {
   try {
     execFileSync(step.command[0], step.command.slice(1), {
       stdio: ['ignore', 'pipe', 'pipe'],
       maxBuffer: 256 * 1024 * 1024,
       env: process.env,
     })
-    return { ok: true, skipped: false, detail: '' }
+    return { ok: true, detail: '' }
   } catch (err) {
-    const stderr = (err as { stderr?: Buffer }).stderr?.toString().slice(-2000) ?? ''
-    return { ok: false, skipped: false, detail: stderr }
+    const stderr = err.stderr?.toString().slice(-2000) ?? ''
+    return { ok: false, detail: stderr }
   }
 }
 
-function main(): void {
+function main() {
   console.log('RELAY RELEASE GATE')
   console.log('==================')
   console.log(`git SHA: ${gitSha()}`)
@@ -58,7 +51,9 @@ function main(): void {
   // expected SHA. `qa:deployed` enforces it.
   const version = readApiVersion()
   console.log('------------------')
-  console.log(`SHA VERIFIED      ${version ? 'PENDING (run qa:deployed)' : 'NOT VERIFIED (no /api/version reachable)'}`)
+  console.log(
+    `SHA VERIFIED      ${version ? 'PENDING (run qa:deployed)' : 'NOT VERIFIED (no /api/version reachable)'}`,
+  )
 
   console.log('==================')
   if (failures > 0) {
