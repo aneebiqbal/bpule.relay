@@ -171,6 +171,37 @@ export interface PipelineEmptyState {
  * with no results is about the search; an empty stage is about the stage;
  * the two must never borrow each other's copy.
  */
+export interface LeadsBoardEmptyState {
+  kind: 'none' | 'filter' | 'search'
+  title: string
+  hint: string
+}
+
+/**
+ * The one place that decides what an empty leads board says. A board with leads
+ * must never say "No leads yet" just because the selected filter or search
+ * matched none (REL-QA-010). Returns null when there is content to render.
+ */
+export function resolveLeadsBoardEmptyState(input: {
+  leadsCount: number
+  filteredCount: number
+  search: string
+}): LeadsBoardEmptyState | null {
+  if (input.filteredCount > 0) return null
+  const query = input.search.trim()
+  if (query) {
+    return { kind: 'search', title: 'No leads match your search.', hint: 'Try a different search term.' }
+  }
+  if (input.leadsCount === 0) {
+    return { kind: 'none', title: 'No leads yet.', hint: 'Find prospects and save them to start your outreach.' }
+  }
+  return {
+    kind: 'filter',
+    title: 'No leads in this view.',
+    hint: 'You have leads in other views. Switch the filter above to see them.',
+  }
+}
+
 export function resolvePipelineEmptyState(input: { stage: PipelineStage | 'all'; query: string }): PipelineEmptyState {
   const query = input.query.trim()
   if (query) {

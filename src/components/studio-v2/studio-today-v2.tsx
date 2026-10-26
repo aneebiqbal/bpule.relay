@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Copy, Shuffle, Check, AlertCircle, Plus, Users, RefreshCw, Download, Image, Sparkles } from 'lucide-react'
 import type { DailyContentIdea } from '@/lib/domain/types'
+import { imageFailureReason } from '@/lib/content/image-failure'
 
 type Platform = 'linkedin' | 'x'
 
@@ -202,20 +203,30 @@ export function StudioTodayV2({ personaId, displayName }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
       })
-      if (!res.ok) throw new Error('Image generation failed')
-      const json = await res.json()
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        // Keep the existing image intact; never replace it with a fallback.
+        setImageError(imageFailureReason(res.status, json?.error))
+        return
+      }
       if (json.url) {
         setImageUrl(json.url)
         persistImage(activeIdea.id, json.url)
       } else {
-        throw new Error(json.error || 'No image')
+        setImageError(imageFailureReason(res.status, json?.error))
       }
-    } catch {
-      generateCanvasImage()
+    } catch (err) {
+      // Provider/network failure. Fall back to the canvas visual only when
+      // there is no existing image to preserve.
+      if (imageUrl) {
+        setImageError(imageFailureReason(null, err instanceof Error ? err.message : undefined))
+      } else {
+        generateCanvasImage()
+      }
     } finally {
       setImageLoading(false)
     }
-  }, [activeIdea])
+  }, [activeIdea, imageUrl])
 
   const generateCanvasImage = useCallback(() => {
     if (!canvasRef.current || !activeIdea) return

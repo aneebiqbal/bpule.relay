@@ -71,6 +71,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends }: Pro
     return () => { cancelled = true }
   }, [lead.id])
   const phase = relationshipState.phase
+  const displayLabel = relationshipState.displayLabel
   // The server refuses contact actions on a no/dead lead. Do not offer them.
   const leadLocked = lead.status === 'no' || lead.status === 'dead'
   // A SKIP verdict never recommends outreach; connecting is a manual override.
@@ -319,7 +320,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends }: Pro
             </div>
           </div>
           <div className="shrink-0 text-right">
-            <StatusPill phase={phase} />
+            <StatusPill label={displayLabel} />
             {lead.url && <a href={lead.url} target="_blank" rel="noopener" className="mt-1 inline-block text-[10px] text-cobalt hover:underline">LinkedIn ↗</a>}
             {(leadScore.qualification === 'STRONG' || leadScore.qualification === 'WORTH_PURSUING') && (
               <button
@@ -727,19 +728,20 @@ function QuickReplyInput({ onSave }: { onSave: (text: string) => Promise<void> }
   )
 }
 
-function StatusPill({ phase }: { phase: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    connection_due: { label: 'To Contact', cls: 'bg-stone-100 text-stone-600' },
-    connection_sent: { label: 'Pending', cls: 'bg-cobalt/10 text-cobalt' },
-    connection_accepted: { label: 'Accepted', cls: 'bg-cobalt/10 text-cobalt' },
-    dm_due: { label: 'DM Due', cls: 'bg-cobalt/10 text-cobalt' },
-    dm_sent: { label: 'Waiting', cls: 'bg-cobalt/10 text-cobalt' },
-    waiting_for_reply: { label: 'Waiting', cls: 'bg-cobalt/10 text-cobalt' },
-    replied: { label: 'Replied', cls: 'bg-orange/10 text-orange' },
-    follow_up_due: { label: 'Follow-Up Due', cls: 'bg-orange/10 text-orange' },
-  }
-  const { label, cls } = map[phase] ?? { label: phase, cls: 'bg-stone-100 text-stone-500' }
-  return <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-medium', cls)}>{label}</span>
+/**
+ * Renders the canonical display label from `computeRelationshipState`. The
+ * internal `phase` is never shown raw: a lead the rep owes a reply to reads
+ * "Needs reply", not "Replied" (REL-QA-005).
+ */
+function StatusPill({ label }: { label: string }) {
+  const tone = /needs reply|follow-up|overdue/i.test(label)
+    ? 'bg-orange/10 text-orange'
+    : /waiting|pending|accepted/i.test(label)
+      ? 'bg-cobalt/10 text-cobalt'
+      : /connected|closed/i.test(label)
+        ? 'bg-status-success/10 text-status-success'
+        : 'bg-stone-100 text-stone-600'
+  return <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-medium', tone)}>{label}</span>
 }
 
 function timeAgo(iso: string | null): string {

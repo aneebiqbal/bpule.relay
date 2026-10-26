@@ -342,6 +342,7 @@ function mapMessage(r: Row): Message {
     rejectReasons: Array.isArray(r.reject_reasons) ? r.reject_reasons as Message['rejectReasons'] : [],
     idempotencyKey: (r.idempotency_key as string) ?? null,
     direction: (r.direction as Message['direction']) ?? 'outbound',
+    threadStatus: (r.thread_status as Message['threadStatus']) ?? null,
     createdAt: r.created_at as string,
   }
 }

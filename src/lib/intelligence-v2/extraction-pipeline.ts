@@ -1693,6 +1693,30 @@ export function isPlausibleCompanyName(candidate: string | null | undefined): bo
  * Inbound UI MUST pass through here, regardless of which extraction path
  * produced it (signature, introduction, AI model, or demo fallback).
  */
+/**
+ * Index of the first sentence boundary inside a value, or -1. The extractor can
+ * bleed into the next sentence ("Meridian Logistics Labs. Our company…"), so the
+ * value is cut there. Domain-style names ("Bio-marker.ai") and names whose next
+ * word is not a sentence starter ("Meridian Labs Building") are left alone.
+ */
+function cutAtSentenceBoundary(value: string): string {
+  let cut = -1
+  const consider = (index: number) => {
+    if (index > 0 && (cut === -1 || index < cut)) cut = index
+  }
+
+  const sentence = value.match(/[.!?]\s+(?=(?:our|we|i|the|it|they|my|this|that|he|she|you|in|at|as|if|when|but|and|so|their|his|her|its|there|here|please|thanks)\b)/i)
+  if (sentence?.index != null) consider(sentence.index)
+
+  const comma = value.search(/,\s*where\b/i)
+  if (comma !== -1) consider(comma)
+
+  const dash = value.search(/\s+[—–-]\s+(?=(?:our|we|i|the|it|they|my|this|that|he|she|you)\b)/i)
+  if (dash !== -1) consider(dash)
+
+  return cut === -1 ? value : value.slice(0, cut).trim()
+}
+
 export function sanitizeCompanyName(candidate: string | null | undefined): string | null {
   if (typeof candidate !== 'string') return null
   const trimmed = candidate.trim()
@@ -1701,17 +1725,21 @@ export function sanitizeCompanyName(candidate: string | null | undefined): strin
   // Reject values that are ONLY punctuation/whitespace after trimming.
   if (!trimmed || /^[\s,;.!?]+$/.test(trimmed)) return null
 
+  // Cut at a sentence boundary before anything else: the extractor may have
+  // bled into the next sentence ("Meridian Logistics Labs. Our company…").
+  const bounded = cutAtSentenceBoundary(trimmed)
+
   // Strip trailing/leading whitespace, commas, and sentence punctuation for
-  // further validation, but keep the original to detect trailing-fragment
+  // further validation, but keep the bounded form to detect trailing-fragment
   // issues (a sentence-ending period can mark extraction bleed even when the
   // stripped form looks valid).
-  const cleaned = trimmed.replace(/^[,\s]+|[,\s.!?]+$/g, '').trim()
+  const cleaned = bounded.replace(/^[,\s]+|[,\s.!?]+$/g, '').trim()
   if (!cleaned) return null
 
-  // If the original (pre-strip) ended with sentence-ending punctuation that
-  // isn't a legal suffix, reject it because the period is a sentence boundary,
-  // not part of the name.
-  if (/[.!?]$/.test(trimmed) && !/\b(?:inc|ltd|co|corp|llc|l\.l\.c|s\.a|b\.v)\.$/i.test(trimmed)) return null
+  // If the bounded form ended with sentence-ending punctuation that isn't a
+  // legal suffix, reject it because the period is a sentence boundary, not part
+  // of the name.
+  if (/[.!?]$/.test(bounded) && !/\b(?:inc|ltd|co|corp|llc|l\.l\.c|s\.a|b\.v)\.$/i.test(bounded)) return null
 
   // Reject greetings — both single-word ("Hello") and multi-word ("Hi there",
   // "Dear team", "Hey folks", "Greetings everyone"). A greeting phrase is one

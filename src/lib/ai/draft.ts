@@ -29,6 +29,13 @@ import { sanitizeDraft, siteIsLive } from '@/lib/facts/sanitize'
 import { classifyRoleFromTitle, rolePromptGuidance } from '@/lib/leads/targeting'
 import { strategyToPromptBlock } from '@/lib/relay/outreach-strategy'
 import {
+  assessQuestionCoverage,
+  buildQuestionPlanBlock,
+  extractExplicitBuyerQuestions,
+  hasInventedAvailability,
+  type BuyerQuestion,
+} from '@/lib/relay/buyer-questions'
+import {
   ANTI_AI_RULES,
   FACTUALITY_RULES,
   SURVEILLANCE_RULES,
@@ -439,7 +446,15 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
     }
   }
 
-  const userPrompt = buildUserPrompt(effectiveInput)
+  let userPrompt = buildUserPrompt(effectiveInput)
+  // Reply completeness (REL-QA-009): hand the generator every explicit buyer
+  // question before it writes, then gate the draft on covering them all.
+  const buyerQuestions: BuyerQuestion[] =
+    effectiveInput.type === 'reply'
+      ? extractExplicitBuyerQuestions(effectiveInput.conversationContext ?? '')
+      : []
+  const questionBlock = buildQuestionPlanBlock(buyerQuestions)
+  if (questionBlock) userPrompt = `${userPrompt}\n\n${questionBlock}`
   const systemPrompt = baseDraftSystem(effectiveInput.styleCard, effectiveInput.facts)
 
   if (!hasProvider()) {
@@ -453,7 +468,7 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
 
   // Attempt 1: LongCat (primary writer)
   const longcatChain = buildLongcatDraftChain()
-  const resultA = await runDraftAttemptWithFallback(longcatChain, 'longcat', systemPrompt, userPrompt, callLog)
+  const resultA = await runDraftAttemptWithFallback(longcatChain, 'longcat', systemPrompt, userPrompt, callLog, buyerQuestions)
     .catch((err) => {
       console.error('[draft] LongCat attempt failed:', err instanceof Error ? err.message : String(err))
       return null
@@ -487,6 +502,7 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
       systemPrompt,
       feedback ? `${userPrompt}\n\n${feedback}` : userPrompt,
       callLog,
+      buyerQuestions,
     ).catch((err) => {
       console.error('[draft] Groq retry failed:', err instanceof Error ? err.message : String(err))
       return null
@@ -515,6 +531,7 @@ export async function generateDraft(input: DraftInput): Promise<DraftResult> {
         systemPrompt,
         gptFeedback ? `${userPrompt}\n\n${gptFeedback}` : userPrompt,
         callLog,
+        buyerQuestions,
       ).catch((err) => {
         console.error('[draft] GPT escalation failed:', err instanceof Error ? err.message : String(err))
         return null
@@ -563,9 +580,10 @@ async function runDraftAttemptWithFallback(
   system: string,
   userPrompt: string,
   callLog: DraftCallLog[],
+  buyerQuestions: BuyerQuestion[] = [],
 ): Promise<ReturnType<typeof runDraftAttempt> | null> {
   if (chain.length === 0) return null
-  return runDraftAttempt(chain, system, userPrompt, callLog)
+  return runDraftAttempt(chain, system, userPrompt, callLog, buyerQuestions)
 }
 
 /** Empty result used when a candidate completely fails. */
@@ -648,7 +666,8 @@ async function runDraftAttempt(
   system: string,
   userPrompt: string,
   callLog: DraftCallLog[],
-): Promise<{ output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks']; hostLabel: string }> {
+  buyerQuestions: BuyerQuestion[] = [],
+): Promise<{ output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks']; hostLabel: string; questionGateReasons?: string[] }> {
   // json_object mode only, never strict schema — same reasoning as
   // extraction: DeepSeek's own strict mode has an open bug returning
   // malformed JSON on some calls, so this app never trusts a provider's
@@ -678,19 +697,33 @@ async function runDraftAttempt(
     evidence: extractEvidenceFromUserPrompt(userPrompt),
   })
 
+  // Reply completeness gate (REL-QA-009): every explicit buyer question must be
+  // addressed, and no calendar slot may be invented.
+  const questionGateReasons: string[] = []
+  if (buyerQuestions.length > 0) {
+    const coverage = assessQuestionCoverage(buyerQuestions, cleaned)
+    if (!coverage.complete) {
+      const missing = coverage.questions.filter((q) => q.status === 'NEEDS_VERIFICATION').map((q) => q.topic)
+      questionGateReasons.push(`Unanswered buyer question(s): ${missing.join(', ')}`)
+    }
+  }
+  if (hasInventedAvailability(cleaned)) {
+    questionGateReasons.push('Proposed a specific calendar slot without a calendar source')
+  }
+
   const passed = Boolean(
     output.test_1_reply_or_delete &&
       output.test_2_not_generic &&
       codeChecks.companyMentioned &&
       codeChecks.specificEvidenceMentioned,
-  )
+  ) && questionGateReasons.length === 0
 
-  return { output: { ...output, draft: cleaned }, passed, codeChecks, hostLabel }
+  return { output: { ...output, draft: cleaned }, passed, codeChecks, hostLabel, questionGateReasons }
 }
 
 function finishDraft(
   input: DraftInput,
-  result: { output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks'] },
+  result: { output: DraftModelOutput; passed: boolean; codeChecks: SelfCheck['codeChecks']; questionGateReasons?: string[] },
   modelsUsed: string[],
   attempts: number,
   callLog: DraftCallLog[],
@@ -708,6 +741,7 @@ function finishDraft(
       test2NotGeneric: Boolean(result.output.test_2_not_generic),
       test2Note: result.output.test_2_note || '',
       codeChecks: result.codeChecks,
+      ...(result.questionGateReasons?.length ? { qualityGateReasons: result.questionGateReasons } : {}),
     },
     passed,
     modelUsed: modelsUsed.join(' then '),

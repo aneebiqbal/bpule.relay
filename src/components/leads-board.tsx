@@ -9,6 +9,7 @@ import { LeadScoreRing } from '@/components/score-ring'
 import { signalById } from '@/lib/score/signals'
 import { getComparableLeadScore } from '@/lib/score/rubric'
 import { isLeadLocked, lockCountdownMs } from '@/lib/leads/lock'
+import { resolveLeadsBoardEmptyState } from '@/components/leads/pipeline-utils'
 import { LogReplyDialog } from '@/components/log-reply-dialog'
 import type { Lead } from '@/lib/domain/types'
 
@@ -161,6 +162,9 @@ export function LeadsBoard({ leads, orgView }: { leads: LeadRow[]; orgView: bool
     return c
   }, [leads, now])
 
+  // Names the real empty state: no leads, no search match, or no filter match.
+  const emptyState = resolveLeadsBoardEmptyState({ leadsCount: leads.length, filteredCount: filtered.length, search })
+
   return (
     <div className="space-y-3">
       {/* Search + sort */}
@@ -204,15 +208,11 @@ export function LeadsBoard({ leads, orgView }: { leads: LeadRow[]; orgView: bool
       </div>
 
       {/* List */}
-      {filtered.length === 0 ? (
+      {filtered.length === 0 && emptyState ? (
         <div className="rounded-lg border border-dashed border-line px-6 py-10 text-center">
-          <p className="text-[14px] font-medium text-ink">
-            {search ? 'No leads match your search.' : 'No leads yet.'}
-          </p>
-          <p className="mt-1 text-[13px] text-graphite">
-            {search ? 'Try a different search term.' : 'Find prospects and save them to start your outreach.'}
-          </p>
-          {!search && (
+          <p className="text-[14px] font-medium text-ink">{emptyState.title}</p>
+          <p className="mt-1 text-[13px] text-graphite">{emptyState.hint}</p>
+          {emptyState.kind === 'none' && (
             <Link
               href="/prospect"
               className="mt-4 inline-flex items-center gap-2 rounded-md bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"

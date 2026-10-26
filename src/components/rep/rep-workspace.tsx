@@ -64,6 +64,8 @@ export interface RepWorkspaceData {
   }
   nextAction: RelayTodayAction | null
   upNext: RelayTodayAction[]
+  /** Full canonical action list; the desk sections and the Today KPI share it. */
+  allActions: RelayTodayAction[]
   notifications: Array<{ id: string; title: string; body: string }>
   profilesPulled?: number
   isManager?: boolean
@@ -260,8 +262,8 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
           <DoThisNext action={data.nextAction} />
 
           <BdDailyDesk
-            yourMove={data.upNext.filter(a => ['reply_needed', 'followup_due', 'connection_dm_due', 'high_fit_lead', 'new_opportunity', 'inbound_opportunity'].includes(a.kind))}
-            theirMove={data.upNext.filter(a => ['lead_going_cold', 'proposal_ready'].includes(a.kind))}
+            yourMove={data.allActions.filter(a => ['reply_needed', 'followup_due', 'connection_dm_due', 'high_fit_lead', 'new_opportunity', 'inbound_opportunity'].includes(a.kind))}
+            theirMove={data.allActions.filter(a => ['lead_going_cold', 'proposal_ready'].includes(a.kind))}
             repliesWaiting={data.day.repliesWaiting}
             followUpsDue={data.day.followUpsDue}
             referredLeads={data.referredLeads ?? []}

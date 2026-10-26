@@ -168,6 +168,8 @@ export interface Message {
   idempotencyKey?: string | null
   /** 'outbound' = rep sent; 'inbound' = prospect replied. Default outbound for legacy rows. */
   direction?: 'inbound' | 'outbound'
+  /** Identity verification of an inbound message; null for outbound/legacy rows. */
+  threadStatus?: 'UNVERIFIED' | 'VERIFIED' | 'DISMISSED' | null
   createdAt: string
 }
 

@@ -8,6 +8,7 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { buildRoleContext } from '@/lib/relay/role-intelligence'
 import { buildRelayQueue } from '@/lib/relay/queue-engine'
 import { rankNextActions, type NextBestAction } from '@/lib/relay/next-best-action'
+import { deriveTodayCounts } from '@/lib/relay/today-counts'
 import { logRecommendation } from '@/lib/action-ledger'
 import { loadAccountabilityDashboard } from '@/lib/relay/dashboard-loader'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
@@ -260,7 +261,9 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
 
   // Apply live conversation override — active conversations supersede cold prospect score
   const { evaluateLiveOpportunity, getEffectiveAction } = await import('@/lib/relay/live-opportunity')
-  const actions: RelayTodayAction[] = rankedActions.slice(0, 10).map((nba) => {
+  // The full canonical action list. The Today KPI card and the section lists both
+  // read this, so they cannot disagree (REL-QA-003/004).
+  const allActions: RelayTodayAction[] = rankedActions.map((nba) => {
     const action = nbaToRelayAction(nbaToActionKind, workspace)(nba)
 
     // Check if this lead has an active live conversation that should override
@@ -289,6 +292,8 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
 
     return action
   })
+  const actions = allActions.slice(0, 10)
+  const todayCounts = deriveTodayCounts(allActions)
 
   // Log recommendations for observability (non-blocking)
   if (actions.length > 0 && user.organization?.id) {
@@ -310,7 +315,14 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     hasAssignments: workspace.hasAssignments,
     identities: workspace.targetSummary.byIdentity,
     targetSummary: workspace.targetSummary,
-    day: workspace.day,
+    day: {
+      ...workspace.day,
+      repliesWaiting: todayCounts.repliesWaiting,
+      followUpsDue: todayCounts.followUpsDue,
+      totalRemaining: workspace.targetSummary.totalRemaining + todayCounts.repliesWaiting + todayCounts.followUpsDue,
+      isComplete: workspace.targetSummary.totalRemaining === 0 && todayCounts.repliesWaiting === 0 && todayCounts.followUpsDue === 0,
+    },
+    allActions,
     nextAction: actions[0] ?? null,
     upNext: actions.slice(1),
     notifications: [],

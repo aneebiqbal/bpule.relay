@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getLeadDisplayScore } from '@/lib/scoring/display-score'
 
 /**
  * Accountability Metrics
@@ -35,7 +36,20 @@ export interface LeadJourney {
   hasReply: boolean
   isWon: boolean
   lastActivityAt: string | null
-  score: number
+  /** User-facing score text ("8/10"); never a raw legacy number (REL-QA-006). */
+  scoreText: string
+}
+
+/**
+ * The user-facing score text for a lead. Canonical leads show the /10 display
+ * value; a legacy-only lead shows "/12" so the scale is always named. A raw
+ * legacy number is never shown as "score" on its own (REL-QA-006).
+ */
+export function leadScoreText(input: { canonicalScore?: number | null; score?: number | null }): string {
+  return getLeadDisplayScore({
+    canonicalScore: input.canonicalScore ?? null,
+    score: input.score ?? null,
+  }).text
 }
 
 export interface RepAccountability {
@@ -174,7 +188,7 @@ export async function getRepLeadJourney(
 ): Promise<LeadJourney[]> {
   const { data: leads } = await client
     .from('leads')
-    .select('id, company, contact_name, status, score, created_at')
+    .select('id, company, contact_name, status, score, canonical_score, created_at')
     .eq('owner_rep_id', repId)
     .neq('status', 'won')
     .neq('status', 'lost')
@@ -213,7 +227,10 @@ export async function getRepLeadJourney(
       hasReply: msgs.inbound,
       isWon: l.status === 'won',
       lastActivityAt: l.created_at as string,
-      score: (l.score as number) ?? 0,
+      scoreText: leadScoreText({
+        canonicalScore: (l.canonical_score as number) ?? null,
+        score: (l.score as number) ?? null,
+      }),
     }
   })
 }

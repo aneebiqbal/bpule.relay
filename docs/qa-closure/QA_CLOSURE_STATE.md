@@ -282,3 +282,68 @@ Continued from the Session 1 tracker; did not restart the audit.
 
 **NO-GO.** S1 items are not browser-verified, deployed SHA parity is unconfirmed, and the
 required browser/device matrix has not been run.
+
+---
+
+## Session 3 — REL-QA-001..010 closure (26 Oct 2026 program)
+
+Branch `sprint-post-mvp-activation`. Baseline HEAD `8660e10dc0c3cac53114cfb5dba9bcb0e3cc582d`.
+
+### Baseline (before changes)
+
+| Field | Value |
+| --- | --- |
+| tsc --noEmit | clean |
+| vitest | 6 failed / 3423 passed (228 files) |
+| Pre-existing failures | `hardening-regression-avigail` (3), `hardening-regression-brian` (1), `hardening-regression-daria` (1), `hardening-regression-elijah` (1) |
+
+The 6 failures are pre-existing and were NOT introduced by this session. They are
+extraction/eligibility failures that need the AI provider and are out of scope for
+the REL-QA-001..010 set. They are recorded here rather than hidden.
+
+### Work performed
+
+Each item is fixed at the canonical layer and carries a permanent regression test.
+
+| Item | Root cause | Fix | Test |
+| --- | --- | --- | --- |
+| REL-QA-001 | `EXTERNAL_PROVIDER` regex did not allow "external software development company" | Allow up to three qualifiers between "external" and the provider noun (`source-facts.ts`) | `tests/qa-relay-rel-qa-001-explicit-buyer.test.ts` (13) — pre-existing from an earlier session |
+| REL-QA-002 | Presence derived from raw `messages` rows; Archive/Conversation use `buildThread`, which also counts `lead.inboundMessage` | `deriveConversationPresence()` reads the canonical thread (`conversation-presence.ts`); `LeadTrustAndThesis` consumes it | `tests/qa-relay-rel-qa-002-conversation-presence.test.ts` |
+| REL-QA-003 | Today card counted leads by stored `status`; sections counted canonical ranked actions | `deriveTodayCounts()` feeds the card; the desk sections read the same full action list | `tests/qa-relay-rel-qa-003-today-count-parity.test.ts` |
+| REL-QA-004 | Same as REL-QA-003 (follow-ups keyed on `status='followed_up'` vs policy-derived list) | Same canonical selector | same test |
+| REL-QA-005 | `SEND_REPLY` mapped to phase `replied` and rendered "Replied" while the rep owes a reply | `deriveRelationshipDisplayState()` maps the action to `NEEDS_REPLY` / "Needs reply"; `StatusPill` renders the canonical label | same test as REL-QA-002 |
+| REL-QA-006 | My Numbers rendered the raw legacy 0–12 `leads.score` as "score N" | `leadScoreText()` renders the canonical `/10` (or names `/12`); accountability consumes it | `tests/qa-relay-rel-qa-006-score-parity.test.ts` |
+| REL-QA-007 | Studio Regenerate silently replaced the existing image with a canvas fallback and persisted it | Failure classified (`image-failure.ts`); existing image kept; real reason + retry shown | `tests/qa-relay-rel-qa-007-image-regenerate-failure.test.ts` |
+| REL-QA-008 | `sanitizeCompanyName` only stripped edge punctuation, so a sentence boundary inside the value survived | Cut at the sentence boundary; domain-style names preserved | `tests/qa-relay-rel-qa-008-company-boundary.test.ts` |
+| REL-QA-009 | Reply generator had no question plan and no completeness gate | `buyer-questions.ts` extracts the plan, injects it into the prompt, and gates the draft on 100% coverage + no invented calendar slot | `tests/qa-relay-rel-qa-009-buyer-question-coverage.test.ts` |
+| REL-QA-010 | Leads board said "No leads yet" when a filter/search matched none, despite leads existing | `resolveLeadsBoardEmptyState()` names the real state | `tests/qa-relay-rel-qa-010-empty-state.test.ts` |
+
+Also carried through: `mapMessage` dropped the `thread_status` column, so presence could
+never see verification state. Added `Message.threadStatus` + the mapping.
+
+### Regression runs (this session)
+
+- Full `vitest run`: **6 failed / 3472 passed (235 files)** — same 6 pre-existing failures, zero new.
+- `npx tsc --noEmit`: clean.
+- `eslint`: 0 errors.
+
+### Risks
+
+| Risk | Status |
+| --- | --- |
+| RISK-01 fake proof | Already gated by `isProductionSafeProof` (RQA-026). Not re-run this session. |
+| RISK-03 workspace visibility | Leads page already scopes to the workspace profile and explains it. |
+| RISK-04 sender duplicates | `SenderMatchCard` ranks by profile id; no name-only dedupe. |
+| RISK-05 Upwork reset semantics | No "Clear source" / "Reset all" control exists in the Upwork flow. |
+| RISK-06 mobile Feedback overlap | There is no floating Feedback widget in this codebase (only inline `ScoringFeedback`). |
+
+### Not done in this session
+
+- No browser / device matrix. No running app or production credentials.
+- Deployed SHA parity unconfirmed (no Vercel CLI access).
+- No cross-surface `assertLeadParity` suite (Phase 17) or named eval dataset (Phase 18).
+- No security re-run (Phase 20) beyond the existing suite.
+- The 6 pre-existing extraction failures are open.
+
+**Verdict: NO-GO** — the fixes are unit-verified, but browser verification and the release
+SHA gate have not been run.

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { AlertTriangle, CheckCircle2, HelpCircle, RefreshCw } from 'lucide-react'
 import { cn } from 'cn'
 import { SCORING_VERSION } from '@/lib/intelligence-v3/versions'
-import { deriveThreadStatus } from '@/lib/relay/thread-status'
+import { deriveConversationPresence } from '@/lib/relay/conversation-presence'
 import type { LeadDetail } from '@/lib/store/types'
 
 interface Thesis {
@@ -36,11 +36,12 @@ function BasisTag({ basis }: { basis?: string | null }) {
  * auto-derived sales thesis. A hypothesis is never rendered like a fact.
  */
 export function LeadTrustAndThesis({ lead }: { lead: LeadDetail }) {
-  const messages = (lead.messages ?? []) as Array<{ direction?: string; thread_status?: string | null }>
+  const messages = lead.messages ?? []
 
-  // Thread state is derived from the thread itself, not assumed.
-  const threadStatus = deriveThreadStatus(messages)
-  const unverified = messages.filter((m) => m.direction === 'inbound' && m.thread_status === 'UNVERIFIED').length
+  // Presence comes from the same thread the Conversation tab and Archive read,
+  // so a lead with a visible inbound is never called "no conversation".
+  const presence = deriveConversationPresence(lead)
+  const unverified = messages.filter((m) => m.direction === 'inbound' && m.threadStatus === 'UNVERIFIED').length
 
   const version = (lead as { scoreVersion?: string | null }).scoreVersion ?? null
   const canonicalScore = (lead as { canonicalScore?: number | null }).canonicalScore ?? null
@@ -54,7 +55,7 @@ export function LeadTrustAndThesis({ lead }: { lead: LeadDetail }) {
     <section className="space-y-4 rounded-lg border border-line bg-bone-raised p-5" aria-label="Trust and sales thesis">
       {/* Thread trust */}
       <div className="flex items-start gap-3">
-        {threadStatus === 'UNVERIFIED' ? (
+        {presence === 'UNVERIFIED_THREAD' ? (
           <>
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-warning" aria-hidden="true" />
             <div className="min-w-0 flex-1">
@@ -69,12 +70,28 @@ export function LeadTrustAndThesis({ lead }: { lead: LeadDetail }) {
               </div>
             </div>
           </>
-        ) : threadStatus === 'NO_THREAD' ? (
+        ) : presence === 'NO_MESSAGES' ? (
           <>
             <HelpCircle className="mt-0.5 size-4 shrink-0 text-stone" aria-hidden="true" />
             <div>
               <p className="text-[13px] font-medium text-ink">No conversation thread</p>
               <p className="text-[12px] text-graphite">This lead has no messages yet, so there is no thread to verify.</p>
+            </div>
+          </>
+        ) : presence === 'MISMATCH_REVIEW' ? (
+          <>
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-warning" aria-hidden="true" />
+            <div>
+              <p className="text-[13px] font-medium text-ink">Thread needs review</p>
+              <p className="text-[12px] text-graphite">A message on this thread does not match the lead&apos;s contact. Confirm the sender before treating it as conversation history.</p>
+            </div>
+          </>
+        ) : presence === 'DISMISSED_THREAD' ? (
+          <>
+            <HelpCircle className="mt-0.5 size-4 shrink-0 text-stone" aria-hidden="true" />
+            <div>
+              <p className="text-[13px] font-medium text-ink">Thread dismissed</p>
+              <p className="text-[12px] text-graphite">This conversation was reviewed and dismissed, so it is not part of the active thread.</p>
             </div>
           </>
         ) : (
