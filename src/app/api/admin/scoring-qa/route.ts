@@ -9,6 +9,8 @@ import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { applyQaFilters, buildScoringMonitor, loadRecentDecisions, type QaFilters } from '@/lib/admin/scoring-qa'
+import { createScoutStore } from '@/lib/store'
+import { buildLeadParityReport } from '@/lib/relay/lead-parity'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +20,22 @@ export async function GET(request: Request) {
   if (!auth.isAdmin && !auth.isOwner && !auth.isManager) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const url = new URL(request.url)
+
+  // Parity inspection: one lead, every surface's view, with an explicit
+  // PARITY VIOLATION flag and the fields that differ (Phase 15).
+  const leadId = url.searchParams.get('leadId')
+  if (leadId) {
+    const store = await createScoutStore()
+    const lead = await store.getLead(leadId)
+    if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const report = buildLeadParityReport(lead)
+    return NextResponse.json({
+      ...report,
+      parityViolation: !report.consistent,
+      parityViolationFields: report.divergences,
+    })
+  }
+
   const days = Math.min(90, Math.max(1, Number(url.searchParams.get('days') ?? '14') || 14))
   const since = new Date(Date.now() - days * 86_400_000).toISOString()
   const flag = (k: string) => url.searchParams.get(k) === '1' || url.searchParams.get(k) === 'true'
