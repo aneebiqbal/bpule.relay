@@ -46,3 +46,24 @@ export function imageFailureReason(status: number | null | undefined, message?: 
       return `Image regeneration failed${message ? `: ${message}` : '. Retry.'}`
   }
 }
+
+export interface ImageRegenerationOutcome {
+  /** True when the existing image must be retained (REL-QA-007). */
+  keepExisting: boolean
+  /** The reason to show the rep, when the existing image is kept. */
+  reason: string | null
+}
+
+/**
+ * The one decision a regeneration makes: only a successful response carrying a
+ * URL replaces the existing image. Any failure keeps it and reports why, so a
+ * failed regenerate can never destroy the rep's visual.
+ */
+export function imageRegenerationOutcome(
+  status: number | null | undefined,
+  nextUrl?: string | null,
+): ImageRegenerationOutcome {
+  const succeeded = typeof status === 'number' && status >= 200 && status < 300 && Boolean(nextUrl)
+  if (succeeded) return { keepExisting: false, reason: null }
+  return { keepExisting: true, reason: imageFailureReason(status) }
+}

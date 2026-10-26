@@ -5,20 +5,35 @@
  * a future change cannot silently reverse a contract. If a test here conflicts
  * with the contract document, the document wins: investigate the test first.
  */
-import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { describe, expect, it, vi } from 'vitest'
 import { separateRoleFromEmployer } from '@/lib/intelligence-v2/extraction-pipeline'
 import { formatRoleLine, stripEmployerFromTitle } from '@/lib/leads/role-line'
 import { buildRevenueStrategy, sourceFromCanonical } from '@/lib/relay/revenue-strategy'
 import { buildLeadParityReport } from '@/lib/relay/lead-parity'
 import { resolveBuyerIntentFromSource } from '@/lib/intelligence-v3/buyer-intent'
 import { deriveNextLeadAction } from '@/lib/relay/lead-state-machine'
-import { imageFailureReason } from '@/lib/content/image-failure'
+import { imageFailureReason, imageRegenerationOutcome } from '@/lib/content/image-failure'
 import { isTerminalOutcome, isTerminalStoredStage } from '@/lib/conversation/terminal'
-import { HAS_AI_PROVIDER } from './helpers/needs-ai'
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 import type { LeadDetail } from '@/lib/store/types'
 import type { Message } from '@/lib/domain/types'
+
+// The Upwork extractor's provider call is mocked so Contract 6 runs
+// deterministically in CI with no provider key.
+vi.mock('@/lib/ai/runtime', () => ({
+  generate: vi.fn(async () => ({
+    data: {
+      title: 'Senior React Native Engineer',
+      description: 'Maintain our mobile app.',
+      skills: [],
+      budget: null,
+      budgetType: null,
+      hourlyRateMin: null,
+      hourlyRateMax: null,
+      connectsCost: null,
+    },
+  })),
+}))
 
 describe('Contract 1 — title and employer are separate canonical fields', () => {
   it('splits "Role at Company" into a role-only title and the employer', () => {
@@ -324,18 +339,17 @@ More than 6 months
 We need an experienced React Native engineer to maintain our mobile app.
 Compensation: Negotiable based on scope.`
 
-  it.skipIf(!HAS_AI_PROVIDER)(
-    'a job with no Connects and no fixed budget yields null, not 0',
-    async () => {
-      const { extractUpworkJob } = await import('@/lib/upwork-v2')
-      const result = await extractUpworkJob({ rawText: HOURLY_ONLY_JOB })
-      if (!result.job) return
-      expect(result.job.connectsCost).toBeNull()
-      expect(result.job.budget).toBeNull()
-      expect(result.job.budgetType).toBe('hourly')
-    },
-    60_000,
-  )
+  it('a job with no Connects and no fixed budget yields null, not 0', async () => {
+    // The provider is mocked to return no Connects and no fixed budget, so the
+    // deterministic backfill is what runs. A release contract test must never
+    // depend on a live provider key.
+    const { extractUpworkJob } = await import('@/lib/upwork-v2')
+    const result = await extractUpworkJob({ rawText: HOURLY_ONLY_JOB })
+    expect(result.job).toBeTruthy()
+    expect(result.job?.connectsCost).toBeNull()
+    expect(result.job?.budget).toBeNull()
+    expect(result.job?.budgetType).toBe('hourly')
+  })
 
   it('a failure reason is never an empty or silent success', () => {
     for (const status of [401, 503, 429, 504, 502, 500, null]) {
@@ -347,13 +361,23 @@ Compensation: Negotiable based on scope.`
 })
 
 describe('Contract 7 — persistence and UI state reflect actual lifecycle state', () => {
-  it('a failed image regeneration keeps the existing asset and shows a reason', () => {
-    // REL-QA-007 S1: the old code cleared the image on failure. The failure
-    // branch must return before any state that clears it.
-    const source = readFileSync('src/components/relay/persona-daily-post.tsx', 'utf8')
-    const failureBranch = source.slice(source.indexOf('if (!res.ok)'), source.indexOf('if (json.url)'))
-    expect(failureBranch).toMatch(/setError\(/)
-    expect(failureBranch).not.toMatch(/setImageUrl\(null\)/)
+  it('a failed regeneration keeps the existing image and reports a reason', () => {
+    // REL-QA-007 S1: the old code cleared the image on failure. The decision is
+    // a pure function, so it is tested as behavior, not by reading source text.
+    for (const status of [401, 403, 429, 500, 502, 503, 504, null]) {
+      const outcome = imageRegenerationOutcome(status)
+      expect(outcome.keepExisting, `status ${status}`).toBe(true)
+      expect(outcome.reason).toBeTruthy()
+      expect(outcome.reason).toMatch(/retry/i)
+    }
+    // A 200 with no URL is still a failure: nothing to show, keep the asset.
+    expect(imageRegenerationOutcome(200, null).keepExisting).toBe(true)
+  })
+
+  it('only a successful response carrying a URL replaces the image', () => {
+    const outcome = imageRegenerationOutcome(200, 'https://cdn.example.com/new.png')
+    expect(outcome.keepExisting).toBe(false)
+    expect(outcome.reason).toBeNull()
   })
 
   it('every failure category carries a real reason with a retry hint', () => {

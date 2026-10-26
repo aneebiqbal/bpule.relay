@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { Copy, RefreshCw, AlertCircle, Check, ThumbsDown, Image, ChevronRight } from 'lucide-react'
-import { imageFailureReason } from '@/lib/content/image-failure'
+import { imageFailureReason, imageRegenerationOutcome } from '@/lib/content/image-failure'
 
 interface PersonaDailyPost {
   title: string
@@ -92,13 +92,13 @@ export function PersonaDailyPostView({ personaId, personaName, initialPlatform =
         body: JSON.stringify({ prompt: data.visualPrompt.imagePrompt }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        // Keep the existing image intact; never clear it on failure.
-        setError(imageFailureReason(res.status, json?.error))
+      const outcome = imageRegenerationOutcome(res.status, json?.url)
+      // Keep the existing image intact; never clear it on failure.
+      if (outcome.keepExisting) {
+        setError(outcome.reason ?? imageFailureReason(res.status, json?.error))
         return
       }
-      if (json.url) setImageUrl(json.url)
-      else setError(imageFailureReason(res.status, json?.error))
+      setImageUrl(json.url as string)
     } catch (err) {
       setError(imageFailureReason(null, err instanceof Error ? err.message : undefined))
     } finally {
