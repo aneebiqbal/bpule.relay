@@ -56,7 +56,9 @@ describe('REL-QA-009 message-quality eval set', () => {
       const answers: Record<string, string> = {
         experience: 'We have built similar systems before.',
         timeline: 'The timeline is about 10 weeks.',
-        availability: 'We can start next week.',
+        // Availability is calendar-backed: the correct answer coordinates, it
+        // never invents a slot (UNSAFE_TO_INVENT).
+        availability: 'I can coordinate a time next week.',
         pricing: 'The cost depends on scope; a ballpark is available.',
         tech_stack: 'We work with React and Node.',
         process: 'Our process starts with discovery.',
@@ -65,7 +67,7 @@ describe('REL-QA-009 message-quality eval set', () => {
       }
       const draft = expectTopics.map((t) => answers[t]).join(' ')
       const coverage = assessQuestionCoverage(questions, draft)
-      expect(coverage.complete, `${message} -> ${coverage.divergences ?? ''}`).toBe(true)
+      expect(coverage.complete, `${message} -> ${coverage.questions.map((q) => `${q.topic}:${q.status}`).join(', ')}`).toBe(true)
     }
   })
 

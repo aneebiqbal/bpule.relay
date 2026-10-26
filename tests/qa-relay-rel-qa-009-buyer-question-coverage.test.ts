@@ -36,7 +36,9 @@ describe('REL-QA-009 — explicit buyer questions', () => {
     const coverage = assessQuestionCoverage(questions, draft)
     expect(coverage.total).toBe(3)
     expect(coverage.complete).toBe(true)
-    expect(coverage.questions.every((q) => q.status === 'ANSWERED')).toBe(true)
+    // A calendar-backed question is answered by offering to coordinate; it is
+    // never answered by inventing a slot.
+    expect(coverage.questions.every((q) => q.status !== 'NEEDS_VERIFICATION')).toBe(true)
   })
 
   it('a reply that omits two of three questions fails the gate', () => {
