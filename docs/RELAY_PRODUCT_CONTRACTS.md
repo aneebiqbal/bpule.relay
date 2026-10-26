@@ -214,3 +214,17 @@ The contract is the source of truth. A test that contradicts a contract is
 almost always a stale test — not a bug in the product. Silently editing the
 test to make it pass, or silently changing the code to satisfy the test, both
 reintroduce the regression the contract exists to prevent.
+
+---
+
+## Related release-gating artifacts
+
+- `docs/RELAY_CONTRACT_RUNTIME_MAP.md` — owner / consumers / tests per contract
+- `docs/RELAY_CONTRACT_CHANGE_PROCESS.md` — how a contract may be changed
+- `docs/RELAY_PREVIEW_QA_POLICY.md` — how browser QA may run against a preview
+- `docs/RELAY_OBSERVABILITY_AUDIT.md` — trace fields and the gaps that remain
+- `docs/RELAY_EXPLAINABILITY_AUDIT.md` — the dimension → evidence rule
+- `tests/fixtures/relay-regression-corpus.ts` — named historical bug fixtures
+- `tests/relay-contract-owners.test.ts` — no orphaned owner, no hidden V2
+- `scripts/qa/contract-coverage.mjs` — per-contract coverage, no skips allowed
+- `scripts/qa/qa-release.mjs` — the release gate
