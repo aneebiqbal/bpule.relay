@@ -7,7 +7,7 @@
  *   node scripts/qa/release-manifest.mjs [--url=<preview-url>]
  */
 import { execFileSync } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { gitSha, readApiVersion } from './release-lib.mjs'
 
@@ -40,7 +40,7 @@ function runTests() {
     // vitest exits non-zero on failure; the JSON is still written.
   }
   try {
-    const parsed = JSON.parse(execFileSync('cat', ['/tmp/relay-release-tests.json'], { encoding: 'utf8' }))
+    const parsed = JSON.parse(readFileSync('/tmp/relay-release-tests.json', 'utf8'))
     return {
       total: parsed.numTotalTests ?? 0,
       passed: parsed.numPassedTests ?? 0,

@@ -44,3 +44,6 @@ yarn-error.log*
 next-env.d.ts
 benchmark-results/
 .neon
+
+# Generated release artifact (see scripts/qa/release-manifest.mjs)
+release-manifest.json
