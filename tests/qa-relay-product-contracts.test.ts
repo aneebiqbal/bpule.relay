@@ -1,0 +1,365 @@
+/**
+ * Relay product contracts — automated guards.
+ *
+ * These assert the decisions in docs/RELAY_PRODUCT_CONTRACTS.md. They exist so
+ * a future change cannot silently reverse a contract. If a test here conflicts
+ * with the contract document, the document wins: investigate the test first.
+ */
+import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { separateRoleFromEmployer } from '@/lib/intelligence-v2/extraction-pipeline'
+import { formatRoleLine, stripEmployerFromTitle } from '@/lib/leads/role-line'
+import { buildRevenueStrategy, sourceFromCanonical } from '@/lib/relay/revenue-strategy'
+import { buildLeadParityReport } from '@/lib/relay/lead-parity'
+import { resolveBuyerIntentFromSource } from '@/lib/intelligence-v3/buyer-intent'
+import { deriveNextLeadAction } from '@/lib/relay/lead-state-machine'
+import { imageFailureReason } from '@/lib/content/image-failure'
+import { isTerminalOutcome, isTerminalStoredStage } from '@/lib/conversation/terminal'
+import { HAS_AI_PROVIDER } from './helpers/needs-ai'
+import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
+import type { LeadDetail } from '@/lib/store/types'
+import type { Message } from '@/lib/domain/types'
+
+describe('Contract 1 — title and employer are separate canonical fields', () => {
+  it('splits "Role at Company" into a role-only title and the employer', () => {
+    const identity = separateRoleFromEmployer('CEO at Hartford AI Partners', 'CEO at Hartford AI Partners', null)
+    expect(identity.title).toBe('CEO')
+    expect(identity.company).toBe('Hartford AI Partners')
+  })
+
+  it('the role-only title and the company compose one subtitle', () => {
+    expect(formatRoleLine('CEO', 'Hartford AI Partners')).toBe('CEO · Hartford AI Partners')
+  })
+
+  it('a title that already carries the employer is deduplicated, not repeated', () => {
+    expect(formatRoleLine('CEO at Hartford AI Partners', 'Hartford AI Partners')).toBe('CEO · Hartford AI Partners')
+    expect(stripEmployerFromTitle('CEO at Hartford AI Partners', 'Hartford AI Partners')).toBe('CEO')
+  })
+
+  it('the employer is never left inside the role', () => {
+    expect(stripEmployerFromTitle('Technical Recruiter at Northstar Technologies', 'Northstar Technologies')).toBe('Technical Recruiter')
+  })
+})
+
+describe('Contract 2 — a high-potential builder needs product/technical evidence', () => {
+  function makeCanonical(overrides: Partial<CanonicalProspectIntelligence['intelligence']> = {}): CanonicalProspectIntelligence {
+    return {
+      version: 'relay_qualification_v2',
+      intelligenceRunId: 'test',
+      intelligenceInputHash: 'test',
+      intelligenceVersion: 'test',
+      computedAt: new Date().toISOString(),
+      canonicalScore: 24,
+      scoreVersion: 'test',
+      scoredAt: new Date().toISOString(),
+      scoreBreakdown: { dimensions: [], hardNegatives: [], missingInfo: [], total: 24, label: 'Weak fit', reasons: [], watchOut: [] },
+      confidence: 50,
+      qualification: 'skip',
+      intelligence: {
+        person: { fullName: 'Jane CEO', firstName: 'Jane', title: 'CEO', seniority: null, location: null, linkedinUrl: null, otherUrls: [] },
+        company: { name: 'Acme', domain: null, linkedinUrl: null, industry: null, size: null, sizeEvidence: null, product: null, stage: null, stageEvidence: null },
+        opportunity: { signals: [], primarySignal: null, description: null, urgency: 'unknown' },
+        job: { title: null, employmentType: 'unknown', workplaceType: 'UNKNOWN', allowedGeography: null, timezone: null, compensation: null, skills: [], seniority: 'unknown', source: null, postedDate: null },
+        content: { recentPosts: [], topics: [], explicitProblems: [], initiatives: [], launches: [], technicalSignals: [], hiringSignals: [] },
+        probableNeed: null,
+        opportunityTrigger: null,
+        timingSignal: null,
+        risks: [],
+        unknowns: [],
+        resolvedContradictions: [],
+        businessModel: 'PRODUCT',
+        relationship: 'UNKNOWN',
+        commercialReading: { serviceBuyerIntent: 'UNKNOWN', externalEngineeringNeed: 'NONE_DETECTED', immediateBuyerNeed: false, buyerTiming: 'UNKNOWN', productMomentum: 'NONE', customerDiscovery: 'NONE', preLaunchActivity: 'NONE', technicalRelevance: 'NONE', buyerEvidenceKinds: [] },
+        remoteEligibility: { workplaceType: 'REMOTE', remoteScope: 'UNKNOWN', eligibility: 'ELIGIBLE', reason: '', evidence: [] },
+        needOwnershipSummary: { dominant: 'UNKNOWN', counts: { SELF_NEED: 0, CUSTOMER_NEED: 0, MARKET_PROBLEM: 0, SERVICE_OFFERING: 0, PRODUCT_PROBLEM: 0, EMPLOYER_NEED: 0, UNKNOWN: 0 } },
+        ...overrides,
+      },
+      rawSource: { rawInput: '', sourceType: 'mixed', sourceUrl: null, profileUrl: null, companyUrl: null, jobUrl: null, postUrls: [], rawPosts: [], rawJobDescription: null, rawProfileText: null, rawCompanyText: null, capturedAt: new Date().toISOString() },
+      evidenceLedger: [],
+      remoteEligibility: { workplaceType: 'REMOTE', remoteScope: 'UNKNOWN', eligibility: 'ELIGIBLE', reason: '', evidence: [] },
+      extractionCompleteness: { score: 0, presentFields: [], missingFields: [], weakFields: [], repairAttempted: false, repairImproved: false, sourceUrlsFound: [], urlsPreserved: [] },
+      rescoreEvents: [],
+      recommendedIdentityId: null,
+      recommendedProofIds: [],
+      personalizationAngle: null,
+      outreachContext: { whyNow: null, probableNeed: null, bestProof: null, personalizationAnchor: null, messageGoal: null, cta: null, thingsNotToClaim: [] },
+      extractionCallLog: [],
+      extractionTrace: [],
+    }
+  }
+
+  it('a product builder with a CEO title gets a connection note', () => {
+    const strategy = buildRevenueStrategy(sourceFromCanonical(makeCanonical(), { channel: 'connection' }))
+    expect(strategy.contact.messageRecommended).toBe(true)
+  })
+
+  it('a non-product CEO with no technical signal does not', () => {
+    const strategy = buildRevenueStrategy(
+      sourceFromCanonical(makeCanonical({ businessModel: 'UNKNOWN' }), { channel: 'connection' }),
+    )
+    expect(strategy.contact.messageRecommended).toBe(false)
+  })
+
+  it('technical signals alone qualify even without a product business model', () => {
+    const strategy = buildRevenueStrategy(
+      sourceFromCanonical(
+        makeCanonical({ businessModel: 'UNKNOWN', content: { recentPosts: [], topics: [], explicitProblems: [], initiatives: [], launches: [], technicalSignals: ['react'], hiringSignals: [] } }),
+        { channel: 'connection' },
+      ),
+    )
+    expect(strategy.contact.messageRecommended).toBe(true)
+  })
+})
+
+describe('Contract 3 — one lead has one canonical action/state across every surface', () => {
+  const NOW = new Date('2026-10-27T12:00:00Z').getTime()
+
+  function makeLead(overrides: Partial<LeadDetail> = {}): LeadDetail {
+    return {
+      id: 'lead-1',
+      organizationId: 'org-1',
+      ownerRepId: 'rep-1',
+      company: 'Acme',
+      companyKey: 'acme',
+      contactName: 'Sarah',
+      contactTitle: 'VP Engineering',
+      url: 'https://linkedin.com/in/sarah',
+      rawInput: null,
+      signalType: 1,
+      signalEvidence: 'Hiring engineers',
+      verbatimQuote: null,
+      score: 8,
+      verdict: 'send',
+      status: 'new',
+      playId: null,
+      tags: [],
+      direction: 'outbound',
+      source: 'linkedin',
+      connectionAcceptedAt: null,
+      lockedUntil: null,
+      lockedReason: null,
+      archived: false,
+      archivedAt: null,
+      createdAt: '2026-10-20T10:00:00Z',
+      canonicalScore: 80,
+      messages: [],
+      outcomes: [],
+      followupCount: 0,
+      ...overrides,
+    }
+  }
+
+  function msg(overrides: Partial<Message>): Message {
+    return {
+      id: crypto.randomUUID(),
+      organizationId: 'org-1',
+      leadId: 'lead-1',
+      repId: 'rep-1',
+      type: 'dm',
+      draftText: null,
+      sentText: 'Hello!',
+      sentAt: '2026-10-21T10:00:00Z',
+      modelUsed: null,
+      direction: 'outbound',
+      createdAt: '2026-10-21T10:00:00Z',
+      ...overrides,
+    }
+  }
+
+  it('an inbound-first lead is needs-reply on the board and the lead detail', () => {
+    const report = buildLeadParityReport(
+      makeLead({ direction: 'inbound', inboundMessage: 'We need an external team to rebuild our platform.', messages: [] }),
+      NOW,
+    )
+    expect(report.consistent).toBe(true)
+    expect(report.pipelineStage).toBe('needs_reply')
+    expect(report.relationshipDisplay).toBe('NEEDS_REPLY')
+    expect(report.conversationPresence).not.toBe('NO_MESSAGES')
+  })
+
+  it('a lead the rep owes a reply to reads the same on every surface', () => {
+    const report = buildLeadParityReport(
+      makeLead({
+        status: 'replied',
+        connectionAcceptedAt: '2026-10-20T12:00:00Z',
+        messages: [
+          msg({ type: 'connection', sentText: 'Hi!', sentAt: '2026-10-20T10:00:00Z' }),
+          msg({ type: 'dm', sentText: 'Hey Sarah...', sentAt: '2026-10-20T14:00:00Z' }),
+          msg({ type: 'dm', direction: 'inbound', sentText: 'Tell me more', sentAt: '2026-10-26T09:00:00Z' }),
+        ],
+      }),
+      NOW,
+    )
+    expect(report.consistent).toBe(true)
+    expect(report.relationshipDisplay).toBe('NEEDS_REPLY')
+    expect(report.relationshipLabel).toBe('Needs reply')
+    expect(report.pipelineStage).toBe('needs_reply')
+  })
+
+  it('a quiet lead past the follow-up window is a follow-up on every surface', () => {
+    const report = buildLeadParityReport(
+      makeLead({
+        status: 'contacted',
+        connectionAcceptedAt: '2026-10-01T12:00:00Z',
+        messages: [
+          msg({ type: 'connection', sentText: 'Hi!', sentAt: '2026-10-01T10:00:00Z' }),
+          msg({ type: 'dm', sentText: 'Hey Sarah...', sentAt: '2026-10-01T14:00:00Z' }),
+        ],
+      }),
+      NOW,
+    )
+    expect(report.consistent).toBe(true)
+    expect(report.relationshipDisplay).toBe('FOLLOW_UP_DUE')
+    expect(report.pipelineStage).toBe('follow_up_due')
+  })
+
+  it('the score is one canonical /10 value with its band, not a raw number', () => {
+    const report = buildLeadParityReport(makeLead({ canonicalScore: 80 }), NOW)
+    expect(report.displayText).toBe('8/10')
+    expect(report.qualification).toBe('STRONG')
+    expect(report.consistent).toBe(true)
+  })
+})
+
+describe('Contract 4 — verified source truth outranks model disagreement', () => {
+  const GENUINE_BUYER = `Priya Raman
+CTO at Ledgerline
+About
+Ledgerline is a payments startup.
+We are looking for an external software development agency to rebuild our merchant dashboard in React.
+Budget approved: $40,000. Start within 3 weeks.`
+
+  it('a source-verified request is HIGH even when the model scores it low', () => {
+    const r = resolveBuyerIntentFromSource(GENUINE_BUYER, { modelBuyerProbability: 0.1 })
+    expect(r.verifiedBuyerRequest).toBe(true)
+    expect(r.buyerIntentLevel).toBe('HIGH')
+    expect(r.relationshipRole).toBe('BUYER')
+    // The disagreement is recorded for audit, never allowed to erase the request.
+    expect(r.contradictions.join(' ')).toMatch(/opportunity model scored buyer request 0\.10/)
+    expect(r.effectiveBuyerProbability).toBeGreaterThanOrEqual(0.7)
+  })
+
+  it('seller-side promotion is still SELLER with UNKNOWN intent when every scorer claims buyer', () => {
+    const r = resolveBuyerIntentFromSource(
+      'Jordan Vale\nFounder & CEO at Arbiter Governance\nWe built Arbiter so enterprises can prove their AI is safe.\nBring us the workflow — we will evaluate it against regulatory frameworks.',
+      { modelBuyerProbability: 0.95, signalCheck: { explicitAsk: true, seekingVendor: true } },
+    )
+    expect(r.verifiedBuyerRequest).toBe(false)
+    expect(r.buyerIntentLevel).toBe('UNKNOWN')
+    expect(['SELLER', 'BUILDER']).toContain(r.relationshipRole)
+  })
+})
+
+describe('Contract 5 — terminal state overrides historical intent', () => {
+  const NOW = new Date('2026-10-27T12:00:00Z').getTime()
+
+  function makeLead(overrides: Partial<LeadDetail> = {}): LeadDetail {
+    return {
+      id: 'lead-1',
+      organizationId: 'org-1',
+      ownerRepId: 'rep-1',
+      company: 'Acme',
+      companyKey: 'acme',
+      contactName: 'Sarah',
+      contactTitle: 'VP Engineering',
+      url: null,
+      rawInput: null,
+      signalType: 1,
+      signalEvidence: 'Hiring engineers',
+      verbatimQuote: 'We need an agency to build our platform.',
+      score: 9,
+      verdict: 'send',
+      status: 'new',
+      playId: null,
+      tags: [],
+      direction: 'outbound',
+      source: 'linkedin',
+      connectionAcceptedAt: null,
+      lockedUntil: null,
+      lockedReason: null,
+      archived: false,
+      archivedAt: null,
+      createdAt: '2026-10-20T10:00:00Z',
+      canonicalScore: 95,
+      messages: [],
+      outcomes: [],
+      followupCount: 0,
+      ...overrides,
+    }
+  }
+
+  it.each(['won', 'lost', 'dead', 'no'] as const)('a %s lead offers no outreach, however strong the old signals', (status) => {
+    const result = deriveNextLeadAction(
+      makeLead({ status, score: 9, canonicalScore: 95, verbatimQuote: 'We need an agency.' }),
+      NOW,
+    )
+    expect(result.requiresAction).toBe(false)
+    expect(result.followupDue).toBe(false)
+    expect(result.followupsRemaining).toBe(0)
+  })
+
+  it('a skipped lead is never contacted', () => {
+    const result = deriveNextLeadAction(makeLead({ verdict: 'skip' }), NOW)
+    expect(result.requiresAction).toBe(false)
+    expect(result.followupDue).toBe(false)
+  })
+
+  it('the terminal authorities agree on DO_NOT_CONTACT', () => {
+    expect(isTerminalOutcome('DO_NOT_CONTACT')).toBe(true)
+    expect(isTerminalStoredStage('do_not_contact')).toBe(true)
+    expect(isTerminalOutcome('WON')).toBe(true)
+    expect(isTerminalOutcome('DEFERRED')).toBe(false)
+  })
+})
+
+describe('Contract 6 — unknown is not zero', () => {
+  const HOURLY_ONLY_JOB = `Senior React Native Engineer
+Posted 25 minutes ago
+Worldwide
+Hourly
+$5.00 - $15.00
+Hourly
+Expert
+More than 6 months
+We need an experienced React Native engineer to maintain our mobile app.
+Compensation: Negotiable based on scope.`
+
+  it.skipIf(!HAS_AI_PROVIDER)(
+    'a job with no Connects and no fixed budget yields null, not 0',
+    async () => {
+      const { extractUpworkJob } = await import('@/lib/upwork-v2')
+      const result = await extractUpworkJob({ rawText: HOURLY_ONLY_JOB })
+      if (!result.job) return
+      expect(result.job.connectsCost).toBeNull()
+      expect(result.job.budget).toBeNull()
+      expect(result.job.budgetType).toBe('hourly')
+    },
+    60_000,
+  )
+
+  it('a failure reason is never an empty or silent success', () => {
+    for (const status of [401, 503, 429, 504, 502, 500, null]) {
+      const reason = imageFailureReason(status)
+      expect(reason.length).toBeGreaterThan(0)
+      expect(reason).toMatch(/retry/i)
+    }
+  })
+})
+
+describe('Contract 7 — persistence and UI state reflect actual lifecycle state', () => {
+  it('a failed image regeneration keeps the existing asset and shows a reason', () => {
+    // REL-QA-007 S1: the old code cleared the image on failure. The failure
+    // branch must return before any state that clears it.
+    const source = readFileSync('src/components/relay/persona-daily-post.tsx', 'utf8')
+    const failureBranch = source.slice(source.indexOf('if (!res.ok)'), source.indexOf('if (json.url)'))
+    expect(failureBranch).toMatch(/setError\(/)
+    expect(failureBranch).not.toMatch(/setImageUrl\(null\)/)
+  })
+
+  it('every failure category carries a real reason with a retry hint', () => {
+    expect(imageFailureReason(401)).toMatch(/not signed in/i)
+    expect(imageFailureReason(503)).toMatch(/not configured/i)
+    expect(imageFailureReason(429)).toMatch(/rate limit/i)
+    expect(imageFailureReason(null, 'Failed to fetch')).toMatch(/timed out/i)
+  })
+})

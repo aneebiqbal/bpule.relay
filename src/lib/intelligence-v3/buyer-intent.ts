@@ -108,7 +108,11 @@ export interface VerifiedBuyerIntent {
   evidence: BuyerIntentEvidence[]
   /** 0-1: how sure the canonical decision is. */
   confidence: number
-  /** Scorer disagreements; any entry forces buyerIntentLevel UNKNOWN. */
+  /**
+   * Scorer disagreements; recorded for audit. A model disagreement never
+   * lowers a source-verified request (Contract 4) — only a source-side problem
+   * (seller-owned, historical, negated, terminal) fails closed.
+   */
   contradictions: string[]
   /** Buyer-request probability every scorer must use instead of the model's raw value. */
   effectiveBuyerProbability: number
