@@ -11,6 +11,7 @@ import {
   type RelationshipDisplayState,
 } from './conversation-presence'
 import { derivePipelineStage, type LeadRow, type PipelineStage } from '@/components/leads/pipeline-utils'
+import { recordParityViolations } from './contract-violations'
 
 /**
  * Cross-surface parity for one lead.
@@ -133,6 +134,16 @@ export function buildLeadParityReport(lead: LeadDetail, now: number = Date.now()
     consistent: divergences.length === 0,
     divergences,
   }
+}
+
+/**
+ * Parity plus telemetry: the same report, with every divergence recorded as a
+ * contract violation. Use this on QA/admin inspection paths.
+ */
+export function buildLeadParityReportWithViolations(lead: LeadDetail, now: number = Date.now()): LeadParityReport {
+  const report = buildLeadParityReport(lead, now)
+  if (!report.consistent) recordParityViolations(lead.id, report.divergences)
+  return report
 }
 
 /** Same as buildLeadParityReport, but throws when the surfaces disagree. */
