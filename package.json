@@ -10,6 +10,10 @@
     "test": "vitest run",
     "qa:relay": "npm run build && npx tsc --noEmit && vitest run --reporter=verbose && echo '✅ QA:RELAY PASS'",
     "qa:contracts": "vitest run tests/qa-relay-product-contracts.test.ts tests/qa-relay-cross-surface-parity.test.ts",
+    "qa:coverage": "tsx scripts/qa/contract-coverage.ts",
+    "qa:release": "tsx scripts/qa/qa-release.ts",
+    "qa:deployed": "tsx scripts/qa/qa-deployed.ts",
+    "qa:manifest": "tsx scripts/qa/release-manifest.ts",
     "test:watch": "vitest",
     "intelligence:benchmark": "npx tsx scripts/benchmark-intelligence.mjs",
     "intelligence:benchmark:mock": "npx tsx scripts/benchmark-intelligence.mjs --pipeline=mock"

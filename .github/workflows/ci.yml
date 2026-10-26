@@ -117,3 +117,43 @@ jobs:
         if: steps.migration-check.outputs.changed == 'true' && steps.secrets-check.outputs.present != 'true'
         run: |
           echo "::notice::Skipping the adversarial RLS test: Supabase secrets are not configured on this repository."
+
+  # Release gate. A green badge requires the product contracts to pass with no
+  # skipped test, the historical regression corpus to pass, lead parity to hold,
+  # and typecheck / lint / tests / build to be green. No release is green when a
+  # contract test skipped.
+  release-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Contract coverage (no skips allowed)
+        run: pnpm qa:coverage
+
+      - name: Historical regression corpus
+        run: pnpm exec vitest run tests/relay-regression-corpus.test.ts --silent
+
+      - name: Contract owner scan
+        run: pnpm exec vitest run tests/relay-contract-owners.test.ts --silent
+
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit / integration
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
