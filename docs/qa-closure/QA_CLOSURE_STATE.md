@@ -362,6 +362,19 @@ SHA gate have not been run.
   `{"sha":"ae652cb110bde4fc4184da58c52bfac866bf4418","ref":"sprint-post-mvp-activation","env":"preview"}`.
   Production `relay.bpulse.dev` is on `65b9f91` (`main`) — not this build.
 
+### Release candidate (the SHA QA should test)
+
+- Commit `bdf75f873e78bcd01db35ceebf4fff384bf0e8c0` ("test(relay): release candidate —
+  parity suite, message-quality eval, close 6 pre-existing failures").
+- Preview: `https://bpule-relay-c7da6ns8c-aneeb-iqbals-projects.vercel.app`
+  (`dpl_AqimrUzFY7y5CihAHNsnyK8p8PHN`).
+- **Runtime-verified**: `GET /api/version` →
+  `{"sha":"bdf75f873e78bcd01db35ceebf4fff384bf0e8c0","env":"preview","appVersion":"0.8.0"}`.
+- Smoke: `/`, `/login`, `/api/version` all `200`.
+
+Production deploy is a separate, explicit step (promote this exact SHA) and has
+**not** been done.
+
 ### Added
 
 - `GET /api/version` already existed; extended with `appVersion`.
