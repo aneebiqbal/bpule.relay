@@ -142,6 +142,12 @@ jobs:
       - name: Historical regression corpus
         run: pnpm exec vitest run tests/relay-regression-corpus.test.ts --silent
 
+      - name: Semantic buyer questions
+        run: pnpm exec vitest run tests/qa-relay-semantic-buyer-questions.test.ts --silent
+
+      - name: Message quality invariants
+        run: pnpm exec vitest run tests/qa-relay-message-quality-invariants.test.ts --silent
+
       - name: Contract owner scan
         run: pnpm exec vitest run tests/relay-contract-owners.test.ts --silent
 

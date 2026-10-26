@@ -11,8 +11,11 @@ import { gitSha, readApiVersion } from './release-lib.mjs'
 
 const STEPS = [
   { name: 'PRODUCT CONTRACTS', command: ['node', 'scripts/qa/contract-coverage.mjs'] },
+  { name: 'SEMANTIC BUYER QUESTIONS', command: ['npx', 'vitest', 'run', 'tests/qa-relay-semantic-buyer-questions.test.ts', '--silent'] },
+  { name: 'MESSAGE QUALITY', command: ['npx', 'vitest', 'run', 'tests/qa-relay-message-quality-invariants.test.ts', '--silent'] },
   { name: 'REGRESSION CORPUS', command: ['npx', 'vitest', 'run', 'tests/relay-regression-corpus.test.ts', '--silent'] },
   { name: 'LEAD PARITY', command: ['npx', 'vitest', 'run', 'tests/qa-relay-cross-surface-parity.test.ts', '--silent'] },
+  { name: 'CONTRACT OWNERS', command: ['npx', 'vitest', 'run', 'tests/relay-contract-owners.test.ts', '--silent'] },
   { name: 'TYPECHECK', command: ['npx', 'tsc', '--noEmit'] },
   { name: 'LINT', command: ['npx', 'eslint'] },
   { name: 'UNIT', command: ['npx', 'vitest', 'run', '--silent'] },
