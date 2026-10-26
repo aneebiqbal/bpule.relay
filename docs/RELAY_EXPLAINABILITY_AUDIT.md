@@ -37,17 +37,20 @@ There is no regression set that pins *evidence selection* separately from
 extraction. A fixture can extract correctly and still attach irrelevant
 evidence, and nothing fails.
 
-### Remediation (Phase 17, not done in this sprint)
+### Remediation (Phase 17)
 
-Add fixtures where extraction is correct but evidence selection is bad:
+`tests/qa-relay-explainability-regression.test.ts` pins evidence selection on the
+Access dimension (the only dimension that reads just `SourceFacts`):
 
-- a past role attached to Authority
-- an education line attached to Commercial Potential
-- a seller-offering line attached to Buyer Intent
-- a dated historical post attached to Timing when a current one exists
+- a 1st-degree connection cites the connection, never an unrelated quote
+- a stated contact route is quoted verbatim, not paraphrased
+- a model claim of DIRECT with no route in the source is overridden to CONNECTION
+  and the evidence explains the override
+- a 3rd-degree connection is INDIRECT and says so
+- no access facts and no model leaves INDIRECT, never an invented route
 
-Each asserts the evidence kind and dimension, so a future change cannot quietly
-make an explanation plausible-but-wrong.
+Still open: the same treatment for Buyer Intent, Commercial Potential, Authority
+and Timing evidence selection.
 
 ---
 
