@@ -24,28 +24,29 @@ The `[relay-ai]` line carries: `task`, `provider`, `model`, `attempt`,
 
 ---
 
-## Gaps
+## Status — closed in this pass
 
-1. **No tenant or lead on the runtime trace.** The `[relay-ai]` line identifies
-   the feature and the model but not which organization or lead produced it. A
-   production incident cannot be scoped from the trace alone.
-2. **No structured failure category on AI traces.** The `error` field is free
-   text. `imageFailureCategory` exists for Studio but is not emitted as a
-   structured field on the trace.
-3. **No request_id correlation.** Persisted rows carry `decision_run_id`, but
-   the log line does not, so log and row cannot be joined.
+| Gap | Resolution |
+| --- | --- |
+| No tenant or lead on the runtime trace | `TraceContext` (AsyncLocalStorage) carries `requestId`, `organizationId`, `leadId`, `jobId`, `repId`, `decisionRunId`; `generate` reads the ambient context when the caller does not pass ids. |
+| No structured failure category | `AiFailureCategory` + `classifyAiFailure`; `persistTrace` writes `failure_category`; the raw `error` is kept separately. |
+| No request_id correlation | One `requestId` per user request (`newRequestId`), propagated through every AI call and persisted on `ai_traces` (`request_id`, `decision_run_id`). The `[relay-ai]` line carries `req=… lead=… failure=…`. |
 
----
+Persisted trace columns: `request_id`, `decision_run_id`, `failure_category` (with
+a graceful fallback when the migration has not been applied).
 
-## Remediation (not done in this sprint)
+### Privacy
 
-- Add `organization_id` and `lead_id` (where the call site has them) to the
-  `[relay-ai]` trace, redacted to the id only — never the raw source text.
-- Emit a structured `failure_category` alongside `error`.
-- Add `request_id` to the trace and join it to `decision_run_id`.
+Traces carry ids, feature, provider, model, latency, tokens, cost, attempt,
+fallback and failure category. They do **not** carry the raw source paste, client
+messages, generated messages, emails or phone numbers. A regression test asserts
+the persisted row contains none of those keys.
 
-**Avoid sensitive raw data.** Traces carry ids and model metadata, not client
-messages or source text.
+### Remaining
+
+- The `ai_traces` migration for the three new columns still needs to be applied
+  in production (the persistence falls back gracefully until then).
+- Dashboards should read `failure_category`, never parse the free-text `error`.
 
 ---
 
