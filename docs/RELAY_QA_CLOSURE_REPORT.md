@@ -11,10 +11,11 @@
 | Field | Value |
 | --- | --- |
 | BASELINE SHA | `fd14819493ff485b572bc1c2e760e6b9faccd4fe` |
-| FROZEN SHA (gate-verified) | the tip of this pass's commit chain — see "Deploy target" below |
+| **FROZEN SHA (gate-verified)** | **`3ae4308bdbee6675e3f7ba6aa4c9dab81ef283da`** |
+| FINAL SHA | `3ae4308` — the tree is clean (`git status` empty) |
 | PREVIEW SHA | **NOT DEPLOYED** — no Vercel CLI access in this environment |
 | PRODUCTION SHA | `65b9f916ff1198278e9eaaff7a8f19ef051ddcaf` (`origin/main`) — unchanged |
-| Tested SHA | the tip of this pass's commit chain |
+| Tested SHA | `3ae4308` — the full automated gate ran green on this exact commit |
 
 **The tree is frozen and committed.** Every changed path was verified to be
 this pass's own work before staging (no foreign uncommitted work was in the
@@ -23,7 +24,7 @@ tree, and no secret-looking path was staged). The commits are local — they wer
 session is a separate, riskier action.
 
 **Deployed SHA ≠ tested SHA.** Per the release rules, browser verification and
-production promotion are **invalid** until the frozen SHA is deployed and
+production promotion are **invalid** until `3ae4308` is deployed and
 `/api/version` reports it.
 
 ### Deploy target
@@ -579,19 +580,26 @@ target and a running app, which this environment does not have.
 
 ### Deploy target
 
-**Deploy the tip of this pass's commit chain — the newest commit the full
-automated gate ran green on.** Do not deploy an earlier runtime-equivalent
-commit: the release tooling is part of the release candidate, and carving out an
-exception to `tested SHA == deployed SHA` at the last moment is how the rule
-stops meaning anything.
+**Deploy `3ae4308` exactly.** Do not deploy an earlier runtime-equivalent
+commit, and do not deploy moving `HEAD`.
 
-Do not deploy moving `HEAD` either. `pnpm qa:production-release --url=<preview-url>`
-re-checks SHA parity live against `/api/version`, so a promotion cannot be
-authorised against a stale state file.
+The release tooling is part of the release candidate. An earlier version of this
+report named `2581561` because the later commits were "docs and gate-test work" —
+that was wrong. Deploying `2581561` would ship the application changes but not
+the gate infrastructure that proves them, and it would carve an exception out of
+`tested SHA == deployed SHA` at the last moment, which is how the rule stops
+meaning anything.
+
+`3ae4308` is the tip of the chain and the commit the full automated gate ran
+green on (3841 tests, `AUTOMATED_CODE_GATE: PASS`).
+
+`pnpm qa:production-release --url=<preview-url>` re-checks SHA parity live
+against `/api/version`, so a promotion cannot be authorised against a stale
+state file.
 
 **One nuance:** `/api/version` reports the *application* deployment SHA. The
-preview must be built from the exact target commit — not an older runtime commit
-while newer release scripts run locally, which would look like parity and not be.
+preview must be built from `3ae4308` — not an older runtime commit while newer
+release scripts run locally, which would look like parity and not be.
 
 ---
 
