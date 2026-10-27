@@ -11,26 +11,29 @@
 | Field | Value |
 | --- | --- |
 | BASELINE SHA | `fd14819493ff485b572bc1c2e760e6b9faccd4fe` |
-| **FROZEN SHA (this pass)** | **`3012ec697113b05e3d8d26acc0152ef5fab6c35a`** |
-| FINAL SHA | `3012ec6` — the tree is clean at this commit (`git status` empty) |
+| **FROZEN SHA (this pass)** | **`258156176cb746b6dfb382d27c87fabfd814aa05`** |
+| FINAL SHA | `2581561` — the tree is clean at this commit (`git status` empty) |
 | PREVIEW SHA | **NOT DEPLOYED** — no Vercel CLI access in this environment |
 | PRODUCTION SHA | `65b9f916ff1198278e9eaaff7a8f19ef051ddcaf` (`origin/main`) — unchanged |
-| Tested SHA | `3012ec6` — the gate was re-run on this exact commit |
+| Tested SHA | `2581561` — the gate was re-run on this exact commit |
 
-**The tree is frozen and committed.** Every one of the 55 changed paths was
-verified to be this pass's own work before staging (no foreign uncommitted work
-was in the tree, and no secret-looking path was staged). The commit is local —
-it was **not pushed**, because pushing to a shared repo with a known concurrent
+**The tree is frozen and committed.** Every changed path was verified to be
+this pass's own work before staging (no foreign uncommitted work was in the
+tree, and no secret-looking path was staged). The commit is local — it was
+**not pushed**, because pushing to a shared repo with a known concurrent
 session is a separate, riskier action.
 
 **Deployed SHA ≠ tested SHA.** Per the release rules, browser verification and
-production promotion are **invalid** until `3012ec6` is deployed and
+production promotion are **invalid** until `2581561` is deployed and
 `/api/version` reports it.
 
-> **Concurrent commits.** Another session pushed three commits on top of the
-> baseline while this pass was running (`001c7a2`, `35f1687`, `7413507`). They
-> touch only `scripts/qa/*` and do not overlap this pass's files. `3012ec6` is
-> on top of them, so the tested SHA is a single immutable commit.
+> **Concurrent commits.** Another session pushed a merge on top of the earlier
+> frozen SHA (`4759992 merge: reconcile the release-hardening RC with the 12-bug
+> QA batch`, then `8a805f5`). Their work touches the release-hardening RC; mine
+> is `3012ec6` → `b67b92e` (the BUG-004 hard gate) → `2581561` (this report and
+> the gate fix). **The SHA to deploy is `2581561`, not the earlier `3012ec6`** —
+> it is theirs plus mine, and the browser matrix is the first real test of the
+> combination.
 
 ---
 
