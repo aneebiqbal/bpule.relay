@@ -11,11 +11,16 @@
 | Field | Value |
 | --- | --- |
 | BASELINE SHA | `fd14819493ff485b572bc1c2e760e6b9faccd4fe` |
-| **FROZEN SHA (gate-verified)** | **`3ae4308bdbee6675e3f7ba6aa4c9dab81ef283da`** |
-| FINAL SHA | `3ae4308` — the tree is clean (`git status` empty) |
+| **DEPLOY TARGET (gate-verified)** | **`3ae4308bdbee6675e3f7ba6aa4c9dab81ef283da`** |
+| FINAL SHA | `0919898` — the tree is clean; commits after `3ae4308` are documentation only and are **not** part of the deploy target |
 | PREVIEW SHA | **NOT DEPLOYED** — no Vercel CLI access in this environment |
 | PRODUCTION SHA | `65b9f916ff1198278e9eaaff7a8f19ef051ddcaf` (`origin/main`) — unchanged |
 | Tested SHA | `3ae4308` — the full automated gate ran green on this exact commit |
+
+**The deploy target is a specific commit, not `HEAD`.** The documentation
+commits after `3ae4308` change no code, but `/api/version` reports the SHA
+Vercel actually built — so deploying anything other than `3ae4308` breaks
+`tested SHA == deployed SHA` while looking like it holds.
 
 **The tree is frozen and committed.** Every changed path was verified to be
 this pass's own work before staging (no foreign uncommitted work was in the
