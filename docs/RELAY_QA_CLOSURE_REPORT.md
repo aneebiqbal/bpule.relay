@@ -11,11 +11,10 @@
 | Field | Value |
 | --- | --- |
 | BASELINE SHA | `fd14819493ff485b572bc1c2e760e6b9faccd4fe` |
-| **FROZEN SHA (gate-verified)** | **`258156176cb746b6dfb382d27c87fabfd814aa05`** |
-| FINAL SHA | `1034406` — the tree is clean; the two commits after `2581561` change documentation only |
+| FROZEN SHA (gate-verified) | the tip of this pass's commit chain — see "Deploy target" below |
 | PREVIEW SHA | **NOT DEPLOYED** — no Vercel CLI access in this environment |
 | PRODUCTION SHA | `65b9f916ff1198278e9eaaff7a8f19ef051ddcaf` (`origin/main`) — unchanged |
-| Tested SHA | `2581561` — the last commit the full automated gate ran green on |
+| Tested SHA | the tip of this pass's commit chain |
 
 **The tree is frozen and committed.** Every changed path was verified to be
 this pass's own work before staging (no foreign uncommitted work was in the
@@ -24,16 +23,37 @@ tree, and no secret-looking path was staged). The commits are local — they wer
 session is a separate, riskier action.
 
 **Deployed SHA ≠ tested SHA.** Per the release rules, browser verification and
-production promotion are **invalid** until `2581561` is deployed and
+production promotion are **invalid** until the frozen SHA is deployed and
 `/api/version` reports it.
+
+### Deploy target
+
+**The deploy target is the tip of this pass's commit chain, not an earlier
+runtime-equivalent commit.**
+
+An earlier version of this report named `2581561` because the later commits were
+"docs and gate-test work". That was wrong: **the release tooling is part of the
+release candidate.** Deploying `2581561` would ship the application changes but
+not the gate infrastructure that proves them — and it would weaken the exact
+rule this pass exists to enforce, `tested SHA == deployed SHA`, by carving out an
+exception at the last moment.
+
+So the target is the newest commit that the full automated gate has run green
+on, including `scripts/qa/*`, the gate tests and this report. `/api/version`
+reports the *application* deployment SHA, so the deploy must be built from that
+exact commit — not an older runtime commit while newer release scripts run
+locally.
+
+`pnpm qa:production-release --url=<preview-url>` re-checks SHA parity live
+against `/api/version`, so a promotion cannot be authorised against a stale
+state file.
 
 > **Concurrent commits.** Another session pushed a merge on top of the earlier
 > frozen SHA (`4759992 merge: reconcile the release-hardening RC with the 12-bug
 > QA batch`, then `8a805f5`). Their work touches the release-hardening RC; mine
-> is `3012ec6` → `b67b92e` (the BUG-004 hard gate) → `2581561` (gate verified).
-> The two commits after `2581561` are this report. **The SHA to deploy is
-> `2581561`** — theirs plus mine, and the browser matrix is the first real test
-> of the combination.
+> is `3012ec6` → `b67b92e` (the BUG-004 hard gate) → `2581561` → the gate-logic
+> test and this report. **The combination has only been through the automated
+> gate — the browser matrix is its first real test.**
 
 ---
 
@@ -559,13 +579,19 @@ target and a running app, which this environment does not have.
 
 ### Deploy target
 
-**Deploy `2581561` exactly.** Do not deploy moving `HEAD` — the commits after it
-are documentation and the gate-logic test, and deploying a moving tree is how
-`tested SHA == deployed SHA` stops meaning anything.
+**Deploy the tip of this pass's commit chain — the newest commit the full
+automated gate ran green on.** Do not deploy an earlier runtime-equivalent
+commit: the release tooling is part of the release candidate, and carving out an
+exception to `tested SHA == deployed SHA` at the last moment is how the rule
+stops meaning anything.
 
-`pnpm qa:production-release --url=<preview-url>` re-checks SHA parity live
-against `/api/version`, so a promotion cannot be authorised against a stale
-state file.
+Do not deploy moving `HEAD` either. `pnpm qa:production-release --url=<preview-url>`
+re-checks SHA parity live against `/api/version`, so a promotion cannot be
+authorised against a stale state file.
+
+**One nuance:** `/api/version` reports the *application* deployment SHA. The
+preview must be built from the exact target commit — not an older runtime commit
+while newer release scripts run locally, which would look like parity and not be.
 
 ---
 

@@ -22,7 +22,7 @@ import {
   readVitestCounts,
   writeReleaseState,
 } from './release-lib.mjs'
-import { evaluateReleaseGates } from './release-gates.mjs'
+import { evaluateReleaseGates, renderReleaseGateReport } from './release-gates.mjs'
 
 const VITEST_JSON = path.join(ARTIFACTS_DIR, 'vitest.json')
 const BROWSER_JSON = path.join(ARTIFACTS_DIR, 'browser.json')
@@ -205,11 +205,11 @@ function main() {
   const shaGate = gates.shaGate
   const productionReady = gates.productionReady
 
-  console.log(`AUTOMATED_CODE_GATE      ${automatedOk ? 'PASS' : `FAIL (${failures} step(s) failed)`}`)
-  console.log(`BROWSER_GATE             ${browserGate}${browserGate === 'NOT_RUN' ? ` (${browser.reason})` : ''}`)
-  console.log(`BUG004_INBOUND_GATE      ${bug004Ready ? 'PASS' : browser.bug004?.result ?? 'NOT_RUN'}`)
-  console.log(`SHA_GATE                 ${shaGate}${version ? '' : ' (no /api/version reachable)'}`)
-  console.log(`PRODUCTION_GATE          ${gates.productionGate}`)
+  console.log(renderReleaseGateReport(gates, {
+    browserReasons: [browser.acceptance?.reason, browser.reason].filter(Boolean),
+    bug004Reasons: [browser.bug004?.reason].filter(Boolean),
+    shaReason: version ? null : 'no /api/version reachable',
+  }))
 
   // The verified state the manifest reads. Derived, never hand-maintained.
   let contractTestCount = null
@@ -240,7 +240,8 @@ function main() {
   }
   writeReleaseState(state)
 
-  console.log('==================')
+  // The renderer already printed the gate block, including the verdict. This
+  // block only decides the exit code.
   if (!automatedOk) {
     console.error(`AUTOMATED CODE GATE: FAIL (${failures} step(s) failed)`)
     process.exit(1)
@@ -249,13 +250,9 @@ function main() {
     // Deliberately exit 0: this script ran everything it can run. The
     // incomplete release is a fact to report, not a failure to hide. Use
     // `pnpm qa:production-release` to enforce the full release condition.
-    console.log('AUTOMATED CODE GATE: PASS')
-    console.log('RELEASE GATE: INCOMPLETE — browser and/or SHA parity outstanding')
     console.log(`wrote ${ARTIFACTS_DIR}/release-state.json`)
     process.exit(0)
   }
-  console.log('AUTOMATED CODE GATE: PASS')
-  console.log('RELEASE GATE: COMPLETE')
   console.log(`wrote ${ARTIFACTS_DIR}/release-state.json`)
 }
 

@@ -119,3 +119,112 @@ describe('release gate — every blocker names its gate', () => {
     expect(joined).toMatch(/SHA/i)
   })
 })
+
+// ── The rendered report ───────────────────────────────────────────────────────
+// The decision is only half the gate. The bug that started this work was a
+// REPORTING bug: the decision said incomplete while the headline said PASS.
+// A reviewer reads the rendered block, so the rendered block is pinned too — as
+// structured lines, not a brittle snapshot.
+
+import { renderReleaseGateReport } from '../scripts/qa/release-gates.mjs'
+
+/** `KEY   value` lines as a map, so assertions are on structure not spacing. */
+function gateLines(report: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const line of report.split('\n')) {
+    const m = line.match(/^([A-Z0-9_]+)\s{2,}(.*)$/)
+    if (m) out.set(m[1], m[2].trim())
+  }
+  return out
+}
+
+describe('release gate report — a reviewer cannot be misled', () => {
+  it('prints every gate on its own line with its real value', () => {
+    const report = renderReleaseGateReport(evaluateReleaseGates(PASSING))
+    const lines = gateLines(report)
+
+    expect(lines.get('AUTOMATED_CODE_GATE')).toBe('PASS')
+    expect(lines.get('BROWSER_GATE')).toBe('PASS')
+    expect(lines.get('BUG004_INBOUND_GATE')).toBe('PASS')
+    expect(lines.get('SHA_GATE')).toBe('VERIFIED')
+    expect(lines.get('PRODUCTION_GATE')).toBe('PASS')
+  })
+
+  it('says COMPLETE only when the release is actually ready', () => {
+    const report = renderReleaseGateReport(evaluateReleaseGates(PASSING))
+    expect(report).toContain('RELEASE GATE: COMPLETE')
+    expect(report).not.toContain('RELEASE GATE: INCOMPLETE')
+  })
+
+  it('says INCOMPLETE, never PASS, when the browser never ran', () => {
+    const report = renderReleaseGateReport(
+      evaluateReleaseGates({ ...PASSING, browserGate: 'NOT_RUN' }),
+      { browserReasons: ['E2E_BASE_URL not set'] },
+    )
+    const lines = gateLines(report)
+
+    expect(lines.get('BROWSER_GATE')).toContain('NOT_RUN')
+    expect(lines.get('PRODUCTION_GATE')).toBe('BLOCKED')
+    expect(report).toContain('RELEASE GATE: INCOMPLETE')
+    // The headline must never read as a pass.
+    expect(report).not.toMatch(/RELEASE GATE:\s*PASS/)
+    expect(report).not.toMatch(/AUTOMATED CODE GATE: PASS\s*\nRELEASE GATE: COMPLETE/)
+  })
+
+  it('says INCOMPLETE when the dedicated BUG-004 gate failed', () => {
+    const report = renderReleaseGateReport(
+      evaluateReleaseGates({ ...PASSING, bug004Gate: 'FAIL' }),
+    )
+    const lines = gateLines(report)
+
+    expect(lines.get('BUG004_INBOUND_GATE')).toContain('FAIL')
+    expect(lines.get('PRODUCTION_GATE')).toBe('BLOCKED')
+    // The blocker is named, so the reviewer knows which gate failed.
+    expect(report).toMatch(/BUG-004/i)
+    expect(report).toContain('RELEASE GATE: INCOMPLETE')
+  })
+
+  it('says INCOMPLETE when the SHA is not verified', () => {
+    const report = renderReleaseGateReport(
+      evaluateReleaseGates({ ...PASSING, shaGate: 'NOT_VERIFIED' }),
+      { shaReason: 'no /api/version reachable' },
+    )
+    const lines = gateLines(report)
+
+    expect(lines.get('SHA_GATE')).toContain('NOT_VERIFIED')
+    expect(lines.get('PRODUCTION_GATE')).toBe('BLOCKED')
+    expect(report).toContain('RELEASE GATE: INCOMPLETE')
+    expect(report).not.toMatch(/RELEASE GATE:\s*PASS/)
+  })
+
+  it('lists every blocker when everything is unsatisfied', () => {
+    const report = renderReleaseGateReport(
+      evaluateReleaseGates({
+        automatedCodeGate: 'FAIL',
+        browserGate: 'NOT_RUN',
+        bug004Gate: 'NOT_RUN',
+        shaGate: 'NOT_VERIFIED',
+      }),
+    )
+
+    // Four unsatisfied gates, four named blocker lines.
+    const blockerLines = report.split('\n').filter((l) => /^\s*- /.test(l))
+    expect(blockerLines).toHaveLength(4)
+    expect(report).toMatch(/automated/i)
+    expect(report).toMatch(/browser/i)
+    expect(report).toMatch(/BUG-004/i)
+    expect(report).toMatch(/SHA/i)
+  })
+
+  it('does not duplicate a reason that two specs of one gate share', () => {
+    // The acceptance spec and the matrix spec both report the same missing
+    // target; joining them made the report read as two separate problems.
+    const report = renderReleaseGateReport(
+      evaluateReleaseGates({ ...PASSING, browserGate: 'NOT_RUN' }),
+      { browserReasons: ['E2E_BASE_URL not set', 'E2E_BASE_URL not set'] },
+    )
+    const occurrences = report.split('E2E_BASE_URL not set').length - 1
+    expect(occurrences).toBe(1)
+    expect(gateLines(report).get('BROWSER_GATE')).toContain('NOT_RUN')
+  })
+})
