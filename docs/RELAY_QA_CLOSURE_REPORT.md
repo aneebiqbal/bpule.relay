@@ -11,21 +11,26 @@
 | Field | Value |
 | --- | --- |
 | BASELINE SHA | `fd14819493ff485b572bc1c2e760e6b9faccd4fe` |
-| FINAL SHA | **uncommitted** — the tree is dirty by design; no commit was made |
-| HEAD at gate time | `741350708a564e047ea6f24da31d4256801f0a21` — three CI commits landed **during** this pass (`001c7a2`, `35f1687`, `7413507`), none of them mine |
+| **FROZEN SHA (this pass)** | **`3012ec697113b05e3d8d26acc0152ef5fab6c35a`** |
+| FINAL SHA | `3012ec6` — the tree is clean at this commit (`git status` empty) |
 | PREVIEW SHA | **NOT DEPLOYED** — no Vercel CLI access in this environment |
 | PRODUCTION SHA | `65b9f916ff1198278e9eaaff7a8f19ef051ddcaf` (`origin/main`) — unchanged |
-| Tested SHA | `7413507` + the working tree below |
+| Tested SHA | `3012ec6` — the gate was re-run on this exact commit |
+
+**The tree is frozen and committed.** Every one of the 55 changed paths was
+verified to be this pass's own work before staging (no foreign uncommitted work
+was in the tree, and no secret-looking path was staged). The commit is local —
+it was **not pushed**, because pushing to a shared repo with a known concurrent
+session is a separate, riskier action.
 
 **Deployed SHA ≠ tested SHA.** Per the release rules, browser verification and
-production promotion are **invalid** until the tested tree is deployed and
-`/api/version` reports the tested SHA.
+production promotion are **invalid** until `3012ec6` is deployed and
+`/api/version` reports it.
 
 > **Concurrent commits.** Another session pushed three commits on top of the
-> baseline while this pass was running. They are CI/browser-artifact changes and
-> do not touch the files this pass modified, but the tested tree is therefore
-> `7413507` + a dirty working tree, not a single SHA. That is a real obstacle to
-> the `tested SHA == deployed SHA` gate and is recorded rather than hidden.
+> baseline while this pass was running (`001c7a2`, `35f1687`, `7413507`). They
+> touch only `scripts/qa/*` and do not overlap this pass's files. `3012ec6` is
+> on top of them, so the tested SHA is a single immutable commit.
 
 ---
 
@@ -394,11 +399,40 @@ split:
 
 ## Files changed
 
-**Modified (29):**
+**Added (22):**
+```
+docs/RELAY_NAVIGATION_PERFORMANCE.md
+docs/RELAY_QA_CLOSURE_LATEST.md
+docs/RELAY_QA_CLOSURE_REPORT.md
+scripts/qa/qa-production-release.mjs
+src/lib/auth/capabilities.ts
+src/lib/conversation/canonical-message.ts
+src/lib/intelligence-v3/normalize-external-input.ts
+src/lib/relay/draft-generation-state.ts
+src/lib/relay/lead-bootstrap-state.ts
+src/lib/relay/violation-kinds.ts
+tests/live-provider/upwork-extract.smoke.ts
+tests/qa-relay-bug-002-explicit-buyer-future-start.test.ts
+tests/qa-relay-bug-003-refresh-bootstrap.test.ts
+tests/qa-relay-bug-004-duplicate-inbound.test.ts
+tests/qa-relay-bug-007-upwork-extract-deterministic.test.ts
+tests/qa-relay-bug-008-009-auth-capabilities.test.ts
+tests/qa-relay-bug-011-recruiter-role.test.ts
+tests/qa-relay-bug-012-skip-draft-state.test.ts
+tests/qa-relay-bug-contract-telemetry.test.ts
+tests/qa-relay-input-normalization.test.ts
+tests/qa-relay-normalization-boundary.test.ts
+vitest.smoke.config.mts
+```
+
+**Modified (33):**
 ```
 docs/RELAY_CONTRACT_RUNTIME_MAP.md
 docs/RELAY_PRODUCT_CONTRACTS.md
+package.json
 scripts/qa/contract-coverage.mjs
+scripts/qa/qa-release.mjs
+scripts/qa/release-manifest.mjs
 src/app/(app)/layout.tsx
 src/app/(app)/leads/new/page.tsx
 src/app/(app)/prospect/page.tsx
@@ -423,31 +457,12 @@ src/lib/store/supabase-store.ts
 src/lib/upwork-v2.ts
 src/lib/upwork/facts.ts
 tests/fixtures/relay-regression-corpus.ts
+tests/messaging-stage-quality.test.ts
 tests/qa-relay-product-contracts.test.ts
 tests/relay-regression-corpus.test.ts
 ```
 
-**New (18):**
-```
-docs/RELAY_NAVIGATION_PERFORMANCE.md
-docs/RELAY_QA_CLOSURE_LATEST.md
-docs/RELAY_QA_CLOSURE_REPORT.md
-src/lib/auth/capabilities.ts
-src/lib/conversation/canonical-message.ts
-src/lib/intelligence-v3/normalize-external-input.ts
-src/lib/relay/draft-generation-state.ts
-src/lib/relay/lead-bootstrap-state.ts
-src/lib/relay/violation-kinds.ts
-tests/qa-relay-bug-002-explicit-buyer-future-start.test.ts
-tests/qa-relay-bug-003-refresh-bootstrap.test.ts
-tests/qa-relay-bug-004-duplicate-inbound.test.ts
-tests/qa-relay-bug-008-009-auth-capabilities.test.ts
-tests/qa-relay-bug-011-recruiter-role.test.ts
-tests/qa-relay-bug-012-skip-draft-state.test.ts
-tests/qa-relay-bug-contract-telemetry.test.ts
-tests/qa-relay-input-normalization.test.ts
-tests/qa-relay-normalization-boundary.test.ts
-```
+All committed as `3012ec6` (22 added + 33 modified = 55 paths).
 
 ---
 
@@ -457,6 +472,48 @@ tests/qa-relay-normalization-boundary.test.ts
 row reuses the existing `messages` table and its existing
 `messages_org_idempotency_key_idx` unique index — the insert is idempotent by
 key.
+
+---
+
+## Next sequence
+
+Steps 1–3 of the freeze-and-prove plan are done. Steps 4–14 need a deploy
+target and a running app, which this environment does not have.
+
+| # | Step | Status |
+| --- | --- | --- |
+| 1 | Freeze every writer | **Partial** — no new commits for ~45 min and no foreign uncommitted work in the tree, but the freeze itself cannot be enforced from here |
+| 2 | Reconcile/commit the dirty tree into one SHA | **Done** — `3012ec6`, `git status` clean |
+| 3 | Run the full automated gate on that SHA | **Done** — 3816/3816, `AUTOMATED_CODE_GATE: PASS` |
+| 4 | Deploy that exact SHA to preview | **BLOCKED** — no Vercel CLI access |
+| 5 | Verify `/api/version` | **BLOCKED** — nothing deployed |
+| 6 | Run browser cases for all 12 bugs | **BLOCKED** — no `E2E_BASE_URL` |
+| 7 | Pay special attention to the six high-risk flows | **BLOCKED** — same |
+| 8 | Run the inbound-first lead through every surface | **BLOCKED** — needs the DB check the report flags |
+| 9 | Measure navigation | **BLOCKED** — needs `scripts/perf-navigation.mjs` against a running app |
+| 10 | Run 375px smoke | **BLOCKED** |
+| 11 | Run security suite | **Done** — 173 passed (RLS, org scope, auth-provider boundaries, dataset scope, lead mutation scope) |
+| 12 | If all green, promote the exact same SHA | **BLOCKED** — gated on 4–10 |
+| 13 | Verify production `/api/version` | **BLOCKED** |
+| 14 | Run short production smoke | **BLOCKED** |
+
+**Highest-value next work, in order:**
+
+1. Deploy `3012ec6` to preview and confirm `/api/version` reports it.
+2. Browser-test **BUG-003** (Create Lead → generation starts → immediate
+   refresh: lead exists, no 404, no duplicate draft, no duplicate message, the
+   one-shot URL intent is gone).
+3. Browser + DB-test **BUG-004**: `createLead` now writes a real `messages` row.
+   Check one inbound-first lead across Overview, Conversation, History, Chats,
+   Archive and Today — **one inbound event everywhere** — and that
+   `has inbound, no later outbound` reads **Needs Reply**, not To Contact /
+   Follow-up / Replied / No thread.
+4. Verify auth against the **real deployment config** (login, signup, invite
+   code present/absent, Google hidden/enabled, refresh, direct `/signup`). A
+   correct capability model with the wrong production env is still a broken
+   product.
+5. Measure navigation (Today, Leads, Lead Detail, Chats, Prospect, Admin QA):
+   RSC duration, server request count, DB query count, time to useful content.
 
 ---
 
