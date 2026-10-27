@@ -583,28 +583,83 @@ target and a running app, which this environment does not have.
 5. Measure navigation (Today, Leads, Lead Detail, Chats, Prospect, Admin QA):
    RSC duration, server request count, DB query count, time to useful content.
 
-### Deploy target
+### RELEASE HOLD — do not push or deploy
 
-**Deploy `3ae4308` exactly.** Do not deploy an earlier runtime-equivalent
-commit, and do not deploy moving `HEAD`.
+> **Decision: WAIT. Do not push.**
+>
+> Hold all push/deploy actions until **both active worktrees are idle**. Do not
+> touch `release-merge`, `scout-rc`, or any other session's branch/worktree.
+> Once the writers stop, verify the repo is stable, then push exactly
+> `3ae4308bdbee6675e3f7ba6aa4c9dab81ef283da` to `refs/heads/release-candidate`.
+> After that, deploy that exact commit, confirm `/api/version`, and run the
+> full browser + BUG-004 gates against that deployment.
+>
+> **Evidence from `2581561` must not be reused as certification for
+> `3ae4308`.**
 
-The release tooling is part of the release candidate. An earlier version of this
-report named `2581561` because the later commits were "docs and gate-test work" —
-that was wrong. Deploying `2581561` would ship the application changes but not
-the gate infrastructure that proves them, and it would carve an exception out of
-`tested SHA == deployed SHA` at the last moment, which is how the rule stops
-meaning anything.
+**Why the hold exists.** At the time of the decision, two worktrees were
+genuinely active:
 
-`3ae4308` is the tip of the chain and the commit the full automated gate ran
-green on (3841 tests, `AUTOMATED_CODE_GATE: PASS`).
+- `scout-rc` at `2581561` — **running the browser matrix** (`qa-artifacts/browser-2581.json`,
+  `test-results/.last-run.json` are recent).
+- the main worktree on `release-merge`, which carries ~46 commits of another
+  session's intentional release-hardening RC.
 
-`pnpm qa:production-release --url=<preview-url>` re-checks SHA parity live
-against `/api/version`, so a promotion cannot be authorised against a stale
-state file.
+Pushing would have published that unfinished ancestry under a new branch name,
+and the in-flight browser run cannot certify `3ae4308` — it targets a
+different commit. Both would have broken the one rule this pass exists to
+enforce: **the deployed commit must be the exact commit that passed the gate.**
 
-**One nuance:** `/api/version` reports the *application* deployment SHA. The
-preview must be built from `3ae4308` — not an older runtime commit while newer
-release scripts run locally, which would look like parity and not be.
+### Browser evidence scope
+
+| Artifact | Certifies | Use |
+| --- | --- | --- |
+| `scout-rc/qa-artifacts/browser-2581.json` | `2581561` only | Finding defects. **Not** release evidence for `3ae4308`. |
+| `scout-rc/test-results/*` | `2581561` only | Same. |
+| a browser run against `3ae4308` | `3ae4308` | Release evidence, once it happens. |
+
+Label any copied `2581561` artifact with its SHA. Never let a `2581561` result
+appear in a `3ae4308` QA record.
+
+### Unblocking sequence
+
+```bash
+# 0. Confirm the writers stopped. Worktree existence is not the signal —
+#    activity is. Do not delete or reset worktrees to make the list empty.
+git worktree list
+for d in $(git worktree list --porcelain | grep '^worktree' | sed 's/^worktree //'); do
+  find "$d" -maxdepth 2 -newermt '-30 minutes' -type f \
+    -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.next/*' 2>/dev/null | head -1
+done
+
+# 1. Repo stable
+git status                      # clean
+git rev-parse 3ae4308           # 3ae4308bdbee6675e3f7ba6aa4c9dab81ef283da
+
+# 2. Push the exact SHA to a dedicated branch. Does not touch release-merge.
+git push origin \
+  3ae4308bdbee6675e3f7ba6aa4c9dab81ef283da:refs/heads/release-candidate
+
+# 3. Deploy that exact commit (not an implicit HEAD), then verify parity.
+curl -s <preview-url>/api/version
+
+# 4. The enforcing gate. Exits non-zero unless all four are green.
+E2E_BASE_URL=<preview-url> pnpm qa:production-release
+
+# 5. BUG-004 first, then the rest.
+npx playwright test e2e/rc-bug-004-inbound-parity.spec.ts --project=desktop-chrome
+```
+
+The release is blocked unless all four gates are green:
+
+```text
+AUTOMATED_CODE_GATE      PASS
+BROWSER_GATE             PASS
+BUG004_INBOUND_GATE      PASS
+SHA_GATE                 VERIFIED
+```
+
+Only then: `PRODUCTION_GATE = PASS`.
 
 ---
 
@@ -638,12 +693,24 @@ release scripts run locally, which would look like parity and not be.
 | PERFORMANCE | PASS (structural) / BLOCKED (measured) |
 | CROSS-SURFACE PARITY | PASS |
 | SECURITY | PASS (targeted set) |
-| BROWSER | FAIL — not run |
-| **PRODUCTION** | **NO-GO** |
+| Gate decision logic | PASS (pinned, 18 fixtures) |
+| Gate reporting | PASS (pinned) |
+| BROWSER | FAIL — not run for `3ae4308` |
+| BUG-004 browser gate | FAIL — not run for `3ae4308` |
+| SHA parity | NOT VERIFIED |
+| **PRODUCTION** | **NO-GO — on hold** |
 
-**NO-GO.** Not because the fixes are wrong — the automated gates are green and
-zero regressions were introduced — but because the absolute release rule
-requires browser acceptance, `tested SHA == deployed SHA`, and a production
-smoke, and none of the three can be performed in this environment. The tree is
-ready to deploy and verify; the deployment and browser steps are the remaining
-work.
+**NO-GO, on hold.** Not because the fixes are wrong — the automated gates are
+green and zero regressions were introduced — but because:
+
+1. **Push/deploy is held.** Two worktrees were actively writing; `release-merge`
+   is another session's unfinished RC. See **RELEASE HOLD** above.
+2. **`2581561` browser evidence does not certify `3ae4308`.** The in-flight
+   browser run targets a different commit.
+3. **The absolute release rule** requires browser acceptance,
+   `tested SHA == deployed SHA`, and a production smoke, none of which can be
+   performed in this environment.
+
+The tree is ready. The remaining work is operational: freeze the writers, push
+`3ae4308` to `release-candidate`, deploy that exact commit, verify
+`/api/version`, then run the browser and BUG-004 gates against that deployment.
