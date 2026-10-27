@@ -115,6 +115,7 @@ import type {
   UpworkSnapshot,
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
+import { inboundFirstMessageKey } from '@/lib/conversation/canonical-message'
 import { calendarDaysBetween, followupDueInDays } from '@/lib/leads/followup'
 import { emitAction } from '@/lib/action-ledger'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
@@ -809,6 +810,28 @@ export class SupabaseStore implements ScoutStore {
       throw row.error
     }
     const lead = mapLead(row.data as Row)
+
+    // Canonical opening message: an inbound lead's first message becomes a
+    // canonical row so the messages table owns the timeline, instead of a
+    // lead-level fallback that can render the same message twice (QA BUG-004).
+    // Idempotent by key, and non-fatal: the fallback still renders the opening.
+    if (lead.direction === 'inbound' && lead.inboundMessage?.trim()) {
+      try {
+        await insertMessageReturningId(this.client, {
+          organization_id: this.orgId,
+          lead_id: lead.id,
+          rep_id: lead.ownerRepId,
+          type: 'reply',
+          direction: 'inbound',
+          sent_text: lead.inboundMessage.trim(),
+          sent_at: lead.createdAt ?? new Date().toISOString(),
+          model_used: 'inbound_lead',
+          idempotency_key: inboundFirstMessageKey(lead.id),
+        })
+      } catch {
+        // A failed row must never break lead creation.
+      }
+    }
 
     // Create outbound relay run (non-fatal — must not break lead creation)
     let relayRunId: string | null = null

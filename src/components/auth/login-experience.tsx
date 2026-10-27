@@ -11,6 +11,7 @@ import {
   humanizeOauthError,
   humanizeSignInError,
 } from "@/lib/auth/error-messages";
+import { logClientViolation } from "@/lib/relay/violation-kinds";
 import {
   RelayAuthShell,
   RelayAuthSurface,
@@ -26,6 +27,8 @@ type BusyMode = "password" | "magic" | "google" | null;
 
 type LoginExperienceProps = {
   demoMode: boolean;
+  /** Rendered only when this deployment has Google OAuth configured. */
+  googleEnabled: boolean;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -76,7 +79,7 @@ function sanitizeNextPath(value: string | null): string {
   return value;
 }
 
-export function LoginExperience({ demoMode }: LoginExperienceProps) {
+export function LoginExperience({ demoMode, googleEnabled }: LoginExperienceProps) {
   const searchParams = useSearchParams();
 
   const nextPath = useMemo(() => sanitizeNextPath(searchParams.get("next")), [searchParams]);
@@ -181,6 +184,14 @@ export function LoginExperience({ demoMode }: LoginExperienceProps) {
 
   async function continueWithGoogle() {
     if (busy) return;
+    // Telemetry guard (Contract 12): a Google attempt on a deployment that
+    // cannot execute it. The button is not rendered in that case, so this is a
+    // defensive record rather than an expected path.
+    if (!googleEnabled) {
+      logClientViolation('UNSUPPORTED_AUTH_CAPABILITY', 'a Google sign-in was attempted on a deployment that cannot execute it', ['google'], 'auth')
+      setError('Google sign-in is not available on this deployment.');
+      return;
+    }
     setBusy("google");
     setError(null);
 
@@ -331,17 +342,20 @@ export function LoginExperience({ demoMode }: LoginExperienceProps) {
               </Link>
             </div>
 
-            <div className="auth-note-strip space-y-2">
-              <p className="text-[0.73rem] uppercase tracking-[0.11em] text-[var(--stone)]">Alternative route</p>
-              <button
-                type="button"
-                className="relay-cta-quiet w-full"
-                onClick={continueWithGoogle}
-                disabled={busy !== null}
-              >
-                {busy === "google" ? "Redirecting to Google..." : "Continue with Google"}
-              </button>
-            </div>
+            {/* A capability the deployment cannot execute is not advertised. */}
+            {googleEnabled ? (
+              <div className="auth-note-strip space-y-2">
+                <p className="text-[0.73rem] uppercase tracking-[0.11em] text-[var(--stone)]">Alternative route</p>
+                <button
+                  type="button"
+                  className="relay-cta-quiet w-full"
+                  onClick={continueWithGoogle}
+                  disabled={busy !== null}
+                >
+                  {busy === "google" ? "Redirecting to Google..." : "Continue with Google"}
+                </button>
+              </div>
+            ) : null}
           </form>
         )}
       </RelayAuthSurface>

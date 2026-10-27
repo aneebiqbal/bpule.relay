@@ -1,16 +1,26 @@
 import type { LeadDetail } from '@/lib/store/types'
 import type { ConversationTurn, TurnKind } from './types'
+import { hasCanonicalOpeningMessage } from './canonical-message'
 
 /**
  * The single ordered thread for a lead, oldest first, every turn labeled by
  * who wrote it. Every writer and the chat view read this — never the raw
  * message rows — so labeling and ordering cannot drift between surfaces.
+ *
+ * Canonical message rows own the timeline. The lead-level opening message is a
+ * fallback, rendered only when no canonical row represents it (QA BUG-004):
+ * otherwise the same message appears twice.
  */
 export function buildThread(lead: Pick<LeadDetail, 'messages' | 'direction' | 'inboundMessage' | 'createdAt' | 'id'>): ConversationTurn[] {
   const turns: ConversationTurn[] = []
 
-  // Inbound-first leads: the client's opening message lives on the lead.
-  if (lead.direction === 'inbound' && lead.inboundMessage?.trim()) {
+  // Inbound-first leads: the client's opening message lives on the lead. It is
+  // a fallback for leads created before the opening became a canonical row.
+  if (
+    lead.direction === 'inbound'
+    && lead.inboundMessage?.trim()
+    && !hasCanonicalOpeningMessage(lead.messages ?? [], lead.id)
+  ) {
     turns.push({
       id: `inbound_first:${lead.id}`,
       role: 'client',

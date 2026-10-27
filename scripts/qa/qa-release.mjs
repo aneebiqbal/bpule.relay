@@ -129,9 +129,21 @@ function main() {
   const version = readApiVersion()
   console.log('------------------')
   console.log(`TESTS                    ${counts.total} total / ${counts.passed} passed / ${counts.failed} failed / ${counts.skipped} skipped`)
-  console.log(
-    `SHA VERIFIED             ${version ? 'PENDING (run qa:deployed)' : 'NOT VERIFIED (no /api/version reachable)'}`,
-  )
+
+  // ── The four gates, kept separate ─────────────────────────────────────────
+  // The automated gate is what this script can actually run. Browser and SHA
+  // parity are release conditions it can only REPORT — printing a single green
+  // "RELEASE GATE: PASS" next to "BROWSER NOT_RUN / SHA NOT VERIFIED" is how a
+  // build gets promoted on a lie.
+  const automatedOk = failures === 0
+  const browserGate = browser.result === 'PASS' ? 'PASS' : browser.result === 'FAIL' ? 'FAIL' : 'NOT_RUN'
+  const shaGate = version ? 'VERIFIED' : 'NOT_VERIFIED'
+  const productionReady = automatedOk && browser.result === 'PASS' && Boolean(version)
+
+  console.log(`AUTOMATED_CODE_GATE      ${automatedOk ? 'PASS' : `FAIL (${failures} step(s) failed)`}`)
+  console.log(`BROWSER_GATE             ${browserGate}${browserGate === 'NOT_RUN' ? ` (${browser.reason})` : ''}`)
+  console.log(`SHA_GATE                 ${shaGate}${version ? '' : ' (no /api/version reachable)'}`)
+  console.log(`PRODUCTION_GATE          ${productionReady ? 'READY' : 'BLOCKED'}`)
 
   // The verified state the manifest reads. Derived, never hand-maintained.
   let contractTestCount = null
@@ -146,7 +158,11 @@ function main() {
   const state = {
     gitSha: sha,
     generatedAt: new Date().toISOString(),
-    gatesPassed: failures === 0,
+    automatedCodeGate: automatedOk,
+    browserGate,
+    shaGate,
+    productionGate: productionReady ? 'READY' : 'BLOCKED',
+    productionReady,
     testCounts: counts,
     contractTestCount,
     regressionFixtureCount: countCorpusFixtures(),
@@ -157,11 +173,21 @@ function main() {
   writeReleaseState(state)
 
   console.log('==================')
-  if (failures > 0) {
-    console.error(`RELEASE GATE: FAIL (${failures} step(s) failed)`)
+  if (!automatedOk) {
+    console.error(`AUTOMATED CODE GATE: FAIL (${failures} step(s) failed)`)
     process.exit(1)
   }
-  console.log('RELEASE GATE: PASS')
+  if (!productionReady) {
+    // Deliberately exit 0: this script ran everything it can run. The
+    // incomplete release is a fact to report, not a failure to hide. Use
+    // `pnpm qa:production-release` to enforce the full release condition.
+    console.log('AUTOMATED CODE GATE: PASS')
+    console.log('RELEASE GATE: INCOMPLETE — browser and/or SHA parity outstanding')
+    console.log(`wrote ${ARTIFACTS_DIR}/release-state.json`)
+    process.exit(0)
+  }
+  console.log('AUTOMATED CODE GATE: PASS')
+  console.log('RELEASE GATE: COMPLETE')
   console.log(`wrote ${ARTIFACTS_DIR}/release-state.json`)
 }
 

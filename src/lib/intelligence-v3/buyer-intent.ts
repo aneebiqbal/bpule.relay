@@ -309,6 +309,10 @@ export function resolveVerifiedBuyerIntent(
   const buyingNeedSurvived = verifiedBuyerRequest && buyerIntentLevel !== 'UNKNOWN'
   const independentSellerLines = facts.sellerLines.filter((line) => line !== facts.externalServiceRequest?.line)
   let relationshipRole: RelationshipRole = 'UNKNOWN'
+  // A recruiter's title never blocks a verified external request: the recruiter
+  // FLAG is recorded in facts.recruiter for every surface, while the role
+  // describes the commercial relationship. A recruiter asking for an outsourced
+  // team is a BUYER (golden fixture buyer-outsourced-team-not-employees).
   if (facts.candidateSeeking) relationshipRole = 'CANDIDATE'
   else if (buyingNeedSurvived && independentSellerLines.length > 0) relationshipRole = 'BUYER_AND_SELLER'
   else if (buyingNeedSurvived) relationshipRole = 'BUYER'

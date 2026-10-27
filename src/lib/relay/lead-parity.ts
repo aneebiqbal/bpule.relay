@@ -12,6 +12,8 @@ import {
 } from './conversation-presence'
 import { derivePipelineStage, type LeadRow, type PipelineStage } from '@/components/leads/pipeline-utils'
 import { recordParityViolations } from './contract-violations'
+import { findDuplicateOpeningTurns } from '@/lib/conversation/canonical-message'
+import { recordContractViolation } from './contract-violations'
 
 /**
  * Cross-surface parity for one lead.
@@ -113,6 +115,19 @@ export function buildLeadParityReport(lead: LeadDetail, now: number = Date.now()
     if (action.primaryLabel !== canonicalLabel) {
       divergences.push(`action label "${action.primaryLabel}" is not the canonical "${canonicalLabel}" for ${action.action}`)
     }
+  }
+
+  // 5. The opening message must appear once (Contract 11). Telemetry only: a
+  // duplicate means the canonical row and the lead-level fallback both rendered.
+  for (const duplicate of findDuplicateOpeningTurns(thread)) {
+    recordContractViolation({
+      kind: 'DUPLICATE_OPENING_MESSAGE',
+      leadId: lead.id,
+      contractId: 11,
+      surface: 'lead_parity',
+      fields: ['inboundMessage'],
+      detail: `the opening message rendered ${duplicate.ids.length} times (${duplicate.ids.join(', ')})`,
+    })
   }
 
   return {

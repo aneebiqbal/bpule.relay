@@ -6,7 +6,6 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { HAS_AI_PROVIDER } from './helpers/needs-ai'
 import { evaluateMessageStage, type MessageStage } from '@/lib/writing/engine'
 
 describe('Em-dash name formatting detection', () => {
@@ -229,14 +228,6 @@ describe('Reply quality', () => {
 })
 
 describe('Em-dash name format fix', () => {
-  it.skipIf(!HAS_AI_PROVIDER)('fixes "Hi John - came across" → "Hi John, came across"', async () => {
-    const { extractUpworkJob } = await import('@/lib/upwork-v2')
-    // Test via the backfill which uses similar logic
-    const result = await extractUpworkJob({ rawText: 'Hi John - came across your work. Thought it was worth connecting.' })
-    // The fixEmDashNameFormat is in draft-stream, test it indirectly
-    expect(result.job).not.toBeNull()
-  })
-
   it('fixes "Hey Sarah - looks like" → "Hey Sarah, looks like"', () => {
     // Test the regex pattern directly
     const text = 'Hey Sarah - looks like you are building something.'

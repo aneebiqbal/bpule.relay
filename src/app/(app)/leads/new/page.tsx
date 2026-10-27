@@ -603,7 +603,7 @@ export default function NewLeadPage() {
                           ) : (
                             <AlertTriangle className="size-3.5" aria-hidden="true" />
                           )}
-                          {form.extractionConfidence}/100 field accuracy
+                          {form.extractionConfidence}/100 extraction completeness
                         </span>
                         <span>{ROLE_LABELS[form.roleCategory]}</span>
                         <span>{REGION_LABELS[liveRegion]}</span>

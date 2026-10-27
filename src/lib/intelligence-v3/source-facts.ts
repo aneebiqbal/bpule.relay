@@ -648,7 +648,7 @@ export interface ExplicitDateEvidence {
 
 const MONTH = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?'
 const ABSOLUTE_DATE = new RegExp(`\\b${MONTH}\\s+(?:(?:19|20)\\d{2}|\\d{1,2}(?:st|nd|rd|th)?)\\b`, 'i')
-const START_CTX = /\b(?:start|kick[- ]?off|begin|launch|go[- ]?live|onboard|engagement\s+starts?|project\s+starts?)\b/i
+const START_CTX = /\b(?:start(?:ing)?|kick(?:ing)?[- ]?off|begin(?:ning)?s?|launch(?:ing)?|go(?:ing)?[- ]?live|onboard(?:ing)?|engagement\s+starts?|project\s+(?:starts?|begins?))\b/i
 const DEADLINE_CTX = /\b(?:deadline|by\s+(?:the\s+)?(?:end\s+of\s+)?|before\s+(?:the\s+)?(?:end\s+of\s+)?|due\s+(?:by|date)|no\s+later\s+than|target\s+date)\b/i
 
 /**

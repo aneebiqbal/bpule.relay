@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SignupExperience } from "@/components/auth/signup-experience";
 import { getCurrentUser } from "@/lib/auth/current";
+import { getAuthCapabilities } from "@/lib/auth/capabilities";
 
 export const dynamic = "force-dynamic";
 
@@ -15,5 +16,8 @@ export default async function SignupPage() {
   if (user?.profile) redirect("/dashboard");
   if (user) redirect("/onboarding");
 
-  return <SignupExperience />;
+  // The screen renders the signup paths this deployment actually supports.
+  const capabilities = getAuthCapabilities();
+
+  return <SignupExperience capabilities={capabilities} />;
 }

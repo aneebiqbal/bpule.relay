@@ -109,7 +109,6 @@ function NavSection({ label, items, isActive, studio }: NavSectionProps) {
           <Link
             key={href}
             href={href}
-            prefetch={false}
             aria-current={active ? 'page' : undefined}
             className={cn(
               'group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-all duration-150',
@@ -156,7 +155,6 @@ function MobileNavSection({ label, items, isActive, studio, onNavigate }: NavSec
           <Link
             key={href}
             href={href}
-            prefetch={false}
             onClick={onNavigate}
             aria-current={active ? 'page' : undefined}
             className={cn(
@@ -583,7 +581,6 @@ export function AppRail({
               <Link
                 key={href}
                 href={href}
-                prefetch={false}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors',

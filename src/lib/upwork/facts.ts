@@ -10,6 +10,7 @@
  */
 
 import { detectSourceLanguage } from '@/lib/intelligence-v3/multilingual'
+import { normalizeExternalInput } from '@/lib/intelligence-v3/normalize-external-input'
 
 export const UPWORK_FACTS_VERSION = 'upwork_facts_v1'
 
@@ -399,6 +400,12 @@ function descriptionOf(text: string): string {
 }
 
 function titleOf(text: string): string | null {
+  // A labeled job title is the canonical boundary's job, not a line scan: the
+  // label is stripped from the value so "Job Title:" never becomes the title
+  // (QA BUG-007).
+  const labeled = normalizeExternalInput(text).structuredFields.jobTitle
+  if (labeled) return labeled
+
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
   for (const l of lines.slice(0, 6)) {
     if (/^(?:current\s+page|posted\s+|job\s+details|featured|promoted|hourly|fixed|budget|\$)/i.test(l)) continue

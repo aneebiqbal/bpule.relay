@@ -387,3 +387,142 @@ describe('Contract 7 — persistence and UI state reflect actual lifecycle state
     expect(imageFailureReason(null, 'Failed to fetch')).toMatch(/timed out/i)
   })
 })
+
+describe('Contract 8 — all external text enters through the normalization boundary', () => {
+  it('strips a label from the value and never invents a missing field', async () => {
+    const { normalizeExternalInput } = await import('@/lib/intelligence-v3/normalize-external-input')
+    const out = normalizeExternalInput('Full Name: Emily Carter\nJob Title: Operations Director')
+    expect(out.structuredFields.name).toBe('Emily Carter')
+    expect(out.structuredFields.title).toBe('Operations Director')
+    expect(out.structuredFields.company).toBeNull()
+  })
+
+  it('no surface compiles its own label list', async () => {
+    const { isLabeledFieldLine } = await import('@/lib/intelligence-v3/normalize-external-input')
+    expect(isLabeledFieldLine('Name: Emily Carter')).toBe(true)
+    expect(isLabeledFieldLine('Just a normal sentence.')).toBe(false)
+  })
+})
+
+describe('Contract 9 — RAW input is not ANALYZED input', () => {
+  it('a policy skip is resolved before any generation outcome', async () => {
+    const { resolveDraftGenerationState, canGenerateDraft, draftStateMessage } = await import('@/lib/relay/draft-generation-state')
+    const state = resolveDraftGenerationState({
+      verdict: 'skip', generating: true, draftText: '', needsRescoring: false, failed: true,
+    })
+    expect(state).toBe('SKIPPED_BY_POLICY')
+    expect(canGenerateDraft(state)).toBe(false)
+    expect(draftStateMessage(state)).toBeTruthy()
+  })
+})
+
+describe('Contract 10 — the reviewed decision is the persisted decision', () => {
+  it('every surface reads one canonical score from the stored packet', async () => {
+    const { buildLeadParityReport } = await import('@/lib/relay/lead-parity')
+    const lead = {
+      id: 'lead_c10',
+      organizationId: 'org-1',
+      ownerRepId: 'rep-1',
+      company: 'Northstar Logistics',
+      companyKey: 'northstarlogistics',
+      contactName: 'Michael Anderson',
+      contactTitle: 'CTO',
+      url: null,
+      rawInput: 'We are looking for an external software team to rebuild our dispatch platform.',
+      signalType: 1,
+      signalEvidence: 'We are looking for an external software team to rebuild our dispatch platform.',
+      verbatimQuote: null,
+      score: null,
+      verdict: null,
+      status: 'new',
+      playId: null,
+      tags: [],
+      direction: 'outbound',
+      source: 'linkedin',
+      connectionAcceptedAt: null,
+      lockedUntil: null,
+      lockedReason: null,
+      archived: false,
+      archivedAt: null,
+      createdAt: '2026-10-20T10:00:00Z',
+      canonicalScore: 72,
+      canonicalIntelligence: { score: 72, scoreVersion: 'relay_decision_v3.3.0', qualification: 'STRONG' },
+      messages: [],
+      outcomes: [],
+      followupCount: 0,
+    } as unknown as LeadDetail
+
+    const report = buildLeadParityReport(lead)
+    expect(report.canonicalScore).toBe(72)
+    expect(report.displayText).toBe('7/10')
+    expect(report.divergences).toEqual([])
+  })
+})
+
+describe('Contract 11 — canonical message rows own the conversation timeline', () => {
+  it('the lead-level opening renders only when no canonical row exists', async () => {
+    const { buildThread } = await import('@/lib/conversation/thread')
+    const { inboundFirstMessageKey } = await import('@/lib/conversation/canonical-message')
+    const opening = 'We need an external team to rebuild our booking platform.'
+
+    const fallback = buildThread({
+      id: 'lead_c11', direction: 'inbound', inboundMessage: opening,
+      createdAt: '2026-10-20T10:00:00Z', messages: [],
+    } as LeadDetail)
+    expect(fallback).toHaveLength(1)
+
+    const canonical = buildThread({
+      id: 'lead_c11', direction: 'inbound', inboundMessage: opening,
+      createdAt: '2026-10-20T10:00:00Z',
+      messages: [{
+        id: 'msg_1', organizationId: 'org-1', leadId: 'lead_c11', repId: null, type: 'reply',
+        draftText: null, sentText: opening, sentAt: '2026-10-20T10:00:00Z', modelUsed: null,
+        idempotencyKey: inboundFirstMessageKey('lead_c11'), direction: 'inbound',
+        createdAt: '2026-10-20T10:00:00Z',
+      }] as Message[],
+    } as LeadDetail)
+    expect(canonical).toHaveLength(1)
+    expect(canonical.filter((t) => t.text === opening)).toHaveLength(1)
+  })
+})
+
+describe('Contract 12 — UI cannot advertise an unavailable auth capability', () => {
+  it('Google is advertised only when configured', async () => {
+    const { getAuthCapabilities } = await import('@/lib/auth/capabilities')
+    const base = { NEXT_PUBLIC_SUPABASE_URL: 'https://x.supabase.co', NEXT_PUBLIC_SUPABASE_ANON_KEY: 'k' }
+    expect(getAuthCapabilities(base).googleEnabled).toBe(false)
+    expect(getAuthCapabilities({ ...base, RELAY_GOOGLE_AUTH_ENABLED: 'true' }).googleEnabled).toBe(true)
+  })
+
+  it('public and invite-only signup are mutually exclusive', async () => {
+    const { getAuthCapabilities } = await import('@/lib/auth/capabilities')
+    const base = { NEXT_PUBLIC_SUPABASE_URL: 'https://x.supabase.co', NEXT_PUBLIC_SUPABASE_ANON_KEY: 'k' }
+    const inviteOnly = getAuthCapabilities({ ...base, SIGNUP_INVITE_CODE: 'relay-2026' })
+    expect(inviteOnly.inviteOnlySignupEnabled).toBe(true)
+    expect(inviteOnly.publicSignupEnabled).toBe(false)
+    const pub = getAuthCapabilities({ ...base, SIGNUP_PUBLIC: 'true', SIGNUP_INVITE_CODE: 'relay-2026' })
+    expect(pub.publicSignupEnabled).toBe(true)
+    expect(pub.inviteOnlySignupEnabled).toBe(false)
+  })
+})
+
+describe('Contract 13 — a recruiter is a relationship, not a buying signal', () => {
+  it('a recruiter with no external request has UNKNOWN intent', async () => {
+    const { resolveBuyerIntentFromSource } = await import('@/lib/intelligence-v3/buyer-intent')
+    const intent = resolveBuyerIntentFromSource(
+      "Sofia Marchetti\nTechnical Recruiter at Northstar Talent\nWe're hiring a Full Stack Engineer for a fintech client. Submit your CV.",
+    )
+    expect(intent.relationshipRole).toBe('RECRUITER')
+    expect(intent.buyerIntentLevel).toBe('UNKNOWN')
+  })
+
+  it('a recruiter title does not block a verified external request', async () => {
+    const { resolveBuyerIntentFromSource } = await import('@/lib/intelligence-v3/buyer-intent')
+    const intent = resolveBuyerIntentFromSource(
+      'Alex Morgan\nTechnical Recruiter at Northstar Technologies\nCompany: Northstar Technologies\nWe are looking for an external software development agency to help us build a customer portal in React.\nApproved project budget: $20,000',
+    )
+    expect(intent.verifiedBuyerRequest).toBe(true)
+    expect(intent.buyerIntentLevel).toBe('HIGH')
+    expect(intent.relationshipRole).toBe('BUYER')
+  })
+})

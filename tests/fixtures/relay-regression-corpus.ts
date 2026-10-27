@@ -129,6 +129,38 @@ Open to collaborations.`
 /** Inbound-first: the client opened the conversation. */
 const INBOUND_FIRST = `We need an external team to rebuild our booking platform. Budget approved: $45,000.`
 
+/** BUG-002: an explicit buyer whose project starts in the future. */
+const MICHAEL_FUTURE_START = `Michael Anderson
+CTO at Northstar Logistics
+Northstar Logistics runs a fleet dispatch platform.
+We are looking for an external software team to rebuild our dispatch platform.
+Budget approved: $60,000.
+Project begins April 2027.`
+
+/** BUG-010: identity read from multiline prose. */
+const MAZHAR_PROSE = `Hello,
+My name is Mazhar khan,
+and I'm the Chief Technology Officer
+at Bpulse.`
+
+/** BUG-005: structured labeled input. */
+const STRUCTURED_LEAD = `Full Name: Emily Carter
+Company: QA Northstar Logistics
+Job Title: Operations Director
+Country: United States`
+
+/** BUG-006: labeled prospect with a full location. */
+const LABELED_PROSPECT = `Name: Michael Anderson
+Company: Northstar Logistics
+Location: Austin, Texas, United States
+We are looking for an external software team to rebuild our dispatch platform.`
+
+/** BUG-011: a recruiter hiring an employee. */
+const RECRUITER_HIRING = `Sofia Marchetti
+Technical Recruiter at Northstar Talent
+We help companies hire React developers. Open to a chat?
+We're hiring a Full Stack Engineer for a fintech client. Submit your CV.`
+
 export const RELAY_REGRESSION_CORPUS: readonly RelayRegressionFixture[] = [
   {
     id: 'HARDENING_AVIGAIL',
@@ -276,5 +308,40 @@ export const RELAY_REGRESSION_CORPUS: readonly RelayRegressionFixture[] = [
     source: 'We built a logistics platform for a national carrier.',
     expected: { unknownNotZero: true },
     contracts: [6, 7],
+  },
+  {
+    id: 'BUG002_ACTIVE_BUYER_FUTURE_START',
+    symptom: 'A verified buying request with a future project start was treated as stale, and the card said UNKNOWN intent.',
+    source: MICHAEL_FUTURE_START,
+    expected: { messageRecommended: true },
+    contracts: [3, 4],
+  },
+  {
+    id: 'BUG005_STRUCTURED_LEAD',
+    symptom: 'Label prefixes survived extraction and were stored as the person name, title and company.',
+    source: STRUCTURED_LEAD,
+    expected: { unknownNotZero: true },
+    contracts: [1, 6, 8],
+  },
+  {
+    id: 'BUG006_LABELED_PROSPECT',
+    symptom: 'A labeled prospect lost its location and country, and a future start date was read as activity.',
+    source: LABELED_PROSPECT,
+    expected: { messageRecommended: true },
+    contracts: [4, 6, 8],
+  },
+  {
+    id: 'BUG010_INBOUND_PROSE',
+    symptom: 'A lowercase surname and a multiline role/company were not read from prose.',
+    source: MAZHAR_PROSE,
+    expected: { unknownNotZero: true },
+    contracts: [1, 8],
+  },
+  {
+    id: 'BUG011_RECRUITER_ROLE',
+    symptom: 'A recruiter hiring an employee was read as a buyer request for our services.',
+    source: RECRUITER_HIRING,
+    expected: { messageRecommended: false },
+    contracts: [4, 13],
   },
 ]

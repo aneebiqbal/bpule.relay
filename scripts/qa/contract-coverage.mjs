@@ -30,6 +30,12 @@ const OWNERS = {
   'Contract 5': 'deriveNextLeadAction + conversation/terminal.ts',
   'Contract 6': 'extractConnectsCost / extractFixedBudget',
   'Contract 7': 'captureProspect / imageRegenerationOutcome',
+  'Contract 8': 'normalizeExternalInput',
+  'Contract 9': 'resolveDraftGenerationState',
+  'Contract 10': 'canonical packet (canonical_intelligence / canonical_score)',
+  'Contract 11': 'inboundFirstMessageKey + buildThread',
+  'Contract 12': 'getAuthCapabilities',
+  'Contract 13': 'resolveVerifiedBuyerIntent (recruiterOnly)',
   unattributed: 'lead-parity.ts (cross-surface parity)',
 }
 

@@ -21,6 +21,20 @@ import type { Message } from '@/lib/domain/types'
 import { getLeadDisplayScore, normalizeScoreDimensions, scoreExplanation } from '@/lib/scoring/display-score'
 import { calendarDaysBetween, followupDueInDays } from '@/lib/leads/followup'
 import { formatRoleLine, stripEmployerFromTitle } from '@/lib/leads/role-line'
+import { hasCanonicalOpeningMessage } from '@/lib/conversation/canonical-message'
+import {
+  resolveDraftGenerationState,
+  canGenerateDraft,
+  draftStateMessage,
+  SKIP_POLICY_MESSAGE,
+} from '@/lib/relay/draft-generation-state'
+import {
+  transitionLeadBootstrap,
+  bootstrapPreconditionsMet,
+  stripOneShotIntent,
+  type LeadBootstrapState,
+} from '@/lib/relay/lead-bootstrap-state'
+import { logClientViolation } from '@/lib/relay/violation-kinds'
 import { ScoreBreakdown } from '@/components/score-breakdown'
 import { DecisionExplainability } from '@/components/leads/decision-explain'
 import { DecisionTraceView } from '@/components/leads/decision-trace-view'
@@ -47,6 +61,10 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends }: Pro
   const [generating, setGenerating] = useState(false)
   const [sending, setSending] = useState(false)
   const [generationStatus, setGenerationStatus] = useState<string | null>(null)
+  // The explicit draft lifecycle: a policy skip and a generator failure must
+  // never look the same (QA BUG-012).
+  const [needsRescoring, setNeedsRescoring] = useState(false)
+  const [draftFailed, setDraftFailed] = useState(false)
   const [markingAccepted, setMarkingAccepted] = useState(false)
   const [archiving, setArchiving] = useState(false)
 
@@ -76,6 +94,17 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends }: Pro
   const leadLocked = lead.status === 'no' || lead.status === 'dead'
   // A SKIP verdict never recommends outreach; connecting is a manual override.
   const skipVerdict = lead.verdict === 'skip'
+  // The explicit draft lifecycle (QA BUG-012): a policy skip is never a silent
+  // empty result, and a failure is never mistaken for a policy decision.
+  const draftState = resolveDraftGenerationState({
+    verdict: lead.verdict,
+    generating,
+    draftText,
+    needsRescoring,
+    failed: draftFailed,
+  })
+  const draftMessage = draftStateMessage(draftState)
+  const canGenerate = canGenerateDraft(draftState)
   const isTheirMove = relationshipState.kind === 'their_move' && phase !== 'replied'
   const isTerminal = relationshipState.kind === 'won' || relationshipState.kind === 'lost'
   // BUG-18: an unanswered inbound exists when the newest inbound is newer than
@@ -105,26 +134,21 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends }: Pro
 
   useEffect(() => { if (leadVersion > 0) refreshLead() }, [leadVersion, refreshLead])
 
-  // Deep linking
-  useEffect(() => {
-    const next = searchParams.get('next')
-    if (!next || mode || generating) return
-    const match = next.match(/^generate-(connection|dm|reply|followup)$/)
-    if (match) {
-      const requested = match[1] as Mode
-      if (requested === 'followup' && phase !== 'follow_up_due') return
-      if (requested === 'connection' && phase !== 'connection_due') return
-      setMode(requested)
-      generateDraft(requested)
-      const url = new URL(window.location.href)
-      url.searchParams.delete('next')
-      window.history.replaceState({}, '', url.toString())
-    }
-  }, [searchParams, phase])
-
   const generateDraft = useCallback(async (type: Mode) => {
     if (!type) return
+    // Telemetry guard (Contract 9): outreach generated for a SKIP lead. The
+    // policy refuses it, so this should never fire — if it does, a surface
+    // offered Generate against policy.
+    if (lead.verdict === 'skip') {
+      logClientViolation(
+        'SKIP_WITH_GENERATED_DRAFT',
+        `a ${type} draft was requested for a skip-verdict lead`,
+        ['verdict', 'draft'],
+        'lead_detail',
+      )
+    }
     setMode(type); setGenerating(true); setDraftText(''); setGenerationStatus(null)
+    setNeedsRescoring(false); setDraftFailed(false)
     try {
       const replyText = type === 'reply' ? (lastInbound?.sentText || '') : undefined
       const replyToMessageId = type === 'reply' ? (lastInbound?.id || undefined) : undefined
@@ -151,20 +175,63 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends }: Pro
               // The server could not derive a strategy. Say so instead of
               // leaving a blank note (QA RQA-012).
               sawTerminal = true
+              setNeedsRescoring(true)
               setGenerationStatus(json.reason || 'This lead needs rescoring before a message can be written.')
               return
             }
-            else if (json.type === 'error') { sawTerminal = true; setGenerationStatus(json.message || 'Generation failed'); return }
+            else if (json.type === 'error') { sawTerminal = true; setDraftFailed(true); setGenerationStatus(json.message || 'Generation failed'); return }
           } catch { /* skip */ }
         }
       }
       // A stream that ends without a terminal event must not look like a
       // silent success — the rep sees nothing and cannot tell what happened.
-      if (!sawTerminal) setGenerationStatus('Generation ended without a result. Please try again.')
+      if (!sawTerminal) { setDraftFailed(true); setGenerationStatus('Generation ended without a result. Please try again.') }
     } catch (err) {
+      setDraftFailed(true)
       setGenerationStatus(err instanceof Error ? err.message : 'Generation failed. Retry.')
     } finally { setGenerating(false) }
   }, [lead.id, lastInbound])
+
+  // ── Deep-link bootstrap (QA BUG-003) ─────────────────────────────────────
+  // The one-shot intent is consumed from the URL BEFORE any async work, so a
+  // refresh during generation can never re-trigger it. Generation then starts
+  // only from PENDING and only when the lead and its canonical decision exist.
+  const [bootstrap, setBootstrap] = useState<LeadBootstrapState>('NOT_REQUESTED')
+  const consumeOneShotIntent = useCallback(() => {
+    const stripped = stripOneShotIntent(window.location.href)
+    if (stripped !== null) window.history.replaceState({}, '', stripped)
+  }, [])
+
+  useEffect(() => {
+    const next = searchParams.get('next')
+    if (!next) return
+    const match = next.match(/^generate-(connection|dm|reply|followup)$/)
+    if (!match) return
+
+    // Consume first: the intent must not survive a reload mid-generation.
+    consumeOneShotIntent()
+    setBootstrap((s) => transitionLeadBootstrap(s, 'REQUEST'))
+
+    const requested = match[1] as Mode
+    if (requested === 'followup' && phase !== 'follow_up_due') return
+    if (requested === 'connection' && phase !== 'connection_due') return
+
+    // Draft generation requires the lead, a valid id and the canonical decision.
+    if (!bootstrapPreconditionsMet({
+      leadLoaded: Boolean(lead),
+      leadIdValid: Boolean(lead.id),
+      decisionAvailable: decisionCtx !== null,
+    })) {
+      setBootstrap((s) => transitionLeadBootstrap(s, 'FAIL'))
+      return
+    }
+
+    setBootstrap((s) => transitionLeadBootstrap(s, 'START'))
+    setMode(requested)
+    void generateDraft(requested).finally(() => {
+      setBootstrap((s) => (s === 'RUNNING' ? transitionLeadBootstrap(s, 'SUCCEED') : s))
+    })
+  }, [searchParams, phase, lead, decisionCtx, generateDraft, consumeOneShotIntent])
 
   // "Send without note" logs a connection with no text. It must surface
   // server refusals (daily ceiling, lock, ownership) instead of failing
@@ -230,9 +297,10 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends }: Pro
   const visibleMessages = messages.filter((m) => m.sentText || m.direction === 'inbound' || (m.type === 'connection' && m.sentAt)).sort((a, b) => (a.sentAt ?? '').localeCompare(b.sentAt ?? ''))
 
   // Inbound leads store the opening message on the lead itself (lead.inboundMessage)
-  // rather than as a message row. Surface it as the first timeline entry so the
-  // History tab reflects what the Conversation tab already shows.
-  const inboundFirstEntry = lead.inboundMessage?.trim()
+  // rather than as a message row. Surface it as the first timeline entry ONLY
+  // when no canonical row represents it, so the opening is never shown twice
+  // (QA BUG-004).
+  const inboundFirstEntry = lead.inboundMessage?.trim() && !hasCanonicalOpeningMessage(lead.messages ?? [], lead.id)
     ? {
         id: 'inbound-first',
         type: 'inbound_first' as const,
@@ -485,6 +553,12 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends }: Pro
             {relationshipState.lastActionAt && <span className="text-[11px] text-stone">{timeAgo(relationshipState.lastActionAt)}</span>}
           </div>
 
+          {draftMessage && (
+            <p role="status" className="px-5 py-3 text-[12px] text-ink-muted">
+              {draftMessage}
+            </p>
+          )}
+
           {generating && !draftText && (
             <div className="px-5 py-4 flex items-center gap-3">
               <div className="size-5 animate-spin rounded-full border-2 border-orange/30 border-t-orange" />
@@ -528,13 +602,18 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends }: Pro
             <div className="px-5 py-4 space-y-3">
               {phase === 'connection_due' && !lead.connectionAcceptedAt && !leadLocked && (
                 <div className="space-y-2">
-                  {skipVerdict && (
+                  {draftState === 'SKIPPED_BY_POLICY' && (
+                    <p role="status" className="text-[11px] text-ink-muted">
+                      {SKIP_POLICY_MESSAGE}
+                    </p>
+                  )}
+                  {skipVerdict && draftState !== 'SKIPPED_BY_POLICY' && (
                     <p className="text-[11px] text-ink-muted">
                       Verdict is skip. Outreach is not recommended; the actions below are a manual override.
                     </p>
                   )}
                   <div className="flex flex-col gap-2 sm:flex-row">
-                    <Button size="sm" variant={skipVerdict ? 'outline' : undefined} onClick={() => generateDraft('connection')} disabled={loggingConnection} className="w-full justify-center sm:flex-1">
+                    <Button size="sm" variant={skipVerdict ? 'outline' : undefined} onClick={() => generateDraft('connection')} disabled={loggingConnection || !canGenerate} className="w-full justify-center sm:flex-1">
                       <Send className="size-3.5" /> {skipVerdict ? 'Connect anyway (override)' : 'Generate connection note'}
                     </Button>
                     <Button size="sm" variant="outline" className="w-full justify-center sm:w-auto" loading={loggingConnection} disabled={loggingConnection} onClick={() => void sendWithoutNote()}>

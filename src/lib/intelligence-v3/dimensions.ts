@@ -122,6 +122,11 @@ export type BuyerTiming = 'NONE' | 'WEAK' | 'CURRENT' | 'URGENT'
 export interface TimingResolution {
   activityRecency: ActivityRecency
   buyerTiming: BuyerTiming
+  /**
+   * The stated project start date, when the source gives one. A future start
+   * is a delivery fact, never a proxy for activity recency (QA BUG-002).
+   */
+  desiredStartDate: string | null
   modelTiming: V3TimingLevel | null
   /** 0-1 blended dimension value. */
   raw: number
@@ -215,7 +220,18 @@ export function resolveTiming(
     ? `Model said ${modelTiming} — not verified: no buyer deadline or current request in the source. Activity ${activityRecency.toLowerCase()}, buyer timing ${buyerTiming.toLowerCase()}.`
     : `Activity ${activityRecency.toLowerCase()}${ageDays !== null ? ` (${ageDays}d)` : ''}; buyer timing ${buyerTiming.toLowerCase()}${timeline && verifiedRequest ? ` (${timeline.label})` : ''}.`
 
-  return { activityRecency, buyerTiming, modelTiming: modelTiming ?? null, raw, recencyRaw, buyerTimingRaw, note, evidence, urgencyRejected }
+  return {
+    activityRecency,
+    buyerTiming,
+    desiredStartDate: verifiedRequest ? facts.explicitDates.buyerStartDate : null,
+    modelTiming: modelTiming ?? null,
+    raw,
+    recencyRaw,
+    buyerTimingRaw,
+    note,
+    evidence,
+    urgencyRejected,
+  }
 }
 
 // ── Authority ───────────────────────────────────────────────────────────────

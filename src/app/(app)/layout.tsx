@@ -37,28 +37,34 @@ export default async function AppLayout({
   }
   if (!user.profile) redirect("/onboarding");
 
-  const store = await createScoutStore();
-  const queue = await store.getQueue();
+  // The store, the auth context and the identity list are independent: run
+  // them concurrently instead of as a sequential waterfall (BUG-001).
+  const [store, authCtx] = await Promise.all([
+    createScoutStore(),
+    getAuthContext().catch(() => null),
+  ])
 
-  let revenueIdentities: WorkspaceIdentity[] = [];
-  const authCtx = await getAuthContext().catch(() => null);
-
-  try {
-    const identities = authCtx?.isOwner || authCtx?.isAdmin
-      ? await store.listRevenueIdentitiesAdmin()
-      : await store.listMyAssignedIdentities();
-    revenueIdentities = identities
-      .filter((identity) => identity.status === "active")
-      .map((identity) => ({
-        id: identity.id,
-        identityName: identity.identityName,
-        title: identity.title,
-        channel: identity.channel,
-        profileId: identity.profileId,
-      }));
-  } catch {
-    revenueIdentities = [];
-  }
+  const [queue, revenueIdentities] = await Promise.all([
+    store.getQueue(),
+    (async (): Promise<WorkspaceIdentity[]> => {
+      try {
+        const identities = authCtx?.isOwner || authCtx?.isAdmin
+          ? await store.listRevenueIdentitiesAdmin()
+          : await store.listMyAssignedIdentities();
+        return identities
+          .filter((identity) => identity.status === "active")
+          .map((identity) => ({
+            id: identity.id,
+            identityName: identity.identityName,
+            title: identity.title,
+            channel: identity.channel,
+            profileId: identity.profileId,
+          }));
+      } catch {
+        return [];
+      }
+    })(),
+  ])
 
   const cookieStore = await cookies();
   const savedIdentityId = cookieStore.get(ACTIVE_IDENTITY_COOKIE)?.value ?? null;

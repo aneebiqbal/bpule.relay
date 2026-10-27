@@ -138,3 +138,94 @@ report coverage.
 - `tests/qa-relay-product-contracts.test.ts` → "Contract 7"
 - `tests/qa-relay-rel-qa-007-image-regenerate-failure.test.ts`
 - `tests/log-sent-idempotency.test.ts`, `tests/inbound-analysis-race.test.ts`
+
+---
+
+## Contract 8 — All external text enters intelligence through the canonical normalization boundary
+
+**Canonical owner**
+- `normalizeExternalInput` / `isLabeledFieldLine` / `countryFromLocation` — `src/lib/intelligence-v3/normalize-external-input.ts`
+
+**Runtime consumers**
+- `src/lib/intelligence-v3/bridge.ts` (V3-light identity: name, title, company)
+- `src/lib/upwork/facts.ts` (`titleOf`)
+- `src/lib/upwork-v2.ts` (`cleanExtractedTitle`)
+
+**Tests**
+- `tests/qa-relay-input-normalization.test.ts`
+- `tests/qa-relay-normalization-boundary.test.ts` (architecture)
+
+---
+
+## Contract 9 — RAW input is not ANALYZED input
+
+**Canonical owners**
+- `resolveDraftGenerationState` — `src/lib/relay/draft-generation-state.ts`
+- `analysisState` lifecycle — `src/app/(app)/upwork/new/page.tsx`
+
+**Runtime consumers**
+- `src/app/(app)/upwork/new/page.tsx` (score and apply action gated on `ANALYZED`)
+
+**Tests**
+- `tests/qa-relay-bug-012-skip-draft-state.test.ts`
+
+---
+
+## Contract 10 — The decision reviewed by the user is the decision persisted on save
+
+**Canonical owners**
+- the canonical packet on the lead row — `canonical_intelligence`, `canonical_score`, `score_version`, `scored_at`, `score_breakdown`
+
+**Runtime consumers**
+- `src/app/api/prospect/save/route.ts`, `src/app/api/leads/route.ts`
+- `src/lib/scoring/display-score.ts` (every surface reads the stored packet)
+
+**Tests**
+- `tests/score-parity-save-replay.test.ts`
+- `tests/canonical-score-surface-consistency.test.ts`
+
+---
+
+## Contract 11 — Canonical message rows own the conversation timeline
+
+**Canonical owners**
+- `inboundFirstMessageKey` / `hasCanonicalOpeningMessage` / `isInboundFirstMessage` — `src/lib/conversation/canonical-message.ts`
+- `buildThread` — `src/lib/conversation/thread.ts`
+
+**Runtime consumers**
+- `src/lib/conversation/service.ts`, `src/lib/relay/{lead-parity,conversation-presence}.ts`
+- `src/components/lead-workspace-simple.tsx` (History tab)
+- `src/lib/store/supabase-store.ts` (`createLead` writes the canonical opening row)
+
+**Tests**
+- `tests/qa-relay-bug-004-duplicate-inbound.test.ts`
+
+---
+
+## Contract 12 — UI cannot advertise an authentication capability the deployment cannot execute
+
+**Canonical owner**
+- `getAuthCapabilities` / `signupAvailable` — `src/lib/auth/capabilities.ts`
+
+**Runtime consumers**
+- `src/app/(public)/login/page.tsx` → `LoginExperience` (`googleEnabled`)
+- `src/app/(public)/signup/page.tsx` → `SignupExperience` (`capabilities`)
+- `src/app/api/signup/route.ts` (the server side of the same flags)
+
+**Tests**
+- `tests/qa-relay-bug-008-009-auth-capabilities.test.ts`
+
+---
+
+## Contract 13 — A recruiter is a relationship, not a buying signal
+
+**Canonical owner**
+- `resolveVerifiedBuyerIntent` — `src/lib/intelligence-v3/buyer-intent.ts` (`recruiterOnly`, role resolution)
+
+**Runtime consumers**
+- the V3 decision packet, `src/lib/intelligence-v3/dimensions.ts` (access cap), `src/lib/scoring/signal-extractor.ts`
+
+**Tests**
+- `tests/qa-relay-bug-011-recruiter-role.test.ts`
+- `tests/golden/fixtures-buyers.ts` → `buyer-outsourced-team-not-employees`
+- `tests/hardening-regression-tammo.test.ts` (counterweight)

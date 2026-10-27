@@ -13,6 +13,7 @@ import {
   RelaySubmitButton,
   maskEmailAddress,
 } from "@/components/auth/relay-auth-shell";
+import type { AuthCapabilities } from "@/lib/auth/capabilities";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -21,7 +22,18 @@ type CompletionState = {
   orgName: string;
 };
 
-export function SignupExperience() {
+/**
+ * The public signup screen renders the paths this deployment supports.
+ *
+ * A Create Workspace form that cannot succeed is worse than no form: on an
+ * invite-only deployment the screen says so and collects the invite code
+ * instead (QA BUG-008).
+ */
+export function SignupExperience({ capabilities }: { capabilities: AuthCapabilities }) {
+  const inviteOnly = capabilities.inviteOnlySignupEnabled
+  const signupOpen = capabilities.publicSignupEnabled
+
+  const [inviteCode, setInviteCode] = useState("");
   const [orgName, setOrgName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -47,7 +59,12 @@ export function SignupExperience() {
   const orgValid = orgName.trim().length >= 2;
   const emailValid = EMAIL_RE.test(trimmedEmail);
   const passwordValid = password.length >= 8;
-  const canSubmit = orgValid && emailValid && passwordValid && !busy;
+  const inviteValid = inviteCode.trim().length > 0;
+  const canSubmit = signupOpen
+    ? orgValid && emailValid && passwordValid && !busy
+    : inviteOnly
+      ? inviteValid && emailValid && passwordValid && !busy
+      : false;
 
   const passwordSignals = useMemo(
     () => [
@@ -75,6 +92,7 @@ export function SignupExperience() {
           orgName: orgName.trim(),
           email: trimmedEmail,
           password,
+          inviteCode: inviteCode.trim() || undefined,
         }),
       });
 
@@ -125,8 +143,12 @@ export function SignupExperience() {
   return (
     <RelayAuthShell
       stateLabel="RELAY / LINK"
-      heading="Build your Relay workspace in one minute"
-      subheading="Start free, no card. Relay sets the route, then helps you move from signal to real outreach."
+      heading={inviteOnly ? "Join your team's Relay workspace" : "Build your Relay workspace in one minute"}
+      subheading={
+        inviteOnly
+          ? "Relay access is invitation-only. Use the code from your workspace admin."
+          : "Start free, no card. Relay sets the route, then helps you move from signal to real outreach."
+      }
       contextLabel="What appears after this"
       contextPoints={[
         { title: "Identity", detail: "Email confirmation secures your workspace and teammate invites." },
@@ -135,12 +157,14 @@ export function SignupExperience() {
       ]}
     >
       <RelayAuthSurface
-        chapter="Start free"
-        title={completion ? "Confirm your inbox" : "Create your account"}
+        chapter={inviteOnly ? "Invitation only" : "Start free"}
+        title={completion ? "Confirm your inbox" : signupOpen ? "Create your account" : "Relay access is invitation-only"}
         subtitle={
           completion
             ? `We sent a verification link to ${maskEmailAddress(doneEmail)}.`
-            : "You become the first admin. Add teammates after onboarding."
+            : signupOpen
+              ? "You become the first admin. Add teammates after onboarding."
+              : "Your workspace admin holds an invite code. Enter it below to create your account."
         }
       >
         {completion ? (
@@ -191,6 +215,15 @@ export function SignupExperience() {
               </button>
             </div>
           </div>
+        ) : !signupOpen && !inviteOnly ? (
+          <div className="auth-step-enter space-y-3">
+            <p className="auth-inline-alert" role="status">
+              Signup is not available on this deployment. If you already have access, sign in below.
+            </p>
+            <Link href="/login" className="relay-cta-quiet w-full text-center">
+              Go to sign in
+            </Link>
+          </div>
         ) : (
           <form onSubmit={handleSubmit} className="auth-step-enter space-y-4" noValidate>
             {error ? (
@@ -199,21 +232,39 @@ export function SignupExperience() {
               </p>
             ) : null}
 
-            <RelayField
-              label="Organization"
-              htmlFor="signup-org"
-              hint="Use your company or operating brand name."
-              error={orgName.trim().length > 0 && !orgValid ? "Use at least 2 characters." : null}
-            >
-              <input
-                id="signup-org"
-                className="auth-input"
-                value={orgName}
-                onChange={(event) => setOrgName(event.target.value)}
-                placeholder="Acme Delivery Co."
-                autoComplete="organization"
-              />
-            </RelayField>
+            {inviteOnly ? (
+              <RelayField
+                label="Invite code"
+                htmlFor="signup-invite"
+                hint="Provided by your workspace admin."
+                error={inviteCode.trim().length > 0 && !inviteValid ? "Enter the invite code." : null}
+              >
+                <input
+                  id="signup-invite"
+                  className="auth-input"
+                  value={inviteCode}
+                  onChange={(event) => setInviteCode(event.target.value)}
+                  placeholder="Invite code"
+                  autoComplete="off"
+                />
+              </RelayField>
+            ) : (
+              <RelayField
+                label="Organization"
+                htmlFor="signup-org"
+                hint="Use your company or operating brand name."
+                error={orgName.trim().length > 0 && !orgValid ? "Use at least 2 characters." : null}
+              >
+                <input
+                  id="signup-org"
+                  className="auth-input"
+                  value={orgName}
+                  onChange={(event) => setOrgName(event.target.value)}
+                  placeholder="Acme Delivery Co."
+                  autoComplete="organization"
+                />
+              </RelayField>
+            )}
 
             <RelayField
               label="Work email"
@@ -259,7 +310,12 @@ export function SignupExperience() {
               </div>
             ) : null}
 
-            <RelaySubmitButton idleLabel="Create Relay workspace" busyLabel="Provisioning workspace" busy={busy} disabled={!canSubmit} />
+            <RelaySubmitButton
+              idleLabel={inviteOnly ? "Create account with invite" : "Create Relay workspace"}
+              busyLabel="Provisioning workspace"
+              busy={busy}
+              disabled={!canSubmit}
+            />
           </form>
         )}
       </RelayAuthSurface>

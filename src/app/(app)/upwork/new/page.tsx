@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import { notifyError } from '@/lib/ui/notify'
 import { cn } from 'cn'
 import type { UpworkJob } from '@/lib/domain/types'
 import { computeUpworkScore } from '@/lib/score/upwork-rubric'
+import { logClientViolation } from '@/lib/relay/violation-kinds'
 
 interface FormState {
   title: string
@@ -56,6 +57,8 @@ function verdictCall(verdict: UpworkJob['verdict']): string {
   return 'Not worth the spend. Skip it.'
 }
 
+type AnalysisState = 'RAW' | 'EXTRACTING' | 'ANALYZED' | 'FAILED'
+
 export default function NewUpworkJobPage() {
   const router = useRouter()
   const [form, setForm] = useState<FormState>(INITIAL)
@@ -65,6 +68,9 @@ export default function NewUpworkJobPage() {
   const rawRef = useRef<HTMLTextAreaElement | null>(null)
 
   const [extractedJobId, setExtractedJobId] = useState<string | null>(null)
+  // RAW input is not ANALYZED input: the score and the apply action are shown
+  // only once canonical extraction has completed (QA BUG-007).
+  const [analysisState, setAnalysisState] = useState<AnalysisState>('RAW')
   const score = useMemo(() => {
     return computeUpworkScore({
       budgetMin: form.budgetMin ? Number(form.budgetMin) : null,
@@ -79,6 +85,17 @@ export default function NewUpworkJobPage() {
       title: form.title,
     })
   }, [form])
+
+  // The score is a statement about analyzed job data, so it is only true when
+  // extraction produced it — never from the raw paste.
+  const analyzedScore = analysisState === 'ANALYZED' && score.hasJob
+
+  // Telemetry guard (Contract 9): a score shown while the source is still RAW.
+  useEffect(() => {
+    if (analysisState === 'RAW' && score.hasJob) {
+      logClientViolation('RAW_STATE_SHOWS_SCORE', `a score of ${score.total} was shown while the source was still RAW`, ['analysisState'], 'upwork_new')
+    }
+  }, [analysisState, score])
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -95,6 +112,7 @@ export default function NewUpworkJobPage() {
     }
     setExtracting(true)
     setError(null)
+    setAnalysisState('EXTRACTING')
     setForm((f) => ({ ...f, tags: [] }))
     try {
       const res = await fetch('/api/upwork/extract', {
@@ -112,12 +130,14 @@ export default function NewUpworkJobPage() {
         onEvent(event) {
           if (event.type === 'error') {
             setError(event.message)
+            setAnalysisState('FAILED')
             notifyError(event.message)
             return
           }
           if (event.type === 'done') {
             const ex = event.extracted
             if (event.jobId) setExtractedJobId(event.jobId)
+            setAnalysisState('ANALYZED')
             setForm((f) => ({
               ...f,
               title: ex.title?.trim() || f.title,
@@ -139,9 +159,23 @@ export default function NewUpworkJobPage() {
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Extraction failed.')
+      setAnalysisState('FAILED')
     } finally {
       setExtracting(false)
     }
+  }
+
+  /**
+   * Clear source: drop the paste and every field that came from it, back to
+   * RAW. It does not claim to reset a saved job — that is a different action
+   * on the job detail page (QA BUG-007 reset contract).
+   */
+  function clearSource() {
+    setForm(INITIAL)
+    setExtractedJobId(null)
+    setError(null)
+    setAnalysisState('RAW')
+    rawRef.current?.focus()
   }
 
   async function save() {
@@ -202,7 +236,7 @@ export default function NewUpworkJobPage() {
           Relay extracts budget and urgency, scores the job with rubric math, and keeps the apply decision explicit.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <UpworkSignal label="Current score" value={score.hasJob ? `${score.total}/10` : 'Paste a job'} />
+          <UpworkSignal label="Current score" value={analyzedScore ? `${score.total}/10` : 'Paste a job'} />
           <UpworkSignal label="Connects cost" value={connectsPreview !== null ? String(connectsPreview) : 'Not stated'} />
           <UpworkSignal label="Observed proposals" value={proposalLabel ?? 'Unknown'} />
         </div>
@@ -235,9 +269,16 @@ export default function NewUpworkJobPage() {
           />
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <span className="text-xs text-slate">Cmd / Ctrl + Enter to extract</span>
-          <Button variant="orange" size="lg" onClick={() => void extract()} loading={extracting}>
-            {extracting ? 'Extracting' : 'Extract'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {analysisState === 'ANALYZED' ? (
+              <Button variant="ghost" size="sm" onClick={clearSource}>
+                Clear source
+              </Button>
+            ) : null}
+            <Button variant="orange" size="lg" onClick={() => void extract()} loading={extracting}>
+              {extracting ? 'Extracting' : 'Extract'}
+            </Button>
+          </div>
         </div>
       </Step>
 
@@ -287,7 +328,7 @@ export default function NewUpworkJobPage() {
       </Step>
 
       <Step n={3} title="Score and save" hint="Pure arithmetic, never a model call." last>
-        {score.hasJob ? (
+        {analyzedScore ? (
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-baseline gap-3">
@@ -333,7 +374,13 @@ export default function NewUpworkJobPage() {
           </ul>
         </div>
         ) : (
-          <p className="text-[13px] text-graphite">Paste an Upwork job to analyze.</p>
+          <p className="text-[13px] text-graphite">
+            {analysisState === 'EXTRACTING'
+              ? 'Reading the job post…'
+              : analysisState === 'FAILED'
+                ? 'Extraction failed. Fix the paste and try again.'
+                : 'Paste an Upwork job and extract it to analyze.'}
+          </p>
         )}
 
         <div className="mt-6 flex items-center justify-end border-t border-line pt-5">

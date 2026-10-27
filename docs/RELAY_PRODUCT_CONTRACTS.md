@@ -175,6 +175,138 @@ what was saved, is worse than not having the feature.
 
 ---
 
+## Contract 8 — All external text enters intelligence through the canonical normalization boundary
+
+**Decision.** Every surface that turns pasted or ingested text into
+intelligence — Prospect, Inbound, Manual Lead, Upwork — runs its raw text
+through `normalizeExternalInput()` FIRST and reads the structured fields from
+the result. No surface implements its own label stripping or label parsing.
+
+**Why.** Label-prefix pollution was a recurring class: `"Name: Michael
+Anderson"` survived extraction and was stored, scored and displayed as a
+person's name. The label belongs to the source format, never to the value.
+Four separate QA findings (BUG-005, BUG-006, BUG-007, BUG-010) were one
+architectural family — four surfaces re-implementing the same incomplete label
+parser. One boundary removes the class.
+
+**Canonical owner.** `normalizeExternalInput` / `isLabeledFieldLine`
+(`src/lib/intelligence-v3/normalize-external-input.ts`). Returns
+`normalizedText`, `structuredFields` and per-field `provenance`. A field is
+`null` when the source does not state it — never invented.
+
+**Guard.** `tests/qa-relay-input-normalization.test.ts` (behaviour) and
+`tests/qa-relay-normalization-boundary.test.ts` (architecture — no second
+boundary exists).
+
+---
+
+## Contract 9 — RAW input is not ANALYZED input
+
+**Decision.** No score, verdict or action is shown until canonical extraction
+has completed. The Upwork flow has an explicit lifecycle —
+`RAW → EXTRACTING → ANALYZED → FAILED` — and the score is visible only in
+`ANALYZED`. Raw textarea content never counts as analyzed job data.
+
+**Why.** `computeUpworkScore` set `hasJob` from the raw paste, so a rep saw a
+score for text Relay had never read. A score is a statement about analyzed
+data; showing one for raw input is a fabricated measurement (Contract 6).
+
+**Canonical owner.** `resolveDraftGenerationState` /
+`src/lib/relay/draft-generation-state.ts` for the draft lifecycle, and the
+`analysisState` lifecycle in `src/app/(app)/upwork/new/page.tsx`.
+
+**Guard.** `tests/qa-relay-bug-012-skip-draft-state.test.ts`.
+
+---
+
+## Contract 10 — The decision reviewed by the user is the decision persisted on save
+
+**Decision.** For Prospect, Inbound, Manual Lead and Upwork, save persists the
+canonical analysis packet the rep reviewed: canonical score, score version,
+buyer intent, action, facts, events, decision date and model/version metadata.
+Save never silently recomputes a different decision.
+
+**Why.** Analyze → Save → Reopen showed a different score when persistence
+recomputed the decision instead of storing the reviewed packet. That is the
+same class as Contract 7 (UI state must reflect stored state) applied to the
+decision itself.
+
+**Canonical owner.** the canonical packet on the lead row
+(`canonical_intelligence`, `canonical_score`, `score_version`, `scored_at`,
+`score_breakdown`).
+
+**Guard.** `tests/score-parity-save-replay.test.ts`,
+`tests/canonical-score-surface-consistency.test.ts`.
+
+---
+
+## Contract 11 — Canonical message rows own the conversation timeline
+
+**Decision.** The messages table is the canonical conversation history. A
+lead-level opening message (`lead.inboundMessage`) is legacy/source context
+only, rendered as a turn when — and only when — no canonical row represents it.
+
+**Why.** The opening message lived only on the lead, and `buildThread`
+synthesized a turn for it. When the same message was also logged as a message
+row, the conversation showed it twice. The identity is structural, never
+textual: two genuinely repeated messages with the same text are two messages,
+and a lead's opening is one.
+
+**Canonical owner.** `inboundFirstMessageKey` / `hasCanonicalOpeningMessage`
+(`src/lib/conversation/canonical-message.ts`); `buildThread`
+(`src/lib/conversation/thread.ts`) reads it.
+
+**Guard.** `tests/qa-relay-bug-004-duplicate-inbound.test.ts`.
+
+---
+
+## Contract 12 — UI cannot advertise an authentication capability the deployment cannot execute
+
+**Decision.** The auth UI renders from `getAuthCapabilities()`: email/password,
+Google OAuth, public signup and invite-only signup. A Google button appears only
+when Google OAuth is configured; a Create Workspace form appears only when the
+deployment accepts signups.
+
+**Why.** The signup route required `SIGNUP_INVITE_CODE` while the public signup
+screen never collected a code — a form that could not succeed in either
+configuration. The Google button rendered regardless of provider configuration.
+Both are capabilities the deployment could not honour, advertised anyway.
+
+**Canonical owner.** `getAuthCapabilities` / `signupAvailable`
+(`src/lib/auth/capabilities.ts`).
+
+**Guard.** `tests/qa-relay-bug-008-009-auth-capabilities.test.ts`.
+
+---
+
+## Contract 13 — A recruiter is a relationship, not a buying signal
+
+**Decision.** `RECRUITER` is its own relationship role, distinct from
+`CANDIDATE`. A recruiter's buying intent is `UNKNOWN` unless the source contains
+a verified external buying request. The role is independent of channel value,
+referral potential and sender match.
+
+**Why.** "We're hiring a Full Stack Engineer" from a recruiter is a hiring
+post, not a request to buy a dev agency. A recruiter may be high-value as a
+channel while having no buying intent at all — those are separate dimensions,
+and faking intent to make a lead actionable is worse than leaving it unknown.
+
+**The role vs. the flag.** A recruiter *title* never blocks a verified external
+request. The golden fixture `buyer-outsourced-team-not-employees` settles it:
+*"Recruiter title does not block a real external request."* The recruiter flag
+(`facts.recruiter`) is recorded for every surface, while `relationshipRole`
+describes the commercial relationship — so a recruiter asking for an outsourced
+team resolves to `BUYER` with the recruiter flag still set.
+
+**Canonical owner.** `resolveVerifiedBuyerIntent`
+(`src/lib/intelligence-v3/buyer-intent.ts`) — `recruiterOnly` fails buyer
+intent closed; the role resolves to `BUYER` when a request survived.
+
+**Guard.** `tests/qa-relay-bug-011-recruiter-role.test.ts`,
+`tests/golden/fixtures-buyers.ts` → `buyer-outsourced-team-not-employees`.
+
+---
+
 ## Process rule — every S1/S2 fix becomes a fixture and, where applicable, a contract
 
 > **Every S1/S2 production bug that is fixed must become both a named regression

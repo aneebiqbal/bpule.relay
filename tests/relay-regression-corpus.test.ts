@@ -158,3 +158,115 @@ describe('Relay historical bug corpus', () => {
     expect(divergences, `${fixture.id}: ${fixture.symptom}`).toEqual([])
   })
 })
+
+// ── Named QA cases (Phase 25) ────────────────────────────────────────────────
+// Lifecycle, capability and navigation facts that are not expressible as a
+// lead/source invariant. Each name fails CI by itself.
+
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { canStartBootstrap } from '@/lib/relay/lead-bootstrap-state'
+import { getAuthCapabilities, signupAvailable } from '@/lib/auth/capabilities'
+import {
+  resolveDraftGenerationState,
+  canGenerateDraft,
+  draftStateMessage,
+  SKIP_POLICY_MESSAGE,
+} from '@/lib/relay/draft-generation-state'
+
+const BASE_ENV = {
+  NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: 'anon-key',
+}
+
+function readApp(relative: string): string {
+  return readFileSync(path.join(process.cwd(), relative), 'utf8')
+}
+
+interface NamedCase {
+  id: string
+  symptom: string
+  check: () => void
+}
+
+const NAMED_CASES: readonly NamedCase[] = [
+  {
+    id: 'BUG001_NAVIGATION',
+    symptom: 'Every sidebar link disabled prefetch and the layout ran a five-step sequential waterfall.',
+    check: () => {
+      if (readApp('src/components/app-rail.tsx').includes('prefetch={false}')) {
+        throw new Error('the sidebar still disables prefetch; navigation pays a full RSC round-trip per click')
+      }
+      if (!readApp('src/app/(app)/layout.tsx').includes('Promise.all([')) {
+        throw new Error('the app layout still awaits its independent lookups sequentially')
+      }
+    },
+  },
+  {
+    id: 'BUG003_REFRESH_BOOTSTRAP',
+    symptom: 'The one-shot ?next intent survived a refresh during draft generation and fired a second draft.',
+    check: () => {
+      const mod = readApp('src/lib/relay/lead-bootstrap-state.ts')
+      for (const symbol of ['stripOneShotIntent', 'bootstrapPreconditionsMet', 'canStartBootstrap']) {
+        if (!mod.includes(`export function ${symbol}`)) throw new Error(`${symbol} is missing`)
+      }
+      if (!canStartBootstrap('PENDING')) throw new Error('generation must start from PENDING')
+    },
+  },
+  {
+    id: 'BUG007_UPWORK_ANALYSIS_STATE',
+    symptom: 'The Upwork score was computed from raw textarea content before extraction.',
+    check: () => {
+      const page = readApp('src/app/(app)/upwork/new/page.tsx')
+      if (!page.includes("'RAW'") || !page.includes("'ANALYZED'")) {
+        throw new Error('the Upwork flow has no RAW/ANALYZED lifecycle')
+      }
+      if (!page.includes("analysisState === 'ANALYZED'")) {
+        throw new Error('the score is not gated on ANALYZED')
+      }
+    },
+  },
+  {
+    id: 'BUG008_SIGNUP_CAPABILITY',
+    symptom: 'A public Create Workspace form was shown on a deployment that could not accept signups.',
+    check: () => {
+      const caps = readApp('src/lib/auth/capabilities.ts')
+      if (!caps.includes('inviteOnlySignupEnabled') || !caps.includes('publicSignupEnabled')) {
+        throw new Error('there is no signup capability model')
+      }
+      if (signupAvailable({ emailPasswordEnabled: true, googleEnabled: false, publicSignupEnabled: false, inviteOnlySignupEnabled: false })) {
+        throw new Error('signup must be unavailable when neither path is configured')
+      }
+    },
+  },
+  {
+    id: 'BUG009_GOOGLE_CAPABILITY',
+    symptom: 'The Google button rendered on a deployment without Google OAuth configured.',
+    check: () => {
+      if (getAuthCapabilities({ ...BASE_ENV, RELAY_GOOGLE_AUTH_ENABLED: 'true' }).googleEnabled !== true) {
+        throw new Error('Google must be enabled when configured')
+      }
+      if (getAuthCapabilities(BASE_ENV).googleEnabled !== false) {
+        throw new Error('Google must not be advertised when it is not configured')
+      }
+    },
+  },
+  {
+    id: 'BUG012_SKIP_DRAFT_STATE',
+    symptom: 'A SKIP lead offered Generate and silently produced nothing.',
+    check: () => {
+      const state = resolveDraftGenerationState({
+        verdict: 'skip', generating: true, draftText: '', needsRescoring: false, failed: true,
+      })
+      if (state !== 'SKIPPED_BY_POLICY') throw new Error(`a skip verdict resolved to ${state}`)
+      if (canGenerateDraft(state)) throw new Error('Generate must be disabled for a policy skip')
+      if (draftStateMessage(state) !== SKIP_POLICY_MESSAGE) throw new Error('the policy skip has no visible message')
+    },
+  },
+]
+
+describe('Relay named QA cases', () => {
+  it.each(NAMED_CASES)('$id: holds its invariant', (entry) => {
+    expect(() => entry.check(), `${entry.id}: ${entry.symptom}`).not.toThrow()
+  })
+})

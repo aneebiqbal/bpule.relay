@@ -28,7 +28,14 @@ function main() {
   const manifest = {
     gitSha: state.gitSha ?? gitSha(),
     generatedAt: new Date().toISOString(),
-    gatesPassed: state.gatesPassed ?? false,
+    // The full release condition, not just the automated steps: a manifest that
+    // says gatesPassed on a build with no browser run and no SHA parity is how a
+    // build gets promoted on a lie.
+    gatesPassed: state.productionReady ?? false,
+    automatedCodeGate: state.automatedCodeGate ?? false,
+    browserGate: state.browserGate ?? 'NOT_RUN',
+    shaGate: state.shaGate ?? 'NOT_VERIFIED',
+    productionGate: state.productionGate ?? 'BLOCKED',
     deploymentSha: deployed?.sha ?? null,
     deploymentUrl: url ?? null,
     appVersion: deployed?.appVersion ?? '0.8.0',

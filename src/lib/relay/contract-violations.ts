@@ -9,23 +9,9 @@
  * violationCode. Ids only — no raw source text or client messages.
  */
 import { getTraceContext } from '@/lib/observability/trace-context'
+import type { ContractViolationKind } from './violation-kinds'
 
-export type ContractViolationKind =
-  | 'SCORE_DISAGREEMENT'
-  | 'ACTION_DISAGREEMENT'
-  | 'THREAD_DISAGREEMENT'
-  | 'TERMINAL_OUTREACH'
-  | 'SKIP_WITH_SEND_ACTION'
-  | 'NO_THREAD_WITH_INBOUND'
-  | 'NO_THREAD_BUT_CLAIMS_REPLY'
-  | 'VERIFIED_BUYER_UNKNOWN_INTENT'
-  | 'VERIFIED_BUYER_BUT_DENIED_REQUEST'
-  | 'TERMINAL_BUT_CONTACTABLE'
-  | 'ACCESS_BUT_DENIES_ROUTE'
-  | 'TIMING_BUT_DENIES_TIMING'
-  | 'LOW_FIT_BUT_CLAIMS_STRONG_FIT'
-  | 'FOLLOWUP_ON_TERMINAL'
-  | 'UNKNOWN_RENDERED_AS_ZERO'
+export type { ContractViolationKind }
 
 export interface ContractViolation {
   kind: ContractViolationKind
@@ -92,4 +78,50 @@ export function recordExplanationViolations(
       detail: c.message,
     })
   }
+}
+
+// ── Phase 36 emitters ────────────────────────────────────────────────────────
+
+/**
+ * The score shown to the rep is not the score that was persisted. The decision
+ * the user reviewed must be the decision saved (Contract 10).
+ */
+export function recordAnalysisScoreDrift(params: {
+  leadId: string | null
+  reviewedScore: number
+  persistedScore: number
+  surface?: string
+}): void {
+  recordContractViolation({
+    kind: 'ANALYSIS_SCORE_DRIFT',
+    leadId: params.leadId,
+    contractId: 10,
+    surface: params.surface ?? 'save',
+    fields: ['canonicalScore'],
+    detail: `reviewed ${params.reviewedScore} but persisted ${params.persistedScore}`,
+  })
+}
+
+/** The lead-level opening fallback rendered although a canonical row existed. */
+export function recordDuplicateOpeningMessage(leadId: string): void {
+  recordContractViolation({
+    kind: 'DUPLICATE_OPENING_MESSAGE',
+    leadId,
+    contractId: 11,
+    surface: 'conversation',
+    fields: ['inboundMessage'],
+    detail: 'the lead-level opening rendered while a canonical message row already represented it',
+  })
+}
+
+/** A recruiter flag was paired with a candidate relationship. */
+export function recordCandidateRecruiterConflict(leadId: string): void {
+  recordContractViolation({
+    kind: 'CANDIDATE_WITH_RECRUITER_FLAG',
+    leadId,
+    contractId: 13,
+    surface: 'intelligence',
+    fields: ['relationshipRole'],
+    detail: 'a recruiter flag was paired with the candidate relationship',
+  })
 }
