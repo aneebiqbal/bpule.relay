@@ -138,6 +138,7 @@ export async function POST(req: NextRequest) {
         context: body.context,
         idempotencyKey,
       },
+      isTest: body.isTest === true,
       assignedProfileId: validatedProfileId,
       canonicalIntelligence: analysis.canonicalIntelligence,
       canonicalScore: analysis.canonicalScore,

@@ -32,6 +32,7 @@ function main() {
 
   const automated = state.automatedCodeGate === true
   const browser = state.browserGate ?? 'NOT_RUN'
+  const bug004 = state.bug004Gate ?? 'NOT_RUN'
   const shaGate = url ? (shaMatches ? 'VERIFIED' : 'NOT_VERIFIED') : (state.shaGate ?? 'NOT_VERIFIED')
 
   console.log('PRODUCTION RELEASE GATE')
@@ -40,12 +41,14 @@ function main() {
   console.log(`deployed SHA  ${deployed?.sha ?? 'unknown'}`)
   console.log(`AUTOMATED_CODE_GATE  ${automated ? 'PASS' : 'FAIL'}`)
   console.log(`BROWSER_GATE         ${browser}`)
+  console.log(`BUG004_INBOUND_GATE  ${bug004}`)
   console.log(`SHA_GATE             ${shaGate}`)
   console.log('=======================')
 
   const blockers = []
   if (!automated) blockers.push('the automated code gate failed')
   if (browser !== 'PASS') blockers.push(`browser acceptance is ${browser}`)
+  if (bug004 !== 'PASS') blockers.push(`the dedicated BUG-004 inbound-parity gate is ${bug004}`)
   if (shaGate !== 'VERIFIED') blockers.push('the deployed SHA is not verified against the tested SHA')
 
   if (blockers.length > 0) {

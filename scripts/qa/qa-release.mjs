@@ -25,6 +25,7 @@ import {
 
 const VITEST_JSON = path.join(ARTIFACTS_DIR, 'vitest.json')
 const BROWSER_JSON = path.join(ARTIFACTS_DIR, 'browser.json')
+const BUG004_JSON = path.join(ARTIFACTS_DIR, 'browser-bug-004.json')
 
 mkdirSync(ARTIFACTS_DIR, { recursive: true })
 
@@ -63,6 +64,37 @@ function runStep(s) {
   }
 }
 
+/**
+ * Run one Playwright spec against E2E_BASE_URL and read its counts.
+ * NOT_RUN carries a reason — a browser gate is never a silent PASS.
+ */
+function runBrowserSpec(specs, jsonFile) {
+  const baseURL = process.env.E2E_BASE_URL
+  if (!baseURL) {
+    return { result: 'NOT_RUN', casesRun: 0, casesPassed: 0, casesFailed: 0, reason: 'E2E_BASE_URL not set' }
+  }
+  const result = runStep(
+    step(
+      'BROWSER',
+      ['npx', 'playwright', 'test', ...specs, '--project=desktop-chrome', '--reporter=json'],
+      // The JSON reporter writes to PLAYWRIGHT_JSON_OUTPUT_NAME, not --output
+      // (which is the test-artifact directory).
+      { env: { PLAYWRIGHT_JSON_OUTPUT_NAME: jsonFile } },
+    ),
+  )
+  const counts = readBrowserCounts(jsonFile)
+  return { ...counts, reason: result.ok ? null : 'one or more browser cases failed' }
+}
+
+/**
+ * The browser gates.
+ *
+ * BUG-004 runs as a DEDICATED hard gate, separately from the acceptance suite.
+ * `createLead` writes a real `messages` row — the riskiest persistence/state
+ * change in the batch — and its proof must come from a real row in a real
+ * database, not from a unit test. Combining it into one undifferentiated
+ * browser number is exactly how that proof gets skipped.
+ */
 function runBrowser() {
   // Separate CI jobs can run the browser suites and hand their JSON artifacts in.
   const jsonArgs = process.argv.slice(2).filter((a) => a.startsWith('--browser-json='))
@@ -71,34 +103,47 @@ function runBrowser() {
     const casesRun = results.reduce((s, r) => s + r.casesRun, 0)
     const casesPassed = results.reduce((s, r) => s + r.casesPassed, 0)
     const casesFailed = results.reduce((s, r) => s + r.casesFailed, 0)
-    const casesFlaky = results.reduce((s, r) => s + (r.casesFlaky ?? 0), 0)
     const result = casesRun === 0 ? 'NOT_RUN' : casesFailed > 0 ? 'FAIL' : 'PASS'
-    return { result, casesRun, casesPassed, casesFailed, casesFlaky, reason: result === 'NOT_RUN' ? 'no parseable browser artifact' : null }
+    return {
+      result,
+      casesRun,
+      casesPassed,
+      casesFailed,
+      reason: result === 'NOT_RUN' ? 'no parseable browser artifact' : null,
+      // A hand-in artifact cannot be attributed per spec, so the dedicated
+      // BUG-004 gate is reported as unverified rather than guessed.
+      bug004: { result: 'NOT_RUN', casesRun: 0, casesPassed: 0, casesFailed: 0, reason: 'browser results handed in as one artifact; BUG-004 not separately verified' },
+    }
   }
 
-  const baseURL = process.env.E2E_BASE_URL
-  if (!baseURL) {
-    return { result: 'NOT_RUN', casesRun: 0, casesPassed: 0, casesFailed: 0, reason: 'E2E_BASE_URL not set' }
-  }
-  const result = runStep(
-    step(
-      'BROWSER',
-      [
-        'npx',
-        'playwright',
-        'test',
-        'e2e/rc-browser-acceptance.spec.ts',
-        'e2e/rc-browser-matrix.spec.ts',
-        '--project=desktop-chrome',
-        '--reporter=json',
-      ],
-      // The JSON reporter writes to PLAYWRIGHT_JSON_OUTPUT_NAME, not --output
-      // (which is the test-artifact directory).
-      { env: { PLAYWRIGHT_JSON_OUTPUT_NAME: BROWSER_JSON } },
-    ),
+  const acceptance = runBrowserSpec(
+    ['e2e/rc-browser-acceptance.spec.ts', 'e2e/rc-browser-matrix.spec.ts'],
+    BROWSER_JSON,
   )
-  const counts = readBrowserCounts(BROWSER_JSON)
-  return { ...counts, reason: result.ok ? null : 'one or more browser cases failed' }
+  const bug004 = process.env.E2E_SKIP_BUG004 === '1'
+    ? { result: 'NOT_RUN', casesRun: 0, casesPassed: 0, casesFailed: 0, reason: 'E2E_SKIP_BUG004=1' }
+    : runBrowserSpec(['e2e/rc-bug-004-inbound-parity.spec.ts'], BUG004_JSON)
+
+  const casesRun = acceptance.casesRun + bug004.casesRun
+  const casesPassed = acceptance.casesPassed + bug004.casesPassed
+  const casesFailed = acceptance.casesFailed + bug004.casesFailed
+  const result = casesRun === 0 ? 'NOT_RUN' : casesFailed > 0 ? 'FAIL' : 'PASS'
+  // De-duplicate: both specs report the same missing target.
+  const reason = result === 'NOT_RUN'
+    ? [...new Set([acceptance.reason, bug004.reason].filter(Boolean))].join('; ') || 'no browser target'
+    : null
+
+  return {
+    result,
+    casesRun,
+    casesPassed,
+    casesFailed,
+    reason: result === 'NOT_RUN'
+      ? [acceptance.reason, bug004.reason].filter(Boolean).join('; ') || 'no browser target'
+      : null,
+    acceptance,
+    bug004,
+  }
 }
 
 function main() {
@@ -125,6 +170,13 @@ function main() {
     console.log(`${'BROWSER'.padEnd(24)} NOT_RUN  (${browser.reason})`)
   }
 
+  // The dedicated hard gate. Reported separately so a green combined browser
+  // number can never hide a red BUG-004.
+  const bug004 = browser.bug004 ?? { result: 'NOT_RUN', casesRun: 0, casesPassed: 0, casesFailed: 0, reason: 'not run' }
+  if (bug004.result === 'FAIL') failures += 1
+  const bug004Label = bug004.result === 'NOT_RUN' ? `NOT_RUN  (${bug004.reason})` : `${bug004.result}  cases:${bug004.casesRun} passed:${bug004.casesPassed} failed:${bug004.casesFailed}`
+  console.log(`${'BUG004_INBOUND_PARITY'.padEnd(24)} ${bug004Label}`)
+
   const buildResult = runStep(BUILD_STEP)
   if (!buildResult.ok) failures += 1
   console.log(`${BUILD_STEP.name.padEnd(24)} ${buildResult.ok ? 'PASS' : 'FAIL'}`)
@@ -143,10 +195,13 @@ function main() {
   const automatedOk = failures === 0
   const browserGate = browser.result === 'PASS' ? 'PASS' : browser.result === 'FAIL' ? 'FAIL' : 'NOT_RUN'
   const shaGate = version ? 'VERIFIED' : 'NOT_VERIFIED'
-  const productionReady = automatedOk && browser.result === 'PASS' && Boolean(version)
+  // The dedicated BUG-004 gate is a release condition of its own.
+  const bug004Ready = (browser.bug004?.result ?? 'NOT_RUN') === 'PASS'
+  const productionReady = automatedOk && browser.result === 'PASS' && bug004Ready && Boolean(version)
 
   console.log(`AUTOMATED_CODE_GATE      ${automatedOk ? 'PASS' : `FAIL (${failures} step(s) failed)`}`)
   console.log(`BROWSER_GATE             ${browserGate}${browserGate === 'NOT_RUN' ? ` (${browser.reason})` : ''}`)
+  console.log(`BUG004_INBOUND_GATE      ${bug004Ready ? 'PASS' : browser.bug004?.result ?? 'NOT_RUN'}`)
   console.log(`SHA_GATE                 ${shaGate}${version ? '' : ' (no /api/version reachable)'}`)
   console.log(`PRODUCTION_GATE          ${productionReady ? 'READY' : 'BLOCKED'}`)
 
@@ -165,6 +220,7 @@ function main() {
     generatedAt: new Date().toISOString(),
     automatedCodeGate: automatedOk,
     browserGate,
+    bug004Gate: browser.bug004?.result ?? 'NOT_RUN',
     shaGate,
     productionGate: productionReady ? 'READY' : 'BLOCKED',
     productionReady,
