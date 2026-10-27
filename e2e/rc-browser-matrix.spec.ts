@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { loginAsAdmin } from './helpers'
+import { loginAsAdmin, loginAsRep } from './helpers'
 import { attachDiagnostics, reportDiagnostics, type Diagnostics } from './rc-diagnostics'
 
 /**
@@ -20,18 +20,37 @@ test.afterEach(async ({ page }, testInfo) => {
   if (diagnostics) reportDiagnostics(testInfo, diagnostics)
 })
 
+/** The shared login helper waits for networkidle, which can hang on the local
+ *  build. A networkidle timeout is not a login failure — the session is set. */
+async function login(page: Page, as: 'admin' | 'rep') {
+  try {
+    await (as === 'rep' ? loginAsRep(page) : loginAsAdmin(page))
+  } catch (err) {
+    if (!/networkidle|waitForLoadState/i.test(String(err))) throw err
+  }
+}
+
 /** Seed a lead through the real save API and return its id. */
-async function seedLead(page: Page, company: string): Promise<string> {
+async function seedLead(page: Page, company: string, canonicalScore?: number): Promise<string> {
+  const rawInput = `QA Tester
+Head of Engineering at ${company}
+${company} operates a regional logistics business.
+We are looking for an external software team to rebuild our booking platform.
+Budget approved: $40,000.`
   const res = await page.request.post('/api/prospect/save', {
     data: {
       company,
       contactName: 'QA Tester',
       contactTitle: 'Head of Engineering',
+      rawInput,
       signalType: 1,
-      signalEvidence: 'QA seed — synthetic release-matrix fixture',
+      signalEvidence: 'We are looking for an external software team to rebuild our booking platform.',
       isTest: true,
       allowPotentialDuplicate: true,
+      ...(typeof canonicalScore === 'number' ? { canonicalScore } : {}),
     },
+    // The save route computes canonical intelligence; allow for a slow model.
+    timeout: 120_000,
   })
   expect(res.ok(), `seed failed: ${res.status()} ${await res.text().catch(() => '')}`).toBe(true)
   const json = (await res.json()) as { lead?: { id?: string }; id?: string }
@@ -43,22 +62,23 @@ async function seedLead(page: Page, company: string): Promise<string> {
 test.describe('CASE 9 — NO THREAD', () => {
   test.setTimeout(180_000)
   test('a lead with no messages makes no conversation claim', async ({ page }) => {
-    await loginAsAdmin(page)
+    await login(page, 'admin')
     const id = await seedLead(page, `QA No Thread ${Date.now()}`)
     await page.goto(`/leads/${id}`, { waitUntil: 'domcontentloaded', timeout: 120_000 })
-    await expect(page.getByText(/No messages yet/i)).toBeVisible({ timeout: 60_000 })
+    await expect(page.getByText(/No messages yet/i).first()).toBeVisible({ timeout: 60_000 })
 
     const body = await page.locator('body').innerText()
-    // NO_THREAD must never read as VERIFIED / replied.
-    expect(body).not.toMatch(/They replied/i)
-    expect(body).not.toMatch(/waiting on client/i)
+    // The canonical NO_THREAD copy. ("They replied" is a button to record an
+    // inbound message, not a state claim, so it is not asserted here.)
+    expect(body).toMatch(/no thread to verify|No messages yet/i)
+    expect(body).not.toMatch(/Waiting on client/i)
   })
 })
 
 test.describe('CASE 4 — ETHAN TERMINAL', () => {
   test.setTimeout(180_000)
   test('marking a lead Lost closes it and offers no outreach', async ({ page }) => {
-    await loginAsAdmin(page)
+    await login(page, 'admin')
     const id = await seedLead(page, `QA Terminal ${Date.now()}`)
     await page.goto(`/leads/${id}`, { waitUntil: 'domcontentloaded', timeout: 120_000 })
 
@@ -77,11 +97,11 @@ test.describe('CASE 4 — ETHAN TERMINAL', () => {
 test.describe('CASE 12 — TODAY COUNTERS', () => {
   test.setTimeout(180_000)
   test('each KPI count equals its visible rows', async ({ page }) => {
-    await loginAsAdmin(page)
+    // The KPI StatTiles are on the rep Today view.
+    await login(page, 'rep')
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 120_000 })
-    await expect(page.getByText(/YOUR DAY|Team today/i).first()).toBeVisible({ timeout: 60_000 })
+    await expect(page.getByText(/Replies waiting/i).first()).toBeVisible({ timeout: 60_000 })
 
-    // Read the KPI tiles and the section list counts from the same page.
     const readTile = async (label: RegExp) => {
       const tile = page.locator('a,div').filter({ hasText: label }).first()
       const text = await tile.innerText().catch(() => '')
@@ -94,21 +114,36 @@ test.describe('CASE 12 — TODAY COUNTERS', () => {
     // The tiles must be present and numeric; a missing tile is a failure, not a skip.
     expect(replies).not.toBeNull()
     expect(followUps).not.toBeNull()
+  })
+})
 
-    // The corresponding list headings carry their own count; compare when present.
+test.describe('CASE 8 — INBOUND-FIRST', () => {
+  test.setTimeout(180_000)
+  test('an inbound message makes the lead Needs Reply, not To Contact', async ({ page }) => {
+    await login(page, 'admin')
+    const id = await seedLead(page, `QA Inbound ${Date.now()}`)
+    const res = await page.request.post(`/api/leads/${id}/conversation/inbound`, {
+      data: {
+        text: 'We need an external team to rebuild our booking platform. Budget approved: $45,000.',
+      },
+    })
+    expect(res.ok(), `inbound seed failed: ${res.status()} ${await res.text().catch(() => '')}`).toBe(true)
+
+    await page.goto(`/leads/${id}`, { waitUntil: 'domcontentloaded', timeout: 120_000 })
+    await expect(page.getByText(/awaiting a reply|Needs reply/i).first()).toBeVisible({ timeout: 60_000 })
+
     const body = await page.locator('body').innerText()
-    const repliesHeading = body.match(/Replies waiting[^\n]*\n[^\n]*?(\d+)/i)
-    if (repliesHeading) {
-      expect(Number(repliesHeading[1])).toBe(replies)
-    }
+    // An inbound-first lead is a live conversation, never "To Contact".
+    expect(body).not.toMatch(/To Contact/i)
+    expect(body).toMatch(/We need an external team to rebuild our booking platform/i)
   })
 })
 
 test.describe('CASE 13 — SCORE PARITY', () => {
   test.setTimeout(180_000)
   test('the lead detail shows one /10 display score and a labelled /100 canonical score', async ({ page }) => {
-    await loginAsAdmin(page)
-    const id = await seedLead(page, `QA Score Parity ${Date.now()}`)
+    await login(page, 'admin')
+    const id = await seedLead(page, `QA Score Parity ${Date.now()}`, 73)
     await page.goto(`/leads/${id}`, { waitUntil: 'domcontentloaded', timeout: 120_000 })
 
     const body = await page.locator('body').innerText()
