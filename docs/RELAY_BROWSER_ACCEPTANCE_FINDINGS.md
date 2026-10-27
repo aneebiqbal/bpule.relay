@@ -136,3 +136,27 @@ earlier acceptance expectation of UNKNOWN intent was stale for this source.
 extracted as an EXPERIENCE buyer question (unit eval, 107 cases) but correctly
 does **not** upgrade to a verified buyer request, so intent stays UNKNOWN.
 Question coverage and buyer intent are separate axes.
+
+### F4 — BUG-004 was a visibility bug, not a persistence bug
+
+An inbound lead created through `/api/inbound/lead` stored correctly
+(`status: new`, `archived: false`, one canonical `messages` row keyed
+`inbound_first:<id>`) but disappeared from Today.
+
+**Root cause.** `buildRelayQueue`'s dedicated inbound branch iterated
+`input.allLeads`, and the dashboard passes `allLeads: []`, so the branch never
+ran. Inbound-first leads were also not `send`-verdict or STRONG-band, so no
+other branch picked them up.
+
+**Fix.** The branch now scans the owned queue as well as `allLeads`,
+de-duplicated by id. An inbound lead with a canonical message produces an
+`inbound_opportunity` task regardless of sender assignment. No scoring,
+buyer-intent or persistence change.
+
+**Regression fixtures.** `tests/qa-relay-inbound-visibility.test.ts` — inbound
+with/without sender, outbound-only, terminal inbound, and the no-duplicate case.
+
+**Browser spec corrections (test bugs, not product bugs):** the detail heading
+is the contact name; tabs are client-side (`?tab=conversation` is ignored);
+Chats/Today links carry `?tab=conversation`; Archive's top section is
+"every thread you own", so only its "Archived leads" section is strict.
