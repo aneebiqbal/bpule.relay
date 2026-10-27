@@ -4,6 +4,18 @@
 exact preview. Each entry is either a **test defect** (my assertion was wrong) or
 a **product finding** (a real inconsistency worth a fixture).
 
+## Scope status — READ THIS FIRST
+
+**BROWSER SUBSET: PASS** — not "BROWSER RC: PASS".
+
+Eight Prospect-surface cases were exercised against a local production build:
+NADIA, HANNAH, EMMA, DANIEL, JURICA, ABDULHAKIM, PARAPHRASED, MOBILE.
+
+The following release cases were **NOT run** and must pass before a browser RC
+claim: ETHAN terminal, inbound-first, no-thread, multi-question reply, Today
+counter parity, the full score-parity matrix, Studio regenerate, Upwork
+unknown-values, and production smoke.
+
 ---
 
 ## Test defects (assertion was wrong, product is correct)
