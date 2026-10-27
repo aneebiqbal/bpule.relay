@@ -17,7 +17,7 @@ export function gitSha() {
 
 /** GET /api/version against a deployed URL, or null when unreachable. */
 export function readApiVersion(url) {
-  const target = url || process.env.RELAY_PREVIEW_URL || ''
+  const target = url || process.env.RELAY_PREVIEW_URL || process.env.E2E_BASE_URL || ''
   if (!target) return null
   try {
     const raw = execFileSync('curl', ['-s', '--max-time', '30', `${target.replace(/\/$/, '')}/api/version`], {

@@ -54,7 +54,7 @@ function runStep(s) {
     execFileSync(s.command[0], s.command.slice(1), {
       stdio: ['ignore', 'pipe', 'pipe'],
       maxBuffer: 256 * 1024 * 1024,
-      env: process.env,
+      env: { ...process.env, ...(s.env ?? {}) },
     })
     return { ok: true, detail: '' }
   } catch (err) {
@@ -69,15 +69,20 @@ function runBrowser() {
     return { result: 'NOT_RUN', casesRun: 0, casesPassed: 0, casesFailed: 0, reason: 'E2E_BASE_URL not set' }
   }
   const result = runStep(
-    step('BROWSER', [
-      'npx',
-      'playwright',
-      'test',
-      'e2e/rc-browser-acceptance.spec.ts',
-      '--project=desktop-chrome',
-      '--reporter=json',
-      `--output=${BROWSER_JSON}`,
-    ]),
+    step(
+      'BROWSER',
+      [
+        'npx',
+        'playwright',
+        'test',
+        'e2e/rc-browser-acceptance.spec.ts',
+        '--project=desktop-chrome',
+        '--reporter=json',
+      ],
+      // The JSON reporter writes to PLAYWRIGHT_JSON_OUTPUT_NAME, not --output
+      // (which is the test-artifact directory).
+      { env: { PLAYWRIGHT_JSON_OUTPUT_NAME: BROWSER_JSON } },
+    ),
   )
   const counts = readBrowserCounts(BROWSER_JSON)
   return { ...counts, reason: result.ok ? null : 'one or more browser cases failed' }
