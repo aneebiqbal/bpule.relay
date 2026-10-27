@@ -16,6 +16,7 @@ import {
   ARTIFACTS_DIR,
   countCorpusFixtures,
   gitSha,
+  latestMigration,
   readApiVersion,
   readBrowserCounts,
   readVitestCounts,
@@ -42,8 +43,11 @@ const STEPS = [
   step('TYPECHECK', ['npx', 'tsc', '--noEmit']),
   step('LINT', ['npx', 'eslint']),
   step('UNIT', ['npx', 'vitest', 'run', '--silent', '--reporter=json', `--outputFile=${VITEST_JSON}`]),
-  step('BUILD', ['npx', 'next', 'build']),
 ]
+
+// Build runs AFTER the browser suite: the browser validates the running build,
+// and a rebuild would replace .next underneath the server.
+const BUILD_STEP = step('BUILD', ['npx', 'next', 'build'])
 
 function runStep(s) {
   try {
@@ -103,6 +107,11 @@ function main() {
     console.log(`${'BROWSER'.padEnd(24)} NOT_RUN  (${browser.reason})`)
   }
 
+  const buildResult = runStep(BUILD_STEP)
+  if (!buildResult.ok) failures += 1
+  console.log(`${BUILD_STEP.name.padEnd(24)} ${buildResult.ok ? 'PASS' : 'FAIL'}`)
+  if (!buildResult.ok && buildResult.detail) console.log(buildResult.detail.split('\n').slice(-12).join('\n'))
+
   const counts = readVitestCounts(VITEST_JSON)
   const version = readApiVersion()
   console.log('------------------')
@@ -128,6 +137,7 @@ function main() {
     testCounts: counts,
     contractTestCount,
     regressionFixtureCount: countCorpusFixtures(),
+    migrationVersion: latestMigration(),
     browser,
     apiVersion: version,
   }

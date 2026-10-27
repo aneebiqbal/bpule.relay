@@ -29,6 +29,21 @@ export function readApiVersion(url) {
   }
 }
 
+/** The newest Supabase migration filename, or null. */
+export function latestMigration() {
+  try {
+    const dir = path.join(process.cwd(), 'supabase', 'migrations')
+    const files = execFileSync('ls', [dir], { encoding: 'utf8' })
+      .split('\n')
+      .map((f) => f.trim())
+      .filter((f) => /^\d{14}_.*\.sql$/.test(f))
+      .sort()
+    return files.at(-1) ?? null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Regression fixtures are derived from the corpus source, never hand-maintained.
  * Each fixture declares `id: '<NAME>'`.
