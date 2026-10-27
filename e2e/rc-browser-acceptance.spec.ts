@@ -38,6 +38,12 @@ Freelance Consultant
 Independent consultant advising startups on go-to-market.
 We help early-stage companies with positioning and pricing.
 Open to collaborations.`,
+  ABDULHAKIM: `Abdulhakim Sheik
+Founder at Tayo360
+Tayo360 is a logistics platform for West African freight.
+We are building a freight marketplace and fleet management tool.
+We are looking for an external engineering team to help build our mobile apps.
+Budget approved: $120,000.`,
   PARAPHRASED: `Priya Raman
 CTO at Ledgerline
 Ledgerline is a payments startup.
@@ -50,8 +56,11 @@ Curious whether your team has handled this kind of migration before.`,
  */
 async function analyze(page: import('@playwright/test').Page, source: string) {
   await page.goto('/prospect', { waitUntil: 'domcontentloaded' })
-  await page.waitForLoadState('networkidle')
-  await page.getByPlaceholder('Paste the LinkedIn profile here...').fill(source)
+  // Do not wait for networkidle: the preview can hold a connection open and the
+  // 45s networkidle budget is not about product behavior.
+  const box = page.getByPlaceholder('Paste the LinkedIn profile here...')
+  await expect(box).toBeVisible({ timeout: 60_000 })
+  await box.fill(source)
   await page.getByRole('button', { name: 'Analyze' }).click()
   await expect(page.getByText(/Display score \d+\/10|NOT A PROSPECT/i).first()).toBeVisible({
     timeout: ANALYSIS_TIMEOUT,
@@ -153,7 +162,7 @@ test.describe('CASE 16 — MOBILE 375px', () => {
     await page.setViewportSize({ width: 375, height: 812 })
     await loginAsAdmin(page)
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
-    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('heading', { name: /Team today|YOUR DAY/ })).toBeVisible({ timeout: 60_000 })
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     )
