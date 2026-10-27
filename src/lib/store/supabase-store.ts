@@ -747,6 +747,10 @@ export class SupabaseStore implements ScoutStore {
       intelligence_input_hash: input.intelligenceInputHash ?? null,
       v3_reuse_key: input.v3ReuseKey ?? null,
       fallback_reason: input.fallbackReason ?? null,
+      // QA seed marker: test leads are excluded from analytics and swept by the
+      // QA cleanup. Defaults to false, so production rows are unchanged.
+      is_test: input.isTest === true,
+      source_kind: input.isTest === true ? 'E2E' : 'PRODUCTION',
     }
 
     // Insert with graceful column handling. PostgREST runs insert().select(cols)

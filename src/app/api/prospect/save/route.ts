@@ -232,6 +232,9 @@ export async function POST(request: Request) {
       senderProfileId,
       revenueIdentityId,
       allowPotentialDuplicate,
+      // QA seeding: an explicit isTest marks the lead as E2E so analytics
+      // exclude it and the QA cleanup can sweep it. Absent = production.
+      isTest: body.isTest === true,
       extractionProfile: {
         aboutSummary: extracted.aboutSummary ?? null,
         experienceSummary: extracted.experienceSummary ?? null,

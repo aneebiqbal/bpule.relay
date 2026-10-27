@@ -1,13 +1,27 @@
 import { test, expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import { loginAsAdmin, loginAsRep } from './helpers'
+import { attachDiagnostics, reportDiagnostics, type Diagnostics } from './rc-diagnostics'
 
 /**
- * Browser RC acceptance against the exact preview (bdf75f8).
+ * Browser RC acceptance against the exact preview.
  *
  * Every AI-backed case waits for a rendered outcome rather than a fixed sleep.
  * A failure produces a screenshot + trace automatically
- * (playwright.config.ts: screenshot 'only-on-failure', trace 'on-first-retry').
+ * (playwright.config.ts: screenshot 'only-on-failure', trace 'on-first-retry')
+ * and prints console / page / request diagnostics.
  */
+
+const diagnosticsByPage = new WeakMap<Page, Diagnostics>()
+
+test.beforeEach(async ({ page }) => {
+  diagnosticsByPage.set(page, attachDiagnostics(page))
+})
+
+test.afterEach(async ({ page }, testInfo) => {
+  const diagnostics = diagnosticsByPage.get(page)
+  if (diagnostics) reportDiagnostics(testInfo, diagnostics)
+})
 
 const ANALYSIS_TIMEOUT = 200_000
 

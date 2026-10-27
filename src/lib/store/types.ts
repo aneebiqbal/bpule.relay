@@ -135,6 +135,8 @@ export interface NewLeadInput {
   intelligenceInputHash?: string | null
   v3ReuseKey?: string | null
   fallbackReason?: string | null
+  /** QA seed marker. Test leads are excluded from analytics and swept by cleanup. */
+  isTest?: boolean
 }
 
 export interface ExtractionMetrics {
