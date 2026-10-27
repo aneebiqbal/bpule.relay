@@ -64,12 +64,16 @@ function runStep(s) {
 }
 
 function runBrowser() {
-  // A separate CI job can run the browser suite and hand its JSON artifact in.
-  const jsonArg = process.argv.slice(2).find((a) => a.startsWith('--browser-json='))
-  if (jsonArg) {
-    const file = jsonArg.split('=')[1]
-    const counts = readBrowserCounts(file)
-    return { ...counts, reason: counts.result === 'NOT_RUN' ? `no parseable browser artifact at ${file}` : null }
+  // Separate CI jobs can run the browser suites and hand their JSON artifacts in.
+  const jsonArgs = process.argv.slice(2).filter((a) => a.startsWith('--browser-json='))
+  if (jsonArgs.length > 0) {
+    const results = jsonArgs.map((a) => readBrowserCounts(a.split('=')[1]))
+    const casesRun = results.reduce((s, r) => s + r.casesRun, 0)
+    const casesPassed = results.reduce((s, r) => s + r.casesPassed, 0)
+    const casesFailed = results.reduce((s, r) => s + r.casesFailed, 0)
+    const casesFlaky = results.reduce((s, r) => s + (r.casesFlaky ?? 0), 0)
+    const result = casesRun === 0 ? 'NOT_RUN' : casesFailed > 0 ? 'FAIL' : 'PASS'
+    return { result, casesRun, casesPassed, casesFailed, casesFlaky, reason: result === 'NOT_RUN' ? 'no parseable browser artifact' : null }
   }
 
   const baseURL = process.env.E2E_BASE_URL
@@ -84,6 +88,7 @@ function runBrowser() {
         'playwright',
         'test',
         'e2e/rc-browser-acceptance.spec.ts',
+        'e2e/rc-browser-matrix.spec.ts',
         '--project=desktop-chrome',
         '--reporter=json',
       ],
