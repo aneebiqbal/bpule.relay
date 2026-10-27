@@ -77,16 +77,50 @@ intent in the rationale, or suppress the V2 watchOut item when the canonical
 intent is HIGH. Either way, the card must not say "they have not asked for help"
 about a lead whose canonical intent is a verified request.
 
+**Status: FIXED.** `assessFitIntentConfidence` now honors the canonical
+`externalNeed`, so the rationale reads "HIGH fit, HIGH intent". The prospect
+route also filters explanation lines through
+`filterContradictoryExplanation`, so a line that denies a verified request,
+claims a thread, or offers contact to a terminal lead is removed and recorded as
+a contract violation. Regression set:
+`tests/qa-relay-explanation-consistency.test.ts`.
+
 ---
 
 ## Cases verified in the browser
 
 | Case | Outcome |
 | --- | --- |
-| NADIA | INTENT HIGH, "current, explicit need", CONNECT WITH NOTE, request quote retained, no "No verified buyer request", no "No buyer timing" |
-| HANNAH | INTENT HIGH, "current, explicit need", not skip band, no "No verified buyer request" |
-| EMMA | INTENT HIGH (request credited), no "No verified buyer request" — plus finding P1 |
-| DANIEL | INTENT UNKNOWN, skip band, "no explicit buyer request", seller not a buyer |
+| NADIA | INTENT HIGH, verified request, budget $90,000 retained, request quote retained, no "No verified buyer request", no "No buyer timing" |
+| HANNAH | INTENT HIGH, verified request, budget $75,000 retained, not skip band |
+| EMMA | INTENT HIGH (request credited), no "No verified buyer request" — P1 fixed |
+| DANIEL | INTENT UNKNOWN, no verified request — seller grammar is not a buyer request |
 | JURICA | Not a prospect (no company) — no outreach offered |
-| PARAPHRASED | INTENT HIGH, "current, explicit need" |
+| ABDULHAKIM | INTENT HIGH, verified request, budget $120,000 retained |
+| PARAPHRASED | INTENT UNKNOWN — an experience question is a buyer *question*, not a request to buy |
 | MOBILE 375px | Today renders with no horizontal overflow |
+
+## Findings from the local production build
+
+### F1 — The V3 canonical explanation is richer than the V2 one
+
+On the V3 path the rationale reads: *"Intent: HIGH (verified request). Commercial
+potential: medium. Explicit buyer request detected (verified). Budget stated:
+$90,000 (approved). Strong capability fit."* On the V2 path it reads *"HIGH fit,
+HIGH intent, MEDIUM confidence. There is a current, explicit need …"*. Both are
+consistent with the decision; the V3 wording additionally surfaces the budget.
+The browser assertions accept either wording.
+
+### F2 — ABDULHAKIM is a verified buyer, not an observe-only builder
+
+The source contains *"We are looking for an external engineering team to help
+build our mobile apps. Budget approved: $120,000."* — a prospect-owned external
+request with a budget. INTENT HIGH is therefore **correct** (Contract 4). The
+earlier acceptance expectation of UNKNOWN intent was stale for this source.
+
+### F3 — A paraphrased experience question is a question, not a buying request
+
+*"Curious whether your team has handled this kind of migration before."* is
+extracted as an EXPERIENCE buyer question (unit eval, 107 cases) but correctly
+does **not** upgrade to a verified buyer request, so intent stays UNKNOWN.
+Question coverage and buyer intent are separate axes.
