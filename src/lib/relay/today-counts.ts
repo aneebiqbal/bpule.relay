@@ -15,7 +15,7 @@ export interface TodayCounts {
 }
 
 /** The action kinds that belong to each Today section. */
-export const TODAY_REPLY_KINDS = ['reply_needed'] as const
+export const TODAY_REPLY_KINDS = ['reply_needed', 'inbound_opportunity'] as const
 export const TODAY_FOLLOWUP_KINDS = ['followup_due'] as const
 
 export function deriveTodayCounts(actions: ReadonlyArray<{ kind: string }>): TodayCounts {

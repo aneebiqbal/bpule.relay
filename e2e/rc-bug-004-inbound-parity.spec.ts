@@ -223,9 +223,11 @@ test.describe('BUG-004 — every surface agrees', () => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
     await expect(page.getByText(/Do this next|New qualified leads/i).first()).toBeVisible({ timeout: 120_000 })
 
-    const text = await page.locator('body').innerText()
-    expect(countOccurrences(text, company)).toBe(1)
-    // The inbound-first lead is a live conversation, not a cold contact.
-    expect(page.locator(`a[href^="/leads/${leadId}"]`).first()).toBeVisible()
+    // The lead appears exactly once as a task row. (The company string itself
+    // legitimately appears in the title and the evidence line.)
+    await expect(page.locator(`a[href^="/leads/${leadId}"]`)).toHaveCount(1)
+    // An inbound message awaiting a reply is filed under Replies, not cold
+    // "new leads".
+    await expect(page.getByText(/Replies requiring action/i).first()).toBeVisible()
   })
 })

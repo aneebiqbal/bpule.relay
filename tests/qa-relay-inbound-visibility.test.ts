@@ -11,6 +11,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { buildRelayQueue } from '@/lib/relay/queue-engine'
+import { deriveTodayCounts } from '@/lib/relay/today-counts'
 import type { Lead } from '@/lib/domain/types'
 import type { ConversationState } from '@/lib/relay/queue-engine'
 import type { QueueData } from '@/lib/store/types'
@@ -116,5 +117,10 @@ describe('inbound visibility contract', () => {
       allLeads: [l],
     })
     expect(inboundTasks(queue)).toHaveLength(1)
+  })
+
+  it('an inbound opportunity counts as a reply waiting in the Today KPI', () => {
+    const counts = deriveTodayCounts([{ kind: 'inbound_opportunity' }, { kind: 'reply_needed' }])
+    expect(counts.repliesWaiting).toBe(2)
   })
 })
