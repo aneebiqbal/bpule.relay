@@ -22,6 +22,7 @@ import {
   readVitestCounts,
   writeReleaseState,
 } from './release-lib.mjs'
+import { evaluateReleaseGates } from './release-gates.mjs'
 
 const VITEST_JSON = path.join(ARTIFACTS_DIR, 'vitest.json')
 const BROWSER_JSON = path.join(ARTIFACTS_DIR, 'browser.json')
@@ -41,6 +42,7 @@ const STEPS = [
   step('REGRESSION CORPUS', ['npx', 'vitest', 'run', 'tests/relay-regression-corpus.test.ts', '--silent']),
   step('LEAD PARITY', ['npx', 'vitest', 'run', 'tests/qa-relay-cross-surface-parity.test.ts', '--silent']),
   step('CONTRACT OWNERS', ['npx', 'vitest', 'run', 'tests/relay-contract-owners.test.ts', '--silent']),
+  step('RELEASE GATE LOGIC', ['npx', 'vitest', 'run', 'tests/qa-relay-release-gate.test.ts', '--silent']),
   step('TYPECHECK', ['npx', 'tsc', '--noEmit']),
   step('LINT', ['npx', 'eslint']),
   step('UNIT', ['npx', 'vitest', 'run', '--silent', '--reporter=json', `--outputFile=${VITEST_JSON}`]),
@@ -189,19 +191,25 @@ function main() {
   // The automated gate is what this script can actually run. Browser and SHA
   // parity are release conditions it can only REPORT — printing a single green
   // "RELEASE GATE: PASS" next to "BROWSER NOT_RUN / SHA NOT VERIFIED" is how a
-  // build gets promoted on a lie.
-  const automatedOk = failures === 0
-  const browserGate = browser.result === 'PASS' ? 'PASS' : browser.result === 'FAIL' ? 'FAIL' : 'NOT_RUN'
-  const shaGate = version ? 'VERIFIED' : 'NOT_VERIFIED'
-  // The dedicated BUG-004 gate is a release condition of its own.
-  const bug004Ready = (browser.bug004?.result ?? 'NOT_RUN') === 'PASS'
-  const productionReady = automatedOk && browser.result === 'PASS' && bug004Ready && Boolean(version)
+  // build gets promoted on a lie. The decision lives in release-gates.mjs and
+  // is pinned by tests/qa-relay-release-gate.test.ts.
+  const gates = evaluateReleaseGates({
+    automatedCodeGate: failures === 0 ? 'PASS' : 'FAIL',
+    browserGate: browser.result,
+    bug004Gate: browser.bug004?.result,
+    shaGate: version ? 'VERIFIED' : 'NOT_VERIFIED',
+  })
+  const automatedOk = gates.automatedCodeGate === 'PASS'
+  const browserGate = gates.browserGate
+  const bug004Ready = gates.bug004Gate === 'PASS'
+  const shaGate = gates.shaGate
+  const productionReady = gates.productionReady
 
   console.log(`AUTOMATED_CODE_GATE      ${automatedOk ? 'PASS' : `FAIL (${failures} step(s) failed)`}`)
   console.log(`BROWSER_GATE             ${browserGate}${browserGate === 'NOT_RUN' ? ` (${browser.reason})` : ''}`)
   console.log(`BUG004_INBOUND_GATE      ${bug004Ready ? 'PASS' : browser.bug004?.result ?? 'NOT_RUN'}`)
   console.log(`SHA_GATE                 ${shaGate}${version ? '' : ' (no /api/version reachable)'}`)
-  console.log(`PRODUCTION_GATE          ${productionReady ? 'READY' : 'BLOCKED'}`)
+  console.log(`PRODUCTION_GATE          ${gates.productionGate}`)
 
   // The verified state the manifest reads. Derived, never hand-maintained.
   let contractTestCount = null
@@ -216,12 +224,13 @@ function main() {
   const state = {
     gitSha: sha,
     generatedAt: new Date().toISOString(),
-    automatedCodeGate: automatedOk,
-    browserGate,
-    bug004Gate: browser.bug004?.result ?? 'NOT_RUN',
-    shaGate,
-    productionGate: productionReady ? 'READY' : 'BLOCKED',
-    productionReady,
+    automatedCodeGate: gates.automatedCodeGate,
+    browserGate: gates.browserGate,
+    bug004Gate: gates.bug004Gate,
+    shaGate: gates.shaGate,
+    productionGate: gates.productionGate,
+    productionReady: gates.productionReady,
+    blockers: gates.blockers,
     testCounts: counts,
     contractTestCount,
     regressionFixtureCount: countCorpusFixtures(),

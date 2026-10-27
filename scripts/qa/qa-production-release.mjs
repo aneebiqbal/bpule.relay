@@ -14,6 +14,7 @@
  *   node scripts/qa/qa-production-release.mjs [--url=<preview-url>]
  */
 import { readApiVersion, readReleaseState } from './release-lib.mjs'
+import { evaluateReleaseGates } from './release-gates.mjs'
 
 function main() {
   const urlArg = process.argv.slice(2).find((a) => a.startsWith('--url='))
@@ -30,30 +31,28 @@ function main() {
   const deployed = url ? readApiVersion(url) : state.apiVersion ?? null
   const shaMatches = Boolean(url && deployed?.sha && deployed.sha === state.gitSha)
 
-  const automated = state.automatedCodeGate === true
-  const browser = state.browserGate ?? 'NOT_RUN'
-  const bug004 = state.bug004Gate ?? 'NOT_RUN'
-  const shaGate = url ? (shaMatches ? 'VERIFIED' : 'NOT_VERIFIED') : (state.shaGate ?? 'NOT_VERIFIED')
+  // The same tested decision `qa:release` reports. The logic lives in one
+  // place and is pinned by tests/qa-relay-release-gate.test.ts.
+  const gates = evaluateReleaseGates({
+    automatedCodeGate: state.automatedCodeGate ? 'PASS' : 'FAIL',
+    browserGate: state.browserGate,
+    bug004Gate: state.bug004Gate,
+    shaGate: url ? (shaMatches ? 'VERIFIED' : 'NOT_VERIFIED') : state.shaGate,
+  })
 
   console.log('PRODUCTION RELEASE GATE')
   console.log('=======================')
   console.log(`tested SHA    ${state.gitSha ?? 'unknown'}`)
   console.log(`deployed SHA  ${deployed?.sha ?? 'unknown'}`)
-  console.log(`AUTOMATED_CODE_GATE  ${automated ? 'PASS' : 'FAIL'}`)
-  console.log(`BROWSER_GATE         ${browser}`)
-  console.log(`BUG004_INBOUND_GATE  ${bug004}`)
-  console.log(`SHA_GATE             ${shaGate}`)
+  console.log(`AUTOMATED_CODE_GATE  ${gates.automatedCodeGate}`)
+  console.log(`BROWSER_GATE         ${gates.browserGate}`)
+  console.log(`BUG004_INBOUND_GATE  ${gates.bug004Gate}`)
+  console.log(`SHA_GATE             ${gates.shaGate}`)
   console.log('=======================')
 
-  const blockers = []
-  if (!automated) blockers.push('the automated code gate failed')
-  if (browser !== 'PASS') blockers.push(`browser acceptance is ${browser}`)
-  if (bug004 !== 'PASS') blockers.push(`the dedicated BUG-004 inbound-parity gate is ${bug004}`)
-  if (shaGate !== 'VERIFIED') blockers.push('the deployed SHA is not verified against the tested SHA')
-
-  if (blockers.length > 0) {
+  if (!gates.productionReady) {
     console.error('PRODUCTION GATE: BLOCKED')
-    for (const b of blockers) console.error(`  - ${b}`)
+    for (const b of gates.blockers) console.error(`  - ${b}`)
     process.exit(1)
   }
 
