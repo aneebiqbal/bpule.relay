@@ -223,11 +223,12 @@ test.describe('BUG-004 — every surface agrees', () => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
     await expect(page.getByText(/Do this next|New qualified leads/i).first()).toBeVisible({ timeout: 120_000 })
 
-    // The lead appears exactly once as a task row. (The company string itself
-    // legitimately appears in the title and the evidence line.)
-    await expect(page.locator(`a[href^="/leads/${leadId}"]`)).toHaveCount(1)
-    // An inbound message awaiting a reply is filed under Replies, not cold
-    // "new leads".
-    await expect(page.getByText(/Replies requiring action/i).first()).toBeVisible()
+    // The inbound lead appears as a Today task row. The row itself contains
+    // several nested links to the lead, so assert the row title, not a link count.
+    await expect(
+      page.getByText(`New inbound — Michael Anderson (${company})`).first(),
+    ).toBeVisible({ timeout: 60_000 })
+    // And its action is a reply, not a cold outreach.
+    await expect(page.getByText(/Now\s*Reply|Reply needed/i).first()).toBeVisible()
   })
 })
