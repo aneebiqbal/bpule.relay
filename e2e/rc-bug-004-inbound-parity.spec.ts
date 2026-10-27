@@ -149,6 +149,9 @@ test.describe('BUG-004 — inbound-first canonical message row', () => {
     const conversationTab = page.getByRole('tab', { name: 'Conversation' })
     await expect(conversationTab).toBeVisible({ timeout: 60_000 })
     await conversationTab.click()
+    // The tab loads the thread asynchronously; assert on the loaded state.
+    await expect(page.getByText(/Loading conversation/i)).toHaveCount(0, { timeout: 60_000 })
+    await expect(page.getByText(OPENING).first()).toBeVisible({ timeout: 60_000 })
 
     const text = await page.locator('body').innerText()
     expect(countOccurrences(text, OPENING)).toBe(1)
@@ -171,7 +174,9 @@ test.describe('BUG-004 — relationship state', () => {
     expect(text).toMatch(/Needs reply/i)
     expect(text).not.toMatch(/To contact/i)
     expect(text).not.toMatch(/Follow-up due/i)
-    expect(text).not.toMatch(/Replied/i)
+    // "They replied" is a button that records an inbound message, not a state.
+    const withoutActionButtons = text.replace(/They replied/gi, '')
+    expect(withoutActionButtons).not.toMatch(/\bReplied\b/)
   })
 })
 
@@ -209,12 +214,14 @@ test.describe('BUG-004 — every surface agrees', () => {
 
   test('Today counts the lead once and files it as Needs Reply', async ({ page }) => {
     test.setTimeout(180_000)
-    await loginAsAdmin(page)
+    // Create the lead AS the rep: Today is ownership-scoped, and an admin/owner
+    // gets the Command Center, which does not list individual leads.
+    await loginAsRep(page)
     const company = `Bug004 Today ${Date.now()}`
     const leadId = await createInboundFirstLead(page, company)
 
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('heading', { name: /Team today|YOUR DAY/ }).first()).toBeVisible({ timeout: 120_000 })
+    await expect(page.getByText(/Do this next|New qualified leads/i).first()).toBeVisible({ timeout: 120_000 })
 
     const text = await page.locator('body').innerText()
     expect(countOccurrences(text, company)).toBe(1)
