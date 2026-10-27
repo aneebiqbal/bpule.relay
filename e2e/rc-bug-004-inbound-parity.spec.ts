@@ -69,6 +69,8 @@ async function createInboundFirstLead(page: Page, company: string): Promise<stri
       isTest: true,
       idempotencyKey: `qa-bug004:${Date.now()}`,
     },
+    // The inbound route runs canonical analysis; the 20s default is too short.
+    timeout: 120_000,
   })
   expect(res.ok(), `POST /api/inbound/lead failed: ${res.status()} ${await res.text().catch(() => '')}`).toBe(true)
   const payload = await res.json() as { lead?: { id?: string } }
