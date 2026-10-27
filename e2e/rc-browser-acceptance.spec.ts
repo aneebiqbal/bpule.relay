@@ -61,7 +61,13 @@ async function analyze(page: import('@playwright/test').Page, source: string) {
   const box = page.getByPlaceholder('Paste the LinkedIn profile here...')
   await expect(box).toBeVisible({ timeout: 60_000 })
   await box.fill(source)
-  await page.getByRole('button', { name: 'Analyze' }).click()
+  // Hydration race: a fill before React attaches its onChange leaves the
+  // controlled value empty, so Analyze would submit nothing. Prove the value
+  // is reflected before clicking.
+  await expect(box).toHaveValue(source)
+  const analyzeBtn = page.getByRole('button', { name: 'Analyze' })
+  await expect(analyzeBtn).toBeEnabled()
+  await analyzeBtn.click()
   await expect(page.getByText(/Display score \d+\/10|NOT A PROSPECT/i).first()).toBeVisible({
     timeout: ANALYSIS_TIMEOUT,
   })
