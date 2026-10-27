@@ -64,6 +64,14 @@ function runStep(s) {
 }
 
 function runBrowser() {
+  // A separate CI job can run the browser suite and hand its JSON artifact in.
+  const jsonArg = process.argv.slice(2).find((a) => a.startsWith('--browser-json='))
+  if (jsonArg) {
+    const file = jsonArg.split('=')[1]
+    const counts = readBrowserCounts(file)
+    return { ...counts, reason: counts.result === 'NOT_RUN' ? `no parseable browser artifact at ${file}` : null }
+  }
+
   const baseURL = process.env.E2E_BASE_URL
   if (!baseURL) {
     return { result: 'NOT_RUN', casesRun: 0, casesPassed: 0, casesFailed: 0, reason: 'E2E_BASE_URL not set' }
