@@ -108,12 +108,17 @@ export function leadClosedForOutreach(
 export function buildRelayQueue(input: QueueInput): RelayQueue {
   const tasks: RelayTask[] = []
 
-  // 1. Inbound opportunities (highest priority — client contacted us first)
-  if (input.allLeads) {
-    for (const lead of input.allLeads) {
-      if (lead.direction === 'inbound' && lead.status === 'new') {
-        tasks.push(buildInboundTask(lead, input))
-      }
+  // 1. Inbound opportunities (highest priority — client contacted us first).
+  // The dedicated inbound branch must not depend on `allLeads`: the dashboard
+  // passes an empty `allLeads`, which silently dropped every inbound-first lead
+  // from Today (BUG-004 visibility). The owned queue already contains them, so
+  // both sources are scanned and de-duplicated by id.
+  const inboundCandidates = new Map<string, Lead>()
+  for (const lead of input.allLeads ?? []) inboundCandidates.set(lead.id, lead)
+  for (const lead of input.queueData.queue) inboundCandidates.set(lead.id, lead)
+  for (const lead of inboundCandidates.values()) {
+    if (lead.direction === 'inbound' && lead.status === 'new') {
+      tasks.push(buildInboundTask(lead, input))
     }
   }
 

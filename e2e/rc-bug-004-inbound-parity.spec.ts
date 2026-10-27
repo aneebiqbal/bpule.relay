@@ -124,7 +124,7 @@ test.describe('BUG-004 — inbound-first canonical message row', () => {
     const leadId = await createInboundFirstLead(page, `Bug004 Dup ${Date.now()}`)
 
     await page.goto(`/leads/${leadId}`, { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('heading', { name: /Booking|Bug004/ }).first()).toBeVisible({ timeout: 60_000 })
+    await expect(page.getByRole('heading', { name: /Michael Anderson/i }).first()).toBeVisible({ timeout: 60_000 })
 
     // History is the timeline the rep reads; its badge is the canonical count.
     const history = page.locator('details', { hasText: 'History' }).first()
@@ -145,8 +145,10 @@ test.describe('BUG-004 — inbound-first canonical message row', () => {
     await loginAsAdmin(page)
     const leadId = await createInboundFirstLead(page, `Bug004 Chat ${Date.now()}`)
 
-    await page.goto(`/leads/${leadId}?tab=conversation`, { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('tab', { name: 'Conversation' })).toBeVisible({ timeout: 60_000 })
+    await page.goto(`/leads/${leadId}`, { waitUntil: 'domcontentloaded' })
+    const conversationTab = page.getByRole('tab', { name: 'Conversation' })
+    await expect(conversationTab).toBeVisible({ timeout: 60_000 })
+    await conversationTab.click()
 
     const text = await page.locator('body').innerText()
     expect(countOccurrences(text, OPENING)).toBe(1)
@@ -160,7 +162,7 @@ test.describe('BUG-004 — relationship state', () => {
     const leadId = await createInboundFirstLead(page, `Bug004 Rel ${Date.now()}`)
 
     await page.goto(`/leads/${leadId}`, { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('heading', { name: /Bug004/ }).first()).toBeVisible({ timeout: 60_000 })
+    await expect(page.getByRole('heading', { name: /Michael Anderson/i }).first()).toBeVisible({ timeout: 60_000 })
 
     const text = await page.locator('body').innerText()
 
@@ -185,7 +187,7 @@ test.describe('BUG-004 — every surface agrees', () => {
     await expect(bucket).toBeVisible({ timeout: 60_000 })
 
     // One link to this lead — not two.
-    const links = bucket.locator(`a[href="/leads/${leadId}"]`)
+    const links = bucket.locator(`a[href^="/leads/${leadId}"]`)
     await expect(links).toHaveCount(1)
     expect(countOccurrences(await bucket.innerText(), company)).toBe(1)
   })
@@ -197,8 +199,12 @@ test.describe('BUG-004 — every surface agrees', () => {
     await createInboundFirstLead(page, company)
 
     await page.goto('/archive', { waitUntil: 'domcontentloaded' })
-    const text = await page.locator('body').innerText()
-    expect(countOccurrences(text, company)).toBe(0)
+    // The page's top section is the conversation archive ("every thread you
+    // own, including closed ones"), so an active thread legitimately appears
+    // there. Only the "Archived leads" section is strict.
+    const archivedSection = page.locator('section', { hasText: 'Archived leads' }).last()
+    await expect(archivedSection).toBeVisible({ timeout: 60_000 })
+    expect(countOccurrences(await archivedSection.innerText(), company)).toBe(0)
   })
 
   test('Today counts the lead once and files it as Needs Reply', async ({ page }) => {
@@ -213,6 +219,6 @@ test.describe('BUG-004 — every surface agrees', () => {
     const text = await page.locator('body').innerText()
     expect(countOccurrences(text, company)).toBe(1)
     // The inbound-first lead is a live conversation, not a cold contact.
-    expect(page.locator(`a[href="/leads/${leadId}"]`).first()).toBeVisible()
+    expect(page.locator(`a[href^="/leads/${leadId}"]`).first()).toBeVisible()
   })
 })
