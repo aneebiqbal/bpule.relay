@@ -289,6 +289,45 @@ cases `BUG001_NAVIGATION`, `BUG003_REFRESH_BOOTSTRAP`,
 `NOT_RUN` — no `E2E_BASE_URL`, no running app. The existing Playwright specs
 were not executed against these changes.
 
+### The BUG-004 dedicated hard gate
+
+BUG-004 is **not** one case among twelve. `createLead` now writes a real
+`messages` row, which is the riskiest persistence/state change in the batch, so
+its proof is a dedicated gate with its own line and its own blocker.
+
+`e2e/rc-bug-004-inbound-parity.spec.ts` creates **one** synthetic inbound-first
+lead and asserts every consequence from that same record:
+
+| Assertion | Why |
+| --- | --- |
+| exactly one canonical opening row, `idempotency_key = inbound_first:<leadId>` | the row the fix writes |
+| `direction = 'inbound'`, `sentText = <opening>` | the row carries the message |
+| History count badge = 1 | the canonical timeline count |
+| the opening text appears exactly once on Overview and once on Conversation | no duplication |
+| relationship = **Needs reply** | Contract 3 / REL-QA-005 |
+| not To Contact, not Follow-up due, not Replied | the four states it must not be |
+| Chats lists the lead once, in "Waiting on you" | one inbound event |
+| Archive does not show it | it was never archived |
+| Today counts it once | one inbound event |
+
+Wired in as `BUG004_INBOUND_PARITY` in `qa:release` and
+`BUG004_INBOUND_GATE` in `qa:production-release`. Both treat it as a release
+condition of its own, so a green combined browser number cannot hide a red
+BUG-004:
+
+```
+PRODUCTION GATE: BLOCKED
+  - browser acceptance is NOT_RUN
+  - the dedicated BUG-004 inbound-parity gate is NOT_RUN
+  - the deployed SHA is not verified against the tested SHA
+```
+
+**Supporting change:** the inbound lead route now passes `isTest` through, so
+the gate's synthetic lead is marked as test data — excluded from analytics and
+swept by the QA cleanup — instead of becoming a production row. Only an
+authenticated rep can set it (the route requires a session); the default is
+`false`, so production rows are unchanged.
+
 ---
 
 ## Security

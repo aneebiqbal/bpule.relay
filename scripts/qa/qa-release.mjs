@@ -138,9 +138,7 @@ function runBrowser() {
     casesRun,
     casesPassed,
     casesFailed,
-    reason: result === 'NOT_RUN'
-      ? [acceptance.reason, bug004.reason].filter(Boolean).join('; ') || 'no browser target'
-      : null,
+    reason,
     acceptance,
     bug004,
   }
