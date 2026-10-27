@@ -11,28 +11,29 @@
 | Field | Value |
 | --- | --- |
 | BASELINE SHA | `fd14819493ff485b572bc1c2e760e6b9faccd4fe` |
-| **FROZEN SHA (this pass)** | **`644fa3d`** (this document's own commit) |
-| FINAL SHA | `644fa3d` — the tree is clean at this commit (`git status` empty) |
+| **FROZEN SHA (gate-verified)** | **`258156176cb746b6dfb382d27c87fabfd814aa05`** |
+| FINAL SHA | `1034406` — the tree is clean; the two commits after `2581561` change documentation only |
 | PREVIEW SHA | **NOT DEPLOYED** — no Vercel CLI access in this environment |
 | PRODUCTION SHA | `65b9f916ff1198278e9eaaff7a8f19ef051ddcaf` (`origin/main`) — unchanged |
-| Tested SHA | `644fa3d` — the gate was re-run on `2581561`, its code-identical parent; this commit changes documentation only |
+| Tested SHA | `2581561` — the last commit the full automated gate ran green on |
 
 **The tree is frozen and committed.** Every changed path was verified to be
 this pass's own work before staging (no foreign uncommitted work was in the
-tree, and no secret-looking path was staged). The commit is local — it was
+tree, and no secret-looking path was staged). The commits are local — they were
 **not pushed**, because pushing to a shared repo with a known concurrent
 session is a separate, riskier action.
 
 **Deployed SHA ≠ tested SHA.** Per the release rules, browser verification and
-production promotion are **invalid** until `644fa3d` is deployed and
+production promotion are **invalid** until `2581561` is deployed and
 `/api/version` reports it.
 
 > **Concurrent commits.** Another session pushed a merge on top of the earlier
 > frozen SHA (`4759992 merge: reconcile the release-hardening RC with the 12-bug
 > QA batch`, then `8a805f5`). Their work touches the release-hardening RC; mine
-> is `3012ec6` → `b67b92e` (the BUG-004 hard gate) → `2581561` → `644fa3d` (this
-> report). **The SHA to deploy is `644fa3d`** — theirs plus mine, and the
-> browser matrix is the first real test of the combination.
+> is `3012ec6` → `b67b92e` (the BUG-004 hard gate) → `2581561` (gate verified).
+> The two commits after `2581561` are this report. **The SHA to deploy is
+> `2581561`** — theirs plus mine, and the browser matrix is the first real test
+> of the combination.
 
 ---
 
