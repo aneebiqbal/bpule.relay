@@ -534,6 +534,7 @@ target and a running app, which this environment does not have.
 | 9 | Measure navigation | **BLOCKED** — needs `scripts/perf-navigation.mjs` against a running app |
 | 10 | Run 375px smoke | **BLOCKED** |
 | 11 | Run security suite | **Done** — 173 passed (RLS, org scope, auth-provider boundaries, dataset scope, lead mutation scope) |
+| 11b | Regression-test the gate itself | **Done** — `tests/qa-relay-release-gate.test.ts`; `RELEASE GATE LOGIC` is a named release-gate step |
 | 12 | If all green, promote the exact same SHA | **BLOCKED** — gated on 4–10 |
 | 13 | Verify production `/api/version` | **BLOCKED** |
 | 14 | Run short production smoke | **BLOCKED** |
@@ -555,6 +556,16 @@ target and a running app, which this environment does not have.
    product.
 5. Measure navigation (Today, Leads, Lead Detail, Chats, Prospect, Admin QA):
    RSC duration, server request count, DB query count, time to useful content.
+
+### Deploy target
+
+**Deploy `2581561` exactly.** Do not deploy moving `HEAD` — the commits after it
+are documentation and the gate-logic test, and deploying a moving tree is how
+`tested SHA == deployed SHA` stops meaning anything.
+
+`pnpm qa:production-release --url=<preview-url>` re-checks SHA parity live
+against `/api/version`, so a promotion cannot be authorised against a stale
+state file.
 
 ---
 
