@@ -1,83 +1,52 @@
 /**
- * Release manifest (Phase 12).
+ * Release manifest (Phase 12 / 21 / 22).
  *
- * Generates release-manifest.json from the tree and, optionally, a deployment.
- * Nothing here is hand-maintained.
+ * READS the verified release state written by `qa:release`. It does not run the
+ * test suite, and it does not hand-maintain counts.
  *
  *   node scripts/qa/release-manifest.mjs [--url=<preview-url>]
  */
-import { execFileSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
-import path from 'node:path'
-import { gitSha, readApiVersion } from './release-lib.mjs'
+import { writeFileSync } from 'node:fs'
+import { gitSha, readApiVersion, readReleaseState } from './release-lib.mjs'
 
 const CONTRACT_VERSION = 'relay_contracts_v7'
 const OUT = 'release-manifest.json'
 
-function latestMigration() {
-  try {
-    const dir = path.join(process.cwd(), 'supabase', 'migrations')
-    const files = execFileSync('ls', [dir], { encoding: 'utf8' })
-      .split('\n')
-      .map((f) => f.trim())
-      .filter((f) => /^\d{14}_.*\.sql$/.test(f))
-      .sort()
-    return files.at(-1) ?? null
-  } catch {
-    return null
-  }
-}
-
-function runTests() {
-  const fallback = { total: 0, passed: 0, failed: 0, skipped: 0, files: 0 }
-  try {
-    execFileSync(
-      'npx',
-      ['vitest', 'run', '--reporter=json', '--outputFile=/tmp/relay-release-tests.json', '--silent'],
-      { stdio: ['ignore', 'ignore', 'pipe'], maxBuffer: 256 * 1024 * 1024 },
-    )
-  } catch {
-    // vitest exits non-zero on failure; the JSON is still written.
-  }
-  try {
-    const parsed = JSON.parse(readFileSync('/tmp/relay-release-tests.json', 'utf8'))
-    return {
-      total: parsed.numTotalTests ?? 0,
-      passed: parsed.numPassedTests ?? 0,
-      failed: parsed.numFailedTests ?? 0,
-      skipped: parsed.numPendingTests ?? 0,
-      files: parsed.testResults?.length ?? 0,
-    }
-  } catch {
-    return fallback
-  }
-}
-
 function main() {
   const urlArg = process.argv.slice(2).find((a) => a.startsWith('--url='))
   const url = urlArg?.split('=')[1]
-  const deployed = url ? readApiVersion(url) : null
 
-  console.log('running unit/integration suite for the manifest…')
-  const counts = runTests()
+  const state = readReleaseState()
+  if (!state) {
+    console.error('No qa-artifacts/release-state.json. Run `pnpm qa:release` first.')
+    process.exit(1)
+  }
+
+  const deployed = url ? readApiVersion(url) : state.apiVersion ?? null
+  const browser = state.browser ?? { result: 'NOT_RUN', casesRun: 0, casesPassed: 0, casesFailed: 0 }
 
   const manifest = {
-    gitSha: gitSha(),
+    gitSha: state.gitSha ?? gitSha(),
+    generatedAt: new Date().toISOString(),
+    gatesPassed: state.gatesPassed ?? false,
     deploymentSha: deployed?.sha ?? null,
     deploymentUrl: url ?? null,
     appVersion: deployed?.appVersion ?? '0.8.0',
     scoringVersion: deployed?.scoringVersion ?? 'relay_decision_v3.3.0',
     buyerIntentVersion: deployed?.buyerIntentVersion ?? 'buyer_intent_v5',
     contractVersion: CONTRACT_VERSION,
-    migrationVersion: latestMigration(),
-    testCounts: counts,
-    contractTestCount: 23,
-    regressionFixtureCount: 21,
-    browserSuiteResult: 'NOT_RUN (requires credentials and a running preview)',
+    migrationVersion: state.migrationVersion ?? null,
+    testCounts: state.testCounts ?? { total: 0, passed: 0, failed: 0, skipped: 0, files: 0 },
+    contractTestCount: state.contractTestCount ?? null,
+    regressionFixtureCount: state.regressionFixtureCount ?? null,
+    browserSuiteResult: browser.result,
+    browserCasesRun: browser.casesRun ?? 0,
+    browserCasesPassed: browser.casesPassed ?? 0,
+    browserCasesFailed: browser.casesFailed ?? 0,
   }
 
   writeFileSync(OUT, `${JSON.stringify(manifest, null, 2)}\n`)
-  console.log(`wrote ${OUT}`)
+  console.log(`wrote ${OUT} (from qa-artifacts/release-state.json)`)
   console.log(JSON.stringify(manifest, null, 2))
 }
 

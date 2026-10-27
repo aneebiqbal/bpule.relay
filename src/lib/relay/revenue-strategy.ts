@@ -854,6 +854,10 @@ function assessFitIntentConfidence(source: StrategySource, scoped: ScopedItem[])
     || source.urgency === 'immediate'
     || source.opportunitySignals.includes('freelance_project_need')
     || (source.buyerEvidenceKinds ?? []).includes('BUYER_REQUEST')
+    // The canonical source facts already verified a prospect-owned request for
+    // outside help. The explanation must not re-derive intent from V2 signals
+    // and call it UNKNOWN while the decision says HIGH (EMMA contradiction).
+    || source.externalNeed
   ) {
     intent = 'HIGH'
     intentWhy = 'Current, explicit need or active project ask.'

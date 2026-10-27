@@ -6,6 +6,7 @@
  */
 
 import type { AiTrace } from './types'
+import { classifyAiFailure } from './types'
 import { estimateCostUsd, type CostTier } from '@/lib/ai/cost'
 
 
@@ -42,6 +43,9 @@ export interface PersistedTrace {
   lead_id: string | null
   job_id: string | null
   rep_id: string | null
+  request_id?: string | null
+  decision_run_id?: string | null
+  failure_category?: string | null
   created_at: string
 }
 
@@ -82,6 +86,9 @@ export async function persistTrace(
       lead_id: trace.leadId ?? null,
       job_id: trace.jobId ?? null,
       rep_id: trace.repId ?? null,
+      request_id: trace.requestId ?? null,
+      decision_run_id: trace.decisionRunId ?? null,
+      failure_category: trace.failureCategory ?? null,
       created_at: new Date(trace.timestamp).toISOString(),
     }
 
@@ -89,8 +96,16 @@ export async function persistTrace(
       .from('ai_traces')
       .insert(record)
 
-    if (error && /lead_id|job_id|rep_id/.test(error.message)) {
-      const { lead_id: _lead, job_id: _job, rep_id: _rep, ...withoutScope } = record
+    if (error && /lead_id|job_id|rep_id|request_id|decision_run_id|failure_category/.test(error.message)) {
+      const {
+        lead_id: _lead,
+        job_id: _job,
+        rep_id: _rep,
+        request_id: _req,
+        decision_run_id: _run,
+        failure_category: _failure,
+        ...withoutScope
+      } = record
       const retry = await supabase.from('ai_traces').insert(withoutScope)
       if (retry.error) console.warn('[ai/telemetry] Failed to persist trace:', retry.error.message)
       return
@@ -126,6 +141,8 @@ export async function recordScopedTrace(input: {
   repId?: string | null
   leadId?: string | null
   jobId?: string | null
+  requestId?: string | null
+  decisionRunId?: string | null
 }): Promise<void> {
   let organizationId = input.organizationId ?? undefined
   let repId = input.repId ?? undefined
@@ -171,6 +188,9 @@ export async function recordScopedTrace(input: {
     leadId: input.leadId ?? null,
     jobId: input.jobId ?? null,
     repId: repId ?? null,
+    requestId: input.requestId ?? null,
+    decisionRunId: input.decisionRunId ?? null,
+    failureCategory: input.success ? null : classifyAiFailure(input.error ?? null),
   }
   await persistTrace(trace, organizationId)
 }

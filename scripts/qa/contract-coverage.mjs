@@ -9,7 +9,7 @@
  *   node scripts/qa/contract-coverage.mjs
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -17,6 +17,9 @@ const CONTRACT_FILES = [
   'tests/qa-relay-product-contracts.test.ts',
   'tests/qa-relay-cross-surface-parity.test.ts',
 ]
+
+const ARTIFACTS_DIR = 'qa-artifacts'
+const COVERAGE_JSON = path.join(ARTIFACTS_DIR, 'contract-coverage.json')
 
 /** Runtime owner per contract, kept in sync with docs/RELAY_CONTRACT_RUNTIME_MAP.md. */
 const OWNERS = {
@@ -84,6 +87,25 @@ function main() {
   }
   console.log('----------------------')
   console.log(`contracts: ${contracts.length}  failed: ${failures}  skipped: ${totalSkipped}`)
+
+  // The manifest derives contractTestCount from this artifact.
+  mkdirSync(ARTIFACTS_DIR, { recursive: true })
+  const totalTests = contracts.reduce((sum, c) => sum + byContract.get(c).total, 0)
+  writeFileSync(
+    COVERAGE_JSON,
+    `${JSON.stringify(
+      {
+        generatedAt: new Date().toISOString(),
+        contractTestCount: totalTests,
+        contracts: contracts.length,
+        failed: failures,
+        skipped: totalSkipped,
+        perContract: Object.fromEntries(contracts.map((c) => [c, byContract.get(c)])),
+      },
+      null,
+      2,
+    )}\n`,
+  )
 
   if (failures > 0 || totalSkipped > 0) {
     console.error('\nRELEASE BLOCKER: contract tests failed or were skipped.')

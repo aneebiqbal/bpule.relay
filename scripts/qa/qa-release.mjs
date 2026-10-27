@@ -1,30 +1,53 @@
 /**
- * Release gate (Phase 9 / 34).
+ * Release gate (Phase 9 / 34 / 21 / 22).
  *
- * Runs every automated gate in order and prints one human-readable report.
- * Returns non-zero on any failure, so CI can gate on it.
+ * Runs every automated gate in order, writes the verified release state to
+ * qa-artifacts/release-state.json, and prints one human-readable report.
+ *
+ * The browser suite runs only when E2E_BASE_URL is set; otherwise it is
+ * recorded as NOT_RUN with the reason — never silently skipped as PASS.
  *
  *   node scripts/qa/qa-release.mjs
  */
 import { execFileSync } from 'node:child_process'
-import { gitSha, readApiVersion } from './release-lib.mjs'
+import { mkdirSync } from 'node:fs'
+import path from 'node:path'
+import {
+  ARTIFACTS_DIR,
+  countCorpusFixtures,
+  gitSha,
+  readApiVersion,
+  readBrowserCounts,
+  readVitestCounts,
+  writeReleaseState,
+} from './release-lib.mjs'
+
+const VITEST_JSON = path.join(ARTIFACTS_DIR, 'vitest.json')
+const BROWSER_JSON = path.join(ARTIFACTS_DIR, 'browser.json')
+
+mkdirSync(ARTIFACTS_DIR, { recursive: true })
+
+function step(name, command, opts = {}) {
+  return { name, command, ...opts }
+}
 
 const STEPS = [
-  { name: 'PRODUCT CONTRACTS', command: ['node', 'scripts/qa/contract-coverage.mjs'] },
-  { name: 'SEMANTIC BUYER QUESTIONS', command: ['npx', 'vitest', 'run', 'tests/qa-relay-semantic-buyer-questions.test.ts', '--silent'] },
-  { name: 'MESSAGE QUALITY', command: ['npx', 'vitest', 'run', 'tests/qa-relay-message-quality-invariants.test.ts', '--silent'] },
-  { name: 'REGRESSION CORPUS', command: ['npx', 'vitest', 'run', 'tests/relay-regression-corpus.test.ts', '--silent'] },
-  { name: 'LEAD PARITY', command: ['npx', 'vitest', 'run', 'tests/qa-relay-cross-surface-parity.test.ts', '--silent'] },
-  { name: 'CONTRACT OWNERS', command: ['npx', 'vitest', 'run', 'tests/relay-contract-owners.test.ts', '--silent'] },
-  { name: 'TYPECHECK', command: ['npx', 'tsc', '--noEmit'] },
-  { name: 'LINT', command: ['npx', 'eslint'] },
-  { name: 'UNIT', command: ['npx', 'vitest', 'run', '--silent'] },
-  { name: 'BUILD', command: ['npx', 'next', 'build'] },
+  step('PRODUCT CONTRACTS', ['node', 'scripts/qa/contract-coverage.mjs']),
+  step('SEMANTIC BUYER QUESTIONS', ['npx', 'vitest', 'run', 'tests/qa-relay-semantic-buyer-questions.test.ts', '--silent']),
+  step('EXPLANATION CONSISTENCY', ['npx', 'vitest', 'run', 'tests/qa-relay-explanation-consistency.test.ts', '--silent']),
+  step('MESSAGE QUALITY', ['npx', 'vitest', 'run', 'tests/qa-relay-message-quality-invariants.test.ts', '--silent']),
+  step('REGRESSION CORPUS', ['npx', 'vitest', 'run', 'tests/relay-regression-corpus.test.ts', '--silent']),
+  step('LEAD PARITY', ['npx', 'vitest', 'run', 'tests/qa-relay-cross-surface-parity.test.ts', '--silent']),
+  step('CONTRACT OWNERS', ['npx', 'vitest', 'run', 'tests/relay-contract-owners.test.ts', '--silent']),
+  step('TYPECHECK', ['npx', 'tsc', '--noEmit']),
+  step('LINT', ['npx', 'eslint']),
+  step('UNIT', ['npx', 'vitest', 'run', '--silent', '--reporter=json', `--outputFile=${VITEST_JSON}`]),
+  step('BUILD', ['npx', 'next', 'build']),
 ]
 
-function runStep(step) {
+function runStep(s) {
   try {
-    execFileSync(step.command[0], step.command.slice(1), {
+    execFileSync(s.command[0], s.command.slice(1), {
       stdio: ['ignore', 'pipe', 'pipe'],
       maxBuffer: 256 * 1024 * 1024,
       env: process.env,
@@ -36,27 +59,79 @@ function runStep(step) {
   }
 }
 
+function runBrowser() {
+  const baseURL = process.env.E2E_BASE_URL
+  if (!baseURL) {
+    return { result: 'NOT_RUN', casesRun: 0, casesPassed: 0, casesFailed: 0, reason: 'E2E_BASE_URL not set' }
+  }
+  const result = runStep(
+    step('BROWSER', [
+      'npx',
+      'playwright',
+      'test',
+      'e2e/rc-browser-acceptance.spec.ts',
+      '--project=desktop-chrome',
+      '--reporter=json',
+      `--output=${BROWSER_JSON}`,
+    ]),
+  )
+  const counts = readBrowserCounts(BROWSER_JSON)
+  return { ...counts, reason: result.ok ? null : 'one or more browser cases failed' }
+}
+
 function main() {
   console.log('RELAY RELEASE GATE')
   console.log('==================')
-  console.log(`git SHA: ${gitSha()}`)
+  const sha = gitSha()
+  console.log(`git SHA: ${sha}`)
 
   let failures = 0
-  for (const step of STEPS) {
-    const result = runStep(step)
+  for (const s of STEPS) {
+    const result = runStep(s)
     const status = result.ok ? 'PASS' : 'FAIL'
     if (!result.ok) failures += 1
-    console.log(`${step.name.padEnd(20)} ${status}`)
+    console.log(`${s.name.padEnd(24)} ${status}`)
     if (!result.ok && result.detail) console.log(result.detail.split('\n').slice(-12).join('\n'))
   }
 
-  // Deployed SHA parity is reported, not enforced here: the caller names the
-  // expected SHA. `qa:deployed` enforces it.
+  const browser = runBrowser()
+  if (browser.result !== 'NOT_RUN') {
+    const status = browser.result === 'PASS' ? 'PASS' : 'FAIL'
+    if (browser.result === 'FAIL') failures += 1
+    console.log(`${'BROWSER'.padEnd(24)} ${status}  cases:${browser.casesRun} passed:${browser.casesPassed} failed:${browser.casesFailed}`)
+  } else {
+    console.log(`${'BROWSER'.padEnd(24)} NOT_RUN  (${browser.reason})`)
+  }
+
+  const counts = readVitestCounts(VITEST_JSON)
   const version = readApiVersion()
   console.log('------------------')
+  console.log(`TESTS                    ${counts.total} total / ${counts.passed} passed / ${counts.failed} failed / ${counts.skipped} skipped`)
   console.log(
-    `SHA VERIFIED      ${version ? 'PENDING (run qa:deployed)' : 'NOT VERIFIED (no /api/version reachable)'}`,
+    `SHA VERIFIED             ${version ? 'PENDING (run qa:deployed)' : 'NOT VERIFIED (no /api/version reachable)'}`,
   )
+
+  // The verified state the manifest reads. Derived, never hand-maintained.
+  let contractTestCount = null
+  try {
+    contractTestCount = JSON.parse(
+      execFileSync('cat', [path.join(ARTIFACTS_DIR, 'contract-coverage.json')], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }),
+    ).contractTestCount
+  } catch {
+    contractTestCount = null
+  }
+
+  const state = {
+    gitSha: sha,
+    generatedAt: new Date().toISOString(),
+    gatesPassed: failures === 0,
+    testCounts: counts,
+    contractTestCount,
+    regressionFixtureCount: countCorpusFixtures(),
+    browser,
+    apiVersion: version,
+  }
+  writeReleaseState(state)
 
   console.log('==================')
   if (failures > 0) {
@@ -64,6 +139,7 @@ function main() {
     process.exit(1)
   }
   console.log('RELEASE GATE: PASS')
+  console.log(`wrote ${ARTIFACTS_DIR}/release-state.json`)
 }
 
 main()
