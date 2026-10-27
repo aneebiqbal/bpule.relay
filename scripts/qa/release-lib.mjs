@@ -76,25 +76,17 @@ export function readVitestCounts(file) {
 
 /** Playwright's JSON reporter shape (the fields we need). */
 export function readBrowserCounts(file) {
-  const empty = { result: 'NOT_RUN', casesRun: 0, casesPassed: 0, casesFailed: 0 }
+  const empty = { result: 'NOT_RUN', casesRun: 0, casesPassed: 0, casesFailed: 0, casesFlaky: 0 }
   try {
     const parsed = JSON.parse(readFileSync(file, 'utf8'))
-    const specs = []
-    const walk = (suite) => {
-      for (const s of suite.suites ?? []) walk(s)
-      for (const t of suite.tests ?? []) specs.push(t)
-    }
-    for (const suite of parsed.suites ?? []) walk(suite)
-    const casesRun = specs.length
-    let casesPassed = 0
-    let casesFailed = 0
-    for (const spec of specs) {
-      const outcome = spec.results?.[spec.results.length - 1]?.status
-      if (outcome === 'passed') casesPassed += 1
-      else if (outcome === 'failed' || outcome === 'timedOut') casesFailed += 1
-    }
-    const result = casesRun === 0 ? 'NOT_RUN' : casesFailed > 0 ? 'FAIL' : 'PASS'
-    return { result, casesRun, casesPassed, casesFailed }
+    // Playwright's `stats` is the authoritative summary.
+    const stats = parsed.stats ?? {}
+    const passed = (stats.expected ?? 0) + (stats.flaky ?? 0)
+    const failed = stats.unexpected ?? 0
+    const skipped = stats.skipped ?? 0
+    const casesRun = passed + failed + skipped
+    const result = casesRun === 0 ? 'NOT_RUN' : failed > 0 ? 'FAIL' : 'PASS'
+    return { result, casesRun, casesPassed: passed, casesFailed: failed, casesFlaky: stats.flaky ?? 0 }
   } catch {
     return empty
   }
