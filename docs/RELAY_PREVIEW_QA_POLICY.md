@@ -46,6 +46,9 @@ reason to make an environment public.
 5. Run mobile (375×812) and accessibility checks.
 6. Record the SHA, the cases run, and any case not run with its reason.
 
+The full human pass — every role, page, workflow and failure state, with the
+bug-record format and severity rules — is `docs/QA_END_TO_END.md`.
+
 ---
 
 ## Production

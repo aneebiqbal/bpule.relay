@@ -1,6 +1,6 @@
 # Relay — End-to-End QA Script
 
-One pass through the whole platform. Each step says what to **do** and what you should **see**. Tick the box when it matches; if it doesn't, log a bug with the template at the end. Expect the full pass to take about 3 hours.
+One pass through the whole platform. Each step says what to **do** and what you should **see**. Tick the box when it matches; if it doesn't, log a bug with the template at the end. Expect the full pass to take about 6 hours — split it across two sessions if you like, but **finish section 19 (the golden flow) in one sitting**, because it is the pass/fail flow.
 
 Everything below uses **made-up people and companies**. Never paste a real LinkedIn profile, real name or real email into a test environment.
 
@@ -8,9 +8,35 @@ Everything below uses **made-up people and companies**. Never paste a real Linke
 
 ## 0. Before you start
 
+**Record the build before you test anything.** A pass is evidence only for the
+SHA it ran on.
+
+| Field | Where to get it |
+| --- | --- |
+| Deployed SHA | `GET /api/version` |
+| Expected SHA | the release report / engineering |
+| Scoring version | should be `relay_decision_v3.3.0` |
+| Buyer-intent version | shown on a prospect result |
+| Browser + version | |
+| Desktop resolution | |
+| Mobile viewport | 375px wide, minimum |
+| QA role + organization | |
+
+**Stop if `/api/version` does not match the expected SHA.** Nothing below can be
+certified against an unidentified build. The rule and the enforcement command
+live in `docs/RELAY_PREVIEW_QA_POLICY.md`.
+
+**A local dev server is not release evidence.** `localhost` is fine for
+exploratory poking, but the acceptance pass must run against the deployed
+preview — otherwise the result belongs to a build nobody shipped.
+
+**URLs in this script are current.** "Today" is the tab on `/dashboard`; there is
+no `/today` route. Legacy paths (`/conversations`, `/usage`, `/find-jobs`,
+`/resume/generate`, `/studio/drafts/new`) redirect — see `next.config.ts`.
+
 **You need**
 
-- The app running (ask engineering for the staging URL, or run it locally with `pnpm dev` after `pnpm install`; it opens at `http://localhost:3000`).
+- The app running. **For an acceptance pass, that means the deployed preview URL** — the one whose SHA you recorded above. For exploratory poking, `pnpm dev` after `pnpm install` opens at `http://localhost:3000`.
 - Two test accounts. The dev accounts and their shared password are listed in the project `README.md` under *Getting started*:
   - **Admin:** `hassan@scout.dev`
   - **Rep:** `madiha@scout.dev`
@@ -298,25 +324,176 @@ Repeat sections 2.1, 3.1 and 4.4 on:
 
 ---
 
+## 15. Replies, terminal states, thread integrity, follow-ups (35 min)
+
+The highest-risk area in this release. Use a throwaway lead per row — do not
+mutate a lead another test depends on.
+
+### 15a. Reply classification
+
+Log each reply on its own lead and check the resulting state.
+
+| # | Log this inbound reply | See | ✅ |
+|---|------------------------|-----|----|
+| 15.1 | *"Budget is around $30k and we may need help next month."* | Positive commercial reply. Budget extracted and stored, timeline captured, next action updated. | ☐ |
+| 15.2 | *"Can we jump on a call Thursday?"* | Meeting request. Next action is to schedule a meeting. | ☐ |
+| 15.3 | *"Send pricing and let's talk Thursday."* | **Both** pricing and meeting request — not just one signal. | ☐ |
+| 15.4 | *"Can you send a proposal?"* | Proposal request. Next action is prepare proposal. | ☐ |
+| 15.5 | *"You're approved. Please sign our NDA."* | NDA / procurement progression, with the correct next action. | ☐ |
+| 15.6 | *"Your rate is above our budget."* | Objection — **not** a generic positive reply. | ☐ |
+| 15.7 | *"Reach out again in January."* | Deferred, with the follow-up set to that explicit date. | ☐ |
+| 15.8 | *"Not interested."* | Negative / lost. No future outreach. | ☐ |
+| 15.9 | *"Do not send me any additional messages."* | **`DO_NOT_CONTACT`.** Terminal: no Send CTA, no follow-up, gone from the Today queue. | ☐ |
+
+### 15b. Thread integrity
+
+| # | Do | See | ✅ |
+|---|----|-----|----|
+| 15.10 | Log a reply from the contact the thread belongs to. | Thread marked **VERIFIED**. | ☐ |
+| 15.11 | Attach a reply from a different contact to an existing thread. | **`THREAD_MISMATCH_REVIEW_REQUIRED`**. It is not silently attached. | ☐ |
+| 15.12 | Paste inbound text with no reliable identity. | **UNVERIFIED** — never silently verified. | ☐ |
+| 15.13 | Resolve the 15.11 / 15.12 case via Confirm, then reload. | The decision persists. | ☐ |
+
+### 15c. Follow-ups
+
+| # | Do | See | ✅ |
+|---|----|-----|----|
+| 15.14 | Log a first outbound message. | `next_followup_at` is set on the expected cadence; the lead appears in Today at the right time. | ☐ |
+| 15.15 | Leave it unreplied until due. | Appears under Follow-ups with the correct CTA. | ☐ |
+| 15.16 | Reply before the follow-up is due. | The pending cold follow-up is **cancelled**. | ☐ |
+| 15.17 | On a Won / Lost / Dead / `DO_NOT_CONTACT` lead, wait past the due date. | No follow-up is ever created. | ☐ |
+| 15.18 | Set a deferral to an explicit future date, then let the normal cadence pass. | The explicit date wins. | ☐ |
+| 15.19 | Trigger the same follow-up twice (reload / retry). | Exactly one follow-up exists — no duplicate. | ☐ |
+
+---
+
+## 16. Admin QA — `/admin/qa` (25 min)
+
+Distinct from Scoring QA (`/admin/scoring-qa`, section 10.4).
+
+| # | Do | See | ✅ |
+|---|----|-----|----|
+| 16.1 | Open `/admin/qa` as admin. | Loads. A rep gets redirected, not an error page. | ☐ |
+| 16.2 | Walk the routing filters: All, Disagreement, No proof, Inaccessible, Platform mismatch, Unreviewed. | Each filter changes the list and the counts match the rows shown. | ☐ |
+| 16.3 | Submit a routing review: Best sender, V1 correct, V2 correct, Neither. Reload. | The label persists. | ☐ |
+| 16.4 | Score staleness: inspect current, older-version, and unscored leads. | Current shows no warning; older shows a version warning plus a re-analyze CTA; unscored says **not analyzed** and shows no fake score. Version breakdown and oldest-stale are readable. | ☐ |
+| 16.5 | Run the staleness **dry-run** re-analysis. | Nothing is written. No production row changes unless you explicitly apply. | ☐ |
+| 16.6 | Confirm a thread, reload. | Persists. | ☐ |
+| 16.7 | Dismiss a thread, reload. | Persists. | ☐ |
+| 16.8 | Reassign a thread. | Lands on a valid sender / lead flow, not a dead link. | ☐ |
+| 16.9 | Submit a message review (1–5 + classification), reload. | Persists, and the aggregate updates. | ☐ |
+| 16.10 | Submit a thesis review (Strong / Useful / Weak / Misleading), reload. | Persists. | ☐ |
+| 16.11 | Revenue funnel on this page. | Qualified → Conversation → Meeting → Proposal → Won / Lost counts trace to real canonical outcomes — no fabricated stage. | ☐ |
+
+---
+
+## 17. Training Data and dataset export (25 min)
+
+### 17a. First-100 campaign — `/admin/training-data`
+
+| # | Do | See | ✅ |
+|---|----|-----|----|
+| 17.1 | Open the page. | X / 100 progress, remaining, pairwise count, routing-review count, message-review count, thesis-review count, learning health. All non-zero after section 16. | ☐ |
+| 17.2 | Press `1` (Great), then `2` (Good), `3` (Maybe), `4` (Poor), `5` (Never), `Enter` to save. | Label persists, progress increments, the next case loads. | ☐ |
+| 17.3 | Click into the notes/input box and press `1`–`5`. | **No shortcut fires while typing.** | ☐ |
+| 17.4 | Read the active-learning reason on a case. | Human-readable: model disagreement, routing disagreement, high value / low confidence, outcome contradicts rank, threshold case. No raw enum-only label. | ☐ |
+| 17.5 | Pairwise: choose A, then B, Tie, Unsure on separate cases. | Each persists. Model score does not visibly bias the choice if it is meant to be hidden. | ☐ |
+
+### 17b. Dataset export — `/admin/dataset`
+
+Export each type: `SCORING_EVAL`, `PAIRWISE_RANKING`, `ROUTING_EVAL`,
+`MESSAGE_QUALITY`, `THESIS_QUALITY`, `OUTCOME_TRAINING`.
+
+| # | Do | See | ✅ |
+|---|----|-----|----|
+| 17.6 | Export each type. | Correct columns, stable IDs where expected, no crash on an empty range. | ☐ |
+| 17.7 | Check scope on every export. | Only the current organization's rows. No cross-org rows. | ☐ |
+| 17.8 | Check test-data exclusion. | E2E / TEST / DEMO rows are excluded. | ☐ |
+| 17.9 | Export in redacted and anonymized modes. | No unexpected raw PII in the privacy-safe mode; the mode is visibly labelled. | ☐ |
+
+---
+
+## 18. Cross-surface parity (15 min)
+
+One controlled lead, checked everywhere. Any disagreement here is a P1 at
+minimum — silent divergence between surfaces is how bad decisions get made.
+
+| # | Do | See | ✅ |
+|---|----|-----|----|
+| 18.1 | Take the lead from 3.1 and read it on: Prospect result, Leads list, Lead detail, Today (`/dashboard`), Chats, `/admin/qa`, Training Data, Revenue intelligence. | **Same** score, qualification, intent, role, next action, sender, owner, outcome on every surface. | ☐ |
+| 18.2 | Compare the /10 display score with the /100 canonical score on the lead. | One /10 and one clearly labelled /100. They are consistent, and the /10 is not presented as the canonical number. | ☐ |
+| 18.3 | Check the conversation surfaces for the canonical opening message. | It appears **exactly once** on Overview, exactly once on History, and as one turn on Conversation. The database holds one canonical opening row. | ☐ |
+| 18.4 | Open the same lead in Today and in Chats. | Same stage and same next action in both — a lead cannot be "Needs Reply" in one place and "To Contact" in the other. | ☐ |
+
+---
+
+## 19. The golden flow, and its negative twin (30 min)
+
+Run this last, end to end, on a clean lead. This is the pass/fail flow for the
+release.
+
+**Positive**
+
+| # | Step | ✅ |
+|---|------|----|
+| 19.1 | Sign in as rep. | ☐ |
+| 19.2 | Analyze an explicit buyer (paste **A**). | ☐ |
+| 19.3 | Save as a lead; verify Lead detail matches the prospect result. | ☐ |
+| 19.4 | Choose the sender; confirm the score does not change. | ☐ |
+| 19.5 | Generate a sales-ready message (real detail, commercial purpose, one low-friction CTA, correct signature). | ☐ |
+| 19.6 | Log / send it; verify sender attribution is recorded. | ☐ |
+| 19.7 | Log inbound: *"Budget is $30k, can we meet Thursday?"* | ☐ |
+| 19.8 | Verify budget **and** meeting facts are stored, and the next action updates. | ☐ |
+| 19.9 | Progress to meeting, then proposal, then **Won**. | ☐ |
+| 19.10 | Verify it leaves Today and appears correctly in Revenue intelligence. | ☐ |
+| 19.11 | Add a quality label, a pairwise judgment, and a routing / message / thesis review. | ☐ |
+| 19.12 | Export the evaluation dataset and confirm the new rows are in it. | ☐ |
+
+**Negative**
+
+| # | Step | ✅ |
+|---|------|----|
+| 19.13 | Analyze a service provider (paste **C**). | ☐ |
+| 19.14 | Confirm no buyer intent is invented and no "contact now". | ☐ |
+| 19.15 | Log inbound: *"Do not contact me again."* | ☐ |
+| 19.16 | Confirm `DO_NOT_CONTACT`: no Send CTA, no follow-up, removed from Today. | ☐ |
+| 19.17 | Confirm outcome and history are preserved, and the lead cannot be re-activated by a restore alone. | ☐ |
+
+---
+
 ## Bug report template
 
 Copy this into the tracker for every failure.
 
 ```
 Title: [Section #.#] short description
+Bug ID:
 Role: admin | rep
 Page / URL:
 Steps: (the step numbers from this script + anything extra)
 Pasted text used: (paste letter A–H, or attach the synthetic text)
+Lead ID / Test ID:
 Expected:
-Actual: (attach screenshot; include the on-screen error text)
+Actual: (attach screenshot or video; include the on-screen error text)
 Severity:
   S1 = data loss, wrong lead sent to wrong rep, security
   S2 = flow blocked (cannot create / save / log)
   S3 = wrong number or label but flow completes
   S4 = cosmetic
 Browser / device:
+Deployed SHA: (from /api/version — a bug without this cannot be reproduced)
 ```
+
+**Priority, and what stops the release**
+
+| Priority | Covers |
+| --- | --- |
+| **P0** | Cross-org data leak · opt-out still receives outreach · a fabricated message can send · the wrong client or thread gets a message · wrong sender identity sends · data loss · a Won/Lost lead is still contacted · the production score is silently corrupted |
+| **P1** | Wrong buyer/seller classification · wrong follow-up · wrong counts or analytics · sender routing wrong or inaccessible · the score changes across surfaces · a primary page or action is broken · a message is wrong for its stage |
+| **P2** | UI inconsistency · poor empty state · minor responsive issue · copy issue · non-blocking layout problem |
+
+Any P0 is a stop-the-line result: report it immediately, do not continue the
+pass, and do not "work around it and keep going".
 
 **Automatic S1 flags** (stop and report immediately):
 
@@ -329,6 +506,10 @@ Browser / device:
 ---
 
 ## Sign-off
+
+**This sign-off is only valid for the SHA recorded here.**
+
+Deployed SHA (`/api/version`): ____________________  ·  Expected: ____________________
 
 | Area | Sections | Pass | Fail | Tester | Date |
 |---|---|---|---|---|---|
@@ -343,3 +524,12 @@ Browser / device:
 | Jobs / content / email | 11 | | | | |
 | Settings | 12 | | | | |
 | Resilience | 13, 14 | | | | |
+| Replies, terminal states, thread integrity, follow-ups | 15 | | | | |
+| Admin QA | 16 | | | | |
+| Training data & dataset export | 17 | | | | |
+| Cross-surface parity | 18 | | | | |
+| Golden flow + negative flow | 19 | | | | |
+
+**Release rule:** a pass is not a release. Promotion additionally requires the
+automated gate, the browser gate, the BUG-004 inbound gate and SHA parity — all
+on this same SHA. See `docs/RELAY_QA_CLOSURE_REPORT.md`.
