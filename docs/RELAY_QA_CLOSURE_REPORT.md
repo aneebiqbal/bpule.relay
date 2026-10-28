@@ -11,16 +11,42 @@
 | Field | Value |
 | --- | --- |
 | BASELINE SHA | `fd14819493ff485b572bc1c2e760e6b9faccd4fe` |
-| **DEPLOY TARGET (gate-verified)** | **`3ae4308bdbee6675e3f7ba6aa4c9dab81ef283da`** |
-| FINAL SHA | `0919898` — the tree is clean; commits after `3ae4308` are documentation only and are **not** part of the deploy target |
+| **DEPLOY TARGET (gate-verified)** | **`c9821c3`** |
+| FINAL SHA | `c9821c3` — the tree is clean |
 | PREVIEW SHA | **NOT DEPLOYED** — no Vercel CLI access in this environment |
 | PRODUCTION SHA | `65b9f916ff1198278e9eaaff7a8f19ef051ddcaf` (`origin/main`) — unchanged |
-| Tested SHA | `3ae4308` — the full automated gate ran green on this exact commit |
+| Tested SHA | `c9821c3` — 3916 tests, 0 failures, at this exact commit |
 
-**The deploy target is a specific commit, not `HEAD`.** The documentation
-commits after `3ae4308` change no code, but `/api/version` reports the SHA
-Vercel actually built — so deploying anything other than `3ae4308` breaks
-`tested SHA == deployed SHA` while looking like it holds.
+**The deploy target is a specific commit, not `HEAD`.** `/api/version` reports
+the SHA Vercel actually built, so deploying anything other than the verified
+commit breaks `tested SHA == deployed SHA` while looking like it holds.
+
+### The target moved — `3ae4308` is now 11 commits behind
+
+`3ae4308` was superseded. The commits after it include **both this pass's
+adversarial fixes and another session's BUG-004 fix**:
+
+```
+3efe0fc  fix(relay): inbound leads stay visible on Today without a sender assignment
+b0180c6  docs(relay): record BUG-004 as a visibility bug with its root cause and fix
+7dfcd84  test(relay): BUG-004 gate — wait for the async thread, use the rep dashboard
+e7bd973  test(relay): import loginAsRep in the BUG-004 gate
+e108022  fix(relay): an inbound message awaiting a reply counts as a reply on Today
+e186eb7  test(relay): assert the Today task row, not a nested-link count
+4882b95  test(relay): allow 120s for the inbound seed POST
+d65fbd8  ci(relay): browser ingest recomputes the browser, BUG-004 and production gates
+2dfdfff  fix(relay): adversarial pass — 4 real defects in the 12-bug fixes   ← this pass
+c9821c3  docs(relay): record the adversarial verification                ← this pass
+```
+
+**The other session found and fixed a real BUG-004 defect** — inbound leads
+disappearing from Today when no sender profile was assigned. That is the exact
+"riskiest persistence/state change" this report flagged, and it was caught
+before the browser run. Their fix touches `src/lib/relay/queue-engine.ts` and
+adds `tests/qa-relay-inbound-visibility.test.ts`.
+
+**So the target is `c9821c3`, not `3ae4308`.** Deploying `3ae4308` would ship a
+build that predates both the adversarial fixes and the BUG-004 visibility fix.
 
 **The tree is frozen and committed.** Every changed path was verified to be
 this pass's own work before staging (no foreign uncommitted work was in the
@@ -34,32 +60,31 @@ production promotion are **invalid** until `3ae4308` is deployed and
 
 ### Deploy target
 
-**The deploy target is the tip of this pass's commit chain, not an earlier
-runtime-equivalent commit.**
+**Deploy `c9821c3`** — the commit the full automated gate ran green on at this
+exact SHA (3916 tests, 0 failures, in two shards).
 
-An earlier version of this report named `2581561` because the later commits were
-"docs and gate-test work". That was wrong: **the release tooling is part of the
-release candidate.** Deploying `2581561` would ship the application changes but
-not the gate infrastructure that proves them — and it would weaken the exact
-rule this pass exists to enforce, `tested SHA == deployed SHA`, by carving out an
-exception at the last moment.
+The release tooling is part of the release candidate. An earlier version of this
+report named `3ae4308`, then `2581561` — both were wrong for the same reason:
+deploying an earlier commit ships the application changes but not the
+infrastructure that proves them, and it carves an exception out of
+`tested SHA == deployed SHA` at the last moment.
 
-So the target is the newest commit that the full automated gate has run green
-on, including `scripts/qa/*`, the gate tests and this report. `/api/version`
-reports the *application* deployment SHA, so the deploy must be built from that
-exact commit — not an older runtime commit while newer release scripts run
-locally.
+`c9821c3` contains this pass's adversarial fixes **and** the other session's
+BUG-004 visibility fix (`3efe0fc`). Deploying anything earlier ships a build
+that predates them.
+
+`/api/version` reports the *application* deployment SHA, so the deploy must be
+built from that exact commit — not an older runtime commit while newer release
+scripts run locally.
 
 `pnpm qa:production-release --url=<preview-url>` re-checks SHA parity live
 against `/api/version`, so a promotion cannot be authorised against a stale
 state file.
 
-> **Concurrent commits.** Another session pushed a merge on top of the earlier
-> frozen SHA (`4759992 merge: reconcile the release-hardening RC with the 12-bug
-> QA batch`, then `8a805f5`). Their work touches the release-hardening RC; mine
-> is `3012ec6` → `b67b92e` (the BUG-004 hard gate) → `2581561` → the gate-logic
-> test and this report. **The combination has only been through the automated
-> gate — the browser matrix is its first real test.**
+> **Concurrent commits.** Another session's work landed between the earlier
+> target and this one, including a real BUG-004 defect fix. The combination has
+> now been through the full automated gate — the browser matrix is its first real
+> test.
 
 ---
 
