@@ -107,6 +107,12 @@ export interface DashboardAnalytics {
   activity: ActivityPoint[]
   stages: StageSlice[]
   funnel: FunnelStep[]
+  /**
+   * Leads whose status says they were contacted but which have no message in
+   * Relay — typically an import. Reported beside the funnel so the difference
+   * between "contacted in Relay" and "contacted somewhere else" stays visible.
+   */
+  importedContacted: number
   scoreBands: CountSlice[]
   averageScore: number | null
   regions: CountSlice[]
@@ -286,12 +292,17 @@ export function buildDashboardAnalytics(input: {
   const leadsWithOutbound = new Set(outbound.map((e) => e.leadId))
   const leadsWithInbound = new Set(inbound.map((e) => e.leadId))
   const leadsWithDm = new Set(outbound.filter((e) => e.type === 'dm' || e.type === 'followup' || e.type === 'reply' || e.type === 'email' || e.type === 'upwork').map((e) => e.leadId))
-  const contacted = leads.filter((l) => leadsWithOutbound.has(l.id) || l.status !== 'new')
+  // Contacted means Relay saw contact happen. A lead whose status was imported
+  // as "contacted" but which has no message in Relay is reported separately:
+  // counting it here made the funnel claim 110 contacted directly above
+  // "0 messages sent", which is a contradiction, not a conversion rate.
+  const contacted = leads.filter((l) => leadsWithOutbound.has(l.id))
   const engaged = contacted.filter((l) => l.connectionAcceptedAt || leadsWithDm.has(l.id) || leadsWithInbound.has(l.id) || l.direction === 'inbound')
-  const replied = engaged.filter((l) => leadsWithInbound.has(l.id) || l.status === 'replied' || l.status === 'won')
+  const replied = engaged.filter((l) => leadsWithInbound.has(l.id))
   const won = leads.filter((l) => l.status === 'won')
+  const importedContacted = leads.filter((l) => l.status !== 'new' && !leadsWithOutbound.has(l.id)).length
   const funnel: FunnelStep[] = [
-    { key: 'added', label: 'Leads added', value: leads.length },
+    { key: 'added', label: 'All leads', value: leads.length },
     { key: 'contacted', label: 'Contacted', value: contacted.length },
     { key: 'engaged', label: 'Connected or messaged', value: engaged.length },
     { key: 'replied', label: 'Replied', value: replied.length },
@@ -417,6 +428,7 @@ export function buildDashboardAnalytics(input: {
     activity,
     stages,
     funnel,
+    importedContacted,
     scoreBands,
     averageScore,
     regions,

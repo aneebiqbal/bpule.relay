@@ -205,6 +205,8 @@ interface RawRecord {
 }
 
 export async function loadTrainingQueue(client: SupabaseClient, orgId: string, opts: { since: string; limit?: number; engines?: EngineId[] }): Promise<{ rows: TrainingRow[]; summary: TrainingQueueSummary }> {
+  // shortcut: 400 rows per table caps the queue, so rawRecords saturates at 800
+  // and is not a total. Paginate when a window legitimately exceeds it.
   const limit = opts.limit ?? 400
   const [{ data: leads }, { data: prospects }] = await Promise.all([
     client.from('leads')

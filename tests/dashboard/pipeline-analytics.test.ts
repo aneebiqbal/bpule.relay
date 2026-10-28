@@ -144,6 +144,29 @@ describe('dashboard analytics', () => {
     for (let i = 1; i < values.length; i++) expect(values[i]).toBeLessThanOrEqual(values[i - 1])
   })
 
+  it('a status of contacted is not evidence of contact — the funnel needs a message', () => {
+    // The imported-lead case: status says contacted, Relay holds nothing. Counting
+    // it made the funnel report 110 contacted beside "0 messages sent".
+    const imported = lead({ status: 'contacted' })
+    const real = lead({ status: 'contacted' })
+    const events = [ev(real.id, 'connection', 'outbound', daysAgo(2))]
+
+    const a = buildDashboardAnalytics({ leads: [imported, real], events, range: 30, now: NOW })
+
+    const byKey = Object.fromEntries(a.funnel.map((s) => [s.key, s.value]))
+    expect(byKey.added).toBe(2)
+    expect(byKey.contacted).toBe(1)
+    expect(a.importedContacted).toBe(1)
+  })
+
+  it('a status of replied is not evidence of a reply — the funnel needs an inbound message', () => {
+    const claimed = lead({ status: 'replied' })
+    const a = buildDashboardAnalytics({ leads: [claimed], events: [], range: 30, now: NOW })
+    const byKey = Object.fromEntries(a.funnel.map((s) => [s.key, s.value]))
+    expect(byKey.contacted).toBe(0)
+    expect(byKey.replied).toBe(0)
+  })
+
   it('events for leads outside the view are ignored', () => {
     const l = lead()
     const a = buildDashboardAnalytics({ leads: [l], events: [ev('someone-else', 'dm', 'outbound', daysAgo(1))], range: 7, now: NOW })

@@ -517,8 +517,13 @@ export function PipelineAnalyticsView({ data, scope, basePath = '/dashboard' }: 
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Panel title="Conversion funnel" subtitle="All leads · step-to-step conversion on the right">
+        <Panel title="Conversion funnel" subtitle="Contacted in Relay · step-to-step conversion on the right">
           <Funnel steps={data.funnel} />
+          {data.importedContacted > 0 && (
+            <p className="mt-3 border-t border-line pt-2 text-[11px] leading-relaxed text-stone">
+              {`${data.importedContacted} more ${data.importedContacted === 1 ? 'lead is' : 'leads are'} marked contacted outside Relay (imported). Not counted above — Relay holds no message for ${data.importedContacted === 1 ? 'it' : 'them'}.`}
+            </p>
+          )}
         </Panel>
         <Panel title="Lead quality" subtitle={`${scored} scored · same scale as each lead's score ring`}>
           <Donut

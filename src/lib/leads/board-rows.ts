@@ -180,6 +180,11 @@ export async function loadBoardData(): Promise<BoardData> {
 
   if (!workspace) return { leads, orgView, events, reps, workspace: null }
 
+  // An admin's board is the organisation's, not one identity's. Scoping it to
+  // the selected workspace made the team view show a fraction of the team's
+  // leads while the command centre showed all of them.
+  if (orgView) return { leads, orgView, events, reps, workspace }
+
   const selected = workspace
   const scoped = leads.filter((lead) => leadBelongsToWorkspace(lead, selected))
   const scopedIds = new Set(scoped.map((lead) => lead.id))

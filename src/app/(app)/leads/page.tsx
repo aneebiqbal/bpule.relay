@@ -10,11 +10,11 @@ import { loadBoardData } from '@/lib/leads/board-rows'
 
 export const dynamic = 'force-dynamic'
 
-type LeadsPayload = { leads: LeadRow[]; workspaceName: string | null }
+type LeadsPayload = { leads: LeadRow[]; workspaceName: string | null; orgView: boolean }
 
 async function loadLeads(): Promise<LeadsPayload> {
-  const { leads, workspace } = await loadBoardData()
-  return { leads, workspaceName: workspace?.identityName ?? null }
+  const { leads, workspace, orgView } = await loadBoardData()
+  return { leads, workspaceName: workspace?.identityName ?? null, orgView }
 }
 
 export default function LeadsPage() {
@@ -34,13 +34,15 @@ export default function LeadsPage() {
 }
 
 async function LeadsHeader({ leadsPromise }: { leadsPromise: Promise<LeadsPayload> }) {
-  const { workspaceName } = await leadsPromise
+  const { workspaceName, orgView, leads } = await leadsPromise
   return (
     <PageHeader
       title="Leads Pipeline"
-      description={workspaceName
-        ? `Leads for ${workspaceName}. Switch the workspace profile in the sidebar to see another identity.`
-        : 'Every prospect. Organized by where they are in your outreach lifecycle.'}
+      description={orgView
+        ? `All ${leads.length} active leads in the organisation — every rep and every identity. Archived leads are not counted.`
+        : workspaceName
+          ? `Leads for ${workspaceName}. Switch the workspace profile in the sidebar to see another identity.`
+          : 'Every prospect. Organized by where they are in your outreach lifecycle.'}
       action={
         <Link
           href="/leads/new"

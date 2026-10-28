@@ -87,7 +87,7 @@ export function TrainingDataCenter() {
       {error && <EmptyNote>{error}</EmptyNote>}
       {s && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-          <StatTile label="Raw records" value={s.rawRecords} />
+          <StatTile label="Raw records" value={s.rawRecords} sub="leads + prospects · max 800" />
           <StatTile label="Unique opportunities" value={s.uniqueOpportunities} />
           <StatTile label="Labelled" value={s.labelled} tone={s.labelled > 0 ? 'success' : 'neutral'} />
           <StatTile label="Unlabelled" value={s.unlabelled} />
