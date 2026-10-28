@@ -11,11 +11,18 @@
 | Field | Value |
 | --- | --- |
 | BASELINE SHA | `fd14819493ff485b572bc1c2e760e6b9faccd4fe` |
-| **DEPLOY TARGET (gate-verified)** | **`c9821c3`** |
-| FINAL SHA | `c9821c3` — the tree is clean |
+| **RC SHA (gate-verified)** | **`b00336f`** |
+| FINAL SHA | `b00336f` — the tree is clean; this IS the verified commit |
 | PREVIEW SHA | **NOT DEPLOYED** — no Vercel CLI access in this environment |
 | PRODUCTION SHA | `65b9f916ff1198278e9eaaff7a8f19ef051ddcaf` (`origin/main`) — unchanged |
-| Tested SHA | `c9821c3` — 3916 tests, 0 failures, at this exact commit |
+| Tested SHA | `b00336f` — 3916 tests, 0 failures, at this exact commit |
+
+**The RC is the commit the gate ran green on, and it is HEAD.** No
+runtime-equivalent reasoning, no "deploy the earlier one": `b00336f` is the
+newest commit and it is the one that passed.
+
+`3ae4308` and `c9821c3` are both superseded — they predate the other session's
+BUG-004 visibility fix and this pass's adversarial fixes.
 
 **The deploy target is a specific commit, not `HEAD`.** `/api/version` reports
 the SHA Vercel actually built, so deploying anything other than the verified
@@ -60,16 +67,16 @@ production promotion are **invalid** until `3ae4308` is deployed and
 
 ### Deploy target
 
-**Deploy `c9821c3`** — the commit the full automated gate ran green on at this
-exact SHA (3916 tests, 0 failures, in two shards).
+**Deploy `b00336f`** — the newest commit, and the one the full automated gate
+ran green on at this exact SHA (3916 tests, 0 failures, two shards).
 
 The release tooling is part of the release candidate. An earlier version of this
-report named `3ae4308`, then `2581561` — both were wrong for the same reason:
+report named `3ae4308`, then `c9821c3` — both were wrong for the same reason:
 deploying an earlier commit ships the application changes but not the
 infrastructure that proves them, and it carves an exception out of
 `tested SHA == deployed SHA` at the last moment.
 
-`c9821c3` contains this pass's adversarial fixes **and** the other session's
+`b00336f` contains this pass's adversarial fixes **and** the other session's
 BUG-004 visibility fix (`3efe0fc`). Deploying anything earlier ships a build
 that predates them.
 
@@ -514,17 +521,21 @@ is.
 **3916 passed / 0 failed / 0 skipped** across 259/259 test files (baseline:
 3707 passed). Zero regressions.
 
-The full suite could not complete in a single run — the shared machine was at
-load average 11.5 and vitest timed out at 50 minutes. It was run in four chunks
-covering every file:
+> **FULL COVERAGE, SHARDED EXECUTION.** The suite was run in two shards, not a
+> single full-suite run. The shared machine could not complete one run (load
+> average 11.5, vitest timed out at 50 minutes). Together the shards covered
+> every file and both were green. This is strong evidence, but it is not
+> identical to a single full-suite run — and the release risk from sharding is
+> small next to the unresolved browser/SHA-parity risk.
 
-| Chunk | Files | Tests | Failed |
-| --- | --- | --- | --- |
-| 1 | 40 | 595 | 0 |
-| 2 | 70 | 919 | 0 |
-| 3 | 96 | 1349 | 0 |
-| 4 (subdirectories) | 53 | 1053 | 0 |
-| **Total** | **259** | **3916** | **0** |
+| Shard | Tests | Failed |
+| --- | --- | --- |
+| 1 | 1908 | 0 |
+| 2 | 2008 | 0 |
+| **Total** | **3916** | **0** |
+
+An earlier chunked run (before the other session's BUG-004 fix landed) covered
+the same 259 files in four chunks: 595 + 919 + 1349 + 1053 = 3916, 0 failures.
 
 `npx tsc --noEmit` clean. `npx eslint` 0 errors (805 pre-existing warnings).
 
