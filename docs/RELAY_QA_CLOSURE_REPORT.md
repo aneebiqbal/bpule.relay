@@ -12,10 +12,14 @@
 | --- | --- |
 | BASELINE SHA | `fd14819493ff485b572bc1c2e760e6b9faccd4fe` |
 | **RC SHA (gate-verified)** | **`b00336f`** |
-| FINAL SHA | `b00336f` — the tree is clean; this IS the verified commit |
+| FINAL SHA | `d95f860` — docs-only, one commit after the RC; **not** the RC |
 | PREVIEW SHA | **NOT DEPLOYED** — no Vercel CLI access in this environment |
 | PRODUCTION SHA | `65b9f916ff1198278e9eaaff7a8f19ef051ddcaf` (`origin/main`) — unchanged |
 | Tested SHA | `b00336f` — 3916 tests, 0 failures, at this exact commit |
+
+**Deploy `b00336f`, not HEAD.** HEAD is a docs-only commit that changed no code,
+but `/api/version` reports the SHA Vercel built — so deploying HEAD would report
+a SHA the gate never ran on. Pin the deploy to `b00336f`.
 
 **The RC is the commit the gate ran green on, and it is HEAD.** No
 runtime-equivalent reasoning, no "deploy the earlier one": `b00336f` is the
