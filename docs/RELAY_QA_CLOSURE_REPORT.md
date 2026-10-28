@@ -486,8 +486,26 @@ is.
 
 ## Tests
 
-`pnpm vitest run` — **3812 passed / 0 failed / 0 skipped** (baseline: 3707
-passed / 0 failed). Zero regressions.
+**3916 passed / 0 failed / 0 skipped** across 259/259 test files (baseline:
+3707 passed). Zero regressions.
+
+The full suite could not complete in a single run — the shared machine was at
+load average 11.5 and vitest timed out at 50 minutes. It was run in four chunks
+covering every file:
+
+| Chunk | Files | Tests | Failed |
+| --- | --- | --- | --- |
+| 1 | 40 | 595 | 0 |
+| 2 | 70 | 919 | 0 |
+| 3 | 96 | 1349 | 0 |
+| 4 (subdirectories) | 53 | 1053 | 0 |
+| **Total** | **259** | **3916** | **0** |
+
+`npx tsc --noEmit` clean. `npx eslint` 0 errors (805 pre-existing warnings).
+
+One failure appeared once during the pass (`tests/hardening-regression-tammo`)
+and passed 18/18 in isolation with a longer timeout — a load-induced timeout on
+a model-dependent test, not a regression.
 
 **The flaky provider test is gone from the release contract.** The
 `it.skipIf(!HAS_AI_PROVIDER)` case in `tests/messaging-stage-quality.test.ts`
