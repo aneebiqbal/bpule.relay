@@ -129,6 +129,27 @@ async function loginWith(page: Page, email: string): Promise<void> {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
   }
 
+  // Supabase rate-limits repeated password grants: "Could not sign you in
+  // right now. Please try again." A long browser matrix can hit it. Wait for
+  // the window to pass and retry once, rather than reporting a product failure.
+  if (page.url().includes('/login')) {
+    const alertText = await page.locator('[role="alert"]').first().innerText().catch(() => '')
+    if (/could not sign you in|too many|rate limit|try again/i.test(alertText)) {
+      await page.waitForTimeout(45_000)
+      const emailInput = page
+        .locator('#login-email, input[type="email"], input[name="email"], input[placeholder*="email" i]')
+        .first()
+      const passInput = page.locator('#login-password, input[type="password"], input[name="password"]').first()
+      const submitBtn = page
+        .locator('button.auth-submit, button:has-text("Sign in with password"), button:has-text("Sign in"), button[type="submit"]:not(.gv-submit-btn)')
+        .first()
+      await emailInput.fill(email)
+      await passInput.fill(PASSWORD)
+      await submitBtn.click()
+      await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 }).catch(() => undefined)
+    }
+  }
+
   await expect(page).toHaveURL(/dashboard/, { timeout: 20_000 })
   await page.waitForLoadState('networkidle')
 }
