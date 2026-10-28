@@ -52,7 +52,7 @@ async function loginWith(page: Page, email: string): Promise<void> {
     // loading) AND the email input actually accepting synthetic events
     // (proven by typing a throwaway character and seeing it reflected,
     // rather than assuming hydration = idle network).
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('networkidle').catch(() => undefined)
     const emailInput = page
       .locator('#login-email, input[type="email"], input[name="email"], input[placeholder*="email" i]')
       .first()
@@ -151,7 +151,9 @@ async function loginWith(page: Page, email: string): Promise<void> {
   }
 
   await expect(page).toHaveURL(/dashboard/, { timeout: 20_000 })
-  await page.waitForLoadState('networkidle')
+  // The URL proves the session is set. networkidle can time out when the app
+  // holds a polling connection open; that is not a login failure.
+  await page.waitForLoadState('networkidle').catch(() => undefined)
 }
 
 export async function loginAsAdmin(page: Page) {
