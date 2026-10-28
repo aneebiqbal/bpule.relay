@@ -9,6 +9,13 @@
     "lint": "eslint",
     "test": "vitest run",
     "qa:relay": "npm run build && npx tsc --noEmit && vitest run --reporter=verbose && echo '✅ QA:RELAY PASS'",
+    "qa:contracts": "vitest run tests/qa-relay-product-contracts.test.ts tests/qa-relay-cross-surface-parity.test.ts",
+    "qa:coverage": "node scripts/qa/contract-coverage.mjs",
+    "qa:release": "node scripts/qa/qa-release.mjs",
+    "qa:production-release": "node scripts/qa/qa-production-release.mjs",
+    "qa:live-provider": "vitest run --config vitest.smoke.config.mts",
+    "qa:deployed": "node scripts/qa/qa-deployed.mjs",
+    "qa:manifest": "node scripts/qa/release-manifest.mjs",
     "test:watch": "vitest",
     "intelligence:benchmark": "npx tsx scripts/benchmark-intelligence.mjs",
     "intelligence:benchmark:mock": "npx tsx scripts/benchmark-intelligence.mjs --pipeline=mock"

@@ -45,6 +45,12 @@ import {
   toUiSnapshot,
   type MessagingPolicy,
 } from '@/lib/relay/revenue-strategy'
+import {
+  filterContradictoryExplanation as explanationFilter,
+  type ExplanationContext,
+} from '@/lib/relay/explanation-consistency'
+import { newRequestId, runWithTraceContext } from '@/lib/observability/trace-context'
+import { recordExplanationViolations } from '@/lib/relay/contract-violations'
 
 /**
  * Messaging policies that actually involve writing/sending a pitch message.
@@ -170,6 +176,12 @@ function cleanupCache() {
 }
 
 export async function POST(request: Request) {
+  // One correlation id for every AI call in this request (Phase 17). The id is
+  // ids-only: no raw source text or client data enters the trace context.
+  return runWithTraceContext({ requestId: newRequestId() }, () => handlePost(request))
+}
+
+async function handlePost(request: Request) {
   let body: {
     rawText?: string
     profileId?: string
@@ -412,6 +424,17 @@ export async function POST(request: Request) {
     const buyerIntent: VerifiedBuyerIntent = (v3Packet as V3LeadDecisionPacket | null)?.buyerIntent
       ?? resolveBuyerIntentFromSource(rawText)
     ;(loop as { intent: string }).intent = buyerIntent.buyerIntentLevel
+
+    // One explanation context for every user-facing explanation surface.
+    const explanationCtx: ExplanationContext = {
+      verifiedBuyerRequest: buyerIntent.verifiedBuyerRequest,
+      buyerIntentLevel: buyerIntent.buyerIntentLevel,
+      terminal: buyerIntent.terminalState !== null,
+      hasThread: false,
+      accessLevel: null,
+      fit: (loop as { fit?: string }).fit ?? null,
+      hasCurrentTiming: buyerIntent.verifiedBuyerRequest,
+    }
 
     // The ONE recommended action. The packet already carries the cold
     // decision from deriveRecommendedAction (opportunity + confidence); the
@@ -945,6 +968,13 @@ export async function POST(request: Request) {
       }
     }
 
+    // One explanation filter for every user-facing explanation list. A line
+    // that contradicts the decision is removed AND recorded (never silently
+    // corrected, never shown alongside a contradicting decision).
+    const watchOutFiltered = explanationFilter(canonical.scoreBreakdown.watchOut, explanationCtx, 'watchOut')
+    const missingInfoFiltered = explanationFilter(canonical.scoreBreakdown.missingInfo, explanationCtx, 'missingEvidence')
+    recordExplanationViolations(null, 'prospect', [...watchOutFiltered.removed, ...missingInfoFiltered.removed])
+
     const finalResult = {
       extracted,
       canonical,
@@ -955,9 +985,12 @@ export async function POST(request: Request) {
         label: canonical.scoreBreakdown.label,
         qualification: canonical.qualification,
         reasons: canonical.scoreBreakdown.reasons,
-        watchOut: canonical.scoreBreakdown.watchOut,
+        // The decision is the authority: an explanation line that denies a
+        // verified request, claims a thread, or offers contact to a terminal
+        // lead is removed rather than shown alongside a contradicting decision.
+        watchOut: watchOutFiltered.kept,
         dimensions: normalizeScoreDimensions(canonical.scoreBreakdown.dimensions),
-        missingInfo: canonical.scoreBreakdown.missingInfo,
+        missingInfo: missingInfoFiltered.kept,
         ...scoreTrace(canonical),
       },
       buyerIntent,

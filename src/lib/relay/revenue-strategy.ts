@@ -854,6 +854,10 @@ function assessFitIntentConfidence(source: StrategySource, scoped: ScopedItem[])
     || source.urgency === 'immediate'
     || source.opportunitySignals.includes('freelance_project_need')
     || (source.buyerEvidenceKinds ?? []).includes('BUYER_REQUEST')
+    // The canonical source facts already verified a prospect-owned request for
+    // outside help. The explanation must not re-derive intent from V2 signals
+    // and call it UNKNOWN while the decision says HIGH (EMMA contradiction).
+    || source.externalNeed
   ) {
     intent = 'HIGH'
     intentWhy = 'Current, explicit need or active project ask.'
@@ -1103,11 +1107,17 @@ function decideContact(
   // Founder/CEO/CTO/product builder with high commercial potential on LinkedIn
   // connection: send a relationship-building connection note even without
   // explicit buyer intent. Connection notes earn access — they don't pitch.
+  // "High potential builder" means a product/technical business. A CEO/Founder
+  // title alone is not enough: an interior designer or nonprofit COO is not a
+  // BPulse-relevant builder, and must not be sent outreach (hardening fixture
+  // Avigail Eisenstadt). Require a product business model or technical signal.
+  const isProductBuilder = source.businessModel === 'PRODUCT' || source.technicalSignals.length > 0
   const isHighPotentialBuilder = (
     source.channel === 'connection'
     && !irrelevant
     && !nonBuyerRelationship
     && !hasBuyerRequest
+    && isProductBuilder
   ) && (
     // Founder/CEO/CTO role signals
     (source.title && /\b(ceo|cto|cfo|founder|co[- ]?founder|owner|president|managing director)\b/i.test(source.title))

@@ -118,7 +118,9 @@ More`
         canonicalScore: canonical.canonicalScore,
         type: 'connection',
         styleCard: null, facts: [], plays: [], history: [], profile: null, matchedProof: null,
-        fewShotExamples: [], strategy: null, safeFacts: [safeFact], matchedProofCards: [],
+        // The real route passes the derived strategy; a null strategy is the
+        // "needs rescoring" path and legitimately returns an empty draft.
+        fewShotExamples: [], strategy: revenue, safeFacts: [safeFact], matchedProofCards: [],
       },
       () => undefined,
       null, null,

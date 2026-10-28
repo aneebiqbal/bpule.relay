@@ -1,6 +1,7 @@
 
 import { fetchOpenAI, withRetry } from '@/lib/intelligence-v3/retry-utils'
 import { generate } from '@/lib/ai/runtime'
+import { normalizeExternalInput } from '@/lib/intelligence-v3/normalize-external-input'
 
 export interface UpworkJobInput {
   rawText: string
@@ -384,7 +385,7 @@ function extractApplicationRequirements(text: string): string[] {
   return reqs
 }
 
-function cleanExtractedTitle(title: string): string {
+export function cleanExtractedTitle(title: string): string {
   let t = title.trim()
   // Strip common paste artifacts: "sf", "spS", etc. (Upwork UI noise)
   t = t.replace(/^(sf|spS|sp|sv|sb)\s*/i, '')
@@ -396,6 +397,10 @@ function cleanExtractedTitle(title: string): string {
   t = t.replace(/^posted\s+\d+\s+(minutes?|hours?|days?)\s+ago\s*/i, '')
   // Strip "Title:" prefix from Upwork page paste
   t = t.replace(/^title:\s*/i, '')
+  // A model can echo the source label ("Job Title: Full-Stack Developer…").
+  // The canonical boundary owns label stripping, so delegate rather than
+  // pattern-match here (QA BUG-007).
+  t = normalizeExternalInput(t).structuredFields.jobTitle ?? t
   return t.slice(0, 150) || 'Unknown Job'
 }
 

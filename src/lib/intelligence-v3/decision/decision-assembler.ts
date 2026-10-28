@@ -28,6 +28,7 @@ import { scoreEpisode, type V3ScoreInput, type V3ScoreOutput } from '../scoring/
 import { isVerbatimInSource } from '../source-facts'
 import { NORMALIZED_ANSWER_CONFIDENCE_CAP, type V3ProviderResult } from './decision-provider'
 import { resolveVerifiedBuyerIntent, type VerifiedBuyerIntent } from '../buyer-intent'
+import { recordCandidateRecruiterConflict } from '@/lib/relay/contract-violations'
 import { summarizeSourceFacts, type SourceFacts } from '../source-facts-model'
 import { computeConfidence } from '../dimensions'
 import { deriveRecommendedAction } from '../action/recommended-action'
@@ -101,6 +102,12 @@ export async function assembleDecisionPacket(input: V3AssemblerInput): Promise<V
     },
   })
   const decision = projectBuyerIntent(guarded, buyerIntent, decisionAdjustments)
+
+  // Telemetry guard (Contract 13): a recruiter flag paired with the candidate
+  // relationship. Distinct roles, and a conflict here means one reader won.
+  if (buyerIntent.relationshipRole === 'CANDIDATE' && facts.buyer.recruiter) {
+    recordCandidateRecruiterConflict(facts.buyerRequest ?? 'unknown')
+  }
 
   // An episode is only an explicit request when the canonical decision verified one.
   const projectedEpisodes = episodes.map((e) =>

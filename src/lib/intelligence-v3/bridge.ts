@@ -17,6 +17,7 @@ import { extractHiringOrganization, extractStatedLocation, isPlausibleCompanyNam
 import { commercialReadingFromFacts } from '@/lib/intelligence-v2/commercial-reading'
 import { isLinkedInChromeLine, nameFromViewProfileLabel } from '@/lib/prospect/paste-normalize'
 import { stripEmployerFromTitle } from '@/lib/leads/role-line'
+import { normalizeExternalInput, isLabeledFieldLine } from './normalize-external-input'
 
 
 export function buildV3BridgeInput(
@@ -405,12 +406,24 @@ function looksLikeRole(text: string): boolean {
  */
 const SECTION_HEADER = /^(about|activity|experience|posts?|comments?|education|skills|highlights|contact\s*info|show\s*all|linkedin\s+post:?|post:?)$/i
 const ROLE_WORDS = /\b(founder|ceo|cto|cfo|chief|officer|vp|head|director|manager|lead|engineer|developer|architect|recruiter|rekruter(?:ka)?|headhunter|sourcer|consultant|president|owner|partner)\b/i
-const LABELED_FIELD = /^(name|company|organization|employer|role|title|position|location|headline)\s*:\s*(.*)$/i
+
+/** Legacy label names the V3-light path passes, mapped to canonical fields. */
+const LABEL_FIELD_ALIAS: Record<string, keyof ReturnType<typeof normalizeExternalInput>['structuredFields']> = {
+  role: 'title',
+  position: 'title',
+  headline: 'title',
+  organization: 'company',
+  employer: 'company',
+}
 
 function labeledField(lines: string[], ...labels: string[]): string | null {
-  for (const line of lines) {
-    const m = line.match(LABELED_FIELD)
-    if (m && labels.includes(m[1].toLowerCase()) && m[2].trim()) return m[2].trim()
+  // The canonical normalization boundary owns label parsing. This is a thin
+  // adapter so the V3-light identity path reads the same fields the Prospect,
+  // Inbound and Upwork routes read — one boundary, one set of fields.
+  const { structuredFields } = normalizeExternalInput(lines.join('\n'))
+  for (const label of labels) {
+    const value = structuredFields[LABEL_FIELD_ALIAS[label as keyof typeof LABEL_FIELD_ALIAS] ?? label]
+    if (value) return value
   }
   return null
 }
@@ -433,11 +446,11 @@ function looksLikePersonName(line: string): boolean {
 export function splitIdentityAndBody(lines: string[]): { identity: string[]; body: string[] } {
   let end = lines.findIndex((l, i) =>
     SECTION_HEADER.test(l)
-    || (i > 0 && !LABELED_FIELD.test(l) && (l.length > 90 || /[.!?]["”']?$/.test(l) && l.split(/\s+/).length > 6)),
+    || (i > 0 && !isLabeledFieldLine(l) && (l.length > 90 || /[.!?]["”']?$/.test(l) && l.split(/\s+/).length > 6)),
   )
   if (end === -1) end = Math.min(lines.length, 4)
   const identity = lines.slice(0, end)
-  const body = lines.slice(end).filter((l) => !SECTION_HEADER.test(l) && !LABELED_FIELD.test(l) && !isLinkedInChromeLine(l))
+  const body = lines.slice(end).filter((l) => !SECTION_HEADER.test(l) && !isLabeledFieldLine(l) && !isLinkedInChromeLine(l))
   return { identity, body }
 }
 

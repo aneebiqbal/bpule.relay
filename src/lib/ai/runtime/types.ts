@@ -147,4 +147,64 @@ export interface AiTrace {
   leadId?: string | null
   jobId?: string | null
   repId?: string | null
+  /** Correlates every trace for one user request across features. */
+  requestId?: string | null
+  /** Links the trace to the decision run that produced it. */
+  decisionRunId?: string | null
+  /** Structured failure reason. Raw `error` stays free text for debugging. */
+  failureCategory?: AiFailureCategory | null
+}
+
+/**
+ * A structured failure category. Dashboards must read this, never parse the
+ * free-text `error` string.
+ */
+export type AiFailureCategory =
+  | 'PROVIDER_TIMEOUT'
+  | 'PROVIDER_RATE_LIMIT'
+  | 'PROVIDER_AUTH'
+  | 'PROVIDER_4XX'
+  | 'PROVIDER_5XX'
+  | 'NETWORK_ERROR'
+  | 'SCHEMA_INVALID'
+  | 'VALIDATION_FAILED'
+  | 'QUALITY_BLOCKED'
+  | 'CACHE_FAILURE'
+  | 'STORAGE_FAILURE'
+  | 'CANCELLED'
+  | 'UNKNOWN'
+
+/**
+ * Canonical trace context. Passed from the request boundary through the AI
+ * runtime. Ids only — never raw source text, client messages, emails or phones.
+ */
+export interface TraceContext {
+  requestId: string
+  organizationId?: string | null
+  leadId?: string | null
+  jobId?: string | null
+  repId?: string | null
+  decisionRunId?: string | null
+}
+
+/** Classify a provider/runtime failure into a stable category. */
+export function classifyAiFailure(error: string | null | undefined, status?: number | null): AiFailureCategory {
+  if (status === 401 || status === 403) return 'PROVIDER_AUTH'
+  if (status === 429) return 'PROVIDER_RATE_LIMIT'
+  if (status === 408 || status === 504) return 'PROVIDER_TIMEOUT'
+  if (status === 400 || status === 422) return 'PROVIDER_4XX'
+  if (typeof status === 'number' && status >= 500) return 'PROVIDER_5XX'
+  const text = (error ?? '').toLowerCase()
+  if (!text) return 'UNKNOWN'
+  if (/timeout|timed out|etimedout|deadline/.test(text)) return 'PROVIDER_TIMEOUT'
+  if (/rate.?limit|429|too many requests/.test(text)) return 'PROVIDER_RATE_LIMIT'
+  if (/unauthor|forbidden|invalid api key|401|403/.test(text)) return 'PROVIDER_AUTH'
+  if (/schema|json|parse|invalid response/.test(text)) return 'SCHEMA_INVALID'
+  if (/enotfound|econnreset|econnrefused|network|fetch failed|socket/.test(text)) return 'NETWORK_ERROR'
+  if (/abort|cancel/.test(text)) return 'CANCELLED'
+  if (/cache/.test(text)) return 'CACHE_FAILURE'
+  if (/storage|s3|bucket|upload/.test(text)) return 'STORAGE_FAILURE'
+  if (/quality|unsafe|blocked/.test(text)) return 'QUALITY_BLOCKED'
+  if (/validation/.test(text)) return 'VALIDATION_FAILED'
+  return 'UNKNOWN'
 }

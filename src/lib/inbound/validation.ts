@@ -11,6 +11,12 @@ export interface ValidatedInboundLeadInput extends ValidatedInboundAnalysisInput
   company: string
   assignedProfileId: string | null
   idempotencyKey: string | null
+  /**
+   * QA seeding: marks the lead as test data so analytics exclude it and the QA
+   * cleanup can sweep it. Only an authenticated rep can set it (the route
+   * requires a session), and the default is false.
+   */
+  isTest: boolean
 }
 
 type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string }
@@ -140,6 +146,7 @@ export function validateInboundLeadBody(value: unknown): ValidationResult<Valida
       company: company.value,
       assignedProfileId: assignedProfileId.value,
       idempotencyKey: idempotencyKey.value,
+      isTest: body.isTest === true,
     },
   }
 }

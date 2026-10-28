@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { LoginExperience } from "@/components/auth/login-experience";
 import { getCurrentUser } from "@/lib/auth/current";
 import { isDemoMode } from "@/lib/ai/config";
+import { getAuthCapabilities } from "@/lib/auth/capabilities";
 
 export const dynamic = "force-dynamic";
 
@@ -16,5 +17,8 @@ export default async function LoginPage() {
   if (user?.profile) redirect("/dashboard");
   if (user) redirect("/onboarding");
 
-  return <LoginExperience demoMode={isDemoMode()} />;
+  // The UI renders only the capabilities this deployment can execute.
+  const capabilities = getAuthCapabilities();
+
+  return <LoginExperience demoMode={isDemoMode()} googleEnabled={capabilities.googleEnabled} />;
 }

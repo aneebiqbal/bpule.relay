@@ -117,7 +117,7 @@ function LeadQueue({ title, hint, leads, cta, tone }: { title: string; hint: str
               <Link href={`/leads/${lead.leadId}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-bone sm:px-5">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] text-ink">{lead.company}</p>
-                  <p className="truncate text-[11px] text-stone">{lead.contactName || 'Contact'} · score {lead.score}</p>
+                  <p className="truncate text-[11px] text-stone">{lead.contactName || 'Contact'} · {lead.scoreText}</p>
                 </div>
                 <span className="shrink-0 text-[11px] font-medium text-cobalt">{cta}</span>
               </Link>

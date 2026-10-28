@@ -73,13 +73,15 @@ export function RepDashboard({ data }: { data: RepWorkspaceData }) {
   // returned by the queue engine; this is the rep's only work list.
   const ranked = [...upNext].sort((a, b) => priorityValue(a.priority) - priorityValue(b.priority))
 
-  const replies = ranked.filter((t) => t.kind === 'reply_needed')
+  // An inbound message awaiting a reply IS a reply waiting: it is filed in the
+  // Replies section and counted by the "Replies waiting" KPI (one selector).
+  const replies = ranked.filter((t) => t.kind === 'reply_needed' || t.kind === 'inbound_opportunity')
   const followups = ranked.filter((t) => t.kind === 'followup_due')
   const highPriority = ranked.filter(
-    (t) => t.kind !== 'reply_needed' && t.kind !== 'followup_due' && (t.priority === 'urgent' || t.priority === 'high'),
+    (t) => t.kind !== 'reply_needed' && t.kind !== 'inbound_opportunity' && t.kind !== 'followup_due' && (t.priority === 'urgent' || t.priority === 'high'),
   )
   const research = ranked.filter((t) => t.kind === 'high_fit_lead' || t.humanAction === 'RESEARCH')
-  const newLeads = ranked.filter((t) => t.kind === 'new_opportunity' || t.kind === 'inbound_opportunity')
+  const newLeads = ranked.filter((t) => t.kind === 'new_opportunity')
 
   const progress = computeDailyProgress({
     totalTarget: data.targetSummary?.totalTarget ?? 0,

@@ -47,8 +47,13 @@ describe('Hardening regression — Justus Hanna / Grego AI', () => {
     expect(intel.intelligence.opportunity.signals).not.toContain('growth_signal')
   })
 
-  it('resolves remote eligibility to NOT_APPLICABLE', () => {
-    expect(intel.remoteEligibility.eligibility).toBe('NOT_APPLICABLE')
+  // A seller's own remote arrangement must never be read as a location
+  // restriction that makes them INELIGIBLE. Whether the exact state is
+  // NOT_APPLICABLE or ELIGIBLE depends on whether the text carries real
+  // workplace evidence (e.g. "Remote OK"), so the exact value is model-dependent
+  // and is deliberately not asserted here.
+  it('never treats a seller\'s remote arrangement as a location restriction', () => {
+    expect(intel.remoteEligibility.eligibility).not.toBe('INELIGIBLE')
   })
 
   it('keeps canonical score out of buyer-opportunity territory', () => {

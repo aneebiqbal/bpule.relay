@@ -115,6 +115,7 @@ import type {
   UpworkSnapshot,
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
+import { inboundFirstMessageKey } from '@/lib/conversation/canonical-message'
 import { calendarDaysBetween, followupDueInDays } from '@/lib/leads/followup'
 import { emitAction } from '@/lib/action-ledger'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
@@ -342,6 +343,7 @@ function mapMessage(r: Row): Message {
     rejectReasons: Array.isArray(r.reject_reasons) ? r.reject_reasons as Message['rejectReasons'] : [],
     idempotencyKey: (r.idempotency_key as string) ?? null,
     direction: (r.direction as Message['direction']) ?? 'outbound',
+    threadStatus: (r.thread_status as Message['threadStatus']) ?? null,
     createdAt: r.created_at as string,
   }
 }
@@ -746,6 +748,10 @@ export class SupabaseStore implements ScoutStore {
       intelligence_input_hash: input.intelligenceInputHash ?? null,
       v3_reuse_key: input.v3ReuseKey ?? null,
       fallback_reason: input.fallbackReason ?? null,
+      // QA seed marker: test leads are excluded from analytics and swept by the
+      // QA cleanup. Defaults to false, so production rows are unchanged.
+      is_test: input.isTest === true,
+      source_kind: input.isTest === true ? 'E2E' : 'PRODUCTION',
     }
 
     // Insert with graceful column handling. PostgREST runs insert().select(cols)
@@ -804,6 +810,28 @@ export class SupabaseStore implements ScoutStore {
       throw row.error
     }
     const lead = mapLead(row.data as Row)
+
+    // Canonical opening message: an inbound lead's first message becomes a
+    // canonical row so the messages table owns the timeline, instead of a
+    // lead-level fallback that can render the same message twice (QA BUG-004).
+    // Idempotent by key, and non-fatal: the fallback still renders the opening.
+    if (lead.direction === 'inbound' && lead.inboundMessage?.trim()) {
+      try {
+        await insertMessageReturningId(this.client, {
+          organization_id: this.orgId,
+          lead_id: lead.id,
+          rep_id: lead.ownerRepId,
+          type: 'reply',
+          direction: 'inbound',
+          sent_text: lead.inboundMessage.trim(),
+          sent_at: lead.createdAt ?? new Date().toISOString(),
+          model_used: 'inbound_lead',
+          idempotency_key: inboundFirstMessageKey(lead.id),
+        })
+      } catch {
+        // A failed row must never break lead creation.
+      }
+    }
 
     // Create outbound relay run (non-fatal — must not break lead creation)
     let relayRunId: string | null = null

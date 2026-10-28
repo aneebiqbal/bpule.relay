@@ -5,6 +5,12 @@ import type { CostTierName } from '@/lib/ai/routing'
 import { hasProvider } from '@/lib/ai/config'
 import { sanitizeDraft } from '@/lib/facts/sanitize'
 import { generate as runtimeGenerate } from '@/lib/ai/runtime'
+import {
+  assessQuestionCoverage,
+  buildQuestionPlanBlock,
+  extractExplicitBuyerQuestions,
+  hasInventedAvailability,
+} from '@/lib/relay/buyer-questions'
 
 export type DraftStreamEvent =
   | { type: 'status'; message: string }
@@ -106,7 +112,13 @@ export async function streamDraft(
   }
 
   const system = baseDraftSystem(input.styleCard, input.facts)
-  const user = buildUserPrompt(input)
+  let user = buildUserPrompt(input)
+  // Reply completeness (REL-QA-009): hand the generator every explicit buyer
+  // question before it writes, so it cannot quietly drop one.
+  const questionBlock = buildQuestionPlanBlock(
+    input.type === 'reply' ? extractExplicitBuyerQuestions(input.conversationContext ?? '') : [],
+  )
+  if (questionBlock) user = `${user}\n\n${questionBlock}`
   const callLog: DraftCallLog[] = []
 
   // Contextual status messages based on message type (no model/tier details)
@@ -191,8 +203,24 @@ async function streamFinalDraft(
     qualityGateReasons = [...evaluation.reasons]
     if (surveillance) qualityGateReasons.push('Surveillance-like opening')
     if (generic) qualityGateReasons.push('Too generic')
-  } catch {
-    // Quality gate import failed — use self-check result only.
+  } catch { /* quality gate import failed — self-check result only */ }
+
+  // Reply completeness gate (REL-QA-009): every explicit buyer question must be
+  // addressed, and no calendar slot may be invented.
+  if (input.type === 'reply') {
+    const questions = extractExplicitBuyerQuestions(input.conversationContext ?? '')
+    if (questions.length > 0) {
+      const coverage = assessQuestionCoverage(questions, primary.draftText)
+      if (!coverage.complete) {
+        qualityGatePassed = false
+        const missing = coverage.questions.filter((q) => q.status === 'NEEDS_VERIFICATION').map((q) => q.topic)
+        qualityGateReasons.push(`Unanswered buyer question(s): ${missing.join(', ')}`)
+      }
+    }
+    if (hasInventedAvailability(primary.draftText)) {
+      qualityGatePassed = false
+      qualityGateReasons.push('Proposed a specific calendar slot without a calendar source')
+    }
   }
 
   emit({ type: 'selfcheck', pass: qualityGatePassed, selfCheck: { ...primary.selfCheck, qualityGateReasons } })

@@ -52,7 +52,7 @@ async function loginWith(page: Page, email: string): Promise<void> {
     // loading) AND the email input actually accepting synthetic events
     // (proven by typing a throwaway character and seeing it reflected,
     // rather than assuming hydration = idle network).
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('networkidle').catch(() => undefined)
     const emailInput = page
       .locator('#login-email, input[type="email"], input[name="email"], input[placeholder*="email" i]')
       .first()
@@ -129,8 +129,31 @@ async function loginWith(page: Page, email: string): Promise<void> {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
   }
 
+  // Supabase rate-limits repeated password grants: "Could not sign you in
+  // right now. Please try again." A long browser matrix can hit it. Wait for
+  // the window to pass and retry once, rather than reporting a product failure.
+  if (page.url().includes('/login')) {
+    const alertText = await page.locator('[role="alert"]').first().innerText().catch(() => '')
+    if (/could not sign you in|too many|rate limit|try again/i.test(alertText)) {
+      await page.waitForTimeout(45_000)
+      const emailInput = page
+        .locator('#login-email, input[type="email"], input[name="email"], input[placeholder*="email" i]')
+        .first()
+      const passInput = page.locator('#login-password, input[type="password"], input[name="password"]').first()
+      const submitBtn = page
+        .locator('button.auth-submit, button:has-text("Sign in with password"), button:has-text("Sign in"), button[type="submit"]:not(.gv-submit-btn)')
+        .first()
+      await emailInput.fill(email)
+      await passInput.fill(PASSWORD)
+      await submitBtn.click()
+      await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 }).catch(() => undefined)
+    }
+  }
+
   await expect(page).toHaveURL(/dashboard/, { timeout: 20_000 })
-  await page.waitForLoadState('networkidle')
+  // The URL proves the session is set. networkidle can time out when the app
+  // holds a polling connection open; that is not a login failure.
+  await page.waitForLoadState('networkidle').catch(() => undefined)
 }
 
 export async function loginAsAdmin(page: Page) {

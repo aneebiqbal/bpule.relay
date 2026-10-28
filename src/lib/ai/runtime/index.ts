@@ -7,6 +7,8 @@ import type {
   TextCallParams,
   AiTrace,
 } from './types'
+import { classifyAiFailure } from './types'
+import { getTraceContext } from '@/lib/observability/trace-context'
 import { isAvailable, recordFailure } from './health'
 import { resolveModel as resolveGroqModel, callJson as groqJson, callText as groqText, hasGroq } from './providers/groq'
 import { resolveModel as resolveOpenCodeModel, callJson as openCodeJson, callText as openCodeText, hasOpenCode } from './providers/opencode'
@@ -146,6 +148,10 @@ export interface GenerateOptions {
   leadId?: string
   /** Upwork job this call is about, when there is one. */
   jobId?: string
+  /** Correlates every trace for one user request. */
+  requestId?: string
+  /** Links this call to the decision run that produced it. */
+  decisionRunId?: string
   /** Where in the code this call originated (e.g. 'extraction-pipeline:runPassA') */
   callSite?: string
   /** Feature that initiated this call (e.g. 'prospect_analysis', 'connection_note') */
@@ -263,14 +269,17 @@ async function generateOnce<T>(
   const timeoutMs = options.timeoutMs ?? profile.timeoutMs
   const taskId = generateTaskId()
   const scope = await resolveTraceScope(options)
+  const ambient = getTraceContext()
   const traceBase = {
     taskId,
     taskClass: options.task,
     inputChars: options.system.length + options.user.length,
     timestamp: Date.now(),
-    leadId: options.leadId ?? null,
-    jobId: options.jobId ?? null,
-    repId: scope.repId ?? null,
+    leadId: options.leadId ?? ambient?.leadId ?? null,
+    jobId: options.jobId ?? ambient?.jobId ?? null,
+    repId: scope.repId ?? ambient?.repId ?? null,
+    requestId: options.requestId ?? ambient?.requestId ?? null,
+    decisionRunId: options.decisionRunId ?? ambient?.decisionRunId ?? null,
   }
 
   const chain = getChainForTask(options.task)
@@ -521,6 +530,7 @@ async function generateOnce<T>(
     fallback: errors.length > 1,
     fallbackReason: null,
     error: errors.map((e) => `${e.provider}/${e.model}: ${e.error}`).join('; '),
+    failureCategory: classifyAiFailure(errors.map((e) => e.error).join('; ')),
     runtimeVersion: RUNTIME_VERSION,
     callSite: options.callSite ?? 'unknown',
     skippedProviders: skippedProviders.length > 0 ? skippedProviders : undefined,
@@ -598,12 +608,16 @@ function logTrace(trace: AiTrace): void {
   const cache = trace.cacheHit ? ' cache=hit' : ''
   const mTier = trace.modelTier ? ` tier=${trace.modelTier}` : ''
   const pVer = trace.promptVersion ? ` prompt=${trace.promptVersion}` : ''
+  // Correlation ids only — never raw source text, messages, emails or phones.
+  const req = trace.requestId ? ` req=${trace.requestId}` : ''
+  const lead = trace.leadId ? ` lead=${trace.leadId}` : ''
+  const failure = trace.failureCategory ? ` failure=${trace.failureCategory}` : ''
   console.info(
     `[relay-ai] task=${trace.taskClass} provider=${trace.provider} model=${trace.model} ` +
     `attempt=${trace.attempt} input_tokens=${trace.inputTokens} output_tokens=${trace.outputTokens} ` +
     `ttfb=${trace.ttfbMs}ms latency=${trace.latencyMs}ms cost=$${trace.estimatedCostUsd.toFixed(6)} ` +
     `runtime=${trace.runtimeVersion} site=${trace.callSite} feature=${trace.feature}` +
-    `${mTier}${pVer}${cache}${fallback}${skipped}${schema}${error}`,
+    `${req}${lead}${mTier}${pVer}${cache}${fallback}${skipped}${schema}${failure}${error}`,
   )
 }
 

@@ -1,6 +1,7 @@
 import type { LeadDetail } from '@/lib/store/types'
 import type { Message } from '@/lib/domain/types'
 import { deriveNextLeadAction } from './lead-state-machine'
+import { displayForAction, type RelationshipDisplayState } from './conversation-presence'
 
 /**
  * Relationship presentation state.
@@ -55,6 +56,9 @@ export interface RelationshipState {
   secondaryCta: string | null
   lastActionLabel: string | null
   lastActionAt: string | null
+  /** Canonical display state and label — render these, never the raw phase. */
+  display: RelationshipDisplayState
+  displayLabel: string
 }
 
 export function computeRelationshipState(lead: LeadDetail, now: number = Date.now()): RelationshipState {
@@ -69,7 +73,9 @@ export function computeRelationshipState(lead: LeadDetail, now: number = Date.no
     .filter((m) => m.direction !== 'inbound' && m.sentText && m.sentAt)
     .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''))[0] ?? null
 
-  return mapCanonicalToPresentation(canonical, lead, lastClient, lastOutbound)
+  const state = mapCanonicalToPresentation(canonical, lead, lastClient, lastOutbound)
+  const display = displayForAction(canonical.action, lead.status)
+  return { ...state, display: display.display, displayLabel: display.label }
 }
 
 function mapCanonicalToPresentation(
@@ -77,7 +83,7 @@ function mapCanonicalToPresentation(
   lead: LeadDetail,
   lastClient: Message | null,
   lastOutbound: Message | null,
-): RelationshipState {
+): Omit<RelationshipState, 'display' | 'displayLabel'> {
   const connMsg = lead.messages
     // Presence = type + sent time; the note is optional.
     .filter((m) => m.type === 'connection' && m.direction !== 'inbound' && m.sentAt)

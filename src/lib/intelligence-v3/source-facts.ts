@@ -41,7 +41,9 @@ export interface StatedTimeline extends SourceLine {
 const NEGATION_BEFORE = /\b(?:no|not|without|never)\s+(?:an?\s+|any\s+)?$/i
 
 const EXTERNAL_PROVIDER =
-  /\b(?:agenc(?:y|ies)|vendors?|outsourc\w*|external\s+(?:software\s+|development\s+|engineering\s+|dev\s+|devops\s+)?(?:team|partner|agency|provider|company|firm)s?|(?:development|software|engineering|technology|devops)\s+partners?|staff\s+augmentation|dev(?:elopment)?\s+shops?|software\s+(?:house|consultancy|firm)s?|consultanc(?:y|ies)|contractors?|freelancers?|developers?)\b/i
+  // "external software development company" carries two qualifiers between
+  // "external" and the provider noun (REL-QA-001), so allow up to three.
+  /\b(?:agenc(?:y|ies)|vendors?|outsourc\w*|external\s+(?:software\s+|development\s+|engineering\s+|dev\s+|devops\s+){0,3}(?:team|partner|agency|provider|company|firm)s?|(?:development|software|engineering|technology|devops)\s+partners?|staff\s+augmentation|dev(?:elopment)?\s+shops?|software\s+(?:house|consultancy|firm)s?|consultanc(?:y|ies)|contractors?|freelancers?|developers?)\b/i
 
 const REQUEST_CONTEXT =
   /\b(?:looking\s+for|seeking|searching\s+for|need(?:s|ed)?(?:\s+a\s+(?:developer|agency|contractor|vendor|freelancer))?|hire|hiring|engage|want(?:s|ed)?\s+to\s+(?:hire|work\s+with|engage)|invit(?:e|ing)|request(?:ing)?\s+(?:proposals?|quotes?)|rfp|should\s+(?:contact|reach|submit|send|apply)|send\s+(?:us\s+)?(?:a\s+)?(?:proposal|quote)|submit\s+(?:a\s+)?(?:proposal|quote))\b/i
@@ -646,7 +648,7 @@ export interface ExplicitDateEvidence {
 
 const MONTH = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?'
 const ABSOLUTE_DATE = new RegExp(`\\b${MONTH}\\s+(?:(?:19|20)\\d{2}|\\d{1,2}(?:st|nd|rd|th)?)\\b`, 'i')
-const START_CTX = /\b(?:start|kick[- ]?off|begin|launch|go[- ]?live|onboard|engagement\s+starts?|project\s+starts?)\b/i
+const START_CTX = /\b(?:start(?:ing)?|kick(?:ing)?[- ]?off|begin(?:ning)?s?|launch(?:ing)?|go(?:ing)?[- ]?live|onboard(?:ing)?|engagement\s+starts?|project\s+(?:starts?|begins?))\b/i
 const DEADLINE_CTX = /\b(?:deadline|by\s+(?:the\s+)?(?:end\s+of\s+)?|before\s+(?:the\s+)?(?:end\s+of\s+)?|due\s+(?:by|date)|no\s+later\s+than|target\s+date)\b/i
 
 /**

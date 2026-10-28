@@ -692,7 +692,7 @@ export default function ProspectCheckPage() {
                 <p className="mt-2 flex items-start gap-1.5 text-[11px] text-status-warning">
                   <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
                   <span>
-                    Extraction is {result.extractionCompleteness.score}% complete
+                    Extraction completeness is {result.extractionCompleteness.score}%
                     {result.extractionCompleteness.missingFields?.length
                       ? ` — missing ${result.extractionCompleteness.missingFields.map((f) => f.replaceAll('_', ' ')).join(', ')}`
                       : ''}

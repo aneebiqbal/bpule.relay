@@ -108,7 +108,11 @@ export interface VerifiedBuyerIntent {
   evidence: BuyerIntentEvidence[]
   /** 0-1: how sure the canonical decision is. */
   confidence: number
-  /** Scorer disagreements; any entry forces buyerIntentLevel UNKNOWN. */
+  /**
+   * Scorer disagreements; recorded for audit. A model disagreement never
+   * lowers a source-verified request (Contract 4) — only a source-side problem
+   * (seller-owned, historical, negated, terminal) fails closed.
+   */
   contradictions: string[]
   /** Buyer-request probability every scorer must use instead of the model's raw value. */
   effectiveBuyerProbability: number
@@ -305,6 +309,10 @@ export function resolveVerifiedBuyerIntent(
   const buyingNeedSurvived = verifiedBuyerRequest && buyerIntentLevel !== 'UNKNOWN'
   const independentSellerLines = facts.sellerLines.filter((line) => line !== facts.externalServiceRequest?.line)
   let relationshipRole: RelationshipRole = 'UNKNOWN'
+  // A recruiter's title never blocks a verified external request: the recruiter
+  // FLAG is recorded in facts.recruiter for every surface, while the role
+  // describes the commercial relationship. A recruiter asking for an outsourced
+  // team is a BUYER (golden fixture buyer-outsourced-team-not-employees).
   if (facts.candidateSeeking) relationshipRole = 'CANDIDATE'
   else if (buyingNeedSurvived && independentSellerLines.length > 0) relationshipRole = 'BUYER_AND_SELLER'
   else if (buyingNeedSurvived) relationshipRole = 'BUYER'

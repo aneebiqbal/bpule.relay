@@ -214,7 +214,17 @@ export function scoreEpisode(input: V3ScoreInput): V3ScoreOutput {
       ? `Budget stated: ${amount}${facts.budgetEvidence?.approved ? ' (approved)' : ''}`
       : `Budget available — amount not stated${facts.budgetEvidence?.approved ? ' (approved)' : ''}`)
   }
-  if (intent.contradictions.length > 0) watchOut.push('Buyer signals disagree — intent treated as UNKNOWN')
+  // Warning parity: a contradiction is only a reason to say "intent treated as
+  // UNKNOWN" when the intent actually resolved to UNKNOWN. A source-verified
+  // request is HIGH even when the model scored it low (Contract 4), so the
+  // card must not say UNKNOWN about it (QA BUG-002).
+  if (intent.contradictions.length > 0) {
+    if (intent.buyerIntentLevel === 'UNKNOWN') {
+      watchOut.push('Buyer signals disagree — intent treated as UNKNOWN')
+    } else {
+      reasons.push('Buyer signals disagree — the source-verified request is credited over the model')
+    }
+  }
   if (!intent.verifiedBuyerRequest && (intent.claims.modelBuyerProbability ?? 0) >= 0.7) watchOut.push('Model claimed buyer intent the source does not state — not credited')
   if (intent.verifiedHiringNeed && !intent.verifiedBuyerRequest) watchOut.push('Employee hiring is not a request to buy services')
   if (biRaw < 0.3 && !closed) watchOut.push('No clear buyer request signal')

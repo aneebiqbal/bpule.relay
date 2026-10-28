@@ -17,6 +17,7 @@ import { getLeadDisplayScore } from '@/lib/scoring/display-score'
 import { resolveAccessibleIdentity } from '@/lib/workspace/resolve-active-identity'
 import type { V3LeadDecisionPacket } from '@/lib/intelligence-v3/types'
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
+import { recordAnalysisScoreDrift } from '@/lib/relay/contract-violations'
 
 /**
  * Save Prospect as Lead
@@ -183,6 +184,21 @@ export async function POST(request: Request) {
       typeof canonical?.canonicalScore === 'number'
         ? canonical.canonicalScore
         : typeof body.canonicalScore === 'number' ? body.canonicalScore : null
+    // Telemetry guard (Contract 10): the decision the rep reviewed must be the
+    // decision persisted. If the server packet overrode a client-supplied score
+    // with a different number, that is a drift.
+    if (
+      typeof body.canonicalScore === 'number'
+      && typeof canonical?.canonicalScore === 'number'
+      && body.canonicalScore !== canonical.canonicalScore
+    ) {
+      recordAnalysisScoreDrift({
+        leadId: null,
+        reviewedScore: body.canonicalScore,
+        persistedScore: canonical.canonicalScore,
+        surface: 'prospect_save',
+      })
+    }
     if (canonical && typeof canonicalScore === 'number') {
       // Stored qualification always follows the stored score.
       canonical.qualification = toStoredQualification(qualifyCanonicalScore(canonicalScore).qualification)
@@ -232,6 +248,9 @@ export async function POST(request: Request) {
       senderProfileId,
       revenueIdentityId,
       allowPotentialDuplicate,
+      // QA seeding: an explicit isTest marks the lead as E2E so analytics
+      // exclude it and the QA cleanup can sweep it. Absent = production.
+      isTest: body.isTest === true,
       extractionProfile: {
         aboutSummary: extracted.aboutSummary ?? null,
         experienceSummary: extracted.experienceSummary ?? null,

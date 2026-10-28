@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { Copy, RefreshCw, AlertCircle, Check, ThumbsDown, Image, ChevronRight } from 'lucide-react'
+import { imageFailureReason, imageRegenerationOutcome } from '@/lib/content/image-failure'
 
 interface PersonaDailyPost {
   title: string
@@ -84,18 +85,22 @@ export function PersonaDailyPostView({ personaId, personaName, initialPlatform =
   const handleGenerateImage = async () => {
     if (!data?.visualPrompt) return
     setGeneratingImage(true)
-    setImageUrl(null)
     try {
       const res = await fetch('/api/content/intelligence/v2/daily-brief/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: data.visualPrompt.imagePrompt }),
       })
-      if (!res.ok) throw new Error('Image generation failed')
-      const json = await res.json()
-      if (json.url) setImageUrl(json.url)
-    } catch {
-      setError('Image generation failed. Try again.')
+      const json = await res.json().catch(() => ({}))
+      const outcome = imageRegenerationOutcome(res.status, json?.url)
+      // Keep the existing image intact; never clear it on failure.
+      if (outcome.keepExisting) {
+        setError(outcome.reason ?? imageFailureReason(res.status, json?.error))
+        return
+      }
+      setImageUrl(json.url as string)
+    } catch (err) {
+      setError(imageFailureReason(null, err instanceof Error ? err.message : undefined))
     } finally {
       setGeneratingImage(false)
     }
