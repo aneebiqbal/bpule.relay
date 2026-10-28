@@ -19,7 +19,7 @@ export function buildThread(lead: Pick<LeadDetail, 'messages' | 'direction' | 'i
   if (
     lead.direction === 'inbound'
     && lead.inboundMessage?.trim()
-    && !hasCanonicalOpeningMessage(lead.messages ?? [], lead.id)
+    && !hasCanonicalOpeningMessage(lead.messages ?? [], lead.id, lead.inboundMessage?.trim())
   ) {
     turns.push({
       id: `inbound_first:${lead.id}`,

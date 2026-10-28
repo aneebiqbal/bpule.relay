@@ -300,7 +300,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends }: Pro
   // rather than as a message row. Surface it as the first timeline entry ONLY
   // when no canonical row represents it, so the opening is never shown twice
   // (QA BUG-004).
-  const inboundFirstEntry = lead.inboundMessage?.trim() && !hasCanonicalOpeningMessage(lead.messages ?? [], lead.id)
+  const inboundFirstEntry = lead.inboundMessage?.trim() && !hasCanonicalOpeningMessage(lead.messages ?? [], lead.id, lead.inboundMessage.trim())
     ? {
         id: 'inbound-first',
         type: 'inbound_first' as const,

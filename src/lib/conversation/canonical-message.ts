@@ -24,13 +24,24 @@ export function isInboundFirstMessage(message: { idempotencyKey?: string | null 
 /**
  * Whether any canonical row already represents the lead's opening message.
  * When it does, the lead-level fallback must not synthesize a second turn.
+ *
+ * The row must carry the opening TEXT, not just the key. A row with the right
+ * key and different text must not make the opening disappear: that is silent
+ * data loss in the conversation view. `openingText` is optional so callers that
+ * only have the key still work.
  */
 export function hasCanonicalOpeningMessage(
-  messages: Array<{ idempotencyKey?: string | null }>,
+  messages: Array<{ idempotencyKey?: string | null; sentText?: string | null }>,
   leadId: string,
+  openingText?: string | null,
 ): boolean {
   const key = inboundFirstMessageKey(leadId)
-  return messages.some((m) => m.idempotencyKey === key)
+  const expected = openingText?.trim() ?? null
+  return messages.some((m) => {
+    if (m.idempotencyKey !== key) return false
+    if (expected === null) return true
+    return m.sentText?.trim() === expected
+  })
 }
 
 /**

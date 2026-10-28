@@ -311,6 +311,46 @@ cases `BUG001_NAVIGATION`, `BUG003_REFRESH_BOOTSTRAP`,
 `BUG007_UPWORK_ANALYSIS_STATE`, `BUG008_SIGNUP_CAPABILITY`,
 `BUG009_GOOGLE_CAPABILITY`, `BUG012_SKIP_DRAFT_STATE`.
 
+## Adversarial break attempts
+
+`tests/qa-relay-adversarial-break-attempts.test.ts` — 65 fixtures, each an input
+chosen to make a specific fix produce the wrong answer. Not a coverage suite.
+
+### Defects found and fixed
+
+| # | Input | Before | After | Root cause |
+| --- | --- | --- | --- | --- |
+| 1 | `Company: Company XYZ` | `XYZ` | `Company XYZ` | `stripRepeatedLabel` stripped the label word even when it was part of the value |
+| 2 | `Name: Name` | `null` | `Name` | same root cause |
+| 3 | canonical row with the right key but different text | opening **vanished** | opening renders | the key alone suppressed the fallback |
+| 4 | `Title: Senior React Engineer` (Upwork) | whole line returned | `Senior React Engineer` | `titleOf` read only `jobTitle` |
+
+**#1/#2** is the most serious find: a value beginning with a label word was
+mangled. Fixed by stripping only when the label is followed by a **separator** —
+`"Name: Name: Michael"` strips, `"Company: Company XYZ"` does not.
+
+**#3** is silent data loss in the conversation view. `hasCanonicalOpeningMessage`
+now requires the row to carry the opening **text** as well as the key.
+
+**#4** — `titleOf` now reads the person-facing `title` too, which the boundary
+mirrors onto for a posting label.
+
+### A regression introduced and reverted
+
+Adding `deliver(?:y)?` to `START_CTX` (to read `"Delivery April 2027"` as a start
+date) broke a **deliberate existing contract**:
+
+```
+We need this built by March 2027. The agency we spoke to said they can deliver in 2 weeks.
+```
+
+The seller's "deliver" matched the start context, so the buyer's deadline was
+reclassified as a start date. `tests/inbound-timeline-attribution.test.ts`
+caught it. The change was reverted and the conflict is now a fixture.
+
+**Lesson:** the existing seller/buyer attribution tests are the authority. A new
+expectation that conflicts with them is the new expectation being wrong.
+
 ---
 
 ## Browser

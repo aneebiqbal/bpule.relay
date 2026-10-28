@@ -402,9 +402,11 @@ function descriptionOf(text: string): string {
 function titleOf(text: string): string | null {
   // A labeled job title is the canonical boundary's job, not a line scan: the
   // label is stripped from the value so "Job Title:" never becomes the title
-  // (QA BUG-007).
-  const labeled = normalizeExternalInput(text).structuredFields.jobTitle
-  if (labeled) return labeled
+  // (QA BUG-007). The person-facing `title` covers both "Job Title:" and
+  // "Title:" because the boundary mirrors the posting label onto it.
+  const labeled = normalizeExternalInput(text).structuredFields
+  if (labeled.title) return labeled.title
+  if (labeled.jobTitle) return labeled.jobTitle
 
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
   for (const l of lines.slice(0, 6)) {

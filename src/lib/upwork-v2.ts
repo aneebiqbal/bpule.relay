@@ -385,7 +385,7 @@ function extractApplicationRequirements(text: string): string[] {
   return reqs
 }
 
-function cleanExtractedTitle(title: string): string {
+export function cleanExtractedTitle(title: string): string {
   let t = title.trim()
   // Strip common paste artifacts: "sf", "spS", etc. (Upwork UI noise)
   t = t.replace(/^(sf|spS|sp|sv|sb)\s*/i, '')

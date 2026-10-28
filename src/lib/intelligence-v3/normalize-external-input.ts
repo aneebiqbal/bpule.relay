@@ -180,7 +180,10 @@ function cleanValue(raw: string): string {
 
 /**
  * A label can be repeated by a bad paste ("Name: Name: Michael Anderson").
- * Strip it until the value no longer begins with the label.
+ *
+ * The label is only stripped when it is followed by a separator. Without that
+ * requirement, a value that merely BEGINS with the label word is mangled:
+ * "Company: Company XYZ" became "XYZ", and "Name: Name" became nothing.
  */
 function stripRepeatedLabel(value: string, label: string): string {
   let out = value
@@ -188,7 +191,7 @@ function stripRepeatedLabel(value: string, label: string): string {
   while (prev !== out) {
     prev = out
     out = out
-      .replace(new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:=–—|·]?\\s*`, 'i'), '')
+      .replace(new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:=–—|·]\\s*`, 'i'), '')
       .trim()
   }
   return out
