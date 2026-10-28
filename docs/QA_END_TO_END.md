@@ -1,6 +1,6 @@
 # Relay — End-to-End QA Script
 
-One pass through the whole platform. Each step says what to **do** and what you should **see**. Tick the box when it matches; if it doesn't, log a bug with the template at the end. Expect the full pass to take about 6 hours — split it across two sessions if you like, but **finish section 19 (the golden flow) in one sitting**, because it is the pass/fail flow.
+One pass through the whole platform. Each step says what to **do** and what you should **see**. Tick the box when it matches; if it doesn't, log a bug with the template at the end. Expect the full pass to take about 6.5 hours — split it across two sessions if you like, but **finish section 20 (the golden flow) in one sitting, on one SHA**, because it is the pass/fail flow.
 
 Everything below uses **made-up people and companies**. Never paste a real LinkedIn profile, real name or real email into a test environment.
 
@@ -152,6 +152,23 @@ asdf asdf lorem ipsum 12345
 
 Go to **Prospect** (`/prospect`) as the **rep**. For each paste: clear the box, paste, click **Analyze**, wait for "Complete".
 
+**What is a release contract here, and what is only an expectation**
+
+The score ranges in the table below are **expected ranges**, not absolute
+contracts. A score moving 8 → 7 because the evidence legitimately changed is not
+a bug if the canonical decision is still correct. Judge the pass on these hard
+assertions instead:
+
+- **Semantics** — buyer vs seller vs candidate vs recruiter is classified correctly.
+- **Verified request** — a request is credited only when it is the prospect's own.
+- **Action** — the recommended action follows from the decision, not from the score number.
+- **No contradiction** — the explanation, missing evidence and rejected signals do not disagree with the decision.
+- **Canonical parity** — the /100 canonical score is consistent everywhere it is shown.
+- **Sender independence** — changing the sender does **not** change the prospect score.
+
+Log a bug when a hard assertion fails, or when a fixture breaches its locked
+band. Do not log a bug merely because a number moved inside a plausible range.
+
 | # | Paste | See | ✅ |
 |---|-------|-----|----|
 | 2.1 | **A** strong buyer | Score **8–10 /10**, label **Strong opportunity**. Next step **contact now**. Confidence **HIGH**. "Strongest evidence" quotes the request line and the budget line. Best sender is shown with a proof line. A connection note is drafted (under the character limit). | ☐ |
@@ -210,9 +227,17 @@ Use the Northwind lead from 3.1.
 | # | Do | See | ✅ |
 |---|----|-----|----|
 | 5.1 | **Leads** → filter by status, by score band, by owner (admin). | Filters change the list; counts match. | ☐ |
-| 5.2 | **Leads → New**: enter a lead by hand without pasting research. | Lead is created with a legacy rubric score and no canonical score; verdict shown. | ☐ |
+| 5.2 | **Leads → New**: enter a lead by hand without pasting research. | Lead is created as **Not analyzed / unscored**. No canonical score, no legacy rubric score, no invented verdict. | ☐ |
 | 5.3 | **Leads → Import**: upload a small CSV (3 rows, one with a bad email). | 2 imported, 1 rejected with a clear reason. | ☐ |
-| 5.4 | **Archive**: archive a lead, then restore it. | It leaves and returns to the main list. | ☐ |
+| 5.4 | **Archived leads** section on `/archive`: archive a lead, then restore it. | It appears under **Archived leads**, leaves the active lists, and returns when restored. | ☐ |
+
+**Archive is two surfaces, not one — do not use it as a single oracle.**
+
+`/archive` renders (a) the **conversation archive** — *"every thread you own,
+including closed ones"* — and (b) an **Archived leads** list. Only (b) is an
+archived-only list. An active inbound-first lead legitimately appears in (a),
+so "the lead is on /archive" is **not** evidence that it was archived or that it
+leaves the Today queue.
 
 ---
 
@@ -282,7 +307,7 @@ Use the Northwind lead from 3.1.
 | # | Do | See | ✅ |
 |---|----|-----|----|
 | 11.1 | **Jobs** (`/upwork`) → **New**: paste a sample job post (*"Need a React Native developer to build a delivery driver app, 3 months, $25k"*). | Job is scored and saved; detail page shows fit, risks and a proposal draft. | ☐ |
-| 11.2 | **Find jobs** (`/find-jobs`). | Search runs; unconfigured providers show "not configured" rather than errors. | ☐ |
+| 11.2 | Open `/find-jobs` directly. | **Redirects to `/upwork`** (legacy path, see `next.config.ts`). Then test the destination: search runs, and unconfigured providers show "not configured" rather than errors. | ☐ |
 | 11.3 | **Content** (`/content`) → **New** → pick a persona → **Today**. | Opportunities list, interview asks 1–3 specific questions, a draft is produced in the persona's voice. | ☐ |
 | 11.4 | Content → **Library**: the draft appears; **Journey** shows progress. | Yes. | ☐ |
 | 11.5 | **Résumé → Generate**. | A résumé is generated from the chosen profile; download works. | ☐ |
@@ -295,7 +320,7 @@ Use the Northwind lead from 3.1.
 | # | Do | See | ✅ |
 |---|----|-----|----|
 | 12.1 | **Settings**: change display name, save, reload. | Persisted. | ☐ |
-| 12.2 | **Account / Usage** (`/usage`). | Shows your usage for today; daily send ceiling visible. | ☐ |
+| 12.2 | Open `/usage` directly. | **Redirects to `/dashboard`** (legacy path). The live usage surface is **Settings**: daily send limits as used / limit, "sends left today", resetting at midnight. `/admin/ai-usage` is the separate admin view of spend, errors and speed. | ☐ |
 | 12.3 | Sign out from the account menu. | Back to the landing page; protected pages redirect to sign-in. | ☐ |
 
 ---
@@ -310,6 +335,27 @@ Use the Northwind lead from 3.1.
 | 13.4 | Turn off Wi-Fi mid-analysis. | A readable error with a retry button; after reconnecting, retry works. | ☐ |
 | 13.5 | Open the same lead in two tabs; log sent in one, reload the other. | Second tab shows the update; no duplicate message. | ☐ |
 | 13.6 | Browser back/forward through Prospect → Lead → Leads. | State is preserved sensibly; no infinite spinners. | ☐ |
+
+### 13a. Input normalization — labels that look like values
+
+Paste this exactly, as one block:
+
+```
+Company: Company XYZ
+Name: Name
+Title: Senior React Engineer
+Company:
+Company Alpha
+Name:
+van der Meer
+```
+
+| # | Do | See | ✅ |
+|---|----|-----|----|
+| 13.7 | Analyze the block above. | Company is **"Company XYZ"**, not "XYZ". Name is **"Name"**. Title is **"Senior React Engineer"**. | ☐ |
+| 13.8 | Check the two next-line fields. | Company is **"Company Alpha"**, not "Alpha". Name is **"van der Meer"** — a value that legitimately starts with the label word is not truncated. | ☐ |
+| 13.9 | Paste `Name: Name: Michael`. | Stripped to **"Michael"** — a genuinely repeated label *is* removed. | ☐ |
+| 13.10 | Scan every field for a label inside a value. | No field is empty and no label survives inside a value. A label is stripped only when followed by a separator (`:` `=` `–` `—` `|` `·`) — never merely because the value begins with the same word. | ☐ |
 
 ---
 
@@ -427,7 +473,37 @@ minimum — silent divergence between surfaces is how bad decisions get made.
 
 ---
 
-## 19. The golden flow, and its negative twin (30 min)
+## 19. BUG-004 inbound-first gate — release blocking (20 min)
+
+This is a gate in its own right. A green general browser score does **not** cover
+it, and it cannot be waived because "everything else passed".
+
+**Setup:** a synthetic inbound-first lead — a canonical opening message exists,
+and **no sender profile is assigned**.
+
+| # | Do | See | ✅ |
+|---|----|-----|----|
+| 19.1 | Open the lead's **Overview**. | The opening message renders **once**. | ☐ |
+| 19.2 | Open **History**. | The same opening appears **once** — not twice, not zero times. | ☐ |
+| 19.3 | Open the **Conversation** tab. | Exactly **one** opening turn. | ☐ |
+| 19.4 | Read the lead state. | **Needs Reply.** Not To Contact, not Follow-up, not Replied. | ☐ |
+| 19.5 | Open Today (`/dashboard`) as the rep who owns it. | The lead is visible. An inbound lead with no assigned sender must still be operationally visible. | ☐ |
+| 19.6 | Open **Chats**. | The thread is there, with the same state as Today. | ☐ |
+| 19.7 | Query the database. | Exactly **one** canonical opening row, with `idempotency_key = inbound_first:<leadId>`. | ☐ |
+| 19.8 | Data integrity: find a row whose `idempotency_key` is `inbound_first:<leadId>` but whose **text differs** from the opening message. Reload the lead. | The legitimate opening message is **still rendered**. It must not silently disappear because a row with the right key exists — the key alone is not proof of identity. | ☐ |
+
+**If 19.7 or 19.8 needs database access QA does not have, that is not a pass.**
+Record it as *not verified* and let the automated gate cover it. A silently
+disappeared opening message is a **P0**.
+
+---
+
+## 20. The golden flow, and its negative twin (30 min)
+
+**Rule: sections 1–18 may be split across testers. Section 19 must be one tester,
+one pass. This section may not be split at all.** One tester, one SHA, one
+sitting, no switching builds part-way through. If the build changes, this
+section restarts from 20.1.
 
 Run this last, end to end, on a clean lead. This is the pass/fail flow for the
 release.
@@ -436,28 +512,28 @@ release.
 
 | # | Step | ✅ |
 |---|------|----|
-| 19.1 | Sign in as rep. | ☐ |
-| 19.2 | Analyze an explicit buyer (paste **A**). | ☐ |
-| 19.3 | Save as a lead; verify Lead detail matches the prospect result. | ☐ |
-| 19.4 | Choose the sender; confirm the score does not change. | ☐ |
-| 19.5 | Generate a sales-ready message (real detail, commercial purpose, one low-friction CTA, correct signature). | ☐ |
-| 19.6 | Log / send it; verify sender attribution is recorded. | ☐ |
-| 19.7 | Log inbound: *"Budget is $30k, can we meet Thursday?"* | ☐ |
-| 19.8 | Verify budget **and** meeting facts are stored, and the next action updates. | ☐ |
-| 19.9 | Progress to meeting, then proposal, then **Won**. | ☐ |
-| 19.10 | Verify it leaves Today and appears correctly in Revenue intelligence. | ☐ |
-| 19.11 | Add a quality label, a pairwise judgment, and a routing / message / thesis review. | ☐ |
-| 19.12 | Export the evaluation dataset and confirm the new rows are in it. | ☐ |
+| 20.1 | Sign in as rep. | ☐ |
+| 20.2 | Analyze an explicit buyer (paste **A**). | ☐ |
+| 20.3 | Save as a lead; verify Lead detail matches the prospect result. | ☐ |
+| 20.4 | Choose the sender; confirm the score does not change. | ☐ |
+| 20.5 | Generate a sales-ready message (real detail, commercial purpose, one low-friction CTA, correct signature). | ☐ |
+| 20.6 | Log / send it; verify sender attribution is recorded. | ☐ |
+| 20.7 | Log inbound: *"Budget is $30k, can we meet Thursday?"* | ☐ |
+| 20.8 | Verify budget **and** meeting facts are stored, and the next action updates. | ☐ |
+| 20.9 | Progress to meeting, then proposal, then **Won**. | ☐ |
+| 20.10 | Verify it leaves Today and appears correctly in Revenue intelligence. | ☐ |
+| 20.11 | Add a quality label, a pairwise judgment, and a routing / message / thesis review. | ☐ |
+| 20.12 | Export the evaluation dataset and confirm the new rows are in it. | ☐ |
 
 **Negative**
 
 | # | Step | ✅ |
 |---|------|----|
-| 19.13 | Analyze a service provider (paste **C**). | ☐ |
-| 19.14 | Confirm no buyer intent is invented and no "contact now". | ☐ |
-| 19.15 | Log inbound: *"Do not contact me again."* | ☐ |
-| 19.16 | Confirm `DO_NOT_CONTACT`: no Send CTA, no follow-up, removed from Today. | ☐ |
-| 19.17 | Confirm outcome and history are preserved, and the lead cannot be re-activated by a restore alone. | ☐ |
+| 20.13 | Analyze a service provider (paste **C**). | ☐ |
+| 20.14 | Confirm no buyer intent is invented and no "contact now". | ☐ |
+| 20.15 | Log inbound: *"Do not contact me again."* | ☐ |
+| 20.16 | Confirm `DO_NOT_CONTACT`: no Send CTA, no follow-up, removed from Today. | ☐ |
+| 20.17 | Confirm outcome and history are preserved, and the lead cannot be re-activated by a restore alone. | ☐ |
 
 ---
 
@@ -528,8 +604,27 @@ Deployed SHA (`/api/version`): ____________________  ·  Expected: _____________
 | Admin QA | 16 | | | | |
 | Training data & dataset export | 17 | | | | |
 | Cross-surface parity | 18 | | | | |
-| Golden flow + negative flow | 19 | | | | |
+| BUG-004 inbound-first gate | 19 | | | | |
+| Golden flow + negative flow | 20 | | | | |
 
-**Release rule:** a pass is not a release. Promotion additionally requires the
-automated gate, the browser gate, the BUG-004 inbound gate and SHA parity — all
-on this same SHA. See `docs/RELAY_QA_CLOSURE_REPORT.md`.
+**Release sign-off — five gates, one SHA**
+
+```text
+AUTOMATED_CODE_GATE      PASS / FAIL
+BROWSER_GATE             PASS / FAIL
+BUG004_INBOUND_GATE      PASS / FAIL
+SHA_GATE                 VERIFIED / FAIL
+PRODUCTION_SMOKE         PASS / FAIL
+
+FINAL VERDICT            GO / NO-GO
+```
+
+**GO only when all five are green on the exact same SHA.** Four green and one
+not-run is a NO-GO, not "probably fine". Manual QA passing does not substitute
+for any of them.
+
+`scripts/qa/release-gates.mjs` prints the same five lines and labels the last one
+`PRODUCTION_GATE` — that is this production smoke. The machine and this script
+must agree; if they disagree, the machine wins and the difference is a bug.
+
+See `docs/RELAY_QA_CLOSURE_REPORT.md` for the current SHA and gate state.
