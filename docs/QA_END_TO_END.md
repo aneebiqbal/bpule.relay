@@ -481,6 +481,12 @@ it, and it cannot be waived because "everything else passed".
 **Setup:** a synthetic inbound-first lead — a canonical opening message exists,
 and **no sender profile is assigned**.
 
+**Ownership is split, and the split is the point.** QA cannot verify the database
+from the UI, and the UI cannot prove the row. Each side reports only what it
+actually observed.
+
+### 19a. Browser assertions — owned by **QA**
+
 | # | Do | See | ✅ |
 |---|----|-----|----|
 | 19.1 | Open the lead's **Overview**. | The opening message renders **once**. | ☐ |
@@ -489,12 +495,21 @@ and **no sender profile is assigned**.
 | 19.4 | Read the lead state. | **Needs Reply.** Not To Contact, not Follow-up, not Replied. | ☐ |
 | 19.5 | Open Today (`/dashboard`) as the rep who owns it. | The lead is visible. An inbound lead with no assigned sender must still be operationally visible. | ☐ |
 | 19.6 | Open **Chats**. | The thread is there, with the same state as Today. | ☐ |
-| 19.7 | Query the database. | Exactly **one** canonical opening row, with `idempotency_key = inbound_first:<leadId>`. | ☐ |
-| 19.8 | Data integrity: find a row whose `idempotency_key` is `inbound_first:<leadId>` but whose **text differs** from the opening message. Reload the lead. | The legitimate opening message is **still rendered**. It must not silently disappear because a row with the right key exists — the key alone is not proof of identity. | ☐ |
 
-**If 19.7 or 19.8 needs database access QA does not have, that is not a pass.**
-Record it as *not verified* and let the automated gate cover it. A silently
-disappeared opening message is a **P0**.
+### 19b. Database assertions — owned by **engineering / release owner**
+
+| # | Check | See | ✅ |
+|---|-------|-----|----|
+| 19.7 | Row count. | Exactly **one** canonical opening row for the lead. | ☐ |
+| 19.8 | Identity. | `idempotency_key = inbound_first:<leadId>`, and `direction` is inbound. | ☐ |
+| 19.9 | Text. | `sentText` matches the opening message. | ☐ |
+| 19.10 | Mismatch case: take a row with the right `idempotency_key` but **different text**, then reload the lead. | The legitimate opening message is **still rendered**. A row with the right key is not proof of identity — it must not make the real opening disappear. | ☐ |
+| 19.11 | Cleanup. | The synthetic lead, its messages and its rows are removed, or explicitly labelled as test data. No QA fixture is left in a live queue. | ☐ |
+
+**QA must not mark 19.7–19.11 PASS from UI evidence alone.** If database
+verification was not performed, the status stays **NOT VERIFIED** — not PASS, and
+not "assumed fine because the page looked right". A silently disappeared opening
+message is a **P0**.
 
 ---
 
@@ -604,27 +619,45 @@ Deployed SHA (`/api/version`): ____________________  ·  Expected: _____________
 | Admin QA | 16 | | | | |
 | Training data & dataset export | 17 | | | | |
 | Cross-surface parity | 18 | | | | |
-| BUG-004 inbound-first gate | 19 | | | | |
+| BUG-004 inbound-first gate | 19a (QA) · 19b (engineering) | | | | |
 | Golden flow + negative flow | 20 | | | | |
 
 **Release sign-off — five gates, one SHA**
 
 ```text
-AUTOMATED_CODE_GATE      PASS / FAIL
-BROWSER_GATE             PASS / FAIL
-BUG004_INBOUND_GATE      PASS / FAIL
-SHA_GATE                 VERIFIED / FAIL
-PRODUCTION_SMOKE         PASS / FAIL
+AUTOMATED_CODE_GATE   PASS / FAIL
+BROWSER_GATE          PASS / FAIL
+BUG004_INBOUND_GATE   PASS / FAIL
+SHA_GATE              VERIFIED / FAIL
+PRODUCTION_SMOKE      PASS / FAIL
 
-FINAL VERDICT            GO / NO-GO
+PRODUCTION_GATE       PASS / BLOCKED
+FINAL VERDICT         GO / NO-GO
 ```
 
-**GO only when all five are green on the exact same SHA.** Four green and one
-not-run is a NO-GO, not "probably fine". Manual QA passing does not substitute
-for any of them.
+**`PRODUCTION_GATE` is not a synonym for `PRODUCTION_SMOKE`.** They are two
+different facts and must be reported separately:
 
-`scripts/qa/release-gates.mjs` prints the same five lines and labels the last one
-`PRODUCTION_GATE` — that is this production smoke. The machine and this script
-must agree; if they disagree, the machine wins and the difference is a bug.
+- `PRODUCTION_SMOKE` — the smoke checks actually ran against the promoted build
+  and passed.
+- `PRODUCTION_GATE` — the release decision. `PASS` **only when** every other
+  required gate, including production smoke, is satisfied. `BLOCKED` whenever
+  anything above it is FAIL, NOT RUN or NOT VERIFIED.
+
+> **Known gap in the release tooling.** `scripts/qa/release-gates.mjs`
+> (`evaluateReleaseGates`) currently derives `productionGate` from the automated,
+> browser, BUG-004 and SHA gates **only**. It has no production-smoke input, and
+> `renderReleaseGateReport` prints no `PRODUCTION_SMOKE` line. So a machine
+> `PRODUCTION_GATE: PASS` today means **cleared to promote**, not **production
+> verified**. Until the tool accepts a smoke result, the human sign-off carries
+> `PRODUCTION_SMOKE` on its own, and a machine PASS by itself is not a GO.
+
+**GO only when all five are green on the exact same SHA**, and `PRODUCTION_GATE`
+derives to `PASS` from them. Four green and one not-run is a NO-GO, not
+"probably fine". Manual QA passing does not substitute for any of them.
+
+`scripts/qa/release-gates.mjs` computes these from the state file; the human
+sign-off and the machine must agree. If they disagree, the machine wins and the
+difference is a bug.
 
 See `docs/RELAY_QA_CLOSURE_REPORT.md` for the current SHA and gate state.
