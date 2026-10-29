@@ -467,15 +467,16 @@ unsafe fixture and to pass once it was removed.
 
 ```text
 BASELINE SHA   98ef2dea26b15442261db9fcbe7ca5c463a26575
-DEPLOYED SHA   b4128b9f5032bacb52194b32cfdbb7e5eeca3114   ← /api/version
+DEPLOYED SHA   c262b5b092c9f008218e2025347e68546c205698   ← /api/version
 CODE SHA       df90e84  (the commit that carries every fix)
 ```
 
 `DEPLOYED SHA` is the value `/api/version` returned when this report was
-finalized. It is a **docs-only** commit on top of `df90e84`, so it serves
-identical application code. Commits made after this line bump `HEAD` without
-changing deployed behaviour — compare `/api/version` against `CODE SHA`, do not
-expect them to be equal.
+finalized (2026-10-30). Every commit after `df90e84` is tests, docs or tooling,
+so it serves identical application code — but Vercel rebuilds on each push, so
+`HEAD` moves without the behaviour changing. **Always confirm the live value
+with `/api/version` and compare it against `CODE SHA`**, rather than expecting
+the two to be equal.
 
 | Bug | REPRODUCED | ROOT CAUSE | FIX | UNIT | BROWSER | DB | STATUS |
 |---|---|---|---|---|---|---|---|
@@ -529,7 +530,7 @@ visible toast).
 | `npx next build` | PASS |
 | Full suite | **266 files / 4,012 tests / 0 failed** |
 | `pnpm qa:contracts` | PASS — 41 tests |
-| `/api/version` | `b4128b9` |
+| `/api/version` | `c262b5b` |
 
 ```text
 BUG-23 PASS   BUG-24 PASS   BUG-25 PASS   BUG-26 PASS   BUG-27 PASS
