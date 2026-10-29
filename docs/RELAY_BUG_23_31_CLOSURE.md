@@ -181,17 +181,22 @@ dead schema, never read or written by `src`.
 
 ### BUG-29 — Lead actions missing profile attribution
 
-**REPRODUCED:** yes.
+**REPRODUCED:** yes — the browser matrix found Lead Detail rendered no profile at all.
 
-**ROOT CAUSE:** same as BUG-28(3) — the Upwork emit sites omit `senderProfileId`.
-`markContacted()` already passes it (`:1527`), which is why LinkedIn actions are
-attributed and Upwork actions are not.
+**ROOT CAUSE (two parts):**
+1. `emitAction` omitted `senderProfileId` for `UPWORK_APPLIED` /
+   `UPWORK_PROPOSAL_PREPARED`, so those ledger rows carried no attribution.
+   `markContacted()` already passed it, which is why LinkedIn actions were
+   attributed and Upwork actions were not.
+2. Lead Detail resolved no sender name: the page loaded `profiles` but
+   `LeadWorkspaceAsync` dropped them before passing to `LeadWorkspace`.
 
-**CANONICAL OWNER:** `src/lib/store/supabase-store.ts`
+**CANONICAL OWNER:** `src/lib/store/supabase-store.ts`,
+`src/components/lead-workspace-async.tsx`
 
 ### BUG-30 — Different profiles show the same leads
 
-**REPRODUCED:** yes.
+**REPRODUCED:** yes — verified in production before the fix.
 
 **ROOT CAUSE:** `loadBoardData()` (`src/lib/leads/board-rows.ts:33-34`) selects
 `fetchLeadsAll()` for admins and `listOwnedLeads()` for reps and **never applies
@@ -202,6 +207,11 @@ page header promises "across every identity"
 call sites**; the only workspace-scoped lead view is
 `/workspace/[revenueIdentityId]`, which filters in memory after loading the whole
 table (`src/app/(app)/workspace/[revenueIdentityId]/page.tsx:70-72`).
+
+**The first fix was incomplete and the browser matrix caught it.** Scoping the
+message query but mapping the returned `LeadRow[]` from the *unscoped* set meant
+the page still rendered every lead while the header claimed a scoped count. The
+fix maps from the scoped set; the board and the inbox now both scope.
 
 **CANONICAL OWNER:** `src/lib/leads/board-rows.ts`
 

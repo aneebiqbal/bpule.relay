@@ -22,8 +22,11 @@ const sb = SUPABASE_URL && SERVICE_KEY
   ? createClient(SUPABASE_URL, SERVICE_KEY, { auth: { autoRefreshToken: false, persistSession: false } })
   : null
 
+// A unique company per run: the duplicate check keys on company, so reusing a
+// fixed name makes the second run a 409 and the UI never navigates.
+const RUN = Date.now()
 const PASTE = `Sarah Chen
-VP Engineering at Acme Cloud Platform
+VP Engineering at Acme Cloud ${RUN}
 Austin, Texas, United States
 We need an external team to rebuild our customer portal. Budget is approved for Q1 and we want to start in November.`
 
@@ -150,10 +153,13 @@ test.describe('BUG025_COMPLETE_PROFILE_SCOPED_LEAD_LIST', () => {
   test('reaches leads past the first page via Load more', async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto('/leads', { waitUntil: 'domcontentloaded' })
-    await page.waitForTimeout(2500)
+    // The board is server-rendered inside a Suspense boundary; wait for the
+    // header rather than a fixed delay.
+    await page.getByText(/active lead/).first().waitFor({ timeout: 60_000 })
+    await page.waitForLoadState('networkidle').catch(() => undefined)
 
     // The header reports the full count; the board renders a page at a time.
-    const header = await page.locator('p', { hasText: /active leads/ }).first().innerText().catch(() => '')
+    const header = await page.locator('p', { hasText: /active lead/ }).first().innerText()
     const match = header.match(/(\d+)\s+active lead/)
     const total = match ? Number(match[1]) : 0
     expect(total).toBeGreaterThan(0)
@@ -192,11 +198,15 @@ test.describe('BUG026_NO_FOLLOWUP_WITHOUT_OUTBOUND', () => {
 // ---------------------------------------------------------------------------
 test.describe('BUG027_STAGE_PROGRESS_INDEPENDENT_OF_SCORE', () => {
   test('a low-scored lead with an accepted connection is asked for the first message', async ({ page }) => {
+    test.skip(!sb, 'requires service-role credentials')
     await loginAsAdmin(page)
     const leadId = await createTestLead(page)
 
-    // Force the relationship state the bug stranded: connection sent + accepted,
-    // with a research_more (score 4/5) verdict.
+    // Force the verdict the bug stranded. The score is computed from the paste,
+    // so a fixture cannot rely on it landing in the MAYBE band; the lifecycle
+    // rule under test is "a relationship exists", not the number itself.
+    await sb!.from('leads').update({ verdict: 'research_more' }).eq('id', leadId)
+
     const res = await page.request.post(`/api/leads/${leadId}/contact`, {
       data: { sentText: 'Hi Sarah — would love to connect.', type: 'connection' },
       timeout: 90_000,
@@ -206,7 +216,8 @@ test.describe('BUG027_STAGE_PROGRESS_INDEPENDENT_OF_SCORE', () => {
     const accepted = await page.request.post(`/api/leads/${leadId}/connection-accepted`, {
       data: {},
       timeout: 60_000,
-    }).catch(() => null)
+    })
+    expect(accepted.ok()).toBeTruthy()
 
     await page.goto(`/leads/${leadId}`, { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(2500)
@@ -214,9 +225,8 @@ test.describe('BUG027_STAGE_PROGRESS_INDEPENDENT_OF_SCORE', () => {
 
     // The old bug rendered "Watch — not yet a fit" and never advanced.
     expect(body).not.toMatch(/not yet a fit/i)
-    if (accepted?.ok()) {
-      expect(body).toMatch(/first message|send.{0,20}message/i)
-    }
+    expect(body).not.toMatch(/No outreach/i)
+    expect(body).toMatch(/first message|send.{0,20}message/i)
   })
 })
 
@@ -249,11 +259,14 @@ test.describe('BUG028_UPWORK_APPLIED_COUNTS_TODAY', () => {
     const { data: after } = await sb!.from('upwork_jobs').select('status').eq('id', job!.id).maybeSingle()
     expect(after?.status).toBe('applied')
 
-    // Exactly one ledger event, carrying an idempotency key.
+    // Exactly one ledger event for THIS apply, carrying an idempotency key.
+    // Counting by job alone would include events left by earlier runs, before
+    // the idempotency key was being written at all.
     const { count } = await sb!.from('action_events')
       .select('id', { count: 'exact', head: true })
       .eq('job_id', job!.id)
       .eq('action_type', 'UPWORK_APPLIED')
+      .eq('idempotency_key', `upwork_applied:${job!.id}`)
     expect(count).toBe(1)
 
     const { data: event } = await sb!.from('action_events')
@@ -351,7 +364,7 @@ test.describe('BUG031_DRAFT_SAVE_CONFIRMATION', () => {
     const save = page.getByRole('button', { name: /save draft|failed — retry/i })
     await expect(save).toBeEnabled()
     await save.click()
-    await expect(page.getByText('Draft saved')).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole('status').filter({ hasText: 'Draft saved' })).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole('button', { name: /^saved$/i })).toBeVisible({ timeout: 30_000 })
 
     // Reload: the exact draft must still be there.
