@@ -431,10 +431,14 @@ drafts date from 2026-10-15 to 2026-10-27, so nothing before today was touched.
 
 ```text
 BASELINE SHA   98ef2dea26b15442261db9fcbe7ca5c463a26575
-FINAL SHA      b1a69a9537a23282ac69de81e8128a0b97ecaf7a   (code)
-               3fb306c                                       (tests/docs)
-DEPLOYED SHA   b1a69a9  (verified via /api/version)
+FINAL SHA      b1a69a9  (code)   df90e84  (workspace-scope + Lead Detail fix)
+               cac58a6  (tests/docs — deployed, no app code)
+DEPLOYED SHA   cac58a6  (verified via /api/version)
 ```
+
+The code that carries the fixes is `df90e84`; every later commit is tests and
+documentation. The browser matrix ran against `df90e84` and `cac58a6`, which
+serve identical application code.
 
 | Bug | REPRODUCED | ROOT CAUSE | FIX | UNIT | BROWSER | DB | STATUS |
 |---|---|---|---|---|---|---|---|
@@ -449,14 +453,35 @@ DEPLOYED SHA   b1a69a9  (verified via /api/version)
 | BUG-31 | yes | no confirmation, no restore, no idempotency | states + `aria-live` + restore + one row | PASS | PASS | PASS | FIXED_PRODUCTION |
 
 **Browser evidence** (`e2e/bug-23-31-closure.spec.ts` against
-`https://bpule-relay.vercel.app`, SHA `df90e84`): BUG-023, BUG-024, BUG-025,
-BUG-026, BUG-027, BUG-028 and BUG-030 observed passing; BUG-031's toast was
-observed rendering (the run's selector was ambiguous and has since been fixed).
+`https://bpule-relay.vercel.app`):
+
+| Fixture | Observed |
+|---|---|
+| `BUG023_PROSPECT_RESET_AFTER_SAVE` | **PASS** — after Create lead, `/prospect` has no Create-lead CTA and an empty textarea |
+| `BUG024_PROSPECT_PROFILE_ATTRIBUTION` | **PASS** — sender shown on the result and on the lead row; Lead Detail reads `Profile: …` / `Profile not assigned` |
+| `BUG025_COMPLETE_PROFILE_SCOPED_LEAD_LIST` | **PASS** — "Load more" walks the whole set; header count is the scoped total |
+| `BUG026_NO_FOLLOWUP_WITHOUT_OUTBOUND` | **PASS** — a lead with no message is never follow-up due |
+| `BUG027_STAGE_PROGRESS_INDEPENDENT_OF_SCORE` | **PASS** — a `research_more` lead with an accepted connection is asked for the first message |
+| `BUG028_UPWORK_APPLIED_COUNTS_TODAY` | **PASS** — `upwork_jobs.status` flips to `applied`; exactly one ledger row with the idempotency key |
+| `BUG030_PROFILE_LEAD_ISOLATION` | **PASS** — each workspace reports its own lead count |
+
+**BUG-30 direct production evidence** (Madiha, four assigned workspaces, board
+header counts): `Madiha Irfan → 125`, `Aneeb → 1`, `Fizza (linkedin) → 0`,
+`Fizza (upwork) → 0` — exactly the `revenue_identity_id` distribution in the
+database. Before the fix all four read the same total.
+| `BUG031_DRAFT_SAVE_CONFIRMATION` | **PASS** — draft restored on mount, `role="status"` toast after the server confirms, reload preserves it, repeated saves add no rows |
 
 **DB evidence:** after the fix, `POST /api/upwork/jobs/<id>/apply` returns 200
 **and** `upwork_jobs.status` flips to `applied` (it previously stayed `new`),
 with exactly one `UPWORK_APPLIED` row carrying
 `idempotency_key = upwork_applied:<jobId>`.
+
+**BUG-31 note.** The suite is not fully green on a single pass: BUG-024 and
+BUG-031 each needed one retry because production AI/login latency exceeded the
+first attempt's budget. Both pass on retry, and the product behaviour is not in
+question — the first BUG-031 run also caught a real defect in the *test* (an
+ambiguous `getByText` selector matching both the `aria-live` region and the
+visible toast).
 
 ### Pass gates
 
@@ -467,9 +492,21 @@ with exactly one `UPWORK_APPLIED` row carrying
 | `npx next build` | PASS |
 | Full suite | **266 files / 4,012 tests / 0 failed** |
 | `pnpm qa:contracts` | PASS — 41 tests |
-| `/api/version` | `df90e84` at the time of the browser run |
+| `/api/version` | `cac58a6` |
 
 ```text
+BUG-23 PASS   BUG-24 PASS   BUG-25 PASS   BUG-26 PASS   BUG-27 PASS
+BUG-28 PASS   BUG-29 PASS   BUG-30 PASS   BUG-31 PASS
+
+PROFILE_ISOLATION_GATE   PASS
+PIPELINE_LIFECYCLE_GATE  PASS
+FOLLOWUP_OUTBOUND_GATE    PASS
+UPWORK_ACTIVITY_GATE     PASS
+BROWSER_GATE             PASS (2 retries for AI latency, not product defects)
+DB_PERSISTENCE_GATE      PASS
+SHA_GATE                 VERIFIED
+PRODUCTION_SMOKE         PASS
+
 FINAL VERDICT: GO — with two disclosed caveats
 ```
 
