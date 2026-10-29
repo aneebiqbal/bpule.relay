@@ -12,7 +12,7 @@ acceptance, SHA parity and the production smoke are **blocked** (exact reasons b
 | Field | Value |
 | --- | --- |
 | Baseline SHA | `8d859e8` (clean tree before this sprint) |
-| Final SHA | see `git log -1` after the closing commit |
+| Final SHA | `65baeb8` |
 | Preview SHA | **not deployed** — no Vercel access in this environment |
 | Production SHA | **not deployed** — promotion requires the browser + SHA gates |
 | Scoring version | `relay_decision_v3.3.0` |
