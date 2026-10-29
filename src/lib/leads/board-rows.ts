@@ -12,8 +12,9 @@ import { computeLifecycleState } from '@/lib/leads/lifecycle-policy'
 import type { LeadRow } from '@/components/leads/pipeline-utils'
 import type { MessageType } from '@/lib/domain/types'
 import type { ActivityEvent } from '@/lib/analytics/pipeline-analytics'
-import { leadBelongsToWorkspace, type WorkspaceIdentity } from '@/lib/workspace/active-identity'
+import { type WorkspaceIdentity } from '@/lib/workspace/active-identity'
 import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
+import { chunkedIn } from '@/lib/supabase/chunked-in'
 
 export type { ActivityEvent }
 
@@ -39,22 +40,31 @@ export async function loadBoardData(): Promise<BoardData> {
       if (!authCtx || leadIds.length === 0) return []
       try {
         const client = await createServerSupabase()
-        const { data: outbound } = await client
-          .from('messages')
-          .select('lead_id, sent_at, created_at, sent_text, direction, type')
-          .eq('organization_id', authCtx.orgId)
-          .in('lead_id', leadIds)
-          .neq('direction', 'inbound')
-          .order('sent_at', { ascending: false })
-        const { data: inbound } = await client
-          .from('messages')
-          .select('lead_id, sent_at, created_at, sent_text, direction, type')
-          .eq('organization_id', authCtx.orgId)
-          .in('lead_id', leadIds)
-          .eq('direction', 'inbound')
-          .order('sent_at', { ascending: false })
-        return [...(outbound ?? []), ...(inbound ?? [])]
-      } catch {
+        const select = 'lead_id, sent_at, created_at, sent_text, direction, type'
+        type MessageRow = { lead_id: string; sent_at: string | null; created_at: string | null; sent_text: string | null; direction: string; type: string }
+        // One `in.(...)` with hundreds of UUIDs is rejected by the URL limit
+        // and comes back empty, which made the whole org look inactive.
+        const [outbound, inbound] = await Promise.all([
+          chunkedIn<MessageRow>(leadIds, (chunk) => client
+            .from('messages')
+            .select(select)
+            .eq('organization_id', authCtx.orgId)
+            .in('lead_id', chunk)
+            .neq('direction', 'inbound')
+            .order('sent_at', { ascending: false })),
+          chunkedIn<MessageRow>(leadIds, (chunk) => client
+            .from('messages')
+            .select(select)
+            .eq('organization_id', authCtx.orgId)
+            .in('lead_id', chunk)
+            .eq('direction', 'inbound')
+            .order('sent_at', { ascending: false })),
+        ])
+        const byNewest = (a: MessageRow, b: MessageRow) =>
+          String(b.sent_at ?? b.created_at).localeCompare(String(a.sent_at ?? a.created_at))
+        return [...outbound.sort(byNewest), ...inbound.sort(byNewest)]
+      } catch (err) {
+        console.error('[board-rows] message load failed:', err)
         return []
       }
     })(),
@@ -62,13 +72,13 @@ export async function loadBoardData(): Promise<BoardData> {
       if (!authCtx || leadIds.length === 0) return []
       try {
         const client = await createServerSupabase()
-        const { data } = await client
+        return await chunkedIn<{ lead_id: string; followup_count: number | null }>(leadIds, (chunk) => client
           .from('conversation_states')
           .select('lead_id, followup_count')
           .eq('organization_id', authCtx.orgId)
-          .in('lead_id', leadIds)
-        return data ?? []
-      } catch {
+          .in('lead_id', chunk))
+      } catch (err) {
+        console.error('[board-rows] conversation state load failed:', err)
         return []
       }
     })(),
@@ -129,15 +139,13 @@ export async function loadBoardData(): Promise<BoardData> {
   if (senderProfileIds.length > 0 && authCtx) {
     try {
       const client = await createServerSupabase()
-      const { data: profiles } = await client
+      const profiles = await chunkedIn<{ id: string; display_name: string | null; full_name: string | null }>(senderProfileIds, (chunk) => client
         .from('profiles')
         .select('id, display_name, full_name')
         .eq('organization_id', authCtx.orgId)
-        .in('id', senderProfileIds)
-      if (profiles) {
-        for (const p of profiles) {
-          profileById.set(p.id as string, (p.display_name ?? p.full_name ?? 'Profile') as string)
-        }
+        .in('id', chunk))
+      for (const p of profiles) {
+        profileById.set(p.id as string, (p.display_name ?? p.full_name ?? 'Profile') as string)
       }
     } catch { }
   }
@@ -180,19 +188,8 @@ export async function loadBoardData(): Promise<BoardData> {
 
   if (!workspace) return { leads, orgView, events, reps, workspace: null }
 
-  // An admin's board is the organisation's, not one identity's. Scoping it to
-  // the selected workspace made the team view show a fraction of the team's
-  // leads while the command centre showed all of them.
-  if (orgView) return { leads, orgView, events, reps, workspace }
-
-  const selected = workspace
-  const scoped = leads.filter((lead) => leadBelongsToWorkspace(lead, selected))
-  const scopedIds = new Set(scoped.map((lead) => lead.id))
-  return {
-    leads: scoped,
-    orgView,
-    events: events.filter((event) => scopedIds.has(event.leadId)),
-    reps,
-    workspace,
-  }
+  // A rep's board is every lead they own. The sidebar identity is the capture
+  // context for new leads, not a visibility filter: filtering by one identity
+  // hid a rep's other work (a rep assigned four identities saw one lead).
+  return { leads, orgView, events, reps, workspace }
 }

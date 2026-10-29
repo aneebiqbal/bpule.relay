@@ -41,7 +41,7 @@ async function LeadsHeader({ leadsPromise }: { leadsPromise: Promise<LeadsPayloa
       description={orgView
         ? `All ${leads.length} active leads in the organisation — every rep and every identity. Archived leads are not counted.`
         : workspaceName
-          ? `Leads for ${workspaceName}. Switch the workspace profile in the sidebar to see another identity.`
+          ? `${leads.length} active ${leads.length === 1 ? 'lead' : 'leads'} you own — across every identity. Working as ${workspaceName}.`
           : 'Every prospect. Organized by where they are in your outreach lifecycle.'}
       action={
         <Link
@@ -65,7 +65,7 @@ async function LeadsBody({ leadsPromise }: { leadsPromise: Promise<LeadsPayload>
         icon={Target}
         title={workspaceName ? `No leads for ${workspaceName}` : 'No leads yet'}
         description={workspaceName
-          ? `Prospects you check while ${workspaceName} is selected show up here. Other profiles keep their own leads.`
+          ? `Leads you check while ${workspaceName} is selected show up here, alongside the rest of your book.`
           : 'Paste a LinkedIn profile, add a company, or import from Upwork. Relay scores them and tells you who is worth contacting.'}
         action={
           <Link

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { opportunityKey } from '@/lib/scoring-v4/opportunity-key'
 import { determineFollowup } from '@/lib/relay/followup-engine'
 import { isTerminalStoredStage, isTerminalLeadStatus, checkOutreachAllowed } from '@/lib/conversation/terminal'
@@ -521,8 +522,11 @@ export class SupabaseStore implements ScoutStore {
       .select(LEAD_LIST_COLUMNS)
       .order('created_at', { ascending: false })
 
-    // Non-admin users can only see their own leads
-    if (scopeToUser || this.rep.role !== 'admin') {
+    // `scopeToUser` is the only thing that narrows this query. The caller
+    // decides visibility (an org admin's board is the whole organisation); the
+    // legacy `reps.role` must not silently re-scope an owner whose role row is
+    // OWNER but whose legacy column still says 'rep'.
+    if (scopeToUser) {
       query = query.eq('owner_rep_id', this.rep.id)
     }
 
@@ -2337,16 +2341,18 @@ export class SupabaseStore implements ScoutStore {
     if (contacted.length === 0) return []
 
     const leadIds = contacted.map((l) => l.id)
-    const [{ data: msgRows, error: msgErr }, { data: outcomeRows, error: outcomeErr }] = await Promise.all([
-      this.client
+    const [msgRows, outcomeRows, convStates] = await Promise.all([
+      chunkedIn<{ lead_id: string; sent_at: string | null; direction: string | null }>(leadIds, (chunk) => this.client
         .from('messages')
         .select('lead_id, sent_at, direction')
-        .in('lead_id', leadIds)
-        .not('sent_at', 'is', null),
-      this.client.from('outcomes').select('lead_id, stage').in('lead_id', leadIds),
+        .in('lead_id', chunk)
+        .not('sent_at', 'is', null)),
+      chunkedIn<{ lead_id: string; stage: string }>(leadIds, (chunk) => this.client.from('outcomes').select('lead_id, stage').in('lead_id', chunk)),
+      chunkedIn<{ lead_id: string; followup_count: number }>(leadIds, (chunk) => this.client
+        .from('conversation_states')
+        .select('lead_id, followup_count')
+        .in('lead_id', chunk)),
     ])
-    if (msgErr) throw msgErr
-    if (outcomeErr) throw outcomeErr
 
     // A reply, a decline/opt-out or a closed deal all stop the follow-up queue.
     const blockedLeadIds = new Set(
@@ -2363,12 +2369,8 @@ export class SupabaseStore implements ScoutStore {
     }
 
     // Bulk-fetch conversation states to avoid N+1
-    const { data: convStates } = await this.client
-      .from('conversation_states')
-      .select('lead_id, followup_count')
-      .in('lead_id', leadIds)
     const followupCountByLead = new Map<string, number>()
-    for (const row of (convStates ?? []) as Array<{ lead_id: string; followup_count: number }>) {
+    for (const row of convStates as Array<{ lead_id: string; followup_count: number }>) {
       followupCountByLead.set(row.lead_id, row.followup_count)
     }
 

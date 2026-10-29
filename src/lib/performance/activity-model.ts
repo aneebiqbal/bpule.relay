@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { chunkedIn } from '@/lib/supabase/chunked-in'
 
 // Canonical activity types — mapped from action_events
 export type CanonicalAction =
@@ -112,13 +113,13 @@ export async function getRepDailyActivity(params: {
   const leadIds = [...new Set(events.map(e => e.lead_id).filter(Boolean))]
   const leadNames = new Map<string, string>()
   if (leadIds.length > 0) {
-    const { data: leads } = await supabase
-      .from('leads')
-      .select('id, company')
-      .in('id', leadIds)
-    if (leads) {
+    try {
+      const leads = await chunkedIn<{ id: string; company: string | null }>(leadIds, (chunk) => supabase
+        .from('leads')
+        .select('id, company')
+        .in('id', chunk))
       for (const l of leads) leadNames.set(l.id, l.company ?? 'Unknown')
-    }
+    } catch { /* names are drill-down only */ }
   }
 
   // Group events by local date

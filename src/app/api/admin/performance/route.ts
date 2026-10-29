@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceSupabase } from '@/lib/supabase/service'
+import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import {
   computeExecutionResult,
@@ -168,16 +169,16 @@ export async function GET(req: NextRequest) {
   // For leads without connection_accepted_at, check if action ledger shows CONNECTION_SENT
   const leadsWithoutAccept = (leads ?? []).filter((l) => !l.connection_accepted_at).map((l) => l.id)
   if (leadsWithoutAccept.length > 0) {
-    const { data: connectionActions } = await store
+    const connectionActions = await chunkedIn<{ lead_id: string | null; action_type: string }>(leadsWithoutAccept, (chunk) => store
       .from('action_events')
       .select('lead_id, action_type')
       .eq('organization_id', auth.orgId)
       .eq('actor_id', repId)
-      .in('lead_id', leadsWithoutAccept)
+      .in('lead_id', chunk)
       .eq('action_type', 'CONNECTION_SENT')
-      .limit(200)
+      .limit(200))
 
-    for (const event of connectionActions ?? []) {
+    for (const event of connectionActions) {
       if (event.lead_id) {
         acceptedLeadIds.add(event.lead_id)
       }
@@ -224,16 +225,16 @@ export async function GET(req: NextRequest) {
   const pending: SLAItem[] = []
 
   if (repliedLeadIds.length > 0) {
-    const { data: pendingMessages } = await store
+    const pendingMessages = await chunkedIn<{ lead_id: string; created_at: string; direction: string | null }>(repliedLeadIds, (chunk) => store
       .from('messages')
       .select('lead_id, created_at, direction')
       .eq('organization_id', auth.orgId)
-      .in('lead_id', repliedLeadIds)
+      .in('lead_id', chunk)
       .order('created_at', { ascending: false })
-      .limit(200)
+      .limit(200))
 
     const lastInboundByLead = new Map<string, string>()
-    for (const msg of pendingMessages ?? []) {
+    for (const msg of pendingMessages) {
       if (msg.direction === 'inbound' && !lastInboundByLead.has(msg.lead_id)) {
         lastInboundByLead.set(msg.lead_id, msg.created_at)
       }

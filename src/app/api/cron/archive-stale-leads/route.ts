@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceSupabase, requireCronSecret } from '@/lib/supabase/service'
+import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { isArchiveEligible } from '@/lib/leads/followup'
 import { emitAction } from '@/lib/action-ledger'
 
@@ -66,32 +67,34 @@ export async function GET(request: Request) {
     diagnostics.push(`Found ${leads.length} candidate leads to check.`)
     const leadIds = leads.map((l) => l.id as string)
 
-    // Bulk-fetch conversation states (for followupCount) — avoid N+1.
-    const { data: convStates } = await supabase
+    // Bulk-fetch conversation states (for followupCount) — avoid N+1 and the
+    // URL limit that silently returns no rows for a large org.
+    const convStates = await chunkedIn(leadIds, (chunk) => supabase
       .from('conversation_states')
       .select('lead_id, followup_count')
-      .in('lead_id', leadIds)
+      .in('lead_id', chunk))
     const followupCountByLead = new Map<string, number>()
-    for (const row of (convStates ?? []) as Array<{ lead_id: string; followup_count: number }>) {
+    for (const row of convStates as Array<{ lead_id: string; followup_count: number }>) {
       followupCountByLead.set(row.lead_id, row.followup_count)
     }
 
     // Bulk-fetch messages (outbound sends and any reply) — avoid N+1.
-    const { data: msgRows, error: msgError } = await supabase
-      .from('messages')
-      .select('lead_id, sent_at, direction, type')
-      .in('lead_id', leadIds)
-      .not('sent_at', 'is', null)
-      .order('sent_at', { ascending: true })
-
-    if (msgError) {
-      diagnostics.push(`Failed to fetch messages: ${msgError.message}`)
+    let msgRows: Array<{ lead_id: string; sent_at: string; direction: string | null; type: string }>
+    try {
+      msgRows = await chunkedIn(leadIds, (chunk) => supabase
+        .from('messages')
+        .select('lead_id, sent_at, direction, type')
+        .in('lead_id', chunk)
+        .not('sent_at', 'is', null)
+        .order('sent_at', { ascending: true })) as Array<{ lead_id: string; sent_at: string; direction: string | null; type: string }>
+    } catch (err) {
+      diagnostics.push(`Failed to fetch messages: ${err instanceof Error ? err.message : String(err)}`)
       return NextResponse.json({ ok: false, diagnostics }, { status: 500 })
     }
 
     const lastOutboundSendByLead = new Map<string, string>()
     const repliedSinceByLead = new Map<string, boolean>()
-    for (const row of (msgRows ?? []) as Array<{ lead_id: string; sent_at: string; direction: string | null; type: string }>) {
+    for (const row of msgRows) {
       const isReply = row.type === 'reply' || row.direction === 'inbound'
       if (isReply) {
         const lastSend = lastOutboundSendByLead.get(row.lead_id)

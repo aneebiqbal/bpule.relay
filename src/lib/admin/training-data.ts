@@ -9,6 +9,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { qualifyCanonicalScore, displayScoreForCanonical, QUALIFICATION_BANDS, type CanonicalQualification } from '@/lib/scoring/qualification'
 import { isPacketCurrent } from '@/lib/intelligence-v3/versions'
 import type { V3LeadDecisionPacket } from '@/lib/intelligence-v3/types'
@@ -234,24 +235,26 @@ export async function loadTrainingQueue(client: SupabaseClient, orgId: string, o
   const leadIds = records.filter((r) => r.kind === 'lead').map((r) => r.id)
   const prospectIds = records.filter((r) => r.kind === 'prospect').map((r) => r.id)
   const keys = [...byKey.keys()]
-  const [msgRes, outRes, fbRes, labelRes] = await Promise.all([
-    leadIds.length ? client.from('messages').select('lead_id, direction, draft_text, sent_text, sent_at, original_draft').in('lead_id', leadIds) : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
-    leadIds.length ? client.from('outcomes').select('lead_id, stage').in('lead_id', leadIds) : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
-    client.from('scoring_feedback').select('lead_id, captured_prospect_id, feedback_type, note, created_at').eq('organization_id', orgId).or([leadIds.length ? `lead_id.in.(${leadIds.join(',')})` : '', prospectIds.length ? `captured_prospect_id.in.(${prospectIds.join(',')})` : ''].filter(Boolean).join(',') || 'lead_id.is.null').limit(2000),
-    keys.length ? client.from('scoring_labels').select('*').eq('organization_id', orgId).in('opportunity_key', keys.slice(0, 500)).order('created_at', { ascending: false }).limit(2000) : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+  const [msgs, outcomes, leadFeedback, prospectFeedback, labels] = await Promise.all([
+    chunkedIn(leadIds, (chunk) => client.from('messages').select('lead_id, direction, draft_text, sent_text, sent_at, original_draft').in('lead_id', chunk)),
+    chunkedIn(leadIds, (chunk) => client.from('outcomes').select('lead_id, stage').in('lead_id', chunk)),
+    chunkedIn(leadIds, (chunk) => client.from('scoring_feedback').select('lead_id, captured_prospect_id, feedback_type, note, created_at').eq('organization_id', orgId).in('lead_id', chunk).limit(2000)),
+    chunkedIn(prospectIds, (chunk) => client.from('scoring_feedback').select('lead_id, captured_prospect_id, feedback_type, note, created_at').eq('organization_id', orgId).in('captured_prospect_id', chunk).limit(2000)),
+    chunkedIn(keys.slice(0, 500), (chunk) => client.from('scoring_labels').select('*').eq('organization_id', orgId).in('opportunity_key', chunk).order('created_at', { ascending: false }).limit(2000)),
   ])
+  const fbRows = [...leadFeedback, ...prospectFeedback]
   const msgsByLead = new Map<string, Array<Record<string, unknown>>>()
-  for (const m of (msgRes.data ?? []) as Array<Record<string, unknown>>) { const k = m.lead_id as string; msgsByLead.set(k, [...(msgsByLead.get(k) ?? []), m]) }
+  for (const m of msgs as Array<Record<string, unknown>>) { const k = m.lead_id as string; msgsByLead.set(k, [...(msgsByLead.get(k) ?? []), m]) }
   const outByLead = new Map<string, Set<string>>()
-  for (const o of (outRes.data ?? []) as Array<Record<string, unknown>>) { const k = o.lead_id as string; outByLead.set(k, new Set([...(outByLead.get(k) ?? []), o.stage as string])) }
+  for (const o of outcomes as Array<Record<string, unknown>>) { const k = o.lead_id as string; outByLead.set(k, new Set([...(outByLead.get(k) ?? []), o.stage as string])) }
   const fbById = new Map<string, Array<{ type: string; note: string | null; createdAt: string }>>()
-  for (const f of (fbRes.data ?? []) as Array<Record<string, unknown>>) {
+  for (const f of fbRows as Array<Record<string, unknown>>) {
     const k = (f.lead_id as string) ?? (f.captured_prospect_id as string)
     if (!k) continue
     fbById.set(k, [...(fbById.get(k) ?? []), { type: f.feedback_type as string, note: (f.note as string) ?? null, createdAt: f.created_at as string }])
   }
   const labelsByKey = new Map<string, TrainingLabel[]>()
-  for (const l of (labelRes.data ?? []) as Array<Record<string, unknown>>) {
+  for (const l of labels as Array<Record<string, unknown>>) {
     const k = l.opportunity_key as string
     labelsByKey.set(k, [...(labelsByKey.get(k) ?? []), {
       id: l.id as string, labelerRepId: l.labeler_rep_id as string, labelVersion: l.label_version as string,

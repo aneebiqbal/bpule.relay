@@ -4,6 +4,7 @@
 // Command Center V2 data layer
 import { generateTodaysIntelligence } from '@/lib/relay/admin-intelligence'
 import { qualifyCanonicalScore, displayScoreForCanonical } from '@/lib/scoring/qualification'
+import { chunkedIn } from '@/lib/supabase/chunked-in'
 
 
 export type ExceptionSeverity = 'attention' | 'urgent' | 'critical'
@@ -292,10 +293,10 @@ export async function loadCommandCenterData(
   for (const lead of leads || []) {
     if (lead.sender_profile_id) senderProfileIds.add(lead.sender_profile_id as string)
   }
-  const { data: senderProfiles } = senderProfileIds.size > 0
-    ? await client.from('profiles').select('id, identity_name').in('id', [...senderProfileIds])
-    : { data: [] }
-  const profileNameMap = new Map<string, string>((senderProfiles || []).map((p: { id: string; identity_name: string }) => [p.id, p.identity_name] as [string, string]))
+  const senderProfiles = senderProfileIds.size > 0
+    ? await chunkedIn<{ id: string; display_name: string | null; full_name: string | null }>([...senderProfileIds], (chunk) => client.from('profiles').select('id, display_name, full_name').in('id', chunk))
+    : []
+  const profileNameMap = new Map<string, string>(senderProfiles.map((p) => [p.id, p.display_name ?? p.full_name ?? 'Profile'] as [string, string]))
 
   const { data: profileMatches } = await client
     .from('profile_opportunity_matches')
@@ -364,10 +365,10 @@ export async function loadCommandCenterData(
     }
   }
   const bestProfileIds = new Set([...bestProfileByLead.values()].map(v => v.id))
-  const { data: bestProfileData } = bestProfileIds.size > 0
-    ? await client.from('profiles').select('id, identity_name').in('id', [...bestProfileIds])
-    : { data: [] }
-  const bestProfileNameMap = new Map<string, string>((bestProfileData || []).map((p: { id: string; identity_name: string }) => [p.id, p.identity_name] as [string, string]))
+  const bestProfileData = bestProfileIds.size > 0
+    ? await chunkedIn<{ id: string; display_name: string | null; full_name: string | null }>([...bestProfileIds], (chunk) => client.from('profiles').select('id, display_name, full_name').in('id', chunk))
+    : []
+  const bestProfileNameMap = new Map<string, string>(bestProfileData.map((p) => [p.id, p.display_name ?? p.full_name ?? 'Profile'] as [string, string]))
 
   const team: TeamRow[] = (reps || []).map((rep: { id: string; name: string }) => {
     const ev = repEventMap.get(rep.id)
