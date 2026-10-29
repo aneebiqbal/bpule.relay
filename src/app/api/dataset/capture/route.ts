@@ -79,6 +79,7 @@ export async function POST(request: Request) {
       upworkJobId: typeof body.upwork_job_id === 'string' ? body.upwork_job_id : undefined,
       rawInput: typeof body.raw_input === 'string' ? body.raw_input : undefined,
       organizationId: auth.orgId,
+      isTest: body.isTest === true,
     })
     if (!sid) return NextResponse.json({ error: 'Failed to create sample.' }, { status: 500 })
   }

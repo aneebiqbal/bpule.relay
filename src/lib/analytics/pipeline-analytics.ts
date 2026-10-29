@@ -212,7 +212,9 @@ export function buildDashboardAnalytics(input: {
 }): DashboardAnalytics {
   const now = input.now ?? new Date()
   const timeZone = input.timeZone || 'UTC'
-  const { leads, range } = input
+  // Test/E2E leads never count toward production analytics (P0-2).
+  const leads = input.leads.filter((l) => !l.isTest)
+  const { range } = input
   const leadIds = new Set(leads.map((l) => l.id))
   const events = input.events
     .filter((e) => leadIds.has(e.leadId) && Number.isFinite(Date.parse(e.at)))

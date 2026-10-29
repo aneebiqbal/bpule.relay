@@ -211,10 +211,10 @@ export async function loadTrainingQueue(client: SupabaseClient, orgId: string, o
   const [{ data: leads }, { data: prospects }] = await Promise.all([
     client.from('leads')
       .select('id, company, contact_name, owner_rep_id, created_at, raw_input, canonical_score, canonical_intelligence, sender_profile_id, best_profile_id, best_profile_match_score, status, connection_accepted_at')
-      .eq('organization_id', orgId).not('canonical_intelligence', 'is', null).gte('created_at', opts.since).order('created_at', { ascending: false }).limit(limit),
+      .eq('organization_id', orgId).neq('is_test', true).not('canonical_intelligence', 'is', null).gte('created_at', opts.since).order('created_at', { ascending: false }).limit(limit),
     client.from('captured_prospects')
       .select('id, extracted_company, extracted_name, owner_rep_id, created_at, raw_input, canonical_score, canonical_intelligence, sender_profile_id, status')
-      .eq('organization_id', orgId).eq('status', 'captured').not('canonical_intelligence', 'is', null).gte('created_at', opts.since).order('created_at', { ascending: false }).limit(limit),
+      .eq('organization_id', orgId).neq('is_test', true).eq('status', 'captured').not('canonical_intelligence', 'is', null).gte('created_at', opts.since).order('created_at', { ascending: false }).limit(limit),
   ])
   const records: RawRecord[] = []
   for (const l of (leads ?? []) as Array<Record<string, unknown>>) {

@@ -71,6 +71,14 @@ describe('dashboard analytics', () => {
     expect(a.totals).toMatchObject({ leads: 5, won: 1, lost: 1 })
   })
 
+  it('excludes test/E2E leads from production analytics', () => {
+    const real = lead({ status: 'new' })
+    const testLead = lead({ status: 'new', isTest: true })
+    const a = buildDashboardAnalytics({ leads: [real, testLead], events: [], range: 30, now: NOW })
+    expect(a.totals.leads).toBe(1)
+    expect(a.stages.reduce((n, s) => n + s.value, 0)).toBe(1)
+  })
+
   it('score bands come from the same display score as the ring (no second formula)', () => {
     const strong = lead({ canonicalScore: 82, displayQualification: 'strong', displayIntelligenceVersion: 'relay_decision_v3' })
     const maybe = lead({ canonicalScore: 42, displayQualification: 'maybe', displayIntelligenceVersion: 'relay_decision_v3' })

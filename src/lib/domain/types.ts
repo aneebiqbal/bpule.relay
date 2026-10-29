@@ -97,6 +97,10 @@ export interface Lead {
   scoreVersion?: string | null
   scoredAt?: string | null
   canonicalIntelligence?: Record<string, unknown> | null
+  /** True for E2E/TEST/DEMO data; excluded from analytics by default (P0-2). */
+  isTest?: boolean
+  /** Explicit source classification (PRODUCTION/E2E/TEST/DEMO/SEED/IMPORT/MANUAL). */
+  sourceKind?: string
   /**
    * canonicalIntelligence.qualification / .intelligenceVersion, loaded even
    * on list queries (which skip the full blob) so every surface can apply

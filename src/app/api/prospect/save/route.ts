@@ -361,7 +361,7 @@ export async function POST(request: Request) {
  * Uses service role client (bypasses RLS) — this is a system capture action.
  */
 async function createDatasetSampleForLead(
-  lead: { id: string; organizationId: string; rawInput?: string | null },
+  lead: { id: string; organizationId: string; rawInput?: string | null; isTest?: boolean },
   canonical: Record<string, unknown> | null,
   canonicalScore: number | null,
   connectionNote: string | null,
@@ -375,6 +375,8 @@ async function createDatasetSampleForLead(
     leadId: lead.id,
     rawInput: lead.rawInput ?? body.rawInput as string | undefined,
     organizationId: lead.organizationId,
+    // Inherit the lead's test marker so QA/E2E samples are never unmarked (P0-2).
+    isTest: lead.isTest === true || body.isTest === true,
   })
   if (!sampleId) return
 

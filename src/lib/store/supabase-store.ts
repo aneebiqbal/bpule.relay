@@ -195,7 +195,7 @@ function isOptionalSearchError(err: unknown): boolean {
  * drops it for list, queue and rate queries that never read it.
  */
 const LEAD_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, intelligence_input_hash, connection_accepted_at, locked_until, locked_reason, archived, archived_at, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, intelligence_input_hash, is_test, connection_accepted_at, locked_until, locked_reason, archived, archived_at, created_at'
 
 /**
  * Read-back used when a newer optional column (intelligence_input_hash,
@@ -249,7 +249,7 @@ function isMissingColumnError(err: unknown): boolean {
 }
 
 const LEAD_LIST_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, buyer_intent:canonical_intelligence->buyerIntent, display_qualification:canonical_intelligence->>qualification, display_intelligence_version:canonical_intelligence->>intelligenceVersion, remote_eligibility, connection_accepted_at, locked_until, locked_reason, archived, archived_at, decision_provider, decision_model, decision_run_id, selected_episode_id, profile_match_score, profile_match_version, best_profile_id, best_profile_match_score, intelligence_input_hash, fallback_reason, created_at'
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, is_test, buyer_intent:canonical_intelligence->buyerIntent, display_qualification:canonical_intelligence->>qualification, display_intelligence_version:canonical_intelligence->>intelligenceVersion, remote_eligibility, connection_accepted_at, locked_until, locked_reason, archived, archived_at, decision_provider, decision_model, decision_run_id, selected_episode_id, profile_match_score, profile_match_version, best_profile_id, best_profile_match_score, intelligence_input_hash, fallback_reason, created_at'
 
 export function mapLead(r: Row): Lead {
   const canonical = (r.canonical_intelligence as Record<string, unknown> | null) ?? null
@@ -323,6 +323,8 @@ export function mapLead(r: Row): Lead {
     bestProfileMatchScore: (r.best_profile_match_score as number) ?? null,
     intelligenceInputHash: (r.intelligence_input_hash as string) ?? null,
     fallbackReason: (r.fallback_reason as string) ?? null,
+    isTest: Boolean(r.is_test),
+    sourceKind: (r.source_kind as string) ?? 'PRODUCTION',
     createdAt: r.created_at as string,
   }
 }
