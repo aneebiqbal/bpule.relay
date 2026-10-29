@@ -7,7 +7,10 @@
  *   - DB trigger 0033  → 5 business days, 1 follow-up (outlier)
  *   - relay/timing-engine.ts → 24 h window (dead code, only used by dead
  *     orchestration/next-action.ts)
- *   - conversation_states.next_followup_at → never set (now computed here)
+ * `conversation_states.next_followup_at` is a persisted copy of this policy's
+ * `nextFollowupAt`, written by markContacted() after a real send and read by the
+ * admin command center. It is a snapshot, not a second clock: it is computed
+ * here and stored there.
  * The live product behaviour was the 3/6/6 calendar-day cadence, max 3
  * follow-ups; this module keeps that behaviour and makes it single-source.
  *

@@ -1963,6 +1963,28 @@ export class SupabaseStore implements ScoutStore {
     return (data ?? []).map(mapProfile)
   }
 
+  /**
+   * Resolve a client-supplied sender profile id to one this caller may use.
+   *
+   * The profile is attribution, not a trust boundary — but an id from the
+   * request body must still resolve inside the caller's own organization before
+   * it is persisted. A profile belonging to another rep in the same org is
+   * valid (a rep can be assigned an identity whose profile someone else owns);
+   * a profile from another org is not, and resolves to null rather than being
+   * stored as attribution.
+   */
+  async resolveSenderProfileId(profileId: string | null | undefined): Promise<string | null> {
+    if (!profileId) return null
+    const { data, error } = await this.client
+      .from('profiles')
+      .select('id')
+      .eq('id', profileId)
+      .eq('organization_id', this.orgId)
+      .maybeSingle()
+    if (error || !data) return null
+    return profileId
+  }
+
   async getProfile(id: string): Promise<Profile | null> {
     const { data, error } = await this.client
       .from('profiles')
@@ -2964,20 +2986,78 @@ export class SupabaseStore implements ScoutStore {
     type: UpworkMessage['type']
     draftText: string
     modelUsed: string
+    senderProfileId?: string | null
   }): Promise<UpworkMessage> {
-    const { data, error } = await this.client
+    // One draft row per (job, type): a double-click or a retry must not stack
+    // duplicate drafts. Reuse the existing unsent row and update its text.
+    const { data: existing } = await this.client
       .from('upwork_messages')
-      .insert({
+      .select('id')
+      .eq('job_id', input.jobId)
+      .eq('type', input.type)
+      .is('sent_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const payload: Record<string, unknown> = {
+      draft_text: input.draftText,
+      model_used: input.modelUsed,
+    }
+    if (input.senderProfileId) payload.sender_profile_id = input.senderProfileId
+
+    let data: Row | null = null
+    if (existing?.id) {
+      const { data: updated, error } = await this.client
+        .from('upwork_messages')
+        .update(payload)
+        .eq('id', existing.id)
+        .eq('organization_id', this.orgId)
+        .select('*')
+        .maybeSingle()
+      if (error && isOptionalSearchError(error) && payload.sender_profile_id) {
+        delete payload.sender_profile_id
+        const retry = await this.client
+          .from('upwork_messages')
+          .update(payload)
+          .eq('id', existing.id)
+          .eq('organization_id', this.orgId)
+          .select('*')
+          .maybeSingle()
+        data = (retry.data as Row) ?? null
+        if (retry.error) throw retry.error
+      } else {
+        data = (updated as Row) ?? null
+        if (error) throw error
+      }
+    }
+
+    if (!data) {
+      const insertPayload: Record<string, unknown> = {
         organization_id: this.orgId,
         job_id: input.jobId,
         rep_id: this.rep.id,
         type: input.type,
         draft_text: input.draftText,
         model_used: input.modelUsed,
-      })
-      .select('*')
-      .single()
-    if (error) throw error
+      }
+      if (input.senderProfileId) insertPayload.sender_profile_id = input.senderProfileId
+      const { data: inserted, error } = await this.client
+        .from('upwork_messages')
+        .insert(insertPayload)
+        .select('*')
+        .single()
+      if (error && isOptionalSearchError(error) && insertPayload.sender_profile_id) {
+        delete insertPayload.sender_profile_id
+        const retry = await this.client.from('upwork_messages').insert(insertPayload).select('*').single()
+        if (retry.error) throw retry.error
+        data = (retry.data as Row) ?? null
+      } else {
+        if (error) throw error
+        data = (inserted as Row) ?? null
+      }
+    }
+
     const msg = mapUpworkMessage(data as Row)
     if (input.type === 'cover') {
       try {
@@ -2987,6 +3067,7 @@ export class SupabaseStore implements ScoutStore {
           actorType: 'rep',
           actorId: this.rep.id,
           jobId: input.jobId,
+          senderProfileId: input.senderProfileId ?? null,
           messageId: msg.id,
           executionStatus: 'generated',
           channel: 'upwork',
@@ -3042,25 +3123,66 @@ export class SupabaseStore implements ScoutStore {
     // Look up the job's connects cost before updating
     const { data: jobRow } = await this.client
       .from('upwork_jobs')
-      .select('connects_cost')
+      .select('connects_cost, sender_profile_id, revenue_identity_id')
       .eq('id', jobId)
       .maybeSingle()
     const connectsCost = (jobRow as unknown as { connects_cost: number })?.connects_cost ?? 0
+    const senderProfileId = (jobRow as unknown as { sender_profile_id?: string | null })?.sender_profile_id ?? null
 
-    await Promise.all([
-      this.client
+    // `connects_used` was added in code (commit 3d0a4b4) without a migration and
+    // does not exist in every environment. supabase-js resolves a query builder
+    // with `{ data, error }` rather than rejecting, so an unchecked 400 here left
+    // `upwork_jobs.status` at 'new' while the route still returned 200 — the job
+    // looked un-applied and could be applied again. Write the optional column
+    // only when it is present, and surface a real failure.
+    const statusUpdate: Record<string, unknown> = { status: 'applied', connects_used: connectsCost }
+    const statusResult = await this.client
+      .from('upwork_jobs')
+      .update(statusUpdate)
+      .eq('id', jobId)
+      .eq('owner_rep_id', this.rep.id)
+    if (statusResult.error && isOptionalSearchError(statusResult.error)) {
+      delete statusUpdate.connects_used
+      const retry = await this.client
         .from('upwork_jobs')
-        .update({ status: 'applied', connects_used: connectsCost })
+        .update(statusUpdate)
         .eq('id', jobId)
-        .eq('owner_rep_id', this.rep.id),
-      this.client.from('upwork_messages').insert({
+        .eq('owner_rep_id', this.rep.id)
+      if (retry.error) throw retry.error
+    } else if (statusResult.error) {
+      throw statusResult.error
+    }
+
+    // One application per job. A retry or a double-click must not log a second
+    // sent proposal — reuse the row an earlier call already committed.
+    const { data: existingMessage } = await this.client
+      .from('upwork_messages')
+      .select('id')
+      .eq('job_id', jobId)
+      .eq('type', type)
+      .not('sent_at', 'is', null)
+      .maybeSingle()
+    if (!existingMessage) {
+      const insertPayload: Record<string, unknown> = {
         organization_id: this.orgId,
         job_id: jobId,
         rep_id: this.rep.id,
         type,
         sent_text: sentText,
         sent_at: new Date().toISOString(),
-      }),
+      }
+      if (senderProfileId) insertPayload.sender_profile_id = senderProfileId
+      const { error: insertError } = await this.client.from('upwork_messages').insert(insertPayload)
+      if (insertError && isOptionalSearchError(insertError) && insertPayload.sender_profile_id) {
+        delete insertPayload.sender_profile_id
+        const { error: retryError } = await this.client.from('upwork_messages').insert(insertPayload)
+        if (retryError) throw retryError
+      } else if (insertError) {
+        throw insertError
+      }
+    }
+
+    await Promise.all([
       // Record accountability increment — TEAM-001 (Today showed no
       // progress). This was the one real send-logging path in the app that
       // never called record_activity_event: DM/connection/followup/reply/
@@ -3133,6 +3255,7 @@ export class SupabaseStore implements ScoutStore {
         actorType: 'rep',
         actorId: this.rep.id,
         jobId,
+        senderProfileId,
         executionStatus: 'sent',
         channel: 'upwork',
         idempotencyKey: `upwork_applied:${jobId}`,
@@ -5678,6 +5801,9 @@ export class SupabaseStore implements ScoutStore {
       .from('leads')
       .select(`${LEAD_LIST_COLUMNS}, messages(*), conversation_states(*)`)
       .eq('owner_rep_id', this.rep.id)
+      // Every other lead list excludes archived rows; omitting it here let the
+      // Relay queue surface leads the board had already swept into archive.
+      .eq('archived', false)
       .order('created_at', { ascending: false })
     if (error) throw error
     return (data ?? []).map((r: Row) => ({
@@ -8577,6 +8703,7 @@ function mapUpworkMessage(r: Row): UpworkMessage {
     sentText: (r.sent_text as string) ?? null,
     sentAt: (r.sent_at as string) ?? null,
     modelUsed: (r.model_used as string) ?? null,
+    senderProfileId: (r.sender_profile_id as string) ?? null,
     createdAt: r.created_at as string,
   }
 }

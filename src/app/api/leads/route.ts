@@ -245,9 +245,9 @@ export async function POST(request: Request) {
       confidenceNotes: extracted.confidenceNotes ?? [],
     },
     allowPotentialDuplicate,
-    senderProfileId: typeof body.senderProfileId === 'string'
-      ? body.senderProfileId
-      : workspace?.profileId ?? null,
+    senderProfileId: await store.resolveSenderProfileId(
+      typeof body.senderProfileId === 'string' ? body.senderProfileId : null,
+    ) ?? workspace?.profileId ?? null,
     revenueIdentityId: (await validateRevenueIdentityId(body.revenueIdentityId))
       ?? workspace?.id
       ?? null,

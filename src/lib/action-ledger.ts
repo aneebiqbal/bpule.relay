@@ -6,6 +6,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { createServiceSupabase } from '@/lib/supabase/service'
 type ActionEventType =
   | 'LEAD_EXTRACTED'
   | 'CONNECTION_PREPARED'
@@ -78,11 +79,9 @@ interface ActionLogEntry {
 let supabase: SupabaseClient | null = null
 
 function getClient() {
-  if (!supabase) {
-    /* eslint-disable-next-line @typescript-eslint/no-require-imports */
-    const { createServiceSupabase } = require('@/lib/supabase/service')
-    supabase = createServiceSupabase()
-  }
+  // Static import, not a runtime require: the alias resolves under vitest, so
+  // the ledger can be unit-tested with a stubbed client.
+  if (!supabase) supabase = createServiceSupabase()
   return supabase!
 }
 
@@ -113,26 +112,22 @@ export async function emitAction(params: EmitActionParams): Promise<string | nul
     payload.idempotency_key = params.idempotencyKey
   }
 
-  // With idempotency key: use upsert with ignoreDuplicates for safe retries.
-  // Falls back to plain insert when the migration has not been applied yet
-  // (missing column or missing unique index).
+  // The unique index is PARTIAL — `(organization_id, idempotency_key) where
+  // idempotency_key is not null` — so PostgREST's
+  // `ON CONFLICT (organization_id, idempotency_key)` cannot infer it and the
+  // upsert always fails with 42P10. The old code treated that failure as
+  // "migration not applied" and re-inserted WITHOUT the key, so every event was
+  // written with a NULL idempotency_key and the exactly-once guarantee did not
+  // exist at all. Select-then-insert instead, and let the unique index arbitrate
+  // the race — the same pattern markContacted() uses for messages.
   if (params.idempotencyKey) {
-    const { error } = await getClient()
+    const { data: existing } = await getClient()
       .from('action_events')
-      .upsert(payload, { onConflict: 'organization_id,idempotency_key', ignoreDuplicates: true })
-    if (!error) return null // idempotency upsert does not return the row id
-
-    // Migration not yet applied — fall back to plain insert without idempotency.
-    const { data, error: insertError } = await getClient()
-      .from('action_events')
-      .insert({ ...payload, idempotency_key: undefined })
       .select('id')
-      .single()
-    if (insertError) {
-      console.error('[Action Ledger] Failed to emit:', insertError.message)
-      return null
-    }
-    return data?.id ?? null
+      .eq('organization_id', params.orgId)
+      .eq('idempotency_key', params.idempotencyKey)
+      .maybeSingle()
+    if (existing?.id) return existing.id
   }
 
   const { data, error } = await getClient()
@@ -141,11 +136,24 @@ export async function emitAction(params: EmitActionParams): Promise<string | nul
     .select('id')
     .single()
 
+  // A concurrent writer committed the same key between our SELECT and INSERT.
+  // The unique index rejected ours; return the row it won with rather than
+  // surfacing a raw constraint violation to the caller.
+  if (error && (error as { code?: string }).code === '23505' && params.idempotencyKey) {
+    const { data: winner } = await getClient()
+      .from('action_events')
+      .select('id')
+      .eq('organization_id', params.orgId)
+      .eq('idempotency_key', params.idempotencyKey)
+      .maybeSingle()
+    if (winner?.id) return winner.id
+  }
+
   if (error) {
     console.error('[Action Ledger] Failed to emit:', error.message)
     return null
   }
-  return data?.id || null
+  return data?.id ?? null
 }
 
 /**

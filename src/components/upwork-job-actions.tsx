@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Check, Copy, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -14,6 +14,8 @@ interface UpworkJobActionsProps {
   jobScore: number | null
   profiles: Profile[]
   matchedProofs: ProofItem[]
+  /** The persisted cover draft, so a saved proposal survives a reload. */
+  savedDraft?: string | null
 }
 
 // Relay does not recommend spending a Connect below this score — see
@@ -29,7 +31,7 @@ function markAppliedButtonClass(applied: boolean, belowGate: boolean): string {
   return 'bg-status-success text-on-accent hover:bg-status-success/90'
 }
 
-export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedProofs }: UpworkJobActionsProps) {
+export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedProofs, savedDraft }: UpworkJobActionsProps) {
   const belowGate = jobScore === null || jobScore < MIN_SCORE_TO_APPLY
   // Exact eligibility reason for the disabled Generate button (QA BUG-11-08):
   // never leave it disabled without saying why.
@@ -39,7 +41,9 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
     return { ok: true as const, reason: null as string | null }
   })()
   const [selectedProfileId, setSelectedProfileId] = useState(profiles[0]?.id ?? '')
-  const [proposal, setProposal] = useState('')
+  // Restore the persisted draft: a saved proposal must survive a reload, or
+  // "Save draft" is a lie (BUG-31).
+  const [proposal, setProposal] = useState(savedDraft ?? '')
   const [editing, setEditing] = useState(false)
   const [generating, setGenerating] = useState(false)
   const canGenerate = eligibility.ok && !generating
@@ -50,6 +54,9 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
   const [questionAnswers, setQuestionAnswers] = useState<Array<{ question: string; answer: string }>>([])
   const [generationMode, setGenerationMode] = useState<'standard' | 'premium'>('standard')
   const [applied, setApplied] = useState(false)
+  // Save-draft lifecycle. `saved` is confirmed only after the server returns.
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
+  const saveInFlightRef = useRef(false)
   const proofHint = matchedProofs[0]?.projectSummary ?? null
 
   const generate = useCallback(async () => {
@@ -97,21 +104,37 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
 
   const saveDraft = useCallback(async () => {
     if (!proposal.trim()) return
+    // A double-click must not fire two saves; the server also collapses them to
+    // one draft row, but the UI should not look like it is still working.
+    if (saveInFlightRef.current) return
+    saveInFlightRef.current = true
+    setSaveState('saving')
+    setError(null)
     try {
       const res = await fetch(`/api/upwork/jobs/${jobId}/draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId, draftText: proposal.trim(), type: 'cover' }),
+        body: JSON.stringify({
+          jobId,
+          draftText: proposal.trim(),
+          type: 'cover',
+          profileId: selectedProfileId || undefined,
+        }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => null)
         throw new Error(data?.error || 'Failed to save draft.')
       }
+      // Confirmed by the server: it is only now safe to say "Saved".
       setEditing(false)
+      setSaveState('saved')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save.')
+      setSaveState('failed')
+    } finally {
+      saveInFlightRef.current = false
     }
-  }, [jobId, proposal])
+  }, [jobId, proposal, selectedProfileId])
 
   const markApplied = useCallback(async () => {
     if (!proposal.trim()) {
@@ -218,8 +241,19 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
 
       {/* Error */}
       {error && (
-        <div className="rounded-lg border border-status-danger/20 bg-status-danger/5 px-4 py-3 text-sm text-status-danger">
+        <div role="alert" className="rounded-lg border border-status-danger/20 bg-status-danger/5 px-4 py-3 text-sm text-status-danger">
           {error}
+        </div>
+      )}
+
+      {/* Save confirmation. `aria-live` so a screen reader hears the outcome;
+          rendered only after the server confirmed the write. */}
+      <div aria-live="polite" className="sr-only">
+        {saveState === 'saving' ? 'Saving draft' : saveState === 'saved' ? 'Draft saved' : ''}
+      </div>
+      {saveState === 'saved' && (
+        <div role="status" className="rounded-lg border border-status-success/20 bg-status-success/5 px-4 py-3 text-sm text-status-success">
+          Draft saved
         </div>
       )}
 
@@ -286,9 +320,18 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
             </button>
             <button
               onClick={() => void saveDraft()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm text-graphite transition-colors hover:bg-bone"
+              disabled={saveState === 'saving' || !proposal.trim()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm text-graphite transition-colors hover:bg-bone disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Save draft
+              {saveState === 'saving' ? (
+                <><RefreshCw className="size-3.5 animate-spin" aria-hidden="true" />Saving…</>
+              ) : saveState === 'saved' ? (
+                <><Check className="size-3.5 text-status-success" aria-hidden="true" />Saved</>
+              ) : saveState === 'failed' ? (
+                'Failed — Retry'
+              ) : (
+                'Save draft'
+              )}
             </button>
             <button
               onClick={() => void markApplied()}

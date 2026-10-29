@@ -2,7 +2,8 @@ import type { Lead } from '@/lib/domain/types'
 import { getComparableLeadScore } from '@/lib/score/rubric'
 import { isLeadLocked } from '@/lib/leads/lock'
 import { computeLifecycleState, type LifecycleState, type LifecycleResult } from '@/lib/leads/lifecycle-policy'
-import { isFollowupDue } from '@/lib/leads/followup'
+import { evaluateFollowUpPolicy } from '@/lib/conversation/follow-up-policy'
+import { relationshipHasStarted } from '@/lib/relay/lead-state-machine'
 import { formatRelativeTime } from '@/lib/ui/time'
 export { formatRelativeTime }
 
@@ -58,7 +59,7 @@ export function derivePipelineStage(lead: LeadRow, now: Date = new Date()): Pipe
   // OBSERVE / SKIP: not a fit yet. They never belong in "To Contact".
   const verdict = lead.verdict ?? null
   if (verdict === 'skip') return 'observe'
-  if (verdict === 'research_more' && !lead.lastOutboundAt) return 'observe'
+  if (verdict === 'research_more' && !relationshipHasStarted(lead)) return 'observe'
 
   // Cold/frozen leads go to the cold section regardless of their status
   if (lead.lifecycle && (lead.lifecycle.state === 'cold' || lead.lifecycle.state === 'frozen')) {
@@ -75,12 +76,19 @@ export function derivePipelineStage(lead: LeadRow, now: Date = new Date()): Pipe
   if (inboundFirst && !hasOutbound) return 'needs_reply'
   if (inboundFirst && !hasRepliedSinceOutbound) return 'waiting'
 
-  // Follow-up due: contacted but no reply, and enough time has passed
+  // Follow-up due: contacted but no reply, and enough time has passed. The
+  // canonical policy is the one clock — this used to re-derive the cadence with
+  // isFollowupDue, a second copy of the same arithmetic.
   if (hasOutbound && !hasRepliedSinceOutbound && lead.lastOutboundAt) {
-    const hasReplied = hasRepliedSinceOutbound
-    if (isFollowupDue(lead.lastOutboundAt, hasReplied, now, lead.followupCount ?? 0)) {
-      return 'follow_up_due'
-    }
+    const policy = evaluateFollowUpPolicy({
+      leadStatus: lead.status,
+      lastOutboundAt: lead.lastOutboundAt,
+      lastInboundAt: lead.lastInboundAt ?? null,
+      followupCount: lead.followupCount ?? 0,
+      channel: 'dm',
+      now,
+    })
+    if (policy.eligible) return 'follow_up_due'
   }
 
   if (lead.status === 'followed_up') {

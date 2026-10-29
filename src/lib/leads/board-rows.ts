@@ -12,11 +12,26 @@ import { computeLifecycleState } from '@/lib/leads/lifecycle-policy'
 import type { LeadRow } from '@/components/leads/pipeline-utils'
 import type { MessageType } from '@/lib/domain/types'
 import type { ActivityEvent } from '@/lib/analytics/pipeline-analytics'
-import { type WorkspaceIdentity } from '@/lib/workspace/active-identity'
+import { leadBelongsToWorkspace, type WorkspaceIdentity } from '@/lib/workspace/active-identity'
 import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 
 export type { ActivityEvent }
+
+/**
+ * The one rule that decides which leads a board shows.
+ *
+ * An admin's board is intentionally org-wide. A rep's board is scoped to the
+ * selected workspace identity — switching profiles must change the visible lead
+ * set (BUG-30). A rep with no resolvable workspace keeps their full book rather
+ * than an empty board.
+ */
+export function scopeLeadsToWorkspace<
+  T extends { revenueIdentityId?: string | null; senderProfileId?: string | null },
+>(leads: readonly T[], workspace: WorkspaceIdentity | null, orgView: boolean): T[] {
+  if (orgView || !workspace) return [...leads]
+  return leads.filter((lead) => leadBelongsToWorkspace(lead, workspace))
+}
 
 export interface BoardData {
   leads: LeadRow[]
@@ -31,8 +46,17 @@ export async function loadBoardData(): Promise<BoardData> {
   const authCtx = await getAuthContext()
   const store = await createScoutStore()
   const orgView = isProductAdmin(user, authCtx)
-  const ownedLeads = orgView ? await store.fetchLeadsAll() : await store.listOwnedLeads()
-  const leadIds = ownedLeads.map((l) => l.id)
+
+  let workspace: WorkspaceIdentity | null = null
+  try {
+    workspace = await resolveActiveWorkspace()
+  } catch {
+    workspace = null
+  }
+
+  const allLeads = orgView ? await store.fetchLeadsAll() : await store.listOwnedLeads()
+  const visibleLeads = scopeLeadsToWorkspace(allLeads, workspace, orgView)
+  const leadIds = visibleLeads.map((l) => l.id)
 
   const [repsRes, messagesRes, followupCountsRes] = await Promise.all([
     orgView ? store.listAllReps() : Promise.resolve([]),
@@ -134,7 +158,7 @@ export async function loadBoardData(): Promise<BoardData> {
     followupCountByLead.set(fc.lead_id as string, (fc.followup_count as number) ?? 0)
   }
 
-  const senderProfileIds = [...new Set(ownedLeads.map((l) => l.senderProfileId).filter(Boolean) as string[])]
+  const senderProfileIds = [...new Set(visibleLeads.map((l) => l.senderProfileId).filter(Boolean) as string[])]
   const profileById = new Map<string, string>()
   if (senderProfileIds.length > 0 && authCtx) {
     try {
@@ -150,7 +174,7 @@ export async function loadBoardData(): Promise<BoardData> {
     } catch { }
   }
 
-  const leads: LeadRow[] = ownedLeads.map((lead) => {
+  const leads: LeadRow[] = allLeads.map((lead) => {
     const outbound = lastOutboundByLead.get(lead.id)
     const inbound = lastInboundByLead.get(lead.id)
     const lifecycle = computeLifecycleState({
@@ -179,17 +203,10 @@ export async function loadBoardData(): Promise<BoardData> {
     }
   })
 
-  let workspace: WorkspaceIdentity | null = null
-  try {
-    workspace = await resolveActiveWorkspace()
-  } catch {
-    workspace = null
-  }
+  // Events are scoped to the visible leads so the activity heatmap cannot count
+  // work the selected workspace does not show.
+  const visibleIds = new Set(visibleLeads.map((l) => l.id))
+  const visibleEvents = events.filter((e) => visibleIds.has(e.leadId))
 
-  if (!workspace) return { leads, orgView, events, reps, workspace: null }
-
-  // A rep's board is every lead they own. The sidebar identity is the capture
-  // context for new leads, not a visibility filter: filtering by one identity
-  // hid a rep's other work (a rep assigned four identities saw one lead).
-  return { leads, orgView, events, reps, workspace }
+  return { leads, orgView, events: visibleEvents, reps, workspace }
 }

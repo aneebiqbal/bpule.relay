@@ -1,7 +1,7 @@
 import { resolveConversationIntent } from '@/lib/conversation/intent'
 import { evaluateFollowUpPolicy } from '@/lib/conversation/follow-up-policy'
 import type { Lead, Message, OutreachStrategy } from '@/lib/domain/types'
-import { calendarDaysBetween, followupDueInDays } from '@/lib/leads/followup'
+import { calendarDaysBetween, followupDueInDays, MAX_FOLLOWUPS_PER_LEAD } from '@/lib/leads/followup'
 
 /**
  * Follow-up Engine
@@ -52,18 +52,19 @@ export function determineFollowup(context: FollowupContext): FollowupStrategy {
     }
   }
 
-  // All 3 follow-ups already used = no more (the Relay rule, raised from 1
-  // to 3 per the approved product design — a lead can receive up to 3
-  // follow-ups total across its life, not just one).
-  if (followupCount >= 3) {
+  // All follow-ups already used = no more (the Relay rule, raised from 1 to 3 per
+  // the approved product design — a lead can receive up to 3 follow-ups total
+  // across its life, not just one). The cap is the canonical policy's, imported
+  // rather than restated, so the two can never drift apart.
+  if (followupCount >= MAX_FOLLOWUPS_PER_LEAD) {
     return {
       shouldFollowUp: false,
-      reason: 'All 3 follow-ups already used. Relay does not send a fourth.',
+      reason: `All ${MAX_FOLLOWUPS_PER_LEAD} follow-ups already used. Relay does not send another.`,
       approach: 'none',
       tone: 'none',
       ctaApproach: 'none',
       valueAdd: null,
-      waitReason: 'Maximum three follow-ups per lead.',
+      waitReason: `Maximum ${MAX_FOLLOWUPS_PER_LEAD} follow-ups per lead.`,
     }
   }
 

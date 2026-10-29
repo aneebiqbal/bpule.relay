@@ -1,6 +1,6 @@
 type Row = Record<string, any>
 
-type FilterOp = 'eq' | 'neq' | 'gte' | 'lt'
+type FilterOp = 'eq' | 'neq' | 'gte' | 'lt' | 'is'
 
 interface Filter {
   field: string
@@ -128,6 +128,23 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: Error | null; 
     return this
   }
 
+  /** PostgREST `is` — used for `sent_at is null` style filters. */
+  is(field: string, value: 'null' | 'not null' | boolean) {
+    this.filters.push({ field, op: 'is', value })
+    return this
+  }
+
+  not(field: string, op: 'is' | 'eq' | 'neq', value: any) {
+    // `not(col, is, null)` is the form the store uses to find rows where a
+    // column IS NOT NULL.
+    if (op === 'is' && value === null) {
+      this.filters.push({ field, op: 'is', value: 'not null' })
+    } else {
+      this.filters.push({ field, op: 'neq', value })
+    }
+    return this
+  }
+
   gte(field: string, value: any) {
     this.filters.push({ field, op: 'gte', value })
     return this
@@ -189,6 +206,7 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: Error | null; 
       if (f.op === 'neq') return value !== f.value
       if (f.op === 'gte') return value >= f.value
       if (f.op === 'lt') return value < f.value
+      if (f.op === 'is') return f.value === 'null' ? value == null : value != null
       return true
     })
     if (!base) return false

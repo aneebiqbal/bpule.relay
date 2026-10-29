@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     const allowPotentialDuplicate = body.allowPotentialDuplicate === true
 
     const linkedinUrl = typeof body.url === 'string' && body.url.trim() ? body.url.trim() : null
-    const senderProfileId = typeof body.senderProfileId === 'string' ? body.senderProfileId : null
+    const requestedSenderProfileId = typeof body.senderProfileId === 'string' ? body.senderProfileId : null
     let revenueIdentityId: string | null = null
     if (typeof body.revenueIdentityId === 'string') {
       try {
@@ -147,11 +147,12 @@ export async function POST(request: Request) {
     try {
       store = await createScoutStore()
     } catch {
-      return NextResponse.json(
-        { error: 'Not signed in.' },
-        { status: 401 },
-      )
+      return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
     }
+
+    // Attribution, not a trust boundary — but an id from the request body must
+    // still resolve inside this caller's own organization before it is stored.
+    const senderProfileId = await store.resolveSenderProfileId(requestedSenderProfileId)
 
     const rulebook = await store.getRulebook()
     if (!rulebook) {

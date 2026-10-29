@@ -88,6 +88,7 @@ import type {
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
 import { determineFollowup } from '@/lib/relay/followup-engine'
+import { calendarDaysBetween, evaluateFollowUpPolicy } from '@/lib/conversation/follow-up-policy'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
@@ -1260,6 +1261,11 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         .filter((p) => p.repId === rep.id)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     },
+    async resolveSenderProfileId(profileId) {
+      if (!profileId) return null
+      const p = profiles.find((x) => x.id === profileId)
+      return p && p.organizationId === DEMO_ORG_ID ? profileId : null
+    },
     async getProfile(id: string) {
       const p = profiles.find((x) => x.id === id)
       return p && p.repId === rep.id ? p : null
@@ -1448,17 +1454,30 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const notifications = await this.listNotifications()
 
       const contacted = leads.filter((l) => l.ownerRepId === rep.id && l.status === 'contacted')
-      const now = Date.now()
+      const now = new Date()
       const followupsDue: FollowupDue[] = contacted
         .map((lead) => {
-          const hasReply = outcomes.some((o) => o.leadId === lead.id && o.stage === 'replied')
-          if (hasReply) return null
-          const sent = messages
-            .filter((m) => m.leadId === lead.id && m.sentAt)
+          const rows = messages.filter((m) => m.leadId === lead.id && m.sentAt)
+          // One clock: the canonical policy. This used to hardcode
+          // `daysSinceContact >= 3` with no follow-up cap, an independent
+          // eligibility rule that could drift from the real product.
+          const lastOutbound = rows
+            .filter((m) => m.direction !== 'inbound')
             .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''))[0]
-          if (!sent?.sentAt) return null
-          const daysSinceContact = Math.floor((now - new Date(sent.sentAt).getTime()) / 86_400_000)
-          return daysSinceContact >= 3 ? { lead, daysSinceContact } : null
+          if (!lastOutbound?.sentAt) return null
+          const lastInbound = rows
+            .filter((m) => m.direction === 'inbound')
+            .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''))[0]
+          const policy = evaluateFollowUpPolicy({
+            leadStatus: lead.status as string | null,
+            lastOutboundAt: lastOutbound.sentAt ?? null,
+            lastInboundAt: lastInbound?.sentAt ?? null,
+            followupCount: rows.filter((m) => m.type === 'followup').length,
+            channel: 'dm',
+            now,
+          })
+          if (!policy.eligible) return null
+          return { lead, daysSinceContact: calendarDaysBetween(new Date(lastOutbound.sentAt as string), now) }
         })
         .filter((x): x is FollowupDue => x !== null)
         .sort((a, b) => b.daysSinceContact - a.daysSinceContact)
@@ -1666,16 +1685,23 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }
     },
     async saveUpworkDraft(input) {
+      const existing = upworkMessages.find((m) => m.jobId === input.jobId && m.type === input.type && !m.sentAt)
+      if (existing) {
+        existing.draftText = input.draftText
+        existing.modelUsed = input.modelUsed
+        return existing
+      }
       const msg: UpworkMessage = {
         id: nextId('umsg'),
         organizationId: DEMO_ORG_ID,
         jobId: input.jobId,
-    repId: rep.id,
+        repId: rep.id,
         type: input.type,
         draftText: input.draftText,
         sentText: null,
         sentAt: null,
         modelUsed: input.modelUsed,
+        senderProfileId: input.senderProfileId ?? null,
         createdAt: new Date().toISOString(),
       }
       upworkMessages.unshift(msg)
@@ -1694,6 +1720,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         sentText,
         sentAt: new Date().toISOString(),
         modelUsed: null,
+        senderProfileId: null,
         createdAt: new Date().toISOString(),
       })
     },

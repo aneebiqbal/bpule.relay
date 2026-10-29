@@ -261,6 +261,8 @@ export interface UpworkMessage {
   sentText: string | null
   sentAt: string | null
   modelUsed: string | null
+  /** The profile the proposal was written for, when the schema carries it. */
+  senderProfileId: string | null
   createdAt: string
 }
 

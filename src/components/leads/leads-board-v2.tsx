@@ -176,7 +176,7 @@ export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
             type="text"
             placeholder="Search by name, company, or title…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE) }}
             className="w-full rounded-xl border border-line bg-bone pl-10 pr-4 py-2.5 text-sm text-ink placeholder:text-stone/40 focus:border-orange/40 focus:outline-none transition-colors"
           />
         </div>
@@ -184,7 +184,7 @@ export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
           {FILTERS.map((f) => (
             <button
               key={f.key}
-              onClick={() => setFilter(f.key)}
+              onClick={() => { setFilter(f.key); setVisibleCount(PAGE_SIZE) }}
               className={cn(
                 'rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200',
                 filter === f.key ? 'bg-orange text-on-accent shadow-sm' : 'text-ink/50 hover:text-ink/80'
@@ -345,6 +345,14 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
               <span>{lead.ownerName}</span>
             </div>
           )}
+
+          {/* Source profile attribution. A lead with no sender is said so
+              plainly — never silently dropped, never guessed from a name. */}
+          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-stone">
+            <span className={lead.senderProfileName ? 'text-graphite' : 'font-medium text-status-warning'}>
+              {lead.senderProfileName ? `Profile: ${lead.senderProfileName}` : 'Profile not assigned'}
+            </span>
+          </div>
 
           {/* Archival warning */}
           {countdown !== null && (

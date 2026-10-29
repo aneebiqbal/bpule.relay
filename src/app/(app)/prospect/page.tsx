@@ -37,6 +37,12 @@ import { RejectedSignalInspector, type RejectedSignalView } from '@/components/s
 import { ScoringFeedback } from '@/components/scoring/scoring-feedback'
 import { useActiveIdentity } from '@/components/workspace/active-identity-provider'
 import { workspaceIdentityForSender } from '@/lib/workspace/active-identity'
+import {
+  PROSPECT_DRAFT_KEY,
+  isProspectDraftWorthSaving,
+  readProspectDraft,
+  serializeProspectDraft,
+} from '@/lib/prospect/draft'
 import { ROUTING_MISMATCH_DELTA } from '@/lib/intelligence-v3/action/recommended-action'
 
 /** Canonical decision detail returned by /api/prospect/analyze (Phase 25-31). */
@@ -213,8 +219,9 @@ export default function ProspectCheckPage() {
 
   // Resilient workspace: the draft and the last completed result survive a
   // refresh, back/forward and navigation away (QA BUG-13-01). Explicit Clear
-  // removes it; privacy stays local to this browser.
-  const DRAFT_KEY = 'relay.prospect.draft.v1'
+  // removes it; privacy stays local to this browser. A successful save removes
+  // it too — a completed analysis must not come back (BUG-23).
+  const DRAFT_KEY = PROSPECT_DRAFT_KEY
   const [draftRestored, setDraftRestored] = useState(false)
   const restoredOnce = useRef(false)
   useEffect(() => {
@@ -223,23 +230,19 @@ export default function ProspectCheckPage() {
     if (restoredOnce.current) return
     restoredOnce.current = true
     if (searchParams?.get('paste')) { setDraftRestored(true); return }
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as { rawInput?: string; result?: AnalysisState | null }
-        if (parsed.rawInput) setRawInput(parsed.rawInput)
-        if (parsed.result) setResult(parsed.result)
-      }
-    } catch { /* corrupt or unavailable draft — start clean */ }
+    const parsed = readProspectDraft(localStorage.getItem(DRAFT_KEY))
+    if (parsed?.rawInput) setRawInput(parsed.rawInput)
+    if (parsed?.result) setResult(parsed.result as AnalysisState)
     setDraftRestored(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useEffect(() => {
     if (!draftRestored) return
+    if (!isProspectDraftWorthSaving({ rawInput, result })) return
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ rawInput, result }))
+      localStorage.setItem(DRAFT_KEY, serializeProspectDraft({ rawInput, result }))
     } catch { /* quota or unavailable — never block the analysis */ }
-  }, [rawInput, result, draftRestored])
+  }, [rawInput, result, draftRestored, DRAFT_KEY])
 
   useEffect(() => {
     return () => {
@@ -486,6 +489,14 @@ export default function ProspectCheckPage() {
         return
       }
       if (!res.ok) throw new Error(data.error ?? 'Failed to save lead.')
+      // Clear the one-shot prospect state only AFTER the server confirmed the
+      // lead. Clearing before the response would leave nothing to show if the
+      // save failed; never clearing left the completed analysis — and its live
+      // "Create lead" CTA — in localStorage, so returning to Prospect resurrected
+      // it and allowed a second save (BUG-23).
+      resetResult()
+      setRawInput('')
+      try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
       trackEvent({ event: 'lead_saved', leadId: data.leadId })
       router.push(`/leads/${data.leadId}?next=generate-connection`)
     } catch (err) {
@@ -865,7 +876,7 @@ export default function ProspectCheckPage() {
                 return (
                   <>
                     <p className="mt-1.5 text-[13px] font-medium text-ink">
-                      Sending as: {active?.name ?? result.bestSender?.label ?? 'No profile selected'}
+                      Sending as: {active?.name ?? result.bestSender?.label ?? 'Profile not assigned'}
                       {active ? ` · ${active.profileMatch}% sender match` : ''}
                     </p>
                     {(active?.reasons[0] ?? result.bestSenderProof[0]?.safeClaim) && (

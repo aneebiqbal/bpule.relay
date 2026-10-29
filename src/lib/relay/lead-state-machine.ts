@@ -51,6 +51,23 @@ export interface LeadActionResult {
 const MAX_FOLLOWUPS = 3
 const DAY_MS = 1000 * 60 * 60 * 24
 
+/**
+ * Whether the rep and the client have actually started a relationship.
+ *
+ * The only thing that ends the "watch, do not pitch" state for a
+ * `research_more` lead. Score decides priority; it must never decide whether an
+ * existing relationship may progress (BUG-27). Structural on purpose: the state
+ * machine (LeadDetail) and the pipeline board (LeadRow) must agree on one rule.
+ */
+export function relationshipHasStarted(
+  lead: { connectionAcceptedAt?: string | null; messages?: readonly Message[] | null },
+  messages?: readonly Message[],
+): boolean {
+  if (lead.connectionAcceptedAt != null) return true
+  const rows = messages ?? lead.messages ?? []
+  return rows.some((m) => m.direction !== 'inbound' && Boolean(m.sentAt))
+}
+
 function bySentAtDesc(a: Message, b: Message): number {
   return (b.sentAt ?? '').localeCompare(a.sentAt ?? '')
 }
@@ -110,7 +127,14 @@ export function deriveNextLeadAction(lead: LeadDetail, now: number = Date.now())
       followupsRemaining: 0,
     }
   }
-  if (verdict === 'research_more' && !messages.some((m) => m.direction === 'inbound')) {
+
+  // A research_more lead is watched rather than pitched — but only until a
+  // relationship exists. Once the rep has sent anything, or the connection has
+  // been accepted, the lifecycle takes over: score decides priority, never
+  // whether an existing relationship may progress (BUG-27). Gating on the
+  // verdict here stranded score-4/5 leads in "Watch" forever, so a connection
+  // that was sent and accepted could never advance to "send the first message".
+  if (verdict === 'research_more' && !relationshipHasStarted(lead, messages)) {
     return {
       action: 'REVIEW',
       primaryLabel: 'Watch — not yet a fit',

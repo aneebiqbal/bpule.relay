@@ -415,6 +415,7 @@ export interface ScoutStore {
   listAllReps(): Promise<Rep[]>
   // profiles (multi-platform identity)
   listProfiles(): Promise<Profile[]>
+  resolveSenderProfileId(profileId: string | null | undefined): Promise<string | null>
   getProfile(id: string): Promise<Profile | null>
   upsertProfile(input: {
     id?: string
@@ -532,7 +533,7 @@ export interface ScoutStore {
   updateUpworkJobFields(id: string, fields: Partial<Parameters<ScoutStore['createUpworkJob']>[0]>): Promise<void>
   updateUpworkJobScore(id: string, score: { total: number; verdict: UpworkJob['verdict']; canonicalScore?: number | null; scoreVersion?: string | null; scoreBreakdown?: unknown; jobFacts?: unknown; profileMatch?: unknown }): Promise<void>
   updateUpworkJob(id: string, updates: { status?: UpworkJob['status']; notes?: string | null; proposedRate?: number | null }): Promise<void>
-  saveUpworkDraft(input: { jobId: string; type: UpworkMessage['type']; draftText: string; modelUsed: string }): Promise<UpworkMessage>
+  saveUpworkDraft(input: { jobId: string; type: UpworkMessage['type']; draftText: string; modelUsed: string; senderProfileId?: string | null }): Promise<UpworkMessage>
   markUpworkApplied(jobId: string, sentText: string, type?: UpworkMessage['type']): Promise<void>
   // csv imports
   logCsvImport(input: Omit<CsvImport, 'id' | 'createdAt' | 'repId'>): Promise<CsvImport>

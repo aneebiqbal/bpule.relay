@@ -30,6 +30,21 @@ export async function POST(request: Request) {
     )
   }
 
-  const msg = await store.saveUpworkDraft({ jobId, type: type as 'cover' | 'followup' | 'reply', draftText, modelUsed })
+  // The profile is attribution, not a trust boundary — but a client-supplied id
+  // must still resolve to one of the caller's own profiles before it is stored.
+  const requestedProfileId = typeof body.profileId === 'string' ? body.profileId : null
+  let senderProfileId: string | null = null
+  if (requestedProfileId) {
+    const profiles = await store.listProfiles()
+    if (profiles.some((p) => p.id === requestedProfileId)) senderProfileId = requestedProfileId
+  }
+
+  const msg = await store.saveUpworkDraft({
+    jobId,
+    type: type as 'cover' | 'followup' | 'reply',
+    draftText,
+    modelUsed,
+    senderProfileId,
+  })
   return NextResponse.json({ message: msg })
 }

@@ -120,6 +120,7 @@ describe('Lead creation hardening flow', () => {
   it('returns explicit hard duplicate semantics from /api/leads', async () => {
     createScoutStoreMock.mockResolvedValue({
       getRulebook: vi.fn().mockResolvedValue(RULEBOOK),
+      resolveSenderProfileId: vi.fn().mockResolvedValue(null),
       createLead: vi.fn().mockResolvedValue({
         blocked: true,
         duplicateKind: 'hard',
@@ -148,6 +149,7 @@ describe('Lead creation hardening flow', () => {
   it('returns explicit potential duplicate semantics from /api/prospect/save', async () => {
     createScoutStoreMock.mockResolvedValue({
       getRulebook: vi.fn().mockResolvedValue(RULEBOOK),
+      resolveSenderProfileId: vi.fn().mockResolvedValue(null),
       createLead: vi.fn().mockResolvedValue({
         blocked: true,
         duplicateKind: 'potential',
@@ -181,6 +183,7 @@ describe('Lead creation hardening flow', () => {
 
     createScoutStoreMock.mockResolvedValue({
       getRulebook: vi.fn().mockResolvedValue(RULEBOOK),
+      resolveSenderProfileId: vi.fn().mockResolvedValue(null),
       createLead: createLeadMock,
       updateLeadScore: updateLeadScoreMock,
     })
@@ -234,6 +237,7 @@ describe('Lead creation hardening flow', () => {
 
     createScoutStoreMock.mockResolvedValue({
       getRulebook: vi.fn().mockResolvedValue(RULEBOOK),
+      resolveSenderProfileId: vi.fn().mockResolvedValue(null),
       createLead: createLeadMock,
     })
 
@@ -267,6 +271,7 @@ describe('Lead creation hardening flow', () => {
     })
     createScoutStoreMock.mockResolvedValue({
       getRulebook: vi.fn().mockResolvedValue(RULEBOOK),
+      resolveSenderProfileId: vi.fn().mockResolvedValue(null),
       createLead: createLeadMock,
     })
 
@@ -297,6 +302,7 @@ describe('Lead creation hardening flow', () => {
 
     createScoutStoreMock.mockResolvedValue({
       getRulebook: vi.fn().mockResolvedValue(RULEBOOK),
+      resolveSenderProfileId: vi.fn().mockResolvedValue(null),
       createLead: createLeadMock,
     })
 

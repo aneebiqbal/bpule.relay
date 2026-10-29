@@ -167,6 +167,7 @@ export default async function UpworkJobPage({
           jobScore={job.score}
           profiles={profiles}
           matchedProofs={[]}
+          savedDraft={(job.messages ?? []).find((m) => m.type === 'cover' && !m.sentAt && m.draftText)?.draftText ?? null}
         />
       </section>
 

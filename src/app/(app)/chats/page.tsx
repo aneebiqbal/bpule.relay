@@ -4,6 +4,7 @@ import { createScoutStore } from '@/lib/store'
 import { PageHeader } from '@/components/ui/page-header'
 import { EmptyState } from '@/components/ui/empty-state'
 import { loadInbox, type InboxBucket, type InboxItem } from '@/lib/conversation/inbox'
+import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
 import { cn } from 'cn'
 
 export const dynamic = 'force-dynamic'
@@ -28,7 +29,10 @@ export default async function ChatsPage() {
   let items: InboxItem[] = []
   let failed = false
   try {
-    items = await loadInbox(store)
+    // Scope the rep's inbox to the selected workspace so switching profiles
+    // changes the visible conversation set too (BUG-30).
+    const workspace = await resolveActiveWorkspace()
+    items = await loadInbox(store, workspace)
   } catch {
     failed = true
   }
