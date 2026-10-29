@@ -286,14 +286,43 @@ Today / Chats / Leads / History
 
 ### Known limitation (not silently "done")
 
-**Upwork profile attribution requires a schema column.** `upwork_messages` and
-`upwork_jobs` have no `sender_profile_id`; the column was never migrated. The
-code now writes it when the column is present and degrades to `null` when it is
-not, and the migration is recorded in
-`supabase/migrations/20261029120001_upwork_sender_attribution.sql`. Production
-will carry Upwork attribution as soon as that migration is applied — which needs
-`SUPABASE_DB_PASSWORD` or a management token, neither of which is available in
-this environment.
+**Upwork sender attribution is schema-incomplete — OPEN.** `upwork_messages` and
+`upwork_jobs` have no `sender_profile_id`, and `upwork_jobs` has no
+`connects_used`; both were added in code commit `3d0a4b4` without a migration.
+The application writes all three only when the column exists and degrades to a
+no-op when it does not, so nothing breaks — the feature is simply not live.
+
+The migration is recorded at
+`supabase/migrations/20261029120001_upwork_sender_attribution.sql` (idempotent,
+safe to re-run). It **cannot be applied from this environment**:
+
+- `supabase migration list --linked` → `403 — insufficient privileges`
+- no `SUPABASE_DB_PASSWORD`; the keychain's `SUPABASE_ACCESS_TOKEN` is empty
+- `supabase/.temp/pooler-url` carries no password
+- the running Docker Supabase stack is a different local project
+
+Apply it with either:
+
+```bash
+supabase db push --linked
+# or, in the Supabase SQL editor:
+#   supabase/migrations/20261029120001_upwork_sender_attribution.sql
+```
+
+Then confirm:
+
+```bash
+node --env-file=.env.local scripts/qa/check-upwork-attribution-schema.mjs
+```
+
+That script probes the three columns and exits non-zero while any is missing, so
+the OPEN state is machine-checkable rather than a note in a document. It
+currently reports all three missing.
+
+**What is already fixed without the migration:** the BUG-28 status write. The
+`connects_used` column is optional and dropped when absent, so
+`upwork_jobs.status` flips to `applied` today — verified in production by the
+browser matrix. Only cumulative Connect tracking waits on the column.
 
 ---
 
@@ -425,21 +454,28 @@ database — draft text lives only in that row. The committed E2E spec does not 
 this; its cleanups are scoped by `job_id` and a 10-minute window. The remaining
 drafts date from 2026-10-15 to 2026-10-27, so nothing before today was touched.
 
+**Permanent guard added.** `tests/qa-cleanup-scope-guard.test.ts` fails the build
+if any `delete` under `scripts/` or `e2e/` narrows by a time window without also
+naming the rows it means — an identity column (`id`, `job_id`, `lead_id`, …) in
+the same statement. Time may bound how much history to sweep; it may never
+select what the caller means. The guard was verified to fire on a deliberately
+unsafe fixture and to pass once it was removed.
+
 ---
 
 ## MANDATORY FINAL REPORT
 
 ```text
 BASELINE SHA   98ef2dea26b15442261db9fcbe7ca5c463a26575
-FINAL SHA      b1a69a9  (code)   df90e84  (workspace-scope + Lead Detail fix)
-               cac58a6  (tests/docs — deployed, no app code)
-DEPLOYED SHA   13a033e  (verified via /api/version)
+DEPLOYED SHA   b4128b9f5032bacb52194b32cfdbb7e5eeca3114   ← /api/version
+CODE SHA       df90e84  (the commit that carries every fix)
 ```
 
-The code that carries the fixes is `df90e84`; every later commit is tests and
-documentation. The browser matrix ran against `df90e84` and `cac58a6`, which
-serve identical application code. `13a033e` is the docs-only commit on top and
-is what `/api/version` reports.
+`DEPLOYED SHA` is the value `/api/version` returned when this report was
+finalized. It is a **docs-only** commit on top of `df90e84`, so it serves
+identical application code. Commits made after this line bump `HEAD` without
+changing deployed behaviour — compare `/api/version` against `CODE SHA`, do not
+expect them to be equal.
 
 | Bug | REPRODUCED | ROOT CAUSE | FIX | UNIT | BROWSER | DB | STATUS |
 |---|---|---|---|---|---|---|---|
@@ -493,7 +529,7 @@ visible toast).
 | `npx next build` | PASS |
 | Full suite | **266 files / 4,012 tests / 0 failed** |
 | `pnpm qa:contracts` | PASS — 41 tests |
-| `/api/version` | `13a033e` |
+| `/api/version` | `b4128b9` |
 
 ```text
 BUG-23 PASS   BUG-24 PASS   BUG-25 PASS   BUG-26 PASS   BUG-27 PASS
@@ -505,10 +541,14 @@ FOLLOWUP_OUTBOUND_GATE    PASS
 UPWORK_ACTIVITY_GATE     PASS
 BROWSER_GATE             PASS (2 retries for AI latency, not product defects)
 DB_PERSISTENCE_GATE      PASS
+CLEANUP_SCOPE_GATE       PASS  (new — tests/qa-cleanup-scope-guard.test.ts)
 SHA_GATE                 VERIFIED
 PRODUCTION_SMOKE         PASS
 
-FINAL VERDICT: GO — with two disclosed caveats
+OPEN  Upwork sender-attribution migration  (blocked on DB credentials)
+OPEN  Draft-deletion incident follow-up    (data already lost; guard now added)
+
+FINAL VERDICT: GO — with the two OPEN items above tracked, not hidden
 ```
 
 1. **Upwork profile attribution needs its migration applied.** Recorded in
