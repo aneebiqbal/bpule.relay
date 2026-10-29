@@ -174,7 +174,7 @@ export async function loadBoardData(): Promise<BoardData> {
     } catch { }
   }
 
-  const leads: LeadRow[] = allLeads.map((lead) => {
+  const leads: LeadRow[] = visibleLeads.map((lead) => {
     const outbound = lastOutboundByLead.get(lead.id)
     const inbound = lastInboundByLead.get(lead.id)
     const lifecycle = computeLifecycleState({

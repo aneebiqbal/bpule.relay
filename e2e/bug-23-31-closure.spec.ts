@@ -29,6 +29,10 @@ We need an external team to rebuild our customer portal. Budget is approved for 
 
 const createdLeadIds: string[] = []
 
+// Prospect analysis makes real AI calls; the default 60s test timeout is not
+// enough for analyze -> review -> create on a deployed environment.
+test.setTimeout(300_000)
+
 async function cleanup() {
   if (!sb || createdLeadIds.length === 0) return
   const ids = [...createdLeadIds]
@@ -325,34 +329,37 @@ test.describe('BUG031_DRAFT_SAVE_CONFIRMATION', () => {
       .maybeSingle()
     test.skip(!job, 'no applicable Upwork job in this environment')
 
+    const draftText = `BUG-31 verification draft ${Date.now()}.`
+
+    // Seed the draft through the real API — generation is slow and flaky, and
+    // the requirement under test is the confirmation and the persistence.
+    const seed = await page.request.post(`/api/upwork/jobs/${job!.id}/draft`, {
+      data: { jobId: job!.id, draftText, type: 'cover' },
+      timeout: 60_000,
+    })
+    expect(seed.ok()).toBeTruthy()
+
     await page.goto(`/upwork/${job!.id}`, { waitUntil: 'domcontentloaded' })
-    await page.waitForTimeout(2000)
+    await page.waitForTimeout(2500)
 
-    const generate = page.getByRole('button', { name: /generate/i }).first()
-    if (await generate.count().catch(() => 0)) {
-      await generate.click({ timeout: 60_000 })
-      await page.waitForTimeout(30_000)
-    }
-
+    // The stored draft must be restored on mount, or "Save draft" is a lie.
     const textarea = page.locator('textarea').first()
-    if (!(await textarea.count().catch(() => 0))) test.skip(true, 'no proposal editor on this job')
-    const draftText = (await textarea.inputValue().catch(() => '')) || 'BUG-31 verification draft text.'
-    await textarea.fill(draftText)
+    await expect(textarea).toHaveValue(draftText, { timeout: 30_000 })
 
+    // Editing and saving shows the confirmation only after the server confirms.
+    await textarea.fill(`${draftText} (edited)`)
     const save = page.getByRole('button', { name: /save draft|failed — retry/i })
     await expect(save).toBeEnabled()
     await save.click()
-
-    // The confirmation must appear only after the server confirmed.
     await expect(page.getByText('Draft saved')).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole('button', { name: /^saved$/i })).toBeVisible({ timeout: 30_000 })
 
     // Reload: the exact draft must still be there.
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(2500)
-    await expect(page.locator('textarea').first()).toHaveValue(draftText)
+    await expect(page.locator('textarea').first()).toHaveValue(`${draftText} (edited)`, { timeout: 30_000 })
 
-    // One draft row, not one per click.
+    // One draft row, not one per save.
     const { count } = await sb!.from('upwork_messages')
       .select('id', { count: 'exact', head: true })
       .eq('job_id', job!.id)

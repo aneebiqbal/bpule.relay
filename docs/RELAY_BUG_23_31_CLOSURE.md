@@ -279,8 +279,154 @@ Today / Chats / Leads / History
 **Upwork profile attribution requires a schema column.** `upwork_messages` and
 `upwork_jobs` have no `sender_profile_id`; the column was never migrated. The
 code now writes it when the column is present and degrades to `null` when it is
-not, and the migration is recorded in `supabase/migrations/`. Production will
-carry Upwork attribution as soon as that migration is applied — which needs
+not, and the migration is recorded in
+`supabase/migrations/20261029120001_upwork_sender_attribution.sql`. Production
+will carry Upwork attribution as soon as that migration is applied — which needs
 `SUPABASE_DB_PASSWORD` or a management token, neither of which is available in
 this environment.
+
+---
+
+## PHASE 14 — ATTRIBUTION / BACKFILL AUDIT
+
+Production `bpulse` org, 720 leads:
+
+| Metric | Count |
+|---|---:|
+| Total leads | 720 |
+| Stamped with `revenue_identity_id` | 646 |
+| Sender-only (no workspace stamp) | 57 |
+| Neither | **17** |
+| Attribution resolvable to a display name | **703** |
+| Attribution unresolvable | 17 |
+
+Per owner:
+
+| Owner | Total | Stamped | Sender-only | Neither |
+|---|---:|---:|---:|---:|
+| `…0003` (Madiha) | 128 | 128 | 0 | 0 |
+| `ec4f844d…` (Dawood) | 186 | 186 | 0 | 0 |
+| `…0004` (Ahmad) | 305 | 258 | 47 | 0 |
+| `dd050dac…` (anas) | 24 | 7 | 0 | **17** |
+| `…0001` (Aneeb) | 19 | 16 | 3 | 0 |
+| `…0002` (Hassan) | 58 | 51 | 7 | 0 |
+
+**No backfill was attempted.** All 17 unresolvable rows belong to one rep and
+have neither a workspace nor a sender; guessing from employee name or company
+would be fabrication. They render as `Profile not assigned` and can be assigned
+explicitly.
+
+---
+
+## CONTRACT STATUS
+
+### PROFILE ATTRIBUTION CONTRACT
+
+One canonical rule, `leadBelongsToWorkspace()`
+(`src/lib/workspace/active-identity.ts:34-45`), now with call sites: the rep
+board (`scopeLeadsToWorkspace`) and the rep inbox (`loadInbox`). A stamped
+workspace is the only visibility key; the current sender never moves a lead
+between workspaces. `senderProfileId` is validated against the caller's
+organization on both lead-creation routes.
+
+### PROFILE-SCOPED QUERY STATUS
+
+| Surface | Scoped | Notes |
+|---|---|---|
+| `/leads` board | yes | `scopeLeadsToWorkspace`; admin stays org-wide |
+| `/chats` inbox | yes | `loadInbox(store, workspace)` |
+| `/dashboard` board | yes | reads `loadBoardData()` |
+| `/archive` | no | whole-book search; intentionally unscoped |
+| `/team`, `/admin/*` | n/a | org-wide by design |
+
+### PIPELINE STATE MACHINE STATUS
+
+One authority: `deriveNextLeadAction()` (`lead-state-machine.ts`), rendered by
+`displayForAction()` and `derivePipelineStage()`. No function compares a raw
+score. The only score-derived gate left is `verdict === 'skip'` → never
+contact, which is the product's SKIP rule, not a progression block.
+`relationshipHasStarted()` is shared by the state machine and the board.
+
+### FOLLOW-UP POLICY STATUS
+
+One clock: `evaluateFollowUpPolicy()`. Consumers: `followup-engine`,
+`fetchFollowupsDue`, `deriveNextLeadAction`, `derivePipelineStage`, the demo
+store. `conversation_states.next_followup_at` is a persisted copy written by
+`markContacted()` after a real send — no migration or trigger writes it.
+
+### TODAY ACTIVITY LEDGER STATUS
+
+`action_events` is the append-only ledger; `daily_accountability.completed_count`
+is the counter it feeds. Both are written from the same call site with the same
+`source_event_id`, so they cannot disagree. `record_canonical_progress` bridges
+to `day_closes`.
+
+### UPWORK ACTIVITY STATUS
+
+`UPWORK_APPLIED` is emitted with a stable idempotency key, and the job's own
+`status` now actually flips. `upwork_applications` is dead schema — never read
+or written by `src`; the workflow uses `upwork_jobs.status` + `upwork_messages`.
+
+### DRAFT PERSISTENCE STATUS
+
+One `upwork_messages` row per `(job, type)`; a retry updates it rather than
+inserting a copy. The page restores it on mount.
+
+### PAGINATION STATUS
+
+No server-side limit on the leads query; the board pages client-side at 50 with
+an explicit "Load more (N remaining)" control, and resets its window when the
+filter or search changes. The header reports the full profile-scoped count.
+
+### CROSS-SURFACE PARITY
+
+`buildLeadParityReport()` compares score, action label, pipeline stage,
+relationship display, conversation presence and thread length for one lead.
+`pnpm qa:contracts` runs it plus the cross-surface parity suite: **41 tests
+passing**.
+
+### SECURITY
+
+- Profile/workspace ids from the request body are validated against the caller's
+  organization before being persisted (`resolveSenderProfileId`,
+  `resolveAccessibleIdentity`, `validateRevenueIdentityId`).
+- RLS remains the organization boundary; profile filtering is an
+  application-level scope on top, never a replacement.
+- `createServiceSupabase()` is not exposed to any browser-served route.
+
+### PERFORMANCE
+
+`chunkedIn()` (100 ids/query) is used wherever a large id set is required, so
+the BUG-25/BUG-30 fixes do not reintroduce an unchunked `in.(...)`. The board
+loads the rep's scoped set rather than the whole org table.
+
+### TEST DATA CLEANUP
+
+Every record the E2E suite creates is `is_test: true` and is removed in
+`afterEach`; the Upwork tests restore the job's original status and delete only
+rows created during the run.
+
+---
+
+## MANDATORY FINAL REPORT
+
+```text
+BASELINE SHA   98ef2dea26b15442261db9fcbe7ca5c463a26575
+FINAL SHA      b1a69a9537a23282ac69de81e8128a0b97ecaf7a   (code)
+               3fb306c                                       (tests/docs)
+DEPLOYED SHA   b1a69a9  (verified via /api/version)
+```
+
+| Bug | REPRODUCED | ROOT CAUSE | FIX | UNIT | BROWSER | DB | STATUS |
+|---|---|---|---|---|---|---|---|
+| BUG-23 | yes | save never cleared prospect state/draft | clear after server confirms | PASS | pending | pending | FIXED_UNIT |
+| BUG-24 | yes | unvalidated client profile id; wrong fallback copy | org-scoped resolution + `Profile not assigned` | PASS | pending | pending | FIXED_UNIT |
+| BUG-25 | partial | archived leads in the Relay queue; stale page window | `archived=false`; reset on filter change | PASS | pending | pending | FIXED_UNIT |
+| BUG-26 | no | latent duplicated clocks | all read the canonical policy | PASS | n/a | n/a | FIXED_UNIT |
+| BUG-27 | yes | `research_more` blocked progression | `relationshipHasStarted()` | PASS | pending | pending | FIXED_UNIT |
+| BUG-28 | yes | silent `connects_used` 400; broken ledger idempotency | optional column + thrown errors; keyed insert; one message row | PASS | pending | PASS | FIXED_UNIT |
+| BUG-29 | yes | Upwork emits omitted the profile | pass `senderProfileId` | PASS | pending | pending | FIXED_UNIT |
+| BUG-30 | yes | no query applied the workspace scope | `scopeLeadsToWorkspace` on board + inbox | PASS | pending | pending | FIXED_UNIT |
+| BUG-31 | yes | no confirmation, no restore, no idempotency | states + `aria-live` + restore + one row | PASS | pending | pending | FIXED_UNIT |
+
 

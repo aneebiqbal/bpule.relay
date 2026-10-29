@@ -48,9 +48,11 @@ interface Props {
   lead: LeadDetail
   dailyLimit: number
   todaySends: number
+  /** Display name of the lead's sender profile, or null when none is assigned. */
+  senderProfileName?: string | null
 }
 
-export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends }: Props) {
+export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, senderProfileName }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [lead, setLead] = useState(initialLead)
@@ -368,6 +370,13 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends }: Pro
                       Account 360 →
                     </Link>
                   )}
+                </p>
+                {/* Source profile attribution. A lead with no sender says so
+                    plainly — never silently omitted, never guessed (BUG-29). */}
+                <p className="mt-0.5 flex items-center gap-1 text-[11px]">
+                  <span className={senderProfileName ? 'text-graphite' : 'font-medium text-status-warning'}>
+                    {senderProfileName ? `Profile: ${senderProfileName}` : 'Profile not assigned'}
+                  </span>
                 </p>
               </div>
             </div>

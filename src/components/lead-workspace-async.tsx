@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useCallback, useState } from 'react'
+import { use, useCallback, useState, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { LayoutList, MessagesSquare } from 'lucide-react'
 import { LeadWorkspace } from './lead-workspace-simple'
@@ -22,10 +22,18 @@ const CONVERSATION_UI = process.env.NEXT_PUBLIC_CONVERSATION_UI !== 'false'
 type Tab = 'overview' | 'conversation'
 
 export function LeadWorkspaceAsync({ dataPromise }: { dataPromise: Promise<LeadData> }) {
-  const { lead, dailyLimit, todaySends } = use(dataPromise)
+  const { lead, profiles, dailyLimit, todaySends } = use(dataPromise)
   const router = useRouter()
   const searchParams = useSearchParams()
   const [tab, setTab] = useState<Tab>(() => (CONVERSATION_UI && searchParams?.get('tab') === 'conversation' ? 'conversation' : 'overview'))
+
+  // Resolve the stored sender profile id to its current display name, so the
+  // attribution is a name and not a raw uuid (BUG-29).
+  const senderProfileName = useMemo(() => {
+    if (!lead.senderProfileId) return null
+    const profile = profiles.find((p) => p.id === lead.senderProfileId)
+    return profile?.displayName ?? profile?.fullName ?? null
+  }, [lead.senderProfileId, profiles])
 
   const changeTab = useCallback((next: string) => {
     const value: Tab = next === 'conversation' ? 'conversation' : 'overview'
@@ -38,7 +46,7 @@ export function LeadWorkspaceAsync({ dataPromise }: { dataPromise: Promise<LeadD
   }, [router, searchParams])
 
   if (!CONVERSATION_UI) {
-    return <LeadWorkspace lead={lead} dailyLimit={dailyLimit} todaySends={todaySends} />
+    return <LeadWorkspace lead={lead} dailyLimit={dailyLimit} todaySends={todaySends} senderProfileName={senderProfileName} />
   }
 
   return (
@@ -52,7 +60,7 @@ export function LeadWorkspaceAsync({ dataPromise }: { dataPromise: Promise<LeadD
         onChange={changeTab}
       />
       {tab === 'overview' ? (
-        <LeadWorkspace lead={lead} dailyLimit={dailyLimit} todaySends={todaySends} />
+        <LeadWorkspace lead={lead} dailyLimit={dailyLimit} todaySends={todaySends} senderProfileName={senderProfileName} />
       ) : (
         <LeadConversation leadId={lead.id} onChanged={() => router.refresh()} />
       )}
