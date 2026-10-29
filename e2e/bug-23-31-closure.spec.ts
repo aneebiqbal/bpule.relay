@@ -232,8 +232,7 @@ test.describe('BUG028_UPWORK_APPLIED_COUNTS_TODAY', () => {
       .limit(1)
       .maybeSingle()
     test.skip(!job, 'no applicable Upwork job in this environment')
-
-    const before = await page.evaluate(() => document.body.innerText).catch(() => '')
+    const originalStatus = job!.status
 
     const res = await page.request.post(`/api/upwork/jobs/${job!.id}/apply`, {
       data: { sentText: 'BUG-28 verification proposal text.' },
@@ -260,11 +259,16 @@ test.describe('BUG028_UPWORK_APPLIED_COUNTS_TODAY', () => {
       .maybeSingle()
     expect(event?.idempotency_key).toBe(`upwork_applied:${job!.id}`)
 
-    // Restore the job so the environment is left as found.
-    await sb!.from('upwork_jobs').update({ status: 'new' }).eq('id', job!.id)
-    await sb!.from('upwork_messages').delete().eq('job_id', job!.id).gte('sent_at', '2000-01-01')
-    await sb!.from('action_events').delete().eq('job_id', job!.id).eq('action_type', 'UPWORK_APPLIED')
-    void before
+    // Restore the job and remove only what this test created.
+    await sb!.from('upwork_jobs').update({ status: originalStatus }).eq('id', job!.id)
+    const since = new Date(Date.now() - 10 * 60_000).toISOString()
+    await sb!.from('upwork_messages').delete().eq('job_id', job!.id).gte('created_at', since)
+    await sb!
+      .from('action_events')
+      .delete()
+      .eq('job_id', job!.id)
+      .eq('action_type', 'UPWORK_APPLIED')
+      .eq('idempotency_key', `upwork_applied:${job!.id}`)
   })
 })
 
@@ -356,6 +360,8 @@ test.describe('BUG031_DRAFT_SAVE_CONFIRMATION', () => {
       .is('sent_at', null)
     expect(count).toBe(1)
 
-    await sb!.from('upwork_messages').delete().eq('job_id', job!.id).is('sent_at', null)
+    // Remove only the draft this test wrote.
+    const since = new Date(Date.now() - 10 * 60_000).toISOString()
+    await sb!.from('upwork_messages').delete().eq('job_id', job!.id).is('sent_at', null).gte('created_at', since)
   })
 })
