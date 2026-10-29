@@ -19,6 +19,9 @@ const POLICY: OperatingPolicy = normalizePolicy({
 
 const DATE = '2026-10-30'
 const at = (hour: number, minute = 0) => new Date(Date.UTC(2026, 9, 30, hour - 5, minute))
+/** A Karachi wall-clock instant on an arbitrary date (UTC+5). */
+const karachiAt = (year: number, month: number, day: number, hour: number, minute = 0) =>
+  new Date(Date.UTC(year, month - 1, day, hour - 5, minute))
 
 describe('SCHEDULER_IDEMPOTENCY — deterministic planning', () => {
   it('produces identical keys when planned twice', () => {
@@ -105,5 +108,34 @@ describe('SCHEDULER_IDEMPOTENCY — the outbox unique key', () => {
     const keysA = new Set(a.map((job) => `${job.organizationId}:${job.dedupeKey}`))
     const keysB = new Set(b.map((job) => `${job.organizationId}:${job.dedupeKey}`))
     for (const key of keysB) expect(keysA.has(key)).toBe(false)
+  })
+})
+
+describe('SCHEDULER_IDEMPOTENCY — recovery after an outage', () => {
+  it('plans the previous operating day close in the first two hours of a new day', () => {
+    // 00:30 Monday local: the worker may have been down through Friday's end.
+    const mondayEarly = karachiAt(2026, 11, 2, 0, 30) // 00:30 Karachi on Mon 2 Nov
+    const jobs = planOperationalJobs({ policy: POLICY, businessDate: '2026-11-02', now: mondayEarly })
+
+    const recovery = jobs.filter((job) => job.jobKind === 'CLOSE_MISSED_DAY' && job.businessDate === '2026-10-30')
+    expect(recovery).toHaveLength(1)
+    expect(recovery[0].dedupeKey).toBe('2026-10-30:CLOSE_MISSED_DAY:end')
+  })
+
+  it('does not plan recovery later in the day', () => {
+    const jobs = planOperationalJobs({ policy: POLICY, businessDate: DATE, now: at(12, 0) })
+    const previousDay = jobs.filter((job) => job.businessDate !== DATE)
+    expect(previousDay).toHaveLength(0)
+  })
+
+  it('keeps recovery idempotent with the original end-of-day job', () => {
+    const endOfDay = planOperationalJobs({ policy: POLICY, businessDate: DATE, now: at(18, 5) })
+    const original = endOfDay.find((job) => job.jobKind === 'CLOSE_MISSED_DAY')!
+
+    const mondayEarly = karachiAt(2026, 11, 2, 0, 30)
+    const recoveryPlan = planOperationalJobs({ policy: POLICY, businessDate: '2026-11-02', now: mondayEarly })
+    const recovered = recoveryPlan.find((job) => job.jobKind === 'CLOSE_MISSED_DAY')!
+
+    expect(recovered.dedupeKey).toBe(original.dedupeKey)
   })
 })

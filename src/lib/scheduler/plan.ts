@@ -11,6 +11,8 @@
  */
 import {
   isOrgWorkingDay,
+  orgParts,
+  previousOperatingDay,
   workdayProgress,
   type OperatingPolicy,
   type WarningThresholds,
@@ -63,13 +65,13 @@ export function planOperationalJobs(input: {
   const progress = workdayProgress(now, policy, businessDate)
   const stage = dayStage(progress, policy.warningThresholds)
 
-  const job = (jobKind: OperationalJobKind, timeBucket: string): PlannedJob => ({
+  const job = (jobKind: OperationalJobKind, timeBucket: string, date = businessDate): PlannedJob => ({
     organizationId: policy.organizationId,
-    businessDate,
+    businessDate: date,
     repId: null,
     jobKind,
     timeBucket,
-    dedupeKey: dedupeKeyFor(businessDate, jobKind, timeBucket),
+    dedupeKey: dedupeKeyFor(date, jobKind, timeBucket),
     payload: { stage, progress: Number(progress.toFixed(4)) },
   })
 
@@ -90,6 +92,18 @@ export function planOperationalJobs(input: {
   if (stage === 'end') {
     jobs.push(job('CLOSE_MISSED_DAY', 'end'))
     jobs.push(job('PREPARE_CARRYOVER', 'end'))
+  }
+
+  // Recovery: if the worker was down through the end of the previous operating
+  // day, its close job was never planned. In the first two hours of a new day,
+  // plan it for the previous day so the shortfall is still recorded.
+  const minutesIntoDay = orgParts(now, policy.timezone).minutesOfDay
+  if (minutesIntoDay < 120) {
+    const previous = previousOperatingDay(policy, businessDate)
+    if (isOrgWorkingDay(policy, previous)) {
+      jobs.push(job('CLOSE_MISSED_DAY', 'end', previous))
+      jobs.push(job('PREPARE_CARRYOVER', 'end', previous))
+    }
   }
 
   return jobs
