@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { createServerSupabase } from '@/lib/supabase/server'
-import { dayProgress } from '@/lib/relay/accountability-engine'
+import { currentInstant, orgDate, workdayProgress } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 export async function GET(req: NextRequest) {
   const ctx = await getAuthContext()
@@ -10,7 +11,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const date = req.nextUrl.searchParams.get('date') ?? new Date().toISOString().slice(0, 10)
+  const policy = await loadOperatingPolicy(ctx.orgId)
+  const now = currentInstant()
+  const date = req.nextUrl.searchParams.get('date') ?? orgDate(now, policy.timezone)
   const supabase = await createServerSupabase()
 
   const { data: teamMembers } = await supabase
@@ -53,7 +56,7 @@ export async function GET(req: NextRequest) {
     .select('id, identity_name')
     .in('id', assignments?.map((a: any) => a.revenue_identity_id) ?? [])
 
-  const timeProgress = dayProgress(new Date(), 'UTC')
+  const timeProgress = workdayProgress(now, policy, date)
 
   const members = personIds.map((personId: string) => {
     const rep = reps?.find((r: any) => r.id === personId)

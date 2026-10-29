@@ -3,6 +3,7 @@ import { getAuthContext } from '@/lib/auth/organization'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { can } from '@/lib/auth/organization'
 import type { ExceptionReason } from '@/lib/domain/types'
+import { businessDateForOrg } from '@/lib/org-clock/load'
 
 /**
  * Strict Day Close API.
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const identityId = req.nextUrl.searchParams.get('identityId')
-  const date = req.nextUrl.searchParams.get('date') ?? new Date().toISOString().slice(0, 10)
+  const date = req.nextUrl.searchParams.get('date') ?? (await businessDateForOrg(ctx.orgId))
   const supabase = await createServerSupabase()
 
   if (identityId) {
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
   const identityId = typeof body.identityId === 'string' ? body.identityId : ''
-  const date = typeof body.date === 'string' ? body.date : new Date().toISOString().slice(0, 10)
+  const date = typeof body.date === 'string' ? body.date : (await businessDateForOrg(ctx.orgId))
 
   if (!identityId) {
     return NextResponse.json({ error: 'identityId is required.' }, { status: 400 })
@@ -197,7 +198,7 @@ export async function PATCH(req: NextRequest) {
     const identityId = body.identityId as string
     const reason = body.reason as ExceptionReason
     const note = body.note as string | undefined
-    const date = body.date ?? new Date().toISOString().slice(0, 10)
+    const date = body.date ?? (await businessDateForOrg(ctx.orgId))
 
     if (!identityId || !reason) {
       return NextResponse.json({ error: 'identityId and reason are required.' }, { status: 400 })

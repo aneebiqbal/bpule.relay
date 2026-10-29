@@ -1,10 +1,22 @@
 import type { AccountabilityStatus, DailyProgress, DailyContract, DayCloseStatus } from '@/lib/domain/types'
+import {
+  formatClock,
+  normalizePolicy,
+  orgWeekday,
+  workdayProgress,
+  minutesRemaining,
+} from '@/lib/org-clock'
 
 /**
  * Accountability Engine — deterministic, no AI.
  *
  * Pure functions that compute accountability status from inputs.
  * Used by both the API layer and any scheduled job that closes days.
+ *
+ * TIME: `dayProgress`, `workingMinutesRemaining` and `isWorkingDay` delegate to
+ * `@/lib/org-clock`. The browser's timezone is never consulted. The status
+ * helpers below are legacy per-category heuristics; the canonical rep-day state
+ * machine lives in `@/lib/rep-day`.
  */
 
 
@@ -20,34 +32,24 @@ export const DEFAULT_WORKING_DAY: WorkingDayConfig = {
   timezone: 'UTC',
 }
 
-/** Fraction of the working day elapsed, 0..1 */
+/** Fraction of the working day elapsed, 0..1 — organization-local. */
 export function dayProgress(now: Date, timezone: string, config: WorkingDayConfig = DEFAULT_WORKING_DAY): number {
-  const localStr = now.toLocaleString('en-US', { timeZone: timezone })
-  const local = new Date(localStr)
-  const hour = local.getHours()
-  const minute = local.getMinutes()
-
-  const startHour = config.startHour
-  const endHour = config.endHour
-  const totalMinutes = (endHour - startHour) * 60
-  const elapsedMinutes = (hour - startHour) * 60 + minute
-
-  if (elapsedMinutes <= 0) return 0
-  if (elapsedMinutes >= totalMinutes) return 1
-  return elapsedMinutes / totalMinutes
+  const policy = normalizePolicy({
+    timezone,
+    workdayStart: formatClock(config.startHour * 60),
+    workdayEnd: formatClock(config.endHour * 60),
+  })
+  return workdayProgress(now, policy)
 }
 
-/** Remaining working minutes in the day */
+/** Remaining working minutes in the day — organization-local. */
 export function workingMinutesRemaining(now: Date, timezone: string, config: WorkingDayConfig = DEFAULT_WORKING_DAY): number {
-  const localStr = now.toLocaleString('en-US', { timeZone: timezone })
-  const local = new Date(localStr)
-  const hour = local.getHours()
-  const minute = local.getMinutes()
-
-  const endMinutes = config.endHour * 60
-  const currentMinutes = hour * 60 + minute
-
-  return Math.max(0, endMinutes - currentMinutes)
+  const policy = normalizePolicy({
+    timezone,
+    workdayStart: formatClock(config.startHour * 60),
+    workdayEnd: formatClock(config.endHour * 60),
+  })
+  return minutesRemaining(now, policy)
 }
 
 
@@ -225,9 +227,17 @@ export function countConsecutiveMisses(
 }
 
 
-export function isWorkingDay(date: Date, workingDays: number[] = [1, 2, 3, 4, 5]): boolean {
-  const dow = date.getDay()
-  return workingDays.includes(dow)
+/**
+ * True when `date` falls on one of `workingDays` **in the organization's
+ * timezone**. The weekday must come from the org zone: at 23:00 UTC on a Friday
+ * it is already Saturday in Karachi, and a UTC `getDay()` would say otherwise.
+ */
+export function isWorkingDay(
+  date: Date,
+  workingDays: number[] = [1, 2, 3, 4, 5],
+  timezone: string = 'UTC',
+): boolean {
+  return workingDays.includes(orgWeekday(date, timezone))
 }
 
 

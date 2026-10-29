@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { computeStatus } from '@/lib/relay/accountability-engine'
+import { businessDateForOrg } from '@/lib/org-clock/load'
 
 /**
  * Record a completed activity event for accountability.
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
   }
 
   const revenueIdentityId = rawIdentityId
-  const today = new Date().toISOString().slice(0, 10)
+  const today = await businessDateForOrg(org.id)
 
   const { data: target } = await supabase
     .from('daily_targets')

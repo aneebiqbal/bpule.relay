@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { businessDateForOrg } from '@/lib/org-clock/load'
 
 /**
  * Ensure day_close rows exist for the authenticated rep's assignments.
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))
-  const date = typeof body.date === 'string' ? body.date : new Date().toISOString().slice(0, 10)
+  const date = typeof body.date === 'string' ? body.date : (await businessDateForOrg(ctx.orgId))
   const supabase = await createServerSupabase()
 
   const { data, error } = await supabase.rpc('ensure_day_closes_for_person', {
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
   const ctx = await getAuthContext()
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const date = req.nextUrl.searchParams.get('date') ?? new Date().toISOString().slice(0, 10)
+  const date = req.nextUrl.searchParams.get('date') ?? (await businessDateForOrg(ctx.orgId))
   const supabase = await createServerSupabase()
 
   const { data, error } = await supabase.rpc('ensure_day_closes_for_person', {

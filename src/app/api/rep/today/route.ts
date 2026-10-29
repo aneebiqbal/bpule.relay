@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth/current'
-import { computeStatus, dayProgress, isWorkingDay } from '@/lib/relay/accountability-engine'
+import { computeStatus } from '@/lib/relay/accountability-engine'
+import { currentInstant, isOrgWorkingDay, orgDate, workdayProgress, type OperatingPolicy } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -11,8 +13,10 @@ export async function GET() {
   const org = user.organization
   const rep = user.rep
 
-  const now = new Date()
-  const isWorking = isWorkingDay(now, org.workingDays)
+  const policy: OperatingPolicy = await loadOperatingPolicy(org.id)
+  const now = currentInstant()
+  const businessDate = orgDate(now, policy.timezone)
+  const isWorking = isOrgWorkingDay(policy, businessDate)
 
   const { data: assignments } = await supabase
     .from('identity_assignments')
@@ -47,7 +51,7 @@ export async function GET() {
     .in('revenue_identity_id', identityIds)
     .eq('active', true)
 
-  const today = now.toISOString().slice(0, 10)
+  const today = businessDate
   const { data: accountability } = await supabase
     .from('daily_accountability')
     .select('*')
@@ -55,7 +59,7 @@ export async function GET() {
     .eq('target_date', today)
     .eq('organization_id', org.id)
 
-  const progress = dayProgress(now, rep.timezone || org.timezone)
+  const progress = workdayProgress(now, policy, businessDate)
   const targetList = targets ?? []
   const accountabilityMap = new Map((accountability ?? []).map((a) => [
     `${a.revenue_identity_id}:${a.activity_type}`,
@@ -101,6 +105,12 @@ export async function GET() {
 
   const overallStatus = computeStatus(totalTarget, totalCompleted, progress)
 
+  // The canonical day is the same object Today renders. This route keeps its
+  // legacy fields so existing consumers do not break, but the authoritative
+  // state now comes from `day`.
+  const { loadRepDay } = await import('@/lib/rep-day/load')
+  const day = await loadRepDay()
+
   return NextResponse.json({
     repName: rep.name,
     isWorkingDay: isWorking,
@@ -110,6 +120,7 @@ export async function GET() {
     overallStatus,
     assignedIdentities: identities,
     notifications: [],
+    day,
   })
 }
 

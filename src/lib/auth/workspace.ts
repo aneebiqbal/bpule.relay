@@ -3,6 +3,15 @@ import { getCurrentUser } from './current'
 import { createScoutStore } from '@/lib/store'
 import { isDemoMode } from '@/lib/ai/config'
 import { createServerSupabase } from '@/lib/supabase/server'
+import {
+  currentInstant,
+  isOrgWorkingDay,
+  minutesRemaining as minutesRemainingIn,
+  orgDate,
+  workdayProgress as workdayProgressAt,
+  type OperatingPolicy,
+} from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 
 /**
@@ -36,10 +45,6 @@ export interface RepWorkspace {
   isWorkingDay: boolean
   identities: AuthorizedIdentity[]
   hasAssignments: boolean
-}
-
-function isWorkingDay(date: Date, workingDays: number[] = [1, 2, 3, 4, 5]): boolean {
-  return workingDays.includes(date.getDay())
 }
 
 /**
@@ -103,13 +108,15 @@ async function resolveCurrentRepWorkspace(): Promise<RepWorkspace | null> {
   if (!user) return null
 
   const identities = await getAuthorizedIdentities()
+  const policy = await loadOperatingPolicy(user.organization.id)
+  const now = currentInstant()
 
   return {
     repId: user.rep.id,
     repName: user.rep.name,
     orgId: user.organization.id,
-    timezone: user.rep.timezone || user.organization.timezone,
-    isWorkingDay: isWorkingDay(new Date(), user.organization.workingDays),
+    timezone: policy.timezone,
+    isWorkingDay: isOrgWorkingDay(policy, orgDate(now, policy.timezone)),
     identities,
     hasAssignments: identities.length > 0,
   }
@@ -124,7 +131,13 @@ export const getCurrentRepWorkspace = cache(resolveCurrentRepWorkspace)
  */
 async function resolveDailyWorkspace(): Promise<{
   rep: { id: string; name: string }
+  orgId: string
   isWorkingDay: boolean
+  businessDate: string
+  timezone: string
+  workdayProgress: number
+  minutesRemaining: number
+  policy: OperatingPolicy
   hasAssignments: boolean
   identities: AuthorizedIdentity[]
   targetSummary: {
@@ -165,14 +178,24 @@ async function resolveDailyWorkspace(): Promise<{
   const store = await createScoutStore()
   const org = user.organization
   const rep = user.rep
-  const now = new Date()
-  const workingDay = isWorkingDay(now, org.workingDays)
+  // The business date and workday window come from the organization's clock,
+  // never from the server's UTC date or the browser's timezone.
+  const policy = await loadOperatingPolicy(org.id)
+  const now = currentInstant()
+  const businessDate = orgDate(now, policy.timezone)
+  const workingDay = isOrgWorkingDay(policy, businessDate)
   const identities = await getAuthorizedIdentities()
 
   if (identities.length === 0) {
     return {
       rep: { id: rep.id, name: rep.name },
+      orgId: org.id,
       isWorkingDay: workingDay,
+      businessDate,
+      timezone: policy.timezone,
+      workdayProgress: workdayProgressAt(now, policy, businessDate),
+      minutesRemaining: minutesRemainingIn(now, policy, businessDate),
+      policy,
       hasAssignments: false,
       identities: [],
       targetSummary: {
@@ -243,7 +266,13 @@ async function resolveDailyWorkspace(): Promise<{
 
   return {
     rep: { id: rep.id, name: rep.name },
+    orgId: org.id,
     isWorkingDay: workingDay,
+    businessDate,
+    timezone: policy.timezone,
+    workdayProgress: workdayProgressAt(now, policy, businessDate),
+    minutesRemaining: minutesRemainingIn(now, policy, businessDate),
+    policy,
     hasAssignments: true,
     identities,
     targetSummary: {

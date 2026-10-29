@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { generateWarnings } from '@/lib/relay/warning-service'
-import { dayProgress } from '@/lib/relay/accountability-engine'
+import { currentInstant, isOrgWorkingDay, orgDate, workdayProgress } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 /**
  * Get current warnings for the authenticated rep.
@@ -14,18 +15,14 @@ export async function GET(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const identityId = req.nextUrl.searchParams.get('identityId')
-  const now = new Date()
-  const today = now.toISOString().slice(0, 10)
+  const policy = await loadOperatingPolicy(ctx.orgId)
+  const now = currentInstant()
+  const today = orgDate(now, policy.timezone)
+  const timezone = policy.timezone
   const supabase = await createServerSupabase()
 
-  const { data: repRow } = await supabase
-    .from('reps')
-    .select('timezone')
-    .eq('id', ctx.repId)
-    .maybeSingle()
-  const timezone = (repRow?.timezone as string) ?? 'UTC'
-
-  const dayElapsed = dayProgress(now, timezone)
+  const dayElapsed = workdayProgress(now, policy, today)
+  const workingDay = isOrgWorkingDay(policy, today)
 
   const { data: availability } = await supabase
     .from('operator_availability')
@@ -56,7 +53,7 @@ export async function GET(req: NextRequest) {
       contracts: [],
       dayElapsed,
       hasAssignments: false,
-      isWorkingDay: true,
+      isWorkingDay: workingDay,
       availabilityStatus,
       dayCloseStatus: null,
       totalRemaining: 0,
@@ -120,7 +117,7 @@ export async function GET(req: NextRequest) {
     contracts: contracts ?? [],
     dayElapsed,
     hasAssignments: true,
-    isWorkingDay: true,
+    isWorkingDay: workingDay,
     availabilityStatus,
     dayCloseStatus: targetDayClose?.status ?? null,
     totalRemaining,

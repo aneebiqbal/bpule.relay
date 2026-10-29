@@ -10,6 +10,7 @@ import type { RelayTodayAction } from '@/components/relay-today-workspace'
 import { computeDailyProgress } from '@/lib/performance/daily-progress'
 import { ContributionHeatmap } from '@/components/performance/contribution-heatmap'
 import { DashHeader, EmptyNote, Meter, Panel, Pill, StatTile } from '@/components/dashboard/kit'
+import { RepDayPanel } from '@/components/rep/rep-day-panel'
 import type { DailyActivity, ActivitySummary } from '@/lib/performance/activity-model'
 import { useEffect, useState } from 'react'
 
@@ -100,13 +101,20 @@ export function RepDashboard({ data }: { data: RepWorkspaceData }) {
 
   return (
     <div className="space-y-6">
-      <DashHeader
-        eyebrow={new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        title={<>Good {greeting()}, {data.rep.name.split(' ')[0]}</>}
-        subtitle={hasWork
-          ? 'Here is what needs you right now, in order.'
-          : 'You are caught up. Nothing needs attention right now.'}
-      />
+      {/* The canonical rep day: time remaining, commitment, state, commitments.
+          When it is available it replaces the generic header so the greeting is
+          not rendered twice. */}
+      {data.repDay ? (
+        <RepDayPanel day={data.repDay} />
+      ) : (
+        <DashHeader
+          eyebrow={new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          title={<>Good {greeting()}, {data.rep.name.split(' ')[0]}</>}
+          subtitle={hasWork
+            ? 'Here is what needs you right now, in order.'
+            : 'You are caught up. Nothing needs attention right now.'}
+        />
+      )}
 
       {/* Four operational numbers — every one clickable */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

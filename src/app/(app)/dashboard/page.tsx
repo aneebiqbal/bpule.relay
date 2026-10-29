@@ -124,7 +124,8 @@ async function loadManagerTeamTab() {
     const authCtx = await getAuthContext()
     if (!authCtx || authCtx.managedTeamIds.length === 0) return { teams: [], isOwner: false }
     const store = await createScoutStore()
-    const today = new Date().toISOString().slice(0, 10)
+    const { businessDateForOrg } = await import('@/lib/org-clock/load')
+    const today = await businessDateForOrg(authCtx.orgId)
     const teams = await Promise.all(authCtx.managedTeamIds.map(async (teamId) => {
       const [teamInfo, members, targets] = await Promise.all([
         store.getTeamInfo(teamId),
@@ -187,9 +188,12 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   const { getDailyWorkspace } = await import('@/lib/auth/workspace')
   const workspace = await getDailyWorkspace()
 
-  const [dash, relayData] = await Promise.all([
+  const [dash, relayData, repDay] = await Promise.all([
     store.getTodayDashboard(),
     store.getRelayQueueData(),
+    // The canonical rep day. `getDailyWorkspace` is request-cached, so this
+    // shares the same identities/targets/accountability load as `workspace`.
+    import('@/lib/rep-day/load').then((m) => m.loadRepDay()),
   ])
 
   const roleContext = buildRoleContext(user.rep, user.organization)
@@ -315,6 +319,7 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
 
   return {
     rep: workspace.rep,
+    repDay,
     isWorkingDay: workspace.isWorkingDay,
     hasAssignments: workspace.hasAssignments,
     identities: workspace.targetSummary.byIdentity,

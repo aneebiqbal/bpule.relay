@@ -3,6 +3,14 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { can } from '@/lib/auth/organization'
+import {
+  currentInstant,
+  minutesRemaining as minutesRemainingIn,
+  orgDate,
+  workdayProgress as workdayProgressAt,
+  type OperatingPolicy,
+} from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 /**
  * Canonical data loader for the Accountability Control Plane.
@@ -102,30 +110,12 @@ function formatTimeRemaining(minutes: number): string {
   return `${h}h ${m}m`
 }
 
-function computeDayElapsed(timezone: string): number {
-  const now = new Date()
-  const localStr = now.toLocaleString('en-US', { timeZone: timezone })
-  const local = new Date(localStr)
-  const hour = local.getHours()
-  const minute = local.getMinutes()
-  const startHour = 9
-  const endHour = 17
-  const totalMinutes = (endHour - startHour) * 60
-  const elapsedMinutes = (hour - startHour) * 60 + minute
-  if (elapsedMinutes <= 0) return 0
-  if (elapsedMinutes >= totalMinutes) return 1
-  return elapsedMinutes / totalMinutes
+function computeDayElapsed(policy: OperatingPolicy, now: Date, businessDate: string): number {
+  return workdayProgressAt(now, policy, businessDate)
 }
 
-function computeTimeRemaining(timezone: string): string {
-  const now = new Date()
-  const localStr = now.toLocaleString('en-US', { timeZone: timezone })
-  const local = new Date(localStr)
-  const hour = local.getHours()
-  const minute = local.getMinutes()
-  const endMinutes = 17 * 60
-  const currentMinutes = hour * 60 + minute
-  return formatTimeRemaining(Math.max(0, endMinutes - currentMinutes))
+function computeTimeRemaining(policy: OperatingPolicy, now: Date, businessDate: string): string {
+  return formatTimeRemaining(minutesRemainingIn(now, policy, businessDate))
 }
 
 const ACTIVITY_TYPE_TO_CATEGORY: Record<string, 'connections' | 'firstDms' | 'emails' | 'followups'> = {
@@ -419,8 +409,10 @@ async function load(): Promise<AccountabilityDashboardData | null> {
   if (!ctx) return null
 
   const supabase = await createServerSupabase()
-  const today = new Date().toISOString().slice(0, 10)
-  const timezone = user.rep.timezone || user.organization.timezone || 'UTC'
+  const policy = await loadOperatingPolicy(ctx.orgId)
+  const now = currentInstant()
+  const today = orgDate(now, policy.timezone)
+  const timezone = policy.timezone
 
   // Auto-create day_close rows for all assigned identities (non-fatal)
   if (ctx.repId && ctx.orgId) {
@@ -434,7 +426,7 @@ async function load(): Promise<AccountabilityDashboardData | null> {
       // Non-fatal: if RPC fails, proceed without pre-created day closes
     }
   }
-  const dayElapsedPct = computeDayElapsed(timezone)
+  const dayElapsedPct = computeDayElapsed(policy, now, today)
 
   const role: 'rep' | 'manager' | 'admin' = ctx.isOwner || ctx.isAdmin ? 'admin' : ctx.isManager ? 'manager' : 'rep'
 
@@ -506,7 +498,7 @@ async function load(): Promise<AccountabilityDashboardData | null> {
 
   const myDay: AccountabilityDashboardData['myDay'] = {
     ...myDayActivity,
-    timeRemaining: computeTimeRemaining(timezone),
+    timeRemaining: computeTimeRemaining(policy, now, today),
     dayElapsedPct,
   }
 

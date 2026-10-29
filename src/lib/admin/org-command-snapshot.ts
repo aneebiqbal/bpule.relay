@@ -3,6 +3,8 @@ import { createScoutStore } from '@/lib/store'
 import { getAuthContext } from '@/lib/auth/organization'
 import { isDemoMode } from '@/lib/ai/config'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { currentInstant, orgDate } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 export type PersonStatus = 'completed' | 'on_track' | 'at_risk' | 'missed' | 'no_target'
 
@@ -120,7 +122,10 @@ async function loadExtractionCounts(orgId: string): Promise<Map<string, number>>
 
 async function resolveSnapshot(): Promise<OrgCommandSnapshot> {
   const authCtx = await getAuthContext()
-  const today = new Date().toISOString().slice(0, 10)
+  const now = currentInstant()
+  const today = authCtx
+    ? orgDate(now, (await loadOperatingPolicy(authCtx.orgId)).timezone)
+    : orgDate(now, 'UTC')
   if (!authCtx) return emptySnapshot('Organization', today, false, false)
 
   try {

@@ -1,4 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { currentInstant, orgDate, type OperatingPolicy } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { opportunityKey } from '@/lib/scoring-v4/opportunity-key'
 import { determineFollowup } from '@/lib/relay/followup-engine'
@@ -481,6 +483,21 @@ export class SupabaseStore implements ScoutStore {
       .maybeSingle()
     this._orgSettingsCache = (data?.settings as Record<string, unknown>) ?? {}
     return this._orgSettingsCache
+  }
+
+  private _policyCache: OperatingPolicy | undefined
+
+  /** The organization's operating policy, loaded once per store instance. */
+  async getOperatingPolicy(): Promise<OperatingPolicy> {
+    if (!this._policyCache) {
+      this._policyCache = await loadOperatingPolicy(this.orgId, this.client)
+    }
+    return this._policyCache
+  }
+
+  /** The organization-local business date. Never the UTC date. */
+  async businessDate(): Promise<string> {
+    return orgDate(currentInstant(), (await this.getOperatingPolicy()).timezone)
   }
 
   private _ratesCache: RateBucket[] | undefined = undefined
@@ -1561,6 +1578,7 @@ export class SupabaseStore implements ScoutStore {
                 p_activity_type: activityType,
                 p_org_id: this.orgId,
                 p_source_event_id: `activity:${leadId}:${idempotencyKey ?? 'none'}:${t.revenue_identity_id}`,
+                p_date: await this.businessDate(),
               })
             } catch {
               // Non-fatal per-target
@@ -1588,7 +1606,7 @@ export class SupabaseStore implements ScoutStore {
                     p_event_type: 'OUTREACH_RECORDED',
                     p_metric_key: metricKey,
                     p_source_event_id: sourceEventId,
-                    p_date: new Date().toISOString().slice(0, 10),
+                    p_date: await this.businessDate(),
                   })
                 } catch {
                   // Non-fatal per-target
@@ -3090,6 +3108,7 @@ export class SupabaseStore implements ScoutStore {
                 p_activity_type: 'application',
                 p_org_id: this.orgId,
                 p_source_event_id: `activity:upwork_draft:${input.jobId}:${t.revenue_identity_id}`,
+                p_date: await this.businessDate(),
               })
             } catch { }
           }
@@ -3104,7 +3123,7 @@ export class SupabaseStore implements ScoutStore {
                   p_event_type: 'OUTREACH_RECORDED',
                   p_metric_key: 'applications',
                   p_source_event_id: sourceEventId,
-                  p_date: new Date().toISOString().slice(0, 10),
+                  p_date: await this.businessDate(),
                 })
               } catch { }
             }
@@ -3214,6 +3233,7 @@ export class SupabaseStore implements ScoutStore {
                   p_activity_type: 'application',
                   p_org_id: this.orgId,
                   p_source_event_id: `activity:upwork:${jobId}:${t.revenue_identity_id}`,
+                  p_date: await this.businessDate(),
                 })
               } catch {
                 // Non-fatal per-target
@@ -3232,7 +3252,7 @@ export class SupabaseStore implements ScoutStore {
                     p_event_type: 'OUTREACH_RECORDED',
                     p_metric_key: 'applications',
                     p_source_event_id: sourceEventId,
-                    p_date: new Date().toISOString().slice(0, 10),
+                    p_date: await this.businessDate(),
                   })
                 } catch {
                   // Non-fatal per-target
@@ -5567,6 +5587,7 @@ export class SupabaseStore implements ScoutStore {
             p_identity_id: t.revenue_identity_id as string,
             p_activity_type: 'prospect_extracted',
             p_org_id: this.orgId,
+            p_date: await this.businessDate(),
           })
         } catch {
           // Non-fatal per-target
@@ -6093,7 +6114,7 @@ export class SupabaseStore implements ScoutStore {
 
   async getTeamAccountabilityAdmin(date?: string): Promise<TeamAccountabilityView> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
-    const targetDate = date ?? new Date().toISOString().slice(0, 10)
+    const targetDate = date ?? (await this.businessDate())
     const { data: accountability } = await this.client
       .from('daily_accountability').select('*').eq('organization_id', this.orgId).eq('target_date', targetDate)
     const items = (accountability ?? []) as Record<string, unknown>[]
@@ -6131,7 +6152,7 @@ export class SupabaseStore implements ScoutStore {
 
   async getCommandCenterAdmin(): Promise<CommandCenterView> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
-    const today = new Date().toISOString().slice(0, 10)
+    const today = await this.businessDate()
     const { data: targets } = await this.client.from('daily_targets').select('*').eq('organization_id', this.orgId).eq('active', true)
     const { data: accountability } = await this.client.from('daily_accountability').select('*').eq('organization_id', this.orgId).eq('target_date', today)
     const { data: identities } = await this.client.from('revenue_identities').select('id, identity_name, status').eq('organization_id', this.orgId).eq('status', 'active')
@@ -6185,7 +6206,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getRepTodayAccountability(repId: string): Promise<import('@/lib/domain/types').RepTodayView> {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = await this.businessDate()
     const isSelf = repId === this.rep.id
     const repName = isSelf ? this.rep.name : (await this.getRepInfo(repId))?.name ?? this.rep.name
     const { data: repRow } = isSelf
@@ -6367,7 +6388,7 @@ export class SupabaseStore implements ScoutStore {
     const contract = await this.getActiveContract(identityId)
     if (!contract) return null
 
-    const today = new Date().toISOString().slice(0, 10)
+    const today = await this.businessDate()
     const { data: dayClose } = await this.client
       .from('day_closes')
       .select('*')
@@ -6438,7 +6459,7 @@ export class SupabaseStore implements ScoutStore {
         due_replies_pct: input.dueRepliesPct ?? 100,
         meaningful_touches: input.meaningfulTouches ?? 90,
         logging_completeness_pct: input.loggingCompletenessPct ?? 100,
-        effective_from: input.effectiveFrom ?? new Date().toISOString().slice(0, 10),
+        effective_from: input.effectiveFrom ?? (await this.businessDate()),
         status: 'active', version: 1, created_by: this.rep.id,
       })
       .select('*').single()
@@ -6879,7 +6900,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getMyDayView(): Promise<import('@/lib/domain/types').MyDayView> {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = await this.businessDate()
     const { data: assignments } = await this.client
       .from('identity_assignments').select('revenue_identity_id').eq('rep_id', this.rep.id)
 
@@ -7016,7 +7037,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getTeamAccountabilityView(date?: string): Promise<import('@/lib/domain/types').TeamAccountabilityView> {
-    const targetDate = date ?? new Date().toISOString().slice(0, 10)
+    const targetDate = date ?? (await this.businessDate())
     const { data: dayCloses } = await this.client
       .from('day_closes').select('*').eq('organization_id', this.orgId).eq('date', targetDate)
     const { data: reps } = await this.client
@@ -7092,7 +7113,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getOwnerCommandCenterView(): Promise<import('@/lib/domain/types').OwnerCommandCenterView> {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = await this.businessDate()
     const month = today.slice(0, 7) + '-01'
     const { data: allReps } = await this.client.from('reps').select('id, name').eq('organization_id', this.orgId)
     const { data: dayCloses } = await this.client.from('day_closes').select('*').eq('organization_id', this.orgId).eq('date', today)
@@ -7727,7 +7748,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getTeamTargets(teamId: string, date?: string): Promise<TeamTargetRow[]> {
-    const targetDate = date ?? new Date().toISOString().slice(0, 10)
+    const targetDate = date ?? (await this.businessDate())
 
     const { data: memberships } = await this.client
       .from('team_memberships')
@@ -7882,7 +7903,7 @@ export class SupabaseStore implements ScoutStore {
     if (!memberships || memberships.length === 0) return []
 
     const teamIds = memberships.map((m) => m.team_id)
-    const today = new Date().toISOString().slice(0, 10)
+    const today = await this.businessDate()
 
     const { data: allTargets } = await this.client
       .from('daily_targets')

@@ -88,11 +88,17 @@ export function rankNextActions(input: NextBestActionInput): NextBestAction[] {
     if (nbaAction) actions.push(nbaAction)
   }
 
-  // 3. Sort: reply first, then by priority desc, then by urgency
+  // 3. Sort: reply first, then follow-ups ahead of fresh research, then priority
   actions.sort((a, b) => {
     // Incoming replies always win
     if (a.action === 'REPLY_NOW' && b.action !== 'REPLY_NOW') return -1
     if (b.action === 'REPLY_NOW' && a.action !== 'REPLY_NOW') return 1
+    // A due follow-up on a live conversation outranks fresh prospecting.
+    // Collection is the only work that can wait; a thread already in motion
+    // cannot. This is the product contract, not a priority tweak.
+    const isResearch = (action: NextBestActionType) => action === 'RESEARCH' || action === 'WAIT'
+    if (a.action === 'SEND_FOLLOWUP' && isResearch(b.action)) return -1
+    if (b.action === 'SEND_FOLLOWUP' && isResearch(a.action)) return 1
     // Then by priority score
     if (b.priority !== a.priority) return b.priority - a.priority
     // Then by due date (sooner first)

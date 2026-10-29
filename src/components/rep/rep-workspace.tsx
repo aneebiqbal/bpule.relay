@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { motion } from 'motion/react'
 import { AlertTriangle, Shield, Trophy, PartyPopper } from 'lucide-react'
 import { trackEvent } from '@/lib/analytics/tracker'
+import { RepDayPanel } from '@/components/rep/rep-day-panel'
 import { Progress } from '@/components/ui/progress'
 import { DailyJobs, jobsFromTargets } from './daily-jobs'
 import { DoThisNext } from './do-this-next'
@@ -62,6 +63,8 @@ export interface RepWorkspaceData {
     outreachRemaining: number
     isComplete: boolean
   }
+  /** The canonical rep day: state, pace, commitments, check-in, close. */
+  repDay?: import('@/lib/rep-day/load').RepDayView
   nextAction: RelayTodayAction | null
   upNext: RelayTodayAction[]
   /** Full canonical action list; the desk sections and the Today KPI share it. */
@@ -177,6 +180,8 @@ export function RepWorkspace({ data, teamData, mode = 'rep' }: RepWorkspaceProps
 
       {data.hasAssignments && (
         <>
+          {data.repDay && <RepDayPanel day={data.repDay} />}
+
           {/* Daily completion context */}
           {data.completion && data.completion.done + data.completion.remaining > 0 && (() => {
             const total = data.completion.done + data.completion.remaining

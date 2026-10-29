@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getLeadDisplayScore } from '@/lib/scoring/display-score'
+import { addDays, currentInstant, orgDate, weekdayOfDate } from '@/lib/org-clock'
 
 /**
  * Accountability Metrics
@@ -270,10 +271,11 @@ export async function getTeamCalendar(
   endDate: string,
 ): Promise<TeamDayView[]> {
   const days: string[] = []
-  const start = new Date(startDate)
-  const end = new Date(endDate)
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    days.push(d.toISOString().slice(0, 10))
+  let cursor = startDate
+  // Calendar enumeration on date strings: immune to DST and server timezone.
+  for (let guard = 0; cursor <= endDate && guard < 400; guard += 1) {
+    days.push(cursor)
+    cursor = addDays(cursor, 1)
   }
 
   const emptyTotal = () => ({ connectionsSent: 0, dmsSent: 0, followupsSent: 0, repliesReceived: 0, leadsWon: 0, totalActions: 0 })
@@ -351,14 +353,13 @@ export async function getRepAccountability(
   client: SupabaseClient,
   repId: string,
   repName: string,
+  timezone: string = 'UTC',
 ): Promise<RepAccountability> {
-  const today = new Date().toISOString().slice(0, 10)
-  const weekStart = new Date()
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-  const weekStartStr = weekStart.toISOString().slice(0, 10)
-  const monthStart = new Date()
-  monthStart.setDate(1)
-  const monthStartStr = monthStart.toISOString().slice(0, 10)
+  const today = orgDate(currentInstant(), timezone)
+  // Calendar arithmetic on the business date: no server-local Date math, no
+  // DST drift when a week spans a transition.
+  const weekStartStr = addDays(today, -weekdayOfDate(today))
+  const monthStartStr = `${today.slice(0, 8)}01`
 
   const [todayM, weekM, monthM, openLeads] = await Promise.all([
     fetchMetricsForPeriod(client, repId, `${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`).then(m => ({ date: today, repId, repName, ...m })),

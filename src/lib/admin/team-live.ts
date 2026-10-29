@@ -1,3 +1,5 @@
+import { orgDate } from '@/lib/org-clock'
+
 export const ACTIVITY_LABEL: Record<string, string> = {
   connection_request: 'connection notes',
   dm: 'DMs',
@@ -80,6 +82,8 @@ type OpenLeadRow = {
 
 export type TeamLiveRows = {
   now: Date
+  businessDate?: string
+  timezone?: string
   reps: RepRow[]
   identities: IdentityRow[]
   assignments: AssignmentRow[]
@@ -113,7 +117,7 @@ export function leadScore(row: { canonical_score: number | null; score: number |
 }
 
 export function assembleTeamLive(rows: TeamLiveRows): TeamLivePayload {
-  const date = rows.now.toISOString().slice(0, 10)
+  const date = rows.businessDate ?? orgDate(rows.now, rows.timezone ?? 'UTC')
   const identities = rows.identities ?? []
 
   const people = (rows.reps ?? []).map((rep) => {

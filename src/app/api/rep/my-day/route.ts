@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createServerSupabase } from '@/lib/supabase/server'
-import { dayProgress } from '@/lib/relay/accountability-engine'
+import { currentInstant, orgDate, workdayProgress } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 export async function GET() {
   const ctx = await getAuthContext()
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const supabase = await createServerSupabase()
-  const today = new Date().toISOString().slice(0, 10)
+  const policy = await loadOperatingPolicy(ctx.orgId)
+  const now = currentInstant()
+  const today = orgDate(now, policy.timezone)
 
   const { data: contracts } = await supabase
     .from('revenue_identity_contracts')
@@ -83,7 +86,7 @@ export async function GET() {
   const totalCompleted = progress.reduce((sum: number, p: any) => sum + p.qualifiedProspects.completed + p.connections.completed + p.firstDms.completed + p.emails.completed + p.followups.completed + p.meaningfulTouches.completed, 0)
 
   const progressRatio = totalTarget > 0 ? totalCompleted / totalTarget : 0
-  const timeProgress = dayProgress(new Date(), 'UTC')
+  const timeProgress = workdayProgress(now, policy, today)
 
   let overallStatus: 'on_track' | 'at_risk' | 'completed' | 'missed' = 'on_track'
   if (totalCompleted >= totalTarget && totalTarget > 0) overallStatus = 'completed'

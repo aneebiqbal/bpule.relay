@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createServerSupabase } from '@/lib/supabase/server'
 import type { DayCloseStatus, ExceptionReason } from '@/lib/domain/types'
+import { businessDateForOrg } from '@/lib/org-clock/load'
 
 export async function GET(req: NextRequest) {
   const ctx = await getAuthContext()
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const identityId = req.nextUrl.searchParams.get('identityId')
-  const date = req.nextUrl.searchParams.get('date') ?? new Date().toISOString().slice(0, 10)
+  const date = req.nextUrl.searchParams.get('date') ?? (await businessDateForOrg(ctx.orgId))
   const supabase = await createServerSupabase()
 
   if (identityId) {
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const supabase = await createServerSupabase()
 
-  const date = body.date ?? new Date().toISOString().slice(0, 10)
+  const date = body.date ?? (await businessDateForOrg(ctx.orgId))
 
   const { data: existing } = await supabase
     .from('day_closes')

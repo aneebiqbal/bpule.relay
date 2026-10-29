@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { isRevenueIdentityAssignedToRep } from '@/lib/auth/workspace'
+import { businessDateForOrg } from '@/lib/org-clock/load'
 
 /**
  * Record a canonical business event as progress on the day_close.
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = await createServerSupabase()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = await businessDateForOrg(ctx.orgId)
 
   // Atomically record progress (exactly-once via DB function)
   const { data, error } = await supabase.rpc('record_canonical_progress', {
