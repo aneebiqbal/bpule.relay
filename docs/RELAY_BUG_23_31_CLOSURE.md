@@ -433,12 +433,13 @@ drafts date from 2026-10-15 to 2026-10-27, so nothing before today was touched.
 BASELINE SHA   98ef2dea26b15442261db9fcbe7ca5c463a26575
 FINAL SHA      b1a69a9  (code)   df90e84  (workspace-scope + Lead Detail fix)
                cac58a6  (tests/docs — deployed, no app code)
-DEPLOYED SHA   cac58a6  (verified via /api/version)
+DEPLOYED SHA   13a033e  (verified via /api/version)
 ```
 
 The code that carries the fixes is `df90e84`; every later commit is tests and
 documentation. The browser matrix ran against `df90e84` and `cac58a6`, which
-serve identical application code.
+serve identical application code. `13a033e` is the docs-only commit on top and
+is what `/api/version` reports.
 
 | Bug | REPRODUCED | ROOT CAUSE | FIX | UNIT | BROWSER | DB | STATUS |
 |---|---|---|---|---|---|---|---|
@@ -492,7 +493,7 @@ visible toast).
 | `npx next build` | PASS |
 | Full suite | **266 files / 4,012 tests / 0 failed** |
 | `pnpm qa:contracts` | PASS — 41 tests |
-| `/api/version` | `cac58a6` |
+| `/api/version` | `13a033e` |
 
 ```text
 BUG-23 PASS   BUG-24 PASS   BUG-25 PASS   BUG-26 PASS   BUG-27 PASS
