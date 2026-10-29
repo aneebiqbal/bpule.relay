@@ -17,9 +17,10 @@ function movedToday(person: TeamLivePerson): boolean {
   return person.totalCompleted > 0 || person.leadsSaved > 0 || person.outreachSent > 0 || person.repliesHandled > 0 || person.extractionsCount > 0 || Boolean(person.lastActivityAt)
 }
 
-export function TeamLiveBoard({ initial = null }: { readonly initial?: TeamLivePayload | null }) {
+export function TeamLiveBoard({ initial = null, initialNow }: { readonly initial?: TeamLivePayload | null; readonly initialNow?: number }) {
   const [data, setData] = useState<TeamLivePayload | null>(initial)
-  const [now, setNow] = useState(() => Date.now())
+  // The server's clock is the hydration-stable first value; a live tick follows.
+  const [now, setNow] = useState(() => initialNow ?? Date.now())
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {

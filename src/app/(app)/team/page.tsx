@@ -54,7 +54,7 @@ export default async function TeamPage() {
         />
       ) : (
         <Suspense fallback={<div className="h-40 animate-pulse rounded-lg border border-line bg-bone-raised" />}>
-          <TeamLiveBoard initial={live} />
+          <TeamLiveBoard initial={live} initialNow={Date.now()} />
         </Suspense>
       )}
 
