@@ -364,6 +364,15 @@ test.describe('BUG031_DRAFT_SAVE_CONFIRMATION', () => {
     })
     expect(seed.ok()).toBeTruthy()
 
+    // The seed adds at most one row; if the job already had an unsent cover
+    // draft it reuses it.
+    const { count: afterSeed } = await sb!.from('upwork_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('job_id', job!.id)
+      .eq('type', 'cover')
+      .is('sent_at', null)
+    expect(afterSeed).toBe((before ?? 0) + 1)
+
     await page.goto(`/upwork/${job!.id}`, { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(2500)
 
@@ -384,14 +393,13 @@ test.describe('BUG031_DRAFT_SAVE_CONFIRMATION', () => {
     await page.waitForTimeout(2500)
     await expect(page.locator('textarea').first()).toHaveValue(`${draftText} (edited)`, { timeout: 30_000 })
 
-    // No NEW draft row: the save reuses the existing one rather than stacking
-    // a copy per click.
-    const { count: after } = await sb!.from('upwork_messages')
+    // The UI save reuses the same row rather than stacking a copy per click.
+    const { count: afterSave } = await sb!.from('upwork_messages')
       .select('id', { count: 'exact', head: true })
       .eq('job_id', job!.id)
       .eq('type', 'cover')
       .is('sent_at', null)
-    expect(after).toBe((before ?? 0) + 1)
+    expect(afterSave).toBe(afterSeed)
 
     // Remove only the draft this test wrote.
     const since = new Date(Date.now() - 10 * 60_000).toISOString()
