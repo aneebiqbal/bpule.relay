@@ -364,14 +364,14 @@ test.describe('BUG031_DRAFT_SAVE_CONFIRMATION', () => {
     })
     expect(seed.ok()).toBeTruthy()
 
-    // The seed adds at most one row; if the job already had an unsent cover
-    // draft it reuses it.
+    // The seed adds at most one row. If the job already had an unsent cover
+    // draft it reuses it, which is the intended "save over my draft" semantic.
     const { count: afterSeed } = await sb!.from('upwork_messages')
       .select('id', { count: 'exact', head: true })
       .eq('job_id', job!.id)
       .eq('type', 'cover')
       .is('sent_at', null)
-    expect(afterSeed).toBe((before ?? 0) + 1)
+    expect(afterSeed).toBeLessThanOrEqual((before ?? 0) + 1)
 
     await page.goto(`/upwork/${job!.id}`, { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(2500)
