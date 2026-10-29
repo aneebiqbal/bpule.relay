@@ -238,14 +238,17 @@ test.describe('BUG028_UPWORK_APPLIED_COUNTS_TODAY', () => {
     test.skip(!sb, 'requires service-role credentials')
     await loginAsAdmin(page)
 
+    // The job must belong to the logged-in rep: markUpworkApplied scopes its
+    // update by owner_rep_id, so another rep's job would silently not flip.
     const { data: job } = await sb!
       .from('upwork_jobs')
       .select('id, score, status')
+      .eq('owner_rep_id', 'aaaaaaaa-0000-0000-0000-000000000002')
       .eq('status', 'new')
       .gte('score', 6)
       .limit(1)
       .maybeSingle()
-    test.skip(!job, 'no applicable Upwork job in this environment')
+    test.skip(!job, 'no applicable Upwork job owned by this rep')
     const originalStatus = job!.status
 
     const res = await page.request.post(`/api/upwork/jobs/${job!.id}/apply`, {
@@ -344,6 +347,15 @@ test.describe('BUG031_DRAFT_SAVE_CONFIRMATION', () => {
 
     const draftText = `BUG-31 verification draft ${Date.now()}.`
 
+    // Count before: the job may already hold drafts written before the
+    // idempotency fix shipped, and those are history. What matters is that
+    // this run adds none.
+    const { count: before } = await sb!.from('upwork_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('job_id', job!.id)
+      .eq('type', 'cover')
+      .is('sent_at', null)
+
     // Seed the draft through the real API — generation is slow and flaky, and
     // the requirement under test is the confirmation and the persistence.
     const seed = await page.request.post(`/api/upwork/jobs/${job!.id}/draft`, {
@@ -372,13 +384,14 @@ test.describe('BUG031_DRAFT_SAVE_CONFIRMATION', () => {
     await page.waitForTimeout(2500)
     await expect(page.locator('textarea').first()).toHaveValue(`${draftText} (edited)`, { timeout: 30_000 })
 
-    // One draft row, not one per save.
-    const { count } = await sb!.from('upwork_messages')
+    // No NEW draft row: the save reuses the existing one rather than stacking
+    // a copy per click.
+    const { count: after } = await sb!.from('upwork_messages')
       .select('id', { count: 'exact', head: true })
       .eq('job_id', job!.id)
       .eq('type', 'cover')
       .is('sent_at', null)
-    expect(count).toBe(1)
+    expect(after).toBe((before ?? 0) + 1)
 
     // Remove only the draft this test wrote.
     const since = new Date(Date.now() - 10 * 60_000).toISOString()
