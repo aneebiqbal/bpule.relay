@@ -17,6 +17,7 @@ const CORE_REGIONS: Record<Exclude<MarketRegion, 'outside_core' | 'unknown'>, re
     ...US_STATES,
     'san francisco', 'bay area', 'silicon valley', 'los angeles', 'san diego', 'san jose', 'seattle', 'portland',
     'austin', 'dallas', 'houston', 'chicago', 'boston', 'atlanta', 'miami', 'denver', 'phoenix', 'nyc',
+    'ny', 'new york city',
     'brooklyn', 'philadelphia', 'pittsburgh', 'detroit', 'minneapolis', 'nashville', 'raleigh', 'salt lake city',
   ],
   UK: ['united kingdom', 'uk', 'u.k.', 'great britain', 'england', 'scotland', 'wales', 'northern ireland', 'london', 'manchester', 'edinburgh', 'glasgow', 'bristol', 'leeds', 'liverpool', 'belfast'],
@@ -24,6 +25,7 @@ const CORE_REGIONS: Record<Exclude<MarketRegion, 'outside_core' | 'unknown'>, re
     'germany', 'france', 'spain', 'italy', 'netherlands', 'belgium', 'sweden', 'denmark', 'ireland', 'portugal',
     'poland', 'austria', 'finland', 'greece', 'czech republic', 'czechia', 'romania', 'hungary', 'estonia',
     'latvia', 'lithuania', 'luxembourg', 'croatia', 'slovakia', 'slovenia', 'bulgaria', 'europe', 'european union',
+    'deutschland', 'münchen', 'munchen',
     'berlin', 'munich', 'hamburg', 'paris', 'amsterdam', 'rotterdam', 'madrid', 'barcelona', 'dublin', 'lisbon',
     'stockholm', 'copenhagen', 'warsaw', 'vienna', 'prague', 'milan', 'rome', 'brussels', 'helsinki', 'tallinn',
   ],
@@ -50,7 +52,22 @@ const COUNTRIES = new Set([
   ...OUTSIDE_MARKERS.filter((m) => m !== 'tbilisi'),
 ])
 
-const ALL_PLACE_NAMES = new Set<string>([...Object.values(CORE_REGIONS).flat(), ...OUTSIDE_MARKERS, 'us', 'dc', 'd.c.'])
+const ALL_PLACE_NAMES = new Set<string>([
+  ...Object.values(CORE_REGIONS).flat(),
+  ...OUTSIDE_MARKERS,
+  // Administrative regions that sit under a country but are not countries
+  // themselves ("Lahore, Punjab, Pakistan").
+  'punjab', 'sindh', 'balochistan', 'khyber pakhtunkhwa',
+  'us', 'dc', 'd.c.',
+])
+
+/** Constituent countries of a sovereign state, for the one-country rule. */
+const SOVEREIGN_OF: Record<string, string> = {
+  england: 'united kingdom',
+  scotland: 'united kingdom',
+  wales: 'united kingdom',
+  'northern ireland': 'united kingdom',
+}
 
 /** Whether a whole string is a known place name ("Texas", "USA", "Lahore" is not known). */
 export function isKnownPlaceName(part: string | null | undefined): boolean {
@@ -72,10 +89,18 @@ export function looksLikePlace(value: string | null | undefined): boolean {
   if (!v || v.length > 80 || mapLocationToRegion(v) === 'unknown') return false
   if (/^(?:greater\s+)?[\p{Lu}][\p{L}.'’ -]*?\s+(?:bay\s+area|metropolitan\s+area|metro(?:politan)?\s+area|area|region)$/iu.test(v)) return true
   const parts = v.split(',').map((p) => p.trim()).filter(Boolean)
-  if (parts.length < 2 || parts.length > 3) return false
+  if (parts.length === 1) {
+    // A single named city ("London") is a place; "Remote" is not, and no
+    // country is invented for it.
+    return isKnownPlaceName(parts[0]) && !isCountryName(parts[0])
+  }
+  if (parts.length > 3) return false
   // After the city, every part is a known region, and only one is a country.
   if (!parts.slice(1).every(isKnownPlaceName)) return false
-  return parts.filter(isCountryName).length <= 1
+  const sovereigns = new Set(
+    parts.filter(isCountryName).map((p) => SOVEREIGN_OF[norm(p)] ?? norm(p)),
+  )
+  return sovereigns.size <= 1
 }
 
 function norm(v: string): string {

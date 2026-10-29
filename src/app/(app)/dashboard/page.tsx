@@ -38,10 +38,14 @@ export default async function TodayPage({
     </Suspense>
   )
 
-  const authCtx = await getAuthContext()
+  // Auth context and the accountability snapshot are independent: both read the
+  // already-cached current user. Awaiting them in sequence added a full
+  // round-trip to every Today load (BUG-001).
+  const [authCtx, acData] = await Promise.all([
+    getAuthContext(),
+    loadAccountabilityDashboard(),
+  ])
   if (!authCtx) redirect('/login')
-
-  const acData = await loadAccountabilityDashboard()
 
   if (authCtx.isOwner || authCtx.isAdmin) {
     return (

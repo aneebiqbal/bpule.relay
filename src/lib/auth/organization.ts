@@ -57,12 +57,21 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
 
   const supabase = await createServerSupabase()
 
-  const { data: orgRoleRow } = await supabase
-    .from('organization_roles')
-    .select('role')
-    .eq('organization_id', user.organization.id)
-    .eq('person_id', user.rep.id)
-    .maybeSingle()
+  // Org role and team memberships are independent; run them together. The
+  // capability set depends on the role, so it is the only second wave.
+  const [{ data: orgRoleRow }, { data: memberships }] = await Promise.all([
+    supabase
+      .from('organization_roles')
+      .select('role')
+      .eq('organization_id', user.organization.id)
+      .eq('person_id', user.rep.id)
+      .maybeSingle(),
+    supabase
+      .from('team_memberships')
+      .select('team_id, membership_role, active, teams!inner(name)')
+      .eq('person_id', user.rep.id)
+      .eq('active', true),
+  ])
 
   // organization_roles is the canonical source of truth for org-level access.
   // reps.role is used only as a bootstrap fallback when no org role row exists
@@ -71,12 +80,6 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
   const tableRole = orgRoleRow?.role as OrganizationRole | undefined
   const organizationRole: OrganizationRole =
     tableRole ?? (user.rep.role === 'admin' ? 'ADMIN' : 'MEMBER')
-
-  const { data: memberships } = await supabase
-    .from('team_memberships')
-    .select('team_id, membership_role, active, teams!inner(name)')
-    .eq('person_id', user.rep.id)
-    .eq('active', true)
 
   const teamMemberships: TeamMembership[] = (memberships ?? []).map((m: any) => ({
     teamId: m.team_id,

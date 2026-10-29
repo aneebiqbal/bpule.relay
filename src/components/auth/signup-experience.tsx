@@ -98,7 +98,8 @@ export function SignupExperience({ capabilities }: { capabilities: AuthCapabilit
 
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(payload?.error ?? "Signup failed");
+        const code = typeof payload?.code === "string" ? payload.code : "";
+        throw new Error(code ? `${code}|${payload?.error ?? ""}` : payload?.error ?? "Signup failed");
       }
 
       track(AnalyticsEvents.SIGNUP_COMPLETED, {

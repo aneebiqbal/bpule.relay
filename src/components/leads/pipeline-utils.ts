@@ -51,7 +51,7 @@ export const TERMINAL_COLUMNS: PipelineColumnDef[] = [
   { id: 'cold', label: 'Cold', description: 'Unresponsive — reactivate or archive', dotColor: 'bg-status-warning', iconColor: 'text-status-warning', borderColor: 'border-t-status-warning', headerBg: 'bg-status-warning/[0.03]' },
 ]
 
-export function derivePipelineStage(lead: LeadRow): PipelineStage {
+export function derivePipelineStage(lead: LeadRow, now: Date = new Date()): PipelineStage {
   if (lead.status === 'won' || lead.status === 'lost' || lead.status === 'dead' || lead.status === 'no') return 'done'
   if (lead.status === 'replied') return 'needs_reply'
 
@@ -78,7 +78,7 @@ export function derivePipelineStage(lead: LeadRow): PipelineStage {
   // Follow-up due: contacted but no reply, and enough time has passed
   if (hasOutbound && !hasRepliedSinceOutbound && lead.lastOutboundAt) {
     const hasReplied = hasRepliedSinceOutbound
-    if (isFollowupDue(lead.lastOutboundAt, hasReplied, new Date(), lead.followupCount ?? 0)) {
+    if (isFollowupDue(lead.lastOutboundAt, hasReplied, now, lead.followupCount ?? 0)) {
       return 'follow_up_due'
     }
   }

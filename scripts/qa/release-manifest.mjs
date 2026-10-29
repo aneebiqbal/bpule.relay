@@ -35,6 +35,7 @@ function main() {
     automatedCodeGate: state.automatedCodeGate ?? false,
     browserGate: state.browserGate ?? 'NOT_RUN',
     bug004Gate: state.bug004Gate ?? 'NOT_RUN',
+    authOnboardingGate: state.authOnboardingGate ?? 'NOT_RUN',
     shaGate: state.shaGate ?? 'NOT_VERIFIED',
     productionGate: state.productionGate ?? 'BLOCKED',
     deploymentSha: deployed?.sha ?? null,

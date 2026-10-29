@@ -1,10 +1,11 @@
 'use client'
 
 import { use, useState } from 'react'
-import { ChevronDown, ChevronRight, Shield, Users, UserPlus, Settings, CheckCircle2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Shield, Users, Settings, CheckCircle2 } from 'lucide-react'
 import { cn } from 'cn'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatusBadge } from '@/components/ui/status-badge'
+import { InvitePersonDialog } from './invite-person-dialog'
 
 interface PeopleData {
   orgName: string
@@ -50,10 +51,7 @@ export function PeopleView({ dataPromise }: { dataPromise: Promise<PeopleData> }
         </div>
         <div className="flex gap-2">
           <BypassAllButton />
-          <button className="flex items-center gap-1.5 rounded bg-orange px-3 py-1.5 text-[12px] font-medium text-on-accent hover:bg-orange-dark transition-colors">
-            <UserPlus className="size-3.5" />
-            Add person
-          </button>
+          <InvitePersonDialog isOwner={data.isOwner} />
         </div>
       </div>
 

@@ -78,7 +78,7 @@ export function buildLeadParityReport(lead: LeadDetail, now: number = Date.now()
   const action = deriveNextLeadAction(lead, now)
   const relationship = deriveRelationshipDisplayState(lead, now)
   const presence = deriveConversationPresence(lead)
-  const stage = derivePipelineStage(toBoardLead(lead))
+  const stage = derivePipelineStage(toBoardLead(lead), new Date(now))
   const thread = buildThread(lead)
   const divergences: string[] = []
 

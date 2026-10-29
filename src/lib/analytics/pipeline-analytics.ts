@@ -282,7 +282,7 @@ export function buildDashboardAnalytics(input: {
   const roundHours = (h: number | null) => (h == null ? null : Math.round(h * 10) / 10)
 
   // ── Stages: the board's own rule ───────────────────────────────────────
-  const stageOf = new Map(leads.map((l) => [l.id, derivePipelineStage(l)]))
+  const stageOf = new Map(leads.map((l) => [l.id, derivePipelineStage(l, now)]))
   const stageOrder: PipelineStage[] = ['to_contact', 'waiting', 'follow_up_due', 'needs_reply', 'cold', 'done']
   const stages: StageSlice[] = stageOrder.map((key) => ({
     key,

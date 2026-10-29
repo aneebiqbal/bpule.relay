@@ -438,48 +438,56 @@ async function load(): Promise<AccountabilityDashboardData | null> {
 
   const role: 'rep' | 'manager' | 'admin' = ctx.isOwner || ctx.isAdmin ? 'admin' : ctx.isManager ? 'manager' : 'rep'
 
-  const { data: assignments } = await supabase
-    .from('identity_assignments')
-    .select('revenue_identity_id')
-    .eq('rep_id', ctx.repId)
-    .eq('organization_id', ctx.orgId)
+  // Assignments and availability are independent.
+  const [{ data: assignments }, { data: availability }] = await Promise.all([
+    supabase
+      .from('identity_assignments')
+      .select('revenue_identity_id')
+      .eq('rep_id', ctx.repId)
+      .eq('organization_id', ctx.orgId),
+    supabase
+      .from('operator_availability')
+      .select('status')
+      .eq('person_id', ctx.repId)
+      .eq('date', today)
+      .maybeSingle(),
+  ])
 
   const identityIds = (assignments ?? []).map((a: any) => a.revenue_identity_id)
 
-  const { data: contracts } = identityIds.length > 0
-    ? await supabase.from('revenue_identity_contracts').select('*').in('revenue_identity_id', identityIds).eq('status', 'active').order('effective_from', { ascending: false })
-    : { data: [] }
+  // Everything below depends on identityIds but not on each other: one wave.
+  const [
+    { data: contracts },
+    { data: dayCloses },
+    { data: myTargets },
+    { data: myAccountability },
+  ] = await Promise.all([
+    identityIds.length > 0
+      ? supabase.from('revenue_identity_contracts').select('*').in('revenue_identity_id', identityIds).eq('status', 'active').order('effective_from', { ascending: false })
+      : Promise.resolve({ data: [] }),
+    identityIds.length > 0
+      ? supabase.from('day_closes').select('*').eq('person_id', ctx.repId).eq('date', today).in('revenue_identity_id', identityIds)
+      : Promise.resolve({ data: [] }),
+    // daily_targets/daily_accountability is a separate, simpler per-activity-type
+    // target system (see the admin Command Center comment below for the full
+    // history) that can be populated for a rep even when no formal
+    // revenue_identity_contracts row has ever been created for their identity.
+    // Without this, a rep with a real identity assignment and real daily
+    // targets/completions saw "No revenue identity assigned" and an all-zero
+    // My Day view, because this section only ever read from `contracts`.
+    identityIds.length > 0
+      ? supabase.from('daily_targets').select('*').eq('rep_id', ctx.repId).in('revenue_identity_id', identityIds).eq('active', true)
+      : Promise.resolve({ data: [] }),
+    identityIds.length > 0
+      ? supabase.from('daily_accountability').select('*').eq('rep_id', ctx.repId).eq('target_date', today).eq('organization_id', ctx.orgId)
+      : Promise.resolve({ data: [] }),
+  ])
 
+  // Allocations need the contract ids from the wave above.
   const contractIds = (contracts ?? []).map((c: any) => c.id)
   const { data: allocations } = contractIds.length > 0
     ? await supabase.from('contract_allocations').select('*').in('contract_id', contractIds)
     : { data: [] }
-
-  const { data: dayCloses } = identityIds.length > 0
-    ? await supabase.from('day_closes').select('*').eq('person_id', ctx.repId).eq('date', today).in('revenue_identity_id', identityIds)
-    : { data: [] }
-
-  // daily_targets/daily_accountability is a separate, simpler per-activity-type
-  // target system (see the admin Command Center comment below for the full
-  // history) that can be populated for a rep even when no formal
-  // revenue_identity_contracts row has ever been created for their identity.
-  // Without this, a rep with a real identity assignment and real daily
-  // targets/completions saw "No revenue identity assigned" and an all-zero
-  // My Day view, because this section only ever read from `contracts`.
-  const { data: myTargets } = identityIds.length > 0
-    ? await supabase.from('daily_targets').select('*').eq('rep_id', ctx.repId).in('revenue_identity_id', identityIds).eq('active', true)
-    : { data: [] }
-
-  const { data: myAccountability } = identityIds.length > 0
-    ? await supabase.from('daily_accountability').select('*').eq('rep_id', ctx.repId).eq('target_date', today).eq('organization_id', ctx.orgId)
-    : { data: [] }
-
-  const { data: availability } = await supabase
-    .from('operator_availability')
-    .select('status')
-    .eq('person_id', ctx.repId)
-    .eq('date', today)
-    .maybeSingle()
 
   const availabilityStatus = (availability?.status as string) ?? 'working'
   const isWorkingDay = availabilityStatus === 'working'
@@ -620,40 +628,28 @@ async function load(): Promise<AccountabilityDashboardData | null> {
   // logged real activity); day_closes is still consulted, best-effort, to
   // enrich the "Day Close" column when that separate system IS in use.
   if (role === 'admin') {
-    const { data: allReps } = await supabase
-      .from('reps')
-      .select('id, name')
-      .eq('organization_id', ctx.orgId)
-
-    const { data: allAssignments } = await supabase
-      .from('identity_assignments')
-      .select('rep_id, revenue_identity_id')
-      .eq('organization_id', ctx.orgId)
+    // Five independent reads plus one dependent read: two waves, not six
+    // sequential round-trips on every Command Center load (BUG-001).
+    const [
+      { data: allReps },
+      { data: allAssignments },
+      { data: allTargets },
+      { data: allAccountability },
+      { data: allDayCloses },
+    ] = await Promise.all([
+      supabase.from('reps').select('id, name').eq('organization_id', ctx.orgId),
+      supabase.from('identity_assignments').select('rep_id, revenue_identity_id').eq('organization_id', ctx.orgId),
+      supabase.from('daily_targets').select('*').eq('organization_id', ctx.orgId).eq('active', true),
+      supabase.from('daily_accountability').select('*').eq('organization_id', ctx.orgId).eq('target_date', today),
+      // day_closes is best-effort enrichment only — an org that has never
+      // provisioned contracts must not lose the rest of this view over it.
+      supabase.from('day_closes').select('person_id, status').eq('organization_id', ctx.orgId).eq('date', today),
+    ])
 
     const assignedIdentityIds = [...new Set((allAssignments ?? []).map((a: any) => a.revenue_identity_id))]
     const { data: allIdentities } = assignedIdentityIds.length > 0
       ? await supabase.from('revenue_identities').select('id, identity_name').in('id', assignedIdentityIds)
       : { data: [] }
-
-    const { data: allTargets } = await supabase
-      .from('daily_targets')
-      .select('*')
-      .eq('organization_id', ctx.orgId)
-      .eq('active', true)
-
-    const { data: allAccountability } = await supabase
-      .from('daily_accountability')
-      .select('*')
-      .eq('organization_id', ctx.orgId)
-      .eq('target_date', today)
-
-    // day_closes is best-effort enrichment only — an org that has never
-    // provisioned contracts must not lose the rest of this view over it.
-    const { data: allDayCloses } = await supabase
-      .from('day_closes')
-      .select('person_id, status')
-      .eq('organization_id', ctx.orgId)
-      .eq('date', today)
 
     result.commandCenter = buildCommandCenterFromActivity({
       reps: (allReps ?? []) as Array<{ id: string; name: string }>,

@@ -15,6 +15,7 @@ export const GATE_VALUES = {
   automated: ['PASS', 'FAIL'],
   browser: ['PASS', 'FAIL', 'NOT_RUN'],
   bug004: ['PASS', 'FAIL', 'NOT_RUN'],
+  authOnboarding: ['PASS', 'FAIL', 'NOT_RUN'],
   sha: ['VERIFIED', 'NOT_VERIFIED'],
 }
 
@@ -46,18 +47,21 @@ export function evaluateReleaseGates(input) {
   const automatedOk = input.automatedCodeGate === 'PASS'
   const browserGate = normalise(input.browserGate, 'PASS', 'NOT_RUN', 'FAIL')
   const bug004Gate = normalise(input.bug004Gate, 'PASS', 'NOT_RUN', 'FAIL')
+  const authOnboardingGate = normalise(input.authOnboardingGate, 'PASS', 'NOT_RUN', 'FAIL')
   const shaGate = normalise(input.shaGate, 'VERIFIED', 'NOT_VERIFIED')
 
   const blockers = []
   if (!automatedOk) blockers.push('the automated code gate failed')
   if (browserGate !== 'PASS') blockers.push(`browser acceptance is ${browserGate}`)
   if (bug004Gate !== 'PASS') blockers.push(`the dedicated BUG-004 inbound-parity gate is ${bug004Gate}`)
+  if (authOnboardingGate !== 'PASS') blockers.push(`the auth/onboarding gate is ${authOnboardingGate}`)
   if (shaGate !== 'VERIFIED') blockers.push('the deployed SHA is not verified against the tested SHA')
 
   return {
     automatedCodeGate: automatedOk ? 'PASS' : 'FAIL',
     browserGate,
     bug004Gate,
+    authOnboardingGate,
     shaGate,
     productionGate: blockers.length === 0 ? 'PASS' : 'BLOCKED',
     productionReady: blockers.length === 0,
@@ -80,12 +84,14 @@ export function renderReleaseGateReport(gates, details = {}) {
   const uniq = (values) => [...new Set((values ?? []).filter(Boolean))]
   const browserReason = uniq(details.browserReasons).join('; ')
   const bug004Reason = uniq(details.bug004Reasons).join('; ')
+  const authReason = details.authReasons ? uniq(details.authReasons).join('; ') : ''
   const shaReason = details.shaReason ?? ''
 
   const lines = [
     `AUTOMATED_CODE_GATE      ${gates.automatedCodeGate === 'PASS' ? 'PASS' : 'FAIL'}`,
     `BROWSER_GATE             ${gates.browserGate}${gates.browserGate === 'NOT_RUN' && browserReason ? ` (${browserReason})` : ''}`,
     `BUG004_INBOUND_GATE      ${gates.bug004Gate}${gates.bug004Gate === 'NOT_RUN' && bug004Reason ? ` (${bug004Reason})` : ''}`,
+    `AUTH_ONBOARDING_GATE     ${gates.authOnboardingGate}${gates.authOnboardingGate === 'NOT_RUN' && authReason ? ` (${authReason})` : ''}`,
     `SHA_GATE                 ${gates.shaGate}${gates.shaGate === 'NOT_VERIFIED' && shaReason ? ` (${shaReason})` : ''}`,
     `PRODUCTION_GATE          ${gates.productionGate}`,
     '==================',

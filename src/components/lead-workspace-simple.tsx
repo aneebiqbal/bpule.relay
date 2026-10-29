@@ -847,13 +847,24 @@ function leadDimensionShares(lead: LeadDetail): Map<string, { share: number; lab
   return out
 }
 
-function buildPositiveSignals(lead: LeadDetail): string[] {
+function canonicalBuyerIntent(lead: LeadDetail): { level: string | null; verified: boolean } {
+  const intent = (lead.buyerIntent ?? {}) as Record<string, unknown>
+  return {
+    level: typeof intent.buyerIntentLevel === 'string' ? intent.buyerIntentLevel : null,
+    verified: intent.verifiedBuyerRequest === true,
+  }
+}
+
+export function buildPositiveSignals(lead: LeadDetail): string[] {
   const signals: string[] = []
   const byKey = leadDimensionShares(lead)
   const display = getLeadDisplayScore(lead)
+  const intent = canonicalBuyerIntent(lead)
 
   if ((byKey.get('fit')?.share ?? 0) >= 0.7) signals.push('Strong capability fit — matches what you deliver')
-  if ((byKey.get('buyerIntent')?.share ?? 0) >= 0.6) signals.push('Verified request for outside help')
+  if (intent.verified) signals.push('Verified request for outside help')
+  else if (intent.level === 'HIGH') signals.push('High buyer intent')
+  else if ((byKey.get('buyerIntent')?.share ?? 0) >= 0.6) signals.push('Verified request for outside help')
   if ((byKey.get('timing')?.share ?? 0) >= 0.6) signals.push('Current buyer timing or recent activity')
   if ((byKey.get('commercialPotential')?.share ?? 0) >= 0.5) signals.push('High commercial potential')
   if ((byKey.get('authority')?.share ?? 0) >= 0.75) signals.push(`Decision maker${lead.contactTitle ? ` (${lead.contactTitle})` : ''}`)
@@ -862,12 +873,17 @@ function buildPositiveSignals(lead: LeadDetail): string[] {
   return signals
 }
 
-function buildNegativeSignals(lead: LeadDetail): string[] {
+export function buildNegativeSignals(lead: LeadDetail): string[] {
   const signals: string[] = []
   const byKey = leadDimensionShares(lead)
   const display = getLeadDisplayScore(lead)
+  const intent = canonicalBuyerIntent(lead)
 
-  if ((byKey.get('buyerIntent')?.share ?? 1) < 0.3) signals.push('No verified buyer request')
+  // Never contradict the canonical decision: a HIGH / verified request is not
+  // "no verified buyer request", whatever the dimension share says.
+  if (!intent.verified && intent.level !== 'HIGH' && (byKey.get('buyerIntent')?.share ?? 1) < 0.3) {
+    signals.push('No verified buyer request')
+  }
   if ((byKey.get('timing')?.share ?? 1) < 0.4) signals.push('No current buyer timing')
   if ((byKey.get('access')?.share ?? 1) < 0.4) signals.push('May be hard to reach or engage')
   if ((byKey.get('evidenceQuality')?.share ?? 1) < 0.4) signals.push('Limited evidence — research before acting')

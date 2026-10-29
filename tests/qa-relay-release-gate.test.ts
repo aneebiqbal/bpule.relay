@@ -21,6 +21,7 @@ const PASSING = {
   automatedCodeGate: 'PASS',
   browserGate: 'PASS',
   bug004Gate: 'PASS',
+  authOnboardingGate: 'PASS',
   shaGate: 'VERIFIED',
 } as const
 
@@ -109,14 +110,31 @@ describe('release gate — every blocker names its gate', () => {
       automatedCodeGate: 'FAIL',
       browserGate: 'NOT_RUN',
       bug004Gate: 'NOT_RUN',
+      authOnboardingGate: 'NOT_RUN',
       shaGate: 'NOT_VERIFIED',
     })
-    expect(result.blockers).toHaveLength(4)
+    expect(result.blockers).toHaveLength(5)
     const joined = result.blockers.join(' ')
     expect(joined).toMatch(/automated/i)
     expect(joined).toMatch(/browser/i)
     expect(joined).toMatch(/BUG-004/i)
+    expect(joined).toMatch(/auth\/onboarding/i)
     expect(joined).toMatch(/SHA/i)
+  })
+})
+
+describe('release gate — the auth/onboarding gate is never implied', () => {
+  it('treats an absent auth/onboarding gate as NOT_RUN and blocks', () => {
+    const result = evaluateReleaseGates({ ...PASSING, authOnboardingGate: undefined as unknown as string })
+    expect(result.authOnboardingGate).toBe('NOT_RUN')
+    expect(result.productionGate).toBe('BLOCKED')
+    expect(result.blockers.join(' ')).toMatch(/auth\/onboarding/i)
+  })
+
+  it('a failed auth/onboarding gate blocks even when everything else passed', () => {
+    const result = evaluateReleaseGates({ ...PASSING, authOnboardingGate: 'FAIL' })
+    expect(result.productionGate).toBe('BLOCKED')
+    expect(result.blockers.join(' ')).toMatch(/auth\/onboarding/i)
   })
 })
 
@@ -146,6 +164,7 @@ describe('release gate report — a reviewer cannot be misled', () => {
     expect(lines.get('AUTOMATED_CODE_GATE')).toBe('PASS')
     expect(lines.get('BROWSER_GATE')).toBe('PASS')
     expect(lines.get('BUG004_INBOUND_GATE')).toBe('PASS')
+    expect(lines.get('AUTH_ONBOARDING_GATE')).toBe('PASS')
     expect(lines.get('SHA_GATE')).toBe('VERIFIED')
     expect(lines.get('PRODUCTION_GATE')).toBe('PASS')
   })
@@ -203,16 +222,18 @@ describe('release gate report — a reviewer cannot be misled', () => {
         automatedCodeGate: 'FAIL',
         browserGate: 'NOT_RUN',
         bug004Gate: 'NOT_RUN',
+        authOnboardingGate: 'NOT_RUN',
         shaGate: 'NOT_VERIFIED',
       }),
     )
 
-    // Four unsatisfied gates, four named blocker lines.
+    // Five unsatisfied gates, five named blocker lines.
     const blockerLines = report.split('\n').filter((l) => /^\s*- /.test(l))
-    expect(blockerLines).toHaveLength(4)
+    expect(blockerLines).toHaveLength(5)
     expect(report).toMatch(/automated/i)
     expect(report).toMatch(/browser/i)
     expect(report).toMatch(/BUG-004/i)
+    expect(report).toMatch(/auth\/onboarding/i)
     expect(report).toMatch(/SHA/i)
   })
 

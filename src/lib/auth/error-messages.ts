@@ -5,6 +5,32 @@ function normalize(message: unknown): string {
 
 export function humanizeSignupError(message: unknown): string {
   const value = normalize(message);
+  const raw = String(message ?? "").trim();
+
+  // Server error codes are explicit; map each to an actionable sentence rather
+  // than collapsing every failure into "Could not create your account".
+  const code = raw.split("|")[0].toUpperCase();
+  switch (code) {
+    case "INVITE_REQUIRED":
+      return "Relay access is invitation-only. Enter the invite code from your workspace admin.";
+    case "INVITE_INVALID":
+      return "That invite code is not valid. Check it with your workspace admin.";
+    case "SIGNUP_DISABLED":
+      return "Relay signup is currently disabled. Ask your workspace admin for an invitation.";
+    case "EMAIL_ALREADY_REGISTERED":
+      return "That email is already registered. Try signing in instead.";
+    case "RATE_LIMITED":
+      return "Too many attempts right now. Please wait a minute and try again.";
+    case "ORG_CREATION_FAILED":
+    case "MEMBERSHIP_CREATION_FAILED":
+    case "ROLE_ASSIGNMENT_FAILED":
+    case "SIGNUP_FAILED":
+      return "Your account was not created because the workspace could not be set up. Nothing was saved — please try again.";
+    case "INVALID_INPUT":
+      return "Check the workspace name, email, and password (8+ characters).";
+    case "ACCOUNT_CREATION_FAILED":
+      return "Could not create your account. Please check your details and try again.";
+  }
 
   if (!value) return "Could not create your account. Please try again.";
   if (value.includes("already") || value.includes("in use")) {

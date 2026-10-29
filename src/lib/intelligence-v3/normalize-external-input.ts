@@ -15,6 +15,7 @@
  */
 
 import { isCountryName } from '@/lib/leads/targeting-pure'
+import { stripMarkdownFormatting } from '@/lib/prospect/paste-normalize'
 
 export interface NormalizedExternalFields {
   name: string | null
@@ -160,8 +161,7 @@ function fieldForLabel(rawLabel: string): keyof NormalizedExternalFields | null 
  * triple newlines indistinguishable.
  */
 export function normalizeExternalWhitespace(rawText: string): string {
-  return rawText
-    .replace(/\r\n?/g, '\n')
+  return stripMarkdownFormatting(rawText)
     .split('\n')
     .map((line) => line.replace(/\s+$/, '').replace(/\t/g, ' '))
     .join('\n')

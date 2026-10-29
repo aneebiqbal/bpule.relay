@@ -37,6 +37,7 @@ function main() {
     automatedCodeGate: state.automatedCodeGate ? 'PASS' : 'FAIL',
     browserGate: state.browserGate,
     bug004Gate: state.bug004Gate,
+    authOnboardingGate: state.authOnboardingGate,
     shaGate: url ? (shaMatches ? 'VERIFIED' : 'NOT_VERIFIED') : state.shaGate,
   })
 
@@ -47,6 +48,7 @@ function main() {
   console.log(`AUTOMATED_CODE_GATE  ${gates.automatedCodeGate}`)
   console.log(`BROWSER_GATE         ${gates.browserGate}`)
   console.log(`BUG004_INBOUND_GATE  ${gates.bug004Gate}`)
+  console.log(`AUTH_ONBOARDING_GATE ${gates.authOnboardingGate}`)
   console.log(`SHA_GATE             ${gates.shaGate}`)
   console.log('=======================')
 

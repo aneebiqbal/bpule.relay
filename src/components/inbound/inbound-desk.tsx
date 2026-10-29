@@ -317,7 +317,18 @@ export function Intake({ onSaved }: { onSaved: (leadId: string) => void }) {
       })
       const data = await res.json().catch(() => ({}))
       if (completedAnalysisKey.current !== currentInputKey || snapshotKey(latestInput.current) !== currentInputKey) return
-      if (!res.ok) throw new Error(data.error ?? 'Failed to save the lead.')
+      if (!res.ok) {
+        // The server may have persisted the lead but failed to initialise its
+        // conversation. Never tell the rep it was not created when it was.
+        if (data.incomplete === true && typeof data.leadId === 'string') {
+          setSavedId(data.leadId)
+          onSaved(data.leadId)
+          setError(data.error ?? 'The lead was saved, but its conversation could not be initialized. Retry to repair it.')
+          notifyError(data.error ?? 'Retry to finish setting up the conversation.', 'Lead saved')
+          return
+        }
+        throw new Error(data.error ?? 'Failed to save the lead.')
+      }
       setSavedId(data.lead.id)
       onSaved(data.lead.id)
     } catch (err) {

@@ -17,7 +17,7 @@ import { extractHiringOrganization, extractStatedLocation, isPlausibleCompanyNam
 import { commercialReadingFromFacts } from '@/lib/intelligence-v2/commercial-reading'
 import { isLinkedInChromeLine, nameFromViewProfileLabel } from '@/lib/prospect/paste-normalize'
 import { stripEmployerFromTitle } from '@/lib/leads/role-line'
-import { normalizeExternalInput, isLabeledFieldLine } from './normalize-external-input'
+import { normalizeExternalInput, normalizeExternalWhitespace, isLabeledFieldLine } from './normalize-external-input'
 
 
 export function buildV3BridgeInput(
@@ -275,7 +275,7 @@ function extractCompanyFromProfile(
     const pipeParts = title.split(/\s*\|\s*/).map(p => p.trim())
     if (pipeParts.length >= 2) {
       for (const part of pipeParts) {
-        if (isLikelyCompanyName(part) && !looksLikeRole(part)) {
+        if (isLikelyCompanyName(part) && !isRolePhrase(part)) {
           return cleanOrgName(part)
         }
       }
@@ -298,7 +298,7 @@ function extractCompanyFromProfile(
 
       // Pattern: "Company" standalone line (organization name only)
       const standaloneMatch = line.match(/^([A-Z][A-Za-z0-9._&\-\s]{2,40})$/)
-      if (standaloneMatch && isLikelyCompanyName(standaloneMatch[1]) && !looksLikeRole(standaloneMatch[1])) {
+      if (standaloneMatch && isLikelyCompanyName(standaloneMatch[1]) && !isRolePhrase(standaloneMatch[1])) {
         return cleanOrgName(standaloneMatch[1])
       }
     }
@@ -321,7 +321,7 @@ function extractCompanyFromProfile(
   for (const line of identityLines) {
     // Skip the name line and title line
     if (line === identityLines[0]) continue
-    if (looksLikeRole(line)) continue
+    if (isRolePhrase(line)) continue
 
     // Look for company-like patterns in identity lines
     const cleanLine = line.replace(/·/g, '|').trim()
@@ -355,7 +355,7 @@ function isLikelyCompanyName(candidate: string): boolean {
   if (!candidate || candidate.length < 2 || candidate.length > 60) return false
   const lower = candidate.toLowerCase().trim()
 
-  if (looksLikeRole(candidate)) return false
+  if (isRolePhrase(candidate)) return false
 
   // Reject standalone legal suffixes
   const legalSuffixes = ['inc', 'inc.', 'ltd', 'ltd.', 'llc', 'gmbh', 'corp', 'corp.', 'co', 'co.', 'sa', 's.a.', 'bv', 'nv', 'plc', 'llp', 'lp']
@@ -399,6 +399,17 @@ function looksLikeRole(text: string): boolean {
 }
 
 /**
+ * True when a candidate reads as a job title rather than an employer. A company
+ * may legitimately contain a role word ("Nexora Talent Solutions"); only a
+ * phrase whose FIRST word is a role word is a title ("Senior Recruiter").
+ */
+function isRolePhrase(text: string): boolean {
+  const words = text.trim().toLowerCase().split(/\s+/)
+  if (words.length === 0) return false
+  return looksLikeRole(words[0])
+}
+
+/**
  * Build a minimal V2 canonical structure WITHOUT AI calls.
  * Used only when V3 is canonical — V3's event extractor works from raw text,
  * so we only need basic normalization (not full AI extraction).
@@ -429,8 +440,16 @@ function labeledField(lines: string[], ...labels: string[]): string | null {
 }
 
 /** A line that reads as a person's name: 2-4 capitalized words, no role words or punctuation. */
+function cleanPersonNameLine(line: string): string {
+  // "Oliver Haines – CertRP" is a name plus a credential, not a four-word name.
+  return line
+    .replace(/\s*[,|·]\s*(?:CertRP|CIPD|MCIPD|MBA|PhD|MSc|BSc|BA|MA|CPA|CFA|PMP|ACCA|FREC|CIM|PRINCE2)\b\.?\s*$/i, '')
+    .replace(/\s*[–—-]\s*(?:CertRP|CIPD|MCIPD|MBA|PhD|MSc|BSc|BA|MA|CPA|CFA|PMP|ACCA|FREC|CIM|PRINCE2)\b\.?\s*$/i, '')
+    .trim()
+}
+
 function looksLikePersonName(line: string): boolean {
-  const t = line.trim()
+  const t = cleanPersonNameLine(line).trim()
   if (!/^[\p{L}][\p{L} .'’-]{2,60}$/u.test(t)) return false
   if (ROLE_WORDS.test(t) || isLinkedInChromeLine(t)) return false
   const words = t.split(/\s+/)
@@ -458,22 +477,24 @@ const NOT_A_PERSON = /\b(?:hiring|we(?:'|’)?re|we\s+are|join|apply|vacanc(?:y|
 
 function pickPersonName(identityLines: string[], allLines: string[]): string | null {
   const labeled = labeledField(allLines, 'name')
-  if (labeled) return labeled
+  if (labeled) return cleanPersonNameLine(labeled)
   for (const line of identityLines) {
     const fromLabel = nameFromViewProfileLabel(line)
-    if (fromLabel && looksLikePersonName(fromLabel)) return fromLabel
+    if (fromLabel && looksLikePersonName(fromLabel)) return cleanPersonNameLine(fromLabel)
   }
   const named = identityLines.find(looksLikePersonName)
-  if (named) return named
+  if (named) return cleanPersonNameLine(named)
   const first = identityLines.find((l) => !isLinkedInChromeLine(l))
-  const candidate = first?.split(/\s+·\s+/)[0]?.split(/\s+at\s+/)[0]?.trim() ?? ''
+  const candidate = cleanPersonNameLine(first?.split(/\s+·\s+/)[0]?.split(/\s+at\s+/)[0]?.trim() ?? '')
   // A job-ad banner ("We're Hiring!", "Join our team") is not a person.
   if (!candidate || /[!?:]/.test(candidate) || !/^[\p{Lu}]/u.test(candidate) || NOT_A_PERSON.test(candidate)) return null
   return !ROLE_WORDS.test(candidate) && candidate.split(/\s+/).length <= 5 ? candidate : null
 }
 
 export function buildMinimalV2Canonical(rawText: string, facts?: SourceFacts): CanonicalProspectIntelligence {
-  const lines = rawText.split('\n').map((l) => l.trim()).filter((l) => l && !isLinkedInChromeLine(l))
+  // The canonical boundary owns whitespace AND Markdown: a pasted `### **Name**`
+  // must reach identity extraction as `Name`.
+  const lines = normalizeExternalWhitespace(rawText).split('\n').map((l) => l.trim()).filter((l) => l && !isLinkedInChromeLine(l))
   const { identity: identityLines, body: bodyLines } = splitIdentityAndBody(lines)
 
   const name = pickPersonName(identityLines, lines)

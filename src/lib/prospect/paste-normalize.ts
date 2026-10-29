@@ -35,9 +35,33 @@ export function nameFromViewProfileLabel(line: string): string | null {
   return name ? name : null
 }
 
+/**
+ * Strip Markdown formatting from a pasted profile. LinkedIn and other sources
+ * render a name as `### **Oliver Haines**`; the markers are formatting, not
+ * identity, and must not reach the extractor.
+ */
+export function stripMarkdownFormatting(rawText: string): string {
+  return rawText
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/^\s{0,3}#{1,6}\s+/, '') // ATX heading
+        .replace(/^\s*>\s?/, '') // blockquote
+        .replace(/^\s*[-*+•]\s+/, '') // bullet
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [text](url)
+        .replace(/\*\*([^*]+)\*\*/g, '$1') // bold
+        .replace(/__([^_]+)__/g, '$1') // bold
+        .replace(/\*([^*\n]+)\*/g, '$1') // italic
+        .replace(/`([^`]+)`/g, '$1') // inline code
+        .replace(/\s+$/, ''),
+    )
+    .join('\n')
+}
+
 export function normalizeProspectPaste(rawText: string): string {
   const out: string[] = []
-  for (const line of rawText.replace(/\r\n?/g, '\n').split('\n')) {
+  for (const line of stripMarkdownFormatting(rawText).split('\n')) {
     if (isLinkedInChromeLine(line)) continue
     out.push(line.replace(/\s+$/, ''))
   }

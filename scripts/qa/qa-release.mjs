@@ -27,6 +27,29 @@ import { evaluateReleaseGates, renderReleaseGateReport } from './release-gates.m
 const VITEST_JSON = path.join(ARTIFACTS_DIR, 'vitest.json')
 const BROWSER_JSON = path.join(ARTIFACTS_DIR, 'browser.json')
 const BUG004_JSON = path.join(ARTIFACTS_DIR, 'browser-bug-004.json')
+const AUTH_ONBOARDING_JSON = path.join(ARTIFACTS_DIR, 'auth-onboarding.json')
+
+/**
+ * The auth/onboarding gate is produced by the browser matrix. A missing or
+ * malformed artifact is NOT_RUN, never an implied pass.
+ */
+function readAuthOnboardingGate() {
+  try {
+    const parsed = JSON.parse(execFileSync('cat', [AUTH_ONBOARDING_JSON], { encoding: 'utf8' }))
+    return parsed.result === 'PASS' ? 'PASS' : parsed.result === 'FAIL' ? 'FAIL' : 'NOT_RUN'
+  } catch {
+    return 'NOT_RUN'
+  }
+}
+
+function readAuthOnboardingGateReason() {
+  try {
+    const parsed = JSON.parse(execFileSync('cat', [AUTH_ONBOARDING_JSON], { encoding: 'utf8' }))
+    return parsed.result === 'PASS' ? null : (parsed.reason ?? 'AUTH_ONBOARDING_GATE not run')
+  } catch {
+    return 'AUTH_ONBOARDING_GATE not run'
+  }
+}
 
 mkdirSync(ARTIFACTS_DIR, { recursive: true })
 
@@ -197,6 +220,7 @@ function main() {
     automatedCodeGate: failures === 0 ? 'PASS' : 'FAIL',
     browserGate: browser.result,
     bug004Gate: browser.bug004?.result,
+    authOnboardingGate: readAuthOnboardingGate(),
     shaGate: version ? 'VERIFIED' : 'NOT_VERIFIED',
   })
   const automatedOk = gates.automatedCodeGate === 'PASS'
@@ -208,6 +232,7 @@ function main() {
   console.log(renderReleaseGateReport(gates, {
     browserReasons: [browser.acceptance?.reason, browser.reason].filter(Boolean),
     bug004Reasons: [browser.bug004?.reason].filter(Boolean),
+    authReasons: [readAuthOnboardingGateReason()].filter(Boolean),
     shaReason: version ? null : 'no /api/version reachable',
   }))
 
@@ -227,6 +252,7 @@ function main() {
     automatedCodeGate: gates.automatedCodeGate,
     browserGate: gates.browserGate,
     bug004Gate: gates.bug004Gate,
+    authOnboardingGate: gates.authOnboardingGate,
     shaGate: gates.shaGate,
     productionGate: gates.productionGate,
     productionReady: gates.productionReady,

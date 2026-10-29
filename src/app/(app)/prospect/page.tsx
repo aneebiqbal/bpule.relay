@@ -649,7 +649,12 @@ export default function ProspectCheckPage() {
           {result.score ? (
             <div>
               <div className="flex items-baseline gap-3">
-                <ScoreRing canonicalScore={result.score.total} displayValue={result.score.displayScore} size={64} />
+                <div className="flex flex-col items-center gap-1">
+                  <ScoreRing canonicalScore={result.score.total} displayValue={result.score.displayScore} size={64} />
+                  {/* The opportunity score is sender-independent. The sender
+                      block below shows a different number: the sender match. */}
+                  <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Opportunity score</span>
+                </div>
                 <div className="min-w-0">
                   <h2 className="text-[15px] font-medium text-ink">
                     {result.extracted.name ?? 'Unnamed prospect'}
@@ -835,7 +840,7 @@ export default function ProspectCheckPage() {
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <User className="size-3.5 text-orange" aria-hidden="true" />
-                  <h3 className="text-[12px] font-medium text-ink">Sender</h3>
+                  <h3 className="text-[12px] font-medium text-ink">Sender match</h3>
                 </div>
                 {Array.isArray(result.alternativeSenders) && result.alternativeSenders.length > 0 && (
                   <button
@@ -861,7 +866,7 @@ export default function ProspectCheckPage() {
                   <>
                     <p className="mt-1.5 text-[13px] font-medium text-ink">
                       Sending as: {active?.name ?? result.bestSender?.label ?? 'No profile selected'}
-                      {active ? ` · ${active.profileMatch}% match` : ''}
+                      {active ? ` · ${active.profileMatch}% sender match` : ''}
                     </p>
                     {(active?.reasons[0] ?? result.bestSenderProof[0]?.safeClaim) && (
                       <p className="mt-0.5 text-[11px] text-graphite">

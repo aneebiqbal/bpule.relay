@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { readInvitation } from '@/lib/auth/invitations'
+import { provisionInvitedMember } from '@/lib/auth/invitations-server'
 
 type CookieMutation = {
   name: string
@@ -35,19 +37,28 @@ function parseRequestCookies(request: Request): Array<{ name: string; value: str
     })
 }
 
+/**
+ * Resolve a post-auth destination. Only same-origin application paths are
+ * allowed; a protocol-relative or absolute URL is an open redirect and is
+ * replaced by "/". The query string is preserved (deep links like
+ * `/leads/123?tab=conversation`).
+ */
+export function safeNextPath(requested: string | null, origin: string): string {
+  if (!requested) return '/'
+  try {
+    const parsed = new URL(requested, origin)
+    if (parsed.origin !== origin) return '/'
+    if (!parsed.pathname.startsWith('/') || parsed.pathname.startsWith('//')) return '/'
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`
+  } catch {
+    return '/'
+  }
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const code = url.searchParams.get('code')
-  const requested = url.searchParams.get('next') || '/'
-  let redirectTo = '/'
-  try {
-    const parsed = new URL(requested, url.origin)
-    if (parsed.origin === url.origin && parsed.pathname.startsWith('/')) {
-      redirectTo = parsed.pathname
-    }
-  } catch {
-    redirectTo = '/'
-  }
+  let redirectTo = safeNextPath(url.searchParams.get('next'), url.origin)
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -103,11 +114,28 @@ export async function GET(request: Request) {
       .maybeSingle()
 
     if (!rep) {
-      await supabase.auth.signOut()
-      return applyCookieMutations(
-        NextResponse.redirect(new URL('/login?error=no_workspace', url.origin)),
-        cookieMutations,
-      )
+      // No application identity yet. Only a trusted invitation (admin-only
+      // app_metadata) may create one; anyone else is denied, never given a
+      // free-floating account with no organisation.
+      const invitation = readInvitation(data.user?.app_metadata)
+      const provisioned = invitation
+        ? await provisionInvitedMember({
+            invitation,
+            authUserId,
+            email: data.user?.email ?? '',
+            displayName: (data.user?.user_metadata?.full_name as string | undefined) ?? null,
+          })
+        : null
+
+      if (!provisioned) {
+        await supabase.auth.signOut()
+        return applyCookieMutations(
+          NextResponse.redirect(new URL('/login?error=no_workspace', url.origin)),
+          cookieMutations,
+        )
+      }
+      // A brand-new invited member always starts onboarding.
+      redirectTo = '/onboarding'
     }
   }
 

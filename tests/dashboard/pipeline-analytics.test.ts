@@ -65,7 +65,7 @@ describe('dashboard analytics', () => {
     ]
     const a = buildDashboardAnalytics({ leads, events: [], range: 30, now: NOW })
     for (const s of a.stages) {
-      expect(s.value).toBe(leads.filter((l) => derivePipelineStage(l) === s.key).length)
+      expect(s.value).toBe(leads.filter((l) => derivePipelineStage(l, NOW) === s.key).length)
     }
     expect(a.stages.reduce((n, s) => n + s.value, 0)).toBe(leads.length)
     expect(a.totals).toMatchObject({ leads: 5, won: 1, lost: 1 })
