@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/operational-scheduler",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 4 * * *"
     },
     {
       "path": "/api/few-shot/refresh",
