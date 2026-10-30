@@ -211,6 +211,7 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     assignedProfiles: relayData.assignedProfiles,
     allReps: undefined,
     allLeads: [],
+    suppressedLeadIds: await store.getSuppressedLeadIds(),
   })
 
   const { filterQueueByRole } = await import('@/lib/relay/queue-engine')

@@ -43,6 +43,11 @@ export interface QueueInput {
   assignedProfiles: Profile[]
   allReps?: Rep[]
   allLeads?: Lead[]
+  /**
+   * Leads carrying an active suppression row. No outreach task may be built for
+   * them. Suppression is one authority (§24) and Today is not a bypass.
+   */
+  suppressedLeadIds?: ReadonlySet<string>
 }
 
 const KIND_PRIORITY_BASE: Record<RelayTaskKind, number> = {
@@ -106,6 +111,15 @@ export function leadClosedForOutreach(
 }
 
 export function buildRelayQueue(input: QueueInput): RelayQueue {
+  // A suppressed lead owes no outreach task of any kind. Filtering here rather
+  // than at each build site means a new task kind cannot quietly become a bypass.
+  const suppressed = input.suppressedLeadIds ?? new Set<string>()
+  const hasSuppressions = suppressed.size > 0
+  const queue = hasSuppressions ? input.queueData.queue.filter((l) => !suppressed.has(l.id)) : input.queueData.queue
+  const replies = hasSuppressions ? input.queueData.replies.filter((l) => !suppressed.has(l.id)) : input.queueData.replies
+  const followupsDue = hasSuppressions ? input.followupsDue.filter((f) => !suppressed.has(f.lead.id)) : input.followupsDue
+  const allLeads = input.allLeads && hasSuppressions ? input.allLeads.filter((l) => !suppressed.has(l.id)) : input.allLeads
+
   const tasks: RelayTask[] = []
 
   // 1. Inbound opportunities (highest priority — client contacted us first).
@@ -114,8 +128,8 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
   // from Today (BUG-004 visibility). The owned queue already contains them, so
   // both sources are scanned and de-duplicated by id.
   const inboundCandidates = new Map<string, Lead>()
-  for (const lead of input.allLeads ?? []) inboundCandidates.set(lead.id, lead)
-  for (const lead of input.queueData.queue) inboundCandidates.set(lead.id, lead)
+  for (const lead of allLeads ?? []) inboundCandidates.set(lead.id, lead)
+  for (const lead of queue) inboundCandidates.set(lead.id, lead)
   for (const lead of inboundCandidates.values()) {
     if (lead.direction === 'inbound' && lead.status === 'new') {
       tasks.push(buildInboundTask(lead, input))
@@ -126,7 +140,7 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
   // interested / don't follow up", owes no reply and gets no urgent task
   // (REL-QA-014). The store's replies list is keyed on status alone, so the
   // decline is read from the thread here.
-  for (const lead of input.queueData.replies) {
+  for (const lead of replies) {
     if (leadClosedForOutreach(lead, input.messagesByLead.get(lead.id) ?? [])) continue
     const task = buildReplyTask(lead, input)
     if (task) tasks.push(task)
@@ -137,7 +151,7 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
   // gate still applies: it is only appropriate once the connection is accepted.
   // CRITICAL: Only create DM task if connection has been accepted. Otherwise
   // the lead should appear as "waiting for connection", not "DM due".
-  for (const lead of input.queueData.queue) {
+  for (const lead of queue) {
     if (
       lead.status === 'contacted' &&
       lead.lockedReason === 'connection_note_sent' &&
@@ -152,20 +166,20 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
   }
 
   // 3. Follow-up due. Same rule: no follow-up to a closed or declined lead.
-  for (const f of input.followupsDue) {
+  for (const f of followupsDue) {
     if (leadClosedForOutreach(f.lead, input.messagesByLead.get(f.lead.id) ?? [])) continue
     tasks.push(buildFollowupTask(f.lead, f.daysSinceContact, input))
   }
 
   // 4. High-fit leads (scored 'send' but not yet contacted)
-  for (const lead of input.queueData.queue) {
+  for (const lead of queue) {
     if (lead.verdict === 'send' && lead.status === 'new') {
       tasks.push(buildHighFitTask(lead, input))
     }
   }
 
   // 4. New qualified opportunities (recently added, scored)
-  for (const lead of input.queueData.queue) {
+  for (const lead of queue) {
     const leadScore = effectiveScore(lead)
     const band = leadScore === null ? null : qualifyCanonicalScore(leadScore).qualification
     if (lead.status === 'new' && (band === 'STRONG' || band === 'WORTH_PURSUING')) {
@@ -193,7 +207,7 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
   }
 
   // 7. Leads going cold (contacted but no reply after 10+ days)
-  for (const lead of input.queueData.queue) {
+  for (const lead of queue) {
     if (lead.status === 'contacted') {
       const age = (Date.now() - new Date(lead.createdAt).getTime()) / (1000 * 60 * 60 * 24)
       if (age > 10) {
@@ -203,7 +217,7 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
   }
 
   // 8. Admin review (admin role only)
-  if (input.roleContext.role === 'admin' && input.allReps && input.allLeads) {
+  if (input.roleContext.role === 'admin' && input.allReps && allLeads) {
     tasks.push(...buildAdminTasks(input))
   }
 
