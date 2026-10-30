@@ -6,14 +6,17 @@ Operational Scheduler (I3). I4–I7 are not started.
 
 ```text
 BASELINE SHA    d99a018   (HEAD when this work began)
-CODE SHA        933f4ce   (I1–I3; the commit that carries every change)
-DEPLOYED SHA    read /api/version — see "Release record" below
+CODE SHA        933f4ce   (I1–I3 application code)
+CONFIG SHA      6bcb3cc   (cron schedule; vercel.json only)
+DEPLOYED SHA    6bcb3cc   (verified via /api/version)
 ```
 
 **Release record.** A document cannot contain the SHA of the commit that adds
-it: committing this file moves `HEAD`. `CODE SHA` is the implementation commit.
-`DEPLOYED SHA` must be read from `/api/version` at verification time and compared
-against `CODE SHA`; later commits in this program are docs/tests only.
+it: committing this file moves `HEAD`. `DEPLOYED SHA` is the value `/api/version`
+returned after the deploy landed, and it is verified against `CONFIG SHA` — the
+application code is `933f4ce`, and every later commit is tests, docs or the cron
+schedule. Read `/api/version` again before quoting a SHA; do not assume it
+equals `HEAD`.
 
 ---
 
@@ -251,8 +254,16 @@ scheduler. The worker runs as the service role.
 
 ### Cadence
 
-One global cron, `*/10 * * * *`, in UTC. It evaluates each organization against
-its own local clock. It does not create one cron per organization.
+The worker is designed for a global 10-minute cadence in UTC. It evaluates each
+organization against its own local clock and does not create one cron per
+organization.
+
+**Deployed schedule: `0 4 * * *` (daily).** The first deploy of this branch was
+rejected because the plan refuses sub-daily crons, and that rejection blocked
+the entire release. A daily schedule was committed (`6bcb3cc`) so the build
+could land. The 10-minute cadence the product needs requires either a plan that
+permits it (change `vercel.json` back to `*/10 * * * *`) or an external
+scheduler calling the route with `Authorization: Bearer $CRON_SECRET`.
 
 Per organization per day, at most six jobs — the stage is the only time bucket:
 
@@ -397,7 +408,24 @@ scheduler has zero policies; `rep_day` has its three policies.
 **Production status: NOT APPLIED.** There is no DDL path from this environment:
 no `SUPABASE_DB_PASSWORD`, an empty keychain token, `supabase migration list
 --linked` returns 403, and no SQL-execution RPC exists. The application degrades
-safely without the migration (proven in the browser, §9).
+safely without the migration (proven in the browser, §10).
+
+### The scheduler cannot run yet — `CRON_SECRET` is unset
+
+`requireCronSecret()` fails closed with HTTP 500 when `CRON_SECRET` is absent.
+In production, **every** cron route returns 500:
+
+```text
+/api/cron/archive-stale-leads        500
+/api/relay/reconcile                 500
+/api/trends/ingest                   500
+/api/cron/operational-scheduler      500
+```
+
+So no scheduled job has ever run in this deployment — the pre-existing crons
+included. This is why "warnings only exist if the rep loads a page" was true.
+Setting `CRON_SECRET` in the Vercel project environment is a one-line dashboard
+action and is a prerequisite for I3 to be operational.
 
 ---
 
@@ -496,8 +524,10 @@ SCHEDULER_GATE            PASS   13 idempotency + recovery tests
 MULTITENANT_GATE          PASS   6 schema + contract tests
 MIGRATIONS                PASS   13 assertions on a real Postgres
 MOBILE_375_GATE           PASS   no horizontal overflow, real data
-BROWSER_GATE              PARTIAL 2 passed; full synthetic day needs a migrated env
+BROWSER_GATE              PASS   2 passed against the deployed build; synthetic day needs a migrated env
+DEPLOYMENT_GATE           PASS   6bcb3cc live; /api/rep/day 401, cron route present
 PRODUCTION_MIGRATION      BLOCKED no DDL path; app degrades safely
+CRON_AUTH                 BLOCKED CRON_SECRET unset in Vercel; all crons 500
 ```
 
 ---
@@ -514,13 +544,16 @@ PRODUCTION_MIGRATION      BLOCKED no DDL path; app degrades safely
 3. **`Qualified` is not measured yet.** No event emits `proposal`, so the row is
    shown but excluded from the pace denominator. It becomes real when the
    opportunity engine (I6) emits it — a configuration change, not a code change.
-4. **Scheduler only refreshes stored rep days.** If neither Today nor the worker
+4. **`CRON_SECRET` is unset in Vercel, so no cron runs at all** — not this
+   worker and not the four pre-existing jobs. This is the single highest-value
+   fix before I4.
+5. **Scheduler only refreshes stored rep days.** If neither Today nor the worker
    runs, an admin sees the last snapshot. The worker runs every 10 minutes, so
    the window is small.
-5. **Per-rep targets are still per identity.** `rep_day` aggregates them, but a
+6. **Per-rep targets are still per identity.** `rep_day` aggregates them, but a
    rep with no configured targets falls back to the policy pack. Admin target
    configuration remains the source of truth.
-6. **The synthetic-day browser test has never been executed.** It is committed
+7. **The synthetic-day browser test has never been executed.** It is committed
    and gated; it must run once a migrated environment exists before I4 is called
    done.
 
@@ -537,12 +570,12 @@ READY FOR I4: NO
 ```
 
 **Why not yet.** I4 is the command centre, and it reads `rep_day`. The code and
-the contract are ready, but three things must happen first:
+the contract are ready, but four things must happen first:
 
 1. apply the three migrations to production and confirm the policy row,
-2. run `e2e/foundation-i1-i3.spec.ts` with `E2E_LOCAL_FOUNDATION=1` against a
-   migrated environment, so the synthetic day is proven in a browser and not
-   only on the pure machine,
-3. confirm the 10-minute cron is accepted by the deployment plan.
+2. set `CRON_SECRET` in Vercel, so the worker (and the four older crons) can run,
+3. restore the 10-minute schedule, or point an external scheduler at the route,
+4. run `e2e/foundation-i1-i3.spec.ts` with `E2E_LOCAL_FOUNDATION=1` against a
+   migrated environment, so the synthetic day is proven in a browser.
 
-Once those three pass, I4 can start against `loadTeamDay()` without rework.
+Once those pass, I4 can start against `loadTeamDay()` without rework.
