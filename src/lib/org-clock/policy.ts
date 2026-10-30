@@ -158,3 +158,48 @@ export function timeColumnToClock(value: unknown): string | undefined {
   const minutes = parseClock(value)
   return minutes === null ? undefined : formatClock(minutes)
 }
+
+/**
+ * Validate an operating-policy edit from an admin.
+ * Returns a human error message, or null when the input is acceptable.
+ * Pure, so the API and the tests share exactly one rule set.
+ */
+export function validatePolicyInput(input: {
+  timezone?: unknown
+  workdayStart?: unknown
+  workdayEnd?: unknown
+  workingDays?: unknown
+}): string | null {
+  if (input.timezone !== undefined) {
+    if (typeof input.timezone !== 'string' || !input.timezone.trim()) return 'A timezone is required.'
+    if (!isValidTimeZone(input.timezone)) return `Unknown timezone: ${input.timezone}`
+  }
+
+  if (input.workdayStart !== undefined || input.workdayEnd !== undefined) {
+    const start = parseClock(typeof input.workdayStart === 'string' ? input.workdayStart : null)
+    const end = parseClock(typeof input.workdayEnd === 'string' ? input.workdayEnd : null)
+    if (start === null || end === null) return 'Workday start and end must be valid times.'
+    if (start >= end) return 'The workday must start before it ends.'
+  }
+
+  if (input.workingDays !== undefined) {
+    if (!Array.isArray(input.workingDays) || input.workingDays.length === 0) {
+      return 'At least one working day is required.'
+    }
+    if (input.workingDays.some((day) => !Number.isInteger(day) || day < 0 || day > 6)) {
+      return 'Working days must be between Sunday (0) and Saturday (6).'
+    }
+  }
+
+  return null
+}
+
+/** True when the runtime knows the IANA zone. */
+export function isValidTimeZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date(0))
+    return true
+  } catch {
+    return false
+  }
+}

@@ -108,3 +108,23 @@ export function planOperationalJobs(input: {
 
   return jobs
 }
+
+/**
+ * Reps who were escalated as CRITICAL and are no longer critical.
+ * Pure so the recovery contract can be tested without a database.
+ */
+export function recoveredRepIds(
+  escalated: Iterable<string>,
+  alreadyRecovered: Iterable<string>,
+  stillCritical: Iterable<string>,
+): string[] {
+  const recovered = new Set(alreadyRecovered)
+  const critical = new Set(stillCritical)
+  const out: string[] = []
+  for (const repId of escalated) {
+    if (critical.has(repId)) continue
+    if (recovered.has(repId)) continue
+    out.push(repId)
+  }
+  return out
+}

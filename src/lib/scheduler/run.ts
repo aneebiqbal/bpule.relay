@@ -14,6 +14,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import {
+  businessDateRange,
   currentInstant,
   isAfterWorkday,
   isOrgWorkingDay,
@@ -25,7 +26,7 @@ import {
 } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { deriveRepDayState } from '@/lib/rep-day/state-machine'
-import { planOperationalJobs, type OperationalJobKind } from './plan'
+import { planOperationalJobs, recoveredRepIds, type OperationalJobKind } from './plan'
 
 export interface SchedulerSummary {
   ok: boolean
@@ -237,6 +238,7 @@ async function emitEscalations(
   client: SupabaseClient,
   organizationId: string,
   businessDate: string,
+  policy: OperatingPolicy,
 ) {
   const rows = await loadRepDays(client, organizationId, businessDate)
   const critical = rows.filter((row) => !row.closed_at && row.state === 'CRITICAL')
@@ -274,7 +276,42 @@ async function emitEscalations(
     }
   }
 
-  return { sent }
+  // Recovery: a rep who was escalated and is no longer critical is recorded
+  // once, so the history shows the day turning around.
+  const { data: priorNotifications } = await client
+    .from('notifications')
+    .select('recipient_id, notification_type')
+    .eq('organization_id', organizationId)
+    .in('notification_type', ['rep_day_critical', 'rep_day_recovered'])
+    .gte('created_at', businessDateRange(businessDate, policy.timezone).start)
+    .lt('created_at', businessDateRange(businessDate, policy.timezone).end)
+
+  const escalated = new Set<string>()
+  const alreadyRecovered = new Set<string>()
+  for (const notification of priorNotifications ?? []) {
+    const repId = notification.recipient_id as string
+    if (notification.notification_type === 'rep_day_critical') escalated.add(repId)
+    if (notification.notification_type === 'rep_day_recovered') alreadyRecovered.add(repId)
+  }
+
+  const stillCritical = new Set(critical.map((row) => row.rep_id))
+  const recovered = recoveredRepIds(escalated, alreadyRecovered, stillCritical)
+  let recoveries = 0
+
+  for (const repId of recovered) {
+    const didSend = await notifyOnce(client, {
+      organizationId,
+      recipientId: repId,
+      type: 'rep_day_recovered',
+      title: 'You are back on pace',
+      body: 'Today is no longer critical. Finish the remaining work and close your day.',
+      link: '/dashboard',
+      dedupeKey: `recovery:${businessDate}:${repId}`,
+    })
+    if (didSend) recoveries += 1
+  }
+
+  return { sent, recoveries }
 }
 
 async function closeMissedDays(
@@ -417,7 +454,7 @@ async function executeJob(client: SupabaseClient, row: JobRow): Promise<Record<s
     case 'EMIT_WARNING':
       return emitWarnings(client, policy, organizationId, businessDate)
     case 'EMIT_ESCALATION':
-      return emitEscalations(client, organizationId, businessDate)
+      return emitEscalations(client, organizationId, businessDate, policy)
     case 'CLOSE_MISSED_DAY':
       return closeMissedDays(client, policy, organizationId, businessDate)
     case 'PREPARE_CARRYOVER':

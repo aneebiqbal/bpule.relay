@@ -11,6 +11,8 @@ import { createScoutStore } from '@/lib/store'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { SignOutButton } from '@/components/sign-out-button'
 import { DashHeader, Meter, Panel, Pill } from '@/components/dashboard/kit'
+import { OperatingHours } from '@/components/admin/operating-hours'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +23,8 @@ export default async function SettingsPage() {
   if (!user) redirect('/login')
   const authCtx = await getAuthContext()
   const isAdmin = isProductAdmin(user, authCtx)
+
+  const policy = authCtx ? await loadOperatingPolicy(authCtx.orgId).catch(() => null) : null
 
   const store = await createScoutStore()
   const queue = await store.getTodayDashboard().catch(() => null)
@@ -89,13 +93,15 @@ export default async function SettingsPage() {
         )}
       </Panel>
 
+      {isAdmin && policy && <OperatingHours initial={policy} />}
+
       {isAdmin && (
         <Panel title="Workspace" subtitle="Admin controls for your team" flush>
           <ul className="grid divide-y divide-line/70 sm:grid-cols-2 sm:divide-y-0">
             <LinkRow href="/admin/people" icon={<Users className="size-4" />} label="People" detail="Roles, teams and managers" />
             <LinkRow href="/profile-intelligence" icon={<UserCircle2 className="size-4" />} label="Profiles & identities" detail="Who your team sends as" />
             <LinkRow href="/admin/targets" icon={<Target className="size-4" />} label="Targets" detail="Daily activity per person" />
-            <LinkRow href="/admin/accountability" icon={<TrendingUp className="size-4" />} label="Accountability" detail="Weekly activity by person" />
+            <LinkRow href="/admin/command" icon={<TrendingUp className="size-4" />} label="Command" detail="Today’s execution" />
             <LinkRow href="/admin/ai-usage" icon={<Activity className="size-4" />} label="AI usage" detail="Spend, errors and speed" />
             <LinkRow href="/docs" icon={<BookOpen className="size-4" />} label="Docs" detail="How Relay works" />
           </ul>

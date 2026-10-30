@@ -12,6 +12,7 @@
 import { currentInstant } from './clock'
 import {
   DEFAULT_POLICY,
+  isValidTimeZone,
   parseClock,
   type OperatingPolicy,
 } from './policy'
@@ -54,16 +55,6 @@ function partsFormatter(timeZone: string): Intl.DateTimeFormat {
   })
   partsFormatterCache.set(timeZone, formatter)
   return formatter
-}
-
-/** True when the IANA zone is known to the runtime. */
-export function isValidTimeZone(timeZone: string): boolean {
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date(0))
-    return true
-  } catch {
-    return false
-  }
 }
 
 function partsInZone(instant: Date, timeZone: string): {
