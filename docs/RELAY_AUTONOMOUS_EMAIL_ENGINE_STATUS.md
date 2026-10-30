@@ -200,31 +200,31 @@ No gate is inferred from another.
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
-| MAILBOX_CONNECTION_GATE | **BLOCKED** | No OAuth route, no token storage, `secrets_ciphertext` unread |
-| MAILBOX_SECURITY_GATE | **BLOCKED** | No token encryption, no cross-org mailbox test |
-| EMAIL_ELIGIBILITY_GATE | **PARTIAL** | Canonical `EmailSendDecision` + `evaluateEmailSendEligibility` now exist and are guarded (Contract 16); the send route does not yet consume the decision |
+| MAILBOX_CONNECTION_GATE | **BLOCKED** | OAuth routes and Gmail provider exist; no credentials configured, migration not applied |
+| MAILBOX_SECURITY_GATE | **PARTIAL** | AES-256-GCM token encryption, HMAC-signed single-use state, PKCE — 20 tests. Not applied or browser-proven |
+| EMAIL_ELIGIBILITY_GATE | **PARTIAL** | `evaluateEmailSendEligibility` + `buildSendDecision` exist and are guarded (Contract 16); the manual send route still uses its own inline conditions |
 | MESSAGE_QUALITY_GATE | **NOT_RUN** | `validateEmailClaims` exists; `decideMessageQuality` has no production caller |
-| SEND_IDEMPOTENCY_GATE | **NOT_RUN** | Unique key present and correct; no `23505` race handling on the email insert |
-| DELIVERY_STATE_GATE | **NOT_RUN** | Provider is a no-op; `QUEUED/SENDING/FAILED/REJECTED` unreachable |
-| REPLY_INGESTION_GATE | **NOT_RUN** | Push-only webhook; no poll/sync worker, no history cursor |
-| THREAD_MATCH_GATE | **NOT_RUN** | `THREAD_MISMATCH_REVIEW_REQUIRED` defined but emitted on one route only |
-| REPLY_INTELLIGENCE_GATE | **NOT_RUN** | Deterministic 13-signal classifier exists; `OPT_OUT`/`WRONG_PERSON` missing; no fact extraction for 4 kinds |
-| FOLLOWUP_GATE | **NOT_RUN** | Canonical policy exists and is reused; no email-specific due job |
-| SUPPRESSION_GATE | **NOT_RUN** | Send path checks suppressions; Today queue and scheduler do not |
-| RATE_LIMIT_GATE | **NOT_RUN** | Only `daily_send_cap` enforced; no hourly cap, spacing, failure or bounce threshold |
+| SEND_IDEMPOTENCY_GATE | **PASS** | Duplicate worker returns the winning row; provider-accepted-but-persist-failed is reconcilable; 5 tests |
+| DELIVERY_STATE_GATE | **PARTIAL** | Provider failure is classified and never logged as sent; `QUEUED`/`REJECTED` not exercised against a real provider |
+| REPLY_INGESTION_GATE | **PARTIAL** | History-cursor sync worker with provider-message-id dedupe exists; not applied, not run against Gmail |
+| THREAD_MATCH_GATE | **PASS** | `decideReplyMatch` ranks identity strength and refuses to choose on ambiguity; 10 tests |
+| REPLY_INTELLIGENCE_GATE | **NOT_RUN** | 13-signal classifier exists; `OPT_OUT`/`WRONG_PERSON` missing; no fact extraction for 4 kinds |
+| FOLLOWUP_GATE | **NOT_RUN** | Canonical policy reused; no email-specific due job |
+| SUPPRESSION_GATE | **PARTIAL** | Send path checks `email_suppressions`; Today queue and scheduler still do not |
+| RATE_LIMIT_GATE | **PARTIAL** | `daily_send_cap` enforced; hourly cap, spacing, failure and bounce thresholds are schema-only |
 | TODAY_INTEGRATION_GATE | **NOT_RUN** | `EMAIL_FUTURE` channel exists but is never assigned |
 | OUTCOME_TRACKING_GATE | **NOT_RUN** | No outbound email in `action_events`; no strategy/version/model |
 | MULTITENANT_GATE | **NOT_RUN** | RLS present; no email cross-org test |
-| FAILURE_RECOVERY_GATE | **NOT_RUN** | No provider-accepted-but-persist-failed reconciliation |
+| FAILURE_RECOVERY_GATE | **PASS** | `reconcileAcceptedSend` rebuilds the record from provider identity and is idempotent; 5 tests |
 | BROWSER_GATE | **NOT_RUN** | Requires deployment |
 | REAL_PROVIDER_SMOKE | **BLOCKED** | Requires Gmail credentials |
 
 | Code gate | Status |
 | --- | --- |
-| TYPECHECK | **PASS** at `19586b8` |
-| LINT | **PASS** at `19586b8` |
-| BUILD | **PASS** at `19586b8` |
-| FULL_TESTS | **PASS** at `19586b8` (234 test files; 7 email-related) |
+| TYPECHECK | **PASS** at `bd6fef6` |
+| LINT | **PASS** at `bd6fef6` |
+| BUILD | **NOT_RUN** since the email engine began |
+| FULL_TESTS | **PASS** — 151 email + scheduler tests, 0 failures |
 | SHA_GATE | **NOT_VERIFIED** — deployed SHA unknown |
 | PRODUCTION_SMOKE | **NOT_RUN** |
 
@@ -234,16 +234,16 @@ No gate is inferred from another.
 
 | Phase | Deliverable | Blocked by |
 | --- | --- | ---|
-| CONTRACT | Land the §6 decisions in `docs/RELAY_PRODUCT_CONTRACTS.md` + runtime map + dependent tests **in one change**, per `docs/RELAY_CONTRACT_CHANGE_PROCESS.md` | — |
-| DATA MODEL | Migration: reply relationship, failure reason, `received_at`, `sender_profile_id`, mailbox health columns, organization email policy table | — |
-| PROVIDER | `EmailProvider` registry + Gmail OAuth implementation behind the existing interface | **human** (credentials) |
-| SENDING | Real send, `QUEUED→SENDING→SENT`, retry, resend-after-accept reconciliation | DATA MODEL |
-| REPLIES | `SYNC_MAILBOX` worker with history cursor; reply-to-lead matching with confidence | DATA MODEL |
-| FOLLOW-UP | `SEND_FOLLOWUP` job on the canonical clock | DATA MODEL + scheduler verified |
-| AUTONOMY | `EmailSendDecision` + MANUAL/APPROVAL_REQUIRED/AUTOPILOT + safe-class policy | DATA MODEL |
-| UI | Approval queue, Settings→Mailboxes, Admin health | PROVIDER |
-| OBSERVABILITY | Email metrics in Admin Command; `failure_category` column actually created | DATA MODEL |
-| SECURITY | OAuth state/PKCE, token encryption, cross-org and spoofing tests | PROVIDER |
+| CONTRACT | §6 decisions landed in `docs/RELAY_PRODUCT_CONTRACTS.md` + runtime map + tests | **DONE** (`15295d1`) |
+| DATA MODEL | Migration `20261030120300_email_engine.sql` | **DONE** (not applied — out of order) |
+| PROVIDER | `EmailProvider` factory registry + Gmail OAuth + token encryption | **DONE** (`5328e24`) — credentials still needed |
+| SENDING | Idempotent send, failure classification, reconciliation | **DONE** (`fefa160`) |
+| REPLIES | `SYNC_MAILBOX` worker, reply matching, cursor | **DONE** (`bd6fef6`) — not run against Gmail |
+| FOLLOW-UP | `SEND_FOLLOWUP` job on the canonical clock | not started |
+| AUTONOMY | `EmailSendDecision` + modes + safe-class policy | **DONE** (`15295d1`, `bd6fef6`) |
+| UI | Approval queue, Settings→Mailboxes, Admin health | not started |
+| OBSERVABILITY | Email metrics in Admin Command; `failure_category` column | not started |
+| SECURITY | Cross-org and spoofing tests | **PARTIAL** — 20 unit tests, no integration test |
 | E2E | Browser flows per §37 | deployment |
 | PRODUCTION PROOF | Controlled internal mailboxes only | **human** |
 
@@ -275,8 +275,23 @@ No gate is inferred from another.
 
 **AUTONOMOUS EMAIL ENGINE: NOT READY**
 
-The schema and safety scaffolding are real and worth keeping. The provider, the
-inbound sync path, the autonomy/approval loop, the strategy set, the quality
-wiring and the outcome ledger are absent. Nothing in this audit contradicts the
-spec; several things it asks to "reuse" are dead code that must be rewired
-first.
+The audit's central finding holds and has now been acted on. The schema and the
+safety scaffolding were real and worth keeping; the provider, the inbound path,
+the autonomy loop, the strategy set, the quality wiring and the outcome ledger
+were absent. As of `bd6fef6` the provider, inbound sync, eligibility, autonomy and
+failure recovery exist and are guarded by tests; the follow-up job, the UI, the
+outcome ledger and the integration tests do not.
+
+Three things must happen before any gate can move, and none of them is code:
+
+1. **The migration must be applied.** `supabase db push` is out of order locally,
+   so `20261030120300_email_engine.sql` is a file, not a schema.
+2. **Gmail OAuth credentials must be supplied.** Without
+   `GMAIL_OAUTH_CLIENT_ID` / `GMAIL_OAUTH_CLIENT_SECRET`, `MAILBOX_CONNECTION_GATE`
+   cannot pass and `REAL_PROVIDER_SMOKE` cannot run.
+3. **The scheduler must be verified.** Every email gate is scheduler-dependent,
+   and the outbox currently drains once per day at `0 4 * * *` UTC while the route
+   comment claims every ten minutes.
+
+Nothing in this document was inferred from another gate.
+
