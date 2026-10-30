@@ -165,6 +165,62 @@ precise mechanism behind "scheduled operations never ran": refusal, not silence.
 
 ---
 
+## RPC overloads — audited and pinned
+
+`record_activity_event` accumulated four definitions across migrations:
+
+```
+0085 / 0091   (uuid, uuid, text, uuid)                       4-arg
+20261001      (uuid, uuid, text, uuid, text)                  5-arg
+20261030      (uuid, uuid, text, uuid, text, date)            6-arg
+```
+
+`create or replace` at a different arity **adds an overload**, it does not
+replace one. 20261030 drops the 5-arg, but the 4-arg from 0085/0091 was never
+dropped — which is why `comment on function` failed with `42725`.
+
+| Call site | Args | Resolves to |
+| --- | --- | --- |
+| `supabase-store.ts:1575` | 6 (incl. `p_date`) | 6-arg |
+| `supabase-store.ts:3105` | 6 | 6-arg |
+| `supabase-store.ts:3230` | 6 | 6-arg |
+| `supabase-store.ts:5585` | 5 (incl. `p_date`) | 6-arg |
+
+A call that omits `p_date` matches both the 4-arg and the 6-arg and fails at
+runtime as ambiguous. `tests/rpc-signature-resolution.test.ts` pins every call
+site to `p_date` and the six declared parameters.
+
+**Removal plan for the obsolete 4-arg (not applied):** confirm no external caller
+depends on it, then `drop function if exists
+public.record_activity_event(uuid, uuid, text, uuid)` in a dedicated migration
+with the guard test already in place. Do not drop it casually — a scheduled job
+or an older deploy could still call it.
+
+---
+
+## Timezone authority
+
+Production disagrees with itself: `organizations.timezone = UTC` for bpulse while
+`organization_operating_policy.timezone = Asia/Karachi`.
+
+Classification of live readers:
+
+| Reader | Class | Action |
+| --- | --- | --- |
+| `dashboard/page.tsx` | OPERATING_DAY | **moved** to `loadOperatingPolicy` |
+| `performance/page.tsx` | OPERATING_DAY | **moved** to `loadOperatingPolicy` |
+| `api/admin/performance/route.ts` | OPERATING_DAY | **moved** to `loadOperatingPolicy` |
+| `api/accountability/warnings/route.ts` | OPERATING_DAY | already policy-based |
+| `admin/command/[repId]/page.tsx` | DISPLAY_ONLY | left alone |
+| `settings/page.tsx` | DISPLAY_ONLY | left alone |
+| `content/.../daily-brief`, `growth-v2/daily` | OTHER (content scheduling) | left alone |
+| `admin/revenue-identities/[id]/email` | CONTACT_WINDOW | already policy-based |
+
+`tests/timezone-authority.test.ts` forbids the modules that decide the business
+day from reading `rep.timezone` or the legacy org column.
+
+
+
 ## Gate matrix
 
 | Gate | Status |
@@ -175,6 +231,9 @@ precise mechanism behind "scheduled operations never ran": refusal, not silence.
 | FULL_TESTS | **PASS** — 4185 / 0 / 0 |
 | SECURITY (cron auth) | **PASS** |
 | MIGRATION_GATE | **PASS** — 4/4 tables, policy verified live |
+| DATABASE_STRUCTURE_GATE | **PENDING_HUMAN** — RLS/constraints/indexes need `RELAY_FOUNDATION_VERIFY.sql` output; PostgREST cannot read them |
+| RPC_SIGNATURE_GATE | **PASS** — 4 call sites audited, all resolve to the 6-arg overload; guard test |
+| TIMEZONE_GATE | **PARTIAL** — readers fixed and guarded; DB still disagrees; matrix not run |
 | SCHEDULER_TRIGGER_GATE | **PENDING_HUMAN** — needs `CRON_SECRET` in Vercel + one Supabase Cron job |
 | SCHEDULER_HEALTH_GATE | **NOT BUILT** — see below |
 | SCHEDULER_IDEMPOTENCY_GATE | **PENDING_HUMAN** — needs a live trigger |
