@@ -33,7 +33,10 @@ export interface SchedulerSummary {
   error?: string
   organizations: number
   planned: number
-  enqueued: number
+  /** Jobs actually written by this run. */
+  inserted: number
+  /** Jobs that already existed — a repeat run is all alreadyExisting. */
+  alreadyExisting: number
   executed: number
   failed: number
   deadLettered: number
@@ -137,6 +140,7 @@ export async function ensureRepDays(
   client: SupabaseClient,
   organizationId: string,
   businessDate: string,
+  policy: OperatingPolicy,
 ) {
   const { data: reps, error } = await client
     .from('reps')
@@ -149,18 +153,37 @@ export async function ensureRepDays(
   }
   if (!reps || reps.length === 0) return { reps: 0 }
 
+  // A row created mid-day must reflect work that already happened. Otherwise a
+  // rep who has been active all morning without a row would appear NOT_STARTED
+  // until their next check-in.
+  const range = businessDateRange(businessDate, policy.timezone)
+  const { data: activity, error: activityError } = await client
+    .from('action_events')
+    .select('actor_id')
+    .eq('organization_id', organizationId)
+    .gte('occurred_at', range.start)
+    .lt('occurred_at', range.end)
+    .limit(5000)
+
+  const active = new Set<string>()
+  if (!activityError && activity) {
+    for (const row of activity) {
+      if (row.actor_id) active.add(row.actor_id as string)
+    }
+  }
+
   const { error: upsertError } = await client.from('rep_day').upsert(
     reps.map((rep) => ({
       organization_id: organizationId,
       rep_id: rep.id as string,
       business_date: businessDate,
-      state: 'NOT_STARTED',
+      state: active.has(rep.id as string) ? 'ACTIVE' : 'NOT_STARTED',
     })),
     { onConflict: 'organization_id,rep_id,business_date', ignoreDuplicates: true },
   )
   if (upsertError && !isMissingRelation(upsertError)) throw upsertError
 
-  return { reps: reps.length }
+  return { reps: reps.length, active: active.size }
 }
 
 async function openDay(
@@ -182,7 +205,7 @@ async function openDay(
     return { opened: true, reps: 0, skipped: 'after_workday' }
   }
 
-  const { reps } = await ensureRepDays(client, organizationId, businessDate)
+  const { reps } = await ensureRepDays(client, organizationId, businessDate, policy)
   return { opened: true, reps }
 }
 
@@ -534,7 +557,8 @@ export async function runOperationalScheduler(options: {
     ok: true,
     organizations: 0,
     planned: 0,
-    enqueued: 0,
+    inserted: 0,
+    alreadyExisting: 0,
     executed: 0,
     failed: 0,
     deadLettered: 0,
@@ -559,7 +583,7 @@ export async function runOperationalScheduler(options: {
     summary.planned += jobs.length
 
     for (const job of jobs) {
-      const { error } = await client.from('operational_jobs').upsert(
+      const { data: inserted, error } = await client.from('operational_jobs').upsert(
         {
           organization_id: job.organizationId,
           business_date: job.businessDate,
@@ -571,7 +595,7 @@ export async function runOperationalScheduler(options: {
           next_attempt_at: now.toISOString(),
         },
         { onConflict: 'organization_id,dedupe_key', ignoreDuplicates: true },
-      )
+      ).select('id')
 
       if (error) {
         if (isMissingRelation(error)) {
@@ -579,7 +603,10 @@ export async function runOperationalScheduler(options: {
         }
         throw error
       }
-      summary.enqueued += 1
+      // ignoreDuplicates returns only the rows this run actually wrote, so the
+      // counters describe reality: a repeat run is all alreadyExisting.
+      if (inserted && inserted.length > 0) summary.inserted += inserted.length
+      else summary.alreadyExisting += 1
     }
   }
 
