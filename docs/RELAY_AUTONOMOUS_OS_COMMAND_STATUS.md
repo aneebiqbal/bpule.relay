@@ -6,8 +6,8 @@ admin-surface simplification.
 
 ```text
 BASELINE SHA    f54b6a2
-FINAL SHA       (recorded at commit)
-DEPLOYED SHA    (recorded from /api/version after deploy)
+FINAL SHA       87c3db6
+DEPLOYED SHA    87c3db6   (verified via /api/version)
 ```
 
 ---
@@ -346,21 +346,32 @@ MOBILE_375_GATE         PASS     no horizontal overflow
 TYPECHECK               PASS
 BUILD                   PASS
 FULL TESTS              PASS   284 files / 4,185 tests / 0 failed
+DEPLOYMENT              PASS   87c3db6 live; /api/version verified
+BROWSER (deployed)      PASS   6 / 6
 ```
 
 ### Browser results — `e2e/command-centre.spec.ts` (iPhone 14 viewport)
 
+Run against the **deployed build** (`/api/version` = `87c3db6`), not local:
+
 ```text
 ✓ answers the operational questions in severity order
-✓ a rep day opens and shows targets, identities and the shortfall record  (1 retry: dev compile)
+✓ a rep day opens and shows targets, identities and the shortfall record
 ✓ the Command API refuses a rep (403)
 ✓ a rep is redirected away from Command
 ✓ fits 375px without horizontal scrolling
 ✓ Operating hours rejects a workday that ends before it starts
+
+6 passed
 ```
 
-The one retry is dev-server route compilation on first hit, not a product
-defect; the production build is precompiled.
+Route presence on the deployed SHA:
+
+```text
+/admin/command                307 (auth redirect)
+/api/admin/team-day           401 (auth required)
+/api/admin/operating-policy   401 (auth required)
+```
 
 ### Two defects found and fixed by the browser pass
 
@@ -395,6 +406,10 @@ NEW          24 Command Centre tests (priority order, recovery, role
 6. **The synthetic-day browser test has never run.**
 7. **`/admin/targets` remains a separate page**, linked from Settings rather
    than embedded. Acceptable for configuration; revisit if it grows.
+8. **The operating-hours save path is not exercised against a migrated
+   database.** Validation is tested (seven cases) and the editor renders, but
+   the successful `PATCH` cannot run until the policy table exists; today it
+   returns a clear 409. Verify it immediately after Phase A.
 
 ---
 
