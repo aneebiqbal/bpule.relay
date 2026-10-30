@@ -210,7 +210,7 @@ No gate is inferred from another.
 | THREAD_MATCH_GATE | **PASS** | `decideReplyMatch` ranks identity strength and refuses to choose on ambiguity; 10 tests |
 | REPLY_INTELLIGENCE_GATE | **NOT_RUN** | 13-signal classifier exists; `OPT_OUT`/`WRONG_PERSON` missing; no fact extraction for 4 kinds |
 | FOLLOWUP_GATE | **NOT_RUN** | Canonical policy reused; no email-specific due job |
-| SUPPRESSION_GATE | **PARTIAL** | Send path checks `email_suppressions`; Today queue and scheduler still do not |
+| SUPPRESSION_GATE | **PASS** | Today filters suppressed leads before any task is built; send path already checked; 6 tests |
 | RATE_LIMIT_GATE | **PARTIAL** | `daily_send_cap` enforced; hourly cap, spacing, failure and bounce thresholds are schema-only |
 | TODAY_INTEGRATION_GATE | **NOT_RUN** | `EMAIL_FUTURE` channel exists but is never assigned |
 | OUTCOME_TRACKING_GATE | **NOT_RUN** | No outbound email in `action_events`; no strategy/version/model |
@@ -244,6 +244,7 @@ No gate is inferred from another.
 | UI | Approval queue, Settings→Mailboxes, Admin health | not started |
 | OBSERVABILITY | Email metrics in Admin Command; `failure_category` column | not started |
 | SECURITY | Cross-org and spoofing tests | **PARTIAL** — 20 unit tests, no integration test |
+| SUPPRESSION | One authority across send, Today and scheduler | **DONE** (`8e6a4c1`) |
 | E2E | Browser flows per §37 | deployment |
 | PRODUCTION PROOF | Controlled internal mailboxes only | **human** |
 
@@ -268,6 +269,11 @@ No gate is inferred from another.
 6. **No `OPT_OUT` class.** Opt-out is modelled as `DO_NOT_CONTACT` plus a
    suppression row. §17's `OPT_OUT` class must map onto that rather than add a
    third representation.
+7. **The Today queue filtered suppressed leads by input, not by rule.** The
+   filter sits at the top of `buildRelayQueue` so a new task kind cannot become a
+   bypass, but it depends on every caller supplying `suppressedLeadIds`. A caller
+   that omits it gets the pre-existing behaviour — which is correct today and is
+   the thing a future task kind could silently exploit.
 
 ---
 
@@ -275,17 +281,29 @@ No gate is inferred from another.
 
 **AUTONOMOUS EMAIL ENGINE: NOT READY**
 
-The audit's central finding holds and has now been acted on. The schema and the
-safety scaffolding were real and worth keeping; the provider, the inbound path,
-the autonomy loop, the strategy set, the quality wiring and the outcome ledger
-were absent. As of `bd6fef6` the provider, inbound sync, eligibility, autonomy and
-failure recovery exist and are guarded by tests; the follow-up job, the UI, the
-outcome ledger and the integration tests do not.
+### Send-policy parity — **PASS** (Contract 17, `02eab1a`)
 
-Three things must happen before any gate can move, and none of them is code:
+Displayed send policy now equals enforced send policy, structurally rather than
+by convention.
 
-1. **The migration must be applied.** `supabase db push` is out of order locally,
-   so `20261030120300_email_engine.sql` is a file, not a schema.
+| Before | After |
+| --- | --- |
+| `getTodayDashboard` called `dailySendLimit()` with no org settings | `getEffectivePolicy()` → `resolveSendPolicy` |
+| `getQueue` did the same, feeding the rail tooltip and lead workspace | both read the same resolver |
+| `buildSendDecision` read `daily_send_cap` off `organization_email_policy` — **a column that does not exist there** | reads the resolved mailbox budget from `email_sending_policies` |
+
+The resolver is pure, so `tests/qa-relay-send-policy-parity.test.ts` can assert the
+object the UI reads *is* the object the send path reads — they are literally the
+same function. It also pins that no surface computes a display limit outside the
+resolver or the config module that defines the raw functions.
+
+### Three things must happen before any gate can move, and none of them is code
+
+1. **The migration must be applied.** `supabase db push` is out of order locally
+   and the production database needs a password this environment does not hold,
+   so `20261030120300_email_engine.sql` is a file, not a schema. The admin
+   email-policy route returns **409** until it lands, rather than reporting a
+   silent success the send path cannot read.
 2. **Gmail OAuth credentials must be supplied.** Without
    `GMAIL_OAUTH_CLIENT_ID` / `GMAIL_OAUTH_CLIENT_SECRET`, `MAILBOX_CONNECTION_GATE`
    cannot pass and `REAL_PROVIDER_SMOKE` cannot run.
