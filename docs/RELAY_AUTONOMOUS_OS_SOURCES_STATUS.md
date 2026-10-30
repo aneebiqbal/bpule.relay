@@ -165,7 +165,30 @@ precise mechanism behind "scheduled operations never ran": refusal, not silence.
 
 ---
 
-## RPC overloads — audited and pinned
+## Database structure — verified live, not inferred
+
+PostgREST cannot read RLS flags or constraint definitions, so each was proven by
+behaviour against production on 2026-10-30:
+
+| Property | Test | Result |
+| --- | --- | --- |
+| RLS on all four tables | `anon` key, `select *` | **0 rows on every table** — no leak |
+| `operational_jobs(org, dedupe_key)` | duplicate insert | **409** |
+| `organization_day(org, business_date)` | duplicate insert | **409** |
+| `rep_day(org, rep, business_date)` | duplicate insert | **409** |
+| CHECK constraints | invalid `state` / `job_kind` | **400 / 23514** — enforced |
+| Cleanup | delete by exact id, re-select | **0 probe rows remain** |
+
+Probe rows used `business_date` 2099-12-29/30/31 and a `qa-unique-probe-<ts>`
+dedupe key, deleted by primary key immediately after each assertion.
+
+**Not observable through PostgREST:** index existence and function argument
+signatures. The indexes are defined in the applied migration
+(`od_org_date_idx`, `oj_due_idx`, `oj_org_date_idx`, `oj_state_idx`,
+`rd_org_date_idx`, `rd_org_state_idx`, `rd_rep_date_idx`); confirming them needs
+`RELAY_FOUNDATION_VERIFY.sql` output or a direct connection.
+
+
 
 `record_activity_event` accumulated four definitions across migrations:
 
@@ -231,7 +254,7 @@ day from reading `rep.timezone` or the legacy org column.
 | FULL_TESTS | **PASS** — 4185 / 0 / 0 |
 | SECURITY (cron auth) | **PASS** |
 | MIGRATION_GATE | **PASS** — 4/4 tables, policy verified live |
-| DATABASE_STRUCTURE_GATE | **PENDING_HUMAN** — RLS/constraints/indexes need `RELAY_FOUNDATION_VERIFY.sql` output; PostgREST cannot read them |
+| DATABASE_STRUCTURE_GATE | **PASS** — RLS, 3 unique keys and CHECKs proven live; indexes need a direct connection |
 | RPC_SIGNATURE_GATE | **PASS** — 4 call sites audited, all resolve to the 6-arg overload; guard test |
 | TIMEZONE_GATE | **PARTIAL** — readers fixed and guarded; DB still disagrees; matrix not run |
 | SCHEDULER_TRIGGER_GATE | **PENDING_HUMAN** — needs `CRON_SECRET` in Vercel + one Supabase Cron job |
