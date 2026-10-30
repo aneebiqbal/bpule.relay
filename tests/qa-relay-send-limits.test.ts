@@ -106,22 +106,26 @@ describe('the step control stays inside the allowed range', () => {
 })
 
 describe('the budget the UI shows is the budget the send path enforces', () => {
-  it('the Supabase store passes the org settings to both limits', () => {
+  it('the Supabase store budget is the effective policy', () => {
     const store = read('src/lib/store/supabase-store.ts')
-    expect(store).toContain('dailySendLimit(orgSettings)')
-    expect(store).toContain('dailyConnectionSendLimit(orgSettings)')
-    expect(store).toContain('this.getOrgSettings()')
+    expect(store).toContain('resolveSendPolicy')
+    expect(store).toContain('getEffectivePolicy')
+    expect(store).toContain('effective.budgets.dmFollowup.limit')
+    expect(store).toContain('effective.budgets.connection.limit')
   })
 
   it('the demo store does the same, so it cannot drift', () => {
     const store = read('src/lib/store/mock-store.ts')
-    expect(store).toContain('dailySendLimit(await this.getOrgSettings())')
-    expect(store).toContain('dailyConnectionSendLimit(await this.getOrgSettings())')
+    expect(store).toContain('resolveSendPolicy')
+    expect(store).toContain('getEffectivePolicy')
+    // No direct limit call survives in the demo store either.
+    expect(store).not.toMatch(/dailySendLimit\(\s*\)/)
+    expect(store).not.toMatch(/dailyConnectionSendLimit\(\s*\)/)
   })
 
   it('the settings page renders the admin control for admins only', () => {
     const page = read('src/app/(app)/settings/page.tsx')
-    expect(page).toContain('readSendLimits')
+    expect(page).toContain('getEffectivePolicy')
     expect(page).toMatch(/isAdmin\s*&&\s*\(?\s*<[^>]*>\s*<SendLimits/)
   })
 

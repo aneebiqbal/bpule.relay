@@ -1,13 +1,13 @@
 /**
  * Gather the facts and evaluate the one eligibility gate for a real send.
  *
- * `evaluateEmailSendEligibility` is pure; this is its database-facing half. It
- * exists so the send route, the approval queue and the queued autopilot job all
- * ask the same questions of the same rows — there is one place where "may we
- * send" is answered.
+ * `evaluateEmailSendEligibility` is pure and `resolveSendPolicy` is pure; this is
+ * their database-facing half. It exists so the send route, the approval queue and
+ * the queued autopilot job all ask the same questions of the same rows.
  *
- * Every fact is a single bounded query. None is per lead beyond the lead being
- * sent to.
+ * The quota and window checks read the *effective policy* — the same object the
+ * admin UI and the rep-facing budget read. That is what makes "displayed equals
+ * enforced" a structural property rather than a convention.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { isWithinWorkday, isOrgWorkingDay, currentInstant, orgDate, type OperatingPolicy } from '@/lib/org-clock'
@@ -15,6 +15,7 @@ import { evaluateEmailSendEligibility, type EmailSendDecision } from './eligibil
 import { DEFAULT_EMAIL_AUTONOMY_MODE, isEmailAutonomyMode } from './autonomy'
 import { deriveMailboxHealth } from './mailbox-health'
 import { isSendEligibleContact } from './contact-points'
+import { resolveSendPolicy } from './effective-policy'
 
 export interface SendDecisionInput {
   organizationId: string
@@ -41,7 +42,8 @@ export async function buildSendDecision(
     suppressionResult,
     contactResult,
     outboundResult,
-    policyResult,
+    emailPolicyResult,
+    mailboxPolicyResult,
   ] = await Promise.all([
     client.from('leads').select('id, status, archived, verdict').eq('organization_id', input.organizationId).eq('id', input.leadId).maybeSingle(),
     client.from('prepared_email_drafts').select('id, revenue_identity_id, contact_point_id, contact_email, draft_status, claim_safety').eq('organization_id', input.organizationId).eq('id', input.draftId).maybeSingle(),
@@ -59,9 +61,14 @@ export async function buildSendDecision(
       .order('created_at', { ascending: false })
       .limit(20),
     client.from('organization_email_policy').select('*').eq('organization_id', input.organizationId).maybeSingle(),
+    client
+      .from('email_sending_policies')
+      .select('revenue_identity_id, daily_send_cap, minimum_delay_seconds')
+      .eq('organization_id', input.organizationId)
+      .limit(50),
   ])
 
-  for (const result of [leadResult, draftResult, assignmentResult, mailboxResult, suppressionResult, contactResult, outboundResult, policyResult]) {
+  for (const result of [leadResult, draftResult, assignmentResult, mailboxResult, suppressionResult, contactResult, outboundResult, emailPolicyResult, mailboxPolicyResult]) {
     if (result.error) throw result.error
   }
 
@@ -72,21 +79,44 @@ export async function buildSendDecision(
   const suppressions = (suppressionResult.data ?? []) as Array<Record<string, unknown>>
   const contacts = (contactResult.data ?? []) as Array<Record<string, unknown>>
   const messages = (outboundResult.data ?? []) as Array<Record<string, unknown>>
-  const emailPolicy = (policyResult.data ?? null) as Record<string, unknown> | null
-
-  const autonomyMode = emailPolicy?.autonomy_mode
-  const mode = isEmailAutonomyMode(autonomyMode as string) ? (autonomyMode as 'MANUAL' | 'APPROVAL_REQUIRED' | 'AUTOPILOT') : DEFAULT_EMAIL_AUTONOMY_MODE
+  const emailPolicy = (emailPolicyResult.data ?? null) as Record<string, unknown> | null
+  const mailboxPolicies = (mailboxPolicyResult.data ?? []) as Array<Record<string, unknown>>
 
   const identityId = (draft?.revenue_identity_id as string) ?? null
   const mailbox = mailboxes.find((m) => m.revenue_identity_id === identityId) ?? null
+  const mailboxPolicy = mailboxPolicies.find((p) => p.revenue_identity_id === identityId) ?? null
   const contact = contacts.find((c) => c.id === draft?.contact_point_id) ?? null
 
-  const sentToday = mailbox && mailbox.sent_today_date === businessDate ? Number(mailbox.sent_today ?? 0) : 0
-  const dailySendCap = emailPolicy?.daily_send_cap
-  const cap = typeof dailySendCap === 'number' && dailySendCap > 0 ? dailySendCap : null
+  // The effective policy is resolved once, here, from the same rows the UI reads.
+  // The quota check below is then a read of this object, not a second calculation.
+  const effective = resolveSendPolicy({
+    organizationId: input.organizationId,
+    now,
+    operating: input.policy,
+    orgSettings: {},
+    emailPolicy,
+    mailboxPolicies: [
+      {
+        revenueIdentityId: identityId ?? '',
+        dailySendCap: asNumber(mailboxPolicy?.daily_send_cap ?? null),
+        minimumDelaySeconds: asNumber(mailboxPolicy?.minimum_delay_seconds ?? null),
+        workingHoursStart: null,
+        workingHoursEnd: null,
+        followUpLimit: null,
+        sentToday: mailbox && mailbox.sent_today_date === businessDate ? Number(mailbox.sent_today ?? 0) : 0,
+        lastSentAt: null,
+      },
+    ],
+    usage: { dmFollowup: 0, connection: 0, upwork: 0 },
+  })
+
+  const mailboxBudget = effective.mailboxes[0] ?? null
+  const autonomyMode = emailPolicy?.autonomy_mode
+  const mode = isEmailAutonomyMode(autonomyMode as string)
+    ? (autonomyMode as 'MANUAL' | 'APPROVAL_REQUIRED' | 'AUTOPILOT')
+    : DEFAULT_EMAIL_AUTONOMY_MODE
 
   const latest = messages[0] ?? null
-  const lastMessageIsInbound = latest?.direction === 'INBOUND'
 
   return evaluateEmailSendEligibility({
     hasOpportunity: Boolean(lead && !lead.archived && lead.status !== 'dead' && lead.status !== 'no' && lead.status !== 'won' && lead.status !== 'lost'),
@@ -98,8 +128,8 @@ export async function buildSendDecision(
           status: mailbox.status as string | null,
           hasUsableToken: mailbox.health === 'CONNECTED' || mailbox.health === 'REAUTH_REQUIRED',
           consecutiveFailures: Number(mailbox.consecutive_failures ?? 0),
-          sentToday,
-          dailySendCap: cap,
+          sentToday: mailboxBudget?.sentToday ?? 0,
+          dailySendCap: mailboxBudget?.dailyLimit ?? null,
           paused: Boolean(mailbox.paused_at),
         })
       : null,
@@ -113,16 +143,19 @@ export async function buildSendDecision(
     notOptedOut: !suppressions.some((s) => s.reason === 'OPT_OUT' || s.reason === 'DO_NOT_CONTACT' || s.reason === 'UNSUBSCRIBE'),
     notTerminal: Boolean(lead && lead.status !== 'won' && lead.status !== 'lost' && lead.status !== 'dead' && lead.status !== 'no'),
     notDuplicateContact: !messages.some((m) => m.direction === 'OUTBOUND' && m.delivery_status === 'SENT'),
-    noUnansweredInboundReply: !lastMessageIsInbound,
-    withinSendWindow:
-      isOrgWorkingDay(input.policy, businessDate) && isWithinWorkday(now, input.policy, businessDate),
-    dailyQuotaAvailable: cap === null ? true : sentToday < cap,
+    noUnansweredInboundReply: latest?.direction !== 'INBOUND',
+    withinSendWindow: isOrgWorkingDay(input.policy, businessDate) && isWithinWorkday(now, input.policy, businessDate),
+    dailyQuotaAvailable: mailboxBudget ? (mailboxBudget.remaining ?? 0) > 0 : false,
     messageQualityPassed: draft?.draft_status === 'READY',
     claimsSafe: draft?.draft_status === 'READY',
     followUpAllowed: true,
     autonomyMode: mode,
     now,
   })
+}
+
+function asNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 /** Load an organization's email policy, falling back to the safe default. */

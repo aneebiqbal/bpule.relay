@@ -370,6 +370,8 @@ export interface ScoutStore {
   getSuppressedLeadIds(): Promise<ReadonlySet<string>>
   /** The organization's `settings` JSONB. Send limits are read from it. */
   getOrgSettings(): Promise<Record<string, unknown>>
+  /** The one effective send policy. Every surface showing a limit reads this. */
+  getEffectivePolicy(): Promise<import('@/lib/email/effective-policy').EffectiveSendPolicy>
   getRecentLeads(repId: string, limit: number): Promise<Lead[]>
    /** @param includeArchived defaults to false — archived leads are excluded from the default read path. */
    listOwnedLeads(includeArchived?: boolean): Promise<Lead[]>

@@ -121,7 +121,8 @@ import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib
 import { inboundFirstMessageKey } from '@/lib/conversation/canonical-message'
 import { calendarDaysBetween, followupDueInDays } from '@/lib/leads/followup'
 import { emitAction } from '@/lib/action-ledger'
-import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
+import { messageTypeLimit } from '@/lib/ai/config'
+import { resolveSendPolicy, type EffectiveSendPolicy } from '@/lib/email/effective-policy'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
@@ -1170,13 +1171,35 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getQueue(): Promise<QueueData> {
-    const [owned, todaySends] = await Promise.all([
+    const [owned, todaySends, effective] = await Promise.all([
       this.listOwnedLeads(),
       this.countTodaysSends(),
+      this.getEffectivePolicy(),
     ])
     const queue = owned.filter((l) => l.status === 'new' || l.status === 'contacted')
     const replies = owned.filter((l) => l.status === 'replied')
-    return { todaySends, dailyLimit: dailySendLimit(), queue, replies }
+    return { todaySends, dailyLimit: effective.budgets.dmFollowup.limit, queue, replies }
+  }
+
+  /**
+   * The effective send policy for this organization, including the usage counts
+   * the dashboard already loads. Every surface that shows a limit reads this.
+   */
+  async getEffectivePolicy(): Promise<EffectiveSendPolicy> {
+    const [orgSettings, operating] = await Promise.all([this.getOrgSettings(), this.getOperatingPolicy()])
+    const [dmFollowup, connection] = await Promise.all([
+      this.countTodaysSendsByTypes(['dm', 'followup']),
+      this.countTodaysSendsByTypes(['connection']),
+    ])
+    return resolveSendPolicy({
+      organizationId: this.orgId,
+      now: currentInstant(),
+      operating,
+      orgSettings,
+      emailPolicy: null,
+      mailboxPolicies: [],
+      usage: { dmFollowup, connection, upwork: 0 },
+    })
   }
 
   async saveDraft(input: SaveDraftInput): Promise<Message> {
@@ -2491,20 +2514,22 @@ export class SupabaseStore implements ScoutStore {
         this.getOrgSettings(),
       ])
     const team = computeRates(buckets)
-    // The budget must show the limits the send path actually enforces. Reading
-    // the org settings here is what keeps the two from disagreeing.
+    // The budget is the effective policy, not a second calculation. Settings,
+    // Today, the rail and the send path read this one object.
+    const effective = await this.getEffectivePolicy()
+
     const sendBudgets: SendBudget[] = [
       {
         label: 'DM & follow-up',
         types: ['dm', 'followup'],
-        used: dmFollowupSent,
-        limit: dailySendLimit(orgSettings),
+        used: effective.budgets.dmFollowup.used,
+        limit: effective.budgets.dmFollowup.limit,
       },
       {
         label: 'Connection & Upwork',
         types: ['connection', 'upwork'],
-        used: connectionSent + upworkApplies,
-        limit: dailyConnectionSendLimit(orgSettings),
+        used: effective.budgets.connection.used,
+        limit: effective.budgets.connection.limit,
       },
     ]
     return { mine, team, sendBudgets, notifications, followupsDue, myRank, upwork }

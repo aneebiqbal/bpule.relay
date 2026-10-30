@@ -87,6 +87,8 @@ import type {
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
+import { resolveSendPolicy, type EffectiveSendPolicy } from '@/lib/email/effective-policy'
+import { currentInstant, normalizePolicy } from '@/lib/org-clock'
 import { determineFollowup } from '@/lib/relay/followup-engine'
 import { calendarDaysBetween, evaluateFollowUpPolicy } from '@/lib/conversation/follow-up-policy'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
@@ -109,6 +111,18 @@ const nextId = (prefix: string) => `${prefix}-${(++seq).toString(36)}`
  */
 
 const DEMO_ORG_ID = '11111111-1111-1111-1111-111111111111'
+
+/**
+ * The demo store's operating clock. It mirrors the production default so a demo
+ * session and a real organization show the same window and the same budget.
+ */
+const DEMO_OPERATING_POLICY = normalizePolicy({
+  organizationId: DEMO_ORG_ID,
+  timezone: 'Asia/Karachi',
+  workdayStart: '09:00',
+  workdayEnd: '18:00',
+  workingDays: [1, 2, 3, 4, 5],
+})
 
 const t = (daysAgo: number, hour = 10) => {
   const d = new Date()
@@ -971,6 +985,32 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async listAllProofItems() {
       return proofItems
     },
+    async getEffectivePolicy(): Promise<EffectiveSendPolicy> {
+      const settings = await this.getOrgSettings()
+      let dmFollowup = 0
+      let connection = 0
+      for (const m of messages) {
+        if (!m.sentAt) continue
+        const sent = new Date(m.sentAt)
+        const now = new Date()
+        const sameDay =
+          sent.getFullYear() === now.getFullYear() &&
+          sent.getMonth() === now.getMonth() &&
+          sent.getDate() === now.getDate()
+        if (!sameDay) continue
+        if (m.type === 'dm' || m.type === 'followup') dmFollowup += 1
+        else if (m.type === 'connection' || m.type === 'upwork') connection += 1
+      }
+      return resolveSendPolicy({
+        organizationId: DEMO_ORG_ID,
+        now: currentInstant(),
+        operating: DEMO_OPERATING_POLICY,
+        orgSettings: settings,
+        emailPolicy: null,
+        mailboxPolicies: [],
+        usage: { dmFollowup, connection, upwork: 0 },
+      })
+    },
     async getQueue(): Promise<QueueData> {
       const owned = leads.filter((l) => l.ownerRepId === rep.id)
       const todaySends = messages.filter((m) => {
@@ -991,7 +1031,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const replies = owned
         .filter((l) => l.status === 'replied')
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      return { todaySends, dailyLimit: dailySendLimit(), queue, replies }
+      return { todaySends, dailyLimit: (await this.getEffectivePolicy()).budgets.dmFollowup.limit, queue, replies }
     },
     async saveDraft(input: SaveDraftInput) {
       const msg: Message = {
@@ -1432,28 +1472,26 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         )
       }
       const ownedIds = new Set(leads.filter((l) => l.ownerRepId === rep.id).map((l) => l.id))
-      const dmFollowupSent = messages.filter(
-        (m) => ownedIds.has(m.leadId) && (m.type === 'dm' || m.type === 'followup') && isToday(m.sentAt),
-      ).length
-      const connectionSent = messages.filter(
-        (m) => ownedIds.has(m.leadId) && m.type === 'connection' && isToday(m.sentAt),
-      ).length
       const upworkApplies = upworkMessages.filter(
         (m) => m.repId === rep.id && isToday(m.sentAt),
       ).length
+
+      // Same resolver as production, so a demo session cannot show a budget the
+      // real deployment would not enforce.
+      const effective = await this.getEffectivePolicy()
 
       const sendBudgets: SendBudget[] = [
         {
           label: 'DM & follow-up',
           types: ['dm', 'followup'],
-          used: dmFollowupSent,
-          limit: dailySendLimit(await this.getOrgSettings()),
+          used: effective.budgets.dmFollowup.used,
+          limit: effective.budgets.dmFollowup.limit,
         },
         {
           label: 'Connection & Upwork',
           types: ['connection', 'upwork'],
-          used: connectionSent + upworkApplies,
-          limit: dailyConnectionSendLimit(await this.getOrgSettings()),
+          used: effective.budgets.connection.used,
+          limit: effective.budgets.connection.limit,
         },
       ]
 

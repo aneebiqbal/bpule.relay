@@ -99,3 +99,114 @@ export function nextSendLimit(current: number, direction: 'up' | 'down'): number
   const next = direction === 'up' ? current + SEND_LIMIT_STEP : current - SEND_LIMIT_STEP
   return Math.min(SEND_LIMIT_MAX, Math.max(SEND_LIMIT_MIN, next))
 }
+
+// ---------------------------------------------------------------------------
+// Email policy — autonomy and safety, from organization_email_policy
+// ---------------------------------------------------------------------------
+
+export interface EmailPolicyPatch {
+  enabled?: boolean
+  autonomyMode?: 'MANUAL' | 'APPROVAL_REQUIRED' | 'AUTOPILOT'
+  hourlySendCap?: number
+  minimumSpacingSeconds?: number
+  consecutiveFailureThreshold?: number
+  bounceThreshold?: number
+  weekendPolicy?: 'SKIP' | 'ALLOW'
+  replyCooldownHours?: number
+  minimumConfidence?: 'Possible' | 'Potential' | 'Unverified'
+  requireVerifiedEmail?: boolean
+  /** Per-mailbox daily ceiling, applied to every mailbox in the organization. */
+  dailySendCap?: number
+  workingHoursStart?: number
+  workingHoursEnd?: number
+  followUpLimit?: number
+}
+
+const EMAIL_POLICY_KEYS: Array<keyof EmailPolicyPatch> = [
+  'enabled',
+  'autonomyMode',
+  'hourlySendCap',
+  'minimumSpacingSeconds',
+  'consecutiveFailureThreshold',
+  'bounceThreshold',
+  'weekendPolicy',
+  'replyCooldownHours',
+  'minimumConfidence',
+  'requireVerifiedEmail',
+  'dailySendCap',
+  'workingHoursStart',
+  'workingHoursEnd',
+  'followUpLimit',
+]
+
+function optionalInt(value: unknown, field: string, min: number, max: number): { ok: true; value?: number } | { ok: false; error: string } {
+  if (value === undefined) return { ok: true }
+  if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value)) {
+    return { ok: false, error: `${field} must be a whole number.` }
+  }
+  if (value < min || value > max) return { ok: false, error: `${field} must be between ${min} and ${max}.` }
+  return { ok: true, value }
+}
+
+export function validateEmailPolicyPatch(input: unknown): { ok: true; patch: EmailPolicyPatch } | { ok: false; error: string } {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return { ok: false, error: 'Body must be a JSON object.' }
+  }
+
+  const record = input as Record<string, unknown>
+  for (const key of Object.keys(record)) {
+    if (!(EMAIL_POLICY_KEYS as string[]).includes(key)) {
+      return { ok: false, error: `Unknown field "${key}".` }
+    }
+  }
+
+  const patch: EmailPolicyPatch = {}
+
+  if (record.enabled !== undefined) {
+    if (typeof record.enabled !== 'boolean') return { ok: false, error: 'enabled must be a boolean.' }
+    patch.enabled = record.enabled
+  }
+  if (record.requireVerifiedEmail !== undefined) {
+    if (typeof record.requireVerifiedEmail !== 'boolean') return { ok: false, error: 'requireVerifiedEmail must be a boolean.' }
+    patch.requireVerifiedEmail = record.requireVerifiedEmail
+  }
+  if (record.autonomyMode !== undefined) {
+    if (!['MANUAL', 'APPROVAL_REQUIRED', 'AUTOPILOT'].includes(record.autonomyMode as string)) {
+      return { ok: false, error: 'autonomyMode must be MANUAL, APPROVAL_REQUIRED or AUTOPILOT.' }
+    }
+    patch.autonomyMode = record.autonomyMode as EmailPolicyPatch['autonomyMode']
+  }
+  if (record.weekendPolicy !== undefined) {
+    if (!['SKIP', 'ALLOW'].includes(record.weekendPolicy as string)) {
+      return { ok: false, error: 'weekendPolicy must be SKIP or ALLOW.' }
+    }
+    patch.weekendPolicy = record.weekendPolicy as EmailPolicyPatch['weekendPolicy']
+  }
+  if (record.minimumConfidence !== undefined) {
+    if (!['Possible', 'Potential', 'Unverified'].includes(record.minimumConfidence as string)) {
+      return { ok: false, error: 'minimumConfidence must be Possible, Potential or Unverified.' }
+    }
+    patch.minimumConfidence = record.minimumConfidence as EmailPolicyPatch['minimumConfidence']
+  }
+
+  const intFields: Array<[keyof EmailPolicyPatch, unknown, number, number]> = [
+    ['hourlySendCap', record.hourlySendCap, 0, 200],
+    ['minimumSpacingSeconds', record.minimumSpacingSeconds, 0, 3600],
+    ['consecutiveFailureThreshold', record.consecutiveFailureThreshold, 1, 10],
+    ['bounceThreshold', record.bounceThreshold, 1, 100],
+    ['replyCooldownHours', record.replyCooldownHours, 0, 720],
+    ['dailySendCap', record.dailySendCap, 1, 200],
+    ['followUpLimit', record.followUpLimit, 0, 10],
+    ['workingHoursStart', record.workingHoursStart, 0, 23],
+    ['workingHoursEnd', record.workingHoursEnd, 0, 23],
+  ]
+
+  for (const [key, value, min, max] of intFields) {
+    if (value === undefined) continue
+    const result = optionalInt(value, key, min, max)
+    if (!result.ok) return result
+    patch[key] = result.value as never
+  }
+
+  return { ok: true, patch }
+}

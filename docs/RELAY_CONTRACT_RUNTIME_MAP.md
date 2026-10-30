@@ -278,3 +278,21 @@ report coverage.
 
 **Tests**
 - `tests/qa-relay-email-policy-contracts.test.ts` → "Contract 16"
+
+---
+
+## Contract 17 — Displayed send policy equals enforced send policy
+
+**Canonical owner**
+- `resolveSendPolicy` — `src/lib/email/effective-policy.ts`
+- `getEffectivePolicy` — `ScoutStore` (`src/lib/store/types.ts`)
+
+**Runtime consumers**
+- `getTodayDashboard` / `getQueue` — `src/lib/store/supabase-store.ts`
+- `getTodayDashboard` / `getQueue` — `src/lib/store/mock-store.ts`
+- Settings page — `src/app/(app)/settings/page.tsx`
+- `buildSendDecision` — `src/lib/email/send-decision.ts`
+
+**Tests**
+- `tests/qa-relay-send-policy-parity.test.ts`
+- `tests/qa-relay-send-limits.test.ts`

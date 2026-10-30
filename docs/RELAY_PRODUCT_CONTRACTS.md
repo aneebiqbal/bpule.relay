@@ -389,6 +389,35 @@ read**, so the effective window was "always" while the operating policy said
 
 ---
 
+## Contract 17 — Displayed send policy equals enforced send policy
+
+**Decision.** Every surface that shows remaining sends, channel availability,
+autonomy state or a send window derives from `resolveSendPolicy` — the same
+function the send path calls immediately before it calls a provider. No surface
+computes a limit of its own for display, and no surface reads a limit column
+without resolving it through that object.
+
+**Why.** Settings called `dailySendLimit()` with no organization settings while
+`markContacted` called `messageTypeLimit(type, orgSettings)`. The UI showed the
+environment default (15 / 20) while enforcement honoured the organization
+override — a budget that could read "35 left" while the send path allowed 30.
+Nothing was wrong with either limit individually; the defect was that no single
+object resolved them, so a surface could read one authority and the send path
+another. Two more surfaces carried the same bug: the rail tooltip and the lead
+workspace, both reading `queue.dailyLimit` from `getQueue()`, which also called
+the limit functions with no settings.
+
+**Canonical owner.** `resolveSendPolicy` (`src/lib/email/effective-policy.ts`);
+`getEffectivePolicy` on `ScoutStore` is the database-facing half.
+
+**Consumers.** `getTodayDashboard`, `getQueue` (both stores), the Settings page,
+and `buildSendDecision` (`src/lib/email/send-decision.ts`).
+
+**Guard.** `tests/qa-relay-send-policy-parity.test.ts`, and
+`tests/qa-relay-send-limits.test.ts`.
+
+---
+
 ## Process rule — every S1/S2 fix becomes a fixture and, where applicable, a contract
 
 > **Every S1/S2 production bug that is fixed must become both a named regression
