@@ -34,6 +34,26 @@ blocker is a database credential, which is a human action.
 
 ## Migrations — PENDING_HUMAN
 
+> **Verified live after the operator's apply (2026-10-30):** only **1 of 4** tables
+> landed.
+>
+> | Table | State |
+> | --- | --- |
+> | `operational_jobs` | **EXISTS** — all 19 columns correct |
+> | `organization_operating_policy` | **MISSING** |
+> | `organization_day` | **MISSING** |
+> | `rep_day` | **MISSING** |
+>
+> The `is_org_working_day()` function is also absent, which confirms migration 1
+> never ran. Migrations 1 and 2 are independent of each other, so each failed on
+> its own; migration 3 succeeded alone.
+>
+> Every prerequisite both migrations reference **does** exist in production —
+> `organizations.timezone` (text), `organizations.working_days` (int[]),
+> `organizations.holidays` (jsonb), `reps`, `daily_targets`,
+> `daily_accountability`, `team_memberships`. So the schema is not the blocker.
+> **The error text from migrations 1 and 2 is still needed.**
+
 The connected database is **production**: 730 leads, 1112 messages, 14 profiles.
 
 All four operating tables are absent:
