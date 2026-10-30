@@ -32,29 +32,38 @@ blocker is a database credential, which is a human action.
 
 ---
 
-## Migrations — PENDING_HUMAN
+## Migrations — **PASS**
 
-> **Verified live after the operator's apply (2026-10-30):** only **1 of 4** tables
-> landed.
+> **Verified live (2026-10-30):** all four tables exist.
 >
 > | Table | State |
 > | --- | --- |
-> | `operational_jobs` | **EXISTS** — all 19 columns correct |
-> | `organization_operating_policy` | **MISSING** |
-> | `organization_day` | **MISSING** |
-> | `rep_day` | **MISSING** |
+> | `organization_operating_policy` | **EXISTS** — 11 policy rows |
+> | `organization_day` | **EXISTS** |
+> | `rep_day` | **EXISTS** |
+> | `operational_jobs` | **EXISTS** — 19 columns |
 >
-> The `is_org_working_day()` function is also absent, which confirms migration 1
-> never ran. Migrations 1 and 2 are independent of each other, so each failed on
-> its own; migration 3 succeeded alone.
+> The production org `11111111…` (**bpulse**, 735 leads) carries exactly the
+> expected policy: `Asia/Karachi` · `09:00–18:00` · Mon–Fri · reset `00:00` ·
+> cutover `2026-10-30` · 7-item target pack. The ten other organizations are
+> empty tenants and received UTC defaults by design.
 >
-> Every prerequisite both migrations reference **does** exist in production —
-> `organizations.timezone` (text), `organizations.working_days` (int[]),
-> `organizations.holidays` (jsonb), `reps`, `daily_targets`,
-> `daily_accountability`, `team_memberships`. So the schema is not the blocker.
-> **The error text from migrations 1 and 2 is still needed.**
+> `organization_day` and `rep_day` column shapes match what the scheduler code
+> reads and writes. `is_org_working_day(uuid, date)` and
+> `record_activity_event(uuid, uuid, text, uuid, text, date)` both exist.
+>
+> **Fixed on the way:** migration 1 ended with `comment on function
+> public.record_activity_event` without a signature. Production already carried
+> an overload of that name, so Postgres rejected it with `42725: function name
+> is not unique` and the whole migration rolled back. Both function comments now
+> carry their argument lists (`349ee5e`).
+>
+> **Divergence to watch:** `organizations.timezone` is still `UTC` for bpulse
+> while the policy says `Asia/Karachi`. The policy is authoritative by design,
+> but any code reading the legacy column will disagree. `TIMEZONE_GATE` must
+> prove which one every surface reads.
 
-The connected database is **production**: 730 leads, 1112 messages, 14 profiles.
+The connected database is **production**: 735 leads, 1112 messages, 14 profiles.
 
 All four operating tables are absent:
 
@@ -165,8 +174,8 @@ precise mechanism behind "scheduled operations never ran": refusal, not silence.
 | BUILD | **PASS** |
 | FULL_TESTS | **PASS** — 4185 / 0 / 0 |
 | SECURITY (cron auth) | **PASS** |
-| MIGRATION_GATE | **PENDING_HUMAN** — no DDL credential |
-| SCHEDULER_TRIGGER_GATE | **PENDING_HUMAN** — needs migrations + secret |
+| MIGRATION_GATE | **PASS** — 4/4 tables, policy verified live |
+| SCHEDULER_TRIGGER_GATE | **PENDING_HUMAN** — needs `CRON_SECRET` in Vercel + one Supabase Cron job |
 | SCHEDULER_HEALTH_GATE | **NOT BUILT** — see below |
 | SCHEDULER_IDEMPOTENCY_GATE | **PENDING_HUMAN** — needs a live trigger |
 | SYNTHETIC_DAY_GATE | **PENDING_HUMAN** — needs migrations + trigger |
