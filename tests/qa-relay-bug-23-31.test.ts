@@ -127,7 +127,7 @@ describe('BUG030_PROFILE_LEAD_ISOLATION', () => {
   })
 })
 
-describe('BUG024_PROSPECT_PROFILE_ATTRIBUTION', () => {
+describe('BUG024_PROFILE_ATTRIBUTION', () => {
   it('does not infer a workspace from the sender profile when the lead is stamped', () => {
     // A stamped workspace is the only visibility key.
     const stamped = { id: 'x', revenueIdentityId: 'ident-aneeb', senderProfileId: 'prof-mehak' }
