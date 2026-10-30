@@ -6,6 +6,7 @@ import { createServiceSupabase } from '@/lib/supabase/service'
 import { getRepDailyActivity } from '@/lib/performance/activity-model'
 import { ContributionHeatmap } from '@/components/performance/contribution-heatmap'
 import { DayDrilldown } from '@/components/performance/day-drilldown'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +22,8 @@ export default async function PerformancePage({
   if (!authCtx) redirect('/login')
 
   const { range = '12w', date } = await searchParams
-  const timezone = user.rep.timezone ?? 'UTC'
+  // Operating day, not the rep's personal zone — see TIMEZONE authority.
+  const timezone = (await loadOperatingPolicy(authCtx.orgId)).timezone
   const { start, end } = parseRange(range)
 
   const supabase = createServiceSupabase()

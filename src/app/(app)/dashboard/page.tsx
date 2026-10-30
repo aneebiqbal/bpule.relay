@@ -20,6 +20,7 @@ import { PipelineAnalyticsView } from '@/components/dashboard/analytics/pipeline
 import { buildDashboardAnalytics, parseRange, type RangeDays } from '@/lib/analytics/pipeline-analytics'
 import { qualifyCanonicalScore, displayScoreForCanonical } from '@/lib/scoring/qualification'
 import { loadBoardData } from '@/lib/leads/board-rows'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,7 +32,9 @@ export default async function TodayPage({
   const user = await getCurrentUser()
   if (!user) redirect('/login')
   const range = parseRange((await searchParams).range)
-  const timeZone = user.rep.timezone || 'UTC'
+  // Business dates come from the organization's operating clock, not the rep's
+  // personal timezone: a rep in another zone must not see a different day.
+  const timeZone = (await loadOperatingPolicy(user.organization.id)).timezone
   const analytics = (
     <Suspense fallback={<AnalyticsSkeleton />}>
       <AnalyticsSection range={range} timeZone={timeZone} />
