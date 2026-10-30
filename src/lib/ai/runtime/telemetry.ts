@@ -57,6 +57,12 @@ export async function persistTrace(
   trace: AiTrace,
   organizationId: string,
 ): Promise<void> {
+  // No database configured — tests, or a local run without env. There is
+  // nothing to persist, and because callers use `void persistTrace(...)` the
+  // warn below lands after the test worker has closed, surfacing as
+  // "Closing rpc while onUserConsoleLog was pending" and failing the run.
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return
+
   try {
     const supabase = await getSupabase()
 
