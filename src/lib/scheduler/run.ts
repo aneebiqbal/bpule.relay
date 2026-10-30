@@ -125,13 +125,65 @@ async function loadRepDays(
   return (data ?? []) as RepDayRow[]
 }
 
-async function openDay(client: SupabaseClient, organizationId: string, businessDate: string) {
+/**
+ * Every rep in the organization gets a day row when the day opens, so a rep who
+ * has not checked in is still visible as NOT_STARTED.
+ *
+ * Without this the scheduler has nothing to evaluate until someone checks in:
+ * `refreshRepDays` only updates rows that already exist, so an un-checked-in rep
+ * is invisible all day and the day only becomes visible once it is already over.
+ */
+export async function ensureRepDays(
+  client: SupabaseClient,
+  organizationId: string,
+  businessDate: string,
+) {
+  const { data: reps, error } = await client
+    .from('reps')
+    .select('id')
+    .eq('organization_id', organizationId)
+
+  if (error) {
+    if (isMissingRelation(error)) return { reps: 0 }
+    throw error
+  }
+  if (!reps || reps.length === 0) return { reps: 0 }
+
+  const { error: upsertError } = await client.from('rep_day').upsert(
+    reps.map((rep) => ({
+      organization_id: organizationId,
+      rep_id: rep.id as string,
+      business_date: businessDate,
+      state: 'NOT_STARTED',
+    })),
+    { onConflict: 'organization_id,rep_id,business_date', ignoreDuplicates: true },
+  )
+  if (upsertError && !isMissingRelation(upsertError)) throw upsertError
+
+  return { reps: reps.length }
+}
+
+async function openDay(
+  client: SupabaseClient,
+  organizationId: string,
+  businessDate: string,
+  policy: OperatingPolicy,
+) {
   const { error } = await client.from('organization_day').upsert(
     { organization_id: organizationId, business_date: businessDate, state: 'OPEN' },
     { onConflict: 'organization_id,business_date', ignoreDuplicates: true },
   )
   if (error && !isMissingRelation(error)) throw error
-  return { opened: true }
+
+  // Only materialise rep days while the day can still be worked. A day that is
+  // already over was never tracked, and inventing rows for it would mark every
+  // rep MISSED on the first activation run.
+  if (isAfterWorkday(currentInstant(), policy, businessDate)) {
+    return { opened: true, reps: 0, skipped: 'after_workday' }
+  }
+
+  const { reps } = await ensureRepDays(client, organizationId, businessDate)
+  return { opened: true, reps }
 }
 
 async function refreshRepDays(
@@ -448,7 +500,7 @@ async function executeJob(client: SupabaseClient, row: JobRow): Promise<Record<s
 
   switch (row.job_kind) {
     case 'OPEN_DAY':
-      return openDay(client, organizationId, businessDate)
+      return openDay(client, organizationId, businessDate, policy)
     case 'EVALUATE_REP_DAY':
       return refreshRepDays(client, policy, organizationId, businessDate)
     case 'EMIT_WARNING':
