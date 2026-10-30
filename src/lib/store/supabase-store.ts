@@ -1125,6 +1125,21 @@ export class SupabaseStore implements ScoutStore {
     return (data as Row[]).map(mapLead)
   }
 
+  async getSuppressedLeadIds(): Promise<ReadonlySet<string>> {
+    const { data, error } = await this.client
+      .from('email_suppressions')
+      .select('lead_id')
+      .eq('organization_id', this.orgId)
+      .eq('active', true)
+      .not('lead_id', 'is', null)
+      .limit(5000)
+    if (error) {
+      if (isOptionalSearchError(error)) return new Set()
+      throw error
+    }
+    return new Set((data as Row[]).map((r) => r.lead_id as string).filter(Boolean))
+  }
+
   async getRecentLeads(repId: string, limit: number): Promise<Lead[]> {
     const { data, error } = await this.client
       .from('leads')
@@ -2462,7 +2477,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getTodayDashboard(): Promise<TodayDashboard> {
-    const [mine, buckets, dmFollowupSent, connectionSent, upworkApplies, notifications, followupsDue, myRank, upwork] =
+    const [mine, buckets, dmFollowupSent, connectionSent, upworkApplies, notifications, followupsDue, myRank, upwork, orgSettings] =
       await Promise.all([
         this.getQueue(),
         this.fetchRates(),
@@ -2473,20 +2488,23 @@ export class SupabaseStore implements ScoutStore {
         this.fetchFollowupsDue(),
         this.fetchMyRank(),
         this.fetchUpworkSnapshot(),
+        this.getOrgSettings(),
       ])
     const team = computeRates(buckets)
+    // The budget must show the limits the send path actually enforces. Reading
+    // the org settings here is what keeps the two from disagreeing.
     const sendBudgets: SendBudget[] = [
       {
         label: 'DM & follow-up',
         types: ['dm', 'followup'],
         used: dmFollowupSent,
-        limit: dailySendLimit(),
+        limit: dailySendLimit(orgSettings),
       },
       {
         label: 'Connection & Upwork',
         types: ['connection', 'upwork'],
         used: connectionSent + upworkApplies,
-        limit: dailyConnectionSendLimit(),
+        limit: dailyConnectionSendLimit(orgSettings),
       },
     ]
     return { mine, team, sendBudgets, notifications, followupsDue, myRank, upwork }

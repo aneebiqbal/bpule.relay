@@ -811,6 +811,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async getRulebook() {
       return demoRulebook
     },
+    async getOrgSettings() {
+      return {}
+    },
     getSupabaseClient() {
       throw new Error('Demo store does not support direct Supabase access')
     },
@@ -924,6 +927,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         .sort((a, b) => (b.referralAt || '').localeCompare(a.referralAt || ''))
         .slice(0, 10)
         .map(l => ({ ...l }))
+    },
+    async getSuppressedLeadIds() {
+      return new Set<string>()
     },
     async getRecentLeads(repId: string, limit: number) {
       return leads
@@ -1441,13 +1447,13 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
           label: 'DM & follow-up',
           types: ['dm', 'followup'],
           used: dmFollowupSent,
-          limit: dailySendLimit(),
+          limit: dailySendLimit(await this.getOrgSettings()),
         },
         {
           label: 'Connection & Upwork',
           types: ['connection', 'upwork'],
           used: connectionSent + upworkApplies,
-          limit: dailyConnectionSendLimit(),
+          limit: dailyConnectionSendLimit(await this.getOrgSettings()),
         },
       ]
 

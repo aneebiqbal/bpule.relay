@@ -363,7 +363,14 @@ export interface ScoutStore {
    findLeadByIntelligenceInputHash(hash: string): Promise<LeadDetail | null>
    findLeadByV3ReuseKey(reuseKey: string): Promise<Lead | null>
    getReferredLeads(repId: string): Promise<Lead[]>
-   getRecentLeads(repId: string, limit: number): Promise<Lead[]>
+  /**
+   * Leads carrying an active suppression row. Today must not build an outreach
+   * task for any of them — suppression is one authority with no surface bypass.
+   */
+  getSuppressedLeadIds(): Promise<ReadonlySet<string>>
+  /** The organization's `settings` JSONB. Send limits are read from it. */
+  getOrgSettings(): Promise<Record<string, unknown>>
+  getRecentLeads(repId: string, limit: number): Promise<Lead[]>
    /** @param includeArchived defaults to false — archived leads are excluded from the default read path. */
    listOwnedLeads(includeArchived?: boolean): Promise<Lead[]>
   /** Sent messages and conversation state for many leads in one round trip (inbox). */

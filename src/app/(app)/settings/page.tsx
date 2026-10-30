@@ -12,7 +12,9 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { SignOutButton } from '@/components/sign-out-button'
 import { DashHeader, Meter, Panel, Pill } from '@/components/dashboard/kit'
 import { OperatingHours } from '@/components/admin/operating-hours'
+import { SendLimits } from '@/components/admin/send-limits'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { readSendLimits } from '@/lib/email/send-limits'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +34,9 @@ export default async function SettingsPage() {
   const totalLimit = budgets.reduce((sum, b) => sum + b.limit, 0)
   const totalUsed = budgets.reduce((sum, b) => sum + b.used, 0)
   const remaining = Math.max(0, totalLimit - totalUsed)
+
+  const orgSettings = await store.getOrgSettings().catch(() => ({}))
+  const sendLimits = readSendLimits(orgSettings)
 
   const planLabel = user.organization.plan === 'active' ? 'Pro' : 'Free'
 
@@ -89,6 +94,12 @@ export default async function SettingsPage() {
                 </li>
               ))}
             </ul>
+
+            {isAdmin && (
+              <div className="pt-1">
+                <SendLimits initial={sendLimits} />
+              </div>
+            )}
           </div>
         )}
       </Panel>
