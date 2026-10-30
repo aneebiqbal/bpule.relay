@@ -96,6 +96,30 @@ export async function PATCH(request: Request) {
       }
     }
 
+    // Channel autonomy lives with the send limits, because that is the
+    // authority an admin already edits. Merged, never replaced.
+    const channelAutonomy: Record<string, unknown> = {}
+    if (patch.linkedinAutonomyMode !== undefined) channelAutonomy.linkedinAutonomyMode = patch.linkedinAutonomyMode
+    if (patch.upworkAutonomyMode !== undefined) channelAutonomy.upworkAutonomyMode = patch.upworkAutonomyMode
+
+    if (Object.keys(channelAutonomy).length > 0) {
+      const { data: orgRow, error: orgError } = await client
+        .from('organizations')
+        .select('settings')
+        .eq('id', ctx.orgId)
+        .maybeSingle()
+      if (orgError) throw orgError
+
+      const { error: settingsError } = await client
+        .from('organizations')
+        .update({
+          settings: { ...((orgRow?.settings as Record<string, unknown>) ?? {}), ...channelAutonomy },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', ctx.orgId)
+      if (settingsError) throw settingsError
+    }
+
     return NextResponse.json({ ok: true, patch })
   } catch (error) {
     return NextResponse.json(

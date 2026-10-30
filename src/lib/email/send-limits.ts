@@ -120,6 +120,9 @@ export interface EmailPolicyPatch {
   workingHoursStart?: number
   workingHoursEnd?: number
   followUpLimit?: number
+  /** Channel autonomy, stored on `organizations.settings` with the send limits. */
+  linkedinAutonomyMode?: 'MANUAL' | 'APPROVAL_REQUIRED' | 'AUTOPILOT'
+  upworkAutonomyMode?: 'MANUAL' | 'APPROVAL_REQUIRED' | 'AUTOPILOT'
 }
 
 const EMAIL_POLICY_KEYS: Array<keyof EmailPolicyPatch> = [
@@ -137,6 +140,8 @@ const EMAIL_POLICY_KEYS: Array<keyof EmailPolicyPatch> = [
   'workingHoursStart',
   'workingHoursEnd',
   'followUpLimit',
+  'linkedinAutonomyMode',
+  'upworkAutonomyMode',
 ]
 
 function optionalInt(value: unknown, field: string, min: number, max: number): { ok: true; value?: number } | { ok: false; error: string } {
@@ -187,6 +192,14 @@ export function validateEmailPolicyPatch(input: unknown): { ok: true; patch: Ema
       return { ok: false, error: 'minimumConfidence must be Possible, Potential or Unverified.' }
     }
     patch.minimumConfidence = record.minimumConfidence as EmailPolicyPatch['minimumConfidence']
+  }
+  for (const key of ['linkedinAutonomyMode', 'upworkAutonomyMode'] as const) {
+    const value = record[key]
+    if (value === undefined) continue
+    if (!['MANUAL', 'APPROVAL_REQUIRED', 'AUTOPILOT'].includes(value as string)) {
+      return { ok: false, error: `${key} must be MANUAL, APPROVAL_REQUIRED or AUTOPILOT.` }
+    }
+    patch[key] = value as EmailPolicyPatch[typeof key]
   }
 
   const intFields: Array<[keyof EmailPolicyPatch, unknown, number, number]> = [

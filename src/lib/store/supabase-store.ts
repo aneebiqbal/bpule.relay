@@ -123,6 +123,7 @@ import { calendarDaysBetween, followupDueInDays } from '@/lib/leads/followup'
 import { emitAction } from '@/lib/action-ledger'
 import { messageTypeLimit } from '@/lib/ai/config'
 import { resolveSendPolicy, type EffectiveSendPolicy } from '@/lib/email/effective-policy'
+import { evaluateSendPolicy } from '@/lib/email/policy-engine'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
@@ -1325,13 +1326,40 @@ export class SupabaseStore implements ScoutStore {
 
     const orgSettings = await this.getOrgSettings()
     const todaySends = await this.countTodaysSends(type)
-    const limit = messageTypeLimit(type, orgSettings)
-    if (todaySends >= limit) {
+
+    // The effective policy runs immediately before the write, from the same
+    // rows the UI reads. `messageTypeLimit` alone was the only gate here, so a
+    // change to autonomy or the send window could not stop a send.
+    const policy = evaluateSendPolicy({
+      organizationId: this.orgId,
+      revenueIdentityId: null,
+      senderProfileId: this.rep.id,
+      channel: type === 'connection' || type === 'upwork' ? (type === 'upwork' ? 'upwork' : 'linkedin') : 'linkedin',
+      messageType: type ?? 'dm',
+      now: currentInstant(),
+      operating: await this.getOperatingPolicy(),
+      orgSettings,
+      emailPolicy: null,
+      mailbox: null,
+      usage: { dmFollowup: todaySends, connection: 0, upwork: 0, emailSentToday: 0, emailSentThisHour: 0, followupsUsed: 0 },
+      safety: { terminal: false, optedOut: false, suppressed: false, senderAuthorized: true, recipientVerified: true, messageQualityPassed: true },
+    })
+
+    if (!policy.allowed) {
       return {
         allowed: false,
         todaySends,
-        limit,
-        message: `Daily ceiling of ${limit} reached for ${type} messages. Other message types still have budget.`,
+        limit: policy.dailyLimit,
+        message: `Send blocked: ${policy.reason ?? 'policy'}.`,
+      }
+    }
+
+    if (todaySends >= policy.dailyLimit) {
+      return {
+        allowed: false,
+        todaySends,
+        limit: policy.dailyLimit,
+        message: `Daily ceiling of ${policy.dailyLimit} reached for ${type} messages. Other message types still have budget.`,
       }
     }
 
@@ -1660,7 +1688,7 @@ export class SupabaseStore implements ScoutStore {
       }
     }
 
-    return { allowed: true, todaySends: todaySends + 1, limit, messageId: inserted.id as string }
+    return { allowed: true, todaySends: todaySends + 1, limit: policy.dailyLimit, messageId: inserted.id as string }
   }
 
   /**
