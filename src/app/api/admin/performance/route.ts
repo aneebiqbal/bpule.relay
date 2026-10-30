@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { getAuthContext, can } from '@/lib/auth/organization'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import {
   computeExecutionResult,
   mapActionEventToCanonical,
@@ -65,13 +66,14 @@ export async function GET(req: NextRequest) {
   }
   const date = url.searchParams.get('date') ?? new Date().toISOString().slice(0, 10)
 
-  // 1. Get org timezone and performance config
-  const [{ data: org }, { data: rulebook }] = await Promise.all([
-    store.from('organizations').select('timezone').eq('id', auth.orgId).single(),
+  // 1. Get the operating clock and performance config. The policy is the time
+  // authority; organizations.timezone is legacy and must not drive business dates.
+  const [{ data: rulebook }, policy] = await Promise.all([
     store.from('organization_rulebooks').select('performance_weights, sla_config').eq('organization_id', auth.orgId).single(),
+    loadOperatingPolicy(auth.orgId).catch(() => null),
   ])
 
-  const timezone = org?.timezone ?? 'UTC'
+  const timezone = policy?.timezone ?? 'UTC'
 
   const config = {
     weights: (rulebook?.performance_weights as Record<string, number>) ?? DEFAULT_CONFIG.weights,
