@@ -307,6 +307,88 @@ intent closed; the role resolves to `BUYER` when a request survived.
 
 ---
 
+## Contract 14 — One email delivery authority; a mailbox belongs to a sender identity
+
+**Decision.** `email_messages` is the canonical record of an email's *delivery*.
+It owns the provider message id, provider thread id, delivery state, reply
+relationship and failure classification. `messages` remains the conversation
+authority (Contract 11) and is not replaced. A third store for the same email is
+a contract violation.
+
+A mailbox connection is scoped to exactly one `revenue_identities` row, and a
+send may only use a mailbox whose identity is assigned to the acting rep
+(`identity_assignments`). The no-op provider is a test fixture, not a capability:
+`provider='relay_noop'` is never CONNECTED and `getEmailProvider` refuses it
+outside an explicit test override.
+
+**Why.** The audit found `email_mailboxes.secrets_ciphertext` present but never
+read, `getEmailProvider` ignoring its argument, and three mailboxes marked
+`CONNECTED` while backed by a provider that fabricates message ids and always
+returns `SENT`. A deployment could not tell whether it was sending through a real
+mailbox. Delivery state, failure classification and resend-after-accept (§14/§34)
+are undefined while the provider can never fail.
+
+**Canonical owners.**
+- `evaluateEmailSendEligibility` (`src/lib/email/eligibility.ts`) — the one
+  eligibility gate; every send surface consumes its decision.
+- `deriveMailboxHealth` / `canSendFromHealth` (`src/lib/email/mailbox-health.ts`).
+- `getEmailProvider` / `registerEmailProvider`
+  (`src/lib/email/providers/email-provider.ts`) — id-authoritative, fails closed.
+
+**Guard.** `tests/qa-relay-email-policy-contracts.test.ts` → "Contract 14".
+
+---
+
+## Contract 15 — Autonomy is a policy of the action, not a property of a sent message
+
+**Decision.** `MANUAL`, `APPROVAL_REQUIRED` and `AUTOPILOT` are evaluated per
+send action and are never persisted on the message row. Existing organizations
+default to `APPROVAL_REQUIRED`. `MANUAL` produces `PREPARE_ONLY` — no provider
+call is ever made. Only `AUTOPILOT` may send without a human, and only for reply
+classes in a **closed** safe set: `SCHEDULING`, `ACKNOWLEDGEMENT`,
+`FACTUAL_ANSWER`. Pricing, scope, commitment, proposal, negotiation, legal and
+custom estimates are absent by design — each can create an obligation the sender
+never agreed to.
+
+**Why.** Permission depends on state that has changed since the message was
+drafted (mailbox health, suppression, quota, terminal outcome). Storing it on the
+row would let a stale permission outlive the facts it was based on. The audit
+found `ENQUEUE_EMAIL` already routed in the scheduler but returning
+`skipped: 'email_autopilot_not_enabled'` — the mode existed as a switch with no
+definition of what it permitted.
+
+**Canonical owners.**
+- `EMAIL_AUTONOMY_MODES` / `DEFAULT_EMAIL_AUTONOMY_MODE` / `modeMayAutosend`
+  (`src/lib/email/autonomy.ts`).
+- `AUTOPILOT_SAFE_REPLY_CLASSES` / `isAutopilotSafeReplyClass` (same file).
+
+**Guard.** `tests/qa-relay-email-policy-contracts.test.ts` → "Contract 15".
+
+---
+
+## Contract 16 — A send is blocked, not guessed
+
+**Decision.** Every surface that can cause an email to be sent evaluates
+`evaluateEmailSendEligibility` and acts on its `action`. A `BLOCK` decision never
+reaches a provider. All failing conditions are reported together, not only the
+first. Suppression is one authority (`email_suppressions`) and no surface
+bypasses it. Send windows derive from the organization operating policy
+(`organization_operating_policy.timezone`) — the operating policy is the sole
+time authority and no email code reads a second timezone.
+
+**Why.** Two definitions of "may we send" is how a mailbox ends up emailing an
+opted-out lead. The audit found the send window stored in
+`email_sending_policies` (`working_hours 0–23`, `timezone='UTC'`) and **never
+read**, so the effective window was "always" while the operating policy said
+`Asia/Karachi`.
+
+**Canonical owner.** `evaluateEmailSendEligibility` / `makeDecision`
+(`src/lib/email/eligibility.ts`).
+
+**Guard.** `tests/qa-relay-email-policy-contracts.test.ts` → "Contract 16".
+
+---
+
 ## Process rule — every S1/S2 fix becomes a fixture and, where applicable, a contract
 
 > **Every S1/S2 production bug that is fixed must become both a named regression

@@ -121,6 +121,7 @@ with its own lifecycle. Both already exist and are distinct on purpose.
 | Piece | Gap |
 | --- | --- |
 | `email_messages` | No reply relationship (`in_reply_to`/`parent_message_id`), no `failure_reason`, no `received_at` |
+| `evaluateEmailSendEligibility` | **BUILT** (`src/lib/email/eligibility.ts`) and guarded by Contract 16 — but the send route still has its own inline conditions and does not consume the decision |
 | `email_mailboxes` | `secrets_ciphertext` exists and is **never read or written**; `status` is free text, not the 5-state health enum; no `last_sync_at`, no quota, no failure counters |
 | `email_sending_policies` | `working_hours_start/end`, `timezone`, `minimum_delay_seconds`, `follow_up_limit`, `suppression_rules` are stored and editable but **never read in the send path** |
 | `classifyConversationSignals` | No `OPT_OUT` enum value; `WRONG_PERSON` is a regex, not a class |
@@ -201,7 +202,7 @@ No gate is inferred from another.
 | --- | --- | --- |
 | MAILBOX_CONNECTION_GATE | **BLOCKED** | No OAuth route, no token storage, `secrets_ciphertext` unread |
 | MAILBOX_SECURITY_GATE | **BLOCKED** | No token encryption, no cross-org mailbox test |
-| EMAIL_ELIGIBILITY_GATE | **NOT_RUN** | No canonical `EmailSendDecision` object exists |
+| EMAIL_ELIGIBILITY_GATE | **PARTIAL** | Canonical `EmailSendDecision` + `evaluateEmailSendEligibility` now exist and are guarded (Contract 16); the send route does not yet consume the decision |
 | MESSAGE_QUALITY_GATE | **NOT_RUN** | `validateEmailClaims` exists; `decideMessageQuality` has no production caller |
 | SEND_IDEMPOTENCY_GATE | **NOT_RUN** | Unique key present and correct; no `23505` race handling on the email insert |
 | DELIVERY_STATE_GATE | **NOT_RUN** | Provider is a no-op; `QUEUED/SENDING/FAILED/REJECTED` unreachable |
