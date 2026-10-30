@@ -7,6 +7,18 @@ export interface EmailSendResult {
   failureReason: string | null
 }
 
+/** One message from a provider's history feed. */
+export interface ProviderHistoryMessage {
+  providerMessageId: string
+  providerThreadId: string | null
+  fromAddress: string | null
+  toAddress: string | null
+  subject: string | null
+  inReplyTo: string | null
+  receivedAt: string | null
+  snippet: string | null
+}
+
 export interface EmailProvider {
   id: string
   name: string
@@ -30,6 +42,14 @@ export interface EmailProvider {
     /** The mailbox's own address; a message whose From is not this is inbound. */
     mailboxEmail?: string | null
   }): Promise<Array<{ providerMessageId: string; direction: 'OUTBOUND' | 'INBOUND'; subject: string | null; body: string | null; sentAt: string | null }>>
+  /**
+   * Incremental reply sync. Optional because the shape is provider-specific: a
+   * provider without it cannot be polled and must rely on push.
+   */
+  fetchHistory?(input: {
+    startHistoryId?: string | null
+    pageSize?: number
+  }): Promise<{ messages: ProviderHistoryMessage[]; historyId: string | null }>
 }
 
 function stableId(prefix: string): string {

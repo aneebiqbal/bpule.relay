@@ -10,7 +10,7 @@
  * `In-Reply-To` — which is what makes reply ingestion match a reply to its
  * outbound message.
  */
-import type { EmailProvider, EmailSendResult } from './email-provider'
+import type { EmailProvider, EmailSendResult, ProviderHistoryMessage } from './email-provider'
 
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1'
 
@@ -209,6 +209,35 @@ export function createGmailProvider(credentials: GmailCredentials): EmailProvide
       } catch {
         return []
       }
+    },
+
+    async fetchHistory(input) {
+      const params = new URLSearchParams({ maxResults: String(input.pageSize ?? 50) })
+      if (input.startHistoryId) params.set('startHistoryId', input.startHistoryId)
+
+      const data = await call<{
+        history?: Array<{ id: string; messages?: Array<Record<string, unknown>> }>
+        historyId?: string
+      }>(`/users/me/history?${params.toString()}`, { method: 'GET' }, credentials.accessToken)
+
+      const messages: ProviderHistoryMessage[] = []
+      for (const entry of data.history ?? []) {
+        for (const raw of entry.messages ?? []) {
+          const payload = (raw.payload ?? {}) as { headers?: Array<{ name: string; value: string }> }
+          const header = (name: string) => payload.headers?.find((h) => h.name.toLowerCase() === name)?.value ?? null
+          messages.push({
+            providerMessageId: String(raw.id),
+            providerThreadId: (raw.threadId as string) ?? entry.id ?? null,
+            fromAddress: header('from'),
+            toAddress: header('to'),
+            subject: header('subject'),
+            inReplyTo: header('in-reply-to'),
+            receivedAt: raw.internalDate ? new Date(Number(raw.internalDate as string)).toISOString() : null,
+            snippet: (raw.snippet as string) ?? null,
+          })
+        }
+      }
+      return { messages, historyId: data.historyId ?? null }
     },
   }
 }

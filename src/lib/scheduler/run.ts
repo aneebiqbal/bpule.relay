@@ -26,6 +26,11 @@ import {
 } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { deriveRepDayState } from '@/lib/rep-day/state-machine'
+import { syncOrganizationMailboxes } from '@/lib/email/sync'
+import { reconcileAcceptedSend } from '@/lib/email/reconcile'
+import { buildSendDecision } from '@/lib/email/send-decision'
+import { createStoreForRep } from '@/lib/email/store-context'
+import { sendPreparedEmail } from '@/lib/email/service'
 import { planOperationalJobs, recoveredRepIds, type OperationalJobKind } from './plan'
 
 export interface SchedulerSummary {
@@ -51,6 +56,7 @@ interface JobRow {
   time_bucket: string
   attempt: number
   max_attempts: number
+  payload: Record<string, unknown>
 }
 
 interface RepDayRow {
@@ -516,6 +522,189 @@ async function evaluateFollowUps(
   return { sent }
 }
 
+async function syncMailboxes(client: SupabaseClient, organizationId: string) {
+  const summaries = await syncOrganizationMailboxes(client, organizationId)
+  return {
+    scanned: summaries.reduce((n, s) => n + s.scanned, 0),
+    imported: summaries.reduce((n, s) => n + s.imported, 0),
+    duplicates: summaries.reduce((n, s) => n + s.duplicates, 0),
+    reviewRequired: summaries.reduce((n, s) => n + s.reviewRequired, 0),
+    mailboxes: summaries.length,
+    failures: summaries.filter((s) => s.failure).map((s) => ({ mailboxId: s.mailboxId, failure: s.failure })),
+  }
+}
+
+/**
+ * Reconcile sends the provider accepted but Relay failed to record.
+ *
+ * Without this a retry would email a prospect twice: the provider already
+ * delivered the message, and the local row is the only thing that says so.
+ */
+/**
+ * Enqueue a send job for every draft that is ready to go.
+ *
+ * This job never sends. It creates the `SEND_EMAIL` work item that the send job
+ * then evaluates — so a draft that becomes ineligible (opt-out, terminal, quota)
+ * is dropped by the same gate the manual route uses, rather than by a second rule.
+ */
+async function enqueueEmailWork(client: SupabaseClient, organizationId: string, businessDate: string) {
+  const { data: drafts, error } = await client
+    .from('prepared_email_drafts')
+    .select('id, revenue_identity_id')
+    .eq('organization_id', organizationId)
+    .eq('draft_status', 'READY')
+    .limit(200)
+
+  if (error) {
+    if (isMissingRelation(error)) return { enqueued: 0, drafts: 0 }
+    throw error
+  }
+
+  let enqueued = 0
+  for (const draft of drafts ?? []) {
+    const draftId = draft.id as string
+    const { data: inserted, error: upsertError } = await client
+      .from('operational_jobs')
+      .upsert(
+        {
+          organization_id: organizationId,
+          business_date: businessDate,
+          rep_id: null,
+          job_kind: 'SEND_EMAIL',
+          time_bucket: draftId,
+          dedupe_key: `${businessDate}:SEND_EMAIL:${draftId}`,
+          payload: { draftId, revenueIdentityId: draft.revenue_identity_id },
+          next_attempt_at: new Date().toISOString(),
+        },
+        { onConflict: 'organization_id,dedupe_key', ignoreDuplicates: true },
+      )
+      .select('id')
+
+    if (upsertError) {
+      if (isMissingRelation(upsertError)) return { enqueued, drafts: (drafts ?? []).length }
+      throw upsertError
+    }
+    if (inserted && inserted.length > 0) enqueued += 1
+  }
+
+  return { enqueued, drafts: (drafts ?? []).length }
+}
+
+/**
+ * Execute one queued send.
+ *
+ * The eligibility gate runs again here — immediately before the provider call —
+ * because the facts it read when the job was enqueued have certainly changed. A
+ * draft held for approval is left alone; a blocked draft is marked FAILED with
+ * its blockers so the rep can see why.
+ */
+async function sendQueuedEmail(
+  client: SupabaseClient,
+  organizationId: string,
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const draftId = payload.draftId as string | undefined
+  if (!draftId) return { skipped: 'missing_draft_id' }
+
+  const { data: draft, error: draftError } = await client
+    .from('prepared_email_drafts')
+    .select('id, lead_id, revenue_identity_id, draft_status')
+    .eq('organization_id', organizationId)
+    .eq('id', draftId)
+    .maybeSingle()
+
+  if (draftError) throw draftError
+  if (!draft) return { skipped: 'draft_not_found' }
+  if (draft.draft_status === 'SENT') return { skipped: 'already_sent' }
+
+  const { data: lead, error: leadError } = await client
+    .from('leads')
+    .select('id, owner_rep_id')
+    .eq('organization_id', organizationId)
+    .eq('id', draft.lead_id as string)
+    .maybeSingle()
+
+  if (leadError) throw leadError
+  if (!lead) return { skipped: 'lead_not_found' }
+
+  const repId = (lead.owner_rep_id as string | null) ?? null
+
+  // Without an owner rep there is no identity assignment to check against, so
+  // the send cannot be authorized. Fail closed rather than inventing a sender.
+  if (!repId) {
+    await client
+      .from('prepared_email_drafts')
+      .update({ draft_status: 'FAILED', blocked_reason: 'sender_identity_unauthorized', updated_at: new Date().toISOString() })
+      .eq('organization_id', organizationId)
+      .eq('id', draftId)
+    return { blocked: ['sender_identity_unauthorized'] }
+  }
+
+  const policy = await loadOperatingPolicy(organizationId, client)
+  const decision = await buildSendDecision(client, {
+    organizationId,
+    leadId: draft.lead_id as string,
+    draftId,
+    repId,
+    policy,
+  })
+
+  if (!decision.eligible) {
+    const nowIso = new Date().toISOString()
+    await client
+      .from('prepared_email_drafts')
+      .update({ draft_status: 'FAILED', blocked_reason: decision.blockers.join(','), updated_at: nowIso })
+      .eq('organization_id', organizationId)
+      .eq('id', draftId)
+    return { blocked: decision.blockers, reason: decision.reason }
+  }
+
+  if (decision.action === 'APPROVAL_REQUIRED') return { held: 'approval_required' }
+  if (decision.action === 'PREPARE_ONLY') return { held: 'manual_mode' }
+
+  const store = await createStoreForRep(client, organizationId, repId as string)
+  const leadId = draft.lead_id as string
+  const result = await sendPreparedEmail({
+    client,
+    store,
+    orgId: organizationId,
+    repId,
+    leadId,
+    draftId,
+    idempotencyKey: `email:${leadId}:${draftId}`,
+  })
+
+  return { sent: true, emailMessageId: result.emailMessage.id, idempotent: result.idempotent }
+}
+
+async function retryEmails(client: SupabaseClient, organizationId: string) {
+  const { data: attempts, error } = await client
+    .from('email_send_attempts')
+    .select('provider, provider_message_id')
+    .eq('organization_id', organizationId)
+    .eq('status', 'FAILED')
+    .eq('failure_reason', 'persist_failed_after_provider_accept')
+    .not('provider_message_id', 'is', null)
+    .limit(50)
+
+  if (error) {
+    if (isMissingRelation(error)) return { checked: 0, reconciled: 0 }
+    throw error
+  }
+
+  let reconciled = 0
+  for (const attempt of attempts ?? []) {
+    const result = await reconcileAcceptedSend(client, {
+      organizationId,
+      provider: attempt.provider as string,
+      providerMessageId: attempt.provider_message_id as string,
+    })
+    if (result.reconciled) reconciled += 1
+  }
+
+  return { checked: attempts?.length ?? 0, reconciled }
+}
+
 async function executeJob(client: SupabaseClient, row: JobRow): Promise<Record<string, unknown>> {
   const organizationId = row.organization_id
   const businessDate = row.business_date
@@ -536,10 +725,21 @@ async function executeJob(client: SupabaseClient, row: JobRow): Promise<Record<s
       return prepareCarryover(client, policy, organizationId, businessDate)
     case 'EVALUATE_FOLLOWUP':
       return evaluateFollowUps(client, organizationId, businessDate)
+    case 'SYNC_MAILBOX':
+      return syncMailboxes(client, organizationId)
+    case 'RETRY_EMAIL':
+      return retryEmails(client, organizationId)
     case 'ENQUEUE_EMAIL':
-      // Deliberately not implemented: email autopilot is a future promotion
-      // state, not part of this foundation.
-      return { skipped: 'email_autopilot_not_enabled' }
+      // Enqueues draft work only. Sending requires an eligibility decision and,
+      // outside AUTOPILOT, a human approval — neither is this job's authority.
+      return enqueueEmailWork(client, organizationId, businessDate)
+    case 'SEND_EMAIL':
+      return sendQueuedEmail(client, organizationId, row.payload)
+    case 'SEND_FOLLOWUP':
+    case 'PROCESS_INBOUND_EMAIL':
+      // Handled by the same worker once planned; not yet planned because the
+      // follow-up generator that produces them does not exist yet.
+      return { skipped: 'not_planned' }
   }
 }
 
@@ -612,7 +812,7 @@ export async function runOperationalScheduler(options: {
 
   const { data: due, error: dueError } = await client
     .from('operational_jobs')
-    .select('id, organization_id, business_date, rep_id, job_kind, time_bucket, attempt, max_attempts')
+    .select('id, organization_id, business_date, rep_id, job_kind, time_bucket, attempt, max_attempts, payload')
     .eq('state', 'pending')
     .lte('next_attempt_at', now.toISOString())
     .order('next_attempt_at', { ascending: true })
