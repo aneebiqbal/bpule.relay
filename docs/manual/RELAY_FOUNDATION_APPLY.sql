@@ -157,7 +157,7 @@ $$
     );
 $$;
 
-comment on function public.is_org_working_day is
+comment on function public.is_org_working_day(uuid, date) is
   'True when p_date is a working day for the organization. p_date must already be the organization-local business date.';
 
 -- ---------------------------------------------------------------------------
@@ -281,7 +281,7 @@ begin
 end;
 $$;
 
-comment on function public.record_activity_event is
+comment on function public.record_activity_event(uuid, uuid, text, uuid, text, date) is
   'Increments daily_accountability exactly once per source event, on the caller-supplied organization-local business date.';
 
 -- ---------------------------------------------------------------------------
