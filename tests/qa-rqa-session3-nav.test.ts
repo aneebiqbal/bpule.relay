@@ -5,6 +5,9 @@
  * every commit; JSON.parse returns a fresh object each time, so `setResult`
  * scheduled another render forever. The page pegged the main thread and only the
  * browser Back button responded.
+ *
+ * Phase 7 moved the analyze form into its own component (the Prospect workspace
+ * adds Recent / Saved / Watchlist tabs), so the guard reads that file.
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -12,7 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SRC = readFileSync(join(ROOT, 'src/app/(app)/prospect/page.tsx'), 'utf8')
+const SRC = readFileSync(join(ROOT, 'src/components/prospect/prospect-analyze.tsx'), 'utf8')
 
 describe('prospect page — no post-analysis render loop', () => {
   it('reads the URL query once (memoized), not every render', () => {
