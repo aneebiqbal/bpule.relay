@@ -43,19 +43,29 @@ describe('Today — terminal leads never appear', () => {
 })
 
 describe('Today — action-first operating screen', () => {
-  const src = read('src/components/dashboard/rep-dashboard.tsx')
+  // RepDashboard is a thin wrapper; Rep Home owns the operating screen.
+  const src = read('src/components/rep/rep-home-view.tsx')
+  const why = read('src/lib/rep-home/action-presentation.ts')
+
   it('shows exactly the four operational numbers', () => {
-    for (const label of ['Replies waiting', 'Follow-ups due', 'High-priority opportunities', 'Done today']) {
+    for (const label of [
+      'Replies waiting',
+      'Follow-ups due',
+      'High-priority opportunities',
+      'Completed today',
+    ]) {
       expect(src).toContain(label)
     }
   })
   it('renders a ranked "Do this next" list with one CTA per row', () => {
     expect(src).toContain('Do this next')
-    expect(src).toContain('ACTION_VERB[task.humanAction')
-    expect(src).toContain('whyNow(task)')
+    expect(src).toMatch(/rankUnifiedTasks|rankActions/)
+    expect(why).toContain('primaryCtaLabel')
+    expect(why).toContain('humanWhyNow')
   })
   it('states a canonical "why now" instead of raw scorer language', () => {
-    expect(src).toContain('Client replied — answer while it is fresh')
+    expect(why).toContain('Client replied — your turn')
+    expect(why).toContain('Positive commercial reply')
     expect(src).not.toMatch(/canonicalScore\s*\/\s*100\s*\{/)
   })
   it('has a caught-up empty state', () => {

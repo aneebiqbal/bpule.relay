@@ -26,6 +26,8 @@ import {
   sumTargets,
 } from '@/lib/rep-home/profile-scope'
 import { actionDeepLink } from '@/lib/rep-home/action-presentation'
+import { businessDateRange, currentInstant, orgDate } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 export const dynamic = 'force-dynamic'
 
@@ -315,17 +317,17 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
 async function countProfilesPulled(orgId: string, repId: string): Promise<number> {
   try {
     const supabase = await createServerSupabase()
-    const start = new Date()
-    start.setHours(0, 0, 0, 0)
-    const end = new Date(start)
-    end.setDate(end.getDate() + 1)
+    // Operating policy timezone is the only authority for the business day.
+    const policy = await loadOperatingPolicy(orgId)
+    const businessDate = orgDate(currentInstant(), policy.timezone)
+    const { start, end } = businessDateRange(businessDate, policy.timezone)
     const { count } = await supabase
       .from('extraction_runs')
       .select('id', { count: 'exact', head: true })
       .eq('organization_id', orgId)
       .eq('rep_id', repId)
-      .gte('created_at', start.toISOString())
-      .lt('created_at', end.toISOString())
+      .gte('created_at', start)
+      .lt('created_at', end)
     return count ?? 0
   } catch {
     return 0

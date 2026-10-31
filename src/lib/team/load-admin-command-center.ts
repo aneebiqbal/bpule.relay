@@ -106,11 +106,12 @@ export async function loadAdminCommandCenter(): Promise<{
         loadTeamLive(ctx.orgId),
         supabase
           .from('leads')
-          .select('id, company, status, owner_rep_id, revenue_identity_id, canonical_score, updated_at')
+          // Durable column only — never select a nonexistent lead timestamp.
+          .select('id, company, status, owner_rep_id, revenue_identity_id, canonical_score, created_at')
           .eq('organization_id', ctx.orgId)
           .eq('archived', false)
           .in('status', OPEN_STATUSES)
-          .order('updated_at', { ascending: false })
+          .order('created_at', { ascending: false })
           .limit(2000),
         supabase
           .from('revenue_identities')
@@ -151,7 +152,7 @@ export async function loadAdminCommandCenter(): Promise<{
       ownerName: row.owner_rep_id ? nameByRep.get(row.owner_rep_id as string) ?? null : null,
       revenueIdentityId: (row.revenue_identity_id as string | null) ?? null,
       canonicalScore: (row.canonical_score as number | null) ?? null,
-      updatedAt: (row.updated_at as string | null) ?? null,
+      updatedAt: (row.created_at as string | null) ?? null,
       lastOutboundAt: null,
     }))
 
