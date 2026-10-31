@@ -18,6 +18,12 @@ import { cn } from 'cn'
 
 export interface RepWorkspaceData {
   rep: { id: string; name: string }
+  activeWorkspace?: {
+    id: string
+    identityName: string
+    title: string | null
+    channel: string
+  } | null
   isWorkingDay: boolean
   hasAssignments: boolean
   identities: Array<{
@@ -69,6 +75,8 @@ export interface RepWorkspaceData {
   upNext: RelayTodayAction[]
   /** Full canonical action list; the desk sections and the Today KPI share it. */
   allActions: RelayTodayAction[]
+  /** Unified derived + assigned tasks for Home ranking and /tasks parity. */
+  unifiedTasks?: import('@/lib/tasks/types').UnifiedTask[]
   notifications: Array<{ id: string; title: string; body: string }>
   profilesPulled?: number
   isManager?: boolean

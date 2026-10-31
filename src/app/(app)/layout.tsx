@@ -6,8 +6,7 @@ import { getAuthContext } from "@/lib/auth/organization";
 import { isDemoMode } from "@/lib/ai/config";
 import { createScoutStore } from "@/lib/store";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { AppRail } from "@/components/app-rail";
-import { AppBackButton } from "@/components/app-back-button";
+import { RelayAppShell } from "@/components/shell/relay-app-shell";
 import { AppIdentifyWrapper } from "@/components/app-identify-wrapper";
 import { AnalyticsProvider } from "@/components/analytics-provider";
 import { ActiveIdentityProvider } from "@/components/workspace/active-identity-provider";
@@ -82,24 +81,19 @@ export default async function AppLayout({
         plan={user.organization.plan}
       >
         <ActiveIdentityProvider identities={revenueIdentities} initialActiveId={initialActiveId}>
-          <div className="min-h-dvh bg-bone lg:grid lg:grid-cols-[14rem_1fr]">
-            <AppRail
-              repName={user.rep.name}
-              organizationName={user.organization.name}
-              role={user.rep.role}
-              isAdmin={authCtx?.isAdmin ?? false}
-              calibrated={Boolean(user.profile)}
-              demo={isDemoMode()}
-              todaySends={queue.todaySends}
-              dailyLimit={queue.dailyLimit}
-            />
-            <main className="mx-auto w-full max-w-6xl px-5 pt-6 pb-24 lg:px-8 lg:pt-0 lg:pb-8">
-              <div className="sticky top-0 z-30 -mx-8 mb-6 hidden border-b border-line bg-bone/95 px-8 py-2.5 backdrop-blur-sm lg:block">
-                <AppBackButton />
-              </div>
-              {children}
-            </main>
-          </div>
+          <RelayAppShell
+            repName={user.rep.name}
+            organizationName={user.organization.name}
+            role={user.rep.role}
+            isOwner={authCtx?.isOwner ?? false}
+            isAdmin={authCtx?.isAdmin ?? false}
+            isManager={authCtx?.isManager ?? false}
+            demo={isDemoMode()}
+            todaySends={queue.todaySends}
+            dailyLimit={queue.dailyLimit}
+          >
+            {children}
+          </RelayAppShell>
         </ActiveIdentityProvider>
       </AppIdentifyWrapper>
     </>

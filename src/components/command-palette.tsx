@@ -94,6 +94,33 @@ export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: 
       action: () => { router.push('/relay'); onOpenChange(false) },
     },
     {
+      id: 'my-tasks',
+      label: 'My tasks',
+      description: 'Unified task workspace',
+      icon: Target,
+      group: 'Relay',
+      action: () => { router.push('/tasks'); onOpenChange(false) },
+    },
+    {
+      id: 'overdue-tasks',
+      label: 'Overdue tasks',
+      description: 'Tasks past due',
+      icon: Target,
+      group: 'Relay',
+      action: () => { router.push('/tasks?tab=overdue'); onOpenChange(false) },
+    },
+    {
+      id: 'create-task',
+      label: isAdmin ? 'Assign task' : 'Create task',
+      description: isAdmin ? 'Assign work to a teammate' : 'Open task workspace',
+      icon: Plus,
+      group: 'Relay',
+      action: () => {
+        router.push(isAdmin ? '/tasks?assign=1' : '/tasks')
+        onOpenChange(false)
+      },
+    },
+    {
       id: 'search-lead',
       label: 'Search lead',
       description: 'Search lead and proof archive',

@@ -54,6 +54,15 @@ interface DrillDownData {
   }>
 }
 
+function DrillStat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-lg border border-line bg-bone-raised px-3 py-2.5">
+      <p className="text-[11px] text-stone">{label}</p>
+      <p className="mt-0.5 text-[18px] font-medium tabular-nums text-ink">{value}</p>
+    </div>
+  )
+}
+
 function OpenWork({ leads }: { readonly leads: NonNullable<DrillDownData['openLeads']> }) {
   if (leads.length === 0) {
     return <p className="text-[13px] text-graphite">No open leads in the queue.</p>
@@ -85,6 +94,17 @@ export function ManagerDrillDown({ dataPromise }: { dataPromise: Promise<DrillDo
   const workingDay = ![0, 6].includes(new Date().getDay())
   const jobs = jobsFromTargets(data.targets.map((row) => ({ targets: row.targets })))
   const exceptions = (data.dayCloses ?? []).filter((row) => row.exceptionReason)
+  const totals = data.targets.reduce(
+    (acc, row) => {
+      for (const t of row.targets) {
+        acc.target += t.targetCount
+        acc.completed += t.completedCount
+        acc.remaining += t.remaining
+      }
+      return acc
+    },
+    { target: 0, completed: 0, remaining: 0 },
+  )
 
   return (
     <div className="space-y-6 pb-8">
@@ -109,10 +129,23 @@ export function ManagerDrillDown({ dataPromise }: { dataPromise: Promise<DrillDo
             {data.rep.name}
           </h1>
           <p className="text-[13px] text-graphite">
-            {data.rep.role} · {data.identities.map((identity) => identity.identityName).join(', ') || 'No profile'}
+            {data.rep.role}
+            {data.identities[0]?.title ? ` · ${data.identities[0].title}` : ''}
+          </p>
+          <p className="mt-0.5 text-[12px] text-stone">
+            {data.identities.map((identity) => identity.identityName).join(', ') || 'No profile assigned'}
           </p>
         </div>
       </header>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <DrillStat label="Completed today" value={totals.completed} />
+        <DrillStat label="Replies waiting" value={(data.openLeads ?? []).filter((l) => /replied/i.test(l.statusLabel)).length} />
+        <DrillStat label="Follow-ups" value={(data.openLeads ?? []).filter((l) => /follow/i.test(l.statusLabel) || /contact/i.test(l.statusLabel)).length} />
+        <DrillStat label="Open leads" value={(data.openLeads ?? []).length} />
+        <DrillStat label="Remaining" value={totals.remaining} />
+        <DrillStat label="Target %" value={totals.target > 0 ? `${Math.round((totals.completed / totals.target) * 100)}%` : '—'} />
+      </div>
 
       <DailyJobs jobs={jobs} workingDay={workingDay} />
 

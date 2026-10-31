@@ -1,6 +1,5 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
-import { AlertTriangle } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
@@ -10,175 +9,74 @@ import { buildRelayQueue } from '@/lib/relay/queue-engine'
 import { rankNextActions, type NextBestAction } from '@/lib/relay/next-best-action'
 import { deriveTodayCounts } from '@/lib/relay/today-counts'
 import { logRecommendation } from '@/lib/action-ledger'
-import { loadAccountabilityDashboard } from '@/lib/relay/dashboard-loader'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
 import type { RelayTaskKind } from '@/lib/domain/types'
-import { RepWorkspace, type RepWorkspaceData } from '@/components/rep/rep-workspace'
-import { AdminDashboard } from '@/components/dashboard/admin-dashboard'
+import type { RepWorkspaceData } from '@/components/rep/rep-workspace'
 import { RepDashboard } from '@/components/dashboard/rep-dashboard'
-import { PipelineAnalyticsView } from '@/components/dashboard/analytics/pipeline-analytics-view'
-import { buildDashboardAnalytics, parseRange, type RangeDays } from '@/lib/analytics/pipeline-analytics'
+import { ManagerHomeView } from '@/components/manager/manager-home-view'
+import { AdminCommandCenterView } from '@/components/admin/admin-command-center-view'
+import { loadManagerHomeTeam } from '@/lib/team/load-manager-home'
+import { loadAdminCommandCenter } from '@/lib/team/load-admin-command-center'
 import { qualifyCanonicalScore, displayScoreForCanonical } from '@/lib/scoring/qualification'
-import { loadBoardData } from '@/lib/leads/board-rows'
-import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
+import {
+  filterActionsByWorkspace,
+  filterLeadsByWorkspace,
+  sliceTargetSummaryForWorkspace,
+  sumTargets,
+} from '@/lib/rep-home/profile-scope'
+import { actionDeepLink } from '@/lib/rep-home/action-presentation'
 
 export const dynamic = 'force-dynamic'
 
-export default async function TodayPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ range?: string | string[] }>
-}) {
+export default async function TodayPage() {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
-  const range = parseRange((await searchParams).range)
-  // Business dates come from the organization's operating clock, not the rep's
-  // personal timezone: a rep in another zone must not see a different day.
-  const timeZone = (await loadOperatingPolicy(user.organization.id)).timezone
-  const analytics = (
-    <Suspense fallback={<AnalyticsSkeleton />}>
-      <AnalyticsSection range={range} timeZone={timeZone} />
-    </Suspense>
-  )
-
-  // Auth context and the accountability snapshot are independent: both read the
-  // already-cached current user. Awaiting them in sequence added a full
-  // round-trip to every Today load (BUG-001).
-  const [authCtx, acData] = await Promise.all([
-    getAuthContext(),
-    loadAccountabilityDashboard(),
-  ])
+  const authCtx = await getAuthContext()
   if (!authCtx) redirect('/login')
 
   if (authCtx.isOwner || authCtx.isAdmin) {
+    // Org Command Center — no analytics fan-out on first paint (Reports owns charts).
+    const adminResult = await loadAdminCommandCenter()
     return (
-      <div className="space-y-10">
-        <Suspense fallback={<DashboardShellSkeleton />}>
-          <AdminDashboard data={acData} />
-        </Suspense>
-        {analytics}
-      </div>
+      <Suspense fallback={<DashboardShellSkeleton />}>
+        <AdminCommandCenterView
+          data={adminResult.data}
+          adminName={user.rep.name}
+          error={adminResult.error}
+        />
+      </Suspense>
     )
   }
 
   if (authCtx.isManager && authCtx.managedTeamIds.length > 0) {
-    const [repData, teamData] = await Promise.all([
+    // Personal work is profile-scoped; team payload is managed-team scope —
+    // never filter team metrics by the manager's active sending profile.
+    const [repData, teamResult] = await Promise.all([
       loadRepWorkspaceData(user.rep.id),
-      loadManagerTeamTab(),
+      loadManagerHomeTeam(),
     ])
 
     return (
-      <>
-        <Suspense fallback={<DashboardShellSkeleton />}>
-          <ManagerTodayView
-            repData={repData}
-            teamData={teamData}
-          />
-        </Suspense>
-        <div className="mt-10">{analytics}</div>
-      </>
+      <Suspense fallback={<DashboardShellSkeleton />}>
+        <ManagerHomeView
+          personal={repData}
+          team={teamResult.data}
+          error={teamResult.error}
+        />
+      </Suspense>
     )
   }
 
-  // Rep view
-  const [repData] = await Promise.all([
-    loadRepWorkspaceData(user.rep.id),
-  ])
+  const repData = await loadRepWorkspaceData(user.rep.id)
 
   return (
     <Suspense fallback={<DashboardShellSkeleton />}>
       <RepDashboard data={repData} />
-      <div className="mt-10">{analytics}</div>
     </Suspense>
   )
 }
 
-
-function ManagerTodayView({
-  repData,
-  teamData,
-}: {
-  repData: RepWorkspaceData
-  teamData: { teams: any[]; isOwner: boolean; error?: boolean }
-}) {
-  return (
-    <div className="space-y-6 pb-8">
-      <header className="space-y-1.5">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Command Center</p>
-        <h1 className="text-display text-[28px] font-light tracking-[-0.02em] text-ink">Team overview</h1>
-        <p className="text-[13px] text-graphite">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-      </header>
-
-      {teamData.error && (
-        <div className="flex items-center gap-3 rounded-lg border border-status-warning/30 bg-status-warning/5 px-4 py-3">
-          <AlertTriangle className="size-4 shrink-0 text-status-warning" />
-          <p className="text-[12px] text-graphite">Could not load team data. Refresh or try again later.</p>
-        </div>
-      )}
-
-      <RepWorkspace data={repData} teamData={teamData} mode="manager" />
-    </div>
-  )
-}
-
-
-async function loadManagerTeamTab() {
-  try {
-    const authCtx = await getAuthContext()
-    if (!authCtx || authCtx.managedTeamIds.length === 0) return { teams: [], isOwner: false }
-    const store = await createScoutStore()
-    const { businessDateForOrg } = await import('@/lib/org-clock/load')
-    const today = await businessDateForOrg(authCtx.orgId)
-    const teams = await Promise.all(authCtx.managedTeamIds.map(async (teamId) => {
-      const [teamInfo, members, targets] = await Promise.all([
-        store.getTeamInfo(teamId),
-        store.getTeamMembers(teamId),
-        store.getTeamTargets(teamId, today),
-      ])
-      const memberDetails = members.map((member) => {
-        const memberTargets = targets.filter((target) => target.repId === member.repId)
-        const totalTarget = memberTargets.reduce((sum, target) => sum + target.targetCount, 0)
-        const totalCompleted = memberTargets.reduce((sum, target) => sum + target.completedCount, 0)
-        return {
-          repId: member.repId,
-          repName: member.repName,
-          role: member.role,
-          revenueIdentities: memberTargets.map((target) => ({
-            identityName: target.identityName,
-            channel: target.channel,
-            targets: [{
-              activityType: target.activityType,
-              targetCount: target.targetCount,
-              completedCount: target.completedCount,
-              remaining: target.remaining,
-              status: target.status,
-            }],
-          })),
-          totalTarget,
-          totalCompleted,
-          totalRemaining: Math.max(0, totalTarget - totalCompleted),
-          attentionReason: memberTargets.some((target) => target.status === 'at_risk' || target.status === 'missed')
-            ? `${Math.max(0, totalTarget - totalCompleted)} remaining`
-            : null,
-        }
-      })
-      return {
-        teamId,
-        teamName: teamInfo?.name ?? 'My Team',
-        memberCount: members.length,
-        totalTarget: memberDetails.reduce((sum, member) => sum + member.totalTarget, 0),
-        totalCompleted: memberDetails.reduce((sum, member) => sum + member.totalCompleted, 0),
-        totalRemaining: memberDetails.reduce((sum, member) => sum + member.totalRemaining, 0),
-        needsAttention: memberDetails.filter((member) => member.attentionReason).length,
-        members: memberDetails,
-      }
-    }))
-    return { teams, isOwner: false }
-  } catch (err) {
-    console.error('loadManagerTeamTab failed:', err)
-    return { teams: [], isOwner: false, error: true }
-  }
-}
 
 async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   const user = await getCurrentUser()
@@ -189,7 +87,10 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   const store = await createScoutStore()
 
   const { getDailyWorkspace } = await import('@/lib/auth/workspace')
-  const workspace = await getDailyWorkspace()
+  const [workspace, activeWorkspace] = await Promise.all([
+    getDailyWorkspace(),
+    resolveActiveWorkspace(),
+  ])
 
   const [dash, relayData, repDay] = await Promise.all([
     store.getTodayDashboard(),
@@ -199,11 +100,17 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     import('@/lib/rep-day/load').then((m) => m.loadRepDay()),
   ])
 
+  const scopedLeads = filterLeadsByWorkspace(dash.mine?.queue ?? [], activeWorkspace)
+  const scopedFollowups = dash.followupsDue.filter((row) =>
+    filterLeadsByWorkspace([row.lead], activeWorkspace).length > 0,
+  )
+  const leadsById = new Map(scopedLeads.map((lead) => [lead.id, lead]))
+
   const roleContext = buildRoleContext(user.rep, user.organization)
   const queue = buildRelayQueue({
     roleContext,
-    queueData: dash.mine,
-    followupsDue: dash.followupsDue,
+    queueData: dash.mine ? { ...dash.mine, queue: scopedLeads } : dash.mine,
+    followupsDue: scopedFollowups,
     upwork: dash.upwork,
     conversations: relayData.conversations,
     messagesByLead: relayData.messagesByLead,
@@ -234,9 +141,11 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
       fitScore: j.score,
     }))
 
-  const totalTarget = workspace.targetSummary?.totalTarget ?? 0
-  const totalRemaining = workspace.targetSummary?.totalRemaining ?? 0
-  const completionDone = Math.max(0, totalTarget - totalRemaining)
+  const identityRows = sliceTargetSummaryForWorkspace(workspace.targetSummary.byIdentity, activeWorkspace)
+  const scopedTargets = sumTargets(identityRows)
+  const totalTarget = scopedTargets.totalTarget
+  const totalRemaining = scopedTargets.totalRemaining
+  const completionDone = scopedTargets.totalCompleted
 
   // Derive resume work: leads with drafts started but not yet sent
   const resumeWork = recentLeads
@@ -267,16 +176,16 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   }
   const rankedActions = rankNextActions({
     queue: filteredQueue,
-    leads: dash.mine?.queue ?? [],
+    leads: scopedLeads,
     messagesByLead: relayData.messagesByLead,
   })
 
   // Apply live conversation override — active conversations supersede cold prospect score
-  const { evaluateLiveOpportunity, getEffectiveAction } = await import('@/lib/relay/live-opportunity')
+  const { evaluateLiveOpportunity } = await import('@/lib/relay/live-opportunity')
   // The full canonical action list. The Today KPI card and the section lists both
   // read this, so they cannot disagree (REL-QA-003/004).
-  const allActions: RelayTodayAction[] = rankedActions.map((nba) => {
-    const action = nbaToRelayAction(nbaToActionKind, workspace)(nba)
+  const allActionsRaw: RelayTodayAction[] = rankedActions.map((nba) => {
+    const action = nbaToRelayAction(nbaToActionKind, workspace, activeWorkspace)(nba)
 
     // Check if this lead has an active live conversation that should override
     const leadId = action.id.replace(/^(reply-|followup-|highfit-|opportunity-|connection-dm-)/, '')
@@ -285,7 +194,7 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
       sentText: m.sentText,
       sentAt: m.sentAt,
     }))
-    const lead = dash.mine?.queue.find(l => l.id === leadId)
+    const lead = scopedLeads.find(l => l.id === leadId)
 
     if (lead && messages.length > 0) {
       const liveState = evaluateLiveOpportunity({
@@ -304,8 +213,25 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
 
     return action
   })
+
+  const allActions = filterActionsByWorkspace(allActionsRaw, leadsById, activeWorkspace).map((action) => ({
+    ...action,
+    href: actionDeepLink(action),
+  }))
   const actions = allActions.slice(0, 10)
   const todayCounts = deriveTodayCounts(allActions)
+
+  const authCtx = await getAuthContext()
+  let unifiedTasks: import('@/lib/tasks/types').UnifiedTask[] = []
+  if (authCtx) {
+    const { loadUnifiedTasks } = await import('@/lib/tasks/load-unified-tasks')
+    unifiedTasks = await loadUnifiedTasks({
+      auth: authCtx,
+      derivedActions: allActions,
+      forRepId: user.rep.id,
+      includeCompleted: false,
+    })
+  }
 
   // Log recommendations for observability (non-blocking)
   if (actions.length > 0 && user.organization?.id) {
@@ -323,11 +249,25 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
 
   return {
     rep: workspace.rep,
+    activeWorkspace: activeWorkspace
+      ? {
+          id: activeWorkspace.id,
+          identityName: activeWorkspace.identityName,
+          title: activeWorkspace.title,
+          channel: activeWorkspace.channel,
+        }
+      : null,
     repDay,
     isWorkingDay: workspace.isWorkingDay,
     hasAssignments: workspace.hasAssignments,
-    identities: workspace.targetSummary.byIdentity,
-    targetSummary: workspace.targetSummary,
+    identities: identityRows,
+    targetSummary: {
+      ...workspace.targetSummary,
+      totalTarget: scopedTargets.totalTarget,
+      totalCompleted: scopedTargets.totalCompleted,
+      totalRemaining: scopedTargets.totalRemaining,
+      byIdentity: identityRows,
+    },
     day: {
       ...workspace.day,
       repliesWaiting: todayCounts.repliesWaiting,
@@ -336,6 +276,7 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
       isComplete: workspace.targetSummary.totalRemaining === 0 && todayCounts.repliesWaiting === 0 && todayCounts.followUpsDue === 0,
     },
     allActions,
+    unifiedTasks,
     nextAction: actions[0] ?? null,
     upNext: actions.slice(1),
     notifications: [],
@@ -417,6 +358,7 @@ function nbaToActionKind(action: NextBestAction['action']): RelayTaskKind {
 function nbaToRelayAction(
   toKind: typeof nbaToActionKind,
   workspace: { identities: Array<{ identityName: string; title: string | null; channel: string | null }> },
+  activeWorkspace: { identityName: string; title: string | null; channel: string } | null,
 ) {
   return (nba: NextBestAction): RelayTodayAction => ({
     id: nba.leadId ?? nba.jobId ?? 'unknown',
@@ -434,43 +376,13 @@ function nbaToRelayAction(
     fitScore: null,
     identity: {
       id: null,
-      name: workspace.identities[0]?.identityName ?? '',
-      title: workspace.identities[0]?.title ?? null,
-      channel: workspace.identities[0]?.channel ?? null,
+      name: activeWorkspace?.identityName ?? workspace.identities[0]?.identityName ?? '',
+      title: activeWorkspace?.title ?? workspace.identities[0]?.title ?? null,
+      channel: activeWorkspace?.channel ?? workspace.identities[0]?.channel ?? null,
     },
     proof: null,
     inbound: nba.channel === 'INBOUND',
   })
-}
-
-async function loadAnalytics(range: RangeDays, timeZone: string) {
-  try {
-    const board = await loadBoardData()
-    const data = buildDashboardAnalytics({
-      leads: board.leads,
-      events: board.events,
-      reps: board.orgView ? board.reps : undefined,
-      range,
-      timeZone,
-    })
-    return { data, scope: board.orgView ? ('team' as const) : ('mine' as const) }
-  } catch (err) {
-    console.error('dashboard analytics failed:', err instanceof Error ? err.message : 'unknown error')
-    return null
-  }
-}
-
-async function AnalyticsSection({ range, timeZone }: { range: RangeDays; timeZone: string }) {
-  const result = await loadAnalytics(range, timeZone)
-  if (!result) {
-    return (
-      <div role="alert" className="flex items-center gap-3 rounded-lg border border-status-warning/30 bg-status-warning/5 px-4 py-3">
-        <AlertTriangle className="size-4 shrink-0 text-status-warning" />
-        <p className="text-[12px] text-graphite">Performance charts could not load. Your tasks above are unaffected. Refresh to try again.</p>
-      </div>
-    )
-  }
-  return <PipelineAnalyticsView data={result.data} scope={result.scope} />
 }
 
 /**
@@ -503,21 +415,6 @@ function buildSignalFeedFromActionEvents(
       }
     })
   return items
-}
-
-function AnalyticsSkeleton() {
-  return (
-    <div className="space-y-4" aria-busy="true" aria-label="Loading performance charts">
-      <div className="h-6 w-56 rounded bg-bone" />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        {[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-[132px] rounded-xl border border-line bg-bone-raised" />)}
-      </div>
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="h-[320px] rounded-xl border border-line bg-bone-raised lg:col-span-2" />
-        <div className="h-[320px] rounded-xl border border-line bg-bone-raised" />
-      </div>
-    </div>
-  )
 }
 
 function DashboardShellSkeleton() {
