@@ -308,6 +308,34 @@ describe('PIPELINE_STUCK_SIGNALS', () => {
   })
 })
 
+describe('LEADS_PERFORMANCE', () => {
+  it('LEADS_PERFORMANCE: the table is server-paginated, never client-sliced', () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+    const loader = readFileSync(join(root, 'src/lib/leads/leads-page.ts'), 'utf8')
+    const table = readFileSync(join(root, 'src/components/leads/leads-table.tsx'), 'utf8')
+    expect(loader).toContain('listLeadsPage')
+    expect(loader).toContain('enrichLeads')
+    expect(table).not.toMatch(/\.slice\(0,\s*visibleCount\)/)
+    expect(table).not.toMatch(/PAGE_SIZE/)
+  })
+
+  it('LEADS_PERFORMANCE: enrichment is chunked so no giant in(...) request', () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+    const board = readFileSync(join(root, 'src/lib/leads/board-rows.ts'), 'utf8')
+    expect(board).toContain('chunkedIn')
+  })
+})
+
+describe('TABLE_ACCESSIBILITY', () => {
+  it('TABLE_ACCESSIBILITY: headers expose sort state and rows are keyboard operable', () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+    const source = readFileSync(join(root, 'src/components/ui/data-table.tsx'), 'utf8')
+    expect(source).toContain('aria-sort')
+    expect(source).toContain('tabIndex')
+    expect(source).toContain('event.key === "Enter"')
+  })
+})
+
 describe('LEADS_CROSS_SURFACE_PARITY', () => {
   it('LEADS_CROSS_SURFACE_PARITY: one stage vocabulary across the table and the pipeline', () => {
     const root = join(dirname(fileURLToPath(import.meta.url)), '..')
