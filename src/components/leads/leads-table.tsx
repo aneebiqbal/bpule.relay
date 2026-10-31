@@ -720,6 +720,17 @@ export function LeadsTable({
               </select>
               {orgView ? (
                 <select
+                  aria-label="Profile"
+                  value={query.profile ?? 'all'}
+                  onChange={(event) => navigate({ profile: event.target.value })}
+                  className="rounded-lg border border-line bg-bone px-2 py-1.5 text-[12px] text-ink"
+                >
+                  <option value="all">All profiles</option>
+                  <option value="unassigned">No profile</option>
+                </select>
+              ) : null}
+              {orgView ? (
+                <select
                   aria-label="Owner"
                   value={query.owner ?? 'all'}
                   onChange={(event) => navigate({ owner: event.target.value })}

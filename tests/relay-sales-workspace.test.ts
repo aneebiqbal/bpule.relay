@@ -308,6 +308,19 @@ describe('PIPELINE_STUCK_SIGNALS', () => {
   })
 })
 
+describe('LEADS_TASK_INTEGRATION', () => {
+  it('LEADS_TASK_INTEGRATION: assigning a task posts to the tasks API with the lead', () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+    const source = readFileSync(join(root, 'src/components/leads/leads-table.tsx'), 'utf8')
+    expect(source).toContain("'/api/tasks'")
+    for (const field of ['kind:', 'title:', 'priority:', 'leadId:', 'assigneeRepId:']) {
+      expect(source).toContain(field)
+    }
+    // A task is never created without a title.
+    expect(source).toContain('!title.trim()')
+  })
+})
+
 describe('LEADS_PERFORMANCE', () => {
   it('LEADS_PERFORMANCE: the table is server-paginated, never client-sliced', () => {
     const root = join(dirname(fileURLToPath(import.meta.url)), '..')
