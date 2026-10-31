@@ -335,6 +335,28 @@ export interface FewShotWin {
   createdAt: string
 }
 
+/** One page of leads. `stage`/`priority` are derived (not columns) and applied by the caller. */
+export interface LeadsPageInput {
+  q?: string
+  /** Rep id, or the literal 'unassigned'. */
+  owner?: string
+  /** Revenue identity id or sender profile id. */
+  profile?: string
+  source?: string
+  status?: string
+  /** 'created' (default) | 'company' | 'name'. Derived sorts are applied by the caller. */
+  sort?: string
+  dir?: 'asc' | 'desc'
+  page?: number
+  pageSize?: number
+  includeArchived?: boolean
+}
+
+export interface LeadsPageResult {
+  leads: Lead[]
+  total: number
+}
+
 export interface ScoutStore {
   /** The organization this store is scoped to. */
   readonly organizationId: string
@@ -379,6 +401,13 @@ export interface ScoutStore {
   listConversationSnapshots(leadIds: string[]): Promise<Map<string, { messages: Message[]; followupCount: number; memoryStage: string | null }>>
   /** @param includeArchived defaults to false — archived leads are excluded from the default read path. */
   fetchLeadsAll(scopeToUser?: boolean, includeArchived?: boolean): Promise<Lead[]>
+  /**
+   * One page of leads, filtered/ordered/counted by the database. The browser
+   * never holds the full set. `stage`/`priority` are derived (not columns) and
+   * are applied by the caller after enrichment — pass them only through the
+   * caller, never here.
+   */
+  listLeadsPage(input?: LeadsPageInput): Promise<LeadsPageResult>
   getQueue(): Promise<QueueData>
   // messages
   saveDraft(input: SaveDraftInput): Promise<Message>

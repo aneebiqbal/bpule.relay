@@ -84,6 +84,8 @@ import type {
   TeamStats,
   TodayDashboard,
   UpworkSnapshot,
+  LeadsPageInput,
+  LeadsPageResult,
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
@@ -966,6 +968,45 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       return filtered
         .filter((l) => includeArchived || !l.archived)
         .map((l) => ({ ...l, direction: l.direction ?? 'outbound', source: l.source ?? null, inboundMessage: l.inboundMessage ?? null, inboundRaw: l.inboundRaw ?? null, archived: l.archived ?? false, archivedAt: l.archivedAt ?? null }))
+    },
+    async listLeadsPage(input: LeadsPageInput = {}): Promise<LeadsPageResult> {
+      const page = Math.max(1, Math.floor(input.page ?? 1))
+      const pageSize = Math.min(200, Math.max(1, Math.floor(input.pageSize ?? 50)))
+      const scoped = rep.role === 'admin' ? leads : leads.filter((l) => l.ownerRepId === rep.id)
+      let rows = scoped.filter((l) => input.includeArchived || !l.archived)
+      if (input.owner === 'unassigned') rows = rows.filter((l) => !l.ownerRepId)
+      else if (input.owner) rows = rows.filter((l) => l.ownerRepId === input.owner)
+      if (input.profile) {
+        rows = rows.filter((l) => l.revenueIdentityId === input.profile || l.senderProfileId === input.profile)
+      }
+      if (input.source) rows = rows.filter((l) => l.source === input.source)
+      if (input.status) rows = rows.filter((l) => l.status === input.status)
+      const q = (input.q ?? '').replace(/[%,()\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80)
+      if (q) {
+        const needle = q.toLowerCase()
+        rows = rows.filter((l) =>
+          [l.contactName, l.company, l.contactTitle].some((v) => (v ?? '').toLowerCase().includes(needle)))
+      }
+      const dir = input.dir === 'asc' ? 1 : -1
+      rows = [...rows].sort((a, b) => {
+        if (input.sort === 'company') return a.company.localeCompare(b.company) * dir
+        if (input.sort === 'name') return (a.contactName ?? '').localeCompare(b.contactName ?? '') * dir
+        return b.createdAt.localeCompare(a.createdAt) * dir
+      })
+      const total = rows.length
+      const start = (page - 1) * pageSize
+      return {
+        total,
+        leads: rows.slice(start, start + pageSize).map((l) => ({
+          ...l,
+          direction: l.direction ?? 'outbound',
+          source: l.source ?? null,
+          inboundMessage: l.inboundMessage ?? null,
+          inboundRaw: l.inboundRaw ?? null,
+          archived: l.archived ?? false,
+          archivedAt: l.archivedAt ?? null,
+        })),
+      }
     },
     async listConversationSnapshots(leadIds: string[]) {
       const out = new Map<string, { messages: Message[]; followupCount: number; memoryStage: string | null }>()

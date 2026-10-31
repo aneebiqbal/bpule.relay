@@ -172,7 +172,7 @@ Send your CV to careers@example.com`)
   })
 
   test('LEAD-004: search vs empty stage copy', async ({ page }) => {
-    await page.goto('/leads')
+    await page.goto('/leads?view=pipeline')
     await page.getByPlaceholder('Search by name, company, or title…').fill('zzqq-no-such-lead')
     await expect(page.getByText('No leads match "zzqq-no-such-lead".')).toBeVisible()
     await page.getByPlaceholder('Search by name, company, or title…').fill('')

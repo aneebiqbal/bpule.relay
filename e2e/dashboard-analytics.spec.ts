@@ -50,7 +50,7 @@ test.describe('Dashboard analytics', () => {
     const dash = { total, to_contact: await stage('to_contact'), needs_reply: await stage('needs_reply'), follow_up_due: await stage('follow_up_due') }
     await page.screenshot({ path: path.join(OUT, `dashboard-${info.project.name}.png`), fullPage: true })
 
-    await page.goto('/leads')
+    await page.goto('/leads?view=pipeline')
     await expect(page.getByText('Total', { exact: true })).toBeVisible({ timeout: 60_000 })
     const board = {
       total: await boardStat(page, 'Total'),

@@ -10,7 +10,7 @@ import { isProductAdmin } from '@/lib/auth/admin-page'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { computeLifecycleState } from '@/lib/leads/lifecycle-policy'
 import type { LeadRow } from '@/components/leads/pipeline-utils'
-import type { MessageType } from '@/lib/domain/types'
+import type { Lead, MessageType } from '@/lib/domain/types'
 import type { ActivityEvent } from '@/lib/analytics/pipeline-analytics'
 import { leadBelongsToWorkspace, type WorkspaceIdentity } from '@/lib/workspace/active-identity'
 import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
@@ -41,25 +41,25 @@ export interface BoardData {
   workspace: WorkspaceIdentity | null
 }
 
-export async function loadBoardData(): Promise<BoardData> {
-  const user = await getCurrentUser()
-  const authCtx = await getAuthContext()
-  const store = await createScoutStore()
-  const orgView = isProductAdmin(user, authCtx)
+export interface EnrichContext {
+  authCtx: Awaited<ReturnType<typeof getAuthContext>>
+  orgView: boolean
+  reps: Array<{ id: string; name: string }>
+}
 
-  let workspace: WorkspaceIdentity | null = null
-  try {
-    workspace = await resolveActiveWorkspace()
-  } catch {
-    workspace = null
-  }
-
-  const allLeads = orgView ? await store.fetchLeadsAll() : await store.listOwnedLeads()
-  const visibleLeads = scopeLeadsToWorkspace(allLeads, workspace, orgView)
+/**
+ * The one enrichment pass: messages, conversation state and sender profiles.
+ * The full board and a single paginated page both run through this, so a lead
+ * shows the same activity, owner and profile attribution everywhere.
+ */
+export async function enrichLeads(
+  visibleLeads: Lead[],
+  ctx: EnrichContext,
+): Promise<{ leads: LeadRow[]; events: ActivityEvent[] }> {
+  const { authCtx, orgView, reps } = ctx
   const leadIds = visibleLeads.map((l) => l.id)
 
-  const [repsRes, messagesRes, followupCountsRes] = await Promise.all([
-    orgView ? store.listAllReps() : Promise.resolve([]),
+  const [messagesRes, followupCountsRes] = await Promise.all([
     (async () => {
       if (!authCtx || leadIds.length === 0) return []
       try {
@@ -108,9 +108,7 @@ export async function loadBoardData(): Promise<BoardData> {
     })(),
   ])
 
-  const reps = (Array.isArray(repsRes) ? repsRes : []).map((rep) => ({ id: rep.id, name: rep.name }))
   const ownerByRepId = Object.fromEntries(reps.map((rep) => [rep.id, rep.name]))
-
   const messages = Array.isArray(messagesRes) ? messagesRes : []
 
   const lastActivityByLead = new Map<string, string>()
@@ -208,5 +206,28 @@ export async function loadBoardData(): Promise<BoardData> {
   const visibleIds = new Set(visibleLeads.map((l) => l.id))
   const visibleEvents = events.filter((e) => visibleIds.has(e.leadId))
 
-  return { leads, orgView, events: visibleEvents, reps, workspace }
+  return { leads, events: visibleEvents }
+}
+
+export async function loadBoardData(): Promise<BoardData> {
+  const user = await getCurrentUser()
+  const authCtx = await getAuthContext()
+  const store = await createScoutStore()
+  const orgView = isProductAdmin(user, authCtx)
+
+  let workspace: WorkspaceIdentity | null = null
+  try {
+    workspace = await resolveActiveWorkspace()
+  } catch {
+    workspace = null
+  }
+
+  const allLeads = orgView ? await store.fetchLeadsAll() : await store.listOwnedLeads()
+  const visibleLeads = scopeLeadsToWorkspace(allLeads, workspace, orgView)
+  const repsRes = orgView ? await store.listAllReps() : []
+  const reps = (Array.isArray(repsRes) ? repsRes : []).map((rep) => ({ id: rep.id, name: rep.name }))
+
+  const { leads, events } = await enrichLeads(visibleLeads, { authCtx, orgView, reps })
+
+  return { leads, orgView, events, reps, workspace }
 }

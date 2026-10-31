@@ -32,14 +32,16 @@ export function FilterBar({
   className,
 }: FilterBarProps) {
   const controlled = searchValue !== undefined
-  const [internal, setInternal] = useState(searchValue ?? "")
-  const value = controlled ? searchValue : internal
+  const [draft, setDraft] = useState(searchValue ?? "")
+  const [lastExternal, setLastExternal] = useState(searchValue ?? "")
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => {
-    if (!controlled) return
-    setInternal(searchValue)
-  }, [searchValue, controlled])
+  // Adopt an external change (the page cleared the filter, or picked a saved
+  // view) without an effect — the input is the only writer of its own draft.
+  if (controlled && searchValue !== lastExternal) {
+    setLastExternal(searchValue ?? "")
+    setDraft(searchValue ?? "")
+  }
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
 
@@ -51,15 +53,13 @@ export function FilterBar({
 
   function onChange(event: React.ChangeEvent<HTMLInputElement>) {
     const next = event.target.value
-    if (controlled) onSearchChange?.(next)
-    else setInternal(next)
+    setDraft(next)
     commit(next)
   }
 
   function clear() {
     if (timer.current) clearTimeout(timer.current)
-    if (controlled) onSearchChange?.("")
-    else setInternal("")
+    setDraft("")
     onSearchChange?.("")
   }
 
@@ -75,11 +75,11 @@ export function FilterBar({
           role="searchbox"
           aria-label="Search"
           placeholder={searchPlaceholder}
-          value={value}
+          value={draft}
           onChange={onChange}
           className="w-full rounded-lg border border-line bg-bone py-2 pl-9 pr-8 text-[13px] text-ink placeholder:text-stone/50 focus:border-orange/40 focus:outline-none focus:ring-1 focus:ring-orange/20"
         />
-        {value ? (
+        {draft ? (
           <button
             type="button"
             onClick={clear}

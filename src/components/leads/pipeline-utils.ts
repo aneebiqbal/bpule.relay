@@ -1,4 +1,5 @@
 import type { Lead } from '@/lib/domain/types'
+import type { LeadsPageInput } from '@/lib/store/types'
 import { getComparableLeadScore } from '@/lib/score/rubric'
 import { isLeadLocked } from '@/lib/leads/lock'
 import { computeLifecycleState, type LifecycleState, type LifecycleResult } from '@/lib/leads/lifecycle-policy'
@@ -131,6 +132,140 @@ export function sortLeads(leads: LeadRow[], mode: SortMode): LeadRow[] {
   return sorted
 }
 
+/**
+ * Canonical priority language. This is a label over the canonical pipeline
+ * state — never a raw scoring band, and never a second scoring model.
+ */
+export type LeadPriority = 'critical' | 'high' | 'normal' | 'watch'
+
+export const LEAD_PRIORITY_LABELS: Record<LeadPriority, string> = {
+  critical: 'Critical',
+  high: 'High',
+  normal: 'Normal',
+  watch: 'Watch',
+}
+
+export function leadPriority(lead: LeadRow): LeadPriority {
+  const stage = derivePipelineStage(lead)
+  if (stage === 'needs_reply') return 'critical'
+  if (stage === 'follow_up_due') return 'high'
+  if (stage === 'observe') return 'watch'
+  return 'normal'
+}
+
+/**
+ * Buyer intent, kept visually separate from the opportunity score and the
+ * sender match. Null when the lead carries no buyer-intent evidence.
+ */
+export type LeadIntent = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN'
+
+export function leadIntentLevel(lead: LeadRow): LeadIntent | null {
+  const raw = lead.buyerIntent?.buyerIntentLevel
+  if (typeof raw !== 'string') return null
+  const value = raw.trim().toUpperCase()
+  if (value === 'HIGH' || value === 'MEDIUM' || value === 'LOW' || value === 'UNKNOWN') return value
+  return null
+}
+
+const PIPELINE_STAGE_IDS: PipelineStage[] = ['to_contact', 'observe', 'waiting', 'follow_up_due', 'needs_reply', 'done', 'cold']
+
+export function isPipelineStage(value: string | null | undefined): value is PipelineStage {
+  return typeof value === 'string' && PIPELINE_STAGE_IDS.includes(value as PipelineStage)
+}
+
+/** The canonical next action for a lead. Never derived per page. */
+export function leadNextAction(lead: LeadRow): { label: string; href: string } {
+  const stage = derivePipelineStage(lead)
+  switch (stage) {
+    case 'needs_reply':
+      return { label: 'Reply', href: `/leads/${lead.id}?tab=conversation` }
+    case 'follow_up_due':
+      return { label: 'Follow up', href: `/leads/${lead.id}?tab=conversation` }
+    case 'to_contact':
+      return lead.connectionAcceptedAt && !lead.hasDmSent
+        ? { label: 'Send first message', href: `/leads/${lead.id}` }
+        : { label: 'Send connection', href: `/leads/${lead.id}` }
+    case 'observe':
+      return { label: 'Research', href: `/leads/${lead.id}` }
+    case 'cold':
+      return { label: 'Reactivate', href: `/leads/${lead.id}` }
+    case 'done':
+      return { label: '—', href: `/leads/${lead.id}` }
+    default:
+      return { label: 'Watch', href: `/leads/${lead.id}` }
+  }
+}
+
+/**
+ * When the canonical follow-up clock says the next action is due. The policy is
+ * the one authority; this only formats it. `nextFollowupAt` is null exactly when
+ * the follow-up is already due, so eligibility — not the timestamp — is the
+ * "due now" signal.
+ */
+export function leadDue(
+  lead: LeadRow,
+  now: number,
+): { label: string; overdue: boolean } | null {
+  if (!lead.lastOutboundAt) return null
+  const policy = evaluateFollowUpPolicy({
+    leadStatus: lead.status,
+    lastOutboundAt: lead.lastOutboundAt,
+    lastInboundAt: lead.lastInboundAt ?? null,
+    followupCount: lead.followupCount ?? 0,
+    channel: 'dm',
+    now: new Date(now),
+  })
+  if (policy.eligible) return { label: 'Due now', overdue: true }
+  if (!policy.nextFollowupAt) return null
+  const diff = new Date(policy.nextFollowupAt).getTime() - now
+  if (diff <= 0) return { label: 'Due now', overdue: true }
+  const label = diff < 3_600_000
+    ? `${Math.max(1, Math.round(diff / 60_000))}m`
+    : diff < 86_400_000
+      ? `${Math.max(1, Math.round(diff / 3_600_000))}h`
+      : `${Math.max(1, Math.round(diff / 86_400_000))}d`
+  return { label, overdue: false }
+}
+
+/** Derived sorts run over the enriched set; the database only orders by columns. */
+export function isDerivedSort(sort: string | undefined): boolean {
+  return sort === 'activity' || sort === 'score'
+}
+
+/**
+ * One sort authority for the table. Mirrors the database ordering for the
+ * column sorts so the table and the board never disagree.
+ */
+export function sortLeadRows(
+  leads: LeadRow[],
+  sort?: string,
+  dir: 'asc' | 'desc' = 'desc',
+): LeadRow[] {
+  const direction = dir === 'asc' ? 1 : -1
+  const sorted = [...leads]
+  const byTime = (lead: LeadRow) => new Date(lead.lastActivityAt ?? lead.createdAt).getTime()
+  switch (sort) {
+    case 'score':
+      sorted.sort((a, b) => (getComparableLeadScore(b) - getComparableLeadScore(a)) * direction)
+      break
+    case 'recent':
+      sorted.sort((a, b) => (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * direction)
+      break
+    case 'activity':
+      sorted.sort((a, b) => (byTime(a, 'lastActivityAt') - byTime(b, 'lastActivityAt')) * direction)
+      break
+    case 'company':
+      sorted.sort((a, b) => a.company.localeCompare(b.company) * direction)
+      break
+    case 'name':
+      sorted.sort((a, b) => (a.contactName ?? '').localeCompare(b.contactName ?? '') * direction)
+      break
+    default:
+      sorted.sort((a, b) => (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * direction)
+  }
+  return sorted
+}
+
 export function filterLeads(leads: LeadRow[], search: string): LeadRow[] {
   if (!search.trim()) return leads
   const q = search.toLowerCase()
@@ -225,4 +360,85 @@ export function resolvePipelineEmptyState(input: { stage: PipelineStage | 'all';
   if (input.stage === 'all') return { kind: 'all', title: 'No leads yet.', hint: 'Create or import a lead to start your pipeline.' }
   const copy = STAGE_EMPTY_MESSAGES[input.stage]
   return { kind: 'stage', title: copy.title, hint: copy.hint }
+}
+
+/* ─── saved views + URL query state ─── */
+
+export const LEADS_PAGE_SIZE = 50
+export const LEADS_MAX_PAGE_SIZE = 200
+
+export interface LeadsQuery extends LeadsPageInput {
+  stage?: string
+  priority?: string
+  view?: string
+}
+
+export const LEADS_VIEWS = [
+  { id: 'all', label: 'All', hint: 'Every active lead for the selected profile.' },
+  { id: 'needs_reply', label: 'Needs reply', hint: 'A prospect wrote back and is waiting on you.' },
+  { id: 'follow_ups', label: 'Follow-ups', hint: 'The canonical follow-up clock says it is time to re-engage.' },
+  { id: 'high_priority', label: 'High priority', hint: 'Follow-ups that are due now — timing matters.' },
+  { id: 'new', label: 'New', hint: 'Captured but not contacted yet.' },
+  { id: 'watch', label: 'Watch', hint: 'Not a fit yet — observe, do not contact.' },
+  { id: 'won', label: 'Won', hint: 'Closed as won.' },
+  { id: 'lost', label: 'Lost', hint: 'Closed as lost.' },
+] as const
+
+export type LeadsViewId = (typeof LEADS_VIEWS)[number]['id']
+
+/** A saved view is a preset of query params — never a stored filter. */
+export function viewToQuery(view: string): LeadsQuery {
+  switch (view) {
+    case 'needs_reply':
+      return { stage: 'needs_reply' }
+    case 'follow_ups':
+      return { stage: 'follow_up_due' }
+    case 'high_priority':
+      return { priority: 'high' }
+    case 'new':
+      return { status: 'new' }
+    case 'watch':
+      return { stage: 'observe' }
+    case 'won':
+      return { status: 'won' }
+    case 'lost':
+      return { status: 'lost' }
+    default:
+      return {}
+  }
+}
+
+export function isLeadsViewId(value: string | undefined): value is LeadsViewId {
+  return LEADS_VIEWS.some((view) => view.id === value)
+}
+
+function firstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
+}
+
+/**
+ * URL state is the only filter state. A saved view supplies a preset; explicit
+ * params win over it, so `?view=needs_reply&q=acme` is a filtered view.
+ */
+export function parseLeadsQuery(
+  params: Record<string, string | string[] | undefined>,
+): LeadsQuery {
+  const preset = viewToQuery(firstParam(params.view) ?? 'all')
+  return {
+    ...preset,
+    q: firstParam(params.q)?.trim() || undefined,
+    stage: firstParam(params.stage) ?? preset.stage,
+    priority: firstParam(params.priority) ?? preset.priority,
+    owner: firstParam(params.owner) ?? preset.owner,
+    profile: firstParam(params.profile) ?? preset.profile,
+    source: firstParam(params.source) ?? preset.source,
+    status: firstParam(params.status) ?? preset.status,
+    sort: firstParam(params.sort) ?? preset.sort,
+    dir: firstParam(params.dir) === 'asc' ? 'asc' : 'desc',
+    page: Math.max(1, Math.floor(Number(firstParam(params.page)) || 1)),
+    pageSize: Math.min(
+      LEADS_MAX_PAGE_SIZE,
+      Math.max(1, Math.floor(Number(firstParam(params.pageSize)) || LEADS_PAGE_SIZE)),
+    ),
+  }
 }

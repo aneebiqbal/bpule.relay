@@ -116,6 +116,8 @@ import type {
   TeamStats,
   TodayDashboard,
   UpworkSnapshot,
+  LeadsPageInput,
+  LeadsPageResult,
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
 import { inboundFirstMessageKey } from '@/lib/conversation/canonical-message'
@@ -255,6 +257,18 @@ function isMissingColumnError(err: unknown): boolean {
 
 const LEAD_LIST_COLUMNS =
   'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, is_test, buyer_intent:canonical_intelligence->buyerIntent, display_qualification:canonical_intelligence->>qualification, display_intelligence_version:canonical_intelligence->>intelligenceVersion, remote_eligibility, connection_accepted_at, locked_until, locked_reason, archived, archived_at, decision_provider, decision_model, decision_run_id, selected_episode_id, profile_match_score, profile_match_version, best_profile_id, best_profile_match_score, intelligence_input_hash, fallback_reason, created_at'
+
+/**
+ * PostgREST `or` values are comma-separated and `%` is a wildcard, so strip the
+ * characters a user can type that would change the filter's meaning.
+ */
+function sanitizeLeadSearch(raw: string | undefined): string {
+  return (raw ?? '')
+    .replace(/[%,()\\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80)
+}
 
 export function mapLead(r: Row): Lead {
   const canonical = (r.canonical_intelligence as Record<string, unknown> | null) ?? null
@@ -1169,6 +1183,45 @@ export class SupabaseStore implements ScoutStore {
     const { data, error } = await query
     if (error) throw error
     return (data ?? []).map(mapLead)
+  }
+
+  async listLeadsPage(input: LeadsPageInput = {}): Promise<LeadsPageResult> {
+    const page = Math.max(1, Math.floor(input.page ?? 1))
+    const pageSize = Math.min(200, Math.max(1, Math.floor(input.pageSize ?? 50)))
+
+    let query = this.client
+      .from('leads')
+      .select(LEAD_LIST_COLUMNS, { count: 'exact' })
+
+    if (!input.includeArchived) query = query.eq('archived', false)
+
+    if (input.owner === 'unassigned') query = query.is('owner_rep_id', null)
+    else if (input.owner) query = query.eq('owner_rep_id', input.owner)
+
+    if (input.profile) {
+      const id = input.profile.replace(/[^a-zA-Z0-9-]/g, '')
+      if (id) query = query.or(`revenue_identity_id.eq.${id},sender_profile_id.eq.${id}`)
+    }
+
+    if (input.source) query = query.eq('source', input.source)
+    if (input.status) query = query.eq('status', input.status)
+
+    const q = sanitizeLeadSearch(input.q)
+    if (q) {
+      query = query.or(
+        `contact_name.ilike.%${q}%,company.ilike.%${q}%,contact_title.ilike.%${q}%`,
+      )
+    }
+
+    const ascending = input.dir === 'asc'
+    const orderColumn =
+      input.sort === 'company' ? 'company' : input.sort === 'name' ? 'contact_name' : 'created_at'
+    query = query.order(orderColumn, { ascending }).order('id', { ascending })
+    query = query.range((page - 1) * pageSize, page * pageSize - 1)
+
+    const { data, error, count } = await query
+    if (error) throw error
+    return { leads: (data ?? []).map(mapLead), total: count ?? 0 }
   }
 
   async getQueue(): Promise<QueueData> {

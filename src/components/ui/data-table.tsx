@@ -9,6 +9,23 @@ import { Checkbox } from "./checkbox"
 import { Skeleton } from "./skeleton"
 
 export type SortDir = "asc" | "desc"
+
+/** Responsive column hiding: the mobile card carries the essential cells. */
+function hideBelowClass(hideBelow?: Column<unknown>["hideBelow"]): string {
+  switch (hideBelow) {
+    case "sm":
+      return "hidden sm:table-cell"
+    case "md":
+      return "hidden md:table-cell"
+    case "lg":
+      return "hidden lg:table-cell"
+    case "xl":
+      return "hidden xl:table-cell"
+    default:
+      return ""
+  }
+}
+
 export interface SortState {
   key: string
   dir: SortDir
@@ -22,7 +39,7 @@ export interface Column<T> {
   sortKey?: string
   align?: "left" | "right" | "center"
   /** Hide below this breakpoint — the mobile card carries the essential cells. */
-  hideBelow?: "sm" | "md" | "lg"
+  hideBelow?: "sm" | "md" | "lg" | "xl"
   className?: string
 }
 
@@ -138,6 +155,7 @@ export function DataTable<T>({
               aria-sort={active ? (sort!.dir === "asc" ? "ascending" : "descending") : undefined}
               className={cn(
                 "sticky top-0 z-10 bg-bone",
+                hideBelowClass(column.hideBelow),
                 column.align === "right" && "text-right",
                 column.align === "center" && "text-center",
                 column.className,
@@ -184,7 +202,7 @@ export function DataTable<T>({
             </TableCell>
           ) : null}
           {columns.map((column) => (
-            <TableCell key={column.key} className={cn(cellPad, column.className)}>
+            <TableCell key={column.key} className={cn(cellPad, hideBelowClass(column.hideBelow), column.className)}>
               <Skeleton className="h-3.5 w-3/4" />
             </TableCell>
           ))}
@@ -246,6 +264,7 @@ export function DataTable<T>({
                 key={column.key}
                 className={cn(
                   cellPad,
+                  hideBelowClass(column.hideBelow),
                   column.align === "right" && "text-right",
                   column.align === "center" && "text-center",
                   column.className,
