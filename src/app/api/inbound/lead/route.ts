@@ -6,6 +6,8 @@ import { isDemoMode } from '@/lib/ai/config'
 import { scanForSecrets } from '@/lib/ai/secrets'
 import { analyzeInboundInput, buildInboundSensitiveText } from '@/lib/inbound/analysis'
 import { validateInboundLeadBody, type ValidatedInboundLeadInput } from '@/lib/inbound/validation'
+import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
+import type { WorkspaceIdentity } from '@/lib/workspace/active-identity'
 import type { Lead } from '@/lib/domain/types'
 
 function derivedIdempotencyKey(
@@ -117,6 +119,19 @@ export async function POST(req: NextRequest) {
   }
 
   const repId = store.getCurrentRepId()
+
+  // A lead captured through the app must carry the workspace it was captured
+  // under, exactly like POST /api/leads. Without the stamp, workspace-scoped
+  // surfaces (board, inbox) filter the lead out and it vanishes from Chats.
+  let workspace: WorkspaceIdentity | null = null
+  try {
+    workspace = await resolveActiveWorkspace()
+  } catch {
+    workspace = null
+  }
+
+  const effectiveSenderProfileId = validatedProfileId ?? workspace?.profileId ?? null
+
   const idempotencyKey = body.idempotencyKey ?? derivedIdempotencyKey(
     store.organizationId,
     repId,
@@ -139,7 +154,10 @@ export async function POST(req: NextRequest) {
         idempotencyKey,
       },
       isTest: body.isTest === true,
-      assignedProfileId: validatedProfileId,
+      // The recommended profile is the sender when there is one; otherwise the
+      // lead is sent as the workspace's own profile, mirroring POST /api/leads.
+      senderProfileId: effectiveSenderProfileId,
+      revenueIdentityId: workspace?.id ?? null,
       canonicalIntelligence: analysis.canonicalIntelligence,
       canonicalScore: analysis.canonicalScore,
       buyerIntent: analysis.buyerIntent,
@@ -155,7 +173,7 @@ export async function POST(req: NextRequest) {
       repId,
       idempotencyKey,
       body,
-      validatedProfileId,
+      effectiveSenderProfileId,
     )
     if ((result.blocked && !recovered) || !result.lead) {
       return NextResponse.json({ error: result.reason ?? 'Failed to create lead.' }, { status: 409 })
@@ -166,7 +184,7 @@ export async function POST(req: NextRequest) {
       await store.upsertConversationState({
         leadId: lead.id,
         stage: 'new',
-        senderProfileId: validatedProfileId,
+        senderProfileId: effectiveSenderProfileId,
       })
     } catch (err) {
       console.error('[inbound/lead] required conversation state creation failed:', err)
