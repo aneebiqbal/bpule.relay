@@ -17,6 +17,8 @@ export type LeadRow = Lead & {
   lastInboundText?: string | null
   lastInboundAt?: string | null
   followupCount?: number
+  /** Open assigned tasks for this lead (Phase 6) — never invents derived work. */
+  openAssignedTaskCount?: number
   lifecycle?: LifecycleResult
   hasDmSent?: boolean
 }
@@ -409,6 +411,8 @@ export interface LeadsQuery extends LeadsPageInput {
   stage?: string
   priority?: string
   view?: string
+  /** Rep: ignored. Manager: `team` expands to managed owners. Admin: `org` is default. */
+  scope?: 'profile' | 'team' | 'org'
 }
 
 export const LEADS_VIEWS = [
@@ -473,6 +477,10 @@ export function parseLeadsQuery(
     status: firstParam(params.status) ?? preset.status,
     sort: firstParam(params.sort) ?? preset.sort,
     dir: firstParam(params.dir) === 'asc' ? 'asc' : 'desc',
+    scope: (() => {
+      const raw = firstParam(params.scope)
+      return raw === 'team' || raw === 'org' || raw === 'profile' ? raw : undefined
+    })(),
     page: Math.max(1, Math.floor(Number(firstParam(params.page)) || 1)),
     pageSize: Math.min(
       LEADS_MAX_PAGE_SIZE,

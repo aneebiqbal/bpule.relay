@@ -91,7 +91,7 @@ export default async function LeadsPage({
         page={data.page}
         pageSize={data.pageSize}
         pageCount={data.pageCount}
-        orgView={data.orgView}
+        orgView={data.orgView || data.teamView}
         workspaceName={data.workspace?.identityName ?? null}
         currentRepId={currentRepId}
         reps={data.reps}

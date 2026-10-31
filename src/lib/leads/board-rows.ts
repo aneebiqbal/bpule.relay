@@ -59,7 +59,7 @@ export async function enrichLeads(
   const { authCtx, orgView, reps } = ctx
   const leadIds = visibleLeads.map((l) => l.id)
 
-  const [messagesRes, followupCountsRes] = await Promise.all([
+  const [messagesRes, followupCountsRes, openTasksRes] = await Promise.all([
     (async () => {
       if (!authCtx || leadIds.length === 0) return []
       try {
@@ -103,6 +103,21 @@ export async function enrichLeads(
           .in('lead_id', chunk))
       } catch (err) {
         console.error('[board-rows] conversation state load failed:', err)
+        return []
+      }
+    })(),
+    (async () => {
+      if (!authCtx || leadIds.length === 0) return [] as Array<{ lead_id: string }>
+      try {
+        const client = await createServerSupabase()
+        return await chunkedIn<{ lead_id: string }>(leadIds, (chunk) => client
+          .from('assigned_tasks')
+          .select('lead_id')
+          .eq('organization_id', authCtx.orgId)
+          .in('status', ['OPEN', 'IN_PROGRESS'])
+          .in('lead_id', chunk))
+      } catch {
+        // Table may not be migrated yet — treat as zero open tasks.
         return []
       }
     })(),
@@ -156,6 +171,13 @@ export async function enrichLeads(
     followupCountByLead.set(fc.lead_id as string, (fc.followup_count as number) ?? 0)
   }
 
+  const openTaskCountByLead = new Map<string, number>()
+  for (const row of openTasksRes) {
+    const id = row.lead_id as string
+    if (!id) continue
+    openTaskCountByLead.set(id, (openTaskCountByLead.get(id) ?? 0) + 1)
+  }
+
   const senderProfileIds = [...new Set(visibleLeads.map((l) => l.senderProfileId).filter(Boolean) as string[])]
   const profileById = new Map<string, string>()
   if (senderProfileIds.length > 0 && authCtx) {
@@ -196,6 +218,7 @@ export async function enrichLeads(
       lastInboundText: inbound?.text ?? null,
       lastInboundAt: inbound?.at ?? null,
       followupCount: followupCountByLead.get(lead.id) ?? 0,
+      openAssignedTaskCount: openTaskCountByLead.get(lead.id) ?? 0,
       hasDmSent: hasDmSentByLead.get(lead.id) ?? false,
       lifecycle,
     }

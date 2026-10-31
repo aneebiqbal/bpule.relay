@@ -521,7 +521,16 @@ export function LeadsTable({
       {
         key: 'next',
         header: 'Next action',
-        render: (lead) => <NextActionCell lead={lead} />,
+        render: (lead) => (
+          <div className="min-w-0">
+            <NextActionCell lead={lead} />
+            {(lead.openAssignedTaskCount ?? 0) > 0 ? (
+              <p className="mt-0.5 text-[11px] text-graphite">
+                {lead.openAssignedTaskCount} open task{lead.openAssignedTaskCount === 1 ? '' : 's'}
+              </p>
+            ) : null}
+          </div>
+        ),
       },
       {
         key: 'due',
