@@ -10,7 +10,26 @@ import {
 } from 'lucide-react'
 import { cn } from 'cn'
 import { LeadScoreRing } from '@/components/score-ring'
-import { derivePipelineStage, resolvePipelineEmptyState, type LeadRow, type PipelineStage } from './pipeline-utils'
+import {
+  derivePipelineStage,
+  resolvePipelineEmptyState,
+  leadPriority,
+  leadStuckSignals,
+  LEAD_PRIORITY_LABELS,
+  STAGE_LABELS,
+  STUCK_SIGNAL_LABELS,
+  type LeadRow,
+  type LeadPriority,
+  type PipelineStage,
+} from './pipeline-utils'
+
+/** Canonical priority language on the pipeline card (never a score band). */
+const PRIORITY_STYLES: Record<LeadPriority, string> = {
+  critical: 'bg-status-danger/10 text-status-danger',
+  high: 'bg-orange/10 text-orange',
+  normal: 'bg-bone-raised text-graphite',
+  watch: 'bg-status-info/10 text-status-info',
+}
 
 /* ─── config ─── */
 const PAGE_SIZE = 50
@@ -21,23 +40,23 @@ const STAGE_META: Record<PipelineStage, {
   color: string
   description: string
 }> = {
-  to_contact: { label: 'To Contact', icon: <Send className="size-3.5" />, color: 'text-stone-500', description: 'New leads waiting for first contact' },
-  observe: { label: 'Observe', icon: <Eye className="size-3.5" />, color: 'text-status-warning', description: 'Not a fit yet — watch, do not contact' },
-  needs_reply: { label: 'Needs Reply', icon: <Reply className="size-3.5" />, color: 'text-orange', description: 'Prospect replied — respond now' },
-  follow_up_due: { label: 'Follow-Up Due', icon: <Bell className="size-3.5" />, color: 'text-orange', description: 'Time to re-engage' },
-  waiting: { label: 'Waiting', icon: <Clock className="size-3.5" />, color: 'text-cobalt', description: 'Sent, awaiting response' },
-  done: { label: 'Done', icon: <CheckCircle2 className="size-3.5" />, color: 'text-status-success', description: 'Won or closed' },
-  cold: { label: 'Cold', icon: <Snowflake className="size-3.5" />, color: 'text-status-warning', description: 'Unresponsive — will auto-archive' },
+  to_contact: { label: STAGE_LABELS.to_contact, icon: <Send className="size-3.5" />, color: 'text-stone-500', description: 'Qualified — waiting for first contact' },
+  observe: { label: STAGE_LABELS.observe, icon: <Eye className="size-3.5" />, color: 'text-status-warning', description: 'Not a fit yet — watch, do not contact' },
+  needs_reply: { label: STAGE_LABELS.needs_reply, icon: <Reply className="size-3.5" />, color: 'text-orange', description: 'Prospect replied — respond now' },
+  follow_up_due: { label: STAGE_LABELS.follow_up_due, icon: <Bell className="size-3.5" />, color: 'text-orange', description: 'Time to re-engage' },
+  waiting: { label: STAGE_LABELS.waiting, icon: <Clock className="size-3.5" />, color: 'text-cobalt', description: 'Sent, awaiting response' },
+  done: { label: STAGE_LABELS.done, icon: <CheckCircle2 className="size-3.5" />, color: 'text-status-success', description: 'Won or closed' },
+  cold: { label: STAGE_LABELS.cold, icon: <Snowflake className="size-3.5" />, color: 'text-status-warning', description: 'Unresponsive — will auto-archive' },
 }
 
 const FILTERS: Array<{ key: PipelineStage | 'all'; label: string }> = [
   { key: 'all', label: 'All' },
-  { key: 'to_contact', label: 'To Contact' },
-  { key: 'observe', label: 'Observe' },
-  { key: 'needs_reply', label: 'Needs Reply' },
-  { key: 'follow_up_due', label: 'Follow-Up' },
-  { key: 'waiting', label: 'Waiting' },
-  { key: 'done', label: 'Done' },
+  { key: 'to_contact', label: STAGE_LABELS.to_contact },
+  { key: 'observe', label: STAGE_LABELS.observe },
+  { key: 'needs_reply', label: STAGE_LABELS.needs_reply },
+  { key: 'follow_up_due', label: STAGE_LABELS.follow_up_due },
+  { key: 'waiting', label: STAGE_LABELS.waiting },
+  { key: 'done', label: STAGE_LABELS.done },
 ]
 
 /* ─── helpers ─── */
@@ -162,9 +181,9 @@ export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatCard icon={<Users className="size-4" />} label="Total" value={stats.total} />
-        <StatCard icon={<Send className="size-4" />} label="To Contact" value={stats.to_contact} accent="stone" />
-        <StatCard icon={<Reply className="size-4" />} label="Needs Reply" value={stats.needs_reply} accent="orange" />
-        <StatCard icon={<Bell className="size-4" />} label="Follow-Up Due" value={stats.follow_up_due} accent="orange" />
+        <StatCard icon={<Send className="size-4" />} label={STAGE_LABELS.to_contact} value={stats.to_contact} accent="stone" />
+        <StatCard icon={<Reply className="size-4" />} label={STAGE_LABELS.needs_reply} value={stats.needs_reply} accent="orange" />
+        <StatCard icon={<Bell className="size-4" />} label={STAGE_LABELS.follow_up_due} value={stats.follow_up_due} accent="orange" />
         <StatCard icon={<Archive className="size-4" />} label="Archiving Soon" value={stats.archivingSoon} accent="red" />
       </div>
 
@@ -289,6 +308,8 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
   const stage = derivePipelineStage(lead)
   const action = primaryAction(lead)
   const countdown = archivalCountdown(lead)
+  const priority = leadPriority(lead)
+  const stuck = leadStuckSignals(lead)
 
   return (
     <motion.div
@@ -352,6 +373,25 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
             <span className={lead.senderProfileName ? 'text-graphite' : 'font-medium text-status-warning'}>
               {lead.senderProfileName ? `Profile: ${lead.senderProfileName}` : 'Profile not assigned'}
             </span>
+          </div>
+
+          {/* Canonical priority + stuck signals. No new model, no local stage. */}
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span className={cn(
+              'inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+              PRIORITY_STYLES[priority],
+            )}>
+              {LEAD_PRIORITY_LABELS[priority]}
+            </span>
+            {stuck.map((signal) => (
+              <span
+                key={signal}
+                className="inline-flex items-center gap-1 rounded-full bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-status-warning"
+              >
+                <AlertTriangle className="size-2.5" aria-hidden="true" />
+                {STUCK_SIGNAL_LABELS[signal]}
+              </span>
+            ))}
           </div>
 
           {/* Archival warning */}

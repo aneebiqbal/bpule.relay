@@ -173,6 +173,21 @@ export function isPipelineStage(value: string | null | undefined): value is Pipe
   return typeof value === 'string' && PIPELINE_STAGE_IDS.includes(value as PipelineStage)
 }
 
+/**
+ * The one stage vocabulary. The Leads table, the Pipeline board and Lead Detail
+ * all render this — a lead must never be called "Qualified" in one surface and
+ * "To Contact" in another.
+ */
+export const STAGE_LABELS: Record<PipelineStage, string> = {
+  to_contact: 'Qualified',
+  waiting: 'Connection sent',
+  needs_reply: 'Conversation',
+  follow_up_due: 'Follow-up due',
+  observe: 'Watch',
+  done: 'Won',
+  cold: 'Cold',
+}
+
 /** The canonical next action for a lead. Never derived per page. */
 export function leadNextAction(lead: LeadRow): { label: string; href: string } {
   const stage = derivePipelineStage(lead)
@@ -194,6 +209,29 @@ export function leadNextAction(lead: LeadRow): { label: string; href: string } {
     default:
       return { label: 'Watch', href: `/leads/${lead.id}` }
   }
+}
+
+/**
+ * Canonical stuck signals for the pipeline. Only existing canonical state is
+ * used — no new model, and never a locally-derived stage.
+ */
+export type StuckSignal = 'reply_waiting' | 'followup_overdue' | 'no_profile' | 'no_next_action'
+
+export const STUCK_SIGNAL_LABELS: Record<StuckSignal, string> = {
+  reply_waiting: 'Reply waiting',
+  followup_overdue: 'Follow-up overdue',
+  no_profile: 'No profile',
+  no_next_action: 'No next action',
+}
+
+export function leadStuckSignals(lead: LeadRow): StuckSignal[] {
+  const signals: StuckSignal[] = []
+  const stage = derivePipelineStage(lead)
+  if (stage === 'needs_reply') signals.push('reply_waiting')
+  if (stage === 'follow_up_due') signals.push('followup_overdue')
+  if (!lead.senderProfileName) signals.push('no_profile')
+  if (!lead.lastOutboundAt && stage !== 'done' && stage !== 'cold') signals.push('no_next_action')
+  return signals
 }
 
 /**
@@ -252,7 +290,7 @@ export function sortLeadRows(
       sorted.sort((a, b) => (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * direction)
       break
     case 'activity':
-      sorted.sort((a, b) => (byTime(a, 'lastActivityAt') - byTime(b, 'lastActivityAt')) * direction)
+      sorted.sort((a, b) => (byTime(a) - byTime(b)) * direction)
       break
     case 'company':
       sorted.sort((a, b) => a.company.localeCompare(b.company) * direction)

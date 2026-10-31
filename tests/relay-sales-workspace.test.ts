@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { Lead } from '@/lib/domain/types'
@@ -11,6 +14,9 @@ import {
   leadIntentLevel,
   leadNextAction,
   leadPriority,
+  leadStuckSignals,
+  STAGE_LABELS,
+  STUCK_SIGNAL_LABELS,
   parseLeadsQuery,
   sortLeadRows,
   viewToQuery,
@@ -264,6 +270,74 @@ describe('TABLE_RESPONSIVE_MODEL', () => {
       }),
     )
     expect(html).toContain('hidden xl:table-cell')
+  })
+})
+
+describe('PIPELINE_STUCK_SIGNALS', () => {
+  it('PIPELINE_STUCK_SIGNALS: flags only canonical state, never a local stage', () => {
+    const replied = lead({
+      id: 'r',
+      company: 'Acme',
+      status: 'replied',
+      createdAt: '2026-01-01T00:00:00Z',
+      lastOutboundAt: '2026-01-01T00:00:00Z',
+      lastInboundAt: '2026-01-02T00:00:00Z',
+      senderProfileName: 'Mehak Seedat',
+    })
+    expect(leadStuckSignals(replied)).toEqual(['reply_waiting'])
+
+    const noProfile = lead({
+      id: 'n',
+      company: 'Beta',
+      status: 'new',
+      createdAt: '2026-01-01T00:00:00Z',
+    })
+    expect(leadStuckSignals(noProfile)).toContain('no_profile')
+    expect(leadStuckSignals(noProfile)).toContain('no_next_action')
+
+    const healthy = lead({
+      id: 'h',
+      company: 'Gamma',
+      status: 'contacted',
+      createdAt: '2026-01-01T00:00:00Z',
+      lastOutboundAt: '2026-01-05T00:00:00Z',
+      senderProfileName: 'Mehak Seedat',
+    })
+    expect(leadStuckSignals(healthy)).not.toContain('reply_waiting')
+    expect(STUCK_SIGNAL_LABELS.followup_overdue).toBe('Follow-up overdue')
+  })
+})
+
+describe('LEADS_CROSS_SURFACE_PARITY', () => {
+  it('LEADS_CROSS_SURFACE_PARITY: one stage vocabulary across the table and the pipeline', () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+    const table = readFileSync(join(root, 'src/components/leads/leads-table.tsx'), 'utf8')
+    const board = readFileSync(join(root, 'src/components/leads/leads-board-v2.tsx'), 'utf8')
+    for (const source of [table, board]) {
+      expect(source).toContain('STAGE_LABELS')
+      expect(source).not.toMatch(/label:\s*'To Contact'/)
+    }
+    expect(STAGE_LABELS.to_contact).toBe('Qualified')
+    expect(STAGE_LABELS.needs_reply).toBe('Conversation')
+  })
+
+  it('LEADS_CROSS_SURFACE_PARITY: stage, priority, next action and intent read one row', () => {
+    const row = lead({
+      id: 'a',
+      company: 'Acme',
+      status: 'replied',
+      createdAt: '2026-01-01T00:00:00Z',
+      lastOutboundAt: '2026-01-01T00:00:00Z',
+      lastInboundAt: '2026-01-02T00:00:00Z',
+      senderProfileName: 'Mehak Seedat',
+      buyerIntent: { buyerIntentLevel: 'HIGH' },
+      canonicalScore: 8,
+    })
+    expect(derivePipelineStage(row)).toBe('needs_reply')
+    expect(leadPriority(row)).toBe('critical')
+    expect(leadNextAction(row).label).toBe('Reply')
+    expect(leadIntentLevel(row)).toBe('HIGH')
+    expect(row.senderProfileName).toBe('Mehak Seedat')
   })
 })
 

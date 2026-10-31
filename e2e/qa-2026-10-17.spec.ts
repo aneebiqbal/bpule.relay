@@ -177,7 +177,7 @@ Send your CV to careers@example.com`)
     await expect(page.getByText('No leads match "zzqq-no-such-lead".')).toBeVisible()
     await page.getByPlaceholder('Search by name, company, or title…').fill('')
     let emptyStage = 'none empty on this account'
-    for (const label of ['To Contact', 'Needs Reply', 'Follow-Up', 'Waiting', 'Done']) {
+    for (const label of ['Qualified', 'Watch', 'Conversation', 'Follow-up due', 'Connection sent', 'Won']) {
       await page.getByRole('button', { name: new RegExp(`^${label}`) }).first().click()
       const status = page.getByRole('status').filter({ hasText: /^No / })
       if (await status.count()) {

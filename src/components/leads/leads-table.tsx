@@ -32,6 +32,7 @@ import { formatRelativeTime } from '@/lib/ui/time'
 import {
   LEADS_VIEWS,
   LEAD_PRIORITY_LABELS,
+  STAGE_LABELS,
   derivePipelineStage,
   isLeadsViewId,
   leadDue,
@@ -59,16 +60,6 @@ export interface LeadsTableProps {
   now: number
   /** Table | Pipeline representation toggle. */
   viewToggle?: React.ReactNode
-}
-
-const STAGE_LABELS: Record<PipelineStage, string> = {
-  to_contact: 'Qualified',
-  observe: 'Watch',
-  waiting: 'Connection sent',
-  follow_up_due: 'Conversation',
-  needs_reply: 'Conversation',
-  done: 'Won',
-  cold: 'Cold',
 }
 
 const STAGE_VARIANT: Record<PipelineStage, 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 'orange' | 'cobalt'> = {
