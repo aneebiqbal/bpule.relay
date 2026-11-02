@@ -84,12 +84,12 @@ export async function loadLeadPreview(leadId: string): Promise<LeadPreviewData |
 
   if (!inScope) return null
 
-  const ownerId = row.owner_rep_id as string | null
   const profileId = row.sender_profile_id as string | null
 
   const store = await createScoutStore()
   const [owner, profile, activity, tasks, timeline] = await Promise.all([
-    ownerId ? store.getRepInfo(ownerId).catch(() => null) : Promise.resolve(null),    profileId ? store.getProfile(profileId).catch(() => null) : Promise.resolve(null),
+    ownerId ? store.getRepInfo(ownerId).catch(() => null) : Promise.resolve(null),
+    profileId ? store.getProfile(profileId).catch(() => null) : Promise.resolve(null),
     client
       .from('messages')
       .select('sent_at', { count: 'exact', head: true })
