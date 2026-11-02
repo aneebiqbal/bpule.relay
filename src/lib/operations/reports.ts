@@ -134,7 +134,7 @@ function stateCount(
     const leadIds = await matchingLeadIds(client, scope, leadWindow, (q) => q.eq('archived', false))
     if (leadIds === null) return null
     if (leadIds.length === 0) return 0
-    let q = client
+    const q = client
       .from('conversation_states')
       .select('lead_id', { head: true, count: 'exact' })
       .eq('organization_id', scope.orgId)
