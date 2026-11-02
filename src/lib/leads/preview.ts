@@ -74,11 +74,13 @@ export async function loadLeadPreview(leadId: string): Promise<LeadPreviewData |
 
   const orgView = isProductAdmin(user, authCtx)
   const workspace = await resolveActiveWorkspace().catch(() => null)
-  const inScope = orgView
-    ? true
-    : workspace
-      ? row.revenue_identity_id === workspace.id || row.sender_profile_id === workspace.id
-      : (row.owner_rep_id ?? authCtx.repId) === authCtx.repId
+  const ownerId = row.owner_rep_id as string | null
+  // An unowned lead is claimable by any rep; otherwise the acting rep must own it.
+  const ownedByRep = ownerId === null || ownerId === authCtx.repId
+  const inWorkspace = Boolean(
+    workspace && (row.revenue_identity_id === workspace.id || row.sender_profile_id === workspace.id),
+  )
+  const inScope = orgView || ownedByRep || inWorkspace
 
   if (!inScope) return null
 
@@ -87,8 +89,7 @@ export async function loadLeadPreview(leadId: string): Promise<LeadPreviewData |
 
   const store = await createScoutStore()
   const [owner, profile, activity, tasks, timeline] = await Promise.all([
-    ownerId ? store.getRepInfo(ownerId).catch(() => null) : Promise.resolve(null),
-    profileId ? store.getProfile(profileId).catch(() => null) : Promise.resolve(null),
+    ownerId ? store.getRepInfo(ownerId).catch(() => null) : Promise.resolve(null),    profileId ? store.getProfile(profileId).catch(() => null) : Promise.resolve(null),
     client
       .from('messages')
       .select('sent_at', { count: 'exact', head: true })

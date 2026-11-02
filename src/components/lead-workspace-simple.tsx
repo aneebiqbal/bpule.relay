@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { hasUnfilledValues, UNFILLED_VALUES_MESSAGE } from '@/lib/relay/unfilled-values'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import {
   Send, Reply, MessageSquare, X, Copy, Check, Trophy, Clock,
   Building2, ExternalLink, AlertTriangle, Sparkles,
@@ -50,13 +50,14 @@ interface Props {
   todaySends: number
   /** Display clock. Server and client must agree or hydration fails. */
   now?: number
+  /** One-shot generation intent from the URL (`?next=generate-dm`). */
+  next?: string | null
   /** Display name of the lead's sender profile, or null when none is assigned. */
   senderProfileName?: string | null
 }
 
-export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now = Date.now(), senderProfileName }: Props) {
+export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now = Date.now(), next = null, senderProfileName }: Props) {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [lead, setLead] = useState(initialLead)
   const [leadVersion, setLeadVersion] = useState(0)
   const [mode, setMode] = useState<Mode>(null)
@@ -207,7 +208,6 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
   }, [])
 
   useEffect(() => {
-    const next = searchParams.get('next')
     if (!next) return
     const match = next.match(/^generate-(connection|dm|reply|followup)$/)
     if (!match) return
@@ -235,7 +235,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
     void generateDraft(requested).finally(() => {
       setBootstrap((s) => (s === 'RUNNING' ? transitionLeadBootstrap(s, 'SUCCEED') : s))
     })
-  }, [searchParams, phase, lead, decisionCtx, generateDraft, consumeOneShotIntent])
+  }, [next, phase, lead, decisionCtx, generateDraft, consumeOneShotIntent])
 
   // "Send without note" logs a connection with no text. It must surface
   // server refusals (daily ceiling, lock, ownership) instead of failing

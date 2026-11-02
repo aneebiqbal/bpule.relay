@@ -1,7 +1,7 @@
 'use client'
 
 import { use, useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { LayoutList, MessagesSquare, ClipboardList, History } from 'lucide-react'
 import { LeadWorkspace } from './lead-workspace-simple'
 import { LeadConversation } from './conversation/lead-conversation'
@@ -35,18 +35,20 @@ const TAB_ITEMS = [
   { value: 'activity', label: 'Activity', icon: History },
 ]
 
-export function LeadWorkspaceAsync({ dataPromise, now }: { dataPromise: Promise<LeadData>; now: number }) {
+export function LeadWorkspaceAsync({
+  dataPromise,
+  initialTab,
+  initialNext,
+  now,
+}: {
+  dataPromise: Promise<LeadData>
+  initialTab: Tab
+  initialNext: string | null
+  now: number
+}) {
   const { lead, profiles, dailyLimit, todaySends, ownerName } = use(dataPromise)
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const requested = searchParams?.get('tab') ?? null
-  const [tab, setTab] = useState<Tab>(() =>
-    CONVERSATION_UI && requested === 'conversation'
-      ? 'conversation'
-      : requested === 'tasks' || requested === 'activity'
-        ? requested
-        : 'overview',
-  )
+  const [tab, setTab] = useState<Tab>(initialTab)
   const [tasks, setTasks] = useState<UnifiedTask[] | null>(null)
   const [tasksError, setTasksError] = useState(false)
 
@@ -63,13 +65,13 @@ export function LeadWorkspaceAsync({ dataPromise, now }: { dataPromise: Promise<
       const value: Tab =
         next === 'conversation' || next === 'tasks' || next === 'activity' ? next : 'overview'
       setTab(value)
-      const params = new URLSearchParams(searchParams?.toString() ?? '')
+      const params = new URLSearchParams(window.location.search)
       if (value === 'overview') params.delete('tab')
       else params.set('tab', value)
       const qs = params.toString()
       router.replace(qs ? `?${qs}` : '?', { scroll: false })
     },
-    [router, searchParams],
+    [router],
   )
 
   useEffect(() => {
@@ -116,7 +118,7 @@ export function LeadWorkspaceAsync({ dataPromise, now }: { dataPromise: Promise<
           <Tabs items={TAB_ITEMS} value={tab} onChange={changeTab} />
           {tab === 'overview' ? (
             <div className="mt-4">
-              <LeadWorkspace lead={lead} dailyLimit={dailyLimit} todaySends={todaySends} senderProfileName={senderProfileName} now={now} />
+              <LeadWorkspace lead={lead} dailyLimit={dailyLimit} todaySends={todaySends} senderProfileName={senderProfileName} now={now} next={initialNext} />
             </div>
           ) : null}
           {tab === 'conversation' ? (
