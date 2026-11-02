@@ -133,6 +133,25 @@ The RLS harness ran against a scratch database on `main`'s branch, never against
 
 ### 8a. Automated code gate
 
+**PASS.** Every automated step is green:
+
+```
+PRODUCT CONTRACTS        PASS
+SEMANTIC BUYER QUESTIONS PASS
+EXPLANATION CONSISTENCY  PASS
+MESSAGE QUALITY          PASS
+REGRESSION CORPUS        PASS
+LEAD PARITY              PASS
+CONTRACT OWNERS          PASS
+RELEASE GATE LOGIC       PASS
+TYPECHECK                PASS
+LINT                     PASS
+UNIT                     PASS
+BUILD                    PASS
+TESTS                    4607 total / 4607 passed / 0 failed / 0 skipped
+AUTOMATED_CODE_GATE      PASS
+```
+
 `LINT` initially failed on a `prefer-const` in the report lead-scope resolver; fixed
 and committed as `52ebc20`.
 
@@ -240,5 +259,25 @@ rollback path was removed.
 |---|---|
 | `c53e56c` | feat(relay): Neon database provider and the Phase 8 operations workspace |
 | `9e90ece` | feat(relay): Neon Auth provider, provider-neutral invitations, and the app migration |
+| `5f7abbb` | fix(relay): close the Neon runtime defects found by browser certification |
+| `52ebc20` | fix(relay): prefer-const in the report lead-scope resolver |
+| `a20f66e` | docs(relay): record the Neon cutover final report |
+| `644e626` | docs(relay): record the automated code gate result |
 
-Pushed to `origin/release-merge`; remote SHA matches local HEAD.
+Pushed to `origin/release-merge`; remote SHA matches local HEAD, tree clean.
+
+## 12. Verdict
+
+```
+RELAY NEON CUTOVER: NOT COMPLETE
+```
+
+What is proven: the database migration (schema, rows, hash, RLS, auth mapping, the
+26/26 auth-id rewrite), the application layer (DB adapter, auth adapter,
+provider-neutral invitations), and — under a real browser session against the live
+database — sign-in, session resolution, and 14 authenticated pages with zero SQL
+errors. `AUTOMATED_CODE_GATE` is green.
+
+What is not: every gate that needs a deployed app. `BROWSER_GATE`,
+`BUG004_INBOUND_GATE`, `AUTH_ONBOARDING_GATE`, `SHA_GATE` and `PRODUCTION_GATE` are
+NOT_RUN / BLOCKED. The remaining blockers are exactly the ones in §9.
