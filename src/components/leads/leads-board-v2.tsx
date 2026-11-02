@@ -208,13 +208,13 @@ export function LeadsBoardV2({
             className="w-full rounded-xl border border-line bg-bone pl-10 pr-4 py-2.5 text-sm text-ink placeholder:text-stone/40 focus:border-orange/40 focus:outline-none transition-colors"
           />
         </div>
-        <div className="flex rounded-xl border border-line bg-bone p-0.5">
+        <div className="flex gap-1 overflow-x-auto rounded-xl border border-line bg-bone p-0.5">
           {FILTERS.map((f) => (
             <button
               key={f.key}
               onClick={() => { setFilter(f.key); setVisibleCount(PAGE_SIZE) }}
               className={cn(
-                'rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200',
+                'shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200',
                 filter === f.key ? 'bg-orange text-on-accent shadow-sm' : 'text-ink/50 hover:text-ink/80'
               )}
             >
@@ -331,7 +331,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
       transition={{ duration: 0.15, delay: index * 0.02 }}
       className="group"
     >
-      <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-bone-raised/30 transition-colors">
+      <div className="flex flex-col gap-3 px-4 py-3.5 transition-colors hover:bg-bone-raised/30 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
         {/* Avatar + status dot */}
         <div className="relative shrink-0">
           <div className="flex size-10 items-center justify-center rounded-full bg-cobalt/10 text-sm font-semibold text-cobalt">
@@ -417,7 +417,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
         </div>
 
         {/* Score + action */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 self-start shrink-0">
           <LeadScoreRing lead={lead} size={38} />
           <Link
             href={action.href}

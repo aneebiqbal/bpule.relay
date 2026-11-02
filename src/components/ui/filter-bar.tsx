@@ -5,6 +5,12 @@ import { useEffect, useRef, useState } from "react"
 import { Search, X } from "lucide-react"
 import { cn } from "cn"
 
+export interface FilterChip {
+  key: string
+  label: string
+  onRemove: () => void
+}
+
 export interface FilterBarProps {
   /** Controlled search value. Omit to make the field uncontrolled. */
   searchValue?: string
@@ -15,6 +21,10 @@ export interface FilterBarProps {
   children?: React.ReactNode
   /** Right-hand slot (e.g. saved views, export). */
   trailing?: React.ReactNode
+  /** Active filters as removable chips, rendered above the search row. */
+  chips?: FilterChip[]
+  /** Removes every active filter at once. */
+  onClearAll?: () => void
   className?: string
 }
 
@@ -29,6 +39,8 @@ export function FilterBar({
   searchPlaceholder = "Search…",
   children,
   trailing,
+  chips,
+  onClearAll,
   className,
 }: FilterBarProps) {
   const controlled = searchValue !== undefined
@@ -64,10 +76,40 @@ export function FilterBar({
   }
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-3", className)}>
+    <div className={cn('space-y-2', className)}>
+      {chips && chips.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Active filters">
+          {chips.map((chip) => (
+            <span
+              key={chip.key}
+              className="inline-flex items-center gap-1 rounded-full border border-line bg-bone-raised px-2 py-0.5 text-[12px] text-ink"
+            >
+              {chip.label}
+              <button
+                type="button"
+                onClick={chip.onRemove}
+                aria-label={`Remove ${chip.label} filter`}
+                className="rounded-full p-0.5 text-stone transition-colors hover:bg-bone hover:text-ink"
+              >
+                <X className="size-3" aria-hidden="true" />
+              </button>
+            </span>
+          ))}
+          {onClearAll ? (
+            <button
+              type="button"
+              onClick={onClearAll}
+              className="text-[12px] font-medium text-orange transition-colors hover:underline"
+            >
+              Clear all
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="flex flex-wrap items-center gap-3">
       <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
         <Search
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone/50"
+          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone"
           aria-hidden="true"
         />
         <input
@@ -84,7 +126,7 @@ export function FilterBar({
             type="button"
             onClick={clear}
             aria-label="Clear search"
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-stone/60 transition-colors hover:text-ink"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-stone transition-colors hover:text-ink"
           >
             <X className="size-3.5" aria-hidden="true" />
           </button>
@@ -94,6 +136,7 @@ export function FilterBar({
       {children}
 
       {trailing ? <div className="ml-auto flex items-center gap-2">{trailing}</div> : null}
+      </div>
     </div>
   )
 }

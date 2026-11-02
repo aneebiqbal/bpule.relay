@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import { cn } from 'cn'
 import { SalesHeader } from '@/components/sales/sales-header'
-import { FilterBar } from '@/components/ui/filter-bar'
+import { FilterBar, type FilterChip } from '@/components/ui/filter-bar'
 import { DataTable, type Column, type SortState } from '@/components/ui/data-table'
 import { Tabs } from '@/components/ui/tabs'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -655,6 +655,35 @@ export function LeadsTable({
 
   const hasFilters = Boolean(query.q || query.stage || query.priority || query.owner || query.source || query.status)
 
+  /** Active filters as removable chips — the URL stays the only filter state. */
+  const chips = useMemo<FilterChip[]>(() => {
+    const out: FilterChip[] = []
+    if (query.q) out.push({ key: 'q', label: `Search: ${query.q}`, onRemove: () => navigate({ q: undefined }) })
+    if (query.stage) {
+      const label = STAGE_LABELS[query.stage as PipelineStage] ?? query.stage
+      out.push({ key: 'stage', label: `Stage: ${label}`, onRemove: () => navigate({ stage: undefined }) })
+    }
+    if (query.priority) {
+      const label = LEAD_PRIORITY_LABELS[query.priority as LeadPriority] ?? query.priority
+      out.push({ key: 'priority', label: `Priority: ${label}`, onRemove: () => navigate({ priority: undefined }) })
+    }
+    if (query.owner) {
+      const label = query.owner === 'unassigned'
+        ? 'Unassigned'
+        : reps.find((rep) => rep.id === query.owner)?.name ?? query.owner
+      out.push({ key: 'owner', label: `Owner: ${label}`, onRemove: () => navigate({ owner: undefined }) })
+    }
+    if (query.profile) {
+      const label = query.profile === 'unassigned' ? 'No profile' : query.profile
+      out.push({ key: 'profile', label: `Profile: ${label}`, onRemove: () => navigate({ profile: undefined }) })
+    }
+    return out
+  }, [query, reps, navigate])
+
+  const clearAll = useCallback(() => {
+    navigate({ q: undefined, stage: undefined, priority: undefined, owner: undefined, profile: undefined, source: undefined, status: undefined })
+  }, [navigate])
+
   const empty = hasFilters ? (
     <EmptyState
       icon={SearchX}
@@ -736,6 +765,8 @@ export function LeadsTable({
         }
         filters={
           <FilterBar
+            chips={chips}
+            onClearAll={clearAll}
             searchValue={query.q ?? ''}
             onSearchChange={(value) => navigate({ q: value })}
             searchPlaceholder="Search name, company or title…"

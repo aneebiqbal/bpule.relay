@@ -199,6 +199,17 @@ describe('V3_LEADS_DRAWER', () => {
 
 // ── Pipeline ────────────────────────────────────────────────────────────────
 
+describe('V3_LEADS_FILTER_CHIPS', () => {
+  it('V3_LEADS_FILTER_CHIPS: active filters render as removable chips with Clear all', () => {
+    const table = read('src/components/leads/leads-table.tsx')
+    expect(table).toContain('chips={chips}')
+    expect(table).toContain('onClearAll={clearAll}')
+    const bar = read('src/components/ui/filter-bar.tsx')
+    expect(bar).toContain('Clear all')
+    expect(bar).toContain('aria-label="Active filters"')
+  })
+})
+
 describe('V3_PIPELINE_CANONICAL_STAGE', () => {
   it('V3_PIPELINE_CANONICAL_STAGE: the board uses the same stage vocabulary as the table', () => {
     const row = lead({ id: 'a', company: 'Acme', status: 'replied', createdAt: '2026-01-01T00:00:00Z' })
