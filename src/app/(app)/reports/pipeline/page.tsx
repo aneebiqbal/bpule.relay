@@ -67,7 +67,7 @@ export default async function PipelineReportPage({
                     </Link>
                   </th>
                   <td className="px-3 py-2 text-right tabular-nums text-ink">{countText(r.count)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-graphite">{r.conversionPct === null ? '—' : `${r.conversionPct}%`}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-graphite">{r.conversionPct === null ? '—' : `${r.conversionPct}% of prior`}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-graphite">{r.avgAgeDays === null ? '—' : `${r.avgAgeDays}d`}</td>
                   <td className={`px-3 py-2 text-right tabular-nums ${r.stuck ? 'font-medium text-status-warning' : 'text-graphite'}`}>{countText(r.stuck)}</td>
                 </tr>

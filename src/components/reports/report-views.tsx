@@ -52,7 +52,7 @@ export function CountTable({
                 </th>
                 <td className="px-3 py-2 text-right tabular-nums text-ink">{countText(r.count)}</td>
                 {showConversion && (
-                  <td className="px-3 py-2 text-right tabular-nums text-graphite">{r.conversionPct === null ? '—' : `${r.conversionPct}%`}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-graphite">{r.conversionPct === null ? '—' : `${r.conversionPct}% of prior`}</td>
                 )}
                 {showChange && (
                   <td className="px-3 py-2 text-right tabular-nums text-graphite">

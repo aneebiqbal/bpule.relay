@@ -44,7 +44,7 @@ export function FunnelTable({ steps, inspectHref }: { steps: FunnelStep[]; inspe
                 </th>
                 <td className="px-3 py-2 text-right tabular-nums text-ink">{s.count}</td>
                 <td className="px-3 py-2 text-graphite">{s.transition ?? '—'}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-ink">{pct(s.conversionPct)}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-ink">{s.conversionPct === null ? '—' : `${s.conversionPct}% of prior`}</td>
                 <td className="hidden px-3 py-2 sm:table-cell">
                   <div className="h-1.5 rounded-full bg-bone-raised" aria-hidden="true">
                     <div className="h-1.5 rounded-full bg-orange/70" style={{ width: `${Math.round((s.count / max) * 100)}%` }} />

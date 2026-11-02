@@ -14,6 +14,7 @@ import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { isMissingRelation } from '@/lib/operations/db-errors'
 import { qualifyCanonicalScore } from '@/lib/scoring/qualification'
 import { sourceBucket, type OpsSource } from '@/lib/operations/filters'
+import { stageRatioPct } from '@/lib/operations/reports'
 import { MEETING_EVENT } from '@/lib/sales/meetings'
 import { readAllPages } from '@/lib/operations/paged-read'
 
@@ -262,7 +263,7 @@ export function buildFunnel(leads: readonly FunnelLead[]): FunnelStep[] {
       label: step.label,
       transition: i > 0 ? `${SHORT[FUNNEL_ORDER[i - 1].key]} → ${SHORT[step.key]}` : null,
       count: reached[i],
-      conversionPct: prev === null || prev === 0 ? null : Math.round((reached[i] / prev) * 100),
+      conversionPct: stageRatioPct(reached[i], prev),
     }
   })
 }

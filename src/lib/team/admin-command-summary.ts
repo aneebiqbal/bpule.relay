@@ -5,6 +5,7 @@
  * for the same underlying snapshots.
  */
 import { qualifyCanonicalScore } from '@/lib/scoring/qualification'
+import { stageRatioPct } from '@/lib/operations/reports'
 import type { TeamDaySummary } from '@/lib/rep-day/team'
 import type { TeamLivePayload } from '@/lib/admin/team-live'
 import {
@@ -110,8 +111,7 @@ export function buildPipelineHealth(leads: OpenLeadFact[], now = Date.now()): Pi
 
   return stages.map((row, i) => {
     const prev = i === 0 ? null : stages[i - 1].count
-    const conversionPct =
-      prev != null && prev > 0 ? Math.round((row.count / prev) * 100) : null
+    const conversionPct = stageRatioPct(row.count, prev)
     return {
       key: row.step.key,
       label: row.step.label,

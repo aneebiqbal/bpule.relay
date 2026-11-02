@@ -41,11 +41,22 @@ export interface CountStep {
 export function withConversion<T extends { count: number | null }>(steps: T[]): Array<T & { conversionPct: number | null }> {
   return steps.map((s, i) => {
     const prev = i > 0 ? steps[i - 1].count : null
-    return {
-      ...s,
-      conversionPct: i === 0 || prev === null || prev === 0 || s.count === null ? null : Math.round((s.count / prev) * 100),
-    }
+    return { ...s, conversionPct: stageRatioPct(s.count, prev) }
   })
+}
+
+/**
+ * Stage ratio, or null when the denominator cannot support one.
+ *
+ * Stage counts are snapshots of where leads sit now, not transitions between
+ * stages. Filters, history and re-entry make a later stage hold more rows than
+ * its predecessor, so a value above 100% is not a conversion rate and must not
+ * be rendered as one ("1413%").
+ */
+export function stageRatioPct(current: number | null, previous: number | null): number | null {
+  if (current === null || previous === null || previous <= 0) return null
+  const pct = Math.round((current / previous) * 100)
+  return pct > 100 ? null : pct
 }
 
 /** Pure: change vs previous window. Only shown when both sides are known and the previous is non-zero. */
