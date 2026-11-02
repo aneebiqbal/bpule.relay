@@ -122,14 +122,19 @@ The RLS harness ran against a scratch database on `main`'s branch, never against
 | Gate | Result |
 |---|---|
 | `npx tsc --noEmit` | **PASS** — 0 errors |
-| `pnpm test` | **PASS** — 314 files / 4600 tests |
+| `pnpm test` | **PASS** — 314 files / 4607 tests |
 | `pnpm build` | **PASS** |
-| `pnpm qa:release` → AUTOMATED_CODE_GATE | **PASS** |
+| `pnpm qa:release` → AUTOMATED_CODE_GATE | see §8a |
 | BROWSER_GATE | NOT_RUN |
 | BUG004_INBOUND_GATE | NOT_RUN |
 | AUTH_ONBOARDING_GATE | NOT_RUN |
 | SHA_GATE | NOT_VERIFIED |
 | PRODUCTION_GATE | BLOCKED |
+
+### 8a. Automated code gate
+
+`LINT` initially failed on a `prefer-const` in the report lead-scope resolver; fixed
+and committed as `52ebc20`.
 
 ## 9. Blockers
 
