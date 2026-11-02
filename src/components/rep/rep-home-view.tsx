@@ -21,8 +21,6 @@ import {
   deriveRepV3MetricInput,
   REP_V3_EMPTY_STATE,
   REP_V3_PRIMARY_CTA,
-  REP_V3_PROFILE_LABEL,
-  buildRepV3ProfileMeta,
   selectRepV3WorkRows,
   type RepV3WorkTab,
 } from '@/lib/rep-home/v3-present'
@@ -62,7 +60,9 @@ export function RepHomeView({ data, role }: { data: RepWorkspaceData; role: 'adm
     [workTab, unified, ranked],
   )
 
-  const identity = buildRepV3ProfileMeta(data.activeWorkspace)
+  const targetTotal = data.targetSummary?.totalTarget ?? 0
+  const targetDone = data.targetSummary?.totalCompleted ?? 0
+  const targetPct = targetTotal > 0 ? Math.round((targetDone / targetTotal) * 100) : 0
 
   return (
     <div className="space-y-8 pb-10">
@@ -70,11 +70,17 @@ export function RepHomeView({ data, role }: { data: RepWorkspaceData; role: 'adm
         title={`Good ${greeting()}, ${data.rep.name.split(' ')[0]}`}
         subtitle="Your workspace for today"
         meta={
-          <div className="flex items-center gap-3">
-            {identity && (
-              <p className="text-[12px] text-stone">
-                {REP_V3_PROFILE_LABEL} <span className="font-medium text-ink">{identity}</span>
-              </p>
+          <div className="flex items-center gap-4">
+            {targetTotal > 0 && (
+              <div className="hidden w-32 sm:block">
+                <div className="flex items-baseline justify-between text-[10px] text-stone">
+                  <span>Daily target</span>
+                  <span className="tabular-nums text-ink">{targetDone}/{targetTotal}</span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-bone">
+                  <div className="h-1 rounded-full bg-orange" style={{ width: `${Math.min(100, targetPct)}%` }} />
+                </div>
+              </div>
             )}
             <span className="hidden lg:inline-flex">
               <ProfileSwitcher role={role} compact />
@@ -101,7 +107,7 @@ export function RepHomeView({ data, role }: { data: RepWorkspaceData; role: 'adm
 
       <section aria-label="Execution metrics" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {metrics.map((metric) => (
-          <V3Metric key={metric.key} label={metric.label} value={metric.value} hint={metric.hint} href={metric.href} />
+          <V3Metric key={metric.key} label={metric.label} value={metric.value} hint={metric.hint} href={metric.href} tone={metric.tone} />
         ))}
       </section>
 

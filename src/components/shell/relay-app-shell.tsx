@@ -6,12 +6,12 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Command, LogOut, Menu, ShieldCheck, X } from 'lucide-react'
 import { cn } from 'cn'
 import { RelayBrand } from '@/components/brand'
-import { IdentityChip } from '@/components/identity-chip'
 import { NotificationCenter } from '@/components/notification-center'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { AppBackButton } from '@/components/app-back-button'
 import { ProfileSwitcher } from '@/components/shell/profile-switcher'
 import { GlobalCreateMenu } from '@/components/shell/global-create-menu'
+import { V3Avatar } from '@/components/v3/primitives'
 import { useCommandPalette } from '@/components/command-palette'
 import {
   detectRelayShellSection,
@@ -23,15 +23,7 @@ import {
 import { APP_VERSION } from '@/lib/version'
 import type { RepRole } from '@/lib/domain/types'
 
-const ROLE_LABEL: Record<RepRole, string> = {
-  admin: 'Admin',
-  rep: 'Rep',
-  sourcer: 'Sourcer',
-  manager: 'Manager',
-}
-
 export interface RelayAppShellProps {
-  repName: string
   organizationName: string
   role: RepRole
   isOwner: boolean
@@ -44,7 +36,6 @@ export interface RelayAppShellProps {
 }
 
 export function RelayAppShell({
-  repName,
   organizationName,
   role,
   isOwner,
@@ -235,10 +226,18 @@ export function RelayAppShell({
 
       <div className="lg:grid lg:grid-cols-[14rem_1fr]">
         <aside className="sticky top-12 hidden h-[calc(100dvh-3rem)] self-start flex-col border-r border-line bg-bone lg:flex">
+          <div className="border-b border-line px-3 py-3">
+            <div className="flex items-center gap-2.5">
+              <V3Avatar name={organizationName} />
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-medium text-ink">{organizationName}</p>
+                <p className="text-[10px] uppercase tracking-[0.14em] text-stone">Workspace</p>
+              </div>
+            </div>
+          </div>
           {renderSidebarNav()}
           <div className="mt-auto space-y-2 border-t border-line px-3 py-3">
             {renderSecondaryNav()}
-            <IdentityChip name={repName} subtitle={`${ROLE_LABEL[role]} · ${organizationName}`} />
             <p className="text-[9px] text-stone/50">v{APP_VERSION}</p>
           </div>
         </aside>

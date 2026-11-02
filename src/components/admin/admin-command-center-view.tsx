@@ -61,7 +61,7 @@ export function AdminCommandCenterView({
         subtitle={data.orgName}
         meta={
           <p className="text-[13px] text-graphite">
-            Good {greeting()}, {adminName.split(' ')[0]}. Here&apos;s what needs attention across Relay.
+            Good <span suppressHydrationWarning>{greeting()}</span>, {adminName.split(' ')[0]}. Here&apos;s what needs attention across Relay.
           </p>
         }
         actions={
@@ -92,7 +92,7 @@ export function AdminCommandCenterView({
 
       <section aria-label="Organization health" className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {health.map((metric) => (
-          <V3Metric key={metric.key} label={metric.label} value={metric.value} hint={metric.hint} href={metric.href} />
+          <V3Metric key={metric.key} label={metric.label} value={metric.value} hint={metric.hint} href={metric.href} tone={metric.tone} />
         ))}
       </section>
 
@@ -139,7 +139,8 @@ export function AdminCommandCenterView({
                 key={row.id}
                 name={row.name}
                 role={row.role}
-                stats={row.stats.slice(0, 5)}
+                stats={row.stats}
+                progress={{ label: 'Target', pct: row.targetPct }}
                 status={row.status}
                 href={row.href}
               />

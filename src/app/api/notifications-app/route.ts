@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { safeErrorResponse } from '@/lib/errors'
 import { getDatabaseCapabilities } from '@/lib/operations/capabilities'
+import { isSchemaNotReady } from '@/lib/operations/db-errors'
 import { toRelayNotification, type NotificationRow } from '@/lib/notifications/model'
 
 /**
@@ -38,7 +39,14 @@ export async function GET(request: Request) {
       .eq('read', false),
   ])
 
-  if (error) return safeErrorResponse(error, 500, 'Failed to load notifications.', 'notifications-app')
+  if (error) {
+    // The table exists in an older shape: report the feature unavailable
+    // instead of a 500 (RELAY_V3_ERROR_SANITIZATION).
+    if (isSchemaNotReady(error)) {
+      return NextResponse.json({ notifications: [], unread: 0, available: false })
+    }
+    return safeErrorResponse(error, 500, 'Failed to load notifications.', 'notifications-app')
+  }
   return NextResponse.json({
     notifications: ((data ?? []) as NotificationRow[]).map(toRelayNotification),
     unread: unreadRes.count ?? 0,

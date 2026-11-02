@@ -30,12 +30,22 @@ export const REP_V3_ACTIVITY_LIMIT = 5
 export type RepV3Priority = 'critical' | 'high' | 'normal'
 export type RepV3WorkTab = 'replies' | 'followups' | 'tasks' | 'pipeline'
 
+export type V3Tone = 'neutral' | 'danger' | 'warning' | 'success'
+
 export interface RepV3Metric {
   key: 'needsAction' | 'replies' | 'followups' | 'tasks'
   label: string
   value: number
   hint: string
   href: string
+  tone: V3Tone
+}
+
+export const REP_V3_METRIC_TONE_TEXT: Record<V3Tone, string> = {
+  neutral: 'text-ink',
+  danger: 'text-status-danger',
+  warning: 'text-status-warning',
+  success: 'text-status-success',
 }
 
 export interface RepV3Action {
@@ -119,6 +129,7 @@ export function buildRepV3Metrics(input: RepV3MetricInput): RepV3Metric[] {
       value: input.actionable,
       hint: input.urgent > 0 ? `${input.urgent} urgent` : 'Ranked for you',
       href: '/dashboard',
+      tone: input.urgent > 0 ? 'danger' : 'neutral',
     },
     {
       key: 'replies',
@@ -131,6 +142,7 @@ export function buildRepV3Metrics(input: RepV3MetricInput): RepV3Metric[] {
             ? `${input.repliesOlderThan4h} older than 4h`
             : 'Answer while fresh',
       href: '/chats',
+      tone: input.repliesOlderThan4h > 0 ? 'warning' : 'neutral',
     },
     {
       key: 'followups',
@@ -143,6 +155,7 @@ export function buildRepV3Metrics(input: RepV3MetricInput): RepV3Metric[] {
             ? `${input.followUpsOverdue} overdue`
             : 'Due today',
       href: '/leads?filter=followup',
+      tone: input.followUpsOverdue > 0 ? 'warning' : 'neutral',
     },
     {
       key: 'tasks',
@@ -150,6 +163,7 @@ export function buildRepV3Metrics(input: RepV3MetricInput): RepV3Metric[] {
       value: input.openTasks,
       hint: input.tasksDueToday > 0 ? `${input.tasksDueToday} due today` : 'Queue clear',
       href: '/tasks',
+      tone: input.tasksDueToday > 0 ? 'warning' : 'neutral',
     },
   ]
 }

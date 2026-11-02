@@ -14,6 +14,15 @@ export function isMissingRelation(error: unknown): boolean {
  */
 export function isSchemaNotReady(error: unknown): boolean {
   if (isMissingRelation(error)) return true
-  const code = (error as { code?: string } | null)?.code
-  return code === '42703' || code === 'PGRST204'
+  return isMissingColumn(error)
+}
+
+/** Postgres 42703 / PGRST204 phrasing, including driver-wrapped messages. */
+export function isMissingColumn(error: unknown): boolean {
+  if (!error) return false
+  const code = (error as { code?: string }).code
+  if (code === '42703' || code === 'PGRST204') return true
+  const message = String((error as { message?: string }).message ?? '')
+  return /column\s+.*(does not exist|does not exist|is not known)/i.test(message)
+    || /undefined column|unknown column/i.test(message)
 }

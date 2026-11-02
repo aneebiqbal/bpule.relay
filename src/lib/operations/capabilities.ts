@@ -16,7 +16,7 @@ import type { DbClient } from '@/lib/db/types'
  *    Capabilities that cannot be introspected through PostgREST (constraint
  *    contents) default to false until the env says otherwise.
  */
-import { isMissingRelation } from '@/lib/operations/db-errors'
+import { isSchemaNotReady } from '@/lib/operations/db-errors'
 
 export const CAPABILITY_KEYS = [
   'assignedTasks',
@@ -75,14 +75,16 @@ let inflight: Promise<DatabaseCapabilities> | null = null
 async function tableExists(client: DbClient, table: string, columns = 'id'): Promise<boolean> {
   let error: { code?: string; message?: string } | null
   try {
-    ;({ error } = await client.from(table).select(columns, { head: true, count: 'exact' }).limit(0))
+    // Select the actual columns (not head/count): a count query never touches
+    // them, so a missing column would pass the probe and fail the real query.
+    ;({ error } = await client.from(table).select(columns).limit(1))
   } catch (err) {
     // A driver that rejects rather than resolving must not take every other
     // capability down with it.
     error = err as { code?: string; message?: string }
   }
   if (!error) return true
-  if (isMissingRelation(error)) return false
+  if (isSchemaNotReady(error)) return false
   // Permission / network errors: do not claim the feature works.
   return false
 }

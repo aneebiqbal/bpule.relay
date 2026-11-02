@@ -17,6 +17,7 @@ export interface AdminV3Metric {
   value: number
   hint: string
   href: string
+  tone: 'neutral' | 'danger' | 'warning' | 'success'
 }
 
 export interface AdminV3AttentionRow {
@@ -33,6 +34,7 @@ export interface AdminV3PersonRow {
   name: string
   role: string | null
   stats: Array<{ label: string; value: number | string }>
+  targetPct: number
   status: string
   href: string
 }
@@ -92,6 +94,7 @@ export function buildAdminV3Health(data: AdminCommandCenterData): AdminV3Metric[
       value: data.health.activeOpportunities,
       hint: 'Non-terminal open leads',
       href: '/leads',
+      tone: 'neutral',
     },
     {
       key: 'replies',
@@ -99,6 +102,7 @@ export function buildAdminV3Health(data: AdminCommandCenterData): AdminV3Metric[
       value: data.health.repliesWaiting,
       hint: data.health.repliesCritical > 0 ? `${data.health.repliesCritical} critical` : 'Org-wide',
       href: '/chats',
+      tone: data.health.repliesCritical > 0 ? 'danger' : data.health.repliesWaiting > 0 ? 'warning' : 'neutral',
     },
     {
       key: 'overdueTasks',
@@ -106,6 +110,7 @@ export function buildAdminV3Health(data: AdminCommandCenterData): AdminV3Metric[
       value: data.health.overdueTasks,
       hint: data.health.overdueTasks > 0 ? 'Past due assigned work' : 'Assigned work clear',
       href: '/tasks?tab=overdue',
+      tone: data.health.overdueTasks > 0 ? 'warning' : 'neutral',
     },
     {
       key: 'meetings',
@@ -113,6 +118,7 @@ export function buildAdminV3Health(data: AdminCommandCenterData): AdminV3Metric[
       value: data.health.meetingsThisWeek,
       hint: 'Canonical outcome events',
       href: '/reports/sales',
+      tone: 'neutral',
     },
     {
       key: 'wins',
@@ -120,6 +126,7 @@ export function buildAdminV3Health(data: AdminCommandCenterData): AdminV3Metric[
       value: data.health.wins,
       hint: 'This week + today',
       href: '/leads?filter=won',
+      tone: data.health.wins > 0 ? 'success' : 'neutral',
     },
   ]
 }
@@ -146,8 +153,8 @@ export function buildAdminV3TeamRows(rows: ReadonlyArray<ManagerTeamRow>): Admin
       { label: 'Follow-ups', value: row.followUpsOverdue },
       { label: 'Priority', value: row.highPriority },
       { label: 'Meetings', value: row.meetings },
-      { label: 'Target', value: `${row.targetPct}%` },
     ],
+    targetPct: row.targetPct,
     status: row.status,
     href: `/team/${row.repId}`,
   }))
