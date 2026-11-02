@@ -47,11 +47,35 @@ for (const user of USERS) {
   })
   page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`.slice(0, 300)))
 
-  // Sign in through the real auth flow.
+  // Sign in through the real auth flow. Fill through the React value tracker so
+  // the submit button actually enables, then click once it is live.
   await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })
-  await page.fill('#login-email', user.email)
-  await page.fill('#login-password', user.password)
-  await Promise.all([page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 60_000 }), page.click('form button[type=submit]')])
+  await page.waitForSelector('#login-email', { timeout: 60_000 })
+  await page.evaluate(
+    ({ email, password }) => {
+      const set = (el, value) => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+        if (el._valueTracker) el._valueTracker.setValue('')
+        setter.call(el, value)
+        el.dispatchEvent(new Event('input', { bubbles: true }))
+        el.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+      set(document.querySelector('#login-email'), email)
+      set(document.querySelector('#login-password'), password)
+    },
+    { email: user.email, password: user.password },
+  )
+  await page.waitForFunction(
+    () => {
+      const btn = document.querySelector('form button[type="submit"]')
+      return btn instanceof HTMLButtonElement && !btn.disabled
+    },
+    { timeout: 60_000 },
+  )
+  await Promise.all([
+    page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 60_000 }),
+    page.evaluate(() => document.querySelector('form button[type="submit"]').click()),
+  ])
   await page.waitForLoadState('networkidle').catch(() => {})
 
   for (const vp of VIEWPORTS) {
