@@ -1,11 +1,11 @@
 import { getCurrentUser } from '@/lib/auth/current'
 import { loadLeadsPage } from '@/lib/leads/leads-page'
-import { loadBoardData } from '@/lib/leads/board-rows'
+import { loadBoardPreview } from '@/lib/leads/board-rows'
 import { isPipelineView, parseLeadsQuery } from '@/components/leads/pipeline-utils'
 import { LeadsTable } from '@/components/leads/leads-table'
 import { LeadsViewToggle } from '@/components/leads/leads-view-toggle'
 import { LeadsBoardV2 } from '@/components/leads/leads-board-v2'
-import { PageHeader } from '@/components/ui/page-header'
+import { SalesHeader } from '@/components/sales/sales-header'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,17 +23,16 @@ export default async function LeadsPage({
   const query = parseLeadsQuery(params)
 
   if (isPipelineView(query.view)) {
-    let board: Awaited<ReturnType<typeof loadBoardData>>
+    let board: Awaited<ReturnType<typeof loadBoardPreview>>
     try {
-      board = await loadBoardData()
+      board = await loadBoardPreview()
     } catch (err) {
       return (
         <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6">
-          <PageHeader
-            eyebrow="Sales"
+          <SalesHeader
             title="Pipeline"
             description="The same leads grouped by their canonical stage."
-            savedView={<LeadsViewToggle view="pipeline" query={query} />}
+            meta={<LeadsViewToggle view="pipeline" query={query} />}
           />
           <p role="alert" className="mt-4 rounded-lg border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-[13px] text-status-danger">
             {err instanceof Error ? err.message : 'The pipeline could not be loaded.'}
@@ -44,18 +43,19 @@ export default async function LeadsPage({
 
     return (
       <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6">
-        <PageHeader
-          eyebrow="Sales"
+        <SalesHeader
           title="Pipeline"
+          count={board.total}
+          countLabel="leads"
           description={
             board.orgView
               ? 'Every active lead in the organisation, grouped by its canonical stage.'
               : 'Every active lead for the selected profile, grouped by its canonical stage.'
           }
-          savedView={<LeadsViewToggle view="pipeline" query={query} />}
+          meta={<LeadsViewToggle view="pipeline" query={query} />}
         />
         <div className="mt-5">
-          <LeadsBoardV2 leads={board.leads} />
+          <LeadsBoardV2 leads={board.cards} counts={board.counts} total={board.total} />
         </div>
       </div>
     )
@@ -70,11 +70,10 @@ export default async function LeadsPage({
   } catch (err) {
     return (
       <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6">
-        <PageHeader
-          eyebrow="Sales"
+        <SalesHeader
           title="Leads"
           description="Every active opportunity for the selected profile."
-          savedView={<LeadsViewToggle view="table" query={query} />}
+          meta={<LeadsViewToggle view="table" query={query} />}
         />
         <p role="alert" className="mt-4 rounded-lg border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-[13px] text-status-danger">
           {err instanceof Error ? err.message : 'Leads could not be loaded.'}
@@ -82,6 +81,8 @@ export default async function LeadsPage({
       </div>
     )
   }
+
+  const now = Date.now()
 
   return (
     <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6">
@@ -96,7 +97,7 @@ export default async function LeadsPage({
         currentRepId={currentRepId}
         reps={data.reps}
         query={query}
-        now={Date.now()}
+        now={now}
         viewToggle={<LeadsViewToggle view="table" query={query} />}
       />
     </div>

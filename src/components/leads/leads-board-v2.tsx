@@ -118,7 +118,16 @@ function smartSort(leads: LeadRow[]): LeadRow[] {
 }
 
 /* ─── component ─── */
-export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
+export function LeadsBoardV2({
+  leads,
+  counts,
+  total,
+}: {
+  leads: LeadRow[]
+  /** Server-side stage counts over the full set — never a client truncation. */
+  counts: Record<PipelineStage, number>
+  total: number
+}) {
   const [filter, setFilter] = useState<PipelineStage | 'all'>('all')
   const [search, setSearch] = useState('')
   const [collapsed, setCollapsed] = useState<Set<PipelineStage>>(new Set(['done', 'cold']))
@@ -157,12 +166,12 @@ export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
   }, [displayed])
 
   const stats = useMemo(() => ({
-    total: leads.length,
-    to_contact: leads.filter((l) => derivePipelineStage(l) === 'to_contact').length,
-    needs_reply: leads.filter((l) => derivePipelineStage(l) === 'needs_reply').length,
-    follow_up_due: leads.filter((l) => derivePipelineStage(l) === 'follow_up_due').length,
+    total,
+    to_contact: counts.to_contact ?? 0,
+    needs_reply: counts.needs_reply ?? 0,
+    follow_up_due: counts.follow_up_due ?? 0,
     archivingSoon: leads.filter((l) => (archivalCountdown(l) ?? 99) <= 7).length,
-  }), [leads])
+  }), [leads, counts, total])
 
   const toggleCollapse = (stage: PipelineStage) => {
     setCollapsed((prev) => {
@@ -217,6 +226,10 @@ export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
 
       {/* Groups */}
       <div className="space-y-4">
+        <p className="text-[12px] text-graphite">
+          Showing the {Math.min(leads.length, total)} highest-priority cards of {total} leads.
+          Counts above cover the full set.
+        </p>
         <AnimatePresence mode="popLayout">
           {activeStages.map((stage) => {
             const leadsInStage = grouped[stage]
@@ -245,7 +258,7 @@ export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-ink">{meta.label}</span>
                         <span className="rounded-full bg-line/60 px-1.5 py-0.5 text-[10px] font-medium text-stone">
-                          {leadsInStage.length}
+                          {counts[stage] ?? 0}
                         </span>
                       </div>
                       <p className="text-[11px] text-stone/60">{meta.description}</p>

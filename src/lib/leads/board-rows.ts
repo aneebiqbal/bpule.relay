@@ -9,7 +9,8 @@ import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { isProductAdmin } from '@/lib/auth/admin-page'
 import { computeLifecycleState } from '@/lib/leads/lifecycle-policy'
-import type { LeadRow } from '@/components/leads/pipeline-utils'
+import type { LeadRow, PipelineStage } from '@/components/leads/pipeline-utils'
+import { derivePipelineStage } from '@/components/leads/pipeline-utils'
 import type { Lead, MessageType } from '@/lib/domain/types'
 import type { ActivityEvent } from '@/lib/analytics/pipeline-analytics'
 import { leadBelongsToWorkspace, type WorkspaceIdentity } from '@/lib/workspace/active-identity'
@@ -17,6 +18,9 @@ import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 
 export type { ActivityEvent }
+
+/** Cards sent to the client on first paint. Counts cover the full set. */
+export const BOARD_CARD_LIMIT = 150
 
 /**
  * The one rule that decides which leads a board shows.
@@ -39,6 +43,52 @@ export interface BoardData {
   events: ActivityEvent[]
   reps: Array<{ id: string; name: string }>
   workspace: WorkspaceIdentity | null
+}
+
+/**
+ * Bounded pipeline payload.
+ *
+ * The board must not transfer the organisation's whole lead set on first paint.
+ * Counts are computed server-side over the full set; only the highest-priority
+ * `cardLimit` cards are returned. Counts and cards therefore never disagree —
+ * the card list is a declared subset, and the UI says so.
+ */
+export interface BoardPreview {
+  cards: LeadRow[]
+  counts: Record<PipelineStage, number>
+  total: number
+  orgView: boolean
+  workspace: WorkspaceIdentity | null
+}
+
+const CARD_ORDER: Record<PipelineStage, number> = {
+  needs_reply: 0,
+  follow_up_due: 1,
+  to_contact: 2,
+  observe: 3,
+  waiting: 4,
+  cold: 5,
+  done: 6,
+}
+
+export async function loadBoardPreview(cardLimit = BOARD_CARD_LIMIT): Promise<BoardPreview> {
+  const data = await loadBoardData()
+
+  const counts = {} as Record<PipelineStage, number>
+  for (const stage of Object.keys(CARD_ORDER) as PipelineStage[]) counts[stage] = 0
+  for (const lead of data.leads) counts[derivePipelineStage(lead)] += 1
+
+  const cards = [...data.leads]
+    .sort((a, b) => {
+      const byStage = CARD_ORDER[derivePipelineStage(a)] - CARD_ORDER[derivePipelineStage(b)]
+      if (byStage !== 0) return byStage
+      const aAt = a.lastActivityAt ?? a.createdAt
+      const bAt = b.lastActivityAt ?? b.createdAt
+      return new Date(bAt).getTime() - new Date(aAt).getTime()
+    })
+    .slice(0, cardLimit)
+
+  return { cards, counts, total: data.leads.length, orgView: data.orgView, workspace: data.workspace }
 }
 
 export interface EnrichContext {

@@ -3,8 +3,8 @@
 import { useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Inbox, Plus, Sparkles } from 'lucide-react'
-import { PageHeader } from '@/components/ui/page-header'
+import { Inbox, Plus } from 'lucide-react'
+import { SalesHeader } from '@/components/sales/sales-header'
 import { DataTable, type Column } from '@/components/ui/data-table'
 import { Tabs } from '@/components/ui/tabs'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -280,20 +280,10 @@ export function ProspectsWorkspace({
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        eyebrow="Sales"
+      <SalesHeader
         title="Prospects"
         description={description}
-        action={
-          <Link
-            href="/prospect"
-            className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark active:scale-[0.98]"
-          >
-            <Sparkles className="size-4" aria-hidden="true" />
-            Analyze
-          </Link>
-        }
-        savedView={
+        meta={
           <Tabs
             items={[
               { value: 'analyze', label: 'Analyze', hint: 'Check whether a prospect is worth your next outreach.' },

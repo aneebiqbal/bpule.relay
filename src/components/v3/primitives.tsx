@@ -12,13 +12,14 @@ import Link from 'next/link'
 import { ChevronRight, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react'
 import { cn } from 'cn'
 
-export type V3Priority = 'critical' | 'high' | 'normal'
+export type V3Priority = 'critical' | 'high' | 'normal' | 'watch'
 export type V3Tone = 'neutral' | 'danger' | 'warning' | 'success'
 
 const PRIORITY_DOT: Record<V3Priority | 'attention', string> = {
   critical: 'bg-status-danger',
   high: 'bg-status-warning',
   attention: 'bg-status-warning',
+  watch: 'bg-status-info',
   normal: 'bg-stone/40',
 }
 
@@ -26,6 +27,7 @@ const PRIORITY_TEXT: Record<V3Priority | 'attention', string> = {
   critical: 'text-status-danger',
   high: 'text-status-warning',
   attention: 'text-status-warning',
+  watch: 'text-status-info',
   normal: 'text-graphite',
 }
 
@@ -33,6 +35,7 @@ const PRIORITY_ACCENT: Record<string, string> = {
   critical: 'border-l-status-danger',
   high: 'border-l-status-warning',
   attention: 'border-l-status-warning',
+  watch: 'border-l-status-info',
   normal: 'border-l-transparent',
 }
 

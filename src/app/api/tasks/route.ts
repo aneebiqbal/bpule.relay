@@ -18,6 +18,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const includeCompleted = url.searchParams.get('includeCompleted') === '1'
   const assigneeRepId = url.searchParams.get('assignee') ?? undefined
+  const leadId = url.searchParams.get('leadId') ?? undefined
 
   const store = await createScoutStore()
   const client = store.getSupabaseClient()
@@ -26,6 +27,7 @@ export async function GET(request: Request) {
     const rows = await listAssignedTaskRows(client, auth, {
       includeCompleted,
       assigneeRepId,
+      leadId,
     })
     const tasks = rows.map((r) => toUnifiedTaskFromAssigned(r))
     return NextResponse.json({ tasks })

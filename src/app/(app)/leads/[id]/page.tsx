@@ -20,7 +20,10 @@ async function loadLeadData(id: string) {
   ])
   if (!lead) notFound()
 
-  return { lead, profiles, dailyLimit: queue.dailyLimit, todaySends: queue.todaySends }
+  // Owner attribution for the context panel — a name, never a raw uuid.
+  const owner = lead.ownerRepId ? await store.getRepInfo(lead.ownerRepId).catch(() => null) : null
+
+  return { lead, profiles, dailyLimit: queue.dailyLimit, todaySends: queue.todaySends, ownerName: owner?.name ?? null }
 }
 
 export default function LeadPage({ params }: LeadPageProps) {
@@ -28,7 +31,7 @@ export default function LeadPage({ params }: LeadPageProps) {
 
   return (
     <Suspense fallback={<LeadShellSkeleton />}>
-      <LeadWorkspaceAsync dataPromise={dataPromise} />
+      <LeadWorkspaceAsync dataPromise={dataPromise} now={Date.now()} />
     </Suspense>
   )
 }

@@ -313,6 +313,7 @@ export function filterLeads(leads: LeadRow[], search: string): LeadRow[] {
     const hay = [
       lead.company,
       lead.contactName ?? '',
+      lead.contactTitle ?? '',
       lead.signalEvidence ?? '',
       lead.companyKey,
       lead.senderProfileName ?? '',

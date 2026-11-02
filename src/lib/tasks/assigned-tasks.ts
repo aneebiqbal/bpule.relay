@@ -79,7 +79,7 @@ export async function resolveTaskAssigneeScope(
 export async function listAssignedTaskRows(
   client: DbClient,
   auth: AuthContext,
-  opts?: { includeCompleted?: boolean; assigneeRepId?: string },
+  opts?: { includeCompleted?: boolean; assigneeRepId?: string; leadId?: string },
 ): Promise<AssignedTaskRow[]> {
   let query = client
     .from('assigned_tasks')
@@ -90,6 +90,10 @@ export async function listAssignedTaskRows(
 
   if (!opts?.includeCompleted) {
     query = query.in('status', ['OPEN', 'IN_PROGRESS'])
+  }
+
+  if (opts?.leadId) {
+    query = query.eq('lead_id', opts.leadId)
   }
 
   const scope = await resolveTaskAssigneeScope(client, auth)

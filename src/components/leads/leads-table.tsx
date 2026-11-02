@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from 'cn'
-import { PageHeader } from '@/components/ui/page-header'
+import { SalesHeader } from '@/components/sales/sales-header'
 import { FilterBar } from '@/components/ui/filter-bar'
 import { DataTable, type Column, type SortState } from '@/components/ui/data-table'
 import { Tabs } from '@/components/ui/tabs'
@@ -26,7 +26,9 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import { LeadScoreRing } from '@/components/score-ring'
+import { V3Avatar } from '@/components/v3/primitives'
 import { Input } from '@/components/ui/input'
+import { LeadPreviewDrawer } from '@/components/sales/lead-preview-drawer'
 import { formatRoleLine } from '@/lib/leads/role-line'
 import { formatRelativeTime } from '@/lib/ui/time'
 import {
@@ -98,6 +100,47 @@ export function PriorityBadge({ priority }: { priority: LeadPriority }) {
   return (
     <StatusBadge status={LEAD_PRIORITY_LABELS[priority]} variant={PRIORITY_VARIANT[priority]} />
   )
+}
+
+/**
+ * Restrained stage label — text plus a quiet indicator, never a giant pill.
+ * Used by the dense table; the mobile card keeps the badge form.
+ */
+export function StageText({ stage }: { stage: PipelineStage }) {
+  const dot = STAGE_DOT[stage]
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[13px] text-ink">
+      <span className={cn('size-1.5 shrink-0 rounded-full', dot)} aria-hidden />
+      {STAGE_LABELS[stage]}
+    </span>
+  )
+}
+
+const STAGE_DOT: Record<PipelineStage, string> = {
+  to_contact: 'bg-stone',
+  observe: 'bg-status-warning',
+  waiting: 'bg-cobalt',
+  follow_up_due: 'bg-orange',
+  needs_reply: 'bg-orange',
+  done: 'bg-status-success',
+  cold: 'bg-status-warning',
+}
+
+export function PriorityText({ priority }: { priority: LeadPriority }) {
+  const tone = PRIORITY_TEXT_TONE[priority]
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[13px] text-ink">
+      <span className={cn('size-1.5 shrink-0 rounded-full', tone)} aria-hidden />
+      {LEAD_PRIORITY_LABELS[priority]}
+    </span>
+  )
+}
+
+const PRIORITY_TEXT_TONE: Record<LeadPriority, string> = {
+  critical: 'bg-status-danger',
+  high: 'bg-status-warning',
+  normal: 'bg-stone',
+  watch: 'bg-status-info',
 }
 
 export function IntentBadge({ lead }: { lead: LeadRow }) {
@@ -380,6 +423,7 @@ export function LeadsTable({
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [taskLeads, setTaskLeads] = useState<LeadRow[] | null>(null)
+  const [previewLeadId, setPreviewLeadId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const view = isLeadsViewId(query.view) ? query.view : 'all'
@@ -455,22 +499,23 @@ export function LeadsTable({
     const base: Column<LeadRow>[] = [
       {
         key: 'lead',
-        header: 'Lead',
+        header: 'Person',
         sortKey: 'name',
         render: (lead) => (
-          <div className="min-w-0">
-            <Link
-              href={`/leads/${lead.id}`}
-              onClick={(event) => event.stopPropagation()}
-              className="block truncate text-[13px] font-medium text-ink transition-colors hover:text-orange"
-            >
-              {lead.contactName ?? 'Unnamed prospect'}
-            </Link>
-            {lead.contactTitle ? (
+          <div className="flex min-w-0 items-center gap-2.5">
+            <V3Avatar name={lead.contactName ?? lead.company ?? '?'} size="sm" />
+            <div className="min-w-0">
+              <Link
+                href={`/leads/${lead.id}`}
+                onClick={(event) => event.stopPropagation()}
+                className="block truncate text-[13px] font-medium text-ink transition-colors hover:text-orange"
+              >
+                {lead.contactName ?? 'Unnamed prospect'}
+              </Link>
               <p className="truncate text-[11px] text-graphite">
-                {formatRoleLine(lead.contactTitle, null)}
+                {[formatRoleLine(lead.contactTitle, null), lead.company].filter(Boolean).join(' · ') || '—'}
               </p>
-            ) : null}
+            </div>
           </div>
         ),
       },
@@ -492,13 +537,13 @@ export function LeadsTable({
       {
         key: 'stage',
         header: 'Stage',
-        render: (lead) => <StageBadge stage={derivePipelineStage(lead)} />,
+        render: (lead) => <StageText stage={derivePipelineStage(lead)} />,
       },
       {
         key: 'priority',
         header: 'Priority',
         hideBelow: 'lg',
-        render: (lead) => <PriorityBadge priority={leadPriority(lead)} />,
+        render: (lead) => <PriorityText priority={leadPriority(lead)} />,
       },
       {
         key: 'score',
@@ -578,30 +623,30 @@ export function LeadsTable({
 
   const renderCard = useCallback(
     (lead: LeadRow) => (
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-medium text-ink">
-              {lead.contactName ?? 'Unnamed prospect'}
-            </p>
-            <p className="truncate text-[11px] text-graphite">{lead.company}</p>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <V3Avatar name={lead.contactName ?? lead.company ?? '?'} size="sm" />
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-medium text-ink">
+                {lead.contactName ?? 'Unnamed prospect'}
+              </p>
+              <p className="truncate text-[11px] text-graphite">
+                {[formatRoleLine(lead.contactTitle, null), lead.company].filter(Boolean).join(' · ') || '—'}
+              </p>
+            </div>
           </div>
-          <LeadScoreRing lead={lead} size={32} />
+          {typeof lead.score === 'number' ? (
+            <span className="shrink-0 text-[13px] tabular-nums text-ink">{lead.score}/10</span>
+          ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <StageBadge stage={derivePipelineStage(lead)} />
-          <PriorityBadge priority={leadPriority(lead)} />
-          <IntentBadge lead={lead} />
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <StageText stage={derivePipelineStage(lead)} />
+          <PriorityText priority={leadPriority(lead)} />
         </div>
         <div className="flex items-center justify-between gap-3">
           <NextActionCell lead={lead} />
-          <LeadRowMenu
-            lead={lead}
-            orgView={orgView}
-            onAssignTask={(row) => setTaskLeads([row])}
-            onArchive={(row) => void runAction(row.id, `/api/leads/${row.id}/archive`, { action: 'archive' })}
-            onOutcome={(row, outcome) => void runAction(row.id, `/api/leads/${row.id}/outcome`, { outcome })}
-          />
+          <ProfileCell lead={lead} />
         </div>
       </div>
     ),
@@ -680,8 +725,7 @@ export function LeadsTable({
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        eyebrow="Sales"
+      <SalesHeader
         title="Leads"
         description={
           orgView
@@ -689,15 +733,6 @@ export function LeadsTable({
             : workspaceName
               ? `Every active opportunity for ${workspaceName} — ${total} shown. Switch workspace to change the set.`
               : `Every active opportunity for the selected profile — ${total} shown.`
-        }
-        action={
-          <Link
-            href="/leads/new"
-            className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark active:scale-[0.98]"
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            Add lead
-          </Link>
         }
         filters={
           <FilterBar
@@ -762,7 +797,7 @@ export function LeadsTable({
             </div>
           </FilterBar>
         }
-        savedView={
+        meta={
           <div className="flex flex-wrap items-center gap-3">
             {viewToggle}
             <Tabs
@@ -814,13 +849,20 @@ export function LeadsTable({
         }
         empty={empty}
         renderCard={renderCard}
-        onRowClick={(lead) => router.push(`/leads/${lead.id}`)}
+        onRowClick={(lead) => setPreviewLeadId(lead.id)}
         footer={footer}
       />
 
       {taskLeads ? (
         <AssignTaskDialog leads={taskLeads} currentRepId={currentRepId} onClose={() => setTaskLeads(null)} />
       ) : null}
+
+      <LeadPreviewDrawer
+        leadId={previewLeadId}
+        open={previewLeadId !== null}
+        onClose={() => setPreviewLeadId(null)}
+        now={now}
+      />
     </div>
   )
 }
