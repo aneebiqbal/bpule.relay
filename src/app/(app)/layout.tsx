@@ -11,6 +11,7 @@ import { AppIdentifyWrapper } from "@/components/app-identify-wrapper";
 import { AnalyticsProvider } from "@/components/analytics-provider";
 import { ActiveIdentityProvider } from "@/components/workspace/active-identity-provider";
 import { ACTIVE_IDENTITY_COOKIE, isIdentityId, type WorkspaceIdentity } from "@/lib/workspace/active-identity";
+import { loadSidebarCounts, type SidebarCounts } from "@/lib/operations/sidebar-counts";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export default async function AppLayout({
     getAuthContext().catch(() => null),
   ])
 
-  const [queue, revenueIdentities] = await Promise.all([
+  const [queue, revenueIdentities, sidebarCounts] = await Promise.all([
     store.getQueue(),
     (async (): Promise<WorkspaceIdentity[]> => {
       try {
@@ -63,7 +64,20 @@ export default async function AppLayout({
         return [];
       }
     })(),
-  ])
+    (async (): Promise<SidebarCounts> => {
+      if (isDemoMode()) return { inboxNeedsReply: null, actionableTasks: null }
+      try {
+        return await loadSidebarCounts(store.getSupabaseClient(), {
+          orgId: user.organization.id,
+          repId: user.rep.id,
+          timeZone: user.organization.timezone ?? "UTC",
+        });
+      } catch {
+        // Badges are optional chrome: never block the shell on them.
+        return { inboxNeedsReply: null, actionableTasks: null };
+      }
+    })(),
+  ]);
 
   const cookieStore = await cookies();
   const savedIdentityId = cookieStore.get(ACTIVE_IDENTITY_COOKIE)?.value ?? null;
@@ -90,6 +104,7 @@ export default async function AppLayout({
             demo={isDemoMode()}
             todaySends={queue.todaySends}
             dailyLimit={queue.dailyLimit}
+            sidebarCounts={sidebarCounts}
           >
             {children}
           </RelayAppShell>

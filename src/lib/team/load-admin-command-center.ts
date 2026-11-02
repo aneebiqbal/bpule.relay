@@ -20,6 +20,7 @@ import {
 import { loadOutcomeEventCounts } from '@/lib/operations/outcome-events'
 import { groupMetrics, identityResolver, PERFORMANCE_ACTION_TYPES, type PerfEvent } from '@/lib/operations/performance'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
+import { perfTrace } from '@/lib/perf-trace'
 
 const MEANINGFUL_ACTIONS = [
   'REPLY_SENT',
@@ -87,7 +88,7 @@ export async function loadAdminCommandCenter(): Promise<{
   data: AdminCommandCenterData
   error?: boolean
 }> {
-  const [ctx, user] = await Promise.all([getAuthContext(), getCurrentUser()])
+  const [ctx, user] = await perfTrace('admin:auth', () => Promise.all([getAuthContext(), getCurrentUser()]))
   const orgName = user?.organization.name ?? 'Organization'
   const isOwner = Boolean(ctx?.isOwner)
 
@@ -96,8 +97,8 @@ export async function loadAdminCommandCenter(): Promise<{
   }
 
   try {
-    const supabase = await createServerSupabase()
-    const policy = await loadOperatingPolicy(ctx.orgId)
+    const supabase = await perfTrace('admin:createClient', () => createServerSupabase())
+    const policy = await perfTrace('admin:operatingPolicy', () => loadOperatingPolicy(ctx.orgId))
     const now = currentInstant()
     const businessDate = orgDate(now, policy.timezone)
     const dayRange = businessDateRange(businessDate, policy.timezone)
@@ -105,7 +106,7 @@ export async function loadAdminCommandCenter(): Promise<{
     weekStart.setUTCDate(weekStart.getUTCDate() - 7)
 
     const [teamDay, teamLiveFull, leadsResult, identitiesResult, assignmentsResult, profileEventsResult, activityResult, repsResult, overdueTasksByRep, unassignedTasks, todayOutcomes, weekOutcomes] =
-      await Promise.all([
+      await perfTrace('admin:main-batch', () => Promise.all([
         loadTeamDay(),
         loadTeamLive(ctx.orgId),
         supabase
@@ -150,7 +151,7 @@ export async function loadAdminCommandCenter(): Promise<{
         countUnassignedOpenTasks(supabase, ctx.orgId),
         loadOutcomeEventCounts(supabase, { orgId: ctx.orgId, repIds: null, start: dayRange.start, end: dayRange.end }),
         loadOutcomeEventCounts(supabase, { orgId: ctx.orgId, repIds: null, start: weekStart.toISOString(), end: dayRange.end }),
-      ])
+      ]))
 
     const allowed = new Set(teamDay.reps.map((r) => r.repId))
     const teamLive = filterTeamLiveToRepIds(teamLiveFull, allowed)

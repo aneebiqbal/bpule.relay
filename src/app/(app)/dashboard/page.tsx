@@ -31,18 +31,19 @@ import { loadTimeline } from '@/lib/operations/activity'
 import type { OpenLeadFact } from '@/lib/team/admin-command-summary'
 import { businessDateRange, currentInstant, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { perfTrace } from '@/lib/perf-trace'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TodayPage() {
-  const user = await getCurrentUser()
+  const user = await perfTrace('auth:getCurrentUser', () => getCurrentUser())
   if (!user) redirect('/login')
-  const authCtx = await getAuthContext()
+  const authCtx = await perfTrace('auth:getAuthContext', () => getAuthContext())
   if (!authCtx) redirect('/login')
 
   if (authCtx.isOwner || authCtx.isAdmin) {
     // Org Command Center — no analytics fan-out on first paint (Reports owns charts).
-    const adminResult = await loadAdminCommandCenter()
+    const adminResult = await perfTrace('admin:loadAdminCommandCenter', () => loadAdminCommandCenter())
     return (
       <Suspense fallback={<DashboardShellSkeleton />}>
         <AdminCommandCenterView
@@ -89,21 +90,29 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     throw new Error('Not signed in')
   }
 
-  const store = await createScoutStore()
+  const store = await perfTrace('rep:createScoutStore', () => createScoutStore())
+  // Read-only composition: collapse the repeated lead-list reads described below.
+  store.beginReadOnlySnapshot()
 
   const { getDailyWorkspace } = await import('@/lib/auth/workspace')
-  const [workspace, activeWorkspace] = await Promise.all([
-    getDailyWorkspace(),
-    resolveActiveWorkspace(),
+  // Workspace resolution and the dashboard batch are independent; running them
+  // serially added the full workspace cost on top of the batch every request.
+  // `getDailyWorkspace` is request-cached, so `loadRepDay` still shares it.
+  const [workspaceResult, dashboardResult] = await Promise.all([
+    perfTrace('rep:workspace', () => Promise.all([
+      perfTrace('rep:getDailyWorkspace', () => getDailyWorkspace()),
+      perfTrace('rep:resolveActiveWorkspace', () => resolveActiveWorkspace()),
+    ])),
+    perfTrace('rep:dashboard-batch', () => Promise.all([
+      perfTrace('rep:getTodayDashboard', () => store.getTodayDashboard()),
+      perfTrace('rep:getRelayQueueData', () => store.getRelayQueueData()),
+      // The canonical rep day. `getDailyWorkspace` is request-cached, so this
+      // shares the same identities/targets/accountability load as `workspace`.
+      perfTrace('rep:loadRepDay', () => import('@/lib/rep-day/load').then((m) => m.loadRepDay())),
+    ])),
   ])
-
-  const [dash, relayData, repDay] = await Promise.all([
-    store.getTodayDashboard(),
-    store.getRelayQueueData(),
-    // The canonical rep day. `getDailyWorkspace` is request-cached, so this
-    // shares the same identities/targets/accountability load as `workspace`.
-    import('@/lib/rep-day/load').then((m) => m.loadRepDay()),
-  ])
+  const [workspace, activeWorkspace] = workspaceResult
+  const [dash, relayData, repDay] = dashboardResult
 
   const scopedLeads = filterLeadsByWorkspace(dash.mine?.queue ?? [], activeWorkspace)
   const scopedFollowups = dash.followupsDue.filter((row) =>
@@ -123,14 +132,14 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     assignedProfiles: relayData.assignedProfiles,
     allReps: undefined,
     allLeads: [],
-    suppressedLeadIds: await store.getSuppressedLeadIds(),
+    suppressedLeadIds: await perfTrace('rep:suppressedLeadIds', () => store.getSuppressedLeadIds()),
   })
 
   const { filterQueueByRole } = await import('@/lib/relay/queue-engine')
   const visibleTasks = filterQueueByRole(queue, roleContext.role)
 
-  const profilesPulled = await countProfilesPulled(user.organization.id, user.rep.id)
-  const [referredLeads, recentLeads, allUpworkJobs, activityRows] = await Promise.all([
+  const profilesPulled = await perfTrace('rep:countProfilesPulled', () => countProfilesPulled(user.organization.id, user.rep.id))
+  const [referredLeads, recentLeads, allUpworkJobs, activityRows] = await perfTrace('rep:secondary-batch', () => Promise.all([
     store.getReferredLeads(user.rep.id),
     store.getRecentLeads(user.rep.id, 5),
     store.listUpworkJobs().catch(() => []),
@@ -147,7 +156,7 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
         return []
       }
     })(),
-  ])
+  ]))
   const upworkJobs = allUpworkJobs
     .filter((j) => j.verdict === 'apply' && j.status !== 'applied')
     .slice(0, 3)
@@ -239,22 +248,22 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   const actions = allActions.slice(0, 10)
   const todayCounts = deriveTodayCounts(allActions)
 
-  const authCtx = await getAuthContext()
+  const authCtx = await perfTrace('rep:getAuthContext', () => getAuthContext())
   let unifiedTasks: import('@/lib/tasks/types').UnifiedTask[] = []
   if (authCtx) {
     const { loadUnifiedTasks } = await import('@/lib/tasks/load-unified-tasks')
-    unifiedTasks = await loadUnifiedTasks({
+    unifiedTasks = await perfTrace('rep:unifiedTasks', () => loadUnifiedTasks({
       auth: authCtx,
       derivedActions: allActions,
       forRepId: user.rep.id,
       includeCompleted: false,
-    })
+    }))
   }
 
   // Canonical meetings / wins today (src/lib/sales/meetings.ts) — same events
   // Manager Home, Admin Home, Rep 360 and Team Performance count.
   const outcomeEvents = user.organization?.id
-    ? await countOutcomeEventsToday(user.organization.id, user.rep.id)
+    ? await perfTrace('rep:outcomeEventsToday', () => countOutcomeEventsToday(user.organization.id, user.rep.id))
     : null
 
   // Log recommendations for observability (non-blocking)

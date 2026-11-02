@@ -487,6 +487,19 @@ export class SupabaseStore implements ScoutStore {
   private _rulebookCache: OrganizationRulebook | null | undefined = undefined
   private _orgSettingsCache: Record<string, unknown> | undefined = undefined
 
+  /**
+   * Read-only page composition (dashboards) reuses fetched lead rows within the
+   * request. Write paths never enable this, so dedup and import flows still see
+   * every row they insert.
+   */
+  private _snapshotMode = false
+  private _ownedLeadsSnapshot: Lead[] | undefined
+  private _allLeadsSnapshot: Lead[] | undefined
+
+  beginReadOnlySnapshot(): void {
+    this._snapshotMode = true
+  }
+
   async getRulebook(): Promise<OrganizationRulebook | null> {
     if (this._rulebookCache !== undefined) return this._rulebookCache
     this._rulebookCache = await loadRulebook(this.client, this.orgId)
@@ -553,6 +566,9 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async fetchLeadsAll(scopeToUser = false, includeArchived = false): Promise<Lead[]> {
+    const cacheable = this._snapshotMode && !scopeToUser && !includeArchived
+    if (cacheable && this._allLeadsSnapshot) return this._allLeadsSnapshot
+
     let query = this.client
       .from('leads')
       .select(LEAD_LIST_COLUMNS)
@@ -576,7 +592,9 @@ export class SupabaseStore implements ScoutStore {
 
     const { data, error } = await query
     if (error) throw error
-    return (data ?? []).map(mapLead)
+    const rows = (data ?? []).map(mapLead)
+    if (cacheable) this._allLeadsSnapshot = rows
+    return rows
   }
 
   private async countTodaysSends(type?: string): Promise<number> {
@@ -1175,6 +1193,9 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async listOwnedLeads(includeArchived = false): Promise<Lead[]> {
+    const cacheable = this._snapshotMode && !includeArchived
+    if (cacheable && this._ownedLeadsSnapshot) return this._ownedLeadsSnapshot
+
     let query = this.client
       .from('leads')
       .select(LEAD_LIST_COLUMNS)
@@ -1185,7 +1206,9 @@ export class SupabaseStore implements ScoutStore {
     }
     const { data, error } = await query
     if (error) throw error
-    return (data ?? []).map(mapLead)
+    const rows = (data ?? []).map(mapLead)
+    if (cacheable) this._ownedLeadsSnapshot = rows
+    return rows
   }
 
   async listLeadsPage(input: LeadsPageInput = {}): Promise<LeadsPageResult> {

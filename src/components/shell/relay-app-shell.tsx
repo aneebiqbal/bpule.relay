@@ -21,6 +21,7 @@ import {
   type RelayNavRoleFlags,
 } from '@/lib/navigation/relay-shell-nav'
 import { APP_VERSION } from '@/lib/version'
+import { sidebarBadge, type SidebarCounts } from '@/lib/operations/sidebar-counts'
 import type { RepRole } from '@/lib/domain/types'
 
 export interface RelayAppShellProps {
@@ -32,6 +33,7 @@ export interface RelayAppShellProps {
   demo: boolean
   todaySends: number
   dailyLimit: number
+  sidebarCounts?: SidebarCounts
   children: React.ReactNode
 }
 
@@ -44,6 +46,7 @@ export function RelayAppShell({
   demo,
   todaySends,
   dailyLimit,
+  sidebarCounts,
   children,
 }: RelayAppShellProps) {
   const pathname = usePathname()
@@ -134,18 +137,37 @@ export function RelayAppShell({
       <nav className="flex flex-col gap-0.5 px-3 py-4" aria-label="Sidebar">
         {sidebarBase.map((item) => {
           const active = activeSidebarId === item.id
+          const badge = sidebarBadge(
+            item.id === 'conversations'
+              ? sidebarCounts?.inboxNeedsReply
+              : item.id === 'tasks'
+                ? sidebarCounts?.actionableTasks
+                : null,
+          )
           return (
             <Link
               key={item.id}
               href={item.href}
               onClick={onNavigate}
               aria-current={active ? 'page' : undefined}
+              aria-label={badge ? `${item.label}, ${badge.value} needing attention` : undefined}
               className={cn(
-                'rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors',
+                'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors',
                 active ? 'bg-solid text-on-solid' : 'text-graphite hover:bg-bone-raised hover:text-ink',
               )}
             >
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {badge && (
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+                    active ? 'bg-on-solid/20 text-on-solid' : 'bg-orange/15 text-orange',
+                  )}
+                >
+                  {badge.label}
+                </span>
+              )}
             </Link>
           )
         })}

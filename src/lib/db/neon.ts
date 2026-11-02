@@ -30,6 +30,9 @@ import type {
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/
 
+/** Query-level timing, off unless `RELAY_PERF_TRACE=1`. */
+const TRACE_QUERIES = process.env.RELAY_PERF_TRACE === '1'
+
 function ident(name: string): string {
   if (!IDENT.test(name)) throw new Error(`Refusing to quote suspicious identifier: ${name}`)
   return `"${name}"`
@@ -162,12 +165,16 @@ export class NeonExecutorImpl implements NeonExecutorApi {
       : `SELECT q.* FROM (${shifted}) q`
     const params = this.userId ? [this.userId, ...values] : values
     let res
+    const started = TRACE_QUERIES ? performance.now() : 0
     try {
       res = await this.pool.query(sql, params)
     } catch (error) {
       // Include the statement: a placeholder or quoting defect is otherwise
       // invisible behind Postgres' terse position marker.
       throw new Error(`Neon query failed: ${(error as Error).message}\n${sql}`)
+    }
+    if (TRACE_QUERIES) {
+      console.log(`[sql] ${Math.round(performance.now() - started)}ms ${sql.slice(0, 160)}`)
     }
     return res.rows as T[]
   }

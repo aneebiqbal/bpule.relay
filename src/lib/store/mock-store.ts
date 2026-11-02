@@ -830,6 +830,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async getOrgSettings() {
       return {}
     },
+    beginReadOnlySnapshot() {},
     getSupabaseClient() {
       throw new Error('Demo store does not support direct Supabase access')
     },
