@@ -11,6 +11,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { Lead } from '@/lib/domain/types'
 import {
+  LEAD_PRIORITY_LABELS,
   LEADS_MAX_PAGE_SIZE,
   LEADS_PAGE_SIZE,
   LEADS_VIEWS,
@@ -382,6 +383,40 @@ describe('V3_LEAD360_HYDRATION', () => {
     expect(simple).toContain('buildNegativeSignals(lead, now)')
     // Locale-formatted dates are suppressed so server and client agree.
     expect(simple).toContain('suppressHydrationWarning>{followupDueLabel}</span>')
+  })
+})
+
+describe('V3_LEAD_RECORD_PARITY', () => {
+  it('V3_LEAD_RECORD_PARITY: every surface derives the same record facts', () => {
+    const row = lead({
+      id: 'lead-1',
+      company: 'Acme',
+      status: 'replied',
+      createdAt: '2026-01-01T00:00:00Z',
+      score: 82,
+      senderProfileId: 'profile-1',
+      ownerRepId: 'rep-1',
+    })
+
+    // Table, drawer, pipeline card and Lead 360 all read the same pure
+    // authorities — no surface may recompute its own stage or priority.
+    const stage = derivePipelineStage(row)
+    const priority = leadPriority(row)
+    const next = leadNextAction(row)
+
+    expect(STAGE_LABELS[stage]).toBe(STAGE_LABELS[derivePipelineStage({ ...row })])
+    expect(LEAD_PRIORITY_LABELS[priority]).toBe(LEAD_PRIORITY_LABELS[leadPriority({ ...row })])
+    expect(next.label).toBe(leadNextAction({ ...row }).label)
+    expect(row.score).toBe(82)
+
+    // The drawer and the record page must not invent their own vocabulary: the
+    // drawer reads the stage the server derived, and Lead 360 uses the same
+    // canonical authorities.
+    const drawer = read('src/components/sales/lead-preview-drawer.tsx')
+    expect(drawer).toContain('preview.stage')
+    expect(drawer).toContain('preview.nextAction.label')
+    const panel = read('src/components/sales/lead-context-panel.tsx')
+    expect(panel).toContain('deriveNextLeadAction')
   })
 })
 

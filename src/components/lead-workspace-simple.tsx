@@ -837,6 +837,8 @@ function StatusPill({ label }: { label: string }) {
 function timeAgo(iso: string | null, now: number = Date.now()): string {
   if (!iso) return ''
   const diff = now - new Date(iso).getTime()
+  // A clock skew or a stale `now` must never render "-1122527m ago".
+  if (diff < 60_000) return 'just now'
   const days = Math.floor(diff / 86_400_000)
   if (days > 0) return `${days}d ago`
   const hrs = Math.floor(diff / 3_600_000)

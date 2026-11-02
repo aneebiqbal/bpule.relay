@@ -9,6 +9,7 @@ import { Tabs } from './ui/tabs'
 import { NotesPanel } from './operations/notes-panel'
 import { LeadContextPanel } from '@/components/sales/lead-context-panel'
 import { LeadStageStrip } from '@/components/sales/lead-stage-strip'
+import { LeadDetailSkeleton } from '@/components/sales/lead-detail-skeleton'
 import { V3ActivityRow, V3Skeleton } from '@/components/v3/primitives'
 import { formatRelativeTime } from '@/lib/ui/time'
 import type { LeadDetail } from '@/lib/store/types'
@@ -118,15 +119,7 @@ export function LeadWorkspaceAsync({
   }, [])
 
   if (!mounted) {
-    return (
-      <div className="space-y-4" data-testid="lead-detail-loading">
-        <div className="space-y-4 rounded-lg border border-line bg-bone-raised p-5">
-          <div className="h-4 w-40 rounded bg-bone" />
-          <div className="mt-2 h-3 w-24 rounded bg-bone" />
-          <div className="mt-4 h-24 w-full rounded bg-bone" />
-        </div>
-      </div>
-    )
+    return <LeadDetailSkeleton />
   }
 
   return (
