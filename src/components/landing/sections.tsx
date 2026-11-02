@@ -180,7 +180,7 @@ export function ContextSection() {
                   )}
                   data-queue={row.id}
                 >
-                  <span className="w-5 text-mono-medium text-[10px] text-stone/75">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="w-5 text-mono-medium text-[10px] text-stone">{String(i + 1).padStart(2, '0')}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-1.5">
                       <span className="truncate text-[12px] font-medium text-ink">{row.kind}</span>
@@ -372,7 +372,7 @@ export function ConversationSection() {
                       <p className="text-[13px] leading-relaxed text-ink">{step.text}</p>
                       <div className="mt-2.5 flex flex-wrap gap-1.5">
                         {REFINEMENT_CHIPS.map((chip) => (
-                          <span key={chip} className="font-mono text-[9px] tracking-[0.04em] text-stone/70">
+                          <span key={chip} className="font-mono text-[9px] tracking-[0.04em] text-stone">
                             {chip}
                           </span>
                         ))}

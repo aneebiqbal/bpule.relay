@@ -506,7 +506,7 @@ function Fact({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="flex gap-2">
       <dt className="w-24 shrink-0 text-stone">{label}</dt>
-      <dd className={cn('min-w-0', value ? 'text-ink' : 'text-stone/70')}>{value ?? 'Unknown'}</dd>
+      <dd className={cn('min-w-0', value ? 'text-ink' : 'text-stone')}>{value ?? 'Unknown'}</dd>
     </div>
   )
 }

@@ -105,7 +105,16 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     ])),
     perfTrace('rep:dashboard-batch', () => Promise.all([
       perfTrace('rep:getTodayDashboard', () => store.getTodayDashboard()),
-      perfTrace('rep:getRelayQueueData', () => store.getRelayQueueData()),
+      // Optional sections must not take the page down: an empty queue still
+      // renders header, metrics and pipeline pulse.
+      perfTrace('rep:getRelayQueueData', () =>
+        store.getRelayQueueData().catch(() => ({
+          conversations: new Map(),
+          messagesByLead: new Map(),
+          messagesByJob: new Map(),
+          assignedProfiles: [],
+        })),
+      ),
       // The canonical rep day. `getDailyWorkspace` is request-cached, so this
       // shares the same identities/targets/accountability load as `workspace`.
       perfTrace('rep:loadRepDay', () => import('@/lib/rep-day/load').then((m) => m.loadRepDay())),
@@ -132,13 +141,15 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     assignedProfiles: relayData.assignedProfiles,
     allReps: undefined,
     allLeads: [],
-    suppressedLeadIds: await perfTrace('rep:suppressedLeadIds', () => store.getSuppressedLeadIds()),
+    suppressedLeadIds: await perfTrace('rep:suppressedLeadIds', () =>
+      store.getSuppressedLeadIds().catch(() => new Set<string>())),
   })
 
   const { filterQueueByRole } = await import('@/lib/relay/queue-engine')
   const visibleTasks = filterQueueByRole(queue, roleContext.role)
 
-  const profilesPulled = await perfTrace('rep:countProfilesPulled', () => countProfilesPulled(user.organization.id, user.rep.id))
+  const profilesPulled = await perfTrace('rep:countProfilesPulled', () =>
+    countProfilesPulled(user.organization.id, user.rep.id).catch(() => 0))
   const [referredLeads, recentLeads, allUpworkJobs, activityRows] = await perfTrace('rep:secondary-batch', () => Promise.all([
     store.getReferredLeads(user.rep.id),
     store.getRecentLeads(user.rep.id, 5),
@@ -216,7 +227,11 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
 
     // Check if this lead has an active live conversation that should override
     const leadId = action.id.replace(/^(reply-|followup-|highfit-|opportunity-|connection-dm-)/, '')
-    const messages = (relayData.messagesByLead.get(leadId) ?? []).map(m => ({
+    const messages = (relayData.messagesByLead.get(leadId) ?? []).map((m: {
+      direction?: 'inbound' | 'outbound' | null
+      sentText?: string | null
+      sentAt?: string | null
+    }) => ({
       direction: m.direction ?? 'outbound',
       sentText: m.sentText,
       sentAt: m.sentAt,
@@ -252,18 +267,21 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   let unifiedTasks: import('@/lib/tasks/types').UnifiedTask[] = []
   if (authCtx) {
     const { loadUnifiedTasks } = await import('@/lib/tasks/load-unified-tasks')
-    unifiedTasks = await perfTrace('rep:unifiedTasks', () => loadUnifiedTasks({
-      auth: authCtx,
-      derivedActions: allActions,
-      forRepId: user.rep.id,
-      includeCompleted: false,
-    }))
+    unifiedTasks = await perfTrace('rep:unifiedTasks', () =>
+      loadUnifiedTasks({
+        auth: authCtx,
+        derivedActions: allActions,
+        forRepId: user.rep.id,
+        includeCompleted: false,
+      }).catch(() => []),
+    )
   }
 
   // Canonical meetings / wins today (src/lib/sales/meetings.ts) — same events
   // Manager Home, Admin Home, Rep 360 and Team Performance count.
   const outcomeEvents = user.organization?.id
-    ? await perfTrace('rep:outcomeEventsToday', () => countOutcomeEventsToday(user.organization.id, user.rep.id))
+    ? await perfTrace('rep:outcomeEventsToday', () =>
+        countOutcomeEventsToday(user.organization.id, user.rep.id).catch(() => null))
     : null
 
   // Log recommendations for observability (non-blocking)
@@ -513,7 +531,7 @@ function DashboardShellSkeleton() {
         <div className="overflow-hidden rounded border border-line bg-bone-raised">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="flex items-center gap-3 border-b border-line/70 px-3 py-3 last:border-b-0">
-              <span className="w-7 text-mono-medium text-[11px] text-stone/75">{String(i + 1).padStart(2, '0')}</span>
+              <span className="w-7 text-mono-medium text-[11px] text-stone">{String(i + 1).padStart(2, '0')}</span>
               <div className="min-w-0 flex-1 space-y-2">
                 <div className="h-3.5 w-40 max-w-full rounded bg-bone" />
                 <div className="h-3 w-56 max-w-full rounded bg-bone" />

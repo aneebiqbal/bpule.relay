@@ -30,7 +30,7 @@ export function UpNext({ actions, excludeId, max = 4 }: UpNextProps) {
               href={action.href}
               className="group flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-bone"
             >
-              <span className="w-5 mt-0.5 text-mono-medium text-[11px] text-stone/60">
+              <span className="w-5 mt-0.5 text-mono-medium text-[11px] text-stone">
                 {String(index + 1).padStart(2, '0')}
               </span>
               <div className="min-w-0 flex-1">

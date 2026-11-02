@@ -376,7 +376,7 @@ export function RelayTodayWorkspace({
                     isPrimary ? 'bg-orange/[0.03]' : 'hover:bg-bone',
                   )}
                 >
-                  <span className="w-6 text-mono-medium text-[11px] text-stone/75">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="w-6 text-mono-medium text-[11px] text-stone">{String(index + 1).padStart(2, '0')}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-[13px] font-medium text-ink">{kindActionLabel(action.kind)}</span>

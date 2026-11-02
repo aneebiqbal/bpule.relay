@@ -128,7 +128,8 @@
   --ink: #1c1c1a;
   --ink-soft: #3d3c39;
   --graphite: #5c5b57;
-  --stone: #8a8984;
+  /* 4.6:1 on --bone so 10px labels pass AA. */
+  --stone: #6e6d68;
   --stone-light: #b0afa9;
   --line: #e0ddd6;
   --line-organic: #d4d1c9;
@@ -231,7 +232,8 @@
   --ink: #ece9e3;
   --ink-soft: #b8b5ad;
   --graphite: #8c8982;
-  --stone: #6b6964;
+  /* 7.4:1 on the dark canvas, so 10px labels pass AA. */
+  --stone: #a8a6a1;
   --stone-light: #4a4945;
   --line: #282624;
   --line-soft: #1f1d1c;
@@ -339,7 +341,8 @@
   --ink: #1c1c1a;
   --ink-soft: #3d3c39;
   --graphite: #5c5b57;
-  --stone: #8a8984;
+  /* 4.6:1 on --bone so 10px labels pass AA. */
+  --stone: #6e6d68;
   --stone-light: #b0afa9;
   --line: #e0ddd6;
   --line-organic: #d4d1c9;

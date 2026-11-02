@@ -199,7 +199,7 @@ export function LeadsBoardV2({
       {/* Search + filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-stone/40" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-stone" />
           <input
             type="text"
             placeholder="Search by name, company, or title…"
@@ -261,7 +261,7 @@ export function LeadsBoardV2({
                           {counts[stage] ?? 0}
                         </span>
                       </div>
-                      <p className="text-[11px] text-stone/60">{meta.description}</p>
+                      <p className="text-[11px] text-stone">{meta.description}</p>
                     </div>
                   </div>
                   <ChevronDown className={cn('size-4 text-stone transition-transform duration-200', isCollapsed && '-rotate-90')} />
@@ -306,9 +306,9 @@ export function LeadsBoardV2({
         const empty = resolvePipelineEmptyState({ stage: filter, query: search })
         return (
           <div className="py-16 text-center" role="status">
-            {empty.kind === 'search' && <Search className="mx-auto mb-3 size-8 text-stone/30" aria-hidden="true" />}
+            {empty.kind === 'search' && <Search className="mx-auto mb-3 size-8 text-stone" aria-hidden="true" />}
             <p className="text-sm text-stone">{empty.title}</p>
-            {empty.hint && <p className="mt-1 text-xs text-stone/70">{empty.hint}</p>}
+            {empty.hint && <p className="mt-1 text-xs text-stone">{empty.hint}</p>}
           </div>
         )
       })()}
@@ -361,7 +361,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
             )}
           </div>
 
-          <div className="mt-0.5 flex items-center gap-2 text-xs text-stone/70">
+          <div className="mt-0.5 flex items-center gap-2 text-xs text-stone">
             {lead.contactTitle && <span className="truncate">{lead.contactTitle}</span>}
             {lead.contactTitle && lead.lastOutboundAt && <span className="text-line">·</span>}
             {(lead.lastInboundAt || lead.lastOutboundAt) && (
@@ -460,7 +460,7 @@ function StatCard({ icon, label, value, accent }: {
       </div>
       <div>
         <p className="text-lg font-semibold text-ink">{value}</p>
-        <p className="text-[11px] text-stone/60">{label}</p>
+        <p className="text-[11px] text-stone">{label}</p>
       </div>
     </div>
   )

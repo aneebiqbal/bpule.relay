@@ -260,7 +260,7 @@ export function RelayAppShell({
           {renderSidebarNav()}
           <div className="mt-auto space-y-2 border-t border-line px-3 py-3">
             {renderSecondaryNav()}
-            <p className="text-[9px] text-stone/50">v{APP_VERSION}</p>
+            <p className="text-[9px] text-stone">v{APP_VERSION}</p>
           </div>
         </aside>
 
