@@ -642,7 +642,10 @@ export function LeadsTable({
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <StageText stage={derivePipelineStage(lead)} />
-          <PriorityText priority={leadPriority(lead)} />
+          {/* The watch stage and the watch priority share a label; never print it twice. */}
+          {leadPriority(lead) !== 'watch' || derivePipelineStage(lead) !== 'observe' ? (
+            <PriorityText priority={leadPriority(lead)} />
+          ) : null}
         </div>
         <div className="flex items-center justify-between gap-3">
           <NextActionCell lead={lead} />
