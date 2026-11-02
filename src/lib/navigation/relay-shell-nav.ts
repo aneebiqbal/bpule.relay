@@ -248,11 +248,24 @@ export function v3SidebarItems(role: RelayNavRoleFlags): V3SidebarItem[] {
 
 /** One active sidebar destination — longest href wins, first declared breaks ties. */
 export function resolveV3SidebarActiveId(pathname: string, role: RelayNavRoleFlags): string | null {
+  const items = v3SidebarItems(role)
   let best: V3SidebarItem | null = null
-  for (const item of v3SidebarItems(role)) {
+  for (const item of items) {
     const matches = pathname === item.href || pathname.startsWith(`${item.href}/`)
     if (!matches) continue
     if (!best || item.href.length > best.href.length) best = item
   }
-  return best?.id ?? null
+  if (best) return best.id
+
+  // A section route with no dedicated sidebar item (/prospect, /upwork, …)
+  // still belongs to its parent destination — never leave context blank.
+  const fallback: Partial<Record<RelayShellSection, string>> = {
+    home: 'home',
+    sales: 'sales',
+    conversations: 'conversations',
+    team: 'team',
+    reports: 'insights',
+  }
+  const fallbackId = fallback[detectRelayShellSection(pathname)]
+  return fallbackId && items.some((item) => item.id === fallbackId) ? fallbackId : null
 }
