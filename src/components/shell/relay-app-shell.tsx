@@ -8,7 +8,7 @@ import { cn } from 'cn'
 import { RelayBrand } from '@/components/brand'
 import { NotificationCenter } from '@/components/notification-center'
 import { ThemeToggle } from '@/components/theme-toggle'
-import { AppBackButton } from '@/components/app-back-button'
+import { AppBackButton, hasAppParent } from '@/components/app-back-button'
 import { ProfileSwitcher } from '@/components/shell/profile-switcher'
 import { GlobalCreateMenu } from '@/components/shell/global-create-menu'
 import { V3Avatar } from '@/components/v3/primitives'
@@ -244,9 +244,11 @@ export function RelayAppShell({
 
         {/* min-w-0: a grid item defaults to min-width:auto, so a wide table would widen the page instead of scrolling in its own container. */}
         <main className="mx-auto w-full min-w-0 max-w-6xl px-5 py-6 pb-24 lg:px-8 lg:pb-8">
-          <div className="mb-6 hidden border-b border-line pb-2.5 lg:block">
-            <AppBackButton />
-          </div>
+          {hasAppParent(pathname) && (
+            <div className="mb-6 hidden border-b border-line pb-2.5 lg:block">
+              <AppBackButton />
+            </div>
+          )}
           {children}
         </main>
       </div>
