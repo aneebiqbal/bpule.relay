@@ -9,9 +9,9 @@ export function SignOutButton() {
 
   async function handleSignOut() {
     if (!isDemoMode()) {
-      const { getBrowserSupabase } = await import('@/lib/supabase/client')
-      const supabase = getBrowserSupabase()
-      await supabase.auth.signOut()
+      const { getBrowserAuth } = await import("@/lib/auth/browser")
+      const auth = await getBrowserAuth()
+      await auth.signOut()
     }
     router.replace('/login')
     router.refresh()

@@ -1,3 +1,4 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 /**
  * The rows behind the Leads pipeline, built once on the server. The board
  * and the dashboard both read these, so a lead sits in the same stage and
@@ -7,7 +8,6 @@ import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { isProductAdmin } from '@/lib/auth/admin-page'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { computeLifecycleState } from '@/lib/leads/lifecycle-policy'
 import type { LeadRow } from '@/components/leads/pipeline-utils'
 import type { Lead, MessageType } from '@/lib/domain/types'

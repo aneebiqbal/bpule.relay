@@ -60,6 +60,10 @@ export interface LeadsTableProps {
   now: number
   /** Table | Pipeline representation toggle. */
   viewToggle?: React.ReactNode
+  /** Route the table navigates on. Rep 360 embeds the table at /team/[repId]. */
+  basePath?: string
+  /** Params pinned on every navigation (e.g. owner + tab for Rep 360). */
+  fixedParams?: Record<string, string>
 }
 
 const STAGE_VARIANT: Record<PipelineStage, 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 'orange' | 'cobalt'> = {
@@ -370,6 +374,8 @@ export function LeadsTable({
   query,
   now,
   viewToggle,
+  basePath = '/leads',
+  fixedParams,
 }: LeadsTableProps) {
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -380,10 +386,11 @@ export function LeadsTable({
 
   const push = useCallback(
     (params: URLSearchParams) => {
+      for (const [key, value] of Object.entries(fixedParams ?? {})) params.set(key, value)
       const qs = params.toString()
-      router.push(qs ? `/leads?${qs}` : '/leads', { scroll: false })
+      router.push(qs ? `${basePath}?${qs}` : basePath, { scroll: false })
     },
-    [router],
+    [router, basePath, fixedParams],
   )
 
   /** Any filter change drops the saved view — the view is a preset, not a stored filter. */

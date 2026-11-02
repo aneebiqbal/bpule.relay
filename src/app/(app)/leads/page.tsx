@@ -1,9 +1,9 @@
 import { getCurrentUser } from '@/lib/auth/current'
 import { loadLeadsPage } from '@/lib/leads/leads-page'
 import { loadBoardData } from '@/lib/leads/board-rows'
-import { parseLeadsQuery } from '@/components/leads/pipeline-utils'
+import { isPipelineView, parseLeadsQuery } from '@/components/leads/pipeline-utils'
 import { LeadsTable } from '@/components/leads/leads-table'
-import { LeadsViewToggle, isPipelineView } from '@/components/leads/leads-view-toggle'
+import { LeadsViewToggle } from '@/components/leads/leads-view-toggle'
 import { LeadsBoardV2 } from '@/components/leads/leads-board-v2'
 import { PageHeader } from '@/components/ui/page-header'
 

@@ -72,7 +72,16 @@ function toLocalInput(date: Date): string {
  * composer under it, and what Relay knows about the deal on the right.
  * Sending stays manual (LinkedIn): copy the message, send it there, log it.
  */
-export function LeadConversation({ leadId, onChanged }: { leadId: string; onChanged?: () => void }) {
+export function LeadConversation({
+  leadId,
+  onChanged,
+  variant = 'full',
+}: {
+  leadId: string
+  onChanged?: () => void
+  /** 'thread' drops the deal sidebar — /chats renders its own intelligence pane. */
+  variant?: 'full' | 'thread'
+}) {
   const [view, setView] = useState<ConversationView | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [mode, setMode] = useState<Mode>('write')
@@ -240,7 +249,7 @@ export function LeadConversation({ leadId, onChanged }: { leadId: string; onChan
   const overLimit = intent === 'connection' && charCount > CONNECTION_NOTE_LIMIT
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div className={cn('grid gap-4', variant === 'full' && 'lg:grid-cols-[minmax(0,1fr)_300px]')}>
       <section className="flex min-h-[520px] flex-col overflow-hidden rounded-2xl border border-line bg-bone-raised/20" aria-label="Conversation">
         <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
           <span className="rounded-full bg-cobalt/10 px-2 py-0.5 text-[11px] font-medium text-cobalt">{view.stageLabel}</span>
@@ -434,6 +443,7 @@ export function LeadConversation({ leadId, onChanged }: { leadId: string; onChan
         </div>
       </section>
 
+      {variant === 'full' && (
       <aside className="space-y-3" aria-label="Deal context">
         <div className="rounded-2xl border border-line bg-bone-raised/20 p-4">
           <p className="text-[10px] font-medium uppercase tracking-wider text-stone">Deal</p>
@@ -487,6 +497,7 @@ export function LeadConversation({ leadId, onChanged }: { leadId: string; onChan
           </div>
         )}
       </aside>
+      )}
     </div>
   )
 }

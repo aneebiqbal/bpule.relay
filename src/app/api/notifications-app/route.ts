@@ -1,23 +1,49 @@
-import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { safeErrorResponse } from '@/lib/errors'
+import { getDatabaseCapabilities } from '@/lib/operations/capabilities'
+import { toRelayNotification, type NotificationRow } from '@/lib/notifications/model'
 
-export async function GET() {
+/**
+ * Recipient-only notifications in the canonical RelayNotification shape.
+ * `?limit=` (≤100) and `?unread=1`. Narrow columns — no select('*').
+ */
+export async function GET(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
 
   const supabase = await createServerSupabase()
-  const { data, error } = await supabase
+  if (!(await getDatabaseCapabilities(supabase)).notifications) {
+    return NextResponse.json({ notifications: [], unread: 0, available: false })
+  }
+  const url = new URL(request.url)
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 100)
+  let query = supabase
     .from('notifications')
-    .select('*')
+    .select('id, notification_type, title, body, link, read, created_at')
     .eq('recipient_id', user.rep.id)
     .eq('organization_id', user.organization.id)
     .order('created_at', { ascending: false })
-    .limit(50)
+    .limit(limit)
+  if (url.searchParams.get('unread') === '1') query = query.eq('read', false)
+
+  const [{ data, error }, unreadRes] = await Promise.all([
+    query,
+    supabase
+      .from('notifications')
+      .select('id', { head: true, count: 'exact' })
+      .eq('recipient_id', user.rep.id)
+      .eq('organization_id', user.organization.id)
+      .eq('read', false),
+  ])
 
   if (error) return safeErrorResponse(error, 500, 'Failed to load notifications.', 'notifications-app')
-  return NextResponse.json({ notifications: data ?? [] })
+  return NextResponse.json({
+    notifications: ((data ?? []) as NotificationRow[]).map(toRelayNotification),
+    unread: unreadRes.count ?? 0,
+    available: true,
+  })
 }
 
 export async function PATCH(request: Request) {

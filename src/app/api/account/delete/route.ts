@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceSupabase } from '@/lib/supabase/service'
-import { createServerSupabase } from '@/lib/supabase/server'
+import { getAuthProvider } from '@/lib/auth/provider'
 import { getCurrentUser } from '@/lib/auth/current'
 
 export async function DELETE() {
@@ -9,12 +9,10 @@ export async function DELETE() {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
 
-  let authUserId: string
-  try {
-    const server = await createServerSupabase()
-    const { data } = await server.auth.getUser()
-    authUserId = data.user!.id
-  } catch {
+  const auth = await getAuthProvider()
+  const { user: sessionUser } = await auth.getSession()
+  const authUserId = sessionUser?.id
+  if (!authUserId) {
     return NextResponse.json({ error: 'Session error.' }, { status: 401 })
   }
 
@@ -32,7 +30,7 @@ export async function DELETE() {
   // Revoke all sessions BEFORE deletion so existing cookies/refresh tokens
   // are immediately invalidated. Without this, JWTs remain valid until natural
   // expiry even after the rep row is gone.
-  await service.auth.admin.signOut(authUserId)
+  await auth.signOutUser(authUserId)
 
   if ((memberCount ?? 0) > 1) {
     const { error: repErr } = await service
@@ -43,7 +41,7 @@ export async function DELETE() {
       return NextResponse.json({ error: 'Failed to remove account.' }, { status: 500 })
     }
 
-    await service.auth.admin.deleteUser(authUserId)
+    await auth.deleteUser(authUserId)
 
     return NextResponse.json({
       message: 'Your account has been removed from the organization.',
@@ -59,7 +57,7 @@ export async function DELETE() {
     return NextResponse.json({ error: 'Failed to delete account.' }, { status: 500 })
   }
 
-  await service.auth.admin.deleteUser(authUserId)
+  await auth.deleteUser(authUserId)
 
   const { error: orgErr } = await service
     .from('organizations')

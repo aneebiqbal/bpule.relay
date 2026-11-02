@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * The one effective send policy.
  *
@@ -12,7 +13,6 @@
  * immediately before it calls a provider. There is deliberately no second
  * resolver, because a second resolver is how the split returns.
  */
-import type { SupabaseClient } from '@supabase/supabase-js'
 import type { OperatingPolicy } from '@/lib/org-clock'
 import { isWithinWorkday, isOrgWorkingDay, orgDate } from '@/lib/org-clock'
 import { dailyConnectionSendLimit, dailySendLimit } from '@/lib/ai/config'
@@ -231,7 +231,7 @@ export function isMissingRelation(error: unknown): boolean {
 
 /** Read the rows the resolver needs. Bounded, and tolerant of a missing table. */
 export async function loadSendPolicyInput(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   operating: OperatingPolicy,
   usage: SendPolicyUsage,
@@ -296,7 +296,7 @@ export async function loadSendPolicyInput(
 
 /** Convenience: read the rows and resolve in one call. */
 export async function getEffectiveSendPolicy(
-  client: SupabaseClient,
+  client: DbClient,
   input: { organizationId: string; operating: OperatingPolicy; usage: SendPolicyUsage; now?: Date },
 ): Promise<EffectiveSendPolicy> {
   const now = input.now ?? new Date()

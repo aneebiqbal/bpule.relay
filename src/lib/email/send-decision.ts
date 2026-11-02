@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Gather the facts and evaluate the one eligibility gate for a real send.
  *
@@ -9,7 +10,6 @@
  * admin UI and the rep-facing budget read. That is what makes "displayed equals
  * enforced" a structural property rather than a convention.
  */
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { isWithinWorkday, isOrgWorkingDay, currentInstant, orgDate, type OperatingPolicy } from '@/lib/org-clock'
 import { evaluateEmailSendEligibility, type EmailSendDecision } from './eligibility'
 import { DEFAULT_EMAIL_AUTONOMY_MODE, isEmailAutonomyMode } from './autonomy'
@@ -28,7 +28,7 @@ export interface SendDecisionInput {
 }
 
 export async function buildSendDecision(
-  client: SupabaseClient,
+  client: DbClient,
   input: SendDecisionInput,
 ): Promise<EmailSendDecision> {
   const now = input.now ?? currentInstant()
@@ -160,7 +160,7 @@ function asNumber(value: unknown): number | null {
 
 /** Load an organization's email policy, falling back to the safe default. */
 export async function loadEmailPolicy(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
 ): Promise<{ autonomyMode: 'MANUAL' | 'APPROVAL_REQUIRED' | 'AUTOPILOT'; enabled: boolean }> {
   const { data, error } = await client

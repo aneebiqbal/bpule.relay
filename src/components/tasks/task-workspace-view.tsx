@@ -76,6 +76,8 @@ export function TaskWorkspaceView({
     if (assigneeParam) setAssignee(assigneeParam)
     const sourceParam = searchParams.get('source')
     if (sourceParam === 'DERIVED' || sourceParam === 'ASSIGNED') setSource(sourceParam)
+    // Deep link: /tasks?task=<unified id> opens on "All" with that row focused.
+    if (searchParams.get('task')) setTab('all')
     const assignParam = searchParams.get('assign')
     if (assignParam && canAssign) {
       setAssignDefaultRep(assignParam === '1' ? undefined : assignParam)
@@ -86,6 +88,11 @@ export function TaskWorkspaceView({
   }, [searchParams, canAssign])
 
   const nameByRep = useMemo(() => new Map(reps.map((r) => [r.id, r.name])), [reps])
+  const focusTaskId = searchParams.get('task')
+  useEffect(() => {
+    if (!focusTaskId) return
+    document.getElementById(`task-${focusTaskId}`)?.scrollIntoView({ block: 'center' })
+  }, [focusTaskId, tab])
 
   const filtered = useMemo(
     () =>
@@ -236,7 +243,12 @@ export function TaskWorkspaceView({
               </tr>
             ) : (
               filtered.map((task) => (
-                <tr key={task.id} className="border-b border-line/70 last:border-0 hover:bg-bone">
+                <tr
+                  key={task.id}
+                  id={`task-${task.id}`}
+                  aria-current={task.id === focusTaskId ? 'true' : undefined}
+                  className={cn('border-b border-line/70 last:border-0 hover:bg-bone', task.id === focusTaskId && 'bg-orange/5 ring-1 ring-inset ring-orange/40')}
+                >
                   <td className="px-3 py-2.5">
                     <p className="font-medium text-ink">{task.title}</p>
                     <p className="text-[11px] text-graphite">{task.reason}</p>
@@ -313,7 +325,11 @@ export function TaskWorkspaceView({
       {/* Mobile priority columns */}
       <ul className="space-y-2 md:hidden">
         {filtered.map((task) => (
-          <li key={`m-${task.id}`} className="rounded-lg border border-line bg-bone-raised px-3 py-3">
+          <li
+            key={`m-${task.id}`}
+            aria-current={task.id === focusTaskId ? 'true' : undefined}
+            className={cn('rounded-lg border bg-bone-raised px-3 py-3', task.id === focusTaskId ? 'border-orange/50' : 'border-line')}
+          >
             <p className="text-[13px] font-medium text-ink">{task.title}</p>
             <p className="mt-0.5 text-[12px] text-graphite">{task.reason}</p>
             <div className="mt-2 flex items-center justify-between gap-2">

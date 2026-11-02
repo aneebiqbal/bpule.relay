@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Minimum-spacing concurrency guard.
  *
@@ -13,7 +14,6 @@
  * Fails closed: when the column is absent (migration not applied) the claim is
  * skipped and the decision-layer spacing check still applies.
  */
-import type { SupabaseClient } from '@supabase/supabase-js'
 
 export interface SpacingClaimInput {
   organizationId: string
@@ -42,7 +42,7 @@ function isMissingColumn(error: unknown): boolean {
  * the send. Calling it earlier widens the window a concurrent worker can exploit.
  */
 export async function claimSendSlot(
-  client: SupabaseClient,
+  client: DbClient,
   input: SpacingClaimInput,
 ): Promise<SpacingClaimResult> {
   const now = input.now ?? new Date()
@@ -93,7 +93,7 @@ export async function claimSendSlot(
 
 /** Release a claim when the send did not actually happen. */
 export async function releaseSendSlot(
-  client: SupabaseClient,
+  client: DbClient,
   input: { organizationId: string; mailboxId: string; previousLastSentAt: string | null },
 ): Promise<void> {
   if (!input.previousLastSentAt) return

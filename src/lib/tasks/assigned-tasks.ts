@@ -1,6 +1,7 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AuthContext } from '@/lib/auth/organization'
 import type { AssignedTaskKind, AssignedTaskRow, UnifiedTaskPriority, UnifiedTaskStatus } from '@/lib/tasks/types'
+import { notifyForEvent, notifyOnce } from '@/lib/notifications/deliver'
+import type { DbClient } from '@/lib/db/types'
 
 export type TaskEventType =
   | 'TASK_CREATED'
@@ -9,6 +10,7 @@ export type TaskEventType =
   | 'TASK_STARTED'
   | 'TASK_COMPLETED'
   | 'TASK_CANCELLED'
+  | 'TASK_RESCHEDULED'
 
 function isMissingRelation(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false
@@ -16,7 +18,7 @@ function isMissingRelation(error: { code?: string; message?: string } | null): b
 }
 
 export async function emitTaskEvent(
-  client: SupabaseClient,
+  client: DbClient,
   input: {
     organizationId: string
     taskId: string
@@ -38,7 +40,7 @@ export async function emitTaskEvent(
 }
 
 export async function notifyTaskAssignee(
-  client: SupabaseClient,
+  client: DbClient,
   input: {
     organizationId: string
     recipientId: string
@@ -49,29 +51,13 @@ export async function notifyTaskAssignee(
     dedupeKey: string
   },
 ): Promise<void> {
-  const { data: existing } = await client
-    .from('notifications')
-    .select('id')
-    .eq('organization_id', input.organizationId)
-    .eq('recipient_id', input.recipientId)
-    .eq('dedupe_key', input.dedupeKey)
-    .maybeSingle()
-  if (existing) return
-
-  await client.from('notifications').insert({
-    organization_id: input.organizationId,
-    recipient_id: input.recipientId,
-    notification_type: input.type,
-    title: input.title,
-    body: input.body,
-    link: input.link,
-    dedupe_key: input.dedupeKey,
-  })
+  // One writer for every notification (src/lib/notifications/deliver.ts).
+  await notifyOnce(client, input)
 }
 
 /** Resolve which assignee IDs the actor may see / mutate. */
 export async function resolveTaskAssigneeScope(
-  client: SupabaseClient,
+  client: DbClient,
   auth: AuthContext,
 ): Promise<{ mode: 'own' | 'team' | 'org'; assigneeIds: string[] | null }> {
   if (auth.isOwner || auth.isAdmin) {
@@ -91,7 +77,7 @@ export async function resolveTaskAssigneeScope(
 }
 
 export async function listAssignedTaskRows(
-  client: SupabaseClient,
+  client: DbClient,
   auth: AuthContext,
   opts?: { includeCompleted?: boolean; assigneeRepId?: string },
 ): Promise<AssignedTaskRow[]> {
@@ -136,7 +122,7 @@ export interface CreateAssignedTaskInput {
 }
 
 export async function createAssignedTask(
-  client: SupabaseClient,
+  client: DbClient,
   auth: AuthContext,
   input: CreateAssignedTaskInput,
 ): Promise<AssignedTaskRow> {
@@ -199,21 +185,19 @@ export async function createAssignedTask(
     metadata: { assignee_rep_id: row.assignee_rep_id },
   })
 
-  await notifyTaskAssignee(client, {
-    organizationId: auth.orgId,
-    recipientId: row.assignee_rep_id,
-    type: 'task_assigned',
-    title: 'New task assigned',
-    body: row.title,
-    link: '/tasks',
-    dedupeKey: `task_assigned:${row.id}`,
-  })
+  await notifyForEvent(
+    client,
+    auth.orgId,
+    row.kind === 'REQUEST_UPDATE'
+      ? { kind: 'UPDATE_REQUESTED', taskId: row.id, assigneeRepId: row.assignee_rep_id, actorRepId: auth.repId, actorName: null, title: row.title }
+      : { kind: 'TASK_ASSIGNED', taskId: row.id, assigneeRepId: row.assignee_rep_id, actorRepId: auth.repId, actorName: null, title: row.title },
+  )
 
   return row
 }
 
 export async function reassignAssignedTask(
-  client: SupabaseClient,
+  client: DbClient,
   auth: AuthContext,
   taskId: string,
   newAssigneeRepId: string,
@@ -269,21 +253,124 @@ export async function reassignAssignedTask(
     metadata: { previous_assignee_rep_id: previous, new_assignee_rep_id: newAssigneeRepId },
   })
 
-  await notifyTaskAssignee(client, {
-    organizationId: auth.orgId,
-    recipientId: newAssigneeRepId,
-    type: 'task_reassigned',
-    title: 'Task reassigned to you',
-    body: row.title,
-    link: '/tasks',
-    dedupeKey: `task_reassigned:${row.id}:${newAssigneeRepId}`,
+  await notifyForEvent(client, auth.orgId, {
+    kind: 'TASK_REASSIGNED',
+    taskId: row.id,
+    assigneeRepId: newAssigneeRepId,
+    actorRepId: auth.repId,
+    actorName: null,
+    title: row.title,
   })
 
   return row
 }
 
+/** Change a task's due date. Creator, admin/owner, or a manager whose scope covers the assignee. */
+export async function rescheduleAssignedTask(
+  client: DbClient,
+  auth: AuthContext,
+  taskId: string,
+  dueAt: string | null,
+): Promise<AssignedTaskRow> {
+  if (dueAt !== null && Number.isNaN(Date.parse(dueAt))) throw new Error('Invalid due date')
+
+  const { data: current, error: loadError } = await client
+    .from('assigned_tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .maybeSingle()
+  if (loadError || !current) throw new Error('Task not found')
+  if (current.status === 'DONE' || current.status === 'CANCELLED') {
+    throw new Error('Closed tasks cannot be rescheduled')
+  }
+
+  let allowed = current.created_by_rep_id === auth.repId || auth.isAdmin || auth.isOwner
+  if (!allowed && auth.isManager) {
+    const scope = await resolveTaskAssigneeScope(client, auth)
+    allowed = !scope.assigneeIds || scope.assigneeIds.includes(current.assignee_rep_id)
+  }
+  if (!allowed) throw new Error('Not allowed to reschedule this task')
+
+  const { data, error } = await client
+    .from('assigned_tasks')
+    .update({ due_at: dueAt, updated_at: new Date().toISOString() })
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .select('*')
+    .single()
+  if (error) throw error
+  const row = data as AssignedTaskRow
+
+  await emitTaskEvent(client, {
+    organizationId: auth.orgId,
+    taskId: row.id,
+    eventType: 'TASK_RESCHEDULED',
+    actorRepId: auth.repId,
+    metadata: { previous_due_at: current.due_at ?? null, new_due_at: dueAt },
+  })
+
+  return row
+}
+
+export interface AssignedTaskEventView {
+  id: string
+  eventType: TaskEventType
+  actorName: string | null
+  createdAt: string
+}
+
+/** One task + its lifecycle, scoped like listAssignedTaskRows. null when not visible. */
+export async function loadAssignedTaskDetail(
+  client: DbClient,
+  auth: AuthContext,
+  taskId: string,
+): Promise<{ row: AssignedTaskRow; events: AssignedTaskEventView[] } | null> {
+  const { data: row, error } = await client
+    .from('assigned_tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .maybeSingle()
+  if (error) {
+    if (isMissingRelation(error)) return null
+    throw error
+  }
+  if (!row) return null
+  const scope = await resolveTaskAssigneeScope(client, auth)
+  const visible =
+    !scope.assigneeIds
+    || scope.assigneeIds.includes(row.assignee_rep_id)
+    || row.created_by_rep_id === auth.repId
+  if (!visible) return null
+
+  const { data: events } = await client
+    .from('task_events')
+    .select('id, event_type, actor_rep_id, created_at')
+    .eq('organization_id', auth.orgId)
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  const list = (events ?? []) as Array<{ id: string; event_type: TaskEventType; actor_rep_id: string | null; created_at: string }>
+  const actorIds = [...new Set(list.map((e) => e.actor_rep_id).filter(Boolean))] as string[]
+  const { data: reps } = actorIds.length
+    ? await client.from('reps').select('id, name').eq('organization_id', auth.orgId).in('id', actorIds)
+    : { data: [] as Array<{ id: string; name: string }> }
+  const names = new Map(((reps ?? []) as Array<{ id: string; name: string }>).map((r) => [r.id, r.name]))
+
+  return {
+    row: row as AssignedTaskRow,
+    events: list.map((e) => ({
+      id: e.id,
+      eventType: e.event_type,
+      actorName: e.actor_rep_id ? names.get(e.actor_rep_id) ?? null : null,
+      createdAt: e.created_at,
+    })),
+  }
+}
+
 export async function completeAssignedTask(
-  client: SupabaseClient,
+  client: DbClient,
   auth: AuthContext,
   taskId: string,
 ): Promise<AssignedTaskRow> {
@@ -328,7 +415,7 @@ export async function completeAssignedTask(
 }
 
 export async function cancelAssignedTask(
-  client: SupabaseClient,
+  client: DbClient,
   auth: AuthContext,
   taskId: string,
   reason?: string | null,
@@ -380,7 +467,7 @@ export async function cancelAssignedTask(
     type: 'task_cancelled',
     title: 'Task cancelled',
     body: row.title,
-    link: '/tasks',
+    link: `/tasks?task=assigned:${row.id}`,
     dedupeKey: `task_cancelled:${row.id}`,
   })
 
@@ -389,7 +476,7 @@ export async function cancelAssignedTask(
 
 /** Overdue assigned-task counts keyed by assignee — one batched query. */
 export async function countOverdueAssignedByRep(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
   assigneeIds: string[] | null,
   now = new Date(),
@@ -421,7 +508,7 @@ export async function countOverdueAssignedByRep(
 }
 
 export async function countUnassignedOpenTasks(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
 ): Promise<number> {
   // "Unassigned" in product terms: open tasks with no due date and no lead —

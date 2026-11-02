@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { getAuthContext } from '@/lib/auth/organization'
+import { createServiceSupabase } from '@/lib/supabase/service'
+import { getAuthProvider } from '@/lib/auth/provider'
 import {
-  INVITATION_KEY,
   INVITABLE_ROLES,
   isInviteEmail,
   nameFromEmail,
@@ -14,8 +14,10 @@ import type { OrganizationRole } from '@/lib/auth/organization'
  * POST /api/admin/invitations — invite one person into the caller's workspace.
  *
  * Invite-only is the product contract: this is the only way a new account is
- * created. The organisation and role are written to admin-only `app_metadata`;
- * the auth callback turns them into a rep + organisation role once.
+ * created. The invitation is stored in Relay's `pending_invitations`, and the
+ * auth account is created with a generated password the invitee never sees —
+ * they set their own through the existing password-reset flow. That keeps the
+ * invite working on both auth providers without depending on vendor metadata.
  */
 export async function POST(request: Request) {
   const ctx = await getAuthContext()
@@ -24,12 +26,6 @@ export async function POST(request: Request) {
   }
   if (!ctx.isAdmin) {
     return NextResponse.json({ code: 'FORBIDDEN', error: 'Only an owner or admin can invite people.' }, { status: 403 })
-  }
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) {
-    return NextResponse.json({ code: 'INVITES_DISABLED', error: 'Invitations are not configured on this deployment.' }, { status: 503 })
   }
 
   let body: { email?: unknown; role?: unknown; name?: unknown }
@@ -53,18 +49,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ code: 'FORBIDDEN', error: 'Only an owner can invite another owner.' }, { status: 403 })
   }
 
-  const service = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
+  const invitation: Invitation = {
+    organizationId: ctx.orgId,
+    role,
+    invitedBy: ctx.repId,
+  }
+
+  // A random password the invitee never sees; they replace it on first login
+  // through the password-reset flow.
+  const tempPassword = crypto.randomUUID() + crypto.randomUUID()
+
+  const { createPendingInvitation } = await import('@/lib/auth/pending-invitations')
+  const service = createServiceSupabase()
+
+  await createPendingInvitation(service, {
+    email,
+    organizationId: invitation.organizationId,
+    role: invitation.role,
+    invitedBy: invitation.invitedBy,
   })
 
-  const origin = new URL(request.url).origin
-  const { data, error } = await service.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${origin}/auth/callback?next=/onboarding`,
-    data: { full_name: typeof body.name === 'string' ? body.name.trim() : nameFromEmail(email) },
+  const auth = await getAuthProvider()
+  const created = await auth.createUser({
+    email,
+    password: tempPassword,
+    name: typeof body.name === 'string' && body.name.trim() ? body.name.trim() : nameFromEmail(email),
   })
 
-  if (error || !data.user) {
-    const already = /already|exists|registered/i.test(error?.message ?? '')
+  if (!created.userId) {
+    // Never leave an invitation for an account that was not created.
+    await service.from('pending_invitations').delete().eq('email', email)
+    const already = /already|exists|registered|duplicate/i.test(created.error?.message ?? '')
     return NextResponse.json(
       {
         code: already ? 'EMAIL_ALREADY_REGISTERED' : 'INVITE_FAILED',
@@ -76,29 +91,5 @@ export async function POST(request: Request) {
     )
   }
 
-  const invitation: Invitation = {
-    organizationId: ctx.orgId,
-    role,
-    invitedBy: ctx.repId,
-  }
-
-  const { error: metaError } = await service.auth.admin.updateUserById(data.user.id, {
-    app_metadata: { [INVITATION_KEY]: {
-      organization_id: invitation.organizationId,
-      role: invitation.role,
-      invited_by: invitation.invitedBy,
-    } },
-  })
-
-  if (metaError) {
-    // Without trusted metadata the invite cannot complete. Revoke it rather
-    // than leave an account that would be denied at the callback.
-    await service.auth.admin.deleteUser(data.user.id).catch(() => {})
-    return NextResponse.json({ code: 'INVITE_FAILED', error: 'The invitation could not be prepared. Please try again.' }, { status: 500 })
-  }
-
-  return NextResponse.json(
-    { code: 'INVITED', email, role, userId: data.user.id },
-    { status: 201 },
-  )
+  return NextResponse.json({ ok: true, email, role })
 }

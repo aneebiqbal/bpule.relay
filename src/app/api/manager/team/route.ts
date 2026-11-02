@@ -1,6 +1,6 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { currentInstant, orgDate, workdayProgress } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 

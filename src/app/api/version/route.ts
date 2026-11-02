@@ -2,9 +2,13 @@ import { NextResponse } from 'next/server'
 import { SCORING_VERSION } from '@/lib/intelligence-v3/versions'
 import { BUYER_INTENT_VERSION } from '@/lib/intelligence-v3/buyer-intent'
 import { APP_VERSION } from '@/lib/version'
+import { describeDbProvider } from '@/lib/db/provider'
+import { describeAuthProvider } from '@/lib/auth/provider'
 
 export const runtime = 'nodejs'
-export const dynamic = 'force-static'
+// Dynamic so the provider names reflect the deployment's runtime environment
+// rather than whatever was set when the route was prerendered.
+export const dynamic = 'force-dynamic'
 
 // Evaluated once when the route is prerendered at build time.
 const BUILT_AT = new Date().toISOString()
@@ -17,6 +21,7 @@ const BUILT_AT = new Date().toISOString()
  */
 export function GET() {
   const sha =
+    process.env.RELAY_GIT_SHA ??
     process.env.VERCEL_GIT_COMMIT_SHA
     ?? process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA
     ?? process.env.GIT_COMMIT_SHA
@@ -34,6 +39,10 @@ export function GET() {
       appVersion: APP_VERSION,
       scoringVersion: SCORING_VERSION,
       buyerIntentVersion: BUYER_INTENT_VERSION,
+      // Which backends this deployment actually reads and writes through.
+      // No secret is included — provider names only.
+      ...describeDbProvider(),
+      ...describeAuthProvider(),
     },
     { headers: { 'Cache-Control': 'no-store' } },
   )

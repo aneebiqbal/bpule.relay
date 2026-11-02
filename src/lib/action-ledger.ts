@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Action Ledger Service — append-only commercial execution history.
  *
@@ -5,7 +6,6 @@
  * Every meaningful action emits an immutable ActionEvent.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceSupabase } from '@/lib/supabase/service'
 type ActionEventType =
   | 'LEAD_EXTRACTED'
@@ -22,6 +22,7 @@ type ActionEventType =
   | 'UPWORK_PROPOSAL_PREPARED'
   | 'UPWORK_APPLIED'
   | 'OPPORTUNITY_CREATED'
+  | 'MEETING_BOOKED'
   | 'CLIENT_WON'
   | 'LEAD_ARCHIVED'
   | 'RECOMMENDATION_SHOWN'
@@ -76,7 +77,7 @@ interface ActionLogEntry {
   metadata: Record<string, unknown>
 }
 
-let supabase: SupabaseClient | null = null
+let supabase: DbClient | null = null
 
 function getClient() {
   // Static import, not a runtime require: the alias resolves under vitest, so

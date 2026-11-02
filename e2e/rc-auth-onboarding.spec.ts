@@ -172,11 +172,22 @@ test.describe('AUTH_INVITED_USER_END_TO_END', () => {
 
     // 5. The provisioning is idempotent: a second pass adds no duplicates.
     const { provisionInvitedMember } = await import('@/lib/auth/invitations-server')
-    const { readInvitation } = await import('@/lib/auth/invitations')
-    const invitation = readInvitation(userRow.user?.app_metadata)
-    expect(invitation, 'the invitation could not be read back').toBeTruthy()
+    // The invitation lives in Relay's database, not in auth metadata.
+    const { data: pendingRows, error: pendingErr } = await admin
+      .from('pending_invitations')
+      .select('organization_id, role, invited_by')
+      .eq('email', email)
+      .is('consumed_at', null)
+      .limit(1)
+    expect(pendingErr, `invitation lookup failed: ${pendingErr?.message ?? ''}`).toBeNull()
+    expect(pendingRows, 'the invitation was not recorded').toHaveLength(1)
+    const invitation = {
+      organizationId: pendingRows![0].organization_id as string,
+      role: pendingRows![0].role as 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER',
+      invitedBy: (pendingRows![0].invited_by as string | null) ?? null,
+    }
     await provisionInvitedMember({
-      invitation: invitation!,
+      invitation,
       authUserId,
       email,
       displayName: null,

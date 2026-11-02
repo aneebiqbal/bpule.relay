@@ -52,15 +52,15 @@ export async function loadUnifiedTasks(input: {
     profileIds.length
       ? client
           .from('revenue_identities')
-          .select('id, name')
+          .select('id, identity_name')
           .eq('organization_id', auth.orgId)
           .in('id', profileIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+      : Promise.resolve({ data: [] as Array<{ id: string; identity_name: string }> }),
   ])
 
   const companyByLead = new Map((leadsRes.data ?? []).map((l) => [l.id, l.company]))
   const nameByRep = new Map((repsRes.data ?? []).map((r) => [r.id, r.name]))
-  const nameByProfile = new Map((profilesRes.data ?? []).map((p) => [p.id, p.name]))
+  const nameByProfile = new Map((profilesRes.data ?? []).map((p) => [p.id, p.identity_name]))
 
   const assigned: UnifiedTask[] = rows.map((row) =>
     toUnifiedTaskFromAssigned(row, {

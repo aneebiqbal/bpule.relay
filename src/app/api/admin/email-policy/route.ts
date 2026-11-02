@@ -1,6 +1,6 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { validateEmailPolicyPatch } from '@/lib/email/send-limits'
 
 export const dynamic = 'force-dynamic'

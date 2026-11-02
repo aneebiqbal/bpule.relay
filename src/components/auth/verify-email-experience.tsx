@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { getBrowserSupabase } from "@/lib/supabase/client";
+import { getBrowserAuth } from "@/lib/auth/browser";
 import { humanizeSignupError } from "@/lib/auth/error-messages";
 import {
   RelayAuthShell,
@@ -40,13 +40,10 @@ export function VerifyEmailExperience() {
     setError(null);
 
     try {
-      const supabase = getBrowserSupabase();
-      const { error: resendError } = await supabase.auth.resend({
-        type: "signup",
-        email: normalizedEmail,
-      });
+      const auth = await getBrowserAuth();
+      const resendError = await auth.resendVerification(normalizedEmail);
 
-      if (resendError) throw resendError;
+      if (resendError) throw new Error(resendError.message);
       setResent(true);
       setCooldown(60);
     } catch (cause) {

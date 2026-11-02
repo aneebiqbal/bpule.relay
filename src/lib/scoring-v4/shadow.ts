@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Shadow mode (Phase 27): every real analysis is also scored by the
  * candidate engines named in SCORING_SHADOW_ENGINES, and the results are
@@ -9,7 +10,6 @@
  * produced.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 import type { V3LeadDecisionPacket } from '@/lib/intelligence-v3/types'
 import { deriveRecommendedAction } from '@/lib/intelligence-v3/action/recommended-action'
 import { qualifyCanonicalScore } from '@/lib/scoring/qualification'
@@ -24,7 +24,7 @@ import { loadSenderProfiles } from '@/lib/relay/routing-context'
 import { opportunityKey } from './opportunity-key'
 
 export interface ShadowRecordInput {
-  client: SupabaseClient
+  client: DbClient
   organizationId: string
   platform?: Platform
   leadId?: string | null

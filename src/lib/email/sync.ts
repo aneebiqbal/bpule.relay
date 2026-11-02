@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Mailbox sync — turn provider history into Relay inbound messages.
  *
@@ -10,7 +11,6 @@
  *
  * Bounded: one page per mailbox per run, oldest first, cursor advanced last.
  */
-import type { SupabaseClient } from '@supabase/supabase-js'
 import type { EmailProvider } from './providers/email-provider'
 import { loadMailboxCredentials } from './mailbox'
 import { matchReplyToLead, normalizeReplyAddress } from './reply-match'
@@ -37,7 +37,7 @@ export interface SyncMailboxInput {
 }
 
 async function alreadyImported(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   providerMessageId: string,
 ): Promise<boolean> {
@@ -58,7 +58,7 @@ async function alreadyImported(
  * unhealthy mailbox must not stop the others.
  */
 export async function syncMailbox(
-  client: SupabaseClient,
+  client: DbClient,
   mailbox: SyncMailboxInput,
   provider: EmailProvider,
 ): Promise<SyncSummary> {
@@ -133,7 +133,7 @@ export async function syncMailbox(
 }
 
 async function recordInbound(
-  client: SupabaseClient,
+  client: DbClient,
   mailbox: SyncMailboxInput,
   message: {
     providerMessageId: string
@@ -191,7 +191,7 @@ async function recordInbound(
  * mailbox-by-mailbox waterfall does not scale across reps.
  */
 export async function syncOrganizationMailboxes(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   concurrency = 4,
 ): Promise<SyncSummary[]> {

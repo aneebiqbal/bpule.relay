@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * The effective send policy engine.
  *
@@ -17,7 +18,6 @@
  * A later rule can only narrow a decision an earlier rule already made. Nothing
  * here can override a block from an earlier rule.
  */
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { currentInstant, isOrgWorkingDay, isWithinWorkday, orgDate, type OperatingPolicy } from '@/lib/org-clock'
 import { messageTypeLimit } from '@/lib/ai/config'
 import { DEFAULT_EMAIL_AUTONOMY_MODE, isEmailAutonomyMode, type EmailAutonomyMode } from './autonomy'
@@ -242,7 +242,7 @@ export function mailboxHealthState(
  * makes health a real signal.
  */
 export async function loadMailboxPolicyState(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   revenueIdentityId: string | null,
   operating: OperatingPolicy,
@@ -336,7 +336,7 @@ export async function loadMailboxPolicyState(
 
 /** The database-facing canonical service. */
 export async function getEffectiveSendPolicy(
-  client: SupabaseClient,
+  client: DbClient,
   input: {
     organizationId: string
     revenueIdentityId?: string | null

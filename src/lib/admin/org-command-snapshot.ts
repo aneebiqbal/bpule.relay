@@ -1,8 +1,8 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { cache } from 'react'
 import { createScoutStore } from '@/lib/store'
 import { getAuthContext } from '@/lib/auth/organization'
 import { isDemoMode } from '@/lib/ai/config'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { currentInstant, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 

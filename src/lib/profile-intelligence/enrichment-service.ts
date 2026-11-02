@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Profile Enrichment + Safe Merge — I/O layer.
  *

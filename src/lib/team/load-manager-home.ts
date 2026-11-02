@@ -1,6 +1,6 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { loadTeamDay } from '@/lib/rep-day/team'
 import { loadTeamLive } from '@/lib/admin/load-team-live'
 import { businessDateRange, currentInstant, orgDate } from '@/lib/org-clock'
@@ -13,6 +13,7 @@ import {
   type ManagerHomeTeamData,
 } from '@/lib/team/manager-home-summary'
 import { countOverdueAssignedByRep } from '@/lib/tasks/assigned-tasks'
+import { loadOutcomeEventCounts } from '@/lib/operations/outcome-events'
 
 const MEANINGFUL_ACTIONS = [
   'REPLY_SENT',
@@ -74,7 +75,8 @@ export async function loadManagerHomeTeam(): Promise<{
     const teamLive = filterTeamLiveToRepIds(teamLiveFull, allowed)
 
     const client = store.getSupabaseClient()
-    const [teamNames, activity, overdueTasksByRep] = await Promise.all([
+    const today = businessDateRange(teamDay.businessDate, teamDay.timezone)
+    const [teamNames, activity, overdueTasksByRep, outcomeEvents] = await Promise.all([
       Promise.all(
         ctx.managedTeamIds.map(async (teamId) => {
           const info = await store.getTeamInfo(teamId)
@@ -83,6 +85,7 @@ export async function loadManagerHomeTeam(): Promise<{
       ),
       loadRecentTeamActivity(ctx.orgId, allowed),
       countOverdueAssignedByRep(client, ctx.orgId, [...allowed]),
+      loadOutcomeEventCounts(client, { orgId: ctx.orgId, repIds: [...allowed], start: today.start, end: today.end }),
     ])
 
     const named = teamNames.filter(Boolean) as string[]
@@ -100,6 +103,7 @@ export async function loadManagerHomeTeam(): Promise<{
       allowedRepIds: allowed,
       activity,
       overdueTasksByRep,
+      outcomeEventsByRep: outcomeEvents.byActor,
     })
 
     return { data }

@@ -71,7 +71,8 @@ export function ContributionHeatmap({ daily, onDayClick, filter = 'all', compact
             gridAutoFlow: 'column',
             gap: GAP,
           }}
-          role="grid"
+          // A labelled set of day buttons, not an ARIA grid (which requires row/gridcell children).
+          role="group"
           aria-label={`Daily ${unit}, ${weeks.length} weeks`}
         >
           {labelCol > 0 && DAY_LABELS.map((l, i) => (

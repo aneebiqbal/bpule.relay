@@ -1,3 +1,4 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -8,7 +9,6 @@ import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { isProductAdmin } from '@/lib/auth/admin-page'
 import { createScoutStore } from '@/lib/store'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { SignOutButton } from '@/components/sign-out-button'
 import { DashHeader, Meter, Panel, Pill } from '@/components/dashboard/kit'

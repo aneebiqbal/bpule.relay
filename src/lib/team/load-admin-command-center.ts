@@ -1,6 +1,6 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { getCurrentUser } from '@/lib/auth/current'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { loadTeamDay } from '@/lib/rep-day/team'
 import { loadTeamLive } from '@/lib/admin/load-team-live'
 import { businessDateRange, currentInstant, orgDate } from '@/lib/org-clock'
@@ -17,6 +17,9 @@ import {
   countOverdueAssignedByRep,
   countUnassignedOpenTasks,
 } from '@/lib/tasks/assigned-tasks'
+import { loadOutcomeEventCounts } from '@/lib/operations/outcome-events'
+import { groupMetrics, identityResolver, PERFORMANCE_ACTION_TYPES, type PerfEvent } from '@/lib/operations/performance'
+import { chunkedIn } from '@/lib/supabase/chunked-in'
 
 const MEANINGFUL_ACTIONS = [
   'REPLY_SENT',
@@ -100,7 +103,7 @@ export async function loadAdminCommandCenter(): Promise<{
     const weekStart = new Date(dayRange.start)
     weekStart.setUTCDate(weekStart.getUTCDate() - 7)
 
-    const [teamDay, teamLiveFull, leadsResult, identitiesResult, assignmentsResult, accountabilityResult, activityResult, repsResult, overdueTasksByRep, unassignedTasks] =
+    const [teamDay, teamLiveFull, leadsResult, identitiesResult, assignmentsResult, profileEventsResult, activityResult, repsResult, overdueTasksByRep, unassignedTasks, todayOutcomes, weekOutcomes] =
       await Promise.all([
         loadTeamDay(),
         loadTeamLive(ctx.orgId),
@@ -115,18 +118,24 @@ export async function loadAdminCommandCenter(): Promise<{
           .limit(2000),
         supabase
           .from('revenue_identities')
-          .select('id, identity_name, channel')
+          .select('id, identity_name, channel, profile_id')
           .eq('organization_id', ctx.orgId)
           .eq('status', 'active'),
         supabase
           .from('identity_assignments')
           .select('revenue_identity_id, rep_id')
           .eq('organization_id', ctx.orgId),
+        // Profile rows: today's executed events by sending profile — the same
+        // send / meeting / win rule as Team Performance (drafts, generated
+        // copy and failures never count). Goal completions are not events.
         supabase
-          .from('daily_accountability')
-          .select('revenue_identity_id, activity_type, completed_count')
+          .from('action_events')
+          .select('actor_id, action_type, execution_status, lead_id, sender_profile_id')
           .eq('organization_id', ctx.orgId)
-          .eq('target_date', businessDate),
+          .in('action_type', PERFORMANCE_ACTION_TYPES)
+          .gte('occurred_at', dayRange.start)
+          .lt('occurred_at', dayRange.end)
+          .limit(5000),
         supabase
           .from('action_events')
           .select('id, actor_id, action_type, occurred_at, lead_id')
@@ -138,6 +147,8 @@ export async function loadAdminCommandCenter(): Promise<{
         supabase.from('reps').select('id, name').eq('organization_id', ctx.orgId),
         countOverdueAssignedByRep(supabase, ctx.orgId, null),
         countUnassignedOpenTasks(supabase, ctx.orgId),
+        loadOutcomeEventCounts(supabase, { orgId: ctx.orgId, repIds: null, start: dayRange.start, end: dayRange.end }),
+        loadOutcomeEventCounts(supabase, { orgId: ctx.orgId, repIds: null, start: weekStart.toISOString(), end: dayRange.end }),
       ])
 
     const allowed = new Set(teamDay.reps.map((r) => r.repId))
@@ -162,29 +173,19 @@ export async function loadAdminCommandCenter(): Promise<{
       leadsByIdentity.set(lead.revenueIdentityId, (leadsByIdentity.get(lead.revenueIdentityId) ?? 0) + 1)
     }
 
-    const sentByIdentity = new Map<string, number>()
-    const replyByIdentity = new Map<string, number>()
-    const meetingsByIdentity = new Map<string, number>()
-    const proposalsByIdentity = new Map<string, number>()
-    const winsByIdentity = new Map<string, number>()
-    for (const row of accountabilityResult.data ?? []) {
-      const id = row.revenue_identity_id as string
-      const type = String(row.activity_type ?? '').toLowerCase()
-      const n = (row.completed_count as number) ?? 0
-      if (type.includes('meeting')) meetingsByIdentity.set(id, (meetingsByIdentity.get(id) ?? 0) + n)
-      else if (type.includes('proposal')) proposalsByIdentity.set(id, (proposalsByIdentity.get(id) ?? 0) + n)
-      else if (type.includes('win')) winsByIdentity.set(id, (winsByIdentity.get(id) ?? 0) + n)
-      else if (type.includes('reply')) replyByIdentity.set(id, (replyByIdentity.get(id) ?? 0) + n)
-      else if (
-        type.includes('dm')
-        || type.includes('connection')
-        || type.includes('email')
-        || type.includes('followup')
-        || type.includes('follow_up')
-      ) {
-        sentByIdentity.set(id, (sentByIdentity.get(id) ?? 0) + n)
-      }
-    }
+    // Same attribution as Team Performance. Today's events on leads that are no
+    // longer open (won, lost) still need their lead's identity as the fallback.
+    const profileEvents = (profileEventsResult.data ?? []) as PerfEvent[]
+    const identityByLead = new Map(openLeads.map((l) => [l.id, l.revenueIdentityId]))
+    const closedLeadIds = [...new Set(profileEvents.map((e) => e.lead_id).filter((id): id is string => !!id && !identityByLead.has(id)))]
+    const closedLeads = await chunkedIn<{ id: string; revenue_identity_id: string | null }>(closedLeadIds, (chunk) =>
+      supabase.from('leads').select('id, revenue_identity_id').eq('organization_id', ctx.orgId).in('id', chunk),
+    ).catch(() => [])
+    for (const l of closedLeads) identityByLead.set(l.id, l.revenue_identity_id)
+    const byIdentity = groupMetrics(
+      profileEvents,
+      identityResolver((identitiesResult.data ?? []) as Array<{ id: string; profile_id: string | null }>, (id) => identityByLead.get(id)),
+    )
 
     const assignedIdentityIds = new Set(
       (assignmentsResult.data ?? [])
@@ -196,8 +197,9 @@ export async function loadAdminCommandCenter(): Promise<{
       .filter((i) => assignedIdentityIds.has(i.id as string) || leadsByIdentity.has(i.id as string))
       .map((i) => {
         const id = i.id as string
-        const messagesSent = sentByIdentity.get(id) ?? 0
-        const replies = replyByIdentity.get(id) ?? 0
+        const m = byIdentity.get(id)
+        const messagesSent = m ? m.connections + m.messages : 0
+        const replies = m?.replies ?? 0
         return {
           identityId: id,
           name: (i.identity_name as string) ?? 'Unnamed',
@@ -205,9 +207,9 @@ export async function loadAdminCommandCenter(): Promise<{
           assignedLeads: leadsByIdentity.get(id) ?? 0,
           messagesSent,
           replies,
-          meetings: meetingsByIdentity.get(id) ?? 0,
-          proposals: proposalsByIdentity.get(id) ?? 0,
-          wins: winsByIdentity.get(id) ?? 0,
+          meetings: m?.meetings ?? 0,
+          proposals: m?.proposals ?? 0,
+          wins: m?.wins ?? 0,
           replyRate: messagesSent > 0 ? Math.round((replies / messagesSent) * 100) : null,
         }
       })
@@ -230,15 +232,10 @@ export async function loadAdminCommandCenter(): Promise<{
       if (activity.length >= 15) break
     }
 
-    let meetingsThisWeek = 0
-    let wins = 0
-    for (const row of activityResult.data ?? []) {
-      if (row.action_type === 'MEETING_BOOKED') meetingsThisWeek += 1
-      if (row.action_type === 'CLIENT_WON') wins += 1
-    }
-    // Prefer accountability wins when present.
-    const accountabilityWins = [...winsByIdentity.values()].reduce((a, b) => a + b, 0)
-    if (accountabilityWins > wins) wins = accountabilityWins
+    // Canonical outcome events (src/lib/sales/meetings.ts) — not the 40-row
+    // activity sample, and not self-reported goal completions.
+    const meetingsThisWeek = weekOutcomes.meetings
+    const wins = weekOutcomes.wins
 
     const data = assembleAdminCommandCenter({
       orgName,
@@ -253,6 +250,7 @@ export async function loadAdminCommandCenter(): Promise<{
       wins,
       overdueTasksByRep,
       unassignedTasks,
+      outcomeEventsByRep: todayOutcomes.byActor,
     })
 
     return { data }

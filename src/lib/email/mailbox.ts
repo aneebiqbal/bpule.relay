@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Mailbox connection — OAuth handshake, token storage and health.
  *
@@ -10,7 +11,6 @@
  * key is never written to the row, a log or a response body.
  */
 import { createHash } from 'node:crypto'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { encryptToken, decryptSecrets, tokenEncryptionConfigured } from './oauth/token-cipher'
 import { createOAuthState, verifyOAuthState, createPkce } from './oauth/state'
 import {
@@ -42,7 +42,7 @@ export interface ConnectionStart {
 
 /** Step 1 — build the Google authorization URL and persist the PKCE verifier. */
 export async function startMailboxConnection(
-  client: SupabaseClient,
+  client: DbClient,
   input: { organizationId: string; revenueIdentityId: string; loginHint?: string | null; redirectTo?: string },
 ): Promise<ConnectionStart> {
   if (!oauthConfigured()) {
@@ -97,7 +97,7 @@ export interface ConnectionResult {
  * retried by replaying the URL.
  */
 export async function completeMailboxConnection(
-  client: SupabaseClient,
+  client: DbClient,
   input: { state: string | null; code: string | null },
 ): Promise<ConnectionResult> {
   const state = verifyOAuthState(input.state)
@@ -196,7 +196,7 @@ export interface MailboxRecord {
  * that as REAUTH_REQUIRED, never as "send anyway".
  */
 export async function loadMailboxCredentials(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   revenueIdentityId: string,
 ): Promise<{ accessToken: string; refreshToken: string; expiresAt: number | null; scope: string | null } | null> {

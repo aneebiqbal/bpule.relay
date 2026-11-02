@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/auth/current";
 import { getAuthContext } from "@/lib/auth/organization";
 import { isDemoMode } from "@/lib/ai/config";
 import { createScoutStore } from "@/lib/store";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { getAuthProvider } from "@/lib/auth/provider";
 import { RelayAppShell } from "@/components/shell/relay-app-shell";
 import { AppIdentifyWrapper } from "@/components/app-identify-wrapper";
 import { AnalyticsProvider } from "@/components/analytics-provider";
@@ -24,9 +24,9 @@ export default async function AppLayout({
   const user = await getCurrentUser();
   if (!user) {
     try {
-      const supabase = await createServerSupabase();
-      const { data } = await supabase.auth.getUser();
-      if (data.user) {
+      const auth = await getAuthProvider();
+      const { user: sessionUser } = await auth.getSession();
+      if (sessionUser) {
         redirect("/login?error=no_workspace");
       }
     } catch {

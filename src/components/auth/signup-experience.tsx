@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AnalyticsEvents } from "@/lib/analytics/events";
 import { getAttribution, track } from "@/lib/analytics/track";
-import { getBrowserSupabase } from "@/lib/supabase/client";
+import { getBrowserAuth } from "@/lib/auth/browser";
 import { humanizeSignupError } from "@/lib/auth/error-messages";
 import {
   RelayAuthShell,
@@ -122,13 +122,10 @@ export function SignupExperience({ capabilities }: { capabilities: AuthCapabilit
     setResendError(null);
 
     try {
-      const supabase = getBrowserSupabase();
-      const { error: authError } = await supabase.auth.resend({
-        type: "signup",
-        email: targetEmail,
-      });
+      const auth = await getBrowserAuth();
+      const authError = await auth.resendVerification(targetEmail);
 
-      if (authError) throw authError;
+      if (authError) throw new Error(authError.message);
 
       setResent(true);
       setCooldown(60);

@@ -1,7 +1,7 @@
+import { createServiceSupabase, createServiceSupabaseAuth } from '@/lib/supabase/service'
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
-import { createServiceSupabase } from '@/lib/supabase/service'
 import { recordHumanEdits } from '@/lib/profile-intelligence/enrichment-service'
 import { effectiveReadiness, LIVE_COUNT_SELECT, liveCounts, profileDisplayName, profileDisplayRole } from '@/lib/profile-intelligence/legacy-display'
 import { canViewProfile, profileAccess } from '@/lib/profile-intelligence/access'
@@ -127,7 +127,7 @@ export async function PATCH(
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid body.' }, { status: 400 })
 
-  const client = createServiceSupabase()
+  const client = createServiceSupabaseAuth()
 
   const editableFields = [
     'full_name', 'display_name', 'headline', 'current_role', 'company',

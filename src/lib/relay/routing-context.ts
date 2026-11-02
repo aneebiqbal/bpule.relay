@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * One way to build the inputs for rankSendersForLead() from a stored lead /
  * decision packet, and one way to load the org's sender profiles. The
@@ -5,7 +6,6 @@
  * all go through here, so the best sender is the same on every screen.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { loadSenderCandidates } from './sender-suggestion'
 import { computeHistoricalOutcomes, toRoutingFormat } from './historical-outcomes'
 import { rankSendersForLead, type RoutingLeadContext, type RoutingResult, type SenderProfile } from './sender-routing-engine'
@@ -76,7 +76,7 @@ export function factsFromCanonical(ci: unknown): SourceFactsSummary | null {
 }
 
 /** Every active sender profile in the org, with proof, industries and bounded historical outcomes. */
-export async function loadSenderProfiles(client: SupabaseClient, orgId: string, repId: string): Promise<SenderProfile[]> {
+export async function loadSenderProfiles(client: DbClient, orgId: string, repId: string): Promise<SenderProfile[]> {
   const [candidates, historicalMap] = await Promise.all([
     loadSenderCandidates(client, orgId, repId),
     computeHistoricalOutcomes(client, orgId).catch(() => new Map()),

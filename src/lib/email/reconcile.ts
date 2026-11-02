@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Reconciliation for a send the provider accepted but Relay failed to record.
  *
@@ -11,7 +12,6 @@
  * (organization_id, provider, provider_message_id), so running it twice, or
  * running it after a successful write, changes nothing.
  */
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { mapEmailMessage } from './mappers'
 import type { EmailMessageMeta } from '@/lib/domain/types'
 
@@ -41,7 +41,7 @@ export interface ReconcileResult {
 }
 
 export async function reconcileAcceptedSend(
-  client: SupabaseClient,
+  client: DbClient,
   input: ReconcileInput,
 ): Promise<ReconcileResult> {
   const { data: existing } = await client

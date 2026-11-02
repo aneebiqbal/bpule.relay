@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * The operational worker.
  *
@@ -11,7 +12,7 @@
  * Failure: every job records attempt, last_error and next_attempt_at, and is
  * dead-lettered after max_attempts. Nothing fails silently.
  */
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { notifyForEvent, notifyOnce } from '@/lib/notifications/deliver'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import {
   businessDateRange,
@@ -81,43 +82,11 @@ function backoffMinutes(attempt: number): number {
   return Math.min(60, 2 ** Math.max(0, attempt - 1))
 }
 
-export async function notifyOnce(
-  client: SupabaseClient,
-  input: {
-    organizationId: string
-    recipientId: string
-    type: string
-    title: string
-    body: string
-    link: string
-    dedupeKey: string
-  },
-): Promise<boolean> {
-  const { data: existing } = await client
-    .from('notifications')
-    .select('id')
-    .eq('organization_id', input.organizationId)
-    .eq('recipient_id', input.recipientId)
-    .eq('dedupe_key', input.dedupeKey)
-    .maybeSingle()
-
-  if (existing) return false
-
-  const { error } = await client.from('notifications').insert({
-    organization_id: input.organizationId,
-    recipient_id: input.recipientId,
-    notification_type: input.type,
-    title: input.title,
-    body: input.body,
-    link: input.link,
-    dedupe_key: input.dedupeKey,
-  })
-
-  return !error
-}
+// One notification writer for the whole app (src/lib/notifications/deliver.ts).
+export { notifyOnce }
 
 async function loadRepDays(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   businessDate: string,
 ): Promise<RepDayRow[]> {
@@ -143,7 +112,7 @@ async function loadRepDays(
  * is invisible all day and the day only becomes visible once it is already over.
  */
 export async function ensureRepDays(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   businessDate: string,
   policy: OperatingPolicy,
@@ -193,7 +162,7 @@ export async function ensureRepDays(
 }
 
 async function openDay(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   businessDate: string,
   policy: OperatingPolicy,
@@ -216,7 +185,7 @@ async function openDay(
 }
 
 async function refreshRepDays(
-  client: SupabaseClient,
+  client: DbClient,
   policy: OperatingPolicy,
   organizationId: string,
   businessDate: string,
@@ -260,7 +229,7 @@ async function refreshRepDays(
 }
 
 async function emitWarnings(
-  client: SupabaseClient,
+  client: DbClient,
   policy: OperatingPolicy,
   organizationId: string,
   businessDate: string,
@@ -315,8 +284,48 @@ async function emitWarnings(
   return { sent }
 }
 
+/**
+ * TASK_OVERDUE: open assigned tasks past due get one notice per task per due
+ * time (`task_overdue:<taskId>:<dueAt>`), so repeated scheduler runs never
+ * re-notify and a reschedule starts a new window. Runs inside EMIT_WARNING —
+ * existing scheduled infrastructure, no new job kind. Skipped while the task
+ * tables are not migrated.
+ */
+export async function emitOverdueTaskNotifications(
+  client: DbClient,
+  organizationId: string,
+  now: Date,
+): Promise<{ overdue: number; notified: number }> {
+  const { data, error } = await client
+    .from('assigned_tasks')
+    .select('id, assignee_rep_id, title, due_at')
+    .eq('organization_id', organizationId)
+    .in('status', ['OPEN', 'IN_PROGRESS'])
+    .not('due_at', 'is', null)
+    .lt('due_at', now.toISOString())
+    .order('due_at', { ascending: true })
+    .limit(200)
+  if (error) {
+    if (isMissingRelation(error)) return { overdue: 0, notified: 0 }
+    throw error
+  }
+  let notified = 0
+  for (const task of (data ?? []) as Array<{ id: string; assignee_rep_id: string | null; title: string | null; due_at: string }>) {
+    if (!task.assignee_rep_id) continue
+    const result = await notifyForEvent(client, organizationId, {
+      kind: 'TASK_OVERDUE',
+      taskId: task.id,
+      assigneeRepId: task.assignee_rep_id,
+      title: task.title ?? 'Task',
+      dueAt: task.due_at,
+    })
+    if (result === 'delivered') notified += 1
+  }
+  return { overdue: data?.length ?? 0, notified }
+}
+
 async function emitEscalations(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   businessDate: string,
   policy: OperatingPolicy,
@@ -396,7 +405,7 @@ async function emitEscalations(
 }
 
 async function closeMissedDays(
-  client: SupabaseClient,
+  client: DbClient,
   policy: OperatingPolicy,
   organizationId: string,
   businessDate: string,
@@ -445,7 +454,7 @@ async function closeMissedDays(
 }
 
 async function prepareCarryover(
-  client: SupabaseClient,
+  client: DbClient,
   policy: OperatingPolicy,
   organizationId: string,
   businessDate: string,
@@ -481,7 +490,7 @@ async function prepareCarryover(
 }
 
 async function evaluateFollowUps(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   businessDate: string,
 ) {
@@ -522,7 +531,7 @@ async function evaluateFollowUps(
   return { sent }
 }
 
-async function syncMailboxes(client: SupabaseClient, organizationId: string) {
+async function syncMailboxes(client: DbClient, organizationId: string) {
   const summaries = await syncOrganizationMailboxes(client, organizationId)
   return {
     scanned: summaries.reduce((n, s) => n + s.scanned, 0),
@@ -547,7 +556,7 @@ async function syncMailboxes(client: SupabaseClient, organizationId: string) {
  * then evaluates — so a draft that becomes ineligible (opt-out, terminal, quota)
  * is dropped by the same gate the manual route uses, rather than by a second rule.
  */
-async function enqueueEmailWork(client: SupabaseClient, organizationId: string, businessDate: string) {
+async function enqueueEmailWork(client: DbClient, organizationId: string, businessDate: string) {
   const { data: drafts, error } = await client
     .from('prepared_email_drafts')
     .select('id, revenue_identity_id')
@@ -599,7 +608,7 @@ async function enqueueEmailWork(client: SupabaseClient, organizationId: string, 
  * its blockers so the rep can see why.
  */
 async function sendQueuedEmail(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   payload: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
@@ -677,7 +686,7 @@ async function sendQueuedEmail(
   return { sent: true, emailMessageId: result.emailMessage.id, idempotent: result.idempotent }
 }
 
-async function retryEmails(client: SupabaseClient, organizationId: string) {
+async function retryEmails(client: DbClient, organizationId: string) {
   const { data: attempts, error } = await client
     .from('email_send_attempts')
     .select('provider, provider_message_id')
@@ -705,7 +714,7 @@ async function retryEmails(client: SupabaseClient, organizationId: string) {
   return { checked: attempts?.length ?? 0, reconciled }
 }
 
-async function executeJob(client: SupabaseClient, row: JobRow): Promise<Record<string, unknown>> {
+async function executeJob(client: DbClient, row: JobRow): Promise<Record<string, unknown>> {
   const organizationId = row.organization_id
   const businessDate = row.business_date
   const policy = await loadOperatingPolicy(organizationId, client)
@@ -715,8 +724,11 @@ async function executeJob(client: SupabaseClient, row: JobRow): Promise<Record<s
       return openDay(client, organizationId, businessDate, policy)
     case 'EVALUATE_REP_DAY':
       return refreshRepDays(client, policy, organizationId, businessDate)
-    case 'EMIT_WARNING':
-      return emitWarnings(client, policy, organizationId, businessDate)
+    case 'EMIT_WARNING': {
+      const warnings = await emitWarnings(client, policy, organizationId, businessDate)
+      const tasks = await emitOverdueTaskNotifications(client, organizationId, currentInstant())
+      return { ...warnings, overdueTasks: tasks.overdue, overdueNotified: tasks.notified }
+    }
     case 'EMIT_ESCALATION':
       return emitEscalations(client, organizationId, businessDate, policy)
     case 'CLOSE_MISSED_DAY':
@@ -747,7 +759,7 @@ export async function runOperationalScheduler(options: {
   now?: Date
   organizationId?: string
   limit?: number
-  client?: SupabaseClient
+  client?: DbClient
 } = {}): Promise<SchedulerSummary> {
   const now = options.now ?? currentInstant()
   const limit = Math.min(500, Math.max(1, options.limit ?? 200))

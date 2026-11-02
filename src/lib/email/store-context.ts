@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * A ScoutStore for callers that have no signed-in request.
  *
@@ -6,13 +7,12 @@
  * rep and organization rows, so those callers use one store implementation
  * rather than a second, divergent one.
  */
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { SupabaseStore } from '@/lib/store/supabase-store'
 import type { ScoutStore } from '@/lib/store/types'
 import type { Organization, Rep } from '@/lib/domain/types'
 
 export async function createStoreForRep(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   repId: string,
 ): Promise<ScoutStore> {

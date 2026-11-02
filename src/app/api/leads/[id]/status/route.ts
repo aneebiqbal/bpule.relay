@@ -58,7 +58,8 @@ export async function POST(
 
     switch (statusType) {
       case 'meeting_booked':
-        newStatus = 'won'
+        // A booked meeting is a meeting, not a won deal (src/lib/sales/meetings.ts).
+        // Lead status is left alone; the stage and a MEETING_BOOKED event record it.
         conversationStage = 'meeting'
         break
       case 'interested':
@@ -86,7 +87,7 @@ export async function POST(
       })
     }
 
-    const actionType = statusType === 'meeting_booked' ? 'CLIENT_WON' as const
+    const actionType = statusType === 'meeting_booked' ? 'MEETING_BOOKED' as const
       : statusType === 'interested' ? 'OPPORTUNITY_CREATED' as const
       : null
 
@@ -105,8 +106,8 @@ export async function POST(
       } catch { }
     }
 
-    // Dataset: capture OUTCOME (won/lost/deferred).
-    if (newStatus) {
+    // Dataset: capture OUTCOME (meeting/won/lost/deferred).
+    if (newStatus || statusType === 'meeting_booked') {
       const sampleId = await findLatestSampleForLead(store.getSupabaseClient(), lead.organizationId, id)
       if (sampleId) {
         // A booked meeting is a meeting, not a won deal: the dataset keeps

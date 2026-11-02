@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { safeErrorResponse } from '@/lib/errors'
 

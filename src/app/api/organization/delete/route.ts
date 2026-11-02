@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceSupabase } from '@/lib/supabase/service'
+import { getAuthProvider } from '@/lib/auth/provider'
 import { getAuthContext, can } from '@/lib/auth/organization'
 
 export async function DELETE() {
@@ -12,6 +13,7 @@ export async function DELETE() {
   }
 
   const service = createServiceSupabase()
+  const auth = await getAuthProvider()
 
   const { data: members, error: membersErr } = await service
     .from('reps')
@@ -34,7 +36,7 @@ export async function DELETE() {
   if (members) {
     for (const member of members) {
       if (member.auth_user_id) {
-        await service.auth.admin.deleteUser(member.auth_user_id)
+        await auth.deleteUser(member.auth_user_id)
       }
     }
   }

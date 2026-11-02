@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { DbClient } from '@/lib/db/types'
 import { currentInstant, orgDate, type OperatingPolicy } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
@@ -465,15 +466,17 @@ function mapProofItemUnredacted(r: Row): ProofItem {
 export class SupabaseStore implements ScoutStore {
   constructor(
     private readonly rep: Rep,
-    private readonly client: SupabaseClient,
+    private readonly client: DbClient,
     private readonly organization: Organization,
+    /** Raw Supabase client, used only for Storage (not part of the adapter). */
+    private readonly storageClient: SupabaseClient | null = null,
   ) {}
 
   get organizationId(): string {
     return this.organization.id
   }
 
-  getSupabaseClient(): SupabaseClient {
+  getSupabaseClient(): DbClient {
     return this.client
   }
 
@@ -1832,6 +1835,9 @@ export class SupabaseStore implements ScoutStore {
     const { data: inserted, error: insertError } = await insertMessageReturningId(this.client, replyPayload)
     if (insertError) throw insertError
     if (!inserted) throw new Error('Failed to record the reply.')
+    // No INBOUND_REPLY notification here: only the owner can log a reply on
+    // this path and nobody is notified of their own action. Replies that
+    // arrive without the owner (email webhook) notify them there.
 
     // Persist the facts the client stated (budget, meeting date, NDA, ...).
     try {
@@ -2175,7 +2181,9 @@ export class SupabaseStore implements ScoutStore {
   async deleteProfile(id: string): Promise<void> {
     const profile = await this.getProfile(id)
     if (profile?.cvPath) {
-      await this.client.storage.from('proof-cvs').remove([profile.cvPath])
+      // Storage is not part of the canonical adapter — it stays on Supabase
+      // until Neon Object Storage is migrated.
+      await this.storageClient?.storage.from('proof-cvs').remove([profile.cvPath])
     }
     const { error } = await this.client
       .from('profiles')
@@ -2244,7 +2252,7 @@ export class SupabaseStore implements ScoutStore {
       .maybeSingle()
     const cvPath = (data as Row | null)?.cv_path as string | undefined
     if (cvPath) {
-      await this.client.storage.from('proof-cvs').remove([cvPath])
+      await this.storageClient?.storage.from('proof-cvs').remove([cvPath])
     }
     const { error } = await this.client.from('profiles').delete().eq('id', id)
     if (error) throw error

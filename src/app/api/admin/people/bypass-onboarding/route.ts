@@ -1,7 +1,7 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { DEFAULT_QUIZ } from '@/lib/style/quiz'
 import { calibrateStyleCard } from '@/lib/style/calibrate'
 

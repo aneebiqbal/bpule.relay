@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { readInvitation } from '@/lib/auth/invitations'
+import { getAuthProvider } from '@/lib/auth/provider'
+import type { AuthUser } from '@/lib/auth/contract'
+import { createServiceSupabase } from '@/lib/supabase/service'
 import { provisionInvitedMember } from '@/lib/auth/invitations-server'
+import { consumePendingInvitation } from '@/lib/auth/pending-invitations'
 
 type CookieMutation = {
   name: string
@@ -55,18 +58,22 @@ export function safeNextPath(requested: string | null, origin: string): string {
   }
 }
 
-export async function GET(request: Request) {
-  const url = new URL(request.url)
-  const code = url.searchParams.get('code')
-  let redirectTo = safeNextPath(url.searchParams.get('next'), url.origin)
-
+/**
+ * Exchange a Supabase PKCE code for a session.
+ *
+ * Supabase's authorization-code flow is the one part of sign-in that must run
+ * here: the exchange mints the session cookie, which has to be written onto
+ * this response. Neon Auth establishes its session through its own API proxy,
+ * so it needs no equivalent.
+ */
+async function exchangeSupabaseCode(
+  request: Request,
+  code: string | null,
+  mutations: CookieMutation[],
+): Promise<{ ok: boolean; user?: AuthUser }> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.redirect(new URL('/login?error=auth_callback_failed', url.origin))
-  }
-
-  const cookieMutations: CookieMutation[] = []
+  if (!supabaseUrl || !supabaseAnonKey) return { ok: false }
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookieOptions: {
@@ -80,7 +87,7 @@ export async function GET(request: Request) {
       },
       setAll(cookiesToSet) {
         for (const cookie of cookiesToSet) {
-          cookieMutations.push({
+          mutations.push({
             name: cookie.name,
             value: cookie.value,
             options: cookie.options as Record<string, unknown>,
@@ -90,53 +97,83 @@ export async function GET(request: Request) {
     },
   })
 
-  if (!code) {
-    return applyCookieMutations(
-      NextResponse.redirect(new URL('/login?error=missing_code', url.origin)),
-      cookieMutations,
-    )
-  }
+  if (!code) return { ok: false }
 
   const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-  if (error) {
+  if (error || !data.user) return { ok: false }
+
+  return {
+    ok: true,
+    user: {
+      id: data.user.id,
+      email: data.user.email ?? '',
+      name: (data.user.user_metadata?.full_name as string | undefined) ?? null,
+    },
+  }
+}
+
+export async function GET(request: Request) {
+  const url = new URL(request.url)
+  const code = url.searchParams.get('code')
+  let redirectTo = safeNextPath(url.searchParams.get('next'), url.origin)
+
+  const auth = await getAuthProvider()
+  const cookieMutations: CookieMutation[] = []
+
+  let user: AuthUser | null = null
+
+  if (auth.name === 'supabase') {
+    const exchange = await exchangeSupabaseCode(request, code, cookieMutations)
+    if (!exchange.ok) {
+      return applyCookieMutations(
+        NextResponse.redirect(new URL('/login?error=auth_callback_failed', url.origin)),
+        cookieMutations,
+      )
+    }
+    user = exchange.user ?? null
+  } else {
+    // Neon Auth has already established the session through its API proxy.
+    const session = await auth.getSession()
+    user = session.user
+  }
+
+  if (!user) {
     return applyCookieMutations(
       NextResponse.redirect(new URL('/login?error=auth_callback_failed', url.origin)),
       cookieMutations,
     )
   }
 
-  const authUserId = data.user?.id
-  if (authUserId) {
-    const { data: rep } = await supabase
-      .from('reps')
-      .select('id')
-      .eq('auth_user_id', authUserId)
-      .maybeSingle()
+  const service = createServiceSupabase()
+  const { data: repRows } = await service
+    .from('reps')
+    .select('id')
+    .eq('auth_user_id', user.id)
+    .limit(1)
 
-    if (!rep) {
-      // No application identity yet. Only a trusted invitation (admin-only
-      // app_metadata) may create one; anyone else is denied, never given a
-      // free-floating account with no organisation.
-      const invitation = readInvitation(data.user?.app_metadata)
-      const provisioned = invitation
-        ? await provisionInvitedMember({
-            invitation,
-            authUserId,
-            email: data.user?.email ?? '',
-            displayName: (data.user?.user_metadata?.full_name as string | undefined) ?? null,
-          })
-        : null
+  if (!repRows || repRows.length === 0) {
+    // No application identity yet. Only a pending invitation may create one;
+    // anyone else is denied, never given a free-floating account with no
+    // organisation.
+    const invitation = await consumePendingInvitation(service, user.email)
+    const provisioned = invitation
+      ? await provisionInvitedMember({
+          invitation,
+          authUserId: user.id,
+          email: user.email,
+          displayName: user.name,
+        })
+      : null
 
-      if (!provisioned) {
-        await supabase.auth.signOut()
-        return applyCookieMutations(
-          NextResponse.redirect(new URL('/login?error=no_workspace', url.origin)),
-          cookieMutations,
-        )
-      }
-      // A brand-new invited member always starts onboarding.
-      redirectTo = '/onboarding'
+    if (!provisioned) {
+      await auth.signOut()
+      return applyCookieMutations(
+        NextResponse.redirect(new URL('/login?error=no_workspace', url.origin)),
+        cookieMutations,
+      )
     }
+    // A brand-new invited member always starts onboarding.
+    redirectTo = '/onboarding'
   }
 
   return applyCookieMutations(

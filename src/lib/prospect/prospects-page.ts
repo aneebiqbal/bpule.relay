@@ -1,3 +1,4 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 /**
  * The Prospect workspace: Analyze | Recent | Saved | Watchlist.
  *
@@ -10,7 +11,6 @@ import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { isProductAdmin } from '@/lib/auth/admin-page'
 import { createScoutStore } from '@/lib/store'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
 import type { WorkspaceIdentity } from '@/lib/workspace/active-identity'
 import { loadBoardData, scopeLeadsToWorkspace } from '@/lib/leads/board-rows'

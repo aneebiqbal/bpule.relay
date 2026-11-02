@@ -98,9 +98,9 @@ export function RelayAppShell({
 
   async function signOut() {
     if (!demo) {
-      const { getBrowserSupabase } = await import('@/lib/supabase/client')
-      const supabase = getBrowserSupabase()
-      await supabase.auth.signOut()
+      const { getBrowserAuth } = await import("@/lib/auth/browser")
+      const auth = await getBrowserAuth()
+      await auth.signOut()
     }
     router.replace('/login')
     router.refresh()
@@ -250,7 +250,8 @@ export function RelayAppShell({
           </div>
         </aside>
 
-        <main className="mx-auto w-full max-w-6xl px-5 py-6 pb-24 lg:px-8 lg:pb-8">
+        {/* min-w-0: a grid item defaults to min-width:auto, so a wide table would widen the page instead of scrolling in its own container. */}
+        <main className="mx-auto w-full min-w-0 max-w-6xl px-5 py-6 pb-24 lg:px-8 lg:pb-8">
           <div className="mb-6 hidden border-b border-line pb-2.5 lg:block">
             <AppBackButton />
           </div>

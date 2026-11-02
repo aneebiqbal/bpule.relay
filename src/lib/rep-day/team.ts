@@ -1,3 +1,4 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 /**
  * Team day — the canonical server-side contract for the Command Centre.
  *
@@ -12,7 +13,6 @@
  * explicit role check here. A rep is refused; a manager sees only managed
  * teams; an admin sees the organization.
  */
-import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext, type AuthContext } from '@/lib/auth/organization'
 import {
   businessDateRange,

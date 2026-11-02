@@ -4,6 +4,7 @@ import { createServiceSupabase } from '@/lib/supabase/service'
 import { executeProfileMerge, previewProfileMerge } from '@/lib/profile-intelligence/enrichment-service'
 import { enrichmentErrorResponse } from '@/lib/profile-intelligence/enrichment-http'
 import { profileAccess } from '@/lib/profile-intelligence/access'
+import { createServiceSupabaseAuth } from '@/lib/supabase/service'
 
 /**
  * Safe duplicate-profile merge: Profile B (source) → Profile A (target).
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
   const targetId = typeof body?.targetProfileId === 'string' ? body.targetProfileId : null
   if (!sourceId || !targetId) return NextResponse.json({ error: 'sourceProfileId and targetProfileId are required.' }, { status: 400 })
 
-  const client = createServiceSupabase()
+  const client = createServiceSupabaseAuth()
   try {
     if (body.mode === 'execute') {
       if (typeof body.previewToken !== 'string') return NextResponse.json({ error: 'Run a dry-run preview first.' }, { status: 400 })

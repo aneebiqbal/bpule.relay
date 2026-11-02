@@ -1,7 +1,7 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
-import { createServerSupabase } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 

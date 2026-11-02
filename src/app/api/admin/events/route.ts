@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 
 export const maxDuration = 30

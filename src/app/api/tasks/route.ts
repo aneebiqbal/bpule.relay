@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getDatabaseCapabilities, notAvailableBody } from '@/lib/operations/capabilities'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
 import {
@@ -39,6 +40,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await getAuthContext()
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const capabilityStore = await createScoutStore().catch(() => null)
+  const capabilities = await getDatabaseCapabilities(capabilityStore?.getSupabaseClient() ?? null)
+  if (!capabilities.assignedTasks) return NextResponse.json(notAvailableBody('assignedTasks'), { status: 503 })
 
   const body = await request.json().catch(() => ({}))
   const {

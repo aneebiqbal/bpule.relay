@@ -22,11 +22,15 @@ export function Drawer({ open, onClose, title, children, side = "left", classNam
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose()
     }
+    // Move focus into the panel and give it back on close (keyboard + SR users).
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    panelRef.current?.focus()
     document.addEventListener("keydown", onKey)
     document.body.style.overflow = "hidden"
     return () => {
       document.removeEventListener("keydown", onKey)
       document.body.style.overflow = ""
+      previouslyFocused?.focus?.()
     }
   }, [open, onClose])
 
@@ -34,7 +38,7 @@ export function Drawer({ open, onClose, title, children, side = "left", classNam
 
   const sideClasses: Record<string, string> = {
     left: "inset-y-0 left-0 w-72 max-w-[85vw]",
-    right: "inset-y-0 right-0 w-80 max-w-[85vw]",
+    right: "inset-y-0 right-0 w-80 max-w-[85vw] sm:w-[420px]",
     bottom: "inset-x-0 bottom-0 max-h-[85vh] rounded-t-xl",
   }
 
@@ -51,6 +55,7 @@ export function Drawer({ open, onClose, title, children, side = "left", classNam
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         className={cn(
           "fixed flex flex-col bg-bone-raised shadow-xl",
           sideClasses[side],

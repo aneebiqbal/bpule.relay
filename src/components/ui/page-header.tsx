@@ -71,7 +71,7 @@ export function PageHeader({
       {hasMeta && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">{filters}</div>
-          {savedView && <div className="shrink-0">{savedView}</div>}
+          {savedView && <div className="max-w-full shrink-0 overflow-x-auto">{savedView}</div>}
         </div>
       )}
     </div>

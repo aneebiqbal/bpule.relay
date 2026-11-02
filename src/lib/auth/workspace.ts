@@ -1,8 +1,8 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { cache } from 'react'
 import { getCurrentUser } from './current'
 import { createScoutStore } from '@/lib/store'
 import { isDemoMode } from '@/lib/ai/config'
-import { createServerSupabase } from '@/lib/supabase/server'
 import {
   currentInstant,
   isOrgWorkingDay,

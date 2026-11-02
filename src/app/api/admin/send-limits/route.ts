@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
-import { createServerSupabase } from '@/lib/supabase/server'
 import {
   mergeSendLimits,
   readSendLimits,
   validateSendLimitPatch,
 } from '@/lib/email/send-limits'
+import { createServerSupabase } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 

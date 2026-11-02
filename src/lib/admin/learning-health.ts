@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * First-100 campaign + learning health.
  *
@@ -5,7 +6,6 @@
  * here is faked: a zero is a true zero, and every number is org-scoped.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 
 /** Human label for an active-learning priority reason. Never a raw enum dump. */
 export const REASON_LABEL: Record<string, string> = {
@@ -39,7 +39,7 @@ export interface CampaignProgress {
 }
 
 /** First-100 campaign progress from the canonical tables. */
-export async function first100Progress(client: SupabaseClient, orgId: string): Promise<CampaignProgress> {
+export async function first100Progress(client: DbClient, orgId: string): Promise<CampaignProgress> {
   const [{ count: opportunityLabels }, { count: pairwise }, { count: routingReviews }, { count: messageReviews }, { count: thesisReviews }] = await Promise.all([
     client.from('scoring_labels').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
     client.from('scoring_pairwise_labels').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
@@ -70,7 +70,7 @@ export interface LearningHealth extends CampaignProgress {
 }
 
 /** The single admin summary of learning health. */
-export async function learningHealth(client: SupabaseClient, orgId: string): Promise<LearningHealth> {
+export async function learningHealth(client: DbClient, orgId: string): Promise<LearningHealth> {
   const progress = await first100Progress(client, orgId)
 
   const { data: labels } = await client
@@ -112,7 +112,7 @@ export async function learningHealth(client: SupabaseClient, orgId: string): Pro
  * Simple same-label agreement between reviewers who labelled the same
  * opportunity. Only meaningful with overlap; null otherwise.
  */
-export async function reviewerAgreement(client: SupabaseClient, orgId: string): Promise<number | null> {
+export async function reviewerAgreement(client: DbClient, orgId: string): Promise<number | null> {
   const { data } = await client
     .from('scoring_labels')
     .select('opportunity_key, labeler_rep_id, prospect_quality')

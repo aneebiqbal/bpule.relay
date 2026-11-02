@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { mapPreparedEmailDraft, mapEmailMessage } from '@/lib/email/mappers'
 import { safeErrorResponse } from '@/lib/errors'

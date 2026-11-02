@@ -1,6 +1,6 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
-import { createServerSupabase } from '@/lib/supabase/server'
 import {
   MESSAGE_CLASSIFICATIONS,
   THESIS_RATINGS,

@@ -95,9 +95,20 @@ export function assembleManagerRepSnapshots(input: {
   allowedRepIds: Set<string>
   /** Batched overdue assigned-task counts by rep id. */
   overdueTasksByRep?: Map<string, number>
+  /**
+   * Canonical meetings / wins (MEETING_BOOKED / CLIENT_WON events) for the
+   * day. When given it is the only source; goal completions are a fallback
+   * for callers that have not loaded events.
+   */
+  outcomeEventsByRep?: Map<string, { meetings: number; wins: number }>
 }): ManagerRepSnapshot[] {
   const liveByRep = new Map(input.teamLive.people.map((p) => [p.repId, p]))
   const overdue = input.overdueTasksByRep ?? new Map<string, number>()
+  const outcomes = input.outcomeEventsByRep
+  const meetingsFor = (repId: string, live: TeamLivePerson | undefined) =>
+    outcomes ? outcomes.get(repId)?.meetings ?? 0 : live ? meetingsFromGoals(live) : 0
+  const winsFor = (repId: string, live: TeamLivePerson | undefined) =>
+    outcomes ? outcomes.get(repId)?.wins ?? 0 : live ? winsFromGoals(live) : 0
   const snaps: ManagerRepSnapshot[] = []
 
   for (const row of input.teamDay.reps) {
@@ -117,8 +128,8 @@ export function assembleManagerRepSnapshots(input: {
       followUpsOverdue: live ? followUpsOverdue(live) : 0,
       highPriorityUntouched: live ? highPriorityCount(live) : 0,
       overdueTasks: overdue.get(row.repId) ?? 0,
-      meetings: live ? meetingsFromGoals(live) : 0,
-      wins: live ? winsFromGoals(live) : 0,
+      meetings: meetingsFor(row.repId, live),
+      wins: winsFor(row.repId, live),
       targetPct,
       // Ages only when measured; never invent hours for severity.
       oldestReplyAgeHours: null,
@@ -147,8 +158,8 @@ export function assembleManagerRepSnapshots(input: {
       followUpsOverdue: followUpsOverdue(person),
       highPriorityUntouched: highPriorityCount(person),
       overdueTasks: overdue.get(person.repId) ?? 0,
-      meetings: meetingsFromGoals(person),
-      wins: winsFromGoals(person),
+      meetings: meetingsFor(person.repId, person),
+      wins: winsFor(person.repId, person),
       targetPct,
       oldestReplyAgeHours: null,
       oldestFollowUpAgeHours: null,
@@ -171,6 +182,7 @@ export function assembleManagerHomeTeamData(input: {
   allowedRepIds: Set<string>
   activity?: ManagerActivityItem[]
   overdueTasksByRep?: Map<string, number>
+  outcomeEventsByRep?: Map<string, { meetings: number; wins: number }>
 }): ManagerHomeTeamData {
   const snaps = assembleManagerRepSnapshots(input)
   const attention = buildTeamAttention(snaps)

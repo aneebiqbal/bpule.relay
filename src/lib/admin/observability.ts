@@ -4,7 +4,6 @@
  * Answers: "Is the system healthy? Are there duplicates, gaps, or drift?"
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 
 function getClient() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports

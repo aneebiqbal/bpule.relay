@@ -6,10 +6,6 @@ import type { LeadsQuery } from '@/components/leads/pipeline-utils'
 
 export type LeadsViewMode = 'table' | 'pipeline'
 
-export function isPipelineView(value: string | undefined): boolean {
-  return value === 'pipeline'
-}
-
 /**
  * Table | Pipeline is a representation toggle over the SAME lead data — never a
  * second data model. Filters carry across; the page resets to page 1.

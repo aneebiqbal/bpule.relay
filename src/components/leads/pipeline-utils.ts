@@ -458,6 +458,11 @@ function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
 }
 
+/** Server-safe: the leads page decides Table vs Pipeline before rendering the client toggle. */
+export function isPipelineView(value: string | undefined): boolean {
+  return value === 'pipeline'
+}
+
 /**
  * URL state is the only filter state. A saved view supplies a preset; explicit
  * params win over it, so `?view=needs_reply&q=acme` is a filtered view.

@@ -1,3 +1,5 @@
+import { createServerSupabase } from '@/lib/supabase/server'
+import type { DbClient } from '@/lib/db/types'
 /**
  * Explicit rep-day transitions: check in, close, exception.
  *
@@ -8,8 +10,6 @@
  * Every transition is idempotent. A double-click cannot move a check-in time,
  * and closing twice returns the first close.
  */
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { createServerSupabase } from '@/lib/supabase/server'
 import type { RepDayView } from './load'
 
 export type CloseMode = 'complete' | 'incomplete'
@@ -41,7 +41,7 @@ export async function checkInRepDay(input: {
   repId: string
   businessDate: string
   now: Date
-  client?: SupabaseClient
+  client?: DbClient
 }): Promise<{ ok: boolean; checkInAt: string | null; error?: string }> {
   const supabase = input.client ?? (await createServerSupabase())
   const key = {
@@ -125,7 +125,7 @@ export async function closeRepDay(input: {
   now: Date
   exceptionReason?: string | null
   exceptionNote?: string | null
-  client?: SupabaseClient
+  client?: DbClient
 }): Promise<CloseResult> {
   const { view, mode, now } = input
   const supabase = input.client ?? (await createServerSupabase())
@@ -181,7 +181,7 @@ export async function requestRepDayException(input: {
   businessDate: string
   reason: string
   note: string | null
-  client?: SupabaseClient
+  client?: DbClient
 }): Promise<{ ok: boolean; error?: string }> {
   const supabase = input.client ?? (await createServerSupabase())
   const { error } = await supabase
@@ -210,7 +210,7 @@ export async function reviewRepDayException(input: {
   approved: boolean
   reviewerId: string
   reason?: string | null
-  client?: SupabaseClient
+  client?: DbClient
 }): Promise<{ ok: boolean; error?: string }> {
   const supabase = input.client ?? (await createServerSupabase())
   const now = new Date().toISOString()

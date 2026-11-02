@@ -1,4 +1,3 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
   ContactPoint,
   EmailMessageMeta,
@@ -22,13 +21,14 @@ import { generateEmailCopy } from '@/lib/email/writer'
 import { validateEmailClaims } from '@/lib/email/claim-safety'
 import { getEmailProvider, type EmailProvider } from '@/lib/email/providers/email-provider'
 import { classifySendDisposition, inferFeedbackReasons } from '@/lib/relay/edit-learning'
+import type { DbClient } from '@/lib/db/types'
 
 /**
  * Record a failed attempt. Never called on the success path, and never allowed
  * to mask the original error — a send that failed is never logged as sent.
  */
 async function recordAttemptFailure(
-  client: SupabaseClient,
+  client: DbClient,
   input: {
     orgId: string
     leadId: string
@@ -71,7 +71,7 @@ async function recordAttemptFailure(
 type Row = Record<string, unknown>
 
 async function listAssignedIdentityIds(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
   repId: string,
 ): Promise<string[]> {
@@ -113,7 +113,7 @@ function mapRevenueIdentity(r: Row): RevenueIdentity {
 }
 
 export async function listLeadContactPoints(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
   leadId: string,
 ): Promise<ContactPoint[]> {
@@ -129,7 +129,7 @@ export async function listLeadContactPoints(
 }
 
 export async function addLeadContactPoint(input: {
-  client: SupabaseClient
+  client: DbClient
   orgId: string
   leadId: string
   type: ContactPoint['type']
@@ -187,7 +187,7 @@ export async function addLeadContactPoint(input: {
 }
 
 async function resolveRevenueIdentity(input: {
-  client: SupabaseClient
+  client: DbClient
   orgId: string
   repId: string
   preferredIdentityId: string | null
@@ -223,7 +223,7 @@ function fallbackContact(contacts: ContactPoint[]): ContactPoint | null {
 }
 
 export async function prepareEmailDraft(input: {
-  client: SupabaseClient
+  client: DbClient
   store: ScoutStore
   orgId: string
   repId: string
@@ -383,7 +383,7 @@ export async function prepareEmailDraft(input: {
   return mapPreparedEmailDraft(data as Row)
 }
 
-async function loadDraftOrThrow(client: SupabaseClient, orgId: string, draftId: string): Promise<PreparedEmailDraft> {
+async function loadDraftOrThrow(client: DbClient, orgId: string, draftId: string): Promise<PreparedEmailDraft> {
   const { data, error } = await client
     .from('prepared_email_drafts')
     .select('*')
@@ -396,7 +396,7 @@ async function loadDraftOrThrow(client: SupabaseClient, orgId: string, draftId: 
 }
 
 export async function sendPreparedEmail(input: {
-  client: SupabaseClient
+  client: DbClient
   store: ScoutStore
   orgId: string
   repId: string

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { getBrowserSupabase } from "@/lib/supabase/client";
+import { getBrowserAuth } from "@/lib/auth/browser";
 import { humanizePasswordResetError } from "@/lib/auth/error-messages";
 import {
   RelayAuthShell,
@@ -31,11 +31,9 @@ export function ForgotPasswordExperience() {
     setError(null);
 
     try {
-      const supabase = getBrowserSupabase();
-      const { error: authError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      if (authError) throw authError;
+      const auth = await getBrowserAuth();
+      const authError = await auth.resetPasswordForEmail(normalizedEmail, `${window.location.origin}/reset-password`);
+      if (authError) throw new Error(authError.message);
 
       setSentTo(normalizedEmail);
     } catch (cause) {

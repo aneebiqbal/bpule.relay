@@ -6,6 +6,7 @@ import { LayoutList, MessagesSquare } from 'lucide-react'
 import { LeadWorkspace } from './lead-workspace-simple'
 import { LeadConversation } from './conversation/lead-conversation'
 import { Tabs } from './ui/tabs'
+import { NotesPanel } from './operations/notes-panel'
 import type { LeadDetail } from '@/lib/store/types'
 import type { Profile } from '@/lib/domain/types'
 
@@ -64,6 +65,10 @@ export function LeadWorkspaceAsync({ dataPromise }: { dataPromise: Promise<LeadD
       ) : (
         <LeadConversation leadId={lead.id} onChanged={() => router.refresh()} />
       )}
+      {/* Internal notes sit outside the thread on purpose: never mixed with client messages. */}
+      <div id="notes" className="scroll-mt-20">
+        <NotesPanel subjectType="LEAD" subjectId={lead.id} />
+      </div>
     </div>
   )
 }

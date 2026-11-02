@@ -161,7 +161,8 @@ export function DataTable<T>({
                 column.className,
               )}
             >
-              {onSortChange ? (
+              {/* A header-less column (row actions) has nothing to sort by and no name for the button. */}
+              {onSortChange && column.header !== '' && column.header != null ? (
                 <button
                   type="button"
                   onClick={() => requestSort(column)}

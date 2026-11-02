@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Reply-to-lead matching.
  *
@@ -14,7 +15,6 @@
  * The decision is pure and the DB reads are separate, so matching can be tested
  * without a database and the queries can change without touching the rule.
  */
-import type { SupabaseClient } from '@supabase/supabase-js'
 
 export type ReplyMatchConfidence = 'THREAD' | 'REPLY_REFERENCE' | 'MAILBOX_RECIPIENT' | 'ADDRESS_MATCH'
 
@@ -90,7 +90,7 @@ export interface ReplyMatchInput {
  * All four queries are independent and bounded; none is per lead.
  */
 export async function matchReplyToLead(
-  client: SupabaseClient,
+  client: DbClient,
   input: ReplyMatchInput,
 ): Promise<ReplyMatchResult> {
   const org = input.organizationId

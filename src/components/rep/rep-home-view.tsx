@@ -259,7 +259,7 @@ export function RepHomeView({ data }: { data: RepWorkspaceData }) {
         <h2 className="text-[16px] font-medium text-ink">Personal scoreboard</h2>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <ScoreStat label="Connections sent" value={scoreboard.connections} />
-          <ScoreStat label="Replies" value={scoreboard.replies} />
+          <ScoreStat label="Replies sent" value={scoreboard.replies} />
           <ScoreStat label="Meetings" value={scoreboard.meetings} />
           <ScoreStat label="Proposals" value={scoreboard.proposals} />
           <ScoreStat label="Wins" value={scoreboard.wins} />
@@ -469,6 +469,16 @@ function aggregateScoreboard(data: RepWorkspaceData) {
       else if (key.includes('proposal')) totals.proposals += t.completedCount
       else if (key.includes('win')) totals.wins += t.completedCount
     }
+  }
+  // Executed events, not goal completions: the same counting rule as Team
+  // Performance and Reports (drafts and failures never count; meetings / wins
+  // are outcome events). Goals only fill in when events did not load.
+  if (data.outcomeEvents) {
+    totals.meetings = data.outcomeEvents.meetings
+    totals.wins = data.outcomeEvents.wins
+    if (data.outcomeEvents.connections !== undefined) totals.connections = data.outcomeEvents.connections
+    if (data.outcomeEvents.repliesSent !== undefined) totals.replies = data.outcomeEvents.repliesSent
+    if (data.outcomeEvents.proposals !== undefined) totals.proposals = data.outcomeEvents.proposals
   }
   return totals
 }

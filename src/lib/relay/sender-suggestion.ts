@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Org-wide sender suggestion.
  *
@@ -10,7 +11,6 @@
  * assigned or changed.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { profileDisplayName, profileDisplayRole } from '@/lib/profile-intelligence/legacy-display'
 
 export interface SenderCandidate {
@@ -117,7 +117,7 @@ export function pickSuggestion(
 
 /** Loads every active profile in the org with its proof, marking which ones the rep can use. */
 export async function loadSenderCandidates(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
   repId: string,
 ): Promise<SenderCandidate[]> {

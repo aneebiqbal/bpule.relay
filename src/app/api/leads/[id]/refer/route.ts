@@ -103,6 +103,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     toRepId: toRepId!,
     toProfileId: toProfileId ?? undefined,
     reason: reason ?? undefined,
+    previousOwnerRepId: (lead.owner_rep_id as string | null) ?? null,
   })
   if (!result.success) {
     return NextResponse.json({ error: 'Referral failed. Try again.' }, { status: 500 })

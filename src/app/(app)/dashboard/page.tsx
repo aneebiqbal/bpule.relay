@@ -1,9 +1,9 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { buildRoleContext } from '@/lib/relay/role-intelligence'
 import { buildRelayQueue } from '@/lib/relay/queue-engine'
 import { rankNextActions, type NextBestAction } from '@/lib/relay/next-best-action'
@@ -235,6 +235,12 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     })
   }
 
+  // Canonical meetings / wins today (src/lib/sales/meetings.ts) — same events
+  // Manager Home, Admin Home, Rep 360 and Team Performance count.
+  const outcomeEvents = user.organization?.id
+    ? await countOutcomeEventsToday(user.organization.id, user.rep.id)
+    : null
+
   // Log recommendations for observability (non-blocking)
   if (actions.length > 0 && user.organization?.id) {
     Promise.all(actions.slice(0, 5).map(action =>
@@ -279,6 +285,7 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     },
     allActions,
     unifiedTasks,
+    outcomeEvents,
     nextAction: actions[0] ?? null,
     upNext: actions.slice(1),
     notifications: [],
@@ -311,6 +318,35 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
       state: r.state,
     })),
     signalFeed: buildSignalFeedFromActionEvents(dash, recentLeads),
+  }
+}
+
+/**
+ * Today's executed events for this rep, counted with the same rule as Team
+ * Performance, Admin Home and Reports (aggregateMetrics): drafts, generated
+ * copy and failed sends never count; meetings / wins are outcome events.
+ */
+async function countOutcomeEventsToday(orgId: string, repId: string): Promise<RepWorkspaceData['outcomeEvents']> {
+  try {
+    const supabase = await createServerSupabase()
+    const policy = await loadOperatingPolicy(orgId)
+    const businessDate = orgDate(currentInstant(), policy.timezone)
+    const { start, end } = businessDateRange(businessDate, policy.timezone)
+    const { aggregateMetrics, PERFORMANCE_ACTION_TYPES } = await import('@/lib/operations/performance')
+    const { data, error } = await supabase
+      .from('action_events')
+      .select('actor_id, action_type, execution_status, lead_id')
+      .eq('organization_id', orgId)
+      .eq('actor_id', repId)
+      .in('action_type', PERFORMANCE_ACTION_TYPES)
+      .gte('occurred_at', start)
+      .lt('occurred_at', end)
+      .limit(2000)
+    if (error) return null
+    const m = aggregateMetrics(data ?? [])
+    return { meetings: m.meetings, wins: m.wins, connections: m.connections, repliesSent: m.repliesSent, proposals: m.proposals }
+  } catch {
+    return null
   }
 }
 

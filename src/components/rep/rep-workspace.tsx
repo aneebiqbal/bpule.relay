@@ -75,6 +75,9 @@ export interface RepWorkspaceData {
   upNext: RelayTodayAction[]
   /** Full canonical action list; the desk sections and the Today KPI share it. */
   allActions: RelayTodayAction[]
+  /** Canonical meetings / wins today (MEETING_BOOKED / CLIENT_WON events). */
+  /** Today's executed events (aggregateMetrics) — the scoreboard's source when loaded. */
+  outcomeEvents?: { meetings: number; wins: number; connections?: number; repliesSent?: number; proposals?: number } | null
   /** Unified derived + assigned tasks for Home ranking and /tasks parity. */
   unifiedTasks?: import('@/lib/tasks/types').UnifiedTask[]
   notifications: Array<{ id: string; title: string; body: string }>

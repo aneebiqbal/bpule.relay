@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
+import { getSupabaseAuthClient } from '@/lib/supabase/server'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const ALLOWED: Record<string, string> = {
@@ -59,7 +59,7 @@ export async function GET(
     return NextResponse.json({ signedUrl: null })
   }
 
-  const client = await createServerSupabase()
+  const client = await getSupabaseAuthClient()
   const { data: signed } = await client.storage
     .from('proof-cvs')
     .createSignedUrl(profile.cvPath, 60 * 60)
@@ -129,7 +129,7 @@ export async function POST(
     )
   }
 
-  const client = await createServerSupabase()
+  const client = await getSupabaseAuthClient()
   const path = `${profile.repId}/${crypto.randomUUID()}.${ext}`
 
   const { error: uploadError } = await client.storage

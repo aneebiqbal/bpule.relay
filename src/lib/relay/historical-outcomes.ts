@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Historical Outcomes Computation
  *
@@ -8,7 +9,7 @@
  * Capped so historical data never overrides current fit assessment.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { MEETING_EVENT, MEETING_OR_LATER_STAGES, leadReachedMeeting } from '@/lib/sales/meetings'
 
 export interface SenderHistoricalOutcomes {
   profileId: string
@@ -28,12 +29,13 @@ export interface SenderHistoricalOutcomes {
  * One query — aggregates from leads + messages tables.
  */
 export async function computeHistoricalOutcomes(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
 ): Promise<Map<string, SenderHistoricalOutcomes>> {
   const { data: rows, error } = await client
     .from('leads')
     .select(`
+      id,
       sender_profile_id,
       status,
       messages:id,lead_id,direction,type,sent_at
@@ -42,6 +44,15 @@ export async function computeHistoricalOutcomes(
     .not('sender_profile_id', 'is', null)
 
   if (error || !rows) return new Map()
+
+  // Canonical meeting truth (src/lib/sales/meetings.ts): a MEETING_BOOKED
+  // event or a stage at/after meeting. Narrow, org-scoped reads.
+  const [meetingRes, stageRes] = await Promise.all([
+    client.from('action_events').select('lead_id').eq('organization_id', orgId).eq('action_type', MEETING_EVENT).limit(5000),
+    client.from('conversation_states').select('lead_id, stage').eq('organization_id', orgId).in('stage', [...MEETING_OR_LATER_STAGES]).limit(5000),
+  ])
+  const meetingLeadIds = new Set(((meetingRes.data ?? []) as Array<{ lead_id: string | null }>).map((e) => e.lead_id).filter(Boolean) as string[])
+  const stageByLead = new Map(((stageRes.data ?? []) as Array<{ lead_id: string; stage: string | null }>).map((c) => [c.lead_id, c.stage]))
 
   const outcomes = new Map<string, {
     contacted: number
@@ -79,8 +90,9 @@ export async function computeHistoricalOutcomes(
     const hasInbound = messages.some((m) => m.direction === 'inbound')
     o.replied.push(hasInbound)
 
-    // Meeting: status = meeting_booked
-    o.meeting.push(lead.status === 'meeting_booked')
+    // Meeting: canonical event / stage — never lead status.
+    const leadId = lead.id as string
+    o.meeting.push(leadReachedMeeting({ hasMeetingEvent: meetingLeadIds.has(leadId), stage: stageByLead.get(leadId) }))
 
     // Won/Lost
     o.won.push(lead.status === 'won')

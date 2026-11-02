@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AnalyticsEvents } from "@/lib/analytics/events";
 import { track } from "@/lib/analytics/track";
-import { getBrowserSupabase } from "@/lib/supabase/client";
+import { getBrowserAuth } from "@/lib/auth/browser";
 import {
   humanizeMagicLinkError,
   humanizeOauthError,
@@ -116,27 +116,24 @@ export function LoginExperience({ demoMode, googleEnabled }: LoginExperienceProp
     setError(null);
 
     try {
-      const supabase = getBrowserSupabase();
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password,
-      });
+      const auth = await getBrowserAuth();
+      const authError = await auth.signInWithPassword(normalizedEmail, password);
 
       if (authError) {
-        throw authError;
+        throw new Error(authError.message);
       }
 
       const serverSessionReady = await waitForServerSession();
       if (!serverSessionReady) {
         const workspaceCheck = await checkWorkspaceMapping();
         if (workspaceCheck.noWorkspace) {
-          await supabase.auth.signOut().catch(() => undefined);
+          await auth.signOut().catch(() => undefined);
           throw new Error(
             "This email is authenticated but not linked to any Relay workspace. Ask an admin to invite this email, or create a new workspace.",
           );
         }
 
-        await supabase.auth.signOut().catch(() => undefined);
+        await auth.signOut().catch(() => undefined);
         throw new Error(
           "Signed in, but this browser is not persisting the session cookie. Please allow cookies for this site and try again.",
         );
@@ -162,16 +159,10 @@ export function LoginExperience({ demoMode, googleEnabled }: LoginExperienceProp
     setError(null);
 
     try {
-      const supabase = getBrowserSupabase();
-      const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
-      const { error: authError } = await supabase.auth.signInWithOtp({
-        email: normalizedEmail,
-        options: {
-          emailRedirectTo: callbackUrl,
-        },
-      });
+      const auth = await getBrowserAuth();
+      const authError = await auth.signInWithOtp(normalizedEmail);
 
-      if (authError) throw authError;
+      if (authError) throw new Error(authError.message);
       setMagicSent(true);
     } catch (cause) {
       const message = humanizeMagicLinkError(cause instanceof Error ? cause.message : "");
@@ -196,21 +187,15 @@ export function LoginExperience({ demoMode, googleEnabled }: LoginExperienceProp
     setError(null);
 
     try {
-      const supabase = getBrowserSupabase();
-      const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
-      const { data, error: authError } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: callbackUrl,
-        },
-      });
+      const auth = await getBrowserAuth();
+      const result = await auth.signInWithOAuth("google", nextPath);
 
-      if (authError) {
-        throw authError;
+      if (result.error) {
+        throw new Error(result.error.message);
       }
 
-      if (data?.url) {
-        window.location.assign(data.url);
+      if (result.url) {
+        window.location.assign(result.url);
         return;
       }
 

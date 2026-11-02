@@ -1,5 +1,5 @@
-import { cache } from 'react'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { cache } from 'react'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { can } from '@/lib/auth/organization'

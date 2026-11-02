@@ -223,6 +223,7 @@ export function assembleAdminCommandCenter(input: {
   wins: number
   overdueTasksByRep?: Map<string, number>
   unassignedTasks?: number
+  outcomeEventsByRep?: Map<string, { meetings: number; wins: number }>
 }): AdminCommandCenterData {
   const team = assembleManagerHomeTeamData({
     teamName: input.orgName,
@@ -231,6 +232,7 @@ export function assembleAdminCommandCenter(input: {
     allowedRepIds: input.allowedRepIds,
     activity: input.activity,
     overdueTasksByRep: input.overdueTasksByRep,
+    outcomeEventsByRep: input.outcomeEventsByRep,
   })
 
   const missingProfileCount = input.openLeads.filter((l) => !l.revenueIdentityId).length

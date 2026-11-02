@@ -1,138 +1,150 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { Bell, Check, X, Info, CheckCircle2, AlertTriangle } from 'lucide-react'
+import Link from 'next/link'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Bell } from 'lucide-react'
 import { cn } from 'cn'
+import type { RelayNotification } from '@/lib/notifications/model'
 
-interface Notification {
-  id: string
-  type: 'success' | 'warning' | 'info'
-  title: string
-  body?: string
-  createdAt: number
-  read: boolean
+const CATEGORY_LABEL: Record<string, string> = {
+  replies: 'Reply',
+  tasks: 'Task',
+  assignments: 'Assignment',
+  meetings: 'Meeting',
+  admin_requests: 'Request',
+  system: 'System',
 }
 
-const STORAGE_KEY = 'relay_notifications'
-
-function loadNotifications(): Notification[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
+function ago(iso: string): string {
+  const mins = Math.round((Date.now() - Date.parse(iso)) / 60_000)
+  if (mins < 1) return 'now'
+  if (mins < 60) return `${mins}m`
+  const h = Math.floor(mins / 60)
+  return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`
 }
 
-function saveNotifications(notifications: Notification[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications.slice(0, 50)))
-}
-
-export function pushNotification(n: Omit<Notification, 'id' | 'createdAt' | 'read'>) {
-  const notifications = loadNotifications()
-  notifications.unshift({ ...n, id: crypto.randomUUID(), createdAt: Date.now(), read: false })
-  saveNotifications(notifications)
-}
-
-const TYPE_ICON = {
-  success: CheckCircle2,
-  warning: AlertTriangle,
-  info: Info,
-}
-
-const TYPE_TONE = {
-  success: 'text-status-success',
-  warning: 'text-status-warning',
-  info: 'text-cobalt',
-}
-
+/**
+ * Header bell — the 8 most recent rows from the canonical `notifications`
+ * table (the old localStorage list was never written to). Polls every 60s
+ * while the tab is visible; full history lives at /notifications.
+ */
 export function NotificationCenter() {
   const [open, setOpen] = useState(false)
-  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [items, setItems] = useState<RelayNotification[]>([])
+  const [unread, setUnread] = useState(0)
+  const [available, setAvailable] = useState(true)
+  const rootRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    setNotifications(loadNotifications())
-    const interval = setInterval(() => setNotifications(loadNotifications()), 5000)
-    return () => clearInterval(interval)
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/notifications-app?limit=8')
+      if (!res.ok) return
+      const json = (await res.json()) as { notifications?: RelayNotification[]; unread?: number; available?: boolean }
+      setItems(json.notifications ?? [])
+      setUnread(json.unread ?? 0)
+      setAvailable(json.available !== false)
+    } catch {
+      /* offline: keep the last list */
+    }
   }, [])
 
-  const unread = notifications.filter(n => !n.read).length
+  useEffect(() => {
+    void load()
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') void load()
+    }, 60_000)
+    return () => clearInterval(id)
+  }, [load])
 
-  const markAllRead = useCallback(() => {
-    const updated = notifications.map(n => ({ ...n, read: true }))
-    setNotifications(updated)
-    saveNotifications(updated)
-  }, [notifications])
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
 
-  const dismiss = useCallback((id: string) => {
-    const updated = notifications.filter(n => n.id !== id)
-    setNotifications(updated)
-    saveNotifications(updated)
-  }, [notifications])
+  async function markRead(id: string) {
+    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+    setUnread((u) => Math.max(0, u - 1))
+    await fetch('/api/notifications-app', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }).catch(() => {})
+  }
 
-  const timeAgo = (ts: number) => {
-    const mins = Math.round((Date.now() - ts) / 60000)
-    if (mins < 1) return 'now'
-    if (mins < 60) return `${mins}m`
-    if (mins < 1440) return `${Math.round(mins / 60)}h`
-    return `${Math.round(mins / 1440)}d`
+  async function markAll() {
+    setItems((prev) => prev.map((n) => ({ ...n, read: true })))
+    setUnread(0)
+    await fetch('/api/notifications-app', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ markAllRead: true }) }).catch(() => {})
   }
 
   return (
-    <div className="relative">
+    <div ref={rootRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
         className="relative rounded-md p-1.5 text-graphite transition-colors hover:bg-bone-raised hover:text-ink"
-        aria-label="Notifications"
       >
-        <Bell className="size-4" />
+        <Bell className="size-4" aria-hidden="true" />
         {unread > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-orange text-[9px] font-medium text-on-accent">
+          <span className="absolute -right-0.5 -top-0.5 min-w-[16px] rounded-full bg-orange px-1 text-center text-[10px] font-medium leading-4 text-on-accent">
             {unread > 9 ? '9+' : unread}
           </span>
         )}
       </button>
-
       {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden srf-console-edge">
-            <div className="flex items-center justify-between border-b border-console-line px-4 py-3">
-              <p className="text-[12px] font-medium text-console-text">Notifications</p>
-              {unread > 0 && (
-                <button onClick={markAllRead} className="text-[11px] text-orange hover:text-orange-light">
-                  Mark all read
-                </button>
-              )}
-            </div>
-            <div className="max-h-80 overflow-y-auto">
-              {notifications.length === 0 ? (
-                <div className="px-4 py-8 text-center">
-                  <Bell className="mx-auto size-6 text-console-mute" />
-                  <p className="mt-2 text-[12px] text-console-mute">No notifications yet</p>
-                </div>
-              ) : (
-                notifications.slice(0, 20).map(n => {
-                  const Icon = TYPE_ICON[n.type]
-                  return (
-                    <div key={n.id} className={cn('flex items-start gap-3 border-b border-console-line/50 px-4 py-3', !n.read && 'bg-orange/[0.03]')}>
-                      <Icon className={cn('size-4 mt-0.5 shrink-0', TYPE_TONE[n.type])} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[12px] text-console-text">{n.title}</p>
-                        {n.body && <p className="mt-0.5 text-[11px] text-console-mute">{n.body}</p>}
-                        <p className="mt-1 text-[10px] text-console-mute">{timeAgo(n.createdAt)}</p>
-                      </div>
-                      <button onClick={() => dismiss(n.id)} className="shrink-0 rounded p-0.5 text-console-mute hover:text-console-text">
-                        <X className="size-3" />
-                      </button>
-                    </div>
-                  )
-                })
-              )}
-            </div>
+        <div className="absolute right-0 z-40 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-line bg-bone-raised shadow-lg">
+          <div className="flex items-center justify-between border-b border-line px-3 py-2">
+            <p className="text-[13px] font-medium text-ink">Notifications</p>
+            {unread > 0 && (
+              <button type="button" onClick={() => void markAll()} className="text-[12px] text-graphite hover:text-ink">
+                Mark all read
+              </button>
+            )}
           </div>
-        </>
+          {!available ? (
+            <p className="px-3 py-4 text-[12px] text-graphite">Available after database activation.</p>
+          ) : items.length === 0 ? (
+            <p className="px-3 py-4 text-[12px] text-graphite">You’re all caught up.</p>
+          ) : (
+            <ul className="max-h-80 overflow-y-auto">
+              {items.map((n) => (
+                <li key={n.id}>
+                  <Link
+                    href={n.href}
+                    onClick={() => {
+                      setOpen(false)
+                      if (!n.read) void markRead(n.id)
+                    }}
+                    className={cn('block border-b border-line/60 px-3 py-2 hover:bg-bone', !n.read && 'bg-orange/5')}
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="truncate text-[13px] font-medium text-ink">
+                        {!n.read && <span className="sr-only">Unread: </span>}
+                        {n.title}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-stone">{ago(n.createdAt)}</span>
+                    </div>
+                    <p className="truncate text-[12px] text-graphite">
+                      {CATEGORY_LABEL[n.category]}
+                      {n.body ? ` · ${n.body}` : ''}
+                    </p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link href="/notifications" onClick={() => setOpen(false)} className="block px-3 py-2 text-center text-[12px] font-medium text-ink hover:bg-bone">
+            View all notifications
+          </Link>
+        </div>
       )}
     </div>
   )

@@ -1,5 +1,5 @@
-import { cache } from 'react'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { cache } from 'react'
 import { getCurrentUser } from './current'
 import { isDemoMode } from '@/lib/ai/config'
 
