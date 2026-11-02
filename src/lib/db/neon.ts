@@ -16,7 +16,7 @@
  * Nothing here trusts a table name or column name from the browser: identifiers
  * are quoted and validated against `[A-Za-z_][A-Za-z0-9_]*`.
  */
-import { Pool } from '@neondatabase/serverless'
+import { Pool, types as neonTypes } from '@neondatabase/serverless'
 import type {
   CountStrategy,
   DbSingleResult,
@@ -33,6 +33,33 @@ const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/
 function ident(name: string): string {
   if (!IDENT.test(name)) throw new Error(`Refusing to quote suspicious identifier: ${name}`)
   return `"${name}"`
+}
+
+/**
+ * Normalize a thrown driver error into the `DbError` the contract promises.
+ * Postgres errors carry a `code` (42P01, 42703, ...); Neon wraps them in a plain
+ * `Error`, so callers that branch on the code get it when the driver does.
+ */
+function toDbError(reason: unknown): { message: string; code?: string } {
+  const err = reason as { message?: string; code?: string }
+  const message = err?.message ?? String(reason)
+  return typeof err?.code === 'string' ? { message, code: err.code } : { message }
+}
+
+const DATE_TYPE = 1082
+const TIMESTAMP_TYPE = 1114
+const TIMESTAMPTZ_TYPE = 1184
+
+/**
+ * The driver parses temporal columns into JS `Date` objects, while PostgREST
+ * emits their text form. Returning the raw text keeps both providers
+ * interchangeable and leaves DATE columns as plain `YYYY-MM-DD`.
+ */
+export function neonTypeParser(id: number, format?: 'text' | 'binary'): (value: string) => unknown {
+  if (id === DATE_TYPE || id === TIMESTAMP_TYPE || id === TIMESTAMPTZ_TYPE) {
+    return (value) => value
+  }
+  return neonTypes.getTypeParser(id, format)
 }
 
 /**
@@ -97,7 +124,11 @@ export function getNeonPool(): Pool {
   if (pool) return pool
   const url = process.env.DATABASE_URL
   if (!url) throw new Error('DATABASE_URL is not configured for the Neon provider')
-  pool = new Pool({ connectionString: url, max: Number(process.env.DATABASE_POOL_MAX ?? 10) })
+  pool = new Pool({
+    connectionString: url,
+    max: Number(process.env.DATABASE_POOL_MAX ?? 10),
+    types: { getTypeParser: (id, format) => neonTypeParser(id, format) },
+  })
   return pool
 }
 
@@ -364,6 +395,16 @@ class NeonQueryBuilder<T = Record<string, unknown>> implements DbQueryBuilder<T>
       if (value !== null && value !== true && value !== false) this.filterParams.push(value)
       return this
     }
+    if (op === 'in' && Array.isArray(value)) {
+      // The list must expand into individual parameters; binding the array as
+      // one value produces `IN $1`, which Postgres rejects.
+      if (!value.length) {
+        this.filters.push('TRUE')
+        return this
+      }
+      this.filters.push(`NOT (${col} IN (${value.map((v) => this.param(v)).join(', ')}))`)
+      return this
+    }
     const frag = `${col} ${op.toUpperCase()} ?`
     this.filters.push(negate(frag))
     this.filterParams.push(value)
@@ -435,21 +476,31 @@ class NeonQueryBuilder<T = Record<string, unknown>> implements DbQueryBuilder<T>
   }
 
   async single(): Promise<DbSingleResult<T>> {
-    const rows = await this.limit(1).run()
+    let rows: T[]
+    try {
+      rows = await this.limit(1).run()
+    } catch (err) {
+      return { data: null, error: toDbError(err) }
+    }
     if (rows.length === 0) return { data: null, error: { message: 'The result contains 0 rows' } }
     if (rows.length > 1) return { data: null, error: { message: 'The result contains more than 1 row' } }
     return { data: rows[0], error: null }
   }
 
   async maybeSingle(): Promise<DbSingleResult<T>> {
-    const rows = await this.limit(2).run()
+    let rows: T[]
+    try {
+      rows = await this.limit(2).run()
+    } catch (err) {
+      return { data: null, error: toDbError(err) }
+    }
     if (rows.length > 1) return { data: null, error: { message: 'The result contains more than 1 row' } }
     return { data: rows[0] ?? null, error: null }
   }
 
   then<TResult1 = DbResult<T[]>, TResult2 = never>(
     onfulfilled?: ((value: DbResult<T[]>) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    _onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): PromiseLike<TResult1 | TResult2> {
     const promise = this.run().then(
       (rows) => {
@@ -460,7 +511,19 @@ class NeonQueryBuilder<T = Record<string, unknown>> implements DbQueryBuilder<T>
         }
         return onfulfilled ? onfulfilled(result) : (result as unknown as TResult1)
       },
-      (reason) => (onrejected ? onrejected(reason) : Promise.reject(reason)),
+      (reason) => {
+        // PostgREST resolves a failed query with `{ data: null, error }`
+        // rather than rejecting; the app's call sites check `.error`, so the
+        // Neon adapter must not throw here. `await` supplies its own rejection
+        // handler, so this branch must settle through `onfulfilled`.
+        const failed: DbResult<T[]> = {
+          data: null as unknown as T[],
+          error: toDbError(reason),
+          count: null,
+        }
+        if (onfulfilled) return onfulfilled(failed)
+        return _onrejected ? _onrejected(reason) : (failed as unknown as TResult1)
+      },
     )
     return promise as PromiseLike<TResult1 | TResult2>
   }

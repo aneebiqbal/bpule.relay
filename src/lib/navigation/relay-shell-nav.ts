@@ -175,3 +175,84 @@ export function sectionNavItems(
   }
   return items
 }
+
+function navItemMatches(pathname: string, item: RelaySectionNavItem): boolean {
+  return item.exact
+    ? pathname === item.href
+    : pathname === item.href || pathname.startsWith(`${item.href}/`)
+}
+
+/**
+ * The one canonical answer to "which sidebar item is active?".
+ *
+ * Prefix matching can match several aliases of the same route (for example
+ * `/leads` is both "Leads" and "Pipeline"), which used to light up more than
+ * one item at a time. Resolve to the most specific match — longest href wins,
+ * first declared breaks ties — so exactly one item (or none) is ever active.
+ * RENDER_V3_SINGLE_ACTIVE_NAV_ITEM.
+ */
+export function resolveSectionActiveItem(
+  section: RelayShellSection,
+  pathname: string,
+  role: RelayNavRoleFlags,
+): RelaySectionNavItem | null {
+  let best: RelaySectionNavItem | null = null
+  for (const item of sectionNavItems(section, role)) {
+    if (!navItemMatches(pathname, item)) continue
+    if (!best || item.href.length > best.href.length) best = item
+  }
+  return best
+}
+
+/** Mobile primary destinations — one canonical list keyed by section id. */
+export function v3MobileNavItems(role: RelayNavRoleFlags): Array<{ id: string; label: string; href: string }> {
+  const items: Array<{ id: string; label: string; href: string }> = [
+    { id: 'home', label: 'Home', href: '/dashboard' },
+    { id: 'sales', label: 'Leads', href: '/leads' },
+    { id: 'conversations', label: 'Inbox', href: '/chats' },
+  ]
+  if (role.isManager || role.isAdmin || role.isOwner) {
+    items.push({ id: 'team', label: 'Team', href: '/team' })
+  }
+  items.push({ id: 'reports', label: 'Reports', href: '/reports/sales' })
+  return items
+}
+
+export interface V3SidebarItem {
+  id: string
+  label: string
+  href: string
+  visible: (role: RelayNavRoleFlags) => boolean
+}
+
+const v3SidebarBase: V3SidebarItem[] = [
+  { id: 'home', label: 'Home', href: '/dashboard', visible: repManagerAdmin },
+  { id: 'sales', label: 'Sales', href: '/leads', visible: repManagerAdmin },
+  { id: 'conversations', label: 'Inbox', href: '/chats', visible: repManagerAdmin },
+  { id: 'tasks', label: 'Tasks', href: '/tasks', visible: repManagerAdmin },
+  { id: 'team', label: 'Team', href: '/team', visible: managerUp },
+  { id: 'insights', label: 'Insights', href: '/reports', visible: repManagerAdmin },
+]
+
+const v3SidebarAdmin: V3SidebarItem[] = [
+  { id: 'admin', label: 'Admin', href: '/admin', visible: adminUp },
+]
+
+const v3SidebarFooter: V3SidebarItem[] = [
+  { id: 'settings', label: 'Settings', href: '/settings', visible: repManagerAdmin },
+]
+
+export function v3SidebarItems(role: RelayNavRoleFlags): V3SidebarItem[] {
+  return [...v3SidebarBase, ...v3SidebarAdmin, ...v3SidebarFooter].filter((item) => item.visible(role))
+}
+
+/** One active sidebar destination — longest href wins, first declared breaks ties. */
+export function resolveV3SidebarActiveId(pathname: string, role: RelayNavRoleFlags): string | null {
+  let best: V3SidebarItem | null = null
+  for (const item of v3SidebarItems(role)) {
+    const matches = pathname === item.href || pathname.startsWith(`${item.href}/`)
+    if (!matches) continue
+    if (!best || item.href.length > best.href.length) best = item
+  }
+  return best?.id ?? null
+}

@@ -3274,7 +3274,7 @@ export class SupabaseStore implements ScoutStore {
     // Look up the job's connects cost before updating
     const { data: jobRow } = await this.client
       .from('upwork_jobs')
-      .select('connects_cost, sender_profile_id, revenue_identity_id')
+      .select('connects_cost')
       .eq('id', jobId)
       .maybeSingle()
     const connectsCost = (jobRow as unknown as { connects_cost: number })?.connects_cost ?? 0

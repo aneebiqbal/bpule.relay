@@ -148,7 +148,7 @@ export function ChatIntelligencePanel({
       <section className="rounded-lg border border-line bg-bone-raised p-3" aria-label="Open tasks">
         <h3 className="text-[12px] font-medium text-ink">Open tasks</h3>
         {intel.openTasks === null ? (
-          <p className="mt-1 text-[12px] text-graphite">Available after database activation.</p>
+          <p className="mt-1 text-[12px] text-graphite">This feature is unavailable right now.</p>
         ) : intel.openTasks.length === 0 ? (
           <InlineEmpty>No open tasks on this lead.</InlineEmpty>
         ) : (

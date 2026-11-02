@@ -72,10 +72,9 @@ export function safeErrorResponse(
   const safeMessage =
     error instanceof AppError ? error.safeMessage : fallbackMessage
 
-  const isDev = process.env.NODE_ENV === 'development'
-  const finalMessage = isDev || status === 500
-    ? `${fallbackMessage} (${describeError(error)})`
-    : safeMessage
+  // Never expose driver/parser internals in the response body — they go to
+  // the log via reportError (REP_V3_ERROR_SANITIZATION).
+  const finalMessage = safeMessage
 
   reportError(error, { route, status })
   return NextResponse.json({ error: finalMessage }, { status })

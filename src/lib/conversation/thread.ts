@@ -1,4 +1,5 @@
 import type { LeadDetail } from '@/lib/store/types'
+import { compareTimestamps } from '@/lib/domain/timestamps'
 import type { ConversationTurn, TurnKind } from './types'
 import { hasCanonicalOpeningMessage } from './canonical-message'
 
@@ -47,7 +48,7 @@ export function buildThread(lead: Pick<LeadDetail, 'messages' | 'direction' | 'i
   return turns.sort((a, b) => {
     if (a.kind === 'inbound_first') return -1
     if (b.kind === 'inbound_first') return 1
-    return (a.at ?? '').localeCompare(b.at ?? '')
+    return compareTimestamps(a.at, b.at)
   })
 }
 

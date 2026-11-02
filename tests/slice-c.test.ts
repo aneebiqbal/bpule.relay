@@ -492,6 +492,32 @@ describe('DATABASE_CAPABILITIES', () => {
     expect(caps).toMatchObject({ assignedTasks: true, notifications: true, internalNotes: false, savedViews: false, teamScopedActivity: false, meetingEvents: false })
   })
 
+  it('probe: a rejecting builder disables only its own capability', async () => {
+    // The Neon adapter rejects a failed builder rather than resolving it, so a
+    // single unmigrated table must not take every capability down with it.
+    const client = {
+      from: (table: string) => {
+        const builder: Record<string, unknown> = {}
+        for (const m of ['select', 'eq', 'neq', 'in', 'not', 'gte', 'lt', 'lte', 'order', 'limit', 'or', 'is', 'ilike']) {
+          builder[m] = () => builder
+        }
+        const settle = () =>
+          table === 'lead_message_previews'
+            ? Promise.reject(new Error('Neon query failed: relation "lead_message_previews" does not exist'))
+            : Promise.resolve({ data: [], error: null, count: 0 })
+        builder.maybeSingle = settle
+        builder.single = settle
+        builder.then = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => settle().then(res, rej)
+        return builder
+      },
+      rpc: () => Promise.resolve({ data: [], error: null }),
+    }
+    const caps = await probeCapabilities(client as never)
+    expect(caps.assignedTasks).toBe(true)
+    expect(caps.internalNotes).toBe(true)
+    expect(caps.messagePreviews).toBe(false)
+  })
+
   it('getDatabaseCapabilities: env wins; probe is cached (no per-request probing)', async () => {
     process.env.RELAY_DB_CAPABILITIES = 'all'
     expect(await getDatabaseCapabilities(null)).toEqual(allCapabilities(true))

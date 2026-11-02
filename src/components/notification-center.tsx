@@ -110,7 +110,7 @@ export function NotificationCenter() {
             )}
           </div>
           {!available ? (
-            <p className="px-3 py-4 text-[12px] text-graphite">Available after database activation.</p>
+            <p className="px-3 py-4 text-[12px] text-graphite">This feature is unavailable right now.</p>
           ) : items.length === 0 ? (
             <p className="px-3 py-4 text-[12px] text-graphite">You’re all caught up.</p>
           ) : (

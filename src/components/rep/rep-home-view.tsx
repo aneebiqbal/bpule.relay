@@ -1,251 +1,171 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+/**
+ * Rep Home V3 — the flagship daily workspace.
+ * Six sections exactly: header, execution metrics, do this next, my work,
+ * pipeline pulse, today / recent.
+ */
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, ChevronRight, MoreHorizontal } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { cn } from 'cn'
 import type { RepWorkspaceData } from '@/components/rep/rep-workspace'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
-import { deriveTodayCounts } from '@/lib/relay/today-counts'
-import {
-  actionDeepLink,
-  classifyWorkTab,
-  humanWhyNow,
-  isHighPriorityOpportunity,
-  overdueSeverity,
-  primaryCtaLabel,
-  rankActions,
-  relativeWait,
-  taskCategoryLabel,
-  type RepWorkTab,
-} from '@/lib/rep-home/action-presentation'
-import { TODAY_FOLLOWUP_KINDS, TODAY_REPLY_KINDS } from '@/lib/relay/today-counts'
-import { rankUnifiedTasks, classifyUnifiedTaskTab } from '@/lib/tasks/rank-unified-tasks'
 import type { UnifiedTask } from '@/lib/tasks/types'
+import {
+  buildRepV3Actions,
+  buildRepV3Activity,
+  buildRepV3Metrics,
+  buildRepV3Stages,
+  countRepV3DueToday,
+  deriveRepV3MetricInput,
+  REP_V3_EMPTY_STATE,
+  REP_V3_PRIMARY_CTA,
+  REP_V3_PROFILE_LABEL,
+  buildRepV3ProfileMeta,
+  selectRepV3WorkRows,
+  type RepV3WorkTab,
+} from '@/lib/rep-home/v3-present'
+import { rankActions } from '@/lib/rep-home/action-presentation'
+import { ProfileSwitcher } from '@/components/shell/profile-switcher'
+import { V3ActionRow, V3ActivityRow, V3EmptyState, V3Metric, V3PageHeader, V3SectionTitle, V3StageStrip } from '@/components/v3/primitives'
 
-type MetricKey = 'replies' | 'followups' | 'priority' | 'completed'
-
-const WORK_TABS: Array<{ id: RepWorkTab; label: string }> = [
-  { id: 'today', label: 'Today' },
-  { id: 'overdue', label: 'Overdue' },
-  { id: 'upcoming', label: 'Upcoming' },
-  { id: 'completed', label: 'Completed' },
+const WORK_TABS: Array<{ id: RepV3WorkTab; label: string }> = [
+  { id: 'replies', label: 'Replies' },
+  { id: 'followups', label: 'Follow-ups' },
+  { id: 'tasks', label: 'Tasks' },
+  { id: 'pipeline', label: 'Pipeline' },
 ]
 
-export function RepHomeView({ data }: { data: RepWorkspaceData }) {
-  const queueRef = useRef<HTMLDivElement>(null)
-  const workRef = useRef<HTMLDivElement>(null)
-  const [workTab, setWorkTab] = useState<RepWorkTab>('today')
-  const [metricFocus, setMetricFocus] = useState<MetricKey | null>(null)
+export function RepHomeView({ data, role }: { data: RepWorkspaceData; role: 'admin' | 'rep' | 'sourcer' | 'manager' }) {
+  const [workTab, setWorkTab] = useState<RepV3WorkTab>('replies')
 
   const ranked = useMemo(() => rankActions(data.allActions ?? []), [data.allActions])
-  const unified = useMemo(
-    () => rankUnifiedTasks(data.unifiedTasks ?? []),
-    [data.unifiedTasks],
+  const unified = useMemo(() => data.unifiedTasks ?? [], [data.unifiedTasks])
+
+  const metrics = useMemo(
+    () =>
+      buildRepV3Metrics(
+        deriveRepV3MetricInput({
+          ranked,
+          openTasks: unified.length,
+          tasksDueToday: countRepV3DueToday(unified),
+        }),
+      ),
+    [ranked, unified],
   )
-  const counts = useMemo(() => deriveTodayCounts(ranked), [ranked])
-  const highPriority = useMemo(() => ranked.filter(isHighPriorityOpportunity), [ranked])
+  const actions = useMemo(() => buildRepV3Actions(unified, ranked), [unified, ranked])
+  const stages = useMemo(() => buildRepV3Stages(data.pipelineLeads ?? []), [data.pipelineLeads])
+  const activity = useMemo(() => buildRepV3Activity(data.activity ?? []), [data.activity])
+  const workRows = useMemo(
+    () => selectRepV3WorkRows(workTab, unified, ranked),
+    [workTab, unified, ranked],
+  )
 
-  const totalTarget = data.targetSummary?.totalTarget ?? 0
-  const totalCompleted = data.targetSummary?.totalCompleted ?? 0
-
-  const repliesOld4h = ranked.filter((a) =>
-    (TODAY_REPLY_KINDS as readonly string[]).includes(a.kind)
-    && overdueSeverity(a.createdAt) !== 'none'
-    && overdueSeverity(a.createdAt) !== 'mild',
-  ).length
-
-  const followupsOverdue = ranked.filter((a) =>
-    (TODAY_FOLLOWUP_KINDS as readonly string[]).includes(a.kind)
-    && overdueSeverity(a.createdAt) !== 'none',
-  ).length
-
-  const doNext = unified.length > 0 ? unified.slice(0, 12) : ranked.slice(0, 12)
-  const caughtUp = (unified.length > 0 ? unified : ranked).length === 0
-
-  const workRows = useMemo(() => {
-    if (workTab === 'completed') return []
-    if (unified.length > 0) {
-      return unified.filter((t) => classifyUnifiedTaskTab(t) === workTab)
-    }
-    return ranked.filter((a) => classifyWorkTab(a) === workTab)
-  }, [ranked, unified, workTab])
-
-  const completedRows = useMemo(() => {
-    const rows: Array<{ label: string; count: number }> = []
-    for (const identity of data.targetSummary?.byIdentity ?? []) {
-      for (const t of identity.targets) {
-        if (t.completedCount <= 0) continue
-        rows.push({ label: t.activityType, count: t.completedCount })
-      }
-    }
-    return rows
-  }, [data.targetSummary?.byIdentity])
-
-  const scoreboard = useMemo(() => aggregateScoreboard(data), [data])
-
-  function scrollToQueue(key: MetricKey) {
-    setMetricFocus(key)
-    setWorkTab(key === 'completed' ? 'completed' : key === 'priority' ? 'today' : key === 'replies' || key === 'followups' ? 'today' : 'today')
-    queueRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    workRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
-  const useUnified = unified.length > 0
-
-  const filteredDoNext = useMemo(() => {
-    if (!metricFocus || metricFocus === 'completed') return doNext
-    if (useUnified) {
-      const tasks = doNext as UnifiedTask[]
-      if (metricFocus === 'replies') return tasks.filter((t) => t.kind === 'REPLY')
-      if (metricFocus === 'followups') return tasks.filter((t) => t.kind === 'FOLLOW_UP')
-      if (metricFocus === 'priority') {
-        return tasks.filter((t) => t.priority === 'HIGH' || t.priority === 'CRITICAL')
-      }
-      return tasks
-    }
-    const actions = doNext as RelayTodayAction[]
-    if (metricFocus === 'replies') {
-      return actions.filter((a) => (TODAY_REPLY_KINDS as readonly string[]).includes(a.kind))
-    }
-    if (metricFocus === 'followups') {
-      return actions.filter((a) => (TODAY_FOLLOWUP_KINDS as readonly string[]).includes(a.kind))
-    }
-    if (metricFocus === 'priority') return actions.filter(isHighPriorityOpportunity)
-    return actions
-  }, [doNext, metricFocus, useUnified])
+  const identity = buildRepV3ProfileMeta(data.activeWorkspace)
 
   return (
     <div className="space-y-8 pb-10">
-      <header className="space-y-1">
-        <h1 className="text-[28px] font-light tracking-[-0.02em] text-ink">
-          Good {greeting()}, {data.rep.name.split(' ')[0]}
-        </h1>
-        <p className="text-[14px] text-graphite">
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        </p>
-        {data.activeWorkspace && (
-          <p className="text-[12px] text-stone">
-            Working as{' '}
-            <span className="font-medium text-ink">{data.activeWorkspace.identityName}</span>
-            {data.activeWorkspace.channel ? ` · ${data.activeWorkspace.channel.toUpperCase()}` : ''}
-          </p>
-        )}
-      </header>
-
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Operational metrics">
-        <MetricCard
-          label="Replies waiting"
-          value={counts.repliesWaiting}
-          hint={
-            counts.repliesWaiting === 0
-              ? 'Inbox clear'
-              : repliesOld4h > 0
-                ? `${repliesOld4h} older than 4h`
-                : 'Answer while fresh'
-          }
-          active={metricFocus === 'replies'}
-          onClick={() => scrollToQueue('replies')}
-        />
-        <MetricCard
-          label="Follow-ups due"
-          value={counts.followUpsDue}
-          hint={
-            counts.followUpsDue === 0
-              ? 'Nothing due'
-              : followupsOverdue > 0
-                ? `${followupsOverdue} overdue`
-                : 'Due today'
-          }
-          active={metricFocus === 'followups'}
-          onClick={() => scrollToQueue('followups')}
-        />
-        <MetricCard
-          label="High-priority opportunities"
-          value={highPriority.length}
-          hint={highPriority.length > 0 ? 'Worth acting on' : 'None queued'}
-          active={metricFocus === 'priority'}
-          onClick={() => scrollToQueue('priority')}
-        />
-        <MetricCard
-          label="Completed today"
-          value={totalCompleted}
-          hint={totalTarget > 0 ? `of ${totalTarget} target` : 'Logged actions'}
-          active={metricFocus === 'completed'}
-          onClick={() => scrollToQueue('completed')}
-        />
-      </section>
-
-      <section ref={queueRef} aria-label="Do this next">
-        <div className="mb-3 flex items-baseline justify-between gap-2">
-          <div>
-            <h2 className="text-[18px] font-medium text-ink">Do this next</h2>
-            <p className="text-[13px] text-graphite">Ranked by urgency — one action per row</p>
-          </div>
-        </div>
-
-        {filteredDoNext.length > 0 ? (
-          <ol className="divide-y divide-line rounded-lg border border-line bg-bone-raised">
-            {filteredDoNext.map((task, i) =>
-              useUnified ? (
-                <UnifiedDoNextRow key={`${task.id}-${i}`} rank={i + 1} task={task as UnifiedTask} />
-              ) : (
-                <DoNextRow key={`${task.id}-${i}`} rank={i + 1} task={task as RelayTodayAction} />
-              ),
+      <V3PageHeader
+        title={`Good ${greeting()}, ${data.rep.name.split(' ')[0]}`}
+        subtitle="Your workspace for today"
+        meta={
+          <div className="flex items-center gap-3">
+            {identity && (
+              <p className="text-[12px] text-stone">
+                {REP_V3_PROFILE_LABEL} <span className="font-medium text-ink">{identity}</span>
+              </p>
             )}
+            <span className="hidden lg:inline-flex">
+              <ProfileSwitcher role={role} compact />
+            </span>
+          </div>
+        }
+        actions={
+          <>
+            <Link
+              href={REP_V3_PRIMARY_CTA.href}
+              className="inline-flex items-center gap-1.5 rounded-md bg-solid px-3.5 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+            >
+              {REP_V3_PRIMARY_CTA.label}
+            </Link>
+            <Link
+              href="/tasks"
+              className="inline-flex items-center gap-1.5 rounded-md border border-line bg-bone-raised px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-bone"
+            >
+              Create Task
+            </Link>
+          </>
+        }
+      />
+
+      <section aria-label="Execution metrics" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {metrics.map((metric) => (
+          <V3Metric key={metric.key} label={metric.label} value={metric.value} hint={metric.hint} href={metric.href} />
+        ))}
+      </section>
+
+      <section aria-label="Do this next">
+        <V3SectionTitle title="Do this next" hint="Ranked by urgency" />
+        {actions.length > 0 ? (
+          <ol className="mt-3 divide-y divide-line overflow-hidden rounded-lg border border-line bg-bone-raised">
+            {actions.map((action, index) => (
+              <V3ActionRow
+                key={`${action.id}-${index}`}
+                rank={index + 1}
+                priority={action.priority}
+                title={action.title}
+                context={action.context || undefined}
+                whyNow={action.whyNow || undefined}
+                age={action.age || undefined}
+                ctaLabel={action.ctaLabel}
+                href={action.href}
+              />
+            ))}
           </ol>
-        ) : caughtUp ? (
-          <EmptyCaughtUp />
         ) : (
-          <p className="rounded-lg border border-line bg-bone-raised px-4 py-6 text-[13px] text-graphite">
-            No tasks in this filter. Clear the metric filter or switch profile.
-          </p>
+          <div className="mt-3">
+            <V3EmptyState title={REP_V3_EMPTY_STATE.title} body={REP_V3_EMPTY_STATE.body}>
+              <Link
+                href={REP_V3_EMPTY_STATE.href}
+                className="inline-flex items-center gap-1.5 rounded-md bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid"
+              >
+                {REP_V3_EMPTY_STATE.cta}
+              </Link>
+            </V3EmptyState>
+          </div>
         )}
       </section>
 
-      <section ref={workRef} aria-label="My work">
-        <h2 className="text-[18px] font-medium text-ink">My work</h2>
-        <div className="mt-3 flex flex-wrap gap-1 border-b border-line" role="tablist">
+      <section aria-label="My work">
+        <V3SectionTitle title="My work" hint={`${unified.length} open`} />
+        <div className="mt-3 flex flex-wrap gap-1 border-b border-line" role="tablist" aria-label="Work tabs">
           {WORK_TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
               role="tab"
               aria-selected={workTab === tab.id}
+              onClick={() => setWorkTab(tab.id)}
               className={cn(
                 'rounded-t-md px-3 py-2 text-[13px] font-medium transition-colors',
                 workTab === tab.id
                   ? 'border border-b-0 border-line bg-bone-raised text-ink'
                   : 'text-graphite hover:text-ink',
               )}
-              onClick={() => setWorkTab(tab.id)}
             >
               {tab.label}
             </button>
           ))}
         </div>
-
         <div className="rounded-b-lg rounded-tr-lg border border-line bg-bone-raised" role="tabpanel">
-          {workTab === 'completed' ? (
-            completedRows.length > 0 ? (
-              <ul className="divide-y divide-line/70">
-                {completedRows.map((row) => (
-                  <li key={row.label} className="flex items-center justify-between px-4 py-3 text-[13px]">
-                    <span className="text-ink">{row.label}</span>
-                    <span className="tabular-nums text-graphite">{row.count} today</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="px-4 py-6 text-[13px] text-graphite">No completed actions logged for this profile yet today.</p>
-            )
-          ) : workRows.length > 0 ? (
+          {workRows.length > 0 ? (
             <ul className="divide-y divide-line/70">
-              {workRows.map((task, i) =>
-                useUnified ? (
-                  <UnifiedWorkRow key={`${task.id}-work-${i}`} task={task as UnifiedTask} />
+              {workRows.map((row, index) =>
+                isUnifiedRow(row) ? (
+                  <UnifiedWorkRow key={`${row.id}-${index}`} task={row} />
                 ) : (
-                  <WorkRow key={`${task.id}-work-${i}`} task={task as RelayTodayAction} />
+                  <RankedWorkRow key={`${row.id}-${index}`} action={row} />
                 ),
               )}
             </ul>
@@ -255,232 +175,78 @@ export function RepHomeView({ data }: { data: RepWorkspaceData }) {
         </div>
       </section>
 
-      <section aria-label="Personal scoreboard" className="rounded-lg border border-line bg-bone-raised px-4 py-4">
-        <h2 className="text-[16px] font-medium text-ink">Personal scoreboard</h2>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <ScoreStat label="Connections sent" value={scoreboard.connections} />
-          <ScoreStat label="Replies sent" value={scoreboard.replies} />
-          <ScoreStat label="Meetings" value={scoreboard.meetings} />
-          <ScoreStat label="Proposals" value={scoreboard.proposals} />
-          <ScoreStat label="Wins" value={scoreboard.wins} />
-          <ScoreStat label="Weekly target" value={totalTarget > 0 ? `${totalCompleted} / ${totalTarget}` : '—'} sub={totalTarget > 0 ? `${Math.round((totalCompleted / totalTarget) * 100)}%` : undefined} />
+      <section aria-label="Pipeline pulse">
+        <V3SectionTitle title="Pipeline pulse" hint="Open opportunities" />
+        <div className="mt-3">
+          <V3StageStrip stages={stages} />
         </div>
+      </section>
+
+      <section aria-label="Today and recent activity">
+        <V3SectionTitle title="Today" hint="Latest operational events" />
+        {activity.length > 0 ? (
+          <>
+            <ul className="mt-3 divide-y divide-line/70 overflow-hidden rounded-lg border border-line bg-bone-raised">
+              {activity.map((item) => (
+                <V3ActivityRow key={item.id} time={item.time} label={item.label} detail={item.detail ?? undefined} href={item.href ?? undefined} />
+              ))}
+            </ul>
+            <Link
+              href="/reports/activity"
+              className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
+            >
+              View activity
+              <ChevronRight className="size-3.5" aria-hidden />
+            </Link>
+          </>
+        ) : (
+          <p className="mt-3 rounded-lg border border-line bg-bone-raised px-4 py-6 text-[13px] text-graphite">
+            No operational events yet today.
+          </p>
+        )}
       </section>
     </div>
   )
 }
 
-function MetricCard({
-  label,
-  value,
-  hint,
-  active,
-  onClick,
-}: {
-  label: string
-  value: number
-  hint: string
-  active: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'rounded-lg border bg-bone-raised px-3 py-3 text-left transition-colors hover:border-orange/30',
-        active ? 'border-orange/50 ring-1 ring-orange/20' : 'border-line',
-      )}
-    >
-      <p className="text-[12px] text-graphite">{label}</p>
-      <p className="mt-1 text-[26px] font-medium tabular-nums tracking-tight text-ink">{value}</p>
-      <p className="mt-1 text-[11px] text-stone">{hint}</p>
-    </button>
-  )
-}
-
-function UnifiedDoNextRow({ rank, task }: { rank: number; task: UnifiedTask }) {
-  return (
-    <li className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
-      <span className="text-mono-medium text-[11px] text-stone">{String(rank).padStart(2, '0')}</span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[14px] font-medium text-ink">{task.title}</p>
-        {task.companyName && <p className="truncate text-[12px] text-graphite">{task.companyName}</p>}
-        <p className="mt-1 text-[12px] text-graphite">{task.reason}</p>
-        {(task.dueAt || task.createdAt) && (
-          <p className="text-[11px] text-stone">{relativeWait(task.dueAt ?? task.createdAt)}</p>
-        )}
-        {task.profileName && (
-          <p className="mt-1 text-[11px] text-stone">
-            Profile: <span className="text-ink">{task.profileName}</span>
-          </p>
-        )}
-      </div>
-      <Link
-        href={task.action.href}
-        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid"
-      >
-        {task.action.label}
-        <ChevronRight className="size-3.5" aria-hidden />
-      </Link>
-    </li>
-  )
+function isUnifiedRow(row: UnifiedTask | RelayTodayAction): row is UnifiedTask {
+  return 'assigneeRepId' in row
 }
 
 function UnifiedWorkRow({ task }: { task: UnifiedTask }) {
   return (
-    <li className="grid grid-cols-1 items-center gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+    <li className="flex items-center justify-between gap-3 px-4 py-3">
       <div className="min-w-0">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-stone">{task.kind.replace('_', ' ')}</p>
         <p className="truncate text-[13px] font-medium text-ink">{task.title}</p>
-        <p className="truncate text-[12px] text-graphite">{task.reason}</p>
-        <p className="mt-1 text-[11px] text-stone">
-          {task.profileName ?? '—'}
-          {' · '}
-          {task.source === 'ASSIGNED' ? 'Assigned' : 'Derived'}
-          {' · '}
-          {task.priority}
+        <p className="truncate text-[12px] text-graphite">
+          {[task.companyName, task.profileName].filter(Boolean).join(' · ') || task.reason}
         </p>
       </div>
-      <Link href={task.action.href} className="rounded-md border border-line px-2.5 py-1 text-[12px] font-medium text-ink hover:bg-bone">
+      <Link
+        href={task.action.href}
+        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-line px-2.5 py-1 text-[12px] font-medium text-ink transition-colors hover:bg-bone"
+      >
         {task.action.label}
       </Link>
     </li>
   )
 }
 
-function DoNextRow({ rank, task }: { rank: number; task: RelayTodayAction }) {
-  const href = actionDeepLink(task)
-  const severity = overdueSeverity(task.createdAt)
+function RankedWorkRow({ action }: { action: RelayTodayAction }) {
   return (
-    <li className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
-      <span className="text-mono-medium text-[11px] text-stone">{String(rank).padStart(2, '0')}</span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[14px] font-medium text-ink">{task.title}</p>
-        {task.subtitle && <p className="truncate text-[12px] text-graphite">{task.subtitle}</p>}
-        <p className="mt-1 text-[12px] text-graphite">{humanWhyNow(task)}</p>
-        {task.createdAt && (
-          <p className="text-[11px] text-stone">{relativeWait(task.createdAt)}</p>
-        )}
-        {task.identity?.name && (
-          <p className="mt-1 text-[11px] text-stone">
-            Profile: <span className="text-ink">{task.identity.name}</span>
-          </p>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {severity !== 'none' && (
-          <span
-            className={cn(
-              'rounded-full px-2 py-0.5 text-[10px] font-medium',
-              severity === 'critical' && 'bg-status-danger/10 text-status-danger',
-              severity === 'attention' && 'bg-status-warning/10 text-status-warning',
-              severity === 'mild' && 'bg-bone text-graphite',
-            )}
-          >
-            {severity === 'critical' ? 'Critical' : severity === 'attention' ? 'Attention' : 'Due'}
-          </span>
-        )}
-        <Link
-          href={href}
-          className="inline-flex items-center gap-1 rounded-md bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid"
-        >
-          {primaryCtaLabel(task)}
-          <ChevronRight className="size-3.5" aria-hidden />
-        </Link>
-      </div>
-    </li>
-  )
-}
-
-function WorkRow({ task }: { task: RelayTodayAction }) {
-  const href = actionDeepLink(task)
-  const severity = overdueSeverity(task.createdAt)
-  return (
-    <li className="grid grid-cols-1 items-center gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+    <li className="flex items-center justify-between gap-3 px-4 py-3">
       <div className="min-w-0">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-stone">{taskCategoryLabel(task)}</p>
-        <p className="truncate text-[13px] font-medium text-ink">{task.title}</p>
-        <p className="truncate text-[12px] text-graphite">{task.subtitle || humanWhyNow(task)}</p>
-        <p className="mt-1 text-[11px] text-stone">
-          {task.identity?.name ?? '—'}
-          {' · '}
-          {task.priority === 'urgent' ? 'Due now' : task.priority === 'high' ? 'Due today' : 'Upcoming'}
-          {' · '}
-          <span className="capitalize">{task.priority}</span>
-        </p>
+        <p className="truncate text-[13px] font-medium text-ink">{action.title}</p>
+        <p className="truncate text-[12px] text-graphite">{action.subtitle || action.identity?.name}</p>
       </div>
-      <div className="flex items-center gap-2">
-        {severity !== 'none' && (
-          <span className="text-[10px] text-status-warning">Overdue</span>
-        )}
-        <Link href={href} className="rounded-md border border-line px-2.5 py-1 text-[12px] font-medium text-ink hover:bg-bone">
-          {primaryCtaLabel(task)}
-        </Link>
-        <button type="button" className="rounded p-1 text-stone hover:bg-bone" aria-label="More actions">
-          <MoreHorizontal className="size-4" />
-        </button>
-      </div>
+      <Link
+        href={action.href}
+        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-line px-2.5 py-1 text-[12px] font-medium text-ink transition-colors hover:bg-bone"
+      >
+        Open
+      </Link>
     </li>
   )
-}
-
-function EmptyCaughtUp() {
-  return (
-    <div className="flex flex-col items-center rounded-lg border border-line bg-bone-raised px-6 py-10 text-center">
-      <CheckCircle2 className="size-6 text-status-success" aria-hidden />
-      <p className="mt-3 text-[15px] font-medium text-ink">You&apos;re caught up.</p>
-      <p className="mt-1 max-w-md text-[13px] text-graphite">
-        No replies, overdue follow-ups or high-priority opportunities need attention right now.
-      </p>
-      <div className="mt-4 flex flex-wrap justify-center gap-2">
-        <Link href="/prospect" className="rounded-md border border-line px-3 py-1.5 text-[12px] font-medium text-ink hover:bg-bone">
-          Analyze a prospect
-        </Link>
-        <Link href="/archive" className="rounded-md border border-line px-3 py-1.5 text-[12px] font-medium text-ink hover:bg-bone">
-          Review watchlist
-        </Link>
-        <Link href="/upwork" className="rounded-md border border-line px-3 py-1.5 text-[12px] font-medium text-ink hover:bg-bone">
-          Open Upwork
-        </Link>
-      </div>
-    </div>
-  )
-}
-
-function ScoreStat({ label, value, sub }: { label: string; value: number | string; sub?: string }) {
-  return (
-    <div>
-      <p className="text-[11px] text-stone">{label}</p>
-      <p className="mt-0.5 text-[16px] font-medium tabular-nums text-ink">{value}</p>
-      {sub && <p className="text-[10px] text-graphite">{sub}</p>}
-    </div>
-  )
-}
-
-function aggregateScoreboard(data: RepWorkspaceData) {
-  const totals = { connections: 0, replies: 0, meetings: 0, proposals: 0, wins: 0 }
-  for (const identity of data.targetSummary?.byIdentity ?? []) {
-    for (const t of identity.targets) {
-      const key = t.activityType.toLowerCase()
-      if (key.includes('connection')) totals.connections += t.completedCount
-      else if (key.includes('reply')) totals.replies += t.completedCount
-      else if (key.includes('meeting')) totals.meetings += t.completedCount
-      else if (key.includes('proposal')) totals.proposals += t.completedCount
-      else if (key.includes('win')) totals.wins += t.completedCount
-    }
-  }
-  // Executed events, not goal completions: the same counting rule as Team
-  // Performance and Reports (drafts and failures never count; meetings / wins
-  // are outcome events). Goals only fill in when events did not load.
-  if (data.outcomeEvents) {
-    totals.meetings = data.outcomeEvents.meetings
-    totals.wins = data.outcomeEvents.wins
-    if (data.outcomeEvents.connections !== undefined) totals.connections = data.outcomeEvents.connections
-    if (data.outcomeEvents.repliesSent !== undefined) totals.replies = data.outcomeEvents.repliesSent
-    if (data.outcomeEvents.proposals !== undefined) totals.proposals = data.outcomeEvents.proposals
-  }
-  return totals
 }
 
 function greeting(): string {

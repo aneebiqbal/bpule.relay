@@ -25,7 +25,7 @@ export async function GET() {
   // Get all applied jobs with connects cost
   const { data: jobs } = await client
     .from('upwork_jobs')
-    .select('id, title, connects_cost, connects_used, status, updated_at, profile_id')
+    .select('id, title, connects_cost, status, updated_at')
     .eq('owner_rep_id', repId)
     .eq('organization_id', authCtx.orgId)
     .in('status', ['applied', 'shortlisted', 'interviewing', 'offer_sent', 'awarded'])

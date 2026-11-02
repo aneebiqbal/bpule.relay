@@ -120,7 +120,7 @@ export function NotesPanel({
       </div>
 
       {!available ? (
-        <p className="mt-2 text-[12px] text-graphite">Available after database activation.</p>
+        <p className="mt-2 text-[12px] text-graphite">This feature is unavailable right now.</p>
       ) : (
         <>
           <form onSubmit={add} className="mt-2 space-y-1.5">

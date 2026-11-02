@@ -92,7 +92,7 @@ export function SavedViewsMenu({ surface }: { surface: SavedViewSurface }) {
       {open && (
         <div className="absolute right-0 z-30 mt-1 w-72 rounded-lg border border-line bg-bone-raised p-2 shadow-lg">
           {!available ? (
-            <p className="px-1 py-2 text-[12px] text-graphite">Available after database activation.</p>
+            <p className="px-1 py-2 text-[12px] text-graphite">This feature is unavailable right now.</p>
           ) : (
             <>
               <ul aria-label="Saved views" className="max-h-60 space-y-0.5 overflow-y-auto">

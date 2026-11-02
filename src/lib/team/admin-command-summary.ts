@@ -20,6 +20,7 @@ export interface OrgHealthMetrics {
   repliesWaiting: number
   repliesCritical: number
   followUpsOverdue: number
+  overdueTasks: number
   meetingsThisWeek: number
   wins: number
 }
@@ -266,6 +267,7 @@ export function assembleAdminCommandCenter(input: {
       repliesWaiting: team.metrics.repliesWaiting,
       repliesCritical,
       followUpsOverdue: team.metrics.followUpsOverdue,
+      overdueTasks: [...(input.overdueTasksByRep?.values() ?? [])].reduce((sum, n) => sum + n, 0),
       meetingsThisWeek: input.meetingsThisWeek,
       wins: input.wins,
     },

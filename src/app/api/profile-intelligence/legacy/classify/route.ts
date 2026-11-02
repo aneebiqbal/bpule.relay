@@ -34,7 +34,7 @@ export async function GET(request: Request) {
     ids.length > 0 ? client.from('profile_assignments').select('profile_id').in('profile_id', ids) : Promise.resolve({ data: [] }),
     ids.length > 0 ? client.from('proof_cards').select('profile_id').in('profile_id', ids) : Promise.resolve({ data: [] }),
     ids.length > 0 ? client.from('portfolio_projects').select('profile_id').in('profile_id', ids) : Promise.resolve({ data: [] }),
-    ids.length > 0 ? client.from('conversation_states').select('lead_id').in('profile_id', ids) : Promise.resolve({ data: [] }),
+    ids.length > 0 ? client.from('conversation_states').select('sender_profile_id').in('sender_profile_id', ids) : Promise.resolve({ data: [] }),
   ])
   const presence = (rows: Array<{ profile_id: string }> | null | undefined) => {
     const set = new Set<string>()
@@ -44,7 +44,9 @@ export async function GET(request: Request) {
   const hasAssignment = presence(assignmentRows.data)
   const hasProofCard = presence(proofCardRows.data)
   const hasPortfolio = presence(portfolioRows.data)
-  const hasConversation = presence(conversationRows.data)
+  // `conversation_states` links to a profile through `sender_profile_id`,
+  // not `profile_id`.
+  const hasConversation = new Set((conversationRows.data ?? []).map((r) => r.sender_profile_id as string))
 
   const enriched = profiles.map((p) => ({
     ...p,

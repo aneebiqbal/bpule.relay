@@ -45,16 +45,12 @@ describe('Today — terminal leads never appear', () => {
 describe('Today — action-first operating screen', () => {
   // RepDashboard is a thin wrapper; Rep Home owns the operating screen.
   const src = read('src/components/rep/rep-home-view.tsx')
+  const present = read('src/lib/rep-home/v3-present.ts')
   const why = read('src/lib/rep-home/action-presentation.ts')
 
   it('shows exactly the four operational numbers', () => {
-    for (const label of [
-      'Replies waiting',
-      'Follow-ups due',
-      'High-priority opportunities',
-      'Completed today',
-    ]) {
-      expect(src).toContain(label)
+    for (const label of ['Needs action', 'Replies', 'Follow-ups', 'Tasks']) {
+      expect(present).toContain(label)
     }
   })
   it('renders a ranked "Do this next" list with one CTA per row', () => {
@@ -69,7 +65,8 @@ describe('Today — action-first operating screen', () => {
     expect(src).not.toMatch(/canonicalScore\s*\/\s*100\s*\{/)
   })
   it('has a caught-up empty state', () => {
-    expect(src).toContain('caught up')
+    expect(present).toContain("You're caught up.")
+    expect(src).toContain('REP_V3_EMPTY_STATE')
   })
 })
 

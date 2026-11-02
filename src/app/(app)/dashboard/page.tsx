@@ -26,6 +26,9 @@ import {
   sumTargets,
 } from '@/lib/rep-home/profile-scope'
 import { actionDeepLink } from '@/lib/rep-home/action-presentation'
+import { REP_V3_ACTIVITY_LIMIT } from '@/lib/rep-home/v3-present'
+import { loadTimeline } from '@/lib/operations/activity'
+import type { OpenLeadFact } from '@/lib/team/admin-command-summary'
 import { businessDateRange, currentInstant, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
@@ -74,7 +77,7 @@ export default async function TodayPage() {
 
   return (
     <Suspense fallback={<DashboardShellSkeleton />}>
-      <RepDashboard data={repData} />
+      <RepDashboard data={repData} role={user.rep.role} />
     </Suspense>
   )
 }
@@ -127,10 +130,23 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   const visibleTasks = filterQueueByRole(queue, roleContext.role)
 
   const profilesPulled = await countProfilesPulled(user.organization.id, user.rep.id)
-  const [referredLeads, recentLeads, allUpworkJobs] = await Promise.all([
+  const [referredLeads, recentLeads, allUpworkJobs, activityRows] = await Promise.all([
     store.getReferredLeads(user.rep.id),
     store.getRecentLeads(user.rep.id, 5),
     store.listUpworkJobs().catch(() => []),
+    // Canonical operational timeline — same authority as the Activity Center.
+    // The demo store has no direct client, so this stays optional there.
+    (async () => {
+      try {
+        return await loadTimeline(store.getSupabaseClient(), {
+          orgId: user.organization.id,
+          repIds: [user.rep.id],
+          limit: REP_V3_ACTIVITY_LIMIT,
+        })
+      } catch {
+        return []
+      }
+    })(),
   ])
   const upworkJobs = allUpworkJobs
     .filter((j) => j.verdict === 'apply' && j.status !== 'applied')
@@ -255,6 +271,18 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     )).catch(() => { /* observability failure is non-fatal */ })
   }
 
+  const pipelineLeads: OpenLeadFact[] = scopedLeads.map((lead) => ({
+    id: lead.id,
+    company: lead.company,
+    status: lead.status,
+    ownerRepId: lead.ownerRepId,
+    ownerName: null,
+    revenueIdentityId: lead.revenueIdentityId ?? null,
+    canonicalScore: lead.canonicalScore ?? null,
+    updatedAt: lead.createdAt ?? null,
+    lastOutboundAt: null,
+  }))
+
   return {
     rep: workspace.rep,
     activeWorkspace: activeWorkspace
@@ -318,6 +346,8 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
       state: r.state,
     })),
     signalFeed: buildSignalFeedFromActionEvents(dash, recentLeads),
+    activity: activityRows,
+    pipelineLeads,
   }
 }
 

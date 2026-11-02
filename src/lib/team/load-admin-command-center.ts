@@ -43,6 +43,7 @@ function emptyAdmin(orgName: string, isOwner: boolean): AdminCommandCenterData {
       repliesWaiting: 0,
       repliesCritical: 0,
       followUpsOverdue: 0,
+      overdueTasks: 0,
       meetingsThisWeek: 0,
       wins: 0,
     },

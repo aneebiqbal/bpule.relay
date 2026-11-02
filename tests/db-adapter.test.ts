@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { NeonDbClient, NeonExecutorImpl, type NeonExecutorApi } from '@/lib/db/neon'
+import { NeonDbClient, NeonExecutorImpl, neonTypeParser, type NeonExecutorApi } from '@/lib/db/neon'
 import type { DbResult } from '@/lib/db/neon'
 import { resolveDbProvider } from '@/lib/db/types'
 
@@ -309,5 +309,52 @@ describe('NEON select-expression translation', () => {
     const db = new NeonDbClient(fakeExecutor(calls) as never, 'user-1')
     await db.from('identity_assignments').select('id, identity:revenue_identities(id, name)')
     expect(calls[0].sql).toContain('identity:revenue_identities(id, name)')
+  })
+})
+
+describe('NEON error and value parity with PostgREST', () => {
+  it('expands not-in into a parameterised list', async () => {
+    const calls: Call[] = []
+    const db = new NeonDbClient(fakeExecutor(calls) as never, 'user-1')
+    await db.from('action_events').select('*').not('lead_id', 'in', ['a', 'b'])
+
+    expect(calls[0].sql).toContain('NOT ("lead_id" IN (?, ?))')
+    expect(calls[0].values).toEqual(['a', 'b'])
+  })
+
+  it('treats not-in over an empty list as no exclusion', async () => {
+    const calls: Call[] = []
+    const db = new NeonDbClient(fakeExecutor(calls) as never, 'user-1')
+    await db.from('action_events').select('*').not('lead_id', 'in', [])
+
+    expect(calls[0].sql).toContain('TRUE')
+    expect(calls[0].values).toEqual([])
+  })
+
+  it('resolves a failed query with { data: null, error } instead of rejecting', async () => {
+    // supabase-js resolves a failed builder rather than throwing; call sites
+    // check `.error`, so the Neon adapter must not reject either.
+    const executor: NeonExecutorApi = {
+      query: async () => { throw new Error('Neon query failed: column "connects_used" does not exist') },
+      queryInWrite: async () => { throw new Error('Neon write failed: column "connects_used" does not exist') },
+    }
+    const db = new NeonDbClient(executor, null)
+
+    const res = await db.from('upwork_jobs').select('connects_used')
+    expect(res.data).toBeNull()
+    expect(res.error?.message).toContain('connects_used')
+
+    const single = await db.from('upwork_jobs').select('connects_cost').eq('id', 'j1').single()
+    expect(single.data).toBeNull()
+    expect(single.error?.message).toContain('connects_used')
+  })
+
+  it('leaves temporal columns as text while delegating other types', () => {
+    // The driver parses dates and timestamps into Date objects; PostgREST emits
+    // their text form, and callers compare and sort these values as strings.
+    expect(neonTypeParser(1082)('2026-10-21')).toBe('2026-10-21')
+    expect(neonTypeParser(1114)('2026-10-21 11:05:34.291333')).toBe('2026-10-21 11:05:34.291333')
+    expect(neonTypeParser(1184)('2026-10-21 11:05:34.291333+00')).toBe('2026-10-21 11:05:34.291333+00')
+    expect(neonTypeParser(23)('42')).toBe(42)
   })
 })

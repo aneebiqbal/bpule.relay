@@ -91,6 +91,10 @@ export interface RepWorkspaceData {
   completion?: { done: number; remaining: number }
   resumeWork?: Array<{ id: string; company: string; contactName: string | null; lastAction: string; state: string }>
   signalFeed?: import('@/lib/relay/signal-watch').SignalFeedItem[]
+  /** Canonical operational timeline for Today / recent (max 5). */
+  activity?: import('@/lib/operations/activity').TimelineRow[]
+  /** Open leads shaped for the canonical pipeline funnel. */
+  pipelineLeads?: import('@/lib/team/admin-command-summary').OpenLeadFact[]
   onRefreshSignals?: () => void
   onDismissSignal?: (id: string) => void
 }

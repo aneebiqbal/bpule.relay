@@ -195,11 +195,7 @@ export async function getDailySummary(orgId: string, date: string, timezone: str
 
   const { data, error } = await getClient()
     .from('action_events')
-    .select(`
-      actor_id,
-      action_type,
-      reps:actor_id (id, name)
-    `)
+    .select('actor_id, action_type, occurred_at')
     .eq('organization_id', orgId)
     .gte('occurred_at', startOfDay)
     .lt('occurred_at', endOfDay)
@@ -207,12 +203,21 @@ export async function getDailySummary(orgId: string, date: string, timezone: str
 
   if (error || !data) return []
 
+  // The rep name is a second read rather than a PostgREST embed
+  // (`reps:actor_id`), which the Neon adapter cannot translate.
+  const actorIds = [...new Set(data.map((e) => e.actor_id).filter((x): x is string => Boolean(x)))]
+  const repNameById = new Map<string, string>()
+  if (actorIds.length > 0) {
+    const { data: reps } = await getClient().from('reps').select('id, name').in('id', actorIds)
+    for (const rep of reps ?? []) repNameById.set(rep.id as string, rep.name as string)
+  }
+
   // Aggregate by rep
   const byRep = new Map<string, DailySummary>()
 
   for (const event of data) {
     const repId = event.actor_id || 'system'
-    const repName = (event.reps as unknown as { name: string } | null)?.name || 'System'
+    const repName = (repId === 'system' ? undefined : repNameById.get(repId)) || 'System'
 
     if (!byRep.has(repId)) {
       byRep.set(repId, {
@@ -292,15 +297,15 @@ export async function getRepDailyLog(
     .from('action_events')
     .select(`
       id,
+      actor_id,
       action_type,
       execution_status,
       channel,
       occurred_at,
       metadata,
-      reps:actor_id (id, name),
-      sender_profiles:sender_profile_id (identity_name),
-      leads:lead_id (company, contact_name),
-      upwork_jobs:job_id (title)
+      sender_profile_id,
+      lead_id,
+      job_id
     `)
     .eq('organization_id', orgId)
     .eq('actor_id', repId)
@@ -311,17 +316,32 @@ export async function getRepDailyLog(
 
   if (error || !data) return []
 
+  // Embed targets are second reads rather than PostgREST embeds
+  // (`reps:actor_id`, `leads:lead_id`), which the Neon adapter cannot translate.
+  const unique = (values: unknown[]) =>
+    [...new Set(values.filter((x): x is string => Boolean(x)))]
+  const [repRows, profileRows, leadRows, jobRows] = await Promise.all([
+    getClient().from('reps').select('id, name').in('id', unique(data.map((e) => e.actor_id))),
+    getClient().from('sender_profiles').select('id, identity_name').in('id', unique(data.map((e) => e.sender_profile_id))),
+    getClient().from('leads').select('id, company, contact_name').in('id', unique(data.map((e) => e.lead_id))),
+    getClient().from('upwork_jobs').select('id, title').in('id', unique(data.map((e) => e.job_id))),
+  ])
+  const repNameById = new Map((repRows.data ?? []).map((r) => [r.id as string, r.name as string]))
+  const profileNameById = new Map((profileRows.data ?? []).map((p) => [p.id as string, p.identity_name as string]))
+  const leadById = new Map((leadRows.data ?? []).map((l) => [l.id as string, l as Record<string, unknown>]))
+  const jobTitleById = new Map((jobRows.data ?? []).map((j) => [j.id as string, j.title as string]))
+
   return data.map(event => ({
     id: event.id,
     actionType: event.action_type,
     executionStatus: event.execution_status,
     channel: event.channel,
     occurredAt: event.occurred_at,
-    actorName: (event.reps as unknown as { name: string } | null)?.name || null,
-    senderProfileName: (event.sender_profiles as unknown as { identity_name: string } | null)?.identity_name || null,
-    leadCompany: (event.leads as unknown as { company: string } | null)?.company || null,
-    leadName: (event.leads as unknown as { contact_name: string } | null)?.contact_name || null,
-    jobTitle: (event.upwork_jobs as unknown as { title: string } | null)?.title || null,
+    actorName: repNameById.get(event.actor_id as string) || null,
+    senderProfileName: profileNameById.get(event.sender_profile_id as string) || null,
+    leadCompany: (leadById.get(event.lead_id as string)?.company as string) || null,
+    leadName: (leadById.get(event.lead_id as string)?.contact_name as string) || null,
+    jobTitle: jobTitleById.get(event.job_id as string) || null,
     metadata: (event.metadata as Record<string, unknown>) || {},
   }))
 }

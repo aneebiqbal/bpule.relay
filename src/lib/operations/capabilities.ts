@@ -5,7 +5,7 @@ import type { DbClient } from '@/lib/db/types'
  * Phase 8 features depend on migrations that are verified locally but NOT
  * applied to production (docs/RELAY_PHASE8_DATABASE_CONTRACTS.md). Every
  * DB-dependent feature asks this registry and renders an honest
- * "Available after database activation" state instead of throwing or
+ * "This feature is unavailable right now" state instead of throwing or
  * pretending to succeed.
  *
  * Resolution order (no per-request probing):
@@ -43,7 +43,7 @@ export const CAPABILITY_LABEL: Record<CapabilityKey, string> = {
   messagePreviews: 'Bounded message previews',
 }
 
-export const NOT_AVAILABLE_MESSAGE = 'Available after database activation'
+export const NOT_AVAILABLE_MESSAGE = 'This feature is unavailable right now'
 
 /** Pure: parse the env override. null = no override. Unknown keys are ignored. */
 export function parseCapabilityEnv(raw: string | undefined | null): DatabaseCapabilities | null {
@@ -73,7 +73,14 @@ let inflight: Promise<DatabaseCapabilities> | null = null
  * (rep_id / type / message) that the canonical writer cannot use.
  */
 async function tableExists(client: DbClient, table: string, columns = 'id'): Promise<boolean> {
-  const { error } = await client.from(table).select(columns, { head: true, count: 'exact' }).limit(0)
+  let error: { code?: string; message?: string } | null
+  try {
+    ;({ error } = await client.from(table).select(columns, { head: true, count: 'exact' }).limit(0))
+  } catch (err) {
+    // A driver that rejects rather than resolving must not take every other
+    // capability down with it.
+    error = err as { code?: string; message?: string }
+  }
   if (!error) return true
   if (isMissingRelation(error)) return false
   // Permission / network errors: do not claim the feature works.
@@ -81,7 +88,12 @@ async function tableExists(client: DbClient, table: string, columns = 'id'): Pro
 }
 
 async function rpcExists(client: DbClient, fn: string, args: Record<string, unknown>): Promise<boolean> {
-  const { error } = await client.rpc(fn, args)
+  let error: { code?: string; message?: string } | null
+  try {
+    ;({ error } = await client.rpc(fn, args))
+  } catch (err) {
+    error = err as { code?: string; message?: string }
+  }
   if (!error) return true
   const code = (error as { code?: string }).code
   // PGRST202 / 42883 = function not found. Anything else means it exists.
