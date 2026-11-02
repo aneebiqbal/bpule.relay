@@ -20,7 +20,8 @@ export async function GET() {
       isAdmin: auth?.isAdmin ?? false,
       isManager: auth?.isManager ?? false,
     })
-  } catch {
+  } catch (cause) {
+    console.warn('[me/status][diag]', cause instanceof Error ? cause.message : String(cause))
     try {
       const authProvider = await getAuthProvider()
       const { user } = await authProvider.getSession()

@@ -5952,18 +5952,40 @@ export class SupabaseStore implements ScoutStore {
   private async fetchLeadsWithMessages(): Promise<Array<Lead & { _messages: Message[]; _conversation: ConversationState | null }>> {
     const { data, error } = await this.client
       .from('leads')
-      .select(`${LEAD_LIST_COLUMNS}, messages(*), conversation_states(*)`)
+      .select(LEAD_LIST_COLUMNS)
       .eq('owner_rep_id', this.rep.id)
       // Every other lead list excludes archived rows; omitting it here let the
       // Relay queue surface leads the board had already swept into archive.
       .eq('archived', false)
       .order('created_at', { ascending: false })
     if (error) throw error
+
+    // The messages and conversation states are second reads rather than PostgREST
+    // embeds (`messages(*)`, `conversation_states(*)`), which the Neon adapter
+    // cannot translate. Batched by lead id.
+    const leadIds = (data ?? []).map((r: Row) => r.id as string)
+    const [messageRows, stateRows] = await Promise.all([
+      leadIds.length > 0
+        ? this.client.from('messages').select('*').in('lead_id', leadIds).order('created_at', { ascending: true })
+        : Promise.resolve({ data: [] }),
+      leadIds.length > 0
+        ? this.client.from('conversation_states').select('*').in('lead_id', leadIds)
+        : Promise.resolve({ data: [] }),
+    ])
+    const messagesByLead = new Map<string, Row[]>()
+    for (const row of messageRows.data ?? []) {
+      const list = messagesByLead.get(row.lead_id as string) ?? []
+      list.push(row)
+      messagesByLead.set(row.lead_id as string, list)
+    }
+    const stateByLead = new Map<string, Row>()
+    for (const row of stateRows.data ?? []) stateByLead.set(row.lead_id as string, row)
+
     return (data ?? []).map((r: Row) => ({
       ...mapLead(r),
-      _messages: ((r.messages as Row[]) ?? []).map(mapMessage),
-      _conversation: (r.conversation_states as Row[])?.[0]
-        ? mapConversationState((r.conversation_states as Row[])[0])
+      _messages: (messagesByLead.get(r.id as string) ?? []).map(mapMessage),
+      _conversation: stateByLead.get(r.id as string)
+        ? mapConversationState(stateByLead.get(r.id as string) as Row)
         : null,
     }))
   }
@@ -6324,11 +6346,20 @@ export class SupabaseStore implements ScoutStore {
 
   async listMyAssignedIdentities(): Promise<RevenueIdentityWithAssignment[]> {
     const { data, error } = await this.client
-      .from('identity_assignments').select('id, assigned_by, created_at, identity:revenue_identities(*)')
+      .from('identity_assignments').select('id, assigned_by, created_at, revenue_identity_id')
       .eq('rep_id', this.rep.id).eq('organization_id', this.orgId).order('created_at', { ascending: false })
     if (error) throw error
+
+    // The identity rows are a second read rather than a PostgREST embed
+    // (`identity:revenue_identities`), which the Neon adapter cannot translate.
+    const ids = (data ?? []).map((a) => a.revenue_identity_id as string)
+    const identityById = new Map<string, Record<string, unknown>>()
+    if (ids.length > 0) {
+      const { data: identityRows } = await this.client.from('revenue_identities').select('*').in('id', ids)
+      for (const row of identityRows ?? []) identityById.set(row.id as string, row)
+    }
     return (data ?? []).map((a) => {
-      const identity = a.identity as unknown as Record<string, unknown>
+      const identity = identityById.get(a.revenue_identity_id as string) ?? {}
       return { ...this.mapRevenueIdentity(identity), assignmentId: a.id as string, assignedBy: (a.assigned_by as string) ?? null, assignedAt: a.created_at as string }
     })
   }
@@ -7866,16 +7897,23 @@ export class SupabaseStore implements ScoutStore {
   // ═══════════════════════════════════════════════════════════════════════════
 
   async getTeamMembers(teamId: string): Promise<TeamMemberRow[]> {
-    const { data, error } = await this.client
+    const { data: memberships, error } = await this.client
       .from('team_memberships')
-      .select('person_id, membership_role, reps!inner(id, name)')
+      .select('person_id, membership_role')
       .eq('team_id', teamId)
       .eq('active', true)
     if (error) throw error
-    return (data ?? []).map((r: any) => ({
-      repId: r.reps.id,
-      repName: r.reps.name,
-      role: r.membership_role,
+
+    // The rep names are a second read rather than a PostgREST embed
+    // (`reps!inner`), which the Neon adapter cannot translate.
+    const personIds = (memberships ?? []).map((m) => m.person_id)
+    if (personIds.length === 0) return []
+    const { data: reps } = await this.client.from('reps').select('id, name').in('id', personIds)
+    const nameById = new Map((reps ?? []).map((r) => [r.id, r.name]))
+    return (memberships ?? []).map((m) => ({
+      repId: m.person_id,
+      repName: nameById.get(m.person_id) ?? 'Unknown',
+      role: m.membership_role,
     }))
   }
 
@@ -7956,17 +7994,32 @@ export class SupabaseStore implements ScoutStore {
   }>> {
     const { data, error } = await this.client
       .from('identity_assignments')
-      .select('id, revenue_identity_id, identity:revenue_identities(id, identity_name, title, channel)')
+      .select('id, revenue_identity_id')
       .eq('rep_id', repId)
       .eq('organization_id', this.orgId)
     if (error) throw error
-    return (data ?? []).map((a: any) => ({
-      assignmentId: a.id,
-      revenueIdentityId: a.revenue_identity_id,
-      identityName: a.identity?.identity_name ?? 'Unknown',
-      title: a.identity?.title ?? null,
-      channel: a.identity?.channel ?? 'other',
-    }))
+
+    // The identity rows are a second read rather than a PostgREST embed
+    // (`identity:revenue_identities`), which the Neon adapter cannot translate.
+    const ids = (data ?? []).map((a) => a.revenue_identity_id as string)
+    const identityById = new Map<string, Record<string, unknown>>()
+    if (ids.length > 0) {
+      const { data: identityRows } = await this.client
+        .from('revenue_identities')
+        .select('id, identity_name, title, channel')
+        .in('id', ids)
+      for (const row of identityRows ?? []) identityById.set(row.id as string, row)
+    }
+    return (data ?? []).map((a: any) => {
+      const identity = identityById.get(a.revenue_identity_id as string) ?? {}
+      return {
+        assignmentId: a.id,
+        revenueIdentityId: a.revenue_identity_id,
+        identityName: (identity.identity_name as string) ?? 'Unknown',
+        title: (identity.title as string | null) ?? null,
+        channel: (identity.channel as string) ?? 'other',
+      }
+    })
   }
 
   async getRepInfo(repId: string): Promise<{ id: string; name: string; role: string } | null> {
@@ -8027,7 +8080,7 @@ export class SupabaseStore implements ScoutStore {
   async getManagedTeamSummary(managerId: string): Promise<TeamSummaryRow[]> {
     const { data: memberships } = await this.client
       .from('team_memberships')
-      .select('team_id, teams!inner(name)')
+      .select('team_id')
       .eq('person_id', managerId)
       .eq('membership_role', 'MANAGER')
       .eq('active', true)

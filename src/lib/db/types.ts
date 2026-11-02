@@ -111,7 +111,28 @@ export interface DbClient {
 /** Which provider the process is running. */
 export type DbProvider = 'supabase' | 'neon'
 
+/**
+ * The provider the server rendered into the page.
+ *
+ * Next.js only inlines `NEXT_PUBLIC_*` names into the client bundle, and that
+ * inlining is not dependable in every runtime. The root layout therefore writes
+ * the resolved provider onto `globalThis`, which is authoritative for the
+ * browser and cannot drift from what the server is actually using.
+ */
+function readBrowserFlag(name: string): string | undefined {
+  if (typeof globalThis === 'undefined') return undefined
+  const value = (globalThis as Record<string, unknown>)[name]
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
 export function resolveDbProvider(env: NodeJS.ProcessEnv = process.env): DbProvider {
-  const raw = (env.RELAY_DB_PROVIDER ?? 'supabase').trim().toLowerCase()
+  const raw = (
+    env.RELAY_DB_PROVIDER ??
+    env.NEXT_PUBLIC_RELAY_DB_PROVIDER ??
+    readBrowserFlag('__RELAY_DB_PROVIDER__') ??
+    'supabase'
+  )
+    .trim()
+    .toLowerCase()
   return raw === 'neon' ? 'neon' : 'supabase'
 }

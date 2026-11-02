@@ -16,13 +16,13 @@ export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get('date') ?? orgDate(now, policy.timezone)
   const supabase = await createServerSupabase()
 
-  const { data: teamMembers } = await supabase
+  const { data: memberships } = await supabase
     .from('team_memberships')
-    .select('person_id, teams!inner(name)')
+    .select('person_id, team_id')
     .eq('team_id', ctx.managedTeamIds[0])
     .eq('active', true)
 
-  const personIds = teamMembers?.map((m: any) => m.person_id) ?? []
+  const personIds = memberships?.map((m: { person_id: string }) => m.person_id) ?? []
 
   const { data: reps } = await supabase
     .from('reps')

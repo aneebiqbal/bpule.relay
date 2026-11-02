@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { NeonDbClient, NeonExecutorImpl, type NeonExecutorApi } from '@/lib/db/neon'
 import type { DbResult } from '@/lib/db/neon'
+import { resolveDbProvider } from '@/lib/db/types'
 
 /**
  * The Neon adapter is the cutover path, so its SQL generation is asserted
@@ -216,6 +217,18 @@ describe('NEON executor — identity and placeholders', () => {
     ])
     expect(calls[2].values).toEqual(['x'])
   })
+
+  it('does not shift placeholders when there is no identity in scope', async () => {
+    // The service client bypasses RLS and sets no GUC, so the builder's $1 must
+    // stay $1. Shifting it would leave the statement referencing a parameter
+    // that was never sent.
+    const { calls, pool } = fakePool()
+    const executor = new NeonExecutorImpl(pool as never, null)
+    await executor.query('SELECT * FROM "organization_operating_policy" WHERE "organization_id" = ?', ['org-1'])
+
+    expect(calls[0].sql).toBe('SELECT q.* FROM (SELECT * FROM "organization_operating_policy" WHERE "organization_id" = $1) q')
+    expect(calls[0].values).toEqual(['org-1'])
+  })
 })
 
 describe('NEON query builder — row semantics', () => {
@@ -252,5 +265,49 @@ describe('NEON client', () => {
 
     expect(calls[0].sql).toContain('SELECT * FROM "current_org_id"()')
     expect(res.error).toBeNull()
+  })
+})
+
+describe('DB provider selection', () => {
+  const original = process.env.RELAY_DB_PROVIDER
+  const originalPublic = process.env.NEXT_PUBLIC_RELAY_DB_PROVIDER
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.RELAY_DB_PROVIDER
+    else process.env.RELAY_DB_PROVIDER = original
+    if (originalPublic === undefined) delete process.env.NEXT_PUBLIC_RELAY_DB_PROVIDER
+    else process.env.NEXT_PUBLIC_RELAY_DB_PROVIDER = originalPublic
+  })
+
+  it('defaults to supabase so an opted-out deployment is unchanged', () => {
+    delete process.env.RELAY_DB_PROVIDER
+    delete process.env.NEXT_PUBLIC_RELAY_DB_PROVIDER
+    expect(resolveDbProvider()).toBe('supabase')
+  })
+
+  it('reads the browser-facing variable, which Next.js inlines into the bundle', () => {
+    // Next.js only inlines NEXT_PUBLIC_* names for the client bundle, so the
+    // browser cannot see RELAY_DB_PROVIDER. Without this fallback the browser
+    // queries Supabase while the server reads Neon.
+    delete process.env.RELAY_DB_PROVIDER
+    process.env.NEXT_PUBLIC_RELAY_DB_PROVIDER = 'neon'
+    expect(resolveDbProvider()).toBe('neon')
+  })
+})
+
+describe('NEON select-expression translation', () => {
+  it('translates a PostgREST JSON-path alias into a SQL cast', async () => {
+    const calls: Call[] = []
+    const db = new NeonDbClient(fakeExecutor(calls) as never, 'user-1')
+    await db.from('leads').select('id, buyer_intent:canonical_intelligence->buyerIntent, verdict:canonical_intelligence->>verdict')
+    expect(calls[0].sql).toContain(`("canonical_intelligence"->>'buyerIntent') AS "buyer_intent"`)
+    expect(calls[0].sql).toContain(`("canonical_intelligence"->>'verdict') AS "verdict"`)
+  })
+
+  it('leaves a table embed for the caller to resolve', async () => {
+    const calls: Call[] = []
+    const db = new NeonDbClient(fakeExecutor(calls) as never, 'user-1')
+    await db.from('identity_assignments').select('id, identity:revenue_identities(id, name)')
+    expect(calls[0].sql).toContain('identity:revenue_identities(id, name)')
   })
 })

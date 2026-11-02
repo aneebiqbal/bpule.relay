@@ -31,3 +31,12 @@ export async function getBrowserAuth(): Promise<BrowserAuthProvider> {
   }
   return supabaseBrowserAuth()
 }
+
+/**
+ * Diagnostics for the provider actually selected in the browser. Read by
+ * `/api/version`-style checks and by the runtime certification; it reports the
+ * server-rendered bootstrap flag so a drift is visible rather than silent.
+ */
+export function describeBrowserAuthSelection(): Record<string, string> {
+  return { authProvider: resolveAuthProvider() }
+}

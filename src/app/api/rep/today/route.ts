@@ -20,13 +20,7 @@ export async function GET() {
 
   const { data: assignments } = await supabase
     .from('identity_assignments')
-    .select(`
-      id,
-      revenue_identity_id,
-      assigned_by,
-      created_at,
-      identity:revenue_identities(*)
-    `)
+    .select('id, revenue_identity_id, assigned_by, created_at')
     .eq('rep_id', rep.id)
     .eq('organization_id', org.id)
 
@@ -44,6 +38,17 @@ export async function GET() {
   }
 
   const identityIds = assignments.map((a) => a.revenue_identity_id)
+  // The identity rows are a second read rather than a PostgREST embed
+  // (`identity:revenue_identities`), which the Neon adapter cannot translate.
+  const { data: identityRows } = await supabase
+    .from('revenue_identities')
+    .select('*')
+    .in('id', identityIds)
+  const identityById = new Map((identityRows ?? []).map((r) => [r.id as string, r]))
+  const assignmentsWithIdentity = assignments.map((a) => ({
+    ...a,
+    identity: identityById.get(a.revenue_identity_id as string) ?? null,
+  }))
   const { data: targets } = await supabase
     .from('daily_targets')
     .select('*')
@@ -69,7 +74,7 @@ export async function GET() {
   let totalTarget = 0
   let totalCompleted = 0
 
-  const identities = assignments.map((a) => {
+  const identities = assignmentsWithIdentity.map((a) => {
     const identityTargets = targetList.filter(
       (t) => t.revenue_identity_id === a.revenue_identity_id,
     )

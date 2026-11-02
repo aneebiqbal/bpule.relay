@@ -34,29 +34,51 @@ export async function loadRepBasics(
     client.from('reps').select('id, name, role').eq('organization_id', auth.orgId).eq('id', repId).maybeSingle(),
     client
       .from('team_memberships')
-      .select('team_id, teams!inner(id, name, organization_id)')
+      .select('team_id')
       .eq('person_id', repId)
       .eq('active', true),
     client
       .from('identity_assignments')
-      .select('revenue_identity_id, identity:revenue_identities(id, identity_name, title, channel)')
+      .select('revenue_identity_id')
       .eq('organization_id', auth.orgId)
       .eq('rep_id', repId),
   ])
   const rep = repRes.data as { id: string; name: string; role: string | null } | null
   if (!rep) return null
 
-  type MembershipJoin = { team_id: string; teams: { id: string; name: string; organization_id: string } | Array<{ id: string; name: string; organization_id: string }> }
-  const teams = ((membershipRes.data ?? []) as MembershipJoin[])
-    .map((m) => (Array.isArray(m.teams) ? m.teams[0] : m.teams))
-    .filter((t): t is { id: string; name: string; organization_id: string } => Boolean(t) && t.organization_id === auth.orgId)
-    .map((t) => ({ id: t.id, name: t.name }))
+  // The joined tables are second reads rather than PostgREST embeds
+  // (`teams!inner`, `identity:revenue_identities`), which the Neon adapter
+  // cannot translate. Both are batched by id.
+  const teamIds = (membershipRes.data ?? []).map((m: { team_id: string }) => m.team_id)
+  const teams: { id: string; name: string }[] = []
+  if (teamIds.length > 0) {
+    const { data: teamRows } = await client
+      .from('teams')
+      .select('id, name, organization_id')
+      .in('id', teamIds)
+    teams.push(
+      ...(teamRows ?? [])
+        .filter((t: { id: string; name: string; organization_id: string }) => t.organization_id === auth.orgId)
+        .map((t: { id: string; name: string; organization_id: string }) => ({ id: t.id, name: t.name })),
+    )
+  }
 
-  type IdentityJoin = { identity: { id: string; identity_name: string; title: string | null; channel: string | null } | Array<{ id: string; identity_name: string; title: string | null; channel: string | null }> | null }
-  const identities = ((assignmentRes.data ?? []) as IdentityJoin[])
-    .map((a) => (Array.isArray(a.identity) ? a.identity[0] : a.identity))
-    .filter(Boolean)
-    .map((i) => ({ id: i!.id, name: i!.identity_name, title: i!.title, channel: i!.channel }))
+  const identityIds = (assignmentRes.data ?? []).map((a: { revenue_identity_id: string }) => a.revenue_identity_id)
+  const identities: { id: string; name: string; title: string | null; channel: string | null }[] = []
+  if (identityIds.length > 0) {
+    const { data: identityRows } = await client
+      .from('revenue_identities')
+      .select('id, identity_name, title, channel')
+      .in('id', identityIds)
+    identities.push(
+      ...(identityRows ?? []).map((i: { id: string; identity_name: string; title: string | null; channel: string | null }) => ({
+        id: i.id,
+        name: i.identity_name,
+        title: i.title,
+        channel: i.channel,
+      })),
+    )
+  }
 
   return { id: rep.id, name: rep.name, repRole: rep.role, teams, identities }
 }

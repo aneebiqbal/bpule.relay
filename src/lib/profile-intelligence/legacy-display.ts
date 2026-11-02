@@ -50,7 +50,3 @@ export function effectiveReadiness(row: Row, counts: { proofCount: number; sourc
 }
 
 /** Select fragment for the embedded live counts used above. */
-export const LIVE_COUNT_SELECT = `
-  proof_cards_count:proof_cards(count),
-  proof_items_count:proof_items(count),
-  sources_count:profile_sources(count)`

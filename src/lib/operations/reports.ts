@@ -93,6 +93,35 @@ function leadCount(
   return run(extra(q))
 }
 
+/**
+ * Resolve the lead ids a report scope selects.
+ *
+ * The report queries used to express this as a PostgREST embed (`leads!inner`)
+ * with filters on the embedded columns, which the Neon adapter cannot
+ * translate. Resolving the lead ids first keeps the same inner-join semantics:
+ * only conversation states / events whose lead matches are counted.
+ */
+async function matchingLeadIds(
+  client: DbClient,
+  scope: ReportScope,
+  leadWindow: { start: string; end: string } | null,
+  extra: (q: any) => any = (q) => q, // eslint-disable-line @typescript-eslint/no-explicit-any
+): Promise<string[] | null> {
+  let q = client
+    .from('leads')
+    .select('id')
+    .eq('organization_id', scope.orgId)
+    .eq('is_test', false)
+  if (leadWindow) q = q.gte('created_at', leadWindow.start).lt('created_at', leadWindow.end)
+  if (scope.repIds) q = q.in('owner_rep_id', scope.repIds)
+  if (scope.profileId) q = q.eq('revenue_identity_id', scope.profileId)
+  if (scope.source === 'linkedin' || scope.source === 'upwork') q = q.eq('source', scope.source)
+  if (scope.source === 'other') q = q.not('source', 'in', '(linkedin,upwork)')
+  const { data, error } = await extra(q)
+  if (error) return null
+  return (data ?? []).map((r: { id: string }) => r.id)
+}
+
 /** conversation_states joined to leads (scope filters on the lead). */
 function stateCount(
   client: DbClient,
@@ -101,17 +130,17 @@ function stateCount(
   extra: (q: any) => any, // eslint-disable-line @typescript-eslint/no-explicit-any
 ): Promise<number | null> {
   if (scope.repIds && scope.repIds.length === 0) return Promise.resolve(0)
-  let q = client
-    .from('conversation_states')
-    .select('lead_id, leads!inner(id)', { head: true, count: 'exact' })
-    .eq('organization_id', scope.orgId)
-    .eq('leads.is_test', false)
-  if (leadWindow) q = q.gte('leads.created_at', leadWindow.start).lt('leads.created_at', leadWindow.end)
-  if (scope.repIds) q = q.in('leads.owner_rep_id', scope.repIds)
-  if (scope.profileId) q = q.eq('leads.revenue_identity_id', scope.profileId)
-  if (scope.source === 'linkedin' || scope.source === 'upwork') q = q.eq('leads.source', scope.source)
-  if (scope.source === 'other') q = q.not('leads.source', 'in', '(linkedin,upwork)')
-  return run(extra(q))
+  return (async () => {
+    const leadIds = await matchingLeadIds(client, scope, leadWindow, (q) => q.eq('archived', false))
+    if (leadIds === null) return null
+    if (leadIds.length === 0) return 0
+    let q = client
+      .from('conversation_states')
+      .select('lead_id', { head: true, count: 'exact' })
+      .eq('organization_id', scope.orgId)
+      .in('lead_id', leadIds)
+    return run(extra(q))
+  })()
 }
 
 /**
@@ -127,19 +156,38 @@ function eventCount(
 ): Promise<number | null> {
   if (scope.repIds && scope.repIds.length === 0) return Promise.resolve(0)
   const needsLead = Boolean(scope.profileId || scope.source)
-  let q = client
-    .from('action_events')
-    .select(needsLead ? 'id, leads!inner(id)' : 'id', { head: true, count: 'exact' })
-    .eq('organization_id', scope.orgId)
-    .in('action_type', types)
-    .neq('execution_status', 'failed')
-    .gte('occurred_at', window.start)
-    .lt('occurred_at', window.end)
-  if (scope.repIds) q = q.in('actor_id', scope.repIds)
-  if (scope.profileId) q = q.eq('leads.revenue_identity_id', scope.profileId)
-  if (scope.source === 'linkedin' || scope.source === 'upwork') q = q.eq('leads.source', scope.source)
-  if (scope.source === 'other') q = q.not('leads.source', 'in', '(linkedin,upwork)')
-  return run(q)
+  if (!needsLead) {
+    return (async () => {
+      const { count, error } = await client
+        .from('action_events')
+        .select('id', { head: true, count: 'exact' })
+        .eq('organization_id', scope.orgId)
+        .in('action_type', types)
+        .neq('execution_status', 'failed')
+        .gte('occurred_at', window.start)
+        .lt('occurred_at', window.end)
+        .in('actor_id', scope.repIds ?? [])
+      if (error) return null
+      return count ?? 0
+    })()
+  }
+  return (async () => {
+    const leadIds = await matchingLeadIds(client, scope, null)
+    if (leadIds === null) return null
+    if (leadIds.length === 0) return 0
+    const { count, error } = await client
+      .from('action_events')
+      .select('id', { head: true, count: 'exact' })
+      .eq('organization_id', scope.orgId)
+      .in('action_type', types)
+      .neq('execution_status', 'failed')
+      .gte('occurred_at', window.start)
+      .lt('occurred_at', window.end)
+      .in('actor_id', scope.repIds ?? [])
+      .in('lead_id', leadIds)
+    if (error) return null
+    return count ?? 0
+  })()
 }
 
 // ─── Sales report ───────────────────────────────────────────────────────────
@@ -269,27 +317,30 @@ export async function loadPipelineReport(
         return { key: g.key, label: g.label, count, avgAgeDays: null, stuck: null, href: links.qualifiedHref }
       }
       const [count, stuck, sample] = await Promise.all([
-        stateCount(client, scope, null, (q) => q.in('stage', g.stages!).eq('leads.archived', false)),
+        stateCount(client, scope, null, (q) => q.in('stage', g.stages!)),
         g.key === 'won'
           ? Promise.resolve(null)
-          : stateCount(client, scope, null, (q) => q.in('stage', g.stages!).eq('leads.archived', false).lt('updated_at', stuckBefore)),
+          : stateCount(client, scope, null, (q) => q.in('stage', g.stages!).lt('updated_at', stuckBefore)),
         (async () => {
           if (scope.repIds && scope.repIds.length === 0) return [] as string[]
-          let q = client
+          const leadIds = await matchingLeadIds(client, scope, null, (q) => q.eq('archived', false))
+          if (leadIds === null) return null
+          if (leadIds.length === 0) return [] as string[]
+          const { data, error } = await client
             .from('conversation_states')
-            .select('leads!inner(created_at)')
+            .select('lead_id')
             .eq('organization_id', scope.orgId)
             .in('stage', g.stages!)
-            .eq('leads.archived', false)
-            .eq('leads.is_test', false)
+            .in('lead_id', leadIds)
             .limit(AGE_SAMPLE)
-          if (scope.repIds) q = q.in('leads.owner_rep_id', scope.repIds)
-          if (scope.profileId) q = q.eq('leads.revenue_identity_id', scope.profileId)
-          const { data, error } = await q
           if (error) return null
-          return ((data ?? []) as unknown as Array<{ leads: { created_at: string } | Array<{ created_at: string }> }>)
-            .map((r) => (Array.isArray(r.leads) ? r.leads[0]?.created_at : r.leads?.created_at))
-            .filter((c): c is string => Boolean(c))
+          const ids = (data ?? []).map((r: { lead_id: string | null }) => r.lead_id).filter((x): x is string => Boolean(x))
+          if (ids.length === 0) return []
+          const { data: leadRows } = await client
+            .from('leads')
+            .select('id, created_at')
+            .in('id', ids)
+          return (leadRows ?? []).map((r: { created_at: string }) => r.created_at)
         })(),
       ])
       return {

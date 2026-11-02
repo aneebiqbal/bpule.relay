@@ -125,40 +125,94 @@ export async function loadSenderCandidates(
     .from('profiles')
     .select(`
       id, rep_id, platform, label, headline, full_name, display_name, current_role,
-      primary_skills, secondary_skills, technologies, specialties, service_capabilities,
-      owner:reps(id, name),
-      assignments:profile_assignments(rep_id, reps(id, name)),
-      proof_cards(safe_claim, capability, tags, strength, verified),
-      proof_items(project_summary, tags, review_quote, permission_on_file),
-      portfolio_projects(project_title, description, technologies)
+      primary_skills, secondary_skills, technologies, specialties, service_capabilities
     `)
     .eq('organization_id', orgId)
     .is('archived_at', null)
   if (error) throw error
 
+  const profileIds = (data ?? []).map((p: any) => p.id as string)
+  const ownerIds = (data ?? []).map((p: any) => p.rep_id as string).filter(Boolean)
+
+  // The owner, the assignments, the identity holders and the proof tables used
+  // to arrive as PostgREST embeds, which the Neon adapter cannot translate.
+  // They are batched reads over the page's ids.
+  const [ownerRows, assignmentRows, proofCardRows, proofItemRows, portfolioRows, identityHolders] = await Promise.all([
+    ownerIds.length > 0 ? client.from('reps').select('id, name').in('id', ownerIds) : Promise.resolve({ data: [] }),
+    profileIds.length > 0 ? client.from('profile_assignments').select('rep_id, profile_id').in('profile_id', profileIds) : Promise.resolve({ data: [] }),
+    profileIds.length > 0
+      ? client.from('proof_cards').select('profile_id, safe_claim, capability, tags, strength, verified').in('profile_id', profileIds)
+      : Promise.resolve({ data: [] }),
+    profileIds.length > 0
+      ? client.from('proof_items').select('profile_id, project_summary, tags, review_quote, permission_on_file').in('profile_id', profileIds)
+      : Promise.resolve({ data: [] }),
+    profileIds.length > 0
+      ? client.from('portfolio_projects').select('profile_id, project_title, description, technologies').in('profile_id', profileIds)
+      : Promise.resolve({ data: [] }),
+    client
+      .from('identity_assignments')
+      .select('rep_id, revenue_identity_id')
+      .eq('organization_id', orgId),
+  ])
+
+  const ownerNameById = new Map((ownerRows.data ?? []).map((r: any) => [r.id as string, r.name as string]))
+  const assignedRepIds = (assignmentRows.data ?? []).map((a: any) => a.rep_id as string).filter(Boolean)
+  const holderRepIds = (identityHolders.data ?? []).map((r: any) => r.rep_id as string).filter(Boolean)
+  const allRepIds = [...new Set([...assignedRepIds, ...holderRepIds])]
+  const repNameById = new Map<string, string>()
+  if (allRepIds.length > 0) {
+    const { data: reps } = await client.from('reps').select('id, name').in('id', allRepIds)
+    for (const r of reps ?? []) repNameById.set(r.id as string, r.name as string)
+  }
+
+  const groupByProfile = <T extends { profile_id: string }>(rows: T[] | null | undefined) => {
+    const map = new Map<string, T[]>()
+    for (const r of rows ?? []) {
+      const list = map.get(r.profile_id as string) ?? []
+      list.push(r)
+      map.set(r.profile_id as string, list)
+    }
+    return map
+  }
+  const cardsByProfile = groupByProfile(proofCardRows.data as any[])
+  const itemsByProfile = groupByProfile(proofItemRows.data as any[])
+  const portfolioByProfile = groupByProfile(portfolioRows.data as any[])
+  const assignmentsByProfile = groupByProfile(assignmentRows.data as any[])
+
   // Reps assigned a sending identity built from a profile can send as it too.
-  const { data: identityHolders } = await client
-    .from('identity_assignments')
-    .select('reps(id, name), revenue_identities(profile_id, status)')
-    .eq('organization_id', orgId)
   const holdersByProfile = new Map<string, Array<{ id: string; name: string }>>()
-  for (const row of (identityHolders ?? []) as any[]) {
-    const identity = Array.isArray(row.revenue_identities) ? row.revenue_identities[0] : row.revenue_identities
-    const rep = Array.isArray(row.reps) ? row.reps[0] : row.reps
-    if (!identity?.profile_id || identity.status === 'archived' || !rep?.id) continue
-    holdersByProfile.set(identity.profile_id, [...(holdersByProfile.get(identity.profile_id) ?? []), rep])
+  const holderIdentityIds = (identityHolders.data ?? []).map((r: any) => r.revenue_identity_id as string).filter(Boolean)
+  if (holderIdentityIds.length > 0) {
+    const { data: identityRows } = await client
+      .from('revenue_identities')
+      .select('id, profile_id, status')
+      .in('id', holderIdentityIds)
+    for (let i = 0; i < (identityHolders.data ?? []).length; i++) {
+      const holder = (identityHolders.data ?? [])[i] as any
+      const identity = (identityRows ?? []).find((r: any) => r.id === holder.revenue_identity_id) as any
+      if (!identity?.profile_id || identity.status === 'archived' || !holder.rep_id) continue
+      holdersByProfile.set(identity.profile_id, [
+        ...(holdersByProfile.get(identity.profile_id) ?? []),
+        { id: holder.rep_id, name: repNameById.get(holder.rep_id) ?? 'Unknown' },
+      ])
+    }
   }
 
   return (data ?? []).map((p: any) => {
     const holders = new Map<string, string>()
-    for (const a of p.assignments ?? []) if (a.reps?.id) holders.set(a.reps.id, a.reps.name)
+    for (const a of assignmentsByProfile.get(p.id) ?? []) {
+      holders.set(a.rep_id, repNameById.get(a.rep_id) ?? 'Unknown')
+    }
     for (const r of holdersByProfile.get(p.id) ?? []) holders.set(r.id, r.name)
-    const owner = Array.isArray(p.owner) ? p.owner[0] : p.owner
-    if (owner?.id) holders.set(owner.id, owner.name)
+    if (p.rep_id) holders.set(p.rep_id, ownerNameById.get(p.rep_id) ?? 'Unknown')
+    const owner = p.rep_id ? { id: p.rep_id, name: ownerNameById.get(p.rep_id) ?? 'Unknown' } : null
+    const proofCards = cardsByProfile.get(p.id) ?? []
+    const proofItems = itemsByProfile.get(p.id) ?? []
+    const portfolioProjects = portfolioByProfile.get(p.id) ?? []
     const skills = [
       ...(p.primary_skills ?? []), ...(p.secondary_skills ?? []), ...(p.technologies ?? []),
       ...(p.specialties ?? []), ...(p.service_capabilities ?? []),
-      ...(p.portfolio_projects ?? []).flatMap((pp: any) => pp.technologies ?? []),
+      ...portfolioProjects.flatMap((pp: any) => pp.technologies ?? []),
     ].filter((s: unknown): s is string => typeof s === 'string')
     return {
       id: p.id,
@@ -167,9 +221,9 @@ export async function loadSenderCandidates(
       platform: p.platform ?? null,
       skills: [...new Set(skills)],
       proof: [
-        ...(p.proof_cards ?? []).map((c: any) => ({ text: c.safe_claim, tags: [...(c.tags ?? []), c.capability ?? ''], strong: c.strength === 'strong', verified: !!c.verified })),
-        ...(p.proof_items ?? []).map((i: any) => ({ text: i.project_summary, tags: i.tags ?? [], strong: !!i.review_quote, verified: !!i.permission_on_file })),
-        ...(p.portfolio_projects ?? []).map((pp: any) => ({ text: [pp.project_title, pp.description].filter(Boolean).join(' — '), tags: pp.technologies ?? [], strong: false, verified: false })),
+        ...proofCards.map((c: any) => ({ text: c.safe_claim, tags: [...(c.tags ?? []), c.capability ?? ''], strong: c.strength === 'strong', verified: !!c.verified })),
+        ...proofItems.map((i: any) => ({ text: i.project_summary, tags: i.tags ?? [], strong: !!i.review_quote, verified: !!i.permission_on_file })),
+        ...portfolioProjects.map((pp: any) => ({ text: [pp.project_title, pp.description].filter(Boolean).join(' — '), tags: pp.technologies ?? [], strong: false, verified: false })),
       ].filter((x) => x.text),
       holders: [...holders].map(([id, name]) => ({ repId: id, name })),
       accessibleToRep: p.rep_id === repId || holders.has(repId),

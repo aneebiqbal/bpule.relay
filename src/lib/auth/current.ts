@@ -99,7 +99,9 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
     // Two plain reads instead of a PostgREST embed (`organizations (...)`),
     // which the Neon adapter does not translate. Batched by id, so this stays
     // two round trips regardless of team size.
-    const db = await getDbClient()
+    // The Neon adapter needs the identity in scope so RLS can derive the
+    // organization; the Supabase adapter takes it from the request cookies.
+    const db = await getDbClient(userId)
     const { data: repRows, error: repError } = await db
       .from('reps')
       .select('id, name, role, organization_id, created_at, timezone')

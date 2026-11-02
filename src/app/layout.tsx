@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { siteConfig, canonicalUrl } from "@/lib/site-config";
+import { resolveDbProvider } from "@/lib/db/types";
+import { resolveAuthProvider } from "@/lib/auth/contract";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -103,8 +105,12 @@ export default function RootLayout({
       <body suppressHydrationWarning className="min-h-full selection:bg-orange/25 selection:text-ink">
         <script
           dangerouslySetInnerHTML={{
-            __html:
-              "(function(){try{var t=localStorage.getItem('relay-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}})()",
+            __html: `(function(){try{var t=localStorage.getItem('relay-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}})()`,
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__RELAY_DB_PROVIDER__=${JSON.stringify(resolveDbProvider())};window.__RELAY_AUTH_PROVIDER__=${JSON.stringify(resolveAuthProvider())};`,
           }}
         />
         {process.env.NEXT_POSTHOG_KEY && (

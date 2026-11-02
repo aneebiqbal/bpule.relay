@@ -59,16 +59,18 @@ export const getSupabaseAuthClient = cachedClient
  *
  * Supabase: the per-request user-scoped client (unchanged behaviour).
  * Neon: a client bound to the signed-in user's id, which carries the RLS
- * identity in `app.current_user_id` on every query. The id comes from the
- * same auth session the request already has, so no caller needs to change.
+ * identity in `app.current_user_id` on every query.
+ *
+ * The identity comes from the auth provider, never from `supabase.auth` — on
+ * the Neon provider there is no Supabase session to read.
  */
 export const createServerSupabase = cache(async (): Promise<DbClient> => {
   const supabase = await cachedClient()
   if (resolveDbProvider() === 'neon') {
-    const { data } = await supabase.auth.getClaims()
-    const userId = data?.claims?.sub
-    if (!userId) throw new Error('No signed-in user id for the Neon database provider')
-    return neonDbClient(userId)
+    const { getAuthProvider } = await import('@/lib/auth/provider')
+    const { user } = await (await getAuthProvider()).getSession()
+    if (!user?.id) throw new Error('No signed-in user id for the Neon database provider')
+    return neonDbClient(user.id)
   }
   return supabaseDbClient(supabase)
 })

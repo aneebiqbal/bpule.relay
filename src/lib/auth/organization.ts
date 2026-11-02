@@ -59,7 +59,7 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
 
   // Org role and team memberships are independent; run them together. The
   // capability set depends on the role, so it is the only second wave.
-  const [{ data: orgRoleRow }, { data: memberships }] = await Promise.all([
+  const [{ data: orgRoleRow }, { data: membershipRows }] = await Promise.all([
     supabase
       .from('organization_roles')
       .select('role')
@@ -68,7 +68,7 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
       .maybeSingle(),
     supabase
       .from('team_memberships')
-      .select('team_id, membership_role, active, teams!inner(name)')
+      .select('team_id, membership_role, active')
       .eq('person_id', user.rep.id)
       .eq('active', true),
   ])
@@ -81,9 +81,24 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
   const organizationRole: OrganizationRole =
     tableRole ?? (user.rep.role === 'admin' ? 'ADMIN' : 'MEMBER')
 
-  const teamMemberships: TeamMembership[] = (memberships ?? []).map((m: any) => ({
+  // The team name is a second read rather than a PostgREST embed (`teams!inner`),
+  // which the Neon adapter cannot translate. Batched by id, so it stays one
+  // round trip regardless of how many teams the rep belongs to.
+  const teamIds = (membershipRows ?? []).map((m: { team_id: string }) => m.team_id)
+  const teamNameById = new Map<string, string>()
+  if (teamIds.length > 0) {
+    const { data: teamRows } = await supabase
+      .from('teams')
+      .select('id, name')
+      .in('id', teamIds)
+    for (const row of teamRows ?? []) {
+      teamNameById.set(row.id, row.name)
+    }
+  }
+
+  const teamMemberships: TeamMembership[] = (membershipRows ?? []).map((m: { team_id: string; membership_role: string; active: boolean }) => ({
     teamId: m.team_id,
-    teamName: m.teams?.name ?? 'Unknown',
+    teamName: teamNameById.get(m.team_id) ?? 'Unknown',
     role: m.membership_role as TeamRole,
     active: m.active,
   }))

@@ -159,6 +159,66 @@ The browser matrix, responsive, accessibility, performance, egress, delta sync a
 production smoke all require a running deployment. They were not substituted with
 guesses.
 
+## 9a. Runtime certification (local, against Neon)
+
+Because Vercel team access is denied (§9), the app was run locally with the
+Neon providers and certified in a real browser against the live Neon database.
+
+| Gate | Result |
+|---|---|
+| `GET /api/version` | **PASS** — `sha` = the deployed SHA, `databaseProvider=neon`, `authProvider=neon` |
+| `GET /` | 200 |
+| `GET /login` | 200 |
+| Boot crash / missing env / DB connection failure | none |
+
+### Defect found and fixed
+
+Running the real sign-in flow caught a defect that no automated test could:
+
+**The browser was signing in against Supabase.** Network capture showed
+`POST https://fhnkanwvgamitrcuzpem.supabase.co/auth/v1/token?grant_type=password`
+while the server was reading Neon.
+
+Root cause: `resolveAuthProvider` read `process.env.RELAY_AUTH_PROVIDER`. Next.js
+only inlines `NEXT_PUBLIC_*` names into the client bundle, and that inlining did
+not carry the value in this runtime — so the browser silently fell back to
+Supabase while the server used Neon. The same latent defect existed in
+`resolveDbProvider`.
+
+Fix: the root layout now bootstraps the server-resolved provider onto
+`globalThis` (`__RELAY_DB_PROVIDER__`, `__RELAY_AUTH_PROVIDER__`), and both
+resolvers read that. It is authoritative for the browser and cannot drift from
+what the server is actually using. Regression tests cover the bootstrap path.
+
+This is exactly the split-brain condition the migration was meant to prevent, and
+it only surfaced under a real browser session.
+
+### Further defects found and fixed under runtime certification
+
+| # | Defect | Impact | Fix |
+|---|---|---|---|
+| 2 | `getCurrentUser` called `getDbClient()` with no identity | Every authenticated page threw; nothing resolved a rep | Pass the session user id: `getDbClient(userId)` |
+| 3 | `createServerSupabase` read the identity from `supabase.auth.getClaims()` | On Neon there is no Supabase session, so every route using `resolveAuthContext` returned 500 | Read the identity from the auth provider |
+| 4 | No Neon Auth API proxy route | The browser client could not reach Neon Auth at all | `src/app/api/auth/[...path]/route.ts` |
+| 5 | 9 PostgREST embeds (`teams!inner`, `leads!inner`, `reps!inner`, …) | Invalid SQL — `column "teams" does not exist` | Rewritten as batched second reads |
+| 6 | PostgREST select aliases (`alias:column->key`) | Invalid SQL — `syntax error at or near ":"` | The adapter translates JSON-path aliases to SQL |
+| 7 | The no-identity executor still shifted placeholders | `could not determine data type of parameter $1` on every service-role query | Only shift when an identity is in scope |
+| 8 | `Secure` session cookie over plain HTTP | Browsers refuse it, so local sign-in is impossible | Dev-only strip, mirroring the app's own `NODE_ENV === 'production'` cookie rule |
+
+Defects 2 and 3 were both fatal to the cutover and neither was reachable from the
+automated suite — the unit tests exercise the adapters in isolation, not a real
+request with a real session.
+
+### Runtime evidence
+
+| Gate | Result |
+|---|---|
+| `GET /api/version` | **PASS** — `sha` matches, `databaseProvider=neon`, `authProvider=neon` |
+| Browser sign-in | **PASS** — `POST /api/auth/sign-in/email` → 200, session cookie set |
+| Session resolution | **PASS** — `/api/me/status` → 200 with real data (`isAdmin`, `isManager`, limits) |
+| Authenticated pages | **PASS** — 14/14 return 200 |
+| Neon SQL errors | **0** |
+
 ## 10. Rollback
 
 Supabase is untouched and remains the rollback database. To roll back:

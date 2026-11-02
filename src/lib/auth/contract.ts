@@ -18,11 +18,32 @@
 export type AuthProviderName = 'supabase' | 'neon'
 
 /**
- * Resolve the configured provider. `RELAY_AUTH_PROVIDER` is the only input;
- * anything unrecognised falls back to `supabase`, which is the rollback path.
+ * The provider the server rendered into the page. See `resolveAuthProvider`.
+ */
+function readBrowserFlag(name: string): string | undefined {
+  if (typeof globalThis === 'undefined') return undefined
+  const value = (globalThis as Record<string, unknown>)[name]
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+/**
+ * Resolve the configured provider.
+ *
+ * `RELAY_AUTH_PROVIDER` is the server-side variable. Next.js only inlines
+ * `NEXT_PUBLIC_*` names into the client bundle, and that inlining is not
+ * dependable in every runtime, so the root layout also writes the resolved
+ * provider onto `globalThis` — authoritative for the browser, and impossible to
+ * drift from what the server is using. Anything unrecognised falls back to
+ * `supabase`, the rollback path.
  */
 export function resolveAuthProvider(env: NodeJS.ProcessEnv = process.env): AuthProviderName {
-  const value = env.RELAY_AUTH_PROVIDER?.trim().toLowerCase()
+  const value = (
+    env.RELAY_AUTH_PROVIDER ??
+    env.NEXT_PUBLIC_RELAY_AUTH_PROVIDER ??
+    readBrowserFlag('__RELAY_AUTH_PROVIDER__')
+  )
+    ?.trim()
+    .toLowerCase()
   return value === 'neon' ? 'neon' : 'supabase'
 }
 

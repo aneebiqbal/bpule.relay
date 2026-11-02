@@ -25,12 +25,27 @@ export async function GET() {
   // Get all applied jobs with connects cost
   const { data: jobs } = await client
     .from('upwork_jobs')
-    .select('id, title, connects_cost, connects_used, status, updated_at, profile:profiles(id, label)')
+    .select('id, title, connects_cost, connects_used, status, updated_at, profile_id')
     .eq('owner_rep_id', repId)
     .eq('organization_id', authCtx.orgId)
     .in('status', ['applied', 'shortlisted', 'interviewing', 'offer_sent', 'awarded'])
     .order('updated_at', { ascending: false })
     .limit(50)
+
+  // The profile label is a second read rather than a PostgREST embed
+  // (`profile:profiles`), which the Neon adapter cannot translate.
+  const profileIds = (jobs ?? []).map((j) => (j as { profile_id: string | null }).profile_id).filter((x): x is string => Boolean(x))
+  const profileLabelById = new Map<string, string>()
+  if (profileIds.length > 0) {
+    const { data: profiles } = await client.from('profiles').select('id, label').in('id', profileIds)
+    for (const p of profiles ?? []) profileLabelById.set(p.id as string, p.label as string)
+  }
+  const jobsWithProfile = (jobs ?? []).map((j) => ({
+    ...j,
+    profile: (j as { profile_id: string | null }).profile_id
+      ? { id: (j as { profile_id: string }).profile_id, label: profileLabelById.get((j as { profile_id: string }).profile_id) ?? null }
+      : null,
+  }))
 
   // Calculate totals
   const now = new Date()
@@ -46,7 +61,7 @@ export async function GET() {
   let monthUsed = 0
   const perProfile: Record<string, { name: string; used: number; jobs: number }> = {}
 
-  for (const job of (jobs ?? [])) {
+  for (const job of (jobsWithProfile ?? [])) {
     const used = (job as any).connects_used ?? (job as any).connects_cost ?? 0
     const updatedAt = new Date((job as any).updated_at ?? now)
     totalUsed += used
@@ -65,9 +80,9 @@ export async function GET() {
     totalUsed,
     weekUsed,
     monthUsed,
-    appliedCount: jobs?.length ?? 0,
+    appliedCount: jobsWithProfile?.length ?? 0,
     perProfile: Object.values(perProfile),
-    recentJobs: (jobs ?? []).slice(0, 10).map((j: any) => ({
+    recentJobs: (jobsWithProfile ?? []).slice(0, 10).map((j: any) => ({
       id: j.id,
       title: j.title.slice(0, 60),
       connects: j.connects_used ?? j.connects_cost ?? 0,

@@ -229,7 +229,13 @@ describe('REPORTS', () => {
   })
 
   it('SALES_REPORT_AGGREGATE: every number is a zero-row count scoped to the reps', async () => {
-    const { client, calls } = fakeClient(() => ({ count: 7 }))
+    // The report counts are a count query over the leads a scope selects, so
+    // the lead-id resolution returns ids and every counted query is head-only.
+    const { client, calls } = fakeClient((call) => {
+      const select = call.ops.find(([n]) => n === 'select')
+      const head = (select?.[1]?.[1] as { head?: boolean } | undefined)?.head
+      return head ? { count: 7 } : { data: [{ id: 'l1' }, { id: 'l2' }] }
+    })
     const report = await loadSalesReport(
       client,
       { orgId: 'org', repIds: ['r1'] },
@@ -240,9 +246,12 @@ describe('REPORTS', () => {
     expect(report.cohort.every((s) => s.count === 7 && s.previous === 7)).toBe(true)
     expect(calls.length).toBeGreaterThan(0)
     for (const call of calls) {
-      const select = call.ops.find(([n]) => n === 'select')!
-      expect((select[1][1] as { head?: boolean }).head).toBe(true)
-      const scoped = call.ops.some(([n, a]) => n === 'in' && (a[0] === 'owner_rep_id' || a[0] === 'leads.owner_rep_id' || a[0] === 'actor_id'))
+      // The lead-id resolution selects only ids; every counted query is head-only.
+      if (call.table !== 'leads') {
+        const select = call.ops.find(([n]) => n === 'select')!
+        expect((select[1][1] as { head?: boolean }).head).toBe(true)
+      }
+      const scoped = call.ops.some(([n, a]) => n === 'in' && (a[0] === 'owner_rep_id' || a[0] === 'leads.owner_rep_id' || a[0] === 'actor_id' || a[0] === 'lead_id'))
       expect(scoped).toBe(true)
     }
     expect(report.cohort.find((s) => s.key === 'meeting')!.href).toBe('/chats?cstage=meeting')
@@ -271,7 +280,13 @@ describe('REPORTS', () => {
   it('REVENUE_REPORT: win rate from closed outcomes; revenue is never estimated', async () => {
     expect(winRate(3, 1)).toBe(75)
     expect(winRate(0, 0)).toBeNull()
-    const { client } = fakeClient((call) => ({ count: call.ops.some(([n, a]) => n === 'gte' && a[0] === 'won_at') ? 4 : 6 }))
+    const { client } = fakeClient((call) => {
+      // The lead-id resolution returns ids; every counted query returns a count.
+      const select = call.ops.find(([n]) => n === 'select')
+      const head = (select?.[1]?.[1] as { head?: boolean } | undefined)?.head
+      if (!head) return { data: [{ id: 'l1' }] }
+      return { count: call.ops.some(([n, a]) => n === 'gte' && a[0] === 'won_at') ? 4 : 6 }
+    })
     const r = await loadRevenueReport(client, { orgId: 'org', repIds: null }, { start: hoursAgo(24), end: new Date(NOW).toISOString() })
     expect(r).toMatchObject({ won: 4, lost: 6, winRatePct: 40, knownRevenue: null })
   })

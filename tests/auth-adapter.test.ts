@@ -48,6 +48,27 @@ describe('auth provider selection', () => {
     expect(resolveAuthProvider()).toBe('neon')
   })
 
+  it('reads the browser-facing variable, which Next.js inlines into the bundle', () => {
+    // Next.js only inlines NEXT_PUBLIC_* names for the client bundle, so the
+    // browser cannot see RELAY_AUTH_PROVIDER. Without this fallback the browser
+    // silently signs in against Supabase while the server reads Neon.
+    delete process.env.RELAY_AUTH_PROVIDER
+    process.env.NEXT_PUBLIC_RELAY_AUTH_PROVIDER = 'neon'
+    expect(resolveAuthProvider()).toBe('neon')
+    delete process.env.NEXT_PUBLIC_RELAY_AUTH_PROVIDER
+  })
+
+  it('reads the provider the root layout bootstraps onto the page', () => {
+    // Authoritative for the browser: it is what the server actually resolved,
+    // so it cannot drift from the server's own provider.
+    delete process.env.RELAY_AUTH_PROVIDER
+    delete process.env.NEXT_PUBLIC_RELAY_AUTH_PROVIDER
+    ;(globalThis as Record<string, unknown>).__RELAY_AUTH_PROVIDER__ = 'neon'
+    expect(resolveAuthProvider()).toBe('neon')
+    delete (globalThis as Record<string, unknown>).__RELAY_AUTH_PROVIDER__
+    expect(resolveAuthProvider()).toBe('supabase')
+  })
+
   it('returns the supabase provider by default without constructing Neon Auth', async () => {
     delete process.env.RELAY_AUTH_PROVIDER
     delete process.env.NEON_AUTH_BASE_URL

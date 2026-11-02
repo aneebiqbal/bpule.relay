@@ -36,6 +36,47 @@ function ident(name: string): string {
 }
 
 /**
+ * Translate a PostgREST select expression into SQL.
+ *
+ * PostgREST allows two things plain SQL does not:
+ *
+ *   - a JSON path alias: `alias:column->key` or `alias:column->>key`
+ *   - a table embed: `alias:table(cols)`
+ *
+ * Embeds are not expressible in a single SELECT, so this only handles the JSON
+ * path form and leaves the rest for the caller to resolve as a second read.
+ */
+function translateSelect(columns: string): string {
+  return columns
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const colon = part.indexOf(':')
+      if (colon < 0) return part
+
+      const alias = part.slice(0, colon).trim()
+      const expression = part.slice(colon + 1).trim()
+
+      // `alias:table(cols)` is a table embed — not translatable here.
+      const embed = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(/.exec(expression)
+      if (embed) return part
+
+      // `alias:column->key` / `alias:column->>key` — a JSON path.
+      const json = /^([A-Za-z_][A-Za-z0-9_]*)\s*(->>?)\s*([A-Za-z_][A-Za-z0-9_]*)$/.exec(expression)
+      if (json) {
+        const [, column, , key] = json
+        // `->` returns jsonb, `->>` returns text; PostgREST's text form is the
+        // one that matters for the app's display fields.
+        return `(${ident(column)}->>'${key.replace(/'/g, "''")}') AS ${ident(alias)}`
+      }
+
+      return part
+    })
+    .join(', ')
+}
+
+/**
  * Low-level executor: runs SQL with the caller's identity in scope.
  *
  * Reads set the identity inside the same round trip (a `LATERAL` join forces
@@ -80,13 +121,23 @@ export class NeonExecutorImpl implements NeonExecutorApi {
     // equivalent. Nothing is written to Supabase in this mode.
     let n = 0
     const inner = text.replace(/\?/g, () => `$${++n}`)
-    // The identity GUC occupies $1, so the builder's placeholders shift by one.
-    const shifted = inner.replace(/\$(\d+)/g, (_, d: string) => `$${Number(d) + 1}`)
+    // With an identity in scope the GUC occupies $1, so the builder's
+    // placeholders shift by one. Without one they start at $1.
+    const shifted = this.userId
+      ? inner.replace(/\$(\d+)/g, (_, d: string) => `$${Number(d) + 1}`)
+      : inner
     const sql = this.userId
       ? `SELECT q.* FROM (SELECT set_config('app.current_user_id', $1, true) AS _g) AS ctx CROSS JOIN LATERAL (${shifted}) q`
       : `SELECT q.* FROM (${shifted}) q`
     const params = this.userId ? [this.userId, ...values] : values
-    const res = await this.pool.query(sql, params)
+    let res
+    try {
+      res = await this.pool.query(sql, params)
+    } catch (error) {
+      // Include the statement: a placeholder or quoting defect is otherwise
+      // invisible behind Postgres' terse position marker.
+      throw new Error(`Neon query failed: ${(error as Error).message}\n${sql}`)
+    }
     return res.rows as T[]
   }
 
@@ -99,7 +150,12 @@ export class NeonExecutorImpl implements NeonExecutorApi {
       if (this.userId) {
         await client.query('SELECT set_config($1, $2, true)', ['app.current_user_id', this.userId])
       }
-      const res = await client.query(inner, values)
+      let res
+      try {
+        res = await client.query(inner, values)
+      } catch (error) {
+        throw new Error(`Neon write failed: ${(error as Error).message}\n${inner}`)
+      }
       await client.query('COMMIT')
       return res.rows as T[]
     } catch (err) {
@@ -245,7 +301,7 @@ class NeonQueryBuilder<T = Record<string, unknown>> implements DbQueryBuilder<T>
   select(columns?: string, opts?: SelectOptions): DbQueryBuilder<T> {
     // PostgREST returns the written rows when `.select()` follows a write.
     if (this.op !== 'select') this.returningRows = true
-    this.columns = (columns ?? '*').trim() || '*'
+    this.columns = translateSelect((columns ?? '*').trim() || '*')
     this.count = opts?.count
     this.headValue = opts?.head === true
     return this
