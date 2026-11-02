@@ -146,7 +146,7 @@ export function LeadDecisionContextCard({ context }: Props) {
               observed={{ score: context.opportunityScore, displayScore: context.displayScore, qualification: context.qualification, action: context.effectiveAction, coldAction: context.coldAction, buyerIntent: context.buyerIntent, relationshipRole: context.relationshipRole, versions: context.versions }}
             />
             {context.versions && (
-              <p className="text-[9px] text-stone">{context.versions.scoringVersion} · {context.versions.modelVersion} · analyzed {new Date(context.versions.analyzedAt).toLocaleString()}</p>
+              <p className="text-[9px] text-stone">{context.versions.scoringVersion} · {context.versions.modelVersion} · analyzed <span suppressHydrationWarning>{new Date(context.versions.analyzedAt).toLocaleString()}</span></p>
             )}
           </div>
         )}

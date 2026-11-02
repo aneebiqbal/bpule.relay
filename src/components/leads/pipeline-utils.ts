@@ -474,6 +474,9 @@ export function parseLeadsQuery(
   const preset = viewToQuery(firstParam(params.view) ?? 'all')
   return {
     ...preset,
+    // `view` is the representation toggle (table | pipeline) and the saved-view
+    // id. It must survive parsing or `?view=pipeline` silently renders the table.
+    view: firstParam(params.view) ?? undefined,
     q: firstParam(params.q)?.trim() || undefined,
     stage: firstParam(params.stage) ?? preset.stage,
     priority: firstParam(params.priority) ?? preset.priority,

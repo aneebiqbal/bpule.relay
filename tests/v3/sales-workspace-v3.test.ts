@@ -18,6 +18,7 @@ import {
   derivePipelineStage,
   filterLeads,
   isLeadsViewId,
+  isPipelineView,
   leadNextAction,
   leadPriority,
   parseLeadsQuery,
@@ -236,6 +237,16 @@ describe('V3_PIPELINE_FILTER_PARITY', () => {
     expect(page).toContain('loadBoardPreview')
     expect(page).toContain('loadLeadsPage')
   })
+
+  it('V3_PIPELINE_URL_STATE: ?view=pipeline survives query parsing', () => {
+    // The representation toggle lives in the URL; if parsing drops it, the
+    // Pipeline view silently renders the table instead.
+    expect(parseLeadsQuery({ view: 'pipeline' }).view).toBe('pipeline')
+    expect(parseLeadsQuery({ view: 'needs_reply' }).view).toBe('needs_reply')
+    expect(parseLeadsQuery({}).view).toBeUndefined()
+    expect(isPipelineView(parseLeadsQuery({ view: 'pipeline' }).view)).toBe(true)
+    expect(isPipelineView(parseLeadsQuery({}).view)).toBe(false)
+  })
 })
 
 // ── Lead 360 ────────────────────────────────────────────────────────────────
@@ -348,6 +359,20 @@ describe('V3_LEADS_SORT_STABILITY', () => {
 })
 
 // ── Stage strip ─────────────────────────────────────────────────────────────
+
+describe('V3_LEAD360_HYDRATION', () => {
+  it('V3_LEAD360_HYDRATION: the record page threads one server clock', () => {
+    const workspace = read('src/components/lead-workspace-async.tsx')
+    expect(workspace).toContain('now={now}')
+    const simple = read('src/components/lead-workspace-simple.tsx')
+    expect(simple).toContain('now: number = Date.now()')
+    expect(simple).toContain('timeAgo(relationshipState.lastActionAt, now)')
+    expect(simple).toContain('buildPositiveSignals(lead)')
+    expect(simple).toContain('buildNegativeSignals(lead, now)')
+    // Locale-formatted dates are suppressed so server and client agree.
+    expect(simple).toContain('suppressHydrationWarning>{followupDueLabel}</span>')
+  })
+})
 
 describe('V3_LEAD360_STAGE_STRIP', () => {
   it('renders the canonical lifecycle and marks the current step', () => {

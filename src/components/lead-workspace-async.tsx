@@ -116,7 +116,7 @@ export function LeadWorkspaceAsync({ dataPromise, now }: { dataPromise: Promise<
           <Tabs items={TAB_ITEMS} value={tab} onChange={changeTab} />
           {tab === 'overview' ? (
             <div className="mt-4">
-              <LeadWorkspace lead={lead} dailyLimit={dailyLimit} todaySends={todaySends} senderProfileName={senderProfileName} />
+              <LeadWorkspace lead={lead} dailyLimit={dailyLimit} todaySends={todaySends} senderProfileName={senderProfileName} now={now} />
             </div>
           ) : null}
           {tab === 'conversation' ? (
