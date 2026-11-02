@@ -109,6 +109,26 @@ export function LeadWorkspaceAsync({
     [lead.messages, now],
   )
 
+  // The record page suspends on a server promise and renders a large tree.
+  // Server and client must agree on that first render, so the content is gated
+  // on mount: the skeleton is what SSR emits, and hydration matches it exactly.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
+      <div className="space-y-4" data-testid="lead-detail-loading">
+        <div className="space-y-4 rounded-lg border border-line bg-bone-raised p-5">
+          <div className="h-4 w-40 rounded bg-bone" />
+          <div className="mt-2 h-3 w-24 rounded bg-bone" />
+          <div className="mt-4 h-24 w-full rounded bg-bone" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       <LeadStageStrip lead={lead} />
