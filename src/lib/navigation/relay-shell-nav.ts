@@ -46,7 +46,7 @@ const adminUp = (r: RelayNavRoleFlags) => r.isAdmin || r.isOwner
 export const RELAY_TOP_NAV: RelayTopNavItem[] = [
   { id: 'home', label: 'Home', href: '/home', visible: repManagerAdmin },
   { id: 'sales', label: 'Sales', href: '/leads', visible: repManagerAdmin },
-  { id: 'conversations', label: 'Conversations', href: '/chats', visible: repManagerAdmin },
+  { id: 'conversations', label: 'Inbox', href: '/chats', visible: repManagerAdmin },
   { id: 'accounts', label: 'Accounts', href: '/accounts', visible: adminUp },
   { id: 'team', label: 'Team', href: '/team', visible: managerUp },
   { id: 'intelligence', label: 'Intelligence', href: '/admin/scoring-qa', visible: adminUp },
