@@ -33,7 +33,7 @@ import { loadRepBasics, buildRepAttention, type RepBasics } from '@/lib/operatio
 import { countConversationViews, loadConversationRows } from '@/lib/operations/conversations'
 import { ACTIVITY_EVENT_FILTERS, loadTimeline } from '@/lib/operations/activity'
 import { loadUnifiedTasks } from '@/lib/tasks/load-unified-tasks'
-import { countOverdueUnifiedTasks } from '@/lib/tasks/rank-unified-tasks'
+import { countOverdueUnifiedTasks, isOverdue } from '@/lib/tasks/rank-unified-tasks'
 import { loadLeadsPage, parseLeadsQuery } from '@/lib/leads/leads-page'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { getRepDailyActivity } from '@/lib/performance/activity-model'
@@ -139,7 +139,7 @@ export default async function Rep360Page({
       <Suspense key={`${tab}:${JSON.stringify(sp)}`} fallback={<TabSkeleton />}>
         {tab === 'overview' && <OverviewTab ctx={ctx} basics={basics} />}
         {tab === 'leads' && <LeadsTab repId={repId} sp={sp} leadScope={ctx.leadScope} />}
-        {tab === 'work' && <WorkTab ctx={ctx} repId={repId} reps={reps} canAssign={canAssign} />}
+        {tab === 'work' && <WorkTab ctx={ctx} repId={repId} reps={reps} canAssign={canAssign} view={typeof sp.view === 'string' ? sp.view : null} />}
         {tab === 'activity' && <ActivityTab ctx={ctx} repId={repId} filters={filters} />}
         {tab === 'performance' && <PerformanceTab ctx={ctx} repId={repId} filters={filters} />}
       </Suspense>
@@ -358,17 +358,22 @@ async function WorkTab({
   repId,
   reps,
   canAssign,
+  view,
 }: {
   ctx: OpsPageContext
   repId: string
   reps: Array<{ id: string; name: string }>
   canAssign: boolean
+  /** ?view=overdue filters the board to overdue assigned work. */
+  view: string | null
 }) {
   const now = Date.now()
   const [tasks, conversations] = await Promise.all([
     loadUnifiedTasks({ auth: ctx.auth, derivedActions: [], forRepId: repId, includeCompleted: true }),
     loadConversationRows(ctx.client, { orgId: ctx.auth.orgId, repIds: [repId] }, now).catch(() => []),
   ])
+  // The "Assigned overdue" metric deep-links here; honour it instead of ignoring it.
+  const visibleTasks = view === 'overdue' ? tasks.filter((task) => isOverdue(task, now)) : tasks
   const counts = countConversationViews(conversations)
   const base = `/team/${repId}`
   return (
@@ -391,7 +396,7 @@ async function WorkTab({
         description="Requests from managers and admins. Open a task to start, complete, reassign or reschedule it."
         action={<Link href="/tasks?view=all" className="text-[12px] text-graphite hover:text-ink">All tasks →</Link>}
       >
-        <TaskBoard tasks={tasks} reps={reps} canManage={canAssign} currentRepId={ctx.auth.repId} now={now} showGroupBy={false} />
+        <TaskBoard tasks={visibleTasks} reps={reps} canManage={canAssign} currentRepId={ctx.auth.repId} now={now} showGroupBy={false} />
       </Section>
     </div>
   )

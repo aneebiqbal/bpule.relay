@@ -103,15 +103,39 @@ export function TaskWorkspaceView({
   const [q, setQ] = useState('')
 
   useEffect(() => {
-    const assigneeParam = searchParams.get('assignee')
-    if (assigneeParam) setAssignee(assigneeParam)
+    // Filters are URL-backed: re-apply them on navigation and reset when the
+    // param disappears (e.g. Clear all), so refresh/back-forward always agree.
+    if (showAssignee) {
+      const assigneeParam = searchParams.get('assignee')
+      if (assigneeParam) setAssignee(assigneeParam)
+    } else {
+      setAssignee('ALL')
+    }
+    const priorityParam = searchParams.get('priority')
+    if (priorityParam === 'CRITICAL' || priorityParam === 'HIGH' || priorityParam === 'NORMAL' || priorityParam === 'LOW') {
+      setPriority(priorityParam)
+    } else {
+      setPriority('ALL')
+    }
     const sourceParam = searchParams.get('source')
     if (sourceParam === 'DERIVED' || sourceParam === 'ASSIGNED') setSource(sourceParam)
+    else setSource('ALL')
+    const dueParam = searchParams.get('due')
+    if (dueParam === 'overdue' || dueParam === 'today' || dueParam === 'week' || dueParam === 'later') {
+      setDue(dueParam)
+    } else {
+      setDue('ALL')
+    }
+    const teamParam = searchParams.get('team')
+    if (teamParam) setTeam(teamParam)
+    else setTeam('ALL')
+    const qParam = searchParams.get('q')
+    if (qParam !== null) setQ(qParam)
     if (searchParams.get('assign')) {
       setAssignDefaultRep(undefined)
       setAssignOpen(true)
     }
-  }, [searchParams])
+  }, [searchParams, showAssignee])
 
   const nameByRep = useMemo(() => new Map(reps.map((r) => [r.id, r.name])), [reps])
   const teamMemberIds = team === 'ALL' ? null : new Set(teams.find((t) => t.id === team)?.memberIds ?? [])
@@ -176,6 +200,7 @@ export function TaskWorkspaceView({
     const params = new URLSearchParams(searchParams.toString())
     params.delete(key)
     const s = params.toString()
+    if (key === 'q') setQ('')
     router.push(s ? `/tasks?${s}` : '/tasks', { scroll: false })
   }
 
@@ -231,15 +256,17 @@ export function TaskWorkspaceView({
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <FilterSelect
-            label="Assignee"
-            value={assignee}
-            onChange={(v) => {
-              setAssignee(v)
-              router.push(hrefWith({ assignee: v === 'ALL' ? null : v }), { scroll: false })
-            }}
-            options={[['ALL', 'All assignees'], ...reps.map((r): [string, string] => [r.id, r.name])]}
-          />
+          {showAssignee ? (
+            <FilterSelect
+              label="Assignee"
+              value={assignee}
+              onChange={(v) => {
+                setAssignee(v)
+                router.push(hrefWith({ assignee: v === 'ALL' ? null : v }), { scroll: false })
+              }}
+              options={[['ALL', 'All assignees'], ...reps.map((r): [string, string] => [r.id, r.name])]}
+            />
+          ) : null}
           <FilterSelect
             label="Priority"
             value={priority}
@@ -283,6 +310,14 @@ export function TaskWorkspaceView({
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              onBlur={() => {
+                if (searchParams.get('q') !== (q || null)) {
+                  router.push(hrefWith({ q: q || null }), { scroll: false })
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+              }}
               placeholder="Related record…"
               aria-label="Related record"
               className="w-40 rounded-md border border-line bg-bone px-2 py-1.5 text-[12px] text-ink"

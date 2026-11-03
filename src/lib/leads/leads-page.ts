@@ -225,7 +225,10 @@ function applyColumnFilters(leads: Lead[], query: LeadsQuery): Lead[] {
   return leads.filter((lead) => {
     if (query.owner === 'unassigned' && lead.ownerRepId) return false
     if (query.owner && query.owner !== 'unassigned' && lead.ownerRepId !== query.owner) return false
-    if (query.profile) {
+    if (query.profile === 'unassigned') {
+      // No sending identity at all: neither a revenue identity nor a sender profile.
+      if (lead.revenueIdentityId || lead.senderProfileId) return false
+    } else if (query.profile) {
       const id = query.profile
       if (lead.revenueIdentityId !== id && lead.senderProfileId !== id) return false
     }

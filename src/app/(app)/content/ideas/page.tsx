@@ -5,6 +5,7 @@ import { createScoutStore } from '@/lib/store'
 import { V3EmptyState, V3PageHeader } from '@/components/v3/primitives'
 import { InlineEmpty, LinkTabs } from '@/components/operations/ops-primitives'
 import { OpsFilters } from '@/components/operations/ops-filters'
+import { opsHref } from '@/lib/operations/filters'
 import {
   filterIdeaRows,
   ideaStatus,
@@ -97,7 +98,7 @@ export default async function ContentIdeasPage({
       <LinkTabs
         label="Idea views"
         active={view}
-        tabs={VIEWS.map((v) => ({ value: v.value, label: v.label, href: `/content/ideas?view=${v.value}` }))}
+        tabs={VIEWS.map((v) => ({ value: v.value, label: v.label, href: opsHref('/content/ideas', current, { view: v.value }) }))}
       />
 
       <OpsFilters

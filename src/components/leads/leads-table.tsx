@@ -779,7 +779,7 @@ export function LeadsTable({
               <select
                 aria-label="Stage"
                 value={query.stage ?? 'all'}
-                onChange={(event) => navigate({ stage: event.target.value })}
+                onChange={(event) => navigate({ stage: event.target.value === 'all' ? undefined : event.target.value })}
                 className="rounded-lg border border-line bg-bone px-2 py-1.5 text-[12px] text-ink"
               >
                 <option value="all">All stages</option>
@@ -794,7 +794,7 @@ export function LeadsTable({
               <select
                 aria-label="Priority"
                 value={query.priority ?? 'all'}
-                onChange={(event) => navigate({ priority: event.target.value })}
+                onChange={(event) => navigate({ priority: event.target.value === 'all' ? undefined : event.target.value })}
                 className="rounded-lg border border-line bg-bone px-2 py-1.5 text-[12px] text-ink"
               >
                 <option value="all">All priorities</option>
@@ -807,7 +807,7 @@ export function LeadsTable({
                 <select
                   aria-label="Profile"
                   value={query.profile ?? 'all'}
-                  onChange={(event) => navigate({ profile: event.target.value })}
+                  onChange={(event) => navigate({ profile: event.target.value === 'all' ? undefined : event.target.value })}
                   className="rounded-lg border border-line bg-bone px-2 py-1.5 text-[12px] text-ink"
                 >
                   <option value="all">All profiles</option>
@@ -818,7 +818,7 @@ export function LeadsTable({
                 <select
                   aria-label="Owner"
                   value={query.owner ?? 'all'}
-                  onChange={(event) => navigate({ owner: event.target.value })}
+                  onChange={(event) => navigate({ owner: event.target.value === 'all' ? undefined : event.target.value })}
                   className="rounded-lg border border-line bg-bone px-2 py-1.5 text-[12px] text-ink"
                 >
                   <option value="all">All owners</option>
