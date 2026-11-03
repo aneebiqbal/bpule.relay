@@ -16,6 +16,7 @@ import { qualifyCanonicalScore } from '@/lib/scoring/qualification'
 import { sourceBucket, type OpsSource } from '@/lib/operations/filters'
 import { stageRatioPct } from '@/lib/operations/reports'
 import { MEETING_EVENT } from '@/lib/sales/meetings'
+import { MEETING_AND_WON_STAGES, PROPOSAL_OR_LATER_STAGES } from '@/lib/sales/stage-vocabulary'
 import { readAllPages } from '@/lib/operations/paged-read'
 import {
   metricCountsFromRow,
@@ -209,8 +210,8 @@ export interface FunnelStep {
   conversionPct: number | null
 }
 
-const MEETING_STAGES = new Set(['meeting', 'proposal', 'negotiation', 'won'])
-const PROPOSAL_STAGES = new Set(['proposal', 'negotiation', 'won'])
+const MEETING_STAGES = new Set<string>(MEETING_AND_WON_STAGES)
+const PROPOSAL_STAGES = new Set<string>(PROPOSAL_OR_LATER_STAGES)
 const REPLY_STATUSES = new Set(['replied', 'won'])
 const CONTACT_STATUSES = new Set(['contacted', 'followed_up', 'replied', 'won', 'lost'])
 

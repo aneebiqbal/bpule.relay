@@ -14,14 +14,17 @@ import { getNeonAuthInstance } from '@/lib/auth/neon-server'
 type RouteContext = { params: Promise<{ path: string[] }> }
 
 /**
- * The Neon Auth SDK always marks its session cookies `Secure`, which a browser
- * will not store over plain HTTP. Production is always HTTPS, so this only
- * affects local development — the same reason the app's own Supabase cookies
- * set `secure` from `NODE_ENV`. Stripping it outside production keeps local
- * sign-in testable without weakening anything that ships.
+ * Neon Auth's SDK always marks its session cookies `Secure`, and their names
+ * carry the `__Secure-` prefix — which browsers refuse to store without that
+ * attribute. Production is always HTTPS, so nothing is stripped there.
+ *
+ * On an insecure origin (plain-HTTP local dev) the cookies are unusable either
+ * way; stripping `Secure` at least lets the rest of the flow be inspected. On
+ * HTTPS the attribute must be preserved or the browser silently drops the
+ * session.
  */
-function forwardResponse(response: Response): Response {
-  if (process.env.NODE_ENV === 'production') return response
+function forwardResponse(response: Response, secureContext: boolean): Response {
+  if (secureContext || process.env.NODE_ENV === 'production') return response
 
   const cookies = response.headers.getSetCookie()
   if (cookies.length === 0 || !cookies.some((c) => /;\s*Secure/i.test(c))) return response
@@ -44,7 +47,8 @@ async function handler(
   context: RouteContext,
 ): Promise<Response> {
   const auth = await getNeonAuthInstance()
-  return forwardResponse(await auth.handler()[method](request, context))
+  const secureContext = (request as Request & { nextUrl?: URL }).nextUrl?.protocol === 'https:'
+  return forwardResponse(await auth.handler()[method](request, context), secureContext)
 }
 
 export function GET(request: Request, context: RouteContext) {

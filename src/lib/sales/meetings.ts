@@ -18,8 +18,10 @@
 export const MEETING_EVENT = 'MEETING_BOOKED' as const
 export const WIN_EVENT = 'CLIENT_WON' as const
 
+import { MEETING_OR_LATER_STAGES as MEETING_OR_LATER } from '@/lib/sales/stage-vocabulary'
+
 /** Conversation stages at or past a booked meeting (current-state questions only). */
-export const MEETING_OR_LATER_STAGES: ReadonlySet<string> = new Set(['meeting', 'proposal', 'negotiation'])
+export const MEETING_OR_LATER_STAGES: ReadonlySet<string> = new Set(MEETING_OR_LATER)
 
 export interface MeetingEventLike {
   action_type: string

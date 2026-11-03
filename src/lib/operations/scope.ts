@@ -32,6 +32,31 @@ export async function resolveOperationalScope(
   }
 }
 
+export interface LeadScopeTarget {
+  organizationId: string
+  ownerRepId: string | null
+}
+
+/**
+ * Lead 360 authorization: one authority for every role.
+ *
+ * - Organization is a hard boundary — a cross-org lead is indistinguishable
+ *   from a missing one, so existence is never leaked.
+ * - Admin/Owner open any lead in the org.
+ * - Manager opens their managed team's leads plus their own, and unassigned
+ *   leads (which are claimable).
+ * - Rep opens their own leads and unassigned leads.
+ */
+export function canOpenLead(
+  auth: Pick<AuthContext, 'orgId'>,
+  scope: OperationalScope,
+  lead: LeadScopeTarget,
+): boolean {
+  if (lead.organizationId !== auth.orgId) return false
+  if (lead.ownerRepId === null) return true
+  return repInScope(scope, lead.ownerRepId)
+}
+
 export function repInScope(scope: OperationalScope, repId: string): boolean {
   if (!repId) return false
   return scope.repIds === null || scope.repIds.includes(repId)

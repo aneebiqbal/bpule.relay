@@ -1177,7 +1177,7 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
   }
 
-  async getLead(id: string) {
+  async getLead(id: string, scope?: LeadReadScope | null) {
     const { data, error } = await this.client
       .from('leads')
       .select(LEAD_COLUMNS)
@@ -1186,12 +1186,22 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
     if (!data) return null
 
-    // Enforce ownership: non-admin can only access their own leads.
-    // A lead with no owner (NULL owner_rep_id) is claimable — the acting
-    // rep is treated as its owner so freshly-extracted leads that haven't
-    // been assigned yet don't block the workflow.
-    const leadOwner = (data as Record<string, unknown>).owner_rep_id as string | null
-    if (this.rep.role !== 'admin' && leadOwner !== null && leadOwner !== this.rep.id) {
+    const row = data as Record<string, unknown>
+
+    // Hard boundary: the Neon provider bypasses RLS, so the organization check
+    // is explicit. A cross-org lead is indistinguishable from a missing one.
+    if (row.organization_id !== this.orgId) return null
+
+    const leadOwner = row.owner_rep_id as string | null
+
+    // Scoped callers (Lead 360) authorize against their operational scope.
+    // Unscoped callers (API routes) keep the original ownership gate, so adding
+    // scope support must never widen what an API route can reach.
+    if (scope) {
+      if (leadOwner !== null && scope.repIds !== null && !scope.repIds.includes(leadOwner)) {
+        throw new Error('You are not the owner of this lead.')
+      }
+    } else if (this.rep.role !== 'admin' && leadOwner !== null && leadOwner !== this.rep.id) {
       throw new Error('You are not the owner of this lead.')
     }
 

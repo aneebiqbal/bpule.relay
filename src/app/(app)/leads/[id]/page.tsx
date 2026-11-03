@@ -1,6 +1,8 @@
 import { Suspense } from 'react'
 import { notFound } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
+import { getAuthContext } from '@/lib/auth/organization'
+import { canOpenLead, resolveOperationalScope } from '@/lib/operations/scope'
 import { LeadWorkspaceAsync } from '@/components/lead-workspace-async'
 import { LeadDetailSkeleton } from '@/components/sales/lead-detail-skeleton'
 
@@ -14,17 +16,28 @@ interface LeadPageProps {
 const LEAD_TABS = ['conversation', 'tasks', 'activity'] as const
 
 async function loadLeadData(id: string) {
+  const auth = await getAuthContext()
+  if (!auth) notFound()
   const store = await createScoutStore()
+  const scope = await resolveOperationalScope(store.getSupabaseClient(), auth)
 
-  const [lead, profiles, queue] = await Promise.all([
-    store.getLead(id),
-    store.listProfiles(),
-    store.getQueue(),
-  ])
+  // A denial is indistinguishable from a missing lead — the same 404, no
+  // existence leak, no stack trace in the UI.
+  let lead = null
+  try {
+    lead = await store.getLead(id)
+  } catch {
+    lead = null
+  }
   if (!lead) notFound()
+  if (!canOpenLead(auth, scope, lead)) notFound()
 
   // Owner attribution for the context panel — a name, never a raw uuid.
-  const owner = lead.ownerRepId ? await store.getRepInfo(lead.ownerRepId).catch(() => null) : null
+  const [profiles, queue, owner] = await Promise.all([
+    store.listProfiles(),
+    store.getQueue(),
+    lead.ownerRepId ? store.getRepInfo(lead.ownerRepId).catch(() => null) : Promise.resolve(null),
+  ])
 
   return { lead, profiles, dailyLimit: queue.dailyLimit, todaySends: queue.todaySends, ownerName: owner?.name ?? null }
 }
