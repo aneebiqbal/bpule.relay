@@ -161,3 +161,29 @@ build — not by a real authenticated session.
 | Tasks / Team / Rep 360 / Performance | pass | pending |
 | Studio / Ideas / Growth | pass | pending |
 | Shell / navigation | pass | partial (demo mode) |
+
+---
+
+## 11. Known product gaps (open, not regressions)
+
+These were found during reconciliation. They are **not** merge regressions and
+are recorded so they are not mistaken for shipped behaviour.
+
+1. **No canonical lead selector.** `AssignTaskDialog`
+   (`src/components/tasks/assign-task-dialog.tsx`) attaches a lead through a
+   free-text "Lead ID (optional)" input whose placeholder is "UUID if related to
+   a lead". There is no server-side lead search API and no combobox. The dialog
+   is pre-filled when opened from a lead context (`defaultLeadId`), so the gap is
+   a fallback path, not the primary flow. Phase 29 of the reconciliation spec
+   asks for a role-scoped selector searchable by person / company / title; that
+   is new feature work and was not built in this reconciliation pass.
+2. **`/leads/[id]` scope is enforced**, but other lead-adjacent routes (notes,
+   tasks, outcomes) rely on the caller passing the scope; there is no single
+   guard for every lead-scoped API route.
+3. **`/admin/command` allows managers** while sibling admin routes do not —
+   confirmed intentional (managers need Daily Operations).
+4. **Landing page (`/`) accessibility** reports `aria-hidden-focus` and
+   `color-contrast` failures. Pre-existing and outside the app shell's scope.
+5. **Dead code.** `src/components/app-rail.tsx`, the old `StudioTodayV2` /
+   `GrowthTodayV2` components, and ~384 unreferenced exports remain. Classified
+   in `RELAY_STABILIZATION_INVENTORY.md`; not deleted during reconciliation.
