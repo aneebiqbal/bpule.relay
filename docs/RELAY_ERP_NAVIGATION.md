@@ -1,5 +1,9 @@
 # RELAY ERP NAVIGATION — PHASE 4 FINAL
 
+> **SUPERSEDED** by `RELAY_NAVIGATION_V3.md`. Sprint 5 moved Studio to `/content`,
+> added `/content/ideas`, and moved Growth to `/content/growth`; this file records
+> the Phase 4 ERP model and is kept for audit.
+
 **Status:** implemented. One role-aware model in `src/lib/navigation/relay-shell-nav.ts`,
 rendered by `src/components/shell/relay-app-shell.tsx`.
 
@@ -69,7 +73,8 @@ Exactly one primary and one secondary item is active at any time.
 | Item | Href | Visible |
 |---|---|---|
 | Studio | `/content` | all |
-| Growth | `/content-v2/growth` | Admin, Owner |
+| Ideas | `/content/ideas` | all |
+| Growth | `/content/growth` | Admin, Owner |
 
 ### Insights
 | Item | Href | Visible |
@@ -155,7 +160,7 @@ per the Phase 6.2 contract), `Search profile`, `Relay Growth`.
 | `/admin/command` | Command Center (Admin) / Daily Operations (Team) |
 | `/admin/scoring-qa` | Scoring QA |
 | `/profile-intelligence` | Profiles |
-| `/content-v2/growth` | Growth |
+| `/content/growth` | Growth |
 | `/admin/people` | People & Roles |
 | `/admin/revenue-intelligence` | Revenue Intelligence |
 | `/upwork` | Upwork |

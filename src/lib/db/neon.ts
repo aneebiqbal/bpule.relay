@@ -537,9 +537,14 @@ class NeonQueryBuilder<T = Record<string, unknown>> implements DbQueryBuilder<T>
 
   private async run(): Promise<T[]> {
     const whereSql = this.filters.length ? ` WHERE ${this.filters.join(' AND ')}` : ''
-    const orderSql = this.orders.length ? ` ORDER BY ${this.orders.join(', ')}` : ''
-    const limitSql = this.limitValue !== undefined ? ` LIMIT ${this.limitValue}` : ''
-    const offsetSql = this.offsetValue ? ` OFFSET ${this.offsetValue}` : ''
+    // ORDER BY / LIMIT / OFFSET are SELECT-only in PostgreSQL — an UPDATE or
+    // DELETE carrying them is a syntax error. `.single()` sets limit(1), so a
+    // write through the builder must not emit it; Postgres already returns
+    // every matched row and single() still rejects more than one.
+    const selectable = this.op === 'select'
+    const orderSql = selectable && this.orders.length ? ` ORDER BY ${this.orders.join(', ')}` : ''
+    const limitSql = selectable && this.limitValue !== undefined ? ` LIMIT ${this.limitValue}` : ''
+    const offsetSql = selectable && this.offsetValue ? ` OFFSET ${this.offsetValue}` : ''
     const returningSql = this.wantsReturning() ? ' RETURNING *' : ''
     const headOnly = this.headValue === true
 

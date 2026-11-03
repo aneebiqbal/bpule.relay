@@ -136,7 +136,7 @@ Committed first, then used as the merge base.
 | typecheck | pass |
 | lint | 0 errors (871 pre-existing warnings) |
 | contracts (`qa:contracts`) | 3 files, 64 tests pass |
-| full suite | 331 files, 4859 tests — 1 live-AI-provider flake (see below) |
+| full suite | 331 files, 4859 tests pass (final run; an earlier run saw one live-AI-provider flake that passes in isolation) |
 | build | pass |
 | nav destination audit | 54/54 nav hrefs resolve to real routes |
 | Lighthouse (Studio / Ideas / Growth) | accessibility 1.00, 0 failures each |
