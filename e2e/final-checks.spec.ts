@@ -33,9 +33,10 @@ async function analyzeAndSave(page: Page, text: string) {
   await page.locator('textarea').first().fill(text)
   await page.locator('button:has-text("Analyze")').first().click()
   await expect(page.locator('[data-testid="decision-why"]').first()).toBeVisible({ timeout: 180_000 })
-  const create = page.locator('button:has-text("Create lead")').first()
+  const create = page.locator('[data-testid="prospect-primary-action"]').first()
   await expect(create).toBeEnabled({ timeout: 30_000 })
   await create.click()
+  await page.getByRole('button', { name: 'Open Lead' }).click()
   await page.waitForURL(/\/leads\/[^/]+/, { timeout: 90_000 })
   const leadId = page.url().split('/leads/')[1]?.split(/[/?#]/)[0]
   expect(leadId).toBeTruthy()
@@ -90,9 +91,10 @@ test.describe('final checks', () => {
     await choices.nth(1).click()
     await expect(sendingAs).not.toHaveText(beforeSender)
 
-    const create = page.locator('button:has-text("Create lead")').first()
+    const create = page.locator('[data-testid="prospect-primary-action"]').first()
     await expect(create).toBeEnabled({ timeout: 30_000 })
     await create.click()
+    await page.getByRole('button', { name: 'Open Lead' }).click()
     await page.waitForURL(/\/leads\/[^/]+/, { timeout: 90_000 })
     const leadId = page.url().split('/leads/')[1]?.split(/[/?#]/)[0]!
 

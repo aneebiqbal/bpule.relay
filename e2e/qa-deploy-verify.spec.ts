@@ -245,7 +245,8 @@ test('cross-surface parity: Hannah prospect → saved lead is not LOW/SKIP', asy
     .replace('Hannah Blake', `Hannah Blake ${stamp}`)
     .replace(/NorthPeak Logistics/g, `NorthPeak ${stamp}`)
   await analyze(page, fresh)
-  await page.getByRole('button', { name: 'Create lead' }).click()
+  await page.locator('[data-testid="prospect-primary-action"]').click()
+  await page.getByRole('button', { name: 'Open Lead' }).click()
   await page.waitForURL(/\/leads\/[^/]+/, { timeout: 60_000 })
   await page.waitForLoadState('networkidle')
   // The saved lead must carry a non-LOW qualification.

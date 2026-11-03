@@ -31,8 +31,9 @@ async function ensureLead(page: Page): Promise<string> {
   await page.goto('/prospect')
   await page.getByPlaceholder('Paste the LinkedIn profile here...').fill(BRIEF)
   await page.getByRole('button', { name: /^Analyze$/ }).click()
-  await expect(page.getByRole('button', { name: /Create lead/ })).toBeEnabled({ timeout: 180_000 })
-  await page.getByRole('button', { name: /Create lead/ }).click()
+  await expect(page.getByRole('button', { name: /Create lead|Save to Watchlist/ })).toBeEnabled({ timeout: 180_000 })
+  await page.locator('[data-testid="prospect-primary-action"]').click()
+  await page.getByRole('button', { name: 'Open Lead' }).click()
   await page.waitForURL(/\/leads\/[^/?]+/, { timeout: 60_000 })
   leadId = new URL(page.url()).pathname.split('/')[2]
   fs.writeFileSync(path.join(OUT, 'conversation-lead-url.txt'), page.url())
