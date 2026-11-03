@@ -76,7 +76,6 @@ export const RELAY_SECTION_NAV: Record<RelayShellSection, RelaySectionNavItem[]>
   conversations: [
     { label: 'Inbox', href: '/chats', exact: true },
     { label: 'Queue', href: '/relay', exact: true },
-    { label: 'Inbound', href: '/inbound', exact: true },
   ],
   accounts: [
     { label: 'Companies', href: '/accounts' },

@@ -53,7 +53,7 @@ describe('RELAY_V3_SINGLE_ACTIVE_NAV_ITEM', () => {
 })
 
 describe('V3_NO_PARALLEL_SELECTED_NAV', () => {
-  const paths = ['/dashboard', '/leads', '/leads/import', '/prospect', '/upwork', '/tasks', '/archive', '/chats', '/relay', '/inbound', '/team', '/reports/sales']
+  const paths = ['/dashboard', '/leads', '/leads/import', '/prospect', '/upwork', '/tasks', '/archive', '/chats', '/relay', '/team', '/reports/sales']
 
   it('never lights two sidebar items for any route', () => {
     for (const pathname of paths) {
@@ -69,6 +69,12 @@ describe('V3_NO_PARALLEL_SELECTED_NAV', () => {
         expect(matches.filter((m) => m.label === resolved!.label)).toHaveLength(1)
       }
     }
+  })
+
+  it('exposes Inbox as the only conversation destination', () => {
+    // Sprint 3: Inbound / Chats / Conversations are one domain. Old routes
+    // deep-link in; they are not separate sidebar destinations.
+    expect(sectionNavItems('conversations', admin).map((i) => i.href)).toEqual(['/chats', '/relay'])
   })
 })
 
