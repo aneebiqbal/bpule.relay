@@ -11,6 +11,7 @@ import {
   Section,
   TimelineTable,
 } from '@/components/operations/ops-primitives'
+import { V3StageStrip } from '@/components/v3/primitives'
 import { OpsFilters } from '@/components/operations/ops-filters'
 import { InterventionMenu } from '@/components/operations/intervention-menu'
 import { AssignTaskButton } from '@/components/operations/assign-task-button'
@@ -34,6 +35,10 @@ import { ACTIVITY_EVENT_FILTERS, loadTimeline } from '@/lib/operations/activity'
 import { loadUnifiedTasks } from '@/lib/tasks/load-unified-tasks'
 import { countOverdueUnifiedTasks } from '@/lib/tasks/rank-unified-tasks'
 import { loadLeadsPage, parseLeadsQuery } from '@/lib/leads/leads-page'
+import { createServiceSupabase } from '@/lib/supabase/service'
+import { getRepDailyActivity } from '@/lib/performance/activity-model'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { ContributionHeatmap } from '@/components/performance/contribution-heatmap'
 
 export const dynamic = 'force-dynamic'
 
@@ -136,7 +141,7 @@ export default async function Rep360Page({
         {tab === 'leads' && <LeadsTab repId={repId} sp={sp} leadScope={ctx.leadScope} />}
         {tab === 'work' && <WorkTab ctx={ctx} repId={repId} reps={reps} canAssign={canAssign} />}
         {tab === 'activity' && <ActivityTab ctx={ctx} repId={repId} filters={filters} />}
-        {tab === 'performance' && <PerformanceTab repId={repId} filters={filters} />}
+        {tab === 'performance' && <PerformanceTab ctx={ctx} repId={repId} filters={filters} />}
       </Suspense>
     </div>
   )
@@ -219,6 +224,18 @@ async function OverviewTab({ ctx, basics }: { ctx: OpsPageContext; basics: RepBa
               { label: 'Assigned tasks', value: tasks.length, href: `${base}?tab=work` },
               { label: 'High-priority leads', value: row?.highPriority ?? 0, href: `${base}?tab=leads&priority=high` },
             ]}
+          />
+        </Section>
+
+        <Section title="Pipeline" description="Furthest known stage per lead, last 7 days. No stage is inferred past the evidence.">
+          <V3StageStrip
+            stages={(weekPerf?.funnel ?? []).map((step) => ({
+              key: step.key,
+              label: step.label,
+              count: step.count,
+              href: `/leads?owner=${basics.id}`,
+              conversionPct: step.conversionPct,
+            }))}
           />
         </Section>
 
@@ -409,12 +426,27 @@ async function ActivityTab({ ctx, repId, filters }: { ctx: OpsPageContext; repId
   )
 }
 
-async function PerformanceTab({ repId, filters }: { repId: string; filters: Filters }) {
+async function PerformanceTab({ ctx, repId, filters }: { ctx: OpsPageContext; repId: string; filters: Filters }) {
   const window = rangeWindow(filters.range === 'today' ? 'today' : filters.range)
   const perf = await getPerformance(repId, window.start, window.end, filters.profile, filters.source).catch(() => null)
   const base = `/team/${repId}`
   if (!perf) return <InlineError>Performance could not be loaded.</InlineError>
   const activityHref = (event: string | null) => opsHref(base, { tab: 'activity', range: filters.range }, { event })
+  const timezone = await loadOperatingPolicy(ctx.auth.orgId).then((p) => p.timezone).catch(() => 'UTC')
+  const end = new Date()
+  end.setHours(23, 59, 59, 999)
+  const start = new Date()
+  start.setDate(start.getDate() - 84)
+  start.setHours(0, 0, 0, 0)
+  const activity = await getRepDailyActivity({
+    repId,
+    orgId: ctx.auth.orgId,
+    startDate: start,
+    endDate: end,
+    timezone,
+    supabase: createServiceSupabase(),
+    includeEventsForDate: null,
+  }).catch(() => null)
   return (
     <div className="space-y-5">
       <OpsFilters
@@ -429,6 +461,11 @@ async function PerformanceTab({ repId, filters }: { repId: string; filters: Filt
       <Section title="By sending profile">
         <ProfileComparison rows={perf.byProfile} rangeQuery={`tab=performance&range=${filters.range}`} basePath={base} />
       </Section>
+      {activity && (
+        <Section title="Consistency" description="Daily executed activity, last 12 weeks. Drafts and failures never count.">
+          <ContributionHeatmap daily={activity.daily} timezone={timezone} dayHref={`${base}?tab=performance&range=${filters.range}`} />
+        </Section>
+      )}
       {perf.truncated && <p className="text-[12px] text-status-warning">This window hit the read limit; totals may be incomplete. Narrow the range.</p>}
     </div>
   )
