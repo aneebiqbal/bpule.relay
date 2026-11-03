@@ -291,14 +291,14 @@ describe('REPORTS', () => {
     expect(r).toMatchObject({ won: 4, lost: 6, winRatePct: 40, knownRevenue: null })
   })
 
-  it('TEAM_REPORT: Insights rail is role-aware (sales for reps/managers, AI usage + revenue for admins)', () => {
+  it('TEAM_REPORT: Insights rail is role-aware (reports for everyone, AI usage for admins)', () => {
     const rep = secondaryItems('insights', { isOwner: false, isAdmin: false, isManager: false }).map((i) => i.href)
     const mgr = secondaryItems('insights', { isOwner: false, isAdmin: false, isManager: true }).map((i) => i.href)
     const admin = secondaryItems('insights', { isOwner: false, isAdmin: true, isManager: true }).map((i) => i.href)
-    expect(rep).toEqual(['/reports/sales'])
-    expect(mgr).toEqual(['/reports/sales'])
-    expect(admin).toContain('/admin/ai-usage')
-    expect(admin).toContain('/admin/revenue-intelligence')
+    const reports = ['/reports/sales', '/reports/pipeline', '/reports/team', '/reports/revenue']
+    expect(rep).toEqual(reports)
+    expect(mgr).toEqual(reports)
+    expect(admin).toEqual([...reports, '/admin/ai-usage'])
     expect(visibleDomains({ isOwner: false, isAdmin: false, isManager: false }).find((i) => i.id === 'insights')!.href).toBe('/reports/sales')
   })
 })

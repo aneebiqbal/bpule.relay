@@ -91,13 +91,21 @@ describe('V3_NO_PARALLEL_SELECTED_NAV', () => {
   it('exposes Inbox as the only conversation destination', () => {
     // Inbound / Chats / Conversations are one domain. Old routes deep-link in;
     // they are not separate rail destinations.
-    expect(secondaryItems('inbox', admin).map((i) => i.href)).toEqual([
+    const queues = [
       '/chats?view=waiting_me',
       '/chats?view=waiting_them',
       '/chats?view=followups',
       '/chats?view=meeting_requests',
       '/chats?view=proposal_requests',
       '/chats?view=closed',
+    ]
+    expect(secondaryItems('inbox', rep).map((i) => i.href)).toEqual(queues)
+    expect(secondaryItems('inbox', admin).map((i) => i.href)).toEqual([
+      ...queues,
+      '/chats?view=over4h',
+      '/chats?view=over12h',
+      '/chats?view=unassigned',
+      '/chats?view=review',
     ])
     expect(domainForPathname('/inbound')).toBe('inbox')
     expect(domainForPathname('/relay')).toBe('inbox')

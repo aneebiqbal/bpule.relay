@@ -165,6 +165,30 @@ describe('NEON query builder — writes', () => {
 
     expect(calls[0].sql).not.toContain('RETURNING')
   })
+
+  it('NEON_WRITE_NO_LIMIT: omits LIMIT/ORDER/OFFSET from writes (PostgreSQL rejects them)', async () => {
+    // `.single()` sets limit(1); emitting it on an UPDATE is a syntax error and
+    // made every single-row write fail with a masked "Failed" 500.
+    const updateCalls: Call[] = []
+    const upd = new NeonDbClient(fakeExecutor(updateCalls) as never, 'user-1')
+    await upd.from('leads').update({ status: 'won' }).eq('id', 'lead-1').select('*').single()
+    expect(updateCalls[0].sql).toBe('UPDATE "leads" SET "status" = ? WHERE "id" = ? RETURNING *')
+
+    const maybeCalls: Call[] = []
+    const maybe = new NeonDbClient(fakeExecutor(maybeCalls) as never, 'user-1')
+    await maybe.from('leads').update({ status: 'won' }).eq('id', 'lead-1').select('*').maybeSingle()
+    expect(maybeCalls[0].sql).not.toContain('LIMIT')
+
+    const deleteCalls: Call[] = []
+    const del = new NeonDbClient(fakeExecutor(deleteCalls) as never, 'user-1')
+    await del.from('leads').delete().eq('id', 'lead-1').single()
+    expect(deleteCalls[0].sql).not.toContain('LIMIT')
+
+    const insertCalls: Call[] = []
+    const ins = new NeonDbClient(fakeExecutor(insertCalls) as never, 'user-1')
+    await ins.from('leads').insert({ company: 'Acme' }).select('*').single()
+    expect(insertCalls[0].sql).not.toContain('LIMIT')
+  })
 })
 
 describe('NEON executor — identity and placeholders', () => {

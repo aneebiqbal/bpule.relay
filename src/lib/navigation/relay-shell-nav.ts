@@ -1,10 +1,26 @@
 /**
  * Relay ERP navigation — one canonical, role-aware information architecture.
  *
- * Primary sidebar = domains. Secondary rail = functions inside the active domain.
- * Every destination has exactly ONE label; aliases are resolved centrally so the
- * shell never lights two items at once.
+ * Primary sidebar = domains ("where am I?"). Secondary rail = functions inside
+ * the active domain ("what can I do here?"). Header = search, create,
+ * notifications, account. Everything else belongs to the page.
+ *
+ * Exactly one primary and one secondary item is active; the resolvers below are
+ * the single authority for that contract.
  */
+
+import {
+  House,
+  Target,
+  Inbox,
+  ListChecks,
+  Users,
+  PenLine,
+  BarChart3,
+  Settings,
+  ShieldCheck,
+  type LucideIcon,
+} from 'lucide-react'
 
 export type RelayNavDomain =
   | 'home'
@@ -29,6 +45,8 @@ export interface RelaySecondaryItem {
   /** May include a query string, e.g. `/leads?view=pipeline`. */
   href: string
   visible?: (role: RelayNavRoleFlags) => boolean
+  /** Optional group heading inside the secondary rail. */
+  group?: string
 }
 
 export interface RelayPrimaryDomain {
@@ -36,6 +54,7 @@ export interface RelayPrimaryDomain {
   label: string
   /** Representative href for the domain itself. */
   href: string
+  icon: LucideIcon
   visible: (role: RelayNavRoleFlags) => boolean
   secondary: RelaySecondaryItem[]
 }
@@ -51,6 +70,7 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     id: 'home',
     label: 'Home',
     href: '/dashboard',
+    icon: House,
     visible: everyone,
     secondary: [],
   },
@@ -58,48 +78,57 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     id: 'sales',
     label: 'Sales',
     href: '/leads',
+    icon: Target,
     visible: everyone,
     secondary: [
-      { id: 'prospects', label: 'Prospects', href: '/prospect' },
-      { id: 'leads', label: 'Leads', href: '/leads' },
-      { id: 'pipeline', label: 'Pipeline', href: '/leads?view=pipeline' },
-      { id: 'import', label: 'Import Leads', href: '/leads/import' },
-      { id: 'companies', label: 'Companies', href: '/accounts', visible: adminUp },
-      { id: 'upwork', label: 'Upwork', href: '/upwork' },
-      { id: 'email', label: 'Email', href: '/revenue/email' },
+      { id: 'prospects', label: 'Prospects', href: '/prospect', group: 'Prospecting' },
+      { id: 'leads', label: 'Leads', href: '/leads', group: 'Prospecting' },
+      { id: 'pipeline', label: 'Pipeline', href: '/leads?view=pipeline', group: 'Prospecting' },
+      { id: 'companies', label: 'Companies', href: '/accounts', visible: adminUp, group: 'Prospecting' },
+      { id: 'import', label: 'Import Leads', href: '/leads/import', group: 'Prospecting' },
+      { id: 'upwork', label: 'Upwork', href: '/upwork', group: 'Channels' },
+      { id: 'email', label: 'Email', href: '/revenue/email', group: 'Channels' },
     ],
   },
   {
     id: 'inbox',
     label: 'Inbox',
     href: '/chats',
+    icon: Inbox,
     visible: everyone,
     secondary: [
-      { id: 'needs-reply', label: 'Needs reply', href: '/chats?view=waiting_me' },
-      { id: 'waiting-them', label: 'Waiting', href: '/chats?view=waiting_them' },
-      { id: 'followups', label: 'Follow-ups', href: '/chats?view=followups' },
-      { id: 'meeting-requests', label: 'Meeting requests', href: '/chats?view=meeting_requests' },
-      { id: 'proposal-requests', label: 'Proposal requests', href: '/chats?view=proposal_requests' },
-      { id: 'closed', label: 'Closed', href: '/chats?view=closed' },
+      { id: 'needs-reply', label: 'Needs reply', href: '/chats?view=waiting_me', group: 'Queues' },
+      { id: 'waiting-them', label: 'Waiting', href: '/chats?view=waiting_them', group: 'Queues' },
+      { id: 'followups', label: 'Follow-ups', href: '/chats?view=followups', group: 'Queues' },
+      { id: 'meeting-requests', label: 'Meeting requests', href: '/chats?view=meeting_requests', group: 'Queues' },
+      { id: 'proposal-requests', label: 'Proposal requests', href: '/chats?view=proposal_requests', group: 'Queues' },
+      { id: 'closed', label: 'Closed', href: '/chats?view=closed', group: 'Queues' },
+      { id: 'over4h', label: 'Waiting >4h', href: '/chats?view=over4h', visible: managerUp, group: 'Manager' },
+      { id: 'over12h', label: 'Waiting >12h', href: '/chats?view=over12h', visible: managerUp, group: 'Manager' },
+      { id: 'unassigned', label: 'Unassigned', href: '/chats?view=unassigned', visible: managerUp, group: 'Manager' },
+      { id: 'review', label: 'Thread review', href: '/chats?view=review', visible: managerUp, group: 'Manager' },
     ],
   },
   {
     id: 'work',
     label: 'Work',
     href: '/tasks',
+    icon: ListChecks,
     visible: everyone,
     secondary: [
-      { id: 'tasks', label: 'Tasks', href: '/tasks' },
-      { id: 'today', label: 'Today', href: '/tasks?view=today' },
-      { id: 'overdue', label: 'Overdue', href: '/tasks?view=overdue' },
-      { id: 'upcoming', label: 'Upcoming', href: '/tasks?view=upcoming' },
-      { id: 'completed', label: 'Completed', href: '/tasks?view=completed' },
+      { id: 'my-tasks', label: 'My Tasks', href: '/tasks', group: 'Views' },
+      { id: 'today', label: 'Today', href: '/tasks?view=today', group: 'Views' },
+      { id: 'overdue', label: 'Overdue', href: '/tasks?view=overdue', group: 'Views' },
+      { id: 'upcoming', label: 'Upcoming', href: '/tasks?view=upcoming', group: 'Views' },
+      { id: 'completed', label: 'Completed', href: '/tasks?view=completed', group: 'Views' },
+      { id: 'team-tasks', label: 'Team Tasks', href: '/tasks?scope=team', visible: managerUp, group: 'Team' },
     ],
   },
   {
     id: 'team',
     label: 'Team',
     href: '/team',
+    icon: Users,
     visible: managerUp,
     secondary: [
       { id: 'overview', label: 'Overview', href: '/team' },
@@ -116,6 +145,7 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     id: 'content',
     label: 'Content',
     href: '/content',
+    icon: PenLine,
     visible: everyone,
     secondary: [
       { id: 'studio', label: 'Studio', href: '/content' },
@@ -127,37 +157,51 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     id: 'insights',
     label: 'Insights',
     href: '/reports/sales',
+    icon: BarChart3,
     visible: everyone,
     secondary: [
-      { id: 'sales-insights', label: 'Sales Insights', href: '/reports/sales' },
-      { id: 'ai-usage', label: 'AI Usage', href: '/admin/ai-usage', visible: adminUp },
-      { id: 'revenue-intelligence', label: 'Revenue Intelligence', href: '/admin/revenue-intelligence', visible: adminUp },
+      { id: 'sales-insights', label: 'Sales', href: '/reports/sales', group: 'Reports' },
+      { id: 'pipeline-report', label: 'Pipeline', href: '/reports/pipeline', group: 'Reports' },
+      { id: 'team-report', label: 'Team', href: '/reports/team', group: 'Reports' },
+      { id: 'revenue-report', label: 'Revenue', href: '/reports/revenue', group: 'Reports' },
+      { id: 'ai-usage', label: 'AI Usage', href: '/admin/ai-usage', visible: adminUp, group: 'System' },
     ],
   },
   {
     id: 'settings',
     label: 'Settings',
     href: '/settings',
+    icon: Settings,
     visible: everyone,
-    secondary: [],
+    secondary: [
+      { id: 'account', label: 'My Account', href: '/settings', group: 'Account' },
+      { id: 'notifications', label: 'Notifications', href: '/notifications', group: 'Account' },
+    ],
   },
   {
     id: 'admin',
     label: 'Admin',
     href: '/admin/command',
+    icon: ShieldCheck,
     visible: adminUp,
     secondary: [
-      { id: 'command-center', label: 'Command Center', href: '/admin/command' },
-      { id: 'people-roles', label: 'People & Roles', href: '/admin/people' },
-      { id: 'profiles', label: 'Profiles', href: '/profile-intelligence' },
-      { id: 'scoring-qa', label: 'Scoring QA', href: '/admin/scoring-qa' },
-      { id: 'qa-trust', label: 'QA & Trust', href: '/admin/qa' },
-      { id: 'dataset', label: 'Dataset', href: '/admin/dataset' },
-      { id: 'training-data', label: 'Training Data', href: '/admin/training-data' },
-      { id: 'manage-profiles', label: 'Manage Profiles', href: '/manage-profiles', visible: (r) => r.isOwner },
+      { id: 'command-center', label: 'Command Center', href: '/admin/command', group: 'Organization' },
+      { id: 'people-roles', label: 'People & Roles', href: '/admin/people', group: 'Organization' },
+      { id: 'profiles', label: 'Profiles', href: '/profile-intelligence', group: 'Organization' },
+      { id: 'scoring-qa', label: 'Scoring QA', href: '/admin/scoring-qa', group: 'Quality' },
+      { id: 'qa-trust', label: 'QA & Trust', href: '/admin/qa', group: 'Quality' },
+      { id: 'dataset', label: 'Dataset', href: '/admin/dataset', group: 'System' },
+      { id: 'training-data', label: 'Training Data', href: '/admin/training-data', group: 'System' },
+      { id: 'admin-ai-usage', label: 'AI Usage', href: '/admin/ai-usage', group: 'System' },
+      { id: 'revenue-intelligence', label: 'Revenue Intelligence', href: '/admin/revenue-intelligence', group: 'System' },
+      { id: 'manage-profiles', label: 'Manage Profiles', href: '/manage-profiles', visible: (r) => r.isOwner, group: 'System' },
     ],
   },
 ]
+
+/** Primary domains shown above the divider; Settings and Admin sit below it. */
+export const PRIMARY_MAIN_IDS: RelayNavDomain[] = ['home', 'sales', 'inbox', 'work', 'team', 'content', 'insights']
+export const PRIMARY_UTILITY_IDS: RelayNavDomain[] = ['settings', 'admin']
 
 // ─── Domain resolution ──────────────────────────────────────────────────────
 
@@ -178,7 +222,7 @@ export function domainForPathname(pathname: string): RelayNavDomain | null {
   if (pathname.startsWith('/team') || pathname.startsWith('/accountability')) return 'team'
   if (pathname.startsWith('/content') || pathname.startsWith('/studio')) return 'content'
   if (pathname.startsWith('/reports') || pathname.startsWith('/performance')) return 'insights'
-  if (pathname === '/settings' || pathname === '/account') return 'settings'
+  if (pathname === '/settings' || pathname === '/account' || pathname === '/notifications') return 'settings'
   if (
     pathname === '/accounts' ||
     pathname.startsWith('/accounts/') ||
@@ -204,6 +248,17 @@ export function domainForPathname(pathname: string): RelayNavDomain | null {
   return null
 }
 
+/** Record-detail routes hide the secondary rail so the page's own tabs are the only sub-nav. */
+export function isRecordDetailPathname(pathname: string): boolean {
+  return (
+    /^\/leads\/[^/]+/.test(pathname) ||
+    /^\/team\/[^/]+/.test(pathname) ||
+    /^\/accounts\/[^/]+/.test(pathname) ||
+    /^\/upwork\/[^/]+/.test(pathname) ||
+    /^\/profile-intelligence\/[^/]+/.test(pathname)
+  )
+}
+
 export function visibleDomains(role: RelayNavRoleFlags): RelayPrimaryDomain[] {
   return NAV_DOMAINS.filter((d) => d.visible(role))
 }
@@ -212,6 +267,24 @@ export function secondaryItems(domain: RelayNavDomain, role: RelayNavRoleFlags):
   const config = NAV_DOMAINS.find((d) => d.id === domain)
   if (!config || !config.visible(role)) return []
   return config.secondary.filter((item) => !item.visible || item.visible(role))
+}
+
+export interface RelaySecondaryGroup {
+  label: string | null
+  items: RelaySecondaryItem[]
+}
+
+/** Secondary items grouped for the contextual rail. Consecutive `group` values merge. */
+export function secondaryGroups(domain: RelayNavDomain, role: RelayNavRoleFlags): RelaySecondaryGroup[] {
+  const items = secondaryItems(domain, role)
+  const groups: RelaySecondaryGroup[] = []
+  for (const item of items) {
+    const label = item.group ?? null
+    const last = groups[groups.length - 1]
+    if (last && last.label === label) last.items.push(item)
+    else groups.push({ label, items: [item] })
+  }
+  return groups
 }
 
 /** Exactly one active primary domain — the one whose routes contain this pathname. */
@@ -237,11 +310,16 @@ function matchesHref(
   search: URLSearchParams,
 ): { pathLen: number; paramCount: number } | null {
   const { path, params } = splitHref(href)
-  if (path !== pathname) return null
+  const hasParams = params.toString().length > 0
+  // A plain destination also owns its descendants (/leads owns /leads/:id), so a
+  // record detail keeps its parent's context. Query-scoped destinations are
+  // exact: /leads?view=pipeline must not claim /leads/import.
+  const pathMatches = hasParams ? path === pathname : pathname === path || pathname.startsWith(`${path}/`)
+  if (!pathMatches) return null
   for (const [key, value] of params) {
     if (search.get(key) !== value) return null
   }
-  return { pathLen: path.length, paramCount: params.toString().length === 0 ? 0 : [...params.keys()].length }
+  return { pathLen: path.length, paramCount: hasParams ? [...params.keys()].length : 0 }
 }
 
 /**
