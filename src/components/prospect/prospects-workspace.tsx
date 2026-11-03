@@ -20,47 +20,12 @@ import {
   LEAD_PRIORITY_LABELS,
   type LeadRow,
 } from '@/components/leads/pipeline-utils'
-import type { CapturedProspect } from '@/lib/domain/types'
-
-export type ProspectsTab = 'analyze' | 'recent' | 'saved' | 'watchlist'
-
-export function isProspectsTab(value: string | undefined): value is ProspectsTab {
-  return value === 'recent' || value === 'saved' || value === 'watchlist'
-}
-
-export const STATUS_LABELS: Record<CapturedProspect['status'], string> = {
-  captured: 'Not saved',
-  converted: 'Lead created',
-  discarded: 'Skipped',
-}
-
-export const STATUS_VARIANT: Record<CapturedProspect['status'], 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 'orange' | 'cobalt'> = {
-  captured: 'neutral',
-  converted: 'success',
-  discarded: 'warning',
-}
-
-export const RECOMMENDATION_LABELS: Record<string, string> = {
-  strong: 'Strong opportunity',
-  worth_pursuing: 'Worth pursuing',
-  maybe: 'Needs more signal',
-  low: 'Low priority',
-  skip: 'Probably skip',
-}
-
-export function recommendationFor(row: CapturedProspect): string | null {
-  const qualification = row.canonicalIntelligence?.qualification
-  if (typeof qualification !== 'string') return null
-  return RECOMMENDATION_LABELS[qualification] ?? qualification.replaceAll('_', ' ')
-}
-
-export function intentFor(row: CapturedProspect): string | null {
-  const intelligence = row.canonicalIntelligence as
-    | { buyerIntent?: { buyerIntentLevel?: unknown } }
-    | null
-  const level = intelligence?.buyerIntent?.buyerIntentLevel
-  return typeof level === 'string' && level.trim() ? level.trim().toUpperCase() : null
-}
+import {
+  PROSPECT_STATUS_LABELS,
+  PROSPECT_STATUS_VARIANT,
+  decisionLabelForScore,
+} from '@/lib/prospect/display'
+import type { ProspectTab, RecentProspect } from '@/lib/prospect/prospects-view'
 
 export function ProspectsWorkspace({
   tab,
@@ -72,8 +37,8 @@ export function ProspectsWorkspace({
   profiles,
   now,
 }: {
-  tab: ProspectsTab
-  recent: CapturedProspect[]
+  tab: ProspectTab
+  recent: RecentProspect[]
   saved: LeadRow[]
   watchlist: LeadRow[]
   workspaceName: string | null
@@ -90,36 +55,38 @@ export function ProspectsWorkspace({
     [router],
   )
 
-  const recentColumns = useMemo<Column<CapturedProspect>[]>(
+  const profileName = useCallback(
+    (id: string | null) => (id ? profiles[id] ?? null : null),
+    [profiles],
+  )
+
+  const recentColumns = useMemo<Column<RecentProspect>[]>(
     () => [
       {
         key: 'prospect',
         header: 'Prospect',
         render: (row) => (
           <div className="min-w-0">
-            <p className="truncate text-[13px] font-medium text-ink">
-              {row.extractedName ?? 'Unnamed prospect'}
-            </p>
-            {row.extractedTitle ? (
-              <p className="truncate text-[11px] text-graphite">{row.extractedTitle}</p>
+            <p className="truncate text-[13px] font-medium text-ink">{row.name ?? 'Unnamed prospect'}</p>
+            {row.title || row.company ? (
+              <p className="truncate text-[11px] text-graphite">{[row.title, row.company].filter(Boolean).join(' · ')}</p>
             ) : null}
           </div>
         ),
       },
       {
-        key: 'company',
-        header: 'Company',
-        hideBelow: 'lg',
+        key: 'decision',
+        header: 'Decision',
         render: (row) => (
-          <span className="block truncate text-[13px] text-graphite">{row.extractedCompany ?? '—'}</span>
+          <span className="text-[13px] text-ink">{decisionLabelForScore(row.score) ?? '—'}</span>
         ),
       },
       {
         key: 'profile',
-        header: 'Source profile',
+        header: 'Analyzed for',
         hideBelow: 'xl',
         render: (row) => {
-          const name = row.senderProfileId ? profiles[row.senderProfileId] : null
+          const name = profileName(row.senderProfileId)
           return name ? (
             <span className="block truncate text-[13px] text-ink">{name}</span>
           ) : (
@@ -133,23 +100,7 @@ export function ProspectsWorkspace({
         align: 'right',
         hideBelow: 'sm',
         render: (row) => (
-          <span className="text-[13px] text-ink">{row.canonicalScore != null ? `${row.canonicalScore}/10` : '—'}</span>
-        ),
-      },
-      {
-        key: 'intent',
-        header: 'Intent',
-        hideBelow: 'xl',
-        render: (row) => (
-          <span className="text-[13px] text-graphite">{intentFor(row) ?? '—'}</span>
-        ),
-      },
-      {
-        key: 'recommendation',
-        header: 'Recommendation',
-        hideBelow: 'md',
-        render: (row) => (
-          <span className="text-[13px] text-graphite">{recommendationFor(row) ?? '—'}</span>
+          <span className="text-[13px] tabular-nums text-ink">{row.score != null ? `${row.score}/10` : '—'}</span>
         ),
       },
       {
@@ -157,18 +108,41 @@ export function ProspectsWorkspace({
         header: 'Analyzed',
         hideBelow: 'lg',
         render: (row) => (
-          <span className="text-[13px] text-graphite">{formatRelativeTime(row.createdAt, now)}</span>
+          <span className="text-[13px] text-graphite">{formatRelativeTime(row.lastActivityAt, now)}</span>
         ),
       },
       {
         key: 'status',
         header: 'Status',
         render: (row) => (
-          <StatusBadge status={STATUS_LABELS[row.status]} variant={STATUS_VARIANT[row.status]} />
+          <StatusBadge status={PROSPECT_STATUS_LABELS[row.outcome]} variant={PROSPECT_STATUS_VARIANT[row.outcome]} />
         ),
       },
     ],
-    [now, profiles],
+    [now, profileName],
+  )
+
+  const recentCard = useCallback(
+    (row: RecentProspect) => (
+      <div className="space-y-1.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="min-w-0 truncate text-[14px] font-medium text-ink">{row.name ?? 'Unnamed prospect'}</p>
+          <StatusBadge status={PROSPECT_STATUS_LABELS[row.outcome]} variant={PROSPECT_STATUS_VARIANT[row.outcome]} />
+        </div>
+        {row.title || row.company ? (
+          <p className="truncate text-[12px] text-graphite">{[row.title, row.company].filter(Boolean).join(' · ')}</p>
+        ) : null}
+        <p className="text-[12px] text-graphite">
+          {decisionLabelForScore(row.score) ?? '—'}
+          {row.score != null ? ` · ${row.score}/10` : ''}
+          {' · '}
+          {profileName(row.senderProfileId) ?? 'Not assigned'}
+          {' · '}
+          {formatRelativeTime(row.lastActivityAt, now)}
+        </p>
+      </div>
+    ),
+    [now, profileName],
   )
 
   const leadColumns = useMemo<Column<LeadRow>[]>(
@@ -195,7 +169,7 @@ export function ProspectsWorkspace({
       },
       {
         key: 'profile',
-        header: 'Profile',
+        header: 'Analyzed for',
         hideBelow: 'xl',
         render: (lead) => (
           <span className="block truncate text-[13px] text-ink">
@@ -205,11 +179,11 @@ export function ProspectsWorkspace({
       },
       {
         key: 'stage',
-        header: 'Stage',
+        header: 'Status',
         render: (lead) => (
           <StatusBadge
-            status={derivePipelineStage(lead) === 'observe' ? 'Watch' : 'Active'}
-            variant={derivePipelineStage(lead) === 'observe' ? 'warning' : 'cobalt'}
+            status={derivePipelineStage(lead) === 'observe' ? 'Watchlist' : 'Lead'}
+            variant={derivePipelineStage(lead) === 'observe' ? 'cobalt' : 'success'}
           />
         ),
       },
@@ -259,7 +233,7 @@ export function ProspectsWorkspace({
     ? 'Every profile in the organisation. Every check, every saved lead and every watchlist entry.'
     : workspaceName
       ? `Analyzed for ${workspaceName}. Every check, every saved lead and every watchlist entry for this profile.`
-      : 'Every check, every saved lead and every watchlist entry for the selected profile.'
+      : 'Analyze a person, company, message or opportunity and decide whether it is worth pursuing.'
 
   const empty = (title: string, hint: string) => (
     <EmptyState
@@ -272,7 +246,7 @@ export function ProspectsWorkspace({
           className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
         >
           <Plus className="size-4" aria-hidden="true" />
-          Analyze a prospect
+          Analyze Prospect
         </Link>
       }
     />
@@ -305,9 +279,10 @@ export function ProspectsWorkspace({
           columns={recentColumns}
           rows={recent}
           rowKey={(row) => row.id}
+          renderCard={recentCard}
           empty={empty(
             'No prospects analyzed yet.',
-            'Paste a LinkedIn profile or job to start.',
+            'Paste a source above to find your first opportunity.',
           )}
           onRowClick={(row) => {
             if (row.convertedLeadId) router.push(`/leads/${row.convertedLeadId}`)

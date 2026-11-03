@@ -57,6 +57,7 @@ import type {
   AppNotification,
   AuditLogEntry,
   CapturedProspect,
+  RecentProspectRow,
   SendDisposition,
   SendFeedbackReason,
   TrendSource,
@@ -2952,6 +2953,25 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     async listCapturedProspects(): Promise<CapturedProspect[]> {
       return capturedProspects.filter((p) => p.status === 'captured')
+    },
+    async listRecentProspects(limit = 50): Promise<RecentProspectRow[]> {
+      return capturedProspects
+        .slice()
+        .sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt))
+        .slice(0, limit)
+        .map((p) => ({
+          id: p.id,
+          name: p.extractedName,
+          company: p.extractedCompany,
+          title: p.extractedTitle,
+          location: p.extractedLocation,
+          score: p.canonicalScore,
+          senderProfileId: p.senderProfileId,
+          status: p.status,
+          convertedLeadId: p.convertedLeadId,
+          createdAt: p.createdAt,
+          lastActivityAt: p.lastActivityAt,
+        }))
     },
     async getCapturedProspect(id: string): Promise<CapturedProspect | null> {
       return capturedProspects.find((p) => p.id === id) ?? null

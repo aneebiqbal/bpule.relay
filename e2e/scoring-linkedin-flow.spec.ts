@@ -78,9 +78,10 @@ test.describe('LinkedIn scoring flow', () => {
     test.setTimeout(300_000)
     await analyze(page, unique(BUYER, 'A'))
     const before = scoreOnPage((await page.textContent('body')) ?? '')
-    const create = page.locator('button:has-text("Create lead")').first()
+    const create = page.locator('[data-testid="prospect-primary-action"]').first()
     await expect(create).toBeEnabled({ timeout: 30_000 })
     await create.click()
+    await page.getByRole('button', { name: 'Open Lead' }).click()
     await page.waitForURL(/\/leads\/[^/]+/, { timeout: 60_000 })
     // The lead workspace hydrates client-side; wait for the score chip.
     await expect(page.getByText(/(?<!\d)\d{1,2}\s*\/\s*10(?!\d)/).first()).toBeVisible({ timeout: 60_000 })
@@ -102,9 +103,10 @@ test.describe('LinkedIn scoring flow', () => {
     test.setTimeout(400_000)
     const buyerB = unique(BUYER, 'B')
     await analyze(page, buyerB)
-    const create = page.locator('button:has-text("Create lead")').first()
+    const create = page.locator('[data-testid="prospect-primary-action"]').first()
     await expect(create).toBeEnabled({ timeout: 30_000 })
     await create.click()
+    await page.getByRole('button', { name: 'Open Lead' }).click()
     await page.waitForURL(/\/leads\/[^/]+/, { timeout: 60_000 })
     await expect(page.getByText(/(?<!\d)\d{1,2}\s*\/\s*10(?!\d)/).first()).toBeVisible({ timeout: 60_000 })
 

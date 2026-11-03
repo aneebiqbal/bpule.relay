@@ -83,6 +83,7 @@ import type {
   TeamAccountabilityView,
   CommandCenterView,
   CapturedProspect,
+  RecentProspectRow,
   TrendSource,
   TrendItem,
   TrendSourceType,
@@ -5901,6 +5902,37 @@ export class SupabaseStore implements ScoutStore {
       .order('last_activity_at', { ascending: false })
     if (error) throw error
     return (data ?? []).map((r) => this.mapCapturedProspect(r as Row))
+  }
+
+  /**
+   * Bounded Recent projection. No `rawInput`, no `canonical_intelligence`,
+   * no `score_breakdown` — those blobs never belong in a list row (spec:
+   * prospect egress). All statuses are returned so a row can show whether it
+   * became a Lead, the Watchlist, was Dismissed, or was never actioned.
+   */
+  async listRecentProspects(limit = 50): Promise<RecentProspectRow[]> {
+    const { data, error } = await this.client
+      .from('captured_prospects')
+      .select(
+        'id, extracted_name, extracted_company, extracted_title, extracted_location, canonical_score, sender_profile_id, status, converted_lead_id, created_at, last_activity_at',
+      )
+      .eq('organization_id', this.orgId)
+      .order('last_activity_at', { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      name: r.extracted_name,
+      company: r.extracted_company,
+      title: r.extracted_title,
+      location: r.extracted_location,
+      score: r.canonical_score,
+      senderProfileId: r.sender_profile_id,
+      status: r.status,
+      convertedLeadId: r.converted_lead_id,
+      createdAt: r.created_at,
+      lastActivityAt: r.last_activity_at,
+    }))
   }
 
   async getCapturedProspect(id: string): Promise<CapturedProspect | null> {

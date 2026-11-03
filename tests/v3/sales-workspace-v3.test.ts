@@ -76,7 +76,7 @@ describe('V3_PROSPECT_ANALYZE_PRIMARY', () => {
 describe('V3_PROSPECT_SOURCE_PROFILE', () => {
   it('V3_PROSPECT_SOURCE_PROFILE: a prospect row always attributes its sending profile', () => {
     const workspace = read('src/components/prospect/prospects-workspace.tsx')
-    expect(workspace).toContain('Source profile')
+    expect(workspace).toContain('Analyzed for')
     expect(workspace).toContain('Not assigned')
   })
 })
@@ -100,8 +100,8 @@ describe('V3_PROSPECT_DUPLICATE_PREVENTION', () => {
 
 describe('V3_PROSPECT_WATCHLIST', () => {
   it('V3_PROSPECT_WATCHLIST: watchlist is the canonical observe set, never active outreach', () => {
-    const page = read('src/lib/prospect/prospects-page.ts')
-    expect(page).toContain("derivePipelineStage(lead) === 'observe'")
+    const page = read('src/lib/prospect/prospects-view.ts')
+    expect(page).toContain("stageById.get(lead.id) === 'observe'")
   })
 })
 

@@ -87,9 +87,10 @@ test.describe('release gate', () => {
       await senderButtons.nth(1).click()
     }
 
-    const create = page.locator('button:has-text("Create lead")').first()
+    const create = page.locator('[data-testid="prospect-primary-action"]').first()
     await expect(create).toBeEnabled({ timeout: 30_000 })
     await create.click()
+    await page.getByRole('button', { name: 'Open Lead' }).click()
     await page.waitForURL(/\/leads\/[^/]+/, { timeout: 90_000 })
     const leadUrl = page.url()
     const leadId = leadUrl.split('/leads/')[1]?.split(/[/?#]/)[0]

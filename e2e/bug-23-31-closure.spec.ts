@@ -95,10 +95,11 @@ test.describe('BUG023_PROSPECT_RESET_AFTER_SAVE', () => {
     await page.getByRole('button', { name: /^analyze$/i }).click()
 
     // Wait for the result panel and the save CTA.
-    await page.getByRole('button', { name: /create lead/i }).waitFor({ timeout: 180_000 })
-    await page.getByRole('button', { name: /create lead/i }).click()
+    await expect(page.locator('[data-testid="prospect-primary-action"]')).toBeVisible({ timeout: 180_000 })
+    await page.locator('[data-testid="prospect-primary-action"]').click()
+    await page.getByRole('button', { name: 'Open Lead' }).click()
 
-    // The save navigates to the new lead.
+    // The save confirms on Prospect, then Open Lead navigates to the new lead.
     await page.waitForURL(/\/leads\/[0-9a-f-]{36}/, { timeout: 120_000 })
     const leadId = page.url().split('/leads/')[1].split('?')[0]
     createdLeadIds.push(leadId)

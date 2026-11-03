@@ -267,7 +267,7 @@ test.describe('Prospect QA Module 01 — live', () => {
 
     // QA's own Alex Morgan lead (saved before the fix) is a hard duplicate:
     // open it and confirm the original paste is now reachable (PRO-018).
-    await page.getByRole('button', { name: /Create lead/ }).click()
+    await page.locator('[data-testid="prospect-primary-action"]').click()
     await page.getByRole('button', { name: 'View existing' }).click()
     await page.waitForURL(/\/leads\/[^/?]+/, { timeout: 60_000 })
     await expect(page.getByText('Technical Recruiter · Northstar Technologies', { exact: true }).first()).toBeVisible({ timeout: 30_000 })
@@ -284,10 +284,11 @@ test.describe('Prospect QA Module 01 — live', () => {
       .replaceAll('Northstar Technologies', 'Westbrook Analytics')
     await analyzeUi(page, brief)
     await expect(page.getByText('Technical Recruiter · Westbrook Analytics', { exact: true })).toBeVisible()
-    await page.getByRole('button', { name: /Create lead/ }).click()
+    await page.locator('[data-testid="prospect-primary-action"]').click()
     const existing = page.getByRole('button', { name: 'View existing' })
+    const openLead = page.getByRole('button', { name: 'Open Lead' })
     await Promise.race([
-      page.waitForURL(/\/leads\/[^/]+/, { timeout: 60_000 }),
+      openLead.waitFor({ timeout: 60_000 }).then(() => openLead.click()),
       existing.waitFor({ timeout: 60_000 }).then(() => existing.click()),
     ])
     await page.waitForURL(/\/leads\/[^/?]+/, { timeout: 60_000 })

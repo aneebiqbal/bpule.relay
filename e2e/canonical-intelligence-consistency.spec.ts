@@ -124,7 +124,7 @@ test.describe('Canonical intelligence consistency — TEAM-002/004/005 acceptanc
     const summaryBodyText = await page.textContent('body')
     expect(summaryBodyText).toBeTruthy()
 
-    const createLeadBtn = page.locator('button:has-text("Create lead")').first()
+    const createLeadBtn = page.locator('[data-testid="prospect-primary-action"]').first()
     const notEligible = await page.locator('button:has-text("Lead not eligible")').first().isVisible().catch(() => false)
     if (notEligible) {
       test.skip(true, 'Test fixture was not classified as eligible to save — cannot complete the Save Lead -> Detail comparison with this input. Not a failure of the invariant under test.')
@@ -132,8 +132,9 @@ test.describe('Canonical intelligence consistency — TEAM-002/004/005 acceptanc
     }
     await expect(createLeadBtn).toBeVisible({ timeout: 5_000 })
     await createLeadBtn.click()
+    await page.getByRole('button', { name: 'Open Lead' }).click()
 
-    // Save navigates to /leads/[id] on success.
+    // Save confirms on Prospect, then Open Lead navigates to /leads/[id].
     await page.waitForURL(/\/leads\/[a-f0-9-]+/, { timeout: 15_000 })
     const leadId = page.url().split('/leads/')[1]?.split(/[/?#]/)[0]
     expect(leadId).toBeTruthy()

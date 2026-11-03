@@ -123,7 +123,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select
     p.id,
