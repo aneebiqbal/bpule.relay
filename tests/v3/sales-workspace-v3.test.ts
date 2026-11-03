@@ -323,8 +323,9 @@ describe('V3_LEAD360_CONVERSATION_PARITY', () => {
 describe('V3_LEAD360_ROLE_ACTIONS', () => {
   it('V3_LEAD360_ROLE_ACTIONS: manager controls are permission-aware in the shell', () => {
     const shell = read('src/lib/navigation/relay-shell-nav.ts')
-    expect(shell).toContain('adminOnly')
-    expect(shell).toContain('managerOnly')
+    expect(shell).toContain('adminUp')
+    expect(shell).toContain('managerUp')
+    expect(shell).toContain('visible:')
   })
 })
 

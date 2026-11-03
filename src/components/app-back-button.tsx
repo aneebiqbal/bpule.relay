@@ -5,13 +5,13 @@ import { ChevronLeft } from 'lucide-react'
 import { cn } from 'cn'
 
 const PARENTS: Array<{ test: (path: string) => boolean; href: string; label: string }> = [
-  { test: (path) => path.startsWith('/upwork/') && path !== '/upwork', href: '/upwork', label: 'Jobs' },
+  { test: (path) => path.startsWith('/upwork/') && path !== '/upwork', href: '/upwork', label: 'Upwork' },
   { test: (path) => path.startsWith('/leads/') && path !== '/leads', href: '/leads', label: 'Leads' },
   { test: (path) => path.startsWith('/content-v2/'), href: '/content', label: 'Studio' },
   { test: (path) => path.startsWith('/content/') && path !== '/content', href: '/content', label: 'Studio' },
   { test: (path) => path.startsWith('/admin/'), href: '/dashboard', label: 'Today' },
   { test: (path) => path.startsWith('/settings/'), href: '/settings', label: 'Settings' },
-  { test: (path) => path.startsWith('/team/'), href: '/team', label: 'My Team' },
+  { test: (path) => path.startsWith('/team/'), href: '/team', label: 'Team' },
   { test: (path) => path.startsWith('/profile-intelligence/'), href: '/profile-intelligence', label: 'Profiles' },
 ]
 

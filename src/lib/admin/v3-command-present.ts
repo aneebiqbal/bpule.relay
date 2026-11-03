@@ -187,9 +187,9 @@ export function buildAdminV3Activity(items: ReadonlyArray<ManagerActivityItem>):
  */
 export function buildAdminV3QuickActions(isOwner: boolean): AdminV3QuickAction[] {
   const actions: AdminV3QuickAction[] = [
-    { key: 'prospect', label: 'Analyze prospect', href: '/prospect' },
-    { key: 'task', label: 'Assign task', href: '/tasks' },
-    { key: 'invite', label: 'Invite person', href: '/admin/people' },
+    { key: 'prospect', label: 'Analyze Prospect', href: '/prospect' },
+    { key: 'task', label: 'Assign Task', href: '/tasks' },
+    { key: 'invite', label: 'Invite Person', href: '/admin/people' },
     { key: 'overdue', label: 'Review overdue work', href: '/leads?filter=followup' },
     { key: 'reports', label: 'Open reports', href: '/reports/sales' },
   ]

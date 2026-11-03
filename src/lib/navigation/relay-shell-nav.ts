@@ -1,17 +1,21 @@
 /**
- * Relay V2 shell navigation — section top nav + contextual left rail.
- * URLs stay on existing routes during Sprint 1; IA is expressed through chrome.
+ * Relay ERP navigation — one canonical, role-aware information architecture.
+ *
+ * Primary sidebar = domains. Secondary rail = functions inside the active domain.
+ * Every destination has exactly ONE label; aliases are resolved centrally so the
+ * shell never lights two items at once.
  */
 
-export type RelayShellSection =
+export type RelayNavDomain =
   | 'home'
   | 'sales'
-  | 'conversations'
-  | 'accounts'
+  | 'inbox'
+  | 'work'
   | 'team'
-  | 'intelligence'
   | 'content'
-  | 'reports'
+  | 'insights'
+  | 'settings'
+  | 'admin'
 
 export interface RelayNavRoleFlags {
   isOwner: boolean
@@ -19,253 +23,305 @@ export interface RelayNavRoleFlags {
   isManager: boolean
 }
 
-export interface RelayTopNavItem {
-  id: RelayShellSection
+export interface RelaySecondaryItem {
+  id: string
   label: string
+  /** May include a query string, e.g. `/leads?view=pipeline`. */
   href: string
-  /** Who sees this in the top bar */
+  visible?: (role: RelayNavRoleFlags) => boolean
+}
+
+export interface RelayPrimaryDomain {
+  id: RelayNavDomain
+  label: string
+  /** Representative href for the domain itself. */
+  href: string
   visible: (role: RelayNavRoleFlags) => boolean
+  secondary: RelaySecondaryItem[]
 }
 
-export interface RelaySectionNavItem {
-  label: string
-  href: string
-  exact?: boolean
-  /** Admin/Owner only. Items without a flag follow the section default. */
-  adminOnly?: boolean
-  /** Hidden from Admin/Owner (personal surfaces — admins have no personal stats). */
-  repOnly?: boolean
-  /** Manager / Admin / Owner only. */
-  managerOnly?: boolean
-}
+const everyone = () => true
+const managerUp = (role: RelayNavRoleFlags) => role.isManager || role.isAdmin || role.isOwner
+const adminUp = (role: RelayNavRoleFlags) => role.isAdmin || role.isOwner
+/** Managers only — admins reach the same surface through the Admin domain. */
+const managerOnly = (role: RelayNavRoleFlags) => role.isManager && !role.isAdmin && !role.isOwner
 
-const repManagerAdmin = (r: RelayNavRoleFlags) => true
-const managerUp = (r: RelayNavRoleFlags) => r.isManager || r.isAdmin || r.isOwner
-const adminUp = (r: RelayNavRoleFlags) => r.isAdmin || r.isOwner
-
-export const RELAY_TOP_NAV: RelayTopNavItem[] = [
-  { id: 'home', label: 'Home', href: '/home', visible: repManagerAdmin },
-  { id: 'sales', label: 'Sales', href: '/leads', visible: repManagerAdmin },
-  { id: 'conversations', label: 'Conversations', href: '/chats', visible: repManagerAdmin },
-  { id: 'accounts', label: 'Accounts', href: '/accounts', visible: adminUp },
-  { id: 'team', label: 'Team', href: '/team', visible: managerUp },
-  { id: 'intelligence', label: 'Intelligence', href: '/admin/scoring-qa', visible: adminUp },
-  { id: 'content', label: 'Content', href: '/content', visible: repManagerAdmin },
+export const NAV_DOMAINS: RelayPrimaryDomain[] = [
   {
-    id: 'reports',
-    label: 'Reports',
+    id: 'home',
+    label: 'Home',
+    href: '/dashboard',
+    visible: everyone,
+    secondary: [],
+  },
+  {
+    id: 'sales',
+    label: 'Sales',
+    href: '/leads',
+    visible: everyone,
+    secondary: [
+      { id: 'prospects', label: 'Prospects', href: '/prospect' },
+      { id: 'leads', label: 'Leads', href: '/leads' },
+      { id: 'pipeline', label: 'Pipeline', href: '/leads?view=pipeline' },
+      { id: 'import', label: 'Import Leads', href: '/leads/import' },
+      { id: 'companies', label: 'Companies', href: '/accounts', visible: adminUp },
+      { id: 'upwork', label: 'Upwork', href: '/upwork' },
+      { id: 'email', label: 'Email', href: '/revenue/email' },
+    ],
+  },
+  {
+    id: 'inbox',
+    label: 'Inbox',
+    href: '/chats',
+    visible: everyone,
+    secondary: [
+      { id: 'needs-reply', label: 'Needs reply', href: '/chats?view=waiting_me' },
+      { id: 'waiting-them', label: 'Waiting on them', href: '/chats?view=waiting_them' },
+      { id: 'followups', label: 'Follow-ups', href: '/chats?view=followups' },
+      { id: 'meeting-requests', label: 'Meeting requests', href: '/chats?view=meeting_requests' },
+      { id: 'proposal-requests', label: 'Proposal requests', href: '/chats?view=proposal_requests' },
+      { id: 'closed', label: 'Closed', href: '/chats?view=closed' },
+    ],
+  },
+  {
+    id: 'work',
+    label: 'Work',
+    href: '/tasks',
+    visible: everyone,
+    secondary: [
+      { id: 'tasks', label: 'Tasks', href: '/tasks' },
+      { id: 'today', label: 'Today', href: '/tasks?tab=today' },
+      { id: 'overdue', label: 'Overdue', href: '/tasks?tab=overdue' },
+      { id: 'upcoming', label: 'Upcoming', href: '/tasks?tab=upcoming' },
+      { id: 'completed', label: 'Completed', href: '/tasks?tab=completed' },
+    ],
+  },
+  {
+    id: 'team',
+    label: 'Team',
+    href: '/team',
+    visible: managerUp,
+    secondary: [
+      { id: 'people', label: 'People', href: '/team' },
+      { id: 'team-tasks', label: 'Team Tasks', href: '/team/tasks' },
+      { id: 'activity', label: 'Activity', href: '/team/activity' },
+      { id: 'performance', label: 'Performance', href: '/team/performance' },
+      { id: 'targets', label: 'Targets', href: '/team/targets' },
+      { id: 'groups', label: 'Groups', href: '/team/groups' },
+      { id: 'daily-operations', label: 'Daily Operations', href: '/admin/command', visible: managerOnly },
+    ],
+  },
+  {
+    id: 'content',
+    label: 'Content',
+    href: '/content',
+    visible: everyone,
+    secondary: [
+      { id: 'studio', label: 'Studio', href: '/content' },
+      { id: 'growth', label: 'Growth', href: '/content-v2/growth', visible: adminUp },
+    ],
+  },
+  {
+    id: 'insights',
+    label: 'Insights',
     href: '/reports/sales',
-    visible: repManagerAdmin,
+    visible: everyone,
+    secondary: [
+      { id: 'sales-insights', label: 'Sales Insights', href: '/reports/sales' },
+      { id: 'ai-usage', label: 'AI Usage', href: '/admin/ai-usage', visible: adminUp },
+      { id: 'revenue-intelligence', label: 'Revenue Intelligence', href: '/admin/revenue-intelligence', visible: adminUp },
+    ],
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    href: '/settings',
+    visible: everyone,
+    secondary: [],
+  },
+  {
+    id: 'admin',
+    label: 'Admin',
+    href: '/admin/command',
+    visible: adminUp,
+    secondary: [
+      { id: 'command-center', label: 'Command Center', href: '/admin/command' },
+      { id: 'people-roles', label: 'People & Roles', href: '/admin/people' },
+      { id: 'profiles', label: 'Profiles', href: '/profile-intelligence' },
+      { id: 'scoring-qa', label: 'Scoring QA', href: '/admin/scoring-qa' },
+      { id: 'qa-trust', label: 'QA & Trust', href: '/admin/qa' },
+      { id: 'dataset', label: 'Dataset', href: '/admin/dataset' },
+      { id: 'training-data', label: 'Training Data', href: '/admin/training-data' },
+      { id: 'manage-profiles', label: 'Manage Profiles', href: '/manage-profiles', visible: (r) => r.isOwner },
+    ],
   },
 ]
 
-export const RELAY_SECTION_NAV: Record<RelayShellSection, RelaySectionNavItem[]> = {
-  home: [
-    { label: 'Today', href: '/dashboard', exact: true },
-    { label: 'My tasks', href: '/tasks', exact: true },
-  ],
-  sales: [
-    { label: 'Prospects', href: '/prospect' },
-    { label: 'Leads', href: '/leads' },
-    { label: 'Pipeline', href: '/leads' },
-    { label: 'Upwork', href: '/upwork' },
-    { label: 'Tasks', href: '/tasks' },
-    { label: 'Archive', href: '/archive' },
-    { label: 'Import', href: '/leads/import', exact: true },
-  ],
-  conversations: [
-    { label: 'Inbox', href: '/chats', exact: true },
-    { label: 'Queue', href: '/relay', exact: true },
-    { label: 'Inbound', href: '/inbound', exact: true },
-  ],
-  accounts: [
-    { label: 'Companies', href: '/accounts' },
-    { label: 'Profiles & identities', href: '/profile-intelligence' },
-    { label: 'Manage profiles', href: '/manage-profiles', exact: true },
-    { label: 'Proof', href: '/facts', exact: true },
-  ],
-  team: [
-    { label: 'People', href: '/team', exact: true },
-    { label: 'Teams', href: '/team/groups' },
-    { label: 'Tasks', href: '/team/tasks', exact: true },
-    { label: 'Activity', href: '/team/activity', exact: true },
-    { label: 'Performance', href: '/team/performance', exact: true },
-    { label: 'Daily operations', href: '/admin/command' },
-    { label: 'Targets', href: '/team/targets', exact: true },
-    { label: 'Access & roles', href: '/admin/people', exact: true, adminOnly: true },
-  ],
-  intelligence: [
-    { label: 'Scoring QA', href: '/admin/scoring-qa', exact: true },
-    { label: 'QA & trust', href: '/admin/qa', exact: true },
-    { label: 'Dataset', href: '/admin/dataset', exact: true },
-    { label: 'Training data', href: '/admin/training-data', exact: true },
-  ],
-  content: [
-    { label: 'Studio', href: '/content', exact: true },
-    { label: 'Growth', href: '/content-v2/growth', exact: true },
-    { label: 'Proof', href: '/facts', exact: true },
-  ],
-  reports: [
-    { label: 'Sales', href: '/reports/sales', exact: true },
-    { label: 'Pipeline', href: '/reports/pipeline', exact: true },
-    { label: 'Team', href: '/reports/team', exact: true, managerOnly: true },
-    { label: 'Activity', href: '/reports/activity', exact: true },
-    { label: 'Revenue', href: '/reports/revenue', exact: true },
-    { label: 'AI usage', href: '/admin/ai-usage', exact: true, adminOnly: true },
-    { label: 'My performance', href: '/performance', exact: true, repOnly: true },
-  ],
+// ─── Domain resolution ──────────────────────────────────────────────────────
+
+/**
+ * Pathname → domain. Overrides run before the prefix table so routes that live
+ * under an admin URL but belong to another domain resolve correctly.
+ */
+export function domainForPathname(pathname: string): RelayNavDomain | null {
+  if (pathname === '/admin/command' || pathname.startsWith('/admin/command/')) return 'team'
+  if (pathname.startsWith('/admin/ai-usage')) return 'insights'
+  if (pathname.startsWith('/admin/revenue-intelligence')) return 'insights'
+
+  if (pathname === '/dashboard') return 'home'
+  if (pathname === '/chats' || pathname.startsWith('/chats/')) return 'inbox'
+  if (pathname === '/inbound' || pathname.startsWith('/inbound/')) return 'inbox'
+  if (pathname === '/relay' || pathname.startsWith('/relay/')) return 'inbox'
+  if (pathname === '/tasks' || pathname.startsWith('/tasks/')) return 'work'
+  if (pathname.startsWith('/team') || pathname.startsWith('/accountability')) return 'team'
+  if (pathname.startsWith('/content') || pathname.startsWith('/studio')) return 'content'
+  if (pathname.startsWith('/reports') || pathname.startsWith('/performance')) return 'insights'
+  if (pathname === '/settings' || pathname === '/account') return 'settings'
+  if (
+    pathname === '/accounts' ||
+    pathname.startsWith('/accounts/') ||
+    pathname.startsWith('/prospect') ||
+    pathname.startsWith('/leads') ||
+    pathname.startsWith('/upwork') ||
+    pathname.startsWith('/archive') ||
+    pathname.startsWith('/activate') ||
+    pathname.startsWith('/revenue/email')
+  ) {
+    return 'sales'
+  }
+  if (
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/profile-intelligence') ||
+    pathname.startsWith('/profiles') ||
+    pathname.startsWith('/manage-profiles') ||
+    pathname.startsWith('/facts') ||
+    pathname.startsWith('/workspace')
+  ) {
+    return 'admin'
+  }
+  return null
 }
 
-const SALES_PREFIXES = ['/leads', '/prospect', '/upwork', '/archive', '/tasks']
-const CONVERSATION_PREFIXES = ['/chats', '/relay', '/inbound']
-const ACCOUNTS_PREFIXES = ['/accounts', '/profile-intelligence', '/profiles', '/manage-profiles', '/workspace', '/rep/assigned-profiles']
-const TEAM_PREFIXES = ['/team', '/admin/command', '/admin/people', '/admin/targets', '/accountability']
-const INTELLIGENCE_PREFIXES = ['/admin/scoring-qa', '/admin/qa', '/admin/dataset', '/admin/training-data']
-const CONTENT_PREFIXES = ['/content', '/content-v2', '/facts', '/studio']
-const REPORTS_PREFIXES = ['/reports', '/performance', '/admin/revenue-intelligence', '/admin/ai-usage']
-
-export function detectRelayShellSection(pathname: string): RelayShellSection {
-  if (pathname === '/dashboard' || pathname === '/home') {
-    return 'home'
-  }
-  // Daily operations (/admin/command) lives under Team since Phase 8.27.
-  if (CONVERSATION_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-    return 'conversations'
-  }
-  if (SALES_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return 'sales'
-  if (ACCOUNTS_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return 'accounts'
-  if (TEAM_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return 'team'
-  if (INTELLIGENCE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-    return 'intelligence'
-  }
-  if (CONTENT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return 'content'
-  if (REPORTS_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return 'reports'
-  if (pathname.startsWith('/settings') || pathname.startsWith('/account')) return 'home'
-  return 'home'
+export function visibleDomains(role: RelayNavRoleFlags): RelayPrimaryDomain[] {
+  return NAV_DOMAINS.filter((d) => d.visible(role))
 }
 
-export function visibleTopNav(role: RelayNavRoleFlags): RelayTopNavItem[] {
-  return RELAY_TOP_NAV.filter((item) => item.visible(role))
+export function secondaryItems(domain: RelayNavDomain, role: RelayNavRoleFlags): RelaySecondaryItem[] {
+  const config = NAV_DOMAINS.find((d) => d.id === domain)
+  if (!config || !config.visible(role)) return []
+  return config.secondary.filter((item) => !item.visible || item.visible(role))
 }
 
-export function sectionNavItems(
-  section: RelayShellSection,
+/** Exactly one active primary domain — the one whose routes contain this pathname. */
+export function resolvePrimaryActiveId(
+  pathname: string,
   role: RelayNavRoleFlags,
-): RelaySectionNavItem[] {
-  const adminRole = role.isAdmin || role.isOwner
-  const items = RELAY_SECTION_NAV[section].filter(
-    (i) =>
-      (!i.adminOnly || adminRole) &&
-      (!i.repOnly || !adminRole) &&
-      (!i.managerOnly || adminRole || role.isManager),
-  )
-  if (section === 'team') {
-    // Managers keep Daily operations (/admin/command allows them); flagged
-    // admin-only items are already removed above.
-    return role.isManager || adminRole ? items : []
-  }
-  if (section === 'reports' && !adminRole) {
-    return items.filter((i) => !i.href.startsWith('/admin/'))
-  }
-  if (section === 'intelligence') {
-    return role.isAdmin || role.isOwner ? items : []
-  }
-  if (section === 'accounts') {
-    return role.isAdmin || role.isOwner ? items : []
-  }
-  return items
+): RelayNavDomain | null {
+  const domain = domainForPathname(pathname)
+  if (!domain) return null
+  return visibleDomains(role).some((d) => d.id === domain) ? domain : null
 }
 
-function navItemMatches(pathname: string, item: RelaySectionNavItem): boolean {
-  return item.exact
-    ? pathname === item.href
-    : pathname === item.href || pathname.startsWith(`${item.href}/`)
+// ─── Secondary resolution ───────────────────────────────────────────────────
+
+function splitHref(href: string): { path: string; params: URLSearchParams } {
+  const [path, query] = href.split('?')
+  return { path, params: new URLSearchParams(query ?? '') }
+}
+
+function matchesHref(
+  href: string,
+  pathname: string,
+  search: URLSearchParams,
+): { pathLen: number; paramCount: number } | null {
+  const { path, params } = splitHref(href)
+  if (path !== pathname) return null
+  for (const [key, value] of params) {
+    if (search.get(key) !== value) return null
+  }
+  return { pathLen: path.length, paramCount: params.toString().length === 0 ? 0 : [...params.keys()].length }
 }
 
 /**
- * The one canonical answer to "which sidebar item is active?".
- *
- * Prefix matching can match several aliases of the same route (for example
- * `/leads` is both "Leads" and "Pipeline"), which used to light up more than
- * one item at a time. Resolve to the most specific match — longest href wins,
- * first declared breaks ties — so exactly one item (or none) is ever active.
- * RENDER_V3_SINGLE_ACTIVE_NAV_ITEM.
+ * Exactly one active secondary item. Most specific match wins: longest path,
+ * then most query params, then declaration order.
  */
-export function resolveSectionActiveItem(
-  section: RelayShellSection,
+export function resolveSecondaryActiveId(
+  domain: RelayNavDomain,
   pathname: string,
+  search: URLSearchParams,
   role: RelayNavRoleFlags,
-): RelaySectionNavItem | null {
-  let best: RelaySectionNavItem | null = null
-  for (const item of sectionNavItems(section, role)) {
-    if (!navItemMatches(pathname, item)) continue
-    if (!best || item.href.length > best.href.length) best = item
+): string | null {
+  let best: { id: string; pathLen: number; paramCount: number } | null = null
+  const items = secondaryItems(domain, role)
+  for (const item of items) {
+    const match = matchesHref(item.href, pathname, search)
+    if (!match) continue
+    if (
+      !best ||
+      match.pathLen > best.pathLen ||
+      (match.pathLen === best.pathLen && match.paramCount > best.paramCount)
+    ) {
+      best = { id: item.id, pathLen: match.pathLen, paramCount: match.paramCount }
+    }
   }
-  return best
+  return best ? best.id : null
 }
 
-/** Mobile primary destinations — one canonical list keyed by section id. */
-export function v3MobileNavItems(role: RelayNavRoleFlags): Array<{ id: string; label: string; href: string }> {
-  const items: Array<{ id: string; label: string; href: string }> = [
+export interface RelayBreadcrumb {
+  domain: RelayNavDomain
+  domainLabel: string
+  itemLabel: string | null
+}
+
+/** Canonical breadcrumb, e.g. `{ domainLabel: 'Sales', itemLabel: 'Leads' }`. */
+export function navBreadcrumb(
+  pathname: string,
+  search: URLSearchParams,
+  role: RelayNavRoleFlags,
+): RelayBreadcrumb | null {
+  const domain = resolvePrimaryActiveId(pathname, role)
+  if (!domain) return null
+  const config = NAV_DOMAINS.find((d) => d.id === domain)!
+  const activeId = resolveSecondaryActiveId(domain, pathname, search, role)
+  const item = config.secondary.find((i) => i.id === activeId)
+  return { domain, domainLabel: config.label, itemLabel: item ? item.label : null }
+}
+
+// ─── Mobile ─────────────────────────────────────────────────────────────────
+
+export interface MobileNavItem {
+  id: RelayNavDomain | 'more'
+  label: string
+  href: string
+}
+
+/** Five slots max. Everything else lives behind "More". */
+export function mobileNavItems(role: RelayNavRoleFlags): MobileNavItem[] {
+  const items: MobileNavItem[] = [
     { id: 'home', label: 'Home', href: '/dashboard' },
-    { id: 'sales', label: 'Leads', href: '/leads' },
-    { id: 'conversations', label: 'Inbox', href: '/chats' },
+    { id: 'sales', label: 'Sales', href: '/leads' },
+    { id: 'inbox', label: 'Inbox', href: '/chats' },
   ]
-  if (role.isManager || role.isAdmin || role.isOwner) {
-    items.push({ id: 'team', label: 'Team', href: '/team' })
-  }
-  items.push({ id: 'reports', label: 'Reports', href: '/reports/sales' })
+  if (managerUp(role)) items.push({ id: 'team', label: 'Team', href: '/team' })
+  else items.push({ id: 'work', label: 'Work', href: '/tasks' })
+  items.push({ id: 'more', label: 'More', href: '' })
   return items
 }
 
-export interface V3SidebarItem {
-  id: string
+/** Contents of the mobile "More" sheet — every role-valid domain and its functions. */
+export function moreSheetSections(role: RelayNavRoleFlags): Array<{
+  id: RelayNavDomain
   label: string
   href: string
-  visible: (role: RelayNavRoleFlags) => boolean
-}
-
-const v3SidebarBase: V3SidebarItem[] = [
-  { id: 'home', label: 'Home', href: '/dashboard', visible: repManagerAdmin },
-  { id: 'sales', label: 'Sales', href: '/leads', visible: repManagerAdmin },
-  { id: 'conversations', label: 'Inbox', href: '/chats', visible: repManagerAdmin },
-  { id: 'tasks', label: 'Tasks', href: '/tasks', visible: repManagerAdmin },
-  { id: 'team', label: 'Team', href: '/team', visible: managerUp },
-  { id: 'insights', label: 'Insights', href: '/reports', visible: repManagerAdmin },
-]
-
-const v3SidebarAdmin: V3SidebarItem[] = [
-  { id: 'admin', label: 'Admin', href: '/admin', visible: adminUp },
-]
-
-const v3SidebarFooter: V3SidebarItem[] = [
-  { id: 'settings', label: 'Settings', href: '/settings', visible: repManagerAdmin },
-]
-
-export function v3SidebarItems(role: RelayNavRoleFlags): V3SidebarItem[] {
-  return [...v3SidebarBase, ...v3SidebarAdmin, ...v3SidebarFooter].filter((item) => item.visible(role))
-}
-
-/** One active sidebar destination — longest href wins, first declared breaks ties. */
-export function resolveV3SidebarActiveId(pathname: string, role: RelayNavRoleFlags): string | null {
-  const items = v3SidebarItems(role)
-  let best: V3SidebarItem | null = null
-  for (const item of items) {
-    const matches = pathname === item.href || pathname.startsWith(`${item.href}/`)
-    if (!matches) continue
-    if (!best || item.href.length > best.href.length) best = item
-  }
-  if (best) return best.id
-
-  // A section route with no dedicated sidebar item (/prospect, /upwork, …)
-  // still belongs to its parent destination — never leave context blank.
-  const fallback: Partial<Record<RelayShellSection, string>> = {
-    home: 'home',
-    sales: 'sales',
-    conversations: 'conversations',
-    team: 'team',
-    reports: 'insights',
-  }
-  const fallbackId = fallback[detectRelayShellSection(pathname)]
-  return fallbackId && items.some((item) => item.id === fallbackId) ? fallbackId : null
+  items: Array<{ id: string; label: string; href: string }>
+}> {
+  return visibleDomains(role)
+    .filter((d) => d.id !== 'home' && d.id !== 'sales' && d.id !== 'inbox' && d.id !== 'team')
+    .map((d) => ({
+      id: d.id,
+      label: d.label,
+      href: d.href,
+      items: secondaryItems(d.id, role),
+    }))
 }

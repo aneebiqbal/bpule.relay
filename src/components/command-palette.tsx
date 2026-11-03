@@ -84,7 +84,7 @@ export function CommandPalette({
     const all: CommandItem[] = [
     {
       id: 'check-prospect',
-      label: 'Analyze prospect',
+      label: 'Analyze Prospect',
       description: 'Run a fit check instantly',
       icon: Search,
       shortcut: '',
@@ -93,7 +93,7 @@ export function CommandPalette({
     },
     {
       id: 'find-leads',
-      label: 'Find leads',
+      label: 'Open Leads',
       description: 'Open and filter lead pipeline',
       icon: Target,
       group: 'Relay',
@@ -101,7 +101,7 @@ export function CommandPalette({
     },
     {
       id: 'find-jobs',
-      label: 'Find jobs',
+      label: 'Open Upwork',
       description: 'Open Upwork opportunities',
       icon: Briefcase,
       group: 'Relay',
@@ -109,7 +109,7 @@ export function CommandPalette({
     },
     {
       id: 'open-conversations',
-      label: 'Open conversations',
+      label: 'Open Inbox',
       description: 'Jump to active queue conversations',
       icon: MessageSquare,
       group: 'Relay',
@@ -117,7 +117,7 @@ export function CommandPalette({
     },
     {
       id: 'my-tasks',
-      label: 'My tasks',
+      label: 'Open Tasks',
       description: 'Unified task workspace',
       icon: Target,
       group: 'Relay',
@@ -125,7 +125,7 @@ export function CommandPalette({
     },
     {
       id: 'overdue-tasks',
-      label: 'Overdue tasks',
+      label: 'Open Overdue Tasks',
       description: 'Tasks past due',
       icon: Target,
       group: 'Relay',
@@ -160,7 +160,7 @@ export function CommandPalette({
     },
     {
       id: 'view-replies',
-      label: 'Open replies',
+      label: 'Open Needs Reply',
       description: 'Leads with client replies waiting',
       icon: MessageSquare,
       group: 'Relay',
@@ -168,7 +168,7 @@ export function CommandPalette({
     },
     {
       id: 'view-followups',
-      label: 'View follow-ups',
+      label: 'Open Follow-ups',
       description: 'Overdue follow-ups',
       icon: MessageSquare,
       group: 'Relay',
@@ -200,7 +200,7 @@ export function CommandPalette({
     },
     {
       id: 'studio-idea',
-      label: 'Create Studio idea',
+      label: 'Create Studio Idea',
       description: 'Open today\'s editorial directions',
       icon: Sparkles,
       group: 'Studio',
@@ -208,7 +208,7 @@ export function CommandPalette({
     },
     {
       id: 'search-profile',
-      label: 'Search profile',
+      label: 'Open Profiles',
       description: 'Open profile intelligence',
       icon: Users,
       group: 'Studio',
@@ -224,7 +224,7 @@ export function CommandPalette({
     },
     {
       id: 'new-lead',
-      label: 'New lead',
+      label: 'Add Lead',
       description: 'Add a company to your pipeline',
       icon: Plus,
       group: 'Navigation',
@@ -248,7 +248,7 @@ export function CommandPalette({
     },
     {
       id: 'reports',
-      label: 'Open Reports',
+      label: 'Open Sales Insights',
       description: 'Sales, pipeline, team, activity and revenue',
       icon: BarChart3,
       group: 'Navigation',
@@ -264,7 +264,7 @@ export function CommandPalette({
     },
     {
       id: 'inbound',
-      label: 'Inbound',
+      label: 'Inbound Desk',
       description: 'Messages from clients',
       icon: MessageSquare,
       group: 'Relay',
@@ -280,7 +280,7 @@ export function CommandPalette({
     },
     {
       id: 'growth',
-      label: 'Relay Growth',
+      label: 'Growth',
       description: 'Growth engine',
       icon: TrendingUp,
       group: 'Studio',
@@ -296,7 +296,7 @@ export function CommandPalette({
     },
     {
       id: 'people',
-      label: 'People',
+      label: 'People & Roles',
       description: 'Org hierarchy',
       icon: Users,
       group: 'Admin',
@@ -312,7 +312,7 @@ export function CommandPalette({
     },
     {
       id: 'identities',
-      label: 'Sending identities',
+      label: 'Profiles',
       description: 'Profiles and the identities reps send as',
       icon: UserCircle2,
       group: 'Admin',
@@ -328,7 +328,7 @@ export function CommandPalette({
     },
     {
       id: 'team-tasks',
-      label: 'Team tasks',
+      label: 'Team Tasks',
       description: 'Who has what work',
       icon: ListChecks,
       group: 'Navigation',
@@ -336,7 +336,7 @@ export function CommandPalette({
     },
     {
       id: 'team-activity',
-      label: 'Team activity',
+      label: 'Team Activity',
       description: 'Operational activity feed',
       icon: Activity,
       group: 'Navigation',
@@ -344,7 +344,7 @@ export function CommandPalette({
     },
     {
       id: 'team-performance',
-      label: 'Team performance',
+      label: 'Team Performance',
       description: 'Execution, conversion and comparisons',
       icon: BarChart3,
       group: 'Navigation',

@@ -85,8 +85,8 @@ function data(overrides: Partial<AdminCommandCenterData> = {}): AdminCommandCent
 describe('ADMIN_V3_CREATE_PROSPECT_VISIBLE', () => {
   it('keeps Analyze Prospect as the primary admin action', () => {
     const actions = buildAdminV3QuickActions(false)
-    expect(actions[0]).toMatchObject({ label: 'Analyze prospect', href: '/prospect' })
-    expect(actions.some((a) => a.label === 'Invite person')).toBe(true)
+    expect(actions[0]).toMatchObject({ label: 'Analyze Prospect', href: '/prospect' })
+    expect(actions.some((a) => a.label === 'Invite Person')).toBe(true)
   })
 })
 
