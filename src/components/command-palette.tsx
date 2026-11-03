@@ -231,14 +231,6 @@ export function CommandPalette({
       action: () => { router.push('/leads/new'); onOpenChange(false) },
     },
     {
-      id: 'studio',
-      label: 'Studio',
-      description: 'Go to create demand workspace',
-      icon: PenLine,
-      group: 'Navigation',
-      action: () => { router.push('/content'); onOpenChange(false) },
-    },
-    {
       id: 'team',
       label: 'Open Team',
       description: 'People, tasks, activity and performance',
