@@ -1,5 +1,5 @@
-import { loadProspectsView } from '@/lib/prospect/prospects-view'
-import { ProspectsWorkspace, type ProspectsTab } from '@/components/prospect/prospects-workspace'
+import { isProspectTabParam, loadProspectsView, type ProspectTab } from '@/lib/prospect/prospects-view'
+import { ProspectsWorkspace } from '@/components/prospect/prospects-workspace'
 import { PageHeader } from '@/components/ui/page-header'
 
 export const dynamic = 'force-dynamic'
@@ -15,11 +15,7 @@ export default async function ProspectPage({
 }) {
   const params = await searchParams
   const rawTab = Array.isArray(params.tab) ? params.tab[0] : params.tab
-  // Inlined rather than imported: `isProspectsTab` lives in the client
-  // component module, and calling it here would invoke a client function
-  // during server render.
-  const tab: ProspectsTab =
-    rawTab === 'recent' || rawTab === 'saved' || rawTab === 'watchlist' ? rawTab : 'analyze'
+  const tab: ProspectTab = isProspectTabParam(rawTab) ? rawTab : 'analyze'
 
   let data: Awaited<ReturnType<typeof loadProspectsView>>
   try {

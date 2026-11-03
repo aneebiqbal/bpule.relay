@@ -2,39 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  AlertTriangle,
-  ArrowRight,
-  Check,
-  ChevronDown,
-  Copy,
-  Handshake,
-  RefreshCw,
-  Search,
-  SkipForward,
-  Sparkles,
-  User,
-  UserPlus,
-  X,
-} from 'lucide-react'
+import { AlertTriangle, Search, SkipForward, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Select } from '@/components/ui/select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { ScoreRing } from '@/components/score-ring'
 import { readSse } from '@/lib/sse/client'
 import { cn } from 'cn'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
 
 import type { ProspectQualificationAssessment } from '@/lib/prospect/qualification-gate'
-import { describeVerdictForDisplay, type RevenueLoopSnapshot } from '@/lib/relay/revenue-strategy'
+import type { RevenueLoopSnapshot } from '@/lib/relay/revenue-strategy'
 import { duplicateNotice } from '@/lib/ui/api-error-toast'
-import { scoreExplanation } from '@/lib/scoring/display-score'
-import { ScoreBreakdown } from '@/components/score-breakdown'
-import { formatRoleLine } from '@/lib/leads/role-line'
 import { pasteGuard } from '@/lib/prospect/paste-guard'
 import { trackEvent } from '@/lib/analytics/tracker'
-import { RejectedSignalInspector, type RejectedSignalView } from '@/components/scoring/rejected-signal-inspector'
-import { ScoringFeedback } from '@/components/scoring/scoring-feedback'
+import type { RejectedSignalView } from '@/components/scoring/rejected-signal-inspector'
 import { useActiveIdentity } from '@/components/workspace/active-identity-provider'
 import { workspaceIdentityForSender } from '@/lib/workspace/active-identity'
 import {
@@ -43,7 +25,8 @@ import {
   readProspectDraft,
   serializeProspectDraft,
 } from '@/lib/prospect/draft'
-import { ROUTING_MISMATCH_DELTA } from '@/lib/intelligence-v3/action/recommended-action'
+import { ProspectCreated, ProspectLoadingSteps, ProspectResult } from './prospect-result'
+import { decisionWordFor, primaryActionFor } from '@/lib/prospect/display'
 
 /** Canonical decision detail returned by /api/prospect/analyze (Phase 25-31). */
 interface DecisionDetail {
@@ -51,7 +34,7 @@ interface DecisionDetail {
   routingRecommendation?: { recommendation?: string; reason?: string | null; delta?: number | null; routing?: { recommendation: string; reason: string | null; delta: number | null } } | null
   confidenceDetail?: { label: 'HIGH' | 'MEDIUM' | 'LOW'; reasons: string[]; researchMore: boolean } | null
   rejectedSignals?: RejectedSignalView[]
-  resolved?: { access?: string; activityRecency?: string; buyerTiming?: string; fit?: string; authority?: string; commercialPotential?: string } | null
+  resolved?: { access?: string; activityRecency?: string; buyerTiming?: string; fit?: string; authority?: string; commercialPotential?: string; commercialPotentialRaw?: number; evidenceQuality?: number } | null
   versions?: { scoringVersion: string; modelVersion: string; analyzedAt: string } | null
   decisionRunId?: string | null
 }
@@ -105,7 +88,7 @@ type AnalyzeEvent =
       revenue?: RevenueLoopSnapshot
     } & DecisionDetail
 
-interface AnalysisState {
+export interface AnalysisState {
   extracted: ExtractedLead | null
   score: {
     total: number
@@ -123,7 +106,11 @@ interface AnalysisState {
   inputStatus: 'not_prospect' | 'insufficient' | null
   inputHeadline: string | null
   extractionCompleteness: { score?: number; missingFields?: string[] } | null
-  canonical: { extractionCompleteness?: { score?: number } } | null
+  canonical: {
+    extractionCompleteness?: { score?: number }
+    intelligence?: { relationship?: string | null } | null
+    rawSource?: { sourceType?: string | null } | null
+  } | null
   bestSender: Profile | null
   bestSenderProof: MatchedProof[]
   connectionNote: string
@@ -141,14 +128,6 @@ interface AnalysisState {
   decision: DecisionDetail
 }
 
-const QUALIFICATION_META: Record<string, { label: string; color: string; bg: string }> = {
-  strong: { label: 'Strong opportunity', color: 'text-status-success', bg: 'bg-status-success/10' },
-  worth_pursuing: { label: 'Worth pursuing', color: 'text-status-success', bg: 'bg-status-success/10' },
-  maybe: { label: 'Maybe — needs more signal', color: 'text-orange', bg: 'bg-orange/10' },
-  low: { label: 'Low priority', color: 'text-graphite', bg: 'bg-stone/10' },
-  skip: { label: 'Probably skip', color: 'text-graphite', bg: 'bg-stone/10' },
-}
-
 function prospectCanBeSaved(
   result: AnalysisState | null,
 ): result is AnalysisState & { extracted: ExtractedLead } {
@@ -164,6 +143,16 @@ function prospectCanBeSaved(
   return false
 }
 
+/**
+ * Loading milestones. The SSE stream reports real stages; these labels only
+ * rename them for display. An unmatched status is never invented as a step.
+ */
+const MILESTONE_LABELS: ReadonlyArray<{ match: RegExp; label: string }> = [
+  { match: /scanning the paste/i, label: 'Reading source' },
+  { match: /extracting prospect intelligence/i, label: 'Extracting identity' },
+  { match: /matching sender profiles/i, label: 'Matching sender profiles' },
+  { match: /drafting the connection note/i, label: 'Drafting the note' },
+]
 
 export function ProspectAnalyze() {
   const router = useRouter()
@@ -187,16 +176,18 @@ export function ProspectAnalyze() {
     }
   })
   const [analyzing, setAnalyzing] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Field-level problem with the paste itself — shown once, next to the
   // textarea, never as a "Something failed" banner or a toast.
   const [validationError, setValidationError] = useState<string | null>(null)
   const [result, setResult] = useState<AnalysisState | null>(null)
-  const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
-  const [showSenders, setShowSenders] = useState(false)
+  const [showSource, setShowSource] = useState(false)
+  /** Milestones the SSE stream actually reported, in order. */
+  const [steps, setSteps] = useState<string[]>([])
+  const [profiles, setProfiles] = useState<Array<{ id: string; label: string }>>([])
+  const [createdLead, setCreatedLead] = useState<{ id: string; company: string | null } | null>(null)
   const [duplicateConflict, setDuplicateConflict] = useState<{
     existingLeadId: string
     existingLeadCompany: string
@@ -269,10 +260,9 @@ export function ProspectAnalyze() {
   const resetResult = useCallback(() => {
     setResult(null)
     setError(null)
-    setStatus(null)
-    setCopied(false)
+    setSteps([])
     setShowDetails(false)
-    setShowSenders(false)
+    setShowSource(false)
     setDuplicateConflict(null)
   }, [])
 
@@ -289,6 +279,32 @@ export function ProspectAnalyze() {
     setSelectedProfileId(nextProfileId)
     resetResult()
   }, [workspace.active?.id, workspace.active?.profileId, resetResult])
+
+  // The sender list backs the "Working as" selector. Best-effort: without it
+  // the selector falls back to the active workspace identity.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/profiles')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data || !Array.isArray(data.profiles)) return
+        setProfiles(
+          (data.profiles as Array<{ id?: unknown; label?: unknown; displayName?: unknown }>)
+            .map((profile) => ({
+              id: typeof profile.id === 'string' ? profile.id : '',
+              label:
+                typeof profile.label === 'string'
+                  ? profile.label
+                  : typeof profile.displayName === 'string'
+                    ? profile.displayName
+                    : 'Profile',
+            }))
+            .filter((profile) => profile.id.length > 0),
+        )
+      })
+      .catch(() => { /* sender list is optional */ })
+    return () => { cancelled = true }
+  }, [])
 
   async function analyze(mode: 'analyze' | 'try-another-angle' | 'generate' = 'analyze', profileIdOverride?: string) {
     if (analyzingRef.current) return
@@ -336,7 +352,11 @@ export function ProspectAnalyze() {
         silent: true,
         onEvent(event) {
           if (event.type === 'status') {
-            setStatus(event.message)
+            setSteps((prev) => {
+              const milestone = MILESTONE_LABELS.find((entry) => entry.match.test(event.message))
+              if (!milestone || prev.includes(milestone.label)) return prev
+              return [...prev, milestone.label]
+            })
             return
           }
           if (event.type === 'error') {
@@ -409,18 +429,6 @@ export function ProspectAnalyze() {
     } finally {
       analyzingRef.current = false
       setAnalyzing(false)
-      setStatus(null)
-    }
-  }
-
-  async function copyNote() {
-    if (!result?.connectionNote) return
-    try {
-      await navigator.clipboard.writeText(result.connectionNote)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Clipboard may be unavailable
     }
   }
 
@@ -494,11 +502,14 @@ export function ProspectAnalyze() {
       // save failed; never clearing left the completed analysis — and its live
       // "Create lead" CTA — in localStorage, so returning to Prospect resurrected
       // it and allowed a second save (BUG-23).
+      const company = result.extracted.company
       resetResult()
       setRawInput('')
       try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
       trackEvent({ event: 'lead_saved', leadId: data.leadId })
-      router.push(`/leads/${data.leadId}?next=generate-connection`)
+      // Stay on the page with an explicit confirmation instead of redirecting:
+      // the result is gone and the primary CTA can never be fired twice.
+      setCreatedLead({ id: data.leadId, company })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save lead.'
       setError(message)
@@ -522,20 +533,34 @@ export function ProspectAnalyze() {
     rawRef.current?.focus()
   }
 
-  const recMeta = result?.score ? QUALIFICATION_META[result.score.qualification] ?? QUALIFICATION_META.maybe : null
-  // Verdict must never contradict action: if qualification is 'skip' but the
-  // canonical action is NOT 'SKIP' (e.g. a valid CONNECT_OR_OBSERVE/
-  // CONNECT_WITHOUT_NOTE relationship contact), the headline must not read
-  // "Probably skip" — see Bug 2 (verdict/action reconciliation).
-  const verdictDisplay = result?.score
-    ? describeVerdictForDisplay(
-        result.score.qualification as 'strong' | 'worth_pursuing' | 'maybe' | 'skip',
-        result.revenue?.act ?? 'RESEARCH_MORE',
-        result.revenue?.messagingPolicyLabel,
-      )
-    : null
+  function openCreatedLead() {
+    if (!createdLead) return
+    router.push(`/leads/${createdLead.id}?next=generate-connection`)
+  }
+
+  function resetAfterCreate() {
+    setCreatedLead(null)
+    rawRef.current?.focus()
+  }
+
+  /** One primary action, chosen by the canonical decision. */
+  function handlePrimaryAction() {
+    if (!result) return
+    const word = decisionWordFor(result.decision?.recommendedAction?.action ?? null, result.score?.qualification)
+    const action = primaryActionFor(word)
+    if (action.kind === 'dismiss') {
+      skip()
+      return
+    }
+    void saveAsLead()
+  }
+
   const canSaveLead = prospectCanBeSaved(result)
   const duplicateCopy = duplicateConflict ? duplicateNotice(duplicateConflict) : null
+  const profileName =
+    profiles.find((profile) => profile.id === (selectedProfileId ?? workspace.active?.profileId))?.label
+    ?? workspace.active?.identityName
+    ?? null
 
   return (
     <div className="space-y-5">
@@ -577,14 +602,15 @@ export function ProspectAnalyze() {
       ) : null}
 
       <div className="srf-console p-4 sm:p-5">
-        <div className="flex items-center gap-2">
+        <label htmlFor="prospect-source" className="flex items-center gap-2 text-sm font-medium text-[color:var(--console-text)]">
           <Search className="size-4 text-orange" aria-hidden="true" />
-          <h2 className="text-sm font-medium text-ink">Paste a LinkedIn profile</h2>
-        </div>
-        <p className="mt-1 text-xs leading-relaxed text-graphite">
+          Paste a LinkedIn profile
+        </label>
+        <p className="mt-1 text-xs leading-relaxed text-[color:var(--console-mute)]">
           Name, headline, current role, company, About, experience, posts — whatever you have.
         </p>
         <Textarea
+          id="prospect-source"
           ref={rawRef}
           value={rawInput}
           aria-invalid={validationError ? true : undefined}
@@ -612,483 +638,93 @@ export function ProspectAnalyze() {
             {validationError}
           </p>
         ) : null}
+
+        <div className="mt-4 border-t border-[color:var(--console-line)] pt-3">
+          <label
+            htmlFor="prospect-sender"
+            className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-[color:var(--console-mute)]"
+          >
+            Working as
+          </label>
+          <Select
+            id="prospect-sender"
+            className="mt-1.5 h-9 text-[13px] border-[color:var(--console-line)] bg-[color:var(--console-raised)] text-[color:var(--console-text)]"
+            value={selectedProfileId ?? workspace.active?.profileId ?? ''}
+            onChange={(e) => changeSender(e.target.value)}
+            disabled={profiles.length === 0}
+          >
+            {profiles.length === 0 ? (
+              <option value={workspace.active?.profileId ?? ''}>
+                {workspace.active?.identityName ?? 'No profile assigned'}
+              </option>
+            ) : (
+              profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>{profile.label}</option>
+              ))
+            )}
+          </Select>
+        </div>
+
         <div className="mt-3 flex items-center justify-between gap-3">
           {/* Keyboard hint is for desktop; touch layouts rely on the Analyze button. */}
           <span className="hidden text-xs text-stone sm:inline">Cmd / Ctrl + Enter</span>
           <span className="sm:hidden" aria-hidden="true" />
           <div className="flex items-center gap-2">
-            {result && (
+            {result && !createdLead ? (
               <Button variant="ghost" size="sm" onClick={skip}>
                 <SkipForward className="size-3.5" aria-hidden="true" />
                 Check another
               </Button>
-            )}
+            ) : null}
             <Button variant="orange" onClick={() => void analyze()} loading={analyzing}>
               <Sparkles className="size-4" aria-hidden="true" />
-              {analyzing ? (status ?? 'Analyzing') : result ? 'Re-analyze' : 'Analyze'}
+              {analyzing ? 'Analyzing' : result ? 'Re-analyze' : 'Analyze'}
             </Button>
           </div>
         </div>
       </div>
 
-      {analyzing && !result && (
-        <div className="flex min-h-[12rem] flex-col items-center justify-center rounded-lg border border-dashed border-line bg-bone-raised/40 px-6 text-center">
-          <RefreshCw className="size-5 animate-spin text-orange" aria-hidden="true" />
-          <p className="mt-3 text-sm font-medium text-ink">Analyzing prospect…</p>
-          <p className="mt-1 text-xs text-graphite">Usually a few seconds.</p>
-        </div>
-      )}
+      {analyzing && !result ? (
+        <ProspectLoadingSteps steps={steps} current={Math.max(0, steps.length - 1)} />
+      ) : null}
 
-      {result && result.extracted && (
-        <div className="space-y-4">
-          {result.score ? (
-            <div>
-              <div className="flex items-baseline gap-3">
-                <div className="flex flex-col items-center gap-1">
-                  <ScoreRing canonicalScore={result.score.total} displayValue={result.score.displayScore} size={64} />
-                  {/* The opportunity score is sender-independent. The sender
-                      block below shows a different number: the sender match. */}
-                  <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Opportunity score</span>
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-[15px] font-medium text-ink">
-                    {result.extracted.name ?? 'Unnamed prospect'}
-                  </h2>
-                  <p className="text-[12px] text-graphite">
-                    {formatRoleLine(result.extracted.title ?? result.extracted.titleRaw, result.extracted.company)}
-                  </p>
-                </div>
-                {verdictDisplay?.contradicted ? (
-                  <span
-                    role="status"
-                    className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-full border border-orange/40 bg-orange/10 px-2.5 py-1 text-[11px] font-semibold text-orange shadow-sm"
-                  >
-                    <Handshake className="size-3.5 shrink-0" aria-hidden="true" />
-                    <span className="size-1.5 shrink-0 rounded-full bg-orange gentle-pulse" aria-hidden="true" />
-                    {verdictDisplay.headline}
-                  </span>
-                ) : (
-                  <span className={cn('ml-auto text-[11px] font-medium shrink-0', recMeta?.color)}>
-                    {recMeta?.label}
-                  </span>
-                )}
-              </div>
+      {createdLead ? (
+        <ProspectCreated
+          leadId={createdLead.id}
+          company={createdLead.company}
+          onOpen={openCreatedLead}
+          onReset={resetAfterCreate}
+        />
+      ) : null}
 
-              {result.revenue && (
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <SignalChip label="Fit" value={result.revenue.fit} />
-                  <SignalChip label="Intent" value={result.revenue.intent} />
-                  {/* Decision confidence: how decisive the qualification is. It is
-                      not extraction certainty — that caveat is shown below. */}
-                  <SignalChip label="Decision confidence" value={result.revenue.confidence} />
-                  {/* Channel-explicit: this reflects the connection-note
-                      channel specifically. Lead Detail may correctly show a
-                      different policy for the DM channel on the same lead —
-                      not a contradiction, a different question. */}
-                  <SignalChip label="Connection" value={result.revenue.messagingPolicy?.replaceAll('_', ' ') ?? '—'} />
-                </div>
-              )}
-              {result.extractionCompleteness?.score != null && result.extractionCompleteness.score < 75 && (
-                <p className="mt-2 flex items-start gap-1.5 text-[11px] text-status-warning">
-                  <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
-                  <span>
-                    Extraction completeness is {result.extractionCompleteness.score}%
-                    {result.extractionCompleteness.missingFields?.length
-                      ? ` — missing ${result.extractionCompleteness.missingFields.map((f) => f.replaceAll('_', ' ')).join(', ')}`
-                      : ''}
-                    . Decision confidence does not cover missing identity details.
-                  </span>
-                </p>
-              )}
-              <p className="mt-3 text-[12px] text-graphite">
-                {scoreExplanation({
-                  displayScore: result.score.displayScore,
-                  canonicalScore: result.score.total,
-                  qualification: result.score.qualification,
-                })}
-              </p>
-              {result.revenue && (
-                <div className="mt-2 space-y-1">
-                  <p className="text-[12px] text-ink">{result.revenue.why}</p>
-                  <p className="text-[11px] text-graphite">Next: {result.revenue.nextAction}</p>
-                  {!result.revenue.messageRecommended && (
-                    <p className="text-[12px] font-medium text-status-warning">
-                      No message recommended. {result.revenue.noMessageReason}
-                    </p>
-                  )}
-                </div>
-              )}
+      {result && result.extracted && !createdLead ? (
+        <ProspectResult
+          result={result}
+          profileName={profileName}
+          rawInput={rawInput}
+          canSaveLead={canSaveLead}
+          showDetails={showDetails}
+          showSource={showSource}
+          activeSenderId={selectedProfileId ?? result.bestSender?.id ?? null}
+          onPrimaryAction={handlePrimaryAction}
+          onReanalyze={() => void analyze('analyze')}
+          onTryAnotherAngle={() => void analyze('analyze')}
+          onToggleDetails={() => setShowDetails((value) => !value)}
+          onToggleSource={() => setShowSource((value) => !value)}
+          onSenderChange={changeSender}
+        />
+      ) : null}
 
-              {Array.isArray(result.score.reasons) && result.score.reasons.length > 0 && (
-                <div className="mt-3 space-y-0.5">
-                  <p className="text-[11px] font-medium text-ink">Strongest evidence</p>
-                  {result.score.reasons.map((w, i) => (
-                    <p key={i} className="flex items-start gap-2 text-[12px] text-ink">
-                      <Check className="mt-0.5 size-3 shrink-0 text-status-success" aria-hidden="true" />
-                      {w}
-                    </p>
-                  ))}
-                </div>
-              )}
-
-              {((Array.isArray(result.score.watchOut) && result.score.watchOut.length > 0) || (Array.isArray(result.score.missingInfo) && result.score.missingInfo.length > 0)) && (
-                <div className="mt-2 space-y-0.5">
-                  <p className="text-[11px] font-medium text-ink">Missing evidence</p>
-                  {[...(result.score.watchOut ?? []), ...(result.score.missingInfo ?? [])].map((w, i) => (
-                    <p key={i} className="flex items-start gap-2 text-[12px] text-graphite">
-                      <AlertTriangle className="mt-0.5 size-3 shrink-0 text-status-warning" aria-hidden="true" />
-                      {w}
-                    </p>
-                  ))}
-                </div>
-              )}
-
-              {/* Why this decision: canonical action + reason, confidence reasons,
-                  routing recommendation, and every signal seen but not credited.
-                  Opportunity ≠ sender: switching the sender never changes this block. */}
-              {result.decision?.recommendedAction && (
-                <div className="mt-3 rounded-lg border border-line bg-bone-raised/20 p-3" data-testid="decision-why">
-                  <p className="text-[11px] font-medium text-ink">
-                    Next step: {result.decision.recommendedAction.action.replaceAll('_', ' ').toLowerCase()}
-                    {result.decision.confidenceDetail && (
-                      <span className={cn('ml-2 rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide', result.decision.confidenceDetail.label === 'HIGH' ? 'bg-status-success/10 text-status-success' : result.decision.confidenceDetail.label === 'MEDIUM' ? 'bg-orange/10 text-orange' : 'bg-stone/10 text-graphite')}>
-                        {result.decision.confidenceDetail.label} confidence
-                      </span>
-                    )}
-                  </p>
-                  <p className="mt-1 text-[12px] text-graphite">{result.decision.recommendedAction.reason}</p>
-                  {result.decision.confidenceDetail?.reasons?.length ? (
-                    <ul className="mt-1 space-y-0.5">
-                      {result.decision.confidenceDetail.reasons.slice(0, 3).map((r) => <li key={r} className="text-[11px] text-graphite">• {r}</li>)}
-                    </ul>
-                  ) : null}
-                  {(() => {
-                    const routing = result.decision.routingRecommendation?.routing ?? result.decision.routingRecommendation
-                    const recommendation = routing?.recommendation
-                    if (!recommendation || recommendation === 'KEEP') return null
-                    return (
-                      <p className="mt-2 text-[11px] text-orange" data-testid="routing-recommendation">
-                        Routing: {recommendation.replaceAll('_', ' ').toLowerCase()}. {routing?.reason}
-                      </p>
-                    )
-                  })()}
-                  {result.decision.rejectedSignals && result.decision.rejectedSignals.length > 0 && (
-                    <RejectedSignalInspector signals={result.decision.rejectedSignals} compact className="mt-2" />
-                  )}
-                  {result.decision.decisionRunId && (
-                    <ScoringFeedback
-                      className="mt-2"
-                      decisionRunId={result.decision.decisionRunId}
-                      observed={{ score: result.score.total, displayScore: result.score.displayScore, qualification: result.score.qualification, action: result.decision.recommendedAction.action, versions: result.decision.versions }}
-                    />
-                  )}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setShowDetails(!showDetails)}
-                className="mt-2 flex items-center gap-1 text-[11px] text-stone transition-colors hover:text-ink"
-              >
-                <ChevronDown className={cn('size-3 transition-transform', showDetails && 'rotate-180')} aria-hidden="true" />
-                {showDetails ? 'Hide' : 'Show'} scoring details
-              </button>
-
-              {showDetails && (
-                <div className="mt-2 border-t border-line pt-3">
-                  <ScoreBreakdown
-                    dimensions={result.score.dimensions}
-                    calculation={result.score.calculation}
-                    decisionAdjustments={result.score.decisionAdjustments ?? []}
-                    canonicalScore={result.score.total}
-                  />
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="border-l-2 border-status-warning/40 pl-4">
-              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-status-warning">
-                {result.inputHeadline ?? 'Insufficient profile information'}
-              </p>
-              <p className="mt-1 text-[14px] font-medium text-ink">
-                {result.inputStatus === 'not_prospect'
-                  ? 'This paste can’t be qualified — it doesn’t describe a prospect.'
-                  : 'Relay could not verify enough evidence to score this prospect.'}
-              </p>
-              {result.revenue?.noMessageReason && (
-                <p className="mt-1 text-[12px] text-graphite">{result.revenue.noMessageReason}</p>
-              )}
-              <p className="mt-1 text-[12px] text-graphite">Not scored — there is no valid prospect to score.</p>
-              {(result.qualification?.missingCritical.length ?? 0) > 0 && (
-                <p className="mt-2 text-[12px] text-graphite">
-                  Missing: {result.qualification.missingCritical.join(', ')}.
-                </p>
-              )}
-              <p className="mt-2 text-[12px] text-ink">
-                Add identifying and opportunity details to continue: the person’s name and role, their company, and the job, project, or need you are qualifying.
-              </p>
-            </div>
-          )}
-
-          {result.score && (
-            <div data-testid="sender-section" className="rounded-lg border border-line bg-bone-raised/30 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <User className="size-3.5 text-orange" aria-hidden="true" />
-                  <h3 className="text-[12px] font-medium text-ink">Sender match</h3>
-                </div>
-                {Array.isArray(result.alternativeSenders) && result.alternativeSenders.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowSenders(!showSenders)}
-                    className="flex items-center gap-1 text-[11px] text-stone transition-colors hover:text-ink"
-                  >
-                    Change sender
-                    <ChevronDown className={cn('size-3 transition-transform', showSenders && 'rotate-180')} aria-hidden="true" />
-                  </button>
-                )}
-              </div>
-              {(() => {
-                const activeId = selectedProfileId ?? result.bestSender?.id ?? null
-                const active = result.senderRankings.find((ranking) => ranking.senderId === activeId) ?? null
-                const stronger = result.senderRankings.find((ranking) => (
-                  ranking.senderId !== activeId
-                  && active != null
-                  && ranking.profileMatch - active.profileMatch >= ROUTING_MISMATCH_DELTA
-                )) ?? null
-                const delta = stronger && active ? stronger.profileMatch - active.profileMatch : 0
-                return (
-                  <>
-                    <p className="mt-1.5 text-[13px] font-medium text-ink">
-                      Sending as: {active?.name ?? result.bestSender?.label ?? 'Profile not assigned'}
-                      {active ? ` · ${active.profileMatch}% sender match` : ''}
-                    </p>
-                    {(active?.reasons[0] ?? result.bestSenderProof[0]?.safeClaim) && (
-                      <p className="mt-0.5 text-[11px] text-graphite">
-                        {(active?.reasons[0] ?? result.bestSenderProof[0]?.safeClaim ?? '').slice(0, 140)}
-                      </p>
-                    )}
-                    {stronger && (
-                      <div data-testid="sender-mismatch" className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2.5">
-                        <p className="text-[12px] font-medium text-amber-800">Another sender is a stronger match</p>
-                        <p className="mt-1 text-[12px] text-amber-700">
-                          <span className="font-medium">{stronger.name ?? 'Another profile'}</span> is +{delta}% stronger for this lead.
-                          {' '}Current sender: {active?.name ?? 'Unknown'} ({active?.profileMatch ?? 0}%).
-                        </p>
-                        {stronger.reasons.length > 0 && (
-                          <ul className="mt-1.5 space-y-0.5">
-                            {stronger.reasons.slice(0, 3).map((reason) => (
-                              <li key={reason} className="text-[11px] text-amber-700">• {reason}</li>
-                            ))}
-                          </ul>
-                        )}
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          className="mt-2 h-7 text-[11px]"
-                          onClick={() => changeSender(stronger.senderId)}
-                        >
-                          Use {stronger.name ?? 'this sender'}
-                        </Button>
-                      </div>
-                    )}
-                  </>
-                )
-              })()}
-              {result.senderRankings.length === 0 && !result.bestSender && (
-                <p className="mt-1.5 text-[12px] text-graphite">No LinkedIn profile is available for this check.</p>
-              )}
-              {result.senderRankings.length > 1 && (
-                <ul className="mt-2 space-y-1">
-                  {result.senderRankings.slice(0, 5).map((ranking, index) => {
-                    const activeId = selectedProfileId ?? result.bestSender?.id ?? null
-                    const selected = ranking.senderId === activeId
-                    return (
-                      <li key={ranking.senderId}>
-                        <button
-                          type="button"
-                          onClick={() => changeSender(ranking.senderId)}
-                          className={cn(
-                            'flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-[11px]',
-                            selected ? 'bg-bone text-ink' : 'text-graphite hover:text-ink',
-                          )}
-                        >
-                          <span className="w-4 text-stone">{index + 1}</span>
-                          <span className="min-w-0 flex-1 truncate font-medium">
-                            {ranking.name ?? 'Unnamed'}
-                            {ranking.role ? <span className="font-normal"> · {ranking.role}</span> : null}
-                          </span>
-                          <span className="shrink-0">{ranking.profileMatch}%</span>
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-
-              {result.senderSuggestion && (
-                <div data-testid="sender-suggestion" className="mt-2 rounded-md border border-orange/30 bg-orange/5 p-2.5">
-                  <p className="text-[11px] font-medium text-ink">
-                    Relay suggests: {result.senderSuggestion.name ?? 'another profile'}
-                    {result.senderSuggestion.role ? <span className="font-normal text-graphite"> · {result.senderSuggestion.role}</span> : null}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-graphite">{result.senderSuggestion.reason}</p>
-                  {result.senderSuggestion.topProof && (
-                    <p className="mt-1 text-[11px] text-graphite">
-                      Strongest proof: {result.senderSuggestion.topProof.slice(0, 120)}
-                    </p>
-                  )}
-                  <p className="mt-1 text-[10px] text-stone">
-                    Match {result.senderSuggestion.score} vs current sender {result.senderSuggestion.currentSenderName ?? 'yours'} {result.senderSuggestion.currentBestScore}
-                    {result.senderSuggestion.holders.length > 0 ? ` · held by ${result.senderSuggestion.holders.join(', ')}` : ''}
-                  </p>
-                </div>
-              )}
-
-              {showSenders && Array.isArray(result.alternativeSenders) && result.alternativeSenders.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {result.alternativeSenders.map((alt) => (
-                    <button
-                      key={alt.profile.id}
-                      type="button"
-                      onClick={() => changeSender(alt.profile.id)}
-                      className="block w-full text-left text-[11px]"
-                    >
-                      <span className="font-medium text-ink">{alt.profile.label ?? 'Unnamed'}</span>
-                      <span className="ml-2 text-graphite">
-                        {alt.topProof ?? 'No match'} · {alt.matchScore}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {result.connectionNote ? (
-            <div>
-              <div className="flex items-center justify-between">
-                <h3 className="text-[12px] font-medium text-ink">
-                  {result.revenue && !result.revenue.messageRecommended ? 'Message' : 'Connection note'}
-                </h3>
-                <span className={cn(
-                  'font-mono text-[11px]',
-                  result.charCount > result.maxChars ? 'text-status-danger' : 'text-stone',
-                )}>
-                  {result.charCount} / {result.maxChars}
-                </span>
-              </div>
-              <div className="mt-2 rounded-md bg-bone p-3">
-                <p className="text-[13px] leading-relaxed text-ink whitespace-pre-wrap">
-                  {result.connectionNote}
-                </p>
-              </div>
-
-              {!result.quality.passed && Array.isArray(result.quality.failures) && result.quality.failures.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {result.quality.failures.slice(0, 3).map((f, i) => (
-                    <span key={i} className="text-[10px] text-status-warning">{f}</span>
-                  ))}
-                </div>
-              )}
-              {result.quality.wasRepaired && (
-                <p className="mt-1 text-[10px] text-stone">Auto-repaired to meet quality standards.</p>
-              )}
-              {result.draftFailed && (
-                <p className="mt-1 text-[10px] text-status-warning">Draft generation failed — using fallback.</p>
-              )}
-
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button variant="orange" size="sm" onClick={() => void copyNote()} disabled={!result.score || !result.connectionNote}>
-                  {copied ? <Check className="size-3" aria-hidden="true" /> : <Copy className="size-3" aria-hidden="true" />}
-                  {copied ? 'Copied' : 'Copy note'}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-md border border-dashed border-line bg-bone-raised/40 p-3">
-              <p className="text-[12px] text-graphite">
-                {canSaveLead
-                  ? (() => {
-                      // Action copy must match the recommended action: a SKIP or
-                      // OBSERVE profile must never be told to start outreach (QA BUG-13-04).
-                      switch (result.revenue?.act) {
-                        case 'SKIP': return 'No outreach recommended — this profile is not a fit.'
-                        case 'RESEARCH_MORE': return 'Research before contacting — add identifying and opportunity details, then create a lead.'
-                        case 'CONNECT_OR_OBSERVE': return 'No pitch recommended — create a lead to save this profile to your watchlist.'
-                        case 'CONTACT_NOW': return 'Analysis complete — create a lead to start outreach from the lead detail page.'
-                        default: return 'Analysis complete — qualification and signals are shown above.'
-                      }
-                    })()
-                  : result.score
-                    ? 'Add identifying and opportunity details to continue. A lead can’t be created from this paste yet.'
-                    : 'A lead can’t be created from this paste yet.'}
-              </p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {result.score && (
-                  <Button variant="secondary" size="sm" onClick={() => void analyze('analyze')} disabled={analyzing}>
-                    <RefreshCw className="size-3" aria-hidden="true" />
-                    Try another angle
-                  </Button>
-                )}
-                <Button variant="orange" size="sm" onClick={() => void saveAsLead()} disabled={saving || !canSaveLead}>
-                  {saving ? 'Creating...' : (
-                    <>
-                      {canSaveLead ? 'Create lead' : 'Lead not eligible'}
-                      <ArrowRight className="size-3" aria-hidden="true" />
-                    </>
-                  )}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={skip}>
-                  <X className="size-3" aria-hidden="true" />
-                  Skip
-                </Button>
-              </div>
-            </div>
-          )}
-
-            {!canSaveLead && result.score && (
-              <div className="mt-2 flex items-start gap-2 rounded-md border border-status-warning/30 bg-status-warning/5 px-3 py-2">
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden="true" />
-                <div className="text-[12px] leading-relaxed text-graphite">
-                  <p className="font-medium text-ink">
-                    Not enough verified context to create a reliable lead.
-                  </p>
-                  {(result.qualification?.missingCritical.length ?? 0) > 0 ? (
-                    <p className="mt-0.5">
-                      Missing: {result.qualification.missingCritical.join(', ')}.
-                    </p>
-                  ) : null}
-                  <p className="mt-0.5">
-                    Paste more of the original source (About section, company mentions, job/opportunity details) and try again — Relay will not invent a company or opportunity that isn&apos;t actually in the text.
-                  </p>
-                </div>
-              </div>
-            )}
-
-          {result.demoMode && (
-            <Alert>
-              <AlertTitle>Demo mode</AlertTitle>
-              <AlertDescription>
-                Using demo extraction. Connect an AI provider in settings for full intelligence.
-              </AlertDescription>
-            </Alert>
-          )}
-        </div>
-      )}
+      {result?.demoMode && !createdLead ? (
+        <Alert>
+          <AlertTitle>Demo mode</AlertTitle>
+          <AlertDescription>
+            Using demo extraction. Connect an AI provider in settings for full intelligence.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="h-4 lg:hidden" />
     </div>
   )
 }
-
-function SignalChip({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-line bg-bone-raised px-3 py-2">
-      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-stone">{label}</p>
-      <p className="mt-1 text-[14px] font-medium text-ink">{value}</p>
-    </div>
-  )
-}
-

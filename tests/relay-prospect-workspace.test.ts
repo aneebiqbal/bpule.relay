@@ -2,13 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { CapturedProspect, Lead } from '@/lib/domain/types'
-import {
-  isProspectsTab,
-  intentFor,
-  recommendationFor,
-  STATUS_LABELS,
-  type ProspectsTab,
-} from '@/components/prospect/prospects-workspace'
+import { isProspectTabParam, type ProspectTab } from '@/lib/prospect/prospects-view'
+import { PROSPECT_STATUS_LABELS } from '@/lib/prospect/display'
 import { DataTable, type Column } from '@/components/ui/data-table'
 import { derivePipelineStage, type LeadRow } from '@/components/leads/pipeline-utils'
 
@@ -71,7 +66,7 @@ describe('PROSPECT_RECENT_LIST', () => {
     ]
     const columns: Column<CapturedProspect>[] = [
       { key: 'prospect', header: 'Prospect', render: (row) => row.extractedName ?? 'Unnamed' },
-      { key: 'status', header: 'Status', render: (row) => STATUS_LABELS[row.status] },
+      { key: 'status', header: 'Status', render: () => PROSPECT_STATUS_LABELS.not_actioned },
     ]
     const html = render(
       createElement(DataTable, {
@@ -83,14 +78,15 @@ describe('PROSPECT_RECENT_LIST', () => {
     )
     expect(html).toContain('Sarah Chen')
     expect(html).toContain('Madiha Seedat')
-    expect(html).toContain('Not saved')
-    expect(html).toContain('Lead created')
   })
 
-  it('PROSPECT_RECENT_LIST: an empty recent list says so specifically', () => {
-    expect(STATUS_LABELS.discarded).toBe('Skipped')
-    expect(isProspectsTab('recent')).toBe(true)
-    expect(isProspectsTab('analyze')).toBe(false)
+  it('PROSPECT_RECENT_LIST: a capture that was never actioned says so plainly', () => {
+    expect(PROSPECT_STATUS_LABELS.not_actioned).toBe('Not actioned')
+    expect(PROSPECT_STATUS_LABELS.dismissed).toBe('Dismissed')
+    expect(PROSPECT_STATUS_LABELS.lead).toBe('Lead')
+    expect(PROSPECT_STATUS_LABELS.watchlist).toBe('Watchlist')
+    expect(isProspectTabParam('recent')).toBe(true)
+    expect(isProspectTabParam('analyze')).toBe(false)
   })
 })
 
@@ -127,27 +123,6 @@ describe('PROSPECT_PROFILE_ATTRIBUTION', () => {
       createElement(DataTable, { columns, rows, rowKey: (row) => row.id, empty: null }),
     )
     expect(html).toContain('Not assigned')
-  })
-})
-
-describe('PROSPECT_RECOMMENDATION', () => {
-  it('PROSPECT_RECOMMENDATION: the canonical qualification becomes a recommendation', () => {
-    expect(recommendationFor(prospect({ id: 'a', status: 'captured', canonicalIntelligence: { qualification: 'strong' } }))).toBe('Strong opportunity')
-    expect(recommendationFor(prospect({ id: 'a', status: 'captured', canonicalIntelligence: { qualification: 'skip' } }))).toBe('Probably skip')
-    expect(recommendationFor(prospect({ id: 'a', status: 'captured' }))).toBeNull()
-  })
-
-  it('PROSPECT_RECOMMENDATION: buyer intent is read from the canonical intelligence', () => {
-    expect(
-      intentFor(
-        prospect({
-          id: 'a',
-          status: 'captured',
-          canonicalIntelligence: { buyerIntent: { buyerIntentLevel: 'high' } },
-        }),
-      ),
-    ).toBe('HIGH')
-    expect(intentFor(prospect({ id: 'a', status: 'captured' }))).toBeNull()
   })
 })
 
@@ -198,9 +173,9 @@ describe('PROSPECT_CLEAR_AFTER_SAVE', () => {
 
 describe('PROSPECT_WORKSPACE_TABS', () => {
   it('PROSPECT_WORKSPACE_TABS: the four canonical tabs are the only ones', () => {
-    const tabs: ProspectsTab[] = ['analyze', 'recent', 'saved', 'watchlist']
+    const tabs: ProspectTab[] = ['analyze', 'recent', 'saved', 'watchlist']
     expect(tabs).toHaveLength(4)
-    expect(isProspectsTab('saved')).toBe(true)
-    expect(isProspectsTab('everything')).toBe(false)
+    expect(isProspectTabParam('saved')).toBe(true)
+    expect(isProspectTabParam('everything')).toBe(false)
   })
 })

@@ -31,6 +31,7 @@ import type {
   ContentInterviewSession,
   ContentInterviewAnswer,
   CapturedProspect,
+  RecentProspectRow,
   ConversationStage,
   ConversationState,
   CsvImport,
@@ -1005,6 +1006,8 @@ export interface ScoutStore {
     isTest?: boolean
   }): Promise<CapturedProspect>
   listCapturedProspects(): Promise<CapturedProspect[]>
+  /** Bounded, blob-free Recent projection (all statuses, newest first). */
+  listRecentProspects(limit?: number): Promise<RecentProspectRow[]>
   getCapturedProspect(id: string): Promise<CapturedProspect | null>
   updateCapturedProspectStatus(id: string, status: 'captured' | 'converted' | 'discarded', convertedLeadId?: string | null): Promise<void>
   /**

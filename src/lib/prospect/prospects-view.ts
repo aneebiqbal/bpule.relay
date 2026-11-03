@@ -1,19 +1,15 @@
 import { createServerSupabase } from '@/lib/supabase/server'
 /**
- * Prospect workspace — tab-aware initial load.
+ * Prospect workspace — the single loader and tab contract.
  *
  * The workspace is four views over existing authorities (Analyze | Recent |
  * Saved | Watchlist). Only the active view's data is required to render it, so
- * this loader loads exactly that and nothing else.
+ * `loadProspectsView(tab)` loads exactly that and nothing else.
  *
  * The default view is Analyze, which renders the intake form and needs no lead
- * data at all. Before this module, every visit — including Analyze — paid for
- * the full enriched lead board (`loadBoardData`): all leads plus their
- * messages, conversation states and open tasks. That is the cost this removes.
- *
- * This module is intentionally separate from `lib/prospect/prospects-page.ts`
- * so it can land without disturbing that in-flight work; once the two are
- * reconciled, this is the loader the route should keep.
+ * data at all. Every visit — including Analyze — used to pay for the full
+ * enriched lead board (`loadBoardData`): all leads plus their messages,
+ * conversation states and open tasks. That is the cost this module removes.
  */
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
@@ -27,11 +23,22 @@ import { derivePipelineStage, type LeadRow } from '@/components/leads/pipeline-u
 import type { RecentProspectRow } from '@/lib/domain/types'
 import { prospectStatus, type ProspectStatus } from '@/lib/prospect/display'
 
+/** The four Prospect views. Analyze is the default route; the rest are `?tab=`. */
 export type ProspectTab = 'analyze' | 'recent' | 'saved' | 'watchlist'
+
+/** True for the three URL-backed views; Analyze needs no `?tab=` parameter. */
+export function isProspectTabParam(
+  value: string | undefined,
+): value is Exclude<ProspectTab, 'analyze'> {
+  return value === 'recent' || value === 'saved' || value === 'watchlist'
+}
+
+/** A captured prospect plus its derived workspace status. */
+export type RecentProspect = RecentProspectRow & { outcome: ProspectStatus }
 
 export interface ProspectsViewData {
   tab: ProspectTab
-  recent: Array<RecentProspectRow & { outcome: ProspectStatus }>
+  recent: RecentProspect[]
   saved: LeadRow[]
   watchlist: LeadRow[]
   workspace: WorkspaceIdentity | null
@@ -39,6 +46,9 @@ export interface ProspectsViewData {
   /** sender profile id → display name, for row attribution. */
   profiles: Record<string, string>
 }
+
+/** The Recent view is a bounded window, never the organisation's history. */
+export const PROSPECT_RECENT_LIMIT = 50
 
 /** Resolve the active sending identity once; every view needs it for context. */
 async function loadWorkspace(): Promise<WorkspaceIdentity | null> {
@@ -51,7 +61,7 @@ async function loadWorkspace(): Promise<WorkspaceIdentity | null> {
 
 /** Narrow profile-name lookup for the Recent rows' "Analyzed for" column. */
 async function loadProfileNames(
-  recent: Array<RecentProspectRow>,
+  recent: RecentProspect[],
   authCtx: Awaited<ReturnType<typeof getAuthContext>>,
 ): Promise<Record<string, string>> {
   const profiles: Record<string, string> = {}
@@ -124,7 +134,7 @@ export async function loadProspectsView(tab: ProspectTab): Promise<ProspectsView
 
   // Bounded (50) and blob-free: the Recent list never transfers rawInput or the
   // canonical blob, and never reads the organisation's full history.
-  const captured = await store.listRecentProspects()
+  const captured = await store.listRecentProspects(PROSPECT_RECENT_LIMIT)
   const recent = scopeLeadsToWorkspace(captured, workspace, orgView).map((row) => ({
     ...row,
     outcome: prospectStatus(row, row.convertedLeadId ? stageById.get(row.convertedLeadId) ?? null : null),

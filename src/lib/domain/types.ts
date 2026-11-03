@@ -1915,6 +1915,25 @@ export interface CapturedProspect {
   isNewCapture?: boolean
 }
 
+/**
+ * Bounded Recent-tab projection. Deliberately excludes rawInput and the
+ * canonical blob: the list only ever needs identity, score, decision, profile,
+ * status and timestamps. Details load when a row is opened.
+ */
+export interface RecentProspectRow {
+  id: string
+  name: string | null
+  company: string | null
+  title: string | null
+  location: string | null
+  score: number | null
+  senderProfileId: string | null
+  status: 'captured' | 'converted' | 'discarded'
+  convertedLeadId: string | null
+  createdAt: string
+  lastActivityAt: string
+}
+
 export type RelayEventType =
   | 'LEAD_CREATED'
   | 'DATASET_CAPTURE_ERROR'
