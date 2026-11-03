@@ -20,7 +20,11 @@ Classification: **CURRENT** (active contract) · **HISTORICAL** (past state, kee
 | `RELAY_STABILIZATION_INVENTORY.md` | **CURRENT** | Phase 1 — every route/component classified; `UNKNOWN` register |
 | `RELAY_COMPONENT_QUALITY_AUDIT.md` | **CURRENT** | Phase 2 — visual component quality, reuse targets, duplicate register |
 | `RELAY_FEATURE_VISIBILITY_MAP.md` | **CURRENT** | Phase 3/4 — feature × entry-point matrix (gate now PASS) |
-| `RELAY_ERP_NAVIGATION.md` | **CURRENT** | Phase 4 — final role-aware IA, labels, mobile model, breadcrumb contract |
+| `RELAY_ERP_NAVIGATION.md` | **CURRENT** | Phase 4 — ERP role-aware IA (superseded by `RELAY_NAVIGATION_V3.md`) |
+| `RELAY_REPOSITORY_RECONCILIATION.md` | **CURRENT** | Worktree forensics, sprint recovery, conflict resolutions |
+| `RELAY_CURRENT_PRODUCT_STATE.md` | **CURRENT** | Reconciled product map and live-certification status |
+| `RELAY_NAVIGATION_V3.md` | **CURRENT** | Final role-aware navigation contract |
+| `RELAY_FEATURE_VISIBILITY_MATRIX.md` | **CURRENT** | Final feature × role × entry-point matrix |
 
 ---
 
