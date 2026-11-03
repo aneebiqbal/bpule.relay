@@ -1,12 +1,6 @@
-import { notFound } from 'next/navigation'
-import { getCurrentUser } from '@/lib/auth/current'
-import { GrowthTodayV2 } from '@/components/studio-v2/growth-today-v2'
+import { redirect } from 'next/navigation'
 
-export const dynamic = 'force-dynamic'
-
-export default async function GrowthV2Page() {
-  const user = await getCurrentUser()
-  if (!user || user.rep.role !== 'admin') notFound()
-
-  return <GrowthTodayV2 />
+/** Compatibility: Growth moved to Content → /content/growth. */
+export default function LegacyGrowthPage() {
+  redirect('/content/growth')
 }

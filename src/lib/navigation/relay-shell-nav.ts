@@ -111,8 +111,8 @@ export const RELAY_SECTION_NAV: Record<RelayShellSection, RelaySectionNavItem[]>
   ],
   content: [
     { label: 'Studio', href: '/content', exact: true },
-    { label: 'Growth', href: '/content-v2/growth', exact: true },
-    { label: 'Proof', href: '/facts', exact: true },
+    { label: 'Ideas', href: '/content/ideas', exact: true },
+    { label: 'Growth', href: '/content/growth', exact: true },
   ],
   reports: [
     { label: 'Sales', href: '/reports/sales', exact: true },
@@ -226,6 +226,7 @@ export function v3MobileNavItems(role: RelayNavRoleFlags): Array<{ id: string; l
   if (role.isManager || role.isAdmin || role.isOwner) {
     items.push({ id: 'team', label: 'Team', href: '/team' })
   }
+  items.push({ id: 'content', label: 'Content', href: '/content' })
   items.push({ id: 'reports', label: 'Reports', href: '/reports/sales' })
   return items
 }
@@ -243,6 +244,7 @@ const v3SidebarBase: V3SidebarItem[] = [
   { id: 'sales', label: 'Sales', href: '/leads', visible: repManagerAdmin },
   { id: 'conversations', label: 'Inbox', href: '/chats', visible: repManagerAdmin },
   { id: 'team', label: 'Team', href: '/team', visible: managerUp },
+  { id: 'content', label: 'Content', href: '/content', visible: repManagerAdmin },
   { id: 'insights', label: 'Insights', href: '/reports', visible: repManagerAdmin },
 ]
 
@@ -277,6 +279,7 @@ export function resolveV3SidebarActiveId(pathname: string, role: RelayNavRoleFla
     sales: 'sales',
     conversations: 'conversations',
     team: 'team',
+    content: 'content',
     reports: 'insights',
   }
   const fallbackId = fallback[detectRelayShellSection(pathname)]

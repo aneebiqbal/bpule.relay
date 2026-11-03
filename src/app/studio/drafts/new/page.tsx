@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth/current'
 import { PostWorkspace } from '@/components/post-workspace'
 import { redirect } from 'next/navigation'
 import { generateVisualConcept } from '@/lib/writing/visual'
+import { draftSourceFromIdea } from '@/lib/content/ideas-v3'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -42,8 +43,9 @@ export default async function NewDraftPage({
     }
 
     if (idea) {
-      initialCaption = idea.postCaption ?? ''
-      initialSourceMaterial = idea.angle ?? idea.title
+      const source = draftSourceFromIdea({ postCaption: idea.postCaption ?? null, angle: idea.angle ?? null, title: idea.title })
+      initialCaption = source.caption
+      initialSourceMaterial = source.sourceMaterial
       ideaTitle = idea.title
     }
   }
