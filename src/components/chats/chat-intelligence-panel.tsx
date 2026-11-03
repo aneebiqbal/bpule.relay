@@ -181,6 +181,11 @@ export function ChatIntelligencePanel({
             Open account →
           </Link>
         )}
+        {intel.ownerRepId && (
+          <Link href={`/team/${intel.ownerRepId}`} className="text-graphite hover:text-ink">
+            Open rep →
+          </Link>
+        )}
       </div>
     </div>
   )
