@@ -60,6 +60,7 @@ async function loadDerivedActionsForCurrentUser(): Promise<RelayTodayAction[]> {
   if (!user) return []
 
   const store = await createScoutStore()
+  store.beginReadOnlySnapshot()
   const { getDailyWorkspace } = await import('@/lib/auth/workspace')
   const [workspace, activeWorkspace, dash, relayData] = await Promise.all([
     getDailyWorkspace(),

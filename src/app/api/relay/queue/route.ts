@@ -13,6 +13,9 @@ export async function GET() {
   }
 
   const store = await createScoutStore()
+  // Read-only queue: one lead snapshot serves the dashboard, the queue and the
+  // admin lead scan instead of three full projections.
+  store.beginReadOnlySnapshot()
   const roleContext = buildRoleContext(user.rep, user.organization)
 
   const [dash, relayData, allLeads, suppressedLeadIds] = await Promise.all([

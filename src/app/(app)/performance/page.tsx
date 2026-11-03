@@ -34,6 +34,8 @@ export default async function PerformancePage({
     endDate: end,
     timezone,
     supabase,
+    // Only the clicked day pays for raw events; the heatmap itself is aggregate.
+    includeEventsForDate: date ?? null,
   })
 
   const selectedDay = date

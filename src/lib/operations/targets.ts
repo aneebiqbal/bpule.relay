@@ -16,6 +16,7 @@ import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { isMissingRelation } from '@/lib/operations/db-errors'
 import { MEETING_EVENT } from '@/lib/sales/meetings'
 import { CONNECTION_EVENTS, SENT_MESSAGE_EVENTS } from '@/lib/sales/send-truth'
+import { targetProgressSql } from '@/lib/analytics/aggregates'
 
 export type TargetType = 'CONNECTIONS' | 'MESSAGES_SENT' | 'UPWORK_APPLICATIONS' | 'MEETINGS' | 'PROPOSALS'
 export type TargetPeriod = 'DAY' | 'WEEK' | 'MONTH'
@@ -103,6 +104,12 @@ export function assembleTargets(input: {
   teams: Array<{ id: string; name: string; memberIds: string[] }>
   dailyTargets: Array<{ rep_id: string; activity_type: string; target_count: number }>
   events: Array<{ actor_id: string | null; action_type: string; execution_status: string | null }>
+  /**
+   * Pre-counted progress (`rep|type` → n) from the SQL aggregate. When present
+   * the event tally is skipped, so a grouped read never expands back into one
+   * object per event.
+   */
+  progress?: Map<string, number>
 }): Omit<TargetsData, 'available'> {
   const period = PERIODS.find((p) => p.value === input.period)!
   const factor = period.workingDays
@@ -117,14 +124,7 @@ export function assembleTargets(input: {
     const key = `${t.rep_id}|${type}`
     goals.set(key, (goals.get(key) ?? 0) + t.target_count)
   }
-  const progress = new Map<string, number>()
-  for (const e of input.events) {
-    if (!e.actor_id) continue
-    const type = targetTypeForEvent(e.action_type, e.execution_status)
-    if (!type) continue
-    const key = `${e.actor_id}|${type}`
-    progress.set(key, (progress.get(key) ?? 0) + 1)
-  }
+  const progress = input.progress ?? countTargetProgress(input.events)
 
   const cell = (goalDaily: number | null, done: number, type: TargetType): TargetCell => {
     const goal = goalDaily === null ? null : goalDaily * factor
@@ -166,6 +166,21 @@ export function assembleTargets(input: {
 
 const EVENT_CAP = 10_000
 
+/** Executed event → `rep|type` progress. Shared by both read paths. */
+function countTargetProgress(
+  events: Array<{ actor_id: string | null; action_type: string; execution_status: string | null }>,
+): Map<string, number> {
+  const progress = new Map<string, number>()
+  for (const e of events) {
+    if (!e.actor_id) continue
+    const type = targetTypeForEvent(e.action_type, e.execution_status)
+    if (!type) continue
+    const key = `${e.actor_id}|${type}`
+    progress.set(key, (progress.get(key) ?? 0) + 1)
+  }
+  return progress
+}
+
 export async function loadTargets(
   client: DbClient,
   input: {
@@ -181,8 +196,7 @@ export async function loadTargets(
   if (repIds.length === 0) {
     return { ...assembleTargets({ ...input, dailyTargets: [], events: [] }), available: true, truncated: false }
   }
-  const allTypes = TARGET_TYPES.flatMap((t) => t.events)
-  const [targetRows, eventRows] = await Promise.all([
+  const [targetRows, targetRead] = await Promise.all([
     chunkedIn<{ rep_id: string; activity_type: string; target_count: number }>(repIds, (chunk) =>
       client
         .from('daily_targets')
@@ -194,20 +208,60 @@ export async function loadTargets(
       if (isMissingRelation(err)) return null
       throw err
     }),
-    (async () => {
-      const { data, error } = await client
-        .from('action_events')
-        .select('actor_id, action_type, execution_status')
-        .eq('organization_id', input.orgId)
-        .in('action_type', allTypes)
-        .in('actor_id', repIds)
-        .gte('occurred_at', input.window.start)
-        .lt('occurred_at', input.window.end)
-        .limit(EVENT_CAP)
-      if (error) throw error
-      return (data ?? []) as Array<{ actor_id: string | null; action_type: string; execution_status: string | null }>
-    })(),
+    loadTargetEvents(client, input, repIds),
   ])
-  const assembled = assembleTargets({ ...input, dailyTargets: targetRows ?? [], events: eventRows })
-  return { ...assembled, available: targetRows !== null, truncated: eventRows.length >= EVENT_CAP }
+  const assembled = assembleTargets({
+    ...input,
+    dailyTargets: targetRows ?? [],
+    events: targetRead.rows ?? [],
+    progress: targetRead.grouped ?? undefined,
+  })
+  return { ...assembled, available: targetRows !== null, truncated: targetRead.rows ? targetRead.rows.length >= EVENT_CAP : false }
+}
+
+/**
+ * Executed target events for the window. On Neon this is one GROUP BY over
+ * (actor, action type) — a handful of rows instead of up to 10,000 events — so
+ * the aggregate can never hit the read cap. Supabase keeps the capped read.
+ */
+type TargetEventRead =
+  | { grouped: Map<string, number>; rows: null }
+  | { grouped: null; rows: Array<{ actor_id: string | null; action_type: string; execution_status: string | null }> }
+
+async function loadTargetEvents(
+  client: DbClient,
+  input: { orgId: string; window: { start: string; end: string } },
+  repIds: string[],
+): Promise<TargetEventRead> {
+  if (client.provider === 'neon' && client.raw) {
+    const { sql, params } = targetProgressSql({
+      orgId: input.orgId,
+      repIds,
+      start: input.window.start,
+      end: input.window.end,
+    })
+    const { data, error } = await client.raw<{ key: string; action_type: string; n: number }>(sql, params)
+    if (!error && Array.isArray(data)) {
+      const grouped = new Map<string, number>()
+      for (const row of data as Array<{ key: string; action_type: string; n: number }>) {
+        const type = targetTypeForEvent(row.action_type, null)
+        if (!type) continue
+        const key = `${row.key}|${type}`
+        grouped.set(key, (grouped.get(key) ?? 0) + Number(row.n))
+      }
+      return { grouped, rows: null }
+    }
+    console.error('[targets] aggregate failed, falling back to event reads')
+  }
+  const { data, error } = await client
+    .from('action_events')
+    .select('actor_id, action_type, execution_status')
+    .eq('organization_id', input.orgId)
+    .in('action_type', TARGET_TYPES.flatMap((t) => t.events))
+    .in('actor_id', repIds)
+    .gte('occurred_at', input.window.start)
+    .lt('occurred_at', input.window.end)
+    .limit(EVENT_CAP)
+  if (error) throw error
+  return { grouped: null, rows: (data ?? []) as Array<{ actor_id: string | null; action_type: string; execution_status: string | null }> }
 }

@@ -1730,6 +1730,15 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async listUpworkJobs() {
       return upworkJobs.filter((j) => j.ownerRepId === rep.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     },
+    async getPipelineStageSummary() {
+      return null
+    },
+    async getPipelineCardIds() {
+      return null
+    },
+    async getLeadsByIds(ids) {
+      return leads.filter((l) => ids.includes(l.id))
+    },
     async updateUpworkJobFields(id, f) {
       const job = upworkJobs.find((j) => j.id === id)
       if (!job) return

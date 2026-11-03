@@ -13,7 +13,7 @@ import { isProductAdmin } from '@/lib/auth/admin-page'
 import { createScoutStore } from '@/lib/store'
 import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
 import type { WorkspaceIdentity } from '@/lib/workspace/active-identity'
-import { enrichLeads, scopeLeadsToWorkspace, type ActivityEvent } from '@/lib/leads/board-rows'
+import { enrichLeads, scopeLeadsToWorkspace } from '@/lib/leads/board-rows'
 import {
   assertRepCannotUseTeamScope,
   filterLeadsByTeamOwners,
@@ -48,7 +48,6 @@ export interface LeadsPageData {
   teamView: boolean
   workspace: WorkspaceIdentity | null
   reps: Array<{ id: string; name: string }>
-  events: ActivityEvent[]
 }
 
 async function resolveManagedOwnerIds(
@@ -124,7 +123,7 @@ export async function loadLeadsPage(query: LeadsQuery): Promise<LeadsPageData> {
         authCtx?.repId ?? '',
       )
       const filtered = applyColumnFilters(teamLeads, query)
-      const { leads: enriched, events } = await enrichLeads(filtered, {
+      const enriched = await enrichLeads(filtered, {
         authCtx,
         orgView: true,
         reps,
@@ -134,7 +133,6 @@ export async function loadLeadsPage(query: LeadsQuery): Promise<LeadsPageData> {
       const start = (page - 1) * pageSize
       return {
         leads: sorted.slice(start, start + pageSize),
-        events,
         reps,
         orgView: false,
         teamView: true,
@@ -164,14 +162,13 @@ export async function loadLeadsPage(query: LeadsQuery): Promise<LeadsPageData> {
     const scoped = orgView || teamView
       ? pageLeads
       : scopeLeadsToWorkspace(pageLeads, workspace, false)
-    const { leads, events } = await enrichLeads(scoped, {
+    const leads = await enrichLeads(scoped, {
       authCtx,
       orgView: orgView || teamView,
       reps,
     })
     return {
       leads,
-      events,
       reps,
       orgView,
       teamView,
@@ -196,7 +193,7 @@ export async function loadLeadsPage(query: LeadsQuery): Promise<LeadsPageData> {
     ? all
     : scopeLeadsToWorkspace(all, workspace, false)
   const columnFiltered = applyColumnFilters(scoped, query)
-  const { leads: enriched, events } = await enrichLeads(columnFiltered, {
+  const enriched = await enrichLeads(columnFiltered, {
     authCtx,
     orgView: orgView || teamView,
     reps,
@@ -212,7 +209,6 @@ export async function loadLeadsPage(query: LeadsQuery): Promise<LeadsPageData> {
 
   return {
     leads: sorted.slice(start, start + pageSize),
-    events,
     reps,
     orgView,
     teamView,

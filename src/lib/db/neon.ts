@@ -654,6 +654,18 @@ export class NeonDbClient implements DbClient {
       return { data: null as unknown as T, error: { message: err instanceof Error ? err.message : String(err) } }
     }
   }
+
+  /**
+   * Raw SQL for aggregates the PostgREST builder cannot express (COUNT FILTER,
+   * BOOL_OR, GROUPING SETS). The executor rewrites `?` to `$n` and puts the RLS
+   * identity in scope, so the statement is subject to the same policies.
+   */
+  raw<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<DbResult<T>> {
+    return this.executor.query<T>(sql, params).then(
+      (rows) => ({ data: rows as T, error: null }),
+      (err: unknown) => ({ data: null as unknown as T, error: { message: err instanceof Error ? err.message : String(err) } }),
+    )
+  }
 }
 
 /** A Neon client bound to one authenticated user. */

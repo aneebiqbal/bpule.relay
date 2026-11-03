@@ -11,13 +11,10 @@ import { isProductAdmin } from '@/lib/auth/admin-page'
 import { computeLifecycleState } from '@/lib/leads/lifecycle-policy'
 import type { LeadRow, PipelineStage } from '@/components/leads/pipeline-utils'
 import { derivePipelineStage } from '@/components/leads/pipeline-utils'
-import type { Lead, MessageType } from '@/lib/domain/types'
-import type { ActivityEvent } from '@/lib/analytics/pipeline-analytics'
+import type { Lead } from '@/lib/domain/types'
 import { leadBelongsToWorkspace, type WorkspaceIdentity } from '@/lib/workspace/active-identity'
 import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
-
-export type { ActivityEvent }
 
 /** Cards sent to the client on first paint. Counts cover the full set. */
 export const BOARD_CARD_LIMIT = 150
@@ -40,7 +37,6 @@ export function scopeLeadsToWorkspace<
 export interface BoardData {
   leads: LeadRow[]
   orgView: boolean
-  events: ActivityEvent[]
   reps: Array<{ id: string; name: string }>
   workspace: WorkspaceIdentity | null
 }
@@ -72,6 +68,40 @@ const CARD_ORDER: Record<PipelineStage, number> = {
 }
 
 export async function loadBoardPreview(cardLimit = BOARD_CARD_LIMIT): Promise<BoardPreview> {
+  const user = await getCurrentUser()
+  const authCtx = await getAuthContext()
+  const store = await createScoutStore()
+  const orgView = isProductAdmin(user, authCtx)
+
+  let workspace: WorkspaceIdentity | null = null
+  try {
+    workspace = await resolveActiveWorkspace()
+  } catch {
+    workspace = null
+  }
+
+  const repsRes = orgView ? await store.listAllReps() : []
+  const reps = (Array.isArray(repsRes) ? repsRes : []).map((rep) => ({ id: rep.id, name: rep.name }))
+
+  const scope = {
+    ownerRepId: orgView ? null : (authCtx?.repId ?? null),
+    revenueIdentityId: orgView ? null : (workspace?.id ?? null),
+    profileId: orgView ? null : (workspace?.profileId ?? null),
+  }
+
+  // Neon: one aggregate for the counts and one bounded id query for the cards.
+  // Supabase (PostgREST) has no raw-SQL surface, so both return null and the
+  // JS authority below computes the same result.
+  const sqlCounts = await store.getPipelineStageSummary(scope)
+  const sqlIds = sqlCounts ? await store.getPipelineCardIds(scope, cardLimit) : null
+
+  if (sqlCounts && sqlIds) {
+    const leads = await store.getLeadsByIds(sqlIds)
+    const cards = await enrichLeads(leads, { authCtx, orgView, reps })
+    const total = Object.values(sqlCounts).reduce((sum, n) => sum + n, 0)
+    return { cards, counts: sqlCounts, total, orgView, workspace }
+  }
+
   const data = await loadBoardData()
 
   const counts = {} as Record<PipelineStage, number>
@@ -105,7 +135,7 @@ export interface EnrichContext {
 export async function enrichLeads(
   visibleLeads: Lead[],
   ctx: EnrichContext,
-): Promise<{ leads: LeadRow[]; events: ActivityEvent[] }> {
+): Promise<LeadRow[]> {
   const { authCtx, orgView, reps } = ctx
   const leadIds = visibleLeads.map((l) => l.id)
 
@@ -114,6 +144,9 @@ export async function enrichLeads(
       if (!authCtx || leadIds.length === 0) return []
       try {
         const client = await createServerSupabase()
+        // sent_text is required to reproduce the exact "has an outbound/inbound
+        // body" rule; the board never renders the body, so it is not attached to
+        // the row sent to the client.
         const select = 'lead_id, sent_at, created_at, sent_text, direction, type'
         type MessageRow = { lead_id: string; sent_at: string | null; created_at: string | null; sent_text: string | null; direction: string; type: string }
         // One `in.(...)` with hundreds of UUIDs is rejected by the URL limit
@@ -177,10 +210,9 @@ export async function enrichLeads(
   const messages = Array.isArray(messagesRes) ? messagesRes : []
 
   const lastActivityByLead = new Map<string, string>()
-  const lastOutboundByLead = new Map<string, { text: string; at: string }>()
-  const lastInboundByLead = new Map<string, { text: string; at: string }>()
-  const hasDmSentByLead = new Map<string, boolean>()
-  const events: ActivityEvent[] = []
+  const lastOutboundByLead = new Map<string, string>()
+  const lastInboundByLead = new Map<string, string>()
+  const hasDmSentByLead = new Set<string>()
 
   for (const m of messages) {
     const leadId = m.lead_id as string
@@ -190,28 +222,20 @@ export async function enrichLeads(
     const direction = m.direction as string
     const type = m.type as string
     const text = m.sent_text as string
-    const at = (m.sent_at ?? m.created_at) as string
 
+    // Exact pre-optimisation rule: a message counts as outbound/inbound only
+    // when it carries a body. Changing this would move connection-only leads
+    // between pipeline stages.
     if (direction !== 'inbound' && text && !lastOutboundByLead.has(leadId)) {
-      lastOutboundByLead.set(leadId, { text, at })
+      lastOutboundByLead.set(leadId, (m.sent_at ?? m.created_at) as string)
     }
     if (direction === 'inbound' && text && !lastInboundByLead.has(leadId)) {
-      lastInboundByLead.set(leadId, { text, at })
+      lastInboundByLead.set(leadId, (m.sent_at ?? m.created_at) as string)
     }
     // Pipeline/detail parity: track whether a DM was sent so connection-
     // accepted leads land in to_contact (action required), not waiting.
     if (type === 'dm' && direction !== 'inbound' && text) {
-      hasDmSentByLead.set(leadId, true)
-    }
-    // Only sent messages are activity; a saved draft has no sent_at. A
-    // connection request without a note still counts as sent.
-    if (m.sent_at) {
-      events.push({
-        leadId,
-        type: type as MessageType,
-        direction: direction === 'inbound' ? 'inbound' : 'outbound',
-        at: m.sent_at as string,
-      })
+      hasDmSentByLead.add(leadId)
     }
   }
 
@@ -245,16 +269,16 @@ export async function enrichLeads(
   }
 
   const leads: LeadRow[] = visibleLeads.map((lead) => {
-    const outbound = lastOutboundByLead.get(lead.id)
-    const inbound = lastInboundByLead.get(lead.id)
+    const outboundAt = lastOutboundByLead.get(lead.id) ?? null
+    const inboundAt = lastInboundByLead.get(lead.id) ?? null
     const lifecycle = computeLifecycleState({
       status: lead.status,
       createdAt: lead.createdAt,
       connectionAcceptedAt: lead.connectionAcceptedAt,
       lockedReason: lead.lockedReason,
       lockedUntil: lead.lockedUntil,
-      lastOutboundAt: outbound?.at ?? null,
-      lastInboundAt: inbound?.at ?? null,
+      lastOutboundAt: outboundAt,
+      lastInboundAt: inboundAt,
       followupCount: followupCountByLead.get(lead.id) ?? 0,
       archived: lead.archived,
     })
@@ -263,23 +287,16 @@ export async function enrichLeads(
       ownerName: orgView && lead.ownerRepId ? ownerByRepId[lead.ownerRepId] : undefined,
       lastActivityAt: lastActivityByLead.get(lead.id) ?? null,
       senderProfileName: lead.senderProfileId ? profileById.get(lead.senderProfileId) ?? undefined : undefined,
-      lastOutboundText: outbound?.text ?? null,
-      lastOutboundAt: outbound?.at ?? null,
-      lastInboundText: inbound?.text ?? null,
-      lastInboundAt: inbound?.at ?? null,
+      lastOutboundAt: outboundAt,
+      lastInboundAt: inboundAt,
       followupCount: followupCountByLead.get(lead.id) ?? 0,
       openAssignedTaskCount: openTaskCountByLead.get(lead.id) ?? 0,
-      hasDmSent: hasDmSentByLead.get(lead.id) ?? false,
+      hasDmSent: hasDmSentByLead.has(lead.id),
       lifecycle,
     }
   })
 
-  // Events are scoped to the visible leads so the activity heatmap cannot count
-  // work the selected workspace does not show.
-  const visibleIds = new Set(visibleLeads.map((l) => l.id))
-  const visibleEvents = events.filter((e) => visibleIds.has(e.leadId))
-
-  return { leads, events: visibleEvents }
+  return leads
 }
 
 export async function loadBoardData(): Promise<BoardData> {
@@ -300,7 +317,7 @@ export async function loadBoardData(): Promise<BoardData> {
   const repsRes = orgView ? await store.listAllReps() : []
   const reps = (Array.isArray(repsRes) ? repsRes : []).map((rep) => ({ id: rep.id, name: rep.name }))
 
-  const { leads, events } = await enrichLeads(visibleLeads, { authCtx, orgView, reps })
+  const leads = await enrichLeads(visibleLeads, { authCtx, orgView, reps })
 
-  return { leads, orgView, events, reps, workspace }
+  return { leads, orgView, reps, workspace }
 }
