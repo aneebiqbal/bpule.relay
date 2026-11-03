@@ -485,7 +485,11 @@ class NeonQueryBuilder<T = Record<string, unknown>> implements DbQueryBuilder<T>
   async single(): Promise<DbSingleResult<T>> {
     let rows: T[]
     try {
-      rows = await this.limit(1).run()
+      // PostgREST applies the query's own LIMIT before the object-shape check,
+      // so `.limit(1).single()` returns one row rather than erroring on rows it
+      // never asked for. Only impose limit(1) when the caller set none.
+      if (this.limitValue === undefined) this.limit(1)
+      rows = await this.run()
     } catch (err) {
       return { data: null, error: toDbError(err) }
     }
@@ -497,7 +501,10 @@ class NeonQueryBuilder<T = Record<string, unknown>> implements DbQueryBuilder<T>
   async maybeSingle(): Promise<DbSingleResult<T>> {
     let rows: T[]
     try {
-      rows = await this.limit(2).run()
+      // Cap at 2 only when the caller left the limit open; an explicit
+      // `.limit(1)` means "give me the first one", not "error if two exist".
+      if (this.limitValue === undefined || this.limitValue > 2) this.limit(2)
+      rows = await this.run()
     } catch (err) {
       return { data: null, error: toDbError(err) }
     }
@@ -537,9 +544,14 @@ class NeonQueryBuilder<T = Record<string, unknown>> implements DbQueryBuilder<T>
 
   private async run(): Promise<T[]> {
     const whereSql = this.filters.length ? ` WHERE ${this.filters.join(' AND ')}` : ''
-    const orderSql = this.orders.length ? ` ORDER BY ${this.orders.join(', ')}` : ''
-    const limitSql = this.limitValue !== undefined ? ` LIMIT ${this.limitValue}` : ''
-    const offsetSql = this.offsetValue ? ` OFFSET ${this.offsetValue}` : ''
+    // ORDER BY / LIMIT / OFFSET are SELECT-only in PostgreSQL — an UPDATE or
+    // DELETE carrying them is a syntax error. `.single()` sets limit(1), so a
+    // write through the builder must not emit it; Postgres already returns
+    // every matched row and single() still rejects more than one.
+    const selectable = this.op === 'select'
+    const orderSql = selectable && this.orders.length ? ` ORDER BY ${this.orders.join(', ')}` : ''
+    const limitSql = selectable && this.limitValue !== undefined ? ` LIMIT ${this.limitValue}` : ''
+    const offsetSql = selectable && this.offsetValue ? ` OFFSET ${this.offsetValue}` : ''
     const returningSql = this.wantsReturning() ? ' RETURNING *' : ''
     const headOnly = this.headValue === true
 

@@ -114,7 +114,6 @@ export async function PATCH(request: Request) {
         .from('organizations')
         .update({
           settings: { ...((orgRow?.settings as Record<string, unknown>) ?? {}), ...channelAutonomy },
-          updated_at: new Date().toISOString(),
         })
         .eq('id', ctx.orgId)
       if (settingsError) throw settingsError

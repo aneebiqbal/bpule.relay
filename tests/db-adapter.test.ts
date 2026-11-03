@@ -165,6 +165,30 @@ describe('NEON query builder — writes', () => {
 
     expect(calls[0].sql).not.toContain('RETURNING')
   })
+
+  it('NEON_WRITE_NO_LIMIT: omits LIMIT/ORDER/OFFSET from writes (PostgreSQL rejects them)', async () => {
+    // `.single()` sets limit(1); emitting it on an UPDATE is a syntax error and
+    // made every single-row write fail with a masked "Failed" 500.
+    const updateCalls: Call[] = []
+    const upd = new NeonDbClient(fakeExecutor(updateCalls) as never, 'user-1')
+    await upd.from('leads').update({ status: 'won' }).eq('id', 'lead-1').select('*').single()
+    expect(updateCalls[0].sql).toBe('UPDATE "leads" SET "status" = ? WHERE "id" = ? RETURNING *')
+
+    const maybeCalls: Call[] = []
+    const maybe = new NeonDbClient(fakeExecutor(maybeCalls) as never, 'user-1')
+    await maybe.from('leads').update({ status: 'won' }).eq('id', 'lead-1').select('*').maybeSingle()
+    expect(maybeCalls[0].sql).not.toContain('LIMIT')
+
+    const deleteCalls: Call[] = []
+    const del = new NeonDbClient(fakeExecutor(deleteCalls) as never, 'user-1')
+    await del.from('leads').delete().eq('id', 'lead-1').single()
+    expect(deleteCalls[0].sql).not.toContain('LIMIT')
+
+    const insertCalls: Call[] = []
+    const ins = new NeonDbClient(fakeExecutor(insertCalls) as never, 'user-1')
+    await ins.from('leads').insert({ company: 'Acme' }).select('*').single()
+    expect(insertCalls[0].sql).not.toContain('LIMIT')
+  })
 })
 
 describe('NEON executor — identity and placeholders', () => {
@@ -249,6 +273,55 @@ describe('NEON query builder — row semantics', () => {
   it('refuses to quote a suspicious table identifier', () => {
     const db = new NeonDbClient(fakeExecutor([]) as never, 'user-1')
     expect(() => db.from('leads; drop table leads').select('*')).toThrow(/suspicious identifier/)
+  })
+
+  it('NEON_LIMIT_BEFORE_SINGLE: an explicit limit is honoured, not overridden', async () => {
+    // PostgREST applies the query's own LIMIT before the object-shape check, so
+    // `.limit(1).maybeSingle()` means "give me the first row", not "error if two
+    // exist". Overriding it to LIMIT 2 broke every `.limit(1).maybeSingle()`
+    // caller once a second row appeared.
+    const calls: Call[] = []
+    const executor: NeonExecutorApi = {
+      async query(text) {
+        calls.push({ method: 'query', sql: text, values: [] })
+        const m = /LIMIT (\d+)/.exec(text)
+        const n = m ? Number(m[1]) : 1
+        return Array.from({ length: n }, (_, i) => ({ id: i + 1 }))
+      },
+      async queryInWrite() {
+        return []
+      },
+    }
+    const db = new NeonDbClient(executor as never, 'user-1')
+    const res = await db
+      .from('daily_content_briefs')
+      .select('*')
+      .eq('persona_id', 'p1')
+      .order('local_date', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    expect(calls[0].sql).toContain('LIMIT 1')
+    expect(res.error).toBeNull()
+    expect(res.data).toEqual({ id: 1 })
+  })
+
+  it('NEON_LIMIT_BEFORE_SINGLE: maybeSingle still errors on >1 row when no limit is set', async () => {
+    const calls: Call[] = []
+    const executor: NeonExecutorApi = {
+      async query(text) {
+        calls.push({ method: 'query', sql: text, values: [] })
+        return [{ id: 1 }, { id: 2 }]
+      },
+      async queryInWrite() {
+        return []
+      },
+    }
+    const db = new NeonDbClient(executor as never, 'user-1')
+    const res = await db.from('leads').select('*').maybeSingle()
+
+    expect(calls[0].sql).toContain('LIMIT 2')
+    expect(res.error?.message).toMatch(/more than 1 row/)
   })
 })
 

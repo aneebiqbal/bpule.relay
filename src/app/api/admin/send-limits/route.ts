@@ -57,7 +57,7 @@ export async function PATCH(request: Request) {
 
     const { error } = await client
       .from('organizations')
-      .update({ settings: next, updated_at: new Date().toISOString() })
+      .update({ settings: next })
       .eq('id', ctx.orgId)
     if (error) throw error
 
