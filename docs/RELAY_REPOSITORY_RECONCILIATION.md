@@ -2,7 +2,7 @@
 
 **Canonical branch:** `release-merge`
 **Canonical worktree:** `/Users/mac/Desktop/products/scout`
-**Reconciled HEAD:** `eb81eba`
+**Reconciled HEAD:** `6504292`
 **Result:** all legitimate Sprint 3 / 4 / 5 work recovered into one branch; full suite, typecheck, lint and build re-run on the reconciled SHA.
 
 ---
@@ -136,9 +136,19 @@ Committed first, then used as the merge base.
 | typecheck | pass |
 | lint | 0 errors (871 pre-existing warnings) |
 | contracts (`qa:contracts`) | 3 files, 64 tests pass |
-| full suite | 330 files, 4826 tests pass |
+| full suite | 331 files, 4859 tests — 1 live-AI-provider flake (see below) |
 | build | pass |
 | nav destination audit | 54/54 nav hrefs resolve to real routes |
+| Lighthouse (Studio / Ideas / Growth) | accessibility 1.00, 0 failures each |
+
+### Live-AI-provider flake
+
+`tests/company-extraction.test.ts › reads the employer from a connector phrase`
+is gated by `skipIf(!HAS_AI_PROVIDER)` and calls the real extraction pipeline.
+It is **not** touched by the reconciliation (`git diff a2e491c..HEAD` is empty for
+both the test and `lib/intelligence-v2/extraction-pipeline.ts`), and it passed in
+every earlier full-suite run in this session. It is a provider non-determinism
+flake, not a regression. The deterministic suite is green.
 
 ---
 
