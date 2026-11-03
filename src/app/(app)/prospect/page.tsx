@@ -1,4 +1,4 @@
-import { loadProspectsPage } from '@/lib/prospect/prospects-page'
+import { loadProspectsView } from '@/lib/prospect/prospects-view'
 import { ProspectsWorkspace, type ProspectsTab } from '@/components/prospect/prospects-workspace'
 import { PageHeader } from '@/components/ui/page-header'
 
@@ -21,15 +21,15 @@ export default async function ProspectPage({
   const tab: ProspectsTab =
     rawTab === 'recent' || rawTab === 'saved' || rawTab === 'watchlist' ? rawTab : 'analyze'
 
-  let data: Awaited<ReturnType<typeof loadProspectsPage>>
+  let data: Awaited<ReturnType<typeof loadProspectsView>>
   try {
-    data = await loadProspectsPage()
-  } catch (err) {
+    data = await loadProspectsView(tab)
+  } catch {
     return (
       <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6">
         <PageHeader eyebrow="Sales" title="Prospects" description="Every check, saved lead and watchlist entry." />
         <p role="alert" className="mt-4 rounded-lg border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-[13px] text-status-danger">
-          {err instanceof Error ? err.message : 'Prospects could not be loaded.'}
+          Couldn&apos;t load prospects. Refresh to try again.
         </p>
       </div>
     )
