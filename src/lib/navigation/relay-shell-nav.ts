@@ -76,7 +76,7 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     visible: everyone,
     secondary: [
       { id: 'needs-reply', label: 'Needs reply', href: '/chats?view=waiting_me' },
-      { id: 'waiting-them', label: 'Waiting on them', href: '/chats?view=waiting_them' },
+      { id: 'waiting-them', label: 'Waiting', href: '/chats?view=waiting_them' },
       { id: 'followups', label: 'Follow-ups', href: '/chats?view=followups' },
       { id: 'meeting-requests', label: 'Meeting requests', href: '/chats?view=meeting_requests' },
       { id: 'proposal-requests', label: 'Proposal requests', href: '/chats?view=proposal_requests' },

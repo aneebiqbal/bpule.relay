@@ -39,7 +39,7 @@ Exactly one primary and one secondary item is active at any time.
 | Item | Href |
 |---|---|
 | Needs reply | `/chats?view=waiting_me` |
-| Waiting on them | `/chats?view=waiting_them` |
+| Waiting | `/chats?view=waiting_them` |
 | Follow-ups | `/chats?view=followups` |
 | Meeting requests | `/chats?view=meeting_requests` |
 | Proposal requests | `/chats?view=proposal_requests` |
