@@ -37,9 +37,9 @@ Entry points: **NAV** (sidebar) · **MOBILE** · **PAL** (command palette) · **
 | Team tasks | Mgr+ | `/team/tasks` | ✅ Team → Team Tasks | PAL | **V** |
 | Daily Operations | Mgr | `/admin/command` | ✅ Team → Daily Operations | PAL, ADMINHOME | **V** |
 | Command Center | Admin | `/admin/command` | ✅ Admin → Command Center | PAL, ADMINHOME | **V** |
-| Studio (canonical) | Rep+ | `/content` → `/content-v2/[id]/today` | ✅ Content → Studio | PAL, CREATE | **V** |
+| Studio (canonical) | Rep+ | `/content` | ✅ Content → Studio | PAL, CREATE | **V** |
 | Content identity create | Rep+ | `/content/new` | — | INAPP `/content?manage=1` | **P** |
-| Growth engine | Admin | `/content-v2/growth` | ✅ Content → Growth | PAL | **V** |
+| Growth engine | Admin | `/content/growth` | ✅ Content → Growth | PAL | **V** |
 | Upwork jobs | Rep+ | `/upwork` | ✅ Sales → Upwork | PAL | **V** |
 | Upwork add job | Rep+ | `/upwork/new` | — | PAL, CREATE, INAPP `/upwork` | **V** |
 | Upwork proposals | Rep+ | `/upwork/[id]` | — | INAPP `/upwork`, BACK | **P** |
@@ -76,8 +76,9 @@ Entry points: **NAV** (sidebar) · **MOBILE** · **PAL** (command palette) · **
 | `/upwork/new` | Global Create + page |
 | `/team/targets` | Team → Targets |
 | `/team/groups` | Team → Groups |
-| `/content-v2/[id]/today` | Content → Studio |
-| `/content-v2/growth` | Content → Growth |
+| `/content` | Content → Studio |
+| `/content/ideas` | Content → Ideas |
+| `/content/growth` | Content → Growth |
 | `/admin/scoring-qa` | Admin → Scoring QA |
 | `/admin/qa` | Admin → QA & Trust |
 | `/admin/dataset` | Admin → Dataset |
@@ -103,7 +104,7 @@ which allows NAV / CMD-K / GLOBAL CREATE / IN-CONTEXT LINK):
 | Team activity | `/team/activity` | `/reports/activity` | redirect legacy → canonical |
 | Revenue | `/admin/revenue-intelligence` | `/reports/revenue` | redirect legacy → canonical |
 | Profiles | `/profile-intelligence` | `/profiles`, `/manage-profiles` | merge |
-| Growth | `/content-v2/growth` | `/admin/growth` | redirect legacy → canonical |
+| Growth | `/content/growth` | `/admin/growth` | redirect legacy → canonical |
 | Command Center | `/admin/command` | `/admin`, `/admin/command-center` | already redirects |
 | Conversations | `/chats` | `/relay`, `/inbound` | merge into Inbox views |
 | Daily Operations | `/admin/command` | — | Team label for managers, Admin label for admins |
