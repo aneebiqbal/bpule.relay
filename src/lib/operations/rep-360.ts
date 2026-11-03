@@ -123,7 +123,7 @@ export function buildRepAttention(input: {
       ? {
           label: 'Oldest overdue task',
           detail: `${oldestTask.title} — due ${Math.max(1, Math.round((now - Date.parse(oldestTask.dueAt!)) / 3_600_000))}h ago`,
-          href: `/team/${repId}?tab=tasks&view=overdue&task=${encodeURIComponent(oldestTask.id)}`,
+          href: `/team/${repId}?tab=work&view=overdue&task=${encodeURIComponent(oldestTask.id)}`,
           tone: 'critical',
         }
       : { label: 'Oldest overdue task', detail: 'Nothing overdue', href: null, tone: 'default' },

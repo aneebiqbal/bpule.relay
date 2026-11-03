@@ -177,7 +177,7 @@ export function buildRepAttentionSignals(
         ? 'critical'
         : 'attention',
       oldestAgeHours: snap.oldestOverdueTaskAgeHours,
-      href: `/tasks?assignee=${snap.repId}&tab=overdue`,
+      href: `/tasks?assignee=${snap.repId}&view=overdue`,
     })
   }
 
@@ -268,4 +268,54 @@ export function deriveRepStatus(signals: AttentionSignal[]): RepStatus {
 export function buildTeamAttention(snaps: ManagerRepSnapshot[], now = Date.now()): AttentionSignal[] {
   const all = snaps.flatMap((snap) => buildRepAttentionSignals(snap, now))
   return rankAttentionSignals(all)
+}
+
+/**
+ * Team attention from directory rows — the same authority as
+ * `buildTeamAttention`, so the Overview and People surfaces agree. Ages are
+ * null here (the directory does not carry them), matching the snapshots the
+ * directory itself builds.
+ */
+export function buildTeamAttentionFromPeople(
+  rows: Array<{
+    repId: string
+    repName: string
+    activeProfile: string | null
+    completedToday: number
+    repliesWaiting: number
+    followUpsOverdue: number
+    highPriority: number
+    overdueTasks: number
+    meetings: number
+    wins: number
+    targetPct: number
+    lastActivityAt: string | null
+    dayState: string | null
+  }>,
+  now = Date.now(),
+): AttentionSignal[] {
+  return buildTeamAttention(
+    rows.map((r) => ({
+      repId: r.repId,
+      repName: r.repName,
+      activeProfile: r.activeProfile,
+      completedToday: r.completedToday,
+      repliesWaiting: r.repliesWaiting,
+      followUpsOverdue: r.followUpsOverdue,
+      highPriorityUntouched: r.highPriority,
+      overdueTasks: r.overdueTasks,
+      meetings: r.meetings,
+      wins: r.wins,
+      targetPct: r.targetPct,
+      oldestReplyAgeHours: null,
+      oldestFollowUpAgeHours: null,
+      oldestHighPriorityAgeHours: null,
+      oldestOverdueTaskAgeHours: null,
+      lastActivityAt: r.lastActivityAt,
+      hasProfileAssignment: r.activeProfile != null,
+      requiredRemaining: 0,
+      dayState: r.dayState,
+    })),
+    now,
+  )
 }

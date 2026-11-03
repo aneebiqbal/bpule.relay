@@ -9,6 +9,9 @@ import {
   SourceComparison,
   metricsToStrip,
 } from '@/components/operations/performance-views'
+import { TeamTrendChart } from '@/components/operations/team-trend-chart'
+import { loadTeamTrend } from '@/lib/operations/team-trend'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { assignableReps, getPeopleDirectory, getPerformance, requireTeamContext } from '@/lib/operations/page-context'
 import { effectiveRepIds } from '@/lib/operations/scope'
 import { OPS_RANGES, opsHref, parseOpsFilters, rangeWindow } from '@/lib/operations/filters'
@@ -41,6 +44,11 @@ export default async function TeamPerformancePage({
     console.error('team performance failed:', err)
     return null
   })
+  const timezone = await loadOperatingPolicy(ctx.auth.orgId).then((p) => p.timezone).catch(() => 'UTC')
+  const trend = await loadTeamTrend(
+    ctx.client,
+    { orgId: ctx.auth.orgId, repIds, start: window.start, end: window.end, timezone },
+  ).catch(() => null)
 
   const current = {
     range: filters.range,
@@ -89,6 +97,16 @@ export default async function TeamPerformancePage({
           {perf.truncated && (
             <p className="text-[12px] text-status-warning">This window hit the read limit, so totals may be incomplete. Narrow the range.</p>
           )}
+
+          <Section id="trend" title="Trend" description="Replies, meetings and completed tasks per day, from the aggregated analytics path.">
+            {trend ? (
+              <TeamTrendChart data={trend} />
+            ) : (
+              <p className="rounded-lg border border-dashed border-line px-3 py-4 text-[13px] text-graphite">
+                Trend isn&apos;t available on this database connection.
+              </p>
+            )}
+          </Section>
 
           <Section id="conversion" title="Conversion" description="Leads created in this window, counted at their furthest known stage. Click a stage to inspect those leads.">
             <FunnelTable

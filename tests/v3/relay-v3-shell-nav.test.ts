@@ -71,6 +71,9 @@ describe('V3_NO_PARALLEL_SELECTED_NAV', () => {
     '/relay',
     '/inbound',
     '/team',
+    '/team/people',
+    '/team/workload',
+    '/content/ideas',
     '/reports/sales',
   ]
 
@@ -144,5 +147,23 @@ describe('V3_GLOBAL_CREATE', () => {
 describe('V3_NAV_HIDDEN_FEATURES_EXPOSED', () => {
   it('leads import is reachable from the Sales rail', () => {
     expect(secondaryItems('sales', rep).map((i) => i.href)).toContain('/leads/import')
+  })
+})
+
+describe('V3_CONTENT_NAV', () => {
+  it('Studio and Ideas are reachable for every role', () => {
+    const hrefs = secondaryItems('content', rep).map((i) => i.href)
+    expect(hrefs).toContain('/content')
+    expect(hrefs).toContain('/content/ideas')
+  })
+
+  it('Growth is admin/owner only', () => {
+    expect(secondaryItems('content', rep).map((i) => i.href)).not.toContain('/content/growth')
+    expect(secondaryItems('content', admin).map((i) => i.href)).toContain('/content/growth')
+  })
+
+  it('Work views resolve through the ?view param the page actually reads', () => {
+    expect(resolveSecondaryActiveId('work', '/tasks', search('view=overdue'), rep)).toBe('overdue')
+    expect(resolveSecondaryActiveId('work', '/tasks', search('view=completed'), rep)).toBe('completed')
   })
 })

@@ -14,5 +14,5 @@ export default async function StudioTodayPage({ params }: { params: Promise<{ id
   if (!persona) redirect('/content')
   if (persona.repId !== user.rep.id && user.rep.role !== 'admin') redirect('/content')
 
-  redirect(`/content-v2/${id}/today`)
+  redirect(`/content?persona=${id}`)
 }

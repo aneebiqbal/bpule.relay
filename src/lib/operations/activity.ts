@@ -162,7 +162,7 @@ export function mapTaskEvent(row: TaskEventRow, lookups: TimelineLookups): Timel
     event: meta.label,
     category: 'task',
     result: task?.title ?? null,
-    href: `/team/tasks?task=${row.task_id}`,
+    href: `/tasks?task=assigned:${row.task_id}`,
     source: lead?.source ?? null,
   }
 }

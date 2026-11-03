@@ -27,11 +27,6 @@ export function ProfileSwitcher({ role, compact, className }: ProfileSwitcherPro
         type="button"
         onClick={() => setIdentityOpen((open) => !open)}
         aria-expanded={identityOpen}
-        aria-label={
-          activeIdentity
-            ? `Working as ${activeIdentity.identityName}${activeIdentity.title ? `, ${activeIdentity.title}` : ''}`
-            : 'No profile selected'
-        }
         className={cn(
           'flex max-w-[220px] items-center gap-2 rounded-md border border-line bg-bone-raised text-left transition-colors hover:border-orange/30',
           compact ? 'px-2 py-1.5' : 'px-2.5 py-2',
@@ -43,7 +38,7 @@ export function ProfileSwitcher({ role, compact, className }: ProfileSwitcherPro
             <>
               <p className="truncate text-[13px] font-medium text-ink">{activeIdentity.identityName}</p>
               {!compact && (
-                <p className="truncate text-[10px] text-graphite">
+                <p className="truncate text-[10px] text-stone">
                   {[activeIdentity.title, activeIdentity.channel.toUpperCase()].filter(Boolean).join(' · ')}
                 </p>
               )}

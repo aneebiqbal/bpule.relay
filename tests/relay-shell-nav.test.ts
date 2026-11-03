@@ -32,7 +32,8 @@ describe('V3_NAV_PRIMARY_SINGLE_ACTIVE', () => {
     ['/team/performance', 'team'],
     ['/team/targets', 'team'],
     ['/content', 'content'],
-    ['/content-v2/growth', 'content'],
+    ['/content/ideas', 'content'],
+    ['/content/growth', 'content'],
     ['/reports/sales', 'insights'],
     ['/admin/ai-usage', 'insights'],
     ['/admin/revenue-intelligence', 'insights'],
@@ -69,9 +70,9 @@ describe('V3_NAV_SECONDARY_SINGLE_ACTIVE', () => {
     expect(resolveSecondaryActiveId('inbox', '/chats', search(''), rep)).toBeNull()
   })
 
-  it('resolves Work tab params to one task view each', () => {
-    expect(resolveSecondaryActiveId('work', '/tasks', search('tab=today'), rep)).toBe('today')
-    expect(resolveSecondaryActiveId('work', '/tasks', search('tab=overdue'), rep)).toBe('overdue')
+  it('resolves Work view params to one task view each', () => {
+    expect(resolveSecondaryActiveId('work', '/tasks', search('view=today'), rep)).toBe('today')
+    expect(resolveSecondaryActiveId('work', '/tasks', search('view=overdue'), rep)).toBe('overdue')
     expect(resolveSecondaryActiveId('work', '/tasks', search(''), rep)).toBe('tasks')
   })
 
@@ -84,13 +85,16 @@ describe('V3_NAV_SECONDARY_SINGLE_ACTIVE', () => {
       ['/upwork', '', rep],
       ['/revenue/email', '', rep],
       ['/chats', 'view=closed', rep],
-      ['/tasks', 'tab=upcoming', rep],
+      ['/tasks', 'view=upcoming', rep],
       ['/team', '', manager],
+      ['/team/people', '', manager],
+      ['/team/workload', '', manager],
       ['/team/activity', '', manager],
       ['/team/targets', '', manager],
       ['/admin/command', '', manager],
       ['/content', '', rep],
-      ['/content-v2/growth', '', admin],
+      ['/content/ideas', '', rep],
+      ['/content/growth', '', admin],
       ['/reports/sales', '', rep],
       ['/admin/ai-usage', '', admin],
       ['/admin/people', '', admin],
@@ -147,11 +151,12 @@ describe('V3_NAV_CANONICAL_LABELS', () => {
     expect(byHref('/leads?view=pipeline')).toBe('Pipeline')
     expect(byHref('/reports/sales')).toBe('Sales Insights')
     expect(byHref('/content')).toBe('Studio')
-    expect(byHref('/team')).toBe('People')
+    expect(byHref('/team')).toBe('Overview')
+    expect(byHref('/team/people')).toBe('People')
     expect(adminItem('/admin/command')).toBe('Command Center')
     expect(byHref('/admin/scoring-qa')).toBe('Scoring QA')
     expect(byHref('/profile-intelligence')).toBe('Profiles')
-    expect(byHref('/content-v2/growth')).toBe('Growth')
+    expect(byHref('/content/growth')).toBe('Growth')
     expect(byHref('/admin/people')).toBe('People & Roles')
     expect(byHref('/admin/revenue-intelligence')).toBe('Revenue Intelligence')
     expect(byHref('/upwork')).toBe('Upwork')
@@ -192,7 +197,7 @@ describe('V3_NAV_ROLE_VISIBILITY', () => {
   it('admin-only secondary items are hidden from reps and managers', () => {
     for (const role of [rep, manager]) {
       expect(secondaryItems('sales', role).map((i) => i.href)).not.toContain('/accounts')
-      expect(secondaryItems('content', role).map((i) => i.href)).not.toContain('/content-v2/growth')
+      expect(secondaryItems('content', role).map((i) => i.href)).not.toContain('/content/growth')
       expect(secondaryItems('insights', role).map((i) => i.href)).not.toContain('/admin/ai-usage')
     }
   })
@@ -210,7 +215,8 @@ describe('V3_NAV_HIDDEN_FEATURES_EXPOSED', () => {
     ['/team/targets', manager],
     ['/team/groups', manager],
     ['/content', rep],
-    ['/content-v2/growth', admin],
+    ['/content/ideas', rep],
+    ['/content/growth', admin],
     ['/admin/scoring-qa', admin],
     ['/admin/qa', admin],
     ['/admin/dataset', admin],
@@ -233,6 +239,14 @@ describe('V3_NAV_HIDDEN_FEATURES_EXPOSED', () => {
     const content = visibleDomains(rep).find((d) => d.id === 'content')
     expect(content).toBeDefined()
     expect(content!.secondary.map((i) => i.href)).toContain('/content')
+  })
+
+  it('V3_CONTENT_RAIL: Studio and Ideas for every role, Growth for admins', () => {
+    const repHrefs = secondaryItems('content', rep).map((i) => i.href)
+    expect(repHrefs).toContain('/content')
+    expect(repHrefs).toContain('/content/ideas')
+    expect(repHrefs).not.toContain('/content/growth')
+    expect(secondaryItems('content', admin).map((i) => i.href)).toContain('/content/growth')
   })
 })
 

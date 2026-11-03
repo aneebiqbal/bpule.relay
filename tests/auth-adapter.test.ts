@@ -20,18 +20,22 @@ import { getNeonAuthInstance } from '@/lib/auth/neon-server'
 
 describe('auth provider selection', () => {
   const original = process.env.RELAY_AUTH_PROVIDER
+  const originalPublic = process.env.NEXT_PUBLIC_RELAY_AUTH_PROVIDER
+  const originalGlobal = (globalThis as Record<string, unknown>).__RELAY_AUTH_PROVIDER__
 
   beforeEach(() => {
     if (original === undefined) delete process.env.RELAY_AUTH_PROVIDER
     else process.env.RELAY_AUTH_PROVIDER = original
-    // The browser-facing flag participates in resolution and may be injected
-    // from .env.local; a "defaults to supabase" assertion must clear it too.
-    delete process.env.NEXT_PUBLIC_RELAY_AUTH_PROVIDER
+    if (originalPublic === undefined) delete process.env.NEXT_PUBLIC_RELAY_AUTH_PROVIDER
+    else process.env.NEXT_PUBLIC_RELAY_AUTH_PROVIDER = originalPublic
+    if (originalGlobal === undefined) delete (globalThis as Record<string, unknown>).__RELAY_AUTH_PROVIDER__
+    else (globalThis as Record<string, unknown>).__RELAY_AUTH_PROVIDER__ = originalGlobal
   })
 
   it('defaults to supabase so an opted-out deployment is unchanged', () => {
     delete process.env.RELAY_AUTH_PROVIDER
     delete process.env.NEXT_PUBLIC_RELAY_AUTH_PROVIDER
+    delete (globalThis as Record<string, unknown>).__RELAY_AUTH_PROVIDER__
     expect(resolveAuthProvider()).toBe('supabase')
     expect(isNeonAuthProvider()).toBe(false)
   })
@@ -76,6 +80,7 @@ describe('auth provider selection', () => {
   it('returns the supabase provider by default without constructing Neon Auth', async () => {
     delete process.env.RELAY_AUTH_PROVIDER
     delete process.env.NEXT_PUBLIC_RELAY_AUTH_PROVIDER
+    delete (globalThis as Record<string, unknown>).__RELAY_AUTH_PROVIDER__
     delete process.env.NEON_AUTH_BASE_URL
     const provider = await getAuthProvider()
     expect(provider.name).toBe('supabase')

@@ -90,10 +90,10 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     visible: everyone,
     secondary: [
       { id: 'tasks', label: 'Tasks', href: '/tasks' },
-      { id: 'today', label: 'Today', href: '/tasks?tab=today' },
-      { id: 'overdue', label: 'Overdue', href: '/tasks?tab=overdue' },
-      { id: 'upcoming', label: 'Upcoming', href: '/tasks?tab=upcoming' },
-      { id: 'completed', label: 'Completed', href: '/tasks?tab=completed' },
+      { id: 'today', label: 'Today', href: '/tasks?view=today' },
+      { id: 'overdue', label: 'Overdue', href: '/tasks?view=overdue' },
+      { id: 'upcoming', label: 'Upcoming', href: '/tasks?view=upcoming' },
+      { id: 'completed', label: 'Completed', href: '/tasks?view=completed' },
     ],
   },
   {
@@ -102,8 +102,9 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     href: '/team',
     visible: managerUp,
     secondary: [
-      { id: 'people', label: 'People', href: '/team' },
-      { id: 'team-tasks', label: 'Team Tasks', href: '/team/tasks' },
+      { id: 'overview', label: 'Overview', href: '/team' },
+      { id: 'people', label: 'People', href: '/team/people' },
+      { id: 'workload', label: 'Workload', href: '/team/workload' },
       { id: 'activity', label: 'Activity', href: '/team/activity' },
       { id: 'performance', label: 'Performance', href: '/team/performance' },
       { id: 'targets', label: 'Targets', href: '/team/targets' },
@@ -118,7 +119,8 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     visible: everyone,
     secondary: [
       { id: 'studio', label: 'Studio', href: '/content' },
-      { id: 'growth', label: 'Growth', href: '/content-v2/growth', visible: adminUp },
+      { id: 'ideas', label: 'Ideas', href: '/content/ideas' },
+      { id: 'growth', label: 'Growth', href: '/content/growth', visible: adminUp },
     ],
   },
   {

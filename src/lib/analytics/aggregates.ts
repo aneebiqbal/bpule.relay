@@ -252,6 +252,61 @@ export interface ActivityDailyScope {
   timezone: string
 }
 
+export interface TeamTrendScope {
+  orgId: string
+  repIds: string[] | null
+  start: string
+  end: string
+  timezone: string
+}
+
+/**
+ * Team trend — replies received and meetings booked per day, grouped in SQL.
+ * Same canonical rules as `performanceMetricsSql`: failed executions never
+ * count, and REPLY_RECEIVED / MEETING_BOOKED are distinct events.
+ */
+export function teamTrendSql(scope: TeamTrendScope): { sql: string; params: unknown[] } {
+  const params: unknown[] = [scope.timezone, scope.orgId, scope.start, scope.end]
+  let repFilter = ''
+  if (scope.repIds && scope.repIds.length > 0) {
+    repFilter = `\n      AND actor_id IN (${scope.repIds.map(() => '?').join(', ')})`
+    params.push(...scope.repIds)
+  }
+  return {
+    sql: `SELECT (occurred_at AT TIME ZONE ?)::date AS day,
+        COUNT(*) FILTER (WHERE action_type = 'REPLY_RECEIVED') AS replies,
+        COUNT(*) FILTER (WHERE action_type = '${MEETING_EVENT}') AS meetings
+      FROM action_events
+      WHERE organization_id = ?
+        AND occurred_at >= ?
+        AND occurred_at < ?
+        AND execution_status IS DISTINCT FROM 'failed'
+        AND action_type IN ('REPLY_RECEIVED', '${MEETING_EVENT}')${repFilter}
+      GROUP BY 1 ORDER BY 1`,
+    params,
+  }
+}
+
+/** Completed assigned tasks per day — the third trend series. */
+export function teamTasksTrendSql(scope: TeamTrendScope): { sql: string; params: unknown[] } {
+  const params: unknown[] = [scope.timezone, scope.orgId, scope.start, scope.end]
+  let repFilter = ''
+  if (scope.repIds && scope.repIds.length > 0) {
+    repFilter = `\n      AND assignee_rep_id IN (${scope.repIds.map(() => '?').join(', ')})`
+    params.push(...scope.repIds)
+  }
+  return {
+    sql: `SELECT (completed_at AT TIME ZONE ?)::date AS day, COUNT(*) AS tasks
+      FROM assigned_tasks
+      WHERE organization_id = ?
+        AND status = 'DONE'
+        AND completed_at >= ?
+        AND completed_at < ?${repFilter}
+      GROUP BY 1 ORDER BY 1`,
+    params,
+  }
+}
+
 /**
  * Daily heatmap counts. The day is rendered in the organization's zone with
  * `AT TIME ZONE`, which is the same calendar date `Intl` produces — a 23:30 UTC
