@@ -17,12 +17,15 @@ export function SalesHeader({
   description,
   count,
   countLabel,
+  eyebrow = 'Sales',
   filters,
   meta,
   className,
 }: {
   title: string
   description?: string
+  /** Small uppercase label above the title. */
+  eyebrow?: string
   /** Total records behind the title — never a decorative number. */
   count?: number | null
   countLabel?: string
@@ -36,7 +39,7 @@ export function SalesHeader({
     <div className={cn('space-y-3', className)}>
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.16em] text-stone">Sales</p>
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.16em] text-stone">{eyebrow}</p>
           <h1 className="mt-1 flex flex-wrap items-baseline gap-2 text-xl font-medium tracking-[-0.01em] text-ink sm:text-2xl">
             {title}
             {typeof count === 'number' && (

@@ -42,13 +42,16 @@ export function ChatIntelligencePanel({
   reps,
   canIntervene,
   tasksAvailable,
+  now,
 }: {
   intel: ChatIntelligence
   reps: Array<{ id: string; name: string }>
   canIntervene: boolean
   tasksAvailable: boolean
+  /** Display clock, supplied by the server page so SSR and client agree. */
+  now?: number
 }) {
-  const now = Date.now()
+  const clock = now ?? Date.now()
   const c = intel.conversation
   return (
     <div className="space-y-3" aria-label="Lead intelligence">
@@ -95,8 +98,8 @@ export function ChatIntelligencePanel({
           <Row label="Waiting">
             {c ? `${CONVERSATION_STATE_LABEL[c.state]}${c.ageHours !== null ? ` · ${ageLabel(c.ageHours)}` : ''}` : 'No conversation yet'}
           </Row>
-          <Row label="Last inbound">{relativeTime(c?.lastInboundAt, now)}</Row>
-          <Row label="Last outbound">{relativeTime(c?.lastOutboundAt, now)}</Row>
+          <Row label="Last inbound">{relativeTime(c?.lastInboundAt, clock)}</Row>
+          <Row label="Last outbound">{relativeTime(c?.lastOutboundAt, clock)}</Row>
           {intel.lastClientIntent && <Row label="Their last intent">{intel.lastClientIntent.replaceAll('_', ' ')}</Row>}
         </dl>
         <p className="mt-2 rounded-md bg-bone px-2 py-1.5 text-[12px]">
@@ -157,7 +160,7 @@ export function ChatIntelligencePanel({
               <li key={t.id}>
                 <Link href={`/tasks?task=assigned:${t.id}`} className="flex justify-between gap-2 text-[12px] hover:underline">
                   <span className="truncate text-ink">{t.title}</span>
-                  <span className="shrink-0 text-stone">{t.dueAt ? relativeTime(t.dueAt, now).replace(' ago', ' overdue') : t.priority.toLowerCase()}</span>
+                  <span className="shrink-0 text-stone">{t.dueAt ? relativeTime(t.dueAt, clock).replace(' ago', ' overdue') : t.priority.toLowerCase()}</span>
                 </Link>
               </li>
             ))}
@@ -176,6 +179,11 @@ export function ChatIntelligencePanel({
         {intel.companyKey && (
           <Link href={`/accounts/${encodeURIComponent(intel.companyKey)}`} className="text-graphite hover:text-ink">
             Open account →
+          </Link>
+        )}
+        {intel.ownerRepId && (
+          <Link href={`/team/${intel.ownerRepId}`} className="text-graphite hover:text-ink">
+            Open rep →
           </Link>
         )}
       </div>

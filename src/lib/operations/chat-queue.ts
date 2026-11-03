@@ -21,8 +21,8 @@ import { sourceBucket, type OpsSource } from '@/lib/operations/filters'
 import { pipelineGroupForStage } from '@/lib/operations/reports'
 
 export const CHAT_VIEWS = [
-  { value: 'waiting_me', label: 'Waiting on me', managerOnly: false },
-  { value: 'waiting_them', label: 'Waiting on them', managerOnly: false },
+  { value: 'waiting_me', label: 'Needs reply', managerOnly: false },
+  { value: 'waiting_them', label: 'Waiting', managerOnly: false },
   { value: 'followups', label: 'Follow-ups', managerOnly: false },
   { value: 'meeting_requests', label: 'Meeting requests', managerOnly: false },
   { value: 'proposal_requests', label: 'Proposal requests', managerOnly: false },
