@@ -214,11 +214,10 @@ export function RelayAppShell({
           <button
             type="button"
             onClick={() => openPalette(true)}
-            aria-label="Search Relay"
             className="ml-2 hidden min-w-0 flex-1 items-center gap-2 rounded-md border border-line bg-bone-raised px-2.5 py-1.5 text-left text-[12px] text-stone transition-colors hover:text-ink sm:flex sm:max-w-xs"
           >
             <Command className="size-3.5 shrink-0" aria-hidden />
-            <span className="truncate">Search Relay...</span>
+            <span className="truncate">Search Relay</span>
             <kbd className="ml-auto hidden items-center gap-1 rounded border border-line px-1.5 py-0.5 text-[9px] text-stone md:inline-flex">
               K
             </kbd>

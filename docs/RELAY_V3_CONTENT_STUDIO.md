@@ -86,10 +86,26 @@ or personal profiles.
   recommended post, four alternates, trends, memories, recent posts, a used
   idea, a posted idea and a fallback idea.
 
+## Accessibility
+
+Lighthouse (accessibility) on the Studio surface: **1.00**, 0 failures. The
+shell fixes that got it there are shared by every surface:
+
+- `.relay-cta` now uses dark text on the orange signal (cream-on-orange failed
+  AA in light and dark themes).
+- The profile switcher no longer overrides its accessible name with a label
+  that does not match the visible text.
+- The search trigger's accessible name matches its visible label.
+
+The marketing landing page still reports `aria-hidden-focus` and
+`color-contrast` failures; it is outside Sprint 5's surface scope.
+
 ## Known gaps
 
 - Content performance (posts created/published, consistency) is not shown
   because engagement metrics are not stored; no invented numbers.
 - No content calendar/heatmap — no real schedule data.
 - Live Neon Auth certification and the browser screenshot matrix are separate
-  from fixture QA.
+  from fixture QA. The demo workspace cannot render Supabase-backed surfaces
+  (Tasks, Team, Rep 360, Ideas), so those screens were verified by fixture and
+  contract rather than by a real session.

@@ -111,14 +111,16 @@ assign / reassign / request-update.
 `typecheck`, `lint`, `contracts`, full `vitest`, `build`. The named fixtures and
 parity tests must pass with zero failures before commit.
 
+## Visual gaps (closed in Sprint 5)
+
+- Rep 360 Overview renders a compact pipeline from the canonical 7d funnel.
+- Rep 360 Performance embeds the canonical 12-week `ContributionHeatmap`.
+- Team Performance renders a replies / meetings / completed-tasks trend from a
+  new aggregated SQL path (`teamTrendSql` + `teamTasksTrendSql`).
+
 ## Known gaps
 
-- Rep 360 Overview does not yet render a compact pipeline visual; the canonical
-  pipeline counts live in the Leads board and are not re-derived here.
-- Team Performance has summary and comparison tables but no 7d/30d trend chart;
-  the existing aggregates path (`getPerformance`) does not carry a daily series.
-- The Rep 360 heatmap is not embedded; the canonical `ContributionHeatmap`
-  remains on `/performance`, and the activity API only allows admins to pass
-  `repId` (managers would need a scoped allowance).
 - Live Neon Auth certification, browser screenshot matrix and egress
-  measurement are separate from fixture QA.
+  measurement are separate from fixture QA. The demo workspace cannot render
+  Supabase-backed surfaces (Tasks, Team, Rep 360), so those screens were
+  verified by fixture and contract rather than by a real session.
