@@ -109,7 +109,7 @@ export function buildAdminV3Health(data: AdminCommandCenterData): AdminV3Metric[
       label: 'Overdue tasks',
       value: data.health.overdueTasks,
       hint: data.health.overdueTasks > 0 ? 'Past due assigned work' : 'Assigned work clear',
-      href: '/tasks?tab=overdue',
+      href: '/tasks?view=overdue',
       tone: data.health.overdueTasks > 0 ? 'warning' : 'neutral',
     },
     {

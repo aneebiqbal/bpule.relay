@@ -99,7 +99,7 @@ export function PeopleTable({ rows }: { rows: PeopleRow[] }) {
       header: 'Replies waiting',
       align: 'right',
       render: (r) => (
-        <CountLink value={r.repliesWaiting} href={`/team/${r.repId}?tab=conversations&view=waiting_me`} label="replies waiting" warn />
+        <CountLink value={r.repliesWaiting} href={`/chats?rep=${r.repId}`} label="replies waiting" warn />
       ),
     },
     {
@@ -107,7 +107,7 @@ export function PeopleTable({ rows }: { rows: PeopleRow[] }) {
       header: 'Overdue tasks',
       align: 'right',
       render: (r) => (
-        <CountLink value={r.overdueTasks} href={`/team/${r.repId}?tab=tasks&view=overdue`} label="overdue tasks" warn />
+        <CountLink value={r.overdueTasks} href={`/team/${r.repId}?tab=work&view=overdue`} label="overdue tasks" warn />
       ),
     },
     {

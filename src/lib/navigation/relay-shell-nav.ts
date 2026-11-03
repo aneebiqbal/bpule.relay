@@ -5,6 +5,7 @@
 
 export type RelayShellSection =
   | 'home'
+  | 'work'
   | 'sales'
   | 'conversations'
   | 'accounts'
@@ -45,6 +46,7 @@ const adminUp = (r: RelayNavRoleFlags) => r.isAdmin || r.isOwner
 
 export const RELAY_TOP_NAV: RelayTopNavItem[] = [
   { id: 'home', label: 'Home', href: '/home', visible: repManagerAdmin },
+  { id: 'work', label: 'Work', href: '/tasks', visible: repManagerAdmin },
   { id: 'sales', label: 'Sales', href: '/leads', visible: repManagerAdmin },
   { id: 'conversations', label: 'Conversations', href: '/chats', visible: repManagerAdmin },
   { id: 'accounts', label: 'Accounts', href: '/accounts', visible: adminUp },
@@ -64,12 +66,18 @@ export const RELAY_SECTION_NAV: Record<RelayShellSection, RelaySectionNavItem[]>
     { label: 'Today', href: '/dashboard', exact: true },
     { label: 'My tasks', href: '/tasks', exact: true },
   ],
+  work: [
+    { label: 'My tasks', href: '/tasks', exact: true },
+    { label: 'Today', href: '/tasks?view=today' },
+    { label: 'Overdue', href: '/tasks?view=overdue' },
+    { label: 'Upcoming', href: '/tasks?view=upcoming' },
+    { label: 'Completed', href: '/tasks?view=completed' },
+  ],
   sales: [
     { label: 'Prospects', href: '/prospect' },
     { label: 'Leads', href: '/leads' },
     { label: 'Pipeline', href: '/leads' },
     { label: 'Upwork', href: '/upwork' },
-    { label: 'Tasks', href: '/tasks' },
     { label: 'Archive', href: '/archive' },
     { label: 'Import', href: '/leads/import', exact: true },
   ],
@@ -85,13 +93,14 @@ export const RELAY_SECTION_NAV: Record<RelayShellSection, RelaySectionNavItem[]>
     { label: 'Proof', href: '/facts', exact: true },
   ],
   team: [
-    { label: 'People', href: '/team', exact: true },
-    { label: 'Teams', href: '/team/groups' },
-    { label: 'Tasks', href: '/team/tasks', exact: true },
+    { label: 'Overview', href: '/team', exact: true },
+    { label: 'People', href: '/team/people', exact: true },
+    { label: 'Workload', href: '/team/workload', exact: true },
     { label: 'Activity', href: '/team/activity', exact: true },
     { label: 'Performance', href: '/team/performance', exact: true },
-    { label: 'Daily operations', href: '/admin/command' },
     { label: 'Targets', href: '/team/targets', exact: true },
+    { label: 'Groups', href: '/team/groups', exact: true },
+    { label: 'Daily operations', href: '/admin/command' },
     { label: 'Access & roles', href: '/admin/people', exact: true, adminOnly: true },
   ],
   intelligence: [
@@ -116,7 +125,8 @@ export const RELAY_SECTION_NAV: Record<RelayShellSection, RelaySectionNavItem[]>
   ],
 }
 
-const SALES_PREFIXES = ['/leads', '/prospect', '/upwork', '/archive', '/tasks']
+const WORK_PREFIXES = ['/tasks']
+const SALES_PREFIXES = ['/leads', '/prospect', '/upwork', '/archive']
 const CONVERSATION_PREFIXES = ['/chats', '/relay', '/inbound']
 const ACCOUNTS_PREFIXES = ['/accounts', '/profile-intelligence', '/profiles', '/manage-profiles', '/workspace', '/rep/assigned-profiles']
 const TEAM_PREFIXES = ['/team', '/admin/command', '/admin/people', '/admin/targets', '/accountability']
@@ -132,6 +142,7 @@ export function detectRelayShellSection(pathname: string): RelayShellSection {
   if (CONVERSATION_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return 'conversations'
   }
+  if (WORK_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return 'work'
   if (SALES_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return 'sales'
   if (ACCOUNTS_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return 'accounts'
   if (TEAM_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return 'team'
@@ -208,6 +219,7 @@ export function resolveSectionActiveItem(
 export function v3MobileNavItems(role: RelayNavRoleFlags): Array<{ id: string; label: string; href: string }> {
   const items: Array<{ id: string; label: string; href: string }> = [
     { id: 'home', label: 'Home', href: '/dashboard' },
+    { id: 'work', label: 'Work', href: '/tasks' },
     { id: 'sales', label: 'Leads', href: '/leads' },
     { id: 'conversations', label: 'Inbox', href: '/chats' },
   ]
@@ -227,9 +239,9 @@ export interface V3SidebarItem {
 
 const v3SidebarBase: V3SidebarItem[] = [
   { id: 'home', label: 'Home', href: '/dashboard', visible: repManagerAdmin },
+  { id: 'work', label: 'Work', href: '/tasks', visible: repManagerAdmin },
   { id: 'sales', label: 'Sales', href: '/leads', visible: repManagerAdmin },
   { id: 'conversations', label: 'Inbox', href: '/chats', visible: repManagerAdmin },
-  { id: 'tasks', label: 'Tasks', href: '/tasks', visible: repManagerAdmin },
   { id: 'team', label: 'Team', href: '/team', visible: managerUp },
   { id: 'insights', label: 'Insights', href: '/reports', visible: repManagerAdmin },
 ]
@@ -261,6 +273,7 @@ export function resolveV3SidebarActiveId(pathname: string, role: RelayNavRoleFla
   // still belongs to its parent destination — never leave context blank.
   const fallback: Partial<Record<RelayShellSection, string>> = {
     home: 'home',
+    work: 'work',
     sales: 'sales',
     conversations: 'conversations',
     team: 'team',

@@ -129,7 +129,7 @@ export function CommandPalette({
       description: 'Tasks past due',
       icon: Target,
       group: 'Relay',
-      action: () => { router.push('/tasks?tab=overdue'); onOpenChange(false) },
+      action: () => { router.push('/tasks?view=overdue'); onOpenChange(false) },
     },
     {
       id: 'create-task',
@@ -332,7 +332,7 @@ export function CommandPalette({
       description: 'Who has what work',
       icon: ListChecks,
       group: 'Navigation',
-      action: () => { router.push('/team/tasks'); onOpenChange(false) },
+      action: () => { router.push('/tasks?scope=team'); onOpenChange(false) },
     },
     {
       id: 'team-activity',

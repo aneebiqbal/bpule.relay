@@ -7,13 +7,15 @@ import {
   LinkTabs,
   MetricStrip,
   RepStatusBadge,
+  relativeTime,
   Section,
   TimelineTable,
 } from '@/components/operations/ops-primitives'
 import { OpsFilters } from '@/components/operations/ops-filters'
 import { InterventionMenu } from '@/components/operations/intervention-menu'
+import { AssignTaskButton } from '@/components/operations/assign-task-button'
+import { RequestUpdateButton } from '@/components/operations/request-update-button'
 import { NotesPanel } from '@/components/operations/notes-panel'
-import { ConversationTable } from '@/components/operations/conversation-table'
 import { TaskBoard } from '@/components/operations/task-board'
 import { FunnelTable, ProfileComparison, metricsToStrip } from '@/components/operations/performance-views'
 import { LeadsTable } from '@/components/leads/leads-table'
@@ -27,12 +29,7 @@ import {
 import { canInterveneOnRep, repInScope } from '@/lib/operations/scope'
 import { OPS_RANGES, opsHref, parseOpsFilters, rangeWindow, type OpsFilters as Filters } from '@/lib/operations/filters'
 import { loadRepBasics, buildRepAttention, type RepBasics } from '@/lib/operations/rep-360'
-import {
-  CONVERSATION_VIEWS,
-  countConversationViews,
-  filterConversationRows,
-  loadConversationRows,
-} from '@/lib/operations/conversations'
+import { countConversationViews, loadConversationRows } from '@/lib/operations/conversations'
 import { ACTIVITY_EVENT_FILTERS, loadTimeline } from '@/lib/operations/activity'
 import { loadUnifiedTasks } from '@/lib/tasks/load-unified-tasks'
 import { countOverdueUnifiedTasks } from '@/lib/tasks/rank-unified-tasks'
@@ -40,13 +37,12 @@ import { loadLeadsPage, parseLeadsQuery } from '@/lib/leads/leads-page'
 
 export const dynamic = 'force-dynamic'
 
-const TABS = ['overview', 'leads', 'tasks', 'conversations', 'activity', 'performance'] as const
+const TABS = ['overview', 'work', 'leads', 'activity', 'performance'] as const
 type Tab = (typeof TABS)[number]
 const TAB_LABEL: Record<Tab, string> = {
   overview: 'Overview',
+  work: 'Work',
   leads: 'Leads',
-  tasks: 'Tasks',
-  conversations: 'Conversations',
   activity: 'Activity',
   performance: 'Performance',
 }
@@ -95,7 +91,7 @@ export default async function Rep360Page({
             {[activeProfile?.title, basics.teams.map((t) => t.name).join(', ') || null].filter(Boolean).join(' · ') || 'No team'}
           </p>
           <p className="mt-1 text-[13px] text-graphite">
-            Active profile:{' '}
+            Working as{' '}
             {activeProfile ? (
               <span className="text-ink">{activeProfile.name}</span>
             ) : (
@@ -106,13 +102,21 @@ export default async function Rep360Page({
             </Suspense>
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
-            href={`/admin/command/${repId}`}
-            className="inline-flex h-8 items-center rounded-lg border border-line bg-bone px-2.5 text-[13px] text-ink hover:bg-bone-raised"
+            href={`/chats?rep=${repId}`}
+            className="inline-flex h-8 items-center rounded-lg border border-line bg-bone px-2.5 text-[13px] text-ink transition-colors hover:bg-bone-raised"
           >
-            Daily operations
+            Open Inbox
           </Link>
+          <Link
+            href={`/leads?owner=${repId}`}
+            className="inline-flex h-8 items-center rounded-lg border border-line bg-bone px-2.5 text-[13px] text-ink transition-colors hover:bg-bone-raised"
+          >
+            Open Leads
+          </Link>
+          {canAssign && <AssignTaskButton reps={reps} defaultAssigneeId={repId} />}
+          {canAssign && <RequestUpdateButton reps={reps} defaultAssigneeId={repId} />}
           <InterventionMenu repId={repId} reps={reps} canAssign={canAssign} notesAnchor={tab === 'overview' ? '#notes' : `${base}#notes`} />
         </div>
       </header>
@@ -130,8 +134,7 @@ export default async function Rep360Page({
       <Suspense key={`${tab}:${JSON.stringify(sp)}`} fallback={<TabSkeleton />}>
         {tab === 'overview' && <OverviewTab ctx={ctx} basics={basics} />}
         {tab === 'leads' && <LeadsTab repId={repId} sp={sp} leadScope={ctx.leadScope} />}
-        {tab === 'tasks' && <TasksTab ctx={ctx} repId={repId} reps={reps} canAssign={canAssign} />}
-        {tab === 'conversations' && <ConversationsTab ctx={ctx} repId={repId} filters={filters} />}
+        {tab === 'work' && <WorkTab ctx={ctx} repId={repId} reps={reps} canAssign={canAssign} />}
         {tab === 'activity' && <ActivityTab ctx={ctx} repId={repId} filters={filters} />}
         {tab === 'performance' && <PerformanceTab repId={repId} filters={filters} />}
       </Suspense>
@@ -153,7 +156,10 @@ async function HeaderStatus({ repId }: { repId: string }) {
   const row = directory?.rows.find((r) => r.repId === repId)
   if (!row) return null
   return (
-    <span className="ml-2 inline-flex align-middle">
+    <span className="ml-2 inline-flex flex-wrap align-middle items-center gap-2">
+      <span className="text-[12px] text-graphite">
+        Last activity {relativeTime(row.lastActivityAt, Date.now())} · Target {Math.round(row.targetPct)}%
+      </span>
       <span className="sr-only">Status:</span>
       <RepStatusBadge status={row.status} />
     </span>
@@ -173,9 +179,9 @@ async function RepMetrics({ repId }: { repId: string }) {
     <MetricStrip
       metrics={[
         { label: 'Completed today', value: row?.completedToday ?? '—', href: `${base}?tab=activity&range=today` },
-        { label: 'Replies waiting', value: row?.repliesWaiting ?? '—', href: `${base}?tab=conversations&view=waiting_me`, tone: row?.repliesWaiting ? 'attention' : 'default' },
-        { label: 'Follow-ups due', value: row?.followUpsOverdue ?? '—', href: `${base}?tab=conversations&view=followups` },
-        { label: 'Tasks overdue', value: row?.overdueTasks ?? '—', href: `${base}?tab=tasks&view=overdue`, tone: row?.overdueTasks ? 'critical' : 'default' },
+        { label: 'Replies waiting', value: row?.repliesWaiting ?? '—', href: `/chats?rep=${repId}`, tone: row?.repliesWaiting ? 'attention' : 'default' },
+        { label: 'Follow-ups due', value: row?.followUpsOverdue ?? '—', href: `/chats?rep=${repId}` },
+        { label: 'Tasks overdue', value: row?.overdueTasks ?? '—', href: `${base}?tab=work&view=overdue`, tone: row?.overdueTasks ? 'critical' : 'default' },
         { label: 'Meetings · 7d', value: perf?.totals.meetings ?? '—', href: `${base}?tab=activity&event=MEETING_BOOKED&range=7d` },
         { label: 'Proposals · 7d', value: perf?.totals.proposals ?? '—', href: `${base}?tab=activity&event=UPWORK_PROPOSAL_PREPARED&range=7d` },
         { label: 'Wins · 7d', value: perf?.totals.wins ?? '—', href: `${base}?tab=activity&event=CLIENT_WON&range=7d` },
@@ -208,9 +214,9 @@ async function OverviewTab({ ctx, basics }: { ctx: OpsPageContext; basics: RepBa
         <Section title="Current workload">
           <MetricStrip
             metrics={[
-              { label: 'Replies waiting', value: row?.repliesWaiting ?? 0, href: `${base}?tab=conversations&view=waiting_me` },
-              { label: 'Follow-ups', value: row?.followUpsOverdue ?? 0, href: `${base}?tab=conversations&view=followups` },
-              { label: 'Assigned tasks', value: tasks.length, href: `${base}?tab=tasks` },
+              { label: 'Replies waiting', value: row?.repliesWaiting ?? 0, href: `/chats?rep=${basics.id}` },
+              { label: 'Follow-ups', value: row?.followUpsOverdue ?? 0, href: `/chats?rep=${basics.id}` },
+              { label: 'Assigned tasks', value: tasks.length, href: `${base}?tab=work` },
               { label: 'High-priority leads', value: row?.highPriority ?? 0, href: `${base}?tab=leads&priority=high` },
             ]}
           />
@@ -330,7 +336,7 @@ async function LeadsTab({ repId, sp, leadScope }: { repId: string; sp: SearchPar
   )
 }
 
-async function TasksTab({
+async function WorkTab({
   ctx,
   repId,
   reps,
@@ -356,42 +362,20 @@ async function TasksTab({
       >
         <MetricStrip
           metrics={[
-            { label: 'Replies to send', value: counts.waiting_me, href: `${base}?tab=conversations&view=waiting_me` },
-            { label: 'Follow-ups due', value: counts.followups, href: `${base}?tab=conversations&view=followups` },
-            { label: 'Meetings to prepare', value: counts.meetings, href: `${base}?tab=conversations&view=meetings` },
-            { label: 'Assigned overdue', value: countOverdueUnifiedTasks(tasks, now), href: `${base}?tab=tasks&view=overdue` },
+            { label: 'Replies to send', value: counts.waiting_me, href: `/chats?rep=${repId}` },
+            { label: 'Follow-ups due', value: counts.followups, href: `/chats?rep=${repId}` },
+            { label: 'Meetings to prepare', value: counts.meetings, href: `/chats?rep=${repId}` },
+            { label: 'Assigned overdue', value: countOverdueUnifiedTasks(tasks, now), href: `${base}?tab=work&view=overdue` },
           ]}
         />
       </Section>
-      <Section title="Assigned tasks" description="Requests from managers and admins. Open a task to start, complete, reassign or reschedule it.">
+      <Section
+        title="Assigned tasks"
+        description="Requests from managers and admins. Open a task to start, complete, reassign or reschedule it."
+        action={<Link href="/tasks?view=all" className="text-[12px] text-graphite hover:text-ink">All tasks →</Link>}
+      >
         <TaskBoard tasks={tasks} reps={reps} canManage={canAssign} currentRepId={ctx.auth.repId} now={now} showGroupBy={false} />
       </Section>
-    </div>
-  )
-}
-
-async function ConversationsTab({ ctx, repId, filters }: { ctx: OpsPageContext; repId: string; filters: Filters }) {
-  const now = Date.now()
-  const rows = await loadConversationRows(ctx.client, { orgId: ctx.auth.orgId, repIds: [repId] }, now)
-  const counts = countConversationViews(rows)
-  const view = CONVERSATION_VIEWS.some((v) => v.value === filters.view) ? (filters.view as string) : 'all'
-  const base = `/team/${repId}`
-  return (
-    <div className="space-y-3">
-      <LinkTabs
-        label="Conversation views"
-        active={view}
-        tabs={CONVERSATION_VIEWS.map((v) => ({
-          value: v.value,
-          label: v.label,
-          count: counts[v.value],
-          href: opsHref(base, { tab: 'conversations' }, { view: v.value === 'all' ? null : v.value }),
-        }))}
-      />
-      <p className="text-[12px] text-graphite">
-        Built from conversation state, not message bodies. Open a row to read the actual thread and check how it was handled.
-      </p>
-      <ConversationTable rows={filterConversationRows(rows, view)} now={now} />
     </div>
   )
 }

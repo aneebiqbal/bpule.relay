@@ -140,7 +140,7 @@ export function RelayAppShell({
           const badge = sidebarBadge(
             item.id === 'conversations'
               ? sidebarCounts?.inboxNeedsReply
-              : item.id === 'tasks'
+              : item.id === 'work'
                 ? sidebarCounts?.actionableTasks
                 : null,
           )

@@ -298,7 +298,7 @@ export function ManagerHomeView({
                       </Link>
                     </td>
                     <td className="px-3 py-2.5">
-                      <Link href={`/tasks?assignee=${row.repId}&tab=overdue`} className="tabular-nums text-ink hover:underline">
+                      <Link href={`/tasks?assignee=${row.repId}&view=overdue`} className="tabular-nums text-ink hover:underline">
                         {row.overdueTasks}
                       </Link>
                     </td>
