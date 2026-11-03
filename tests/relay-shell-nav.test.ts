@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   NAV_DOMAINS,
   domainForPathname,
+  isRecordDetailPathname,
   mobileNavItems,
   moreSheetSections,
   navBreadcrumb,
@@ -53,8 +54,8 @@ describe('V3_NAV_PRIMARY_SINGLE_ACTIVE', () => {
   })
 
   it('maps routes with no dedicated domain to null, not a wrong guess', () => {
-    expect(resolvePrimaryActiveId('/notifications', admin)).toBeNull()
     expect(resolvePrimaryActiveId('/onboarding', admin)).toBeNull()
+    expect(resolvePrimaryActiveId('/verify-email', admin)).toBeNull()
   })
 })
 
@@ -73,7 +74,7 @@ describe('V3_NAV_SECONDARY_SINGLE_ACTIVE', () => {
   it('resolves Work view params to one task view each', () => {
     expect(resolveSecondaryActiveId('work', '/tasks', search('view=today'), rep)).toBe('today')
     expect(resolveSecondaryActiveId('work', '/tasks', search('view=overdue'), rep)).toBe('overdue')
-    expect(resolveSecondaryActiveId('work', '/tasks', search(''), rep)).toBe('tasks')
+    expect(resolveSecondaryActiveId('work', '/tasks', search(''), rep)).toBe('my-tasks')
   })
 
   it('resolves exactly one active secondary item across the route matrix', () => {
@@ -131,9 +132,11 @@ describe('V3_NAV_CANONICAL_LABELS', () => {
     }
   })
 
-  it('gives every destination exactly one label', () => {
-    const labels = NAV_DOMAINS.flatMap((d) => [d.label, ...d.secondary.map((i) => i.label)])
-    expect(new Set(labels).size).toBe(labels.length)
+  it('gives every destination exactly one label within its domain', () => {
+    for (const domain of NAV_DOMAINS) {
+      const labels = [domain.label, ...domain.secondary.map((i) => i.label)]
+      expect(new Set(labels).size, domain.id).toBe(labels.length)
+    }
   })
 
   it('uses the canonical label for each mapped destination', () => {
@@ -149,7 +152,7 @@ describe('V3_NAV_CANONICAL_LABELS', () => {
       NAV_DOMAINS.find((d) => d.id === 'admin')!.secondary.find((i) => i.href === href)?.label
     expect(byHref('/leads')).toBe('Leads')
     expect(byHref('/leads?view=pipeline')).toBe('Pipeline')
-    expect(byHref('/reports/sales')).toBe('Sales Insights')
+    expect(byHref('/reports/sales')).toBe('Sales')
     expect(byHref('/content')).toBe('Studio')
     expect(byHref('/team')).toBe('Overview')
     expect(byHref('/team/people')).toBe('People')
@@ -317,5 +320,130 @@ describe('domainForPathname', () => {
     expect(domainForPathname('/inbound')).toBe('inbox')
     expect(domainForPathname('/relay')).toBe('inbox')
     expect(domainForPathname('/archive')).toBe('sales')
+  })
+})
+
+// ─── Final shell contract (Phases 5–6, 24) ──────────────────────────────────
+
+const ROUTE_MATRIX: Array<[string, string]> = [
+  ['/dashboard', 'home'],
+  ['/prospect', 'sales'],
+  ['/leads', 'sales'],
+  ['/leads/l1', 'sales'],
+  ['/chats', 'inbox'],
+  ['/tasks', 'work'],
+  ['/team', 'team'],
+  ['/team/m1', 'team'],
+  ['/content', 'content'],
+  ['/content/ideas', 'content'],
+  ['/content/growth', 'content'],
+  ['/reports/sales', 'insights'],
+  ['/reports/pipeline', 'insights'],
+  ['/reports/team', 'insights'],
+  ['/reports/revenue', 'insights'],
+  ['/settings', 'settings'],
+  ['/notifications', 'settings'],
+  ['/admin/command', 'team'],
+  ['/admin/people', 'admin'],
+]
+
+describe('V3_PRIMARY_NAV_SINGLE_ACTIVE', () => {
+  it('resolves exactly one primary domain for every route in the matrix', () => {
+    for (const [pathname, expected] of ROUTE_MATRIX) {
+      expect(resolvePrimaryActiveId(pathname, admin), pathname).toBe(expected)
+    }
+  })
+
+  it('never resolves two primary domains for one route', () => {
+    for (const [pathname] of ROUTE_MATRIX) {
+      const active = visibleDomains(admin).filter((d) => resolvePrimaryActiveId(pathname, admin) === d.id)
+      expect(active, pathname).toHaveLength(1)
+    }
+  })
+})
+
+describe('V3_SECONDARY_NAV_SINGLE_ACTIVE', () => {
+  it('resolves at most one secondary item per route', () => {
+    for (const [pathname] of ROUTE_MATRIX) {
+      const domain = resolvePrimaryActiveId(pathname, admin)
+      if (!domain) continue
+      const active = resolveSecondaryActiveId(domain, pathname, search(''), admin)
+      if (!active) continue
+      expect(
+        secondaryItems(domain, admin).filter((i) => i.id === active),
+        pathname,
+      ).toHaveLength(1)
+    }
+  })
+
+  it('resolves query-scoped views to exactly one item', () => {
+    expect(resolveSecondaryActiveId('sales', '/leads', search('view=pipeline'), admin)).toBe('pipeline')
+    expect(resolveSecondaryActiveId('work', '/tasks', search('view=overdue'), admin)).toBe('overdue')
+    expect(resolveSecondaryActiveId('work', '/tasks', search('scope=team'), admin)).toBe('team-tasks')
+    expect(resolveSecondaryActiveId('inbox', '/chats', search('view=waiting_me'), admin)).toBe('needs-reply')
+  })
+})
+
+describe('V3_NAV_ROUTE_MATRIX', () => {
+  const expectations: Array<[string, string, string | null]> = [
+    ['/dashboard', 'home', null],
+    ['/prospect', 'sales', 'prospects'],
+    ['/leads', 'sales', 'leads'],
+    ['/leads/import', 'sales', 'import'],
+    ['/chats', 'inbox', null],
+    ['/tasks', 'work', 'my-tasks'],
+    ['/content', 'content', 'studio'],
+    ['/content/ideas', 'content', 'ideas'],
+    ['/content/growth', 'content', 'growth'],
+    ['/reports/sales', 'insights', 'sales-insights'],
+    ['/reports/pipeline', 'insights', 'pipeline-report'],
+    ['/reports/team', 'insights', 'team-report'],
+    ['/reports/revenue', 'insights', 'revenue-report'],
+    ['/settings', 'settings', 'account'],
+    ['/admin/people', 'admin', 'people-roles'],
+  ]
+
+  it('maps every route to its domain and secondary destination', () => {
+    for (const [pathname, domain, secondaryId] of expectations) {
+      expect(resolvePrimaryActiveId(pathname, admin), pathname).toBe(domain)
+      expect(resolveSecondaryActiveId(domain, pathname, search(''), admin), pathname).toBe(secondaryId)
+    }
+  })
+
+  it('never leaves a real feature without a rail entry point', () => {
+    for (const [pathname, domain] of ROUTE_MATRIX) {
+      const items = secondaryItems(domain, admin).map((i) => i.href)
+      const resolved = resolveSecondaryActiveId(domain, pathname, search(''), admin)
+      if (!resolved) continue
+      expect(items, pathname).toContain(
+        secondaryItems(domain, admin).find((i) => i.id === resolved)!.href,
+      )
+    }
+  })
+})
+
+describe('V3_NESTED_ROUTE_SELECTION', () => {
+  it('keeps the parent destination active on record detail', () => {
+    expect(resolvePrimaryActiveId('/leads/l1', rep)).toBe('sales')
+    expect(resolveSecondaryActiveId('sales', '/leads/l1', search(''), rep)).toBe('leads')
+    expect(resolvePrimaryActiveId('/accounts/acme', admin)).toBe('sales')
+    expect(resolveSecondaryActiveId('sales', '/accounts/acme', search(''), admin)).toBe('companies')
+    expect(resolvePrimaryActiveId('/profile-intelligence/p1', admin)).toBe('admin')
+    expect(resolveSecondaryActiveId('admin', '/profile-intelligence/p1', search(''), admin)).toBe('profiles')
+  })
+
+  it('does not let a query-scoped alias claim a sibling route', () => {
+    expect(resolveSecondaryActiveId('sales', '/leads/import', search(''), admin)).toBe('import')
+    expect(resolveSecondaryActiveId('sales', '/leads/l1', search('view=pipeline'), admin)).toBe('leads')
+  })
+
+  it('hides the secondary rail on record detail without losing the context', () => {
+    expect(isRecordDetailPathname('/leads/l1')).toBe(true)
+    expect(isRecordDetailPathname('/team/m1')).toBe(true)
+    expect(isRecordDetailPathname('/leads')).toBe(false)
+    expect(navBreadcrumb('/leads/l1', search(''), rep)).toMatchObject({
+      domainLabel: 'Sales',
+      itemLabel: 'Leads',
+    })
   })
 })

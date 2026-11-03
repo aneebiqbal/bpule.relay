@@ -12,9 +12,10 @@ import { buildGlobalCreateItems } from '@/lib/navigation/global-create-items'
 
 export interface GlobalCreateMenuProps {
   isAdmin: boolean
+  isManager?: boolean
 }
 
-export function GlobalCreateMenu({ isAdmin }: GlobalCreateMenuProps) {
+export function GlobalCreateMenu({ isAdmin, isManager = false }: GlobalCreateMenuProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -34,7 +35,7 @@ export function GlobalCreateMenu({ isAdmin }: GlobalCreateMenuProps) {
     }
   }, [open])
 
-  const items = buildGlobalCreateItems(isAdmin)
+  const items = buildGlobalCreateItems(isAdmin, isManager)
 
   return (
     <div ref={rootRef} className="relative">

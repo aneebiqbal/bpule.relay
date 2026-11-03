@@ -1,25 +1,36 @@
 'use client'
 
+/**
+ * Relay app shell — the entire navigation architecture:
+ *
+ *   PRIMARY SIDEBAR   where am I in the product?      (domains, collapsible)
+ *   SECONDARY SIDEBAR what can I do in this domain?   (contextual, one level)
+ *   HEADER            search, create, notifications, account
+ *   PAGE              actual work
+ *
+ * There is no third navigation layer. Page-local views use tabs or filters.
+ */
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Command, LogOut, Menu, X } from 'lucide-react'
+import { Command, Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
 import { cn } from 'cn'
 import { RelayBrand } from '@/components/brand'
 import { NotificationCenter } from '@/components/notification-center'
-import { ThemeToggle } from '@/components/theme-toggle'
 import { AppBackButton, hasAppParent } from '@/components/app-back-button'
-import { ProfileSwitcher } from '@/components/shell/profile-switcher'
 import { GlobalCreateMenu } from '@/components/shell/global-create-menu'
-import { V3Avatar } from '@/components/v3/primitives'
+import { UserMenu } from '@/components/shell/user-menu'
 import { useCommandPalette } from '@/components/command-palette'
 import {
+  PRIMARY_MAIN_IDS,
+  PRIMARY_UTILITY_IDS,
+  isRecordDetailPathname,
   mobileNavItems,
   moreSheetSections,
   navBreadcrumb,
   resolvePrimaryActiveId,
   resolveSecondaryActiveId,
-  secondaryItems,
+  secondaryGroups,
   visibleDomains,
   type RelayNavDomain,
   type RelayNavRoleFlags,
@@ -30,6 +41,7 @@ import type { RepRole } from '@/lib/domain/types'
 
 export interface RelayAppShellProps {
   organizationName: string
+  repName: string
   role: RepRole
   isOwner: boolean
   isAdmin: boolean
@@ -41,6 +53,8 @@ export interface RelayAppShellProps {
   children: React.ReactNode
 }
 
+const COLLAPSE_KEY = 'relay.primary.collapsed'
+
 /** Badge count per primary domain. Only Inbox and Work have counts. */
 function domainBadge(id: RelayNavDomain, counts?: SidebarCounts) {
   if (id === 'inbox') return sidebarBadge(counts?.inboxNeedsReply)
@@ -50,6 +64,7 @@ function domainBadge(id: RelayNavDomain, counts?: SidebarCounts) {
 
 export function RelayAppShell({
   organizationName,
+  repName,
   role,
   isOwner,
   isAdmin,
@@ -63,9 +78,9 @@ export function RelayAppShell({
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [sends, setSends] = useState(todaySends)
   const [navOpen, setNavOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   const { setOpen: openPalette } = useCommandPalette()
 
   const roleFlags: RelayNavRoleFlags = useMemo(
@@ -75,7 +90,7 @@ export function RelayAppShell({
 
   const search = useMemo(() => new URLSearchParams(searchParams.toString()), [searchParams])
   const activeDomain = resolvePrimaryActiveId(pathname, roleFlags)
-  const secondary = activeDomain ? secondaryItems(activeDomain, roleFlags) : []
+  const secondary = activeDomain ? secondaryGroups(activeDomain, roleFlags) : []
   const activeSecondaryId = activeDomain
     ? resolveSecondaryActiveId(activeDomain, pathname, search, roleFlags)
     : null
@@ -83,24 +98,16 @@ export function RelayAppShell({
   const domains = useMemo(() => visibleDomains(roleFlags), [roleFlags])
   const mobileItems = useMemo(() => mobileNavItems(roleFlags), [roleFlags])
   const moreSections = useMemo(() => moreSheetSections(roleFlags), [roleFlags])
+  const secondaryFlat = useMemo(() => secondary.flatMap((g) => g.items), [secondary])
 
+  const showSecondary = Boolean(activeDomain) && secondary.length > 0 && !isRecordDetailPathname(pathname)
+
+  // Restore the persisted collapse state after mount so SSR and hydration agree.
   useEffect(() => {
-    let cancelled = false
-    const fetchStatus = () => {
-      fetch('/api/me/status')
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (!cancelled && d && typeof d.todaySends === 'number') setSends(d.todaySends)
-        })
-        .catch(() => {})
-    }
-    fetchStatus()
-    const interval = setInterval(fetchStatus, 30_000)
-    window.addEventListener('focus', fetchStatus)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-      window.removeEventListener('focus', fetchStatus)
+    try {
+      if (localStorage.getItem(COLLAPSE_KEY) === '1') setCollapsed(true)
+    } catch {
+      /* storage unavailable */
     }
   }, [])
 
@@ -116,104 +123,137 @@ export function RelayAppShell({
     return () => window.removeEventListener('keydown', onKey)
   }, [navOpen, moreOpen])
 
-  async function signOut() {
-    if (!demo) {
-      const { getBrowserAuth } = await import('@/lib/auth/browser')
-      const auth = await getBrowserAuth()
-      await auth.signOut()
-    }
-    router.replace('/login')
-    router.refresh()
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0')
+      } catch {
+        /* storage unavailable */
+      }
+      return next
+    })
   }
 
-  const sendPct = Math.min(sends / dailyLimit, 1)
-  const atCeiling = sends >= dailyLimit
-  const circumference = 2 * Math.PI * 11
-
-  const sendCounter = (
-    <div className="flex items-center gap-2" title={`${sends} of ${dailyLimit} sends used today`}>
-      <div className="relative size-7">
-        <svg className="size-7 -rotate-90" viewBox="0 0 28 28" aria-hidden>
-          <circle cx="14" cy="14" r="11" fill="none" stroke="var(--line)" strokeWidth="2" />
-          <circle
-            cx="14"
-            cy="14"
-            r="11"
-            fill="none"
-            stroke={atCeiling ? 'var(--status-warning)' : 'var(--orange)'}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - sendPct)}
-            className="transition-all duration-500 ease-out"
-          />
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-[7px] font-medium tabular-nums text-ink">
-          {sends}
-        </span>
-      </div>
-    </div>
-  )
-
   function renderPrimaryNav(onNavigate?: () => void) {
+    const main = domains.filter((d) => PRIMARY_MAIN_IDS.includes(d.id))
+    const utility = domains.filter((d) => PRIMARY_UTILITY_IDS.includes(d.id))
+    const renderGroup = (items: typeof domains) =>
+      items.map((item) => {
+        const active = activeDomain === item.id
+        const badge = domainBadge(item.id, sidebarCounts)
+        const Icon = item.icon
+        return (
+          <Link
+            key={item.id}
+            href={item.href}
+            onClick={onNavigate}
+            aria-current={active ? 'page' : undefined}
+            aria-label={collapsed ? (badge ? `${item.label}, ${badge.value} needing attention` : item.label) : undefined}
+            title={collapsed ? item.label : undefined}
+            className={cn(
+              'group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors',
+              active ? 'bg-bone-raised text-ink' : 'text-graphite hover:bg-bone-raised hover:text-ink',
+            )}
+          >
+            {active && (
+              <span
+                className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-orange"
+                aria-hidden
+              />
+            )}
+            <Icon
+              className="size-4 shrink-0"
+              aria-hidden
+              strokeWidth={active ? 2 : 1.75}
+            />
+            <span className={cn('flex-1 truncate text-left', collapsed && 'hidden')}>{item.label}</span>
+            {badge && !collapsed && (
+              <span
+                aria-hidden
+                className="ml-auto rounded-full bg-orange-faint px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-orange-dark"
+              >
+                {badge.label}
+              </span>
+            )}
+            {badge && collapsed && (
+              <span
+                aria-hidden
+                className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-orange"
+              />
+            )}
+          </Link>
+        )
+      })
+
     return (
-      <nav className="flex flex-col gap-0.5 px-3 py-3" aria-label="Primary">
-        {domains.map((item) => {
-          const active = activeDomain === item.id
-          const badge = domainBadge(item.id, sidebarCounts)
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              onClick={onNavigate}
-              aria-current={active ? 'page' : undefined}
-              aria-label={badge ? `${item.label}, ${badge.value} needing attention` : undefined}
-              className={cn(
-                'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors',
-                active ? 'bg-solid text-on-solid' : 'text-graphite hover:bg-bone-raised hover:text-ink',
-              )}
-            >
-              <span className="flex-1">{item.label}</span>
-              {badge && (
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    'ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
-                    active ? 'bg-on-solid/20 text-on-solid' : 'bg-orange/15 text-orange',
-                  )}
-                >
-                  {badge.label}
-                </span>
-              )}
-            </Link>
-          )
-        })}
+      <nav className="flex flex-col gap-0.5 px-2 py-2" aria-label="Domains">
+        {renderGroup(main)}
+        {utility.length > 0 && <div className="my-2 border-t border-line" aria-hidden />}
+        {renderGroup(utility)}
       </nav>
     )
   }
 
   function renderSecondaryRail() {
-    if (!activeDomain || secondary.length === 0) return null
+    if (!showSecondary || !activeDomain) return null
     const config = domains.find((d) => d.id === activeDomain)
     if (!config) return null
     return (
       <aside
-        className="hidden w-56 shrink-0 border-r border-line bg-bone lg:block"
+        className="hidden w-56 shrink-0 border-r border-line bg-bone xl:block"
         aria-label={`${config.label} sections`}
       >
-        <p className="px-4 pb-1 pt-4 text-[10px] font-medium uppercase tracking-[0.14em] text-stone">
-          {config.label}
-        </p>
-        <nav className="flex flex-col gap-0.5 px-3 pb-4">
-          {secondary.map((item) => {
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+          {secondary.map((group, index) => (
+            <div key={group.label ?? 'default'} className={index > 0 ? 'mt-3' : undefined}>
+              {group.label && (
+                <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-stone">
+                  {group.label}
+                </p>
+              )}
+              <nav className="flex flex-col gap-0.5" aria-label={group.label ?? undefined}>
+                {group.items.map((item) => {
+                  const active = activeSecondaryId === item.id
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      aria-current={active ? 'page' : undefined}
+                      className={cn(
+                        'relative rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
+                        active
+                          ? 'bg-bone-raised font-medium text-ink'
+                          : 'text-graphite hover:bg-bone-raised hover:text-ink',
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </nav>
+            </div>
+          ))}
+        </div>
+      </aside>
+    )
+  }
+
+  function renderMobileSectionTabs() {
+    if (!showSecondary) return null
+    return (
+      <div className="border-b border-line bg-bone px-3 py-2 xl:hidden">
+        <div className="flex min-w-max gap-0.5 overflow-x-auto" role="tablist" aria-label="Section">
+          {secondaryFlat.map((item) => {
             const active = activeSecondaryId === item.id
             return (
               <Link
                 key={item.id}
                 href={item.href}
-                aria-current={active ? 'page' : undefined}
+                role="tab"
+                aria-selected={active}
                 className={cn(
-                  'rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
+                  'whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12px] transition-colors',
                   active
                     ? 'bg-bone-raised font-medium text-ink'
                     : 'text-graphite hover:bg-bone-raised hover:text-ink',
@@ -223,8 +263,8 @@ export function RelayAppShell({
               </Link>
             )
           })}
-        </nav>
-      </aside>
+        </div>
+      </div>
     )
   }
 
@@ -282,7 +322,9 @@ export function RelayAppShell({
           >
             <Menu className="size-5" />
           </button>
-          <RelayBrand />
+          <span className="lg:hidden">
+            <RelayBrand />
+          </span>
           {breadcrumb && (
             <nav
               aria-label="Breadcrumb"
@@ -313,40 +355,55 @@ export function RelayAppShell({
           <div className="ml-auto flex items-center gap-2">
             <GlobalCreateMenu isAdmin={isAdmin || isOwner} />
             <NotificationCenter />
-            <div className="hidden md:block">
-              <ProfileSwitcher role={role} compact />
-            </div>
-            {sendCounter}
-            <ThemeToggle className="rounded-md p-1 text-graphite hover:bg-bone-raised" />
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className="hidden rounded-md p-1.5 text-graphite hover:bg-bone-raised sm:block"
-              title="Sign out"
-            >
-              <LogOut className="size-4" />
-            </button>
+            <UserMenu
+              name={repName}
+              role={role}
+              organizationName={organizationName}
+              demo={demo}
+              sends={todaySends}
+              dailyLimit={dailyLimit}
+            />
           </div>
         </div>
-        <div className="flex border-t border-line/70 px-4 py-2 lg:hidden">
-          <ProfileSwitcher role={role} className="w-full max-w-none" />
-        </div>
+        {renderMobileSectionTabs()}
       </header>
 
       <div className="lg:flex">
-        <aside className="sticky top-12 hidden h-[calc(100dvh-3rem)] shrink-0 flex-col border-r border-line bg-bone lg:flex lg:w-52">
-          <div className="border-b border-line px-3 py-3">
-            <div className="flex items-center gap-2.5">
-              <V3Avatar name={organizationName} />
-              <div className="min-w-0">
-                <p className="truncate text-[13px] font-medium text-ink">{organizationName}</p>
-                <p className="text-[10px] uppercase tracking-[0.14em] text-stone">Workspace</p>
-              </div>
-            </div>
+        <aside
+          className={cn(
+            'sticky top-12 hidden h-[calc(100dvh-3rem)] shrink-0 flex-col border-r border-line bg-bone lg:flex',
+            collapsed ? 'lg:w-[68px]' : 'lg:w-[216px]',
+          )}
+          aria-label="Primary navigation"
+        >
+          <div
+            className={cn(
+              'flex items-center gap-2 border-b border-line px-3 py-3',
+              collapsed && 'justify-center px-0',
+            )}
+          >
+            <RelayBrand />
+            {!collapsed && <span className="text-[10px] text-stone">v{APP_VERSION}</span>}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">{renderPrimaryNav()}</div>
-          <div className="border-t border-line px-3 py-3">
-            <p className="text-[9px] text-stone">v{APP_VERSION}</p>
+          <div className="border-t border-line p-2">
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-expanded={!collapsed}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className={cn(
+                'flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-graphite transition-colors hover:bg-bone-raised hover:text-ink',
+                collapsed && 'justify-center px-0',
+              )}
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="size-4 shrink-0" aria-hidden />
+              ) : (
+                <PanelLeftClose className="size-4 shrink-0" aria-hidden />
+              )}
+              {!collapsed && <span>Collapse</span>}
+            </button>
           </div>
         </aside>
 
@@ -410,7 +467,7 @@ export function RelayAppShell({
           <div className="absolute inset-0 bg-ink/30" aria-hidden onClick={() => setNavOpen(false)} />
           <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-bone shadow-xl">
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <span className="text-[13px] font-medium capitalize text-ink">
+              <span className="text-[13px] font-medium text-ink">
                 {breadcrumb?.domainLabel ?? 'Relay'}
               </span>
               <button type="button" aria-label="Close" autoFocus onClick={() => setNavOpen(false)}>
@@ -419,26 +476,32 @@ export function RelayAppShell({
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
               {renderPrimaryNav(() => setNavOpen(false))}
-              {activeDomain && secondary.length > 0 && (
+              {showSecondary && (
                 <div className="border-t border-line px-3 py-3">
-                  <p className="px-2.5 pb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-stone">
-                    {breadcrumb?.domainLabel}
-                  </p>
-                  {secondary.map((item) => (
-                    <Link
-                      key={item.id}
-                      href={item.href}
-                      onClick={() => setNavOpen(false)}
-                      aria-current={activeSecondaryId === item.id ? 'page' : undefined}
-                      className={cn(
-                        'block rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
-                        activeSecondaryId === item.id
-                          ? 'bg-bone-raised font-medium text-ink'
-                          : 'text-graphite hover:bg-bone-raised hover:text-ink',
+                  {secondary.map((group) => (
+                    <div key={group.label ?? 'default'} className="pb-2">
+                      {group.label && (
+                        <p className="px-2.5 pb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-stone">
+                          {group.label}
+                        </p>
                       )}
-                    >
-                      {item.label}
-                    </Link>
+                      {group.items.map((item) => (
+                        <Link
+                          key={item.id}
+                          href={item.href}
+                          onClick={() => setNavOpen(false)}
+                          aria-current={activeSecondaryId === item.id ? 'page' : undefined}
+                          className={cn(
+                            'block rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
+                            activeSecondaryId === item.id
+                              ? 'bg-bone-raised font-medium text-ink'
+                              : 'text-graphite hover:bg-bone-raised hover:text-ink',
+                          )}
+                        >
+                          {item.label}
+                        </Link>
+                      ))}
+                    </div>
                   ))}
                 </div>
               )}

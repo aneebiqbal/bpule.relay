@@ -15,10 +15,14 @@ const BASE_ITEMS: GlobalCreateItem[] = [
   { key: 'studio', label: 'Create Studio Idea', description: 'Turn a raw thought into angles', href: '/content' },
 ]
 
-export function buildGlobalCreateItems(isAdmin: boolean): GlobalCreateItem[] {
-  if (!isAdmin) return [...BASE_ITEMS]
-  return [
-    ...BASE_ITEMS,
-    { key: 'invite', label: 'Invite Person', description: 'Add someone to the organization', href: '/admin/people' },
-  ]
+export function buildGlobalCreateItems(isAdmin: boolean, isManager = false): GlobalCreateItem[] {
+  const items = [...BASE_ITEMS]
+  // Managers assign work; admins can too.
+  if (isManager || isAdmin) {
+    items.push({ key: 'assign-task', label: 'Assign Task', description: 'Queue work for a specific rep', href: '/tasks?assign=1' })
+  }
+  if (isAdmin) {
+    items.push({ key: 'invite', label: 'Invite Person', description: 'Add someone to the organization', href: '/admin/people' })
+  }
+  return items
 }

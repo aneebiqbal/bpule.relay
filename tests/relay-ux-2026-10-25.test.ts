@@ -75,7 +75,7 @@ describe('Admin QA surface', () => {
   const api = read('src/app/api/admin/qa-views/route.ts')
 
   it('is reachable from the admin nav', () => {
-    expect(read('src/components/app-rail.tsx')).toContain("'/admin/qa'")
+    expect(read('src/lib/navigation/relay-shell-nav.ts')).toContain("'/admin/qa'")
   })
 
   it('exposes routing, staleness and threads sections', () => {

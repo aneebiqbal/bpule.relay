@@ -44,6 +44,9 @@ Roles: **R** = Rep · **M** = Manager · **A** = Admin · **O** = Owner.
 | Create Post | `/studio/drafts/new` | ✅ | ✅ | ✅ | ✅ | — | INAPP Studio/Ideas, CREATE | ✅ | V |
 | Growth | `/content/growth` | — | — | ✅ | ✅ | Content | — | ✅ | V |
 | Sales Insights | `/reports/sales` | ✅ | ✅ | ✅ | ✅ | Insights | MOBILE, INAPP | ✅ | V |
+| Pipeline Report | `/reports/pipeline` | ✅ | ✅ | ✅ | ✅ | Insights | — | — | V |
+| Team Report | `/reports/team` | ✅ | ✅ | ✅ | ✅ | Insights | — | — | V |
+| Revenue Report | `/reports/revenue` | ✅ | ✅ | ✅ | ✅ | Insights | — | — | V |
 | AI Usage | `/admin/ai-usage` | — | — | ✅ | ✅ | Insights | settings, ADMINHOME | — | V |
 | Revenue Intelligence | `/admin/revenue-intelligence` | — | — | ✅ | ✅ | Insights | INAPP | ✅ | V |
 | People & Roles | `/admin/people` | — | — | ✅ | ✅ | Admin | CREATE, ADMINHOME | ✅ | V |
@@ -54,6 +57,7 @@ Roles: **R** = Rep · **M** = Manager · **A** = Admin · **O** = Owner.
 | Training Data | `/admin/training-data` | — | — | ✅ | ✅ | Admin | — | — | V |
 | Manage Profiles | `/manage-profiles` | — | — | — | ✅ | Admin | ONB, ADMINHOME | — | V |
 | Settings | `/settings` | ✅ | ✅ | ✅ | ✅ | Settings | MOBILE (More), PAL | ✅ | V |
+| Notifications | `/notifications` | ✅ | ✅ | ✅ | ✅ | Settings | BELL | — | V |
 | Notifications | `/notifications` | ✅ | ✅ | ✅ | ✅ | — | BELL | — | V |
 | My performance | `/performance` | ✅ | ✅ | ✅ | ✅ | — | INAPP | — | V |
 

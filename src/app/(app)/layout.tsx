@@ -97,6 +97,7 @@ export default async function AppLayout({
         <ActiveIdentityProvider identities={revenueIdentities} initialActiveId={initialActiveId}>
           <RelayAppShell
             organizationName={user.organization.name}
+            repName={user.rep.name}
             role={user.rep.role}
             isOwner={authCtx?.isOwner ?? false}
             isAdmin={authCtx?.isAdmin ?? false}

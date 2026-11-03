@@ -194,7 +194,7 @@ const NAMED_CASES: readonly NamedCase[] = [
     id: 'BUG001_NAVIGATION',
     symptom: 'Every sidebar link disabled prefetch and the layout ran a five-step sequential waterfall.',
     check: () => {
-      if (readApp('src/components/app-rail.tsx').includes('prefetch={false}')) {
+      if (readApp('src/components/shell/relay-app-shell.tsx').includes('prefetch={false}')) {
         throw new Error('the sidebar still disables prefetch; navigation pays a full RSC round-trip per click')
       }
       if (!readApp('src/app/(app)/layout.tsx').includes('Promise.all([')) {
