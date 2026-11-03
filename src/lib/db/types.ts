@@ -104,6 +104,12 @@ export interface DbQueryBuilder<T = any> extends PromiseLike<DbResult<T[]>> {
 export interface DbClient {
   from<T = any>(table: string): DbQueryBuilder<T>
   rpc<T = any>(functionName: string, args?: Record<string, unknown>): PromiseLike<DbResult<T>>
+  /**
+   * Raw SQL aggregate. Only the Neon provider supports it; the Supabase
+   * (PostgREST) adapter returns an error so callers can fall back to the
+   * in-memory computation. `?` placeholders are rewritten to `$n`.
+   */
+  raw?<T = any>(sql: string, params?: unknown[]): PromiseLike<DbResult<T>>
   /** The provider that produced this client, for diagnostics only. */
   readonly provider: 'supabase' | 'neon'
 }

@@ -13,6 +13,12 @@ import type { DbClient } from '@/lib/db/types'
  */
 import { QUALIFICATION_BANDS } from '@/lib/scoring/qualification'
 import { MEETING_EVENT, WIN_EVENT } from '@/lib/sales/meetings'
+import {
+  CONVERSATION_STAGE_GROUPS,
+  MEETING_AND_WON_STAGES,
+  PROPOSAL_OR_LATER_STAGES,
+  conversationStageGroup,
+} from '@/lib/sales/stage-vocabulary'
 import { CONNECTION_EVENTS, SENT_MESSAGE_EVENTS } from '@/lib/sales/send-truth'
 import type { OpsSource } from '@/lib/operations/filters'
 
@@ -203,8 +209,8 @@ function eventCount(
 
 // ─── Sales report ───────────────────────────────────────────────────────────
 
-const MEETING_OR_LATER = ['meeting', 'proposal', 'negotiation', 'won']
-const PROPOSAL_OR_LATER = ['proposal', 'negotiation', 'won']
+const MEETING_OR_LATER = MEETING_AND_WON_STAGES
+const PROPOSAL_OR_LATER = PROPOSAL_OR_LATER_STAGES
 
 export interface SalesReport {
   /** Cohort: leads created in the window, counted at their furthest known stage. */
@@ -272,19 +278,15 @@ export async function loadSalesReport(
 
 // ─── Pipeline report ────────────────────────────────────────────────────────
 
-export const PIPELINE_STAGE_GROUPS: Array<{ key: string; label: string; stages: string[] | null }> = [
-  { key: 'qualified', label: 'Qualified', stages: null },
-  { key: 'contacted', label: 'Contacted', stages: ['new', 'contacted'] },
-  { key: 'conversation', label: 'Conversation', stages: ['replied', 'qualifying', 'interested'] },
-  { key: 'meeting', label: 'Meeting', stages: ['meeting'] },
-  { key: 'proposal', label: 'Proposal', stages: ['proposal', 'negotiation'] },
-  { key: 'won', label: 'Won', stages: ['won'] },
-]
+/**
+ * Pipeline funnel groups. The stage vocabulary is owned by
+ * `lib/sales/stage-vocabulary.ts` — do not re-list stages here.
+ */
+export const PIPELINE_STAGE_GROUPS = CONVERSATION_STAGE_GROUPS
 
 /** Conversation stage → pipeline group key (used by /chats?cstage= drill-down). */
 export function pipelineGroupForStage(stage: string | null | undefined): string | null {
-  if (!stage) return null
-  return PIPELINE_STAGE_GROUPS.find((g) => g.stages?.includes(stage))?.key ?? null
+  return conversationStageGroup(stage)
 }
 
 export interface PipelineRow {

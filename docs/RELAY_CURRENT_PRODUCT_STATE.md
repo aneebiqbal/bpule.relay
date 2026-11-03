@@ -1,0 +1,163 @@
+# RELAY CURRENT PRODUCT STATE
+
+**Authority:** code + tests on `release-merge` @ `408e7bd`. Docs describe intent;
+this file describes what is actually wired.
+
+---
+
+## 1. HOME
+
+| | |
+|---|---|
+| Route | `/dashboard` |
+| Components | `RepDashboard` (rep) · `ManagerHomeView` (manager) · `AdminCommandCenterView` (admin/owner) |
+| Loaders | `buildRoleContext`, `buildRelayQueue`, `rankNextActions`, `deriveTodayCounts`, `loadTeamDay`, `assembleAdminCommandCenter` |
+| Data | Neon `action_events`, `assigned_tasks`, targets, `conversation_states` via the SQL aggregates when available |
+| Roles | all |
+| Status | code complete · fixture + contract verified · live auth certification pending |
+
+---
+
+## 2. SALES
+
+| Surface | Route | Loader / data | Roles |
+|---|---|---|---|
+| Prospects | `/prospect` | profile scoring, source adapters | all |
+| Leads | `/leads` | `loadLeadsPage`, `loadBoardPreview` | all |
+| Pipeline | `/leads?view=pipeline` | `pipelineStageSql` + `derivePipelineStage` | all |
+| Import | `/leads/import` | bulk CSV | all |
+| Companies | `/accounts` | account 360 | Admin/Owner |
+| Upwork | `/upwork`, `/upwork/new`, `/upwork/[id]` | job extraction + scoring | all |
+| Email | `/revenue/email` | send workspace | all |
+| Lead 360 | `/leads/[id]` | `getLead(id, LeadReadScope)` + `canOpenLead` | scope-aware |
+
+`Lead 360` authorization is one authority: organization boundary + operational
+scope. A denial is indistinguishable from a missing lead.
+
+---
+
+## 3. INBOX
+
+| | |
+|---|---|
+| Route | `/chats` (`/inbound`, `/relay` deep-link in) |
+| Views | `?view=` Needs reply · Waiting · Follow-ups · Meeting requests · Proposal requests · Closed |
+| Components | `ChatQueueList`, `LeadConversation`, `ChatIntelligencePanel`, `IntelligenceDrawer` |
+| Loaders | `chat-queue.ts` (`deriveConversationRow`, `chatViewMatches`, priority sort) |
+| Data | `messages`, `conversation_states`, canonical analysed intent |
+| Roles | all (manager views gated) |
+| Status | code complete · `tests/v3/inbox-v3.test.ts` · live auth certification pending |
+
+---
+
+## 4. WORK
+
+| | |
+|---|---|
+| Route | `/tasks` |
+| Views | `?view=` Today (default) · Overdue · Upcoming · Completed · All |
+| Components | `TaskWorkspaceView`, `TaskBoard`, `TaskDetailDrawer` |
+| Loaders | unified task engine (`rank-unified-tasks`, `task-views`), `task_events` history |
+| Roles | all |
+| Status | code complete · `tests/v3-team-operations.test.ts` · live auth certification pending |
+
+`/team/tasks` redirects here with `?scope=team`.
+
+---
+
+## 5. TEAM
+
+| Surface | Route | Status |
+|---|---|---|
+| Overview | `/team` | code complete |
+| People | `/team/people` | code complete |
+| Workload | `/team/workload` | code complete |
+| Activity | `/team/activity` | code complete |
+| Performance | `/team/performance` | code complete (trend chart added) |
+| Targets | `/team/targets` | code complete |
+| Groups | `/team/groups`, `/team/groups/[teamId]` | code complete |
+| Rep 360 | `/team/[repId]` | code complete (pipeline strip + heatmap added) |
+| Daily Operations | `/admin/command` | code complete |
+
+Loaders: `getPeopleDirectory`, `loadTimeline`, `buildTeamAttentionFromPeople`,
+`buildWorkloadRows`, `getPerformance`, `getRepDailyActivity`, `loadTeamTrend`.
+Roles: Manager+ (Rep 360 is scope-checked).
+
+---
+
+## 6. CONTENT
+
+| Surface | Route | Status |
+|---|---|---|
+| Studio | `/content` | code complete — daily brief, recommended post, alternates, trend context, memory |
+| Ideas | `/content/ideas` | code complete — URL-backed views + filters |
+| Growth | `/content/growth` | code complete — admin/owner brand workspace |
+| Draft | `/studio/drafts/new?personaId&ideaId` | code complete |
+| Draft workspace | `/studio/drafts/[id]` | code complete |
+
+Loaders: `getDailyContentBriefWithIdeas`, `listContentMemories`,
+`listContentHistory`, `listTrendItems` + `rankTrendsForPersona`, growth brief.
+Legacy `/content-v2/*` redirect to V3. Persona access: own + admin
+(`canViewPersona`).
+
+---
+
+## 7. INSIGHTS
+
+| Surface | Route |
+|---|---|
+| Sales Insights | `/reports/sales` |
+| AI Usage | `/admin/ai-usage` |
+| Revenue Intelligence | `/admin/revenue-intelligence` |
+
+Legacy `/reports/pipeline`, `/reports/team`, `/reports/activity`,
+`/reports/revenue` remain but are superseded.
+
+---
+
+## 8. SETTINGS / ADMIN
+
+| Surface | Route | Roles |
+|---|---|---|
+| Settings | `/settings` | all |
+| Command Center | `/admin/command` | Admin/Owner (managers via Team) |
+| People & Roles | `/admin/people` | Admin/Owner |
+| Profiles | `/profile-intelligence` | Admin/Owner |
+| Scoring QA | `/admin/scoring-qa` | Admin/Owner |
+| QA & Trust | `/admin/qa` | Admin/Owner |
+| Dataset | `/admin/dataset` | Admin/Owner |
+| Training Data | `/admin/training-data` | Admin/Owner |
+| Manage Profiles | `/manage-profiles` | Owner |
+
+---
+
+## 9. Database / infrastructure
+
+| Item | State |
+|---|---|
+| DB provider | `RELAY_DB_PROVIDER=neon` (adapter `lib/db/neon.ts`) |
+| Auth provider | `RELAY_AUTH_PROVIDER=neon` (`lib/auth/neon-server.ts`) |
+| Region | `vercel.json` → `sin1` (Singapore, beside Neon) |
+| Aggregates | `lib/analytics/aggregates.ts` — performance, activity, team trend, pipeline stage |
+| Egress | narrow list projections, bounded pipeline cards, SQL aggregates; no raw event transfer for analytics |
+| RLS | Neon path relies on explicit org/scope checks in the store (`getLead`, `canOpenLead`) |
+| Invitations | `pending_invitations` + provider-neutral invitations |
+
+---
+
+## 10. Live certification status
+
+Live Neon Auth certification is **blocked on credentials**. The demo workspace
+(`SCOUT_DB=demo`) signs in but cannot render Supabase-backed surfaces (Tasks,
+Team, Rep 360, Ideas), which throw `Demo store does not support direct Supabase
+access`. Those surfaces are verified by fixture, contract, typecheck, lint and
+build — not by a real authenticated session.
+
+| Surface | Fixture/contract | Live auth |
+|---|---|---|
+| Rep Home | pass | pending |
+| Leads / Pipeline / Lead 360 | pass | pending |
+| Inbox | pass | pending |
+| Tasks / Team / Rep 360 / Performance | pass | pending |
+| Studio / Ideas / Growth | pass | pending |
+| Shell / navigation | pass | partial (demo mode) |

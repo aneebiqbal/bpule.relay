@@ -9,10 +9,8 @@ const nextConfig: NextConfig = {
     return [
       { source: "/conversations", destination: "/chats", permanent: true },
       { source: "/usage", destination: "/dashboard", permanent: true },
-      { source: "/content/growth", destination: "/content-v2/growth", permanent: true },
       { source: "/find-jobs", destination: "/upwork", permanent: true },
       { source: "/resume/generate", destination: "/content", permanent: true },
-      { source: "/studio/drafts/new", destination: "/content", permanent: true },
       { source: "/admin/revenue-identities", destination: "/profile-intelligence?tab=identities", permanent: true },
     ];
   },

@@ -109,7 +109,7 @@ export function buildAdminV3Health(data: AdminCommandCenterData): AdminV3Metric[
       label: 'Overdue tasks',
       value: data.health.overdueTasks,
       hint: data.health.overdueTasks > 0 ? 'Past due assigned work' : 'Assigned work clear',
-      href: '/tasks?tab=overdue',
+      href: '/tasks?view=overdue',
       tone: data.health.overdueTasks > 0 ? 'warning' : 'neutral',
     },
     {
@@ -187,9 +187,9 @@ export function buildAdminV3Activity(items: ReadonlyArray<ManagerActivityItem>):
  */
 export function buildAdminV3QuickActions(isOwner: boolean): AdminV3QuickAction[] {
   const actions: AdminV3QuickAction[] = [
-    { key: 'prospect', label: 'Analyze prospect', href: '/prospect' },
-    { key: 'task', label: 'Assign task', href: '/tasks' },
-    { key: 'invite', label: 'Invite person', href: '/admin/people' },
+    { key: 'prospect', label: 'Analyze Prospect', href: '/prospect' },
+    { key: 'task', label: 'Assign Task', href: '/tasks' },
+    { key: 'invite', label: 'Invite Person', href: '/admin/people' },
     { key: 'overdue', label: 'Review overdue work', href: '/leads?filter=followup' },
     { key: 'reports', label: 'Open reports', href: '/reports/sales' },
   ]

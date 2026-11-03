@@ -919,7 +919,9 @@
     padding: 0 1.25rem;
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--on-accent);
+    /* Dark text on the orange signal passes AA in light and dark themes;
+       cream-on-orange does not. */
+    color: #141312;
     transition: background 0.2s ease, transform 0.15s ease;
   }
   .relay-cta:hover { background: var(--orange-dark); }

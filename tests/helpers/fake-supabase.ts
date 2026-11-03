@@ -1,6 +1,6 @@
 type Row = Record<string, any>
 
-type FilterOp = 'eq' | 'neq' | 'gte' | 'lt' | 'is'
+type FilterOp = 'eq' | 'neq' | 'gte' | 'lt' | 'is' | 'in'
 
 interface Filter {
   field: string
@@ -82,6 +82,7 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: Error | null; 
   private orFilters: OrFilter[] = []
   private orderBy: Array<{ field: string; ascending: boolean }> = []
   private rowLimit: number | null = null
+  private offsetValue: number | null = null
   private returning = false
 
   constructor(private readonly state: FakeState, private readonly table: string) {}
@@ -150,6 +151,11 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: Error | null; 
     return this
   }
 
+  in(field: string, values: any[]) {
+    this.filters.push({ field, op: 'in', value: values })
+    return this
+  }
+
   lt(field: string, value: any) {
     this.filters.push({ field, op: 'lt', value })
     return this
@@ -167,6 +173,12 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: Error | null; 
 
   limit(value: number) {
     this.rowLimit = value
+    return this
+  }
+
+  range(from: number, to: number) {
+    this.offsetValue = from
+    this.rowLimit = to - from + 1
     return this
   }
 
@@ -207,6 +219,7 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: Error | null; 
       if (f.op === 'gte') return value >= f.value
       if (f.op === 'lt') return value < f.value
       if (f.op === 'is') return f.value === 'null' ? value == null : value != null
+      if (f.op === 'in') return Array.isArray(f.value) && f.value.includes(value)
       return true
     })
     if (!base) return false
@@ -236,6 +249,7 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: Error | null; 
         return 0
       })
     }
+    if (this.offsetValue) out = out.slice(this.offsetValue)
     if (typeof this.rowLimit === 'number') out = out.slice(0, this.rowLimit)
     return out
   }

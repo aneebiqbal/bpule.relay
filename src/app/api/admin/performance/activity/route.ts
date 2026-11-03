@@ -7,8 +7,10 @@ import { getRepDailyActivity } from '@/lib/performance/activity-model'
 export const maxDuration = 15
 
 /**
- * GET /api/admin/performance/activity?repId=...&range=12w
+ * GET /api/admin/performance/activity?repId=...&range=12w&date=YYYY-MM-DD
  * Admin view: fetch activity for any rep in the org.
+ *
+ * `daily[].events` is populated only when `date` is supplied.
  */
 export async function GET(req: NextRequest) {
   const ctx = await getAuthContext()
@@ -20,6 +22,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const repId = url.searchParams.get('repId')
   const range = url.searchParams.get('range') ?? '12w'
+  const date = url.searchParams.get('date')
 
   if (!repId) return NextResponse.json({ error: 'repId required.' }, { status: 400 })
 
@@ -32,6 +35,7 @@ export async function GET(req: NextRequest) {
     endDate: end,
     timezone: 'UTC', // Admin view defaults to UTC; reps see their own timezone
     supabase,
+    includeEventsForDate: date,
   })
 
   return NextResponse.json(result)

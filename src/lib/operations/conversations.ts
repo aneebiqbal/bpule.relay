@@ -8,6 +8,7 @@ import type { DbClient } from '@/lib/db/types'
  */
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { leadLabel } from '@/lib/operations/labels'
+import { MEETING_OR_LATER_STAGES } from '@/lib/sales/stage-vocabulary'
 
 export type ConversationState = 'waiting_on_rep' | 'waiting_on_prospect' | 'follow_up_due' | 'meeting' | 'closed'
 
@@ -71,7 +72,7 @@ export interface ConversationRow {
 }
 
 const CLOSED_STATUSES = new Set(['won', 'lost', 'dead', 'no'])
-const MEETING_STAGES = new Set(['meeting', 'proposal', 'negotiation'])
+const MEETING_STAGES = new Set<string>(MEETING_OR_LATER_STAGES)
 
 function hoursSince(iso: string | null, now: number): number | null {
   if (!iso) return null

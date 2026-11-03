@@ -199,6 +199,8 @@ async function loadRelay() {
   if (!user) return { authenticated: false as const }
 
   const store = await createScoutStore()
+  // Read-only page: the dashboard, queue and admin lead scan share one snapshot.
+  store.beginReadOnlySnapshot()
   const roleContext = buildRoleContext(user.rep, user.organization)
 
   const [dash, relayData, allLeads] = await Promise.all([

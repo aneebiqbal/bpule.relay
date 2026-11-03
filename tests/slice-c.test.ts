@@ -41,7 +41,7 @@ import {
   resetCapabilityCache,
 } from '@/lib/operations/capabilities'
 import { instrumentClient, measureLoader, payloadBytes } from '@/lib/operations/instrumentation'
-import { sectionNavItems, visibleTopNav } from '@/lib/navigation/relay-shell-nav'
+import { secondaryItems, visibleDomains } from '@/lib/navigation/relay-shell-nav'
 
 const NOW = Date.parse('2026-11-01T12:00:00.000Z')
 const hoursAgo = (h: number) => new Date(NOW - h * 3_600_000).toISOString()
@@ -291,15 +291,15 @@ describe('REPORTS', () => {
     expect(r).toMatchObject({ won: 4, lost: 6, winRatePct: 40, knownRevenue: null })
   })
 
-  it('TEAM_REPORT: Reports rail is role-aware (team for managers, AI usage for admins, personal for reps)', () => {
-    const rep = sectionNavItems('reports', { isOwner: false, isAdmin: false, isManager: false }).map((i) => i.href)
-    const mgr = sectionNavItems('reports', { isOwner: false, isAdmin: false, isManager: true }).map((i) => i.href)
-    const admin = sectionNavItems('reports', { isOwner: false, isAdmin: true, isManager: true }).map((i) => i.href)
-    expect(rep).toEqual(['/reports/sales', '/reports/pipeline', '/reports/activity', '/reports/revenue', '/performance'])
-    expect(mgr).toContain('/reports/team')
+  it('TEAM_REPORT: Insights rail is role-aware (sales for reps/managers, AI usage + revenue for admins)', () => {
+    const rep = secondaryItems('insights', { isOwner: false, isAdmin: false, isManager: false }).map((i) => i.href)
+    const mgr = secondaryItems('insights', { isOwner: false, isAdmin: false, isManager: true }).map((i) => i.href)
+    const admin = secondaryItems('insights', { isOwner: false, isAdmin: true, isManager: true }).map((i) => i.href)
+    expect(rep).toEqual(['/reports/sales'])
+    expect(mgr).toEqual(['/reports/sales'])
     expect(admin).toContain('/admin/ai-usage')
-    expect(admin).not.toContain('/performance')
-    expect(visibleTopNav({ isOwner: false, isAdmin: false, isManager: false }).find((i) => i.id === 'reports')!.href).toBe('/reports/sales')
+    expect(admin).toContain('/admin/revenue-intelligence')
+    expect(visibleDomains({ isOwner: false, isAdmin: false, isManager: false }).find((i) => i.id === 'insights')!.href).toBe('/reports/sales')
   })
 })
 

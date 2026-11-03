@@ -102,6 +102,15 @@ export default async function ChatsPage({
     age: minAgeHours ? String(minAgeHours) : null,
     cstage: stageGroup,
   }
+  const hasFilters = Boolean(filters.q || filters.profile || filters.source || minAgeHours || filters.rep || filters.team || stageGroup)
+  const queueEmptyLabel =
+    view === 'waiting_me'
+      ? 'You’re caught up. No client replies need attention.'
+      : view === 'closed'
+        ? 'No closed conversations in this view.'
+        : hasFilters
+          ? 'No conversations match these filters.'
+          : 'No conversations in this view.'
   const hrefFor = (id: string) => opsHref('/chats', current, { lead: id })
   const profiles = (profilesRes.data ?? []) as Array<{ id: string; identity_name: string }>
   const visibleViews = CHAT_VIEWS.filter((v) => !v.managerOnly || managerViews)
@@ -167,7 +176,21 @@ export default async function ChatsPage({
       </div>
 
       {!queue ? (
-        <InlineError>Conversations could not be loaded. Refresh to try again.</InlineError>
+        <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(240px,300px)_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
+          <aside aria-label="Conversation queue" className="min-w-0 overflow-hidden rounded-lg border border-line bg-bone-raised">
+            <div className="p-3">
+              <p role="alert" className="rounded-lg border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-[13px] text-status-danger">
+                Couldn’t load conversations. Refresh to try again.
+              </p>
+            </div>
+          </aside>
+          <section aria-label="Thread" className="min-w-0 rounded-lg border border-dashed border-line">
+            <div className="flex h-full min-h-[320px] flex-col items-center justify-center p-6 text-center">
+              <MessagesSquare className="size-6 text-stone" aria-hidden="true" />
+              <p className="mt-2 text-[13px] text-graphite">Select a conversation to read the thread.</p>
+            </div>
+          </section>
+        </div>
       ) : (
         <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(240px,300px)_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
           <aside
@@ -179,8 +202,19 @@ export default async function ChatsPage({
               selectedLeadId={leadId}
               hrefFor={hrefFor}
               showOwner={managerViews}
-              emptyLabel={view === 'waiting_me' ? 'Nothing is waiting on you.' : 'No conversations in this view.'}
+              emptyLabel={queueEmptyLabel}
             />
+            {!leadId && queue.rows.length === 0 && hasFilters && (
+              <div className="border-t border-line px-3 py-2">
+                <Link
+                  href={opsHref('/chats', { view: null, rep: null, team: null, profile: null, source: null, q: null, age: null, cstage: null, lead: null })}
+                  scroll={false}
+                  className="text-[12px] font-medium text-orange hover:underline"
+                >
+                  Clear filters
+                </Link>
+              </div>
+            )}
             {queue.total > queue.rows.length && (
               <p className="border-t border-line px-3 py-2 text-[11px] text-stone">
                 Showing the {queue.rows.length} most urgent of {queue.total}. Narrow the filters to see others.
@@ -199,7 +233,7 @@ export default async function ChatsPage({
             ) : (
               <div className="flex h-full min-h-[320px] flex-col items-center justify-center rounded-lg border border-dashed border-line text-center">
                 <MessagesSquare className="size-6 text-stone" aria-hidden="true" />
-                <p className="mt-2 text-[13px] text-graphite">Select a conversation to read the thread.</p>
+                <p className="mt-2 text-[13px] text-graphite">Select a conversation to start.</p>
               </div>
             )}
           </section>
@@ -248,14 +282,23 @@ async function SelectedThread({
 }
 
 async function IntelligenceSlot({ ctx, leadId, reps }: { ctx: OpsPageContext; leadId: string; reps: Array<{ id: string; name: string }> }) {
+  const now = Date.now()
   const [intel, capabilities] = await Promise.all([getIntelligence(leadId), getDatabaseCapabilities(ctx.client)])
-  if (!intel) return null
+  if (!intel) {
+    // A failed context pane must never take the thread down with it.
+    return (
+      <p role="alert" className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-[13px] text-graphite">
+        Couldn’t load this conversation’s context. The thread is still available.
+      </p>
+    )
+  }
   return (
     <ChatIntelligencePanel
       intel={intel}
       reps={reps}
       canIntervene={ctx.scope.mode !== 'own'}
       tasksAvailable={capabilities.assignedTasks}
+      now={now}
     />
   )
 }

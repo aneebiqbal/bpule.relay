@@ -12,9 +12,7 @@ export type LeadRow = Lead & {
   ownerName?: string
   lastActivityAt?: string | null
   senderProfileName?: string | null
-  lastOutboundText?: string | null
   lastOutboundAt?: string | null
-  lastInboundText?: string | null
   lastInboundAt?: string | null
   followupCount?: number
   /** Open assigned tasks for this lead (Phase 6) — never invents derived work. */

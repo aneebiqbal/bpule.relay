@@ -1,4 +1,5 @@
 import type { DbClient } from '@/lib/db/types'
+import type { PipelineStageCounts, PipelineStageScope } from '@/lib/store/pipeline-stage'
 import type {
   ContentDraft,
   ContentDraftFeedback,
@@ -199,6 +200,15 @@ export interface RateMetric {
   readToCheckRate: number | null
 }
 
+/**
+ * Operational scope for a single-lead read. `repIds === null` means the whole
+ * organization (admin/owner). Passing a scope authorizes the read against it;
+ * omitting it keeps the caller's own ownership gate.
+ */
+export interface LeadReadScope {
+  repIds: string[] | null
+}
+
 export interface LeadDetail extends Lead {
   messages: Message[]
   outcomes: Outcome[]
@@ -371,7 +381,7 @@ export interface ScoutStore {
     score: { total: number; verdict: Verdict },
   ): Promise<void>
   updateLeadTags(id: string, tags: string[]): Promise<void>
-  getLead(id: string): Promise<LeadDetail | null>
+  getLead(id: string, scope?: LeadReadScope | null): Promise<LeadDetail | null>
   /**
    * Looks up a lead in the CURRENT organization whose persisted canonical
    * intelligence was computed from this exact input hash (see
@@ -572,6 +582,12 @@ export interface ScoutStore {
   }): Promise<UpworkJob>
   getUpworkJob(id: string): Promise<(UpworkJob & { messages: UpworkMessage[] }) | null>
   listUpworkJobs(): Promise<UpworkJob[]>
+  /** Pipeline stage counts. Null on the Supabase rollback path (use loadBoardData). */
+  getPipelineStageSummary(scope: PipelineStageScope): Promise<PipelineStageCounts | null>
+  /** Bounded card ids in board order. Null on the Supabase rollback path. */
+  getPipelineCardIds(scope: PipelineStageScope, limit: number): Promise<string[] | null>
+  /** Fetch a bounded set of leads by id, preserving the given order. */
+  getLeadsByIds(ids: string[]): Promise<Lead[]>
   /** Update the editable job fields on an existing row (the extract step creates it; Save corrects it). */
   updateUpworkJobFields(id: string, fields: Partial<Parameters<ScoutStore['createUpworkJob']>[0]>): Promise<void>
   updateUpworkJobScore(id: string, score: { total: number; verdict: UpworkJob['verdict']; canonicalScore?: number | null; scoreVersion?: string | null; scoreBreakdown?: unknown; jobFacts?: unknown; profileMatch?: unknown }): Promise<void>

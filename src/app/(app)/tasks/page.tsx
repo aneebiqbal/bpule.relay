@@ -16,6 +16,7 @@ import {
 import { actionDeepLink } from '@/lib/rep-home/action-presentation'
 import { loadUnifiedTasks, listAssignableReps, canActorAssignTasks } from '@/lib/tasks/load-unified-tasks'
 import { TaskWorkspaceView } from '@/components/tasks/task-workspace-view'
+import { getPeopleDirectory } from '@/lib/operations/page-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,10 +26,12 @@ export default async function TasksPage() {
   const auth = await getAuthContext()
   if (!auth) redirect('/login')
 
-  const [derivedActions, canAssign, reps] = await Promise.all([
+  const showAssignee = auth.isManager || auth.isAdmin || auth.isOwner
+  const [derivedActions, canAssign, reps, directory] = await Promise.all([
     loadDerivedActionsForCurrentUser(),
     canActorAssignTasks(auth),
     listAssignableReps(auth),
+    showAssignee ? getPeopleDirectory().catch(() => null) : Promise.resolve(null),
   ])
 
   const tasks = await loadUnifiedTasks({
@@ -39,8 +42,6 @@ export default async function TasksPage() {
     includeCompleted: true,
   })
 
-  const showAssignee = auth.isManager || auth.isAdmin || auth.isOwner
-
   return (
     <Suspense fallback={<div className="py-10 text-[13px] text-graphite">Loading tasks…</div>}>
       <TaskWorkspaceView
@@ -49,6 +50,7 @@ export default async function TasksPage() {
         showAssignee={showAssignee}
         reps={reps}
         currentRepId={auth.repId}
+        teams={(directory?.teams ?? []).map((t) => ({ id: t.id, name: t.name, memberIds: t.memberIds }))}
       />
     </Suspense>
   )
@@ -60,6 +62,7 @@ async function loadDerivedActionsForCurrentUser(): Promise<RelayTodayAction[]> {
   if (!user) return []
 
   const store = await createScoutStore()
+  store.beginReadOnlySnapshot()
   const { getDailyWorkspace } = await import('@/lib/auth/workspace')
   const [workspace, activeWorkspace, dash, relayData] = await Promise.all([
     getDailyWorkspace(),

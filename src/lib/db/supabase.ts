@@ -165,6 +165,14 @@ export class SupabaseDbClient implements DbClient {
       (err: unknown) => ({ data: null as unknown as T, error: { message: err instanceof Error ? err.message : String(err) } }),
     )
   }
+
+  /** PostgREST has no raw-SQL surface; callers fall back to the JS computation. */
+  raw<T = any>(): PromiseLike<DbResult<T>> {
+    return Promise.resolve({
+      data: null as unknown as T,
+      error: { message: 'raw() is not supported by the Supabase provider' },
+    })
+  }
 }
 
 /** Adapts a Supabase client into the canonical contract. */

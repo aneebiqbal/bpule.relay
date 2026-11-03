@@ -7,9 +7,12 @@ import { getRepDailyActivity } from '@/lib/performance/activity-model'
 export const maxDuration = 15
 
 /**
- * GET /api/performance/activity?range=12w&repId=...
+ * GET /api/performance/activity?range=12w&repId=...&date=YYYY-MM-DD
  * Returns daily activity heatmap data.
  * Reps see their own data; admins can specify repId.
+ *
+ * `daily[].events` is populated only when `date` is supplied — the heatmap itself
+ * is a daily aggregate, so the endpoint no longer embeds every event in the range.
  */
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser()
@@ -22,6 +25,7 @@ export async function GET(req: NextRequest) {
   const range = url.searchParams.get('range') ?? '12w'
   const repId = url.searchParams.get('repId') ?? user.rep.id
   const timezone = url.searchParams.get('timezone') ?? user.rep.timezone ?? 'UTC'
+  const date = url.searchParams.get('date')
 
   // Permission check: reps can only see their own data
   if (repId !== user.rep.id && !authCtx.isAdmin && !authCtx.isOwner) {
@@ -39,6 +43,7 @@ export async function GET(req: NextRequest) {
     endDate: end,
     timezone,
     supabase,
+    includeEventsForDate: date,
   })
 
   return NextResponse.json(result)

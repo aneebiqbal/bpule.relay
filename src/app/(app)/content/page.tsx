@@ -1,90 +1,99 @@
-import { createScoutStore } from '@/lib/store'
-import { getCurrentUser } from '@/lib/auth/current'
-import { ContentDashboard } from '@/components/content-dashboard'
-import { StudioIntro } from '@/components/studio-intro'
-import { buildDailyDecision } from '@/lib/content/daily-decision'
-import type { ContentPersona, ContentProfile, TopicCluster, ContentDraft, ContentHistoryEntry } from '@/lib/domain/types'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { getCurrentUser } from '@/lib/auth/current'
+import { createScoutStore } from '@/lib/store'
+import { V3EmptyState, V3PageHeader } from '@/components/v3/primitives'
+import { StudioHome, type StudioIdea, type StudioPersona } from '@/components/content-v3/studio-home'
+import { canViewPersona } from '@/lib/content/persona-scope'
 
 export const dynamic = 'force-dynamic'
 
+/** Legacy dashboard import — kept so the old Content dashboard still compiles. */
 export type DailyStatus = 'asked' | 'drafted' | 'posted' | 'none'
 
-interface PersonaWithExtras extends ContentPersona {
-  topicClusters: TopicCluster[]
-  drafts: ContentDraft[]
-  recentPosts: ContentHistoryEntry[]
-  dailyStatus: DailyStatus
-  contentProfile: ContentProfile | null
-}
-
-export default async function ContentPage({
+/**
+ * Content → Studio. The daily creation workspace. The persona is resolved
+ * before any brief/idea/memory fan-out, so opening Studio never loads every
+ * persona's datasets.
+ */
+export default async function ContentStudioPage({
   searchParams,
 }: {
-  searchParams: Promise<{ manage?: string }>
+  searchParams: Promise<{ persona?: string }>
 }) {
-  const params = await searchParams
   const user = await getCurrentUser()
-   if (!user) redirect('/login')
+  if (!user) redirect('/login')
 
-  let personas: PersonaWithExtras[] = []
-  let redirectId: string | null = null
+  const { persona: personaParam } = await searchParams
+  const store = await createScoutStore()
+  const personas = await store.listContentPersonas(user.rep.id)
 
-  try {
-    const store = await createScoutStore()
-    const base = await store.listContentPersonas(user.rep.id)
-
-    // Studio opens on the daily workspace. Resolve that before loading every
-    // persona's clusters/drafts/history/feedback: that fan-out is what made
-    // /content take ~45s and time out.
-    if (base.length > 0 && params.manage !== '1') {
-      redirectId = base[0].id
-    } else {
-      const resolved = await Promise.all(
-        base.map(async (p) => {
-          const [topicClusters, drafts, history, contentProfile] = await Promise.all([
-            store.listTopicClusters(p.id),
-            store.listContentDrafts(p.id),
-            store.listContentHistory(p.id, 30),
-            p.contentProfileId ? store.getContentProfile(p.contentProfileId) : Promise.resolve(null),
-          ])
-
-          const cutoff = new Date().getTime() - 14 * 86_400_000
-          const recentPosts = history.filter((h) => new Date(h.postedAt).getTime() >= cutoff)
-
-          const today = new Date().toDateString()
-          const postedToday = history.some((h) => new Date(h.postedAt).toDateString() === today)
-          const draftedToday = drafts.some((d) => new Date(d.createdAt).toDateString() === today)
-
-          let dailyStatus: DailyStatus = 'none'
-          if (postedToday) {
-            dailyStatus = 'posted'
-          } else if (draftedToday) {
-            dailyStatus = 'drafted'
-          } else {
-            const [findings, feedback, generatedToday] = await Promise.all([
-              store.listResearchFindings(p.id, { unusedOnly: true, limit: 10 }),
-              store.listContentDraftFeedback(p.id, 100),
-              store.countContentDraftsToday(p.id),
-            ])
-            const decision = buildDailyDecision({ persona: p, clusters: topicClusters, findings, feedback, generatedToday })
-            dailyStatus = decision.decisionType === 'none' ? 'none' : 'asked'
-          }
-
-          return { ...p, topicClusters, drafts, recentPosts, dailyStatus, contentProfile }
-        }),
-      )
-      personas = resolved
-    }
-  } catch (err) {
-    console.error('[content] Failed to load personas:', err)
+  if (personas.length === 0) {
+    return (
+      <div className="space-y-6">
+        <V3PageHeader title="Studio" subtitle="Your content workspace for today." />
+        <V3EmptyState
+          title="No content persona yet"
+          body="Create a persona to generate today's brief, recommended post and alternates."
+        >
+          <Link href="/content/new" className="relay-cta text-[12px]">
+            Create persona
+          </Link>
+        </V3EmptyState>
+      </div>
+    )
   }
 
-  if (redirectId) redirect(`/content-v2/${redirectId}/today`)
+  const persona = personas.find((p) => p.id === personaParam) ?? personas[0]
+  if (!canViewPersona(persona, { repId: user.rep.id, role: user.rep.role })) redirect('/content')
+
+  const localDate = new Date().toLocaleDateString('en-CA', { timeZone: user.rep.timezone ?? 'UTC' })
+  const [bundle, memories, recentPosts] = await Promise.all([
+    store.getDailyContentBriefWithIdeas(persona.id, localDate).catch(() => null),
+    store.listContentMemories(persona.id, { limit: 20 }).catch(() => []),
+    store.listContentHistory(persona.id, 10).catch(() => []),
+  ])
+
+  const toPersona = (p: typeof persona): StudioPersona => ({
+    id: p.id,
+    displayName: p.displayName,
+    personaRole: p.personaRole ?? null,
+    platforms: p.platforms,
+  })
+
+  const ideas: StudioIdea[] = (bundle?.ideas ?? []).map((idea) => ({
+    id: idea.id,
+    ideaType: idea.ideaType,
+    title: idea.title,
+    angle: idea.angle,
+    whyNow: idea.whyNow,
+    territory: idea.territory,
+    trendGrounded: idea.trendGrounded,
+    postCaption: idea.postCaption,
+    postPlatform: idea.postPlatform,
+    visualType: idea.visualType,
+    visualConcept: idea.visualConcept,
+    visualPrompt: idea.visualPrompt,
+    visualReason: idea.visualReason,
+    sourceFreshness: idea.sourceFreshness,
+    formatSuggestion: idea.formatSuggestion,
+    copiedAt: idea.copiedAt,
+    postedAt: idea.postedAt,
+  }))
 
   return (
-    <StudioIntro>
-      <ContentDashboard personas={personas} />
-    </StudioIntro>
+    <StudioHome
+      persona={toPersona(persona)}
+      personas={personas.map(toPersona)}
+      initialIdeas={ideas}
+      memories={memories.map((m) => ({ memoryType: m.memoryType, content: m.content }))}
+      recentPosts={recentPosts.map((h) => ({
+        id: h.id,
+        postedAt: h.postedAt,
+        platform: h.platform,
+        caption: h.openingLine,
+        topic: h.openingLine,
+      }))}
+    />
   )
 }

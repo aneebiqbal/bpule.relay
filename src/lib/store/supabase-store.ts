@@ -107,6 +107,7 @@ import type {
   FollowupDue,
   HostCallInput,
   LeadDetail,
+  LeadReadScope,
   ModelCallLogInput,
   MyRank,
   NewLeadInput,
@@ -128,7 +129,16 @@ import { messageTypeLimit } from '@/lib/ai/config'
 import { resolveSendPolicy, type EffectiveSendPolicy } from '@/lib/email/effective-policy'
 import { evaluateSendPolicy } from '@/lib/email/policy-engine'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
-import { computeRates, type RateBucket } from '@/lib/store/rates'
+import { computeRates, rateMetricFromGroups, RATE_GROUP_SQL, type RateBucket, type RateGroup } from '@/lib/store/rates'
+import {
+  emptyPipelineStageCounts,
+  pipelineCardIdsSql,
+  pipelineScopeClause,
+  pipelineScopeParams,
+  pipelineStageSql,
+  type PipelineStageCounts,
+  type PipelineStageScope,
+} from '@/lib/store/pipeline-stage'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
 import { pickPlayForSignal } from '@/lib/score/plays'
 import { loadRulebook } from '@/lib/score/rulebook'
@@ -202,7 +212,7 @@ function isOptionalSearchError(err: unknown): boolean {
  * LEAD_COLUMNS keeps raw_input for detail/draft callers; LEAD_LIST_COLUMNS
  * drops it for list, queue and rate queries that never read it.
  */
-const LEAD_COLUMNS =
+export const LEAD_COLUMNS =
   'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, raw_input, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, canonical_intelligence, raw_source_data, score_breakdown, remote_eligibility, evidence_ledger, extraction_completeness, intelligence_input_hash, is_test, connection_accepted_at, locked_until, locked_reason, archived, archived_at, created_at'
 
 /**
@@ -256,8 +266,34 @@ function isMissingColumnError(err: unknown): boolean {
   )
 }
 
-const LEAD_LIST_COLUMNS =
-  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, is_test, buyer_intent:canonical_intelligence->buyerIntent, display_qualification:canonical_intelligence->>qualification, display_intelligence_version:canonical_intelligence->>intelligenceVersion, remote_eligibility, connection_accepted_at, locked_until, locked_reason, archived, archived_at, decision_provider, decision_model, decision_run_id, selected_episode_id, profile_match_score, profile_match_version, best_profile_id, best_profile_match_score, intelligence_input_hash, fallback_reason, created_at'
+/**
+ * List/board/queue projection. Heavy detail (score_breakdown, extraction_profile,
+ * raw_source_data, evidence_ledger, raw_input, canonical_intelligence) stays in
+ * LEAD_COLUMNS for the drawer/360/detail endpoints. Every field here is consumed
+ * by a list, board, pipeline or queue surface — `signal_evidence` and
+ * `verbatim_quote` feed search and the high-fit evidence line, `inbound_message`
+ * drives inbound-first stage derivation, `play_id` feeds per-play rates.
+ */
+export const LEAD_LIST_COLUMNS =
+  'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, url, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, is_test, buyer_intent:canonical_intelligence->buyerIntent, display_qualification:canonical_intelligence->>qualification, display_intelligence_version:canonical_intelligence->>intelligenceVersion, connection_accepted_at, locked_until, locked_reason, archived, archived_at, created_at'
+
+/**
+ * Relay queue projections. The queue ranks and builds evidence; it never needs
+ * the conversation `memory`/`commercial_state` blobs or the message original
+ * drafts, and the full thread loads when a conversation is opened.
+ */
+export const RELAY_QUEUE_MESSAGE_COLUMNS =
+  'id, lead_id, type, direction, sent_text, draft_text, sent_at, created_at'
+export const RELAY_QUEUE_CONVERSATION_COLUMNS =
+  'lead_id, stage, sender_profile_id'
+
+/**
+ * Upwork list/queue projection. `raw_input`, `job_facts`, `search_vector`,
+ * `score_breakdown` and the screening/application arrays are detail-only and are
+ * read by `getUpworkJob` (the job page), never by the list or the queue.
+ */
+export const UPWORK_JOB_LIST_COLUMNS =
+  'id, organization_id, owner_rep_id, title, description, budget_min, budget_max, hourly_rate_min, hourly_rate_max, proposal_count, connects_cost, required_skills, urgency_signal, score, verdict, canonical_score, score_version, status, tags, created_at, posted_at, client_name'
 
 /**
  * PostgREST `or` values are comma-separated and `%` is a wildcard, so strip the
@@ -545,7 +581,8 @@ export class SupabaseStore implements ScoutStore {
       this.fetchLeadsAll(),
       this.client
         .from('messages')
-        .select('id, lead_id, type, sent_at, sent_text')
+        // computeRates only reads sentAt; the body is never needed for a rate.
+        .select('lead_id, sent_at')
         .then((r) => {
           if (r.error) throw r.error
           return (r.data ?? []).map(mapMessage)
@@ -563,6 +600,99 @@ export class SupabaseStore implements ScoutStore {
       sentMessages: messages.filter((m) => m.leadId === lead.id),
       outcomes: outcomes.filter((o) => o.leadId === lead.id),
     }))
+  }
+
+  private _rateGroupsCache: RateGroup[] | null = null
+
+  /**
+   * Rate groups for the dashboard and team stats. On Neon this is one aggregate
+   * query (no message or lead rows leave the database); on Supabase (PostgREST)
+   * it falls back to the in-memory computation so the rollback path keeps
+   * working. Both paths produce the same groups — asserted by
+   * `REP_RATE_SQL_JS_PARITY`.
+   */
+  private async getRateGroups(): Promise<RateGroup[]> {
+    if (this._rateGroupsCache) return this._rateGroupsCache
+    if (this.client.provider === 'neon' && this.client.raw) {
+      const { data, error } = await this.client.raw<RateGroup>(RATE_GROUP_SQL, [
+        this.orgId,
+        this.orgId,
+        this.orgId,
+      ])
+      if (!error && Array.isArray(data)) {
+        this._rateGroupsCache = data as RateGroup[]
+        return this._rateGroupsCache
+      }
+    }
+    const buckets = await this.fetchRates()
+    const byKey = new Map<string, RateGroup>()
+    const groups: RateGroup[] = []
+    for (const b of buckets) {
+      const key = `${b.lead.ownerRepId ?? ''}|${b.lead.playId ?? ''}`
+      let g = byKey.get(key)
+      if (!g) {
+        g = {
+          ownerRepId: b.lead.ownerRepId,
+          playId: b.lead.playId,
+          sentLeads: 0,
+          sent: 0,
+          repliedLeads: 0,
+          readLeads: 0,
+          checkedLeads: 0,
+        }
+        byKey.set(key, g)
+        groups.push(g)
+      }
+      const m = computeRates([b])
+      g.sent += m.sent
+      g.sentLeads += m.sentLeads
+      g.repliedLeads += m.repliedLeads
+      g.readLeads += m.readLeads
+      g.checkedLeads += m.checkedLeads
+    }
+    this._rateGroupsCache = groups
+    return groups
+  }
+
+  /**
+   * Pipeline stage counts. On Neon this is one aggregate query (no lead rows
+   * leave the database); on Supabase (PostgREST) it returns null so the caller
+   * falls back to `loadBoardData` + the JS authority.
+   */
+  async getPipelineStageSummary(scope: PipelineStageScope): Promise<PipelineStageCounts | null> {
+    if (this.client.provider !== 'neon' || !this.client.raw) return null
+    const nowIso = new Date().toISOString()
+    const { data, error } = await this.client.raw<Partial<PipelineStageCounts>>(
+      pipelineStageSql(pipelineScopeClause(scope)),
+      pipelineScopeParams(this.orgId, nowIso, scope),
+    )
+    if (error || !data) return null
+    return { ...emptyPipelineStageCounts(), ...(data as Partial<PipelineStageCounts>) }
+  }
+
+  /** Bounded card ids in board order (stage priority, then last activity). */
+  async getPipelineCardIds(scope: PipelineStageScope, limit: number): Promise<string[] | null> {
+    if (this.client.provider !== 'neon' || !this.client.raw) return null
+    const nowIso = new Date().toISOString()
+    const { data, error } = await this.client.raw<{ id: string }>(
+      pipelineCardIdsSql(pipelineScopeClause(scope)),
+      [...pipelineScopeParams(this.orgId, nowIso, scope), limit],
+    )
+    if (error || !Array.isArray(data)) return null
+    return (data as Array<{ id: string }>).map((row) => row.id)
+  }
+
+  /** Fetch a bounded set of leads by id, preserving the given order. */
+  async getLeadsByIds(ids: string[]): Promise<Lead[]> {
+    if (ids.length === 0) return []
+    const rows = await chunkedIn<Row>(ids, (chunk) =>
+      this.client.from('leads').select(LEAD_LIST_COLUMNS).in('id', chunk),
+    )
+    const byId = new Map(rows.map((row) => [row.id as string, row]))
+    return ids
+      .map((id) => byId.get(id))
+      .filter((row): row is Row => Boolean(row))
+      .map(mapLead)
   }
 
   async fetchLeadsAll(scopeToUser = false, includeArchived = false): Promise<Lead[]> {
@@ -1048,7 +1178,7 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
   }
 
-  async getLead(id: string) {
+  async getLead(id: string, scope?: LeadReadScope | null) {
     const { data, error } = await this.client
       .from('leads')
       .select(LEAD_COLUMNS)
@@ -1057,12 +1187,22 @@ export class SupabaseStore implements ScoutStore {
     if (error) throw error
     if (!data) return null
 
-    // Enforce ownership: non-admin can only access their own leads.
-    // A lead with no owner (NULL owner_rep_id) is claimable — the acting
-    // rep is treated as its owner so freshly-extracted leads that haven't
-    // been assigned yet don't block the workflow.
-    const leadOwner = (data as Record<string, unknown>).owner_rep_id as string | null
-    if (this.rep.role !== 'admin' && leadOwner !== null && leadOwner !== this.rep.id) {
+    const row = data as Record<string, unknown>
+
+    // Hard boundary: the Neon provider bypasses RLS, so the organization check
+    // is explicit. A cross-org lead is indistinguishable from a missing one.
+    if (row.organization_id !== this.orgId) return null
+
+    const leadOwner = row.owner_rep_id as string | null
+
+    // Scoped callers (Lead 360) authorize against their operational scope.
+    // Unscoped callers (API routes) keep the original ownership gate, so adding
+    // scope support must never widen what an API route can reach.
+    if (scope) {
+      if (leadOwner !== null && scope.repIds !== null && !scope.repIds.includes(leadOwner)) {
+        throw new Error('You are not the owner of this lead.')
+      }
+    } else if (this.rep.role !== 'admin' && leadOwner !== null && leadOwner !== this.rep.id) {
       throw new Error('You are not the owner of this lead.')
     }
 
@@ -2612,10 +2752,10 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getTodayDashboard(): Promise<TodayDashboard> {
-    const [mine, buckets, dmFollowupSent, connectionSent, upworkApplies, notifications, followupsDue, myRank, upwork, orgSettings] =
+    const [mine, rateGroups, dmFollowupSent, connectionSent, upworkApplies, notifications, followupsDue, myRank, upwork, orgSettings] =
       await Promise.all([
         this.getQueue(),
-        this.fetchRates(),
+        this.getRateGroups(),
         this.countTodaysSendsByTypes(['dm', 'followup']),
         this.countTodaysSendsByTypes(['connection']),
         this.countTodaysUpworkApplies(),
@@ -2625,7 +2765,7 @@ export class SupabaseStore implements ScoutStore {
         this.fetchUpworkSnapshot(),
         this.getOrgSettings(),
       ])
-    const team = computeRates(buckets)
+    const team = rateMetricFromGroups(rateGroups)
     // The budget is the effective policy, not a second calculation. Settings,
     // Today, the rail and the send path read this one object.
     const effective = await this.getEffectivePolicy()
@@ -2648,8 +2788,8 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getTeamStats(): Promise<TeamStats> {
-    const [buckets, reps] = await Promise.all([
-      this.fetchRates(),
+    const [groups, reps] = await Promise.all([
+      this.getRateGroups(),
       this.client
         .from('reps')
         .select('id, name, role, organization_id, created_at, timezone')
@@ -2666,28 +2806,21 @@ export class SupabaseStore implements ScoutStore {
         }),
     ])
 
-    const overall = computeRates(buckets)
+    const overall = rateMetricFromGroups(groups)
     const perRep = reps
       .filter((r) => r.role !== 'sourcer')
       .map((rep) => ({
         rep,
-        ...computeRates(
-          buckets.filter((b) => b.lead.ownerRepId === rep.id),
-        ),
+        ...rateMetricFromGroups(groups.filter((g) => g.ownerRepId === rep.id)),
       }))
       .filter((row) => row.sent > 0 || row.replyRate !== null)
 
     const plays = await this.listPlays()
-    const playGroups = new Map<string, RateBucket[]>()
-    for (const b of buckets) {
-      const key = b.lead.playId ?? ''
-      if (!playGroups.has(key)) playGroups.set(key, [])
-      playGroups.get(key)!.push(b)
-    }
-    const perPlay = [...playGroups.entries()]
-      .map(([key, group]) => ({
+    const playKeys = [...new Set(groups.map((g) => g.playId ?? ''))]
+    const perPlay = playKeys
+      .map((key) => ({
         play: key ? (plays.find((p) => p.id === key) ?? null) : null,
-        ...computeRates(group),
+        ...rateMetricFromGroups(groups.filter((g) => (g.playId ?? '') === key)),
       }))
       .filter((row) => row.sent > 0 || row.replyRate !== null)
       .sort((a, b) => {
@@ -3080,7 +3213,7 @@ export class SupabaseStore implements ScoutStore {
   async listUpworkJobs(): Promise<UpworkJob[]> {
     const { data, error } = await this.client
       .from('upwork_jobs')
-      .select('*')
+      .select(UPWORK_JOB_LIST_COLUMNS)
       .eq('owner_rep_id', this.rep.id)
       .order('created_at', { ascending: false })
     if (error) throw error
@@ -4139,7 +4272,7 @@ export class SupabaseStore implements ScoutStore {
   async listNotifications(): Promise<NotificationLogEntry[]> {
     const { data, error } = await this.client
       .from('notification_log')
-      .select('*')
+      .select('id, organization_id, rep_id, type, payload, read, created_at')
       .eq('rep_id', this.rep.id)
       .eq('read', false)
       .order('created_at', { ascending: false })
@@ -5973,26 +6106,30 @@ export class SupabaseStore implements ScoutStore {
   }
 
   private async fetchLeadsWithMessages(): Promise<Array<Lead & { _messages: Message[]; _conversation: ConversationState | null }>> {
-    const { data, error } = await this.client
-      .from('leads')
-      .select(LEAD_LIST_COLUMNS)
-      .eq('owner_rep_id', this.rep.id)
-      // Every other lead list excludes archived rows; omitting it here let the
-      // Relay queue surface leads the board had already swept into archive.
-      .eq('archived', false)
-      .order('created_at', { ascending: false })
-    if (error) throw error
+    // Reuse the request-scoped owned-lead snapshot. The dashboard already loaded
+    // this exact set through getQueue(); a second full projection was the
+    // largest repeated read on the rep home.
+    const owned = await this.listOwnedLeads()
+    const leadIds = owned.map((l) => l.id)
 
     // The messages and conversation states are second reads rather than PostgREST
     // embeds (`messages(*)`, `conversation_states(*)`), which the Neon adapter
-    // cannot translate. Batched by lead id.
-    const leadIds = (data ?? []).map((r: Row) => r.id as string)
+    // cannot translate. Only the columns the queue engine reads are selected:
+    // the full thread loads when a conversation is opened, and the conversation
+    // `memory`/`commercial_state` blobs are never needed for ranking.
     const [messageRows, stateRows] = await Promise.all([
       leadIds.length > 0
-        ? this.client.from('messages').select('*').in('lead_id', leadIds).order('created_at', { ascending: true })
+        ? this.client
+            .from('messages')
+            .select(RELAY_QUEUE_MESSAGE_COLUMNS)
+            .in('lead_id', leadIds)
+            .order('created_at', { ascending: true })
         : Promise.resolve({ data: [] }),
       leadIds.length > 0
-        ? this.client.from('conversation_states').select('*').in('lead_id', leadIds)
+        ? this.client
+            .from('conversation_states')
+            .select(RELAY_QUEUE_CONVERSATION_COLUMNS)
+            .in('lead_id', leadIds)
         : Promise.resolve({ data: [] }),
     ])
     const messagesByLead = new Map<string, Row[]>()
@@ -6004,11 +6141,11 @@ export class SupabaseStore implements ScoutStore {
     const stateByLead = new Map<string, Row>()
     for (const row of stateRows.data ?? []) stateByLead.set(row.lead_id as string, row)
 
-    return (data ?? []).map((r: Row) => ({
-      ...mapLead(r),
-      _messages: (messagesByLead.get(r.id as string) ?? []).map(mapMessage),
-      _conversation: stateByLead.get(r.id as string)
-        ? mapConversationState(stateByLead.get(r.id as string) as Row)
+    return owned.map((lead) => ({
+      ...lead,
+      _messages: (messagesByLead.get(lead.id) ?? []).map(mapMessage),
+      _conversation: stateByLead.get(lead.id)
+        ? mapConversationState(stateByLead.get(lead.id) as Row)
         : null,
     }))
   }

@@ -57,3 +57,76 @@ export function emptyRates(): RateMetric {
     readToCheckRate: null,
   }
 }
+
+/**
+ * One (owner, play) group of the rate aggregate. The SQL path returns these
+ * directly; the JS fallback derives them from `computeRates` so both paths
+ * produce the same shape.
+ */
+export interface RateGroup {
+  ownerRepId: string | null
+  playId: string | null
+  sentLeads: number
+  sent: number
+  repliedLeads: number
+  readLeads: number
+  checkedLeads: number
+}
+
+/** Sum groups into one metric. Ratios are recomputed from the summed counts. */
+export function rateMetricFromGroups(groups: readonly RateGroup[]): RateMetric {
+  let sent = 0
+  let sentLeads = 0
+  let repliedLeads = 0
+  let readLeads = 0
+  let checkedLeads = 0
+  for (const g of groups) {
+    sent += g.sent
+    sentLeads += g.sentLeads
+    repliedLeads += g.repliedLeads
+    readLeads += g.readLeads
+    checkedLeads += g.checkedLeads
+  }
+  return {
+    sent,
+    sentLeads,
+    repliedLeads,
+    replyRate: sentLeads > 0 ? repliedLeads / sentLeads : null,
+    readLeads,
+    checkedLeads,
+    readToCheckRate: readLeads > 0 ? checkedLeads / readLeads : null,
+  }
+}
+
+/**
+ * Rate aggregate in SQL. Messages and outcomes are pre-aggregated per lead so
+ * the lead join cannot multiply the send count. Scoped to the org and the same
+ * non-archived lead set `fetchLeadsAll()` reads.
+ */
+export const RATE_GROUP_SQL = `WITH m AS (
+  SELECT lead_id, COUNT(*) AS sent
+  FROM messages
+  WHERE organization_id = ? AND sent_at IS NOT NULL
+  GROUP BY lead_id
+), o AS (
+  SELECT lead_id,
+    BOOL_OR(stage = 'replied') AS replied,
+    BOOL_OR(stage = 'read') AS read,
+    BOOL_OR(stage = 'check') AS checked
+  FROM outcomes
+  WHERE organization_id = ?
+  GROUP BY lead_id
+)
+SELECT
+  l.owner_rep_id AS owner_rep_id,
+  l.play_id AS play_id,
+  COUNT(*) FILTER (WHERE m.sent > 0) AS sent_leads,
+  COALESCE(SUM(m.sent), 0) AS sent,
+  COUNT(*) FILTER (WHERE o.replied) AS replied_leads,
+  COUNT(*) FILTER (WHERE o.read) AS read_leads,
+  COUNT(*) FILTER (WHERE o.checked) AS checked_leads
+FROM leads l
+LEFT JOIN m ON m.lead_id = l.id
+LEFT JOIN o ON o.lead_id = l.id
+WHERE l.organization_id = ? AND l.archived = false
+GROUP BY l.owner_rep_id, l.play_id`

@@ -16,7 +16,14 @@ import { qualifyCanonicalScore } from '@/lib/scoring/qualification'
 import { sourceBucket, type OpsSource } from '@/lib/operations/filters'
 import { stageRatioPct } from '@/lib/operations/reports'
 import { MEETING_EVENT } from '@/lib/sales/meetings'
+import { MEETING_AND_WON_STAGES, PROPOSAL_OR_LATER_STAGES } from '@/lib/sales/stage-vocabulary'
 import { readAllPages } from '@/lib/operations/paged-read'
+import {
+  metricCountsFromRow,
+  performanceMetricsSql,
+  type MetricCounts,
+  type PerformanceAggregateScope,
+} from '@/lib/analytics/aggregates'
 
 export interface ExecutionMetrics {
   connections: number
@@ -203,8 +210,8 @@ export interface FunnelStep {
   conversionPct: number | null
 }
 
-const MEETING_STAGES = new Set(['meeting', 'proposal', 'negotiation', 'won'])
-const PROPOSAL_STAGES = new Set(['proposal', 'negotiation', 'won'])
+const MEETING_STAGES = new Set<string>(MEETING_AND_WON_STAGES)
+const PROPOSAL_STAGES = new Set<string>(PROPOSAL_OR_LATER_STAGES)
 const REPLY_STATUSES = new Set(['replied', 'won'])
 const CONTACT_STATUSES = new Set(['contacted', 'followed_up', 'replied', 'won', 'lost'])
 
@@ -316,15 +323,253 @@ const EVENT_CAP = 5000
  * read that silently undercounted busy windows). Production holds ~5,200
  * action_events in total (2026-11-01). Past the ceiling `truncated` is set
  * and the UI says so; a GROUP BY RPC is the follow-up if windows get there.
+ *
+ * The Neon path aggregates instead and never pages, so the ceiling only bounds
+ * the Supabase rollback read.
  */
 export const PERFORMANCE_EVENT_CEILING = 50_000
 const COHORT_CAP = 3000
 
+/**
+ * Team Performance.
+ *
+ * Neon: the metrics are one grouped aggregate per comparison (rep / profile /
+ * source) plus a totals row, so a window never transfers its raw events.
+ * Supabase (PostgREST) has no raw-SQL surface, so `loadPerformanceFromEvents`
+ * keeps the in-memory tally — the same numbers, the old read pattern.
+ */
 export async function loadPerformance(client: DbClient, query: PerformanceQuery): Promise<PerformanceData> {
   if (query.repIds && query.repIds.length === 0) {
     return emptyPerformance()
   }
+  const aggregated = await loadPerformanceAggregate(client, query)
+  if (aggregated) return aggregated
+  return loadPerformanceFromEvents(client, query)
+}
 
+interface CohortRow {
+  id: string
+  owner_rep_id: string | null
+  status: string | null
+  source: string | null
+  revenue_identity_id: string | null
+  canonical_score: number | null
+}
+
+interface CohortStateRow {
+  lead_id: string
+  stage: string | null
+  last_sent_at: string | null
+  last_reply_at: string | null
+  won_at: string | null
+}
+
+function emptyMetricCounts(): MetricCounts {
+  return {
+    connections: 0,
+    messages: 0,
+    repliesSent: 0,
+    replies: 0,
+    meetings: 0,
+    proposals: 0,
+    wins: 0,
+    applications: 0,
+    leadsWorked: 0,
+    leadsContacted: 0,
+    leadsReplied: 0,
+  }
+}
+
+function toExecutionMetrics(counts: MetricCounts, tasksCompleted = 0): ExecutionMetrics {
+  return { ...counts, tasksCompleted }
+}
+
+async function loadCohortRows(client: DbClient, query: PerformanceQuery): Promise<CohortRow[]> {
+  let q = client
+    .from('leads')
+    .select('id, owner_rep_id, status, source, revenue_identity_id, canonical_score, created_at')
+    .eq('organization_id', query.orgId)
+    .eq('is_test', false)
+    .gte('created_at', query.start)
+    .lt('created_at', query.end)
+    .limit(COHORT_CAP)
+  if (query.repIds) q = q.in('owner_rep_id', query.repIds)
+  if (query.profileId) q = q.eq('revenue_identity_id', query.profileId)
+  const res = await q
+  if (res.error) throw res.error
+  return (res.data ?? []) as CohortRow[]
+}
+
+async function loadCohortStates(client: DbClient, query: PerformanceQuery, leadIds: string[]): Promise<CohortStateRow[]> {
+  if (leadIds.length === 0) return []
+  return chunkedIn<CohortStateRow>(leadIds, (chunk) =>
+    client
+      .from('conversation_states')
+      .select('lead_id, stage, last_sent_at, last_reply_at, won_at')
+      .eq('organization_id', query.orgId)
+      .in('lead_id', chunk),
+  ).catch(() => [])
+}
+
+function buildCohort(query: PerformanceQuery, rows: CohortRow[], states: CohortStateRow[]): CohortLead[] {
+  const stateByLead = new Map(states.map((s) => [s.lead_id, s]))
+  return rows
+    .filter((l) => !query.source || sourceBucket(l.source) === query.source)
+    .map((l) => {
+      const s = stateByLead.get(l.id)
+      return {
+        id: l.id,
+        ownerRepId: l.owner_rep_id,
+        status: l.status,
+        stage: s?.stage ?? null,
+        lastSentAt: s?.last_sent_at ?? null,
+        lastReplyAt: s?.last_reply_at ?? null,
+        wonAt: s?.won_at ?? null,
+        source: sourceBucket(l.source),
+        profileId: l.revenue_identity_id,
+        qualified: l.canonical_score != null && ['STRONG', 'WORTH_PURSUING'].includes(qualifyCanonicalScore(l.canonical_score).qualification),
+      }
+    })
+}
+
+async function loadTaskRows(client: DbClient, query: PerformanceQuery): Promise<Array<{ actor_rep_id: string | null }>> {
+  let q = client
+    .from('task_events')
+    .select('actor_rep_id')
+    .eq('organization_id', query.orgId)
+    .eq('event_type', 'TASK_COMPLETED')
+    .gte('created_at', query.start)
+    .lt('created_at', query.end)
+    .limit(EVENT_CAP)
+  if (query.repIds) q = q.in('actor_rep_id', query.repIds)
+  const res = await q
+  return res.error ? [] : ((res.data ?? []) as Array<{ actor_rep_id: string | null }>)
+}
+
+const SOURCE_LABEL: Record<OpsSource, string> = { linkedin: 'LinkedIn', upwork: 'Upwork', other: 'Other sources' }
+
+/**
+ * Grouped metrics for one comparison. Returns null when the provider cannot run
+ * raw SQL or a statement fails — the caller then reads events and tallies them,
+ * so a broken aggregate degrades to the old behaviour rather than to zeros.
+ */
+async function loadPerformanceAggregate(client: DbClient, query: PerformanceQuery): Promise<PerformanceData | null> {
+  if (client.provider !== 'neon' || !client.raw) return null
+
+  const scope: PerformanceAggregateScope = {
+    orgId: query.orgId,
+    repIds: query.repIds,
+    start: query.start,
+    end: query.end,
+    profileId: query.profileId ?? null,
+    source: query.source ?? null,
+  }
+  const needsTasks = !query.profileId && !query.source
+  const actor = performanceMetricsSql('actor', scope)
+  const profile = performanceMetricsSql('profile', scope)
+  const source = performanceMetricsSql('source', scope)
+  const total = performanceMetricsSql('total', scope)
+
+  try {
+    const [actorRes, profileRes, sourceRes, totalRes, taskRows] = await Promise.all([
+      client.raw<Record<string, unknown>[]>(actor.sql, actor.params),
+      client.raw<Record<string, unknown>[]>(profile.sql, profile.params),
+      client.raw<Record<string, unknown>[]>(source.sql, source.params),
+      client.raw<Record<string, unknown>[]>(total.sql, total.params),
+      needsTasks ? loadTaskRows(client, query) : Promise.resolve([] as Array<{ actor_rep_id: string | null }>),
+    ])
+    if (actorRes.error || profileRes.error || sourceRes.error || totalRes.error) {
+      console.error('[performance] aggregate failed, falling back to event reads')
+      return null
+    }
+
+    const actorByKey = new Map<string, MetricCounts>(
+      (actorRes.data ?? []).map((row) => [String(row.key), metricCountsFromRow(row)]),
+    )
+    const profileByKey = new Map<string, MetricCounts>(
+      (profileRes.data ?? []).map((row) => [String(row.key), metricCountsFromRow(row)]),
+    )
+    const sourceByKey = new Map<string, MetricCounts>(
+      (sourceRes.data ?? []).map((row) => [String(row.key), metricCountsFromRow(row)]),
+    )
+    const totalRow = (totalRes.data ?? [])[0] ?? ({} as Record<string, unknown>)
+
+    const cohortRows = await loadCohortRows(client, query)
+    const states = await loadCohortStates(client, query, cohortRows.map((l) => l.id))
+    const cohort = buildCohort(query, cohortRows, states)
+
+    const tasksByRep = new Map<string, number>()
+    for (const t of taskRows) {
+      if (t.actor_rep_id) tasksByRep.set(t.actor_rep_id, (tasksByRep.get(t.actor_rep_id) ?? 0) + 1)
+    }
+    const totalTasks = needsTasks ? taskRows.length : 0
+
+    // groupMetrics inserts event groups first, then task-only reps.
+    const repKeys = [...actorByKey.keys()]
+    for (const key of tasksByRep.keys()) if (!actorByKey.has(key)) repKeys.push(key)
+
+    const profileKeys = [...new Set([...profileByKey.keys(), ...cohort.map((c) => c.profileId ?? 'none')])]
+    const [repRows, identityRows] = await Promise.all([
+      chunkedIn<{ id: string; name: string }>(repKeys, (chunk) =>
+        client.from('reps').select('id, name').eq('organization_id', query.orgId).in('id', chunk),
+      ),
+      chunkedIn<{ id: string; identity_name: string }>(profileKeys.filter((id) => id !== 'none'), (chunk) =>
+        client.from('revenue_identities').select('id, identity_name').eq('organization_id', query.orgId).in('id', chunk),
+      ).catch(() => []),
+    ])
+    const repName = new Map(repRows.map((r) => [r.id, r.name]))
+    const identityName = new Map(identityRows.map((r) => [r.id, r.identity_name]))
+
+    const opportunitiesByProfile = new Map<string, number>()
+    for (const c of cohort) {
+      const key = c.profileId ?? 'none'
+      opportunitiesByProfile.set(key, (opportunitiesByProfile.get(key) ?? 0) + 1)
+    }
+    const allProfileKeys = new Set([...profileByKey.keys(), ...opportunitiesByProfile.keys()])
+
+    return {
+      totals: toExecutionMetrics(metricCountsFromRow(totalRow), totalTasks),
+      funnel: buildFunnel(cohort),
+      byRep: repKeys
+        .map((id) => {
+          const metrics = toExecutionMetrics(actorByKey.get(id) ?? emptyMetricCounts(), needsTasks ? (tasksByRep.get(id) ?? 0) : 0)
+          return { repId: id, repName: repName.get(id) ?? 'Unknown', metrics, replyRate: replyRate(metrics) }
+        })
+        .sort((a, b) => a.repName.localeCompare(b.repName)),
+      byProfile: [...allProfileKeys]
+        .map((key) => {
+          const metrics = toExecutionMetrics(profileByKey.get(key) ?? emptyMetricCounts())
+          return {
+            profileId: key === 'none' ? null : key,
+            profileName: key === 'none' ? 'No profile' : identityName.get(key) ?? 'Unknown profile',
+            opportunities: opportunitiesByProfile.get(key) ?? 0,
+            metrics,
+            replyRate: replyRate(metrics),
+          }
+        })
+        .sort((a, b) => (a.profileId === null ? 1 : b.profileId === null ? -1 : a.profileName.localeCompare(b.profileName))),
+      bySource: (['linkedin', 'upwork', 'other'] as OpsSource[]).map((src) => {
+        const metrics = sourceByKey.get(src) ?? emptyMetricCounts()
+        return {
+          source: src,
+          label: SOURCE_LABEL[src],
+          qualified: cohort.filter((c) => c.source === src && c.qualified).length,
+          contacted: metrics.leadsContacted,
+          replies: metrics.replies,
+          meetings: metrics.meetings,
+          wins: metrics.wins,
+        }
+      }),
+      truncated: cohortRows.length >= COHORT_CAP,
+    }
+  } catch (err) {
+    console.error('[performance] aggregate threw, falling back to event reads:', err)
+    return null
+  }
+}
+
+/** Supabase rollback path: page the events and tally them in memory. */
+async function loadPerformanceFromEvents(client: DbClient, query: PerformanceQuery): Promise<PerformanceData> {
   const eventsRead = readAllPages<PerfEvent>(
     (from, to) => {
       let q = client
@@ -346,70 +591,30 @@ export async function loadPerformance(client: DbClient, query: PerformanceQuery)
     throw error
   })
 
-  let cohortQ = client
-    .from('leads')
-    .select('id, owner_rep_id, status, source, revenue_identity_id, canonical_score, created_at')
-    .eq('organization_id', query.orgId)
-    .eq('is_test', false)
-    .gte('created_at', query.start)
-    .lt('created_at', query.end)
-    .limit(COHORT_CAP)
-  if (query.repIds) cohortQ = cohortQ.in('owner_rep_id', query.repIds)
-  if (query.profileId) cohortQ = cohortQ.eq('revenue_identity_id', query.profileId)
-
-  let tasksQ = client
-    .from('task_events')
-    .select('actor_rep_id')
-    .eq('organization_id', query.orgId)
-    .eq('event_type', 'TASK_COMPLETED')
-    .gte('created_at', query.start)
-    .lt('created_at', query.end)
-    .limit(EVENT_CAP)
-  if (query.repIds) tasksQ = tasksQ.in('actor_rep_id', query.repIds)
-
   const identityProfilesQ = client.from('revenue_identities').select('id, profile_id').eq('organization_id', query.orgId)
 
-  const [eventsRes, cohortRes, tasksRes, identityProfilesRes] = await Promise.all([eventsRead, cohortQ, tasksQ, identityProfilesQ])
-  if (cohortRes.error) throw cohortRes.error
+  const [eventsRes, cohortRows, taskRows, identityProfilesRes] = await Promise.all([eventsRead, loadCohortRows(client, query), loadTaskRows(client, query), identityProfilesQ])
   const events = eventsRes.rows
-  const cohortRows = (cohortRes.data ?? []) as Array<{
-    id: string
-    owner_rep_id: string | null
-    status: string | null
-    source: string | null
-    revenue_identity_id: string | null
-    canonical_score: number | null
-  }>
-  const taskRows = tasksRes.error ? [] : ((tasksRes.data ?? []) as Array<{ actor_rep_id: string | null }>)
+  const cohortRowsRaw = cohortRows
+  const identityProfiles = (identityProfilesRes.data ?? []) as Array<{ id: string; profile_id: string | null }>
 
   // Lead attributes for events (profile + source) — events may reference
   // leads created before the window, so read those separately (narrow).
   const eventLeadIds = [...new Set(events.map((e) => e.lead_id).filter(Boolean))] as string[]
-  const cohortById = new Map(cohortRows.map((l) => [l.id, l]))
+  const cohortById = new Map(cohortRowsRaw.map((l) => [l.id, l]))
   const missing = eventLeadIds.filter((id) => !cohortById.has(id))
   const [extraLeads, states] = await Promise.all([
     chunkedIn<{ id: string; source: string | null; revenue_identity_id: string | null }>(missing, (chunk) =>
       client.from('leads').select('id, source, revenue_identity_id').eq('organization_id', query.orgId).in('id', chunk),
     ),
-    chunkedIn<{ lead_id: string; stage: string | null; last_sent_at: string | null; last_reply_at: string | null; won_at: string | null }>(
-      cohortRows.map((l) => l.id),
-      (chunk) =>
-        client
-          .from('conversation_states')
-          .select('lead_id, stage, last_sent_at, last_reply_at, won_at')
-          .eq('organization_id', query.orgId)
-          .in('lead_id', chunk),
-    ).catch(() => []),
+    loadCohortStates(client, query, cohortRowsRaw.map((l) => l.id)),
   ])
   const leadAttr = new Map<string, { source: OpsSource; profileId: string | null }>()
-  for (const l of cohortRows) leadAttr.set(l.id, { source: sourceBucket(l.source), profileId: l.revenue_identity_id })
+  for (const l of cohortRowsRaw) leadAttr.set(l.id, { source: sourceBucket(l.source), profileId: l.revenue_identity_id })
   for (const l of extraLeads) leadAttr.set(l.id, { source: sourceBucket(l.source), profileId: l.revenue_identity_id })
 
   // Admin Home profile rows use the same attribution.
-  const profileOf = identityResolver(
-    (identityProfilesRes.data ?? []) as Array<{ id: string; profile_id: string | null }>,
-    (leadId) => leadAttr.get(leadId)?.profileId,
-  )
+  const profileOf = identityResolver(identityProfiles, (leadId) => leadAttr.get(leadId)?.profileId)
 
   // Profile / source filters apply to events through their lead.
   const scopedEvents = events.filter((e) => {
@@ -423,24 +628,7 @@ export async function loadPerformance(client: DbClient, query: PerformanceQuery)
     return true
   })
 
-  const stateByLead = new Map(states.map((s) => [s.lead_id, s]))
-  const cohort: CohortLead[] = cohortRows
-    .filter((l) => !query.source || sourceBucket(l.source) === query.source)
-    .map((l) => {
-      const s = stateByLead.get(l.id)
-      return {
-        id: l.id,
-        ownerRepId: l.owner_rep_id,
-        status: l.status,
-        stage: s?.stage ?? null,
-        lastSentAt: s?.last_sent_at ?? null,
-        lastReplyAt: s?.last_reply_at ?? null,
-        wonAt: s?.won_at ?? null,
-        source: sourceBucket(l.source),
-        profileId: l.revenue_identity_id,
-        qualified: l.canonical_score != null && ['STRONG', 'WORTH_PURSUING'].includes(qualifyCanonicalScore(l.canonical_score).qualification),
-      }
-    })
+  const cohort = buildCohort(query, cohortRowsRaw, states)
 
   const tasksByRep = new Map<string, number>()
   for (const t of taskRows) if (t.actor_rep_id) tasksByRep.set(t.actor_rep_id, (tasksByRep.get(t.actor_rep_id) ?? 0) + 1)
@@ -474,8 +662,6 @@ export async function loadPerformance(client: DbClient, query: PerformanceQuery)
     opportunitiesByProfile.set(key, (opportunitiesByProfile.get(key) ?? 0) + 1)
   }
   const allProfileKeys = new Set([...profileGroups.keys(), ...opportunitiesByProfile.keys()])
-
-  const SOURCE_LABEL: Record<OpsSource, string> = { linkedin: 'LinkedIn', upwork: 'Upwork', other: 'Other sources' }
 
   const totals = aggregateMetrics(scopedEvents, totalTasks)
 
@@ -512,7 +698,7 @@ export async function loadPerformance(client: DbClient, query: PerformanceQuery)
         wins: metrics.wins,
       }
     }),
-    truncated: eventsRes.truncated || cohortRows.length >= COHORT_CAP,
+    truncated: eventsRes.truncated || cohortRowsRaw.length >= COHORT_CAP,
   }
 }
 

@@ -1,21 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
-import type { TrendRelevanceProfile } from '@/lib/trends/types'
 import { rankTrendsForPersona } from '@/lib/trends/engine'
 import { generateGrowthBriefViaStudioEngine } from '@/lib/growth/v2/relay-brand-adapter'
+import { RELAY_TREND_PROFILE } from '@/lib/growth/v2/relay-brand-profile'
 
 export const dynamic = 'force-dynamic'
  export const runtime = 'nodejs'
  export const maxDuration = 120
-
-const RELAY_TREND_PROFILE: TrendRelevanceProfile = {
-  primaryTerritories: ['sales technology', 'revenue operations', 'ai', 'b2b saas', 'outreach'],
-  secondaryTerritories: ['startups', 'product', 'data', 'automation', 'founder'],
-  technologies: ['ai', 'crm', 'automation', 'analytics', 'llm'],
-  industries: ['saas', 'b2b', 'sales'],
-  excludedTerritories: [],
-}
 
 function getLocalDate(timezone: string): string {
   try {

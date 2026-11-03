@@ -1,5 +1,11 @@
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 import type { DbClient } from '@/lib/db/types'
+import {
+  activityCoverageSql,
+  activityDailySql,
+  activityDayEventsSql,
+} from '@/lib/analytics/aggregates'
+import { businessDateRange, isDateString } from '@/lib/org-clock'
 
 // Canonical activity types — mapped from action_events
 export type CanonicalAction =
@@ -89,7 +95,8 @@ export interface RepActivityResult {
 /**
  * Get daily activity for a rep over a date range.
  * Uses organization timezone for day boundaries.
- * 0 AI calls — pure aggregation from action_events.
+ * 0 AI calls — one GROUP BY on action_events, or a raw read on the Supabase
+ * rollback path (PostgREST has no raw-SQL surface).
  */
 export async function getRepDailyActivity(params: {
   repId: string
@@ -98,8 +105,28 @@ export async function getRepDailyActivity(params: {
   endDate: Date
   timezone?: string
   supabase: DbClient
+  /**
+   * The one day whose raw events the drilldown needs. Null — the default for
+   * the page and both API routes — returns the heatmap with no events at all.
+   */
+  includeEventsForDate?: string | null
 }): Promise<RepActivityResult> {
-  const { repId, orgId, startDate, endDate, timezone = 'UTC', supabase } = params
+  const { repId, orgId, startDate, endDate, timezone = 'UTC', supabase, includeEventsForDate = null } = params
+
+  const aggregated = await loadDailyCounts({ repId, orgId, startDate, endDate, timezone, supabase })
+  if (aggregated) {
+    const eventsByDay = includeEventsForDate
+      ? await loadDayEvents({ repId, orgId, date: includeEventsForDate, timezone, supabase })
+      : new Map<string, DailyActivity['events']>()
+    return buildActivity({
+      startDate,
+      endDate,
+      timezone,
+      countsByDay: aggregated.counts,
+      eventsByDay,
+      dataCoverageStart: aggregated.coverageStart,
+    })
+  }
 
   // Fetch all action_events for this rep in the date range
   const { data: events, error } = await supabase
@@ -115,8 +142,173 @@ export async function getRepDailyActivity(params: {
     return emptyResult(startDate, endDate)
   }
 
-  // Fetch lead names for drill-down
-  const leadIds = [...new Set(events.map(e => e.lead_id).filter(Boolean))]
+  // Fetch lead names for drill-down — only the clicked day needs them.
+  const leadNames = new Map<string, string>()
+  if (includeEventsForDate && events.length > 0) {
+    const leadIds = [...new Set(
+      events
+        .filter(e => toLocalDate(e.occurred_at, timezone) === includeEventsForDate)
+        .map(e => e.lead_id)
+        .filter(Boolean),
+    )]
+    if (leadIds.length > 0) {
+      try {
+        const leads = await chunkedIn<{ id: string; company: string | null }>(leadIds, (chunk) => supabase
+          .from('leads')
+          .select('id, company')
+          .in('id', chunk))
+        for (const l of leads) leadNames.set(l.id, l.company ?? 'Unknown')
+      } catch { /* names are drill-down only */ }
+    }
+  }
+
+  const countsByDay = new Map<string, DailyActivityCounts>()
+  const eventsByDay = new Map<string, DailyActivity['events']>()
+
+  for (const event of events) {
+    const canonical = canonicalActionFor(event.action_type, event.execution_status)
+    if (!canonical) continue // drafts, failures and non-activity types
+
+    // Convert to local date
+    const localDate = toLocalDate(event.occurred_at, timezone)
+    if (!localDate) continue
+
+    countsByDay.set(localDate, addDayCount(countsByDay.get(localDate) ?? emptyDayCounts(), canonical))
+
+    if (localDate === includeEventsForDate) {
+      const list = eventsByDay.get(localDate) ?? []
+      list.push({
+        id: event.id,
+        type: canonical,
+        occurredAt: event.occurred_at,
+        leadId: event.lead_id ?? null,
+        leadCompany: event.lead_id ? (leadNames.get(event.lead_id) ?? null) : null,
+        jobId: event.job_id ?? null,
+      })
+      eventsByDay.set(localDate, list)
+    }
+  }
+
+  return buildActivity({
+    startDate,
+    endDate,
+    timezone,
+    countsByDay,
+    eventsByDay,
+    dataCoverageStart: events.length > 0 ? events[0].occurred_at : null,
+  })
+}
+
+interface DailyActivityCounts {
+  totalActions: number
+  weightedActivity: number
+  breakdown: DailyActivity['breakdown']
+}
+
+function emptyBreakdown(): DailyActivity['breakdown'] {
+  return {
+    leadsAnalyzed: 0,
+    leadsSaved: 0,
+    connections: 0,
+    firstDMs: 0,
+    followups: 0,
+    replies: 0,
+    upworkApplications: 0,
+    meetings: 0,
+    wins: 0,
+    referrals: 0,
+  }
+}
+
+function emptyDayCounts(): DailyActivityCounts {
+  return { totalActions: 0, weightedActivity: 0, breakdown: emptyBreakdown() }
+}
+
+function addDayCount(counts: DailyActivityCounts, action: CanonicalAction): DailyActivityCounts {
+  return {
+    totalActions: counts.totalActions + 1,
+    weightedActivity: counts.weightedActivity + getActionWeight(action),
+    breakdown: incrementBreakdown(counts.breakdown, action),
+  }
+}
+
+function addDayCounts(counts: DailyActivityCounts, action: CanonicalAction, n: number): DailyActivityCounts {
+  let out = counts
+  for (let i = 0; i < n; i += 1) out = addDayCount(out, action)
+  return out
+}
+
+interface DailyCountsResult {
+  counts: Map<string, DailyActivityCounts>
+  /** First raw event in the window, before any canonical filter. */
+  coverageStart: string | null
+}
+
+/**
+ * The Neon heatmap read: one row per (local day, action type). Returns null on
+ * the Supabase path or when the aggregate fails, so the caller falls back to
+ * reading events — a failed aggregate degrades to the old behaviour, never to
+ * an empty heatmap.
+ */
+async function loadDailyCounts(params: {
+  repId: string
+  orgId: string
+  startDate: Date
+  endDate: Date
+  timezone: string
+  supabase: DbClient
+}): Promise<DailyCountsResult | null> {
+  const { repId, orgId, startDate, endDate, timezone, supabase } = params
+  if (supabase.provider !== 'neon' || !supabase.raw) return null
+
+  const daily = activityDailySql({ orgId, repId, start: startDate.toISOString(), end: endDate.toISOString(), timezone })
+  const coverage = activityCoverageSql({ orgId, repId, start: startDate.toISOString(), end: endDate.toISOString() })
+  const [dailyRes, coverageRes] = await Promise.all([
+    supabase.raw<{ day: string; action_type: string; n: number }[]>(daily.sql, daily.params),
+    supabase.raw<{ coverage_start: string | null }[]>(coverage.sql, coverage.params),
+  ])
+  if (dailyRes.error || !Array.isArray(dailyRes.data)) {
+    console.error('[activity] daily aggregate failed:', dailyRes.error?.message)
+    return null
+  }
+
+  const counts = new Map<string, DailyActivityCounts>()
+  for (const row of dailyRes.data) {
+    const canonical = canonicalActionFor(row.action_type, null)
+    if (!canonical) continue
+    const day = String(row.day)
+    counts.set(day, addDayCounts(counts.get(day) ?? emptyDayCounts(), canonical, Number(row.n)))
+  }
+  return { counts, coverageStart: coverageRes.data?.[0]?.coverage_start ?? null }
+}
+
+/** The drilldown's raw events for one clicked day. */
+async function loadDayEvents(params: {
+  repId: string
+  orgId: string
+  date: string
+  timezone: string
+  supabase: DbClient
+}): Promise<Map<string, DailyActivity['events']>> {
+  const { repId, orgId, date, timezone, supabase } = params
+  if (!isDateString(date)) return new Map()
+  if (supabase.provider !== 'neon' || !supabase.raw) return new Map()
+  const { start, end } = businessDateRange(date, timezone)
+  const { sql, params: args } = activityDayEventsSql({ orgId, repId, start, end, timezone })
+  const { data, error } = await supabase.raw<{
+    id: string
+    action_type: string
+    execution_status: string | null
+    lead_id: string | null
+    job_id: string | null
+    occurred_at: string
+  }>(sql, args)
+  if (error || !Array.isArray(data)) {
+    console.error('[activity] day drilldown aggregate failed:', error?.message)
+    return new Map()
+  }
+
+  const leadIds = [...new Set(data.map((e) => e.lead_id).filter(Boolean))] as string[]
   const leadNames = new Map<string, string>()
   if (leadIds.length > 0) {
     try {
@@ -128,78 +320,47 @@ export async function getRepDailyActivity(params: {
     } catch { /* names are drill-down only */ }
   }
 
-  // Group events by local date
-  const dailyMap = new Map<string, DailyActivity>()
-
-  for (const event of events) {
-    const canonical = canonicalActionFor(event.action_type, event.execution_status)
-    if (!canonical) continue // drafts, failures and non-activity types
-
-    // Convert to local date
-    const localDate = toLocalDate(event.occurred_at, timezone)
-    if (!localDate) continue
-
-    let day = dailyMap.get(localDate)
-    if (!day) {
-      day = {
-        date: localDate,
-        totalActions: 0,
-        weightedActivity: 0,
-        active: true,
-        breakdown: {
-          leadsAnalyzed: 0,
-          leadsSaved: 0,
-          connections: 0,
-          firstDMs: 0,
-          followups: 0,
-          replies: 0,
-          upworkApplications: 0,
-          meetings: 0,
-          wins: 0,
-          referrals: 0,
-        },
-        events: [],
-      }
-      dailyMap.set(localDate, day)
-    }
-
-    day.totalActions++
-    day.breakdown = incrementBreakdown(day.breakdown, canonical)
-    day.weightedActivity += getActionWeight(canonical)
-    day.active = true
-
-    day.events.push({
-      id: event.id,
+  const events: DailyActivity['events'] = []
+  for (const row of data) {
+    const canonical = canonicalActionFor(row.action_type, row.execution_status)
+    if (!canonical) continue
+    events.push({
+      id: row.id,
       type: canonical,
-      occurredAt: event.occurred_at,
-      leadId: event.lead_id ?? null,
-      leadCompany: event.lead_id ? (leadNames.get(event.lead_id) ?? null) : null,
-      jobId: event.job_id ?? null,
+      occurredAt: row.occurred_at,
+      leadId: row.lead_id ?? null,
+      leadCompany: row.lead_id ? (leadNames.get(row.lead_id) ?? null) : null,
+      jobId: row.job_id ?? null,
     })
   }
+  return new Map([[date, events]])
+}
+
+/** Fill the full date range and derive the summary from per-day counts. */
+function buildActivity(params: {
+  startDate: Date
+  endDate: Date
+  timezone: string
+  countsByDay: Map<string, DailyActivityCounts>
+  eventsByDay: Map<string, DailyActivity['events']>
+  dataCoverageStart: string | null
+}): RepActivityResult {
+  const { startDate, endDate, timezone, countsByDay, eventsByDay, dataCoverageStart } = params
 
   // Build full date range (including empty days)
   const daily: DailyActivity[] = []
   const current = new Date(startDate)
   while (current <= endDate) {
     const dateStr = formatLocalDate(current, timezone)
-    const existing = dailyMap.get(dateStr)
-    if (existing) {
-      daily.push(existing)
-    } else {
-      daily.push({
-        date: dateStr,
-        totalActions: 0,
-        weightedActivity: 0,
-        active: false,
-        breakdown: {
-          leadsAnalyzed: 0, leadsSaved: 0, connections: 0, firstDMs: 0,
-          followups: 0, replies: 0, upworkApplications: 0, meetings: 0,
-          wins: 0, referrals: 0,
-        },
-        events: [],
-      })
-    }
+    const counts = countsByDay.get(dateStr) ?? emptyDayCounts()
+    daily.push({
+      date: dateStr,
+      totalActions: counts.totalActions,
+      weightedActivity: counts.weightedActivity,
+      active: counts.totalActions > 0,
+      breakdown: counts.breakdown,
+      events: eventsByDay.get(dateStr) ?? [],
+    })
     current.setDate(current.getDate() + 1)
   }
 
@@ -235,7 +396,7 @@ export async function getRepDailyActivity(params: {
     summary,
     rangeStart: formatLocalDate(startDate, timezone),
     rangeEnd: formatLocalDate(endDate, timezone),
-    dataCoverageStart: events.length > 0 ? events[0].occurred_at : null,
+    dataCoverageStart,
   }
 }
 

@@ -49,7 +49,7 @@ import {
 } from '@/lib/operations/saved-views'
 import { NoteError, assertNoteSubjectAccess, normalizeNoteBody, notePermissions } from '@/lib/operations/notes'
 import { taskViewMatches } from '@/lib/operations/task-views'
-import { detectRelayShellSection, sectionNavItems, visibleTopNav } from '@/lib/navigation/relay-shell-nav'
+import { domainForPathname, secondaryItems, visibleDomains } from '@/lib/navigation/relay-shell-nav'
 import type { UnifiedTask } from '@/lib/tasks/types'
 import type { AuthContext } from '@/lib/auth/organization'
 
@@ -261,30 +261,37 @@ describe('ROLE_VISIBILITY', () => {
     expect(canOpenTeamWorkspace(rep)).toBe(false)
     expect(canOpenTeamWorkspace(manager)).toBe(true)
     expect(canOpenTeamWorkspace(admin)).toBe(true)
-    expect(visibleTopNav(rep).some((i) => i.id === 'team')).toBe(false)
-    expect(sectionNavItems('team', rep)).toEqual([])
+    expect(visibleDomains(rep).some((i) => i.id === 'team')).toBe(false)
+    expect(secondaryItems('team', rep)).toEqual([])
   })
 
-  it('ROLE_TEAM_RAIL: managers keep Daily operations, never admin-only items', () => {
-    const hrefs = sectionNavItems('team', manager).map((i) => i.href)
-    expect(hrefs).toEqual(['/team', '/team/groups', '/team/tasks', '/team/activity', '/team/performance', '/admin/command', '/team/targets'])
-    const adminHrefs = sectionNavItems('team', admin).map((i) => i.href)
+  it('ROLE_TEAM_RAIL: managers keep Daily Operations; admins reach it through Admin', () => {
+    const hrefs = secondaryItems('team', manager).map((i) => i.href)
+    expect(hrefs).toContain('/team')
+    expect(hrefs).toContain('/team/people')
+    expect(hrefs).toContain('/team/workload')
+    expect(hrefs).toContain('/team/activity')
+    expect(hrefs).toContain('/team/performance')
+    expect(hrefs).toContain('/team/targets')
+    expect(hrefs).toContain('/team/groups')
+    expect(hrefs).toContain('/admin/command')
+    const adminHrefs = secondaryItems('team', admin).map((i) => i.href)
+    expect(adminHrefs).not.toContain('/admin/command')
     expect(adminHrefs).toContain('/team/targets')
-    expect(adminHrefs).toContain('/admin/people')
+    expect(secondaryItems('admin', admin).map((i) => i.href)).toContain('/admin/people')
   })
 
-  it('ROLE_ACCOUNTS: Accounts is admin-only and points at /accounts', () => {
-    expect(visibleTopNav(manager).some((i) => i.id === 'accounts')).toBe(false)
-    const accounts = visibleTopNav(admin).find((i) => i.id === 'accounts')!
-    expect(accounts.href).toBe('/accounts')
-    expect(sectionNavItems('accounts', admin)[0].href).toBe('/accounts')
+  it('ROLE_ACCOUNTS: Companies is admin-only and points at /accounts', () => {
+    expect(visibleDomains(manager).some((i) => i.id === 'admin')).toBe(false)
+    expect(secondaryItems('sales', admin).map((i) => i.href)).toContain('/accounts')
+    expect(secondaryItems('sales', manager).map((i) => i.href)).not.toContain('/accounts')
   })
 
   it('ROLE_SECTION_DETECTION: new routes land in the right section', () => {
-    expect(detectRelayShellSection('/team/groups/abc')).toBe('team')
-    expect(detectRelayShellSection('/team/activity')).toBe('team')
-    expect(detectRelayShellSection('/admin/command')).toBe('team')
-    expect(detectRelayShellSection('/accounts/acme')).toBe('accounts')
+    expect(domainForPathname('/team/groups/abc')).toBe('team')
+    expect(domainForPathname('/team/activity')).toBe('team')
+    expect(domainForPathname('/admin/command')).toBe('team')
+    expect(domainForPathname('/accounts/acme')).toBe('sales')
   })
 })
 
@@ -312,7 +319,7 @@ describe('REP_360', () => {
     expect(items.map((i) => i.label)).toEqual(['Oldest reply waiting', 'Oldest overdue task', 'Untouched opportunities', 'Target risk'])
     expect(items[0].tone).toBe('critical')
     expect(items[0].href).toBe('/chats?lead=l1')
-    expect(items[1].href).toContain('/team/r1?tab=tasks&view=overdue')
+    expect(items[1].href).toContain('/team/r1?tab=work&view=overdue')
     expect(items[2].tone).toBe('attention')
     expect(items[3].tone).toBe('attention')
   })
@@ -646,7 +653,7 @@ describe('SAVED_VIEWS', () => {
     expect(isSavedViewSurface('team.tasks')).toBe(true)
     expect(isSavedViewSurface('admin.secrets')).toBe(false)
     expect(isSavedViewSurface('__proto__')).toBe(false)
-    expect(savedViewHref('team.tasks', 'view=overdue')).toBe('/team/tasks?view=overdue')
+    expect(savedViewHref('team.tasks', 'view=overdue')).toBe('/tasks?scope=team?view=overdue')
     expect(savedViewHref('accounts', '')).toBe('/accounts')
   })
 })

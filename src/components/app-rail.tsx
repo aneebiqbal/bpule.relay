@@ -69,7 +69,7 @@ const MORE_NAV: Array<{
   { href: '/relay', label: 'Conversations', icon: MessageSquare, exact: false, group: 'Work' },
   { href: '/inbound', label: 'Inbound', icon: Search, exact: false, group: 'Work' },
   { href: '/archive', label: 'Archive', icon: Target, exact: false, group: 'Work' },
-  { href: '/content-v2/growth', label: 'Relay Growth', icon: TrendingUp, exact: true, adminOnly: true, group: 'Create' },
+  { href: '/content/growth', label: 'Relay Growth', icon: TrendingUp, exact: true, adminOnly: true, group: 'Create' },
   { href: '/profile-intelligence', label: 'Profiles', icon: UserCircle2, exact: false, group: 'Intelligence' },
   { href: '/facts', label: 'Proof', icon: Shield, exact: false, group: 'Intelligence' },
   { href: '/admin/command', label: 'Command', icon: Shield, exact: true, adminOnly: true, group: 'Admin' },

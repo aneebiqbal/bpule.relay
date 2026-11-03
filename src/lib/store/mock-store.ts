@@ -86,6 +86,7 @@ import type {
   UpworkSnapshot,
   LeadsPageInput,
   LeadsPageResult,
+  LeadReadScope,
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
@@ -903,11 +904,15 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       if (!lead) throw new Error('Lead not found')
       lead.tags = tags
     },
-    async getLead(id: string) {
+    async getLead(id: string, scope?: LeadReadScope | null) {
       const lead = leads.find((l) => l.id === id)
       if (!lead) return null
-      // Enforce ownership: non-admin can only access their own leads
-      if (rep.role !== 'admin' && lead.ownerRepId !== rep.id) {
+      const leadOwner = lead.ownerRepId ?? null
+      if (scope) {
+        if (leadOwner !== null && scope.repIds !== null && !scope.repIds.includes(leadOwner)) {
+          throw new Error('You are not the owner of this lead.')
+        }
+      } else if (rep.role !== 'admin' && leadOwner !== null && leadOwner !== rep.id) {
         throw new Error('You are not the owner of this lead.')
       }
       return {
@@ -1729,6 +1734,15 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     async listUpworkJobs() {
       return upworkJobs.filter((j) => j.ownerRepId === rep.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    },
+    async getPipelineStageSummary() {
+      return null
+    },
+    async getPipelineCardIds() {
+      return null
+    },
+    async getLeadsByIds(ids) {
+      return leads.filter((l) => ids.includes(l.id))
     },
     async updateUpworkJobFields(id, f) {
       const job = upworkJobs.find((j) => j.id === id)
