@@ -485,7 +485,11 @@ class NeonQueryBuilder<T = Record<string, unknown>> implements DbQueryBuilder<T>
   async single(): Promise<DbSingleResult<T>> {
     let rows: T[]
     try {
-      rows = await this.limit(1).run()
+      // PostgREST applies the query's own LIMIT before the object-shape check,
+      // so `.limit(1).single()` returns one row rather than erroring on rows it
+      // never asked for. Only impose limit(1) when the caller set none.
+      if (this.limitValue === undefined) this.limit(1)
+      rows = await this.run()
     } catch (err) {
       return { data: null, error: toDbError(err) }
     }
@@ -497,7 +501,10 @@ class NeonQueryBuilder<T = Record<string, unknown>> implements DbQueryBuilder<T>
   async maybeSingle(): Promise<DbSingleResult<T>> {
     let rows: T[]
     try {
-      rows = await this.limit(2).run()
+      // Cap at 2 only when the caller left the limit open; an explicit
+      // `.limit(1)` means "give me the first one", not "error if two exist".
+      if (this.limitValue === undefined || this.limitValue > 2) this.limit(2)
+      rows = await this.run()
     } catch (err) {
       return { data: null, error: toDbError(err) }
     }
