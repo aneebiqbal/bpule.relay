@@ -184,6 +184,7 @@ are recorded so they are not mistaken for shipped behaviour.
    confirmed intentional (managers need Daily Operations).
 4. **Landing page (`/`) accessibility** reports `aria-hidden-focus` and
    `color-contrast` failures. Pre-existing and outside the app shell's scope.
-5. **Dead code.** `src/components/app-rail.tsx`, the old `StudioTodayV2` /
-   `GrowthTodayV2` components, and ~384 unreferenced exports remain. Classified
-   in `RELAY_STABILIZATION_INVENTORY.md`; not deleted during reconciliation.
+5. **Dead code.** The duplicate `src/components/app-rail.tsx` shell was removed
+   in the shell sprint. The old `StudioTodayV2` / `GrowthTodayV2` components and
+   ~384 unreferenced exports remain. Classified in
+   `RELAY_STABILIZATION_INVENTORY.md`; not deleted.
