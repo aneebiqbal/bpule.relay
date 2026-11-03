@@ -1,6 +1,7 @@
 /** Relay V3 shell navigation contracts. */
 import { describe, expect, it } from 'vitest'
 import {
+  domainForPathname,
   mobileNavItems,
   resolvePrimaryActiveId,
   resolveSecondaryActiveId,
@@ -85,6 +86,21 @@ describe('V3_NO_PARALLEL_SELECTED_NAV', () => {
       if (active === null) continue
       expect(secondaryItems(domain, admin).filter((i) => i.id === active)).toHaveLength(1)
     }
+  })
+
+  it('exposes Inbox as the only conversation destination', () => {
+    // Inbound / Chats / Conversations are one domain. Old routes deep-link in;
+    // they are not separate rail destinations.
+    expect(secondaryItems('inbox', admin).map((i) => i.href)).toEqual([
+      '/chats?view=waiting_me',
+      '/chats?view=waiting_them',
+      '/chats?view=followups',
+      '/chats?view=meeting_requests',
+      '/chats?view=proposal_requests',
+      '/chats?view=closed',
+    ])
+    expect(domainForPathname('/inbound')).toBe('inbox')
+    expect(domainForPathname('/relay')).toBe('inbox')
   })
 })
 

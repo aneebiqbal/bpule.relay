@@ -21,9 +21,9 @@ import { RELAY_TREND_PROFILE } from '@/lib/growth/v2/relay-brand-profile'
 import { rankTrendsForPersona } from '@/lib/trends/engine'
 import type { TrendItem } from '@/lib/domain/types'
 import {
-  sectionNavItems,
-  v3MobileNavItems,
-  v3SidebarItems,
+  moreSheetSections,
+  secondaryItems,
+  visibleDomains,
   type RelayNavRoleFlags,
 } from '@/lib/navigation/relay-shell-nav'
 import {
@@ -209,10 +209,12 @@ describe('V3 Growth', () => {
 
 describe('V3 Content navigation', () => {
   it('V3_STUDIO_NAV_VISIBLE — Studio, Ideas and Growth are reachable for every role', () => {
-    expect(v3SidebarItems(rep).map((i) => i.id)).toContain('content')
-    expect(v3SidebarItems(admin).map((i) => i.id)).toContain('content')
-    expect(v3MobileNavItems(rep).map((i) => i.id)).toContain('content')
-    expect(sectionNavItems('content', rep).map((i) => i.href)).toEqual(['/content', '/content/ideas', '/content/growth'])
+    expect(visibleDomains(rep).map((i) => i.id)).toContain('content')
+    expect(visibleDomains(admin).map((i) => i.id)).toContain('content')
+    // The bottom bar has five slots; Content lives in the More sheet on mobile.
+    expect(moreSheetSections(rep).map((s) => s.id)).toContain('content')
+    expect(secondaryItems('content', rep).map((i) => i.href)).toEqual(['/content', '/content/ideas'])
+    expect(secondaryItems('content', admin).map((i) => i.href)).toContain('/content/growth')
   })
 })
 
