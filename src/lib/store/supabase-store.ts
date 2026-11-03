@@ -107,6 +107,7 @@ import type {
   FollowupDue,
   HostCallInput,
   LeadDetail,
+  LeadReadScope,
   ModelCallLogInput,
   MyRank,
   NewLeadInput,

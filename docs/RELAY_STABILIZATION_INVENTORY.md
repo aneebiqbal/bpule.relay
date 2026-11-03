@@ -389,7 +389,13 @@ Candidates for Phase 34 — each needs its own `rg` re-run at deletion time:
 
 ## 7. Security / correctness observations (non-blocking, recorded)
 
-1. **`/leads/[id]/page.tsx:19-24`** — no ownership/scope check; any authenticated user can open any lead by id.
-2. **`/content-v2/growth/page.tsx:9`** — gates on `user.rep.role !== 'admin'`; every other admin page uses `requireProductAdmin()`/`authCtx`. `/admin/growth/page.tsx:12` mixes both.
-3. **`/admin/command`, `/admin/command/[repId]`** allow managers while sibling admin routes do not — confirm intent.
-4. **`src/proxy.ts:5-21`** omits many `(app)` prefixes (`/reports`, `/tasks`, `/chats`, `/relay`, `/inbound`, `/archive`, `/notifications`, `/performance`, `/accountability`, `/accounts`, `/profiles`, `/profile-intelligence`, `/workspace`, `/revenue`, `/rep`, partial `/team`). Still behind `(app)` auth, but absent from the middleware list.
+1. **`/leads/[id]/page.tsx`** — **FIXED (Phase 6A).** `getLead` now enforces an explicit
+   organization boundary (cross-org → 404, no existence leak) and accepts an optional
+   `LeadReadScope` so the page authorizes reps/managers against their operational scope.
+   Denial is indistinguishable from a missing lead. Unscoped callers (API routes) keep the
+   original ownership gate, so the change does not widen API access.
+   Gates: `LEAD_360_ROLE_SCOPE`, `LEAD_360_MANAGER_SCOPE`, `LEAD_360_CROSS_ORG_DENIED`.
+2. **`/content-v2/growth/page.tsx` + `/admin/growth/page.tsx`** — **FIXED (Phase 6.1).** Both now call `requireProductAdmin()`, which authorizes from `AuthContext` (the canonical source) instead of the possibly-stale `reps.role`.
+3. **`/admin/command`, `/admin/command/[repId]` allow managers** — **confirmed intentional** (existing tests: `ROLE_TEAM_RAIL` asserts managers keep Daily Operations). Nav now exposes it as *Team → Daily Operations* for managers and *Admin → Command Center* for admins, so no one needs to see an Admin section they cannot use.
+4. **`src/proxy.ts`** — **FIXED (Phase 6.3).** Added the missing prefixes (`/reports`, `/tasks`, `/chats`, `/relay`, `/inbound`, `/notifications`, `/performance`, `/accounts`, `/accountability`, `/profile-intelligence`, `/workspace`, `/revenue`, `/rep`, `/studio`, `/content-v2`, `/home`). Gate: `APP_ROUTE_PROXY_COVERAGE`.
+5. **`lib/operations/reports.ts` `PIPELINE_STAGE_GROUPS`** — **FIXED (Phase 6B).** The CRM stage vocabulary now lives in `lib/sales/stage-vocabulary.ts` and is imported by reports, performance, conversations and meetings. Gate: `REPORT_PIPELINE_CANONICAL_STAGE_PARITY`.

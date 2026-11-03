@@ -25,7 +25,7 @@ async function loadLeadData(id: string) {
   // existence leak, no stack trace in the UI.
   let lead = null
   try {
-    lead = await store.getLead(id)
+    lead = await store.getLead(id, { repIds: scope.repIds })
   } catch {
     lead = null
   }

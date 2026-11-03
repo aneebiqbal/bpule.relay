@@ -200,6 +200,15 @@ export interface RateMetric {
   readToCheckRate: number | null
 }
 
+/**
+ * Operational scope for a single-lead read. `repIds === null` means the whole
+ * organization (admin/owner). Passing a scope authorizes the read against it;
+ * omitting it keeps the caller's own ownership gate.
+ */
+export interface LeadReadScope {
+  repIds: string[] | null
+}
+
 export interface LeadDetail extends Lead {
   messages: Message[]
   outcomes: Outcome[]
@@ -372,7 +381,7 @@ export interface ScoutStore {
     score: { total: number; verdict: Verdict },
   ): Promise<void>
   updateLeadTags(id: string, tags: string[]): Promise<void>
-  getLead(id: string): Promise<LeadDetail | null>
+  getLead(id: string, scope?: LeadReadScope | null): Promise<LeadDetail | null>
   /**
    * Looks up a lead in the CURRENT organization whose persisted canonical
    * intelligence was computed from this exact input hash (see
