@@ -14,13 +14,13 @@ describe('relay-shell-nav', () => {
     expect(detectRelayShellSection('/dashboard')).toBe('home')
     expect(detectRelayShellSection('/home')).toBe('home')
     expect(detectRelayShellSection('/leads/abc')).toBe('sales')
-    expect(detectRelayShellSection('/tasks')).toBe('sales')
+    expect(detectRelayShellSection('/tasks')).toBe('work')
     expect(detectRelayShellSection('/chats')).toBe('conversations')
     expect(detectRelayShellSection('/admin/scoring-qa')).toBe('intelligence')
   })
 
-  it('sales rail points Tasks to /tasks', () => {
-    const hrefs = sectionNavItems('sales', rep).map((i) => i.href)
+  it('work rail points My tasks to /tasks', () => {
+    const hrefs = sectionNavItems('work', rep).map((i) => i.href)
     expect(hrefs).toContain('/tasks')
   })
 

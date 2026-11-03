@@ -24,17 +24,17 @@ describe('RELAY_V3_SINGLE_ACTIVE_NAV_ITEM', () => {
     expect(active?.label).toBe('Leads')
   })
 
-  it('resolves home, conversations and tasks to one item each', () => {
+  it('resolves home, conversations and work to one item each', () => {
     expect(resolveSectionActiveItem('home', '/dashboard', rep)?.href).toBe('/dashboard')
     expect(resolveSectionActiveItem('conversations', '/chats', rep)?.href).toBe('/chats')
-    expect(resolveSectionActiveItem('sales', '/tasks', rep)?.href).toBe('/tasks')
+    expect(resolveSectionActiveItem('work', '/tasks', rep)?.href).toBe('/tasks')
   })
 
   it('lights exactly one primary sidebar destination per route', () => {
     expect(resolveV3SidebarActiveId('/dashboard', rep)).toBe('home')
     expect(resolveV3SidebarActiveId('/leads', rep)).toBe('sales')
     expect(resolveV3SidebarActiveId('/chats', rep)).toBe('conversations')
-    expect(resolveV3SidebarActiveId('/tasks', rep)).toBe('tasks')
+    expect(resolveV3SidebarActiveId('/tasks', rep)).toBe('work')
     expect(resolveV3SidebarActiveId('/reports/pipeline', rep)).toBe('insights')
     expect(resolveV3SidebarActiveId('/admin/command', admin)).toBe('admin')
     expect(resolveV3SidebarActiveId('/settings', rep)).toBe('settings')
@@ -47,7 +47,7 @@ describe('RELAY_V3_SINGLE_ACTIVE_NAV_ITEM', () => {
   })
 
   it('keeps the primary sidebar to the canonical six plus role-gated admin', () => {
-    expect(v3SidebarItems(rep).map((i) => i.id)).toEqual(['home', 'sales', 'conversations', 'tasks', 'insights', 'settings'])
+    expect(v3SidebarItems(rep).map((i) => i.id)).toEqual(['home', 'work', 'sales', 'conversations', 'insights', 'settings'])
     expect(v3SidebarItems(admin).map((i) => i.id)).toContain('admin')
   })
 })
