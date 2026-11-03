@@ -46,8 +46,8 @@ describe('RELAY_V3_SINGLE_ACTIVE_NAV_ITEM', () => {
     expect(resolveV3SidebarActiveId('/leads/import', rep)).toBe('sales')
   })
 
-  it('keeps the primary sidebar to the canonical six plus role-gated admin', () => {
-    expect(v3SidebarItems(rep).map((i) => i.id)).toEqual(['home', 'work', 'sales', 'conversations', 'insights', 'settings'])
+  it('keeps the primary sidebar to the canonical set plus role-gated admin', () => {
+    expect(v3SidebarItems(rep).map((i) => i.id)).toEqual(['home', 'work', 'sales', 'conversations', 'content', 'insights', 'settings'])
     expect(v3SidebarItems(admin).map((i) => i.id)).toContain('admin')
   })
 })

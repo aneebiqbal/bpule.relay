@@ -1,0 +1,158 @@
+/**
+ * Deterministic Sprint 5 fixtures — realistic technical content for Studio,
+ * Ideas and Growth. No lorem ipsum: every idea, trend and memory is a plausible
+ * operational state.
+ */
+import type { ContentIdeaRow } from '@/lib/content/ideas-v3'
+
+export const FIXTURE_IDEAS: ContentIdeaRow[] = [
+  {
+    id: 'idea-rec',
+    personaId: 'persona-eng',
+    personaName: 'Mehak Seedat',
+    ideaType: 'recommended',
+    title: 'Why senior engineers misuse list comprehensions',
+    angle: 'Comprehensions are readable until they hide a side effect. The best teams treat them as a smell when the body exceeds one expression.',
+    whyNow: 'A thread on readable Python resurfaced the comprehension debate this week.',
+    territory: 'Python',
+    trendGrounded: true,
+    postCaption: 'We replaced a 12-line comprehension with a plain loop last month.\n\nIt was not about speed. It was about the next engineer being able to debug it at 2am.\n\nComprehensions are fine. Nested side effects aren not.\n\nWhat is your rule for when a comprehension goes too far?',
+    sourceFreshness: 'high',
+    formatSuggestion: 'opinion',
+    copiedAt: null,
+    postedAt: null,
+    createdAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+  },
+  {
+    id: 'idea-alt-1',
+    personaId: 'persona-eng',
+    personaName: 'Mehak Seedat',
+    ideaType: 'alternate',
+    title: 'The Postgres index that made our dashboard 40x slower',
+    angle: 'Adding an index on the obvious column fought the planner instead of helping it. The fix was a partial index on the filtered predicate.',
+    whyNow: 'Evergreen infrastructure lesson.',
+    territory: 'Postgres',
+    trendGrounded: false,
+    postCaption: null,
+    sourceFreshness: null,
+    formatSuggestion: 'case_study',
+    copiedAt: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+    postedAt: null,
+    createdAt: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+  },
+  {
+    id: 'idea-alt-2',
+    personaId: 'persona-eng',
+    personaName: 'Mehak Seedat',
+    ideaType: 'alternate',
+    title: 'AI agents will not replace infrastructure judgment',
+    angle: 'Implementation got cheaper. Deciding what deserves to exist did not. That judgment is the job now.',
+    whyNow: 'AI tooling momentum across HN and GitHub.',
+    territory: 'AI',
+    trendGrounded: true,
+    postCaption: null,
+    sourceFreshness: 'medium',
+    formatSuggestion: 'opinion',
+    copiedAt: null,
+    postedAt: null,
+    createdAt: new Date(Date.now() - 5 * 3_600_000).toISOString(),
+  },
+  {
+    id: 'idea-alt-3',
+    personaId: 'persona-eng',
+    personaName: 'Mehak Seedat',
+    ideaType: 'alternate',
+    title: 'What 3 years of on-call taught me about blame',
+    angle: 'The best postmortems name the system constraint, not the person. Blame is a symptom of a missing guardrail.',
+    whyNow: 'Evergreen engineering culture.',
+    territory: 'Engineering culture',
+    trendGrounded: false,
+    postCaption: null,
+    sourceFreshness: null,
+    formatSuggestion: 'observation',
+    copiedAt: null,
+    postedAt: null,
+    createdAt: new Date(Date.now() - 8 * 3_600_000).toISOString(),
+  },
+  {
+    id: 'idea-alt-4',
+    personaId: 'persona-eng',
+    personaName: 'Mehak Seedat',
+    ideaType: 'alternate',
+    title: 'Build in public: the migration nobody asked for',
+    angle: 'We moved a 40k-line service to a new framework. The boring part was the rollback plan, not the rewrite.',
+    whyNow: 'Build-in-public momentum.',
+    territory: 'Build in public',
+    trendGrounded: false,
+    postCaption: null,
+    sourceFreshness: null,
+    formatSuggestion: 'story',
+    copiedAt: null,
+    postedAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+    createdAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+  },
+]
+
+export const FIXTURE_TRENDS = [
+  {
+    id: 'trend-1',
+    title: 'OpenAI releases a cheaper structured-output model',
+    url: 'https://example.com/openai-structured',
+    topics: ['ai', 'llm', 'sales technology'],
+    evidenceQuality: 'high',
+    whyNow: 'Cost per structured call dropped below the threshold most outreach automation watches.',
+    phase: 'breaking',
+  },
+  {
+    id: 'trend-2',
+    title: 'CRMs are adding AI qualification scores',
+    url: 'https://example.com/crm-ai-scores',
+    topics: ['crm', 'revenue operations', 'ai'],
+    evidenceQuality: 'medium',
+    whyNow: 'Buyers now expect a score before a rep touches them.',
+    phase: 'rising',
+  },
+  {
+    id: 'trend-3',
+    title: 'B2B buyers reply less to generic sequencing',
+    url: 'https://example.com/b2b-sequencing',
+    topics: ['b2b saas', 'outreach'],
+    evidenceQuality: 'medium',
+    whyNow: 'Reply rates keep falling on templated sequences.',
+    phase: 'established',
+  },
+]
+
+export const FIXTURE_MEMORIES = [
+  { memoryType: 'topic_covered', content: 'Postgres scaling' },
+  { memoryType: 'topic_covered', content: 'AI agents' },
+  { memoryType: 'topic_covered', content: 'Developer productivity' },
+  { memoryType: 'angle_used', content: 'Infrastructure judgment' },
+]
+
+export const FIXTURE_RECENT_POSTS = [
+  {
+    id: 'post-1',
+    postedAt: new Date(Date.now() - 86_400_000).toISOString(),
+    platform: 'linkedin',
+    caption: 'We cut deploy time from 4h to 12min. The tool nobody talks about.',
+    topic: 'Deploy tooling',
+  },
+  {
+    id: 'post-2',
+    postedAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+    platform: 'linkedin',
+    caption: 'The migration nobody asked for.',
+    topic: 'Framework migration',
+  },
+]
+
+export const FIXTURE_FALLBACK_IDEA = {
+  id: 'fallback-1',
+  title: 'The Postgres mistake I see every team make',
+  angle: 'A specific, recurring pattern: indexing the obvious column instead of the filtered predicate.',
+  whyNow: 'Evergreen expertise',
+  territory: 'Postgres',
+  trendGrounded: false,
+  formatSuggestion: 'practical_lesson',
+}
