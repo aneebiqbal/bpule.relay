@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { safeErrorResponse } from '@/lib/errors'
+import { notifyForEvent } from '@/lib/notifications/deliver'
 
 type Row = Record<string, unknown>
 
@@ -48,7 +49,7 @@ async function updateConversationOnReply(supabase: ReturnType<typeof createServi
 
   const { data: leadRow } = await supabase
     .from('leads')
-    .select('owner_rep_id')
+    .select('owner_rep_id, contact_name, company')
     .eq('id', leadId)
     .eq('organization_id', organizationId)
     .maybeSingle()
@@ -72,6 +73,22 @@ async function updateConversationOnReply(supabase: ReturnType<typeof createServi
     })
     .select('id')
     .single()
+
+  // The owner did not log this reply themselves, so they are told. Keyed by
+  // the stored message: the webhook's provider-event dedupe already stops
+  // replays from inserting a second message.
+  if (insertedMsg?.id) {
+    await notifyForEvent(supabase, organizationId, {
+      kind: 'INBOUND_REPLY',
+      leadId,
+      messageId: insertedMsg.id as string,
+      ownerRepId: repId,
+      actorRepId: null,
+      person: (leadRow?.contact_name as string | null) || 'A client',
+      company: (leadRow?.company as string | null) ?? null,
+      text: replyBody,
+    }).catch(() => 'failed')
+  }
 
   await supabase
     .from('leads')

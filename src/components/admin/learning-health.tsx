@@ -1,4 +1,5 @@
 import { first100Progress, learningHealth, reviewerAgreement, type LearningHealth } from '@/lib/admin/learning-health'
+import { createServerSupabase } from '@/lib/supabase/server'
 
 /**
  * First-100 campaign header + learning health summary.

@@ -10,6 +10,7 @@ import { composeMessage, loadComposeContext, claimableText, assessMessageQuality
 import { DEAL_STAGE_LABEL } from './stage'
 import type { Profile, ProofItem } from '@/lib/domain/types'
 import type { MessageClassification } from './composer'
+import { notifyForEvent } from '@/lib/notifications/deliver'
 
 export interface SentMessageAssessment {
   classification: MessageClassification
@@ -75,6 +76,36 @@ function cacheMemory(leadId: string, memory: ConversationMemory) {
   memoryCache.set(leadId, memory)
 }
 
+/**
+ * Meeting / proposal requests come from the canonical client-turn analysis
+ * (memory.lastClientAnalysis.intent), never from UI keyword matching. Only a
+ * newly analysed turn emits, and the dedupe key is that turn, so reloading the
+ * thread never notifies twice. The owner is not told about a turn they are
+ * looking at themselves (self-skip in the rule).
+ */
+export async function notifyRequestIntent(
+  store: ScoutStore,
+  lead: LeadDetail,
+  previousTurnId: string | null,
+  memory: ConversationMemory,
+): Promise<void> {
+  const analysis = memory.lastClientAnalysis
+  if (!analysis || analysis.turnId === previousTurnId) return
+  if (analysis.intent !== 'meeting_request' && analysis.intent !== 'pricing') return
+  try {
+    await notifyForEvent(store.getSupabaseClient(), store.organizationId, {
+      kind: analysis.intent === 'meeting_request' ? 'MEETING_REQUESTED' : 'PROPOSAL_REQUESTED',
+      leadId: lead.id,
+      messageId: analysis.turnId,
+      ownerRepId: lead.ownerRepId,
+      actorRepId: store.getCurrentRepId(),
+      person: displayContactName(lead.contactName) || 'A client',
+    })
+  } catch {
+    // Demo store has no client; a notification never blocks the thread.
+  }
+}
+
 /** Load the conversation and bring its memory up to date (cheap when nothing changed). */
 export async function loadConversation(store: ScoutStore, leadId: string): Promise<{ view: ConversationView; lead: LeadDetail } | null> {
   const lead = await store.getLead(leadId)
@@ -91,6 +122,7 @@ export async function loadConversation(store: ScoutStore, leadId: string): Promi
       // Memory persistence is best-effort; the view still uses the fresh copy.
     }
   }
+  await notifyRequestIntent(store, lead, stored?.lastClientAnalysis?.turnId ?? null, memory)
   const nextAction = deriveNextLeadAction(lead)
   return {
     lead,

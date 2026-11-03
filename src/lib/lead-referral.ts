@@ -2,7 +2,6 @@
  * Lead Referral API — refer a lead to another rep/profile without duplication.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 
 interface ReferralParams {
   orgId: string
@@ -11,6 +10,8 @@ interface ReferralParams {
   toRepId: string
   toProfileId?: string
   reason?: string
+  /** Owner before the change; told informationally when someone else moved the lead. */
+  previousOwnerRepId?: string | null
 }
 
 interface ReferralResult {
@@ -28,7 +29,7 @@ export async function referLead(params: ReferralParams): Promise<ReferralResult>
   const supabase = createServiceSupabase()
 
   // 1. Update lead assignment
-  const { error: updateError } = await supabase
+  const { data: updated, error: updateError } = await supabase
     .from('leads')
     .update({
       owner_rep_id: params.toRepId,
@@ -42,6 +43,8 @@ export async function referLead(params: ReferralParams): Promise<ReferralResult>
     })
     .eq('id', params.leadId)
     .eq('organization_id', params.orgId)
+    .select('contact_name')
+    .maybeSingle()
 
   if (updateError) {
     return { success: false, error: updateError.message }
@@ -65,6 +68,20 @@ export async function referLead(params: ReferralParams): Promise<ReferralResult>
     },
     idempotencyKey: `lead_referred:${params.leadId}:${params.toRepId ?? params.toProfileId ?? 'none'}`,
   })
+
+  // 3. Notify the new owner (and the previous one, informationally). Keyed
+  // by lead + new owner like the ledger's idempotency key, so a replayed
+  // referral is silent.
+  const { notifyForEvent } = await import('@/lib/notifications/deliver')
+  await notifyForEvent(supabase, params.orgId, {
+    kind: 'LEAD_REASSIGNED',
+    leadId: params.leadId,
+    newOwnerRepId: params.toRepId,
+    previousOwnerRepId: params.previousOwnerRepId ?? null,
+    actorRepId: params.fromRepId,
+    actorName: null,
+    person: (updated as { contact_name?: string | null } | null)?.contact_name || 'A lead',
+  }).catch(() => 'failed')
 
   return { success: true, actionEventId: actionEventId || undefined }
 }

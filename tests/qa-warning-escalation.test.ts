@@ -62,13 +62,15 @@ function fakeNotifications() {
                 eq(_column: string, recipient: string) {
                   return {
                     eq(_c: string, dedupe: string) {
-                      return {
+                      const lookup = {
                         maybeSingle: async () => ({
                           data:
                             rows.find((row) => row.recipient_id === recipient && row.dedupe_key === dedupe) ?? null,
                           error: null,
                         }),
                       }
+                      // notifyOnce reads with .limit(1) so pre-existing duplicates never error.
+                      return { ...lookup, limit: () => lookup }
                     },
                   }
                 },

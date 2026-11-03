@@ -1,5 +1,5 @@
 import { createScoutStore } from '@/lib/store'
-import { createServerSupabase } from '@/lib/supabase/server'
+import { getAuthProvider } from '@/lib/auth/provider'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,11 +20,12 @@ export async function GET() {
       isAdmin: auth?.isAdmin ?? false,
       isManager: auth?.isManager ?? false,
     })
-  } catch {
+  } catch (cause) {
+    console.warn('[me/status][diag]', cause instanceof Error ? cause.message : String(cause))
     try {
-      const supabase = await createServerSupabase()
-      const { data: auth } = await supabase.auth.getUser()
-      if (!auth.user) {
+      const authProvider = await getAuthProvider()
+      const { user } = await authProvider.getSession()
+      if (!user) {
         return Response.json({ error: 'Not signed in.' }, { status: 401 })
       }
       return Response.json(

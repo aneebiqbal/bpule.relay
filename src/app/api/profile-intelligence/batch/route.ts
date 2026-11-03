@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
-import { createServiceSupabase } from '@/lib/supabase/service'
+import { createServiceSupabaseAuth } from '@/lib/supabase/service'
 import type { ProfileImportBatch } from '@/lib/domain/types'
 import { profileAccess } from '@/lib/profile-intelligence/access'
 import { contentHash, resolveMimeType, sanitizeFilename } from '@/lib/profile-intelligence/parse-document'
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '20', 10), 100)
 
-  const client = createServiceSupabase()
+  const client = createServiceSupabaseAuth()
   const { data, error } = await client
     .from('profile_import_batches')
     .select('*')
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Maximum ${MAX_FILES} files per batch.` }, { status: 400 })
   }
 
-  const client = createServiceSupabase()
+  const client = createServiceSupabaseAuth()
   const orgId = authCtx.orgId
   const uploadedBy = authCtx.repId
 
@@ -190,7 +190,7 @@ export async function POST(request: Request) {
  * upload retried once. Returns an error message, or null on success.
  */
 async function uploadWithBucketCheck(
-  client: ReturnType<typeof createServiceSupabase>,
+  client: ReturnType<typeof createServiceSupabaseAuth>,
   path: string,
   buffer: ArrayBuffer,
   contentType: string,

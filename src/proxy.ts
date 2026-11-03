@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 import { isDemoMode } from "@/lib/ai/config";
+import { getAuthProvider } from "@/lib/auth/provider";
 
 const PROTECTED_PREFIXES = [
   "/onboarding",
@@ -21,8 +21,11 @@ const PROTECTED_PREFIXES = [
 ];
 
 /**
- * Next.js 16 proxy: refreshes the Supabase session cookie and handles
- * auth-based redirects. Replaces middleware.ts.
+ * Next.js 16 proxy: resolves the session for the active auth provider and
+ * handles auth-based redirects. Replaces middleware.ts.
+ *
+ * The provider is authoritative, so a transient verification failure is
+ * inconclusive and never redirects an authenticated user to /login.
  */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -31,45 +34,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) {
-    return NextResponse.next({ request });
-  }
-
   const response = NextResponse.next({ request });
-  const isHttps = request.nextUrl.protocol === 'https:';
-
-  const supabase = createServerClient(url, anonKey, {
-    cookieOptions: {
-      path: '/',
-      sameSite: 'lax',
-      secure: isHttps,
-    },
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookieList) {
-        for (const { name, value, options } of cookieList) {
-          response.cookies.set(name, value, options);
-        }
-      },
-    },
-  });
 
   let isAuthenticated = false;
   let authCheckInconclusive = false;
   try {
-    // Proxy is the route-gatekeeper. Use the authoritative Auth service check
-    // so we do not treat transient local-claims verification issues as logout
-    // and redirect authenticated users to /login.
-    const { data, error } = await supabase.auth.getUser();
-    if (error) {
-      authCheckInconclusive = true;
-    } else {
-      isAuthenticated = Boolean(data.user);
-    }
+    const auth = await getAuthProvider();
+    const { user } = await auth.getSession();
+    isAuthenticated = Boolean(user);
   } catch {
     authCheckInconclusive = true;
   }

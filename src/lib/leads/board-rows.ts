@@ -1,3 +1,4 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 /**
  * The rows behind the Leads pipeline, built once on the server. The board
  * and the dashboard both read these, so a lead sits in the same stage and
@@ -7,16 +8,19 @@ import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { isProductAdmin } from '@/lib/auth/admin-page'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { computeLifecycleState } from '@/lib/leads/lifecycle-policy'
-import type { LeadRow } from '@/components/leads/pipeline-utils'
-import type { MessageType } from '@/lib/domain/types'
+import type { LeadRow, PipelineStage } from '@/components/leads/pipeline-utils'
+import { derivePipelineStage } from '@/components/leads/pipeline-utils'
+import type { Lead, MessageType } from '@/lib/domain/types'
 import type { ActivityEvent } from '@/lib/analytics/pipeline-analytics'
 import { leadBelongsToWorkspace, type WorkspaceIdentity } from '@/lib/workspace/active-identity'
 import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 
 export type { ActivityEvent }
+
+/** Cards sent to the client on first paint. Counts cover the full set. */
+export const BOARD_CARD_LIMIT = 150
 
 /**
  * The one rule that decides which leads a board shows.
@@ -41,25 +45,71 @@ export interface BoardData {
   workspace: WorkspaceIdentity | null
 }
 
-export async function loadBoardData(): Promise<BoardData> {
-  const user = await getCurrentUser()
-  const authCtx = await getAuthContext()
-  const store = await createScoutStore()
-  const orgView = isProductAdmin(user, authCtx)
+/**
+ * Bounded pipeline payload.
+ *
+ * The board must not transfer the organisation's whole lead set on first paint.
+ * Counts are computed server-side over the full set; only the highest-priority
+ * `cardLimit` cards are returned. Counts and cards therefore never disagree —
+ * the card list is a declared subset, and the UI says so.
+ */
+export interface BoardPreview {
+  cards: LeadRow[]
+  counts: Record<PipelineStage, number>
+  total: number
+  orgView: boolean
+  workspace: WorkspaceIdentity | null
+}
 
-  let workspace: WorkspaceIdentity | null = null
-  try {
-    workspace = await resolveActiveWorkspace()
-  } catch {
-    workspace = null
-  }
+const CARD_ORDER: Record<PipelineStage, number> = {
+  needs_reply: 0,
+  follow_up_due: 1,
+  to_contact: 2,
+  observe: 3,
+  waiting: 4,
+  cold: 5,
+  done: 6,
+}
 
-  const allLeads = orgView ? await store.fetchLeadsAll() : await store.listOwnedLeads()
-  const visibleLeads = scopeLeadsToWorkspace(allLeads, workspace, orgView)
+export async function loadBoardPreview(cardLimit = BOARD_CARD_LIMIT): Promise<BoardPreview> {
+  const data = await loadBoardData()
+
+  const counts = {} as Record<PipelineStage, number>
+  for (const stage of Object.keys(CARD_ORDER) as PipelineStage[]) counts[stage] = 0
+  for (const lead of data.leads) counts[derivePipelineStage(lead)] += 1
+
+  const cards = [...data.leads]
+    .sort((a, b) => {
+      const byStage = CARD_ORDER[derivePipelineStage(a)] - CARD_ORDER[derivePipelineStage(b)]
+      if (byStage !== 0) return byStage
+      const aAt = a.lastActivityAt ?? a.createdAt
+      const bAt = b.lastActivityAt ?? b.createdAt
+      return new Date(bAt).getTime() - new Date(aAt).getTime()
+    })
+    .slice(0, cardLimit)
+
+  return { cards, counts, total: data.leads.length, orgView: data.orgView, workspace: data.workspace }
+}
+
+export interface EnrichContext {
+  authCtx: Awaited<ReturnType<typeof getAuthContext>>
+  orgView: boolean
+  reps: Array<{ id: string; name: string }>
+}
+
+/**
+ * The one enrichment pass: messages, conversation state and sender profiles.
+ * The full board and a single paginated page both run through this, so a lead
+ * shows the same activity, owner and profile attribution everywhere.
+ */
+export async function enrichLeads(
+  visibleLeads: Lead[],
+  ctx: EnrichContext,
+): Promise<{ leads: LeadRow[]; events: ActivityEvent[] }> {
+  const { authCtx, orgView, reps } = ctx
   const leadIds = visibleLeads.map((l) => l.id)
 
-  const [repsRes, messagesRes, followupCountsRes] = await Promise.all([
-    orgView ? store.listAllReps() : Promise.resolve([]),
+  const [messagesRes, followupCountsRes, openTasksRes] = await Promise.all([
     (async () => {
       if (!authCtx || leadIds.length === 0) return []
       try {
@@ -106,11 +156,24 @@ export async function loadBoardData(): Promise<BoardData> {
         return []
       }
     })(),
+    (async () => {
+      if (!authCtx || leadIds.length === 0) return [] as Array<{ lead_id: string }>
+      try {
+        const client = await createServerSupabase()
+        return await chunkedIn<{ lead_id: string }>(leadIds, (chunk) => client
+          .from('assigned_tasks')
+          .select('lead_id')
+          .eq('organization_id', authCtx.orgId)
+          .in('status', ['OPEN', 'IN_PROGRESS'])
+          .in('lead_id', chunk))
+      } catch {
+        // Table may not be migrated yet — treat as zero open tasks.
+        return []
+      }
+    })(),
   ])
 
-  const reps = (Array.isArray(repsRes) ? repsRes : []).map((rep) => ({ id: rep.id, name: rep.name }))
   const ownerByRepId = Object.fromEntries(reps.map((rep) => [rep.id, rep.name]))
-
   const messages = Array.isArray(messagesRes) ? messagesRes : []
 
   const lastActivityByLead = new Map<string, string>()
@@ -158,6 +221,13 @@ export async function loadBoardData(): Promise<BoardData> {
     followupCountByLead.set(fc.lead_id as string, (fc.followup_count as number) ?? 0)
   }
 
+  const openTaskCountByLead = new Map<string, number>()
+  for (const row of openTasksRes) {
+    const id = row.lead_id as string
+    if (!id) continue
+    openTaskCountByLead.set(id, (openTaskCountByLead.get(id) ?? 0) + 1)
+  }
+
   const senderProfileIds = [...new Set(visibleLeads.map((l) => l.senderProfileId).filter(Boolean) as string[])]
   const profileById = new Map<string, string>()
   if (senderProfileIds.length > 0 && authCtx) {
@@ -198,6 +268,7 @@ export async function loadBoardData(): Promise<BoardData> {
       lastInboundText: inbound?.text ?? null,
       lastInboundAt: inbound?.at ?? null,
       followupCount: followupCountByLead.get(lead.id) ?? 0,
+      openAssignedTaskCount: openTaskCountByLead.get(lead.id) ?? 0,
       hasDmSent: hasDmSentByLead.get(lead.id) ?? false,
       lifecycle,
     }
@@ -208,5 +279,28 @@ export async function loadBoardData(): Promise<BoardData> {
   const visibleIds = new Set(visibleLeads.map((l) => l.id))
   const visibleEvents = events.filter((e) => visibleIds.has(e.leadId))
 
-  return { leads, orgView, events: visibleEvents, reps, workspace }
+  return { leads, events: visibleEvents }
+}
+
+export async function loadBoardData(): Promise<BoardData> {
+  const user = await getCurrentUser()
+  const authCtx = await getAuthContext()
+  const store = await createScoutStore()
+  const orgView = isProductAdmin(user, authCtx)
+
+  let workspace: WorkspaceIdentity | null = null
+  try {
+    workspace = await resolveActiveWorkspace()
+  } catch {
+    workspace = null
+  }
+
+  const allLeads = orgView ? await store.fetchLeadsAll() : await store.listOwnedLeads()
+  const visibleLeads = scopeLeadsToWorkspace(allLeads, workspace, orgView)
+  const repsRes = orgView ? await store.listAllReps() : []
+  const reps = (Array.isArray(repsRes) ? repsRes : []).map((rep) => ({ id: rep.id, name: rep.name }))
+
+  const { leads, events } = await enrichLeads(visibleLeads, { authCtx, orgView, reps })
+
+  return { leads, orgView, events, reps, workspace }
 }

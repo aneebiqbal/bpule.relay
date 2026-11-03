@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
+import { createServerSupabase } from '@/lib/supabase/server'
 
 type Row = Record<string, unknown>
 

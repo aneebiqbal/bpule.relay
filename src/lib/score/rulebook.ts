@@ -1,10 +1,10 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
   OrganizationRulebook,
   SignalDefinition,
   SignalId,
   VerdictThresholds,
 } from '@/lib/domain/types'
+import type { DbClient } from '@/lib/db/types'
 
 /**
  * Loads an organization's scoring rulebook from the database.
@@ -12,7 +12,7 @@ import type {
  * thresholds — all configurable per organization rather than hardcoded.
  */
 export async function loadRulebook(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
 ): Promise<OrganizationRulebook | null> {
   const { data, error } = await client

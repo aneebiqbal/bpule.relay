@@ -1,3 +1,4 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 /**
  * The canonical Today loader.
  *
@@ -11,7 +12,6 @@
  * read is the rep's own day row.
  */
 import { getDailyWorkspace } from '@/lib/auth/workspace'
-import { createServerSupabase } from '@/lib/supabase/server'
 import {
   currentInstant,
   formatDuration,

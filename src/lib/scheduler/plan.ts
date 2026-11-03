@@ -27,6 +27,11 @@ export type OperationalJobKind =
   | 'PREPARE_CARRYOVER'
   | 'EVALUATE_FOLLOWUP'
   | 'ENQUEUE_EMAIL'
+  | 'SYNC_MAILBOX'
+  | 'SEND_EMAIL'
+  | 'SEND_FOLLOWUP'
+  | 'PROCESS_INBOUND_EMAIL'
+  | 'RETRY_EMAIL'
 
 export type DayStage = 'early' | 'midday' | 'at_risk' | 'final' | 'end'
 
@@ -93,6 +98,12 @@ export function planOperationalJobs(input: {
     jobs.push(job('CLOSE_MISSED_DAY', 'end'))
     jobs.push(job('PREPARE_CARRYOVER', 'end'))
   }
+
+  // Mailbox sync and retry run every cycle. Both are cursor-bounded and cheap:
+  // sync advances the history cursor only after a page is persisted, and retry
+  // only touches attempts already marked FAILED after the provider accepted.
+  jobs.push(job('SYNC_MAILBOX', 'sync'))
+  jobs.push(job('RETRY_EMAIL', 'retry'))
 
   // Recovery: if the worker was down through the end of the previous operating
   // day, its close job was never planned. In the first two hours of a new day,

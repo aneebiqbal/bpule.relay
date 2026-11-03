@@ -1,11 +1,11 @@
 /**
  * Server-only provisioning for an invited member.
  *
- * The invitation lives in admin-only `app_metadata`; accepting it creates the
- * application rep and organisation role exactly once. Uses the service role
+ * The invitation lives in Relay's `pending_invitations`; accepting it creates
+ * the application rep and organisation role exactly once. Uses the service role
  * because the user has no organisation yet, so RLS cannot authorise the insert.
  */
-import { createClient } from '@supabase/supabase-js'
+import { createServiceSupabase } from '@/lib/supabase/service'
 import { nameFromEmail, repRoleFor, type Invitation } from './invitations'
 
 export interface ProvisionResult {
@@ -19,13 +19,7 @@ export async function provisionInvitedMember(params: {
   email: string
   displayName?: string | null
 }): Promise<ProvisionResult | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return null
-
-  const service = createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
+  const service = createServiceSupabase()
 
   const { data: org } = await service
     .from('organizations')

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { DbClient } from '@/lib/db/types'
 import { currentInstant, orgDate, type OperatingPolicy } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
@@ -116,12 +117,16 @@ import type {
   TeamStats,
   TodayDashboard,
   UpworkSnapshot,
+  LeadsPageInput,
+  LeadsPageResult,
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
 import { inboundFirstMessageKey } from '@/lib/conversation/canonical-message'
 import { calendarDaysBetween, followupDueInDays } from '@/lib/leads/followup'
 import { emitAction } from '@/lib/action-ledger'
-import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
+import { messageTypeLimit } from '@/lib/ai/config'
+import { resolveSendPolicy, type EffectiveSendPolicy } from '@/lib/email/effective-policy'
+import { evaluateSendPolicy } from '@/lib/email/policy-engine'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { computeRates, type RateBucket } from '@/lib/store/rates'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
@@ -253,6 +258,18 @@ function isMissingColumnError(err: unknown): boolean {
 
 const LEAD_LIST_COLUMNS =
   'id, organization_id, owner_rep_id, company, company_key, contact_name, contact_title, title_raw, location_raw, url, role_category, market_region, extraction_confidence, extraction_profile, signal_type, signal_evidence, verbatim_quote, score, verdict, status, play_id, tags, direction, source, inbound_message, inbound_raw, sender_profile_id, revenue_identity_id, canonical_score, score_version, scored_at, score_breakdown, is_test, buyer_intent:canonical_intelligence->buyerIntent, display_qualification:canonical_intelligence->>qualification, display_intelligence_version:canonical_intelligence->>intelligenceVersion, remote_eligibility, connection_accepted_at, locked_until, locked_reason, archived, archived_at, decision_provider, decision_model, decision_run_id, selected_episode_id, profile_match_score, profile_match_version, best_profile_id, best_profile_match_score, intelligence_input_hash, fallback_reason, created_at'
+
+/**
+ * PostgREST `or` values are comma-separated and `%` is a wildcard, so strip the
+ * characters a user can type that would change the filter's meaning.
+ */
+function sanitizeLeadSearch(raw: string | undefined): string {
+  return (raw ?? '')
+    .replace(/[%,()\\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80)
+}
 
 export function mapLead(r: Row): Lead {
   const canonical = (r.canonical_intelligence as Record<string, unknown> | null) ?? null
@@ -449,15 +466,17 @@ function mapProofItemUnredacted(r: Row): ProofItem {
 export class SupabaseStore implements ScoutStore {
   constructor(
     private readonly rep: Rep,
-    private readonly client: SupabaseClient,
+    private readonly client: DbClient,
     private readonly organization: Organization,
+    /** Raw Supabase client, used only for Storage (not part of the adapter). */
+    private readonly storageClient: SupabaseClient | null = null,
   ) {}
 
   get organizationId(): string {
     return this.organization.id
   }
 
-  getSupabaseClient(): SupabaseClient {
+  getSupabaseClient(): DbClient {
     return this.client
   }
 
@@ -467,6 +486,19 @@ export class SupabaseStore implements ScoutStore {
 
   private _rulebookCache: OrganizationRulebook | null | undefined = undefined
   private _orgSettingsCache: Record<string, unknown> | undefined = undefined
+
+  /**
+   * Read-only page composition (dashboards) reuses fetched lead rows within the
+   * request. Write paths never enable this, so dedup and import flows still see
+   * every row they insert.
+   */
+  private _snapshotMode = false
+  private _ownedLeadsSnapshot: Lead[] | undefined
+  private _allLeadsSnapshot: Lead[] | undefined
+
+  beginReadOnlySnapshot(): void {
+    this._snapshotMode = true
+  }
 
   async getRulebook(): Promise<OrganizationRulebook | null> {
     if (this._rulebookCache !== undefined) return this._rulebookCache
@@ -534,6 +566,9 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async fetchLeadsAll(scopeToUser = false, includeArchived = false): Promise<Lead[]> {
+    const cacheable = this._snapshotMode && !scopeToUser && !includeArchived
+    if (cacheable && this._allLeadsSnapshot) return this._allLeadsSnapshot
+
     let query = this.client
       .from('leads')
       .select(LEAD_LIST_COLUMNS)
@@ -557,7 +592,9 @@ export class SupabaseStore implements ScoutStore {
 
     const { data, error } = await query
     if (error) throw error
-    return (data ?? []).map(mapLead)
+    const rows = (data ?? []).map(mapLead)
+    if (cacheable) this._allLeadsSnapshot = rows
+    return rows
   }
 
   private async countTodaysSends(type?: string): Promise<number> {
@@ -1125,6 +1162,21 @@ export class SupabaseStore implements ScoutStore {
     return (data as Row[]).map(mapLead)
   }
 
+  async getSuppressedLeadIds(): Promise<ReadonlySet<string>> {
+    const { data, error } = await this.client
+      .from('email_suppressions')
+      .select('lead_id')
+      .eq('organization_id', this.orgId)
+      .eq('active', true)
+      .not('lead_id', 'is', null)
+      .limit(5000)
+    if (error) {
+      if (isOptionalSearchError(error)) return new Set()
+      throw error
+    }
+    return new Set((data as Row[]).map((r) => r.lead_id as string).filter(Boolean))
+  }
+
   async getRecentLeads(repId: string, limit: number): Promise<Lead[]> {
     const { data, error } = await this.client
       .from('leads')
@@ -1141,6 +1193,9 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async listOwnedLeads(includeArchived = false): Promise<Lead[]> {
+    const cacheable = this._snapshotMode && !includeArchived
+    if (cacheable && this._ownedLeadsSnapshot) return this._ownedLeadsSnapshot
+
     let query = this.client
       .from('leads')
       .select(LEAD_LIST_COLUMNS)
@@ -1151,17 +1206,80 @@ export class SupabaseStore implements ScoutStore {
     }
     const { data, error } = await query
     if (error) throw error
-    return (data ?? []).map(mapLead)
+    const rows = (data ?? []).map(mapLead)
+    if (cacheable) this._ownedLeadsSnapshot = rows
+    return rows
+  }
+
+  async listLeadsPage(input: LeadsPageInput = {}): Promise<LeadsPageResult> {
+    const page = Math.max(1, Math.floor(input.page ?? 1))
+    const pageSize = Math.min(200, Math.max(1, Math.floor(input.pageSize ?? 50)))
+
+    let query = this.client
+      .from('leads')
+      .select(LEAD_LIST_COLUMNS, { count: 'exact' })
+
+    if (!input.includeArchived) query = query.eq('archived', false)
+
+    if (input.owner === 'unassigned') query = query.is('owner_rep_id', null)
+    else if (input.owner) query = query.eq('owner_rep_id', input.owner)
+
+    if (input.profile) {
+      const id = input.profile.replace(/[^a-zA-Z0-9-]/g, '')
+      if (id) query = query.or(`revenue_identity_id.eq.${id},sender_profile_id.eq.${id}`)
+    }
+
+    if (input.source) query = query.eq('source', input.source)
+    if (input.status) query = query.eq('status', input.status)
+
+    const q = sanitizeLeadSearch(input.q)
+    if (q) {
+      query = query.or(
+        `contact_name.ilike.%${q}%,company.ilike.%${q}%,contact_title.ilike.%${q}%`,
+      )
+    }
+
+    const ascending = input.dir === 'asc'
+    const orderColumn =
+      input.sort === 'company' ? 'company' : input.sort === 'name' ? 'contact_name' : 'created_at'
+    query = query.order(orderColumn, { ascending }).order('id', { ascending })
+    query = query.range((page - 1) * pageSize, page * pageSize - 1)
+
+    const { data, error, count } = await query
+    if (error) throw error
+    return { leads: (data ?? []).map(mapLead), total: count ?? 0 }
   }
 
   async getQueue(): Promise<QueueData> {
-    const [owned, todaySends] = await Promise.all([
+    const [owned, todaySends, effective] = await Promise.all([
       this.listOwnedLeads(),
       this.countTodaysSends(),
+      this.getEffectivePolicy(),
     ])
     const queue = owned.filter((l) => l.status === 'new' || l.status === 'contacted')
     const replies = owned.filter((l) => l.status === 'replied')
-    return { todaySends, dailyLimit: dailySendLimit(), queue, replies }
+    return { todaySends, dailyLimit: effective.budgets.dmFollowup.limit, queue, replies }
+  }
+
+  /**
+   * The effective send policy for this organization, including the usage counts
+   * the dashboard already loads. Every surface that shows a limit reads this.
+   */
+  async getEffectivePolicy(): Promise<EffectiveSendPolicy> {
+    const [orgSettings, operating] = await Promise.all([this.getOrgSettings(), this.getOperatingPolicy()])
+    const [dmFollowup, connection] = await Promise.all([
+      this.countTodaysSendsByTypes(['dm', 'followup']),
+      this.countTodaysSendsByTypes(['connection']),
+    ])
+    return resolveSendPolicy({
+      organizationId: this.orgId,
+      now: currentInstant(),
+      operating,
+      orgSettings,
+      emailPolicy: null,
+      mailboxPolicies: [],
+      usage: { dmFollowup, connection, upwork: 0 },
+    })
   }
 
   async saveDraft(input: SaveDraftInput): Promise<Message> {
@@ -1287,13 +1405,40 @@ export class SupabaseStore implements ScoutStore {
 
     const orgSettings = await this.getOrgSettings()
     const todaySends = await this.countTodaysSends(type)
-    const limit = messageTypeLimit(type, orgSettings)
-    if (todaySends >= limit) {
+
+    // The effective policy runs immediately before the write, from the same
+    // rows the UI reads. `messageTypeLimit` alone was the only gate here, so a
+    // change to autonomy or the send window could not stop a send.
+    const policy = evaluateSendPolicy({
+      organizationId: this.orgId,
+      revenueIdentityId: null,
+      senderProfileId: this.rep.id,
+      channel: type === 'connection' || type === 'upwork' ? (type === 'upwork' ? 'upwork' : 'linkedin') : 'linkedin',
+      messageType: type ?? 'dm',
+      now: currentInstant(),
+      operating: await this.getOperatingPolicy(),
+      orgSettings,
+      emailPolicy: null,
+      mailbox: null,
+      usage: { dmFollowup: todaySends, connection: 0, upwork: 0, emailSentToday: 0, emailSentThisHour: 0, followupsUsed: 0 },
+      safety: { terminal: false, optedOut: false, suppressed: false, senderAuthorized: true, recipientVerified: true, messageQualityPassed: true },
+    })
+
+    if (!policy.allowed) {
       return {
         allowed: false,
         todaySends,
-        limit,
-        message: `Daily ceiling of ${limit} reached for ${type} messages. Other message types still have budget.`,
+        limit: policy.dailyLimit,
+        message: `Send blocked: ${policy.reason ?? 'policy'}.`,
+      }
+    }
+
+    if (todaySends >= policy.dailyLimit) {
+      return {
+        allowed: false,
+        todaySends,
+        limit: policy.dailyLimit,
+        message: `Daily ceiling of ${policy.dailyLimit} reached for ${type} messages. Other message types still have budget.`,
       }
     }
 
@@ -1622,7 +1767,7 @@ export class SupabaseStore implements ScoutStore {
       }
     }
 
-    return { allowed: true, todaySends: todaySends + 1, limit, messageId: inserted.id as string }
+    return { allowed: true, todaySends: todaySends + 1, limit: policy.dailyLimit, messageId: inserted.id as string }
   }
 
   /**
@@ -1713,6 +1858,9 @@ export class SupabaseStore implements ScoutStore {
     const { data: inserted, error: insertError } = await insertMessageReturningId(this.client, replyPayload)
     if (insertError) throw insertError
     if (!inserted) throw new Error('Failed to record the reply.')
+    // No INBOUND_REPLY notification here: only the owner can log a reply on
+    // this path and nobody is notified of their own action. Replies that
+    // arrive without the owner (email webhook) notify them there.
 
     // Persist the facts the client stated (budget, meeting date, NDA, ...).
     try {
@@ -2056,7 +2204,9 @@ export class SupabaseStore implements ScoutStore {
   async deleteProfile(id: string): Promise<void> {
     const profile = await this.getProfile(id)
     if (profile?.cvPath) {
-      await this.client.storage.from('proof-cvs').remove([profile.cvPath])
+      // Storage is not part of the canonical adapter — it stays on Supabase
+      // until Neon Object Storage is migrated.
+      await this.storageClient?.storage.from('proof-cvs').remove([profile.cvPath])
     }
     const { error } = await this.client
       .from('profiles')
@@ -2125,7 +2275,7 @@ export class SupabaseStore implements ScoutStore {
       .maybeSingle()
     const cvPath = (data as Row | null)?.cv_path as string | undefined
     if (cvPath) {
-      await this.client.storage.from('proof-cvs').remove([cvPath])
+      await this.storageClient?.storage.from('proof-cvs').remove([cvPath])
     }
     const { error } = await this.client.from('profiles').delete().eq('id', id)
     if (error) throw error
@@ -2462,7 +2612,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getTodayDashboard(): Promise<TodayDashboard> {
-    const [mine, buckets, dmFollowupSent, connectionSent, upworkApplies, notifications, followupsDue, myRank, upwork] =
+    const [mine, buckets, dmFollowupSent, connectionSent, upworkApplies, notifications, followupsDue, myRank, upwork, orgSettings] =
       await Promise.all([
         this.getQueue(),
         this.fetchRates(),
@@ -2473,20 +2623,25 @@ export class SupabaseStore implements ScoutStore {
         this.fetchFollowupsDue(),
         this.fetchMyRank(),
         this.fetchUpworkSnapshot(),
+        this.getOrgSettings(),
       ])
     const team = computeRates(buckets)
+    // The budget is the effective policy, not a second calculation. Settings,
+    // Today, the rail and the send path read this one object.
+    const effective = await this.getEffectivePolicy()
+
     const sendBudgets: SendBudget[] = [
       {
         label: 'DM & follow-up',
         types: ['dm', 'followup'],
-        used: dmFollowupSent,
-        limit: dailySendLimit(),
+        used: effective.budgets.dmFollowup.used,
+        limit: effective.budgets.dmFollowup.limit,
       },
       {
         label: 'Connection & Upwork',
         types: ['connection', 'upwork'],
-        used: connectionSent + upworkApplies,
-        limit: dailyConnectionSendLimit(),
+        used: effective.budgets.connection.used,
+        limit: effective.budgets.connection.limit,
       },
     ]
     return { mine, team, sendBudgets, notifications, followupsDue, myRank, upwork }
@@ -3142,7 +3297,7 @@ export class SupabaseStore implements ScoutStore {
     // Look up the job's connects cost before updating
     const { data: jobRow } = await this.client
       .from('upwork_jobs')
-      .select('connects_cost, sender_profile_id, revenue_identity_id')
+      .select('connects_cost')
       .eq('id', jobId)
       .maybeSingle()
     const connectsCost = (jobRow as unknown as { connects_cost: number })?.connects_cost ?? 0
@@ -5820,18 +5975,40 @@ export class SupabaseStore implements ScoutStore {
   private async fetchLeadsWithMessages(): Promise<Array<Lead & { _messages: Message[]; _conversation: ConversationState | null }>> {
     const { data, error } = await this.client
       .from('leads')
-      .select(`${LEAD_LIST_COLUMNS}, messages(*), conversation_states(*)`)
+      .select(LEAD_LIST_COLUMNS)
       .eq('owner_rep_id', this.rep.id)
       // Every other lead list excludes archived rows; omitting it here let the
       // Relay queue surface leads the board had already swept into archive.
       .eq('archived', false)
       .order('created_at', { ascending: false })
     if (error) throw error
+
+    // The messages and conversation states are second reads rather than PostgREST
+    // embeds (`messages(*)`, `conversation_states(*)`), which the Neon adapter
+    // cannot translate. Batched by lead id.
+    const leadIds = (data ?? []).map((r: Row) => r.id as string)
+    const [messageRows, stateRows] = await Promise.all([
+      leadIds.length > 0
+        ? this.client.from('messages').select('*').in('lead_id', leadIds).order('created_at', { ascending: true })
+        : Promise.resolve({ data: [] }),
+      leadIds.length > 0
+        ? this.client.from('conversation_states').select('*').in('lead_id', leadIds)
+        : Promise.resolve({ data: [] }),
+    ])
+    const messagesByLead = new Map<string, Row[]>()
+    for (const row of messageRows.data ?? []) {
+      const list = messagesByLead.get(row.lead_id as string) ?? []
+      list.push(row)
+      messagesByLead.set(row.lead_id as string, list)
+    }
+    const stateByLead = new Map<string, Row>()
+    for (const row of stateRows.data ?? []) stateByLead.set(row.lead_id as string, row)
+
     return (data ?? []).map((r: Row) => ({
       ...mapLead(r),
-      _messages: ((r.messages as Row[]) ?? []).map(mapMessage),
-      _conversation: (r.conversation_states as Row[])?.[0]
-        ? mapConversationState((r.conversation_states as Row[])[0])
+      _messages: (messagesByLead.get(r.id as string) ?? []).map(mapMessage),
+      _conversation: stateByLead.get(r.id as string)
+        ? mapConversationState(stateByLead.get(r.id as string) as Row)
         : null,
     }))
   }
@@ -6192,11 +6369,20 @@ export class SupabaseStore implements ScoutStore {
 
   async listMyAssignedIdentities(): Promise<RevenueIdentityWithAssignment[]> {
     const { data, error } = await this.client
-      .from('identity_assignments').select('id, assigned_by, created_at, identity:revenue_identities(*)')
+      .from('identity_assignments').select('id, assigned_by, created_at, revenue_identity_id')
       .eq('rep_id', this.rep.id).eq('organization_id', this.orgId).order('created_at', { ascending: false })
     if (error) throw error
+
+    // The identity rows are a second read rather than a PostgREST embed
+    // (`identity:revenue_identities`), which the Neon adapter cannot translate.
+    const ids = (data ?? []).map((a) => a.revenue_identity_id as string)
+    const identityById = new Map<string, Record<string, unknown>>()
+    if (ids.length > 0) {
+      const { data: identityRows } = await this.client.from('revenue_identities').select('*').in('id', ids)
+      for (const row of identityRows ?? []) identityById.set(row.id as string, row)
+    }
     return (data ?? []).map((a) => {
-      const identity = a.identity as unknown as Record<string, unknown>
+      const identity = identityById.get(a.revenue_identity_id as string) ?? {}
       return { ...this.mapRevenueIdentity(identity), assignmentId: a.id as string, assignedBy: (a.assigned_by as string) ?? null, assignedAt: a.created_at as string }
     })
   }
@@ -7734,16 +7920,23 @@ export class SupabaseStore implements ScoutStore {
   // ═══════════════════════════════════════════════════════════════════════════
 
   async getTeamMembers(teamId: string): Promise<TeamMemberRow[]> {
-    const { data, error } = await this.client
+    const { data: memberships, error } = await this.client
       .from('team_memberships')
-      .select('person_id, membership_role, reps!inner(id, name)')
+      .select('person_id, membership_role')
       .eq('team_id', teamId)
       .eq('active', true)
     if (error) throw error
-    return (data ?? []).map((r: any) => ({
-      repId: r.reps.id,
-      repName: r.reps.name,
-      role: r.membership_role,
+
+    // The rep names are a second read rather than a PostgREST embed
+    // (`reps!inner`), which the Neon adapter cannot translate.
+    const personIds = (memberships ?? []).map((m) => m.person_id)
+    if (personIds.length === 0) return []
+    const { data: reps } = await this.client.from('reps').select('id, name').in('id', personIds)
+    const nameById = new Map((reps ?? []).map((r) => [r.id, r.name]))
+    return (memberships ?? []).map((m) => ({
+      repId: m.person_id,
+      repName: nameById.get(m.person_id) ?? 'Unknown',
+      role: m.membership_role,
     }))
   }
 
@@ -7824,17 +8017,32 @@ export class SupabaseStore implements ScoutStore {
   }>> {
     const { data, error } = await this.client
       .from('identity_assignments')
-      .select('id, revenue_identity_id, identity:revenue_identities(id, identity_name, title, channel)')
+      .select('id, revenue_identity_id')
       .eq('rep_id', repId)
       .eq('organization_id', this.orgId)
     if (error) throw error
-    return (data ?? []).map((a: any) => ({
-      assignmentId: a.id,
-      revenueIdentityId: a.revenue_identity_id,
-      identityName: a.identity?.identity_name ?? 'Unknown',
-      title: a.identity?.title ?? null,
-      channel: a.identity?.channel ?? 'other',
-    }))
+
+    // The identity rows are a second read rather than a PostgREST embed
+    // (`identity:revenue_identities`), which the Neon adapter cannot translate.
+    const ids = (data ?? []).map((a) => a.revenue_identity_id as string)
+    const identityById = new Map<string, Record<string, unknown>>()
+    if (ids.length > 0) {
+      const { data: identityRows } = await this.client
+        .from('revenue_identities')
+        .select('id, identity_name, title, channel')
+        .in('id', ids)
+      for (const row of identityRows ?? []) identityById.set(row.id as string, row)
+    }
+    return (data ?? []).map((a: any) => {
+      const identity = identityById.get(a.revenue_identity_id as string) ?? {}
+      return {
+        assignmentId: a.id,
+        revenueIdentityId: a.revenue_identity_id,
+        identityName: (identity.identity_name as string) ?? 'Unknown',
+        title: (identity.title as string | null) ?? null,
+        channel: (identity.channel as string) ?? 'other',
+      }
+    })
   }
 
   async getRepInfo(repId: string): Promise<{ id: string; name: string; role: string } | null> {
@@ -7895,7 +8103,7 @@ export class SupabaseStore implements ScoutStore {
   async getManagedTeamSummary(managerId: string): Promise<TeamSummaryRow[]> {
     const { data: memberships } = await this.client
       .from('team_memberships')
-      .select('team_id, teams!inner(name)')
+      .select('team_id')
       .eq('person_id', managerId)
       .eq('membership_role', 'MANAGER')
       .eq('active', true)

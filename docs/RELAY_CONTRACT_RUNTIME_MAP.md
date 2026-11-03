@@ -229,3 +229,70 @@ report coverage.
 - `tests/qa-relay-bug-011-recruiter-role.test.ts`
 - `tests/golden/fixtures-buyers.ts` → `buyer-outsourced-team-not-employees`
 - `tests/hardening-regression-tammo.test.ts` (counterweight)
+
+---
+
+## Contract 14 — One email delivery authority; a mailbox belongs to a sender identity
+
+**Canonical owner**
+- `evaluateEmailSendEligibility` — `src/lib/email/eligibility.ts`
+- `deriveMailboxHealth` / `canSendFromHealth` — `src/lib/email/mailbox-health.ts`
+- `getEmailProvider` / `registerEmailProvider` — `src/lib/email/providers/email-provider.ts`
+
+**Runtime consumers**
+- `sendPreparedEmail` (`src/lib/email/service.ts`) — must resolve the provider by
+  mailbox id and must not record `delivery_status='SENT'` unless the provider
+  accepted
+- `ENQUEUE_EMAIL` scheduler job (`src/lib/scheduler/run.ts`)
+
+**Tests**
+- `tests/qa-relay-email-policy-contracts.test.ts` → "Contract 14"
+
+---
+
+## Contract 15 — Autonomy is a policy of the action, not a property of a sent message
+
+**Canonical owner**
+- `EMAIL_AUTONOMY_MODES` / `DEFAULT_EMAIL_AUTONOMY_MODE` / `modeMayAutosend` — `src/lib/email/autonomy.ts`
+- `AUTOPILOT_SAFE_REPLY_CLASSES` / `isAutopilotSafeReplyClass` — `src/lib/email/autonomy.ts`
+
+**Runtime consumers**
+- `evaluateEmailSendEligibility` (`src/lib/email/eligibility.ts`) — maps the mode
+  to `EmailSendAction`
+- `ENQUEUE_EMAIL` scheduler job (`src/lib/scheduler/run.ts`)
+
+**Tests**
+- `tests/qa-relay-email-policy-contracts.test.ts` → "Contract 15"
+
+---
+
+## Contract 16 — A send is blocked, not guessed
+
+**Canonical owner**
+- `evaluateEmailSendEligibility` / `makeDecision` — `src/lib/email/eligibility.ts`
+
+**Runtime consumers**
+- `sendPreparedEmail` (`src/lib/email/service.ts`) — the send route
+- approval queue and follow-up job (to be built) — must consume the same object
+- `organization_operating_policy` — sole time authority for the send window
+
+**Tests**
+- `tests/qa-relay-email-policy-contracts.test.ts` → "Contract 16"
+
+---
+
+## Contract 17 — Displayed send policy equals enforced send policy
+
+**Canonical owner**
+- `resolveSendPolicy` — `src/lib/email/effective-policy.ts`
+- `getEffectivePolicy` — `ScoutStore` (`src/lib/store/types.ts`)
+
+**Runtime consumers**
+- `getTodayDashboard` / `getQueue` — `src/lib/store/supabase-store.ts`
+- `getTodayDashboard` / `getQueue` — `src/lib/store/mock-store.ts`
+- Settings page — `src/app/(app)/settings/page.tsx`
+- `buildSendDecision` — `src/lib/email/send-decision.ts`
+
+**Tests**
+- `tests/qa-relay-send-policy-parity.test.ts`
+- `tests/qa-relay-send-limits.test.ts`

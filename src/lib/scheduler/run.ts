@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * The operational worker.
  *
@@ -11,7 +12,7 @@
  * Failure: every job records attempt, last_error and next_attempt_at, and is
  * dead-lettered after max_attempts. Nothing fails silently.
  */
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { notifyForEvent, notifyOnce } from '@/lib/notifications/deliver'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import {
   businessDateRange,
@@ -26,6 +27,11 @@ import {
 } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { deriveRepDayState } from '@/lib/rep-day/state-machine'
+import { syncOrganizationMailboxes } from '@/lib/email/sync'
+import { reconcileAcceptedSend } from '@/lib/email/reconcile'
+import { buildSendDecision } from '@/lib/email/send-decision'
+import { createStoreForRep } from '@/lib/email/store-context'
+import { sendPreparedEmail } from '@/lib/email/service'
 import { planOperationalJobs, recoveredRepIds, type OperationalJobKind } from './plan'
 
 export interface SchedulerSummary {
@@ -33,7 +39,10 @@ export interface SchedulerSummary {
   error?: string
   organizations: number
   planned: number
-  enqueued: number
+  /** Jobs actually written by this run. */
+  inserted: number
+  /** Jobs that already existed — a repeat run is all alreadyExisting. */
+  alreadyExisting: number
   executed: number
   failed: number
   deadLettered: number
@@ -48,6 +57,7 @@ interface JobRow {
   time_bucket: string
   attempt: number
   max_attempts: number
+  payload: Record<string, unknown>
 }
 
 interface RepDayRow {
@@ -72,43 +82,11 @@ function backoffMinutes(attempt: number): number {
   return Math.min(60, 2 ** Math.max(0, attempt - 1))
 }
 
-export async function notifyOnce(
-  client: SupabaseClient,
-  input: {
-    organizationId: string
-    recipientId: string
-    type: string
-    title: string
-    body: string
-    link: string
-    dedupeKey: string
-  },
-): Promise<boolean> {
-  const { data: existing } = await client
-    .from('notifications')
-    .select('id')
-    .eq('organization_id', input.organizationId)
-    .eq('recipient_id', input.recipientId)
-    .eq('dedupe_key', input.dedupeKey)
-    .maybeSingle()
-
-  if (existing) return false
-
-  const { error } = await client.from('notifications').insert({
-    organization_id: input.organizationId,
-    recipient_id: input.recipientId,
-    notification_type: input.type,
-    title: input.title,
-    body: input.body,
-    link: input.link,
-    dedupe_key: input.dedupeKey,
-  })
-
-  return !error
-}
+// One notification writer for the whole app (src/lib/notifications/deliver.ts).
+export { notifyOnce }
 
 async function loadRepDays(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   businessDate: string,
 ): Promise<RepDayRow[]> {
@@ -125,17 +103,89 @@ async function loadRepDays(
   return (data ?? []) as RepDayRow[]
 }
 
-async function openDay(client: SupabaseClient, organizationId: string, businessDate: string) {
+/**
+ * Every rep in the organization gets a day row when the day opens, so a rep who
+ * has not checked in is still visible as NOT_STARTED.
+ *
+ * Without this the scheduler has nothing to evaluate until someone checks in:
+ * `refreshRepDays` only updates rows that already exist, so an un-checked-in rep
+ * is invisible all day and the day only becomes visible once it is already over.
+ */
+export async function ensureRepDays(
+  client: DbClient,
+  organizationId: string,
+  businessDate: string,
+  policy: OperatingPolicy,
+) {
+  const { data: reps, error } = await client
+    .from('reps')
+    .select('id')
+    .eq('organization_id', organizationId)
+
+  if (error) {
+    if (isMissingRelation(error)) return { reps: 0 }
+    throw error
+  }
+  if (!reps || reps.length === 0) return { reps: 0 }
+
+  // A row created mid-day must reflect work that already happened. Otherwise a
+  // rep who has been active all morning without a row would appear NOT_STARTED
+  // until their next check-in.
+  const range = businessDateRange(businessDate, policy.timezone)
+  const { data: activity, error: activityError } = await client
+    .from('action_events')
+    .select('actor_id')
+    .eq('organization_id', organizationId)
+    .gte('occurred_at', range.start)
+    .lt('occurred_at', range.end)
+    .limit(5000)
+
+  const active = new Set<string>()
+  if (!activityError && activity) {
+    for (const row of activity) {
+      if (row.actor_id) active.add(row.actor_id as string)
+    }
+  }
+
+  const { error: upsertError } = await client.from('rep_day').upsert(
+    reps.map((rep) => ({
+      organization_id: organizationId,
+      rep_id: rep.id as string,
+      business_date: businessDate,
+      state: active.has(rep.id as string) ? 'ACTIVE' : 'NOT_STARTED',
+    })),
+    { onConflict: 'organization_id,rep_id,business_date', ignoreDuplicates: true },
+  )
+  if (upsertError && !isMissingRelation(upsertError)) throw upsertError
+
+  return { reps: reps.length, active: active.size }
+}
+
+async function openDay(
+  client: DbClient,
+  organizationId: string,
+  businessDate: string,
+  policy: OperatingPolicy,
+) {
   const { error } = await client.from('organization_day').upsert(
     { organization_id: organizationId, business_date: businessDate, state: 'OPEN' },
     { onConflict: 'organization_id,business_date', ignoreDuplicates: true },
   )
   if (error && !isMissingRelation(error)) throw error
-  return { opened: true }
+
+  // Only materialise rep days while the day can still be worked. A day that is
+  // already over was never tracked, and inventing rows for it would mark every
+  // rep MISSED on the first activation run.
+  if (isAfterWorkday(currentInstant(), policy, businessDate)) {
+    return { opened: true, reps: 0, skipped: 'after_workday' }
+  }
+
+  const { reps } = await ensureRepDays(client, organizationId, businessDate, policy)
+  return { opened: true, reps }
 }
 
 async function refreshRepDays(
-  client: SupabaseClient,
+  client: DbClient,
   policy: OperatingPolicy,
   organizationId: string,
   businessDate: string,
@@ -179,7 +229,7 @@ async function refreshRepDays(
 }
 
 async function emitWarnings(
-  client: SupabaseClient,
+  client: DbClient,
   policy: OperatingPolicy,
   organizationId: string,
   businessDate: string,
@@ -234,8 +284,48 @@ async function emitWarnings(
   return { sent }
 }
 
+/**
+ * TASK_OVERDUE: open assigned tasks past due get one notice per task per due
+ * time (`task_overdue:<taskId>:<dueAt>`), so repeated scheduler runs never
+ * re-notify and a reschedule starts a new window. Runs inside EMIT_WARNING —
+ * existing scheduled infrastructure, no new job kind. Skipped while the task
+ * tables are not migrated.
+ */
+export async function emitOverdueTaskNotifications(
+  client: DbClient,
+  organizationId: string,
+  now: Date,
+): Promise<{ overdue: number; notified: number }> {
+  const { data, error } = await client
+    .from('assigned_tasks')
+    .select('id, assignee_rep_id, title, due_at')
+    .eq('organization_id', organizationId)
+    .in('status', ['OPEN', 'IN_PROGRESS'])
+    .not('due_at', 'is', null)
+    .lt('due_at', now.toISOString())
+    .order('due_at', { ascending: true })
+    .limit(200)
+  if (error) {
+    if (isMissingRelation(error)) return { overdue: 0, notified: 0 }
+    throw error
+  }
+  let notified = 0
+  for (const task of (data ?? []) as Array<{ id: string; assignee_rep_id: string | null; title: string | null; due_at: string }>) {
+    if (!task.assignee_rep_id) continue
+    const result = await notifyForEvent(client, organizationId, {
+      kind: 'TASK_OVERDUE',
+      taskId: task.id,
+      assigneeRepId: task.assignee_rep_id,
+      title: task.title ?? 'Task',
+      dueAt: task.due_at,
+    })
+    if (result === 'delivered') notified += 1
+  }
+  return { overdue: data?.length ?? 0, notified }
+}
+
 async function emitEscalations(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   businessDate: string,
   policy: OperatingPolicy,
@@ -315,7 +405,7 @@ async function emitEscalations(
 }
 
 async function closeMissedDays(
-  client: SupabaseClient,
+  client: DbClient,
   policy: OperatingPolicy,
   organizationId: string,
   businessDate: string,
@@ -364,7 +454,7 @@ async function closeMissedDays(
 }
 
 async function prepareCarryover(
-  client: SupabaseClient,
+  client: DbClient,
   policy: OperatingPolicy,
   organizationId: string,
   businessDate: string,
@@ -400,7 +490,7 @@ async function prepareCarryover(
 }
 
 async function evaluateFollowUps(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
   businessDate: string,
 ) {
@@ -441,18 +531,204 @@ async function evaluateFollowUps(
   return { sent }
 }
 
-async function executeJob(client: SupabaseClient, row: JobRow): Promise<Record<string, unknown>> {
+async function syncMailboxes(client: DbClient, organizationId: string) {
+  const summaries = await syncOrganizationMailboxes(client, organizationId)
+  return {
+    scanned: summaries.reduce((n, s) => n + s.scanned, 0),
+    imported: summaries.reduce((n, s) => n + s.imported, 0),
+    duplicates: summaries.reduce((n, s) => n + s.duplicates, 0),
+    reviewRequired: summaries.reduce((n, s) => n + s.reviewRequired, 0),
+    mailboxes: summaries.length,
+    failures: summaries.filter((s) => s.failure).map((s) => ({ mailboxId: s.mailboxId, failure: s.failure })),
+  }
+}
+
+/**
+ * Reconcile sends the provider accepted but Relay failed to record.
+ *
+ * Without this a retry would email a prospect twice: the provider already
+ * delivered the message, and the local row is the only thing that says so.
+ */
+/**
+ * Enqueue a send job for every draft that is ready to go.
+ *
+ * This job never sends. It creates the `SEND_EMAIL` work item that the send job
+ * then evaluates — so a draft that becomes ineligible (opt-out, terminal, quota)
+ * is dropped by the same gate the manual route uses, rather than by a second rule.
+ */
+async function enqueueEmailWork(client: DbClient, organizationId: string, businessDate: string) {
+  const { data: drafts, error } = await client
+    .from('prepared_email_drafts')
+    .select('id, revenue_identity_id')
+    .eq('organization_id', organizationId)
+    .eq('draft_status', 'READY')
+    .limit(200)
+
+  if (error) {
+    if (isMissingRelation(error)) return { enqueued: 0, drafts: 0 }
+    throw error
+  }
+
+  let enqueued = 0
+  for (const draft of drafts ?? []) {
+    const draftId = draft.id as string
+    const { data: inserted, error: upsertError } = await client
+      .from('operational_jobs')
+      .upsert(
+        {
+          organization_id: organizationId,
+          business_date: businessDate,
+          rep_id: null,
+          job_kind: 'SEND_EMAIL',
+          time_bucket: draftId,
+          dedupe_key: `${businessDate}:SEND_EMAIL:${draftId}`,
+          payload: { draftId, revenueIdentityId: draft.revenue_identity_id },
+          next_attempt_at: new Date().toISOString(),
+        },
+        { onConflict: 'organization_id,dedupe_key', ignoreDuplicates: true },
+      )
+      .select('id')
+
+    if (upsertError) {
+      if (isMissingRelation(upsertError)) return { enqueued, drafts: (drafts ?? []).length }
+      throw upsertError
+    }
+    if (inserted && inserted.length > 0) enqueued += 1
+  }
+
+  return { enqueued, drafts: (drafts ?? []).length }
+}
+
+/**
+ * Execute one queued send.
+ *
+ * The eligibility gate runs again here — immediately before the provider call —
+ * because the facts it read when the job was enqueued have certainly changed. A
+ * draft held for approval is left alone; a blocked draft is marked FAILED with
+ * its blockers so the rep can see why.
+ */
+async function sendQueuedEmail(
+  client: DbClient,
+  organizationId: string,
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const draftId = payload.draftId as string | undefined
+  if (!draftId) return { skipped: 'missing_draft_id' }
+
+  const { data: draft, error: draftError } = await client
+    .from('prepared_email_drafts')
+    .select('id, lead_id, revenue_identity_id, draft_status')
+    .eq('organization_id', organizationId)
+    .eq('id', draftId)
+    .maybeSingle()
+
+  if (draftError) throw draftError
+  if (!draft) return { skipped: 'draft_not_found' }
+  if (draft.draft_status === 'SENT') return { skipped: 'already_sent' }
+
+  const { data: lead, error: leadError } = await client
+    .from('leads')
+    .select('id, owner_rep_id')
+    .eq('organization_id', organizationId)
+    .eq('id', draft.lead_id as string)
+    .maybeSingle()
+
+  if (leadError) throw leadError
+  if (!lead) return { skipped: 'lead_not_found' }
+
+  const repId = (lead.owner_rep_id as string | null) ?? null
+
+  // Without an owner rep there is no identity assignment to check against, so
+  // the send cannot be authorized. Fail closed rather than inventing a sender.
+  if (!repId) {
+    await client
+      .from('prepared_email_drafts')
+      .update({ draft_status: 'FAILED', blocked_reason: 'sender_identity_unauthorized', updated_at: new Date().toISOString() })
+      .eq('organization_id', organizationId)
+      .eq('id', draftId)
+    return { blocked: ['sender_identity_unauthorized'] }
+  }
+
+  const policy = await loadOperatingPolicy(organizationId, client)
+  const decision = await buildSendDecision(client, {
+    organizationId,
+    leadId: draft.lead_id as string,
+    draftId,
+    repId,
+    policy,
+  })
+
+  if (!decision.eligible) {
+    const nowIso = new Date().toISOString()
+    await client
+      .from('prepared_email_drafts')
+      .update({ draft_status: 'FAILED', blocked_reason: decision.blockers.join(','), updated_at: nowIso })
+      .eq('organization_id', organizationId)
+      .eq('id', draftId)
+    return { blocked: decision.blockers, reason: decision.reason }
+  }
+
+  if (decision.action === 'APPROVAL_REQUIRED') return { held: 'approval_required' }
+  if (decision.action === 'PREPARE_ONLY') return { held: 'manual_mode' }
+
+  const store = await createStoreForRep(client, organizationId, repId as string)
+  const leadId = draft.lead_id as string
+  const result = await sendPreparedEmail({
+    client,
+    store,
+    orgId: organizationId,
+    repId,
+    leadId,
+    draftId,
+    idempotencyKey: `email:${leadId}:${draftId}`,
+  })
+
+  return { sent: true, emailMessageId: result.emailMessage.id, idempotent: result.idempotent }
+}
+
+async function retryEmails(client: DbClient, organizationId: string) {
+  const { data: attempts, error } = await client
+    .from('email_send_attempts')
+    .select('provider, provider_message_id')
+    .eq('organization_id', organizationId)
+    .eq('status', 'FAILED')
+    .eq('failure_reason', 'persist_failed_after_provider_accept')
+    .not('provider_message_id', 'is', null)
+    .limit(50)
+
+  if (error) {
+    if (isMissingRelation(error)) return { checked: 0, reconciled: 0 }
+    throw error
+  }
+
+  let reconciled = 0
+  for (const attempt of attempts ?? []) {
+    const result = await reconcileAcceptedSend(client, {
+      organizationId,
+      provider: attempt.provider as string,
+      providerMessageId: attempt.provider_message_id as string,
+    })
+    if (result.reconciled) reconciled += 1
+  }
+
+  return { checked: attempts?.length ?? 0, reconciled }
+}
+
+async function executeJob(client: DbClient, row: JobRow): Promise<Record<string, unknown>> {
   const organizationId = row.organization_id
   const businessDate = row.business_date
   const policy = await loadOperatingPolicy(organizationId, client)
 
   switch (row.job_kind) {
     case 'OPEN_DAY':
-      return openDay(client, organizationId, businessDate)
+      return openDay(client, organizationId, businessDate, policy)
     case 'EVALUATE_REP_DAY':
       return refreshRepDays(client, policy, organizationId, businessDate)
-    case 'EMIT_WARNING':
-      return emitWarnings(client, policy, organizationId, businessDate)
+    case 'EMIT_WARNING': {
+      const warnings = await emitWarnings(client, policy, organizationId, businessDate)
+      const tasks = await emitOverdueTaskNotifications(client, organizationId, currentInstant())
+      return { ...warnings, overdueTasks: tasks.overdue, overdueNotified: tasks.notified }
+    }
     case 'EMIT_ESCALATION':
       return emitEscalations(client, organizationId, businessDate, policy)
     case 'CLOSE_MISSED_DAY':
@@ -461,10 +737,21 @@ async function executeJob(client: SupabaseClient, row: JobRow): Promise<Record<s
       return prepareCarryover(client, policy, organizationId, businessDate)
     case 'EVALUATE_FOLLOWUP':
       return evaluateFollowUps(client, organizationId, businessDate)
+    case 'SYNC_MAILBOX':
+      return syncMailboxes(client, organizationId)
+    case 'RETRY_EMAIL':
+      return retryEmails(client, organizationId)
     case 'ENQUEUE_EMAIL':
-      // Deliberately not implemented: email autopilot is a future promotion
-      // state, not part of this foundation.
-      return { skipped: 'email_autopilot_not_enabled' }
+      // Enqueues draft work only. Sending requires an eligibility decision and,
+      // outside AUTOPILOT, a human approval — neither is this job's authority.
+      return enqueueEmailWork(client, organizationId, businessDate)
+    case 'SEND_EMAIL':
+      return sendQueuedEmail(client, organizationId, row.payload)
+    case 'SEND_FOLLOWUP':
+    case 'PROCESS_INBOUND_EMAIL':
+      // Handled by the same worker once planned; not yet planned because the
+      // follow-up generator that produces them does not exist yet.
+      return { skipped: 'not_planned' }
   }
 }
 
@@ -472,7 +759,7 @@ export async function runOperationalScheduler(options: {
   now?: Date
   organizationId?: string
   limit?: number
-  client?: SupabaseClient
+  client?: DbClient
 } = {}): Promise<SchedulerSummary> {
   const now = options.now ?? currentInstant()
   const limit = Math.min(500, Math.max(1, options.limit ?? 200))
@@ -482,7 +769,8 @@ export async function runOperationalScheduler(options: {
     ok: true,
     organizations: 0,
     planned: 0,
-    enqueued: 0,
+    inserted: 0,
+    alreadyExisting: 0,
     executed: 0,
     failed: 0,
     deadLettered: 0,
@@ -507,7 +795,7 @@ export async function runOperationalScheduler(options: {
     summary.planned += jobs.length
 
     for (const job of jobs) {
-      const { error } = await client.from('operational_jobs').upsert(
+      const { data: inserted, error } = await client.from('operational_jobs').upsert(
         {
           organization_id: job.organizationId,
           business_date: job.businessDate,
@@ -519,7 +807,7 @@ export async function runOperationalScheduler(options: {
           next_attempt_at: now.toISOString(),
         },
         { onConflict: 'organization_id,dedupe_key', ignoreDuplicates: true },
-      )
+      ).select('id')
 
       if (error) {
         if (isMissingRelation(error)) {
@@ -527,13 +815,16 @@ export async function runOperationalScheduler(options: {
         }
         throw error
       }
-      summary.enqueued += 1
+      // ignoreDuplicates returns only the rows this run actually wrote, so the
+      // counters describe reality: a repeat run is all alreadyExisting.
+      if (inserted && inserted.length > 0) summary.inserted += inserted.length
+      else summary.alreadyExisting += 1
     }
   }
 
   const { data: due, error: dueError } = await client
     .from('operational_jobs')
-    .select('id, organization_id, business_date, rep_id, job_kind, time_bucket, attempt, max_attempts')
+    .select('id, organization_id, business_date, rep_id, job_kind, time_bucket, attempt, max_attempts, payload')
     .eq('state', 'pending')
     .lte('next_attempt_at', now.toISOString())
     .order('next_attempt_at', { ascending: true })

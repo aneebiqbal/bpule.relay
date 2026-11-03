@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
-import { createServiceSupabase } from '@/lib/supabase/service'
+import { createServiceSupabaseAuth } from '@/lib/supabase/service'
 import { DocumentParseError, parseDocument } from '@/lib/profile-intelligence/parse-document'
 import { parseSpreadsheet, spreadsheetToText } from '@/lib/profile-intelligence/parse-spreadsheet'
 import { runExtractionPipeline, synthesizeAiContext } from '@/lib/profile-intelligence/pipeline'
@@ -52,7 +52,7 @@ export async function POST(
   }
 
   const deadline = Date.now() + TIME_BUDGET_MS
-  const client: Db = createServiceSupabase()
+  const client: Db = createServiceSupabaseAuth()
   const orgId = authCtx.orgId
 
   const { data: batch, error: batchError } = await client

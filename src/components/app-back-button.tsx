@@ -19,6 +19,11 @@ function parentFor(pathname: string): { href: string; label: string } | null {
   return PARENTS.find((item) => item.test(pathname)) ?? null
 }
 
+/** Whether this route sits below another surface and can show Back. */
+export function hasAppParent(pathname: string): boolean {
+  return parentFor(pathname) !== null
+}
+
 export function AppBackButton({ className }: { className?: string }) {
   const pathname = usePathname()
   const router = useRouter()

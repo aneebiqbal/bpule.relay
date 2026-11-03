@@ -1,5 +1,5 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { can, type AuthContext } from '@/lib/auth/organization'
+import type { DbClient } from '@/lib/db/types'
 
 /**
  * Role-based access for Profile Intelligence.
@@ -35,7 +35,7 @@ export function profileAccess(auth: AuthContext): ProfileAccess {
  * revenue_identities.profile_id). Admins usually assign identities, not
  * profiles, so without the last leg a rep's Profiles page stays empty.
  */
-export async function repVisibleProfileIds(client: SupabaseClient, auth: AuthContext): Promise<string[]> {
+export async function repVisibleProfileIds(client: DbClient, auth: AuthContext): Promise<string[]> {
   const [owned, assigned, viaIdentity] = await Promise.all([
     client.from('profiles').select('id').eq('organization_id', auth.orgId).eq('rep_id', auth.repId),
     client.from('profile_assignments').select('profile_id').eq('rep_id', auth.repId),
@@ -58,11 +58,11 @@ export async function repVisibleProfileIds(client: SupabaseClient, auth: AuthCon
 type IdentityLink = { profile_id: string | null; status: string | null }
 
 /** null = no restriction (managers); otherwise the explicit allow-list. */
-export async function visibleProfileIds(client: SupabaseClient, auth: AuthContext): Promise<string[] | null> {
+export async function visibleProfileIds(client: DbClient, auth: AuthContext): Promise<string[] | null> {
   return profileAccess(auth).scope === 'org' ? null : repVisibleProfileIds(client, auth)
 }
 
-export async function canViewProfile(client: SupabaseClient, auth: AuthContext, profileId: string): Promise<boolean> {
+export async function canViewProfile(client: DbClient, auth: AuthContext, profileId: string): Promise<boolean> {
   const ids = await visibleProfileIds(client, auth)
   return ids === null || ids.includes(profileId)
 }

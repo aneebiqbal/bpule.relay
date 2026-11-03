@@ -8,6 +8,8 @@ interface TabItem {
   label: string
   icon?: React.ComponentType<{ className?: string }>
   count?: number
+  /** Explains what the view selects, in one sentence (reference: view tooltips). */
+  hint?: string
 }
 
 interface TabsProps {
@@ -26,7 +28,7 @@ export function Tabs({ items, value, onChange, className }: TabsProps) {
         className
       )}
     >
-      {items.map(({ value: itemValue, label, icon: Icon, count }) => {
+      {items.map(({ value: itemValue, label, icon: Icon, count, hint }) => {
         const active = itemValue === value
         return (
           <button
@@ -34,6 +36,7 @@ export function Tabs({ items, value, onChange, className }: TabsProps) {
             type="button"
             role="tab"
             aria-selected={active}
+            title={hint}
             onClick={() => onChange(itemValue)}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-all duration-150",

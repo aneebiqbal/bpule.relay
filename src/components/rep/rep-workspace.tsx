@@ -18,6 +18,12 @@ import { cn } from 'cn'
 
 export interface RepWorkspaceData {
   rep: { id: string; name: string }
+  activeWorkspace?: {
+    id: string
+    identityName: string
+    title: string | null
+    channel: string
+  } | null
   isWorkingDay: boolean
   hasAssignments: boolean
   identities: Array<{
@@ -69,6 +75,11 @@ export interface RepWorkspaceData {
   upNext: RelayTodayAction[]
   /** Full canonical action list; the desk sections and the Today KPI share it. */
   allActions: RelayTodayAction[]
+  /** Canonical meetings / wins today (MEETING_BOOKED / CLIENT_WON events). */
+  /** Today's executed events (aggregateMetrics) — the scoreboard's source when loaded. */
+  outcomeEvents?: { meetings: number; wins: number; connections?: number; repliesSent?: number; proposals?: number } | null
+  /** Unified derived + assigned tasks for Home ranking and /tasks parity. */
+  unifiedTasks?: import('@/lib/tasks/types').UnifiedTask[]
   notifications: Array<{ id: string; title: string; body: string }>
   profilesPulled?: number
   isManager?: boolean
@@ -80,6 +91,10 @@ export interface RepWorkspaceData {
   completion?: { done: number; remaining: number }
   resumeWork?: Array<{ id: string; company: string; contactName: string | null; lastAction: string; state: string }>
   signalFeed?: import('@/lib/relay/signal-watch').SignalFeedItem[]
+  /** Canonical operational timeline for Today / recent (max 5). */
+  activity?: import('@/lib/operations/activity').TimelineRow[]
+  /** Open leads shaped for the canonical pipeline funnel. */
+  pipelineLeads?: import('@/lib/team/admin-command-summary').OpenLeadFact[]
   onRefreshSignals?: () => void
   onDismissSignal?: (id: string) => void
 }

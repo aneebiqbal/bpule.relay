@@ -18,11 +18,7 @@ export async function GET(request: Request) {
     .select(`
       id, full_name, display_name, label, headline, current_role, company,
       cv_path, readiness, extraction_version, source_count, proof_count,
-      primary_skills, technologies, professional_summary, archived_at,
-      assignments:profile_assignments(id),
-      proof_cards(id),
-      portfolio_projects(id),
-      conversation_states(id)
+      primary_skills, technologies, professional_summary, archived_at
     `)
     .eq('organization_id', orgId)
     .is('archived_at', null)
@@ -30,6 +26,35 @@ export async function GET(request: Request) {
   if (!profiles) {
     return NextResponse.json({ error: 'Failed to load profiles.' }, { status: 500 })
   }
+
+  // The related ids used to arrive as PostgREST embeds, which the Neon adapter
+  // cannot translate. One batched read per relation over the page's ids.
+  const ids = profiles.map((p) => p.id)
+  const [assignmentRows, proofCardRows, portfolioRows, conversationRows] = await Promise.all([
+    ids.length > 0 ? client.from('profile_assignments').select('profile_id').in('profile_id', ids) : Promise.resolve({ data: [] }),
+    ids.length > 0 ? client.from('proof_cards').select('profile_id').in('profile_id', ids) : Promise.resolve({ data: [] }),
+    ids.length > 0 ? client.from('portfolio_projects').select('profile_id').in('profile_id', ids) : Promise.resolve({ data: [] }),
+    ids.length > 0 ? client.from('conversation_states').select('sender_profile_id').in('sender_profile_id', ids) : Promise.resolve({ data: [] }),
+  ])
+  const presence = (rows: Array<{ profile_id: string }> | null | undefined) => {
+    const set = new Set<string>()
+    for (const r of rows ?? []) set.add(r.profile_id as string)
+    return set
+  }
+  const hasAssignment = presence(assignmentRows.data)
+  const hasProofCard = presence(proofCardRows.data)
+  const hasPortfolio = presence(portfolioRows.data)
+  // `conversation_states` links to a profile through `sender_profile_id`,
+  // not `profile_id`.
+  const hasConversation = new Set((conversationRows.data ?? []).map((r) => r.sender_profile_id as string))
+
+  const enriched = profiles.map((p) => ({
+    ...p,
+    assignments: hasAssignment.has(p.id) ? [{ id: p.id }] : [],
+    proof_cards: hasProofCard.has(p.id) ? [{ id: p.id }] : [],
+    portfolio_projects: hasPortfolio.has(p.id) ? [{ id: p.id }] : [],
+    conversation_states: hasConversation.has(p.id) ? [{ id: p.id }] : [],
+  }))
 
   const classification = {
     total: profiles.length,
@@ -39,7 +64,7 @@ export async function GET(request: Request) {
     review: [] as any[],
   }
 
-  for (const profile of profiles) {
+  for (const profile of enriched) {
     const hasMeaningfulData = isMeaningfulProfile(profile)
     const hasAssignment = (profile.assignments?.length ?? 0) > 0
     const hasProof = (profile.proof_cards?.length ?? 0) > 0

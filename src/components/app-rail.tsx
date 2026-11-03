@@ -250,9 +250,9 @@ export function AppRail({
 
   async function signOut() {
     if (!demo) {
-      const { getBrowserSupabase } = await import('@/lib/supabase/client')
-      const supabase = getBrowserSupabase()
-      await supabase.auth.signOut()
+      const { getBrowserAuth } = await import("@/lib/auth/browser")
+      const auth = await getBrowserAuth()
+      await auth.signOut()
     }
     router.replace('/login')
     router.refresh()
@@ -557,7 +557,7 @@ export function AppRail({
           <div className="flex items-center justify-between gap-2 px-1">
             {sendCounter}
             <ThemeToggle className="rounded-md p-1 text-graphite transition-colors hover:bg-bone-raised hover:text-ink" />
-            <span className="text-mono-medium text-[9px] text-stone/50">v{APP_VERSION}</span>
+            <span className="text-mono-medium text-[9px] text-stone">v{APP_VERSION}</span>
           </div>
         </div>
       </aside>

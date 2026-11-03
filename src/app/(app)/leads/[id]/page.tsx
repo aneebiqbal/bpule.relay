@@ -2,13 +2,16 @@ import { Suspense } from 'react'
 import { notFound } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
 import { LeadWorkspaceAsync } from '@/components/lead-workspace-async'
-import { SkeletonText, SkeletonCircle, Skeleton } from '@/components/ui/skeleton'
+import { LeadDetailSkeleton } from '@/components/sales/lead-detail-skeleton'
 
 export const dynamic = 'force-dynamic'
 
 interface LeadPageProps {
   params: Promise<{ id: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }
+
+const LEAD_TABS = ['conversation', 'tasks', 'activity'] as const
 
 async function loadLeadData(id: string) {
   const store = await createScoutStore()
@@ -20,54 +23,29 @@ async function loadLeadData(id: string) {
   ])
   if (!lead) notFound()
 
-  return { lead, profiles, dailyLimit: queue.dailyLimit, todaySends: queue.todaySends }
+  // Owner attribution for the context panel — a name, never a raw uuid.
+  const owner = lead.ownerRepId ? await store.getRepInfo(lead.ownerRepId).catch(() => null) : null
+
+  return { lead, profiles, dailyLimit: queue.dailyLimit, todaySends: queue.todaySends, ownerName: owner?.name ?? null }
 }
 
-export default function LeadPage({ params }: LeadPageProps) {
+export default async function LeadPage({ params, searchParams }: LeadPageProps) {
   const dataPromise = params.then(async ({ id }) => loadLeadData(id))
+  const raw = await searchParams
+  const rawTab = Array.isArray(raw.tab) ? raw.tab[0] : raw.tab
+  const rawNext = Array.isArray(raw.next) ? raw.next[0] : raw.next
+  const initialTab = LEAD_TABS.includes(rawTab as (typeof LEAD_TABS)[number])
+    ? (rawTab as (typeof LEAD_TABS)[number])
+    : 'overview'
 
   return (
-    <Suspense fallback={<LeadShellSkeleton />}>
-      <LeadWorkspaceAsync dataPromise={dataPromise} />
+    <Suspense fallback={<LeadDetailSkeleton />}>
+      <LeadWorkspaceAsync
+        dataPromise={dataPromise}
+        initialTab={initialTab}
+        initialNext={rawNext ?? null}
+        now={Date.now()}
+      />
     </Suspense>
-  )
-}
-
-function LeadShellSkeleton() {
-  return (
-    <div className="space-y-4">
-      <section className="overflow-hidden rounded-lg border border-line bg-bone-raised">
-        <div className="flex flex-col lg:flex-row">
-          <div className="flex-1 space-y-3 p-5 sm:p-6">
-            <SkeletonText className="h-3 w-24" />
-            <SkeletonText className="h-3 w-32" />
-            <SkeletonText className="h-5 w-48" />
-            <SkeletonText className="h-3.5 w-40" />
-            <div className="flex gap-2">
-              <Skeleton className="h-5 w-20 rounded-full" />
-              <Skeleton className="h-5 w-24 rounded-full" />
-            </div>
-            <Skeleton className="h-16 w-full rounded-md" />
-          </div>
-          <div className="flex shrink-0 flex-col items-center justify-center gap-3 border-t border-line bg-surface-muted p-5 lg:border-t-0 lg:border-l lg:px-8">
-            <SkeletonCircle className="size-[88px]" />
-            <SkeletonText className="h-3 w-16" />
-          </div>
-        </div>
-      </section>
-      <div className="rounded-lg border border-line bg-bone-raised p-4">
-        <SkeletonText className="h-3.5 w-28" />
-        <SkeletonText className="mt-2 h-4 w-40" />
-      </div>
-      <div className="space-y-4 rounded-lg border border-line bg-bone-raised p-5">
-        <SkeletonText className="h-4 w-20" />
-        <div className="mt-4 flex gap-1 rounded-lg bg-surface-muted p-1">
-          {['DM', 'Connection', 'Upwork', 'Follow-up', 'Reply'].map((label) => (
-            <Skeleton key={label} className="h-7 w-20 rounded-md" />
-          ))}
-        </div>
-        <Skeleton className="mt-4 h-40 w-full rounded-md border border-line" />
-      </div>
-    </div>
   )
 }

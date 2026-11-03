@@ -1,3 +1,4 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 /**
  * AI Runtime V3 — Telemetry Persistence
  *

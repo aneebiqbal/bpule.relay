@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { validateFunnelOrdering, computeCostCoverage, validateLatencyConsistency, overallFunnelHealth, classifyFallback } from '@/lib/revenue-intelligence/metrics-health'
 import { generateInsights } from '@/lib/revenue-intelligence/insights'

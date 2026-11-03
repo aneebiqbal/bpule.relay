@@ -18,6 +18,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(dirname, './src'),
+      // @neon/auth imports `next/headers` as a bare specifier; vitest resolves
+      // it through the filesystem rather than through Next's export map.
+      'next/headers': path.resolve(dirname, 'node_modules/next/headers.js'),
     },
   },
 })

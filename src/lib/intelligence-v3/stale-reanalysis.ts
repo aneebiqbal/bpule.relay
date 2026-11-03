@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Controlled stale-score reanalysis (Day 5).
  *
@@ -7,7 +8,6 @@
  * action that archives the previous packet and records a rescore event.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { SCORING_VERSION } from './versions'
 
 export interface StaleLeadSummary {
@@ -30,7 +30,7 @@ export interface StaleReanalysisReport {
 
 /** Read-only dry run over the org's stale leads. */
 export async function buildStaleReanalysisReport(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
   limit = 50,
 ): Promise<StaleReanalysisReport> {

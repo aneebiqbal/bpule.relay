@@ -1,5 +1,5 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
+import type { DbClient } from '@/lib/db/types'
 
 // Canonical activity types — mapped from action_events
 export type CanonicalAction =
@@ -15,22 +15,28 @@ export type CanonicalAction =
   | 'LEAD_REFERRED'
   | 'SIGNAL_REVIEWED'
 
-// Map from raw action_event types to canonical
+// Map from raw action_event types to canonical.
+// DRAFTED != SENT: *_PREPARED events (a generated draft, or a proposal that was
+// prepared but not submitted) never count as a send or an application. Only
+// executed events do — the same rule Team Performance uses.
 const ACTION_MAP: Record<string, CanonicalAction> = {
   'LEAD_EXTRACTED': 'LEAD_ANALYZED',
   'LEAD_SAVED': 'LEAD_SAVED',
   'CONNECTION_SENT': 'CONNECTION_SENT',
-  'CONNECTION_PREPARED': 'CONNECTION_SENT',
   'DM_SENT': 'FIRST_DM_SENT',
-  'DM_PREPARED': 'FIRST_DM_SENT',
   'FOLLOWUP_SENT': 'FOLLOWUP_SENT',
   'REPLY_SENT': 'REPLY_SENT',
   'UPWORK_APPLIED': 'UPWORK_APPLIED',
-  'UPWORK_PROPOSAL_PREPARED': 'UPWORK_APPLIED',
   'MEETING_BOOKED': 'MEETING_BOOKED',
   'CLIENT_WON': 'LEAD_WON',
   'OPPORTUNITY_CREATED': 'LEAD_SAVED',
   'LEAD_REFERRED': 'LEAD_REFERRED',
+}
+
+/** Raw event → canonical activity, or null when it is not executed work (drafts, failures, noise). */
+export function canonicalActionFor(actionType: string, executionStatus?: string | null): CanonicalAction | null {
+  if (executionStatus === 'failed') return null
+  return ACTION_MAP[actionType] ?? null
 }
 
 export interface DailyActivity {
@@ -91,14 +97,14 @@ export async function getRepDailyActivity(params: {
   startDate: Date
   endDate: Date
   timezone?: string
-  supabase: SupabaseClient
+  supabase: DbClient
 }): Promise<RepActivityResult> {
   const { repId, orgId, startDate, endDate, timezone = 'UTC', supabase } = params
 
   // Fetch all action_events for this rep in the date range
   const { data: events, error } = await supabase
     .from('action_events')
-    .select('id, action_type, actor_id, lead_id, job_id, occurred_at, metadata')
+    .select('id, action_type, execution_status, actor_id, lead_id, job_id, occurred_at')
     .eq('organization_id', orgId)
     .eq('actor_id', repId)
     .gte('occurred_at', startDate.toISOString())
@@ -126,8 +132,8 @@ export async function getRepDailyActivity(params: {
   const dailyMap = new Map<string, DailyActivity>()
 
   for (const event of events) {
-    const canonical = ACTION_MAP[event.action_type]
-    if (!canonical) continue // Skip non-canonical types
+    const canonical = canonicalActionFor(event.action_type, event.execution_status)
+    if (!canonical) continue // drafts, failures and non-activity types
 
     // Convert to local date
     const localDate = toLocalDate(event.occurred_at, timezone)

@@ -4,12 +4,36 @@ import { cn } from "cn"
 interface PageHeaderProps {
   title: string
   description?: string
+  /** Small uppercase label above the title (e.g. "Sales"). */
+  eyebrow?: string
   action?: React.ReactNode
+  secondaryAction?: React.ReactNode
+  /** Reusable FilterBar, rendered under the title row. */
+  filters?: React.ReactNode
+  /** Saved-view / tab strip, rendered on the same row as the filters. */
+  savedView?: React.ReactNode
   breadcrumb?: React.ReactNode
   className?: string
 }
 
-export function PageHeader({ title, description, action, breadcrumb, className }: PageHeaderProps) {
+/**
+ * The one page header. Every operational surface renders this — no surface
+ * builds its own hero block.
+ */
+export function PageHeader({
+  title,
+  description,
+  eyebrow,
+  action,
+  secondaryAction,
+  filters,
+  savedView,
+  breadcrumb,
+  className,
+}: PageHeaderProps) {
+  const hasActions = Boolean(action || secondaryAction)
+  const hasMeta = Boolean(filters || savedView)
+
   return (
     <div className={cn("space-y-3", className)}>
       {breadcrumb && (
@@ -17,17 +41,39 @@ export function PageHeader({ title, description, action, breadcrumb, className }
           {breadcrumb}
         </nav>
       )}
-      <div className="flex items-start justify-between gap-4">
+
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div className="min-w-0">
-          <h1 className="text-heading text-xl font-medium tracking-[-0.01em] text-ink sm:text-2xl">
+          {eyebrow && (
+            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">{eyebrow}</p>
+          )}
+          <h1
+            className={cn(
+              "text-heading font-medium tracking-[-0.01em] text-ink",
+              eyebrow ? "mt-1 text-lg sm:text-xl" : "text-xl sm:text-2xl",
+            )}
+          >
             {title}
           </h1>
           {description && (
             <p className="mt-1 max-w-2xl text-sm text-graphite">{description}</p>
           )}
         </div>
-        {action && <div className="shrink-0">{action}</div>}
+
+        {hasActions && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {secondaryAction}
+            {action}
+          </div>
+        )}
       </div>
+
+      {hasMeta && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">{filters}</div>
+          {savedView && <div className="max-w-full shrink-0 overflow-x-auto">{savedView}</div>}
+        </div>
+      )}
     </div>
   )
 }

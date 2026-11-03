@@ -1,3 +1,4 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 /**
  * Team day — the canonical server-side contract for the Command Centre.
  *
@@ -12,7 +13,6 @@
  * explicit role check here. A rep is refused; a manager sees only managed
  * teams; an admin sees the organization.
  */
-import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext, type AuthContext } from '@/lib/auth/organization'
 import {
   businessDateRange,
@@ -168,7 +168,7 @@ export async function loadTeamDay(): Promise<TeamDaySummary> {
     .eq('business_date', businessDate)
   const assignmentQuery = supabase
     .from('identity_assignments')
-    .select('rep_id, revenue_identity_id, identity:revenue_identities(id, identity_name, channel)')
+    .select('rep_id, revenue_identity_id')
     .eq('organization_id', ctx.orgId)
   const repliedQuery = supabase
     .from('leads')
@@ -212,16 +212,28 @@ export async function loadTeamDay(): Promise<TeamDaySummary> {
   const dayByRep = new Map(dayRows.map((row) => [row.rep_id as string, row]))
 
   const identitiesByRep = new Map<string, TeamIdentity[]>()
-  for (const row of assignmentsResult.data ?? []) {
-    const identity = row.identity as unknown as Record<string, unknown> | null
-    if (!identity?.id) continue
-    const list = identitiesByRep.get(row.rep_id as string) ?? []
-    list.push({
-      id: identity.id as string,
-      name: (identity.identity_name as string) ?? 'Unnamed identity',
-      channel: (identity.channel as string) ?? 'other',
-    })
-    identitiesByRep.set(row.rep_id as string, list)
+  // The identity rows are a second read rather than a PostgREST embed
+  // (`identity:revenue_identities`), which the Neon adapter cannot translate.
+  const identityIds = new Set(
+    (assignmentsResult.data ?? []).map((row) => row.revenue_identity_id as string).filter(Boolean),
+  )
+  if (identityIds.size > 0) {
+    const { data: identityRows } = await supabase
+      .from('revenue_identities')
+      .select('id, identity_name, channel')
+      .in('id', [...identityIds])
+    const byId = new Map((identityRows ?? []).map((r) => [r.id as string, r]))
+    for (const row of assignmentsResult.data ?? []) {
+      const identity = byId.get(row.revenue_identity_id as string)
+      if (!identity) continue
+      const list = identitiesByRep.get(row.rep_id as string) ?? []
+      list.push({
+        id: identity.id as string,
+        name: (identity.identity_name as string) ?? 'Unnamed identity',
+        channel: (identity.channel as string) ?? 'other',
+      })
+      identitiesByRep.set(row.rep_id as string, list)
+    }
   }
 
   const countByRep = (rows: Array<Record<string, unknown>> | null, key = 'owner_rep_id') => {
@@ -404,7 +416,7 @@ export async function loadRepDayDetail(repId: string): Promise<RepDayDetail> {
         .maybeSingle(),
       supabase
         .from('identity_assignments')
-        .select('revenue_identity_id, identity:revenue_identities(id, identity_name, channel)')
+        .select('revenue_identity_id')
         .eq('organization_id', ctx.orgId)
         .eq('rep_id', repId),
       supabase
@@ -455,9 +467,23 @@ export async function loadRepDayDetail(repId: string): Promise<RepDayDetail> {
   const day = (dayResult.data ?? null) as Record<string, unknown> | null
   const exceptionState = (day?.exception_state as string) ?? 'NONE'
 
-  const identities = (assignmentsResult.data ?? [])
-    .map((row) => row.identity as unknown as Record<string, unknown> | null)
-    .filter((identity): identity is Record<string, unknown> => Boolean(identity?.id))
+  // The identity rows are a second read rather than a PostgREST embed
+  // (`identity:revenue_identities`), which the Neon adapter cannot translate.
+  const identityIds = (assignmentsResult.data ?? [])
+    .map((row) => row.revenue_identity_id as string)
+    .filter(Boolean)
+  const identityById = new Map<string, Record<string, unknown>>()
+  if (identityIds.length > 0) {
+    const { data: identityRows } = await supabase
+      .from('revenue_identities')
+      .select('id, identity_name, channel')
+      .in('id', identityIds)
+    for (const row of identityRows ?? []) identityById.set(row.id as string, row)
+  }
+
+  const identities = identityIds
+    .map((id) => identityById.get(id) ?? null)
+    .filter((identity): identity is Record<string, unknown> => Boolean(identity))
     .map((identity) => ({
       id: identity.id as string,
       name: (identity.identity_name as string) ?? 'Unnamed identity',

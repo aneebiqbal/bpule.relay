@@ -1,9 +1,9 @@
+import { createServiceSupabase, createServiceSupabaseAuth } from '@/lib/supabase/service'
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
-import { createServiceSupabase } from '@/lib/supabase/service'
 import { recordHumanEdits } from '@/lib/profile-intelligence/enrichment-service'
-import { effectiveReadiness, LIVE_COUNT_SELECT, liveCounts, profileDisplayName, profileDisplayRole } from '@/lib/profile-intelligence/legacy-display'
+import { effectiveReadiness, liveCounts, profileDisplayName, profileDisplayRole } from '@/lib/profile-intelligence/legacy-display'
 import { canViewProfile, profileAccess } from '@/lib/profile-intelligence/access'
 
 export async function GET(
@@ -23,19 +23,7 @@ export async function GET(
 
   const { data: profile, error } = await client
     .from('profiles')
-    .select(`
-      *,
-      rep:reps(id, name),
-      assignments:profile_assignments(id, rep_id, reps(id, name)),
-      sources:profile_sources(id, original_filename, mime_type, file_size_bytes, parsing_status, extraction_status, uploaded_at),
-      reviews:profile_reviews(id, review_text, reviewer_name, reviewer_company, relevant_skills, confidence, safe_for_outreach, ownership_status),
-      claims:profile_claims(id, claim_key, claim_value, evidence_type, is_inferred, user_corrected, user_rejected),
-      proof_cards:proof_cards(id, capability, strength, safe_claim, source_type, tags, verified, forbidden_claims),
-      portfolio_projects:portfolio_projects(id, project_title, my_role, description, skills, technologies, client_company, start_date, end_date, outcome),
-      experience:profile_experience(id, role, company, start_date, end_date, is_current, authority),
-      proof_items:proof_items(id, project_summary, review_quote, client_name, client_named),
-      ${LIVE_COUNT_SELECT}
-    `)
+    .select('*')
     .eq('id', id)
     .eq('organization_id', authCtx.orgId)
     .single()
@@ -44,7 +32,66 @@ export async function GET(
     return NextResponse.json({ error: 'Profile not found.' }, { status: 404 })
   }
 
-  return NextResponse.json({ profile: toProfileDetail(profile), access: profileAccess(authCtx) })
+  // The related rows used to arrive as PostgREST embeds, which the Neon adapter
+  // cannot translate. They are separate reads filtered by profile_id, so the
+  // shape is the same and the round trips stay bounded.
+  const [
+    repRow,
+    assignmentRows,
+    sourceRows,
+    reviewRows,
+    claimRows,
+    proofCardRows,
+    portfolioRows,
+    experienceRows,
+    proofItemRows,
+    proofCardCount,
+    proofItemCount,
+    sourceCount,
+  ] = await Promise.all([
+    client.from('reps').select('id, name').eq('id', profile.rep_id).maybeSingle(),
+    client.from('profile_assignments').select('id, rep_id').eq('profile_id', id),
+    client.from('profile_sources').select('id, original_filename, mime_type, file_size_bytes, parsing_status, extraction_status, uploaded_at').eq('profile_id', id),
+    client.from('profile_reviews').select('id, review_text, reviewer_name, reviewer_company, relevant_skills, confidence, safe_for_outreach, ownership_status').eq('profile_id', id),
+    client.from('profile_claims').select('id, claim_key, claim_value, evidence_type, is_inferred, user_corrected, user_rejected').eq('profile_id', id),
+    client.from('proof_cards').select('id, capability, strength, safe_claim, source_type, tags, verified, forbidden_claims').eq('profile_id', id),
+    client.from('portfolio_projects').select('id, project_title, my_role, description, skills, technologies, client_company, start_date, end_date, outcome').eq('profile_id', id),
+    client.from('profile_experience').select('id, role, company, start_date, end_date, is_current, authority').eq('profile_id', id),
+    client.from('proof_items').select('id, project_summary, review_quote, client_name, client_named').eq('profile_id', id),
+    client.from('proof_cards').select('id', { head: true, count: 'exact' }).eq('profile_id', id),
+    client.from('proof_items').select('id', { head: true, count: 'exact' }).eq('profile_id', id),
+    client.from('profile_sources').select('id', { head: true, count: 'exact' }).eq('profile_id', id),
+  ])
+
+  // Reps attached to an assignment need their names; one batched read covers them.
+  const assignedRepIds = (assignmentRows.data ?? []).map((a) => a.rep_id).filter(Boolean)
+  const assignedRepNameById = new Map<string, string>()
+  if (assignedRepIds.length > 0) {
+    const { data: reps } = await client.from('reps').select('id, name').in('id', assignedRepIds)
+    for (const r of reps ?? []) assignedRepNameById.set(r.id as string, r.name as string)
+  }
+
+  const assembled = {
+    ...profile,
+    rep: repRow.data ?? null,
+    assignments: (assignmentRows.data ?? []).map((a) => ({
+      id: a.id,
+      rep_id: a.rep_id,
+      reps: { id: a.rep_id, name: assignedRepNameById.get(a.rep_id as string) ?? 'Unknown' },
+    })),
+    sources: sourceRows.data ?? [],
+    reviews: reviewRows.data ?? [],
+    claims: claimRows.data ?? [],
+    proof_cards: proofCardRows.data ?? [],
+    portfolio_projects: portfolioRows.data ?? [],
+    experience: experienceRows.data ?? [],
+    proof_items: proofItemRows.data ?? [],
+    proof_cards_count: proofCardCount.count ?? 0,
+    proof_items_count: proofItemCount.count ?? 0,
+    sources_count: sourceCount.count ?? 0,
+  }
+
+  return NextResponse.json({ profile: toProfileDetail(assembled), access: profileAccess(authCtx) })
 }
 
 // The detail UI reads camelCase (matching the list route). Raw snake_case
@@ -127,7 +174,7 @@ export async function PATCH(
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid body.' }, { status: 400 })
 
-  const client = createServiceSupabase()
+  const client = createServiceSupabaseAuth()
 
   const editableFields = [
     'full_name', 'display_name', 'headline', 'current_role', 'company',

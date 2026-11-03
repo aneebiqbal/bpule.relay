@@ -5,14 +5,19 @@ const {
   captureClientReplyMock,
   findLatestSampleForLeadMock,
   produceV3IntelligenceMock,
+  resolveActiveWorkspaceMock,
 } = vi.hoisted(() => ({
   createScoutStoreMock: vi.fn(),
   captureClientReplyMock: vi.fn(),
   findLatestSampleForLeadMock: vi.fn(),
   produceV3IntelligenceMock: vi.fn(),
+  resolveActiveWorkspaceMock: vi.fn(),
 }))
 
 vi.mock('@/lib/store', () => ({ createScoutStore: createScoutStoreMock }))
+vi.mock('@/lib/workspace/resolve-active-identity', () => ({
+  resolveActiveWorkspace: resolveActiveWorkspaceMock,
+}))
 vi.mock('@/lib/dataset/service', () => ({
   captureClientReply: captureClientReplyMock,
   findLatestSampleForLead: findLatestSampleForLeadMock,
@@ -95,6 +100,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   produceV3IntelligenceMock.mockResolvedValue(analysisFixture())
   findLatestSampleForLeadMock.mockResolvedValue(null)
+  resolveActiveWorkspaceMock.mockResolvedValue(null)
 })
 
 describe('POST /api/inbound/lead integration boundary', () => {
@@ -228,9 +234,65 @@ describe('POST /api/inbound/lead integration boundary', () => {
 
     expect(first.status).toBe(503)
     expect(second.status).toBe(200)
-    expect(createLead).toHaveBeenNthCalledWith(1, expect.objectContaining({ assignedProfileId: 'profile-1' }))
+    expect(createLead).toHaveBeenNthCalledWith(1, expect.objectContaining({ senderProfileId: 'profile-1' }))
     expect(upsertConversationState).toHaveBeenNthCalledWith(1, expect.objectContaining({ senderProfileId: 'profile-1' }))
     expect(upsertConversationState).toHaveBeenNthCalledWith(2, expect.objectContaining({ senderProfileId: 'profile-1' }))
+  })
+
+  it('stamps the active workspace so workspace-scoped surfaces can see the lead', async () => {
+    resolveActiveWorkspaceMock.mockResolvedValue({
+      id: 'ident-1',
+      identityName: 'Aneeb',
+      title: null,
+      channel: 'linkedin',
+      profileId: 'profile-ws',
+    })
+    const createLead = vi.fn().mockResolvedValue({ blocked: false, lead: makeLead() })
+    createScoutStoreMock.mockResolvedValue({
+      organizationId: 'org-1',
+      getCurrentRepId: () => 'rep-1',
+      getAssignedProfiles: vi.fn().mockResolvedValue([]),
+      createLead,
+      upsertConversationState: vi.fn().mockResolvedValue(undefined),
+      getSupabaseClient: vi.fn(),
+    })
+
+    const response = await POST(request() as never)
+
+    expect(response.status).toBe(201)
+    expect(createLead).toHaveBeenCalledWith(expect.objectContaining({
+      revenueIdentityId: 'ident-1',
+      senderProfileId: 'profile-ws',
+    }))
+  })
+
+  it('keeps the recommended profile as the sender and still stamps the workspace', async () => {
+    resolveActiveWorkspaceMock.mockResolvedValue({
+      id: 'ident-1',
+      identityName: 'Aneeb',
+      title: null,
+      channel: 'linkedin',
+      profileId: 'profile-ws',
+    })
+    const createLead = vi.fn().mockResolvedValue({ blocked: false, lead: makeLead() })
+    createScoutStoreMock.mockResolvedValue({
+      organizationId: 'org-1',
+      getCurrentRepId: () => 'rep-1',
+      getAssignedProfiles: vi.fn().mockResolvedValue([
+        { id: 'profile-rec', organizationId: 'org-1', label: 'Recommended' },
+      ]),
+      createLead,
+      upsertConversationState: vi.fn().mockResolvedValue(undefined),
+      getSupabaseClient: vi.fn(),
+    })
+
+    const response = await POST(request({ assignedProfileId: 'profile-rec' }) as never)
+
+    expect(response.status).toBe(201)
+    expect(createLead).toHaveBeenCalledWith(expect.objectContaining({
+      revenueIdentityId: 'ident-1',
+      senderProfileId: 'profile-rec',
+    }))
   })
 
   it('turns concurrent submissions into one create plus an idempotent completion', async () => {

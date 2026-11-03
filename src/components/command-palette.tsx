@@ -20,8 +20,20 @@ import {
   BarChart3,
   UserCircle2,
   TrendingUp,
+  Building2,
+  ListChecks,
+  Activity,
 } from 'lucide-react'
 import { cn } from 'cn'
+import { SEARCH_GROUP_LABEL, commandVisible, type SearchGroupKey, type SearchGroups } from '@/lib/operations/search-shared'
+
+const SEARCH_GROUP_ICON: Record<SearchGroupKey, React.ComponentType<{ className?: string }>> = {
+  people: Users,
+  companies: Building2,
+  leads: Target,
+  tasks: ListChecks,
+  conversations: MessageSquare,
+}
 
 interface CommandItem {
   id: string
@@ -53,7 +65,17 @@ export function useCommandPalette() {
   return { open, setOpen }
 }
 
-export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: boolean; onOpenChange: (open: boolean) => void; isAdmin?: boolean }) {
+export function CommandPalette({
+  open,
+  onOpenChange,
+  isAdmin = false,
+  isManager = false,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  isAdmin?: boolean
+  isManager?: boolean
+}) {
   const router = useRouter()
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -62,7 +84,7 @@ export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: 
     const all: CommandItem[] = [
     {
       id: 'check-prospect',
-      label: 'Check a prospect',
+      label: 'Analyze prospect',
       description: 'Run a fit check instantly',
       icon: Search,
       shortcut: '',
@@ -91,7 +113,34 @@ export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: 
       description: 'Jump to active queue conversations',
       icon: MessageSquare,
       group: 'Relay',
-      action: () => { router.push('/relay'); onOpenChange(false) },
+      action: () => { router.push('/chats'); onOpenChange(false) },
+    },
+    {
+      id: 'my-tasks',
+      label: 'My tasks',
+      description: 'Unified task workspace',
+      icon: Target,
+      group: 'Relay',
+      action: () => { router.push('/tasks'); onOpenChange(false) },
+    },
+    {
+      id: 'overdue-tasks',
+      label: 'Overdue tasks',
+      description: 'Tasks past due',
+      icon: Target,
+      group: 'Relay',
+      action: () => { router.push('/tasks?tab=overdue'); onOpenChange(false) },
+    },
+    {
+      id: 'create-task',
+      label: 'Create task',
+      description: isAdmin ? 'Assign work to a teammate' : 'Open task workspace',
+      icon: Plus,
+      group: 'Relay',
+      action: () => {
+        router.push('/tasks?assign=1')
+        onOpenChange(false)
+      },
     },
     {
       id: 'search-lead',
@@ -111,11 +160,11 @@ export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: 
     },
     {
       id: 'view-replies',
-      label: 'View replies',
+      label: 'Open replies',
       description: 'Leads with client replies waiting',
       icon: MessageSquare,
       group: 'Relay',
-      action: () => { router.push('/leads?filter=reply'); onOpenChange(false) },
+      action: () => { router.push('/chats?view=waiting_me'); onOpenChange(false) },
     },
     {
       id: 'view-followups',
@@ -123,7 +172,7 @@ export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: 
       description: 'Overdue follow-ups',
       icon: MessageSquare,
       group: 'Relay',
-      action: () => { router.push('/leads?filter=followup'); onOpenChange(false) },
+      action: () => { router.push('/chats?view=followups'); onOpenChange(false) },
     },
     {
       id: 'view-referred',
@@ -135,7 +184,7 @@ export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: 
     },
     {
       id: 'switch-identity',
-      label: 'Switch Revenue Identity',
+      label: 'Switch profile',
       description: 'Choose an authorized identity',
       icon: Shuffle,
       group: 'Relay',
@@ -191,11 +240,19 @@ export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: 
     },
     {
       id: 'team',
-      label: 'Team',
-      description: 'Team performance',
+      label: 'Open Team',
+      description: 'People, tasks, activity and performance',
       icon: Users,
       group: 'Navigation',
       action: () => { router.push('/team'); onOpenChange(false) },
+    },
+    {
+      id: 'reports',
+      label: 'Open Reports',
+      description: 'Sales, pipeline, team, activity and revenue',
+      icon: BarChart3,
+      group: 'Navigation',
+      action: () => { router.push('/reports/sales'); onOpenChange(false) },
     },
     {
       id: 'settings',
@@ -235,7 +292,7 @@ export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: 
       description: 'Admin ops dashboard',
       icon: Shield,
       group: 'Admin',
-      action: () => { router.push('/admin/command-center'); onOpenChange(false) },
+      action: () => { router.push('/admin/command'); onOpenChange(false) },
     },
     {
       id: 'people',
@@ -262,6 +319,38 @@ export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: 
       action: () => { router.push('/profile-intelligence?tab=identities'); onOpenChange(false) },
     },
     {
+      id: 'accounts',
+      label: 'Accounts',
+      description: 'Companies, people and account history',
+      icon: Building2,
+      group: 'Admin',
+      action: () => { router.push('/accounts'); onOpenChange(false) },
+    },
+    {
+      id: 'team-tasks',
+      label: 'Team tasks',
+      description: 'Who has what work',
+      icon: ListChecks,
+      group: 'Navigation',
+      action: () => { router.push('/team/tasks'); onOpenChange(false) },
+    },
+    {
+      id: 'team-activity',
+      label: 'Team activity',
+      description: 'Operational activity feed',
+      icon: Activity,
+      group: 'Navigation',
+      action: () => { router.push('/team/activity'); onOpenChange(false) },
+    },
+    {
+      id: 'team-performance',
+      label: 'Team performance',
+      description: 'Execution, conversion and comparisons',
+      icon: BarChart3,
+      group: 'Navigation',
+      action: () => { router.push('/team/performance'); onOpenChange(false) },
+    },
+    {
       id: 'targets',
       label: 'Targets',
       description: 'Daily targets',
@@ -274,20 +363,62 @@ export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: 
   }, [router, onOpenChange])
 
   const visibleCommands = useMemo(
-    () => (isAdmin ? commands : commands.filter((c) => c.group !== 'Admin')),
-    [commands, isAdmin],
+    () => commands.filter((c) => commandVisible(c, { isAdmin, isManager })),
+    [commands, isAdmin, isManager],
   )
+
+  // Record search (people, companies, leads, tasks, conversations) — debounced,
+  // scoped server-side. Results render above commands, grouped.
+  const [records, setRecords] = useState<{ query: string; groups: SearchGroups } | null>(null)
+  useEffect(() => {
+    const term = query.trim()
+    if (!open || term.length < 2) return
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      fetch(`/api/search/ops?q=${encodeURIComponent(term)}`, { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((json: { groups?: SearchGroups } | null) => {
+          if (json?.groups) setRecords({ query: term, groups: json.groups })
+        })
+        .catch(() => {})
+    }, 200)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [query, open])
+
+  const recordItems: CommandItem[] = useMemo(() => {
+    if (!records || records.query !== query.trim()) return []
+    const items: CommandItem[] = []
+    for (const key of Object.keys(SEARCH_GROUP_LABEL) as SearchGroupKey[]) {
+      for (const hit of records.groups[key] ?? []) {
+        items.push({
+          id: `${key}:${hit.id}`,
+          label: hit.label,
+          description: hit.detail ?? undefined,
+          icon: SEARCH_GROUP_ICON[key],
+          group: SEARCH_GROUP_LABEL[key],
+          action: () => { router.push(hit.href); onOpenChange(false) },
+        })
+      }
+    }
+    return items
+  }, [records, query, router, onOpenChange])
 
   const filtered = useMemo(() => {
     if (!query.trim()) return visibleCommands
     const q = query.toLowerCase()
-    return visibleCommands.filter(
-      (c) =>
-        c.label.toLowerCase().includes(q) ||
-        c.description?.toLowerCase().includes(q) ||
-        c.group.toLowerCase().includes(q),
-    )
-  }, [visibleCommands, query])
+    return [
+      ...recordItems,
+      ...visibleCommands.filter(
+        (c) =>
+          c.label.toLowerCase().includes(q) ||
+          c.description?.toLowerCase().includes(q) ||
+          c.group.toLowerCase().includes(q),
+      ),
+    ]
+  }, [visibleCommands, recordItems, query])
 
   const grouped = useMemo(() => {
     const groups: Record<string, CommandItem[]> = {}
@@ -312,6 +443,13 @@ export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: 
       setSelectedIndex(0)
     }
   }
+
+  // Focus returns to whatever opened the palette once it closes.
+  useEffect(() => {
+    if (!open) return
+    const previous = document.activeElement as HTMLElement | null
+    return () => previous?.focus?.()
+  }, [open])
 
   const execute = useCallback((item: CommandItem) => {
     item.action()
@@ -358,31 +496,40 @@ export function CommandPalette({ open, onOpenChange, isAdmin = false }: { open: 
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a command or search..."
+            placeholder="Search people, companies, leads, tasks — or a command"
             className="flex-1 bg-transparent text-[14px] text-ink placeholder:text-stone outline-none"
             autoFocus
             aria-label="Command search"
+            role="combobox"
+            aria-expanded={filtered.length > 0}
+            aria-controls="command-palette-results"
+            aria-activedescendant={filtered[selectedIndex] ? `cmd-${filtered[selectedIndex].id}` : undefined}
+            aria-autocomplete="list"
           />
           <kbd className="rounded bg-bone px-1.5 py-0.5 text-mono-medium text-[10px] text-stone">ESC</kbd>
         </div>
 
         {/* Results */}
-        <div className="max-h-[320px] overflow-y-auto p-2">
+        <div id="command-palette-results" role="listbox" aria-label="Results" className="max-h-[320px] overflow-y-auto p-2">
           {filtered.length === 0 ? (
             <div className="px-3 py-8 text-center">
               <p className="text-[13px] text-stone">No results</p>
             </div>
           ) : (
             Object.entries(grouped).map(([group, items]) => (
-              <div key={group} className="mb-2">
-                <p className="px-2 py-1 text-label text-stone">{group}</p>
+              <div key={group} role="group" aria-label={group} className="mb-2">
+                <p className="px-2 py-1 text-label text-stone" aria-hidden="true">{group}</p>
                 {items.map((item) => {
                   flatIndex++
                   const isSelected = flatIndex === selectedIndex
                   return (
                     <button
                       key={item.id}
+                      id={`cmd-${item.id}`}
                       type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      tabIndex={-1}
                       onClick={() => execute(item)}
                       onMouseEnter={() => setSelectedIndex(flatIndex)}
                       className={cn(

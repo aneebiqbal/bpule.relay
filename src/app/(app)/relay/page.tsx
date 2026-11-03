@@ -217,6 +217,7 @@ async function loadRelay() {
     messagesByJob: relayData.messagesByJob,
     assignedProfiles: relayData.assignedProfiles,
     allLeads,
+    suppressedLeadIds: await store.getSuppressedLeadIds(),
   })
 
   const visibleTasks = filterQueueByRole(queue, roleContext.role)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { loadRepDay } from '@/lib/rep-day/load'
 import { requestRepDayException, reviewRepDayException } from '@/lib/rep-day/persist'
+import { createServerSupabase } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 

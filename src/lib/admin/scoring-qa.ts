@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Admin Scoring QA Center + production monitoring (Phases 29, 30, 43).
  *
@@ -10,7 +11,6 @@
  * under the versions that stored it.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { qualifyCanonicalScore, displayScoreForCanonical, type CanonicalQualification } from '@/lib/scoring/qualification'
 import { isPacketCurrent, SCORING_VERSION } from '@/lib/intelligence-v3/versions'
 import type { V3LeadDecisionPacket } from '@/lib/intelligence-v3/types'
@@ -255,7 +255,7 @@ export function buildScoringMonitor(rows: QaDecisionRow[], feedback: Array<{ fee
 }
 
 /** Load recent decisions for an org from leads and captured prospects. */
-export async function loadRecentDecisions(client: SupabaseClient, orgId: string, opts: { since: string; limit?: number; latestOnly?: boolean; includeTest?: boolean }): Promise<QaDecisionRow[]> {
+export async function loadRecentDecisions(client: DbClient, orgId: string, opts: { since: string; limit?: number; latestOnly?: boolean; includeTest?: boolean }): Promise<QaDecisionRow[]> {
   const limit = opts.limit ?? 300
   const [{ data: leads }, { data: prospects }] = await Promise.all([
     client

@@ -1,3 +1,4 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -12,6 +13,8 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { SignOutButton } from '@/components/sign-out-button'
 import { DashHeader, Meter, Panel, Pill } from '@/components/dashboard/kit'
 import { OperatingHours } from '@/components/admin/operating-hours'
+import { SendLimits } from '@/components/admin/send-limits'
+import { SendingPolicy, type SendingPolicyInitial } from '@/components/admin/sending-policy'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 export const dynamic = 'force-dynamic'
@@ -32,6 +35,17 @@ export default async function SettingsPage() {
   const totalLimit = budgets.reduce((sum, b) => sum + b.limit, 0)
   const totalUsed = budgets.reduce((sum, b) => sum + b.used, 0)
   const remaining = Math.max(0, totalLimit - totalUsed)
+
+  const effective = await store.getEffectivePolicy()
+  const sendLimits = {
+    dailySendLimit: effective.budgets.dmFollowup.limit,
+    dailyConnectionLimit: effective.budgets.connection.limit,
+  }
+
+  // The sending policy reads both email authorities: the org policy owns
+  // autonomy and safety, the per-mailbox policy owns the email ceiling, window
+  // and follow-up count. Both are shown, because both are enforced.
+  const sendingPolicy: SendingPolicyInitial = await loadSendingPolicy(authCtx?.orgId)
 
   const planLabel = user.organization.plan === 'active' ? 'Pro' : 'Free'
 
@@ -89,11 +103,21 @@ export default async function SettingsPage() {
                 </li>
               ))}
             </ul>
+
+            {isAdmin && (
+              <div className="pt-1">
+                <SendLimits initial={sendLimits} />
+              </div>
+            )}
           </div>
         )}
       </Panel>
 
       {isAdmin && policy && <OperatingHours initial={policy} />}
+
+      {isAdmin && (
+        <SendingPolicy initial={sendingPolicy} />
+      )}
 
       {isAdmin && (
         <Panel title="Workspace" subtitle="Admin controls for your team" flush>
@@ -119,6 +143,75 @@ export default async function SettingsPage() {
       </Panel>
     </div>
   )
+}
+
+/**
+ * Read both email authorities so the panel shows the enforced values.
+ *
+ * An absent table (migration not yet applied) resolves to the safe defaults
+ * rather than failing the settings page.
+ */
+async function loadSendingPolicy(orgId: string | undefined): Promise<SendingPolicyInitial> {
+  if (!orgId) return DEFAULT_SENDING_POLICY
+
+  const client = await createServerSupabase()
+  const [emailPolicyResult, mailboxResult, orgResult] = await Promise.all([
+    client.from('organization_email_policy').select('*').eq('organization_id', orgId).maybeSingle(),
+    client
+      .from('email_sending_policies')
+      .select('daily_send_cap, minimum_delay_seconds, working_hours_start, working_hours_end, follow_up_limit')
+      .eq('organization_id', orgId)
+      .limit(1),
+    client.from('organizations').select('settings').eq('id', orgId).maybeSingle(),
+  ])
+
+  const policy = (emailPolicyResult.data ?? null) as Record<string, unknown> | null
+  const mailbox = ((mailboxResult.data ?? [])[0] ?? null) as Record<string, unknown> | null
+  const settings = ((orgResult.data?.settings as Record<string, unknown>) ?? {}) as Record<string, unknown>
+
+  const fallback = DEFAULT_SENDING_POLICY
+  return {
+    enabled: policy ? policy.enabled !== false : fallback.enabled,
+    autonomyMode: isMode(policy?.autonomy_mode) ? (policy?.autonomy_mode as SendingPolicyInitial['autonomyMode']) : fallback.autonomyMode,
+    linkedinAutonomyMode: isMode(settings.linkedinAutonomyMode) ? (settings.linkedinAutonomyMode as SendingPolicyInitial['autonomyMode']) : fallback.linkedinAutonomyMode,
+    upworkAutonomyMode: isMode(settings.upworkAutonomyMode) ? (settings.upworkAutonomyMode as SendingPolicyInitial['autonomyMode']) : fallback.upworkAutonomyMode,
+    dailySendCap: asInt(mailbox?.daily_send_cap) ?? fallback.dailySendCap,
+    hourlySendCap: asInt(policy?.hourly_send_cap) ?? fallback.hourlySendCap,
+    minimumSpacingMinutes: spacingMinutes(asInt(mailbox?.minimum_delay_seconds)),
+    workingHoursStart: asInt(mailbox?.working_hours_start) ?? fallback.workingHoursStart,
+    workingHoursEnd: asInt(mailbox?.working_hours_end) ?? fallback.workingHoursEnd,
+    followUpLimit: asInt(mailbox?.follow_up_limit) ?? fallback.followUpLimit,
+    consecutiveFailureThreshold: asInt(policy?.consecutive_failure_threshold) ?? fallback.consecutiveFailureThreshold,
+    bounceThresholdPercent: (asInt(policy?.bounce_threshold) ?? fallback.bounceThresholdPercent / 10) * 10,
+  }
+}
+
+const DEFAULT_SENDING_POLICY: SendingPolicyInitial = {
+  enabled: true,
+  autonomyMode: 'APPROVAL_REQUIRED',
+  linkedinAutonomyMode: 'APPROVAL_REQUIRED',
+  upworkAutonomyMode: 'APPROVAL_REQUIRED',
+  dailySendCap: 25,
+  hourlySendCap: 5,
+  minimumSpacingMinutes: 4,
+  workingHoursStart: 9,
+  workingHoursEnd: 17,
+  followUpLimit: 2,
+  consecutiveFailureThreshold: 3,
+  bounceThresholdPercent: 50,
+}
+
+function isMode(value: unknown): value is SendingPolicyInitial['autonomyMode'] {
+  return value === 'MANUAL' || value === 'APPROVAL_REQUIRED' || value === 'AUTOPILOT'
+}
+
+function asInt(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function spacingMinutes(seconds: number | null): number {
+  if (seconds === null || seconds <= 0) return DEFAULT_SENDING_POLICY.minimumSpacingMinutes
+  return Math.max(1, Math.round(seconds / 60))
 }
 
 function Row({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {

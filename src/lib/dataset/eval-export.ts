@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Dataset export V2 — evaluation-specific export modes.
  *
@@ -6,7 +7,6 @@
  * test-data excluded by default.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { SCORING_VERSION } from '@/lib/intelligence-v3/versions'
 
 export const EVAL_EXPORT_MODES = [
@@ -20,7 +20,7 @@ export const EVAL_EXPORT_MODES = [
 export type EvalExportMode = (typeof EVAL_EXPORT_MODES)[number]
 
 /** SCORING_EVAL: opportunity key, human label, V3 decision, shadow decisions, archetype, outcome. */
-export async function exportScoringEval(client: SupabaseClient, orgId: string) {
+export async function exportScoringEval(client: DbClient, orgId: string) {
   const [{ data: labels }, { data: shadow }] = await Promise.all([
     client.from('scoring_labels').select('opportunity_key, prospect_quality, expected_score_min, expected_score_max, expected_action').eq('organization_id', orgId).limit(5000),
     client.from('scoring_shadow_decisions').select('opportunity_key, production_engine, production_score, production_qualification, candidate_engine, candidate_score, candidate_qualification, features, is_test').eq('organization_id', orgId).eq('is_test', false).limit(5000),
@@ -44,7 +44,7 @@ export async function exportScoringEval(client: SupabaseClient, orgId: string) {
 }
 
 /** PAIRWISE_RANKING: two opportunities, the reviewer's choice, and the model rankings. */
-export async function exportPairwiseRanking(client: SupabaseClient, orgId: string) {
+export async function exportPairwiseRanking(client: DbClient, orgId: string) {
   const { data } = await client
     .from('scoring_pairwise_labels')
     .select('opportunity_key_a, opportunity_key_b, winner, labeler_rep_id, created_at')
@@ -54,7 +54,7 @@ export async function exportPairwiseRanking(client: SupabaseClient, orgId: strin
 }
 
 /** ROUTING_EVAL: opportunity, eligible senders, V1/V2 and the human best sender. */
-export async function exportRoutingEval(client: SupabaseClient, orgId: string) {
+export async function exportRoutingEval(client: DbClient, orgId: string) {
   const [{ data: evals }, { data: shadow }] = await Promise.all([
     client.from('routing_evaluations').select('lead_id, best_sender_profile_id, v1_correct, v2_correct, created_at').eq('organization_id', orgId).limit(5000),
     client.from('scoring_shadow_decisions').select('lead_id, routing_v1, routing_v2, is_test').eq('organization_id', orgId).eq('is_test', false).limit(5000),
@@ -71,7 +71,7 @@ export async function exportRoutingEval(client: SupabaseClient, orgId: string) {
 }
 
 /** MESSAGE_QUALITY: generated message, type, human score, classification, outcome. */
-export async function exportMessageQuality(client: SupabaseClient, orgId: string) {
+export async function exportMessageQuality(client: DbClient, orgId: string) {
   const [{ data: evals }, { data: messages }] = await Promise.all([
     client.from('message_evaluations').select('message_id, score, classification, dimensions, reasons').eq('organization_id', orgId).limit(5000),
     client.from('messages').select('id, type, sent_text, send_disposition').eq('organization_id', orgId).limit(5000),
@@ -87,7 +87,7 @@ export async function exportMessageQuality(client: SupabaseClient, orgId: string
 }
 
 /** THESIS_QUALITY: the sales thesis, the human rating, the reasons, the archetype. */
-export async function exportThesisQuality(client: SupabaseClient, orgId: string) {
+export async function exportThesisQuality(client: DbClient, orgId: string) {
   const [{ data: evals }, { data: leads }] = await Promise.all([
     client.from('thesis_evaluations').select('lead_id, rating, reasons').eq('organization_id', orgId).limit(5000),
     client.from('leads').select('id, company, contact_name, canonical_intelligence').eq('organization_id', orgId).limit(5000),
@@ -102,7 +102,7 @@ export async function exportThesisQuality(client: SupabaseClient, orgId: string)
 }
 
 /** OUTCOME_TRAINING: opportunity, sender, strategy, reply/meeting/proposal/won-lost and timestamps. */
-export async function exportOutcomeTraining(client: SupabaseClient, orgId: string) {
+export async function exportOutcomeTraining(client: DbClient, orgId: string) {
   const { data } = await client
     .from('leads')
     .select('id, company, contact_name, sender_profile_id, status, created_at, scored_at, connection_accepted_at, revenue_identity_id')
@@ -125,7 +125,7 @@ export async function exportOutcomeTraining(client: SupabaseClient, orgId: strin
   }) as Array<Record<string, unknown>>
 }
 
-export async function buildEvalExport(client: SupabaseClient, orgId: string, mode: EvalExportMode): Promise<Array<Record<string, unknown>>> {
+export async function buildEvalExport(client: DbClient, orgId: string, mode: EvalExportMode): Promise<Array<Record<string, unknown>>> {
   switch (mode) {
     case 'SCORING_EVAL': return exportScoringEval(client, orgId)
     case 'PAIRWISE_RANKING': return exportPairwiseRanking(client, orgId)

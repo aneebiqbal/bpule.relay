@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { safeErrorResponse } from '@/lib/errors'
 
@@ -14,17 +14,25 @@ export async function GET() {
   // Reps see only identities explicitly assigned to them
   const { data: assignments, error } = await supabase
     .from('identity_assignments')
-    .select(`
-      id,
-      assigned_by,
-      created_at,
-      identity:revenue_identities(*)
-    `)
+    .select('id, assigned_by, created_at, revenue_identity_id')
     .eq('rep_id', rep.id)
     .eq('organization_id', org.id)
     .order('created_at', { ascending: false })
 
   if (error) return safeErrorResponse(error, 500, 'Failed to load assigned profiles.', 'rep/assigned-profiles')
+
+  // The identity rows are a second read rather than a PostgREST embed
+  // (`identity:revenue_identities`), which the Neon adapter cannot translate.
+  const identityIds = (assignments ?? []).map((a) => a.revenue_identity_id).filter(Boolean)
+  const identityById = new Map<string, Record<string, unknown>>()
+  if (identityIds.length > 0) {
+    const { data: identityRows } = await supabase.from('revenue_identities').select('*').in('id', identityIds)
+    for (const row of identityRows ?? []) identityById.set(row.id as string, row)
+  }
+  const assignmentsWithIdentity = (assignments ?? []).map((a) => ({
+    ...a,
+    identity: identityById.get(a.revenue_identity_id as string) ?? null,
+  }))
 
   const inferChannel = (slug: string | undefined, profileUrl: string | undefined): string => {
     const haystack = `${slug ?? ''} ${profileUrl ?? ''}`.toLowerCase()
@@ -33,7 +41,7 @@ export async function GET() {
     return 'other'
   }
 
-  const profiles = (assignments ?? [])
+  const profiles = assignmentsWithIdentity
     .filter((a) => {
       const row = Array.isArray(a.identity) ? a.identity[0] : a.identity
       return row && typeof row === 'object'

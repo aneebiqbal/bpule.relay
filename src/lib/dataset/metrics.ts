@@ -1,12 +1,12 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Dataset metrics for the admin dataset page.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 import type { DatasetMetrics } from './types'
 
 export async function computeDatasetMetrics(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
 ): Promise<DatasetMetrics> {
   const { data: rows } = await client

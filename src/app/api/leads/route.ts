@@ -1,3 +1,4 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { computeScore } from '@/lib/score/rubric'
 import type { ExtractedLead, SignalId, Verdict } from '@/lib/domain/types'

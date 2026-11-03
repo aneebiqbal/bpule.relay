@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { DbClient } from '@/lib/db/types'
 import type {
   ContentDraft,
   ContentDraftFeedback,
@@ -335,11 +335,33 @@ export interface FewShotWin {
   createdAt: string
 }
 
+/** One page of leads. `stage`/`priority` are derived (not columns) and applied by the caller. */
+export interface LeadsPageInput {
+  q?: string
+  /** Rep id, or the literal 'unassigned'. */
+  owner?: string
+  /** Revenue identity id or sender profile id. */
+  profile?: string
+  source?: string
+  status?: string
+  /** 'created' (default) | 'company' | 'name'. Derived sorts are applied by the caller. */
+  sort?: string
+  dir?: 'asc' | 'desc'
+  page?: number
+  pageSize?: number
+  includeArchived?: boolean
+}
+
+export interface LeadsPageResult {
+  leads: Lead[]
+  total: number
+}
+
 export interface ScoutStore {
   /** The organization this store is scoped to. */
   readonly organizationId: string
   /** The underlying Supabase client — used for queries not covered by the store API. */
-  getSupabaseClient(): SupabaseClient
+  getSupabaseClient(): DbClient
   /** The scoring rulebook for this organization. Loaded once per request. */
   getRulebook(): Promise<OrganizationRulebook | null>
   // leads
@@ -363,13 +385,34 @@ export interface ScoutStore {
    findLeadByIntelligenceInputHash(hash: string): Promise<LeadDetail | null>
    findLeadByV3ReuseKey(reuseKey: string): Promise<Lead | null>
    getReferredLeads(repId: string): Promise<Lead[]>
-   getRecentLeads(repId: string, limit: number): Promise<Lead[]>
+  /**
+   * Leads carrying an active suppression row. Today must not build an outreach
+   * task for any of them — suppression is one authority with no surface bypass.
+   */
+  getSuppressedLeadIds(): Promise<ReadonlySet<string>>
+  /** The organization's `settings` JSONB. Send limits are read from it. */
+  getOrgSettings(): Promise<Record<string, unknown>>
+  /**
+   * Reuse fetched lead rows for the rest of this request. Only for read-only
+   * page composition — write paths must keep reading live rows.
+   */
+  beginReadOnlySnapshot(): void
+  /** The one effective send policy. Every surface showing a limit reads this. */
+  getEffectivePolicy(): Promise<import('@/lib/email/effective-policy').EffectiveSendPolicy>
+  getRecentLeads(repId: string, limit: number): Promise<Lead[]>
    /** @param includeArchived defaults to false — archived leads are excluded from the default read path. */
    listOwnedLeads(includeArchived?: boolean): Promise<Lead[]>
   /** Sent messages and conversation state for many leads in one round trip (inbox). */
   listConversationSnapshots(leadIds: string[]): Promise<Map<string, { messages: Message[]; followupCount: number; memoryStage: string | null }>>
   /** @param includeArchived defaults to false — archived leads are excluded from the default read path. */
   fetchLeadsAll(scopeToUser?: boolean, includeArchived?: boolean): Promise<Lead[]>
+  /**
+   * One page of leads, filtered/ordered/counted by the database. The browser
+   * never holds the full set. `stage`/`priority` are derived (not columns) and
+   * are applied by the caller after enrichment — pass them only through the
+   * caller, never here.
+   */
+  listLeadsPage(input?: LeadsPageInput): Promise<LeadsPageResult>
   getQueue(): Promise<QueueData>
   // messages
   saveDraft(input: SaveDraftInput): Promise<Message>

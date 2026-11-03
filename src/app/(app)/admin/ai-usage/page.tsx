@@ -1,3 +1,4 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 /**
  * Admin AI usage — spend, failures and speed from persisted ai_traces,
  * so it survives deploys and serverless cold starts.
@@ -5,7 +6,6 @@
 
 import { AlertTriangle, CircleDollarSign, Gauge, Cpu, ShieldAlert } from 'lucide-react'
 import { requireProductAdmin } from '@/lib/auth/admin-page'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { getAllHealth, getCooldownRemaining } from '@/lib/ai/runtime'
 import { summarizeAiUsage, type AiTraceRow, type AiUsageBucket } from '@/lib/admin/ai-usage'
 import { AiUsageChart } from '@/components/admin/ai-usage-chart'

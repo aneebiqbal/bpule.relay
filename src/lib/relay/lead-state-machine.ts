@@ -90,7 +90,7 @@ function isAutoReply(text: string): boolean {
  * "waiting for client".
  */
 export function deriveNextLeadAction(lead: LeadDetail, now: number = Date.now()): LeadActionResult {
-  const messages = lead.messages
+  const messages = lead.messages ?? []
 
   if (lead.status === 'won') {
     return {

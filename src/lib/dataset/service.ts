@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Intelligence Dataset Service — hardened, append-only.
  *
@@ -9,7 +10,6 @@
  */
 
 import { createHash } from 'node:crypto'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizeForHash } from '@/lib/intelligence-v2/input-hash'
 import { opportunityKey } from '@/lib/scoring-v4/opportunity-key'
 import type {
@@ -36,11 +36,11 @@ export function hashRawInput(raw: string): string {
   return opportunityKey(raw) ?? createHash('sha256').update(normalizeForHash(raw ?? '')).digest('hex')
 }
 
-function tbl(client: SupabaseClient) {
+function tbl(client: DbClient) {
   return client.from('intelligence_samples')
 }
 
-function eventsTbl(client: SupabaseClient) {
+function eventsTbl(client: DbClient) {
   return client.from('intelligence_sample_events')
 }
 
@@ -49,7 +49,7 @@ function eventsTbl(client: SupabaseClient) {
  * never throws.
  */
 async function safeCapture(
-  client: SupabaseClient,
+  client: DbClient,
   sampleId: string | null,
   stage: string,
   fn: () => Promise<void>,
@@ -85,7 +85,7 @@ async function safeCapture(
 // ── Sample creation ──────────────────────────────────────────────────────────
 
 export async function createSample(
-  client: SupabaseClient,
+  client: DbClient,
   input: CreateSampleInput,
 ): Promise<string | null> {
   const hash = input.rawInput ? hashRawInput(input.rawInput) : null
@@ -139,7 +139,7 @@ export async function createSample(
 // ── Event appending (append-only, idempotent) ───────────────────────────────
 
 async function appendEvent(
-  client: SupabaseClient,
+  client: DbClient,
   sampleId: string,
   eventType: SampleEventType,
   payload: Record<string, unknown>,
@@ -180,7 +180,7 @@ interface ScoreCapture {
 }
 
 export async function captureScore(
-  client: SupabaseClient,
+  client: DbClient,
   sampleId: string,
   score: ScoreCapture,
 ): Promise<void> {
@@ -233,7 +233,7 @@ interface RoutingCapture {
 }
 
 export async function captureRouting(
-  client: SupabaseClient,
+  client: DbClient,
   sampleId: string,
   routing: RoutingCapture,
 ): Promise<void> {
@@ -267,7 +267,7 @@ interface MessageCapture {
 }
 
 export async function captureMessageGeneration(
-  client: SupabaseClient,
+  client: DbClient,
   sampleId: string,
   msg: MessageCapture,
 ): Promise<void> {
@@ -296,7 +296,7 @@ export async function captureMessageGeneration(
 }
 
 export async function captureHumanEdit(
-  client: SupabaseClient,
+  client: DbClient,
   sampleId: string,
   edit: HumanEdit,
 ): Promise<void> {
@@ -330,7 +330,7 @@ export async function captureHumanEdit(
 }
 
 export async function captureSent(
-  client: SupabaseClient,
+  client: DbClient,
   sampleId: string,
   finalText: string,
   actorId?: string,
@@ -349,7 +349,7 @@ export async function captureSent(
 }
 
 export async function captureClientReply(
-  client: SupabaseClient,
+  client: DbClient,
   sampleId: string,
   replyText: string,
 ): Promise<void> {
@@ -375,7 +375,7 @@ export async function captureClientReply(
 }
 
 export async function captureOutcome(
-  client: SupabaseClient,
+  client: DbClient,
   sampleId: string,
   outcome: string,
 ): Promise<void> {
@@ -399,7 +399,7 @@ export async function captureOutcome(
 }
 
 export async function captureFeedback(
-  client: SupabaseClient,
+  client: DbClient,
   sampleId: string,
   feedback: HumanFeedback,
   actorId: string,
@@ -434,7 +434,7 @@ export async function captureFeedback(
 }
 
 export async function flagForReview(
-  client: SupabaseClient,
+  client: DbClient,
   sampleId: string,
 ): Promise<void> {
   try {
@@ -448,7 +448,7 @@ export async function flagForReview(
 
 /** Explicitly approve a sample for training (admin/reviewer action). The only path to TRAINING_APPROVED. */
 export async function approveForTraining(
-  client: SupabaseClient,
+  client: DbClient,
   sampleId: string,
   approverId: string,
 ): Promise<void> {
@@ -486,7 +486,7 @@ export interface DatasetFilter {
 }
 
 export async function querySamples(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
   filter: DatasetFilter = {},
 ): Promise<IntelligenceSample[]> {
@@ -519,7 +519,7 @@ export async function querySamples(
 }
 
 export async function countSamples(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
   filter: DatasetFilter = {},
 ): Promise<number> {
@@ -539,7 +539,7 @@ export async function countSamples(
 
 /** Find the most recent sample for a lead, inside one organisation. */
 export async function findLatestSampleForLead(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
   leadId: string,
 ): Promise<string | null> {
@@ -550,7 +550,7 @@ export async function findLatestSampleForLead(
 
 /** Get all events for a sample (reconstruction). */
 export async function getSampleEvents(
-  client: SupabaseClient,
+  client: DbClient,
   sampleId: string,
 ): Promise<Array<{ event_type: string; payload: Record<string, unknown>; actor: string | null; idempotency_key: string | null; created_at: string }>> {
   const { data, error } = await eventsTbl(client)

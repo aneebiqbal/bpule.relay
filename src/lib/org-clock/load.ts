@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Operating-policy loader.
  *
@@ -8,7 +9,6 @@
  * falls back to what `organizations` already declares. The clock keeps working;
  * only the configurable window and target pack are unavailable.
  */
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { currentInstant, orgDate } from './index'
 import {
@@ -47,7 +47,7 @@ function isMissingRelation(error: { code?: string; message?: string } | null): b
 }
 
 async function loadFromOrganizations(
-  client: SupabaseClient,
+  client: DbClient,
   organizationId: string,
 ): Promise<OperatingPolicy> {
   const { data } = await client
@@ -71,7 +71,7 @@ async function loadFromOrganizations(
 
 export async function loadOperatingPolicy(
   organizationId: string,
-  client?: SupabaseClient,
+  client?: DbClient,
 ): Promise<OperatingPolicy> {
   if (!organizationId) return { ...DEFAULT_POLICY }
 
@@ -111,7 +111,7 @@ export async function operatingPolicyFor(organizationId: string): Promise<Operat
  */
 export async function businessDateForOrg(
   organizationId: string,
-  client?: SupabaseClient,
+  client?: DbClient,
 ): Promise<string> {
   const policy = await loadOperatingPolicy(organizationId, client)
   return orgDate(currentInstant(), policy.timezone)

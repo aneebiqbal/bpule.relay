@@ -1,6 +1,6 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { getLeadDisplayScore } from '@/lib/scoring/display-score'
 import { addDays, currentInstant, orgDate, weekdayOfDate } from '@/lib/org-clock'
+import type { DbClient } from '@/lib/db/types'
 
 /**
  * Accountability Metrics
@@ -96,7 +96,7 @@ function withComputed(m: Omit<DailyMetrics, 'date' | 'repId' | 'repName'>): Omit
 }
 
 async function fetchMetricsForPeriod(
-  client: SupabaseClient,
+  client: DbClient,
   repId: string,
   startDate: string,
   endDate: string,
@@ -159,7 +159,7 @@ async function fetchMetricsForPeriod(
 }
 
 export async function getRepMetrics(
-  client: SupabaseClient,
+  client: DbClient,
   repId: string,
   repName: string,
   date: string,
@@ -171,7 +171,7 @@ export async function getRepMetrics(
 }
 
 export async function getRepMetricsRange(
-  client: SupabaseClient,
+  client: DbClient,
   repId: string,
   repName: string,
   startDate: string,
@@ -184,7 +184,7 @@ export async function getRepMetricsRange(
 }
 
 export async function getRepLeadJourney(
-  client: SupabaseClient,
+  client: DbClient,
   repId: string,
 ): Promise<LeadJourney[]> {
   const { data: leads } = await client
@@ -237,7 +237,7 @@ export async function getRepLeadJourney(
 }
 
 export async function getTeamDayView(
-  client: SupabaseClient,
+  client: DbClient,
   repIds: string[],
   repNames: Map<string, string>,
   date: string,
@@ -264,7 +264,7 @@ export async function getTeamDayView(
 }
 
 export async function getTeamCalendar(
-  client: SupabaseClient,
+  client: DbClient,
   repIds: string[],
   repNames: Map<string, string>,
   startDate: string,
@@ -350,7 +350,7 @@ export async function getTeamCalendar(
 }
 
 export async function getRepAccountability(
-  client: SupabaseClient,
+  client: DbClient,
   repId: string,
   repName: string,
   timezone: string = 'UTC',

@@ -1,10 +1,10 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { ChevronRight, Send, MessageSquare, Bell, Reply, Trophy, Activity } from 'lucide-react'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
 import { isProductAdmin } from '@/lib/auth/admin-page'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { getRepAccountability, type DailyMetrics, type LeadJourney } from '@/lib/accountability/metrics'
 import { DashHeader, EmptyNote, Panel, Pill, StatTile } from '@/components/dashboard/kit'
 

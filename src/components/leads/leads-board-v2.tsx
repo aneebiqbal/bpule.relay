@@ -10,7 +10,26 @@ import {
 } from 'lucide-react'
 import { cn } from 'cn'
 import { LeadScoreRing } from '@/components/score-ring'
-import { derivePipelineStage, resolvePipelineEmptyState, type LeadRow, type PipelineStage } from './pipeline-utils'
+import {
+  derivePipelineStage,
+  resolvePipelineEmptyState,
+  leadPriority,
+  leadStuckSignals,
+  LEAD_PRIORITY_LABELS,
+  STAGE_LABELS,
+  STUCK_SIGNAL_LABELS,
+  type LeadRow,
+  type LeadPriority,
+  type PipelineStage,
+} from './pipeline-utils'
+
+/** Canonical priority language on the pipeline card (never a score band). */
+const PRIORITY_STYLES: Record<LeadPriority, string> = {
+  critical: 'bg-status-danger/10 text-status-danger',
+  high: 'bg-orange/10 text-orange',
+  normal: 'bg-bone-raised text-graphite',
+  watch: 'bg-status-info/10 text-status-info',
+}
 
 /* ─── config ─── */
 const PAGE_SIZE = 50
@@ -21,23 +40,23 @@ const STAGE_META: Record<PipelineStage, {
   color: string
   description: string
 }> = {
-  to_contact: { label: 'To Contact', icon: <Send className="size-3.5" />, color: 'text-stone-500', description: 'New leads waiting for first contact' },
-  observe: { label: 'Observe', icon: <Eye className="size-3.5" />, color: 'text-status-warning', description: 'Not a fit yet — watch, do not contact' },
-  needs_reply: { label: 'Needs Reply', icon: <Reply className="size-3.5" />, color: 'text-orange', description: 'Prospect replied — respond now' },
-  follow_up_due: { label: 'Follow-Up Due', icon: <Bell className="size-3.5" />, color: 'text-orange', description: 'Time to re-engage' },
-  waiting: { label: 'Waiting', icon: <Clock className="size-3.5" />, color: 'text-cobalt', description: 'Sent, awaiting response' },
-  done: { label: 'Done', icon: <CheckCircle2 className="size-3.5" />, color: 'text-status-success', description: 'Won or closed' },
-  cold: { label: 'Cold', icon: <Snowflake className="size-3.5" />, color: 'text-status-warning', description: 'Unresponsive — will auto-archive' },
+  to_contact: { label: STAGE_LABELS.to_contact, icon: <Send className="size-3.5" />, color: 'text-stone-500', description: 'Qualified — waiting for first contact' },
+  observe: { label: STAGE_LABELS.observe, icon: <Eye className="size-3.5" />, color: 'text-status-warning', description: 'Not a fit yet — watch, do not contact' },
+  needs_reply: { label: STAGE_LABELS.needs_reply, icon: <Reply className="size-3.5" />, color: 'text-orange', description: 'Prospect replied — respond now' },
+  follow_up_due: { label: STAGE_LABELS.follow_up_due, icon: <Bell className="size-3.5" />, color: 'text-orange', description: 'Time to re-engage' },
+  waiting: { label: STAGE_LABELS.waiting, icon: <Clock className="size-3.5" />, color: 'text-cobalt', description: 'Sent, awaiting response' },
+  done: { label: STAGE_LABELS.done, icon: <CheckCircle2 className="size-3.5" />, color: 'text-status-success', description: 'Won or closed' },
+  cold: { label: STAGE_LABELS.cold, icon: <Snowflake className="size-3.5" />, color: 'text-status-warning', description: 'Unresponsive — will auto-archive' },
 }
 
 const FILTERS: Array<{ key: PipelineStage | 'all'; label: string }> = [
   { key: 'all', label: 'All' },
-  { key: 'to_contact', label: 'To Contact' },
-  { key: 'observe', label: 'Observe' },
-  { key: 'needs_reply', label: 'Needs Reply' },
-  { key: 'follow_up_due', label: 'Follow-Up' },
-  { key: 'waiting', label: 'Waiting' },
-  { key: 'done', label: 'Done' },
+  { key: 'to_contact', label: STAGE_LABELS.to_contact },
+  { key: 'observe', label: STAGE_LABELS.observe },
+  { key: 'needs_reply', label: STAGE_LABELS.needs_reply },
+  { key: 'follow_up_due', label: STAGE_LABELS.follow_up_due },
+  { key: 'waiting', label: STAGE_LABELS.waiting },
+  { key: 'done', label: STAGE_LABELS.done },
 ]
 
 /* ─── helpers ─── */
@@ -99,7 +118,16 @@ function smartSort(leads: LeadRow[]): LeadRow[] {
 }
 
 /* ─── component ─── */
-export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
+export function LeadsBoardV2({
+  leads,
+  counts,
+  total,
+}: {
+  leads: LeadRow[]
+  /** Server-side stage counts over the full set — never a client truncation. */
+  counts: Record<PipelineStage, number>
+  total: number
+}) {
   const [filter, setFilter] = useState<PipelineStage | 'all'>('all')
   const [search, setSearch] = useState('')
   const [collapsed, setCollapsed] = useState<Set<PipelineStage>>(new Set(['done', 'cold']))
@@ -138,12 +166,12 @@ export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
   }, [displayed])
 
   const stats = useMemo(() => ({
-    total: leads.length,
-    to_contact: leads.filter((l) => derivePipelineStage(l) === 'to_contact').length,
-    needs_reply: leads.filter((l) => derivePipelineStage(l) === 'needs_reply').length,
-    follow_up_due: leads.filter((l) => derivePipelineStage(l) === 'follow_up_due').length,
+    total,
+    to_contact: counts.to_contact ?? 0,
+    needs_reply: counts.needs_reply ?? 0,
+    follow_up_due: counts.follow_up_due ?? 0,
     archivingSoon: leads.filter((l) => (archivalCountdown(l) ?? 99) <= 7).length,
-  }), [leads])
+  }), [leads, counts, total])
 
   const toggleCollapse = (stage: PipelineStage) => {
     setCollapsed((prev) => {
@@ -162,16 +190,16 @@ export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatCard icon={<Users className="size-4" />} label="Total" value={stats.total} />
-        <StatCard icon={<Send className="size-4" />} label="To Contact" value={stats.to_contact} accent="stone" />
-        <StatCard icon={<Reply className="size-4" />} label="Needs Reply" value={stats.needs_reply} accent="orange" />
-        <StatCard icon={<Bell className="size-4" />} label="Follow-Up Due" value={stats.follow_up_due} accent="orange" />
+        <StatCard icon={<Send className="size-4" />} label={STAGE_LABELS.to_contact} value={stats.to_contact} accent="stone" />
+        <StatCard icon={<Reply className="size-4" />} label={STAGE_LABELS.needs_reply} value={stats.needs_reply} accent="orange" />
+        <StatCard icon={<Bell className="size-4" />} label={STAGE_LABELS.follow_up_due} value={stats.follow_up_due} accent="orange" />
         <StatCard icon={<Archive className="size-4" />} label="Archiving Soon" value={stats.archivingSoon} accent="red" />
       </div>
 
       {/* Search + filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-stone/40" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-stone" />
           <input
             type="text"
             placeholder="Search by name, company, or title…"
@@ -180,13 +208,13 @@ export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
             className="w-full rounded-xl border border-line bg-bone pl-10 pr-4 py-2.5 text-sm text-ink placeholder:text-stone/40 focus:border-orange/40 focus:outline-none transition-colors"
           />
         </div>
-        <div className="flex rounded-xl border border-line bg-bone p-0.5">
+        <div className="flex gap-1 overflow-x-auto rounded-xl border border-line bg-bone p-0.5">
           {FILTERS.map((f) => (
             <button
               key={f.key}
               onClick={() => { setFilter(f.key); setVisibleCount(PAGE_SIZE) }}
               className={cn(
-                'rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200',
+                'shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200',
                 filter === f.key ? 'bg-orange text-on-accent shadow-sm' : 'text-ink/50 hover:text-ink/80'
               )}
             >
@@ -198,6 +226,10 @@ export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
 
       {/* Groups */}
       <div className="space-y-4">
+        <p className="text-[12px] text-graphite">
+          Showing the {Math.min(leads.length, total)} highest-priority cards of {total} leads.
+          Counts above cover the full set.
+        </p>
         <AnimatePresence mode="popLayout">
           {activeStages.map((stage) => {
             const leadsInStage = grouped[stage]
@@ -226,10 +258,10 @@ export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-ink">{meta.label}</span>
                         <span className="rounded-full bg-line/60 px-1.5 py-0.5 text-[10px] font-medium text-stone">
-                          {leadsInStage.length}
+                          {counts[stage] ?? 0}
                         </span>
                       </div>
-                      <p className="text-[11px] text-stone/60">{meta.description}</p>
+                      <p className="text-[11px] text-stone">{meta.description}</p>
                     </div>
                   </div>
                   <ChevronDown className={cn('size-4 text-stone transition-transform duration-200', isCollapsed && '-rotate-90')} />
@@ -274,9 +306,9 @@ export function LeadsBoardV2({ leads }: { leads: LeadRow[] }) {
         const empty = resolvePipelineEmptyState({ stage: filter, query: search })
         return (
           <div className="py-16 text-center" role="status">
-            {empty.kind === 'search' && <Search className="mx-auto mb-3 size-8 text-stone/30" aria-hidden="true" />}
+            {empty.kind === 'search' && <Search className="mx-auto mb-3 size-8 text-stone" aria-hidden="true" />}
             <p className="text-sm text-stone">{empty.title}</p>
-            {empty.hint && <p className="mt-1 text-xs text-stone/70">{empty.hint}</p>}
+            {empty.hint && <p className="mt-1 text-xs text-stone">{empty.hint}</p>}
           </div>
         )
       })()}
@@ -289,6 +321,8 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
   const stage = derivePipelineStage(lead)
   const action = primaryAction(lead)
   const countdown = archivalCountdown(lead)
+  const priority = leadPriority(lead)
+  const stuck = leadStuckSignals(lead)
 
   return (
     <motion.div
@@ -297,7 +331,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
       transition={{ duration: 0.15, delay: index * 0.02 }}
       className="group"
     >
-      <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-bone-raised/30 transition-colors">
+      <div className="flex flex-col gap-3 px-4 py-3.5 transition-colors hover:bg-bone-raised/30 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
         {/* Avatar + status dot */}
         <div className="relative shrink-0">
           <div className="flex size-10 items-center justify-center rounded-full bg-cobalt/10 text-sm font-semibold text-cobalt">
@@ -327,7 +361,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
             )}
           </div>
 
-          <div className="mt-0.5 flex items-center gap-2 text-xs text-stone/70">
+          <div className="mt-0.5 flex items-center gap-2 text-xs text-stone">
             {lead.contactTitle && <span className="truncate">{lead.contactTitle}</span>}
             {lead.contactTitle && lead.lastOutboundAt && <span className="text-line">·</span>}
             {(lead.lastInboundAt || lead.lastOutboundAt) && (
@@ -354,6 +388,25 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
             </span>
           </div>
 
+          {/* Canonical priority + stuck signals. No new model, no local stage. */}
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span className={cn(
+              'inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+              PRIORITY_STYLES[priority],
+            )}>
+              {LEAD_PRIORITY_LABELS[priority]}
+            </span>
+            {stuck.map((signal) => (
+              <span
+                key={signal}
+                className="inline-flex items-center gap-1 rounded-full bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-status-warning"
+              >
+                <AlertTriangle className="size-2.5" aria-hidden="true" />
+                {STUCK_SIGNAL_LABELS[signal]}
+              </span>
+            ))}
+          </div>
+
           {/* Archival warning */}
           {countdown !== null && (
             <div className="mt-1 flex items-center gap-1 text-[11px] text-status-warning">
@@ -364,7 +417,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
         </div>
 
         {/* Score + action */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 self-start shrink-0">
           <LeadScoreRing lead={lead} size={38} />
           <Link
             href={action.href}
@@ -407,7 +460,7 @@ function StatCard({ icon, label, value, accent }: {
       </div>
       <div>
         <p className="text-lg font-semibold text-ink">{value}</p>
-        <p className="text-[11px] text-stone/60">{label}</p>
+        <p className="text-[11px] text-stone">{label}</p>
       </div>
     </div>
   )

@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Admin QA view data (Day 4 / 5 / 5.25).
  *
@@ -9,7 +10,6 @@
  * All org-scoped. Nothing here promotes v2 or writes a score.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildRoutingComparison, type RoutingComparisonView } from '@/lib/relay/routing-comparison'
 import { loadSenderProfiles, parsePacket } from '@/lib/relay/routing-context'
 import { analyzeScoreStaleness } from '@/lib/intelligence-v3/score-staleness'
@@ -20,7 +20,7 @@ export interface RoutingQARow extends RoutingComparisonView {
 
 /** v1/v2 comparison for the org's scored leads. */
 export async function routingComparisonViews(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
   repId: string,
   limit = 50,
@@ -56,7 +56,7 @@ export async function routingComparisonViews(
 }
 
 /** Current / stale / unscored score coverage for the org. */
-export async function scoringCoverage(client: SupabaseClient, orgId: string) {
+export async function scoringCoverage(client: DbClient, orgId: string) {
   const { data: rows } = await client
     .from('leads')
     .select('score_version, scored_at')
@@ -65,7 +65,7 @@ export async function scoringCoverage(client: SupabaseClient, orgId: string) {
 }
 
 /** Unverified conversation threads awaiting identity review. */
-export async function unverifiedThreads(client: SupabaseClient, orgId: string, limit = 50) {
+export async function unverifiedThreads(client: DbClient, orgId: string, limit = 50) {
   const { data, error } = await client
     .from('messages')
     .select('id, lead_id, sent_text, sent_at, thread_status, sender_profile_id')
@@ -79,7 +79,7 @@ export async function unverifiedThreads(client: SupabaseClient, orgId: string, l
 }
 
 /** Lead ids whose packet is not current (for a controlled re-analysis report). */
-export async function staleLeadIds(client: SupabaseClient, orgId: string, limit = 500): Promise<string[]> {
+export async function staleLeadIds(client: DbClient, orgId: string, limit = 500): Promise<string[]> {
   const { data: rows } = await client
     .from('leads')
     .select('id, score_version')

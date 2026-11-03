@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceSupabase } from '@/lib/supabase/service'
+import { getAuthProvider } from '@/lib/auth/provider'
+import { resolveDbProvider } from '@/lib/db/types'
+import type { DbClient } from '@/lib/db/types'
 
 const BPULSE_ORG_ID = '11111111-1111-1111-1111-111111111111'
 
@@ -13,7 +16,7 @@ function rateLimitKey(headers: Headers): string {
 }
 
 async function isRateLimited(
-  supabase: ReturnType<typeof createClient<any, 'public', any>>,
+  supabase: DbClient,
   key: string,
 ): Promise<boolean> {
   const now = Date.now()
@@ -52,13 +55,17 @@ async function isRateLimited(
 }
 
 export async function POST(request: Request) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) {
-    return NextResponse.json(
-      { error: 'Service is temporarily unavailable.' },
-      { status: 503 },
-    )
+  // The service client is what enforces configuration; on the Supabase
+  // provider that means the URL and service key must be present.
+  if (resolveDbProvider() === 'supabase') {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!url || !serviceKey) {
+      return NextResponse.json(
+        { error: 'Service is temporarily unavailable.' },
+        { status: 503 },
+      )
+    }
   }
 
   const inviteCode = process.env.SIGNUP_INVITE_CODE
@@ -100,9 +107,8 @@ export async function POST(request: Request) {
     )
   }
 
-  const service = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
+  const service = createServiceSupabase()
+  const auth = await getAuthProvider()
 
   if (await isRateLimited(service, rateLimitKey(request.headers))) {
     return NextResponse.json(
@@ -113,14 +119,10 @@ export async function POST(request: Request) {
 
   // Atomic in intent: the auth user is created first, and every later step is
   // compensated. A user must never exist without a workspace, a rep and a role.
-  const { data: authUser, error: authErr } = await service.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: false,
-  })
+  const created = await auth.createUser({ email, password })
 
-  if (authErr || !authUser.user) {
-    const alreadyRegistered = /already|exists|registered/i.test(authErr?.message ?? '')
+  if (!created.userId) {
+    const alreadyRegistered = /already|exists|registered/i.test(created.error?.message ?? '')
     return NextResponse.json(
       {
         code: alreadyRegistered ? 'EMAIL_ALREADY_REGISTERED' : 'ACCOUNT_CREATION_FAILED',
@@ -132,7 +134,7 @@ export async function POST(request: Request) {
     )
   }
 
-  const authUserId = authUser.user.id
+  const authUserId = created.userId
   let orgId: string | null = null
   let repId: string | null = null
 
@@ -141,7 +143,7 @@ export async function POST(request: Request) {
     try { if (repId) await service.from('reps').delete().eq('id', repId) } catch { /* best effort */ }
     try { if (orgId) await service.from('organization_rulebooks').delete().eq('organization_id', orgId) } catch { /* best effort */ }
     try { if (orgId) await service.from('organizations').delete().eq('id', orgId) } catch { /* best effort */ }
-    try { await service.auth.admin.deleteUser(authUserId) } catch { /* best effort */ }
+    try { await auth.deleteUser(authUserId) } catch { /* best effort */ }
   }
 
   try {

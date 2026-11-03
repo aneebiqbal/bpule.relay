@@ -38,22 +38,34 @@ export async function GET(req: NextRequest) {
       .map(([key, count]) => ({ idempotency_key: key, count })))
   }
 
-  // 2. Invalid lead references
-  const { data: orphanedEvents } = await supabase
+  // 2. Invalid lead references. The org's own ids come from a read: PostgREST
+  // expressed this as a `not.in` subquery, which the Neon adapter cannot
+  // parameterize.
+  const { data: orgLeadRows } = await supabase
+    .from('leads')
+    .select('id')
+    .eq('organization_id', ctx.orgId)
+  const orgLeadIds = (orgLeadRows ?? []).map((row) => row.id)
+  let orphanQuery = supabase
     .from('action_events')
     .select('id, lead_id, action_type')
     .eq('organization_id', ctx.orgId)
     .not('lead_id', 'is', null)
-    .filter('lead_id', 'not.in', `(select id from leads where organization_id = '${ctx.orgId}')`)
-    .limit(50)
+  if (orgLeadIds.length > 0) orphanQuery = orphanQuery.not('lead_id', 'in', orgLeadIds)
+  const { data: orphanedEvents } = await orphanQuery.limit(50)
 
   // 3. Invalid rep references
-  const { data: invalidRepRefs } = await supabase
+  const { data: orgRepRows } = await supabase
+    .from('reps')
+    .select('id')
+    .eq('organization_id', ctx.orgId)
+  const orgRepIds = (orgRepRows ?? []).map((row) => row.id)
+  let repRefQuery = supabase
     .from('action_events')
     .select('id, actor_id, action_type')
     .eq('organization_id', ctx.orgId)
-    .filter('actor_id', 'not.in', `(select id from reps where organization_id = '${ctx.orgId}')`)
-    .limit(50)
+  if (orgRepIds.length > 0) repRefQuery = repRefQuery.not('actor_id', 'in', orgRepIds)
+  const { data: invalidRepRefs } = await repRefQuery.limit(50)
 
   // 4. Event type distribution
   const { data: typeDistribution } = await supabase

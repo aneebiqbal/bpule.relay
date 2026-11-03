@@ -9,9 +9,11 @@ interface CheckboxProps {
   description?: string
   disabled?: boolean
   className?: string
+  /** Accessible name when there is no visible label (table row/header checkboxes). */
+  ariaLabel?: string
 }
 
-export function Checkbox({ checked, onChange, label, description, disabled, className }: CheckboxProps) {
+export function Checkbox({ checked, onChange, label, description, disabled, className, ariaLabel }: CheckboxProps) {
   const id = React.useId()
 
   return (
@@ -23,6 +25,7 @@ export function Checkbox({ checked, onChange, label, description, disabled, clas
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
           disabled={disabled}
+          aria-label={ariaLabel}
           className="peer size-4 shrink-0 appearance-none rounded border border-line bg-bone-raised transition-colors duration-150 checked:border-orange checked:bg-orange focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
         />
         <Check

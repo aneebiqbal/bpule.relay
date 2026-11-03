@@ -1,13 +1,21 @@
 import { cache } from 'react'
 import type { Organization, Rep, VoiceProfile } from '@/lib/domain/types'
 import { isDemoMode } from '@/lib/ai/config'
-import { createServerSupabase } from '@/lib/supabase/server'
+import { getAuthProvider } from '@/lib/auth/provider'
+import { getDbClient } from '@/lib/db/provider'
 import { getDemoStore } from '@/lib/store/demo-registry'
 
 export interface CurrentUser {
   rep: Rep
   organization: Organization
   profile: VoiceProfile | null
+  /**
+   * The authenticated user's id. Under Supabase this is the auth.users id; on
+   * the Neon provider it is the Neon Auth user id. The database adapter puts it
+   * in `app.current_user_id` so RLS can derive organization and role — the
+   * browser never supplies an organization id.
+   */
+  authUserId: string
 }
 
 const BPULSE_ORG_ID = '11111111-1111-1111-1111-111111111111'
@@ -67,28 +75,19 @@ function firstEmbedded<T>(value: T | T[] | null | undefined): T | null {
 async function resolveCurrentUser(): Promise<CurrentUser | null> {
   if (isDemoMode()) {
     const profile = await getDemoStore(DEMO_REP).getVoiceProfile()
-    return { rep: DEMO_REP, organization: DEMO_ORG, profile }
+    return { rep: DEMO_REP, organization: DEMO_ORG, profile, authUserId: DEMO_REP.id }
   }
 
   const startedAt = PERF_LOG ? performance.now() : 0
 
   try {
-    const supabase = await createServerSupabase()
-
     const authStartedAt = PERF_LOG ? performance.now() : 0
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
-    let userId = claimsData?.claims?.sub ?? null
-    let userEmail = (claimsData?.claims?.email as string | undefined) ?? null
-
-    if (claimsError || !userId) {
-      // Expired/refreshing or non-asymmetric signing keys: fall back to the
-      // Auth server so we never treat a valid session as signed out.
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      userId = user?.id ?? null
-      userEmail = user?.email ?? null
-    }
+    // The provider resolves the session for the active backend; the user id is
+    // the only thing the database lookup needs.
+    const auth = await getAuthProvider()
+    const { user } = await auth.getSession()
+    const userId = user?.id ?? null
+    const userEmail = user?.email ?? null
     if (PERF_LOG) {
       console.log(
         `[perf] getCurrentUser.auth ${(performance.now() - authStartedAt).toFixed(1)}ms`,
@@ -97,13 +96,15 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
 
     if (!userId) return null
 
-    const { data: repRows, error: repError } = await supabase
+    // Two plain reads instead of a PostgREST embed (`organizations (...)`),
+    // which the Neon adapter does not translate. Batched by id, so this stays
+    // two round trips regardless of team size.
+    // The Neon adapter needs the identity in scope so RLS can derive the
+    // organization; the Supabase adapter takes it from the request cookies.
+    const db = await getDbClient(userId)
+    const { data: repRows, error: repError } = await db
       .from('reps')
-      .select(
-        `id, name, role, organization_id, created_at, timezone,
-         organizations ( id, name, plan, billing_customer_id, timezone, working_days, holidays, created_at ),
-         voice_profiles ( id, rep_id, organization_id, style_card, sample_source, calibrated_at )`,
-      )
+      .select('id, name, role, organization_id, created_at, timezone')
       .eq('auth_user_id', userId)
       .order('created_at', { ascending: true })
       .limit(2)
@@ -112,7 +113,6 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
       console.warn('[auth/current] rep lookup failed', {
         userId,
         email: userEmail,
-        code: (repError as { code?: string }).code ?? null,
         message: repError.message,
       })
       return null
@@ -135,6 +135,30 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
       return null
     }
 
+    const [orgResult, profileResult] = await Promise.all([
+      db
+        .from('organizations')
+        .select('id, name, plan, billing_customer_id, timezone, working_days, holidays, created_at')
+        .eq('id', repRow.organization_id)
+        .maybeSingle(),
+      db
+        .from('voice_profiles')
+        .select('id, rep_id, organization_id, style_card, sample_source, calibrated_at')
+        .eq('rep_id', repRow.id)
+        .maybeSingle(),
+    ])
+
+    const orgRow = orgResult.data as EmbeddedOrgRow | null
+
+    if (!orgRow) {
+      console.warn('[auth/current] rep mapped to missing org', {
+        userId,
+        repId: repRow.id,
+        organizationId: repRow.organization_id,
+      })
+      return null
+    }
+
     const rep: Rep = {
       id: repRow.id,
       name: repRow.name,
@@ -142,17 +166,6 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
       organizationId: repRow.organization_id,
       createdAt: repRow.created_at,
       timezone: (repRow.timezone as string) ?? 'UTC',
-    }
-
-    const orgRow = firstEmbedded<EmbeddedOrgRow>(repRow.organizations)
-
-    if (!orgRow) {
-      console.warn('[auth/current] rep mapped to missing org', {
-        userId,
-        repId: rep.id,
-        organizationId: rep.organizationId,
-      })
-      return null
     }
 
     const organization: Organization = {
@@ -166,7 +179,7 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
       createdAt: orgRow.created_at,
     }
 
-    const vp = firstEmbedded<EmbeddedVoiceProfileRow>(repRow.voice_profiles)
+    const vp = profileResult.data as EmbeddedVoiceProfileRow | null
 
     const profile: VoiceProfile | null = vp
       ? {
@@ -186,7 +199,7 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
       )
     }
 
-    return { rep, organization, profile }
+    return { rep, organization, profile, authUserId: userId }
   } catch (error) {
     console.warn('[auth/current] unexpected auth resolution error', {
       message: error instanceof Error ? error.message : 'unknown error',

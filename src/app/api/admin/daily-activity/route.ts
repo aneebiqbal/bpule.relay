@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 
 export async function GET() {

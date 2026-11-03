@@ -8,6 +8,7 @@ import {
   writeActiveIdentityCookie,
   type WorkspaceIdentity,
 } from '@/lib/workspace/active-identity'
+import { notify } from '@/lib/ui/notify'
 
 interface ActiveIdentityContextValue {
   identities: WorkspaceIdentity[]
@@ -75,6 +76,8 @@ export function ActiveIdentityProvider({
       }
       writeActiveIdentityCookie(identityId)
       router.refresh()
+      const next = identities.find((identity) => identity.id === identityId)
+      if (next) notify({ title: 'Profile switched', description: next.identityName, variant: 'success' })
     },
   }), [identities, active, router])
 

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { hasUnfilledValues, UNFILLED_VALUES_MESSAGE } from '@/lib/relay/unfilled-values'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import {
   Send, Reply, MessageSquare, X, Copy, Check, Trophy, Clock,
   Building2, ExternalLink, AlertTriangle, Sparkles,
@@ -48,13 +48,16 @@ interface Props {
   lead: LeadDetail
   dailyLimit: number
   todaySends: number
+  /** Display clock. Server and client must agree or hydration fails. */
+  now?: number
+  /** One-shot generation intent from the URL (`?next=generate-dm`). */
+  next?: string | null
   /** Display name of the lead's sender profile, or null when none is assigned. */
   senderProfileName?: string | null
 }
 
-export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, senderProfileName }: Props) {
+export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now = Date.now(), next = null, senderProfileName }: Props) {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [lead, setLead] = useState(initialLead)
   const [leadVersion, setLeadVersion] = useState(0)
   const [mode, setMode] = useState<Mode>(null)
@@ -205,7 +208,6 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, sende
   }, [])
 
   useEffect(() => {
-    const next = searchParams.get('next')
     if (!next) return
     const match = next.match(/^generate-(connection|dm|reply|followup)$/)
     if (!match) return
@@ -233,7 +235,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, sende
     void generateDraft(requested).finally(() => {
       setBootstrap((s) => (s === 'RUNNING' ? transitionLeadBootstrap(s, 'SUCCEED') : s))
     })
-  }, [searchParams, phase, lead, decisionCtx, generateDraft, consumeOneShotIntent])
+  }, [next, phase, lead, decisionCtx, generateDraft, consumeOneShotIntent])
 
   // "Send without note" logs a connection with no text. It must surface
   // server refusals (daily ceiling, lock, ownership) instead of failing
@@ -343,7 +345,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, sende
     .sort((a, b) => (a.sentAt ?? '').localeCompare(b.sentAt ?? ''))
     .at(-1)?.sentAt ?? null
   const followupDueIn = followupDueInDays(lead.followupCount ?? 0)
-  const daysSinceConversation = lastConversationAt ? calendarDaysBetween(new Date(lastConversationAt), new Date()) : 0
+  const daysSinceConversation = lastConversationAt ? calendarDaysBetween(new Date(lastConversationAt), new Date(now)) : 0
   const followupDueOn = lastConversationAt
     ? new Date(new Date(lastConversationAt).getTime() + followupDueIn * 24 * 60 * 60 * 1000)
     : null
@@ -537,7 +539,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, sende
         <DecisionExplainability
           title={leadScore.qualification ? `${leadScore.label} · ${leadScore.text}` : leadScore.text}
           positiveSignals={buildPositiveSignals(lead)}
-          negativeSignals={buildNegativeSignals(lead)}
+          negativeSignals={buildNegativeSignals(lead, now)}
           recommendation={nextAction.reason}
           score={lead.canonicalScore}
           confidence={null}
@@ -559,7 +561,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, sende
               {isTheirMove && <Clock className="size-3.5 text-stone" />}
               <span className="text-[13px] font-medium text-ink">{relationshipState.detail}</span>
             </div>
-            {relationshipState.lastActionAt && <span className="text-[11px] text-stone">{timeAgo(relationshipState.lastActionAt)}</span>}
+            {relationshipState.lastActionAt && <span className="text-[11px] text-stone">{timeAgo(relationshipState.lastActionAt, now)}</span>}
           </div>
 
           {draftMessage && (
@@ -653,7 +655,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, sende
               )}
               {phase === 'dm_sent' && !hasUnansweredInbound && lastConversationAt && (
                 <p className="text-[12px] text-graphite">
-                  Waiting for a reply. Follow-up is due {followupDueLabel} ({daysSinceConversation} of {followupDueIn} calendar days so far). Reason: no reply yet.
+                  Waiting for a reply. Follow-up is due <span suppressHydrationWarning>{followupDueLabel}</span> ({daysSinceConversation} of {followupDueIn} calendar days so far). Reason: no reply yet.
                 </p>
               )}
               {phase === 'follow_up_due' && !hasUnansweredInbound && (
@@ -714,7 +716,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, sende
               <div className="mb-1 flex items-center gap-2 text-[10px] text-stone">
                 <span className="rounded bg-status-success/10 px-1 py-0.5 text-[9px] font-medium uppercase text-status-success">Outcome</span>
                 <span className="capitalize">{outcomeEntry.type}</span>
-                {outcomeEntry.sentAt && <span>· {timeAgo(outcomeEntry.sentAt)}</span>}
+                {outcomeEntry.sentAt && <span>· {timeAgo(outcomeEntry.sentAt, now)}</span>}
               </div>
               <p className="text-[13px] text-ink">{outcomeEntry.sentText}</p>
             </div>
@@ -732,7 +734,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, sende
                       {msg.direction === 'inbound' ? '← Received' : '→ Sent'}
                     </span>
                     <span className="capitalize">{msg.type === 'inbound_first' ? 'Received' : msg.type}</span>
-                    {msg.sentAt && <span>· {timeAgo(msg.sentAt)}</span>}
+                    {msg.sentAt && <span>· {timeAgo(msg.sentAt, now)}</span>}
                   </div>
                   <p className="text-[13px] text-ink whitespace-pre-wrap">{msg.sentText || (msg.type === 'connection' ? 'Connection request sent (no note).' : '(empty)')}</p>
                 </div>
@@ -832,9 +834,11 @@ function StatusPill({ label }: { label: string }) {
   return <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-medium', tone)}>{label}</span>
 }
 
-function timeAgo(iso: string | null): string {
+function timeAgo(iso: string | null, now: number = Date.now()): string {
   if (!iso) return ''
-  const diff = Date.now() - new Date(iso).getTime()
+  const diff = now - new Date(iso).getTime()
+  // A clock skew or a stale `now` must never render "-1122527m ago".
+  if (diff < 60_000) return 'just now'
   const days = Math.floor(diff / 86_400_000)
   if (days > 0) return `${days}d ago`
   const hrs = Math.floor(diff / 3_600_000)
@@ -882,7 +886,7 @@ export function buildPositiveSignals(lead: LeadDetail): string[] {
   return signals
 }
 
-export function buildNegativeSignals(lead: LeadDetail): string[] {
+export function buildNegativeSignals(lead: LeadDetail, now: number = Date.now()): string[] {
   const signals: string[] = []
   const byKey = leadDimensionShares(lead)
   const display = getLeadDisplayScore(lead)
@@ -898,7 +902,7 @@ export function buildNegativeSignals(lead: LeadDetail): string[] {
   if ((byKey.get('evidenceQuality')?.share ?? 1) < 0.4) signals.push('Limited evidence — research before acting')
   if (display.qualification === 'SKIP' || display.qualification === 'LOW') signals.push(`Scored ${display.label.toLowerCase()}`)
   if (lead.status === 'new' && lead.createdAt) {
-    const days = (Date.now() - new Date(lead.createdAt).getTime()) / 86_400_000
+    const days = (now - new Date(lead.createdAt).getTime()) / 86_400_000
     if (days > 14) signals.push(`Aging lead (${Math.round(days)} days) — signal may be stale`)
   }
 

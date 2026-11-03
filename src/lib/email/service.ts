@@ -1,4 +1,3 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
   ContactPoint,
   EmailMessageMeta,
@@ -20,13 +19,59 @@ import { buildResearchBrief } from '@/lib/email/research-brief'
 import { buildEmailStrategy } from '@/lib/email/strategy'
 import { generateEmailCopy } from '@/lib/email/writer'
 import { validateEmailClaims } from '@/lib/email/claim-safety'
-import { getEmailProvider } from '@/lib/email/providers/email-provider'
+import { getEmailProvider, type EmailProvider } from '@/lib/email/providers/email-provider'
 import { classifySendDisposition, inferFeedbackReasons } from '@/lib/relay/edit-learning'
+import type { DbClient } from '@/lib/db/types'
+
+/**
+ * Record a failed attempt. Never called on the success path, and never allowed
+ * to mask the original error — a send that failed is never logged as sent.
+ */
+async function recordAttemptFailure(
+  client: DbClient,
+  input: {
+    orgId: string
+    leadId: string
+    draftId: string
+    revenueIdentityId: string
+    idem: string
+    reason: string
+    attemptId?: string
+    providerMessageId?: string | null
+  },
+): Promise<void> {
+  const nowIso = new Date().toISOString()
+  const patch: Record<string, unknown> = {
+    status: 'FAILED',
+    failure_reason: input.reason.slice(0, 500),
+    updated_at: nowIso,
+  }
+  if (input.providerMessageId) patch.provider_message_id = input.providerMessageId
+
+  if (input.attemptId) {
+    await client.from('email_send_attempts').update(patch).eq('id', input.attemptId)
+    return
+  }
+
+  // No attempt row yet — open one in the failed state so the failure is
+  // observable rather than invisible.
+  await client.from('email_send_attempts').upsert(
+    {
+      organization_id: input.orgId,
+      lead_id: input.leadId,
+      prepared_draft_id: input.draftId,
+      revenue_identity_id: input.revenueIdentityId,
+      idempotency_key: input.idem,
+      ...patch,
+    },
+    { onConflict: 'organization_id,idempotency_key', ignoreDuplicates: true },
+  )
+}
 
 type Row = Record<string, unknown>
 
 async function listAssignedIdentityIds(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
   repId: string,
 ): Promise<string[]> {
@@ -68,7 +113,7 @@ function mapRevenueIdentity(r: Row): RevenueIdentity {
 }
 
 export async function listLeadContactPoints(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
   leadId: string,
 ): Promise<ContactPoint[]> {
@@ -84,7 +129,7 @@ export async function listLeadContactPoints(
 }
 
 export async function addLeadContactPoint(input: {
-  client: SupabaseClient
+  client: DbClient
   orgId: string
   leadId: string
   type: ContactPoint['type']
@@ -142,7 +187,7 @@ export async function addLeadContactPoint(input: {
 }
 
 async function resolveRevenueIdentity(input: {
-  client: SupabaseClient
+  client: DbClient
   orgId: string
   repId: string
   preferredIdentityId: string | null
@@ -178,7 +223,7 @@ function fallbackContact(contacts: ContactPoint[]): ContactPoint | null {
 }
 
 export async function prepareEmailDraft(input: {
-  client: SupabaseClient
+  client: DbClient
   store: ScoutStore
   orgId: string
   repId: string
@@ -338,7 +383,7 @@ export async function prepareEmailDraft(input: {
   return mapPreparedEmailDraft(data as Row)
 }
 
-async function loadDraftOrThrow(client: SupabaseClient, orgId: string, draftId: string): Promise<PreparedEmailDraft> {
+async function loadDraftOrThrow(client: DbClient, orgId: string, draftId: string): Promise<PreparedEmailDraft> {
   const { data, error } = await client
     .from('prepared_email_drafts')
     .select('*')
@@ -351,7 +396,7 @@ async function loadDraftOrThrow(client: SupabaseClient, orgId: string, draftId: 
 }
 
 export async function sendPreparedEmail(input: {
-  client: SupabaseClient
+  client: DbClient
   store: ScoutStore
   orgId: string
   repId: string
@@ -490,21 +535,68 @@ export async function sendPreparedEmail(input: {
     throw new Error('Daily send cap reached for this Revenue Identity.')
   }
 
-  const provider = getEmailProvider((mailboxRow as Row).provider as string)
-
-  await input.client
-    .from('email_send_attempts')
-    .insert({
-      organization_id: input.orgId,
-      lead_id: input.leadId,
-      prepared_draft_id: draft.id,
-      revenue_identity_id: draft.revenueIdentityId,
-      idempotency_key: idem,
-      status: 'PENDING',
-      updated_at: new Date().toISOString(),
+  // Resolve the provider first. An unavailable provider must not leave an
+  // orphaned PENDING attempt, and it must never be reported as sent.
+  let provider: EmailProvider
+  try {
+    provider = getEmailProvider((mailboxRow as Row).provider as string)
+  } catch (providerError) {
+    await recordAttemptFailure(input.client, {
+      orgId: input.orgId,
+      leadId: input.leadId,
+      draftId: draft.id,
+      revenueIdentityId: draft.revenueIdentityId,
+      idem,
+      reason: providerError instanceof Error ? providerError.message : 'provider_unavailable',
     })
+    throw providerError
+  }
 
-  let sendResult: Awaited<ReturnType<typeof provider.send>>
+  // One provider send per idempotency key. `ignoreDuplicates` makes a concurrent
+  // duplicate worker a no-op instead of a second send; a SENT attempt returns
+  // idempotently and a FAILED attempt is retryable.
+  const { data: insertedAttempt, error: attemptError } = await input.client
+    .from('email_send_attempts')
+    .upsert(
+      {
+        organization_id: input.orgId,
+        lead_id: input.leadId,
+        prepared_draft_id: draft.id,
+        revenue_identity_id: draft.revenueIdentityId,
+        idempotency_key: idem,
+        status: 'PENDING',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'organization_id,idempotency_key', ignoreDuplicates: true },
+    )
+    .select('id')
+
+  if (attemptError && (attemptError as { code?: string }).code !== '23505') throw attemptError
+
+  let attemptId = insertedAttempt?.[0]?.id as string | undefined
+  if (!attemptId) {
+    const { data: existingAttempt } = await input.client
+      .from('email_send_attempts')
+      .select('id, status, email_message_id')
+      .eq('organization_id', input.orgId)
+      .eq('idempotency_key', idem)
+      .maybeSingle()
+
+    if (existingAttempt?.status === 'SENT') {
+      const { data: sentMessage } = await input.client
+        .from('email_messages')
+        .select('*')
+        .eq('organization_id', input.orgId)
+        .eq('idempotency_key', idem)
+        .maybeSingle()
+      if (sentMessage) {
+        return { emailMessage: mapEmailMessage(sentMessage as Row), todaySends: 0, idempotent: true }
+      }
+    }
+    attemptId = existingAttempt?.id as string | undefined
+  }
+
+  let sendResult: Awaited<ReturnType<EmailProvider['send']>>
   try {
     sendResult = await provider.send({
       fromEmail: (mailboxRow as Row).sender_email as string,
@@ -520,22 +612,41 @@ export async function sendPreparedEmail(input: {
       },
     })
   } catch (sendError) {
-    await input.client
-      .from('email_send_attempts')
-      .update({ status: 'FAILED', failure_reason: sendError instanceof Error ? sendError.message : 'network_error', updated_at: new Date().toISOString() })
-      .eq('organization_id', input.orgId)
-      .eq('idempotency_key', idem)
+    await recordAttemptFailure(input.client, {
+      orgId: input.orgId,
+      leadId: input.leadId,
+      draftId: draft.id,
+      revenueIdentityId: draft.revenueIdentityId,
+      idem,
+      reason: sendError instanceof Error ? sendError.message : 'network_error',
+      attemptId,
+    })
     throw sendError
   }
 
   if (!sendResult.accepted || sendResult.status === 'FAILED') {
-    await input.client
-      .from('email_send_attempts')
-      .update({ status: 'FAILED', failure_reason: sendResult.failureReason, updated_at: new Date().toISOString() })
-      .eq('organization_id', input.orgId)
-      .eq('idempotency_key', idem)
+    await recordAttemptFailure(input.client, {
+      orgId: input.orgId,
+      leadId: input.leadId,
+      draftId: draft.id,
+      revenueIdentityId: draft.revenueIdentityId,
+      idem,
+      reason: sendResult.failureReason ?? 'provider_rejected',
+      attemptId,
+      providerMessageId: sendResult.providerMessageId,
+    })
     throw new Error(sendResult.failureReason ?? 'Provider rejected send.')
   }
+
+  // The provider accepted the send. Persist its identity immediately: every write
+  // below can still fail, and without this anchor a retry would send a second
+  // copy of an email the provider already delivered.
+  const acceptedAt = new Date().toISOString()
+  await input.client
+    .from('email_send_attempts')
+    .update({ provider_message_id: sendResult.providerMessageId, updated_at: acceptedAt })
+    .eq('organization_id', input.orgId)
+    .eq('idempotency_key', idem)
 
   const originalBody = draft.body ?? body
   const disposition = classifySendDisposition(originalBody, body, false)
@@ -553,7 +664,7 @@ export async function sendPreparedEmail(input: {
   }
 
   const category = draft.isFollowup ? 'FOLLOW_UP' : 'FIRST_EMAIL'
-  const nowIso = new Date().toISOString()
+  const nowIso = acceptedAt
   const { data: emailMsgRow, error: emailMsgError } = await input.client
     .from('email_messages')
     .insert({
@@ -578,8 +689,42 @@ export async function sendPreparedEmail(input: {
       updated_at: nowIso,
     })
     .select('*')
-    .single()
-  if (emailMsgError) throw emailMsgError
+    .maybeSingle()
+
+  if (emailMsgError) {
+    // A concurrent worker already inserted this send. The unique key won, so the
+    // row exists and is correct — return it instead of surfacing an error that a
+    // retry would turn into a second provider call.
+    if ((emailMsgError as { code?: string }).code === '23505') {
+      const { data: existingMessage } = await input.client
+        .from('email_messages')
+        .select('*')
+        .eq('organization_id', input.orgId)
+        .eq('idempotency_key', idem)
+        .maybeSingle()
+      if (existingMessage) {
+        return {
+          emailMessage: mapEmailMessage(existingMessage as Row),
+          todaySends: markResult.todaySends,
+          idempotent: true,
+        }
+      }
+    }
+    // The provider accepted this send but Relay could not record it. The attempt
+    // row carries the provider message id, so the reconciliation job can rebuild
+    // the record without sending a second copy.
+    await recordAttemptFailure(input.client, {
+      orgId: input.orgId,
+      leadId: input.leadId,
+      draftId: draft.id,
+      revenueIdentityId: draft.revenueIdentityId,
+      idem,
+      reason: 'persist_failed_after_provider_accept',
+      attemptId,
+      providerMessageId: sendResult.providerMessageId,
+    })
+    throw emailMsgError
+  }
 
   await input.client
     .from('email_delivery_events')

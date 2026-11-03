@@ -15,10 +15,11 @@ export async function GET() {
   const store = await createScoutStore()
   const roleContext = buildRoleContext(user.rep, user.organization)
 
-  const [dash, relayData, allLeads] = await Promise.all([
+  const [dash, relayData, allLeads, suppressedLeadIds] = await Promise.all([
     store.getTodayDashboard(),
     store.getRelayQueueData(),
     store.fetchLeadsAll(),
+    store.getSuppressedLeadIds(),
   ])
 
   const queue = buildRelayQueue({
@@ -31,6 +32,7 @@ export async function GET() {
     messagesByJob: relayData.messagesByJob,
     assignedProfiles: relayData.assignedProfiles,
     allLeads,
+    suppressedLeadIds,
   })
 
   return NextResponse.json(queue)

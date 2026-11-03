@@ -11,22 +11,32 @@ async function profileHolders(
   orgId: string,
   profileId: string,
 ): Promise<string[] | null> {
-  const [{ data: profile }, { data: direct }, { data: viaIdentity }] = await Promise.all([
+  const [{ data: profile }, { data: direct }, { data: matchingIdentities }] = await Promise.all([
     db.from('profiles').select('id, rep_id').eq('id', profileId).eq('organization_id', orgId).maybeSingle(),
     db.from('profile_assignments').select('rep_id').eq('profile_id', profileId),
     db
-      .from('identity_assignments')
-      .select('rep_id, revenue_identities!inner(profile_id, status)')
+      .from('revenue_identities')
+      .select('id, status')
       .eq('organization_id', orgId)
-      .eq('revenue_identities.profile_id', profileId),
+      .eq('profile_id', profileId),
   ])
   if (!profile) return null
   const holders = new Set<string>()
   if (profile.rep_id) holders.add(profile.rep_id as string)
   for (const r of direct ?? []) if (r.rep_id) holders.add(r.rep_id as string)
-  for (const r of (viaIdentity ?? []) as Array<{ rep_id: string; revenue_identities: { status: string | null } | Array<{ status: string | null }> }>) {
-    const identity = Array.isArray(r.revenue_identities) ? r.revenue_identities[0] : r.revenue_identities
-    if (r.rep_id && identity?.status !== 'archived') holders.add(r.rep_id)
+
+  // The assignment rows are a second read rather than a PostgREST embed
+  // (`revenue_identities!inner`), which the Neon adapter cannot translate.
+  const activeIdentityIds = (matchingIdentities ?? [])
+    .filter((r: { status: string | null }) => r.status !== 'archived')
+    .map((r: { id: string }) => r.id)
+  if (activeIdentityIds.length > 0) {
+    const { data: assignments } = await db
+      .from('identity_assignments')
+      .select('rep_id')
+      .eq('organization_id', orgId)
+      .in('revenue_identity_id', activeIdentityIds)
+    for (const a of assignments ?? []) if (a.rep_id) holders.add(a.rep_id as string)
   }
   return [...holders]
 }
@@ -103,6 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     toRepId: toRepId!,
     toProfileId: toProfileId ?? undefined,
     reason: reason ?? undefined,
+    previousOwnerRepId: (lead.owner_rep_id as string | null) ?? null,
   })
   if (!result.success) {
     return NextResponse.json({ error: 'Referral failed. Try again.' }, { status: 500 })

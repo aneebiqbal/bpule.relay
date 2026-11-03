@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getBrowserSupabase } from "@/lib/supabase/client";
+import { getBrowserAuth } from "@/lib/auth/browser";
 import { humanizePasswordResetError } from "@/lib/auth/error-messages";
 import {
   RelayAuthShell,
@@ -33,9 +33,9 @@ export function ResetPasswordExperience() {
     setError(null);
 
     try {
-      const supabase = getBrowserSupabase();
-      const { error: authError } = await supabase.auth.updateUser({ password });
-      if (authError) throw authError;
+      const auth = await getBrowserAuth();
+      const authError = await auth.updatePassword(password);
+      if (authError) throw new Error(authError.message);
       setDone(true);
     } catch (cause) {
       setError(humanizePasswordResetError(cause instanceof Error ? cause.message : ""));

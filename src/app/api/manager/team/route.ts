@@ -1,6 +1,6 @@
+import { createServerSupabase } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
-import { createServerSupabase } from '@/lib/supabase/server'
 import { currentInstant, orgDate, workdayProgress } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
@@ -16,13 +16,13 @@ export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get('date') ?? orgDate(now, policy.timezone)
   const supabase = await createServerSupabase()
 
-  const { data: teamMembers } = await supabase
+  const { data: memberships } = await supabase
     .from('team_memberships')
-    .select('person_id, teams!inner(name)')
+    .select('person_id, team_id')
     .eq('team_id', ctx.managedTeamIds[0])
     .eq('active', true)
 
-  const personIds = teamMembers?.map((m: any) => m.person_id) ?? []
+  const personIds = memberships?.map((m: { person_id: string }) => m.person_id) ?? []
 
   const { data: reps } = await supabase
     .from('reps')

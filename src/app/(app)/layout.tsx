@@ -5,13 +5,13 @@ import { getCurrentUser } from "@/lib/auth/current";
 import { getAuthContext } from "@/lib/auth/organization";
 import { isDemoMode } from "@/lib/ai/config";
 import { createScoutStore } from "@/lib/store";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { AppRail } from "@/components/app-rail";
-import { AppBackButton } from "@/components/app-back-button";
+import { getAuthProvider } from "@/lib/auth/provider";
+import { RelayAppShell } from "@/components/shell/relay-app-shell";
 import { AppIdentifyWrapper } from "@/components/app-identify-wrapper";
 import { AnalyticsProvider } from "@/components/analytics-provider";
 import { ActiveIdentityProvider } from "@/components/workspace/active-identity-provider";
 import { ACTIVE_IDENTITY_COOKIE, isIdentityId, type WorkspaceIdentity } from "@/lib/workspace/active-identity";
+import { loadSidebarCounts, type SidebarCounts } from "@/lib/operations/sidebar-counts";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +25,9 @@ export default async function AppLayout({
   const user = await getCurrentUser();
   if (!user) {
     try {
-      const supabase = await createServerSupabase();
-      const { data } = await supabase.auth.getUser();
-      if (data.user) {
+      const auth = await getAuthProvider();
+      const { user: sessionUser } = await auth.getSession();
+      if (sessionUser) {
         redirect("/login?error=no_workspace");
       }
     } catch {
@@ -44,7 +44,7 @@ export default async function AppLayout({
     getAuthContext().catch(() => null),
   ])
 
-  const [queue, revenueIdentities] = await Promise.all([
+  const [queue, revenueIdentities, sidebarCounts] = await Promise.all([
     store.getQueue(),
     (async (): Promise<WorkspaceIdentity[]> => {
       try {
@@ -64,7 +64,20 @@ export default async function AppLayout({
         return [];
       }
     })(),
-  ])
+    (async (): Promise<SidebarCounts> => {
+      if (isDemoMode()) return { inboxNeedsReply: null, actionableTasks: null }
+      try {
+        return await loadSidebarCounts(store.getSupabaseClient(), {
+          orgId: user.organization.id,
+          repId: user.rep.id,
+          timeZone: user.organization.timezone ?? "UTC",
+        });
+      } catch {
+        // Badges are optional chrome: never block the shell on them.
+        return { inboxNeedsReply: null, actionableTasks: null };
+      }
+    })(),
+  ]);
 
   const cookieStore = await cookies();
   const savedIdentityId = cookieStore.get(ACTIVE_IDENTITY_COOKIE)?.value ?? null;
@@ -82,24 +95,19 @@ export default async function AppLayout({
         plan={user.organization.plan}
       >
         <ActiveIdentityProvider identities={revenueIdentities} initialActiveId={initialActiveId}>
-          <div className="min-h-dvh bg-bone lg:grid lg:grid-cols-[14rem_1fr]">
-            <AppRail
-              repName={user.rep.name}
-              organizationName={user.organization.name}
-              role={user.rep.role}
-              isAdmin={authCtx?.isAdmin ?? false}
-              calibrated={Boolean(user.profile)}
-              demo={isDemoMode()}
-              todaySends={queue.todaySends}
-              dailyLimit={queue.dailyLimit}
-            />
-            <main className="mx-auto w-full max-w-6xl px-5 pt-6 pb-24 lg:px-8 lg:pt-0 lg:pb-8">
-              <div className="sticky top-0 z-30 -mx-8 mb-6 hidden border-b border-line bg-bone/95 px-8 py-2.5 backdrop-blur-sm lg:block">
-                <AppBackButton />
-              </div>
-              {children}
-            </main>
-          </div>
+          <RelayAppShell
+            organizationName={user.organization.name}
+            role={user.rep.role}
+            isOwner={authCtx?.isOwner ?? false}
+            isAdmin={authCtx?.isAdmin ?? false}
+            isManager={authCtx?.isManager ?? false}
+            demo={isDemoMode()}
+            todaySends={queue.todaySends}
+            dailyLimit={queue.dailyLimit}
+            sidebarCounts={sidebarCounts}
+          >
+            {children}
+          </RelayAppShell>
         </ActiveIdentityProvider>
       </AppIdentifyWrapper>
     </>

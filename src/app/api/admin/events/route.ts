@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 
 export const maxDuration = 30
@@ -30,13 +30,13 @@ export async function GET(req: NextRequest) {
     .from('action_events')
     .select(`
       id,
+      actor_id,
       action_type,
       execution_status,
       occurred_at,
-      reps:actor_id (name),
-      sender_profiles:sender_profile_id (identity_name),
-      leads:lead_id (id, company, contact_name),
-      upwork_jobs:job_id (title)
+      sender_profile_id,
+      lead_id,
+      job_id
     `)
     .eq('organization_id', ctx.orgId)
     .eq('action_type', action)
@@ -51,20 +51,36 @@ export async function GET(req: NextRequest) {
 
   const { data: events } = await query
 
+  // Embed targets are second reads rather than PostgREST embeds
+  // (`reps:actor_id`, `leads:lead_id`), which the Neon adapter cannot translate.
+  const rows = events ?? []
+  const unique = (values: unknown[]) =>
+    [...new Set(values.filter((x): x is string => Boolean(x)))]
+  const [repRows, profileRows, leadRows, jobRows] = await Promise.all([
+    store.from('reps').select('id, name').in('id', unique(rows.map((e) => e.actor_id))),
+    store.from('sender_profiles').select('id, identity_name').in('id', unique(rows.map((e) => e.sender_profile_id))),
+    store.from('leads').select('id, company, contact_name').in('id', unique(rows.map((e) => e.lead_id))),
+    store.from('upwork_jobs').select('id, title').in('id', unique(rows.map((e) => e.job_id))),
+  ])
+  const repNameById = new Map((repRows.data ?? []).map((r) => [r.id as string, r.name as string]))
+  const profileNameById = new Map((profileRows.data ?? []).map((p) => [p.id as string, p.identity_name as string]))
+  const leadById = new Map((leadRows.data ?? []).map((l) => [l.id as string, l as Record<string, unknown>]))
+  const jobTitleById = new Map((jobRows.data ?? []).map((j) => [j.id as string, j.title as string]))
+
   return NextResponse.json({
     date,
     action,
-    events: (events || []).map((e: Record<string, unknown>) => ({
+    events: rows.map((e) => ({
       id: e.id as string,
       action_type: e.action_type as string,
       execution_status: e.execution_status as string,
       occurred_at: e.occurred_at as string,
-      actor_name: ((e.reps as Record<string, unknown> | null)?.name as string) || null,
-      sender_profile_name: ((e.sender_profiles as Record<string, unknown> | null)?.identity_name as string) || null,
-      lead_company: ((e.leads as Record<string, unknown> | null)?.company as string) || null,
-      lead_name: ((e.leads as Record<string, unknown> | null)?.contact_name as string) || null,
-      lead_id: ((e.leads as Record<string, unknown> | null)?.id as string) || null,
-      job_title: ((e.upwork_jobs as Record<string, unknown> | null)?.title as string) || null,
+      actor_name: repNameById.get(e.actor_id as string) || null,
+      sender_profile_name: profileNameById.get(e.sender_profile_id as string) || null,
+      lead_company: (leadById.get(e.lead_id as string)?.company as string) || null,
+      lead_name: (leadById.get(e.lead_id as string)?.contact_name as string) || null,
+      lead_id: (leadById.get(e.lead_id as string)?.id as string) || null,
+      job_title: jobTitleById.get(e.job_id as string) || null,
     })),
   })
 }

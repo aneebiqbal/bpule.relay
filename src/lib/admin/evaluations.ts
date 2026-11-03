@@ -1,3 +1,4 @@
+import type { DbClient } from '@/lib/db/types'
 /**
  * Human evaluation data layer (message, thesis, routing) + model comparison
  * with minimum-sample gating + revenue funnel.
@@ -7,7 +8,6 @@
  * original message, thesis or routing decision.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const MESSAGE_CLASSIFICATIONS = [
   'SALES_READY', 'GENERIC', 'MARKETING_NOT_SALES', 'UNSUPPORTED', 'FABRICATED', 'WRONG_STAGE',
@@ -19,7 +19,7 @@ export type ThesisRating = (typeof THESIS_RATINGS)[number]
 
 /** Sample the messages a reviewer should score. Test/demo/E2E are excluded. */
 export async function sampleMessagesForReview(
-  client: SupabaseClient,
+  client: DbClient,
   orgId: string,
   opts: { types?: string[]; limit?: number } = {},
 ) {
@@ -37,7 +37,7 @@ export async function sampleMessagesForReview(
 }
 
 export async function recordMessageEvaluation(
-  client: SupabaseClient,
+  client: DbClient,
   input: {
     organizationId: string
     messageId: string
@@ -67,7 +67,7 @@ export async function recordMessageEvaluation(
 }
 
 /** Human message-review quality metrics. */
-export async function messageReviewStats(client: SupabaseClient, orgId: string) {
+export async function messageReviewStats(client: DbClient, orgId: string) {
   const { data } = await client
     .from('message_evaluations')
     .select('score, classification')
@@ -91,7 +91,7 @@ export async function messageReviewStats(client: SupabaseClient, orgId: string) 
 }
 
 /** Sample theses for review (latest per unique opportunity). */
-export async function sampleThesesForReview(client: SupabaseClient, orgId: string, limit = 50) {
+export async function sampleThesesForReview(client: DbClient, orgId: string, limit = 50) {
   const { data, error } = await client
     .from('leads')
     .select('id, company, contact_name, contact_title, canonical_intelligence')
@@ -104,7 +104,7 @@ export async function sampleThesesForReview(client: SupabaseClient, orgId: strin
 }
 
 export async function recordThesisEvaluation(
-  client: SupabaseClient,
+  client: DbClient,
   input: { organizationId: string; leadId: string; reviewerRepId: string; rating: ThesisRating; reasons?: string[]; note?: string | null },
 ) {
   const { error } = await client.from('thesis_evaluations').upsert(
@@ -123,7 +123,7 @@ export async function recordThesisEvaluation(
 }
 
 /** Human thesis-quality metrics. */
-export async function thesisReviewStats(client: SupabaseClient, orgId: string) {
+export async function thesisReviewStats(client: DbClient, orgId: string) {
   const { data } = await client.from('thesis_evaluations').select('rating').eq('organization_id', orgId)
   const rows = (data ?? []) as Array<{ rating: string }>
   const total = rows.length
@@ -139,7 +139,7 @@ export async function thesisReviewStats(client: SupabaseClient, orgId: string) {
 }
 
 export async function recordRoutingEvaluation(
-  client: SupabaseClient,
+  client: DbClient,
   input: {
     organizationId: string
     leadId: string
@@ -165,7 +165,7 @@ export async function recordRoutingEvaluation(
 }
 
 /** Human routing-judgment coverage. */
-export async function routingEvaluationStats(client: SupabaseClient, orgId: string) {
+export async function routingEvaluationStats(client: DbClient, orgId: string) {
   const { data } = await client.from('routing_evaluations').select('v1_correct, v2_correct, best_sender_profile_id').eq('organization_id', orgId)
   const rows = (data ?? []) as Array<{ v1_correct: boolean | null; v2_correct: boolean | null; best_sender_profile_id: string | null }>
   const judged = rows.filter((r) => r.v1_correct != null || r.v2_correct != null)
@@ -201,7 +201,7 @@ export interface ModelComparison {
  * INSUFFICIENT_DATA below 30 labels and PRELIMINARY_ONLY below 100 — no metric
  * is shown as final before then.
  */
-export async function modelComparison(client: SupabaseClient, orgId: string): Promise<ModelComparison> {
+export async function modelComparison(client: DbClient, orgId: string): Promise<ModelComparison> {
   const { data: labels } = await client
     .from('scoring_labels')
     .select('opportunity_key, expected_score_min, expected_score_max')
@@ -243,7 +243,7 @@ export async function modelComparison(client: SupabaseClient, orgId: string): Pr
 }
 
 /** Canonical revenue funnel from stored outcomes. */
-export async function revenueFunnel(client: SupabaseClient, orgId: string) {
+export async function revenueFunnel(client: DbClient, orgId: string) {
   const { data } = await client
     .from('outcomes')
     .select('lead_id, stage')

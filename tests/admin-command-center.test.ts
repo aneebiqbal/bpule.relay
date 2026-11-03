@@ -1,130 +1,328 @@
 import { describe, expect, it } from 'vitest'
-import { buildCommandCenterFromActivity } from '@/lib/relay/dashboard-loader'
+import {
+  assembleAdminCommandCenter,
+  buildOrgAttentionExtras,
+  buildPipelineHealth,
+  buildStuckOpportunities,
+  type OpenLeadFact,
+} from '@/lib/team/admin-command-summary'
+import {
+  assembleManagerHomeTeamData,
+  filterTeamLiveToRepIds,
+} from '@/lib/team/manager-home-summary'
+import { deriveRepStatus, buildRepAttentionSignals, type ManagerRepSnapshot } from '@/lib/team/attention-policy'
+import type { TeamDaySummary } from '@/lib/rep-day/team'
+import type { TeamLivePayload } from '@/lib/admin/team-live'
 
-/**
- * Regression coverage for the admin Command Center all-zero-stats bug:
- * the view used to be driven entirely by day_closes / revenue_identity_contracts,
- * which can be completely unprovisioned for a real org (zero contracts ever
- * created) while daily_targets/daily_accountability — a separate, simpler
- * per-activity target system — is genuinely populated with real completed
- * counts from reps actively working. That showed "No active operators
- * today" for a team that was demonstrably working.
- */
+function snap(partial: Partial<ManagerRepSnapshot> & Pick<ManagerRepSnapshot, 'repId' | 'repName'>): ManagerRepSnapshot {
+  return {
+    activeProfile: 'LinkedIn',
+    completedToday: 5,
+    repliesWaiting: 0,
+    followUpsOverdue: 0,
+    highPriorityUntouched: 0,
+    overdueTasks: 0,
+    meetings: 0,
+    wins: 0,
+    targetPct: 80,
+    oldestReplyAgeHours: null,
+    oldestFollowUpAgeHours: null,
+    oldestHighPriorityAgeHours: null,
+    oldestOverdueTaskAgeHours: null,
+    lastActivityAt: new Date().toISOString(),
+    hasProfileAssignment: true,
+    requiredRemaining: 0,
+    dayState: 'ACTIVE',
+    ...partial,
+  }
+}
 
-const REP = { id: 'rep-1', name: 'Dana Wu' }
-const IDENTITY = { id: 'identity-1', identity_name: 'Acme Outreach' }
+const teamDay: TeamDaySummary = {
+  businessDate: '2026-10-31',
+  timezone: 'UTC',
+  isWorkingDay: true,
+  workdayProgress: 0.5,
+  minutesRemaining: 240,
+  workdayStart: '09:00',
+  workdayEnd: '18:00',
+  counts: {
+    NOT_STARTED: 0,
+    ACTIVE: 1,
+    AT_RISK: 0,
+    CRITICAL: 0,
+    READY_TO_CLOSE: 0,
+    CLOSED: 0,
+    MISSED: 0,
+  },
+  totals: {
+    reps: 1,
+    requiredRemaining: 2,
+    commitmentProgress: 0.5,
+    repliesWaiting: 3,
+    actionsToday: 4,
+    pipelineCreated: 1,
+  },
+  reps: [
+    {
+      repId: 'rep-1',
+      repName: 'Mehak',
+      repRole: 'rep',
+      state: 'ACTIVE',
+      checkInAt: null,
+      closedAt: null,
+      lateStart: false,
+      exceptionState: 'NONE',
+      commitmentProgress: 0.5,
+      requiredRemaining: 2,
+      minutesRemaining: 240,
+      repliesWaiting: 3,
+      actionsToday: 4,
+      pipelineCreated: 1,
+      lastActivityAt: new Date().toISOString(),
+      identities: [{ id: 'id-1', name: 'Mehak Seedat', channel: 'linkedin' }],
+    },
+  ],
+}
 
-describe('buildCommandCenterFromActivity', () => {
-  it('shows a rep as working from daily_targets/daily_accountability alone, with zero day_closes and zero contracts', () => {
-    const result = buildCommandCenterFromActivity({
-      reps: [REP],
-      assignments: [{ rep_id: REP.id, revenue_identity_id: IDENTITY.id }],
-      identities: [IDENTITY],
-      targets: [
-        { revenue_identity_id: IDENTITY.id, activity_type: 'dm', target_count: 30 },
-        { revenue_identity_id: IDENTITY.id, activity_type: 'connection_request', target_count: 20 },
+const teamLive: TeamLivePayload = {
+  date: '2026-10-31',
+  people: [
+    {
+      repId: 'rep-1',
+      repName: 'Mehak',
+      role: 'rep',
+      identities: [{ name: 'Mehak Seedat', title: null, channel: 'linkedin' }],
+      goals: [],
+      openLeads: [
+        { id: 'l1', company: 'Acme', contactName: null, status: 'replied', statusLabel: 'Replied', score: 80 },
+        { id: 'l2', company: 'Beta', contactName: null, status: 'followed_up', statusLabel: 'Follow-up', score: 40 },
+        { id: 'l3', company: 'Gamma', contactName: null, status: 'new', statusLabel: 'New', score: 78 },
       ],
-      accountability: [
-        { rep_id: REP.id, revenue_identity_id: IDENTITY.id, activity_type: 'dm', completed_count: 15 },
+      openLeadCount: 3,
+      outreachSent: 1,
+      repliesHandled: 1,
+      leadsSaved: 1,
+      extractionsCount: 0,
+      extractionFailures: 0,
+      totalTarget: 10,
+      totalCompleted: 4,
+      totalRemaining: 6,
+      lastActivityAt: new Date().toISOString(),
+      identityCount: 1,
+    },
+  ],
+}
+
+const openLeads: OpenLeadFact[] = [
+  {
+    id: 'l1',
+    company: 'Acme',
+    status: 'replied',
+    ownerRepId: 'rep-1',
+    ownerName: 'Mehak',
+    revenueIdentityId: 'id-1',
+    canonicalScore: 80,
+    updatedAt: new Date(Date.now() - 18 * 3_600_000).toISOString(),
+    lastOutboundAt: null,
+  },
+  {
+    id: 'l-missing',
+    company: 'No Profile Co',
+    status: 'new',
+    ownerRepId: 'rep-1',
+    ownerName: 'Mehak',
+    revenueIdentityId: null,
+    canonicalScore: 70,
+    updatedAt: new Date().toISOString(),
+    lastOutboundAt: null,
+  },
+  {
+    id: 'l-high',
+    company: 'High Intent',
+    status: 'new',
+    ownerRepId: 'rep-1',
+    ownerName: 'Mehak',
+    revenueIdentityId: 'id-1',
+    canonicalScore: 82,
+    updatedAt: new Date().toISOString(),
+    lastOutboundAt: null,
+  },
+]
+
+describe('ADMIN command center', () => {
+  it('ADMIN_HOME_ORG_HEALTH + ATTENTION assemble org payload', () => {
+    const data = assembleAdminCommandCenter({
+      orgName: 'Breakthrough Pulse',
+      isOwner: true,
+      teamDay,
+      teamLive,
+      allowedRepIds: new Set(['rep-1']),
+      openLeads,
+      profiles: [],
+      activity: [],
+      meetingsThisWeek: 2,
+      wins: 1,
+    })
+    expect(data.scopeNote).toBe('organization')
+    expect(data.health.activeOpportunities).toBeGreaterThan(0)
+    expect(data.health.repliesWaiting).toBe(3)
+    expect(data.health.meetingsThisWeek).toBe(2)
+    expect(data.health.wins).toBe(1)
+    expect(data.isOwner).toBe(true)
+    expect(data.attention.length).toBeGreaterThan(0)
+  })
+
+  it('ADMIN_HOME_PIPELINE', () => {
+    const pipeline = buildPipelineHealth(openLeads)
+    expect(pipeline.find((s) => s.key === 'qualified')?.count).toBe(2)
+    expect(pipeline.find((s) => s.key === 'conversation')?.count).toBe(1)
+  })
+
+  it('ADMIN_HOME_PROFILE_PERFORMANCE passthrough', () => {
+    const data = assembleAdminCommandCenter({
+      orgName: 'Org',
+      isOwner: false,
+      teamDay,
+      teamLive,
+      allowedRepIds: new Set(['rep-1']),
+      openLeads,
+      profiles: [
+        {
+          identityId: 'id-1',
+          name: 'Mehak Seedat',
+          channel: 'linkedin',
+          assignedLeads: 3,
+          messagesSent: 10,
+          replies: 2,
+          meetings: 0,
+          proposals: 1,
+          wins: 0,
+          replyRate: 20,
+        },
       ],
-      dayCloses: [], // no day_closes rows at all — must not blank out the view
-      dayElapsedPct: 0.3,
+      activity: [{ id: 'a1', label: 'Won', detail: 'Mehak', occurredAt: new Date().toISOString(), href: null }],
+      meetingsThisWeek: 0,
+      wins: 0,
     })
-
-    expect(result.teamHealth.working).toBe(1)
-    expect(result.teamHealth.onTrack).toBe(1)
-    expect(result.team).toHaveLength(1)
-    expect(result.team[0]).toMatchObject({
-      personId: REP.id,
-      personName: REP.name,
-      progress: '15/50',
-      dayCloseStatus: null,
-    })
+    expect(data.profiles).toHaveLength(1)
+    expect(data.activity[0].label).toBe('Won')
   })
 
-  it('does not count a rep with an identity assignment but zero target rows as "working" (never logged activity is distinct from on-track)', () => {
-    const result = buildCommandCenterFromActivity({
-      reps: [REP],
-      assignments: [{ rep_id: REP.id, revenue_identity_id: IDENTITY.id }],
-      identities: [IDENTITY],
-      targets: [],
-      accountability: [],
-      dayCloses: [],
-      dayElapsedPct: 0.3,
-    })
-
-    expect(result.teamHealth.working).toBe(0)
-    expect(result.team).toHaveLength(0)
+  it('ADMIN_HOME_ACTIVITY stuck opportunities', () => {
+    const stuck = buildStuckOpportunities(openLeads)
+    expect(stuck.some((s) => s.reason.includes('no profile'))).toBe(true)
+    expect(stuck.some((s) => s.reason.toLowerCase().includes('reply'))).toBe(true)
+    expect(stuck.some((s) => s.reason.toLowerCase().includes('high buyer'))).toBe(true)
   })
 
-  it('excludes reps with no identity assignment at all', () => {
-    const result = buildCommandCenterFromActivity({
-      reps: [REP, { id: 'rep-2', name: 'No Assignments' }],
-      assignments: [{ rep_id: REP.id, revenue_identity_id: IDENTITY.id }],
-      identities: [IDENTITY],
-      targets: [{ revenue_identity_id: IDENTITY.id, activity_type: 'dm', target_count: 10 }],
-      accountability: [],
-      dayCloses: [],
-      dayElapsedPct: 0.3,
-    })
-
-    expect(result.team.map((t) => t.personId)).toEqual([REP.id])
+  it('ADMIN_ORG_SCOPE extras for missing profiles', () => {
+    const extras = buildOrgAttentionExtras({ missingProfileCount: 7, stuckCritical: 2 })
+    expect(extras[0].category).toBe('NO_PROFILE_ASSIGNMENT')
+    expect(extras[0].severity).toBe('critical')
   })
 
-  it('flags a rep as behind only once the day is at least half elapsed and completion is under 60% of target', () => {
-    const early = buildCommandCenterFromActivity({
-      reps: [REP],
-      assignments: [{ rep_id: REP.id, revenue_identity_id: IDENTITY.id }],
-      identities: [IDENTITY],
-      targets: [{ revenue_identity_id: IDENTITY.id, activity_type: 'dm', target_count: 30 }],
-      accountability: [{ rep_id: REP.id, revenue_identity_id: IDENTITY.id, activity_type: 'dm', completed_count: 0 }],
-      dayCloses: [],
-      dayElapsedPct: 0.2, // early in the day — not behind yet
-    })
-    expect(early.teamHealth.behind).toBe(0)
-    expect(early.team[0]?.status).toBe('on_track')
-
-    const late = buildCommandCenterFromActivity({
-      reps: [REP],
-      assignments: [{ rep_id: REP.id, revenue_identity_id: IDENTITY.id }],
-      identities: [IDENTITY],
-      targets: [{ revenue_identity_id: IDENTITY.id, activity_type: 'dm', target_count: 30 }],
-      accountability: [{ rep_id: REP.id, revenue_identity_id: IDENTITY.id, activity_type: 'dm', completed_count: 0 }],
-      dayCloses: [],
-      dayElapsedPct: 0.6, // past halfway, 0% complete
-    })
-    expect(late.teamHealth.behind).toBe(1)
-    expect(late.team[0]?.status).toBe('behind')
-    expect(late.attentionItems).toHaveLength(1)
-    expect(late.attentionItems[0]?.repId).toBe(REP.id)
+  it('ADMIN_MANAGER_SCOPE_DIFFERENCE: manager filter excludes outsiders', () => {
+    const liveWithOutsider: TeamLivePayload = {
+      ...teamLive,
+      people: [
+        ...teamLive.people,
+        {
+          ...teamLive.people[0],
+          repId: 'outsider',
+          repName: 'Outsider',
+        },
+      ],
+    }
+    const filtered = filterTeamLiveToRepIds(liveWithOutsider, new Set(['rep-1']))
+    expect(filtered.people.map((p) => p.repId)).toEqual(['rep-1'])
   })
 
-  it('marks a rep completed once completed_count meets target across all their activity types', () => {
-    const result = buildCommandCenterFromActivity({
-      reps: [REP],
-      assignments: [{ rep_id: REP.id, revenue_identity_id: IDENTITY.id }],
-      identities: [IDENTITY],
-      targets: [{ revenue_identity_id: IDENTITY.id, activity_type: 'dm', target_count: 10 }],
-      accountability: [{ rep_id: REP.id, revenue_identity_id: IDENTITY.id, activity_type: 'dm', completed_count: 10 }],
-      dayCloses: [],
-      dayElapsedPct: 0.9,
+  it('OWNER_ADMIN_PARITY: owner flag only adds controls, same ops data shape', () => {
+    const admin = assembleAdminCommandCenter({
+      orgName: 'Org',
+      isOwner: false,
+      teamDay,
+      teamLive,
+      allowedRepIds: new Set(['rep-1']),
+      openLeads,
+      profiles: [],
+      activity: [],
+      meetingsThisWeek: 1,
+      wins: 0,
     })
-
-    expect(result.teamHealth.closed).toBe(1)
-    expect(result.team[0]?.status).toBe('completed')
+    const owner = assembleAdminCommandCenter({
+      orgName: 'Org',
+      isOwner: true,
+      teamDay,
+      teamLive,
+      allowedRepIds: new Set(['rep-1']),
+      openLeads,
+      profiles: [],
+      activity: [],
+      meetingsThisWeek: 1,
+      wins: 0,
+    })
+    expect(admin.health).toEqual(owner.health)
+    expect(admin.rows).toEqual(owner.rows)
+    expect(owner.isOwner).toBe(true)
+    expect(admin.isOwner).toBe(false)
   })
 
-  it('enriches dayCloseStatus from day_closes when present, without requiring it', () => {
-    const result = buildCommandCenterFromActivity({
-      reps: [REP],
-      assignments: [{ rep_id: REP.id, revenue_identity_id: IDENTITY.id }],
-      identities: [IDENTITY],
-      targets: [{ revenue_identity_id: IDENTITY.id, activity_type: 'dm', target_count: 10 }],
-      accountability: [{ rep_id: REP.id, revenue_identity_id: IDENTITY.id, activity_type: 'dm', completed_count: 5 }],
-      dayCloses: [{ person_id: REP.id, status: 'ready_to_close' }],
-      dayElapsedPct: 0.3,
+  it('MANAGER_ADMIN_REP_STATUS_PARITY', () => {
+    const managerTeam = assembleManagerHomeTeamData({
+      teamName: 'Team',
+      teamDay,
+      teamLive,
+      allowedRepIds: new Set(['rep-1']),
     })
+    const admin = assembleAdminCommandCenter({
+      orgName: 'Org',
+      isOwner: false,
+      teamDay,
+      teamLive,
+      allowedRepIds: new Set(['rep-1']),
+      openLeads,
+      profiles: [],
+      activity: [],
+      meetingsThisWeek: 0,
+      wins: 0,
+    })
+    const mRow = managerTeam.rows.find((r) => r.repId === 'rep-1')!
+    const aRow = admin.rows.find((r) => r.repId === 'rep-1')!
+    expect(aRow.repliesWaiting).toBe(mRow.repliesWaiting)
+    expect(aRow.followUpsOverdue).toBe(mRow.followUpsOverdue)
+    expect(aRow.status).toBe(mRow.status)
+    expect(aRow.status).not.toBe('On track')
 
-    expect(result.team[0]?.dayCloseStatus).toBe('ready_to_close')
+    // Identical snapshots → identical status from the shared policy.
+    const s = snap({
+      repId: 'parity',
+      repName: 'Parity',
+      repliesWaiting: 3,
+      oldestReplyAgeHours: 18,
+      followUpsOverdue: 1,
+      oldestFollowUpAgeHours: 11,
+    })
+    const statusA = deriveRepStatus(buildRepAttentionSignals(s))
+    const statusB = deriveRepStatus(buildRepAttentionSignals({ ...s }))
+    expect(statusA).toBe(statusB)
+    expect(statusA).toBe('Critical')
+  })
+
+  it('ADMIN_HOME_TEAM_TABLE rows present', () => {
+    const data = assembleAdminCommandCenter({
+      orgName: 'Org',
+      isOwner: false,
+      teamDay,
+      teamLive,
+      allowedRepIds: new Set(['rep-1']),
+      openLeads,
+      profiles: [],
+      activity: [],
+      meetingsThisWeek: 0,
+      wins: 0,
+    })
+    expect(data.rows).toHaveLength(1)
+    expect(data.rows[0].repName).toBe('Mehak')
   })
 })
