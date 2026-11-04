@@ -2,7 +2,7 @@
  * Admin / Owner Command Center V3 presentation — pure mappings over the
  * canonical admin-command-summary assembly. No new scoring, no new data.
  */
-import type { AdminCommandCenterData, PipelineStageHealth } from '@/lib/team/admin-command-summary'
+import type { AdminCommandCenterData, PipelineStageHealth, ProfilePerformanceRow } from '@/lib/team/admin-command-summary'
 import type { AttentionSignal } from '@/lib/team/attention-policy'
 import type { ManagerActivityItem, ManagerTeamRow } from '@/lib/team/manager-home-summary'
 
@@ -161,12 +161,14 @@ export function buildAdminV3TeamRows(rows: ReadonlyArray<ManagerTeamRow>): Admin
 }
 
 export function buildAdminV3Pipeline(stages: ReadonlyArray<PipelineStageHealth>): AdminV3Stage[] {
+  // Stage counts are status snapshots, not funnel transitions, so the ratio is
+  // withheld rather than presented as a conversion rate.
   return stages.map((stage) => ({
     key: stage.key,
     label: stage.label,
     count: stage.count,
     href: stage.href,
-    conversionPct: stage.conversionPct,
+    conversionPct: null,
   }))
 }
 
@@ -208,6 +210,178 @@ export function sanitizeAdminV3Error(_error?: unknown): string {
   void _error
   return ADMIN_V3_SECTION_ERROR
 }
+
+// ── Dashboard upgrade: team execution, comparison, profiles ────────────────
+
+/** Today's executed activity per rep — the same rule Team Performance uses. */
+export interface AdminRepExecution {
+  /** Replies sent today (not replies waiting). */
+  repliesSent: number
+  /** Follow-ups sent today. */
+  followupsSent: number
+}
+
+/**
+ * Per-rep executed activity for today's team view. Failed executions never
+ * count and generated drafts (*_PREPARED) are not in the source set, so a
+ * rep's "handled" numbers can never be inflated by a send that did not happen.
+ */
+export function buildAdminExecutionByRep(
+  events: ReadonlyArray<{
+    action_type: string
+    actor_id: string | null
+    execution_status?: string | null
+  }>,
+): Map<string, AdminRepExecution> {
+  const out = new Map<string, AdminRepExecution>()
+  for (const event of events) {
+    if (!event.actor_id || event.execution_status === 'failed') continue
+    if (event.action_type !== 'REPLY_SENT' && event.action_type !== 'FOLLOWUP_SENT') continue
+    const current = out.get(event.actor_id) ?? { repliesSent: 0, followupsSent: 0 }
+    if (event.action_type === 'REPLY_SENT') current.repliesSent += 1
+    else current.followupsSent += 1
+    out.set(event.actor_id, current)
+  }
+  return out
+}
+
+export const ADMIN_TEAM_METRICS = [
+  { key: 'completed', label: 'Completed' },
+  { key: 'replies', label: 'Replies' },
+  { key: 'meetings', label: 'Meetings' },
+  { key: 'tasks', label: 'Tasks' },
+] as const
+
+export type AdminTeamMetricKey = (typeof ADMIN_TEAM_METRICS)[number]['key']
+
+export interface AdminTeamCompareRow {
+  id: string
+  name: string
+  status: string
+  href: string
+  values: Record<AdminTeamMetricKey, number>
+}
+
+/**
+ * Per-rep comparison rows. Every metric is a canonical count: target
+ * completions, executed replies (not replies waiting), outcome-event meetings,
+ * and assigned-task completions. No combined performance score.
+ */
+export function buildAdminTeamCompare(
+  rows: ReadonlyArray<ManagerTeamRow>,
+  execution: ReadonlyMap<string, AdminRepExecution> | null,
+  tasksByRep: ReadonlyMap<string, number> | null,
+): AdminTeamCompareRow[] {
+  return rows
+    .map((row) => {
+      const ex = execution?.get(row.repId)
+      return {
+        id: row.repId,
+        name: row.repName,
+        status: row.status,
+        href: `/team/${row.repId}`,
+        values: {
+          completed: row.completedToday,
+          replies: ex?.repliesSent ?? 0,
+          meetings: row.meetings,
+          tasks: tasksByRep?.get(row.repId) ?? 0,
+        },
+      }
+    })
+    .sort((a, b) => b.values.completed - a.values.completed || a.name.localeCompare(b.name))
+}
+
+export interface AdminExecutionRow {
+  key: 'completed' | 'replies' | 'followups' | 'tasks' | 'meetings'
+  label: string
+  value: number | null
+  hint?: string
+  href?: string
+}
+
+/**
+ * Team progress visual. `completed` is target accountability; the rest are
+ * today's executed events and task truth. Values stay null when not loaded.
+ */
+export function buildAdminExecutionRows(input: {
+  completedToday: number | null
+  repliesHandled: number | null
+  followupsCompleted: number | null
+  tasksCompleted: number | null
+  meetings: number | null
+}): AdminExecutionRow[] {
+  return [
+    {
+      key: 'completed',
+      label: 'Completed',
+      value: input.completedToday,
+      hint: 'Target completions',
+      href: '/admin/command',
+    },
+    {
+      key: 'replies',
+      label: 'Replies handled',
+      value: input.repliesHandled,
+      hint: 'Executed today',
+      href: '/chats',
+    },
+    {
+      key: 'followups',
+      label: 'Follow-ups',
+      value: input.followupsCompleted,
+      hint: 'Executed today',
+      href: '/leads?filter=followup',
+    },
+    {
+      key: 'tasks',
+      label: 'Tasks completed',
+      value: input.tasksCompleted,
+      hint: 'Assigned tasks',
+      href: '/tasks',
+    },
+    {
+      key: 'meetings',
+      label: 'Meetings',
+      value: input.meetings,
+      hint: 'Booked today',
+      href: '/reports/sales',
+    },
+  ]
+}
+
+export interface AdminProfileRow {
+  identityId: string
+  name: string
+  channel: string
+  leads: number
+  replies: number
+  /** Replies / messages sent; null when nothing was sent — never 0%. */
+  replyRate: number | null
+  meetings: number
+  proposals: number
+  wins: number
+}
+
+/** Profile performance, ranked by assigned pipeline then wins. */
+export function buildAdminProfileRows(profiles: ReadonlyArray<ProfilePerformanceRow>): AdminProfileRow[] {
+  return profiles.map((profile) => ({
+    identityId: profile.identityId,
+    name: profile.name,
+    channel: profile.channel,
+    leads: profile.assignedLeads,
+    replies: profile.replies,
+    replyRate: profile.replyRate,
+    meetings: profile.meetings,
+    proposals: profile.proposals,
+    wins: profile.wins,
+  }))
+}
+
+export const ADMIN_TREND_SERIES: Array<{ key: 'replies' | 'meetings' | 'wins'; label: string }> = [
+  { key: 'replies', label: 'Replies' },
+  { key: 'meetings', label: 'Meetings' },
+  { key: 'wins', label: 'Wins' },
+]
 
 function formatClock(iso: string): string {
   const ms = new Date(iso).getTime()

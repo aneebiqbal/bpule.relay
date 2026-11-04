@@ -93,13 +93,16 @@ export interface RepActivityResult {
 }
 
 /**
- * Get daily activity for a rep over a date range.
+ * Get daily activity for one rep over a date range — or for the whole
+ * organization when `repId` is null (the Admin team heatmap).
+ *
  * Uses organization timezone for day boundaries.
  * 0 AI calls — one GROUP BY on action_events, or a raw read on the Supabase
  * rollback path (PostgREST has no raw-SQL surface).
  */
 export async function getRepDailyActivity(params: {
-  repId: string
+  /** null = organization-wide aggregation. */
+  repId: string | null
   orgId: string
   startDate: Date
   endDate: Date
@@ -128,15 +131,17 @@ export async function getRepDailyActivity(params: {
     })
   }
 
-  // Fetch all action_events for this rep in the date range
-  const { data: events, error } = await supabase
+  // Fetch all action_events in the date range. Org-wide (repId null) omits the
+  // actor predicate rather than matching NULL.
+  let eventsQuery = supabase
     .from('action_events')
     .select('id, action_type, execution_status, actor_id, lead_id, job_id, occurred_at')
     .eq('organization_id', orgId)
-    .eq('actor_id', repId)
     .gte('occurred_at', startDate.toISOString())
     .lt('occurred_at', endDate.toISOString())
     .order('occurred_at', { ascending: true })
+  if (repId) eventsQuery = eventsQuery.eq('actor_id', repId)
+  const { data: events, error } = await eventsQuery
 
   if (error || !events) {
     return emptyResult(startDate, endDate)
@@ -251,7 +256,7 @@ interface DailyCountsResult {
  * an empty heatmap.
  */
 async function loadDailyCounts(params: {
-  repId: string
+  repId: string | null
   orgId: string
   startDate: Date
   endDate: Date
@@ -284,7 +289,7 @@ async function loadDailyCounts(params: {
 
 /** The drilldown's raw events for one clicked day. */
 async function loadDayEvents(params: {
-  repId: string
+  repId: string | null
   orgId: string
   date: string
   timezone: string
@@ -523,6 +528,38 @@ function getOffset(timezone: string): string {
   const sign = diff >= 0 ? '+' : '-'
   const hours = Math.floor(Math.abs(diff))
   return `${sign}${String(hours).padStart(2, '0')}:00`
+}
+
+export interface ActivityTrendSeries {
+  /** A breakdown key, or 'tasks' for the assigned-task truth. */
+  key: keyof DailyActivity['breakdown'] | 'tasks'
+  label: string
+}
+
+export interface ActivityTrendPoint {
+  date: string
+  [seriesKey: string]: number | string
+}
+
+/**
+ * One point per day for a dashboard trend chart. Task completions come from
+ * their own aggregate (assigned_tasks) because they are not action_events;
+ * every other series is a canonical activity breakdown key, so the trend and
+ * the heatmap are guaranteed to read the same underlying work.
+ */
+export function buildActivityTrendPoints(
+  daily: ReadonlyArray<DailyActivity>,
+  tasksByDay: ReadonlyMap<string, number> | null,
+  series: ReadonlyArray<ActivityTrendSeries>,
+): ActivityTrendPoint[] {
+  return daily.map((day) => {
+    const point: ActivityTrendPoint = { date: day.date }
+    for (const s of series) {
+      point[s.key] =
+        s.key === 'tasks' ? (tasksByDay?.get(day.date) ?? 0) : day.breakdown[s.key]
+    }
+    return point
+  })
 }
 
 function emptyResult(startDate: Date, endDate: Date): RepActivityResult {

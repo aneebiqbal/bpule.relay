@@ -93,6 +93,21 @@ export interface RepWorkspaceData {
   signalFeed?: import('@/lib/relay/signal-watch').SignalFeedItem[]
   /** Canonical operational timeline for Today / recent (max 5). */
   activity?: import('@/lib/operations/activity').TimelineRow[]
+  /** 12-week canonical daily activity for the heatmap and trend (null when unavailable). */
+  activityDaily?: import('@/lib/performance/activity-model').DailyActivity[] | null
+  /** Pre-merged 12-week trend points (replies, meetings, tasks) for the chart. */
+  trendPoints?: import('@/lib/performance/activity-model').ActivityTrendPoint[] | null
+  /** Assigned tasks completed today — the task truth, not action events. */
+  tasksCompletedToday?: number | null
+  /** Target windows for the progress visual; weekly/monthly goals are derived. */
+  targetWindows?: {
+    dailyDone: number
+    dailyTarget: number
+    weeklyDone: number | null
+    weeklyWorkingDays: number
+    monthlyDone: number | null
+    monthlyWorkingDays: number
+  } | null
   /** Open leads shaped for the canonical pipeline funnel. */
   pipelineLeads?: import('@/lib/team/admin-command-summary').OpenLeadFact[]
   onRefreshSignals?: () => void

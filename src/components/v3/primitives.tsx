@@ -323,12 +323,10 @@ export function V3StageStrip({
             href={stage.href}
             className="flex h-full flex-col gap-2 px-3 py-3 text-left transition-colors hover:bg-bone"
           >
-            <span className="flex items-baseline justify-between gap-2">
-              <span className="truncate text-[10px] font-medium uppercase tracking-[0.1em] text-stone">
-                {stage.label}
-              </span>
-              <span className="text-[16px] font-medium tabular-nums text-ink">{stage.count}</span>
+            <span className="block min-w-0 truncate text-[10px] font-medium uppercase tracking-[0.1em] text-stone">
+              {stage.label}
             </span>
+            <span className="text-[18px] font-medium leading-none tabular-nums text-ink">{stage.count}</span>
             <span className="h-1 w-full overflow-hidden rounded-full bg-bone">
               <span
                 className="block h-1 rounded-full bg-orange transition-[width] duration-500"

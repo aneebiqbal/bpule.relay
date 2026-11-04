@@ -8,6 +8,7 @@ import { qualifyCanonicalScore } from '@/lib/scoring/qualification'
 import { stageRatioPct } from '@/lib/operations/reports'
 import type { TeamDaySummary } from '@/lib/rep-day/team'
 import type { TeamLivePayload } from '@/lib/admin/team-live'
+import type { DailyActivity, ActivityTrendPoint } from '@/lib/performance/activity-model'
 import {
   assembleManagerHomeTeamData,
   type ManagerActivityItem,
@@ -68,6 +69,21 @@ export interface AdminCommandCenterData {
   stuck: StuckOpportunity[]
   profiles: ProfilePerformanceRow[]
   activity: ManagerActivityItem[]
+  /** 12-week org daily activity for the team heatmap (null when unavailable). */
+  activityDaily?: DailyActivity[] | null
+  /** Pre-merged trend points (replies, meetings, wins) for the org trend. */
+  trendPoints?: ActivityTrendPoint[] | null
+  /** Today's executed replies / follow-ups per rep — the same rule as Team Performance. */
+  executionByRep?: Map<string, { repliesSent: number; followupsSent: number }> | null
+  /** Assigned tasks completed today, by assignee. */
+  tasksCompletedTodayByRep?: Map<string, number>
+  /** Org-wide today totals for the team progress visual. */
+  executionToday?: {
+    repliesHandled: number
+    followupsCompleted: number
+    tasksCompleted: number
+    meetings: number
+  } | null
   scopeNote: 'organization'
 }
 

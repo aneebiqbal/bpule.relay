@@ -149,7 +149,9 @@ describe('ADMIN_V3_PIPELINE', () => {
       })),
     )
     expect(pipeline).toHaveLength(6)
-    expect(pipeline[0]).toMatchObject({ label: 'Qualified', count: 58, conversionPct: 100 })
+    expect(pipeline[0]).toMatchObject({ label: 'Qualified', count: 58, conversionPct: null })
+    // Snapshot counts are not transitions, so no stage carries a ratio.
+    expect(pipeline.every((stage) => stage.conversionPct === null)).toBe(true)
   })
 })
 

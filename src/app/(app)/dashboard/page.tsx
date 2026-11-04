@@ -29,7 +29,11 @@ import { actionDeepLink } from '@/lib/rep-home/action-presentation'
 import { REP_V3_ACTIVITY_LIMIT } from '@/lib/rep-home/v3-present'
 import { loadTimeline } from '@/lib/operations/activity'
 import type { OpenLeadFact } from '@/lib/team/admin-command-summary'
-import { businessDateRange, currentInstant, orgDate } from '@/lib/org-clock'
+import { businessDateRange, currentInstant, orgDate, addDays, isOrgWorkingDay, weekdayOfDate } from '@/lib/org-clock'
+import type { OperatingPolicy } from '@/lib/org-clock'
+import { getRepDailyActivity, buildActivityTrendPoints, type DailyActivity } from '@/lib/performance/activity-model'
+import { teamTasksTrendSql } from '@/lib/analytics/aggregates'
+import { REP_TREND_SERIES } from '@/lib/rep-home/v3-present'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { perfTrace } from '@/lib/perf-trace'
 
@@ -284,6 +288,40 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
         countOutcomeEventsToday(user.organization.id, user.rep.id).catch(() => null))
     : null
 
+  // Dashboard visuals. Each optional read degrades on its own — a failed
+  // heatmap or trend never takes metrics, attention or the action list down.
+  let activityDaily: DailyActivity[] | null = null
+  let tasksTrend: Map<string, number> | null = null
+  let tasksCompletedToday: number | null = null
+  let targetWindows: RepWorkspaceData['targetWindows'] = null
+  if (user.organization?.id) {
+    const policy = await perfTrace('rep:operatingPolicy', () =>
+      loadOperatingPolicy(user.organization.id).catch(() => null))
+    if (policy) {
+      const businessDate = orgDate(currentInstant(), policy.timezone)
+      const dayRange = businessDateRange(businessDate, policy.timezone)
+      const trendStart = businessDateRange(addDays(businessDate, -29), policy.timezone).start
+      const [daily, tasksByDay] = await perfTrace('rep:visual-batch', () => Promise.all([
+        perfTrace('rep:activityDaily', () =>
+          loadRepActivityDaily(user.organization.id, user.rep.id, businessDate, policy.timezone).catch(() => null)),
+        perfTrace('rep:tasksTrend', () =>
+          loadRepTasksTrend(user.organization.id, [user.rep.id], trendStart, dayRange.end, policy.timezone).catch(() => null)),
+      ]))
+      activityDaily = daily
+      tasksTrend = tasksByDay
+      tasksCompletedToday = tasksByDay ? (tasksByDay.get(businessDate) ?? 0) : null
+      targetWindows = await perfTrace('rep:targetWindows', () =>
+        loadRepTargetWindows({
+          orgId: user.organization.id,
+          repId: user.rep.id,
+          dailyDone: completionDone,
+          dailyTarget: totalTarget,
+          businessDate,
+          policy,
+        }).catch(() => null))
+    }
+  }
+
   // Log recommendations for observability (non-blocking)
   if (actions.length > 0 && user.organization?.id) {
     Promise.all(actions.slice(0, 5).map(action =>
@@ -374,6 +412,13 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     })),
     signalFeed: buildSignalFeedFromActionEvents(dash, recentLeads),
     activity: activityRows,
+    activityDaily,
+    tasksCompletedToday,
+    targetWindows,
+    trendPoints:
+      activityDaily && tasksTrend
+        ? buildActivityTrendPoints(activityDaily, tasksTrend, REP_TREND_SERIES)
+        : null,
     pipelineLeads,
   }
 }
@@ -425,6 +470,109 @@ async function countProfilesPulled(orgId: string, repId: string): Promise<number
   } catch {
     return 0
   }
+}
+
+const ACTIVITY_WEEKS = 12
+const ACTIVITY_DAYS = ACTIVITY_WEEKS * 7
+
+/**
+ * Twelve weeks of canonical daily activity for the Rep heatmap and trend.
+ * One grouped aggregate per load; the day drilldown is never requested here.
+ */
+async function loadRepActivityDaily(
+  orgId: string,
+  repId: string,
+  businessDate: string,
+  timezone: string,
+): Promise<DailyActivity[]> {
+  const start = businessDateRange(addDays(businessDate, -(ACTIVITY_DAYS - 1)), timezone).start
+  const end = businessDateRange(businessDate, timezone).end
+  const supabase = await createServerSupabase()
+  const result = await getRepDailyActivity({
+    repId,
+    orgId,
+    startDate: new Date(start),
+    endDate: new Date(end),
+    timezone,
+    supabase,
+  })
+  return result.daily
+}
+
+/** Assigned-task completions per day — one aggregate, reused by the trend. */
+async function loadRepTasksTrend(
+  orgId: string,
+  repIds: string[],
+  start: string,
+  end: string,
+  timezone: string,
+): Promise<Map<string, number>> {
+  const supabase = await createServerSupabase()
+  if (supabase.provider !== 'neon' || !supabase.raw) return new Map()
+  const { sql, params } = teamTasksTrendSql({ orgId, repIds, start, end, timezone })
+  const res = await supabase.raw<{ day: string; tasks: number }[]>(sql, params)
+  if (res.error || !Array.isArray(res.data)) return new Map()
+  return new Map(res.data.map((row) => [String(row.day), Number(row.tasks)]))
+}
+
+/**
+ * Target windows for the Rep progress visual. Only the daily goal is stored;
+ * weekly and monthly goals are the daily target × elapsed working days and are
+ * labelled as derived in the UI.
+ */
+async function loadRepTargetWindows(args: {
+  orgId: string
+  repId: string
+  dailyDone: number
+  dailyTarget: number
+  businessDate: string
+  policy: OperatingPolicy
+}): Promise<NonNullable<RepWorkspaceData['targetWindows']>> {
+  const weekStart = startOfBusinessWeek(args.businessDate)
+  const monthStart = `${args.businessDate.slice(0, 8)}01`
+  const supabase = await createServerSupabase()
+  const { data } = await supabase
+    .from('daily_accountability')
+    .select('completed_count, target_date')
+    .eq('organization_id', args.orgId)
+    .eq('rep_id', args.repId)
+    .gte('target_date', monthStart)
+    .lte('target_date', args.businessDate)
+    .limit(500)
+
+  let weeklyDone: number | null = null
+  let monthlyDone: number | null = null
+  if (data && data.length > 0) {
+    weeklyDone = 0
+    monthlyDone = 0
+    for (const row of data) {
+      const n = Number((row.completed_count as number | null) ?? 0)
+      monthlyDone += n
+      if ((row.target_date as string) >= weekStart) weeklyDone += n
+    }
+  }
+
+  return {
+    dailyDone: args.dailyDone,
+    dailyTarget: args.dailyTarget,
+    weeklyDone,
+    weeklyWorkingDays: workingDaysBetween(weekStart, args.businessDate, args.policy),
+    monthlyDone,
+    monthlyWorkingDays: workingDaysBetween(monthStart, args.businessDate, args.policy),
+  }
+}
+
+function startOfBusinessWeek(date: string): string {
+  const weekday = weekdayOfDate(date) // 0 = Sunday
+  return addDays(date, weekday === 0 ? -6 : -(weekday - 1))
+}
+
+function workingDaysBetween(start: string, end: string, policy: OperatingPolicy): number {
+  let count = 0
+  for (let cursor = start; cursor <= end; cursor = addDays(cursor, 1)) {
+    if (isOrgWorkingDay(policy, cursor)) count++
+  }
+  return count
 }
 
 /**
