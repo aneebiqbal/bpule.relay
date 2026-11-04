@@ -65,6 +65,7 @@ export function UserMenu({ name, role, organizationName, demo, sends, dailyLimit
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-label={`${name} account`}
         className={cn(
           'flex items-center gap-2 rounded-md border border-line bg-bone-raised pl-1.5 pr-2 py-1 text-left',
           'transition-colors hover:border-orange/30',
