@@ -152,7 +152,7 @@ export function V4ManagerHome({
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[13px] font-medium text-ink">{task.title}</p>
                         <p className="mt-0.5 truncate text-[12px] text-graphite">{humanWhyNow(task)}</p>
-                        {task.createdAt && <p className="mt-0.5 text-[11px] text-stone">{relativeWait(task.createdAt)}</p>}
+                        {task.createdAt && <p suppressHydrationWarning className="mt-0.5 text-[11px] text-stone">{relativeWait(task.createdAt)}</p>}
                       </div>
                       <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-solid px-2 py-1 text-[11px] font-medium text-on-solid">
                         {primaryCtaLabel(task)}
@@ -313,7 +313,7 @@ export function V4ManagerHome({
                       <div className="min-w-0">
                         <p className="truncate text-[13px] font-medium text-ink">{item.label}</p>
                         <p className="text-[11px] text-stone">
-                          {new Date(item.occurredAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          <span suppressHydrationWarning>{new Date(item.occurredAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                         </p>
                       </div>
                       {item.href && <ChevronRight className="size-3.5 shrink-0 text-stone" aria-hidden />}

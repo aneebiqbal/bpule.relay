@@ -382,7 +382,7 @@ export function V4RepHome({
                 {activity.map((item) => (
                   <li key={item.id}>
                     <Link href={item.href ?? '#'} className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-bone">
-                      <span className="w-10 shrink-0 text-right text-[11px] font-medium tabular-nums text-stone">{item.time}</span>
+                      <span suppressHydrationWarning className="w-10 shrink-0 text-right text-[11px] font-medium tabular-nums text-stone">{item.time}</span>
                       <span className="flex w-3 shrink-0 flex-col items-center" aria-hidden>
                         <span className="mt-1 size-1.5 rounded-full bg-orange" />
                         <span className="w-px flex-1 bg-line" />

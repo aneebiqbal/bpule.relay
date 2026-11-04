@@ -248,7 +248,7 @@ export function TaskWorkspaceView({
               )}
             >
               {t.label}
-              <span className="tabular-nums text-[11px] text-stone">{counts[t.id]}</span>
+              <span suppressHydrationWarning className="tabular-nums text-[11px] text-stone">{counts[t.id]}</span>
             </Link>
           ))}
         </nav>
@@ -422,7 +422,7 @@ export function TaskWorkspaceView({
                           {PRIORITY_LABEL[task.priority]}
                         </span>
                       </td>
-                      <td className={cn('px-3 py-2.5', overdue ? 'font-medium text-status-danger' : 'text-graphite')}>
+                      <td suppressHydrationWarning className={cn('px-3 py-2.5', overdue ? 'font-medium text-status-danger' : 'text-graphite')}>
                         {overdue && <span className="sr-only">Overdue: </span>}
                         {dueLabel(task)}
                       </td>
@@ -480,7 +480,7 @@ export function TaskWorkspaceView({
                   <p className="mt-0.5 text-[12px] text-graphite">{task.reason}</p>
                   <p className="mt-0.5 text-[11px] text-stone">{sourceLine(task)}</p>
                   <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className={cn('text-[11px]', isOverdue(task) ? 'font-medium text-status-danger' : 'text-stone')}>
+                    <span suppressHydrationWarning className={cn('text-[11px]', isOverdue(task) ? 'font-medium text-status-danger' : 'text-stone')}>
                       {dueLabel(task)}
                     </span>
                     <Link href={task.action.href} className="text-[12px] font-medium text-cobalt">
