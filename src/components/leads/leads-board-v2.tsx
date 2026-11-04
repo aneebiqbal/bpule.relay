@@ -25,8 +25,8 @@ import {
 
 /** Canonical priority language on the pipeline card (never a score band). */
 const PRIORITY_STYLES: Record<LeadPriority, string> = {
-  critical: 'bg-status-danger/10 text-status-danger',
-  high: 'bg-orange/10 text-orange',
+  critical: 'bg-status-danger/10 text-[#8f2b1e]',
+  high: 'bg-orange/10 text-[#9e4517]',
   normal: 'bg-bone-raised text-graphite',
   watch: 'bg-status-info/10 text-status-info',
 }
@@ -215,7 +215,7 @@ export function LeadsBoardV2({
               onClick={() => { setFilter(f.key); setVisibleCount(PAGE_SIZE) }}
               className={cn(
                 'shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200',
-                filter === f.key ? 'bg-orange text-on-accent shadow-sm' : 'text-ink/50 hover:text-ink/80'
+                filter === f.key ? 'bg-orange text-on-accent shadow-sm' : 'text-graphite hover:text-ink'
               )}
             >
               {f.label}
@@ -334,14 +334,14 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
       <div className="flex flex-col gap-3 px-4 py-3.5 transition-colors hover:bg-bone-raised/30 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
         {/* Avatar + status dot */}
         <div className="relative shrink-0">
-          <div className="flex size-10 items-center justify-center rounded-full bg-cobalt/10 text-sm font-semibold text-cobalt">
+          <div className="flex size-10 items-center justify-center rounded-full bg-cobalt/10 text-sm font-semibold text-[#2a46a8]">
             {getInitials(lead.contactName ?? lead.company ?? '?')}
           </div>
           {stage === 'needs_reply' && (
             <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-orange ring-2 ring-bone-raised" />
           )}
           {countdown !== null && (
-            <span className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-status-warning text-[8px] font-bold text-on-accent ring-2 ring-bone-raised">
+            <span className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-status-warning text-[8px] font-bold text-[#2a1408] ring-2 ring-bone-raised">
               {countdown}
             </span>
           )}
@@ -354,14 +354,14 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
               {lead.contactName ?? 'Unnamed prospect'}
             </Link>
             {lead.company && (
-              <span className="flex items-center gap-1 text-xs text-stone truncate">
+              <span className="flex items-center gap-1 text-xs text-graphite truncate">
                 <Building2 className="size-3 shrink-0" />
                 {lead.company}
               </span>
             )}
           </div>
 
-          <div className="mt-0.5 flex items-center gap-2 text-xs text-stone">
+          <div className="mt-0.5 flex items-center gap-2 text-xs text-graphite">
             {lead.contactTitle && <span className="truncate">{lead.contactTitle}</span>}
             {lead.contactTitle && lead.lastOutboundAt && <span className="text-line">·</span>}
             {(lead.lastInboundAt || lead.lastOutboundAt) && (
@@ -374,7 +374,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
 
           {/* Rep assignment (admin view) */}
           {lead.ownerName && (
-            <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-cobalt/80">
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-[#2a46a8]">
               <Users className="size-3" />
               <span>{lead.ownerName}</span>
             </div>
@@ -382,8 +382,8 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
 
           {/* Source profile attribution. A lead with no sender is said so
               plainly — never silently dropped, never guessed from a name. */}
-          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-stone">
-            <span className={lead.senderProfileName ? 'text-graphite' : 'font-medium text-status-warning'}>
+          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-graphite">
+            <span className={lead.senderProfileName ? 'text-graphite' : 'font-medium text-[#7d5410]'}>
               {lead.senderProfileName ? `Profile: ${lead.senderProfileName}` : 'Profile not assigned'}
             </span>
           </div>
@@ -399,7 +399,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
             {stuck.map((signal) => (
               <span
                 key={signal}
-                className="inline-flex items-center gap-1 rounded-full bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-status-warning"
+                className="inline-flex items-center gap-1 rounded-full bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-[#7d5410]"
               >
                 <AlertTriangle className="size-2.5" aria-hidden="true" />
                 {STUCK_SIGNAL_LABELS[signal]}
@@ -409,7 +409,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
 
           {/* Archival warning */}
           {countdown !== null && (
-            <div className="mt-1 flex items-center gap-1 text-[11px] text-status-warning">
+            <div className="mt-1 flex items-center gap-1 text-[11px] text-[#7d5410]">
               <AlertTriangle className="size-3" />
               <span>Auto-archiving in {countdown} day{countdown !== 1 ? 's' : ''}</span>
             </div>
@@ -421,7 +421,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
           <LeadScoreRing lead={lead} size={38} />
           <Link
             href={action.href}
-            className="flex items-center gap-1.5 rounded-lg bg-orange px-3 py-1.5 text-xs font-medium text-on-accent transition-all duration-200 hover:bg-orange/90 hover:shadow-sm active:scale-[0.97]"
+            className="flex items-center gap-1.5 rounded-lg bg-orange px-3 py-1.5 text-xs font-medium text-[#2a1408] transition-all duration-200 hover:bg-orange/90 hover:shadow-sm active:scale-[0.97]"
           >
             {action.label}
             <ExternalLink className="size-3" />

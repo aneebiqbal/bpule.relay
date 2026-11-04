@@ -239,7 +239,7 @@ export function LeadConversation({
     )
   }
   if (!view) {
-    return <div className="h-64 animate-pulse rounded-2xl border border-line bg-bone-raised/30" aria-label="Loading conversation" />
+    return <div className="h-64 animate-pulse rounded-2xl border border-line bg-bone-raised/30" role="status" aria-label="Loading conversation" />
   }
 
   const memory = view.memory

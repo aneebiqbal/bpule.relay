@@ -189,7 +189,7 @@ export function V4RepHome({
         <V4StatStrip items={stats} label="Today" />
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-12">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-12">
         {/* Assigned to me — impossible to miss. */}
         <div className="lg:col-span-5">
           <V4Panel className="h-full">

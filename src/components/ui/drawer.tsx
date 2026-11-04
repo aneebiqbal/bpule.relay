@@ -16,6 +16,11 @@ interface DrawerProps {
 
 export function Drawer({ open, onClose, title, children, side = "left", className }: DrawerProps) {
   const panelRef = React.useRef<HTMLDivElement>(null)
+  // Portals need document.body, which does not exist during server rendering.
+  // A deep link can open the drawer before hydration, so render it only after
+  // mount instead of touching `document` while React is server-rendering.
+  const [mounted, setMounted] = React.useState(false)
+  React.useEffect(() => setMounted(true), [])
 
   React.useEffect(() => {
     if (!open) return
@@ -34,7 +39,7 @@ export function Drawer({ open, onClose, title, children, side = "left", classNam
     }
   }, [open, onClose])
 
-  if (!open) return null
+  if (!open || !mounted) return null
 
   const sideClasses: Record<string, string> = {
     left: "inset-y-0 left-0 w-72 max-w-[85vw]",

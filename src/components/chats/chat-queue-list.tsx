@@ -6,10 +6,10 @@ import type { ChatPriority, ChatRow } from '@/lib/operations/chat-queue'
 
 const PRIORITY_LABEL: Record<ChatPriority, string> = { critical: 'Critical', high: 'High', normal: 'Normal', low: 'Low' }
 const PRIORITY_CLASS: Record<ChatPriority, string> = {
-  critical: 'text-status-danger',
-  high: 'text-orange',
+  critical: 'text-[#8f2b1e]',
+  high: 'text-[#9e4517]',
   normal: 'text-graphite',
-  low: 'text-stone',
+  low: 'text-graphite',
 }
 
 /**
@@ -56,17 +56,17 @@ export function ChatQueueList({
             <p className="truncate text-[12px] text-graphite">
               {[row.title, row.company].filter(Boolean).join(' · ') || '—'}
             </p>
-            <p className="truncate text-[11px] text-stone">
+            <p className="truncate text-[11px] text-graphite">
               {[row.profileName ?? 'No profile', showOwner ? row.ownerName : null].filter(Boolean).join(' · ')}
             </p>
             {row.preview && (
               <p className="mt-0.5 line-clamp-1 text-[12px] text-graphite">
-                <span className="text-stone">{row.previewFrom === 'client' ? 'Them: ' : 'You: '}</span>
+                <span className="text-graphite">{row.previewFrom === 'client' ? 'Them: ' : 'You: '}</span>
                 {row.preview}
               </p>
             )}
             <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px]">
-              <span className={row.state === 'waiting_on_rep' ? 'font-medium text-orange' : 'text-graphite'}>{waitingText}</span>
+              <span className={row.state === 'waiting_on_rep' ? 'font-medium text-[#b8531f]' : 'text-graphite'}>{waitingText}</span>
               <span className="text-ink">{row.nextAction}</span>
             </div>
             {row.needsReview && <p className="mt-0.5 text-[11px] text-status-warning">Sender not verified — review thread</p>}

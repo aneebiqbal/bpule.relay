@@ -24,7 +24,7 @@ export function Tabs({ items, value, onChange, className }: TabsProps) {
     <div
       role="tablist"
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-lg border border-line bg-bone-raised p-0.5",
+        "inline-flex flex-wrap items-center gap-0.5 rounded-lg border border-line bg-bone-raised p-0.5",
         className
       )}
     >

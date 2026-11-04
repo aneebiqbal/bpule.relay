@@ -42,7 +42,7 @@ function greeting(): string {
 }
 
 function severityClass(severity: AttentionSeverity | string) {
-  if (severity === 'critical' || severity === 'Critical') return 'bg-status-danger/10 text-status-danger'
+  if (severity === 'critical' || severity === 'Critical') return 'bg-status-danger/10 text-[#8f2b1e]'
   if (severity === 'attention' || severity === 'Attention') return 'bg-status-warning/10 text-status-warning'
   return 'bg-status-success/10 text-status-success'
 }
@@ -131,7 +131,7 @@ export function V4ManagerHome({
         <V4StatStrip items={stats} label="Manager today" />
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-12">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-12">
         {/* My work */}
         <div className="lg:col-span-7">
           <V4Panel className="h-full">

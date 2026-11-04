@@ -150,7 +150,7 @@ export function V4AdminHome({
         <V4StatStrip items={health} label="Organization health" />
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-12">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-12">
         {/* Needs attention */}
         <div className="lg:col-span-5">
           <V4Panel className="h-full">

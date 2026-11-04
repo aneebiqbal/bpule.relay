@@ -187,7 +187,7 @@ export default async function ChatsPage({
               </p>
             </div>
           </aside>
-          <section aria-label="Thread" className="min-h-0 min-w-0 overflow-y-auto rounded-lg border border-dashed border-line">
+          <section aria-label="Thread" tabIndex={0} className="min-h-0 min-w-0 overflow-y-auto rounded-lg border border-dashed border-line">
             <div className="flex h-full min-h-[240px] flex-col items-center justify-center p-6 text-center">
               <MessagesSquare className="size-6 text-stone" aria-hidden="true" />
               <p className="mt-2 text-[13px] text-graphite">Select a conversation to read the thread.</p>
@@ -228,7 +228,7 @@ export default async function ChatsPage({
             )}
           </aside>
 
-          <section aria-label="Thread" className={cn('min-h-0 min-w-0 overflow-y-auto', !leadId && 'hidden md:block')}>
+          <section aria-label="Thread" tabIndex={0} className={cn('min-h-0 min-w-0 overflow-y-auto', !leadId && 'hidden md:block')}>
             {leadId ? (
               <Suspense fallback={<Skeleton className="h-[420px] w-full rounded-lg" />}>
                 <SelectedThread ctx={ctx} leadId={leadId} reps={reps} backHref={opsHref('/chats', current, { lead: null })} />
