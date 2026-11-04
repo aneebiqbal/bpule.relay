@@ -234,7 +234,8 @@
   --on-orange: #141312;
   --ink: #ece9e3;
   --ink-soft: #b8b5ad;
-  --graphite: #8c8982;
+  /* 5.5:1 on the dark canvas, so 11–13px secondary text passes AA. */
+  --graphite: #a09d96;
   /* 7.4:1 on the dark canvas, so 10px labels pass AA. */
   --stone: #a8a6a1;
   --stone-light: #4a4945;

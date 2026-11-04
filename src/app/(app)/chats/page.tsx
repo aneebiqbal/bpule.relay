@@ -5,6 +5,7 @@ import { ArrowLeft, MessagesSquare } from 'lucide-react'
 import { cn } from 'cn'
 import { Skeleton } from '@/components/ui/skeleton'
 import { LinkTabs, InlineError } from '@/components/operations/ops-primitives'
+import { V4PageHeader } from '@/components/v4/primitives'
 import { OpsFilters } from '@/components/operations/ops-filters'
 import { SavedViewsMenu } from '@/components/operations/saved-views-menu'
 import { ChatQueueList } from '@/components/chats/chat-queue-list'
@@ -117,21 +118,19 @@ export default async function ChatsPage({
 
   return (
     <div className="space-y-3">
-      <header className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone">Conversations</p>
-          <h1 className="text-[22px] font-medium tracking-[-0.01em] text-ink">Inbox</h1>
-          <p className="text-[12px] text-graphite">
-            {managerViews
-              ? ctx.scope.mode === 'org'
-                ? 'Every client conversation in the organization, most urgent first.'
-                : 'Your team’s client conversations, most urgent first.'
-              : workspace
-                ? `Your conversations as ${workspace.identityName}, most urgent first.`
-                : 'Your client conversations, most urgent first.'}
-          </p>
-        </div>
-      </header>
+      <V4PageHeader
+        eyebrow="Conversations"
+        title="Inbox"
+        subtitle={
+          managerViews
+            ? ctx.scope.mode === 'org'
+              ? 'Every client conversation in the organization, most urgent first.'
+              : 'Your team’s client conversations, most urgent first.'
+            : workspace
+              ? `Your conversations as ${workspace.identityName}, most urgent first.`
+              : 'Your client conversations, most urgent first.'
+        }
+      />
 
       <div className={cn(leadId && 'hidden md:block')}>
         <LinkTabs

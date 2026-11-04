@@ -97,12 +97,12 @@ export function V3PageHeader({
 }) {
   return (
     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0 space-y-1">
+      <div className="min-w-0 space-y-1.5">
         {/* Greeting depends on the viewer's clock; suppress the server/client text mismatch. */}
-        <h1 suppressHydrationWarning className="text-[28px] font-light tracking-[-0.02em] text-ink">
+        <h1 suppressHydrationWarning className="text-[24px] font-light leading-tight tracking-[-0.02em] text-ink">
           {title}
         </h1>
-        {subtitle && <p className="text-[14px] text-graphite">{subtitle}</p>}
+        {subtitle && <p className="text-[13px] text-graphite">{subtitle}</p>}
         {meta && <div className="pt-1">{meta}</div>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

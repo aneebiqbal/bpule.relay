@@ -7,11 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Step } from '@/components/wizard-step'
 import { readSse } from '@/lib/sse/client'
 import { notifyError } from '@/lib/ui/notify'
 import { cn } from 'cn'
+import { V4PageHeader } from '@/components/v4/primitives'
 import type { UpworkJob } from '@/lib/domain/types'
 import { computeUpworkScore } from '@/lib/score/upwork-rubric'
 import { logClientViolation } from '@/lib/relay/violation-kinds'
@@ -227,34 +227,37 @@ export default function NewUpworkJobPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <section className="srf-console px-5 py-5 sm:px-6">
-        <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Intake / Upwork Opportunity</p>
-        <h1 className="mt-2 text-[22px] font-medium text-ink">
-          Qualify job posts before spending Connects.
-        </h1>
-        <p className="mt-2 max-w-2xl text-[13px] text-graphite">
-          Relay extracts budget and urgency, scores the job with rubric math, and keeps the apply decision explicit.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <UpworkSignal label="Current score" value={analyzedScore ? `${score.total}/10` : 'Paste a job'} />
-          <UpworkSignal label="Connects cost" value={connectsPreview !== null ? String(connectsPreview) : 'Not stated'} />
-          <UpworkSignal label="Observed proposals" value={proposalLabel ?? 'Unknown'} />
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Link href="/upwork/new" className="inline-flex items-center gap-1.5 rounded border border-orange/30 bg-orange/10 px-3 py-1.5 text-[12px] font-medium text-orange">
-             New job
-           </Link>
-           <Link href="/leads" className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-1.5 text-[12px] font-medium text-graphite hover:text-ink">
-             Back to leads
-           </Link>
-        </div>
-      </section>
+      <V4PageHeader
+        eyebrow="Sales / Upwork"
+        title="Extract a job"
+        subtitle="Qualify job posts before spending Connects. Relay extracts budget and urgency, scores the job with rubric math, and keeps the apply decision explicit."
+        meta={
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span className="text-[12px] text-graphite">
+              Current score: <span className="font-medium text-ink">{analyzedScore ? `${score.total}/10` : 'Paste a job'}</span>
+            </span>
+            <span className="text-[12px] text-graphite">
+              Connects cost: <span className="font-medium text-ink">{connectsPreview !== null ? String(connectsPreview) : 'Not stated'}</span>
+            </span>
+            <span className="text-[12px] text-graphite">
+              Observed proposals: <span className="font-medium text-ink">{proposalLabel ?? 'Unknown'}</span>
+            </span>
+          </div>
+        }
+        actions={
+          <Link
+            href="/upwork"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-bone-raised px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-bone"
+          >
+            Back to Upwork
+          </Link>
+        }
+      />
 
       {error ? (
-        <Alert variant="destructive">
-          <AlertTitle>Something failed</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <div role="alert" className="rounded-xl border border-status-danger/30 bg-status-danger/10 px-4 py-3 text-[13px] text-status-danger">
+          {error}
+        </div>
       ) : null}
 
       <div className="space-y-5">
@@ -396,15 +399,6 @@ export default function NewUpworkJobPage() {
         </div>
       </Step>
       </div>
-    </div>
-  )
-}
-
-function UpworkSignal({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded border border-orange/20 bg-orange/5 px-3 py-2">
-      <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-orange-light/80">{label}</p>
-      <p className="mt-1 text-[14px] font-medium text-ink">{value}</p>
     </div>
   )
 }

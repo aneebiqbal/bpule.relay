@@ -45,18 +45,18 @@ export function PageHeader({
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div className="min-w-0">
           {eyebrow && (
-            <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">{eyebrow}</p>
+            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-stone">{eyebrow}</p>
           )}
           <h1
             className={cn(
-              "text-heading font-medium tracking-[-0.01em] text-ink",
-              eyebrow ? "mt-1 text-lg sm:text-xl" : "text-xl sm:text-2xl",
+              "font-light tracking-[-0.02em] text-ink",
+              eyebrow ? "mt-1 text-[24px] leading-tight" : "text-[22px] leading-tight",
             )}
           >
             {title}
           </h1>
           {description && (
-            <p className="mt-1 max-w-2xl text-sm text-graphite">{description}</p>
+            <p className="mt-1.5 max-w-2xl text-[13px] text-graphite">{description}</p>
           )}
         </div>
 

@@ -6,7 +6,7 @@ import { getAuthContext } from "@/lib/auth/organization";
 import { isDemoMode } from "@/lib/ai/config";
 import { createScoutStore } from "@/lib/store";
 import { getAuthProvider } from "@/lib/auth/provider";
-import { RelayAppShell } from "@/components/shell/relay-app-shell";
+import { V4AppShell } from "@/components/v4/v4-app-shell";
 import { AppIdentifyWrapper } from "@/components/app-identify-wrapper";
 import { AnalyticsProvider } from "@/components/analytics-provider";
 import { ActiveIdentityProvider } from "@/components/workspace/active-identity-provider";
@@ -95,7 +95,7 @@ export default async function AppLayout({
         plan={user.organization.plan}
       >
         <ActiveIdentityProvider identities={revenueIdentities} initialActiveId={initialActiveId}>
-          <RelayAppShell
+          <V4AppShell
             organizationName={user.organization.name}
             repName={user.rep.name}
             role={user.rep.role}
@@ -108,7 +108,7 @@ export default async function AppLayout({
             sidebarCounts={sidebarCounts}
           >
             {children}
-          </RelayAppShell>
+          </V4AppShell>
         </ActiveIdentityProvider>
       </AppIdentifyWrapper>
     </>

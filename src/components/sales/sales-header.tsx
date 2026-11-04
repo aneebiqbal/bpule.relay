@@ -39,8 +39,8 @@ export function SalesHeader({
     <div className={cn('space-y-3', className)}>
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.16em] text-stone">{eyebrow}</p>
-          <h1 className="mt-1 flex flex-wrap items-baseline gap-2 text-xl font-medium tracking-[-0.01em] text-ink sm:text-2xl">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-stone">{eyebrow}</p>
+          <h1 className="mt-1 flex flex-wrap items-baseline gap-2 text-[24px] font-light leading-tight tracking-[-0.02em] text-ink">
             {title}
             {typeof count === 'number' && (
               <span className="text-[13px] font-normal text-stone">
@@ -50,7 +50,7 @@ export function SalesHeader({
             )}
           </h1>
           {description ? (
-            <p className="mt-1 max-w-2xl text-[13px] text-graphite">{description}</p>
+            <p className="mt-1.5 max-w-2xl text-[13px] text-graphite">{description}</p>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">

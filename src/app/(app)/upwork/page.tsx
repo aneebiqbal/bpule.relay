@@ -1,73 +1,111 @@
 import Link from 'next/link'
-import { Plus, Briefcase, ArrowRight } from 'lucide-react'
+import { Plus, ChevronRight } from 'lucide-react'
 import { createScoutStore } from '@/lib/store'
-import { PageHeader } from '@/components/ui/page-header'
-import { EmptyState } from '@/components/ui/empty-state'
+import { V4PageHeader, V4Panel, V4PanelHeader, V4Chip, V4Empty } from '@/components/v4/primitives'
 import { ConnectsPanel } from '@/components/upwork-connects-panel'
 import { upworkStageLabel } from '@/lib/upwork/pipeline'
 
 export const dynamic = 'force-dynamic'
 
+const VERDICT_CHIP: Record<string, { tone: 'success' | 'warning' | 'neutral'; label: string }> = {
+  apply: { tone: 'success', label: 'Apply' },
+  apply_if_connects: { tone: 'warning', label: 'If Connects' },
+  skip: { tone: 'neutral', label: 'Skip' },
+}
+
+function payLine(job: { budgetMin: number | null; budgetMax: number | null; hourlyRateMin: number | null; hourlyRateMax: number | null }): string | null {
+  if (job.hourlyRateMin && job.hourlyRateMax) {
+    return job.hourlyRateMin === job.hourlyRateMax ? `$${job.hourlyRateMin}/hr` : `$${job.hourlyRateMin}–$${job.hourlyRateMax}/hr`
+  }
+  if (job.budgetMin && job.budgetMax) {
+    return job.budgetMin === job.budgetMax ? `$${job.budgetMin.toLocaleString()} fixed` : `$${job.budgetMin.toLocaleString()}–$${job.budgetMax.toLocaleString()} fixed`
+  }
+  if (job.budgetMin) return `$${job.budgetMin.toLocaleString()} fixed`
+  if (job.budgetMax) return `Up to $${job.budgetMax.toLocaleString()}`
+  return null
+}
+
 export default async function UpworkPage() {
   const store = await createScoutStore()
   const jobs = await store.listUpworkJobs()
+  const open = jobs.filter((j) => j.status !== 'awarded' && j.status !== 'rejected' && j.status !== 'dead' && j.status !== 'no')
+  const scored = jobs.filter((j) => j.score != null)
 
   return (
-    <div className="space-y-5">
-      <PageHeader
+    <div className="space-y-6">
+      <V4PageHeader
+        eyebrow="Sales / Upwork"
         title="Upwork"
-        description="Extract jobs, generate proposals, apply — all in one flow."
-        action={
+        subtitle="Extract jobs, generate proposals, apply — all in one flow."
+        actions={
           <Link
             href="/upwork/new"
-            className="inline-flex items-center gap-2 rounded-md bg-orange px-3 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-3.5 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98]"
           >
-            <Plus className="size-4" aria-hidden="true" />
+            <Plus className="size-4" aria-hidden />
             Extract job
           </Link>
         }
       />
 
-      {/* Connects usage */}
       <ConnectsPanel />
 
-      {jobs.length === 0 ? (
-        <EmptyState
-          icon={Briefcase}
-          title="No Upwork jobs yet"
-          description="Paste a Upwork job URL or text. Relay extracts the details, scores fit, and helps you write a proposal."
+      <V4Panel>
+        <V4PanelHeader
+          eyebrow="Pipeline"
+          title="Jobs"
+          hint={`${open.length} open · ${scored.length} scored`}
           action={
-            <Link
-              href="/upwork/new"
-              className="inline-flex items-center gap-2 rounded-md bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              Extract your first job
+            <Link href="/upwork/new" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
+              New job <ChevronRight className="size-3.5" aria-hidden />
             </Link>
           }
         />
-      ) : (
-        <div className="srf-console overflow-hidden">
-          <ul className="divide-y divide-console-line/50">
-            {jobs.map((job) => (
-              <li key={job.id}>
-                <Link href={`/upwork/${job.id}`} className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-console-raised">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-medium text-console-text">{job.title}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[11px] text-console-mute">{upworkStageLabel(job.status)}</span>
-                      {job.connectsCost > 0 && (
-                        <span className="text-[10px] text-console-mute">• {job.connectsCost} Connects</span>
-                      )}
+        {jobs.length === 0 ? (
+          <div className="mt-4">
+            <V4Empty
+              title="No Upwork jobs yet"
+              body="Paste a Upwork job URL or text. Relay extracts the details, scores fit, and helps you write a proposal."
+            >
+              <Link href="/upwork/new" className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid">
+                <Plus className="size-3.5" aria-hidden />
+                Extract your first job
+              </Link>
+            </V4Empty>
+          </div>
+        ) : (
+          <ul className="mt-4 divide-y divide-line/70 overflow-hidden rounded-xl ring-1 ring-line">
+            {jobs.map((job) => {
+              const pay = payLine(job)
+              const verdict = job.verdict ? VERDICT_CHIP[job.verdict] : null
+              return (
+                <li key={job.id}>
+                  <Link href={`/upwork/${job.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-bone">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="truncate text-[13px] font-medium text-ink">{job.title}</p>
+                        {verdict && <V4Chip tone={verdict.tone}>{verdict.label}</V4Chip>}
+                      </div>
+                      <p className="mt-0.5 truncate text-[12px] text-graphite">
+                        {[job.clientName, pay, job.connectsCost ? `${job.connectsCost} Connects` : null].filter(Boolean).join(' · ') || '—'}
+                      </p>
                     </div>
-                  </div>
-                  <ArrowRight className="size-3.5 shrink-0 text-console-mute" />
-                </Link>
-              </li>
-            ))}
+                    <div className="flex shrink-0 items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-[13px] font-medium tabular-nums text-ink">
+                          {job.score != null ? `${job.score}/10` : '—'}
+                        </p>
+                        <p className="text-[11px] text-stone">{upworkStageLabel(job.status)}</p>
+                      </div>
+                      <ChevronRight className="size-3.5 text-stone" aria-hidden />
+                    </div>
+                  </Link>
+                </li>
+              )
+            })}
           </ul>
-        </div>
-      )}
+        )}
+      </V4Panel>
     </div>
   )
 }
