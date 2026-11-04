@@ -504,6 +504,9 @@ export function LeadsTable({
         key: 'lead',
         header: 'Person',
         sortKey: 'name',
+        // Caps the widest column so stage / next action / priority stay on
+        // screen at 1440 instead of being pushed into the horizontal scroll.
+        className: 'max-w-[280px]',
         render: (lead) => (
           <div className="flex min-w-0 items-center gap-2.5">
             <V3Avatar name={lead.contactName ?? lead.company ?? '?'} size="sm" />
