@@ -58,6 +58,8 @@ export interface LeadsTableProps {
   workspaceName: string | null
   currentRepId: string | null
   reps: Array<{ id: string; name: string }>
+  /** Sending identities for the profile filter. Organization-scoped. */
+  profiles?: Array<{ id: string; identity_name: string }>
   query: LeadsQuery
   now: number
   /** Table | Pipeline representation toggle. */
@@ -414,6 +416,7 @@ export function LeadsTable({
   workspaceName,
   currentRepId,
   reps,
+  profiles = [],
   query,
   now,
   viewToggle,
@@ -812,6 +815,9 @@ export function LeadsTable({
                 >
                   <option value="all">All profiles</option>
                   <option value="unassigned">No profile</option>
+                  {profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>{profile.identity_name}</option>
+                  ))}
                 </select>
               ) : null}
               {orgView ? (

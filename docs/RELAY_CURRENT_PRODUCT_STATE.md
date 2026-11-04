@@ -210,8 +210,11 @@ are recorded so they are not mistaken for shipped behaviour.
 
 **Known blockers / gaps**
 
-1. Rep 360 (`/team/[repId]`) has no nav entry of its own; it is reached by
-   clicking any person row from Team → People / Workload / Overview.
+1. Rep 360 (`/team/[repId]`) intentionally has no global nav item. It is reached
+   by clicking a person from **Team → People** (also Workload/Overview), from the
+   **Manager Home** team rows, from the **Admin Home** team rows and comparison
+   list, from **Team → attention**, and from the **Inbox** owner/rep link. All
+   five paths are verified in code.
 2. The Leads **Profile** select offers only "All profiles" / "No profile"; it
    cannot target a specific sending identity.
 3. Pipeline (`/leads?view=pipeline`) does not apply the table's URL filters —

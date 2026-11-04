@@ -1367,7 +1367,7 @@ export class SupabaseStore implements ScoutStore {
 
     if (input.profile === 'unassigned') {
       query = query.is('revenue_identity_id', null).is('sender_profile_id', null)
-    } else if (input.profile) {
+    } else if (input.profile && input.profile !== 'all') {
       const id = input.profile.replace(/[^a-zA-Z0-9-]/g, '')
       if (id) query = query.or(`revenue_identity_id.eq.${id},sender_profile_id.eq.${id}`)
     }
