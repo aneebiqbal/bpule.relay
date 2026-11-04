@@ -125,6 +125,8 @@
   --solid: #1c1c1a;
   --on-solid: #f7f6f3;
   --on-accent: #ffffff;
+  /* Orange is a light signal: dark text passes AA where white does not. */
+  --on-orange: #141312;
   --ink: #1c1c1a;
   --ink-soft: #3d3c39;
   --graphite: #5c5b57;
@@ -229,6 +231,7 @@
   --solid: #ece9e3;
   --on-solid: #141312;
   --on-accent: #f7f6f3;
+  --on-orange: #141312;
   --ink: #ece9e3;
   --ink-soft: #b8b5ad;
   --graphite: #8c8982;
@@ -338,6 +341,7 @@
   --solid: #1c1c1a;
   --on-solid: #f7f6f3;
   --on-accent: #f7f6f3;
+  --on-orange: #141312;
   --ink: #1c1c1a;
   --ink-soft: #3d3c39;
   --graphite: #5c5b57;
@@ -481,6 +485,15 @@
    Animations — restrained, purposeful
    ═══════════════════════════════════════════════════════════ */
 @layer utilities {
+  /*
+   * Orange is a light signal: dark text passes AA where white does not.
+   * Tailwind's own `text-on-accent` utility outranks the components layer, so
+   * the override has to live here to win the cascade.
+   */
+  :is(button, a, [role="button"], [data-slot="button"]).bg-orange {
+    color: var(--on-orange);
+  }
+
   @keyframes fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -1774,7 +1787,9 @@
 }
 
 @layer components {
-  :is(button, a, [role="button"], [data-slot="button"]).bg-orange,
+  :is(button, a, [role="button"], [data-slot="button"]).bg-orange {
+    color: var(--on-orange);
+  }
   :is(button, a, [role="button"], [data-slot="button"]).bg-cobalt {
     color: var(--on-accent);
   }
@@ -2135,7 +2150,7 @@
 .lg3-button:active { transform: scale(0.98); }
 .lg3-button--primary {
   background: var(--orange);
-  color: var(--on-accent);
+  color: var(--on-orange);
 }
 .lg3-button--primary:hover { background: var(--orange-dark); }
 .lg3-button--primary:focus-visible { outline: 2px solid color-mix(in srgb, var(--orange) 60%, white); outline-offset: 2px; }
@@ -2504,7 +2519,7 @@
   padding: 0.55rem 0.85rem;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--on-accent);
+  color: var(--on-orange);
   text-decoration: none;
   transition: background 0.2s ease;
 }
@@ -3335,7 +3350,7 @@
   padding: 0.4rem 0.85rem;
   border-radius: 5px;
   background: var(--orange);
-  color: var(--on-accent);
+  color: var(--on-orange);
   font-size: 12px;
   font-weight: 500;
   text-decoration: none;
@@ -3379,7 +3394,7 @@
   padding: 0.55rem 1rem;
   border-radius: 5px;
   background: var(--orange);
-  color: var(--on-accent);
+  color: var(--on-orange);
   font-size: 13px;
   font-weight: 500;
   text-decoration: none;

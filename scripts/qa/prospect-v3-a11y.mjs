@@ -15,7 +15,7 @@
  * unreachable the run says so rather than failing silently.
  */
 import { chromium } from 'playwright'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const BASE = process.argv[2] ?? process.env.RELAY_BASE_URL
@@ -49,9 +49,24 @@ const AXE_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.
 mkdirSync(OUT, { recursive: true })
 const report = { base: BASE, startedAt: new Date().toISOString(), runs: [] }
 
-const browser = await chromium.launch()
+const browser = await chromium.launch({ ignoreHTTPSErrors: true })
 
 async function signIn(page, user) {
+  // Reuse the one-time session captured by globalSetup when available.
+  const stored = join(process.cwd(), 'e2e/.auth', `${user.role}.json`)
+  if (existsSync(stored)) {
+    try {
+      const state = JSON.parse(readFileSync(stored, 'utf8'))
+      if (state.cookies?.length) {
+        await page.context().addCookies(state.cookies)
+        await page.goto(`${BASE}/dashboard`, { waitUntil: 'domcontentloaded' })
+        if (!page.url().includes('/login')) return
+      }
+    } catch {
+      // fall through to an interactive sign-in
+    }
+  }
+
   await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })
   if (!page.url().includes('/login')) return // demo mode auto-authenticates
   await page.waitForSelector('#login-email', { timeout: 60_000 })
@@ -84,8 +99,10 @@ async function signIn(page, user) {
 }
 
 for (const user of USERS) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1440, height: 900 } })
   const page = await context.newPage()
+  page.setDefaultNavigationTimeout(60_000)
+  page.setDefaultTimeout(60_000)
   const consoleErrors = []
   page.on('console', (msg) => {
     if (msg.type() === 'error') consoleErrors.push(msg.text().slice(0, 300))
@@ -104,7 +121,23 @@ for (const user of USERS) {
     await page.setViewportSize({ width: vp.width, height: vp.height })
     for (const route of ROUTES) {
       consoleErrors.length = 0
-      await page.goto(`${BASE}${route.path}`, { waitUntil: 'domcontentloaded' })
+      try {
+        await page.goto(`${BASE}${route.path}`, { waitUntil: 'domcontentloaded' })
+      } catch (err) {
+        // A stalled dev server must not abort the whole matrix.
+        report.runs.push({
+          role: user.role,
+          viewport: vp.name,
+          route: route.name,
+          url: `${BASE}${route.path}`,
+          axe: { error: `navigation failed: ${(err).message?.slice(0, 160)}` },
+          consoleErrors: [],
+          overflow: null,
+          ctaVisible: false,
+        })
+        console.log(`${user.role} ${vp.name} ${route.name}: NAV FAILED`)
+        continue
+      }
       await page.waitForTimeout(2000)
 
       const entry = {
