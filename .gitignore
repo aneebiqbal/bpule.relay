@@ -57,5 +57,18 @@ e2e/.auth/
 # Local QA audit output (screenshots + reports)
 artifacts/
 
+# Production PII dump — see docs/PII_GIT_REMEDIATION.md (P0-5, Step 1).
+# Never re-add: the directory holds real prospect emails, LinkedIn URLs and
+# message bodies. History rewrite is tracked separately in that document.
+audit-reports/historical-intelligence/
+audit-reports/**/*.csv
+
+# Generated visual-QA captures (multi-viewport screenshots + contact sheets)
+screenshots/
+feedback-screenshots/
+
+# Local scratch scripts (certification probes, one-off diagnostics)
+.tmp/
+
 # Local HTTPS dev certificates (next dev --experimental-https)
 certificates/
