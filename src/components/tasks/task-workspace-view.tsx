@@ -40,30 +40,28 @@ function sourceLine(task: UnifiedTask): string {
   return task.createdByName ? `From ${task.createdByName}` : 'From Manager'
 }
 
-function dueLabel(task: UnifiedTask): string {
+function dueLabel(task: UnifiedTask, timeZone: string, now: number): string {
   if (task.status === 'DONE' && task.completedAt) {
-    return `Done ${relativeTime(task.completedAt, Date.now())}`.replace(' ago', '')
+    return `Done ${relativeTime(task.completedAt, now)}`.replace(' ago', '')
   }
   if (!task.dueAt) {
     if (task.source === 'DERIVED' && task.kind === 'REPLY') {
-      return relativeTime(task.createdAt, Date.now()) || '—'
+      return relativeTime(task.createdAt, now) || '—'
     }
     return '—'
   }
   const due = new Date(task.dueAt).getTime()
-  const now = Date.now()
   if (due < now) return `Overdue · ${relativeTime(task.dueAt, now).replace(' ago', '')}`
   const hours = (due - now) / 3_600_000
   if (hours < 24) return 'Today'
   if (hours < 48) return 'Tomorrow'
-  return new Date(task.dueAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return new Date(task.dueAt).toLocaleDateString('en-US', { timeZone, month: 'short', day: 'numeric' })
 }
 
-function attentionCount(tasks: UnifiedTask[]): number {
-  const now = Date.now()
+function attentionCount(tasks: UnifiedTask[], timeZone: string, now: number): number {
   return tasks.filter((t) => {
     if (t.status !== 'OPEN' && t.status !== 'IN_PROGRESS') return false
-    return classifyUnifiedTaskTab(t, now) === 'today' || classifyUnifiedTaskTab(t, now) === 'overdue'
+    return classifyUnifiedTaskTab(t, now, timeZone) === 'today' || classifyUnifiedTaskTab(t, now, timeZone) === 'overdue'
   }).length
 }
 
@@ -74,6 +72,8 @@ export function TaskWorkspaceView({
   reps,
   currentRepId,
   teams = [],
+  timeZone = 'UTC',
+  now,
 }: {
   tasks: UnifiedTask[]
   canAssign: boolean
@@ -81,6 +81,10 @@ export function TaskWorkspaceView({
   reps: Array<{ id: string; name: string }>
   currentRepId: string
   teams?: Array<{ id: string; name: string; memberIds: string[] }>
+  /** Org timezone — the one zone the server and client both render in. */
+  timeZone?: string
+  /** Server-computed once per request so SSR and hydration classify tabs identically. */
+  now: number
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -141,27 +145,26 @@ export function TaskWorkspaceView({
   const teamMemberIds = team === 'ALL' ? null : new Set(teams.find((t) => t.id === team)?.memberIds ?? [])
 
   const counts = useMemo(() => {
-    const now = Date.now()
     const out = {} as Record<UnifiedTaskTab, number>
     for (const t of TABS) {
       out[t.id] = t.id === 'all'
         ? tasks.length
-        : tasks.filter((x) => classifyUnifiedTaskTab(x, now) === t.id).length
+        : tasks.filter((x) => classifyUnifiedTaskTab(x, now, timeZone) === t.id).length
     }
     return out
-  }, [tasks])
+  }, [tasks, timeZone, now])
 
   const filtered = useMemo(() => {
-    const now = Date.now()
     return filterUnifiedTasks(tasks, {
       tab: view,
       priority,
       source,
       assigneeRepId: showAssignee ? assignee : 'ALL',
+      timeZone,
     }).filter((t) => {
       if (teamMemberIds && !teamMemberIds.has(t.assigneeRepId)) return false
       if (due !== 'ALL') {
-        const bucket = classifyUnifiedTaskTab(t, now)
+        const bucket = classifyUnifiedTaskTab(t, now, timeZone)
         if (due === 'overdue' && bucket !== 'overdue') return false
         if (due === 'today' && bucket !== 'today') return false
         if (due === 'week') {
@@ -180,7 +183,7 @@ export function TaskWorkspaceView({
       }
       return true
     })
-  }, [tasks, view, priority, source, assignee, showAssignee, due, teamMemberIds, q])
+  }, [tasks, view, priority, source, assignee, showAssignee, due, teamMemberIds, q, timeZone])
 
   const selected = openTaskId
     ? tasks.find((t) => t.id === openTaskId || t.id === `assigned:${openTaskId}`) ?? null
@@ -214,7 +217,7 @@ export function TaskWorkspaceView({
 
   const headerSubtitle = showAssignee
     ? `${counts.overdue} overdue across ${new Set(tasks.filter((t) => isOverdue(t)).map((t) => t.assigneeRepId)).size} people.`
-    : `${attentionCount(tasks)} need your attention today.`
+    : `${attentionCount(tasks, timeZone, now)} need your attention today.`
 
   return (
     <div className="space-y-6 pb-10">
@@ -424,7 +427,7 @@ export function TaskWorkspaceView({
                       </td>
                       <td suppressHydrationWarning className={cn('px-3 py-2.5', overdue ? 'font-medium text-status-danger' : 'text-graphite')}>
                         {overdue && <span className="sr-only">Overdue: </span>}
-                        {dueLabel(task)}
+                        {dueLabel(task, timeZone, now)}
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex flex-wrap items-center gap-2">
@@ -481,7 +484,7 @@ export function TaskWorkspaceView({
                   <p className="mt-0.5 text-[11px] text-stone">{sourceLine(task)}</p>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <span suppressHydrationWarning className={cn('text-[11px]', isOverdue(task) ? 'font-medium text-status-danger' : 'text-stone')}>
-                      {dueLabel(task)}
+                      {dueLabel(task, timeZone, now)}
                     </span>
                     <Link href={task.action.href} className="text-[12px] font-medium text-cobalt">
                       {task.action.label}
@@ -507,7 +510,7 @@ export function TaskWorkspaceView({
             reps={reps}
             canManage={canAssign}
             currentRepId={currentRepId}
-            now={Date.now()}
+            now={now}
             onChanged={() => router.refresh()}
           />
         )}

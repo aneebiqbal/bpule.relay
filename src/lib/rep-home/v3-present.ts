@@ -257,12 +257,12 @@ export function buildRepV3Stages(leads: ReadonlyArray<OpenLeadFact>): RepV3Stage
   }))
 }
 
-export function buildRepV3Activity(rows: ReadonlyArray<TimelineRow>): RepV3ActivityItem[] {
+export function buildRepV3Activity(rows: ReadonlyArray<TimelineRow>, timeZone = 'UTC'): RepV3ActivityItem[] {
   return rows.slice(0, REP_V3_ACTIVITY_LIMIT).map((row) => {
     const lead = row.leadLabel ?? row.company ?? null
     return {
       id: row.id,
-      time: formatClock(row.at),
+      time: formatClock(row.at, timeZone),
       label: lead ? `${row.event} · ${lead}` : row.event,
       detail: row.result,
       href: row.href,
@@ -270,10 +270,15 @@ export function buildRepV3Activity(rows: ReadonlyArray<TimelineRow>): RepV3Activ
   })
 }
 
-function formatClock(iso: string): string {
+function formatClock(iso: string, timeZone = 'UTC'): string {
   const ms = new Date(iso).getTime()
   if (Number.isNaN(ms)) return '--:--'
-  return new Date(ms).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return new Date(ms).toLocaleTimeString('en-US', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }
 
 export function deriveRepV3MetricInput(args: {

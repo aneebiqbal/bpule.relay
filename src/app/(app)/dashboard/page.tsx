@@ -77,6 +77,7 @@ export default async function TodayPage() {
           team={teamResult.data}
           error={teamResult.error}
           greeting={greeting}
+          timeZone={user.organization.timezone ?? 'UTC'}
         />
       </Suspense>
     )
@@ -86,7 +87,12 @@ export default async function TodayPage() {
 
   return (
     <Suspense fallback={<DashboardShellSkeleton />}>
-      <V4RepHome data={repData} role={user.rep.role} greeting={greeting} />
+      <V4RepHome
+        data={repData}
+        role={user.rep.role}
+        greeting={greeting}
+        timeZone={user.organization.timezone ?? 'UTC'}
+      />
     </Suspense>
   )
 }

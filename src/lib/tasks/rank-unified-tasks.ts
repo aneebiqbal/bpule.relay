@@ -42,7 +42,25 @@ export function isOverdue(task: UnifiedTask, now = Date.now()): boolean {
   return false
 }
 
-export function classifyUnifiedTaskTab(task: UnifiedTask, now = Date.now()): Exclude<UnifiedTaskTab, 'all'> {
+/**
+ * Date key in the org timezone. Server and client must agree on "today", so the
+ * comparison is never made in either runtime's local zone (UTC on the server,
+ * the viewer's zone in the browser).
+ */
+function dateKey(instant: number, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(instant))
+}
+
+export function classifyUnifiedTaskTab(
+  task: UnifiedTask,
+  now = Date.now(),
+  timeZone = 'UTC',
+): Exclude<UnifiedTaskTab, 'all'> {
   if (task.status === 'DONE' || task.status === 'CANCELLED') return 'completed'
   if (isOverdue(task, now)) return 'overdue'
   if (
@@ -50,22 +68,18 @@ export function classifyUnifiedTaskTab(task: UnifiedTask, now = Date.now()): Exc
     || task.priority === 'HIGH'
     || task.kind === 'REPLY'
     || task.kind === 'FOLLOW_UP'
-    || (task.source === 'ASSIGNED' && isDueToday(task, now))
+    || (task.source === 'ASSIGNED' && isDueToday(task, now, timeZone))
   ) {
     return 'today'
   }
   return 'upcoming'
 }
 
-function isDueToday(task: UnifiedTask, now: number): boolean {
+function isDueToday(task: UnifiedTask, now: number, timeZone = 'UTC'): boolean {
   if (!task.dueAt) return false
-  const due = new Date(task.dueAt)
-  const d = new Date(now)
-  return (
-    due.getFullYear() === d.getFullYear()
-    && due.getMonth() === d.getMonth()
-    && due.getDate() === d.getDate()
-  )
+  const due = new Date(task.dueAt).getTime()
+  if (Number.isNaN(due)) return false
+  return dateKey(due, timeZone) === dateKey(now, timeZone)
 }
 
 /**
@@ -97,12 +111,14 @@ export function filterUnifiedTasks(
     profileId?: string | 'ALL'
     assigneeRepId?: string | 'ALL'
     now?: number
+    timeZone?: string
   },
 ): UnifiedTask[] {
   const now = opts.now ?? Date.now()
+  const timeZone = opts.timeZone ?? 'UTC'
   return tasks.filter((t) => {
     if (opts.tab && opts.tab !== 'all') {
-      if (classifyUnifiedTaskTab(t, now) !== opts.tab) return false
+      if (classifyUnifiedTaskTab(t, now, timeZone) !== opts.tab) return false
     }
     if (opts.kind && opts.kind !== 'ALL' && t.kind !== opts.kind) return false
     if (opts.priority && opts.priority !== 'ALL' && t.priority !== opts.priority) return false

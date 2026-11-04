@@ -87,11 +87,14 @@ export function V4RepHome({
   data,
   role,
   greeting,
+  timeZone = 'UTC',
 }: {
   data: RepWorkspaceData
   role: 'admin' | 'rep' | 'sourcer' | 'manager'
   /** Server-computed in the viewer's timezone so SSR and hydration agree. */
   greeting: string
+  /** Org timezone — the one zone the server and client both render in. */
+  timeZone?: string
 }) {
   const ranked = useMemo(() => rankActions(data.allActions ?? []), [data.allActions])
   const unified = useMemo(() => data.unifiedTasks ?? [], [data.unifiedTasks])
@@ -106,7 +109,7 @@ export function V4RepHome({
   )
   const actions = useMemo(() => buildRepV3Actions(unified, ranked), [unified, ranked])
   const stages = useMemo(() => buildRepV3Stages(data.pipelineLeads ?? []), [data.pipelineLeads])
-  const activity = useMemo(() => buildRepV3Activity(data.activity ?? []), [data.activity])
+  const activity = useMemo(() => buildRepV3Activity(data.activity ?? [], timeZone), [data.activity, timeZone])
   const breakdown = useMemo(() => buildRepWorkBreakdown(unified, ranked), [unified, ranked])
 
   const daily = data.activityDaily ?? []

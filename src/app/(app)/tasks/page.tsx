@@ -50,6 +50,8 @@ export default async function TasksPage() {
         showAssignee={showAssignee}
         reps={reps}
         currentRepId={auth.repId}
+        now={Date.now()}
+        timeZone={user.organization.timezone ?? 'UTC'}
         teams={(directory?.teams ?? []).map((t) => ({ id: t.id, name: t.name, memberIds: t.memberIds }))}
       />
     </Suspense>

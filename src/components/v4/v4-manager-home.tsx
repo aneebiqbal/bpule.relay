@@ -47,12 +47,15 @@ export function V4ManagerHome({
   team,
   error,
   greeting,
+  timeZone = 'UTC',
 }: {
   personal: RepWorkspaceData
   team: ManagerHomeTeamData
   error?: boolean
   /** Server-computed in the viewer's timezone so SSR and hydration agree. */
   greeting: string
+  /** Org timezone — the one zone the server and client both render in. */
+  timeZone?: string
 }) {
   const [filter, setFilter] = useState<TeamFilter>('all')
 
@@ -313,7 +316,7 @@ export function V4ManagerHome({
                       <div className="min-w-0">
                         <p className="truncate text-[13px] font-medium text-ink">{item.label}</p>
                         <p className="text-[11px] text-stone">
-                          <span suppressHydrationWarning>{new Date(item.occurredAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                          <span>{new Date(item.occurredAt).toLocaleString('en-US', { timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                         </p>
                       </div>
                       {item.href && <ChevronRight className="size-3.5 shrink-0 text-stone" aria-hidden />}
