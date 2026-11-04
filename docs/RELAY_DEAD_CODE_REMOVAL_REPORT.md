@@ -93,7 +93,7 @@ type-carrier rows are now **resolved**: their types were harvested into
 | FILE | REASON |
 |---|---|
 | `src/components/ui/sparkline.tsx` | Strongest-but-unused sparkline; selected for reuse in the shared V3 visual system rather than deletion. |
-| `src/components/dashboard/analytics/pipeline-analytics-view.tsx` | Richest visual asset in the repo (KPIs + deltas + trend + funnel + heatmap + leaderboard); revival candidate. Also still asserted by `e2e/dashboard-analytics.spec.ts`. |
+| `src/components/dashboard/analytics/pipeline-analytics-view.tsx` | Richest visual asset in the repo (KPIs + deltas + trend + funnel + heatmap + leaderboard); revival candidate. Unreachable since V4 replaced the dashboard — its e2e spec was removed with the surface. |
 | `src/components/admin/team-live-board.tsx` | Strongest stacked-bar implementation found; move, don't delete. |
 | `src/components/contribution-heatmap*` (`performance/contribution-heatmap.tsx`) | Live, single canonical heatmap (4 importers). |
 | ~~`relay-today-workspace.tsx`~~ · ~~`rep/rep-workspace.tsx`~~ · ~~`rep/rep-today.tsx`~~ · ~~`performance/execution-health-card.tsx`~~ · ~~`rep/{bd-daily-desk,do-this-next,up-next,rep-day-panel}.tsx`~~ · ~~`inbox/unified-inbox.tsx`~~ | **RESOLVED** — types harvested to `lib/tasks/relay-today-action.ts`, `lib/rep-home/rep-workspace-data.ts` and `lib/performance/execution-health.ts`; the nine dead components were deleted. |
