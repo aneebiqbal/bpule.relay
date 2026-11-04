@@ -11,7 +11,7 @@
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
-import type { RepWorkspaceData } from '@/components/rep/rep-workspace'
+import type { RepWorkspaceData } from '@/lib/rep-home/rep-workspace-data'
 import type { UnifiedTask } from '@/lib/tasks/types'
 import {
   buildRepV3Actions,

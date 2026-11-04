@@ -17,7 +17,7 @@ import {
   selectRepV3WorkRows,
 } from '@/lib/rep-home/v3-present'
 import { filterActionsByWorkspace, sliceTargetSummaryForWorkspace } from '@/lib/rep-home/profile-scope'
-import type { RelayTodayAction } from '@/components/relay-today-workspace'
+import type { RelayTodayAction } from '@/lib/tasks/relay-today-action'
 import type { UnifiedTask } from '@/lib/tasks/types'
 import type { OpenLeadFact } from '@/lib/team/admin-command-summary'
 import type { TimelineRow } from '@/lib/operations/activity'

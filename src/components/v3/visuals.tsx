@@ -9,7 +9,7 @@
  * Every visual degrades on its own — a failed chart renders nothing and never
  * takes the metrics, attention list or actions down with it.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { cn } from 'cn'
@@ -264,6 +264,10 @@ export function V3TrendChart({
   label?: string
 }) {
   const [range, setRange] = useState(initialRange)
+  // Recharts' ResponsiveContainer measures the DOM, so it renders nothing during
+  // SSR and the chart after mount. Gate it to avoid a hydration text mismatch.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
   const days = Number.parseInt(range, 10) || 7
   const visible = useMemo(() => points.slice(-days), [points, days])
   const totals = useMemo(() => {
@@ -307,6 +311,7 @@ export function V3TrendChart({
         ))}
       </div>
       <div className="h-44 w-full" role="img" aria-label={`Trend chart: ${summary}`}>
+        {mounted ? (
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={visible} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>
             <defs>
@@ -355,6 +360,7 @@ export function V3TrendChart({
             ))}
           </AreaChart>
         </ResponsiveContainer>
+        ) : null}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
         {series.map((s) => (

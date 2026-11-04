@@ -6,7 +6,7 @@
  * Home contract. Kept pure so the named product tests can pin each rule.
  */
 import type { UnifiedTask } from '@/lib/tasks/types'
-import type { RelayTodayAction } from '@/components/relay-today-workspace'
+import type { RelayTodayAction } from '@/lib/tasks/relay-today-action'
 import {
   TODAY_FOLLOWUP_KINDS,
   TODAY_REPLY_KINDS,

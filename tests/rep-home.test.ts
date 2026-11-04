@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RelayTodayAction } from '@/components/relay-today-workspace'
+import type { RelayTodayAction } from '@/lib/tasks/relay-today-action'
 import {
   actionDeepLink,
   classifyWorkTab,

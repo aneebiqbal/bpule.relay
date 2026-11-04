@@ -1,4 +1,4 @@
-import type { RelayTodayAction } from '@/components/relay-today-workspace'
+import type { RelayTodayAction } from '@/lib/tasks/relay-today-action'
 import {
   TODAY_FOLLOWUP_KINDS,
   TODAY_REPLY_KINDS,

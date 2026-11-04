@@ -6,7 +6,7 @@
  * Fixtures use Madiha's real rep identity and Aneeb as the assigning manager.
  */
 import { describe, expect, it } from 'vitest'
-import type { RelayTodayAction } from '@/components/relay-today-workspace'
+import type { RelayTodayAction } from '@/lib/tasks/relay-today-action'
 import { toUnifiedTaskFromAction, toUnifiedTaskFromAssigned } from '@/lib/tasks/map-unified-task'
 import {
   classifyUnifiedTaskTab,

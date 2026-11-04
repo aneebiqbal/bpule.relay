@@ -1,4 +1,4 @@
-import type { RelayTodayAction } from '@/components/relay-today-workspace'
+import type { RelayTodayAction } from '@/lib/tasks/relay-today-action'
 import { TODAY_FOLLOWUP_KINDS, TODAY_REPLY_KINDS } from '@/lib/relay/today-counts'
 import type { UnifiedTaskKind, UnifiedTaskPriority } from '@/lib/tasks/types'
 import { overdueSeverity } from '@/lib/rep-home/action-presentation'

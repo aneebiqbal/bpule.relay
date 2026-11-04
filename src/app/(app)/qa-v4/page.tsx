@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { V4ManagerHome } from '@/components/v4/v4-manager-home'
-import type { RepWorkspaceData } from '@/components/rep/rep-workspace'
-import type { RelayTodayAction } from '@/components/relay-today-workspace'
+import type { RepWorkspaceData } from '@/lib/rep-home/rep-workspace-data'
+import type { RelayTodayAction } from '@/lib/tasks/relay-today-action'
 import type { ManagerHomeTeamData } from '@/lib/team/manager-home-summary'
 import type { AttentionSignal } from '@/lib/team/attention-policy'
 

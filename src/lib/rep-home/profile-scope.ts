@@ -1,5 +1,5 @@
 import type { Lead } from '@/lib/domain/types'
-import type { RelayTodayAction } from '@/components/relay-today-workspace'
+import type { RelayTodayAction } from '@/lib/tasks/relay-today-action'
 import { leadBelongsToWorkspace, type WorkspaceIdentity } from '@/lib/workspace/active-identity'
 import { leadIdFromAction } from '@/lib/rep-home/action-presentation'
 

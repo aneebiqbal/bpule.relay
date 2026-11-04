@@ -6,7 +6,7 @@ import { createScoutStore } from '@/lib/store'
 import { buildRoleContext } from '@/lib/relay/role-intelligence'
 import { buildRelayQueue, filterQueueByRole } from '@/lib/relay/queue-engine'
 import { rankNextActions, type NextBestAction } from '@/lib/relay/next-best-action'
-import type { RelayTodayAction } from '@/components/relay-today-workspace'
+import type { RelayTodayAction } from '@/lib/tasks/relay-today-action'
 import type { RelayTaskKind } from '@/lib/domain/types'
 import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
 import {

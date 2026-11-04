@@ -1,6 +1,6 @@
 'use client'
 
-import type { RepWorkspaceData } from '@/components/rep/rep-workspace'
+import type { RepWorkspaceData } from '@/lib/rep-home/rep-workspace-data'
 import type { RepRole } from '@/lib/domain/types'
 import { RepHomeView } from '@/components/rep/rep-home-view'
 

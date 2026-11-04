@@ -1,4 +1,4 @@
-import type { RelayTodayAction } from '@/components/relay-today-workspace'
+import type { RelayTodayAction } from '@/lib/tasks/relay-today-action'
 import type { AuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
 import {

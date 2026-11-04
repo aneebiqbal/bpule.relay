@@ -17,9 +17,9 @@ const ROOT = process.cwd()
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf8')
 
 describe('TODAY_SINGLE_SOURCE — one loader', () => {
-  it('the Today page renders the canonical rep day', () => {
+  it('the Today page loads the canonical rep day into the shared payload', () => {
     expect(read('src/app/(app)/dashboard/page.tsx')).toContain('loadRepDay')
-    expect(read('src/components/rep/rep-workspace.tsx')).toContain('RepDayPanel')
+    expect(read('src/lib/rep-home/rep-workspace-data.ts')).toContain('RepDayView')
   })
 
   it('both rep-day APIs read the same loader', () => {
@@ -35,11 +35,11 @@ describe('TODAY_SINGLE_SOURCE — one loader', () => {
     expect(loader).toContain('deriveRepDayState')
   })
 
-  it('no page computes its own state machine', () => {
-    const panel = read('src/components/rep/rep-day-panel.tsx')
-    // The UI renders a state; it never decides one.
-    expect(panel).not.toContain('deriveRepDayState')
-    expect(panel).not.toContain('computePace')
+  it('no surface computes its own state machine', () => {
+    // The V4 Home renders a state; it never decides one.
+    const home = read('src/components/v4/v4-rep-home.tsx')
+    expect(home).not.toContain('deriveRepDayState')
+    expect(home).not.toContain('computePace')
   })
 
   it('the scheduler reads the same state machine', () => {

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, ChevronRight } from 'lucide-react'
 import { cn } from 'cn'
-import type { RepWorkspaceData } from '@/components/rep/rep-workspace'
+import type { RepWorkspaceData } from '@/lib/rep-home/rep-workspace-data'
 import type { ManagerHomeTeamData } from '@/lib/team/manager-home-summary'
 import { deriveTodayCounts } from '@/lib/relay/today-counts'
 import {
