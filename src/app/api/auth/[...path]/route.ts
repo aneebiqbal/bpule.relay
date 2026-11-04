@@ -23,7 +23,7 @@ type RouteContext = { params: Promise<{ path: string[] }> }
  * HTTPS the attribute must be preserved or the browser silently drops the
  * session.
  */
-function forwardResponse(response: Response, secureContext: boolean): Response {
+export function forwardResponse(response: Response, secureContext: boolean): Response {
   if (secureContext || process.env.NODE_ENV === 'production') return response
 
   const cookies = response.headers.getSetCookie()

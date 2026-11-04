@@ -777,7 +777,7 @@ export function LeadsTable({
             onSearchChange={(value) => navigate({ q: value })}
             searchPlaceholder="Search name, company or title…"
           >
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <ListFilter className="size-3.5 text-stone" aria-hidden="true" />
               <select
                 aria-label="Stage"
