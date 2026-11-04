@@ -5,6 +5,7 @@ import {
   pipelineCardIdsSql,
   pipelineScopeClause,
   pipelineScopeParams,
+  pipelineStageCountsFromRow,
   pipelineStageSql,
 } from '@/lib/store/pipeline-stage'
 import { SupabaseDbClient } from '@/lib/db/supabase'
@@ -114,5 +115,24 @@ describe('emptyPipelineStageCounts', () => {
     expect(emptyPipelineStageCounts()).toEqual({
       to_contact: 0, observe: 0, waiting: 0, follow_up_due: 0, needs_reply: 0, done: 0, cold: 0,
     })
+  })
+})
+
+describe('pipelineStageCountsFromRow', () => {
+  it('coerces Postgres COUNT(*) strings so the board total sums instead of concatenating', () => {
+    const counts = pipelineStageCountsFromRow({
+      to_contact: '2', observe: '7', waiting: '99', follow_up_due: '38', needs_reply: '4', done: '0', cold: '0',
+    })
+    expect(counts).toEqual({
+      to_contact: 2, observe: 7, waiting: 99, follow_up_due: 38, needs_reply: 4, done: 0, cold: 0,
+    })
+    expect(Object.values(counts).reduce((sum, n) => sum + n, 0)).toBe(150)
+  })
+
+  it('fills missing stages with zero and tolerates a null row', () => {
+    expect(pipelineStageCountsFromRow({ to_contact: '3' })).toEqual({
+      to_contact: 3, observe: 0, waiting: 0, follow_up_due: 0, needs_reply: 0, done: 0, cold: 0,
+    })
+    expect(pipelineStageCountsFromRow(null)).toEqual(emptyPipelineStageCounts())
   })
 })

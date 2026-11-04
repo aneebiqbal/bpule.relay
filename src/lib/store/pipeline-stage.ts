@@ -44,6 +44,20 @@ export function emptyPipelineStageCounts(): PipelineStageCounts {
   return { to_contact: 0, observe: 0, waiting: 0, follow_up_due: 0, needs_reply: 0, done: 0, cold: 0 }
 }
 
+/**
+ * Coerce one aggregate row into numeric counts. Postgres returns COUNT(*) as
+ * strings; leaving them as strings makes the board's total concatenate
+ * ("0279938400") instead of summing.
+ */
+export function pipelineStageCountsFromRow(
+  row: Partial<Record<PipelineStageKey, unknown>> | null | undefined,
+): PipelineStageCounts {
+  const counts = emptyPipelineStageCounts()
+  if (!row) return counts
+  for (const key of PIPELINE_STAGE_KEYS) counts[key] = Number(row[key] ?? 0)
+  return counts
+}
+
 /** Board card order: needs_reply first, done last. */
 export const PIPELINE_CARD_ORDER: Record<PipelineStageKey, number> = {
   needs_reply: 0,

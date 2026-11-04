@@ -132,12 +132,13 @@ import { evaluateSendPolicy } from '@/lib/email/policy-engine'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { computeRates, rateMetricFromGroups, RATE_GROUP_SQL, type RateBucket, type RateGroup } from '@/lib/store/rates'
 import {
-  emptyPipelineStageCounts,
   pipelineCardIdsSql,
   pipelineScopeClause,
   pipelineScopeParams,
+  pipelineStageCountsFromRow,
   pipelineStageSql,
   type PipelineStageCounts,
+  type PipelineStageKey,
   type PipelineStageScope,
 } from '@/lib/store/pipeline-stage'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
@@ -668,7 +669,10 @@ export class SupabaseStore implements ScoutStore {
       pipelineScopeParams(this.orgId, nowIso, scope),
     )
     if (error || !data) return null
-    return { ...emptyPipelineStageCounts(), ...(data as Partial<PipelineStageCounts>) }
+    // `raw()` resolves to the row array; this aggregate is exactly one row.
+    const row = Array.isArray(data) ? data[0] : data
+    if (!row) return null
+    return pipelineStageCountsFromRow(row as Partial<Record<PipelineStageKey, unknown>>)
   }
 
   /** Bounded card ids in board order (stage priority, then last activity). */
