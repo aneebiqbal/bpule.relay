@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from 'cn'
+import { V4Panel, V4PanelHeader } from '@/components/v4/primitives'
 import type { UpworkJob, UpworkJobStatus } from '@/lib/domain/types'
 import {
   UPWORK_CLOSE_STAGES,
@@ -41,19 +42,14 @@ export function UpworkJobTimeline({ job }: { job: UpworkJob }) {
   }
 
   return (
-    <section className="rounded-2xl border border-line bg-bone-raised/30 p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-[15px] font-medium text-ink">On Upwork</h2>
-          <p className="mt-1 max-w-xl text-[13px] text-graphite">{upworkStageDetail(status)}</p>
-        </div>
-        <span className={cn(
-          'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium',
-          closed ? 'bg-bone text-stone' : 'bg-ink text-on-solid',
-        )}>
-          {upworkStageLabel(status)}
-        </span>
-      </div>
+    <V4Panel>
+      <V4PanelHeader title="On Upwork" hint={upworkStageDetail(status)} />
+      <span className={cn(
+        'mb-4 inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium',
+        closed ? 'bg-bone text-stone' : 'bg-ink text-on-solid',
+      )}>
+        {upworkStageLabel(status)}
+      </span>
 
       {isLegacyUpworkStatus(status) && (
         <p className="mt-3 rounded-xl bg-status-warning/10 px-3 py-2 text-[12px] text-status-warning">
@@ -114,6 +110,6 @@ export function UpworkJobTimeline({ job }: { job: UpworkJob }) {
       </div>
 
       {error && <p className="mt-3 text-[13px] text-status-danger">{error}</p>}
-    </section>
+    </V4Panel>
   )
 }

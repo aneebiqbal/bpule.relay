@@ -12,9 +12,9 @@ import { logRecommendation } from '@/lib/action-ledger'
 import type { RelayTodayAction } from '@/components/relay-today-workspace'
 import type { RelayTaskKind } from '@/lib/domain/types'
 import type { RepWorkspaceData } from '@/components/rep/rep-workspace'
-import { RepDashboard } from '@/components/dashboard/rep-dashboard'
-import { ManagerHomeView } from '@/components/manager/manager-home-view'
-import { AdminCommandCenterView } from '@/components/admin/admin-command-center-view'
+import { V4RepHome } from '@/components/v4/v4-rep-home'
+import { V4ManagerHome } from '@/components/v4/v4-manager-home'
+import { V4AdminHome } from '@/components/v4/v4-admin-home'
 import { loadManagerHomeTeam } from '@/lib/team/load-manager-home'
 import { loadAdminCommandCenter } from '@/lib/team/load-admin-command-center'
 import { qualifyCanonicalScore, displayScoreForCanonical } from '@/lib/scoring/qualification'
@@ -50,7 +50,7 @@ export default async function TodayPage() {
     const adminResult = await perfTrace('admin:loadAdminCommandCenter', () => loadAdminCommandCenter())
     return (
       <Suspense fallback={<DashboardShellSkeleton />}>
-        <AdminCommandCenterView
+        <V4AdminHome
           data={adminResult.data}
           adminName={user.rep.name}
           error={adminResult.error}
@@ -69,7 +69,7 @@ export default async function TodayPage() {
 
     return (
       <Suspense fallback={<DashboardShellSkeleton />}>
-        <ManagerHomeView
+        <V4ManagerHome
           personal={repData}
           team={teamResult.data}
           error={teamResult.error}
@@ -82,7 +82,7 @@ export default async function TodayPage() {
 
   return (
     <Suspense fallback={<DashboardShellSkeleton />}>
-      <RepDashboard data={repData} role={user.rep.role} />
+      <V4RepHome data={repData} role={user.rep.role} />
     </Suspense>
   )
 }

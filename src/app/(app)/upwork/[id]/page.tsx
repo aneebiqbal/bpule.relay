@@ -1,25 +1,26 @@
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { createScoutStore } from '@/lib/store'
-import { PageHeader } from '@/components/ui/page-header'
 import { computeUpworkScore } from '@/lib/score/upwork-rubric'
 import { matchProfilesToJob } from '@/lib/upwork/score'
 import { loadSenderProfiles } from '@/lib/relay/routing-context'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { getAuthContext } from '@/lib/auth/organization'
 import type { RoutingResult } from '@/lib/relay/sender-routing-engine'
-import { MessageCircle, Tag, FileText } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { cn } from 'cn'
 import { upworkStageLabel } from '@/lib/upwork/pipeline'
 import { UpworkJobActions } from '@/components/upwork-job-actions'
 import { UpworkJobTimeline } from '@/components/upwork-job-timeline'
 import { UpworkCommunication } from '@/components/upwork-communication'
+import { V4PageHeader, V4Panel, V4PanelHeader, V4Chip } from '@/components/v4/primitives'
 
 export const dynamic = 'force-dynamic'
 
-const VERDICT_STYLE: Record<string, { bg: string; text: string; label: string }> = {
-  apply: { bg: 'bg-status-success/10', text: 'text-status-success', label: 'Apply' },
-  apply_if_connects: { bg: 'bg-status-warning/10', text: 'text-status-warning', label: 'If Connects' },
-  skip: { bg: 'bg-bone', text: 'text-slate', label: 'Skip' },
+const VERDICT_CHIP: Record<string, { tone: 'success' | 'warning' | 'neutral'; label: string }> = {
+  apply: { tone: 'success', label: 'Apply' },
+  apply_if_connects: { tone: 'warning', label: 'If Connects' },
+  skip: { tone: 'neutral', label: 'Skip' },
 }
 
 export default async function UpworkJobPage({
@@ -57,7 +58,7 @@ export default async function UpworkJobPage({
     }
   } catch { profileMatch = null }
 
-  const verdict = score.verdict ? VERDICT_STYLE[score.verdict] : VERDICT_STYLE.skip
+  const verdict = job.verdict ? VERDICT_CHIP[job.verdict] : VERDICT_CHIP.skip
   // Read the canonical job facts for honest display: a source proposal range
   // is shown verbatim, and missing Connects stays unknown (QA BUG-11-02/03).
   const jobFacts = (job.jobFacts ?? null) as {
@@ -84,158 +85,173 @@ export default async function UpworkJobPage({
   ].filter(Boolean)
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <PageHeader
+    <div className="space-y-5">
+      <Link
+        href="/upwork"
+        className="inline-flex items-center gap-1 text-[12px] text-graphite transition-colors hover:text-ink lg:hidden"
+      >
+        <ArrowLeft className="size-3.5" aria-hidden />
+        All Upwork jobs
+      </Link>
+
+      <V4PageHeader
+        eyebrow="Sales / Upwork"
         title={job.title}
-        description={`${facts.join(' · ')} · ${score.total} / 10 (${score.canonical.score}/100) · ${upworkStageLabel(job.status)}`}
-        action={<span className={cn('rounded-full px-2.5 py-1 text-[12px] font-medium', verdict.bg, verdict.text)}>{verdict.label}</span>}
+        subtitle={
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>{facts.join(' · ') || 'No extracted facts yet.'}</span>
+            <span className="text-stone">·</span>
+            <span className="tabular-nums">{score.total} / 10</span>
+            <span className="text-stone">·</span>
+            <span>{upworkStageLabel(job.status)}</span>
+          </span>
+        }
+        actions={
+          <V4Chip tone={verdict.tone} className="px-3 py-1.5 text-[12px]">{verdict.label}</V4Chip>
+        }
       />
 
-      <section className="rounded-2xl border border-line bg-bone-raised/30 p-4 sm:p-5">
-        <p className="text-[13px] text-graphite">
-          {jobFacts?.connects != null
-            ? `Spend ${jobFacts.connects} Connects only if you are sending this proposal.`
-            : job.connectsCost
-              ? `Spend ${job.connectsCost} Connects only if you are sending this proposal.`
-              : 'Connects cost not stated — confirm it on Upwork before applying.'}
-        </p>
+      {/* Proposal workspace first: the action a saved job exists for. */}
+      <V4Panel>
+        <div className="mt-1">
+          <UpworkJobActions
+            jobId={id}
+            jobTitle={job.title}
+            jobScore={job.score}
+            profiles={profiles}
+            matchedProofs={[]}
+            savedDraft={(job.messages ?? []).find((m) => m.type === 'cover' && !m.sentAt && m.draftText)?.draftText ?? null}
+          />
+        </div>
+      </V4Panel>
 
-        {(score.canonical.reasons.length > 0 || score.canonical.watchOut.length > 0) && (
-          <div className="mt-3 grid gap-3 sm:grid-cols-2" data-testid="upwork-why">
-            {score.canonical.reasons.length > 0 && (
-              <ul className="space-y-0.5 text-[12px] text-ink">{score.canonical.reasons.map((r) => <li key={r}>+ {r}</li>)}</ul>
-            )}
-            {score.canonical.watchOut.length > 0 && (
-              <ul className="space-y-0.5 text-[12px] text-status-warning">{score.canonical.watchOut.map((r) => <li key={r}>! {r}</li>)}</ul>
-            )}
-          </div>
-        )}
+      <V4Panel>
+        <V4PanelHeader
+          eyebrow="Score"
+          title={`Why this job scores ${score.total} / 10`}
+          hint="Canonical rubric math — a separate profile match never changes it"
+        />
+        <div className="mt-4 space-y-4">
+          <p className="text-[13px] text-graphite">
+            {jobFacts?.connects != null
+              ? `Spend ${jobFacts.connects} Connects only if you are sending this proposal.`
+              : job.connectsCost
+                ? `Spend ${job.connectsCost} Connects only if you are sending this proposal.`
+                : 'Connects cost not stated — confirm it on Upwork before applying.'}
+          </p>
 
-        {profileMatch && profileMatch.rankings.length > 0 && (
-          <div className="mt-4 rounded border border-line bg-bone px-4 py-3" data-testid="upwork-profile-match">
-            <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Profile match (separate from the job score)</p>
-            <ul className="mt-2 space-y-1">
-              {profileMatch.rankings.slice(0, 4).map((r, i) => (
-                <li key={r.senderId} className="flex items-center justify-between gap-3 text-[12px]">
-                  <span className="truncate text-ink">{i + 1}. {r.name ?? 'Unnamed'}{r.reasons[0] ? <span className="text-graphite"> · {r.reasons[0]}</span> : null}</span>
-                  <span className={cn('shrink-0 font-mono font-medium', r.profileMatch >= 70 ? 'text-status-success' : r.profileMatch >= 40 ? 'text-orange' : 'text-stone')}>{r.profileMatch}%</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+          {(score.canonical.reasons.length > 0 || score.canonical.watchOut.length > 0) && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {score.canonical.reasons.length > 0 && (
+                <ul className="space-y-1 text-[12px] text-ink">
+                  {score.canonical.reasons.map((r) => <li key={r}>+ {r}</li>)}
+                </ul>
+              )}
+              {score.canonical.watchOut.length > 0 && (
+                <ul className="space-y-1 text-[12px] text-status-warning">
+                  {score.canonical.watchOut.map((r) => <li key={r}>! {r}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
 
-        {/* Breakdown */}
-        <div className="mt-6 grid gap-2 border-t border-line pt-5 sm:grid-cols-2">
-          {score.breakdown.map((item) => {
-            const frac = item.max > 0 ? item.points / item.max : 0
-            return (
-              <div key={item.category + item.label} className="flex items-center gap-3">
-                <div className="flex-1">
-                  <div className="flex items-baseline justify-between text-sm">
-                    <span className="text-ink">{item.label}</span>
-                    <span className="font-mono text-xs text-slate">
-                      {item.points}/{item.max}
+          {profileMatch && profileMatch.rankings.length > 0 && (
+            <div className="rounded-xl bg-bone px-4 py-3 ring-1 ring-line">
+              <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Profile match (separate from the job score)</p>
+              <ul className="mt-2 space-y-1">
+                {profileMatch.rankings.slice(0, 4).map((r, i) => (
+                  <li key={r.senderId} className="flex items-center justify-between gap-3 text-[12px]">
+                    <span className="truncate text-ink">
+                      {i + 1}. {r.name ?? 'Unnamed'}{r.reasons[0] ? <span className="text-graphite"> · {r.reasons[0]}</span> : null}
                     </span>
-                  </div>
-                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-bone">
-                    <div
-                      className={cn(
-                        'h-full rounded-full transition-all duration-500',
-                        frac >= 1 ? 'bg-status-success' : frac > 0 ? 'bg-orange' : 'bg-line',
-                      )}
-                      style={{ width: `${Math.max(frac * 100, frac > 0 ? 8 : 0)}%` }}
-                    />
+                    <span className={cn('shrink-0 font-mono font-medium', r.profileMatch >= 70 ? 'text-status-success' : r.profileMatch >= 40 ? 'text-orange' : 'text-stone')}>
+                      {r.profileMatch}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="grid gap-2 border-t border-line pt-4 sm:grid-cols-2">
+            {score.breakdown.map((item) => {
+              const frac = item.max > 0 ? item.points / item.max : 0
+              return (
+                <div key={item.category + item.label} className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-baseline justify-between text-[13px]">
+                      <span className="text-ink">{item.label}</span>
+                      <span className="font-mono text-[11px] text-stone">{item.points}/{item.max}</span>
+                    </div>
+                    <div className="mt-1 h-1 overflow-hidden rounded-full bg-bone">
+                      <div
+                        className={cn(
+                          'h-full rounded-full transition-all duration-500',
+                          frac >= 1 ? 'bg-status-success' : frac > 0 ? 'bg-orange' : 'bg-line',
+                        )}
+                        style={{ width: `${Math.max(frac * 100, frac > 0 ? 8 : 0)}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
-      </section>
+      </V4Panel>
 
       <UpworkJobTimeline job={job} />
 
-      <section className="space-y-4 rounded-2xl border border-line bg-bone-raised/30 p-4 sm:p-5">
-        <h2 className="flex items-center gap-2 text-[15px] font-medium text-ink">
-          <FileText className="size-3.5 text-cobalt" />
-          Proposal
-        </h2>
-        <UpworkJobActions
-          jobId={id}
-          jobTitle={job.title}
-          jobScore={job.score}
-          profiles={profiles}
-          matchedProofs={[]}
-          savedDraft={(job.messages ?? []).find((m) => m.type === 'cover' && !m.sentAt && m.draftText)?.draftText ?? null}
-        />
-      </section>
+      <V4Panel>
+        <V4PanelHeader eyebrow="Job post" title="Description" />
+        <p className="mt-3 whitespace-pre-wrap text-[13px] leading-relaxed text-ink/80">{job.description}</p>
+      </V4Panel>
 
-      <section className="rounded-2xl border border-line bg-bone-raised/30 p-4 sm:p-5">
-        <h2 className="text-[15px] font-medium text-ink">Job post</h2>
-        <p className="mt-3 whitespace-pre-wrap text-[14px] leading-relaxed text-ink/80">{job.description}</p>
-      </section>
-
-      {/* Urgency + Skills side by side */}
-      <div className="reveal-up stagger-3 grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         {job.urgencySignal ? (
-           <div className="rounded border border-line bg-bone-raised p-5">
-            <h2 className="flex items-center gap-2 text-sm font-medium text-ink">
-              <MessageCircle className="size-3.5 text-status-warning" />
-              Urgency signal
-            </h2>
-            <p className="mt-2 text-sm text-ink/80">{job.urgencySignal}</p>
-          </div>
+          <V4Panel className="h-full">
+            <V4PanelHeader eyebrow="Signal" title="Urgency" />
+            <p className="mt-3 text-[13px] text-ink/80">{job.urgencySignal}</p>
+          </V4Panel>
         ) : null}
 
         {job.requiredSkills.length > 0 ? (
-           <div className="rounded border border-line bg-bone-raised p-5">
-            <h2 className="flex items-center gap-2 text-sm font-medium text-ink">
-              <Tag className="size-3.5 text-slate" />
-              Required skills
-            </h2>
+          <V4Panel className="h-full">
+            <V4PanelHeader eyebrow="Requirements" title="Required skills" />
             <div className="mt-3 flex flex-wrap gap-2">
               {job.requiredSkills.map((s) => (
-                <span
-                  key={s}
-                  className="rounded-lg bg-bone px-2.5 py-1 font-mono text-xs text-ink"
-                >
+                <span key={s} className="rounded-full bg-bone px-2.5 py-1 font-mono text-[11px] text-ink ring-1 ring-line">
                   {s}
                 </span>
               ))}
             </div>
-          </div>
+          </V4Panel>
         ) : null}
       </div>
 
       {job.applicationRequirements.length > 0 && (
-        <section className="rounded-2xl border border-line bg-bone-raised/30 p-4 sm:p-5">
-          <h2 className="text-[15px] font-medium text-ink">What they ask for</h2>
+        <V4Panel>
+          <V4PanelHeader eyebrow="Requirements" title="What they ask for" />
           <ul className="mt-3 space-y-1.5 text-[13px] text-graphite">
             {job.applicationRequirements.map((item) => <li key={item}>{item}</li>)}
           </ul>
-        </section>
+        </V4Panel>
       )}
 
       {job.screeningQuestions.length > 0 && (
-        <section className="rounded-2xl border border-line bg-bone-raised/30 p-4 sm:p-5">
-          <h2 className="flex items-center gap-2 text-[15px] font-medium text-ink">
-            <MessageCircle className="size-3.5 text-cobalt" />
-            Screening questions
-          </h2>
+        <V4Panel>
+          <V4PanelHeader eyebrow="Screening" title="Screening questions" hint="Answered inside the generated proposal" />
           <ul className="mt-3 space-y-2">
             {job.screeningQuestions.map((q, i) => (
-              <li key={q} className="rounded-xl bg-paper px-3 py-2 text-[13px] text-graphite">
+              <li key={q} className="rounded-xl bg-bone px-3 py-2 text-[13px] text-graphite ring-1 ring-line">
                 <span className="font-medium text-ink">Q{i + 1}.</span> {q}
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-[12px] text-stone">Answer these in the proposal. Generate includes them.</p>
-        </section>
+        </V4Panel>
       )}
 
       <UpworkCommunication jobId={id} job={job} />
-
     </div>
   )
 }

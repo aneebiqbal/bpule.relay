@@ -1,8 +1,15 @@
 'use client'
 
+/**
+ * Upwork proposal workspace — the action surface on a job.
+ *
+ * Generate from a sending profile, edit, save, then mark applied after human
+ * review. The profile requirement is explicit: without one, the workspace says
+ * so and links to the profile screen instead of showing a dead button.
+ */
 import { useState, useCallback, useRef } from 'react'
-import { Check, Copy, RefreshCw } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import Link from 'next/link'
+import { Check, Copy, RefreshCw, Sparkles, UserPlus } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from 'cn'
 import type { Profile, ProofItem } from '@/lib/domain/types'
@@ -31,7 +38,7 @@ function markAppliedButtonClass(applied: boolean, belowGate: boolean): string {
   return 'bg-status-success text-on-accent hover:bg-status-success/90'
 }
 
-export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedProofs, savedDraft }: UpworkJobActionsProps) {
+export function UpworkJobActions({ jobId, jobScore, profiles, matchedProofs, savedDraft }: UpworkJobActionsProps) {
   const belowGate = jobScore === null || jobScore < MIN_SCORE_TO_APPLY
   // Exact eligibility reason for the disabled Generate button (QA BUG-11-08):
   // never leave it disabled without saying why.
@@ -44,7 +51,6 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
   // Restore the persisted draft: a saved proposal must survive a reload, or
   // "Save draft" is a lie (BUG-31).
   const [proposal, setProposal] = useState(savedDraft ?? '')
-  const [editing, setEditing] = useState(false)
   const [generating, setGenerating] = useState(false)
   const canGenerate = eligibility.ok && !generating
   const [error, setError] = useState<string | null>(null)
@@ -64,28 +70,27 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
       setError('Select a profile first.')
       return
     }
-      setGenerating(true)
-      setError(null)
-      setSelfCheckNote(null)
-      setQualityScore(null)
-      setQuestionAnswers([])
-      setProposal('')
-      try {
-        const res = await fetch(`/api/upwork/jobs/${jobId}/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ profileId: selectedProfileId, generationMode }),
-        })
-        if (!res.ok) {
-          const data = await res.json().catch(() => null)
-          throw new Error(data?.error || 'Generation failed.')
-        }
-        const data = await res.json()
-        setProposal(data.draft.text)
-        setSelfCheckNote(data.draft.selfCheckNote)
-        setQualityScore(data.draft.qualityScore ?? null)
-        setQuestionAnswers(data.draft.questionAnswers ?? [])
-        setEditing(true)
+    setGenerating(true)
+    setError(null)
+    setSelfCheckNote(null)
+    setQualityScore(null)
+    setQuestionAnswers([])
+    setProposal('')
+    try {
+      const res = await fetch(`/api/upwork/jobs/${jobId}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profileId: selectedProfileId, generationMode }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Generation failed.')
+      }
+      const data = await res.json()
+      setProposal(data.draft.text)
+      setSelfCheckNote(data.draft.selfCheckNote)
+      setQualityScore(data.draft.qualityScore ?? null)
+      setQuestionAnswers(data.draft.questionAnswers ?? [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed.')
     } finally {
@@ -126,7 +131,6 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
         throw new Error(data?.error || 'Failed to save draft.')
       }
       // Confirmed by the server: it is only now safe to say "Saved".
-      setEditing(false)
       setSaveState('saved')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save.')
@@ -163,24 +167,54 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
 
   return (
     <div className="space-y-4">
-      <div className="srf-proof px-4 py-3">
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Proposal Workspace</p>
-        <p className="mt-1 text-[13px] text-graphite">
-          Generate from an assigned profile, then edit and mark applied after human review.
-        </p>
-        {proofHint && (
-          <p className="mt-2 text-[12px] text-ink">Relevant proof: {proofHint}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-stone">Proposal workspace</p>
+          <p className="mt-1 text-[13px] text-graphite">
+            Generate from a sending profile, then edit and mark applied after human review.
+          </p>
+          {proofHint && <p className="mt-1 text-[12px] text-ink">Relevant proof: {proofHint}</p>}
+        </div>
+        {jobScore != null && (
+          <div className="text-right">
+            <p className="text-[11px] text-stone">Job score</p>
+            <p className={cn('text-[20px] font-medium tabular-nums', belowGate ? 'text-status-warning' : 'text-status-success')}>
+              {jobScore}/10
+            </p>
+          </div>
         )}
       </div>
 
-      {/* Profile selector */}
-      {profiles.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded border border-line bg-bone p-3">
-          <label className="text-[12px] font-medium text-graphite">Proposal as</label>
+      {/* No profile: say why and give the one action that unblocks it. */}
+      {profiles.length === 0 ? (
+        <div className="flex flex-col items-start gap-3 rounded-xl bg-bone px-4 py-4 ring-1 ring-line sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-orange-faint ring-1 ring-orange/20">
+              <UserPlus className="size-4 text-orange" aria-hidden />
+            </span>
+            <div>
+              <p className="text-[13px] font-medium text-ink">A sending profile is required</p>
+              <p className="mt-0.5 text-[12px] text-graphite">
+                Proposals are written in a profile&apos;s voice and proof. Create one, then generate.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/profiles"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-solid px-3 py-2 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+          >
+            <UserPlus className="size-3.5" aria-hidden />
+            Create sending profile
+          </Link>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl bg-bone px-4 py-3 ring-1 ring-line">
+          <label className="text-[12px] font-medium text-graphite" htmlFor="upwork-proposal-profile">Proposal as</label>
           <select
+            id="upwork-proposal-profile"
             value={selectedProfileId}
             onChange={(e) => setSelectedProfileId(e.target.value)}
-            className="rounded border border-line bg-bone-raised px-3 py-1.5 text-sm text-ink"
+            className="rounded-lg border border-line bg-bone-raised px-3 py-1.5 text-[13px] text-ink"
           >
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
@@ -188,32 +222,31 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={() => setGenerationMode(generationMode === 'standard' ? 'premium' : 'standard')}
+            aria-pressed={generationMode === 'premium'}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors',
+              generationMode === 'premium' ? 'border-cobalt/30 bg-cobalt/10 text-cobalt' : 'border-line text-graphite hover:bg-bone-raised hover:text-ink',
+            )}
+          >
+            {generationMode === 'premium' ? '★ Premium' : 'Standard'}
+          </button>
+          {generationMode === 'premium' && (
+            <span className="text-[11px] text-graphite">Stronger model + client research</span>
+          )}
         </div>
       )}
 
-      {/* Generation mode */}
-      <div className="flex items-center gap-3">
+      {/* Generate */}
+      <div className="flex flex-wrap items-center gap-3">
         <button
-          onClick={() => setGenerationMode(generationMode === 'standard' ? 'premium' : 'standard')}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-[12px] transition-colors',
-            generationMode === 'premium' ? 'border-cobalt/30 bg-cobalt/10 text-cobalt' : 'border-line text-graphite hover:bg-bone'
-          )}
-        >
-          {generationMode === 'premium' ? '★ Premium' : 'Standard'}
-        </button>
-        {generationMode === 'premium' && (
-          <span className="text-[11px] text-graphite">Stronger model + client research</span>
-        )}
-      </div>
-
-      {/* Generate button */}
-      <div className="flex items-center gap-3">
-        <button
+          type="button"
           onClick={() => void generate()}
           disabled={!canGenerate}
           title={eligibility.ok ? undefined : eligibility.reason ?? undefined}
-          className="inline-flex items-center gap-1.5 rounded bg-orange px-4 py-2 text-sm font-medium text-on-accent transition-all hover:bg-orange-dark active:scale-[0.97] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-all hover:bg-orange-dark active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {generating ? (
             <>
@@ -221,63 +254,62 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
               Writing proposal...
             </>
           ) : (
-            generationMode === 'premium' ? 'Generate premium proposal' : 'Generate proposal'
+            <>
+              <Sparkles className="size-4" aria-hidden />
+              {generationMode === 'premium' ? 'Generate premium proposal' : 'Generate proposal'}
+            </>
           )}
         </button>
-        {!eligibility.ok && (
+        {!eligibility.ok && profiles.length > 0 && (
           <span className="text-[12px] text-status-warning">{eligibility.reason}</span>
         )}
-        {proposal && (
+        {proposal && !generating && (
           <button
+            type="button"
             onClick={() => void generate()}
-            disabled={generating}
-            className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-2 text-sm text-graphite transition-colors hover:bg-bone"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13px] text-graphite transition-colors hover:bg-bone hover:text-ink"
           >
-            <RefreshCw className="size-3.5" />
+            <RefreshCw className="size-3.5" aria-hidden />
             Regenerate
           </button>
         )}
       </div>
 
-      {/* Error */}
       {error && (
-        <div role="alert" className="rounded-lg border border-status-danger/20 bg-status-danger/5 px-4 py-3 text-sm text-status-danger">
+        <div role="alert" className="rounded-xl border border-status-danger/20 bg-status-danger/5 px-4 py-3 text-[13px] text-status-danger">
           {error}
         </div>
       )}
 
-      {/* Save confirmation. `aria-live` so a screen reader hears the outcome;
-          rendered only after the server confirmed the write. */}
       <div aria-live="polite" className="sr-only">
         {saveState === 'saving' ? 'Saving draft' : saveState === 'saved' ? 'Draft saved' : ''}
       </div>
       {saveState === 'saved' && (
-        <div role="status" className="rounded-lg border border-status-success/20 bg-status-success/5 px-4 py-3 text-sm text-status-success">
+        <div role="status" className="rounded-xl border border-status-success/20 bg-status-success/5 px-4 py-3 text-[13px] text-status-success">
           Draft saved
         </div>
       )}
 
-      {/* Proposal editor */}
+      {/* Editor */}
       {proposal && (
-        <div className="space-y-2">
-          <div className="rounded border border-line/60 bg-bone-raised p-4">
+        <div className="space-y-3">
+          <div className="rounded-xl bg-bone-raised p-3 ring-1 ring-line">
             <Textarea
               value={proposal}
-              onChange={(e) => { setProposal(e.target.value); setEditing(true) }}
-              rows={10}
-              className="border-0 bg-transparent px-0 py-1 text-[14px] leading-relaxed shadow-none focus-visible:ring-0"
+              onChange={(e) => setProposal(e.target.value)}
+              rows={12}
+              className="border-0 bg-transparent px-1 py-1 text-[14px] leading-relaxed shadow-none focus-visible:ring-0"
             />
           </div>
 
-          {/* Quality score */}
           {qualityScore !== null && (
             <div className="flex items-center gap-2">
-              <span className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Proposal Quality</span>
+              <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Proposal quality</span>
               <span className={cn(
                 'rounded-full px-2 py-0.5 text-[11px] font-medium',
                 qualityScore >= 8 ? 'bg-status-success/15 text-status-success' :
                 qualityScore >= 5 ? 'bg-status-warning/15 text-status-warning' :
-                'bg-status-danger/15 text-status-danger'
+                'bg-status-danger/15 text-status-danger',
               )}>
                 {qualityScore}/10
               </span>
@@ -287,46 +319,45 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
             </div>
           )}
 
-          {selfCheckNote && (
-            <p className="text-xs text-graphite italic">{selfCheckNote}</p>
-          )}
+          {selfCheckNote && <p className="text-[12px] italic text-graphite">{selfCheckNote}</p>}
 
-          {/* Screening question answers */}
           {questionAnswers.length > 0 && (
-            <div className="space-y-2 rounded border border-cobalt/15 bg-cobalt/[0.03] p-3">
-              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-cobalt">Screening Answers</p>
+            <div className="space-y-2 rounded-xl bg-cobalt/[0.04] p-3 ring-1 ring-cobalt/15">
+              <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-cobalt">Screening answers</p>
               {questionAnswers.map((qa, i) => (
                 <div key={i} className="space-y-0.5">
                   <p className="text-[12px] font-medium text-ink">Q: {qa.question}</p>
-                  <p className="text-[12px] text-graphite pl-3 border-l-2 border-cobalt/20">{qa.answer}</p>
+                  <p className="border-l-2 border-cobalt/20 pl-3 text-[12px] text-graphite">{qa.answer}</p>
                 </div>
               ))}
             </div>
           )}
 
           {belowGate && !applied && (
-            <p className="text-xs text-status-danger">
+            <p className="text-[12px] text-status-danger">
               Score below {MIN_SCORE_TO_APPLY} — Relay does not recommend spending a Connect here.
             </p>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
+              type="button"
               onClick={() => void copyProposal()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm text-ink transition-colors hover:bg-bone"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[13px] text-ink transition-colors hover:bg-bone"
             >
               {copied ? <Check className="size-3.5 text-status-success" /> : <Copy className="size-3.5" />}
               {copied ? 'Copied' : 'Copy'}
             </button>
             <button
+              type="button"
               onClick={() => void saveDraft()}
               disabled={saveState === 'saving' || !proposal.trim()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm text-graphite transition-colors hover:bg-bone disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[13px] text-graphite transition-colors hover:bg-bone hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saveState === 'saving' ? (
-                <><RefreshCw className="size-3.5 animate-spin" aria-hidden="true" />Saving…</>
+                <><RefreshCw className="size-3.5 animate-spin" aria-hidden />Saving…</>
               ) : saveState === 'saved' ? (
-                <><Check className="size-3.5 text-status-success" aria-hidden="true" />Saved</>
+                <><Check className="size-3.5 text-status-success" aria-hidden />Saved</>
               ) : saveState === 'failed' ? (
                 'Failed — Retry'
               ) : (
@@ -334,16 +365,14 @@ export function UpworkJobActions({ jobId, jobTitle, jobScore, profiles, matchedP
               )}
             </button>
             <button
+              type="button"
               onClick={() => void markApplied()}
               disabled={applied || belowGate}
               title={belowGate ? `Score below ${MIN_SCORE_TO_APPLY} — Relay does not recommend spending a Connect here.` : undefined}
-              className={cn('ml-auto inline-flex items-center gap-1.5 rounded px-4 py-2 text-sm font-medium transition-all', markAppliedButtonClass(applied, belowGate))}
+              className={cn('ml-auto inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-medium transition-all', markAppliedButtonClass(applied, belowGate))}
             >
               {applied ? (
-                <>
-                  <Check className="size-4" />
-                  Marked applied
-                </>
+                <><Check className="size-4" />Marked applied</>
               ) : belowGate ? (
                 'Score too low to apply'
               ) : (

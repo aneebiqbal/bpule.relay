@@ -23,7 +23,7 @@ export function MetricStrip({ metrics, className }: { metrics: OpsMetric[]; clas
   return (
     <dl
       className={cn(
-        'grid grid-cols-2 overflow-hidden rounded-lg border border-line bg-bone-raised sm:grid-cols-4',
+        'grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-line ring-1 ring-line sm:grid-cols-4',
         metrics.length > 4 && 'lg:grid-cols-8',
         className,
       )}
@@ -38,8 +38,8 @@ export function MetricStrip({ metrics, className }: { metrics: OpsMetric[]; clas
             key={m.label}
             title={m.hint}
             className={cn(
-              'relative min-w-0 border-b border-r border-line/70 px-3 py-2.5',
-              m.href && 'transition-colors hover:bg-bone focus-within:bg-bone',
+              'relative min-w-0 bg-bone-raised px-3.5 py-3',
+              m.href && 'transition-colors hover:bg-bone-000 focus-within:bg-bone-000',
             )}
           >
             <dt className="truncate text-[11px] text-graphite">
@@ -51,7 +51,7 @@ export function MetricStrip({ metrics, className }: { metrics: OpsMetric[]; clas
                 m.label
               )}
             </dt>
-            <dd className={cn('mt-0.5 text-[20px] font-medium tabular-nums tracking-tight', tone)}>{m.value}</dd>
+            <dd className={cn('mt-1 text-[22px] font-medium tabular-nums tracking-tight', tone)}>{m.value}</dd>
           </div>
         )
       })}
@@ -70,7 +70,7 @@ export interface LinkTab {
 export function LinkTabs({ tabs, active, label }: { tabs: LinkTab[]; active: string; label: string }) {
   return (
     <nav aria-label={label} className="-mx-1 overflow-x-auto">
-      <ul className="flex min-w-max items-center gap-0.5 border-b border-line px-1">
+      <ul className="flex min-w-max items-center gap-0.5 rounded-lg bg-bone p-0.5 ring-1 ring-line">
         {tabs.map((tab) => {
           const current = tab.value === active
           return (
@@ -80,15 +80,15 @@ export function LinkTabs({ tabs, active, label }: { tabs: LinkTab[]; active: str
                 aria-current={current ? 'page' : undefined}
                 scroll={false}
                 className={cn(
-                  '-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] transition-colors',
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] transition-colors',
                   current
-                    ? 'border-orange font-medium text-ink'
-                    : 'border-transparent text-graphite hover:text-ink',
+                    ? 'bg-bone-raised font-medium text-ink shadow-sm'
+                    : 'text-graphite hover:text-ink',
                 )}
               >
                 {tab.label}
                 {tab.count !== undefined && (
-                  <span className="rounded-full bg-bone-raised px-1.5 text-[11px] tabular-nums text-stone">
+                  <span className="rounded-full bg-bone px-1.5 text-[11px] tabular-nums text-stone">
                     {tab.count}
                   </span>
                 )}
@@ -155,13 +155,13 @@ export function Section({
   id?: string
 }) {
   return (
-    <section id={id} aria-labelledby={id ? `${id}-title` : undefined} className={cn('space-y-2', className)}>
+    <section id={id} aria-labelledby={id ? `${id}-title` : undefined} className={cn('space-y-3', className)}>
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div className="min-w-0">
-          <h2 id={id ? `${id}-title` : undefined} className="text-[14px] font-medium text-ink">
+          <h2 id={id ? `${id}-title` : undefined} className="text-[15px] font-medium tracking-[-0.01em] text-ink">
             {title}
           </h2>
-          {description && <p className="text-[12px] text-graphite">{description}</p>}
+          {description && <p className="mt-0.5 text-[12px] text-graphite">{description}</p>}
         </div>
         {action}
       </div>
@@ -172,7 +172,7 @@ export function Section({
 
 export function InlineEmpty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded-lg border border-dashed border-line px-3 py-4 text-[13px] text-graphite">{children}</p>
+    <p className="rounded-xl border border-dashed border-line px-3 py-4 text-[13px] text-graphite">{children}</p>
   )
 }
 
@@ -180,7 +180,7 @@ export function InlineError({ children }: { children: React.ReactNode }) {
   return (
     <p
       role="alert"
-      className="rounded-lg border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-[13px] text-status-danger"
+      className="rounded-xl border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-[13px] text-status-danger"
     >
       {children}
     </p>
@@ -242,7 +242,7 @@ export function TimelineTable({
       </div>
       <ul className="space-y-2 md:hidden" aria-label="Activity timeline, newest first">
         {rows.map((row) => (
-          <li key={row.id} className="rounded-lg border border-line bg-bone-raised px-3 py-2">
+          <li key={row.id} className="rounded-xl bg-bone-raised px-3 py-2 ring-1 ring-line">
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-[13px] font-medium text-ink">{row.event}</span>
               <time dateTime={row.at} className="shrink-0 text-[11px] tabular-nums text-stone">

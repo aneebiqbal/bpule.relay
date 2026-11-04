@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { MessageCircle, Send, Reply, Loader2 } from 'lucide-react'
+import { Send, Reply, Loader2 } from 'lucide-react'
 import { cn } from 'cn'
+import { V4Panel, V4PanelHeader } from '@/components/v4/primitives'
 import type { UpworkJob } from '@/lib/domain/types'
 
 interface Message {
@@ -92,15 +93,13 @@ export function UpworkCommunication({ jobId, job }: { jobId: string; job: Upwork
   }, [replyText, jobId])
 
   return (
-    <section className="reveal-up stagger-5 rounded border border-line bg-bone-raised p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="flex items-center gap-2 text-sm font-medium text-ink">
-          <MessageCircle className="size-3.5 text-cobalt" />
-          Communication
-        </h2>
+    <V4Panel>
+      <div className="flex items-center justify-between">
+        <V4PanelHeader title="Communication" />
         <button
+          type="button"
           onClick={() => setShowInbound(!showInbound)}
-          className="rounded-lg bg-bone px-2.5 py-1 text-[11px] text-ink hover:bg-bone-raised"
+          className="rounded-lg bg-bone px-2.5 py-1 text-[11px] text-ink ring-1 ring-line hover:bg-bone-raised"
         >
           + Log client message
         </button>
@@ -202,6 +201,6 @@ export function UpworkCommunication({ jobId, job }: { jobId: string; job: Upwork
           No messages yet. Paste a client message when they reply.
         </p>
       )}
-    </section>
+    </V4Panel>
   )
 }
