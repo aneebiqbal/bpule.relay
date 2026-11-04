@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { cn } from 'cn'
 import {
+  CheckCircle2,
   MessageSquare,
   ChevronDown, ChevronUp,
 } from 'lucide-react'
@@ -190,7 +192,7 @@ function SenderMatchCard({ context }: { context: DecisionContext }) {
   const { routing } = context
   const [dismissed, setDismissed] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
+  const [status, setStatus] = useState<{ kind: 'referred' | 'help' | 'error'; message: string; owner?: string } | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [helpReason, setHelpReason] = useState('')
 
@@ -212,7 +214,11 @@ function SenderMatchCard({ context }: { context: DecisionContext }) {
         })
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error((data as { error?: string }).error || 'Could not refer this lead.')
-        setStatus(`Referred to ${best.name ?? 'the stronger sender'}.`)
+        setStatus({
+          kind: 'referred',
+          owner: best.name ?? 'the stronger sender',
+          message: `This lead now belongs to ${best.holders.join(', ') || best.name || 'another rep'}.`,
+        })
       } else {
         const toRepId = best.holderRepIds[0] || ''
         if (!toRepId) throw new Error('No holder to ask for help. Refer the lead instead.')
@@ -227,12 +233,12 @@ function SenderMatchCard({ context }: { context: DecisionContext }) {
         })
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error((data as { error?: string }).error || 'Could not create the help request.')
-        setStatus('Help requested. An admin or the holder will pick it up.')
+        setStatus({ kind: 'help', message: `Help requested from ${best.holders.join(', ') || best.name || 'the holder'}.` })
         setHelpOpen(false)
         setHelpReason('')
       }
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Action failed.')
+      setStatus({ kind: 'error', message: err instanceof Error ? err.message : 'Action failed.' })
     } finally {
       setBusy(null)
     }
@@ -250,6 +256,14 @@ function SenderMatchCard({ context }: { context: DecisionContext }) {
             </span>
           )}
         </div>
+        {current && (
+          <p className="border-t border-line/40 px-4 py-2 text-[11px] text-graphite">
+            Current owner: <span className="font-medium text-ink">{current.name ?? 'Unknown'}</span>
+            {current.holders.length > 0 && (
+              <span className="text-stone"> · worked by {current.holders.join(', ')}</span>
+            )}
+          </p>
+        )}
         <ul className="space-y-1.5 border-t border-line/40 px-4 py-3">
           {routing.rankings.slice(0, 4).map((r) => {
             const isBest = r.senderId === routing.bestSenderId
@@ -271,40 +285,57 @@ function SenderMatchCard({ context }: { context: DecisionContext }) {
 
       {mismatch && best && (
         <div className="space-y-2 rounded-xl border border-orange/20 bg-orange/5 p-3" data-testid="sender-mismatch-banner">
-          <p className="text-[12px] font-medium text-ink">
-            Another sender is a stronger match: {best.name ?? 'another profile'} at {best.profileMatch}%
-            {current ? ` vs your current ${current.profileMatch}%` : ''}.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => setDismissed(true)}>
-              Keep Current Owner
-            </Button>
-            <Button type="button" size="sm" onClick={() => void runAction('refer')} disabled={busy !== null}>
-              {busy === 'refer' ? 'Referring…' : 'Refer'}
-            </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setHelpOpen((v) => !v)} disabled={busy !== null}>
-              Ask for Help
-            </Button>
-          </div>
-
-          {helpOpen && (
-            <div className="space-y-2 pt-1">
-              <label className="block text-[11px] text-graphite">
-                Ask {best.holders.join(', ') || 'the holder'}
-                <input
-                  className="mt-1 w-full rounded-md border border-line bg-bone-raised px-2 py-1.5 text-[12px] text-ink"
-                  placeholder="What do you need?"
-                  value={helpReason}
-                  onChange={(e) => setHelpReason(e.target.value)}
-                />
-              </label>
-              <Button type="button" size="sm" onClick={() => void runAction('help')} disabled={busy !== null}>
-                {busy === 'help' ? 'Requesting…' : 'Request help'}
-              </Button>
+          {(status?.kind === 'referred' || status?.kind === 'help') ? (
+            <div
+              role="status"
+              className="flex flex-wrap items-center gap-2 rounded-lg bg-status-success/10 px-3 py-2 text-[12px] text-status-success"
+            >
+              <CheckCircle2 className="size-3.5 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 flex-1">{status.message}</span>
+              <Link href={`/leads/${context.leadId}`} className="shrink-0 font-medium underline underline-offset-2">
+                Open lead
+              </Link>
             </div>
-          )}
+          ) : (
+            <>
+              <p className="text-[12px] font-medium text-ink">
+                Another sender is a stronger match: {best.name ?? 'another profile'} at {best.profileMatch}%
+                {current ? ` vs your current ${current.profileMatch}%` : ''}.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => setDismissed(true)}>
+                  Keep Current Owner
+                </Button>
+                <Button type="button" size="sm" onClick={() => void runAction('refer')} disabled={busy !== null}>
+                  {busy === 'refer' ? 'Referring…' : 'Refer'}
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setHelpOpen((v) => !v)} disabled={busy !== null}>
+                  Ask for Help
+                </Button>
+              </div>
 
-          {status && <p role="status" className="text-[11px] text-graphite">{status}</p>}
+              {helpOpen && (
+                <div className="space-y-2 pt-1">
+                  <label className="block text-[11px] text-graphite">
+                    Ask {best.holders.join(', ') || 'the holder'}
+                    <input
+                      className="mt-1 w-full rounded-md border border-line bg-bone-raised px-2 py-1.5 text-[12px] text-ink"
+                      placeholder="What do you need?"
+                      value={helpReason}
+                      onChange={(e) => setHelpReason(e.target.value)}
+                    />
+                  </label>
+                  <Button type="button" size="sm" onClick={() => void runAction('help')} disabled={busy !== null}>
+                    {busy === 'help' ? 'Requesting…' : 'Request help'}
+                  </Button>
+                </div>
+              )}
+
+              {status?.kind === 'error' && (
+                <p role="alert" className="text-[11px] text-status-danger">{status.message}</p>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

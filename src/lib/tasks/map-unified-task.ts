@@ -63,7 +63,9 @@ export function toUnifiedTaskFromAssigned(
     assigneeName?: string | null
   },
 ): UnifiedTask {
-  const href = row.lead_id ? `/leads/${row.lead_id}` : '/tasks'
+  // An assigned task without a linked lead still has to open its detail —
+  // falling back to `/tasks` made "View task" a no-op that just reloaded the list.
+  const href = row.lead_id ? `/leads/${row.lead_id}` : `/tasks?task=${row.id}`
   const reason =
     row.kind === 'REQUEST_UPDATE'
       ? enrich?.createdByName

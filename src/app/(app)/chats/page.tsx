@@ -228,7 +228,7 @@ export default async function ChatsPage({
             )}
           </aside>
 
-          <section aria-label="Thread" tabIndex={0} className={cn('min-h-0 min-w-0 overflow-y-auto', !leadId && 'hidden md:block')}>
+          <section aria-label="Thread" tabIndex={0} className={cn('min-h-0 min-w-0 flex flex-col overflow-hidden', !leadId && 'hidden md:block')}>
             {leadId ? (
               <Suspense fallback={<Skeleton className="h-[420px] w-full rounded-lg" />}>
                 <SelectedThread ctx={ctx} leadId={leadId} reps={reps} backHref={opsHref('/chats', current, { lead: null })} />
@@ -270,7 +270,7 @@ async function SelectedThread({
     return <InlineError>This conversation is not available to you.</InlineError>
   }
   return (
-    <div className="space-y-2">
+    <div className="flex h-full min-h-0 flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
         <Link href={backHref} scroll={false} className="inline-flex items-center gap-1 text-[12px] text-graphite hover:text-ink md:hidden">
           <ArrowLeft className="size-3.5" aria-hidden="true" /> All conversations

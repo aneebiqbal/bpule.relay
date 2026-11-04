@@ -158,8 +158,11 @@ export function V4RepHome({
           <>
             {data.activeWorkspace && (
               <span className="inline-flex items-center gap-1.5 text-[12px] text-graphite">
-                <span className="text-stone">Working as</span>
+                <span className="text-stone">Sending as</span>
                 <span className="font-medium text-ink">{data.activeWorkspace.identityName}</span>
+                {data.identities.length > 1 && (
+                  <span className="text-stone">· {data.identities.length} profiles</span>
+                )}
               </span>
             )}
             <span className="hidden h-3 w-px bg-line sm:block" aria-hidden />
@@ -436,18 +439,26 @@ export function V4RepHome({
 }
 
 function TargetWindows({ rows }: { rows: RepTargetWindow[] }) {
+  // Weekly/monthly goals are the daily target × working days elapsed, so early
+  // in a week/month they can be identical to each other. Showing both verbatim
+  // read as a bug — collapse exact duplicates into one row.
+  const seen = new Set<string>()
+  const unique = rows.filter((row) => {
+    if (row.done == null || row.target <= 0) return false
+    const signature = `${row.done}/${row.target}`
+    if (seen.has(signature)) return false
+    seen.add(signature)
+    return true
+  })
+  const hasDerived = unique.some((row) => row.derived)
+
   return (
-    <div className="overflow-hidden rounded-xl ring-1 ring-line">
-      <ul className="divide-y divide-line/70">
-        {rows.map((row) => (
+    <div>
+      <ul className="divide-y divide-line/70 overflow-hidden rounded-xl ring-1 ring-line">
+        {unique.map((row) => (
           <li key={row.key} className="px-4 py-3">
             <div className="flex items-baseline justify-between gap-3">
-              <p className="text-[13px] font-medium text-ink">
-                {row.label}
-                {row.derived && (
-                  <span className="ml-2 rounded-full bg-bone px-1.5 py-0.5 text-[10px] font-medium text-stone">derived</span>
-                )}
-              </p>
+              <p className="text-[13px] font-medium text-ink">{row.label}</p>
               <p suppressHydrationWarning className="text-[13px] tabular-nums text-graphite">
                 <span className="font-medium text-ink">
                   <V3Value value={row.done} />
@@ -457,7 +468,12 @@ function TargetWindows({ rows }: { rows: RepTargetWindow[] }) {
                 {row.pct != null && <span className="ml-1.5 text-stone">{row.pct}%</span>}
               </p>
             </div>
-            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-bone" aria-hidden>
+            <div
+              className="mt-2 h-1 w-full overflow-hidden rounded-full bg-bone"
+              role="progressbar"
+              aria-valuenow={row.pct ?? 0}
+              aria-label={row.label}
+            >
               <div
                 className="h-full rounded-full bg-orange transition-[width] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
                 style={{ width: `${Math.min(100, Math.max(0, row.pct ?? 0))}%` }}
@@ -466,6 +482,11 @@ function TargetWindows({ rows }: { rows: RepTargetWindow[] }) {
           </li>
         ))}
       </ul>
+      {hasDerived && (
+        <p className="mt-2 text-[11px] leading-relaxed text-stone">
+          Weekly and monthly goals are your daily target times the working days elapsed, so they start small.
+        </p>
+      )}
     </div>
   )
 }

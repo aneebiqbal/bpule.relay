@@ -249,8 +249,10 @@ export function LeadConversation({
   const overLimit = intent === 'connection' && charCount > CONNECTION_NOTE_LIMIT
 
   return (
-    <div className={cn('grid gap-4', variant === 'full' && 'lg:grid-cols-[minmax(0,1fr)_300px]')}>
-      <section className="flex min-h-[520px] flex-col overflow-hidden rounded-2xl border border-line bg-bone-raised/20" aria-label="Conversation">
+    <div className={cn('grid gap-4 h-full', variant === 'full' && 'lg:grid-cols-[minmax(0,1fr)_300px]')}>
+      {/* h-full + internal scroll: the thread must fill the workspace instead of
+          stopping at a fixed 520px and leaving a dead band above the composer. */}
+      <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-bone-raised/20" aria-label="Conversation">
         <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
           <span className="rounded-full bg-cobalt/10 px-2 py-0.5 text-[11px] font-medium text-cobalt">{view.stageLabel}</span>
           <span className={cn('text-[12px] font-medium', view.nextAction.requiresAction ? 'text-orange' : 'text-graphite')}>
@@ -264,7 +266,7 @@ export function LeadConversation({
           )}
         </header>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4" style={{ maxHeight: 520 }}>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
           {view.thread.length === 0 && (
             <p className="py-10 text-center text-[12px] text-stone">
               No messages yet. Write the first one below, or paste a message {firstName} sent you.

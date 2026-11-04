@@ -145,9 +145,11 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   const [workspace, activeWorkspace] = workspaceResult
   const [dash, relayData, repDay] = dashboardResult
 
-  const scopedLeads = filterLeadsByWorkspace(dash.mine?.queue ?? [], activeWorkspace)
+  // The dashboard is the rep's whole day, not one sending profile: scoping these
+  // by the active workspace meant forgetting to switch profiles showed no work.
+  const scopedLeads = filterLeadsByWorkspace(dash.mine?.queue ?? [], null)
   const scopedFollowups = dash.followupsDue.filter((row) =>
-    filterLeadsByWorkspace([row.lead], activeWorkspace).length > 0,
+    filterLeadsByWorkspace([row.lead], null).length > 0,
   )
   const leadsById = new Map(scopedLeads.map((lead) => [lead.id, lead]))
 
@@ -201,7 +203,7 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
       fitScore: j.score,
     }))
 
-  const identityRows = sliceTargetSummaryForWorkspace(workspace.targetSummary.byIdentity, activeWorkspace)
+  const identityRows = sliceTargetSummaryForWorkspace(workspace.targetSummary.byIdentity, null)
   const scopedTargets = sumTargets(identityRows)
   const totalTarget = scopedTargets.totalTarget
   const totalRemaining = scopedTargets.totalRemaining
@@ -278,7 +280,7 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     return action
   })
 
-  const allActions = filterActionsByWorkspace(allActionsRaw, leadsById, activeWorkspace).map((action) => ({
+  const allActions = filterActionsByWorkspace(allActionsRaw, leadsById, null).map((action) => ({
     ...action,
     href: actionDeepLink(action),
   }))

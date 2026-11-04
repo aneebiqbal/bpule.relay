@@ -147,7 +147,17 @@ export function TaskDetailDrawer({
       </dl>
 
       {!rawId ? (
-        <p className="text-[12px] text-graphite">Derived from sales state. Complete it by acting on the lead.</p>
+        <div className="space-y-3 border-t border-line pt-3">
+          <p className="text-[12px] text-graphite">
+            This is live sales work — it clears itself once you act, so there is nothing to mark done here.
+          </p>
+          <Link
+            href={task.action.href}
+            className={cn(button, 'inline-flex bg-solid text-on-solid hover:bg-solid/90')}
+          >
+            {task.action.label}
+          </Link>
+        </div>
       ) : open ? (
         <div className="space-y-3 border-t border-line pt-3">
           <div className="flex flex-wrap gap-2">

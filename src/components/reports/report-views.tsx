@@ -57,7 +57,11 @@ export function CountTable({
                 {showChange && (
                   <td className="px-3 py-2 text-right tabular-nums text-graphite">
                     {change === null ? (
-                      <span title="Not shown when the previous window is empty or unknown">—</span>
+                      r.previous === 0 ? (
+                        <span title="No comparable activity in the previous window">new</span>
+                      ) : (
+                        <span title="Not shown when the previous window is empty or unknown">—</span>
+                      )
                     ) : (
                       <span className={change > 0 ? 'text-status-success' : change < 0 ? 'text-status-danger' : undefined}>
                         {change > 0 ? '▲' : change < 0 ? '▼' : ''} {Math.abs(change)}%

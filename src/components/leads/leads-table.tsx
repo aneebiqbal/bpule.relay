@@ -543,6 +543,22 @@ export function LeadsTable({
         render: (lead) => <StageText stage={derivePipelineStage(lead)} />,
       },
       {
+        // "What do I do with this row" is the reason the table exists, so it sits
+        // next to Stage instead of after six other columns.
+        key: 'next',
+        header: 'Next action',
+        render: (lead) => (
+          <div className="min-w-0">
+            <NextActionCell lead={lead} />
+            {(lead.openAssignedTaskCount ?? 0) > 0 ? (
+              <p className="mt-0.5 text-[11px] text-graphite">
+                {lead.openAssignedTaskCount} open task{lead.openAssignedTaskCount === 1 ? '' : 's'}
+              </p>
+            ) : null}
+          </div>
+        ),
+      },
+      {
         key: 'priority',
         header: 'Priority',
         hideBelow: 'lg',
@@ -574,20 +590,6 @@ export function LeadsTable({
         ),
       },
       {
-        key: 'next',
-        header: 'Next action',
-        render: (lead) => (
-          <div className="min-w-0">
-            <NextActionCell lead={lead} />
-            {(lead.openAssignedTaskCount ?? 0) > 0 ? (
-              <p className="mt-0.5 text-[11px] text-graphite">
-                {lead.openAssignedTaskCount} open task{lead.openAssignedTaskCount === 1 ? '' : 's'}
-              </p>
-            ) : null}
-          </div>
-        ),
-      },
-      {
         key: 'due',
         header: 'Due',
         hideBelow: 'lg',
@@ -611,7 +613,7 @@ export function LeadsTable({
     ]
 
     if (orgView) {
-      base.splice(10, 0, {
+      base.splice(1, 0, {
         key: 'owner',
         header: 'Owner',
         hideBelow: 'xl',
@@ -764,10 +766,16 @@ export function LeadsTable({
         title="Leads"
         description={
           orgView
-            ? `Every active opportunity in the organisation — ${total} shown. Archived leads are not counted.`
+            ? `Every active opportunity in the organisation — ${total} total${
+                pageCount > 1 ? `, page ${page} of ${pageCount}` : ''
+              }. Archived leads are not counted.`
             : workspaceName
-              ? `Every active opportunity for ${workspaceName} — ${total} shown. Switch workspace to change the set.`
-              : `Every active opportunity for the selected profile — ${total} shown.`
+              ? `Every active opportunity for ${workspaceName} — ${total} total${
+                  pageCount > 1 ? `, page ${page} of ${pageCount}` : ''
+                }. Switch workspace to change the set.`
+              : `Every active opportunity for the selected profile — ${total} total${
+                  pageCount > 1 ? `, page ${page} of ${pageCount}` : ''
+                }.`
         }
         filters={
           <FilterBar

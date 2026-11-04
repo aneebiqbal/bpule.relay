@@ -323,7 +323,12 @@ export function V3StageStrip({
             href={stage.href}
             className="flex h-full flex-col gap-2 px-3 py-3 text-left transition-colors hover:bg-bone"
           >
-            <span className="block min-w-0 truncate text-[10px] font-medium uppercase tracking-[0.1em] text-stone">
+            {/* Not uppercase/tracked: the six-column strip is ~90px per cell at
+                desktop, where "CONVERSATION" clipped to "CONVER…". */}
+            <span
+              title={stage.label}
+              className="block min-w-0 truncate text-[11px] font-medium text-stone"
+            >
               {stage.label}
             </span>
             <span className="text-[18px] font-medium leading-none tabular-nums text-ink">{stage.count}</span>
