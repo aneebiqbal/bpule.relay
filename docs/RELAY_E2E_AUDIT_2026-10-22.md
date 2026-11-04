@@ -1,6 +1,6 @@
 # Relay end-to-end audit: data, scoring, dataset, routing, messaging and shadow learning
 
-Date: 2026-10-22 · Production scorer: `relay_decision_v3.3.0` (unchanged) · Companion: [SCORING_V4_PROGRAM.md](SCORING_V4_PROGRAM.md)
+Date: 2026-10-22 · Production scorer: `relay_decision_v3.3.0` (unchanged) · Companion: [SCORING_V4_PROGRAM.md](../archive/SCORING_V4_PROGRAM.md)
 
 Verdict first: **GO FOR SHADOW. NO-GO for any candidate promotion.** The shadow engines are enabled in the local environment, every migration they need is applied, and the governance holes that made the dataset unsafe to export are closed in code. Nothing a rep sees has changed. The promotion gate is unmet because the human-labelled set has zero rows.
 

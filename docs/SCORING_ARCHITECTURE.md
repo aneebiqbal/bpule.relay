@@ -123,7 +123,7 @@ Flags: `SCORING_ENGINE` (default `v3`) selects what reps see;
 `SCORING_SHADOW_ENGINES` lists engines whose results are stored beside each
 production decision and shown only in the admin QA center and
 `/admin/training-data`. Human labels live in `scoring_labels`. See
-`docs/SCORING_V4_PROGRAM.md` for the diagnosis, experiments and the
+`docs/archive/SCORING_V4_PROGRAM.md` for the diagnosis, experiments and the
 promotion gates.
 
 ## Failure behaviour

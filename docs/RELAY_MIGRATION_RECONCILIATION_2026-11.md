@@ -282,7 +282,7 @@ order, twice (idempotent), with 0 errors:
 7. `20261101140000_notification_dedupe.sql`: run its header count first
 8. `20261101150000_pin_security_definer_search_path.sql`: added by a concurrent writer; applies cleanly
 9. `20261101151000_lead_message_previews.sql`
-10. `20261101160000_close_anon_exposure.sql`: security fix (the 7 tables, the definer guards, signal_events); see `docs/RELAY_SECURITY_ANON_EXPOSURE_AUDIT.md`
+10. `20261101160000_close_anon_exposure.sql`: security fix (the 7 tables, the definer guards, signal_events); see `docs/archive/RELAY_SECURITY_ANON_EXPOSURE_AUDIT.md`
 
 Files 6 and 10 can go first on their own as the security fix, after GRC sign-off. Applied before
 file 4, admin means `reps.role = 'admin'` until file 4 widens it. Apply each file explicitly

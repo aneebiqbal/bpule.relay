@@ -4,8 +4,8 @@
 > **Date:** 2026-11-01
 > **Sources:** `src/app/(app)/**`, `src/lib/{team,tasks,rep-day,admin,leads,conversation}/**`,
 > `src/lib/auth/organization.ts`, `src/lib/navigation/relay-shell-nav.ts`,
-> `supabase/migrations/**`, `docs/RELAY_INFORMATION_ARCHITECTURE_V2.md`,
-> `docs/RELAY_TASK_SYSTEM_V2.md`, `docs/RELAY_NEON_MIGRATION.md`.
+> `supabase/migrations/**`, `docs/archive/RELAY_INFORMATION_ARCHITECTURE_V2.md`,
+> `docs/RELAY_TASK_SYSTEM_V2.md`, `docs/archive/RELAY_NEON_MIGRATION.md`.
 
 Phase 8 turns Relay's separate team, task, lead and account pages into one
 operations workspace. This doc records what exists, what each Phase 8 surface
@@ -36,7 +36,7 @@ less than the app layer intends. It fails closed: the bug hides data, it does no
 
 The same policy also references `team_memberships.organization_id`, which the
 table definition does not have. The live policy state cannot be confirmed from
-the repo (Supabase is egress-restricted, see `RELAY_NEON_MIGRATION.md`).
+the repo (Supabase is egress-restricted, see `../archive/RELAY_NEON_MIGRATION.md`).
 
 ### 1.2 Managers cannot read their team's `action_events`
 
@@ -166,7 +166,7 @@ Phase 8 is 48 sub-phases. It ships in slices, each releasable on its own.
    returns HTTP 402 (`exceed_egress_quota`) on every gateway; direct Postgres
    and the read-only Management API still work. The schema and all data have
    been migrated to a Neon branch (`migration-validation`) with zero row and
-   hash differences — see `docs/RELAY_NEON_MIGRATION_FINAL.md`. **The app has
+   hash differences — see `docs/archive/RELAY_NEON_MIGRATION_FINAL.md`. **The app has
    not been repointed**: Relay still talks to Supabase through PostgREST, which
    Neon does not provide, so browser QA by role, performance measurement and
    screenshots against live traffic remain blocked until the data-access layer
@@ -275,7 +275,7 @@ psql … -v after=true  -f supabase/tests/sql/operations_workspace_rls.sql
 | before | 8 | 3 | Reproduces both known bugs (manager sees 1/3 memberships, 1/3 team events) **and** a third: a second-org legacy admin reads all of org A's `team_memberships` (old `tm_select` grants on unscoped `is_org_admin()`) |
 | after | **32** | **0** | Manager/rep/admin/owner/second-org scope; admin authority from `organization_roles`; task scope + reassignment guard; notes scope, immutability, author-only edit, admin soft-delete, private audit; saved views private |
 
-Limits: the fixture holds only the tables these policies touch (the full 139-file chain does not replay from scratch — 94 files fail on drift, matching `RELAY_NEON_MIGRATION.md` §1.4). This proves the policies, not the production schema.
+Limits: the fixture holds only the tables these policies touch (the full 139-file chain does not replay from scratch — 94 files fail on drift, matching `../archive/RELAY_NEON_MIGRATION.md` §1.4). This proves the policies, not the production schema.
 
 ### 10.3 Activation runbook (needs a decision — not executed)
 

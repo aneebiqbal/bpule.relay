@@ -660,4 +660,4 @@ derives to `PASS` from them. Four green and one not-run is a NO-GO, not
 sign-off and the machine must agree. If they disagree, the machine wins and the
 difference is a bug.
 
-See `docs/RELAY_QA_CLOSURE_REPORT.md` for the current SHA and gate state.
+See `docs/archive/RELAY_QA_CLOSURE_REPORT.md` for the current SHA and gate state.

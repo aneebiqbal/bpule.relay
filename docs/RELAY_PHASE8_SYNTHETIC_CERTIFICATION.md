@@ -3,7 +3,7 @@
 **Result: 48 / 48 browser tests pass on a local, production-shaped, synthetic stack. Five defects
 found here were fixed in code, and a sixth was in the certification setup.** This is runtime
 evidence in a browser, but it is **not** real-data or deployed evidence. Those gates remain open
-(see `docs/RELAY_PHASE8_FINAL_ACTIVATION.md`).
+(see `docs/archive/RELAY_PHASE8_FINAL_ACTIVATION.md`).
 
 ## 1. The stack
 

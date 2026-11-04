@@ -27,7 +27,7 @@ fixtures whose ranges were written from the scoring program's definition of
 commercial value, independently of what V3 produces. They are not part of
 `GOLDEN_SET`; they feed the candidate-engine experiment and
 `tests/scoring-v4/ranking-benchmark.test.ts`, where V3 misses are the
-measured gap rather than a broken build (see `docs/SCORING_V4_PROGRAM.md`).
+measured gap rather than a broken build (see `docs/archive/SCORING_V4_PROGRAM.md`).
 
 Categories are listed per fixture (`category:`); the calibrate script prints
 pass counts and mean score per category.
