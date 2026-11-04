@@ -86,7 +86,9 @@ Dead exports inside live files (not file deletions):
 
 ## KEPT ON PURPOSE (audit disagreements resolved)
 
-These were flagged as zero-importer but are deliberately retained:
+These were flagged as zero-importer but retained at audit time. The three
+type-carrier rows are now **resolved**: their types were harvested into
+`src/lib/` and the dead UI deleted (see `RELAY_CURRENT_PRODUCT_STATE.md`).
 
 | FILE | REASON |
 |---|---|
@@ -94,12 +96,7 @@ These were flagged as zero-importer but are deliberately retained:
 | `src/components/dashboard/analytics/pipeline-analytics-view.tsx` | Richest visual asset in the repo (KPIs + deltas + trend + funnel + heatmap + leaderboard); revival candidate. Also still asserted by `e2e/dashboard-analytics.spec.ts`. |
 | `src/components/admin/team-live-board.tsx` | Strongest stacked-bar implementation found; move, don't delete. |
 | `src/components/contribution-heatmap*` (`performance/contribution-heatmap.tsx`) | Live, single canonical heatmap (4 importers). |
-| `src/components/relay-today-workspace.tsx` | UI body unmounted, but `RelayTodayAction` type is imported by live code. |
-| `src/components/rep/rep-workspace.tsx` | UI body unmounted, `RepWorkspaceData` type is live. |
-| `src/components/rep/rep-today.tsx` | UI body unmounted, `ExecutionHealthData` type is live. |
-| `src/components/performance/execution-health-card.tsx` | Imported only by the two type-live files above. |
-| `src/components/rep/{bd-daily-desk,do-this-next,up-next,rep-day-panel}.tsx` | Dead UI bodies behind live types; harvest types before any future removal. |
-| `src/components/inbox/unified-inbox.tsx` | Reachable only through the type-live `rep-workspace.tsx`. |
+| ~~`relay-today-workspace.tsx`~~ · ~~`rep/rep-workspace.tsx`~~ · ~~`rep/rep-today.tsx`~~ · ~~`performance/execution-health-card.tsx`~~ · ~~`rep/{bd-daily-desk,do-this-next,up-next,rep-day-panel}.tsx`~~ · ~~`inbox/unified-inbox.tsx`~~ | **RESOLVED** — types harvested to `lib/tasks/relay-today-action.ts`, `lib/rep-home/rep-workspace-data.ts` and `lib/performance/execution-health.ts`; the nine dead components were deleted. |
 | `src/components/ui/{action-line,avatar,breadcrumb,card,inline-notice,page-shell,switch}.tsx` | Standard UI-kit primitives with plausible future use; not product duplicates. |
 | `src/lib/intelligence-v2/index.ts` | Dynamically imported by two benchmark scripts. |
 

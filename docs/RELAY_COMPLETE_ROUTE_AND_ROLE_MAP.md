@@ -594,12 +594,13 @@ file itself.
 | `/api/admin/rep-performance` | `src/app/api/admin/rep-performance/route.ts` | Only `if (!auth) 401`. Any rep can read **any** rep's performance/coaching or the org-wide `brief`. Service role. |
 | `/api/admin/routing-opportunities` | `src/app/api/admin/routing-opportunities/route.ts` | Only `if (!authCtx) 401`. Any rep can list org-wide lead routing opportunities. |
 
-All three are under `/api/admin/` and are called by `admin-dashboard.tsx`,
-`admin-performance-overview.tsx`, `execution-health-card.tsx`, and
-`command-center-v2.tsx`. `execution-health-card.tsx` is rendered inside
-`rep-today.tsx` / `rep-workspace.tsx` (rep surfaces), so reps already call
-`/api/admin/performance?repId=...` — confirming the missing role check is
-reachable, not theoretical.
+All three are under `/api/admin/`. They were previously called by
+`admin-dashboard.tsx`, `admin-performance-overview.tsx`,
+`execution-health-card.tsx` and `command-center-v2.tsx`; those components have
+since been removed as dead code, and no live caller now reaches
+`/api/admin/performance?repId=...` or `/api/admin/rep-performance`. The routes
+remain unguarded, so the missing role check is still a latent exposure rather
+than a reachable one — see the route audit before the next cleanup.
 
 ### 7.2 Medium severity
 

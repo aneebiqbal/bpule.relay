@@ -5,9 +5,8 @@ import { ArrowRight } from 'lucide-react'
 import { cn } from 'cn'
 
 /**
- * DoThisNext — reconstruction of the real "Do This Next" card from
- * Relay's Today workspace (relay-today-workspace.tsx). Same structure,
- * same classes, same visual language. The product is the hero.
+ * DoThisNext — the landing-page "Do This Next" card. Same structure, same
+ * classes, same visual language as the product surface it advertises.
  */
 export function DoThisNext({
   compact = false,
