@@ -65,7 +65,7 @@ export function ChatQueueList({
                 {row.preview}
               </p>
             )}
-            <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
+            <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px]">
               <span className={row.state === 'waiting_on_rep' ? 'font-medium text-orange' : 'text-graphite'}>{waitingText}</span>
               <span className="text-ink">{row.nextAction}</span>
             </div>
@@ -73,7 +73,7 @@ export function ChatQueueList({
           </>
         )
         const className = cn(
-          'block w-full px-3 py-2.5 text-left transition-colors focus-visible:bg-bone focus-visible:outline-none',
+          'block w-full px-3 py-2 text-left transition-colors focus-visible:bg-bone focus-visible:outline-none',
           selected ? 'bg-bone shadow-[inset_2px_0_0_var(--color-orange)]' : 'hover:bg-bone/60',
         )
         return (

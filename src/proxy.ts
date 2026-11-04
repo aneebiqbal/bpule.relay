@@ -34,6 +34,7 @@ const PROTECTED_PREFIXES = [
   "/revenue",
   "/rep",
   "/studio",
+  "/qa-v4",
 ];
 
 /**

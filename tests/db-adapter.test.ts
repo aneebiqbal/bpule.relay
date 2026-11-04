@@ -75,6 +75,21 @@ describe('NEON query builder — select', () => {
     expect(calls[0].values).toEqual(['abc', 'abc'])
   })
 
+  it('keeps nested and()/or() group params and their own joiner', async () => {
+    const calls: Call[] = []
+    const db = new NeonDbClient(fakeExecutor(calls) as never, 'user-1')
+    await db
+      .from('internal_notes')
+      .select('*')
+      .or('and(subject_type.eq.REP,subject_id.in.(r1,r2)),author_rep_id.in.(r1,r2)')
+
+    expect(calls[0].sql).toContain(
+      `(("subject_type" = ? AND "subject_id" IN (?, ?)) OR "author_rep_id" IN (?, ?))`,
+    )
+    // Placeholder order must match the bound values exactly.
+    expect(calls[0].values).toEqual(['REP', 'r1', 'r2', 'r1', 'r2'])
+  })
+
   it('fetches no rows when head: true is requested', async () => {
     const calls: Call[] = []
     const executor: NeonExecutorApi = {

@@ -9,6 +9,7 @@ import { V4PageHeader } from '@/components/v4/primitives'
 import { OpsFilters } from '@/components/operations/ops-filters'
 import { SavedViewsMenu } from '@/components/operations/saved-views-menu'
 import { ChatQueueList } from '@/components/chats/chat-queue-list'
+import { AutoSelectConversation } from '@/components/chats/auto-select-conversation'
 import { ChatIntelligencePanel } from '@/components/chats/chat-intelligence-panel'
 import { IntelligenceDrawer } from '@/components/chats/intelligence-drawer'
 import { LeadConversation } from '@/components/conversation/lead-conversation'
@@ -117,7 +118,7 @@ export default async function ChatsPage({
   const visibleViews = CHAT_VIEWS.filter((v) => !v.managerOnly || managerViews)
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3 md:h-[calc(100dvh-19rem)]">
       <V4PageHeader
         eyebrow="Conversations"
         title="Inbox"
@@ -136,6 +137,7 @@ export default async function ChatsPage({
         <LinkTabs
           label="Conversation views"
           active={view}
+          wrap
           tabs={[
             { value: 'all', label: 'Open', count: queue?.counts.all, href: opsHref('/chats', current, { view: null, lead: null }) },
             ...visibleViews.map((v) => ({
@@ -174,27 +176,29 @@ export default async function ChatsPage({
         </div>
       </div>
 
+      <AutoSelectConversation leadId={leadId} firstHref={queue?.rows[0] ? hrefFor(queue.rows[0].leadId) : null} />
+
       {!queue ? (
-        <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(240px,300px)_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
-          <aside aria-label="Conversation queue" className="min-w-0 overflow-hidden rounded-lg border border-line bg-bone-raised">
+        <div className="grid min-w-0 flex-1 gap-3 min-h-0 md:grid-cols-[minmax(240px,300px)_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
+          <aside aria-label="Conversation queue" className="min-h-0 min-w-0 overflow-y-auto rounded-lg border border-line bg-bone-raised">
             <div className="p-3">
               <p role="alert" className="rounded-lg border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-[13px] text-status-danger">
                 Couldn’t load conversations. Refresh to try again.
               </p>
             </div>
           </aside>
-          <section aria-label="Thread" className="min-w-0 rounded-lg border border-dashed border-line">
-            <div className="flex h-full min-h-[320px] flex-col items-center justify-center p-6 text-center">
+          <section aria-label="Thread" className="min-h-0 min-w-0 overflow-y-auto rounded-lg border border-dashed border-line">
+            <div className="flex h-full min-h-[240px] flex-col items-center justify-center p-6 text-center">
               <MessagesSquare className="size-6 text-stone" aria-hidden="true" />
               <p className="mt-2 text-[13px] text-graphite">Select a conversation to read the thread.</p>
             </div>
           </section>
         </div>
       ) : (
-        <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(240px,300px)_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
+        <div className="grid min-w-0 flex-1 gap-3 min-h-0 md:grid-cols-[minmax(240px,300px)_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
           <aside
             aria-label="Conversation queue"
-            className={cn('min-w-0 overflow-hidden rounded-lg border border-line bg-bone-raised md:max-h-[calc(100dvh-14rem)] md:overflow-y-auto', leadId && 'hidden md:block')}
+            className={cn('min-h-0 min-w-0 overflow-y-auto rounded-lg border border-line bg-bone-raised', leadId && 'hidden md:block')}
           >
             <ChatQueueList
               rows={queue.rows}
@@ -224,13 +228,13 @@ export default async function ChatsPage({
             )}
           </aside>
 
-          <section aria-label="Thread" className={cn('min-w-0', !leadId && 'hidden md:block')}>
+          <section aria-label="Thread" className={cn('min-h-0 min-w-0 overflow-y-auto', !leadId && 'hidden md:block')}>
             {leadId ? (
-              <Suspense fallback={<Skeleton className="h-[520px] w-full rounded-lg" />}>
+              <Suspense fallback={<Skeleton className="h-[420px] w-full rounded-lg" />}>
                 <SelectedThread ctx={ctx} leadId={leadId} reps={reps} backHref={opsHref('/chats', current, { lead: null })} />
               </Suspense>
             ) : (
-              <div className="flex h-full min-h-[320px] flex-col items-center justify-center rounded-lg border border-dashed border-line text-center">
+              <div className="flex h-full min-h-[240px] flex-col items-center justify-center rounded-lg border border-dashed border-line text-center">
                 <MessagesSquare className="size-6 text-stone" aria-hidden="true" />
                 <p className="mt-2 text-[13px] text-graphite">Select a conversation to start.</p>
               </div>
@@ -238,7 +242,7 @@ export default async function ChatsPage({
           </section>
 
           {leadId && (
-            <aside aria-label="Lead intelligence pane" className="hidden min-w-0 xl:block xl:max-h-[calc(100dvh-14rem)] xl:overflow-y-auto">
+            <aside aria-label="Lead intelligence pane" className="hidden min-h-0 min-w-0 overflow-y-auto xl:block">
               <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
                 <IntelligenceSlot ctx={ctx} leadId={leadId} reps={reps} />
               </Suspense>

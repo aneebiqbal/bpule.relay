@@ -305,6 +305,12 @@ export function deriveRepV3MetricInput(args: {
   }
 }
 
+/** Overdue must never hide its source: follow-ups and assigned tasks are separate. */
+export function formatOverdueBreakdown(followUpsOverdue: number, assignedOverdue: number): string {
+  if (followUpsOverdue === 0 && assignedOverdue === 0) return 'Nothing overdue'
+  return `${followUpsOverdue} follow-ups · ${assignedOverdue} task${assignedOverdue === 1 ? '' : 's'}`
+}
+
 // ── Dashboard upgrade: today metrics, work breakdown, targets, trend ────────
 
 /** The five canonical today metrics. Values stay null when the truth is unknown. */

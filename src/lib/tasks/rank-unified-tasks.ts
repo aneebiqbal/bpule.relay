@@ -120,6 +120,20 @@ export function countOpenUnifiedTasks(tasks: UnifiedTask[]): number {
   return tasks.filter((t) => t.status === 'OPEN' || t.status === 'IN_PROGRESS').length
 }
 
+/**
+ * Canonical assigned-work selection. Rep Home and /tasks must both read this —
+ * assignment belongs to `assignee_rep_id`, never to the active sending profile.
+ */
+export function selectAssignedOpenTasks(tasks: UnifiedTask[]): UnifiedTask[] {
+  return filterUnifiedTasks(tasks, { source: 'ASSIGNED', tab: 'all' }).filter(
+    (t) => t.status === 'OPEN' || t.status === 'IN_PROGRESS',
+  )
+}
+
+export function selectAssignedOverdueTasks(tasks: UnifiedTask[], now = Date.now()): UnifiedTask[] {
+  return selectAssignedOpenTasks(tasks).filter((t) => isOverdue(t, now))
+}
+
 export function countOverdueUnifiedTasks(tasks: UnifiedTask[], now = Date.now()): number {
   return tasks.filter((t) => isOverdue(t, now)).length
 }

@@ -21,12 +21,14 @@ import {
   buildRepWorkBreakdown,
   countRepV3DueToday,
   deriveRepV3MetricInput,
+  formatOverdueBreakdown,
   REP_V3_EMPTY_STATE,
   REP_V3_PRIMARY_CTA,
   REP_TREND_SERIES,
   type RepTargetWindow,
 } from '@/lib/rep-home/v3-present'
 import { rankActions, relativeWait } from '@/lib/rep-home/action-presentation'
+import { selectAssignedOpenTasks, selectAssignedOverdueTasks } from '@/lib/tasks/rank-unified-tasks'
 import { ProfileSwitcher } from '@/components/shell/profile-switcher'
 import { ContributionHeatmap } from '@/components/performance/contribution-heatmap'
 import {
@@ -63,11 +65,9 @@ type AssignedGroup = {
  * Relay-generated queue work is a separate kind and never labelled as assigned.
  */
 function groupAssignedWork(tasks: UnifiedTask[]): AssignedGroup[] {
-  const open = tasks.filter(
-    (task) => task.source === 'ASSIGNED' && (task.status === 'OPEN' || task.status === 'IN_PROGRESS'),
-  )
+  // Caller passes the canonical open-assigned selection; no second predicate here.
   const groups = new Map<string, AssignedGroup>()
-  for (const task of open) {
+  for (const task of tasks) {
     const key = task.createdByName ?? 'Unknown'
     const group = groups.get(key) ?? { key, label: key, tasks: [] }
     group.tasks.push(task)
@@ -92,7 +92,9 @@ export function V4RepHome({
 }) {
   const ranked = useMemo(() => rankActions(data.allActions ?? []), [data.allActions])
   const unified = useMemo(() => data.unifiedTasks ?? [], [data.unifiedTasks])
-  const assignedGroups = useMemo(() => groupAssignedWork(unified), [unified])
+  const assignedOpen = useMemo(() => selectAssignedOpenTasks(unified), [unified])
+  const assignedOverdue = useMemo(() => selectAssignedOverdueTasks(unified), [unified])
+  const assignedGroups = useMemo(() => groupAssignedWork(assignedOpen.slice(0, 5)), [assignedOpen])
 
   const tasksDueToday = useMemo(() => countRepV3DueToday(unified), [unified])
   const metricInput = useMemo(
@@ -110,9 +112,6 @@ export function V4RepHome({
   const targetTotal = data.targetSummary?.totalTarget ?? 0
   const targetDone = data.targetSummary?.totalCompleted ?? 0
   const targetRemaining = data.targetSummary?.totalRemaining ?? 0
-
-  const assignedOpen = unified.filter((t) => t.source === 'ASSIGNED' && (t.status === 'OPEN' || t.status === 'IN_PROGRESS'))
-  const assignedOverdue = assignedOpen.filter((t) => t.dueAt != null && new Date(t.dueAt).getTime() < Date.now())
 
   const targetWindows = useMemo(
     () =>
@@ -139,7 +138,7 @@ export function V4RepHome({
     { key: 'completed', label: 'Completed', value: targetDone, hint: targetTotal > 0 ? `of ${targetTotal} target` : 'No daily target', href: '/dashboard', tone: targetTotal > 0 && targetDone >= targetTotal ? 'success' : 'neutral' },
     { key: 'assigned', label: 'Assigned to me', value: assignedOpen.length, hint: assignedOverdue.length > 0 ? `${assignedOverdue.length} overdue` : 'Open work', href: '/tasks', tone: assignedOverdue.length > 0 ? 'danger' : assignedOpen.length > 0 ? 'warning' : 'neutral' },
     { key: 'replies', label: 'Replies waiting', value: data.day?.repliesWaiting ?? metricInput.repliesWaiting, hint: data.day?.repliesWaiting ? 'Need an answer' : 'Inbox clear', href: '/chats', tone: data.day?.repliesWaiting ? 'warning' : 'neutral' },
-    { key: 'overdue', label: 'Overdue', value: metricInput.followUpsOverdue + assignedOverdue.length, hint: 'Follow-ups + assigned', href: '/tasks?view=overdue', tone: metricInput.followUpsOverdue + assignedOverdue.length > 0 ? 'danger' : 'neutral' },
+    { key: 'overdue', label: 'Overdue', value: metricInput.followUpsOverdue + assignedOverdue.length, hint: formatOverdueBreakdown(metricInput.followUpsOverdue, assignedOverdue.length), href: '/tasks?view=overdue', tone: metricInput.followUpsOverdue + assignedOverdue.length > 0 ? 'danger' : 'neutral' },
     { key: 'meetings', label: 'Meetings', value: todayActivity?.breakdown.meetings ?? data.outcomeEvents?.meetings ?? 0, hint: 'Booked today', href: '/reports/sales', tone: 'neutral' },
   ]
 
@@ -199,8 +198,8 @@ export function V4RepHome({
               title="Work someone gave you"
               hint={`${assignedOpen.length} open`}
               action={
-                <Link href="/tasks" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
-                  All work <ChevronRight className="size-3.5" aria-hidden />
+                <Link href="/tasks?source=ASSIGNED&view=all" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
+                  View all assigned work <ChevronRight className="size-3.5" aria-hidden />
                 </Link>
               }
             />
@@ -221,7 +220,7 @@ export function V4RepHome({
                   <div key={group.key}>
                     <div className="flex items-center gap-2">
                       <V4Avatar name={group.label} size="sm" />
-                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">From {group.label}</p>
+                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">Assigned by {group.label}</p>
                       <span className="rounded-full bg-bone px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-graphite">
                         {group.tasks.length}
                       </span>

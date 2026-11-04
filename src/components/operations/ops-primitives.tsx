@@ -67,10 +67,13 @@ export interface LinkTab {
 }
 
 /** URL-state tabs: links, so refresh and back button keep the tab. */
-export function LinkTabs({ tabs, active, label }: { tabs: LinkTab[]; active: string; label: string }) {
+export function LinkTabs({ tabs, active, label, wrap = false }: { tabs: LinkTab[]; active: string; label: string; wrap?: boolean }) {
   return (
     <nav aria-label={label} className="-mx-1 overflow-x-auto">
-      <ul className="flex min-w-max items-center gap-0.5 rounded-lg bg-bone p-0.5 ring-1 ring-line">
+      <ul className={cn(
+        'flex items-center gap-0.5 rounded-lg bg-bone p-0.5 ring-1 ring-line',
+        wrap ? 'flex-wrap' : 'min-w-max',
+      )}>
         {tabs.map((tab) => {
           const current = tab.value === active
           return (

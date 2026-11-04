@@ -243,11 +243,17 @@ function splitTopLevel(input: string, sep = ','): string[] {
  * the app uses: eq, neq, gt, gte, lt, lte, like, ilike, is, in, cs, cd, and
  * `and(...)`/`or(...)` groups. Returns the SQL fragment and its params in order.
  */
-function parseFilterString(filter: string): { sql: string; params: unknown[] } {
+function parseFilterString(filter: string, joiner = 'OR'): { sql: string; params: unknown[] } {
   const params: unknown[] = []
   const parts = splitTopLevel(filter).map((part) => {
     const grouped = /^(and|or)\((.*)\)$/.exec(part)
-    if (grouped) return `(${parseFilterString(grouped[2]).sql})`
+    if (grouped) {
+      // A group keeps its own joiner and contributes its params in place, so
+      // the outer placeholder order stays aligned with the bound values.
+      const inner = parseFilterString(grouped[2], grouped[1].toUpperCase())
+      params.push(...inner.params)
+      return `(${inner.sql})`
+    }
     const dot = part.indexOf('.')
     if (dot < 0) return part
     const column = part.slice(0, dot)
@@ -288,7 +294,7 @@ function parseFilterString(filter: string): { sql: string; params: unknown[] } {
       case 'in': {
         const inner = raw.replace(/^\(|\)$/g, '')
         const vals = splitTopLevel(inner)
-        return `${col} IN (${vals.map((v) => add(v)).join(',')})`
+        return `${col} IN (${vals.map((v) => add(v)).join(', ')})`
       }
       case 'cs':
         return `${col} @> ${add(raw)}`
@@ -298,7 +304,7 @@ function parseFilterString(filter: string): { sql: string; params: unknown[] } {
         return `${col} = ${add(raw)}`
     }
   })
-  return { sql: parts.join(' OR '), params }
+  return { sql: parts.join(` ${joiner} `), params }
 }
 
 // ---------------------------------------------------------------------------
