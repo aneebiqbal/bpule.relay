@@ -49,21 +49,17 @@ const TREND_COLORS: Record<string, string> = {
   wins: 'var(--ink)',
 }
 
-function greeting(): string {
-  const h = new Date().getHours()
-  if (h < 12) return 'morning'
-  if (h < 17) return 'afternoon'
-  return 'evening'
-}
-
 export function V4AdminHome({
   data,
   adminName,
   error,
+  greeting,
 }: {
   data: AdminCommandCenterData
   adminName: string
   error?: boolean
+  /** Server-computed in the viewer's timezone so SSR and hydration agree. */
+  greeting: string
 }) {
   const health = useMemo(() => buildAdminV3Health(data), [data])
   const attention = useMemo(() => buildAdminV3Attention(data.attention), [data.attention])
@@ -110,7 +106,7 @@ export function V4AdminHome({
         subtitle={data.orgName}
         meta={
           <p className="text-[13px] text-graphite">
-            Good <span suppressHydrationWarning>{greeting()}</span>, {adminName.split(' ')[0]}.{' '}
+            Good <span>{greeting}</span>, {adminName.split(' ')[0]}.{' '}
             <span className="font-medium text-ink">{memberCount} {memberCount === 1 ? 'person' : 'people'}</span>
             <span className="text-stone"> · </span>
             <span className="font-medium text-ink">{completedToday} meaningful actions</span> completed today.

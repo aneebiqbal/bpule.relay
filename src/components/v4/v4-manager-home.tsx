@@ -34,13 +34,6 @@ import {
   V4StatStrip,
 } from '@/components/v4/primitives'
 
-function greeting(): string {
-  const h = new Date().getHours()
-  if (h < 12) return 'morning'
-  if (h < 17) return 'afternoon'
-  return 'evening'
-}
-
 function severityClass(severity: AttentionSeverity | string) {
   if (severity === 'critical' || severity === 'Critical') return 'bg-status-danger/10 text-[#8f2b1e]'
   if (severity === 'attention' || severity === 'Attention') return 'bg-status-warning/10 text-status-warning'
@@ -53,10 +46,13 @@ export function V4ManagerHome({
   personal,
   team,
   error,
+  greeting,
 }: {
   personal: RepWorkspaceData
   team: ManagerHomeTeamData
   error?: boolean
+  /** Server-computed in the viewer's timezone so SSR and hydration agree. */
+  greeting: string
 }) {
   const [filter, setFilter] = useState<TeamFilter>('all')
 
@@ -87,7 +83,7 @@ export function V4ManagerHome({
     <div className="space-y-8">
       <V4PageHeader
         eyebrow="Home / Team"
-        title={`Good ${greeting()}, ${personal.rep.name.split(' ')[0]}`}
+        title={`Good ${greeting}, ${personal.rep.name.split(' ')[0]}`}
         subtitle={
           <>
             {team.teamName} · {team.memberCount} {team.memberCount === 1 ? 'person' : 'people'}

@@ -169,5 +169,14 @@ const team: ManagerHomeTeamData = {
 export default function QaV4FixturePage() {
   // Unlinked QA surface: only render when explicitly enabled.
   if (process.env.QA_FIXTURE !== '1') notFound()
-  return <V4ManagerHome personal={personal} team={team} />
+  const greeting = greetingFor('Asia/Karachi')
+  return <V4ManagerHome personal={personal} team={team} greeting={greeting} />
+}
+
+function greetingFor(timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: 'numeric', hourCycle: 'h23' }).formatToParts(new Date())
+  const h = Number(parts.find((p) => p.type === 'hour')?.value ?? 0) % 24
+  if (h < 12) return 'morning'
+  if (h < 17) return 'afternoon'
+  return 'evening'
 }

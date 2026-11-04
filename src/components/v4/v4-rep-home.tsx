@@ -86,9 +86,12 @@ function toPriority(priority: UnifiedTask['priority']): 'critical' | 'high' | 'n
 export function V4RepHome({
   data,
   role,
+  greeting,
 }: {
   data: RepWorkspaceData
   role: 'admin' | 'rep' | 'sourcer' | 'manager'
+  /** Server-computed in the viewer's timezone so SSR and hydration agree. */
+  greeting: string
 }) {
   const ranked = useMemo(() => rankActions(data.allActions ?? []), [data.allActions])
   const unified = useMemo(() => data.unifiedTasks ?? [], [data.unifiedTasks])
@@ -146,7 +149,7 @@ export function V4RepHome({
     <div className="space-y-8">
       <V4PageHeader
         eyebrow="Home / Today"
-        title={`Good ${greeting()}, ${data.rep.name.split(' ')[0]}`}
+        title={`Good ${greeting}, ${data.rep.name.split(' ')[0]}`}
         subtitle="Your execution cockpit for today."
         meta={
           <>
@@ -464,9 +467,4 @@ function TargetWindows({ rows }: { rows: RepTargetWindow[] }) {
   )
 }
 
-function greeting(): string {
-  const h = new Date().getHours()
-  if (h < 12) return 'morning'
-  if (h < 17) return 'afternoon'
-  return 'evening'
-}
+

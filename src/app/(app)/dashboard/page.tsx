@@ -44,6 +44,8 @@ export default async function TodayPage() {
   if (!user) redirect('/login')
   const authCtx = await perfTrace('auth:getAuthContext', () => getAuthContext())
   if (!authCtx) redirect('/login')
+  // Computed server-side in the org timezone so SSR and the client agree.
+  const greeting = greetingFor(user.organization.timezone ?? 'UTC')
 
   if (authCtx.isOwner || authCtx.isAdmin) {
     // Org Command Center — no analytics fan-out on first paint (Reports owns charts).
@@ -54,6 +56,7 @@ export default async function TodayPage() {
           data={adminResult.data}
           adminName={user.rep.name}
           error={adminResult.error}
+          greeting={greeting}
         />
       </Suspense>
     )
@@ -73,6 +76,7 @@ export default async function TodayPage() {
           personal={repData}
           team={teamResult.data}
           error={teamResult.error}
+          greeting={greeting}
         />
       </Suspense>
     )
@@ -82,9 +86,17 @@ export default async function TodayPage() {
 
   return (
     <Suspense fallback={<DashboardShellSkeleton />}>
-      <V4RepHome data={repData} role={user.rep.role} />
+      <V4RepHome data={repData} role={user.rep.role} greeting={greeting} />
     </Suspense>
   )
+}
+
+function greetingFor(timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: 'numeric', hourCycle: 'h23' }).formatToParts(new Date())
+  const h = Number(parts.find((p) => p.type === 'hour')?.value ?? 0) % 24
+  if (h < 12) return 'morning'
+  if (h < 17) return 'afternoon'
+  return 'evening'
 }
 
 
