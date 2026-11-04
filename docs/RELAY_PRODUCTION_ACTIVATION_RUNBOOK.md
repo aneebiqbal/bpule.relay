@@ -22,6 +22,10 @@
 
 ## 2. Apply migrations (exact order)
 
+> Required production env vars, the Neon region and the Supabase rollback path
+> are specified in `docs/RELAY_NEON_CUTOVER_FINAL.md`. Confirm those are set
+> before running anything below.
+
 ```bash
 # in order; verify the schema after each
 supabase migration up   # or apply each file in order

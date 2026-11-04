@@ -1,6 +1,6 @@
 # Relay Scoring Architecture
 
-Version: `relay_decision_v3.2.0` (see `src/lib/intelligence-v3/versions.ts`).
+Version: `relay_decision_v3.3.0` (see `src/lib/intelligence-v3/versions.ts`).
 
 Relay turns a pasted LinkedIn profile, post or job ad into one commercial
 decision: **how much is this opportunity worth to us, who should reach out,

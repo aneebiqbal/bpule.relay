@@ -1,6 +1,8 @@
 # Relay — Phase 8 Database Contracts
 
 > LIVE column updated 2026-11-01 from a read-only production schema dump (no row data). Per-migration detail: `docs/RELAY_MIGRATION_RECONCILIATION_2026-11.md`.
+>
+> **Superseded in part by `supabase/migrations/20261104000000_neon_schema_catchup.sql` (Neon cutover).** Rows below that predate the catch-up describe the Supabase-era schema; the Neon column set is authoritative after that migration.
 
 > **Date:** 2026-11-01 · **Owner of the switch:** `src/lib/operations/capabilities.ts` (`RELAY_DB_CAPABILITIES`).
 > Production status cannot be read (Supabase gateways return HTTP 402) and production's recorded migration history ends at `20261003000000`. "LIVE" therefore means *unknown until verified*, never assumed.

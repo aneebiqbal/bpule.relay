@@ -61,7 +61,7 @@ report coverage.
 - Action: `src/components/lead-workspace-simple.tsx`, `src/lib/relay/relationship-state.ts`, `src/lib/relay/next-best-action.ts`, `src/lib/conversation/{inbox,archive,service}.ts`
 - Presence: `src/components/leads/lead-trust-and-thesis.tsx`
 - Pipeline stage: `src/components/leads/leads-board-v2.tsx`, `src/lib/analytics/pipeline-analytics.ts`
-- Score: `src/app/api/prospect/save/route.ts`, `src/components/{score-ring,lead-workspace-simple}.tsx`, `src/components/rep/bd-daily-desk.tsx`, `src/components/account/account-360-view.tsx`, `src/lib/accountability/metrics.ts`, `src/lib/analytics/pipeline-analytics.ts`
+- Score: `src/app/api/prospect/save/route.ts`, `src/components/lead-workspace-simple.tsx`, `src/components/score-ring.tsx`, `src/lib/accountability/metrics.ts`, `src/lib/analytics/pipeline-analytics.ts`
 - Today counts: `src/app/(app)/dashboard/page.tsx`
 - Parity (required RC check): `src/lib/relay/lead-parity.ts`
 
