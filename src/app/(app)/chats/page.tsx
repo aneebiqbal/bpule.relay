@@ -118,7 +118,7 @@ export default async function ChatsPage({
   const visibleViews = CHAT_VIEWS.filter((v) => !v.managerOnly || managerViews)
 
   return (
-    <div className="flex flex-col gap-3 md:h-[calc(100dvh-19rem)]">
+    <div className="flex flex-col gap-3 md:h-[calc(100dvh-13rem)]">
       <V4PageHeader
         eyebrow="Conversations"
         title="Inbox"

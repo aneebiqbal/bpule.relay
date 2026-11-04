@@ -21,6 +21,8 @@ function hideBelowClass(hideBelow?: Column<unknown>["hideBelow"]): string {
       return "hidden lg:table-cell"
     case "xl":
       return "hidden xl:table-cell"
+    case "2xl":
+      return "hidden 2xl:table-cell"
     default:
       return ""
   }
@@ -39,7 +41,7 @@ export interface Column<T> {
   sortKey?: string
   align?: "left" | "right" | "center"
   /** Hide below this breakpoint — the mobile card carries the essential cells. */
-  hideBelow?: "sm" | "md" | "lg" | "xl"
+  hideBelow?: "sm" | "md" | "lg" | "xl" | "2xl"
   className?: string
 }
 

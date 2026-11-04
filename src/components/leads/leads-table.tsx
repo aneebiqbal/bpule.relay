@@ -526,7 +526,9 @@ export function LeadsTable({
         key: 'company',
         header: 'Company',
         sortKey: 'company',
-        hideBelow: 'lg',
+        // Two widest columns after Person: hidden until there is room, so the
+        // stage and next-action columns stay on screen at 1440.
+        hideBelow: '2xl',
         render: (lead) => (
           <span className="block truncate text-[13px] text-graphite">{lead.company}</span>
         ),
@@ -534,7 +536,7 @@ export function LeadsTable({
       {
         key: 'profile',
         header: 'Profile',
-        hideBelow: 'xl',
+        hideBelow: '2xl',
         render: (lead) => <ProfileCell lead={lead} />,
       },
       {
@@ -575,14 +577,14 @@ export function LeadsTable({
       {
         key: 'intent',
         header: 'Intent',
-        hideBelow: 'xl',
+        hideBelow: '2xl',
         render: (lead) => <IntentBadge lead={lead} />,
       },
       {
         key: 'activity',
         header: 'Last activity',
         sortKey: 'activity',
-        hideBelow: 'md',
+        hideBelow: 'lg',
         render: (lead) => (
           <span className="text-[13px] text-graphite">
             {lead.lastActivityAt ? formatRelativeTime(lead.lastActivityAt, now) : '—'}
@@ -592,7 +594,7 @@ export function LeadsTable({
       {
         key: 'due',
         header: 'Due',
-        hideBelow: 'lg',
+        hideBelow: 'xl',
         render: (lead) => <DueCell lead={lead} now={now} />,
       },
       {
