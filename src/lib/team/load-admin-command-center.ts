@@ -3,7 +3,7 @@ import { getAuthContext } from '@/lib/auth/organization'
 import { getCurrentUser } from '@/lib/auth/current'
 import { loadTeamDay } from '@/lib/rep-day/team'
 import { loadTeamLive } from '@/lib/admin/load-team-live'
-import { businessDateRange, currentInstant, orgDate } from '@/lib/org-clock'
+import { addDays, businessDateRange, currentInstant, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { activityLabelForAction, filterTeamLiveToRepIds } from '@/lib/team/manager-home-summary'
 import {
@@ -20,6 +20,9 @@ import {
 import { loadOutcomeEventCounts } from '@/lib/operations/outcome-events'
 import { groupMetrics, identityResolver, PERFORMANCE_ACTION_TYPES, type PerfEvent } from '@/lib/operations/performance'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
+import { getRepDailyActivity, buildActivityTrendPoints, type DailyActivity } from '@/lib/performance/activity-model'
+import { taskCompletionCountsSql, teamTasksTrendSql } from '@/lib/analytics/aggregates'
+import { ADMIN_TREND_SERIES, buildAdminExecutionByRep } from '@/lib/admin/v3-command-present'
 import { perfTrace } from '@/lib/perf-trace'
 
 const MEANINGFUL_ACTIONS = [
@@ -178,6 +181,33 @@ export async function loadAdminCommandCenter(): Promise<{
     // Same attribution as Team Performance. Today's events on leads that are no
     // longer open (won, lost) still need their lead's identity as the fallback.
     const profileEvents = (profileEventsResult.data ?? []) as PerfEvent[]
+
+    // Today's executed activity per rep — the same canonical event rule Team
+    // Performance uses. Used for the comparison and the execution visual.
+    const executionByRep = buildAdminExecutionByRep(profileEvents)
+
+    // Charts degrade independently: a failed heatmap or trend never takes the
+    // health metrics, attention list or actions down.
+    const [activityDaily, tasksTrend] = await perfTrace('admin:visual-batch', () => Promise.all([
+      perfTrace('admin:orgActivity', () =>
+        loadOrgActivityDaily(ctx.orgId, businessDate, policy.timezone).catch(() => null)),
+      perfTrace('admin:orgTasksTrend', () =>
+        loadOrgTasksTrend(ctx.orgId, businessDate, policy.timezone).catch(() => null)),
+    ]))
+    const tasksCompletedTodayByRep = await perfTrace('admin:taskCompletions', () =>
+      loadTaskCompletionCounts(ctx.orgId, dayRange.start, dayRange.end).catch(() => new Map<string, number>()))
+
+    const tasksCompletedToday = [...tasksCompletedTodayByRep.values()].reduce((sum, n) => sum + n, 0)
+    const executionToday = {
+      repliesHandled: [...executionByRep.values()].reduce((sum, e) => sum + e.repliesSent, 0),
+      followupsCompleted: [...executionByRep.values()].reduce((sum, e) => sum + e.followupsSent, 0),
+      tasksCompleted: tasksCompletedToday,
+      meetings: todayOutcomes.meetings,
+    }
+    const trendPoints = activityDaily && tasksTrend
+      ? buildActivityTrendPoints(activityDaily, tasksTrend, ADMIN_TREND_SERIES)
+      : null
+
     const identityByLead = new Map(openLeads.map((l) => [l.id, l.revenueIdentityId]))
     const closedLeadIds = [...new Set(profileEvents.map((e) => e.lead_id).filter((id): id is string => !!id && !identityByLead.has(id)))]
     const closedLeads = await chunkedIn<{ id: string; revenue_identity_id: string | null }>(closedLeadIds, (chunk) =>
@@ -255,9 +285,76 @@ export async function loadAdminCommandCenter(): Promise<{
       outcomeEventsByRep: todayOutcomes.byActor,
     })
 
-    return { data }
+    return {
+      data: {
+        ...data,
+        activityDaily,
+        trendPoints,
+        executionByRep,
+        tasksCompletedTodayByRep,
+        executionToday,
+      },
+    }
   } catch (err) {
     console.error('loadAdminCommandCenter failed:', err)
     return { data: emptyAdmin(orgName, isOwner), error: true }
   }
+}
+
+/**
+ * Twelve weeks of org-wide daily activity for the Admin team heatmap.
+ * One grouped aggregate; the day drilldown is never requested here.
+ */
+async function loadOrgActivityDaily(
+  orgId: string,
+  businessDate: string,
+  timezone: string,
+): Promise<DailyActivity[]> {
+  const start = businessDateRange(addDays(businessDate, -83), timezone).start
+  const end = businessDateRange(businessDate, timezone).end
+  const supabase = await createServerSupabase()
+  const result = await getRepDailyActivity({
+    // null = whole organization; the per-rep predicate is omitted in SQL.
+    repId: null,
+    orgId,
+    startDate: new Date(start),
+    endDate: new Date(end),
+    timezone,
+    supabase,
+  })
+  return result.daily
+}
+
+/** Org task completions per day for the trend series. */
+async function loadOrgTasksTrend(
+  orgId: string,
+  businessDate: string,
+  timezone: string,
+): Promise<Map<string, number>> {
+  const start = businessDateRange(addDays(businessDate, -29), timezone).start
+  const end = businessDateRange(businessDate, timezone).end
+  const supabase = await createServerSupabase()
+  if (supabase.provider !== 'neon' || !supabase.raw) return new Map()
+  const { sql, params } = teamTasksTrendSql({ orgId, repIds: null, start, end, timezone })
+  const res = await supabase.raw<{ day: string; tasks: number }[]>(sql, params)
+  if (res.error || !Array.isArray(res.data)) return new Map()
+  return new Map(res.data.map((row) => [String(row.day), Number(row.tasks)]))
+}
+
+/** Assigned tasks completed today, grouped by assignee. */
+async function loadTaskCompletionCounts(
+  orgId: string,
+  start: string,
+  end: string,
+): Promise<Map<string, number>> {
+  const supabase = await createServerSupabase()
+  if (supabase.provider !== 'neon' || !supabase.raw) return new Map()
+  const { sql, params } = taskCompletionCountsSql({ orgId, repIds: null, start, end })
+  const res = await supabase.raw<{ key: string | null; n: number }[]>(sql, params)
+  if (res.error || !Array.isArray(res.data)) return new Map()
+  return new Map(
+    res.data
+      .filter((row) => row.key)
+      .map((row) => [String(row.key), Number(row.n)]),
+  )
 }

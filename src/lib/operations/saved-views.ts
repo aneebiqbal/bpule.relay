@@ -9,7 +9,7 @@ import type { AuthContext } from '@/lib/auth/organization'
 import { isMissingRelation } from '@/lib/operations/db-errors'
 
 export const SAVED_VIEW_SURFACES = {
-  'team.people': '/team',
+  'team.people': '/team/people',
   'team.tasks': '/tasks?scope=team',
   'team.activity': '/team/activity',
   'team.performance': '/team/performance',

@@ -667,7 +667,7 @@ export function ProspectAnalyze() {
 
         <div className="mt-3 flex items-center justify-between gap-3">
           {/* Keyboard hint is for desktop; touch layouts rely on the Analyze button. */}
-          <span className="hidden text-xs text-stone sm:inline">Cmd / Ctrl + Enter</span>
+          <span className="hidden text-xs text-[color:var(--console-mute)] sm:inline">Cmd / Ctrl + Enter</span>
           <span className="sm:hidden" aria-hidden="true" />
           <div className="flex items-center gap-2">
             {result && !createdLead ? (

@@ -245,11 +245,44 @@ GROUP BY actor_id, action_type`,
 
 export interface ActivityDailyScope {
   orgId: string
-  repId: string
+  /**
+   * Acting rep. null = whole organization, which is what the Admin team
+   * activity heatmap reads; the per-rep filters below are simply omitted.
+   */
+  repId: string | null
   start: string
   end: string
   /** IANA zone the heatmap's day boundaries follow. */
   timezone: string
+}
+
+/**
+ * Completed assigned tasks per assignee in a window. The same
+ * `assigned_tasks.status = 'DONE'` truth `teamTasksTrendSql` uses, so a rep's
+ * "tasks completed today" and the trend series can never disagree.
+ */
+export function taskCompletionCountsSql(scope: {
+  orgId: string
+  repIds: string[] | null
+  start: string
+  end: string
+}): { sql: string; params: unknown[] } {
+  const params: unknown[] = [scope.orgId, scope.start, scope.end]
+  let repFilter = ''
+  if (scope.repIds && scope.repIds.length > 0) {
+    repFilter = `\n      AND assignee_rep_id IN (${scope.repIds.map(() => '?').join(', ')})`
+    params.push(...scope.repIds)
+  }
+  return {
+    sql: `SELECT assignee_rep_id AS key, COUNT(*) AS n
+      FROM assigned_tasks
+      WHERE organization_id = ?
+        AND status = 'DONE'
+        AND completed_at >= ?
+        AND completed_at < ?${repFilter}
+      GROUP BY assignee_rep_id`,
+    params,
+  }
 }
 
 export interface TeamTrendScope {
@@ -311,32 +344,41 @@ export function teamTasksTrendSql(scope: TeamTrendScope): { sql: string; params:
  * Daily heatmap counts. The day is rendered in the organization's zone with
  * `AT TIME ZONE`, which is the same calendar date `Intl` produces — a 23:30 UTC
  * event is already tomorrow in Asia/Karachi.
+ *
+ * `repId: null` aggregates the whole organization (Admin team activity);
+ * the per-rep predicate is omitted rather than matched against NULL.
  */
 export function activityDailySql(scope: ActivityDailyScope): { sql: string; params: unknown[] } {
+  const repFilter = scope.repId ? '  AND actor_id = ?' : ''
   return {
     sql: `SELECT (occurred_at AT TIME ZONE ?)::date AS day, action_type, COUNT(*) AS n
 FROM action_events
 WHERE organization_id = ?
-  AND actor_id = ?
+  ${repFilter}
   AND occurred_at >= ?
   AND occurred_at < ?
   AND execution_status IS DISTINCT FROM 'failed'
   AND action_type IN (${quoteList(ACTIVITY_EVENT_TYPES)})
 GROUP BY 1, 2`,
-    params: [scope.timezone, scope.orgId, scope.repId, scope.start, scope.end],
+    params: scope.repId
+      ? [scope.timezone, scope.orgId, scope.repId, scope.start, scope.end]
+      : [scope.timezone, scope.orgId, scope.start, scope.end],
   }
 }
 
 /** The first raw event in the window, before any canonical filter. */
 export function activityCoverageSql(scope: Omit<ActivityDailyScope, 'timezone'>): { sql: string; params: unknown[] } {
+  const repFilter = scope.repId ? '  AND actor_id = ?' : ''
   return {
     sql: `SELECT MIN(occurred_at) AS coverage_start
 FROM action_events
 WHERE organization_id = ?
-  AND actor_id = ?
+  ${repFilter}
   AND occurred_at >= ?
   AND occurred_at < ?`,
-    params: [scope.orgId, scope.repId, scope.start, scope.end],
+    params: scope.repId
+      ? [scope.orgId, scope.repId, scope.start, scope.end]
+      : [scope.orgId, scope.start, scope.end],
   }
 }
 
@@ -345,16 +387,19 @@ WHERE organization_id = ?
  * itself never asks for them.
  */
 export function activityDayEventsSql(scope: ActivityDailyScope): { sql: string; params: unknown[] } {
+  const repFilter = scope.repId ? '  AND actor_id = ?' : ''
   return {
     sql: `SELECT id, action_type, execution_status, lead_id, job_id, occurred_at
 FROM action_events
 WHERE organization_id = ?
-  AND actor_id = ?
+  ${repFilter}
   AND occurred_at >= ?
   AND occurred_at < ?
   AND execution_status IS DISTINCT FROM 'failed'
   AND action_type IN (${quoteList(ACTIVITY_EVENT_TYPES)})
 ORDER BY occurred_at ASC`,
-    params: [scope.orgId, scope.repId, scope.start, scope.end],
+    params: scope.repId
+      ? [scope.orgId, scope.repId, scope.start, scope.end]
+      : [scope.orgId, scope.start, scope.end],
   }
 }

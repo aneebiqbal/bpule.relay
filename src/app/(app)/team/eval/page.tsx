@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext } from '@/lib/auth/organization'
 import { ArrowLeft, Play, RefreshCw, Database, FlaskConical } from 'lucide-react'
 import { cn } from 'cn'
 
@@ -10,6 +11,9 @@ export const dynamic = 'force-dynamic'
 export default async function EvalPage() {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
+  // Manager workspace — same gate as every other /team surface.
+  const authCtx = await getAuthContext().catch(() => null)
+  if (!authCtx || !(authCtx.isManager || authCtx.isAdmin || authCtx.isOwner)) redirect('/performance')
 
   const store = await createScoutStore()
   const [runsRes, goldenRes] = await Promise.allSettled([

@@ -1,5 +1,5 @@
 import { getCurrentUser } from '@/lib/auth/current'
-import { loadLeadsPage } from '@/lib/leads/leads-page'
+import { hasActiveLeadFilters, loadFilteredBoard, loadLeadsPage } from '@/lib/leads/leads-page'
 import { loadBoardPreview } from '@/lib/leads/board-rows'
 import { isPipelineView, parseLeadsQuery } from '@/components/leads/pipeline-utils'
 import { LeadsTable } from '@/components/leads/leads-table'
@@ -23,9 +23,14 @@ export default async function LeadsPage({
   const query = parseLeadsQuery(params)
 
   if (isPipelineView(query.view)) {
+    // A filtered pipeline must honour the same canonical filter contract as the
+    // table, so it reads the filtered set server-side instead of the aggregate
+    // fast path (which cannot express these filters).
     let board: Awaited<ReturnType<typeof loadBoardPreview>>
     try {
-      board = await loadBoardPreview()
+      board = hasActiveLeadFilters(query)
+        ? await loadFilteredBoard(query)
+        : await loadBoardPreview()
     } catch (err) {
       return (
         <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6">
@@ -96,6 +101,7 @@ export default async function LeadsPage({
         workspaceName={data.workspace?.identityName ?? null}
         currentRepId={currentRepId}
         reps={data.reps}
+        profiles={data.profiles}
         query={query}
         now={now}
         viewToggle={<LeadsViewToggle view="table" query={query} />}

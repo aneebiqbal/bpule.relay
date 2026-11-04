@@ -26,6 +26,7 @@ import { OPS_RANGES, opsHref, parseOpsFilters, rangeWindow, type OpsFilters as F
 import { CONVERSATION_VIEWS, countConversationViews, filterConversationRows, loadConversationRows } from '@/lib/operations/conversations'
 import { ACTIVITY_EVENT_FILTERS, loadTimeline } from '@/lib/operations/activity'
 import { loadUnifiedTasks } from '@/lib/tasks/load-unified-tasks'
+import { isOverdue } from '@/lib/tasks/rank-unified-tasks'
 import type { PeopleRow, TeamSummary } from '@/lib/operations/people'
 
 export const dynamic = 'force-dynamic'
@@ -105,7 +106,7 @@ export default async function TeamDetailPage({
         {tab === 'overview' && <OverviewTab ctx={ctx} team={team} members={members} memberIds={memberIds} />}
         {tab === 'people' && <PeopleTable rows={members} />}
         {tab === 'leads' && <LeadsTab ctx={ctx} memberIds={memberIds} base={base} filters={filters} />}
-        {tab === 'tasks' && <TasksTab ctx={ctx} memberIds={memberIds} />}
+        {tab === 'tasks' && <TasksTab ctx={ctx} memberIds={memberIds} view={typeof sp.view === 'string' ? sp.view : null} />}
         {tab === 'activity' && <ActivityTab ctx={ctx} memberIds={memberIds} base={base} filters={filters} />}
         {tab === 'performance' && <PerformanceTab memberIds={memberIds} base={base} filters={filters} />}
       </Suspense>
@@ -192,19 +193,23 @@ async function LeadsTab({ ctx, memberIds, base, filters }: { ctx: OpsPageContext
   )
 }
 
-async function TasksTab({ ctx, memberIds }: { ctx: OpsPageContext; memberIds: string[] }) {
+async function TasksTab({ ctx, memberIds, view }: { ctx: OpsPageContext; memberIds: string[]; view: string | null }) {
+  const now = Date.now()
   const [all, reps] = await Promise.all([
     loadUnifiedTasks({ auth: ctx.auth, derivedActions: [], includeCompleted: true }),
     assignableReps(ctx),
   ])
   const members = new Set(memberIds)
+  const scoped = all.filter((t) => members.has(t.assigneeRepId))
+  // The "Overdue tasks" metric deep-links here; honour it instead of ignoring it.
+  const visible = view === 'overdue' ? scoped.filter((t) => isOverdue(t, now)) : scoped
   return (
     <TaskBoard
-      tasks={all.filter((t) => members.has(t.assigneeRepId))}
+      tasks={visible}
       reps={reps}
       canManage={ctx.scope.mode !== 'own'}
       currentRepId={ctx.auth.repId}
-      now={Date.now()}
+      now={now}
     />
   )
 }

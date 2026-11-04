@@ -174,14 +174,15 @@ describe('REP_V3_METRICS', () => {
 })
 
 describe('REP_V3_PIPELINE_LINKS', () => {
-  it('uses the canonical funnel and stays at five stages', () => {
+  it('uses the canonical funnel and shows all six stages', () => {
     const stages = buildRepV3Stages([
       lead('new', 'a'),
       lead('contacted', 'b'),
       lead('replied', 'c'),
       lead('won', 'd'),
     ])
-    expect(stages).toHaveLength(5)
+    expect(stages).toHaveLength(6)
+    expect(stages.map((s) => s.key)).toEqual(['qualified', 'contacted', 'conversation', 'meeting', 'proposal', 'won'])
     expect(stages[0]).toMatchObject({ key: 'qualified', count: 1, href: '/leads?filter=new' })
     expect(stages.map((s) => s.href).every((href) => href.startsWith('/leads'))).toBe(true)
   })

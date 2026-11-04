@@ -242,8 +242,8 @@ export function RelayAppShell({
   function renderMobileSectionTabs() {
     if (!showSecondary) return null
     return (
-      <div className="border-b border-line bg-bone px-3 py-2 xl:hidden">
-        <div className="flex min-w-max gap-0.5 overflow-x-auto" role="tablist" aria-label="Section">
+      <div className="w-full overflow-x-auto border-b border-line bg-bone px-3 py-2 xl:hidden">
+        <div className="flex min-w-max gap-0.5" role="tablist" aria-label="Section">
           {secondaryFlat.map((item) => {
             const active = activeSecondaryId === item.id
             return (

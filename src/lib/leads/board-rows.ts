@@ -57,7 +57,7 @@ export interface BoardPreview {
   workspace: WorkspaceIdentity | null
 }
 
-const CARD_ORDER: Record<PipelineStage, number> = {
+export const CARD_ORDER: Record<PipelineStage, number> = {
   needs_reply: 0,
   follow_up_due: 1,
   to_contact: 2,

@@ -1,5 +1,7 @@
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext } from '@/lib/auth/organization'
+import { isProductAdmin } from '@/lib/auth/admin-page'
 import { FactsManager } from '@/components/facts-manager'
 
 
@@ -7,9 +9,11 @@ export const dynamic = 'force-dynamic'
 
 export default async function FactsPage() {
   const user = await getCurrentUser()
+  const authCtx = await getAuthContext()
   const store = await createScoutStore()
   const facts = await store.listFacts()
-  const isAdmin = (user?.rep.role ?? 'rep') === 'admin'
+  // Canonical capability source — reps.role alone goes stale after a demotion.
+  const isAdmin = isProductAdmin(user, authCtx)
   const typeCount = new Set(facts.map((fact) => fact.factType ?? 'uncategorized')).size
 
   return (

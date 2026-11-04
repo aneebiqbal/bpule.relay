@@ -1,15 +1,17 @@
 # Relay Documentation Index
 
-**Purpose:** one place to find the *current* contract for anything. 81 docs exist;
-most are dated status/audit reports from earlier sprints. This index separates the
-living contracts from the historical record.
+**Purpose:** one place to find the *current* contract for anything. This index
+separates living contracts from the historical record.
 
-Classification: **CURRENT** (active contract) · **HISTORICAL** (past state, keep for context) ·
-**SUPERSEDED** (replaced by a newer doc) · **INTERNAL AUDIT** (point-in-time findings)
+Classification: **CURRENT** (active contract) · **HISTORICAL** (past state, kept
+for context) · **SUPERSEDED** (replaced by a newer doc — archived) ·
+**INTERNAL AUDIT** (point-in-time findings)
 
-> Historical docs are not deleted. The plan is to move them to `docs/archive/` in a
-> later, separate change — moving files now would invalidate links in git history and
-> prior reports. Nothing has been moved yet.
+> Superseded and dead docs have been moved to `docs/archive/`. Historical docs
+> remain in `docs/` because several are still output targets or cited by QA
+> scripts and tests (for example `scripts/qa/relay-test-report.mjs` writes
+> `docs/RELAY_PRODUCTION_TEST_DATA_CLEANUP.md`). They are indexed below so the
+> split is explicit.
 
 ---
 
@@ -19,12 +21,13 @@ Classification: **CURRENT** (active contract) · **HISTORICAL** (past state, kee
 |---|---|---|
 | `RELAY_STABILIZATION_INVENTORY.md` | **CURRENT** | Phase 1 — every route/component classified; `UNKNOWN` register |
 | `RELAY_COMPONENT_QUALITY_AUDIT.md` | **CURRENT** | Phase 2 — visual component quality, reuse targets, duplicate register |
-| `RELAY_FEATURE_VISIBILITY_MAP.md` | **CURRENT** | Phase 3/4 — feature × entry-point matrix (gate now PASS) |
-| `RELAY_ERP_NAVIGATION.md` | **CURRENT** | Phase 4 — ERP role-aware IA (superseded by `RELAY_NAVIGATION_V3.md`) |
+| `RELAY_DEAD_CODE_REMOVAL_REPORT.md` | **CURRENT** | Dead-code inventory: what was removed, what was kept, replacements |
 | `RELAY_REPOSITORY_RECONCILIATION.md` | **CURRENT** | Worktree forensics, sprint recovery, conflict resolutions |
 | `RELAY_CURRENT_PRODUCT_STATE.md` | **CURRENT** | Reconciled product map and live-certification status |
 | `RELAY_NAVIGATION_V3.md` | **CURRENT** | Final role-aware navigation contract |
 | `RELAY_FEATURE_VISIBILITY_MATRIX.md` | **CURRENT** | Final feature × role × entry-point matrix |
+| `RELAY_ERP_NAVIGATION.md` | **SUPERSEDED** | Archived — replaced by `RELAY_NAVIGATION_V3.md` |
+| `RELAY_FEATURE_VISIBILITY_MAP.md` | **SUPERSEDED** | Archived — replaced by `RELAY_FEATURE_VISIBILITY_MATRIX.md` |
 
 ---
 
@@ -32,50 +35,59 @@ Classification: **CURRENT** (active contract) · **HISTORICAL** (past state, kee
 
 | Doc | Class | What it is |
 |---|---|---|
-| `RELAY_INFORMATION_ARCHITECTURE_V2.md` | **CURRENT** | Sprint 1 Phase 0 IA — target nav, route dispositions |
-| `RELAY_COMPLETE_ROUTE_AND_ROLE_MAP.md` | **CURRENT** | Full route + role inventory with per-route gating |
+| `RELAY_COMPLETE_ROUTE_AND_ROLE_MAP.md` | **CURRENT** | Full route + role inventory with per-route gating (counts dated Oct 25) |
 | `RELAY_CONTRACT_RUNTIME_MAP.md` | **CURRENT** | Which contract lives in which module |
 | `RELAY_CONTRACT_CHANGE_PROCESS.md` | **CURRENT** | How contracts may be changed |
-| `RELAY_UI_SYSTEM_V2.md` | **CURRENT** | Design-system contract |
+| `RELAY_UI_SYSTEM_V2.md` | **CURRENT** | Design-system contract (the V3 primitives build on it) |
 | `SENDER_ROUTING.md` | **CURRENT** | Sending-profile routing rules |
 | `FOLLOWUP_POLICY_MAP.md` | **CURRENT** | Follow-up cadence authority map |
 | `RELAY_PRODUCT_CONTRACTS.md` | **CURRENT** | Business-rule contracts |
+| `RELAY_INFORMATION_ARCHITECTURE_V2.md` | **SUPERSEDED** | Archived — describes the deleted `app-rail.tsx` |
+
+---
 
 ## 3. Current product contracts (per surface)
 
 | Doc | Class | What it is |
 |---|---|---|
 | `RELAY_NAVIGATION_V2.md` | **CURRENT** | Sales surface routes + replacements |
-| `RELAY_SALES_WORKSPACE_V2.md` | **CURRENT** | Sales workspace |
+| `RELAY_SALES_WORKSPACE_V2.md` | **CURRENT** | Sales workspace design contract |
 | `RELAY_TASK_SYSTEM_V2.md` | **CURRENT** | Task engine |
-| `RELAY_REP_HOME_V2.md` | **CURRENT** | Rep home contract (Phase 3) |
-| `RELAY_MANAGER_HOME_V2.md` | **CURRENT** | Manager home (Phase 4) |
-| `RELAY_OPERATIONS_WORKSPACE_V2.md` | **CURRENT** | Ops workspace (Phase 8) |
-| `RELAY_ADMIN_COMMAND_CENTER_V2.md` | **CURRENT** | Admin command center (Phase 5) |
+| `RELAY_REP_HOME_V2.md` | **CURRENT** | Rep home contract |
+| `RELAY_MANAGER_HOME_V2.md` | **CURRENT** | Manager home |
+| `RELAY_OPERATIONS_WORKSPACE_V2.md` | **CURRENT** | Ops workspace |
+| `RELAY_ADMIN_COMMAND_CENTER_V2.md` | **CURRENT** | Admin command center |
+| `RELAY_V3_INBOX.md` | **CURRENT** | V3 Inbox contract |
+| `RELAY_V3_TEAM_OPERATIONS.md` | **CURRENT** | V3 Team operations contract |
+| `RELAY_V3_CONTENT_STUDIO.md` | **CURRENT** | V3 Content / Studio IA |
 | `SCORING_ARCHITECTURE.md` | **CURRENT** | Scoring system design |
 | `SCORING_INVARIANTS.md` | **CURRENT** | Scoring invariants |
 | `SCORING_RELEASE_CHECKLIST.md` | **CURRENT** | Scoring release gate |
 | `UPWORK_SCORING.md` | **CURRENT** | Upwork job scoring |
 | `RELAY_PREVIEW_QA_POLICY.md` | **CURRENT** | Preview environment QA policy |
 
+---
+
 ## 4. Database / infrastructure
 
 | Doc | Class | What it is |
 |---|---|---|
 | `RELAY_PHASE8_DATABASE_CONTRACTS.md` | **CURRENT** | DB schema contracts |
-| `RELAY_NEON_CUTOVER_FINAL.md` | **CURRENT** | Neon cutover — required env vars |
+| `RELAY_NEON_CUTOVER_FINAL.md` | **CURRENT** | Neon cutover — required env vars, rollback |
+| `RELAY_MIGRATION_RECONCILIATION_2026-11.md` | **CURRENT** | Latest migration reconciliation |
 | `RELAY_NEON_AGGREGATE_SLICE.md` | **CURRENT** | Analytics SQL aggregates (egress) |
 | `RELAY_NEON_ANALYTICS_EGRESS.md` | **CURRENT** | Analytics egress design |
 | `RELAY_NEON_EGRESS_AUDIT.md` | **CURRENT** | Egress audit evidence |
 | `RELAY_NEON_EGRESS_BUDGET.md` | **CURRENT** | Egress budget model |
 | `RELAY_SUPABASE_APPLICATION_DEPENDENCY_MAP.md` | **CURRENT** | Rollback-path dependency map |
-| `RELAY_SUPABASE_DEPENDENCY_MAP.md` | **HISTORICAL** | Superseded by the application map |
-| `RELAY_MIGRATION_RECONCILIATION_2026-11.md` | **CURRENT** | Latest migration reconciliation |
-| `RELAY_MIGRATION_VERIFICATION_2026-10-25.md` | **HISTORICAL** | Point-in-time verification |
-| `RELAY_NEON_MIGRATION.md` / `RELAY_NEON_MIGRATION_FINAL.md` | **SUPERSEDED** | Superseded by `RELAY_NEON_CUTOVER_FINAL.md` |
-| `RELAY_NEON_APPLICATION_CUTOVER.md` | **SUPERSEDED** | Superseded by `RELAY_NEON_CUTOVER_FINAL.md` |
+| `RELAY_NEON_MIGRATION_FINAL.md` | **HISTORICAL** | Migration parity/RLS evidence |
 | `RELAY_TENANT_TEST_2026-10-25.md` | **HISTORICAL** | RLS test evidence |
-| `RELAY_PRODUCTION_TEST_DATA_CLEANUP.md` | **HISTORICAL** | Cleanup runbook (point-in-time) |
+| `RELAY_MIGRATION_VERIFICATION_2026-10-25.md` | **HISTORICAL** | Point-in-time verification |
+| `RELAY_PRODUCTION_TEST_DATA_CLEANUP.md` | **HISTORICAL** | Cleanup runbook — **script output target**, keep in tree |
+| `RELAY_SUPABASE_DEPENDENCY_MAP.md` | **SUPERSEDED** | Archived — replaced by the application map |
+| `RELAY_NEON_MIGRATION.md` / `RELAY_NEON_APPLICATION_CUTOVER.md` | **SUPERSEDED** | Archived — replaced by `RELAY_NEON_CUTOVER_FINAL.md` |
+
+---
 
 ## 5. Current QA
 
@@ -89,18 +101,18 @@ Classification: **CURRENT** (active contract) · **HISTORICAL** (past state, kee
 
 ---
 
-## 6. Historical / archive candidates
+## 6. Historical reports kept in `docs/`
 
-Point-in-time status, activation, and audit reports. Keep for context; move to
-`docs/archive/` when the stabilization program reaches Phase 19 execution.
+Point-in-time status, activation and audit reports. Retained because they are
+cited by tests/scripts or remain the only record of a decision.
 
 **Activation / status (dated):**
-`RELAY_ACTIVATION_STATUS.md` · `RELAY_FINAL_ACTIVATION_STATUS.md` ·
-`RELAY_PHASE8_FINAL_ACTIVATION.md` · `RELAY_PRODUCTION_CLOSURE_STATUS.md` ·
-`RELAY_LEARNING_ACTIVATION_STATUS.md` · `RELAY_UX_ACTIVATION_STATUS.md` ·
-`RELAY_FIRST100_CAMPAIGN_STATUS.md` · `RELAY_TRUST_PROGRAM_STATUS.md` ·
-`RELAY_POST_MVP_PROGRAM_STATUS.md` · `RELAY_DAILY_OPERATIONS_RELEASE.md` ·
-`RELAY_SPRINT_B_STATUS.md` · `RELAY_CLOSURE_2026-10-29.md`
+`RELAY_FINAL_ACTIVATION_STATUS.md` · `RELAY_PHASE8_FINAL_ACTIVATION.md` ·
+`RELAY_PRODUCTION_CLOSURE_STATUS.md` · `RELAY_LEARNING_ACTIVATION_STATUS.md` ·
+`RELAY_UX_ACTIVATION_STATUS.md` · `RELAY_FIRST100_CAMPAIGN_STATUS.md` ·
+`RELAY_TRUST_PROGRAM_STATUS.md` · `RELAY_POST_MVP_PROGRAM_STATUS.md` ·
+`RELAY_DAILY_OPERATIONS_RELEASE.md` · `RELAY_SPRINT_B_STATUS.md` ·
+`RELAY_CLOSURE_2026-10-29.md`
 
 **Autonomous OS / revenue engine program:**
 `RELAY_AUTONOMOUS_OS_AUDIT.md` · `RELAY_AUTONOMOUS_OS_COMMAND_STATUS.md` ·
@@ -111,24 +123,36 @@ Point-in-time status, activation, and audit reports. Keep for context; move to
 `RELAY_AUDIT_2026-10-24.md` · `RELAY_E2E_AUDIT_2026-10-22.md` ·
 `RELAY_E2E_TRUST_AUDIT_2026-10-29.md` · `RELAY_EXPLAINABILITY_AUDIT.md` ·
 `RELAY_OBSERVABILITY_AUDIT.md` · `RELAY_DATA_VISIBILITY_FIX.md` ·
-`RELAY_NAVIGATION_PERFORMANCE.md` · `RELAY_OPERATIONS_EGRESS_AUDIT.md` ·
-`RELAY_SALES_QUERY_EGRESS_AUDIT.md` · `RELAY_SECURITY_ANON_EXPOSURE_AUDIT.md` ·
-`RELAY_DEPLOYED_SHA_2026-10-25.md` · `RELAY_DEPLOYED_VERIFICATION_2026-10-25.md`
+`RELAY_OPERATIONS_EGRESS_AUDIT.md` · `RELAY_SALES_QUERY_EGRESS_AUDIT.md` ·
+`RELAY_SECURITY_ANON_EXPOSURE_AUDIT.md` · `RELAY_DEPLOYED_SHA_2026-10-25.md` ·
+`RELAY_DEPLOYED_VERIFICATION_2026-10-25.md`
 
 **Program / planning (completed):**
-`RELAY_PRODUCT_SIMPLIFICATION_PLAN.md` · `SCORING_V4_PROGRAM.md` ·
-`RELAY_BUG_23_31_CLOSURE.md`
+`SCORING_V4_PROGRAM.md` · `RELAY_BUG_23_31_CLOSURE.md`
 
-**Security / privacy:**
-`PII_GIT_REMEDIATION.md`
-
-**Reference data:**
-`GOLDEN_SET.md` · `RAW_TEXT_READER_INVENTORY.md`
+**Security / privacy:** `PII_GIT_REMEDIATION.md`
+**Reference data:** `GOLDEN_SET.md` · `RAW_TEXT_READER_INVENTORY.md`
 
 ---
 
-## 7. Gaps
+## 7. Archived (`docs/archive/`)
 
-- No `docs/archive/` yet — historical docs still sit in `docs/`.
-- `RELAY_NEON_CUTOVER_FINAL.md` is the only doc that records the required production
-  env vars; it should be linked from `RELAY_PRODUCTION_ACTIVATION_RUNBOOK.md`.
+Moved because they describe surfaces that no longer exist or are strict
+duplicates of a surviving doc:
+
+`RELAY_ACTIVATION_STATUS.md` · `RELAY_ERP_NAVIGATION.md` ·
+`RELAY_FEATURE_VISIBILITY_MAP.md` · `RELAY_INFORMATION_ARCHITECTURE_V2.md` ·
+`RELAY_NAVIGATION_PERFORMANCE.md` · `RELAY_PRODUCT_SIMPLIFICATION_PLAN.md` ·
+`RELAY_NEON_MIGRATION.md` · `RELAY_NEON_APPLICATION_CUTOVER.md` ·
+`RELAY_SUPABASE_DEPENDENCY_MAP.md`
+
+---
+
+## 8. Gaps
+
+- `RELAY_NEON_CUTOVER_FINAL.md` records the required production env vars; link it
+  from `RELAY_PRODUCTION_ACTIVATION_RUNBOOK.md`.
+- A few CURRENT docs carry stale internals: `SCORING_ARCHITECTURE.md` labels
+  `v3.2.0` while the shipped version is `v3.3.0`; `RELAY_PHASE8_DATABASE_CONTRACTS.md`
+  predates the Nov 4 schema catch-up; `RELAY_CONTRACT_RUNTIME_MAP.md` has one
+  stale owner path.

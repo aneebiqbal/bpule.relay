@@ -1,6 +1,6 @@
 # RELAY CURRENT PRODUCT STATE
 
-**Authority:** code + tests on `release-merge` @ `408e7bd`. Docs describe intent;
+**Authority:** code + tests on `release-merge` @ `a2983dd`. Docs describe intent;
 this file describes what is actually wired.
 
 ---
@@ -185,6 +185,40 @@ are recorded so they are not mistaken for shipped behaviour.
 4. **Landing page (`/`) accessibility** reports `aria-hidden-focus` and
    `color-contrast` failures. Pre-existing and outside the app shell's scope.
 5. **Dead code.** The duplicate `src/components/app-rail.tsx` shell was removed
-   in the shell sprint. The old `StudioTodayV2` / `GrowthTodayV2` components and
-   ~384 unreferenced exports remain. Classified in
-   `RELAY_STABILIZATION_INVENTORY.md`; not deleted.
+   in the shell sprint. In the November 4 stabilization pass a further **48
+   provably unreachable files were deleted** (dead conversation/relationship/
+   studio-v2 clusters, superseded dashboards, unused UI primitives); every
+   removal, replacement and reference check is recorded in
+   `RELAY_DEAD_CODE_REMOVAL_REPORT.md`. Assets flagged for reuse rather than
+   deletion (sparkline, pipeline analytics view, team live board) are listed
+   there too.
+
+---
+
+## STABILIZATION STATUS (2026-11-04)
+
+**Branch:** `release-merge` · **SHA:** `a2983dd`
+
+| Area | Status |
+|---|---|
+| Navigation | Canonical V3 shell (`relay-app-shell.tsx` + `relay-shell-nav.ts`). Exactly one active primary and one active secondary, enforced by tests. Every primary/secondary href resolves to a real route. |
+| Role visibility | Nav items gated by `everyone` / `managerUp` / `adminUp` / `managerOnly`; `/facts` now uses the canonical product-admin check; `/team/eval` requires a manager. |
+| Dead code | 48 files removed, evidence in `RELAY_DEAD_CODE_REMOVAL_REPORT.md`. |
+| Filters | Leads sentinels fixed; Tasks filters are URL-backed on refresh; Rep 360 / Group `?view=overdue` honoured; Ideas tabs preserve filters. |
+| Docs | 9 superseded/dead docs moved to `docs/archive/`; index re-written. |
+| Dashboards | In progress — heatmap / trend blocks for Rep Home and Admin Home. |
+
+**Known blockers / gaps**
+
+1. Rep 360 (`/team/[repId]`) intentionally has no global nav item. It is reached
+   by clicking a person from **Team → People** (also Workload/Overview), from the
+   **Manager Home** team rows, from the **Admin Home** team rows and comparison
+   list, from **Team → attention**, and from the **Inbox** owner/rep link. All
+   five paths are verified in code.
+2. The Leads **Profile** select offers only "All profiles" / "No profile"; it
+   cannot target a specific sending identity.
+3. Pipeline (`/leads?view=pipeline`) does not apply the table's URL filters —
+   its search and stage chips are client-side over the bounded card payload.
+4. Compat-only redirect routes remain because `src/proxy.ts`, e2e suites and QA
+   scripts reference them.
+5. Playwright suites need live Neon credentials; they cannot run on this machine.
