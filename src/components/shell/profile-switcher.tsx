@@ -33,7 +33,7 @@ export function ProfileSwitcher({ role, compact, className }: ProfileSwitcherPro
         )}
       >
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-stone">Working as</p>
+          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-stone">Sending as</p>
           {activeIdentity ? (
             <>
               <p className="truncate text-[13px] font-medium text-ink">{activeIdentity.identityName}</p>
