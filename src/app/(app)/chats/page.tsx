@@ -9,7 +9,6 @@ import { V4PageHeader } from '@/components/v4/primitives'
 import { OpsFilters } from '@/components/operations/ops-filters'
 import { SavedViewsMenu } from '@/components/operations/saved-views-menu'
 import { ChatQueueList } from '@/components/chats/chat-queue-list'
-import { AutoSelectConversation } from '@/components/chats/auto-select-conversation'
 import { ChatIntelligencePanel } from '@/components/chats/chat-intelligence-panel'
 import { IntelligenceDrawer } from '@/components/chats/intelligence-drawer'
 import { LeadConversation } from '@/components/conversation/lead-conversation'
@@ -175,8 +174,6 @@ export default async function ChatsPage({
           />
         </div>
       </div>
-
-      <AutoSelectConversation leadId={leadId} firstHref={queue?.rows[0] ? hrefFor(queue.rows[0].leadId) : null} />
 
       {!queue ? (
         <div className="grid min-w-0 flex-1 gap-3 min-h-0 md:grid-cols-[minmax(240px,300px)_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
