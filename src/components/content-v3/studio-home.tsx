@@ -197,7 +197,7 @@ export function StudioHome({
           <div className="flex flex-wrap items-center gap-2 text-[12px] text-graphite">
             <span className="font-medium text-ink">{persona.displayName}</span>
             {persona.personaRole && <span>· {persona.personaRole}</span>}
-            <span>· {today}</span>
+            <span suppressHydrationWarning>· {today}</span>
           </div>
         }
         actions={

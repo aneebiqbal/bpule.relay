@@ -102,8 +102,8 @@ export function V3PageHeader({
         <h1 suppressHydrationWarning className="text-[24px] font-light leading-tight tracking-[-0.02em] text-ink">
           {title}
         </h1>
-        {subtitle && <p className="text-[13px] text-graphite">{subtitle}</p>}
-        {meta && <div className="pt-1">{meta}</div>}
+        {subtitle && <p suppressHydrationWarning className="text-[13px] text-graphite">{subtitle}</p>}
+        {meta && <div suppressHydrationWarning className="pt-1">{meta}</div>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </header>

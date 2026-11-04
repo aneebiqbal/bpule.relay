@@ -133,8 +133,8 @@ export function V4PageHeader({
         <h1 suppressHydrationWarning className="text-[26px] font-light leading-tight tracking-[-0.02em] text-ink">
           {title}
         </h1>
-        {subtitle && <div className="text-[13px] text-graphite">{subtitle}</div>}
-        {meta && <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1">{meta}</div>}
+        {subtitle && <div suppressHydrationWarning className="text-[13px] text-graphite">{subtitle}</div>}
+        {meta && <div suppressHydrationWarning className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1">{meta}</div>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </header>

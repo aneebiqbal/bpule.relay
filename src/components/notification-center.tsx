@@ -33,6 +33,9 @@ export function NotificationCenter() {
   const [items, setItems] = useState<RelayNotification[]>([])
   const [unread, setUnread] = useState(0)
   const [available, setAvailable] = useState(true)
+  // The unread badge arrives from the network. Render it only after mount so
+  // the server HTML and the first client render match (no hydration mismatch).
+  const [mounted, setMounted] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async () => {
@@ -49,6 +52,7 @@ export function NotificationCenter() {
   }, [])
 
   useEffect(() => {
+    setMounted(true)
     void load()
     const id = setInterval(() => {
       if (document.visibilityState === 'visible') void load()
@@ -89,11 +93,11 @@ export function NotificationCenter() {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="true"
         aria-expanded={open}
-        aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+        aria-label={mounted && unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
         className="relative rounded-md p-1.5 text-graphite transition-colors hover:bg-bone-raised hover:text-ink"
       >
         <Bell className="size-4" aria-hidden="true" />
-        {unread > 0 && (
+        {mounted && unread > 0 && (
           <span className="absolute -right-0.5 -top-0.5 min-w-[16px] rounded-full bg-orange px-1 text-center text-[10px] font-medium leading-4 text-on-accent">
             {unread > 9 ? '9+' : unread}
           </span>
