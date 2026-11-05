@@ -95,18 +95,10 @@ describe('V3_NO_PARALLEL_SELECTED_NAV', () => {
       '/chats?view=waiting_me',
       '/chats?view=waiting_them',
       '/chats?view=followups',
-      '/chats?view=meeting_requests',
-      '/chats?view=proposal_requests',
-      '/chats?view=closed',
+      '/chats?view=all',
     ]
     expect(secondaryItems('inbox', rep).map((i) => i.href)).toEqual(queues)
-    expect(secondaryItems('inbox', admin).map((i) => i.href)).toEqual([
-      ...queues,
-      '/chats?view=over4h',
-      '/chats?view=over12h',
-      '/chats?view=unassigned',
-      '/chats?view=review',
-    ])
+    expect(secondaryItems('inbox', admin).map((i) => i.href)).toEqual(queues)
     expect(domainForPathname('/inbound')).toBe('inbox')
     expect(domainForPathname('/relay')).toBe('inbox')
   })

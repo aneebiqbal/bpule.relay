@@ -146,7 +146,7 @@ export function NotesPanel({
             </div>
           </form>
           {error && (
-            <p role="alert" className="mt-1 text-[12px] text-status-danger">
+            <p role="alert" className="mt-1 text-[12px] text-[#8f2b1e]">
               {error}
             </p>
           )}

@@ -67,7 +67,7 @@ export interface LinkTab {
 }
 
 /** URL-state tabs: links, so refresh and back button keep the tab. */
-export function LinkTabs({ tabs, active, label, wrap = false }: { tabs: LinkTab[]; active: string; label: string; wrap?: boolean }) {
+export function LinkTabs({ tabs, active, label, wrap = false, compact = false }: { tabs: LinkTab[]; active: string; label: string; wrap?: boolean; compact?: boolean }) {
   return (
     <nav aria-label={label} className="-mx-1 overflow-x-auto">
       <ul className={cn(
@@ -83,7 +83,8 @@ export function LinkTabs({ tabs, active, label, wrap = false }: { tabs: LinkTab[
                 aria-current={current ? 'page' : undefined}
                 scroll={false}
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] transition-colors',
+                  'inline-flex items-center gap-1.5 rounded-md whitespace-nowrap transition-colors',
+                  compact ? 'px-2 py-1 text-[12px]' : 'px-3 py-1.5 text-[13px]',
                   current
                     ? 'bg-bone-raised font-medium text-ink shadow-sm'
                     : 'text-graphite hover:text-ink',
@@ -91,7 +92,7 @@ export function LinkTabs({ tabs, active, label, wrap = false }: { tabs: LinkTab[
               >
                 {tab.label}
                 {tab.count !== undefined && (
-                  <span className="rounded-full bg-bone px-1.5 text-[11px] tabular-nums text-stone">
+                  <span className={cn('rounded-full bg-bone tabular-nums text-stone', compact ? 'px-1 text-[10px]' : 'px-1.5 text-[11px]')}>
                     {tab.count}
                   </span>
                 )}
@@ -183,7 +184,7 @@ export function InlineError({ children }: { children: React.ReactNode }) {
   return (
     <p
       role="alert"
-      className="rounded-xl border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-[13px] text-status-danger"
+      className="rounded-xl border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-[13px] text-[#8f2b1e]"
     >
       {children}
     </p>

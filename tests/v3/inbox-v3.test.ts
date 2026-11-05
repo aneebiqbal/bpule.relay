@@ -170,7 +170,7 @@ describe('V3_INBOX_THREAD_LAZY_LOAD', () => {
   it('V3_INBOX_THREAD_LAZY_LOAD: the thread renders only for the selected lead', () => {
     const page = read('src/app/(app)/chats/page.tsx')
     expect(page).toContain('{leadId ? (')
-    expect(page).toContain('<LeadConversation key={leadId} leadId={leadId} variant="thread" />')
+    expect(page).toContain('<LeadConversation key={leadId} leadId={leadId} variant="thread" sendingProfile=')
     // No thread data is fetched for the queue.
     expect(page).not.toContain('listMessages')
   })

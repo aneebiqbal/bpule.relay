@@ -26,6 +26,26 @@ export function Drawer({ open, onClose, title, children, side = "left", classNam
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose()
+      if (e.key !== "Tab") return
+      // Keep Tab inside the drawer: a modal panel must not let focus escape to
+      // the page behind it.
+      const focusables = panelRef.current
+        ? Array.from(
+            panelRef.current.querySelectorAll<HTMLElement>(
+              'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+            ),
+          )
+        : []
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
     // Move focus into the panel and give it back on close (keyboard + SR users).
     const previouslyFocused = document.activeElement as HTMLElement | null

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { cn } from 'cn'
 import { SEARCH_GROUP_LABEL, commandVisible, type SearchGroupKey, type SearchGroups } from '@/lib/operations/search-shared'
+import { inboxViewHref } from '@/lib/navigation/inbox-nav'
 
 const SEARCH_GROUP_ICON: Record<SearchGroupKey, React.ComponentType<{ className?: string }>> = {
   people: Users,
@@ -164,7 +165,7 @@ export function CommandPalette({
       description: 'Leads with client replies waiting',
       icon: MessageSquare,
       group: 'Relay',
-      action: () => { router.push('/chats?view=waiting_me'); onOpenChange(false) },
+      action: () => { router.push(inboxViewHref('waiting_me')); onOpenChange(false) },
     },
     {
       id: 'view-followups',
@@ -172,7 +173,7 @@ export function CommandPalette({
       description: 'Overdue follow-ups',
       icon: MessageSquare,
       group: 'Relay',
-      action: () => { router.push('/chats?view=followups'); onOpenChange(false) },
+      action: () => { router.push(inboxViewHref('followups')); onOpenChange(false) },
     },
     {
       id: 'view-referred',

@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react'
+import { INBOX_PRIMARY_VIEWS, inboxViewHref } from '@/lib/navigation/inbox-nav'
 
 export type RelayNavDomain =
   | 'home'
@@ -96,18 +97,13 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     href: '/chats',
     icon: Inbox,
     visible: everyone,
-    secondary: [
-      { id: 'needs-reply', label: 'Needs reply', href: '/chats?view=waiting_me', group: 'Queues' },
-      { id: 'waiting-them', label: 'Waiting', href: '/chats?view=waiting_them', group: 'Queues' },
-      { id: 'followups', label: 'Follow-ups', href: '/chats?view=followups', group: 'Queues' },
-      { id: 'meeting-requests', label: 'Meeting requests', href: '/chats?view=meeting_requests', group: 'Queues' },
-      { id: 'proposal-requests', label: 'Proposal requests', href: '/chats?view=proposal_requests', group: 'Queues' },
-      { id: 'closed', label: 'Closed', href: '/chats?view=closed', group: 'Queues' },
-      { id: 'over4h', label: 'Waiting >4h', href: '/chats?view=over4h', visible: managerUp, group: 'Manager' },
-      { id: 'over12h', label: 'Waiting >12h', href: '/chats?view=over12h', visible: managerUp, group: 'Manager' },
-      { id: 'unassigned', label: 'Unassigned', href: '/chats?view=unassigned', visible: managerUp, group: 'Manager' },
-      { id: 'review', label: 'Thread review', href: '/chats?view=review', visible: managerUp, group: 'Manager' },
-    ],
+    // One canonical Inbox contract: the four primary views. Secondary
+    // conditions live in the /chats Filters drawer, not in global navigation.
+    secondary: INBOX_PRIMARY_VIEWS.map((view) => ({
+      id: view.id,
+      label: view.label,
+      href: inboxViewHref(view.value),
+    })),
   },
   {
     id: 'work',
@@ -345,7 +341,13 @@ export function resolveSecondaryActiveId(
       best = { id: item.id, pathLen: match.pathLen, paramCount: match.paramCount }
     }
   }
-  return best ? best.id : null
+  if (best) return best.id
+  // /chats with no view resolves immediately to the role default, so the
+  // active state is correct without waiting for a URL normalization pass.
+  if (domain === 'inbox' && !search.has('view')) {
+    return managerUp(role) ? 'all' : 'needs-reply'
+  }
+  return null
 }
 
 export interface RelayBreadcrumb {

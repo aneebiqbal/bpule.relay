@@ -119,8 +119,20 @@ export function truncatePreview(text: string | null | undefined, max = 140): str
   return t.length > max ? `${t.slice(0, max - 1)}…` : t
 }
 
+/**
+ * Legacy/aliases that must keep resolving after the nav cleanup. The canonical
+ * values above never change; these only map old links onto them.
+ */
+const CHAT_VIEW_ALIASES: Record<string, string> = {
+  'needs-reply': 'waiting_me',
+  meeting: 'meeting_requests',
+  proposal: 'proposal_requests',
+  'thread-review': 'review',
+}
+
 export function parseChatView(raw: string | null | undefined, includeManager: boolean): ChatView {
-  const found = CHAT_VIEWS.find((v) => v.value === raw)
+  const normalized = raw ? (CHAT_VIEW_ALIASES[raw] ?? raw) : null
+  const found = CHAT_VIEWS.find((v) => v.value === normalized)
   if (!found) return 'all'
   if (found.managerOnly && !includeManager) return 'all'
   return found.value

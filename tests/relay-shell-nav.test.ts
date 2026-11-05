@@ -67,8 +67,20 @@ describe('V3_NAV_SECONDARY_SINGLE_ACTIVE', () => {
 
   it('resolves Inbox view params to one queue item each', () => {
     expect(resolveSecondaryActiveId('inbox', '/chats', search('view=waiting_me'), rep)).toBe('needs-reply')
-    expect(resolveSecondaryActiveId('inbox', '/chats', search('view=followups'), rep)).toBe('followups')
-    expect(resolveSecondaryActiveId('inbox', '/chats', search(''), rep)).toBeNull()
+    expect(resolveSecondaryActiveId('inbox', '/chats', search('view=followups'), rep)).toBe('follow-ups')
+    expect(resolveSecondaryActiveId('inbox', '/chats', search('view=all'), rep)).toBe('all')
+  })
+
+  it('resolves the role default immediately when no view is in the URL', () => {
+    expect(resolveSecondaryActiveId('inbox', '/chats', search(''), rep)).toBe('needs-reply')
+    expect(resolveSecondaryActiveId('inbox', '/chats', search('lead=abc'), rep)).toBe('needs-reply')
+    expect(resolveSecondaryActiveId('inbox', '/chats', search(''), admin)).toBe('all')
+  })
+
+  it('leaves secondary conditions to the Filters drawer (no sidebar item)', () => {
+    for (const view of ['meeting_requests', 'proposal_requests', 'closed', 'over4h', 'over12h', 'unassigned', 'review']) {
+      expect(resolveSecondaryActiveId('inbox', '/chats', search(`view=${view}`), admin)).toBeNull()
+    }
   })
 
   it('resolves Work view params to one task view each', () => {
@@ -390,7 +402,7 @@ describe('V3_NAV_ROUTE_MATRIX', () => {
     ['/prospect', 'sales', 'prospects'],
     ['/leads', 'sales', 'leads'],
     ['/leads/import', 'sales', 'import'],
-    ['/chats', 'inbox', null],
+    ['/chats', 'inbox', 'all'],
     ['/tasks', 'work', 'my-tasks'],
     ['/content', 'content', 'studio'],
     ['/content/ideas', 'content', 'ideas'],
