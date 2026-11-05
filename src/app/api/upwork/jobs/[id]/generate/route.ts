@@ -8,6 +8,11 @@ import { sanitizeDraft } from '@/lib/facts/sanitize'
 import { evaluateCoverLetter, evaluateScreeningAnswers, COVER_LETTER_WORDS } from '@/lib/upwork/application-gate'
 import { AI_TELL_PHRASES, BANNED_PHRASES } from '@/lib/writing/engine'
 import { rankProfilesForOpportunity, recommendBestProfile } from '@/lib/profile-match'
+import {
+  assignedProfileName,
+  filterAssignedProfilesByChannel,
+  listAssignedProfiles,
+} from '@/lib/profiles/assigned-profiles'
 import type { Profile } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
@@ -47,11 +52,16 @@ export async function POST(
   const job = await store.getUpworkJob(id)
   if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
 
-  const [profiles, facts, plays] = await Promise.all([
-    store.listProfiles(),
+  // Only Upwork-capable profiles assigned to this rep. An owned-but-unassigned
+  // LinkedIn profile must never appear here, and an assigned Upwork identity
+  // whose profile someone else owns must still be eligible.
+  const [assignedProfiles, facts, plays] = await Promise.all([
+    listAssignedProfiles(),
     store.listFacts(),
     store.listPlays(),
   ])
+  const upworkProfiles = filterAssignedProfilesByChannel(assignedProfiles, 'upwork')
+  const profiles = upworkProfiles.map((a) => a.profile)
 
   const profile = profiles.find((p) => p.id === body.profileId) ?? profiles[0] ?? null
   const voiceProfile = await store.getVoiceProfile()
@@ -299,6 +309,11 @@ export async function POST(
       matchedProof: matchedProof ? { id: matchedProof.id, projectSummary: matchedProof.projectSummary } : null,
     },
     generationMode,
+    eligibleProfiles: upworkProfiles.map((a) => ({
+      profileId: a.profile.id,
+      name: assignedProfileName(a),
+      channel: 'upwork' as const,
+    })),
     profileSuggestion: bestProfileSuggestion ? {
       bestProfileId: bestProfileSuggestion.profileId,
       bestProfileName: bestProfileSuggestion.identityName,

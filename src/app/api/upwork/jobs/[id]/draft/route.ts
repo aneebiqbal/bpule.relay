@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
+import { filterAssignedProfilesByChannel, listAssignedProfiles } from '@/lib/profiles/assigned-profiles'
 
 export async function POST(request: Request) {
   let body: Record<string, unknown>
@@ -31,12 +32,12 @@ export async function POST(request: Request) {
   }
 
   // The profile is attribution, not a trust boundary — but a client-supplied id
-  // must still resolve to one of the caller's own profiles before it is stored.
+  // must still resolve to an Upwork-capable profile assigned to this rep.
   const requestedProfileId = typeof body.profileId === 'string' ? body.profileId : null
   let senderProfileId: string | null = null
   if (requestedProfileId) {
-    const profiles = await store.listProfiles()
-    if (profiles.some((p) => p.id === requestedProfileId)) senderProfileId = requestedProfileId
+    const upworkProfiles = filterAssignedProfilesByChannel(await listAssignedProfiles(), 'upwork')
+    if (upworkProfiles.some((a) => a.profile.id === requestedProfileId)) senderProfileId = requestedProfileId
   }
 
   const msg = await store.saveUpworkDraft({

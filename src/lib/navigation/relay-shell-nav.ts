@@ -129,6 +129,7 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     secondary: [
       { id: 'overview', label: 'Overview', href: '/team' },
       { id: 'people', label: 'People', href: '/team/people' },
+      { id: 'team-profiles', label: 'Profiles', href: '/team/profiles' },
       { id: 'workload', label: 'Workload', href: '/team/workload' },
       { id: 'activity', label: 'Activity', href: '/team/activity' },
       { id: 'performance', label: 'Performance', href: '/team/performance' },

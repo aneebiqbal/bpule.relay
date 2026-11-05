@@ -27,6 +27,7 @@ import {
 } from '@/lib/rep-home/profile-scope'
 import { actionDeepLink } from '@/lib/rep-home/action-presentation'
 import { REP_V3_ACTIVITY_LIMIT } from '@/lib/rep-home/v3-present'
+import { buildProfilesToday } from '@/lib/rep-home/profile-completion'
 import { loadTimeline } from '@/lib/operations/activity'
 import type { OpenLeadFact } from '@/lib/team/admin-command-summary'
 import { businessDateRange, currentInstant, orgDate, addDays, isOrgWorkingDay, weekdayOfDate } from '@/lib/org-clock'
@@ -382,6 +383,12 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     isWorkingDay: workspace.isWorkingDay,
     hasAssignments: workspace.hasAssignments,
     identities: identityRows,
+    profilesToday: buildProfilesToday(
+      workspace.identities,
+      identityRows,
+      workspace.workdayProgress,
+      workspace.policy.warningThresholds,
+    ),
     targetSummary: {
       ...workspace.targetSummary,
       totalTarget: scopedTargets.totalTarget,

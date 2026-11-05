@@ -24,15 +24,22 @@ function clockLabel(iso: string | null, timezone: string): string {
   return new Date(iso).toLocaleTimeString('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit' })
 }
 
-export default async function RepDayPage({ params }: { params: Promise<{ repId: string }> }) {
+export default async function RepDayPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ repId: string }>
+  searchParams: Promise<{ date?: string }>
+}) {
   const ctx = await getAuthContext()
   if (!ctx) redirect('/login')
   if (!ctx.isAdmin && !ctx.isManager) redirect('/dashboard')
 
   const { repId } = await params
+  const { date } = await searchParams
   let detail
   try {
-    detail = await loadRepDayDetail(repId)
+    detail = await loadRepDayDetail(repId, { date })
   } catch (error) {
     const message = error instanceof Error ? error.message : ''
     if (message === 'Forbidden' || message === 'Not found') notFound()
@@ -42,7 +49,7 @@ export default async function RepDayPage({ params }: { params: Promise<{ repId: 
   return (
     <div className="space-y-6">
       <Link
-        href="/admin/command"
+        href={date ? `/admin/command?date=${date}` : '/admin/command'}
         className="inline-flex min-h-11 items-center gap-1.5 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
       >
         <ArrowLeft className="size-3.5" aria-hidden="true" />

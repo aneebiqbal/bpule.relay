@@ -198,7 +198,14 @@ export function buildRepV3Actions(
       id: action.id,
       priority: toRepPriority(action.priority),
       title: action.title,
-      context: [action.subtitle, action.identity?.name].filter(Boolean).join(' · '),
+      context: [
+        action.subtitle,
+        action.identity
+          ? [action.identity.name, action.identity.channel].filter(Boolean).join(' · ')
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
       whyNow: humanWhyNow(action),
       age: relativeWait(action.createdAt),
       ctaLabel: primaryCtaLabel(action),

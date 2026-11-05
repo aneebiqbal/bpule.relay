@@ -14,6 +14,10 @@ import { UpworkJobActions } from '@/components/upwork-job-actions'
 import { UpworkJobTimeline } from '@/components/upwork-job-timeline'
 import { UpworkCommunication } from '@/components/upwork-communication'
 import { V4PageHeader, V4Panel, V4PanelHeader, V4Chip } from '@/components/v4/primitives'
+import {
+  filterAssignedProfilesByChannel,
+  listAssignedProfiles,
+} from '@/lib/profiles/assigned-profiles'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,7 +37,12 @@ export default async function UpworkJobPage({
   const job = await store.getUpworkJob(id)
   if (!job) notFound()
 
-  const profiles = await store.listProfiles()
+  // Only Upwork-capable profiles assigned to this rep. An owned-but-unassigned
+  // LinkedIn profile must never appear here.
+  const profiles = filterAssignedProfilesByChannel(
+    await listAssignedProfiles(),
+    'upwork',
+  ).map((assigned) => assigned.profile)
 
   const score = computeUpworkScore({
     budgetMin: job.budgetMin,

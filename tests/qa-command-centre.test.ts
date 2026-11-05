@@ -156,6 +156,33 @@ describe('COMMAND_CENTRE_GATE — operating policy editing', () => {
   })
 })
 
+describe('COMMAND_CENTRE_GATE — day selection', () => {
+  it('the team loader accepts a date and judges a past day as of that day\'s close', () => {
+    const team = read('src/lib/rep-day/team.ts')
+    expect(team).toContain('options: { date?: string } = {}')
+    expect(team).toContain('requestedDate')
+    expect(team).toContain('const asOf = requestedDate ? new Date(range.end) : now')
+  })
+
+  it('the rep-day detail loader accepts the same date', () => {
+    const team = read('src/lib/rep-day/team.ts')
+    expect(team).toContain('loadRepDayDetail(repId: string, options: { date?: string } = {})')
+  })
+
+  it('a date at or after today is treated as now, never as a missed historical day', () => {
+    const team = read('src/lib/rep-day/team.ts')
+    expect(team).toContain('options.date < today')
+  })
+
+  it('the page passes the date and the command centre renders a day selector', () => {
+    const page = read('src/app/(app)/admin/command/page.tsx')
+    expect(page).toContain('loadTeamDay({ date: params.date })')
+    const component = read('src/components/admin/command-centre.tsx')
+    expect(component).toContain('Yesterday')
+    expect(component).toContain('type="date"')
+  })
+})
+
 describe('COMMAND_CENTRE_GATE — policy validation is not masked by normalisation', () => {
   const base = { timezone: 'Asia/Karachi', workdayStart: '09:00', workdayEnd: '18:00', workingDays: [1, 2, 3, 4, 5] }
 

@@ -35,6 +35,7 @@ export interface AuthorizedIdentity {
   channel: string
   profileId: string | null
   profileUrl: string | null
+  status: 'active' | 'archived'
 }
 
 export interface RepWorkspace {
@@ -64,6 +65,7 @@ async function resolveAuthorizedIdentities(): Promise<AuthorizedIdentity[]> {
     channel: identity.channel,
     profileId: identity.profileId,
     profileUrl: identity.profileUrl,
+    status: identity.status,
   }))
 }
 

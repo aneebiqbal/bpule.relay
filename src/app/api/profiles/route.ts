@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { getAuthContext, can } from '@/lib/auth/organization'
+import {
+  filterAssignedProfilesByChannel,
+  listAssignedProfiles,
+} from '@/lib/profiles/assigned-profiles'
+import type { RevenueIdentityChannel } from '@/lib/domain/types'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const admin = url.searchParams.get('admin') === '1'
+  const assigned = url.searchParams.get('assigned') === '1'
 
   const authCtx = await getAuthContext()
   if (!authCtx) {
@@ -25,6 +31,17 @@ export async function GET(request: Request) {
     // Reading every rep's profiles is open to any authenticated rep (same
     const profiles = await store.listAllProfiles()
     return NextResponse.json({ profiles })
+  }
+
+  if (assigned) {
+    const channelParam = url.searchParams.get('channel')
+    const channel = channelParam === 'linkedin' || channelParam === 'upwork' || channelParam === 'email'
+      ? channelParam
+      : null
+    const profiles = channel
+      ? filterAssignedProfilesByChannel(await listAssignedProfiles(), channel as RevenueIdentityChannel)
+      : await listAssignedProfiles()
+    return NextResponse.json({ profiles: profiles.map((a) => a.profile) })
   }
 
   const profiles = await store.listProfiles()

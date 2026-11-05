@@ -194,12 +194,12 @@ export function V4AdminHome({
         <div className="lg:col-span-7">
           <V4Panel className="h-full">
             <V4PanelHeader
-              eyebrow="Execution"
-              title="Team execution today"
+              eyebrow="Today's execution"
+              title="Team execution"
               hint="Canonical counts — no combined score"
               action={
-                <Link href="/team" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
-                  Team <ChevronRight className="size-3.5" aria-hidden />
+                <Link href="/team/profiles" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
+                  Profiles <ChevronRight className="size-3.5" aria-hidden />
                 </Link>
               }
             />

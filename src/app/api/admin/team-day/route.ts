@@ -8,13 +8,14 @@ export const dynamic = 'force-dynamic'
  * The canonical team-day contract for the Command Centre.
  * A rep is refused here, not only in the navigation.
  */
-export async function GET() {
+export async function GET(request: Request) {
   const ctx = await getAuthContext()
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!ctx.isAdmin && !ctx.isManager) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const team = await loadTeamDay()
+  const date = new URL(request.url).searchParams.get('date') ?? undefined
+  const team = await loadTeamDay({ date })
   return NextResponse.json({ team })
 }

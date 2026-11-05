@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 /** One rep's operational day. Scope is enforced by the loader. */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ repId: string }> },
 ) {
   const ctx = await getAuthContext()
@@ -16,8 +16,9 @@ export async function GET(
   }
 
   const { repId } = await params
+  const date = req.nextUrl.searchParams.get('date') ?? undefined
   try {
-    const detail = await loadRepDayDetail(repId)
+    const detail = await loadRepDayDetail(repId, { date })
     return NextResponse.json({ detail })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'

@@ -141,13 +141,19 @@ async function scopedRepIds(ctx: AuthContext): Promise<Set<string> | 'all'> {
   return new Set((data ?? []).map((row) => row.person_id as string))
 }
 
-export async function loadTeamDay(): Promise<TeamDaySummary> {
+export async function loadTeamDay(options: { date?: string } = {}): Promise<TeamDaySummary> {
   const ctx = await getAuthContext()
   if (!ctx) throw new Error('Unauthorized')
 
   const policy: OperatingPolicy = await loadOperatingPolicy(ctx.orgId)
   const now = currentInstant()
-  const businessDate = orgDate(now, policy.timezone)
+  const today = orgDate(now, policy.timezone)
+  // A date at or after today is "now"; only a genuinely past day is judged as
+  // of its close. Passing today's date must not make the day read as missed.
+  const requestedDate = options.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date) && options.date < today
+    ? options.date
+    : null
+  const businessDate = requestedDate ?? today
   const isWorkingDay = isOrgWorkingDay(policy, businessDate)
   const base = emptySummary(businessDate, policy.timezone, isWorkingDay, policy.workdayStart, policy.workdayEnd)
 
@@ -158,6 +164,8 @@ export async function loadTeamDay(): Promise<TeamDaySummary> {
 
   const supabase = await createServerSupabase()
   const range = businessDateRange(businessDate, policy.timezone)
+  // A selected past day is judged as of that day's close, not the current clock.
+  const asOf = requestedDate ? new Date(range.end) : now
 
   // Five bounded reads, in parallel. No query is per rep.
   const repQuery = supabase.from('reps').select('id, name, role').eq('organization_id', ctx.orgId)
@@ -280,7 +288,7 @@ export async function loadTeamDay(): Promise<TeamDaySummary> {
     const derived = deriveRepDayState({
       policy,
       businessDate,
-      now,
+      now: asOf,
       isWorkingDay,
       checkInAt,
       closedAt,
@@ -337,8 +345,8 @@ export async function loadTeamDay(): Promise<TeamDaySummary> {
     businessDate,
     timezone: policy.timezone,
     isWorkingDay,
-    workdayProgress: workdayProgress(now, policy, businessDate),
-    minutesRemaining: minutesRemainingIn(now, policy, businessDate),
+    workdayProgress: workdayProgress(asOf, policy, businessDate),
+    minutesRemaining: minutesRemainingIn(asOf, policy, businessDate),
     workdayStart: policy.workdayStart,
     workdayEnd: policy.workdayEnd,
     counts,
@@ -384,7 +392,7 @@ export interface RepDayDetail {
   warnings: Array<{ type: string; title: string; body: string; createdAt: string }>
 }
 
-export async function loadRepDayDetail(repId: string): Promise<RepDayDetail> {
+export async function loadRepDayDetail(repId: string, options: { date?: string } = {}): Promise<RepDayDetail> {
   const ctx = await getAuthContext()
   if (!ctx) throw new Error('Unauthorized')
 
@@ -394,8 +402,14 @@ export async function loadRepDayDetail(repId: string): Promise<RepDayDetail> {
   const supabase = await createServerSupabase()
   const policy = await loadOperatingPolicy(ctx.orgId)
   const now = currentInstant()
-  const businessDate = orgDate(now, policy.timezone)
+  const today = orgDate(now, policy.timezone)
+  const requestedDate = options.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date) && options.date < today
+    ? options.date
+    : null
+  const businessDate = requestedDate ?? today
   const range = businessDateRange(businessDate, policy.timezone)
+  // A selected past day is judged as of that day's close, not the current clock.
+  const asOf = requestedDate ? new Date(range.end) : now
 
   const { data: rep } = await supabase
     .from('reps')
@@ -516,7 +530,7 @@ export async function loadRepDayDetail(repId: string): Promise<RepDayDetail> {
   const derived = deriveRepDayState({
     policy,
     businessDate,
-    now,
+    now: asOf,
     isWorkingDay: isOrgWorkingDay(policy, businessDate),
     checkInAt: (day?.check_in_at as string) ?? null,
     closedAt: (day?.closed_at as string) ?? null,
@@ -536,7 +550,7 @@ export async function loadRepDayDetail(repId: string): Promise<RepDayDetail> {
     closedAt: (day?.closed_at as string) ?? null,
     commitmentProgress: Number(day?.commitment_progress) || 0,
     requiredRemaining: (day?.required_remaining as number) ?? 0,
-    minutesRemaining: (day?.minutes_remaining as number) ?? minutesRemainingIn(now, policy, businessDate),
+    minutesRemaining: (day?.minutes_remaining as number) ?? minutesRemainingIn(asOf, policy, businessDate),
     exceptionState,
     exceptionReason: (day?.exception_reason as string) ?? null,
     exceptionNote: (day?.exception_note as string) ?? null,

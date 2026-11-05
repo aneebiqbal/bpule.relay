@@ -1395,6 +1395,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async listAllProfiles() {
       return [...profiles].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     },
+    async listProfilesByIds(ids: string[]) {
+      return profiles.filter((p) => ids.includes(p.id))
+    },
     async upsertProfileAdmin(input) {
       if (rep.role !== 'admin') throw new Error('Admin only')
       const existing = input.id ? profiles.find((p) => p.id === input.id) : null
@@ -3223,8 +3226,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const myAssignments = demoIdentityAssignments.filter((a) => a.repId === repId)
       const myTargets = demoDailyTargets.filter((t) => t.repId === repId && t.active)
       let totalTarget = 0, totalCompleted = 0
-      const assignedIdentities = myAssignments.map((a) => {
+      const assignedIdentities = myAssignments.flatMap((a) => {
         const identity = demoRevenueIdentities.find((r) => r.id === a.revenueIdentityId)
+        if (!identity || identity.status === 'archived') return []
         const identityTargets = myTargets.filter((t) => t.revenueIdentityId === a.revenueIdentityId)
         const targets = identityTargets.map((t) => {
           const completed = t.activityType === 'dm' ? 22 : t.activityType === 'connection_request' ? 14 : 6
@@ -3232,7 +3236,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
           totalCompleted += completed
           return { targetId: t.id, activityType: t.activityType, targetCount: t.targetCount, completedCount: completed, remaining: Math.max(0, t.targetCount - completed), status: 'on_track' as const, accountabilityId: null }
         })
-        return { assignmentId: a.id, identity: identity!, targets }
+        return [{ assignmentId: a.id, identity, targets }]
       })
       return {
         repId, repName, timezone, isWorkingDay: true,

@@ -21,9 +21,10 @@ export async function loadTeamLive(orgId: string, now = currentInstant()): Promi
     leadsToday,
     extractions,
     openLeads,
+    profiles,
   ] = await Promise.all([
     supabase.from('reps').select('id, name, role').eq('organization_id', orgId),
-    supabase.from('revenue_identities').select('id, identity_name, channel, title').eq('organization_id', orgId).eq('status', 'active'),
+    supabase.from('revenue_identities').select('id, identity_name, channel, title, profile_id').eq('organization_id', orgId).eq('status', 'active'),
     supabase.from('identity_assignments').select('revenue_identity_id, rep_id').eq('organization_id', orgId),
     supabase.from('daily_targets').select('rep_id, revenue_identity_id, activity_type, target_count').eq('organization_id', orgId).eq('active', true),
     supabase.from('daily_accountability').select('rep_id, revenue_identity_id, activity_type, completed_count, status').eq('organization_id', orgId).eq('target_date', businessDate),
@@ -31,6 +32,7 @@ export async function loadTeamLive(orgId: string, now = currentInstant()): Promi
     supabase.from('leads').select('owner_rep_id, created_at').eq('organization_id', orgId).gte('created_at', startOfDay).lt('created_at', endOfDay),
     supabase.from('extraction_runs').select('rep_id, success, created_at').eq('organization_id', orgId).gte('created_at', startOfDay).lt('created_at', endOfDay),
     supabase.from('leads').select('id, owner_rep_id, company, contact_name, status, canonical_score, score').eq('organization_id', orgId).in('status', OPEN_STATUSES).order('created_at', { ascending: false }).limit(800),
+    supabase.from('profiles').select('id, display_name, full_name, label').eq('organization_id', orgId),
   ])
 
   return assembleTeamLive({
@@ -46,5 +48,6 @@ export async function loadTeamLive(orgId: string, now = currentInstant()): Promi
     leadsToday: leadsToday.data ?? [],
     extractions: extractions.data ?? [],
     openLeads: openLeads.data ?? [],
+    profiles: profiles.data ?? [],
   })
 }

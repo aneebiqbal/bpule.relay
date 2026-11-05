@@ -51,6 +51,10 @@ import {
 } from '@/lib/relay/explanation-consistency'
 import { newRequestId, runWithTraceContext } from '@/lib/observability/trace-context'
 import { recordExplanationViolations } from '@/lib/relay/contract-violations'
+import {
+  filterAssignedProfilesByChannel,
+  listAssignedProfiles,
+} from '@/lib/profiles/assigned-profiles'
 
 /**
  * Messaging policies that actually involve writing/sending a pitch message.
@@ -536,11 +540,14 @@ async function handlePost(request: Request) {
     let fewShotPool: Array<{ id: string; messageId: string; leadId: string; playId: string | null; signalType: number | null; sentText: string; company: string; signalEvidence: string | null; tags: string[]; createdAt: string }> = []
     try {
       if (store) {
-        const [p, fs] = await Promise.all([
-          store.listProfiles(),
+        // LinkedIn prospecting shows only LinkedIn-capable profiles assigned to
+        // this rep. `profileById` below must be built from the same set, or the
+        // identity-linked leg computed by `loadSenderProfiles` is discarded.
+        const [assigned, fs] = await Promise.all([
+          listAssignedProfiles(),
           store.listFewShotWins(50),
         ])
-        profiles = p
+        profiles = filterAssignedProfilesByChannel(assigned, 'linkedin').map((a) => a.profile)
         fewShotPool = fs
       }
     } catch {

@@ -2373,6 +2373,17 @@ export class SupabaseStore implements ScoutStore {
     return (data ?? []).map(mapProfile)
   }
 
+  async listProfilesByIds(ids: string[]): Promise<Profile[]> {
+    if (ids.length === 0) return []
+    const { data, error } = await this.client
+      .from('profiles')
+      .select('*')
+      .in('id', ids)
+      .eq('organization_id', this.orgId)
+    if (error) throw error
+    return (data ?? []).map(mapProfile)
+  }
+
   async upsertProfileAdmin(input: {
     id?: string
     repId: string
@@ -5474,14 +5485,17 @@ export class SupabaseStore implements ScoutStore {
       .select('profile_id')
       .eq('rep_id', this.rep.id)
     if (error) throw error
-    const profileIds = (data ?? []).map((r: { profile_id: string }) => r.profile_id)
+    const assignedIds = (data ?? []).map((r: { profile_id: string }) => r.profile_id)
+    // Identity assignments are the canonical path; profile_assignments is the
+    // legacy leg. Without the union the queue engine cannot resolve senders an
+    // admin assigned as a revenue identity.
+    const identities = await this.listMyAssignedIdentities()
+    const identityProfileIds = identities
+      .map((i) => i.profileId)
+      .filter((id): id is string => Boolean(id))
+    const profileIds = [...new Set([...assignedIds, ...identityProfileIds])]
     if (profileIds.length === 0) return this.listProfiles()
-    const { data: profiles, error: pError } = await this.client
-      .from('profiles')
-      .select('*')
-      .in('id', profileIds)
-    if (pError) throw pError
-    return (profiles ?? []).map(mapProfile)
+    return this.listProfilesByIds(profileIds)
   }
 
   async assignProfile(profileId: string): Promise<void> {
@@ -6586,10 +6600,12 @@ export class SupabaseStore implements ScoutStore {
     const targetList = (targets ?? []) as Record<string, unknown>[]
     const accMap = new Map(((accountability ?? []) as Record<string, unknown>[]).map((a) => [`${a.revenue_identity_id}:${a.activity_type}`, a]))
     let totalTarget = 0, totalCompleted = 0
-    const identityViews = await Promise.all(assignments.map(async (a) => {
+    const identityViews = (await Promise.all(assignments.map(async (a) => {
       const idTargets = targetList.filter((t) => t.revenue_identity_id === a.revenue_identity_id)
       const { data: identityRows } = await this.client.from('revenue_identities').select('*').eq('id', a.revenue_identity_id).maybeSingle()
       const identity = identityRows ? this.mapRevenueIdentity(identityRows as Record<string, unknown>) : null
+      // An archived identity is not a working profile; it must not count.
+      if (!identity || identity.status === 'archived') return null
       const targetViews = idTargets.map((t) => {
         const key = `${t.revenue_identity_id}:${t.activity_type}`
         const acc = accMap.get(key)
@@ -6598,8 +6614,8 @@ export class SupabaseStore implements ScoutStore {
         totalCompleted += completed
         return { targetId: t.id as string, activityType: t.activity_type as ActivityType, targetCount: t.target_count as number, completedCount: completed, remaining: Math.max(0, (t.target_count as number) - completed), status: ((acc?.status as AccountabilityStatus) ?? 'on_track'), accountabilityId: (acc?.id as string) ?? null }
       })
-      return { assignmentId: a.id as string, identity: identity!, targets: targetViews }
-    }))
+      return { assignmentId: a.id as string, identity, targets: targetViews }
+    }))).filter((view): view is NonNullable<typeof view> => view !== null)
     return {
       repId, repName, timezone, isWorkingDay: true,
       totalTarget, totalCompleted, totalRemaining: Math.max(0, totalTarget - totalCompleted),

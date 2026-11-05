@@ -48,7 +48,8 @@ function paceLabel(row: TeamDayRow, workdayProgress: number): string {
   return `${Math.round(ratio * 100)}%`
 }
 
-function RepRow({ row, timezone, workdayProgress }: { row: TeamDayRow; timezone: string; workdayProgress: number }) {
+function RepRow({ row, timezone, workdayProgress, businessDate }: { row: TeamDayRow; timezone: string; workdayProgress: number; businessDate: string }) {
+  const repDayHref = `/admin/command/${row.repId}?date=${businessDate}`
   return (
     <tr className="border-b border-line/60 last:border-0 align-top">
       <td className="px-4 py-3">
@@ -76,7 +77,7 @@ function RepRow({ row, timezone, workdayProgress }: { row: TeamDayRow; timezone:
       <td className="px-4 py-3 text-[12px] tabular-nums text-graphite">{clockLabel(row.lastActivityAt, timezone)}</td>
       <td className="px-4 py-3 text-right">
         <Link
-          href={`/admin/command/${row.repId}`}
+          href={repDayHref}
           className="inline-flex min-h-11 items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
         >
           Open rep day
@@ -87,10 +88,10 @@ function RepRow({ row, timezone, workdayProgress }: { row: TeamDayRow; timezone:
   )
 }
 
-function RepCard({ row, timezone, workdayProgress }: { row: TeamDayRow; timezone: string; workdayProgress: number }) {
+function RepCard({ row, timezone, workdayProgress, businessDate }: { row: TeamDayRow; timezone: string; workdayProgress: number; businessDate: string }) {
   return (
     <Link
-      href={`/admin/command/${row.repId}`}
+      href={`/admin/command/${row.repId}?date=${businessDate}`}
       aria-label={`Open rep day for ${row.repName}`}
       className="block rounded-lg border border-line bg-bone-raised p-3 transition-colors hover:border-ink/20"
     >
@@ -125,26 +126,100 @@ function RepCard({ row, timezone, workdayProgress }: { row: TeamDayRow; timezone
   )
 }
 
+function dateLabel(businessDate: string): string {
+  const date = new Date(`${businessDate}T00:00:00Z`)
+  if (Number.isNaN(date.getTime())) return businessDate
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+}
+
+function DaySelector({
+  team,
+  today,
+  yesterday,
+}: {
+  team: TeamDaySummary
+  today: string
+  yesterday: string
+}) {
+  const isToday = team.businessDate === today
+  const isYesterday = team.businessDate === yesterday
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Link
+        href="/admin/command"
+        className={cn(
+          'rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
+          isToday ? 'bg-solid text-on-solid' : 'text-graphite hover:bg-bone',
+        )}
+      >
+        Today
+      </Link>
+      <Link
+        href={`/admin/command?date=${yesterday}`}
+        className={cn(
+          'rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
+          isYesterday ? 'bg-solid text-on-solid' : 'text-graphite hover:bg-bone',
+        )}
+      >
+        Yesterday
+      </Link>
+      <form action="/admin/command" method="get" className="flex items-center gap-1.5">
+        <label htmlFor="command-custom-date" className="sr-only">
+          Custom date
+        </label>
+        <input
+          id="command-custom-date"
+          type="date"
+          name="date"
+          defaultValue={team.businessDate}
+          max={today}
+          className="h-7 rounded-full border border-line bg-bone-raised px-2 text-[11px] text-graphite"
+        />
+        <button
+          type="submit"
+          className="rounded-full border border-line px-2.5 py-1 text-[11px] font-medium text-graphite transition-colors hover:bg-bone hover:text-ink"
+        >
+          Go
+        </button>
+      </form>
+    </div>
+  )
+}
+
 export function CommandCentre({
   team,
   activeFilter,
+  today,
+  yesterday,
 }: {
   team: TeamDaySummary
   activeFilter: RepDayState | 'ALL'
+  today: string
+  yesterday: string
 }) {
   const rows = activeFilter === 'ALL' ? team.reps : team.reps.filter((row) => row.state === activeFilter)
+  const isToday = team.businessDate === today
+  const isYesterday = team.businessDate === yesterday
+  const title = isToday
+    ? 'Today'
+    : isYesterday
+      ? `Yesterday · ${dateLabel(team.businessDate)}`
+      : dateLabel(team.businessDate)
 
   return (
     <div className="space-y-6">
       <DashHeader
         eyebrow={`Command · ${team.businessDate}`}
-        title="Today"
+        title={title}
         subtitle={
           team.isWorkingDay
             ? `${team.workdayStart}–${team.workdayEnd} ${team.timezone} · ${formatDuration(team.minutesRemaining)} remaining`
             : `Not a working day · ${team.timezone}`
         }
       />
+
+      <DaySelector team={team} today={today} yesterday={yesterday} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatTile label="Not started" value={team.counts.NOT_STARTED} tone={team.counts.NOT_STARTED > 0 ? 'warning' : 'neutral'} icon={<Clock className="size-3.5" />} sub="No check-in" />
@@ -210,7 +285,7 @@ export function CommandCentre({
                 </thead>
                 <tbody>
                   {rows.map((row) => (
-                    <RepRow key={row.repId} row={row} timezone={team.timezone} workdayProgress={team.workdayProgress} />
+                    <RepRow key={row.repId} row={row} timezone={team.timezone} workdayProgress={team.workdayProgress} businessDate={team.businessDate} />
                   ))}
                 </tbody>
               </table>
@@ -219,7 +294,7 @@ export function CommandCentre({
             {/* Mobile cards */}
             <div className="space-y-2 p-3 md:hidden">
               {rows.map((row) => (
-                <RepCard key={row.repId} row={row} timezone={team.timezone} workdayProgress={team.workdayProgress} />
+                <RepCard key={row.repId} row={row} timezone={team.timezone} workdayProgress={team.workdayProgress} businessDate={team.businessDate} />
               ))}
             </div>
           </>

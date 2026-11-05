@@ -20,7 +20,14 @@ const STATUS_LABEL: Record<string, string> = {
 
 const OPEN_LEAD_LIMIT = 4
 
-export type TeamLiveIdentity = { name: string; title: string | null; channel: string }
+export type TeamLiveIdentity = {
+  id: string
+  name: string
+  title: string | null
+  channel: string
+  profileId: string | null
+  profileName: string | null
+}
 
 export type TeamLiveGoal = {
   activityType: string
@@ -29,6 +36,7 @@ export type TeamLiveGoal = {
   completed: number
   remaining: number
   identityId: string
+  status: string | null
 }
 
 export type TeamLiveLead = {
@@ -63,10 +71,11 @@ export type TeamLivePerson = {
 export type TeamLivePayload = { date: string; people: TeamLivePerson[] }
 
 type RepRow = { id: string; name: string; role: string }
-type IdentityRow = { id: string; identity_name: string; channel: string; title: string | null }
+type IdentityRow = { id: string; identity_name: string; channel: string; title: string | null; profile_id?: string | null }
+type ProfileRow = { id: string; display_name?: string | null; full_name?: string | null; label?: string | null }
 type AssignmentRow = { revenue_identity_id?: string | null; identity_id?: string | null; rep_id: string }
 type TargetRow = { rep_id: string; revenue_identity_id: string; activity_type: string; target_count: number }
-type AccountabilityRow = { rep_id: string; revenue_identity_id: string; activity_type: string; completed_count: number | null }
+type AccountabilityRow = { rep_id: string; revenue_identity_id: string; activity_type: string; completed_count: number | null; status?: string | null }
 type MessageRow = { rep_id: string | null; type: string | null; sent_at: string | null }
 type LeadTodayRow = { owner_rep_id: string | null; created_at: string | null }
 type ExtractionRow = { rep_id: string | null; success: boolean | null; created_at: string | null }
@@ -93,6 +102,7 @@ export type TeamLiveRows = {
   leadsToday: LeadTodayRow[]
   extractions: ExtractionRow[]
   openLeads: OpenLeadRow[]
+  profiles?: ProfileRow[]
 }
 
 export function activityLabel(activityType: string): string {
@@ -119,6 +129,12 @@ export function leadScore(row: { canonical_score: number | null; score: number |
 export function assembleTeamLive(rows: TeamLiveRows): TeamLivePayload {
   const date = rows.businessDate ?? orgDate(rows.now, rows.timezone ?? 'UTC')
   const identities = rows.identities ?? []
+  const profileNameById = new Map(
+    (rows.profiles ?? []).map((p) => [
+      p.id as string,
+      p.display_name ?? p.full_name ?? p.label ?? null,
+    ]),
+  )
 
   const people = (rows.reps ?? []).map((rep) => {
     const seen = new Set<string>()
@@ -137,9 +153,10 @@ export function assembleTeamLive(rows: TeamLiveRows): TeamLivePayload {
     const repAccountability = (rows.accountability ?? []).filter((a) => a.rep_id === rep.id)
 
     const goals = repTargets.map((t) => {
-      const done = repAccountability
-        .filter((a) => a.revenue_identity_id === t.revenue_identity_id && a.activity_type === t.activity_type)
-        .reduce((sum, a) => sum + (a.completed_count ?? 0), 0)
+      const matches = repAccountability.filter(
+        (a) => a.revenue_identity_id === t.revenue_identity_id && a.activity_type === t.activity_type,
+      )
+      const done = matches.reduce((sum, a) => sum + (a.completed_count ?? 0), 0)
       const target = t.target_count ?? 0
       return {
         activityType: t.activity_type,
@@ -148,6 +165,7 @@ export function assembleTeamLive(rows: TeamLiveRows): TeamLivePayload {
         completed: done,
         remaining: Math.max(0, target - done),
         identityId: t.revenue_identity_id,
+        status: (matches[0]?.status as string) ?? null,
       }
     })
 
@@ -181,9 +199,12 @@ export function assembleTeamLive(rows: TeamLiveRows): TeamLivePayload {
       repName: rep.name,
       role: rep.role,
       identities: repIdentities.map((i) => ({
+        id: i.id,
         name: i.identity_name,
         title: i.title,
         channel: i.channel,
+        profileId: i.profile_id ?? null,
+        profileName: i.profile_id ? (profileNameById.get(i.profile_id) ?? null) : null,
       })),
       goals,
       openLeads,

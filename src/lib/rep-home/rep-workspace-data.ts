@@ -29,6 +29,8 @@ export interface RepWorkspaceData {
       status: string
     }>
   }>
+  /** Per-profile daily completion, grouped from assigned channel identities. */
+  profilesToday?: import('@/lib/rep-home/profile-completion').ProfileToday[]
   targetSummary: {
     totalTarget: number
     totalCompleted: number

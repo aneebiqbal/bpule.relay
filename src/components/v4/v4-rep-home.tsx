@@ -11,7 +11,9 @@
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
+import { cn } from 'cn'
 import type { RepWorkspaceData } from '@/lib/rep-home/rep-workspace-data'
+import { buildProfileWarnings, type ProfileToday } from '@/lib/rep-home/profile-completion'
 import type { UnifiedTask } from '@/lib/tasks/types'
 import {
   buildRepV3Actions,
@@ -40,6 +42,7 @@ import {
 import { V3StageStrip } from '@/components/v3/primitives'
 import {
   V4Avatar,
+  V4Chip,
   V4Empty,
   V4PageHeader,
   V4Panel,
@@ -111,6 +114,14 @@ export function V4RepHome({
   const stages = useMemo(() => buildRepV3Stages(data.pipelineLeads ?? []), [data.pipelineLeads])
   const activity = useMemo(() => buildRepV3Activity(data.activity ?? [], timeZone), [data.activity, timeZone])
   const breakdown = useMemo(() => buildRepWorkBreakdown(unified, ranked), [unified, ranked])
+  const profileWarnings = useMemo(
+    () =>
+      buildProfileWarnings(
+        data.profilesToday ?? [],
+        data.day ?? { repliesWaiting: 0, followUpsDue: 0, isComplete: false },
+      ),
+    [data.profilesToday, data.day],
+  )
 
   const daily = data.activityDaily ?? []
   const todayActivity = daily.length > 0 ? daily[daily.length - 1] : null
@@ -156,13 +167,10 @@ export function V4RepHome({
         subtitle="Your execution cockpit for today."
         meta={
           <>
-            {data.activeWorkspace && (
+            {data.identities.length > 0 && (
               <span className="inline-flex items-center gap-1.5 text-[12px] text-graphite">
-                <span className="text-stone">Sending as</span>
-                <span className="font-medium text-ink">{data.activeWorkspace.identityName}</span>
-                {data.identities.length > 1 && (
-                  <span className="text-stone">· {data.identities.length} profiles</span>
-                )}
+                <span className="text-stone">Profiles</span>
+                <span className="font-medium text-ink">{data.identities.length}</span>
               </span>
             )}
             <span className="hidden h-3 w-px bg-line sm:block" aria-hidden />
@@ -197,6 +205,42 @@ export function V4RepHome({
       <section aria-label="Today">
         <V4StatStrip items={stats} label="Today" />
       </section>
+
+      {data.profilesToday && data.profilesToday.length > 0 && (
+        <section aria-label="Your profiles today">
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h2 className="text-mono-medium text-[11px] uppercase tracking-[0.18em] text-stone">
+              Your profiles today
+            </h2>
+            <span className="text-[12px] text-stone">
+              {data.profilesToday.length} {data.profilesToday.length === 1 ? 'profile' : 'profiles'} assigned
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {data.profilesToday.map((profile) => (
+              <ProfileTodayCard key={profile.profileId} profile={profile} />
+            ))}
+          </div>
+          {profileWarnings.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {profileWarnings.map((warning) => (
+                <p key={warning.id} className="flex items-center gap-2 text-[12px] text-graphite">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'size-1.5 shrink-0 rounded-full',
+                      warning.tone === 'danger' && 'bg-status-danger',
+                      warning.tone === 'warning' && 'bg-status-warning',
+                      warning.tone === 'info' && 'bg-cobalt',
+                    )}
+                  />
+                  {warning.message}
+                </p>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-12">
         {/* Assigned to me — impossible to miss. */}
@@ -435,6 +479,98 @@ export function V4RepHome({
         )}
       </div>
     </div>
+  )
+}
+
+const PROFILE_STATUS_TONE: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
+  COMPLETE: 'success',
+  ON_TRACK: 'info',
+  BEHIND: 'warning',
+  AT_RISK: 'danger',
+  NOT_STARTED: 'neutral',
+}
+
+const PROFILE_STATUS_LABEL: Record<string, string> = {
+  COMPLETE: 'Complete',
+  ON_TRACK: 'On Track',
+  BEHIND: 'Behind',
+  AT_RISK: 'At Risk',
+  NOT_STARTED: 'Not Started',
+}
+
+function ProfileStatusBadge({ status }: { status: ProfileToday['status'] }) {
+  if (!status) return <span className="text-[11px] text-stone">—</span>
+  return (
+    <V4Chip tone={PROFILE_STATUS_TONE[status] ?? 'neutral'}>
+      {PROFILE_STATUS_LABEL[status] ?? status}
+    </V4Chip>
+  )
+}
+
+function ProfileTodayCard({ profile }: { profile: ProfileToday }) {
+  const pct = profile.targetCount > 0
+    ? Math.min(100, Math.round((profile.completedCount / profile.targetCount) * 100))
+    : 0
+
+  return (
+    <V4Panel>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[14px] font-medium text-ink">{profile.name}</p>
+          <p className="mt-0.5 text-[12px] text-graphite">
+            {profile.channels.length > 0 ? profile.channels.join(' · ') : 'No channel'}
+          </p>
+        </div>
+        <ProfileStatusBadge status={profile.status} />
+      </div>
+
+      <div className="mt-4">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[12px] text-graphite">
+            <span className="font-medium text-ink">{profile.completedCount}</span>
+            {' / '}
+            {profile.targetCount} complete
+          </span>
+          {profile.status && <span className="text-[11px] tabular-nums text-stone">{pct}%</span>}
+        </div>
+        <div
+          className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-bone ring-1 ring-line/70"
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${profile.name} completion`}
+        >
+          <div
+            className="h-full rounded-full bg-orange transition-[width] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+
+      {profile.targets.length > 0 && (
+        <ul className="mt-3 space-y-1 border-t border-line/70 pt-3">
+          {profile.targets.map((target) => (
+            <li key={target.activityType} className="flex items-center justify-between gap-2 text-[12px]">
+              <span className="text-graphite">{target.label}</span>
+              <span className="tabular-nums text-ink">
+                {target.completedCount} / {target.targetCount}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {profile.identityIds.length > 0 && (
+        <Link
+          href={`/workspace/${profile.identityIds[0]}`}
+          className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
+        >
+          Continue {profile.name}&apos;s work
+          <ChevronRight className="size-3" aria-hidden />
+        </Link>
+      )}
+    </V4Panel>
   )
 }
 

@@ -33,15 +33,18 @@ export function ProfileSwitcher({ role, compact, className }: ProfileSwitcherPro
         )}
       >
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-stone">Sending as</p>
+          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-stone">Working profile</p>
           {activeIdentity ? (
             <>
               <p className="truncate text-[13px] font-medium text-ink">{activeIdentity.identityName}</p>
-              {!compact && (
-                <p className="truncate text-[10px] text-stone">
-                  {[activeIdentity.title, activeIdentity.channel.toUpperCase()].filter(Boolean).join(' · ')}
-                </p>
-              )}
+              <p className="truncate text-[10px] text-stone">
+                {[
+                  activeIdentity.channel.toUpperCase(),
+                  identities.length > 1 ? `${identities.length} profiles assigned` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
             </>
           ) : (
             <p className="truncate text-[11px] text-graphite">No profile assigned</p>

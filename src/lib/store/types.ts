@@ -482,6 +482,8 @@ export interface ScoutStore {
   deleteProfile(id: string): Promise<void>
   /** Every rep's profiles, for the Manage Profiles screen. Read is open to any authenticated rep, matching RLS; writes are still admin-only. */
   listAllProfiles(): Promise<Profile[]>
+  /** Profiles by id, bounded to the caller's organization. Used to resolve assigned profiles without loading the whole org. */
+  listProfilesByIds(ids: string[]): Promise<Profile[]>
   /** Admin only: create/update a profile on behalf of any rep. */
   upsertProfileAdmin(input: {
     id?: string

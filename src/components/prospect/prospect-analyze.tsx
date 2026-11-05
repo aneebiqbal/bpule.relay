@@ -284,7 +284,7 @@ export function ProspectAnalyze() {
   // the selector falls back to the active workspace identity.
   useEffect(() => {
     let cancelled = false
-    fetch('/api/profiles')
+    fetch('/api/profiles?assigned=1&channel=linkedin')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled || !data || !Array.isArray(data.profiles)) return

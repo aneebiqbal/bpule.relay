@@ -8,7 +8,6 @@
  * so and links to the profile screen instead of showing a dead button.
  */
 import { useState, useCallback, useRef } from 'react'
-import Link from 'next/link'
 import { Check, Copy, RefreshCw, Sparkles, UserPlus } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from 'cn'
@@ -193,23 +192,16 @@ export function UpworkJobActions({ jobId, jobScore, profiles, matchedProofs, sav
               <UserPlus className="size-4 text-orange" aria-hidden />
             </span>
             <div>
-              <p className="text-[13px] font-medium text-ink">A sending profile is required</p>
+              <p className="text-[13px] font-medium text-ink">No Upwork profile is assigned to you</p>
               <p className="mt-0.5 text-[12px] text-graphite">
-                Proposals are written in a profile&apos;s voice and proof. Create one, then generate.
+                Proposals are written in a profile&apos;s voice and proof. Ask your manager to assign one.
               </p>
             </div>
           </div>
-          <Link
-            href="/profiles"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-solid px-3 py-2 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98]"
-          >
-            <UserPlus className="size-3.5" aria-hidden />
-            Create sending profile
-          </Link>
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-3 rounded-xl bg-bone px-4 py-3 ring-1 ring-line">
-          <label className="text-[12px] font-medium text-graphite" htmlFor="upwork-proposal-profile">Proposal as</label>
+          <label className="text-[12px] font-medium text-graphite" htmlFor="upwork-proposal-profile">Using profile</label>
           <select
             id="upwork-proposal-profile"
             value={selectedProfileId}
@@ -218,7 +210,7 @@ export function UpworkJobActions({ jobId, jobScore, profiles, matchedProofs, sav
           >
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.platform === 'linkedin' ? 'LinkedIn' : 'Upwork'} {p.label ? `· ${p.label}` : ''}
+                {p.platform === 'linkedin' ? 'LinkedIn' : 'Upwork'} · {p.displayName ?? p.fullName ?? p.label ?? 'Profile'}
               </option>
             ))}
           </select>
