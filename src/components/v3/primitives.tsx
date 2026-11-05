@@ -74,13 +74,12 @@ export function V3Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'm
   return (
     <span
       aria-hidden
+      data-initial={initials || '·'}
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-full bg-bone font-medium text-ink ring-1 ring-line',
+        'flex shrink-0 items-center justify-center rounded-full bg-bone font-medium text-ink ring-1 ring-line before:content-[attr(data-initial)]',
         size === 'sm' ? 'size-6 text-[9px]' : 'size-8 text-[11px]',
       )}
-    >
-      {initials || '·'}
-    </span>
+    />
   )
 }
 

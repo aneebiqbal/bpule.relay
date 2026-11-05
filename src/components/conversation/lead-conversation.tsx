@@ -301,7 +301,11 @@ export function LeadConversation({
           </header>
         )}
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        <div
+          className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4"
+          tabIndex={0}
+          aria-label="Message list"
+        >
           {view.thread.length === 0 && (
             <p className="py-10 text-center text-[12px] text-stone">
               No messages yet. Write the first one below, or paste a message {firstName} sent you.
