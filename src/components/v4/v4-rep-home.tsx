@@ -42,7 +42,6 @@ import {
 import { V3StageStrip } from '@/components/v3/primitives'
 import {
   V4Avatar,
-  V4Chip,
   V4Empty,
   V4PageHeader,
   V4Panel,
@@ -179,9 +178,6 @@ export function V4RepHome({
               <span className="text-stone"> · </span>
               <span className="font-medium text-ink">{targetRemaining}</span> remaining
             </p>
-            <span className="hidden lg:inline-flex">
-              <ProfileSwitcher role={role} compact />
-            </span>
           </>
         }
         actions={
@@ -208,15 +204,18 @@ export function V4RepHome({
 
       {data.profilesToday && data.profilesToday.length > 0 && (
         <section aria-label="Your profiles today">
-          <div className="mb-3 flex items-baseline justify-between gap-3">
-            <h2 className="text-mono-medium text-[11px] uppercase tracking-[0.18em] text-stone">
-              Your profiles today
-            </h2>
-            <span className="text-[12px] text-stone">
-              {data.profilesToday.length} {data.profilesToday.length === 1 ? 'profile' : 'profiles'} assigned
-            </span>
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-mono-medium text-[11px] uppercase tracking-[0.18em] text-stone">
+                Your profiles today
+              </h2>
+              <p className="mt-1 text-[12px] text-stone">
+                {data.profilesToday.length} {data.profilesToday.length === 1 ? 'profile' : 'profiles'} assigned
+              </p>
+            </div>
+            <ProfileSwitcher role={role} />
           </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {data.profilesToday.map((profile) => (
               <ProfileTodayCard key={profile.profileId} profile={profile} />
             ))}
@@ -499,11 +498,40 @@ const PROFILE_STATUS_LABEL: Record<string, string> = {
 }
 
 function ProfileStatusBadge({ status }: { status: ProfileToday['status'] }) {
-  if (!status) return <span className="text-[11px] text-stone">—</span>
+  if (!status) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-bone px-2.5 py-1 text-[10px] font-medium text-stone ring-1 ring-line">
+        <span className="size-1.5 rounded-full bg-stone/50" aria-hidden />
+        No target
+      </span>
+    )
+  }
+  const tone = PROFILE_STATUS_TONE[status] ?? 'neutral'
+  const label = PROFILE_STATUS_LABEL[status] ?? status
   return (
-    <V4Chip tone={PROFILE_STATUS_TONE[status] ?? 'neutral'}>
-      {PROFILE_STATUS_LABEL[status] ?? status}
-    </V4Chip>
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium ring-1',
+        tone === 'success' && 'bg-status-success/10 text-status-success ring-status-success/20',
+        tone === 'info' && 'bg-cobalt/10 text-cobalt ring-cobalt/20',
+        tone === 'warning' && 'bg-status-warning/10 text-[#7d5410] ring-status-warning/20',
+        tone === 'danger' && 'bg-status-danger/10 text-[#8f2b1e] ring-status-danger/20',
+        tone === 'neutral' && 'bg-bone text-graphite ring-line',
+      )}
+    >
+      <span
+        className={cn(
+          'size-1.5 rounded-full',
+          tone === 'success' && 'bg-status-success',
+          tone === 'info' && 'bg-cobalt',
+          tone === 'warning' && 'bg-status-warning',
+          tone === 'danger' && 'bg-status-danger',
+          tone === 'neutral' && 'bg-stone/50',
+        )}
+        aria-hidden
+      />
+      {label}
+    </span>
   )
 }
 
@@ -511,30 +539,52 @@ function ProfileTodayCard({ profile }: { profile: ProfileToday }) {
   const pct = profile.targetCount > 0
     ? Math.min(100, Math.round((profile.completedCount / profile.targetCount) * 100))
     : 0
+  const hasTarget = profile.targetCount > 0
 
   return (
-    <V4Panel>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-[14px] font-medium text-ink">{profile.name}</p>
-          <p className="mt-0.5 text-[12px] text-graphite">
-            {profile.channels.length > 0 ? profile.channels.join(' · ') : 'No channel'}
+    <V4Panel className="h-full" innerClassName="flex h-full flex-col">
+      <div className="flex items-start gap-3">
+        <V4Avatar name={profile.name} size="md" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-medium tracking-[-0.01em] text-ink">
+            {profile.name}
           </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            {profile.channels.map((channel) => (
+              <span
+                key={channel}
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ring-1',
+                  channel === 'linkedin' && 'bg-[#0a66c2]/10 text-[#0a66c2] ring-[#0a66c2]/20',
+                  channel === 'upwork' && 'bg-[#14a800]/10 text-[#14a800] ring-[#14a800]/20',
+                  channel !== 'linkedin' && channel !== 'upwork' && 'bg-bone text-graphite ring-line',
+                )}
+              >
+                {channel}
+              </span>
+            ))}
+          </div>
         </div>
         <ProfileStatusBadge status={profile.status} />
       </div>
 
-      <div className="mt-4">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-[12px] text-graphite">
-            <span className="font-medium text-ink">{profile.completedCount}</span>
-            {' / '}
-            {profile.targetCount} complete
-          </span>
-          {profile.status && <span className="text-[11px] tabular-nums text-stone">{pct}%</span>}
-        </div>
+      <div className="mt-5">
+        {hasTarget && (
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-[12px] text-graphite">
+              <span className="text-[20px] font-semibold leading-none tabular-nums text-ink">
+                {profile.completedCount}
+              </span>
+              <span className="text-stone"> / {profile.targetCount}</span>
+            </p>
+            <span className="text-[12px] font-medium tabular-nums text-graphite">{pct}%</span>
+          </div>
+        )}
         <div
-          className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-bone ring-1 ring-line/70"
+          className={cn(
+            'mt-2 h-2 w-full overflow-hidden rounded-full bg-bone ring-1 ring-line/70',
+            !hasTarget && 'opacity-40',
+          )}
           role="progressbar"
           aria-valuenow={pct}
           aria-valuemin={0}
@@ -548,27 +598,36 @@ function ProfileTodayCard({ profile }: { profile: ProfileToday }) {
         </div>
       </div>
 
-      {profile.targets.length > 0 && (
-        <ul className="mt-3 space-y-1 border-t border-line/70 pt-3">
+      {profile.targets.length > 0 ? (
+        <ul className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-line/70 pt-4">
           {profile.targets.map((target) => (
-            <li key={target.activityType} className="flex items-center justify-between gap-2 text-[12px]">
-              <span className="text-graphite">{target.label}</span>
-              <span className="tabular-nums text-ink">
-                {target.completedCount} / {target.targetCount}
+            <li key={target.activityType} className="flex items-baseline justify-between gap-2">
+              <span className="text-[11px] text-graphite">{target.label}</span>
+              <span className="text-[12px] tabular-nums text-ink">
+                {target.completedCount}
+                <span className="text-stone"> / {target.targetCount}</span>
               </span>
             </li>
           ))}
         </ul>
+      ) : (
+        <p className="mt-4 border-t border-line/70 pt-4 text-[11px] text-stone">
+          No daily target set for this profile.
+        </p>
       )}
 
       {profile.identityIds.length > 0 && (
-        <Link
-          href={`/workspace/${profile.identityIds[0]}`}
-          className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
-        >
-          Continue {profile.name}&apos;s work
-          <ChevronRight className="size-3" aria-hidden />
-        </Link>
+        <div className="mt-auto pt-5">
+          <Link
+            href={`/workspace/${profile.identityIds[0]}`}
+            className="group flex w-full items-center justify-between gap-2 rounded-xl border border-line bg-bone px-3 py-2.5 text-[12px] font-medium text-ink transition-colors hover:border-ink/20 hover:bg-bone-raised"
+          >
+            <span className="truncate">Continue {profile.name}&apos;s work</span>
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-solid text-on-solid transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0.5">
+              <ChevronRight className="size-3.5" aria-hidden />
+            </span>
+          </Link>
+        </div>
       )}
     </V4Panel>
   )
