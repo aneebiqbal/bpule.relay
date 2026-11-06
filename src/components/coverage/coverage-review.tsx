@@ -159,6 +159,45 @@ export function CoverageReviewView({
             )}
           </V4Panel>
 
+          <V4Panel>
+            <V4PanelHeader
+              eyebrow="Readiness"
+              title="Access confirmed"
+              hint="Primaries and backups that can work today"
+            />
+            {plan.profiles.every((p) => p.primaryReady) &&
+            plan.profiles.every((p) => p.backups.every((b) => b.ready)) ? (
+              <p className="mt-4 text-[12px] text-status-success">Every primary and backup has confirmed access.</p>
+            ) : (
+              <ul className="mt-4 space-y-2">
+                {plan.profiles
+                  .filter((p) => !p.primaryReady || p.backups.some((b) => !b.ready))
+                  .map((p) => (
+                    <li key={p.profileId} className="text-[12px]">
+                      <span className="font-medium text-ink">{p.name}</span>
+                      <span className="ml-2 text-[10px] uppercase tracking-[0.12em] text-stone">
+                        {p.channels.join(' + ')}
+                      </span>
+                      <span className="block text-graphite">
+                        Primary {p.primaryRepName ?? '—'}:{' '}
+                        <span className={p.primaryReady ? 'text-status-success' : 'text-status-warning'}>
+                          {p.primaryReady ? 'confirmed' : 'NOT CONFIRMED'}
+                        </span>
+                        {p.backups.length > 0 && (
+                          <>
+                            {' · '}Backups{' '}
+                            <span className={p.backups.every((b) => b.ready) ? 'text-status-success' : 'text-status-warning'}>
+                              {p.backups.filter((b) => b.ready).length}/{p.backups.length} confirmed
+                            </span>
+                          </>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </V4Panel>
+
           <V4Panel className="mt-4">
             <V4PanelHeader eyebrow="Today" title="Profile coverage" />
             <ul className="mt-3 space-y-1.5">

@@ -164,6 +164,8 @@ export interface CoverageProfileResult {
   ineligibleReason: string | null
   /** Active coverage ends today — surfaced before it expires. */
   coverageExpiring: boolean
+  /** The primary rep has confirmed operational readiness for this profile. */
+  primaryReady: boolean
   work: ProfileWorkInput
 }
 
@@ -396,6 +398,7 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
     const coverageExpiring = Boolean(
       active?.effectiveUntil && !active.expired && active.effectiveUntil === input.businessDate,
     )
+    const primaryReady = primary ? readyPairs.has(`${profile.profileId}:${primary.repId}`) : false
 
     if (!primary) {
       status = 'UNCOVERED'
@@ -513,6 +516,7 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
       recommendedReady,
       ineligibleReason,
       coverageExpiring,
+      primaryReady,
       work,
     })
   }

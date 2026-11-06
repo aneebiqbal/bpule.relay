@@ -24,7 +24,6 @@ import { UserMenu } from '@/components/shell/user-menu'
 import { useCommandPalette } from '@/components/command-palette'
 import {
   PRIMARY_MAIN_IDS,
-  isRecordDetailPathname,
   mobileNavItems,
   moreSheetSections,
   resolvePrimaryActiveId,
@@ -53,8 +52,25 @@ export interface V4AppShellProps {
 
 const COLLAPSE_KEY = 'relay.v4.collapsed'
 
-/** Domains whose pages already own rich in-page navigation (counts, filters). */
-const PAGE_OWNED_TABS: RelayNavDomain[] = ['inbox', 'work', 'team', 'content', 'settings']
+/**
+ * Routes whose pages render their own sub-navigation. The shell's section tabs
+ * are hidden on exactly these, so the two never compete.
+ *
+ * This is deliberately a path list, not a domain list: most Work / Team /
+ * Content / Settings pages have no in-page tabs, and hiding the canonical
+ * domain sub-nav for the whole domain left them with no sub-navigation at all.
+ */
+const PAGE_OWNED_SUB_NAV: RegExp[] = [
+  /^\/chats(\/|$)/,
+  /^\/notifications(\/|$)/,
+  /^\/team\/targets(\/|$)/,
+  /^\/content\/ideas(\/|$)/,
+  /^\/accounts\/[^/]+/, // company key is a name, not an id
+  // Record details own tabs only when the id is a real record id. List pages
+  // under the same domain (/team/people, /leads/import) must keep the rail.
+  /^\/leads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/,
+  /^\/team\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/,
+]
 
 function domainBadge(id: RelayNavDomain, counts?: SidebarCounts) {
   if (id === 'inbox') return sidebarBadge(counts?.inboxNeedsReply)
@@ -102,9 +118,8 @@ export function V4AppShell({
     : null
   const showSectionTabs = Boolean(
     activeDomain &&
-      !PAGE_OWNED_TABS.includes(activeDomain) &&
       secondary.length > 0 &&
-      !isRecordDetailPathname(pathname),
+      !PAGE_OWNED_SUB_NAV.some((pattern) => pattern.test(pathname)),
   )
 
   useEffect(() => {

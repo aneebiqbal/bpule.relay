@@ -46,6 +46,7 @@ export function AdminCoveragePanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [showAllProfiles, setShowAllProfiles] = useState(false)
 
   async function approve(items: Array<{ profileId: string; kind: 'COVER' | 'RESTORE_PRIMARY' }>) {
     setBusy(true)
@@ -119,6 +120,26 @@ export function AdminCoveragePanel({
         <StatusFact label="Covered" value={summary.covered} tone="text-status-success" />
         <StatusFact label="Backup active" value={summary.backupActive} tone="text-cobalt" />
         <StatusFact label="At risk" value={summary.atRisk + summary.uncovered} tone="text-[#8f2b1e]" />
+      </div>
+
+      {/* Readiness — the gate AUTO_COVER will require, visible now. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-bone px-3 py-2.5 ring-1 ring-line/70">
+        <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Readiness</span>
+        <span className="text-[12px] text-graphite">
+          <span className="font-medium tabular-nums text-ink">{plan.profiles.filter((p) => p.primaryReady).length}/{plan.profiles.length}</span> primaries confirmed
+        </span>
+        <span className="text-[12px] text-graphite">
+          <span className="font-medium tabular-nums text-ink">
+            {plan.profiles.reduce((n, p) => n + p.backups.filter((b) => b.ready).length, 0)}
+            /
+            {plan.profiles.reduce((n, p) => n + p.backups.length, 0)}
+          </span> backups confirmed
+        </span>
+        {plan.profiles.some((p) => !p.primaryReady) && (
+          <Link href="/team/coverage" className="text-[12px] font-medium text-status-warning hover:underline">
+            {plan.profiles.filter((p) => !p.primaryReady).length} profile{plan.profiles.filter((p) => !p.primaryReady).length === 1 ? '' : 's'} not ready
+          </Link>
+        )}
       </div>
 
       <div className="mt-5 border-t border-line/70 pt-4">
@@ -227,26 +248,45 @@ export function AdminCoveragePanel({
         )}
       </div>
 
-      {/* Full coverage status, visible immediately. */}
+      {/* Full coverage status, collapsed by default — the daily plan is the
+          management surface, the table is the drill-down. */}
       <div className="mt-5 border-t border-line/70 pt-4">
-        <h3 className="text-[13px] font-medium text-ink">Profile coverage</h3>
-        <ul className="mt-2 space-y-1.5">
-          {plan.profiles.map((profile) => (
-            <li key={profile.profileId} className="flex flex-col gap-1 text-[12px] sm:flex-row sm:items-center sm:gap-x-3">
-              <span className="min-w-0 flex-1 truncate text-ink">{profile.name}</span>
-              <span className="text-graphite">
-                {profile.primaryRepName ?? 'No primary'}
-                {profile.activeCoveringRepName ? ` · covering ${profile.activeCoveringRepName}` : ''}
-              </span>
-              {profile.coverageExpiring && (
-                <V4Chip tone="warning" className="w-fit sm:shrink-0">Ends today</V4Chip>
-              )}
-              <V4Chip tone={STATUS_TONE[profile.status] ?? 'neutral'} className="w-fit sm:shrink-0">
-                {STATUS_LABEL[profile.status] ?? profile.status}
-              </V4Chip>
-            </li>
-          ))}
-        </ul>
+        <button
+          type="button"
+          onClick={() => setShowAllProfiles((v) => !v)}
+          aria-expanded={showAllProfiles}
+          className="flex w-full flex-wrap items-center justify-between gap-2 text-left"
+        >
+          <h3 className="text-[13px] font-medium text-ink">
+            Profile coverage
+            <span className="ml-2 text-[12px] font-normal text-stone">
+              {plan.profiles.length} profiles
+            </span>
+          </h3>
+          <span className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
+            {showAllProfiles ? 'Hide' : 'Show all'}
+            <ChevronRight className={cn('size-3.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]', showAllProfiles && 'rotate-90')} aria-hidden />
+          </span>
+        </button>
+        {showAllProfiles && (
+          <ul className="mt-2 space-y-1.5">
+            {plan.profiles.map((profile) => (
+              <li key={profile.profileId} className="flex flex-col gap-1 text-[12px] sm:flex-row sm:items-center sm:gap-x-3">
+                <span className="min-w-0 flex-1 truncate text-ink">{profile.name}</span>
+                <span className="text-graphite">
+                  {profile.primaryRepName ?? 'No primary'}
+                  {profile.activeCoveringRepName ? ` · covering ${profile.activeCoveringRepName}` : ''}
+                </span>
+                {profile.coverageExpiring && (
+                  <V4Chip tone="warning" className="w-fit sm:shrink-0">Ends today</V4Chip>
+                )}
+                <V4Chip tone={STATUS_TONE[profile.status] ?? 'neutral'} className="w-fit sm:shrink-0">
+                  {STATUS_LABEL[profile.status] ?? profile.status}
+                </V4Chip>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </V4Panel>
   )
