@@ -1,4 +1,5 @@
 import { createServerSupabase } from '@/lib/supabase/server'
+import type { DbClient } from '@/lib/db/types'
 import type { RevenueIdentityChannel } from '@/lib/domain/types'
 import { isMissingRelation } from '@/lib/operations/db-errors'
 import { currentInstant, isOrgWorkingDay, orgDate } from '@/lib/org-clock'
@@ -65,9 +66,9 @@ interface PolicyRow {
 
 export async function loadCoverageFacts(
   orgId: string,
-  options: { date?: string } = {},
+  options: { date?: string; client?: DbClient } = {},
 ): Promise<CoverageFacts> {
-  const supabase = await createServerSupabase()
+  const supabase = options.client ?? (await createServerSupabase())
   const policy = await loadOperatingPolicy(orgId)
   const now = currentInstant()
   const today = orgDate(now, policy.timezone)
@@ -129,12 +130,21 @@ export async function loadCoverageFacts(
   const dayByRep = new Map(
     ((dayRes.data ?? []) as Array<{ rep_id: string; check_in_at: string | null; closed_at: string | null }>).map((row) => [row.rep_id, row]),
   )
+  // Availability authority: a strong explicit state (leave / offline /
+  // unavailable) overrides the clock; otherwise the canonical rep_day state
+  // wins, and an explicit AVAILABLE only applies when the rep has not checked
+  // in. Admin coverage and the rep's own check-in/out therefore read the same
+  // state instead of disagreeing.
+  const STRONG_EXPLICIT: ReadonlySet<AvailabilityState> = new Set(['ON_LEAVE', 'OFFLINE', 'UNAVAILABLE'])
   const availability: RepAvailabilityInput[] = reps.map((rep) => {
     const row = dayByRep.get(rep.repId)
-    let derived: AvailabilityState = fallbackAvailability(isWorkingDay)
-    if (row?.closed_at) derived = 'CHECKED_OUT'
-    else if (row?.check_in_at) derived = 'WORKING'
-    return { repId: rep.repId, state: explicit.get(rep.repId) ?? derived }
+    const explicitState = explicit.get(rep.repId) ?? null
+    if (explicitState && STRONG_EXPLICIT.has(explicitState)) {
+      return { repId: rep.repId, state: explicitState }
+    }
+    if (row?.closed_at) return { repId: rep.repId, state: 'CHECKED_OUT' }
+    if (row?.check_in_at) return { repId: rep.repId, state: 'WORKING' }
+    return { repId: rep.repId, state: explicitState ?? fallbackAvailability(isWorkingDay) }
   })
   // Eligibility: an assignment grants the channels of its active identity.
   const channelsByProfileRep = new Map<string, Set<RevenueIdentityChannel>>()
@@ -246,10 +256,12 @@ export async function loadCoverageFacts(
 
   const workloads: RepWorkloadInput[] = reps.map((rep) => {
     const tasks = tasksByRep.get(rep.repId)
+    const owned = coverage.filter((row) => row.repId === rep.repId && row.role === 'PRIMARY').length
     return {
       repId: rep.repId,
       name: rep.name,
       assignedProfileCount: assignedProfilesByRep.get(rep.repId)?.size ?? 0,
+      primaryProfileCount: owned,
       openCount: openByRep.get(rep.repId) ?? 0,
       replies: repliesByRep.get(rep.repId) ?? 0,
       followUps: followUpsByRep.get(rep.repId) ?? 0,
@@ -293,7 +305,7 @@ export async function loadCoverageFacts(
 
 export async function loadCoveragePlan(
   orgId: string,
-  options: { date?: string } = {},
+  options: { date?: string; client?: DbClient } = {},
   facts?: CoverageFacts,
 ): Promise<CoveragePlan> {
   // Callers that already loaded facts (Admin Home, the plan API) pass them in —
@@ -329,7 +341,7 @@ export interface CoverageStatusView {
 /** The Admin Home operational block: team status + profile coverage + exceptions. */
 export async function loadCoverageStatus(
   orgId: string,
-  options: { date?: string } = {},
+  options: { date?: string; client?: DbClient } = {},
 ): Promise<CoverageStatusView> {
   const facts = await loadCoverageFacts(orgId, options)
   const plan = await loadCoveragePlan(orgId, options, facts)

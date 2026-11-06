@@ -42,6 +42,19 @@ export const AVAILABLE_FOR_COVERAGE: ReadonlySet<AvailabilityState> = new Set([
 
 export const DEFAULT_MAX_PROFILES_PER_REP = 3
 
+/**
+ * Hard contract for the future AUTO_COVER mode: a backup may only be activated
+ * automatically when they have confirmed operational readiness. The shipped
+ * APPROVAL_REQUIRED mode still lets an admin decide with the gap visible, but
+ * AUTO_COVER must refuse an unready backup.
+ */
+export const AUTO_COVER_REQUIRES_READINESS = true
+
+/** The single gate AUTO_COVER mode will use. Never bypass it. */
+export function isAutoCoverEligible(backup: Pick<BackupCandidate, 'eligible' | 'ready'>): boolean {
+  return AUTO_COVER_REQUIRES_READINESS ? backup.eligible && backup.ready : backup.eligible
+}
+
 export interface CoverageProfileInput {
   profileId: string
   name: string
@@ -73,6 +86,9 @@ export interface RepWorkloadInput {
   repId: string
   name: string
   assignedProfileCount: number
+  /** Profiles this rep is PRIMARY owner of — the load that consumes capacity.
+   *  Being assigned as a backup on a profile does not consume it. */
+  primaryProfileCount: number
   openCount: number
   replies: number
   followUps: number
@@ -235,11 +251,11 @@ export function evaluateBackupEligibility(input: {
     }
   }
 
-  const load = input.workload.assignedProfileCount + input.workload.activeCoverageCount
+  const load = input.workload.primaryProfileCount + input.workload.activeCoverageCount
   if (load >= input.maxProfilesPerRep) {
     return {
       eligible: false,
-      reasons: [`At capacity — ${load} of ${input.maxProfilesPerRep} profiles`],
+      reasons: [`At capacity — ${load} of ${input.maxProfilesPerRep} owned/covered profiles`],
       missingChannels,
     }
   }
@@ -247,7 +263,7 @@ export function evaluateBackupEligibility(input: {
   reasons.push('Available')
   reasons.push(`${input.profile.channels.map(channelLabel).join(' + ')} access confirmed`)
   reasons.push(
-    `${input.workload.assignedProfileCount} active ${input.workload.assignedProfileCount === 1 ? 'profile' : 'profiles'}`,
+    `${input.workload.assignedProfileCount} assigned ${input.workload.assignedProfileCount === 1 ? 'profile' : 'profiles'}`,
   )
   const remaining = Math.max(0, input.workload.openCount)
   reasons.push(`${remaining} remaining ${remaining === 1 ? 'action' : 'actions'}`)
@@ -314,6 +330,7 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
         repId: backup.repId,
         name: backup.repId,
         assignedProfileCount: 0,
+        primaryProfileCount: 0,
         openCount: 0,
         followUps: 0,
         replies: 0,

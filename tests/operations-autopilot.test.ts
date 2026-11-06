@@ -14,7 +14,9 @@ import {
   evaluateDailyCoverage,
   fallbackAvailability,
   filterCoveragePlanToReps,
+  isAutoCoverEligible,
   labelForAvailability,
+  AUTO_COVER_REQUIRES_READINESS,
   type CoverageEngineInput,
   type CoverageMode,
   type RepWorkloadInput,
@@ -46,6 +48,7 @@ function workload(over: Partial<RepWorkloadInput> = {}): RepWorkloadInput {
     repId: DAWOOD,
     name: 'Dawood',
     assignedProfileCount: 1,
+    primaryProfileCount: 1,
     openCount: 5,
     replies: 2,
     followUps: 1,
@@ -272,6 +275,37 @@ describe('DAILY_COVERAGE_OVERLOAD_PROTECTION', () => {
     expect(plan.profiles[0].status).toBe('UNCOVERED')
     expect(plan.profiles[0].ineligibleReason).toBe('NO_SAFE_COVERAGE')
     expect(plan.requiresApproval).toEqual([])
+  })
+
+  it('counts owned + covered profiles, not every assignment, toward capacity', () => {
+    // Madiha is assigned to 5 profiles but owns none: she is still eligible.
+    const plan = planFor(
+      baseInput({
+        workloads: [
+          workload({ repId: MADIHA, name: 'Madiha', assignedProfileCount: 5, primaryProfileCount: 0, openCount: 8 }),
+          workload({ repId: AHMAD, name: 'Ahmad', assignedProfileCount: 2, primaryProfileCount: 2 }),
+        ],
+        availability: [
+          { repId: DAWOOD, state: 'ON_LEAVE' },
+          { repId: MADIHA, state: 'WORKING' },
+          { repId: AHMAD, state: 'WORKING' },
+        ],
+      }),
+    )
+    expect(plan.profiles[0].recommendedRepId).toBe(MADIHA)
+    expect(plan.profiles[0].backups.find((b) => b.repId === MADIHA)!.eligible).toBe(true)
+  })
+})
+
+describe('AUTO_COVER_REQUIRES_READINESS', () => {
+  it('is a hard contract', () => {
+    expect(AUTO_COVER_REQUIRES_READINESS).toBe(true)
+  })
+
+  it('never auto-covers an unready backup, even when otherwise eligible', () => {
+    expect(isAutoCoverEligible({ eligible: true, ready: true })).toBe(true)
+    expect(isAutoCoverEligible({ eligible: true, ready: false })).toBe(false)
+    expect(isAutoCoverEligible({ eligible: false, ready: true })).toBe(false)
   })
 })
 
