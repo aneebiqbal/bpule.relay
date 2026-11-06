@@ -1,6 +1,5 @@
 import type { TeamLivePayload } from '@/lib/admin/team-live'
 import { createServerSupabase } from '@/lib/supabase/server'
-import type { DbClient } from '@/lib/db/types'
 import { loadTeamLive } from '@/lib/admin/load-team-live'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { loadCanonicalProfileAssignments } from '@/lib/profiles/canonical'
