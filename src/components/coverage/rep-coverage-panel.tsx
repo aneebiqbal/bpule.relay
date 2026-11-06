@@ -14,6 +14,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import { cn } from 'cn'
+import { Dialog, DialogActions } from '@/components/ui/dialog'
 import type { RepCoverageView } from '@/lib/coverage/load'
 import type { CoverageProfileResult } from '@/lib/coverage/engine'
 import {
@@ -65,6 +66,8 @@ export function RepCoveragePanel({
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [until, setUntil] = useState('')
+  const [pendingProfile, setPendingProfile] = useState<CoverageProfileResult | null>(null)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
 
   async function call(key: string, init: { url: string; method: string; body?: unknown }) {
     setBusy(key)
@@ -83,6 +86,31 @@ export function RepCoveragePanel({
       router.refresh()
     } catch {
       setError('Network error. Please try again.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /** Confirm device access from the pop-up — never a credential. */
+  async function confirmAccess() {
+    if (!pendingProfile) return
+    setBusy(`ready:${pendingProfile.profileId}`)
+    setConfirmError(null)
+    try {
+      const res = await fetch('/api/rep/coverage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profileId: pendingProfile.profileId, note: 'I have access on this device' }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setConfirmError(body.error ?? 'Could not confirm access. Try again.')
+        return
+      }
+      setPendingProfile(null)
+      router.refresh()
+    } catch {
+      setConfirmError('Network error. Try again.')
     } finally {
       setBusy(null)
     }
@@ -238,7 +266,7 @@ export function RepCoveragePanel({
               kind="own"
               ready={readinessByProfile.get(profile.profileId) ?? false}
               busy={busy !== null}
-              onConfirm={() => call(`ready:${profile.profileId}`, { url: '/api/rep/coverage', method: 'POST', body: { profileId: profile.profileId, note: 'I have access on this device' } })}
+              onConfirm={() => setPendingProfile(profile)}
             />
           ))}
           {covering.map((profile) => (
@@ -248,11 +276,48 @@ export function RepCoveragePanel({
               kind="covering"
               ready={readinessByProfile.get(profile.profileId) ?? false}
               busy={busy !== null}
-              onConfirm={() => call(`ready:${profile.profileId}`, { url: '/api/rep/coverage', method: 'POST', body: { profileId: profile.profileId, note: 'I have access on this device' } })}
+              onConfirm={() => setPendingProfile(profile)}
             />
           ))}
         </div>
       )}
+
+      <Dialog
+        open={pendingProfile !== null}
+        onClose={() => setPendingProfile(null)}
+        title="Profile access"
+        description={
+          pendingProfile
+            ? `Do you have ${pendingProfile.name} logged in on this device? Confirming lets you send and reply from it today.`
+            : undefined
+        }
+      >
+        {confirmError && (
+          <p role="alert" className="mb-3 rounded-lg border border-status-danger/30 bg-status-danger/5 px-3 py-2 text-[12px] text-graphite">
+            {confirmError}
+          </p>
+        )}
+        <div className="rounded-xl bg-bone px-4 py-3 text-[12px] text-graphite ring-1 ring-line/70">
+          Relay never stores passwords or session cookies — this is an operational confirmation only.
+        </div>
+        <DialogActions className="mt-5">
+          <button
+            type="button"
+            onClick={() => setPendingProfile(null)}
+            className="rounded-lg border border-line bg-bone-raised px-4 py-2 text-[13px] font-medium text-graphite transition-colors hover:text-ink"
+          >
+            Not yet
+          </button>
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => void confirmAccess()}
+            className="rounded-lg bg-solid px-4 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:opacity-60"
+          >
+            {busy !== null ? 'Confirming…' : 'Yes, I have access'}
+          </button>
+        </DialogActions>
+      </Dialog>
     </V4Panel>
   )
 }
@@ -355,7 +420,7 @@ function ResponsibilityCard({
               onClick={onConfirm}
               className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:opacity-60"
             >
-              Confirm ready
+              Confirm access
             </button>
           )}
           <Link
