@@ -94,7 +94,7 @@ lead row is absent.
 `/api/performance/activity` and `/api/admin/performance/activity` no longer embed
 every event in the range. `daily[].events` is populated only when `?date=YYYY-MM-DD`
 is supplied, which is what the drilldown needs. Consumers that want a day's events
-must ask for that day. See `docs/RELAY_REP_HOME_V2.md` for the Rep Home client.
+must ask for that day. See `docs/archive/RELAY_REP_HOME_V2.md` for the Rep Home client.
 
 ---
 

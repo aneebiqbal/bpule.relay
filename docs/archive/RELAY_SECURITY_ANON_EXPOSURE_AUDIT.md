@@ -129,7 +129,7 @@ every role's journey passing.
    - Decide whether any notification is required.
    - Sign off §3.
 2. **Owner:** approve applying `20261101135000` and `20261101160000` to production, after a run on a
-   non-production copy with Supabase auth (runbook §12 in `docs/RELAY_OPERATIONS_WORKSPACE_V2.md`).
+   non-production copy with Supabase auth (runbook §12 in `docs/archive/RELAY_OPERATIONS_WORKSPACE_V2.md`).
 3. **Engineering:** fix the audit-log column drift (§3) and decide on leads-level RLS scoping.
 4. **Rotate the anon key?** It is public by design, so rotating it does not undo past access. The
    fix is RLS, not the key.

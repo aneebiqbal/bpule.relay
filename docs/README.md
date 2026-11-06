@@ -16,7 +16,6 @@ state, kept for context) · **ARCHIVE** (`docs/archive/`).
 
 | Doc | Class | What it is |
 |---|---|---|
-| `RELAY_CURRENT_PRODUCT_STATE.md` | **CURRENT** | Reconciled product map and live-certification status |
 | `RELAY_FEATURE_VISIBILITY_MATRIX.md` | **CURRENT** | Feature × role × entry-point matrix |
 | `RELAY_COMPLETE_ROUTE_AND_ROLE_MAP.md` | **CURRENT** | Full route + role inventory with per-route gating |
 | `RELAY_NAVIGATION_V3.md` | **CURRENT** | Role-aware navigation contract (V4 shell) |
@@ -36,13 +35,14 @@ state, kept for context) · **ARCHIVE** (`docs/archive/`).
 
 ### Per-surface contracts
 
-`RELAY_SALES_WORKSPACE_V2.md` · `RELAY_TASK_SYSTEM_V2.md` ·
-`RELAY_REP_HOME_V2.md` · `RELAY_OPERATIONS_WORKSPACE_V2.md` ·
 `RELAY_V3_INBOX.md` ·
 `RELAY_V3_TEAM_OPERATIONS.md` · `RELAY_V3_CONTENT_STUDIO.md`
 
-Superseded per-surface contracts (`RELAY_NAVIGATION_V2.md`,
-`RELAY_ADMIN_COMMAND_CENTER_V2.md`, `RELAY_MANAGER_HOME_V2.md`) live in
+Superseded per-surface contracts and point-in-time status maps
+(`RELAY_NAVIGATION_V2.md`, `RELAY_ADMIN_COMMAND_CENTER_V2.md`,
+`RELAY_MANAGER_HOME_V2.md`, `RELAY_SALES_WORKSPACE_V2.md`,
+`RELAY_TASK_SYSTEM_V2.md`, `RELAY_REP_HOME_V2.md`,
+`RELAY_OPERATIONS_WORKSPACE_V2.md`, `RELAY_CURRENT_PRODUCT_STATE.md`) live in
 `docs/archive/` — the V2/V3 shell they describe has been deleted.
 
 ---

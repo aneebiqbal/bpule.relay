@@ -5,7 +5,7 @@
 > **Sources:** `src/app/(app)/**`, `src/lib/{team,tasks,rep-day,admin,leads,conversation}/**`,
 > `src/lib/auth/organization.ts`, `src/lib/navigation/relay-shell-nav.ts`,
 > `supabase/migrations/**`, `docs/archive/RELAY_INFORMATION_ARCHITECTURE_V2.md`,
-> `docs/RELAY_TASK_SYSTEM_V2.md`, `docs/archive/RELAY_NEON_MIGRATION.md`.
+> `docs/archive/RELAY_TASK_SYSTEM_V2.md`, `docs/archive/RELAY_NEON_MIGRATION.md`.
 
 Phase 8 turns Relay's separate team, task, lead and account pages into one
 operations workspace. This doc records what exists, what each Phase 8 surface

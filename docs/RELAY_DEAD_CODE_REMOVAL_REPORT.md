@@ -88,7 +88,7 @@ Dead exports inside live files (not file deletions):
 
 These were flagged as zero-importer but retained at audit time. The three
 type-carrier rows are now **resolved**: their types were harvested into
-`src/lib/` and the dead UI deleted (see `RELAY_CURRENT_PRODUCT_STATE.md`).
+`src/lib/` and the dead UI deleted (see `docs/archive/RELAY_CURRENT_PRODUCT_STATE.md`).
 
 | FILE | REASON |
 |---|---|

@@ -29,4 +29,4 @@ Legend — **LIVE:** what production is known to have. **LOCAL:** verified on th
 
 1. A feature whose capability is `false` renders **"Available after database activation"** and its API returns `503 { available: false }`. It never returns a fake success.
 2. Capabilities come from `RELAY_DB_CAPABILITIES` (`all` / `none` / comma list) or a process-cached probe (10 min). Constraint-level capabilities (`meetingEvents`) are env-only.
-3. Activation flips the env **after** the RLS harness passes on a non-production copy (runbook: `docs/RELAY_OPERATIONS_WORKSPACE_V2.md` §11).
+3. Activation flips the env **after** the RLS harness passes on a non-production copy (runbook: `docs/archive/RELAY_OPERATIONS_WORKSPACE_V2.md` §11).

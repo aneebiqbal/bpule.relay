@@ -5,7 +5,7 @@
 
 ```text
 PRIMARY SIDEBAR   where am I in the product?      (domains, collapsible)
-SECONDARY SIDEBAR what can I do in this domain?   (contextual, one level)
+SECTION TABS      what can I do in this domain?   (contextual, one level)
 HEADER            search, create, notifications, account
 PAGE              actual work
 ```
@@ -36,9 +36,9 @@ sit below a hairline divider.
 Badges: Inbox (needs reply) and Work (actionable tasks) only. `null`/`0` render
 nothing; `100+` renders `99+`.
 
-## 2. Secondary rail
+## 2. Section tabs
 
-One contextual rail, rendered above the page. It is hidden only where the page
+One contextual section-tab strip, rendered above the page. It is hidden only where the page
 renders its own canonical sub-navigation (`pageOwnsSubNav` in the nav config):
 `/chats`, `/notifications`, `/team/targets`, `/content/ideas`, lead detail,
 rep 360 and company detail. Every other page keeps the rail — including record
@@ -75,7 +75,7 @@ Studio `/content` · Ideas `/content/ideas` · Growth `/content/growth` (Admin+)
 
 ### Admin
 **Organization** — Command Center `/admin/command` · People & Roles `/admin/people` · Targets `/admin/targets`
-**Quality** — Scoring QA `/admin/scoring-qa` · QA & Trust `/admin/qa`
+**Quality** — Scoring QA `/admin/scoring-qa` · QA & Trust `/admin/qa` · Fact Guardrails `/facts`
 **System** — Dataset `/admin/dataset` · Training Data `/admin/training-data` · AI Usage `/admin/ai-usage` · Revenue Intelligence `/admin/revenue-intelligence`
 
 Admin configures targets; Team reviews target progress. Profile and identity
