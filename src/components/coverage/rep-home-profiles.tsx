@@ -15,7 +15,39 @@ import { Dialog, DialogActions } from '@/components/ui/dialog'
 import { V4Chip, V4Empty, V4Panel, V4PanelHeader } from '@/components/v4/primitives'
 import { ProfileSwitcher } from '@/components/shell/profile-switcher'
 import type { RepCoverageView } from '@/lib/coverage/load'
+import type { CoverageProfileResult } from '@/lib/coverage/engine'
 import type { ProfileToday } from '@/lib/rep-home/profile-completion'
+
+/**
+ * Fallback row when the coverage read is unavailable: the rep must still see
+ * the profiles they were assigned, with the progress already loaded.
+ */
+function fromProfileToday(profile: ProfileToday): CoverageProfileResult {
+  return {
+    profileId: profile.profileId,
+    name: profile.name,
+    channels: profile.channels as CoverageProfileResult['channels'],
+    identityIds: profile.identityIds,
+    primaryRepId: null,
+    primaryRepName: null,
+    primaryAvailability: 'AVAILABLE',
+    primaryIsAvailable: true,
+    backups: [],
+    activeCoveringRepId: null,
+    activeCoveringRepName: null,
+    activeCoverageUntil: null,
+    status: 'COVERED',
+    recommendation: 'NONE',
+    recommendedRepId: null,
+    recommendedRepName: null,
+    recommendationReasons: [],
+    recommendedReady: true,
+    ineligibleReason: null,
+    coverageExpiring: false,
+    primaryReady: false,
+    work: { replies: 0, followUps: 0, tasks: 0 },
+  }
+}
 
 export function RepHomeProfiles({
   coverage,
@@ -31,7 +63,9 @@ export function RepHomeProfiles({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const own = coverage?.own ?? []
+  const own = coverage?.own?.length
+    ? coverage.own
+    : (profilesToday ?? []).map(fromProfileToday)
   const covering = coverage?.covering ?? []
   const readiness = new Map((coverage?.readiness ?? []).map((row) => [row.profileId, row.ready]))
   const progressById = new Map((profilesToday ?? []).map((profile) => [profile.profileId, profile]))
