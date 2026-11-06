@@ -105,12 +105,22 @@ export function V4AdminHome({
         title="Command Center"
         subtitle={data.orgName}
         meta={
-          <p className="text-[13px] text-graphite">
-            Good <span>{greeting}</span>, {adminName.split(' ')[0]}.{' '}
-            <span className="font-medium text-ink">{memberCount} {memberCount === 1 ? 'person' : 'people'}</span>
-            <span className="text-stone"> · </span>
-            <span className="font-medium text-ink">{completedToday} meaningful actions</span> completed today.
-          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="text-[13px] text-graphite">
+              Good <span>{greeting}</span>, {adminName.split(' ')[0]}.{' '}
+              <span className="font-medium text-ink">{memberCount} {memberCount === 1 ? 'person' : 'people'}</span>
+              <span className="text-stone"> · </span>
+              <span className="font-medium text-ink">{completedToday} meaningful actions</span> completed today.
+            </p>
+            {data.unassignedProfiles ? (
+              <Link
+                href="/team/profiles?view=unassigned"
+                className="text-[12px] font-medium text-status-warning hover:underline"
+              >
+                {data.unassignedProfiles} profile{data.unassignedProfiles === 1 ? '' : 's'} unassigned
+              </Link>
+            ) : null}
+          </div>
         }
         actions={
           <>

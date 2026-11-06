@@ -68,6 +68,8 @@ export interface AdminCommandCenterData {
   pipeline: PipelineStageHealth[]
   stuck: StuckOpportunity[]
   profiles: ProfilePerformanceRow[]
+  /** Active channel identities with no rep assignment — surfaced, never buried. */
+  unassignedProfiles?: number
   activity: ManagerActivityItem[]
   /** 12-week org daily activity for the team heatmap (null when unavailable). */
   activityDaily?: DailyActivity[] | null

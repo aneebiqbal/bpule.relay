@@ -224,6 +224,9 @@ export async function loadAdminCommandCenter(): Promise<{
         .map((a) => a.revenue_identity_id as string | null)
         .filter((id): id is string => Boolean(id)),
     )
+    const unassignedProfiles = (identitiesResult.data ?? []).filter(
+      (identity) => !assignedIdentityIds.has(identity.id as string),
+    ).length
 
     const profiles: ProfilePerformanceRow[] = (identitiesResult.data ?? [])
       .filter((i) => assignedIdentityIds.has(i.id as string) || leadsByIdentity.has(i.id as string))
@@ -293,6 +296,7 @@ export async function loadAdminCommandCenter(): Promise<{
         executionByRep,
         tasksCompletedTodayByRep,
         executionToday,
+        unassignedProfiles,
       },
     }
   } catch (err) {

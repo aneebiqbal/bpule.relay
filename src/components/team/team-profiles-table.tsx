@@ -1,5 +1,20 @@
-import type { TeamProfileRow } from '@/lib/team/profiles'
-import { V4Chip, V4Empty, V4PageHeader, V4Panel, V4StatStrip } from '@/components/v4/primitives'
+'use client'
+
+import { Suspense, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+import { cn } from 'cn'
+import { V4Chip, V4Empty, V4Panel, V4StatStrip } from '@/components/v4/primitives'
+import type { TeamProfileDirectoryRow } from '@/lib/team/profiles'
+import { AddProfileWizard } from './add-profile-wizard'
+
+type View = 'all' | 'assigned' | 'unassigned' | 'attention'
+
+interface RepOption {
+  id: string
+  name: string
+  profiles: string[]
+}
 
 const STATUS_TONE: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
   completed: 'success',
@@ -34,34 +49,100 @@ function ProgressCell({ completed, target }: { completed: number; target: number
   )
 }
 
-export function TeamProfilesTable({
+export function TeamProfilesTable(props: {
+  profiles: TeamProfileDirectoryRow[]
+  businessDate: string
+  error?: boolean
+  reps: RepOption[]
+}) {
+  return (
+    <Suspense fallback={<TeamProfilesTableInner {...props} />}>
+      <TeamProfilesTableInner {...props} />
+    </Suspense>
+  )
+}
+
+function TeamProfilesTableInner({
   profiles,
   businessDate,
   error = false,
+  reps,
 }: {
-  profiles: TeamProfileRow[]
+  profiles: TeamProfileDirectoryRow[]
   businessDate: string
   error?: boolean
+  reps: RepOption[]
 }) {
-  const totalTarget = profiles.reduce((sum, p) => sum + p.targetCount, 0)
-  const totalCompleted = profiles.reduce((sum, p) => sum + p.completedCount, 0)
-  const behind = profiles.filter((p) => p.status === 'at_risk' || p.status === 'missed').length
+  const searchParams = useSearchParams()
+  const [view, setView] = useState<View>(() =>
+    searchParams.get('view') === 'unassigned' ? 'unassigned' : 'all',
+  )
+  const [repFilter, setRepFilter] = useState('')
+  const [channelFilter, setChannelFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [search, setSearch] = useState('')
+  const [wizardOpen, setWizardOpen] = useState(false)
+
+  const assigned = profiles.filter((profile) => profile.assignmentCount > 0)
+  const unassigned = profiles.filter((profile) => profile.assignmentCount === 0)
+  const attention = profiles.filter((profile) => profile.status === 'at_risk' || profile.status === 'missed')
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    return profiles.filter((profile) => {
+      if (view === 'assigned' && profile.assignmentCount === 0) return false
+      if (view === 'unassigned' && profile.assignmentCount > 0) return false
+      if (view === 'attention' && !(profile.status === 'at_risk' || profile.status === 'missed')) return false
+      if (repFilter && !profile.assignedRepIds.includes(repFilter)) return false
+      if (channelFilter && !profile.channels.includes(channelFilter)) return false
+      if (statusFilter && profile.status !== statusFilter) return false
+      if (query && !profile.profileName.toLowerCase().includes(query)) return false
+      return true
+    })
+  }, [profiles, view, repFilter, channelFilter, statusFilter, search])
+
+  const channels = [...new Set(profiles.flatMap((profile) => profile.channels))].sort()
+  const statuses = [
+    ...new Set(
+      profiles.map((profile) => profile.status).filter((status): status is string => Boolean(status)),
+    ),
+  ].sort()
 
   const stats: Array<{ key: string; label: string; value: number | string; hint: string; tone: 'neutral' | 'warning' | 'danger' | 'success' }> = [
-    { key: 'profiles', label: 'Profiles', value: profiles.length, hint: 'Assigned today', tone: 'neutral' },
-    { key: 'completed', label: 'Completed', value: totalCompleted, hint: `of ${totalTarget} target`, tone: totalTarget > 0 && totalCompleted >= totalTarget ? 'success' : 'neutral' },
-    { key: 'remaining', label: 'Remaining', value: Math.max(0, totalTarget - totalCompleted), hint: 'Across all profiles', tone: 'neutral' },
-    { key: 'behind', label: 'Behind', value: behind, hint: behind > 0 ? 'At risk or missed' : 'All on track', tone: behind > 0 ? 'warning' : 'neutral' },
+    { key: 'active', label: 'Active', value: profiles.length, hint: 'Sending profiles', tone: 'neutral' },
+    { key: 'assigned', label: 'Assigned', value: assigned.length, hint: 'With at least one rep', tone: 'neutral' },
+    { key: 'unassigned', label: 'Unassigned', value: unassigned.length, hint: unassigned.length > 0 ? 'Needs a rep' : 'All assigned', tone: unassigned.length > 0 ? 'warning' : 'neutral' },
+    { key: 'attention', label: 'Needs attention', value: attention.length, hint: 'At risk or missed', tone: attention.length > 0 ? 'danger' : 'neutral' },
+  ]
+
+  const views: Array<{ key: View; label: string; count: number }> = [
+    { key: 'all', label: 'All', count: profiles.length },
+    { key: 'assigned', label: 'Assigned', count: assigned.length },
+    { key: 'unassigned', label: 'Unassigned', count: unassigned.length },
+    { key: 'attention', label: 'Needs attention', count: attention.length },
   ]
 
   return (
     <div className="space-y-6">
-      <V4PageHeader
-        eyebrow="Team / Profiles"
-        title="Profiles"
-        subtitle="Every sending profile, its channel, the rep it is assigned to and today's completion."
-        meta={<span className="text-[12px] text-graphite">{businessDate}</span>}
-      />
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.18em] text-stone">Team / Profiles</p>
+          <h1 className="mt-1 text-[24px] font-light tracking-[-0.02em] text-ink">Profiles</h1>
+          <p className="mt-1 text-[13px] text-graphite">
+            Every sending profile, its channel, the rep it is assigned to and today&apos;s completion.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[12px] text-stone">{businessDate}</span>
+          <button
+            type="button"
+            onClick={() => setWizardOpen(true)}
+            className="rounded-lg bg-solid px-3.5 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+          >
+            Add profile
+          </button>
+        </div>
+      </div>
 
       <V4StatStrip items={stats} label="Profiles summary" />
 
@@ -70,6 +151,53 @@ export function TeamProfilesTable({
           Profile data is temporarily unavailable. Try again in a moment.
         </div>
       )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-1.5">
+          {views.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setView(item.key)}
+              className={cn(
+                'rounded-full px-3 py-1.5 text-[12px] font-medium ring-1 transition-colors',
+                view === item.key ? 'bg-solid text-on-solid ring-solid' : 'bg-bone text-graphite ring-line hover:text-ink',
+              )}
+            >
+              {item.label}
+              <span className="ml-1.5 tabular-nums opacity-70">{item.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search profiles"
+            aria-label="Search profiles"
+            className="h-9 w-40 rounded-lg border border-line bg-bone-raised px-3 text-[12px] text-ink"
+          />
+          <select value={repFilter} onChange={(event) => setRepFilter(event.target.value)} aria-label="Filter by rep" className="h-9 rounded-lg border border-line bg-bone-raised px-2 text-[12px] text-ink">
+            <option value="">All reps</option>
+            {reps.map((rep) => (
+              <option key={rep.id} value={rep.id}>{rep.name}</option>
+            ))}
+          </select>
+          <select value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)} aria-label="Filter by channel" className="h-9 rounded-lg border border-line bg-bone-raised px-2 text-[12px] text-ink">
+            <option value="">All channels</option>
+            {channels.map((channel) => (
+              <option key={channel} value={channel} className="capitalize">{channel}</option>
+            ))}
+          </select>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter by status" className="h-9 rounded-lg border border-line bg-bone-raised px-2 text-[12px] text-ink">
+            <option value="">All statuses</option>
+            {statuses.map((status) => (
+              <option key={status} value={status}>{statusLabel(status)}</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       <V4Panel padded={false}>
         <div className="hidden overflow-x-auto md:block">
@@ -80,38 +208,37 @@ export function TeamProfilesTable({
                 <th className="px-4 py-2 font-medium">Channel</th>
                 <th className="px-4 py-2 font-medium">Assigned rep</th>
                 <th className="px-4 py-2 font-medium">Today</th>
-                <th className="px-4 py-2 font-medium">Replies</th>
                 <th className="px-4 py-2 font-medium">Follow-ups</th>
                 <th className="px-4 py-2 font-medium">Proposals</th>
-                <th className="px-4 py-2 font-medium">Meetings</th>
                 <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2" />
               </tr>
             </thead>
             <tbody>
-              {profiles.map((profile) => (
+              {filtered.map((profile) => (
                 <tr key={profile.profileId} className="border-b border-line/60 align-top last:border-0">
                   <td className="px-4 py-3 text-[13px] font-medium text-ink">{profile.profileName}</td>
                   <td className="px-4 py-3 text-[12px] text-graphite">
                     {profile.channels.join(' · ') || '—'}
                   </td>
                   <td className="px-4 py-3 text-[12px] text-graphite">
-                    {profile.assignedReps.join(', ') || '—'}
+                    {profile.assignedReps.join(', ') || <span className="text-status-warning">Unassigned</span>}
                   </td>
                   <td className="px-4 py-3">
                     <ProgressCell completed={profile.completedCount} target={profile.targetCount} />
                   </td>
-                  <td className="px-4 py-3 text-[12px] text-stone">—</td>
-                  <td className="px-4 py-3 text-[12px] tabular-nums text-graphite">
-                    {profile.followUps || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-[12px] tabular-nums text-graphite">
-                    {profile.proposals || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-[12px] text-stone">—</td>
+                  <td className="px-4 py-3 text-[12px] tabular-nums text-graphite">{profile.followUps || '—'}</td>
+                  <td className="px-4 py-3 text-[12px] tabular-nums text-graphite">{profile.proposals || '—'}</td>
                   <td className="px-4 py-3">
-                    <V4Chip tone={STATUS_TONE[profile.status ?? ''] ?? 'neutral'}>
-                      {statusLabel(profile.status)}
-                    </V4Chip>
+                    <V4Chip tone={STATUS_TONE[profile.status ?? ''] ?? 'neutral'}>{statusLabel(profile.status)}</V4Chip>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Link
+                      href={`/team/profiles/${profile.profileId}`}
+                      className="inline-flex min-h-11 items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
+                    >
+                      Open
+                    </Link>
                   </td>
                 </tr>
               ))}
@@ -120,7 +247,7 @@ export function TeamProfilesTable({
         </div>
 
         <div className="space-y-2 p-3 md:hidden">
-          {profiles.map((profile) => (
+          {filtered.map((profile) => (
             <div key={profile.profileId} className="rounded-xl bg-bone-raised p-3 ring-1 ring-line">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -129,45 +256,37 @@ export function TeamProfilesTable({
                     {profile.channels.join(' · ') || '—'} · {profile.assignedReps.join(', ') || 'Unassigned'}
                   </p>
                 </div>
-                <V4Chip tone={STATUS_TONE[profile.status ?? ''] ?? 'neutral'}>
-                  {statusLabel(profile.status)}
-                </V4Chip>
+                <V4Chip tone={STATUS_TONE[profile.status ?? ''] ?? 'neutral'}>{statusLabel(profile.status)}</V4Chip>
               </div>
               <div className="mt-2.5">
                 <ProgressCell completed={profile.completedCount} target={profile.targetCount} />
               </div>
-              <dl className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-                <div>
-                  <dt className="text-stone">Follow-ups</dt>
-                  <dd className="tabular-nums text-ink">{profile.followUps || '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-stone">Proposals</dt>
-                  <dd className="tabular-nums text-ink">{profile.proposals || '—'}</dd>
-                </div>
-              </dl>
             </div>
           ))}
         </div>
 
-        {profiles.length === 0 && (
+        {filtered.length === 0 && (
           <div className="p-4">
             <V4Empty
-              title="No profiles assigned"
-              body="When an admin assigns a sending identity to a rep, the profile appears here."
+              title={view === 'unassigned' ? 'No unassigned profiles' : 'No profiles match this view'}
+              body={view === 'unassigned' ? 'Every sending profile has a rep.' : 'Adjust the filters or add a profile.'}
             />
           </div>
         )}
       </V4Panel>
 
       <RepInverse profiles={profiles} />
+
+      {wizardOpen && (
+        <AddProfileWizard reps={reps} onClose={() => setWizardOpen(false)} />
+      )}
     </div>
   )
 }
 
 /** The inverse view: REP → PROFILES, with the rep's total completion. */
-function RepInverse({ profiles }: { profiles: TeamProfileRow[] }) {
-  const byRep = new Map<string, { target: number; completed: number; rows: TeamProfileRow[] }>()
+function RepInverse({ profiles }: { profiles: TeamProfileDirectoryRow[] }) {
+  const byRep = new Map<string, { target: number; completed: number; rows: TeamProfileDirectoryRow[] }>()
   for (const profile of profiles) {
     const reps = profile.assignedReps.length > 0 ? profile.assignedReps : ['Unassigned']
     for (const rep of reps) {
@@ -185,9 +304,7 @@ function RepInverse({ profiles }: { profiles: TeamProfileRow[] }) {
   return (
     <V4Panel>
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="text-mono-medium text-[11px] uppercase tracking-[0.18em] text-stone">
-          Reps
-        </h2>
+        <h2 className="text-mono-medium text-[11px] uppercase tracking-[0.18em] text-stone">Reps</h2>
         <span className="text-[12px] text-stone">REP → profiles</span>
       </div>
       <ul className="space-y-3">

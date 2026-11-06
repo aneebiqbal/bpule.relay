@@ -60,14 +60,19 @@ export async function POST(
 
   if (error) return safeErrorResponse(error, 500, 'Failed to assign identity.', 'admin/revenue-identities/[id]/assign')
 
-  // Audit
-  await supabase.from('accountability_audit_log').insert({
-    organization_id: authCtx.orgId,
-    rep_id: authCtx.repId,
-    revenue_identity_id: id,
-    event_type: 'identity_assigned',
-    detail: { rep_id: repId, rep_name: rep.name },
-  })
+  // Audit — best effort. The assignment is already committed; a logging
+  // failure must never report the assignment as failed.
+  try {
+    await supabase.from('accountability_audit_log').insert({
+      organization_id: authCtx.orgId,
+      rep_id: authCtx.repId,
+      revenue_identity_id: id,
+      event_type: 'identity_assigned',
+      detail: { rep_id: repId, rep_name: rep.name },
+    })
+  } catch {
+    // Audit is not a reason to fail a committed assignment.
+  }
 
   try {
     await supabase.rpc('emit_relay_event', {
@@ -87,16 +92,20 @@ export async function POST(
     // Event emission must never break the assignment operation
   }
 
-  // Notify the rep
-  await supabase.from('notifications').insert({
-    organization_id: authCtx.orgId,
-    recipient_id: repId,
-    notification_type: 'identity_assigned',
-    title: 'New identity assigned',
-    body: `You have been assigned the "${identity.identity_name}" revenue identity.`,
-    link: `/rep/assigned-profiles`,
-    dedupe_key: `identity_assigned:${repId}:${id}:${new Date().toISOString().slice(0, 10)}`,
-  })
+  // Notify the rep — best effort, same reason as the audit log.
+  try {
+    await supabase.from('notifications').insert({
+      organization_id: authCtx.orgId,
+      recipient_id: repId,
+      notification_type: 'identity_assigned',
+      title: 'New identity assigned',
+      body: `You have been assigned the "${identity.identity_name}" revenue identity.`,
+      link: `/rep/assigned-profiles`,
+      dedupe_key: `identity_assigned:${repId}:${id}:${new Date().toISOString().slice(0, 10)}`,
+    })
+  } catch {
+    // Notification is not a reason to fail a committed assignment.
+  }
 
   try {
     const store = await createScoutStore()
@@ -135,13 +144,17 @@ export async function DELETE(
 
   if (error) return safeErrorResponse(error, 500, 'Failed to unassign identity.', 'admin/revenue-identities/[id]/assign')
 
-  await supabase.from('accountability_audit_log').insert({
-    organization_id: authCtx.orgId,
-    rep_id: authCtx.repId,
-    revenue_identity_id: id,
-    event_type: 'identity_unassigned',
-    detail: { rep_id: repId },
-  })
+  try {
+    await supabase.from('accountability_audit_log').insert({
+      organization_id: authCtx.orgId,
+      rep_id: authCtx.repId,
+      revenue_identity_id: id,
+      event_type: 'identity_unassigned',
+      detail: { rep_id: repId },
+    })
+  } catch {
+    // Audit is not a reason to fail a committed unassignment.
+  }
 
   return NextResponse.json({ ok: true })
 }
