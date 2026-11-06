@@ -4,12 +4,12 @@ type StatusVariant = "neutral" | "success" | "warning" | "danger" | "info" | "or
 
 const variantStyles: Record<StatusVariant, { bg: string; text: string; dot: string }> = {
   neutral: { bg: "bg-bone-raised", text: "text-graphite", dot: "bg-stone" },
-  success: { bg: "bg-status-success/10", text: "text-status-success", dot: "bg-status-success" },
-  warning: { bg: "bg-status-warning/10", text: "text-status-warning", dot: "bg-status-warning" },
-  danger: { bg: "bg-status-danger/10", text: "text-status-danger", dot: "bg-status-danger" },
-  info: { bg: "bg-status-info/10", text: "text-status-info", dot: "bg-status-info" },
-  orange: { bg: "bg-orange/10", text: "text-orange", dot: "bg-orange" },
-  cobalt: { bg: "bg-cobalt/10", text: "text-cobalt", dot: "bg-cobalt" },
+  success: { bg: "bg-status-success/10", text: "text-[#256b4a]", dot: "bg-status-success" },
+  warning: { bg: "bg-status-warning/10", text: "text-[#7d5410]", dot: "bg-status-warning" },
+  danger: { bg: "bg-status-danger/10", text: "text-[#a8342a]", dot: "bg-status-danger" },
+  info: { bg: "bg-status-info/10", text: "text-[#2f48b8]", dot: "bg-status-info" },
+  orange: { bg: "bg-orange/10", text: "text-[#b8531f]", dot: "bg-orange" },
+  cobalt: { bg: "bg-cobalt/10", text: "text-[#2f48b8]", dot: "bg-cobalt" },
 }
 
 interface StatusBadgeProps {

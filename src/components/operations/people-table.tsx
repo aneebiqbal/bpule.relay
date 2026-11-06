@@ -37,7 +37,7 @@ function CountLink({ value, href, label, warn }: { value: number; href: string; 
       href={href}
       onClick={(e) => e.stopPropagation()}
       aria-label={`${value} ${label}`}
-      className={warn ? 'font-medium tabular-nums text-orange underline-offset-2 hover:underline' : 'tabular-nums text-ink underline-offset-2 hover:underline'}
+      className={warn ? 'font-medium tabular-nums text-[#b8531f] underline-offset-2 hover:underline' : 'tabular-nums text-ink underline-offset-2 hover:underline'}
     >
       {value}
     </Link>
@@ -85,7 +85,7 @@ export function PeopleTable({ rows }: { rows: PeopleRow[] }) {
         r.activeProfile ? (
           <span className="truncate text-graphite">{r.activeProfile}</span>
         ) : (
-          <span className="text-status-warning">No profile</span>
+          <span className="text-[#7d5410]">No profile</span>
         ),
     },
     {

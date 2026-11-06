@@ -30,7 +30,7 @@ export function MetricStrip({ metrics, className }: { metrics: OpsMetric[]; clas
     >
       {metrics.map((m) => {
         const tone =
-          m.tone === 'critical' ? 'text-status-danger' : m.tone === 'attention' ? 'text-orange' : 'text-ink'
+          m.tone === 'critical' ? 'text-[#a8342a]' : m.tone === 'attention' ? 'text-[#b8531f]' : 'text-ink'
         // A <dl> may only hold dt/dd or <div> groups, so the drill-down link sits
         // in the <dt> and stretches over the whole tile.
         return (
