@@ -2080,7 +2080,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
             subtitle: `${persona?.displayName ?? 'Studio'} · ${post.platform} posted`,
             status: 'posted',
             createdAt: post.postedAt,
-            href: `/content/${post.personaId}/library`,
+            href: `/content?persona=${post.personaId}`,
           })
         }
       }

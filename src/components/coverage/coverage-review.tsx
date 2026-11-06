@@ -159,6 +159,7 @@ export function CoverageReviewView({
             )}
           </V4Panel>
 
+          <div id="readiness" className="scroll-mt-20">
           <V4Panel>
             <V4PanelHeader
               eyebrow="Readiness"
@@ -197,6 +198,7 @@ export function CoverageReviewView({
               </ul>
             )}
           </V4Panel>
+          </div>
 
           <V4Panel className="mt-4">
             <V4PanelHeader eyebrow="Today" title="Profile coverage" />

@@ -4205,7 +4205,7 @@ export class SupabaseStore implements ScoutStore {
           subtitle: `${persona?.name ?? 'Studio'} · ${(row.platform as string) ?? 'post'} posted`,
           status: 'posted',
           createdAt: (row.posted_at as string) ?? new Date(0).toISOString(),
-          href: `/content/${personaId}/library`,
+          href: `/content?persona=${personaId}`,
         })
       }
     }

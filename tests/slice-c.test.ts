@@ -295,7 +295,7 @@ describe('REPORTS', () => {
     const rep = secondaryItems('insights', { isOwner: false, isAdmin: false, isManager: false }).map((i) => i.href)
     const mgr = secondaryItems('insights', { isOwner: false, isAdmin: false, isManager: true }).map((i) => i.href)
     const admin = secondaryItems('insights', { isOwner: false, isAdmin: true, isManager: true }).map((i) => i.href)
-    const reports = ['/reports/sales', '/reports/pipeline', '/reports/team', '/reports/revenue']
+    const reports = ['/reports/sales', '/reports/pipeline', '/reports/team', '/reports/revenue', '/reports/activity']
     expect(rep).toEqual(reports)
     expect(mgr).toEqual(reports)
     expect(admin).toEqual([...reports, '/admin/ai-usage'])

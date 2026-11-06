@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   NAV_DOMAINS,
   domainForPathname,
-  isRecordDetailPathname,
   mobileNavItems,
   moreSheetSections,
   navBreadcrumb,
+  pageOwnsSubNav,
   resolvePrimaryActiveId,
   resolveSecondaryActiveId,
   secondaryItems,
@@ -41,7 +41,7 @@ describe('V3_NAV_PRIMARY_SINGLE_ACTIVE', () => {
     ['/admin/command', 'team'],
     ['/admin/people', 'admin'],
     ['/admin/scoring-qa', 'admin'],
-    ['/profile-intelligence', 'admin'],
+    ['/profile-intelligence', 'team'],
     ['/settings', 'settings'],
   ]
 
@@ -170,7 +170,9 @@ describe('V3_NAV_CANONICAL_LABELS', () => {
     expect(byHref('/team/people')).toBe('People')
     expect(adminItem('/admin/command')).toBe('Command Center')
     expect(byHref('/admin/scoring-qa')).toBe('Scoring QA')
-    expect(byHref('/profile-intelligence')).toBe('Profiles')
+    expect(byHref('/profile-intelligence?tab=identities')).toBe('Identities')
+    expect(byHref('/team/profiles')).toBe('Profiles')
+    expect(byHref('/team/coverage')).toBe('Coverage')
     expect(byHref('/content/growth')).toBe('Growth')
     expect(byHref('/admin/people')).toBe('People & Roles')
     expect(byHref('/admin/revenue-intelligence')).toBe('Revenue Intelligence')
@@ -217,9 +219,13 @@ describe('V3_NAV_ROLE_VISIBILITY', () => {
     }
   })
 
-  it('Manage Profiles is owner-only', () => {
-    expect(secondaryItems('admin', owner).map((i) => i.href)).toContain('/manage-profiles')
-    expect(secondaryItems('admin', admin).map((i) => i.href)).not.toContain('/manage-profiles')
+  it('profiles are a Team capability, not an owner-only admin extra', () => {
+    expect(secondaryItems('team', manager).map((i) => i.href)).toContain('/team/profiles')
+    expect(secondaryItems('team', admin).map((i) => i.href)).toContain('/team/profiles')
+    expect(secondaryItems('admin', owner).map((i) => i.href)).not.toContain('/manage-profiles')
+    expect(NAV_DOMAINS.find((d) => d.id === 'admin')!.secondary.map((i) => i.href)).not.toContain(
+      '/manage-profiles',
+    )
   })
 })
 
@@ -237,8 +243,10 @@ describe('V3_NAV_HIDDEN_FEATURES_EXPOSED', () => {
     ['/admin/dataset', admin],
     ['/admin/training-data', admin],
     ['/admin/ai-usage', admin],
-    ['/manage-profiles', owner],
     ['/revenue/email', rep],
+    ['/team/profiles', manager],
+    ['/team/coverage', manager],
+    ['/profile-intelligence?tab=identities', manager],
   ]
 
   it('every formerly hidden feature has a nav entry point', () => {
@@ -302,13 +310,17 @@ describe('V3_NAV_MOBILE', () => {
     expect(mobileNavItems(manager).map((i) => i.id)).toEqual(['home', 'sales', 'inbox', 'team', 'more'])
   })
 
-  it('More sheet contains every domain the bottom bar omits', () => {
+  it('More sheet contains every domain the bottom bar omits, and nothing it already shows', () => {
     const repSheet = moreSheetSections(rep)
-    expect(repSheet.map((s) => s.id)).toContain('work')
-    expect(repSheet.map((s) => s.id)).toContain('content')
-    expect(repSheet.map((s) => s.id)).toContain('insights')
-    expect(repSheet.map((s) => s.id)).toContain('settings')
-    expect(repSheet.map((s) => s.id)).not.toContain('home')
+    const repBottomBar = mobileNavItems(rep).map((i) => i.id)
+    expect(repSheet.map((s) => s.id)).toEqual(['content', 'insights', 'settings'])
+    for (const id of repSheet.map((s) => s.id)) {
+      expect(repBottomBar).not.toContain(id)
+    }
+
+    const managerSheet = moreSheetSections(manager)
+    expect(managerSheet.map((s) => s.id)).toEqual(['work', 'content', 'insights', 'settings'])
+    expect(managerSheet.map((s) => s.id)).not.toContain('team')
   })
 
   it('More sheet never lists a domain the role cannot open', () => {
@@ -330,8 +342,11 @@ describe('domainForPathname', () => {
   it('keeps conversation surfaces under Inbox', () => {
     expect(domainForPathname('/chats')).toBe('inbox')
     expect(domainForPathname('/inbound')).toBe('inbox')
-    expect(domainForPathname('/relay')).toBe('inbox')
     expect(domainForPathname('/archive')).toBe('sales')
+  })
+
+  it('no longer resolves deleted routes', () => {
+    expect(domainForPathname('/relay')).toBeNull()
   })
 })
 
@@ -440,8 +455,8 @@ describe('V3_NESTED_ROUTE_SELECTION', () => {
     expect(resolveSecondaryActiveId('sales', '/leads/l1', search(''), rep)).toBe('leads')
     expect(resolvePrimaryActiveId('/accounts/acme', admin)).toBe('sales')
     expect(resolveSecondaryActiveId('sales', '/accounts/acme', search(''), admin)).toBe('companies')
-    expect(resolvePrimaryActiveId('/profile-intelligence/p1', admin)).toBe('admin')
-    expect(resolveSecondaryActiveId('admin', '/profile-intelligence/p1', search(''), admin)).toBe('profiles')
+    expect(resolvePrimaryActiveId('/profile-intelligence?tab=identities', admin)).toBe('team')
+    expect(resolveSecondaryActiveId('team', '/profile-intelligence', search('tab=identities'), admin)).toBe('identities')
   })
 
   it('does not let a query-scoped alias claim a sibling route', () => {
@@ -449,10 +464,13 @@ describe('V3_NESTED_ROUTE_SELECTION', () => {
     expect(resolveSecondaryActiveId('sales', '/leads/l1', search('view=pipeline'), admin)).toBe('leads')
   })
 
-  it('hides the secondary rail on record detail without losing the context', () => {
-    expect(isRecordDetailPathname('/leads/l1')).toBe(true)
-    expect(isRecordDetailPathname('/team/m1')).toBe(true)
-    expect(isRecordDetailPathname('/leads')).toBe(false)
+  it('hides the secondary rail only where the page owns its own sub-nav', () => {
+    expect(pageOwnsSubNav('/chats')).toBe(true)
+    expect(pageOwnsSubNav('/leads/l1')).toBe(true)
+    expect(pageOwnsSubNav('/team/m1')).toBe(true)
+    expect(pageOwnsSubNav('/leads')).toBe(false)
+    expect(pageOwnsSubNav('/team/people')).toBe(false)
+    expect(pageOwnsSubNav('/upwork/123')).toBe(false)
     expect(navBreadcrumb('/leads/l1', search(''), rep)).toMatchObject({
       domainLabel: 'Sales',
       itemLabel: 'Leads',

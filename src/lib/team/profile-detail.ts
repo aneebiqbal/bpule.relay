@@ -16,6 +16,8 @@ export interface TeamProfileDetail {
   targets: Array<{ activityType: string; targetCount: number; completedCount: number; status: string | null }>
   businessDate: string
   coverage: { primaryRepId: string | null; backups: Array<{ repId: string; priority: number }> }
+  /** Access confirmation for the coverage chain — the gate AUTO_COVER will require. */
+  readiness: Array<{ repId: string; name: string; ready: boolean }>
 }
 
 /** One operational detail surface for a sending profile. */
@@ -43,7 +45,7 @@ export async function loadTeamProfileDetail(
     .limit(50)
   const identityIds = (identities ?? []).map((identity) => identity.id)
 
-  const [assignmentRes, targetRes, accountabilityRes, coverageRes] = await Promise.all([
+  const [assignmentRes, targetRes, accountabilityRes, coverageRes, readinessRes] = await Promise.all([
     identityIds.length > 0
       ? supabase.from('identity_assignments').select('rep_id').eq('organization_id', orgId).in('revenue_identity_id', identityIds).limit(200)
       : Promise.resolve({ data: [] as Array<{ rep_id: string }> }),
@@ -54,11 +56,17 @@ export async function loadTeamProfileDetail(
       ? supabase.from('daily_accountability').select('revenue_identity_id, activity_type, completed_count, status').eq('organization_id', orgId).in('revenue_identity_id', identityIds).eq('target_date', businessDate).limit(200)
       : Promise.resolve({ data: [] as Array<{ revenue_identity_id: string; activity_type: string; completed_count: number; status: string | null }> }),
     supabase.from('profile_coverage').select('rep_id, role, priority').eq('organization_id', orgId).eq('profile_id', profileId).eq('active', true).limit(50),
+    supabase.from('profile_readiness').select('rep_id').eq('organization_id', orgId).eq('profile_id', profileId).limit(200),
   ])
 
   const repIds = [...new Set((assignmentRes.data ?? []).map((assignment) => assignment.rep_id))]
-  const { data: repRows } = repIds.length > 0
-    ? await supabase.from('reps').select('id, name').eq('organization_id', orgId).in('id', repIds).limit(200)
+  const chainRepIds = [
+    ...(coverageRes.data ?? []).filter((row) => row.role === 'PRIMARY').map((row) => row.rep_id),
+    ...(coverageRes.data ?? []).filter((row) => row.role === 'BACKUP').map((row) => row.rep_id),
+  ]
+  const nameLookupIds = [...new Set([...repIds, ...chainRepIds])]
+  const { data: repRows } = nameLookupIds.length > 0
+    ? await supabase.from('reps').select('id, name').eq('organization_id', orgId).in('id', nameLookupIds).limit(200)
     : { data: [] as Array<{ id: string; name: string }> }
   const repNameById = new Map((repRows ?? []).map((rep) => [rep.id, rep.name]))
 
@@ -109,5 +117,10 @@ export async function loadTeamProfileDetail(
     status,
     targets,
     businessDate,
+    readiness: chainRepIds.map((repId) => ({
+      repId,
+      name: repNameById.get(repId) ?? 'Unknown',
+      ready: (readinessRes.data ?? []).some((row) => row.rep_id === repId),
+    })),
   }
 }

@@ -359,7 +359,7 @@ async function emitEscalations(
         type: 'rep_day_critical',
         title: `${repName} is critical today`,
         body: `${row.required_remaining} required ${row.required_remaining === 1 ? 'action is' : 'actions are'} incomplete.`,
-        link: '/admin/command-center',
+        link: '/admin/command',
         dedupeKey: `escalation:${businessDate}:${row.rep_id}:${recipientId}`,
       })
       if (didSend) sent += 1

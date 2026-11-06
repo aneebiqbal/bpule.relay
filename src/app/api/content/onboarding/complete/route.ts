@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       persona: updatedPersona,
       profile: await store.getContentProfile(profile.id),
-      redirectTo: `/content/${persona.id}/today`,
+      redirectTo: `/content?persona=${persona.id}`,
     })
   } catch (err) {
     const detail = err instanceof Error ? err.message : (err && typeof err === 'object' ? JSON.stringify(err) : String(err))

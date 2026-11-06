@@ -134,8 +134,27 @@ function TeamProfilesTableInner({
             Every sending profile, its channel, the rep it is assigned to and today&apos;s completion.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-[12px] text-stone">{businessDate}</span>
+          <Link
+            href="/team/coverage"
+            className="rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-graphite transition-colors hover:text-ink"
+          >
+            Coverage
+          </Link>
+          <Link
+            href="/team/coverage#readiness"
+            className="rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-graphite transition-colors hover:text-ink"
+          >
+            Readiness
+          </Link>
+          <button
+            type="button"
+            onClick={() => setView('unassigned')}
+            className="rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-graphite transition-colors hover:text-ink"
+          >
+            Assign profile
+          </button>
           <button
             type="button"
             onClick={() => setWizardOpen(true)}

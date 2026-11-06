@@ -100,7 +100,7 @@ describe('V3_NO_PARALLEL_SELECTED_NAV', () => {
     expect(secondaryItems('inbox', rep).map((i) => i.href)).toEqual(queues)
     expect(secondaryItems('inbox', admin).map((i) => i.href)).toEqual(queues)
     expect(domainForPathname('/inbound')).toBe('inbox')
-    expect(domainForPathname('/relay')).toBe('inbox')
+    expect(domainForPathname('/relay')).toBeNull()
   })
 })
 

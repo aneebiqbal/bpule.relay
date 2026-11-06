@@ -1,5 +1,10 @@
 # RELAY FEATURE VISIBILITY MATRIX — FINAL
 
+> **Superseded for navigation entry points (2026-11-07).** The canonical IA is
+> `src/lib/navigation/relay-shell-nav.ts` (domains, secondary rail, role
+> visibility, mobile). This matrix is kept for feature-level traceability; the
+> NAV / RAIL / MOBILE / PAL / CREATE columns are now derived from the nav config.
+
 **Authority:** reconciled `release-merge` @ `f833833`.
 Entry points: **NAV** (primary domain) · **RAIL** (secondary) · **MOBILE** ·
 **PAL** (command palette) · **CREATE** (global create) · **BELL** · **PROFILE** ·

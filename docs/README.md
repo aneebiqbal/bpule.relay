@@ -21,7 +21,6 @@ state, kept for context) · **ARCHIVE** (`docs/archive/`).
 | `RELAY_COMPLETE_ROUTE_AND_ROLE_MAP.md` | **CURRENT** | Full route + role inventory with per-route gating |
 | `RELAY_NAVIGATION_V3.md` | **CURRENT** | Role-aware navigation contract (V4 shell) |
 | `RELAY_DEAD_CODE_REMOVAL_REPORT.md` | **CURRENT** | What was removed, what was kept, and why |
-
 ---
 
 ## 2. Architecture and UI system
@@ -38,10 +37,13 @@ state, kept for context) · **ARCHIVE** (`docs/archive/`).
 ### Per-surface contracts
 
 `RELAY_SALES_WORKSPACE_V2.md` · `RELAY_TASK_SYSTEM_V2.md` ·
-`RELAY_REP_HOME_V2.md` · `RELAY_MANAGER_HOME_V2.md` ·
-`RELAY_OPERATIONS_WORKSPACE_V2.md` · `RELAY_ADMIN_COMMAND_CENTER_V2.md` ·
-`RELAY_NAVIGATION_V2.md` · `RELAY_V3_INBOX.md` ·
+`RELAY_REP_HOME_V2.md` · `RELAY_OPERATIONS_WORKSPACE_V2.md` ·
+`RELAY_V3_INBOX.md` ·
 `RELAY_V3_TEAM_OPERATIONS.md` · `RELAY_V3_CONTENT_STUDIO.md`
+
+Superseded per-surface contracts (`RELAY_NAVIGATION_V2.md`,
+`RELAY_ADMIN_COMMAND_CENTER_V2.md`, `RELAY_MANAGER_HOME_V2.md`) live in
+`docs/archive/` — the V2/V3 shell they describe has been deleted.
 
 ---
 
@@ -86,7 +88,7 @@ state, kept for context) · **ARCHIVE** (`docs/archive/`).
 
 ## 7. QA
 
-`QA_END_TO_END.md` (**TOOLING**) · `RELAY_E2E_AUDIT_2026-10-22.md` (**TOOLING**) ·
+`QA_END_TO_END.md` (**TOOLING**) ·
 `RELAY_BUG_23_31_CLOSURE.md` (**TOOLING**) ·
 `RELAY_PHASE8_SYNTHETIC_CERTIFICATION.md` (**TOOLING**) ·
 `RAW_TEXT_READER_INVENTORY.md`

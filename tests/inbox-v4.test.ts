@@ -184,7 +184,7 @@ describe('INBOX_V4_PROFILE_VISIBILITY', () => {
     const page = read('src/components/conversation/lead-conversation.tsx')
     expect(page).toContain('Sending as')
     expect(page).toContain('No sending profile')
-    expect(page).toContain('/manage-profiles')
+    expect(page).toContain('/team/profiles')
   })
 })
 

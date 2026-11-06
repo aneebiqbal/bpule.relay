@@ -246,7 +246,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
         } catch {
           // Ignore local storage failures.
         }
-        router.push(`/content/${draft.personaId}/library?posted=${draftId}`)
+        router.push(`/content?persona=${draft.personaId}&posted=${draftId}`)
       } else {
         setError(data?.error || 'Failed to mark as posted')
       }

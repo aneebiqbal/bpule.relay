@@ -480,7 +480,7 @@ export function V4AdminHome({
                 title="Profile execution"
                 hint={`${profilesComplete} of ${profileRows.length} complete`}
                 action={
-                  <Link href="/manage-profiles" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
+                  <Link href="/team/profiles" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
                     Manage <ChevronRight className="size-3.5" aria-hidden />
                   </Link>
                 }
@@ -490,7 +490,7 @@ export function V4AdminHome({
                   {profileRows.map((row) => (
                     <li key={row.profileId}>
                       <Link
-                        href="/manage-profiles"
+                        href={`/team/profiles/${row.profileId}`}
                         className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-bone"
                       >
                         <div className="min-w-0 flex-1">

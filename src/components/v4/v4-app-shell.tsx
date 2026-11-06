@@ -26,6 +26,7 @@ import {
   PRIMARY_MAIN_IDS,
   mobileNavItems,
   moreSheetSections,
+  pageOwnsSubNav,
   resolvePrimaryActiveId,
   resolveSecondaryActiveId,
   secondaryGroups,
@@ -51,26 +52,6 @@ export interface V4AppShellProps {
 }
 
 const COLLAPSE_KEY = 'relay.v4.collapsed'
-
-/**
- * Routes whose pages render their own sub-navigation. The shell's section tabs
- * are hidden on exactly these, so the two never compete.
- *
- * This is deliberately a path list, not a domain list: most Work / Team /
- * Content / Settings pages have no in-page tabs, and hiding the canonical
- * domain sub-nav for the whole domain left them with no sub-navigation at all.
- */
-const PAGE_OWNED_SUB_NAV: RegExp[] = [
-  /^\/chats(\/|$)/,
-  /^\/notifications(\/|$)/,
-  /^\/team\/targets(\/|$)/,
-  /^\/content\/ideas(\/|$)/,
-  /^\/accounts\/[^/]+/, // company key is a name, not an id
-  // Record details own tabs only when the id is a real record id. List pages
-  // under the same domain (/team/people, /leads/import) must keep the rail.
-  /^\/leads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/,
-  /^\/team\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/,
-]
 
 function domainBadge(id: RelayNavDomain, counts?: SidebarCounts) {
   if (id === 'inbox') return sidebarBadge(counts?.inboxNeedsReply)
@@ -119,7 +100,7 @@ export function V4AppShell({
   const showSectionTabs = Boolean(
     activeDomain &&
       secondary.length > 0 &&
-      !PAGE_OWNED_SUB_NAV.some((pattern) => pattern.test(pathname)),
+      !pageOwnsSubNav(pathname),
   )
 
   useEffect(() => {
@@ -203,7 +184,10 @@ export function V4AppShell({
     if (!config) return null
     return (
       <div className="mb-5 overflow-x-auto">
-        <div className="flex min-w-max items-center gap-0.5 rounded-xl bg-bone p-0.5 ring-1 ring-line">
+        <nav
+          aria-label={`${config.label} sections`}
+          className="flex min-w-max items-center gap-0.5 rounded-xl bg-bone p-0.5 ring-1 ring-line"
+        >
           {secondary.map((group) => (
             <div key={group.label ?? 'default'} className="flex items-center gap-0.5">
               {group.label && (
@@ -217,7 +201,7 @@ export function V4AppShell({
                   <Link
                     key={item.id}
                     href={item.href}
-                    aria-current={active ? 'page' : undefined}
+                    aria-current={activeSecondaryId === item.id ? 'page' : undefined}
                     className={cn(
                       'whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[12px] transition-colors',
                       active
@@ -231,7 +215,7 @@ export function V4AppShell({
               })}
             </div>
           ))}
-        </div>
+        </nav>
       </div>
     )
   }

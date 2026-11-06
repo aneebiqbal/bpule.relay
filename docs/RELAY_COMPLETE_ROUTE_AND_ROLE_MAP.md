@@ -1,5 +1,12 @@
 # Relay / Scout — Complete Route & Role Inventory
 
+> **Superseded for information architecture (2026-11-07).** The canonical,
+> role-aware IA now lives in `src/lib/navigation/relay-shell-nav.ts` and is
+> enforced by `tests/relay-shell-nav.test.ts`. This inventory is kept as a
+> route-level reference; where it disagrees with the nav config, the nav config
+> wins. Dead routes and duplicate profile surfaces were removed in the IA
+> consolidation — see `docs/RELAY_DEAD_CODE_REMOVAL_REPORT.md`.
+>
 > Generated from source. Repo root: `/Users/mac/Desktop/products/scout`.
 > Scope: `src/app/**` (pages, API routes, layouts, proxy), `src/components/app-rail.tsx`,
 > `src/components/command-palette.tsx`, `src/lib/auth/*`, `src/lib/supabase/server.ts`,

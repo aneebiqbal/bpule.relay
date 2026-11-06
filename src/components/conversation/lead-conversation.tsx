@@ -347,7 +347,7 @@ export function LeadConversation({
                 ) : (
                   <>
                     <span className="text-status-warning">No sending profile</span>
-                    <a href="/manage-profiles" className="text-cobalt hover:underline">Assign profile</a>
+                    <a href="/team/profiles" className="text-cobalt hover:underline">Assign profile</a>
                   </>
                 )}
               </span>

@@ -90,10 +90,10 @@ export function TeamProfileDetailView({
               {detail.assignedReps.length > 0 ? 'Reassign' : 'Assign rep'}
             </button>
             <Link
-              href={`/profile-intelligence/${detail.profileId}`}
+              href="/profile-intelligence?tab=identities"
               className="rounded-lg border border-line px-3.5 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-bone"
             >
-              Edit profile
+              Edit identities
             </Link>
           </div>
         )}
@@ -122,7 +122,7 @@ export function TeamProfileDetailView({
       </div>
 
       <V4Panel>
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.18em] text-stone">Today&apos;s targets</p>
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.18em] text-stone">Today&apos;s activity</p>
         {detail.targets.length > 0 ? (
           <ul className="mt-3 divide-y divide-line/70">
             {detail.targets.map((target) => (
@@ -147,6 +147,30 @@ export function TeamProfileDetailView({
         assignedRepIds={detail.assignedRepIds}
         canManage={canManage}
       />
+
+      <V4Panel>
+        <p className="text-mono-medium text-[10px] uppercase tracking-[0.18em] text-stone">Access readiness</p>
+        {detail.readiness.length === 0 ? (
+          <p className="mt-3 text-[12px] text-stone">
+            No coverage chain yet.{' '}
+            <Link href="/team/coverage" className="text-cobalt hover:underline">Configure coverage</Link>
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {detail.readiness.map((row) => (
+              <li key={row.repId} className="flex items-center justify-between gap-3 text-[13px]">
+                <span className="text-graphite">{row.name}</span>
+                <V4Chip tone={row.ready ? 'success' : 'warning'}>
+                  {row.ready ? 'Confirmed' : 'Not confirmed'}
+                </V4Chip>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-3 text-[11px] leading-relaxed text-stone">
+          Readiness is an explicit rep confirmation. It is the hard gate for automatic cover.
+        </p>
+      </V4Panel>
 
       {message && (
         <div role="alert" className="rounded-xl border border-line bg-bone px-4 py-3 text-[12px] text-graphite">

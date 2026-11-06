@@ -129,7 +129,12 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     secondary: [
       { id: 'overview', label: 'Overview', href: '/team' },
       { id: 'people', label: 'People', href: '/team/people' },
+      // The canonical profile/identity front door. Identities is the same
+      // surface scoped to the sending identities; Coverage owns primaries,
+      // backups and access readiness.
       { id: 'team-profiles', label: 'Profiles', href: '/team/profiles' },
+      { id: 'identities', label: 'Identities', href: '/profile-intelligence?tab=identities' },
+      { id: 'coverage', label: 'Coverage', href: '/team/coverage' },
       { id: 'workload', label: 'Workload', href: '/team/workload' },
       { id: 'activity', label: 'Activity', href: '/team/activity' },
       { id: 'performance', label: 'Performance', href: '/team/performance' },
@@ -161,6 +166,7 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
       { id: 'pipeline-report', label: 'Pipeline', href: '/reports/pipeline', group: 'Reports' },
       { id: 'team-report', label: 'Team', href: '/reports/team', group: 'Reports' },
       { id: 'revenue-report', label: 'Revenue', href: '/reports/revenue', group: 'Reports' },
+      { id: 'activity-report', label: 'Activity', href: '/reports/activity', group: 'Reports' },
       { id: 'ai-usage', label: 'AI Usage', href: '/admin/ai-usage', visible: adminUp, group: 'System' },
     ],
   },
@@ -184,14 +190,14 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     secondary: [
       { id: 'command-center', label: 'Command Center', href: '/admin/command', group: 'Organization' },
       { id: 'people-roles', label: 'People & Roles', href: '/admin/people', group: 'Organization' },
-      { id: 'profiles', label: 'Profiles', href: '/profile-intelligence', group: 'Organization' },
+      // Admin configures targets; Team reviews target progress. One surface each.
+      { id: 'admin-targets', label: 'Targets', href: '/admin/targets', group: 'Organization' },
       { id: 'scoring-qa', label: 'Scoring QA', href: '/admin/scoring-qa', group: 'Quality' },
       { id: 'qa-trust', label: 'QA & Trust', href: '/admin/qa', group: 'Quality' },
       { id: 'dataset', label: 'Dataset', href: '/admin/dataset', group: 'System' },
       { id: 'training-data', label: 'Training Data', href: '/admin/training-data', group: 'System' },
       { id: 'admin-ai-usage', label: 'AI Usage', href: '/admin/ai-usage', group: 'System' },
       { id: 'revenue-intelligence', label: 'Revenue Intelligence', href: '/admin/revenue-intelligence', group: 'System' },
-      { id: 'manage-profiles', label: 'Manage Profiles', href: '/manage-profiles', visible: (r) => r.isOwner, group: 'System' },
     ],
   },
 ]
@@ -214,9 +220,19 @@ export function domainForPathname(pathname: string): RelayNavDomain | null {
   if (pathname === '/dashboard') return 'home'
   if (pathname === '/chats' || pathname.startsWith('/chats/')) return 'inbox'
   if (pathname === '/inbound' || pathname.startsWith('/inbound/')) return 'inbox'
-  if (pathname === '/relay' || pathname.startsWith('/relay/')) return 'inbox'
   if (pathname === '/tasks' || pathname.startsWith('/tasks/')) return 'work'
-  if (pathname.startsWith('/team') || pathname.startsWith('/accountability')) return 'team'
+  // Profiles and identities are Team capabilities; /profile-intelligence is the
+  // implementation route behind Team → Identities, and the legacy /profiles and
+  // /manage-profiles URLs resolve there too.
+  if (
+    pathname.startsWith('/team') ||
+    pathname.startsWith('/accountability') ||
+    pathname.startsWith('/profile-intelligence') ||
+    pathname.startsWith('/profiles') ||
+    pathname.startsWith('/manage-profiles')
+  ) {
+    return 'team'
+  }
   if (pathname.startsWith('/content') || pathname.startsWith('/studio')) return 'content'
   if (pathname.startsWith('/reports') || pathname.startsWith('/performance')) return 'insights'
   if (pathname === '/settings' || pathname === '/account' || pathname === '/notifications') return 'settings'
@@ -227,33 +243,38 @@ export function domainForPathname(pathname: string): RelayNavDomain | null {
     pathname.startsWith('/leads') ||
     pathname.startsWith('/upwork') ||
     pathname.startsWith('/archive') ||
-    pathname.startsWith('/activate') ||
     pathname.startsWith('/revenue/email')
   ) {
     return 'sales'
   }
-  if (
-    pathname.startsWith('/admin') ||
-    pathname.startsWith('/profile-intelligence') ||
-    pathname.startsWith('/profiles') ||
-    pathname.startsWith('/manage-profiles') ||
-    pathname.startsWith('/facts') ||
-    pathname.startsWith('/workspace')
-  ) {
+  if (pathname.startsWith('/admin') || pathname.startsWith('/facts') || pathname.startsWith('/workspace')) {
     return 'admin'
   }
   return null
 }
 
-/** Record-detail routes hide the secondary rail so the page's own tabs are the only sub-nav. */
-export function isRecordDetailPathname(pathname: string): boolean {
-  return (
-    /^\/leads\/[^/]+/.test(pathname) ||
-    /^\/team\/[^/]+/.test(pathname) ||
-    /^\/accounts\/[^/]+/.test(pathname) ||
-    /^\/upwork\/[^/]+/.test(pathname) ||
-    /^\/profile-intelligence\/[^/]+/.test(pathname)
-  )
+/**
+ * Routes whose page renders its own sub-navigation. The shell's secondary rail
+ * steps aside on exactly these, so a page never shows two competing sub-navs.
+ *
+ * This is the single authority for rail visibility — the shell has no
+ * page-specific logic of its own. Anything not listed keeps the domain rail.
+ */
+const PAGE_OWNED_SUB_NAV: RegExp[] = [
+  /^\/chats(\/|$)/,
+  /^\/notifications(\/|$)/,
+  /^\/team\/targets(\/|$)/,
+  /^\/content\/ideas(\/|$)/,
+  // Company keys are names, not ids, so any /accounts/<key> owns its tabs.
+  /^\/accounts\/[^/]+/,
+  // Record details own tabs only when the segment is a record, not a list page.
+  /^\/leads\/(?!import$|new$)[^/]+/,
+  /^\/team\/(?!people$|profiles$|coverage$|workload$|targets$|activity$|performance$|groups$|eval$|fixture-)[^/]+/,
+]
+
+/** True when the active page renders its own sub-nav and the shell rail must hide. */
+export function pageOwnsSubNav(pathname: string): boolean {
+  return PAGE_OWNED_SUB_NAV.some((pattern) => pattern.test(pathname))
 }
 
 export function visibleDomains(role: RelayNavRoleFlags): RelayPrimaryDomain[] {
@@ -392,15 +413,16 @@ export function mobileNavItems(role: RelayNavRoleFlags): MobileNavItem[] {
   return items
 }
 
-/** Contents of the mobile "More" sheet — every role-valid domain and its functions. */
+/** Contents of the mobile "More" sheet — every role-valid domain the bottom bar omits. */
 export function moreSheetSections(role: RelayNavRoleFlags): Array<{
   id: RelayNavDomain
   label: string
   href: string
   items: Array<{ id: string; label: string; href: string }>
 }> {
+  const bottomBar = new Set(mobileNavItems(role).map((item) => item.id))
   return visibleDomains(role)
-    .filter((d) => d.id !== 'home' && d.id !== 'sales' && d.id !== 'inbox' && d.id !== 'team')
+    .filter((d) => !bottomBar.has(d.id))
     .map((d) => ({
       id: d.id,
       label: d.label,
