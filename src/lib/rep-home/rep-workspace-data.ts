@@ -100,4 +100,6 @@ export interface RepWorkspaceData {
   pipelineLeads?: import('@/lib/team/admin-command-summary').OpenLeadFact[]
   onRefreshSignals?: () => void
   onDismissSignal?: (id: string) => void
+  /** Today's operational coverage: own profiles, temporary coverage, readiness. */
+  coverage?: import('@/lib/coverage/load').RepCoverageView | null
 }

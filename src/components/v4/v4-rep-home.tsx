@@ -49,6 +49,8 @@ import {
   V4PriorityMark,
   V4StatStrip,
 } from '@/components/v4/primitives'
+import { RepCoveragePanel } from '@/components/coverage/rep-coverage-panel'
+import type { RepCoverageView } from '@/lib/coverage/load'
 
 const TREND_COLORS: Record<string, string> = {
   replies: 'var(--orange)',
@@ -90,6 +92,7 @@ export function V4RepHome({
   role,
   greeting,
   timeZone = 'UTC',
+  coverage,
 }: {
   data: RepWorkspaceData
   role: 'admin' | 'rep' | 'sourcer' | 'manager'
@@ -97,6 +100,8 @@ export function V4RepHome({
   greeting: string
   /** Org timezone — the one zone the server and client both render in. */
   timeZone?: string
+  /** Today's own + temporarily covered profiles. */
+  coverage?: RepCoverageView | null
 }) {
   const ranked = useMemo(() => rankActions(data.allActions ?? []), [data.allActions])
   const unified = useMemo(() => data.unifiedTasks ?? [], [data.unifiedTasks])
@@ -200,6 +205,10 @@ export function V4RepHome({
 
       <section aria-label="Today">
         <V4StatStrip items={stats} label="Today" />
+      </section>
+
+      <section aria-label="Your responsibilities today">
+        <RepCoveragePanel coverage={coverage ?? data.coverage} repDay={data.repDay} />
       </section>
 
       {data.profilesToday && data.profilesToday.length > 0 && (

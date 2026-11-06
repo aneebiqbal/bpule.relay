@@ -28,7 +28,7 @@ const TONE_CHIP: Record<V4Tone, string> = {
   neutral: 'bg-bone text-graphite ring-line',
   danger: 'bg-status-danger/10 text-[#8f2b1e] ring-status-danger/20',
   warning: 'bg-status-warning/10 text-[#7d5410] ring-status-warning/20',
-  success: 'bg-status-success/10 text-status-success ring-status-success/20',
+  success: 'bg-status-success/10 text-[#256b4a] ring-status-success/20',
   info: 'bg-cobalt/10 text-cobalt ring-cobalt/20',
 }
 

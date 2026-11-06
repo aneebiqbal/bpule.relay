@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { V4Chip, V4Panel } from '@/components/v4/primitives'
+import { CoverageConfigPanel } from '@/components/coverage/coverage-config-panel'
 import type { TeamProfileDetail } from '@/lib/team/profile-detail'
 
 const STATUS_TONE: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
@@ -137,6 +138,15 @@ export function TeamProfileDetailView({
           <p className="mt-3 text-[12px] text-stone">No daily target set for this profile.</p>
         )}
       </V4Panel>
+
+      <CoverageConfigPanel
+        profileId={detail.profileId}
+        primaryRepId={detail.coverage.primaryRepId}
+        backups={detail.coverage.backups}
+        reps={reps}
+        assignedRepIds={detail.assignedRepIds}
+        canManage={canManage}
+      />
 
       {message && (
         <div role="alert" className="rounded-xl border border-line bg-bone px-4 py-3 text-[12px] text-graphite">

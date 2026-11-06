@@ -1,0 +1,247 @@
+'use client'
+
+/**
+ * Admin Home — the operational coverage layer.
+ *
+ * Team status, profile coverage and the exceptions that need an approval.
+ * Everything else is unchanged: the daily plan only surfaces changes, so an
+ * admin never reconfigures the whole team each morning.
+ */
+import { useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { ChevronRight } from 'lucide-react'
+import { cn } from 'cn'
+import type { CoverageStatusView } from '@/lib/coverage/load'
+import {
+  V4Avatar,
+  V4Chip,
+  V4Empty,
+  V4Panel,
+  V4PanelHeader,
+} from '@/components/v4/primitives'
+
+const STATUS_TONE: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
+  COVERED: 'success',
+  BACKUP_ACTIVE: 'info',
+  AT_RISK: 'warning',
+  UNCOVERED: 'danger',
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  COVERED: 'Covered',
+  BACKUP_ACTIVE: 'Backup active',
+  AT_RISK: 'At risk',
+  UNCOVERED: 'Uncovered',
+}
+
+export function AdminCoveragePanel({
+  status,
+  businessDate,
+}: {
+  status: CoverageStatusView | null | undefined
+  businessDate?: string
+}) {
+  const router = useRouter()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  async function approve(items: Array<{ profileId: string; kind: 'COVER' | 'RESTORE_PRIMARY' }>) {
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const res = await fetch('/api/team/coverage/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (res.status === 207) {
+        const failed = (body.results ?? []).filter((row: { applied: boolean }) => !row.applied)
+        setError(
+          `Coverage partially applied — ${failed.length} of ${(body.results ?? []).length} changes failed. Review and retry.`,
+        )
+        router.refresh()
+        return
+      }
+      if (!res.ok) {
+        setError(body.error ?? 'Coverage could not be applied.')
+        return
+      }
+      setNotice('Coverage plan applied.')
+      router.refresh()
+    } catch {
+      setError('Network error. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!status) {
+    return (
+      <V4Panel>
+        <V4PanelHeader eyebrow="Operations" title="Coverage" hint="Could not be loaded" />
+        <p className="mt-3 text-[12px] text-stone">
+          The coverage plan could not be loaded. Team progress above is unaffected.
+        </p>
+      </V4Panel>
+    )
+  }
+
+  const { summary, plan } = status
+  const exceptions = plan.requiresApproval
+
+  return (
+    <V4Panel>
+      <V4PanelHeader
+        eyebrow={`Operations · ${businessDate ?? plan.businessDate}`}
+        title="Team coverage"
+        hint={`Policy: ${plan.coveragePolicy === 'APPROVAL_REQUIRED' ? 'approval required' : plan.coveragePolicy.toLowerCase().replace(/_/g, ' ')}`}
+        action={
+          <Link
+            href="/team/coverage"
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink"
+          >
+            Weekly review <ChevronRight className="size-3.5" aria-hidden />
+          </Link>
+        }
+      />
+
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <StatusFact label="Working" value={summary.working} tone="text-status-success" />
+        <StatusFact label="On leave" value={summary.onLeave} tone="text-[#7d5410]" />
+        <StatusFact label="Offline" value={summary.offline} tone="text-graphite" />
+        <StatusFact label="Covered" value={summary.covered} tone="text-status-success" />
+        <StatusFact label="Backup active" value={summary.backupActive} tone="text-cobalt" />
+        <StatusFact label="At risk" value={summary.atRisk + summary.uncovered} tone="text-[#8f2b1e]" />
+      </div>
+
+      <div className="mt-5 border-t border-line/70 pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-[13px] font-medium text-ink">
+            Action required
+            <span className="ml-2 text-[12px] font-normal text-stone">
+              {exceptions.length === 0
+                ? `✓ ${plan.unchanged} profile${plan.unchanged === 1 ? '' : 's'} unchanged`
+                : `${exceptions.length} change${exceptions.length === 1 ? '' : 's'} awaiting approval`}
+            </span>
+          </h3>
+          {exceptions.length > 0 && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => approve(exceptions.map((item) => ({ profileId: item.profileId, kind: item.kind })))}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:opacity-60"
+            >
+              Approve all
+            </button>
+          )}
+        </div>
+
+        {error && (
+          <p role="alert" className="mt-3 rounded-lg border border-status-danger/30 bg-status-danger/5 px-3 py-2 text-[12px] text-graphite">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p role="status" className="mt-3 rounded-lg border border-status-success/30 bg-status-success/5 px-3 py-2 text-[12px] text-graphite">
+            {notice}
+          </p>
+        )}
+
+        {exceptions.length === 0 ? (
+          <div className="mt-3">
+            <V4Empty
+              title="No coverage changes needed"
+              body="Every profile is covered by its primary rep. Leave coverage will appear here automatically."
+            />
+          </div>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {exceptions.map((item) => (
+              <li
+                key={`${item.profileId}:${item.kind}`}
+                className="rounded-xl bg-bone px-4 py-3 ring-1 ring-line/70"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <V4Avatar name={item.profileName} size="sm" />
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium text-ink">
+                        {item.profileName}
+                        <span className="ml-2 text-[11px] font-normal uppercase tracking-[0.12em] text-stone">
+                          {item.channels.join(' + ')}
+                        </span>
+                      </p>
+                      <p className="mt-0.5 text-[12px] text-graphite">
+                        {item.kind === 'RESTORE_PRIMARY'
+                          ? `${item.fromRepName} → ${item.toRepName}`
+                          : `${item.fromRepName} → ${item.toRepName}`}
+                        {' · '}
+                        {item.reason}
+                      </p>
+                      <p className="mt-1 text-[11px] text-stone">
+                        {item.workPackage.replies} replies · {item.workPackage.followUps} follow-ups ·{' '}
+                        {item.workPackage.tasks} task{item.workPackage.tasks === 1 ? '' : 's'}
+                        {item.readinessRequired ? ' · device access not confirmed' : ''}
+                      </p>
+                      {!item.readinessRequired && (
+                        <p className="mt-1 text-[11px] text-status-success">✓ Covering rep confirmed on this device</p>
+                      )}
+                      <p className="mt-1 text-[11px] text-stone">
+                        No lead ownership will change. Historical attribution will not change.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => approve([{ profileId: item.profileId, kind: item.kind }])}
+                    className={cn(
+                      'shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-transform active:scale-[0.98] disabled:opacity-60',
+                      item.kind === 'RESTORE_PRIMARY'
+                        ? 'border border-line bg-bone-raised text-ink hover:bg-bone'
+                        : 'bg-solid text-on-solid',
+                    )}
+                  >
+                    {item.kind === 'RESTORE_PRIMARY' ? 'Restore primary' : 'Approve coverage'}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Full coverage status, visible immediately. */}
+      <div className="mt-5 border-t border-line/70 pt-4">
+        <h3 className="text-[13px] font-medium text-ink">Profile coverage</h3>
+        <ul className="mt-2 space-y-1.5">
+          {plan.profiles.map((profile) => (
+            <li key={profile.profileId} className="flex flex-col gap-1 text-[12px] sm:flex-row sm:items-center sm:gap-x-3">
+              <span className="min-w-0 flex-1 truncate text-ink">{profile.name}</span>
+              <span className="text-graphite">
+                {profile.primaryRepName ?? 'No primary'}
+                {profile.activeCoveringRepName ? ` · covering ${profile.activeCoveringRepName}` : ''}
+              </span>
+              <V4Chip tone={STATUS_TONE[profile.status] ?? 'neutral'} className="w-fit sm:shrink-0">
+                {STATUS_LABEL[profile.status] ?? profile.status}
+              </V4Chip>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </V4Panel>
+  )
+}
+
+function StatusFact({ label, value, tone }: { label: string; value: number; tone: string }) {
+  return (
+    <div className="rounded-xl bg-bone px-3 py-2.5 ring-1 ring-line/70">
+      <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">{label}</p>
+      <p className={cn('mt-1 text-[18px] font-medium leading-none tabular-nums', tone)}>{value}</p>
+    </div>
+  )
+}

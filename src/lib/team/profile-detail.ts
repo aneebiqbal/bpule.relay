@@ -8,12 +8,14 @@ export interface TeamProfileDetail {
   channels: string[]
   identityIds: string[]
   assignedReps: string[]
+  assignedRepIds: string[]
   targetCount: number
   completedCount: number
   remaining: number
   status: string | null
   targets: Array<{ activityType: string; targetCount: number; completedCount: number; status: string | null }>
   businessDate: string
+  coverage: { primaryRepId: string | null; backups: Array<{ repId: string; priority: number }> }
 }
 
 /** One operational detail surface for a sending profile. */
@@ -41,7 +43,7 @@ export async function loadTeamProfileDetail(
     .limit(50)
   const identityIds = (identities ?? []).map((identity) => identity.id)
 
-  const [assignmentRes, targetRes, accountabilityRes] = await Promise.all([
+  const [assignmentRes, targetRes, accountabilityRes, coverageRes] = await Promise.all([
     identityIds.length > 0
       ? supabase.from('identity_assignments').select('rep_id').eq('organization_id', orgId).in('revenue_identity_id', identityIds).limit(200)
       : Promise.resolve({ data: [] as Array<{ rep_id: string }> }),
@@ -51,6 +53,7 @@ export async function loadTeamProfileDetail(
     identityIds.length > 0
       ? supabase.from('daily_accountability').select('revenue_identity_id, activity_type, completed_count, status').eq('organization_id', orgId).in('revenue_identity_id', identityIds).eq('target_date', businessDate).limit(200)
       : Promise.resolve({ data: [] as Array<{ revenue_identity_id: string; activity_type: string; completed_count: number; status: string | null }> }),
+    supabase.from('profile_coverage').select('rep_id, role, priority').eq('organization_id', orgId).eq('profile_id', profileId).eq('active', true).limit(50),
   ])
 
   const repIds = [...new Set((assignmentRes.data ?? []).map((assignment) => assignment.rep_id))]
@@ -91,6 +94,15 @@ export async function loadTeamProfileDetail(
     channels: [...new Set((identities ?? []).map((identity) => identity.channel))].sort(),
     identityIds,
     assignedReps: repIds.map((id) => repNameById.get(id) ?? 'Unknown'),
+    assignedRepIds: repIds,
+    coverage: {
+      primaryRepId:
+        (coverageRes.data ?? []).find((row) => row.role === 'PRIMARY')?.rep_id ?? null,
+      backups: (coverageRes.data ?? [])
+        .filter((row) => row.role === 'BACKUP')
+        .sort((a, b) => a.priority - b.priority)
+        .map((row) => ({ repId: row.rep_id, priority: row.priority })),
+    },
     targetCount,
     completedCount,
     remaining: Math.max(0, targetCount - completedCount),

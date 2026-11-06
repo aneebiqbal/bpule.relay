@@ -35,6 +35,8 @@ import {
   V4Panel,
   V4PanelHeader,
 } from '@/components/v4/primitives'
+import { AdminCoveragePanel } from '@/components/coverage/admin-coverage-panel'
+import type { CoverageStatusView } from '@/lib/coverage/load'
 
 const ATTENTION_TONE = {
   critical: 'danger',
@@ -119,12 +121,15 @@ export function V4AdminHome({
   adminName,
   error,
   greeting,
+  coverage,
 }: {
   data: AdminCommandCenterData
   adminName: string
   error?: boolean
   /** Server-computed in the viewer's timezone so SSR and hydration agree. */
   greeting: string
+  /** Daily coverage: team status, profile coverage, exceptions. */
+  coverage?: CoverageStatusView | null
 }) {
   const teamDay = data.teamDay
   const attention = useMemo(() => buildAdminV3Attention(data.attention), [data.attention])
@@ -305,6 +310,11 @@ export function V4AdminHome({
             </div>
           </div>
         </V4Panel>
+      </section>
+
+      {/* COVERAGE — who is working, which profiles need cover, what to approve. */}
+      <section aria-label="Coverage">
+        <AdminCoveragePanel status={coverage} businessDate={teamDay.businessDate} />
       </section>
 
       {/* ATTENTION — the strongest block on the page. */}

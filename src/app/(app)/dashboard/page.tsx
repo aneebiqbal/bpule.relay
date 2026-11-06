@@ -50,7 +50,15 @@ export default async function TodayPage() {
 
   if (authCtx.isOwner || authCtx.isAdmin) {
     // Org Command Center — no analytics fan-out on first paint (Reports owns charts).
-    const adminResult = await perfTrace('admin:loadAdminCommandCenter', () => loadAdminCommandCenter())
+    // Coverage is an independent operational read; a failure must not take the
+    // command center down.
+    const [adminResult, coverage] = await Promise.all([
+      perfTrace('admin:loadAdminCommandCenter', () => loadAdminCommandCenter()),
+      perfTrace('admin:loadCoverageStatus', () =>
+        import('@/lib/coverage/load').then((m) =>
+          m.loadCoverageStatus(authCtx.orgId).catch(() => null),
+        )),
+    ])
     return (
       <Suspense fallback={<DashboardShellSkeleton />}>
         <V4AdminHome
@@ -58,6 +66,7 @@ export default async function TodayPage() {
           adminName={user.rep.name}
           error={adminResult.error}
           greeting={greeting}
+          coverage={coverage}
         />
       </Suspense>
     )
@@ -315,6 +324,14 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   let tasksTrend: Map<string, number> | null = null
   let tasksCompletedToday: number | null = null
   let targetWindows: RepWorkspaceData['targetWindows'] = null
+  let coverage: RepWorkspaceData['coverage'] = undefined
+  if (user.organization?.id) {
+    // Coverage is optional: a failure must never take the rep's Today down.
+    coverage = await perfTrace('rep:coverage', () =>
+      import('@/lib/coverage/load').then((m) =>
+        m.loadRepCoverage(user.organization.id, user.rep.id).catch(() => null),
+      ))
+  }
   if (user.organization?.id) {
     const policy = await perfTrace('rep:operatingPolicy', () =>
       loadOperatingPolicy(user.organization.id).catch(() => null))
@@ -380,6 +397,7 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
         }
       : null,
     repDay,
+    coverage,
     isWorkingDay: workspace.isWorkingDay,
     hasAssignments: workspace.hasAssignments,
     identities: identityRows,
