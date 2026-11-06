@@ -310,12 +310,18 @@ export function V3PersonRow({
 
 export function V3StageStrip({
   stages,
+  compact = false,
 }: {
   stages: Array<{ key: string; label: string; count: number; href: string; conversionPct?: number | null }>
+  /** 3 columns instead of 6 — for narrow panels where 6 would truncate labels. */
+  compact?: boolean
 }) {
   const max = Math.max(1, ...stages.map((stage) => stage.count))
   return (
-    <ul className="grid grid-cols-3 divide-x divide-line overflow-hidden rounded-lg border border-line bg-bone-raised sm:grid-cols-6">
+    <ul className={cn(
+      'grid grid-cols-3 divide-x divide-line overflow-hidden rounded-lg border border-line bg-bone-raised',
+      compact ? 'sm:grid-cols-3' : 'sm:grid-cols-6',
+    )}>
       {stages.map((stage) => (
         <li key={stage.key} className="min-w-0">
           <Link

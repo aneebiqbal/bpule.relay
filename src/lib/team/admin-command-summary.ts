@@ -7,6 +7,7 @@
 import { qualifyCanonicalScore } from '@/lib/scoring/qualification'
 import { stageRatioPct } from '@/lib/operations/reports'
 import type { TeamDaySummary } from '@/lib/rep-day/team'
+import type { ProfileCompletionStatus } from '@/lib/rep-home/profile-completion'
 import type { TeamLivePayload } from '@/lib/admin/team-live'
 import type { DailyActivity, ActivityTrendPoint } from '@/lib/performance/activity-model'
 import {
@@ -58,6 +59,58 @@ export interface ProfilePerformanceRow {
   replyRate: number | null
 }
 
+/** Profile execution for today: one row per sending profile, canonical completion. */
+export interface AdminProfileExecutionRow {
+  profileId: string
+  name: string
+  channels: string[]
+  assignedReps: string[]
+  targetCount: number
+  completedCount: number
+  remaining: number
+  status: ProfileCompletionStatus | null
+  followUps: number
+  proposals: number
+}
+
+/** Today's sales movement — canonical executed events and new-pipeline counts. */
+export interface AdminMovement {
+  newLeadsToday: number
+  qualifiedToday: number
+  repliesHandledToday: number
+  followupsToday: number
+  meetingsToday: number
+  winsToday: number
+  proposalsToday: number
+}
+
+/** Yesterday's persisted totals for the today-vs-yesterday comparison. */
+export interface AdminYesterday {
+  completed: number
+  replies: number
+  followups: number
+  meetings: number
+  wins: number
+  proposals: number
+  newLeads: number
+}
+
+export function emptyMovement(): AdminMovement {
+  return {
+    newLeadsToday: 0,
+    qualifiedToday: 0,
+    repliesHandledToday: 0,
+    followupsToday: 0,
+    meetingsToday: 0,
+    winsToday: 0,
+    proposalsToday: 0,
+  }
+}
+
+export function emptyYesterday(): AdminYesterday {
+  return { completed: 0, replies: 0, followups: 0, meetings: 0, wins: 0, proposals: 0, newLeads: 0 }
+}
+
 export interface AdminCommandCenterData {
   orgName: string
   isOwner: boolean
@@ -70,6 +123,12 @@ export interface AdminCommandCenterData {
   profiles: ProfilePerformanceRow[]
   /** Active channel identities with no rep assignment — surfaced, never buried. */
   unassignedProfiles?: number
+  /** Upwork proposal coverage: usable profiles, unassigned ones, reps with none. */
+  upworkCoverage?: {
+    upworkIdentities: number
+    upworkUnassigned: number
+    repsWithoutUpwork: number
+  }
   activity: ManagerActivityItem[]
   /** 12-week org daily activity for the team heatmap (null when unavailable). */
   activityDaily?: DailyActivity[] | null
@@ -86,6 +145,17 @@ export interface AdminCommandCenterData {
     tasksCompleted: number
     meetings: number
   } | null
+  /** Org-wide daily target and completion sums — the truthful denominator. */
+  teamTarget: number
+  teamCompleted: number
+  /** Canonical rep-day contract for today — the authority for state and remaining work. */
+  teamDay: TeamDaySummary
+  /** Per-profile today completion, the profile-first view of execution. */
+  profileExecution: AdminProfileExecutionRow[]
+  /** Today's sales movement. */
+  movement: AdminMovement
+  /** Yesterday's persisted totals. */
+  yesterday: AdminYesterday
   scopeNote: 'organization'
 }
 
@@ -196,6 +266,49 @@ export function buildStuckOpportunities(leads: OpenLeadFact[], now = Date.now())
     .slice(0, 12)
 }
 
+/**
+ * Profile exceptions are real operational signals: a profile with a target that
+ * has not been started, or one materially behind pace. Derived from the same
+ * canonical completion status Rep Home uses — never a new score.
+ */
+export function buildProfileAttentionSignals(
+  profiles: ReadonlyArray<AdminProfileExecutionRow>,
+): AttentionSignal[] {
+  const signals: AttentionSignal[] = []
+  for (const profile of profiles) {
+    if (profile.targetCount <= 0) continue
+    const owner = profile.assignedReps.join(', ') || 'Unassigned'
+    if (profile.completedCount === 0) {
+      signals.push({
+        category: 'PROFILE_NOT_STARTED',
+        repId: profile.profileId,
+        repName: profile.name,
+        count: 1,
+        reason: `Not started · 0 / ${profile.targetCount}`,
+        severity: 'attention',
+        oldestAgeHours: null,
+        href: '/manage-profiles',
+        subject: owner,
+      })
+      continue
+    }
+    if (profile.status === 'AT_RISK' || profile.status === 'BEHIND') {
+      signals.push({
+        category: 'PROFILE_BEHIND',
+        repId: profile.profileId,
+        repName: profile.name,
+        count: profile.remaining,
+        reason: `${profile.status === 'AT_RISK' ? 'At risk' : 'Behind'} · ${profile.remaining} remaining`,
+        severity: profile.status === 'AT_RISK' ? 'critical' : 'attention',
+        oldestAgeHours: null,
+        href: '/manage-profiles',
+        subject: owner,
+      })
+    }
+  }
+  return signals
+}
+
 export function buildOrgAttentionExtras(input: {
   missingProfileCount: number
   stuckCritical: number
@@ -243,6 +356,11 @@ export function assembleAdminCommandCenter(input: {
   overdueTasksByRep?: Map<string, number>
   unassignedTasks?: number
   outcomeEventsByRep?: Map<string, { meetings: number; wins: number }>
+  profileExecution?: AdminProfileExecutionRow[]
+  movement?: AdminMovement
+  yesterday?: AdminYesterday
+  teamTarget?: number
+  teamCompleted?: number
 }): AdminCommandCenterData {
   const team = assembleManagerHomeTeamData({
     teamName: input.orgName,
@@ -262,7 +380,8 @@ export function assembleAdminCommandCenter(input: {
     unassignedTasks: input.unassignedTasks,
   })
 
-  const attention = [...extras, ...team.attention].sort((a, b) => {
+  const profileSignals = buildProfileAttentionSignals(input.profileExecution ?? [])
+  const attention = [...extras, ...team.attention, ...profileSignals].sort((a, b) => {
     const rank = { critical: 0, attention: 1, normal: 2 } as const
     const bySev = rank[a.severity] - rank[b.severity]
     if (bySev !== 0) return bySev
@@ -296,6 +415,12 @@ export function assembleAdminCommandCenter(input: {
     stuck,
     profiles: input.profiles,
     activity: input.activity.slice(0, 15),
+    teamDay: input.teamDay,
+    teamTarget: input.teamTarget ?? 0,
+    teamCompleted: input.teamCompleted ?? 0,
+    profileExecution: input.profileExecution ?? [],
+    movement: input.movement ?? emptyMovement(),
+    yesterday: input.yesterday ?? emptyYesterday(),
     scopeNote: 'organization',
   }
 }

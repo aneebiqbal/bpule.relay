@@ -8,21 +8,29 @@ import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { activityLabelForAction, filterTeamLiveToRepIds } from '@/lib/team/manager-home-summary'
 import {
   assembleAdminCommandCenter,
+  emptyMovement,
+  emptyYesterday,
   type AdminCommandCenterData,
+  type AdminMovement,
+  type AdminProfileExecutionRow,
+  type AdminYesterday,
   type OpenLeadFact,
   type ProfilePerformanceRow,
 } from '@/lib/team/admin-command-summary'
+import { buildTeamProfiles } from '@/lib/team/profiles'
+import { profileCompletionStatus } from '@/lib/rep-home/profile-completion'
+import { qualifyCanonicalScore } from '@/lib/scoring/qualification'
 import type { ManagerActivityItem } from '@/lib/team/manager-home-summary'
 import {
   countOverdueAssignedByRep,
   countUnassignedOpenTasks,
 } from '@/lib/tasks/assigned-tasks'
 import { loadOutcomeEventCounts } from '@/lib/operations/outcome-events'
+import { normalizeChannel } from '@/lib/profiles/assigned-profiles'
 import { groupMetrics, identityResolver, PERFORMANCE_ACTION_TYPES, type PerfEvent } from '@/lib/operations/performance'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
-import { getRepDailyActivity, buildActivityTrendPoints, type DailyActivity } from '@/lib/performance/activity-model'
-import { taskCompletionCountsSql, teamTasksTrendSql } from '@/lib/analytics/aggregates'
-import { ADMIN_TREND_SERIES, buildAdminExecutionByRep } from '@/lib/admin/v3-command-present'
+import { taskCompletionCountsSql } from '@/lib/analytics/aggregates'
+import { buildAdminExecutionByRep } from '@/lib/admin/v3-command-present'
 import { perfTrace } from '@/lib/perf-trace'
 
 const MEANINGFUL_ACTIONS = [
@@ -74,6 +82,23 @@ function emptyAdmin(orgName: string, isOwner: boolean): AdminCommandCenterData {
     stuck: [],
     profiles: [],
     activity: [],
+    teamDay: {
+      businessDate: '',
+      timezone: 'UTC',
+      isWorkingDay: false,
+      workdayProgress: 0,
+      minutesRemaining: 0,
+      workdayStart: '09:00',
+      workdayEnd: '18:00',
+      counts: { NOT_STARTED: 0, ACTIVE: 0, AT_RISK: 0, CRITICAL: 0, READY_TO_CLOSE: 0, CLOSED: 0, MISSED: 0 },
+      totals: { reps: 0, requiredRemaining: 0, commitmentProgress: 0, repliesWaiting: 0, actionsToday: 0, pipelineCreated: 0 },
+      reps: [],
+    },
+    teamTarget: 0,
+    teamCompleted: 0,
+    profileExecution: [],
+    movement: emptyMovement(),
+    yesterday: emptyYesterday(),
     scopeNote: 'organization',
   }
 }
@@ -105,10 +130,12 @@ export async function loadAdminCommandCenter(): Promise<{
     const now = currentInstant()
     const businessDate = orgDate(now, policy.timezone)
     const dayRange = businessDateRange(businessDate, policy.timezone)
+    const yesterdayDate = addDays(businessDate, -1)
+    const yesterdayRange = businessDateRange(yesterdayDate, policy.timezone)
     const weekStart = new Date(dayRange.start)
     weekStart.setUTCDate(weekStart.getUTCDate() - 7)
 
-    const [teamDay, teamLiveFull, leadsResult, identitiesResult, assignmentsResult, profileEventsResult, activityResult, repsResult, overdueTasksByRep, unassignedTasks, todayOutcomes, weekOutcomes] =
+    const [teamDay, teamLiveFull, leadsResult, identitiesResult, assignmentsResult, profileEventsResult, activityResult, repsResult, overdueTasksByRep, unassignedTasks, todayOutcomes, weekOutcomes, yesterdayAccountabilityResult, todayNewLeadsResult, yesterdayNewLeadsResult, yesterdayEventsResult, yesterdayOutcomes] =
       await perfTrace('admin:main-batch', () => Promise.all([
         loadTeamDay(),
         loadTeamLive(ctx.orgId),
@@ -154,6 +181,35 @@ export async function loadAdminCommandCenter(): Promise<{
         countUnassignedOpenTasks(supabase, ctx.orgId),
         loadOutcomeEventCounts(supabase, { orgId: ctx.orgId, repIds: null, start: dayRange.start, end: dayRange.end }),
         loadOutcomeEventCounts(supabase, { orgId: ctx.orgId, repIds: null, start: weekStart.toISOString(), end: dayRange.end }),
+        supabase
+          .from('daily_accountability')
+          .select('rep_id, completed_count')
+          .eq('organization_id', ctx.orgId)
+          .eq('target_date', yesterdayDate)
+          .limit(5000),
+        supabase
+          .from('leads')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', ctx.orgId)
+          .eq('archived', false)
+          .gte('created_at', dayRange.start)
+          .lt('created_at', dayRange.end),
+        supabase
+          .from('leads')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', ctx.orgId)
+          .eq('archived', false)
+          .gte('created_at', yesterdayRange.start)
+          .lt('created_at', yesterdayRange.end),
+        supabase
+          .from('action_events')
+          .select('action_type, execution_status')
+          .eq('organization_id', ctx.orgId)
+          .in('action_type', ['REPLY_SENT', 'FOLLOWUP_SENT', 'UPWORK_PROPOSAL_PREPARED'])
+          .gte('occurred_at', yesterdayRange.start)
+          .lt('occurred_at', yesterdayRange.end)
+          .limit(5000),
+        loadOutcomeEventCounts(supabase, { orgId: ctx.orgId, repIds: null, start: yesterdayRange.start, end: yesterdayRange.end }),
       ]))
 
     const allowed = new Set(teamDay.reps.map((r) => r.repId))
@@ -186,14 +242,6 @@ export async function loadAdminCommandCenter(): Promise<{
     // Performance uses. Used for the comparison and the execution visual.
     const executionByRep = buildAdminExecutionByRep(profileEvents)
 
-    // Charts degrade independently: a failed heatmap or trend never takes the
-    // health metrics, attention list or actions down.
-    const [activityDaily, tasksTrend] = await perfTrace('admin:visual-batch', () => Promise.all([
-      perfTrace('admin:orgActivity', () =>
-        loadOrgActivityDaily(ctx.orgId, businessDate, policy.timezone).catch(() => null)),
-      perfTrace('admin:orgTasksTrend', () =>
-        loadOrgTasksTrend(ctx.orgId, businessDate, policy.timezone).catch(() => null)),
-    ]))
     const tasksCompletedTodayByRep = await perfTrace('admin:taskCompletions', () =>
       loadTaskCompletionCounts(ctx.orgId, dayRange.start, dayRange.end).catch(() => new Map<string, number>()))
 
@@ -204,10 +252,62 @@ export async function loadAdminCommandCenter(): Promise<{
       tasksCompleted: tasksCompletedToday,
       meetings: todayOutcomes.meetings,
     }
-    const trendPoints = activityDaily && tasksTrend
-      ? buildActivityTrendPoints(activityDaily, tasksTrend, ADMIN_TREND_SERIES)
-      : null
 
+    // Profile-first execution: one row per sending profile, completion from the
+    // same canonical pacing function Rep Home uses.
+    const profileExecution: AdminProfileExecutionRow[] = buildTeamProfiles(teamLive).map((row) => ({
+      profileId: row.profileId,
+      name: row.profileName,
+      channels: row.channels,
+      assignedReps: row.assignedReps,
+      targetCount: row.targetCount,
+      completedCount: row.completedCount,
+      remaining: row.remaining,
+      status: profileCompletionStatus(row.targetCount, row.completedCount, teamDay.workdayProgress, policy.warningThresholds),
+      followUps: row.followUps,
+      proposals: row.proposals,
+    }))
+
+    const proposalsToday = profileEvents.filter(
+      (event) => event.action_type === 'UPWORK_PROPOSAL_PREPARED' && event.execution_status !== 'failed',
+    ).length
+
+    // New qualified leads today — canonical score band on leads created today.
+    const qualifiedToday = openLeads.filter((lead) => {
+      if (!lead.updatedAt || lead.canonicalScore == null) return false
+      if (lead.updatedAt < dayRange.start || lead.updatedAt >= dayRange.end) return false
+      const band = qualifyCanonicalScore(lead.canonicalScore).qualification
+      return band === 'STRONG' || band === 'WORTH_PURSUING'
+    }).length
+
+    const teamTarget = teamLive.people.reduce((sum, person) => sum + person.totalTarget, 0)
+    const teamCompleted = teamLive.people.reduce((sum, person) => sum + person.totalCompleted, 0)
+
+    const movement: AdminMovement = {
+      newLeadsToday: todayNewLeadsResult.count ?? 0,
+      qualifiedToday,
+      repliesHandledToday: executionToday.repliesHandled,
+      followupsToday: executionToday.followupsCompleted,
+      meetingsToday: todayOutcomes.meetings,
+      winsToday: todayOutcomes.wins,
+      proposalsToday,
+    }
+
+    const yesterdayEvents = (yesterdayEventsResult.data ?? []) as Array<{ action_type: string; execution_status: string | null }>
+    const countYesterday = (actionType: string) =>
+      yesterdayEvents.filter((event) => event.action_type === actionType && event.execution_status !== 'failed').length
+    const yesterday: AdminYesterday = {
+      completed: (yesterdayAccountabilityResult.data ?? []).reduce(
+        (sum, row) => sum + (row.completed_count ?? 0),
+        0,
+      ),
+      replies: countYesterday('REPLY_SENT'),
+      followups: countYesterday('FOLLOWUP_SENT'),
+      meetings: yesterdayOutcomes.meetings,
+      wins: yesterdayOutcomes.wins,
+      proposals: countYesterday('UPWORK_PROPOSAL_PREPARED'),
+      newLeads: yesterdayNewLeadsResult.count ?? 0,
+    }
     const identityByLead = new Map(openLeads.map((l) => [l.id, l.revenueIdentityId]))
     const closedLeadIds = [...new Set(profileEvents.map((e) => e.lead_id).filter((id): id is string => !!id && !identityByLead.has(id)))]
     const closedLeads = await chunkedIn<{ id: string; revenue_identity_id: string | null }>(closedLeadIds, (chunk) =>
@@ -227,6 +327,25 @@ export async function loadAdminCommandCenter(): Promise<{
     const unassignedProfiles = (identitiesResult.data ?? []).filter(
       (identity) => !assignedIdentityIds.has(identity.id as string),
     ).length
+
+    // Upwork coverage: which sending profiles can actually be used for
+    // proposals, and which reps have none. Derived from the same identity +
+    // assignment rows already loaded — no extra query.
+    const upworkIdentityIds = (identitiesResult.data ?? [])
+      .filter((identity) => normalizeChannel(identity.channel as string) === 'upwork')
+      .map((identity) => identity.id as string)
+    const upworkAssignedRepIds = new Set(
+      (assignmentsResult.data ?? [])
+        .filter((a) => upworkIdentityIds.includes(a.revenue_identity_id as string))
+        .map((a) => a.rep_id as string),
+    )
+    const upworkCoverage = {
+      upworkIdentities: upworkIdentityIds.length,
+      upworkUnassigned: upworkIdentityIds.filter((id) => !assignedIdentityIds.has(id)).length,
+      repsWithoutUpwork: (repsResult.data ?? []).filter(
+        (rep) => !upworkAssignedRepIds.has(rep.id as string),
+      ).length,
+    }
 
     const profiles: ProfilePerformanceRow[] = (identitiesResult.data ?? [])
       .filter((i) => assignedIdentityIds.has(i.id as string) || leadsByIdentity.has(i.id as string))
@@ -286,63 +405,27 @@ export async function loadAdminCommandCenter(): Promise<{
       overdueTasksByRep,
       unassignedTasks,
       outcomeEventsByRep: todayOutcomes.byActor,
+      profileExecution,
+      movement,
+      yesterday,
+      teamTarget,
+      teamCompleted,
     })
 
     return {
       data: {
         ...data,
-        activityDaily,
-        trendPoints,
         executionByRep,
         tasksCompletedTodayByRep,
         executionToday,
         unassignedProfiles,
+        upworkCoverage,
       },
     }
   } catch (err) {
     console.error('loadAdminCommandCenter failed:', err)
     return { data: emptyAdmin(orgName, isOwner), error: true }
   }
-}
-
-/**
- * Twelve weeks of org-wide daily activity for the Admin team heatmap.
- * One grouped aggregate; the day drilldown is never requested here.
- */
-async function loadOrgActivityDaily(
-  orgId: string,
-  businessDate: string,
-  timezone: string,
-): Promise<DailyActivity[]> {
-  const start = businessDateRange(addDays(businessDate, -83), timezone).start
-  const end = businessDateRange(businessDate, timezone).end
-  const supabase = await createServerSupabase()
-  const result = await getRepDailyActivity({
-    // null = whole organization; the per-rep predicate is omitted in SQL.
-    repId: null,
-    orgId,
-    startDate: new Date(start),
-    endDate: new Date(end),
-    timezone,
-    supabase,
-  })
-  return result.daily
-}
-
-/** Org task completions per day for the trend series. */
-async function loadOrgTasksTrend(
-  orgId: string,
-  businessDate: string,
-  timezone: string,
-): Promise<Map<string, number>> {
-  const start = businessDateRange(addDays(businessDate, -29), timezone).start
-  const end = businessDateRange(businessDate, timezone).end
-  const supabase = await createServerSupabase()
-  if (supabase.provider !== 'neon' || !supabase.raw) return new Map()
-  const { sql, params } = teamTasksTrendSql({ orgId, repIds: null, start, end, timezone })
-  const res = await supabase.raw<{ day: string; tasks: number }[]>(sql, params)
-  if (res.error || !Array.isArray(res.data)) return new Map()
-  return new Map(res.data.map((row) => [String(row.day), Number(row.tasks)]))
 }
 
 /** Assigned tasks completed today, grouped by assignee. */

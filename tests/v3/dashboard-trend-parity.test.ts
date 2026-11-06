@@ -67,11 +67,9 @@ describe('ADMIN_DASHBOARD_TREND', () => {
     expect(points[1].tasks).toBe(3)
   })
 
-  it('shares one trend builder between the Rep and Admin dashboards', () => {
+  it('Rep Home builds the trend from the canonical activity breakdown', () => {
     const repLoader = read('src/app/(app)/dashboard/page.tsx')
     expect(repLoader).toContain('buildActivityTrendPoints(activityDaily, tasksTrend, REP_TREND_SERIES)')
-    const adminLoader = read('src/lib/team/load-admin-command-center.ts')
-    expect(adminLoader).toContain('buildActivityTrendPoints(activityDaily, tasksTrend, ADMIN_TREND_SERIES)')
   })
 
   it('only uses canonical breakdown keys (or tasks) as series on both dashboards', () => {

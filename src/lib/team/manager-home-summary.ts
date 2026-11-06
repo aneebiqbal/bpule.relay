@@ -29,6 +29,8 @@ export interface ManagerTeamRow {
   meetings: number
   wins: number
   targetPct: number
+  /** Canonical daily target sum; undefined when the snapshot has no target data. */
+  totalTarget?: number
   status: RepStatus
 }
 
@@ -131,6 +133,7 @@ export function assembleManagerRepSnapshots(input: {
       meetings: meetingsFor(row.repId, live),
       wins: winsFor(row.repId, live),
       targetPct,
+      totalTarget,
       // Ages only when measured; never invent hours for severity.
       oldestReplyAgeHours: null,
       oldestFollowUpAgeHours: null,
@@ -161,6 +164,7 @@ export function assembleManagerRepSnapshots(input: {
       meetings: meetingsFor(person.repId, person),
       wins: winsFor(person.repId, person),
       targetPct,
+      totalTarget: person.totalTarget,
       oldestReplyAgeHours: null,
       oldestFollowUpAgeHours: null,
       oldestHighPriorityAgeHours: null,
@@ -205,6 +209,7 @@ export function assembleManagerHomeTeamData(input: {
         meetings: snap.meetings,
         wins: snap.wins,
         targetPct: Math.round(snap.targetPct),
+        totalTarget: snap.totalTarget ?? 0,
         status: deriveRepStatus(signals),
       }
     })

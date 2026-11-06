@@ -15,6 +15,8 @@ export type AttentionCategory =
   | 'NO_PROFILE_ASSIGNMENT'
   | 'NO_ACTIVITY'
   | 'TARGET_AT_RISK'
+  | 'PROFILE_NOT_STARTED'
+  | 'PROFILE_BEHIND'
 
 export type AttentionSeverity = 'normal' | 'attention' | 'critical'
 
@@ -39,6 +41,8 @@ export interface ManagerRepSnapshot {
   meetings: number
   wins: number
   targetPct: number
+  /** Canonical daily target sum; undefined when no target data was loaded. */
+  totalTarget?: number
   /** Oldest reply age in hours when known; null if unknown / none. */
   oldestReplyAgeHours: number | null
   oldestFollowUpAgeHours: number | null
@@ -60,6 +64,8 @@ export interface AttentionSignal {
   severity: AttentionSeverity
   oldestAgeHours: number | null
   href: string
+  /** Optional subject (profile name, lead company) so the row can name the work, not just the owner. */
+  subject?: string
 }
 
 export type RepStatus = 'On track' | 'Attention' | 'Critical'

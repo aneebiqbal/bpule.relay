@@ -2,9 +2,18 @@
  * Admin / Owner Command Center V3 presentation — pure mappings over the
  * canonical admin-command-summary assembly. No new scoring, no new data.
  */
-import type { AdminCommandCenterData, PipelineStageHealth, ProfilePerformanceRow } from '@/lib/team/admin-command-summary'
+import type {
+  AdminCommandCenterData,
+  AdminMovement,
+  AdminProfileExecutionRow,
+  AdminYesterday,
+  PipelineStageHealth,
+  ProfilePerformanceRow,
+} from '@/lib/team/admin-command-summary'
 import type { AttentionSignal } from '@/lib/team/attention-policy'
 import type { ManagerActivityItem, ManagerTeamRow } from '@/lib/team/manager-home-summary'
+import type { ProfileCompletionStatus } from '@/lib/rep-home/profile-completion'
+import type { TeamDaySummary } from '@/lib/rep-day/team'
 
 export const ADMIN_V3_ATTENTION_LIMIT = 6
 export const ADMIN_V3_ACTIVITY_LIMIT = 5
@@ -24,6 +33,8 @@ export interface AdminV3AttentionRow {
   id: string
   severity: 'critical' | 'attention' | 'normal'
   name: string
+  /** Optional work subject (profile name, lead company) shown under the owner. */
+  subject?: string
   reason: string
   ctaLabel: string
   href: string
@@ -77,6 +88,9 @@ export function attentionCtaLabel(category: string): string {
       return 'Resolve'
     case 'TARGET_AT_RISK':
       return 'Open rep'
+    case 'PROFILE_NOT_STARTED':
+    case 'PROFILE_BEHIND':
+      return 'Open profile'
     default:
       return 'Review'
   }
@@ -136,6 +150,7 @@ export function buildAdminV3Attention(signals: ReadonlyArray<AttentionSignal>): 
     id: `${signal.repId}-${signal.category}-${signal.count}`,
     severity: toSeverity(signal.severity),
     name: signal.repName,
+    subject: signal.subject,
     reason: signal.reason,
     ctaLabel: attentionCtaLabel(signal.category),
     href: signal.href,
@@ -375,6 +390,151 @@ export function buildAdminProfileRows(profiles: ReadonlyArray<ProfilePerformance
     proposals: profile.proposals,
     wins: profile.wins,
   }))
+}
+
+// ── V4 command center: profile execution, team operations, movement ─────────
+
+export const PROFILE_STATUS_LABEL: Record<ProfileCompletionStatus, string> = {
+  COMPLETE: 'Complete',
+  ON_TRACK: 'On track',
+  BEHIND: 'Behind',
+  AT_RISK: 'At risk',
+  NOT_STARTED: 'Not started',
+}
+
+export const PROFILE_STATUS_TONE: Record<ProfileCompletionStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
+  COMPLETE: 'success',
+  ON_TRACK: 'info',
+  BEHIND: 'warning',
+  AT_RISK: 'danger',
+  NOT_STARTED: 'neutral',
+}
+
+const PROFILE_STATUS_PRIORITY: Record<ProfileCompletionStatus, number> = {
+  NOT_STARTED: 0,
+  AT_RISK: 1,
+  BEHIND: 2,
+  ON_TRACK: 3,
+  COMPLETE: 4,
+}
+
+/** Profile execution rows, most urgent first. */
+export function buildAdminProfileExecutionRows(
+  rows: ReadonlyArray<AdminProfileExecutionRow>,
+): AdminProfileExecutionRow[] {
+  return [...rows].sort((a, b) => {
+    const byStatus = (PROFILE_STATUS_PRIORITY[a.status ?? 'COMPLETE'] ?? 5) - (PROFILE_STATUS_PRIORITY[b.status ?? 'COMPLETE'] ?? 5)
+    if (byStatus !== 0) return byStatus
+    if (b.remaining !== a.remaining) return b.remaining - a.remaining
+    return a.name.localeCompare(b.name)
+  })
+}
+
+export const REP_STATE_LABEL: Record<string, string> = {
+  NOT_STARTED: 'Not started',
+  ACTIVE: 'Active',
+  AT_RISK: 'Behind',
+  CRITICAL: 'At risk',
+  READY_TO_CLOSE: 'Ready to close',
+  CLOSED: 'Closed',
+  MISSED: 'Missed',
+}
+
+export const REP_STATE_TONE: Record<string, 'warning' | 'info' | 'danger' | 'success' | 'neutral'> = {
+  NOT_STARTED: 'warning',
+  ACTIVE: 'info',
+  AT_RISK: 'warning',
+  CRITICAL: 'danger',
+  READY_TO_CLOSE: 'success',
+  CLOSED: 'neutral',
+  MISSED: 'danger',
+}
+
+const REP_STATE_PRIORITY: Record<string, number> = {
+  CRITICAL: 0,
+  AT_RISK: 1,
+  NOT_STARTED: 2,
+  ACTIVE: 3,
+  READY_TO_CLOSE: 4,
+  CLOSED: 5,
+  MISSED: 6,
+}
+
+export interface AdminTeamOperationRow {
+  id: string
+  name: string
+  state: string
+  stateLabel: string
+  assignedProfiles: string[]
+  completedToday: number
+  targetCount: number
+  targetPct: number
+  requiredRemaining: number
+  repliesWaiting: number
+  overdue: number
+  href: string
+}
+
+/** Team rows for the operations view: state, assigned profiles, progress, remaining, overdue. */
+export function buildAdminTeamOperationRows(
+  rows: ReadonlyArray<ManagerTeamRow>,
+  teamDay: TeamDaySummary | null,
+): AdminTeamOperationRow[] {
+  const dayByRep = new Map((teamDay?.reps ?? []).map((rep) => [rep.repId, rep]))
+  return rows
+    .map((row) => {
+      const day = dayByRep.get(row.repId)
+      const state = day?.state ?? 'ACTIVE'
+      return {
+        id: row.repId,
+        name: row.repName,
+        state,
+        stateLabel: REP_STATE_LABEL[state] ?? state,
+        assignedProfiles: (day?.identities ?? []).map((identity) => identity.name),
+        completedToday: row.completedToday,
+        targetCount: row.totalTarget ?? 0,
+        targetPct: row.targetPct,
+        requiredRemaining: day?.requiredRemaining ?? 0,
+        repliesWaiting: row.repliesWaiting,
+        overdue: row.overdueTasks + row.followUpsOverdue,
+        href: `/team/${row.repId}`,
+      }
+    })
+    .sort((a, b) => {
+      const byState = (REP_STATE_PRIORITY[a.state] ?? 9) - (REP_STATE_PRIORITY[b.state] ?? 9)
+      if (byState !== 0) return byState
+      if (b.requiredRemaining !== a.requiredRemaining) return b.requiredRemaining - a.requiredRemaining
+      return a.name.localeCompare(b.name)
+    })
+}
+
+export interface AdminMovementRow {
+  key: string
+  label: string
+  today: number
+  /** Null when no persisted yesterday value exists — rendered as an em dash, never 0. */
+  yesterday: number | null
+  delta: number | null
+  href: string
+}
+
+/** Today vs yesterday comparison rows. Yesterday is the persisted final count. */
+export function buildAdminMovementRows(
+  movement: AdminMovement,
+  yesterday: AdminYesterday,
+  completedToday: number,
+): AdminMovementRow[] {
+  const rows: AdminMovementRow[] = [
+    { key: 'completed', label: 'Completions', today: completedToday, yesterday: yesterday.completed, delta: completedToday - yesterday.completed, href: '/admin/command' },
+    { key: 'newLeads', label: 'New leads', today: movement.newLeadsToday, yesterday: yesterday.newLeads, delta: movement.newLeadsToday - yesterday.newLeads, href: '/leads?filter=new' },
+    { key: 'qualified', label: 'Qualified', today: movement.qualifiedToday, yesterday: null, delta: null, href: '/leads?filter=new' },
+    { key: 'replies', label: 'Replies', today: movement.repliesHandledToday, yesterday: yesterday.replies, delta: movement.repliesHandledToday - yesterday.replies, href: '/chats' },
+    { key: 'followups', label: 'Follow-ups', today: movement.followupsToday, yesterday: yesterday.followups, delta: movement.followupsToday - yesterday.followups, href: '/leads?filter=followup' },
+    { key: 'proposals', label: 'Proposals', today: movement.proposalsToday, yesterday: yesterday.proposals, delta: movement.proposalsToday - yesterday.proposals, href: '/upwork' },
+    { key: 'meetings', label: 'Meetings', today: movement.meetingsToday, yesterday: yesterday.meetings, delta: movement.meetingsToday - yesterday.meetings, href: '/reports/sales' },
+    { key: 'wins', label: 'Wins', today: movement.winsToday, yesterday: yesterday.wins, delta: movement.winsToday - yesterday.wins, href: '/leads?filter=won' },
+  ]
+  return rows
 }
 
 export const ADMIN_TREND_SERIES: Array<{ key: 'replies' | 'meetings' | 'wins'; label: string }> = [
