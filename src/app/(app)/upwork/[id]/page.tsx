@@ -15,8 +15,11 @@ import { UpworkJobTimeline } from '@/components/upwork-job-timeline'
 import { UpworkCommunication } from '@/components/upwork-communication'
 import { V4PageHeader, V4Panel, V4PanelHeader, V4Chip } from '@/components/v4/primitives'
 import {
+  assignedProfileName,
   filterAssignedProfilesByChannel,
   listAssignedProfiles,
+  listAssignedProfilesForRep,
+  type AssignedProfile,
 } from '@/lib/profiles/assigned-profiles'
 
 export const dynamic = 'force-dynamic'
@@ -29,20 +32,79 @@ const VERDICT_CHIP: Record<string, { tone: 'success' | 'warning' | 'neutral'; la
 
 export default async function UpworkJobPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ repId?: string }>
 }) {
   const { id } = await params
+  const { repId: requestedRepId } = await searchParams
   const store = await createScoutStore()
   const job = await store.getUpworkJob(id)
   if (!job) notFound()
 
-  // Only Upwork-capable profiles assigned to this rep. An owned-but-unassigned
-  // LinkedIn profile must never appear here.
-  const profiles = filterAssignedProfilesByChannel(
-    await listAssignedProfiles(),
-    'upwork',
-  ).map((assigned) => assigned.profile)
+  const auth = await getAuthContext()
+  const isAdmin = Boolean(auth?.isAdmin || auth?.isOwner)
+
+  // Admin/owner may generate on behalf of a rep. The acting rep's assigned
+  // profiles are the eligible ones — never the admin's, and never the whole org.
+  let actingRepId = auth?.repId ?? null
+  if (isAdmin && auth && requestedRepId && requestedRepId !== auth.repId) {
+    const { data: repRow } = await store
+      .getSupabaseClient()
+      .from('reps')
+      .select('id, name')
+      .eq('id', requestedRepId)
+      .eq('organization_id', auth.orgId)
+      .maybeSingle()
+    if (repRow) actingRepId = repRow.id as string
+  }
+
+  // Only Upwork-capable profiles assigned to the acting rep. An owned-but-
+  // unassigned LinkedIn profile must never appear here.
+  let assignedProfiles: AssignedProfile[] = []
+  let profilesLoadFailed = false
+  try {
+    assignedProfiles = actingRepId && auth && actingRepId !== auth.repId
+      ? await listAssignedProfilesForRep(auth.orgId, actingRepId)
+      : await listAssignedProfiles()
+  } catch (err) {
+    // A load failure is a data problem, never "no profile assigned".
+    profilesLoadFailed = true
+    console.warn('[upwork/job] profile eligibility load failed', {
+      repId: actingRepId,
+      orgId: auth?.orgId ?? null,
+      jobId: id,
+      message: err instanceof Error ? err.message : String(err),
+    })
+  }
+  const upworkAssigned = filterAssignedProfilesByChannel(assignedProfiles, 'upwork')
+  const profiles = upworkAssigned.map((assigned) => ({
+    id: assigned.profile.id,
+    name: assignedProfileName(assigned),
+    channels: assigned.channels,
+  }))
+
+  if (process.env.RELAY_PROFILE_DEBUG === '1') {
+    console.info('[upwork/job] eligibility', {
+      repId: actingRepId,
+      orgId: auth?.orgId ?? null,
+      channel: 'upwork',
+      eligibleProfileCount: upworkAssigned.length,
+      eligibleIdentityCount: upworkAssigned.reduce((n, p) => n + p.assignedIdentityIds.length, 0),
+    })
+  }
+
+  const reps: Array<{ id: string; name: string }> = []
+  if (isAdmin && auth) {
+    const { data: repRows } = await store
+      .getSupabaseClient()
+      .from('reps')
+      .select('id, name')
+      .eq('organization_id', auth.orgId)
+      .limit(200)
+    for (const row of repRows ?? []) reps.push({ id: row.id as string, name: row.name as string })
+  }
 
   const score = computeUpworkScore({
     budgetMin: job.budgetMin,
@@ -60,9 +122,8 @@ export default async function UpworkJobPage({
   // Profile match is a separate ranking: it never changes the job score.
   let profileMatch: RoutingResult | null = null
   try {
-    const auth = await getAuthContext()
-    if (auth) {
-      const senders = await loadSenderProfiles(createServiceSupabase(), auth.orgId, auth.repId)
+    if (auth && actingRepId) {
+      const senders = await loadSenderProfiles(createServiceSupabase(), auth.orgId, actingRepId)
       if (senders.length) profileMatch = matchProfilesToJob(score.canonical.facts, senders, null)
     }
   } catch { profileMatch = null }
@@ -130,6 +191,10 @@ export default async function UpworkJobPage({
             profiles={profiles}
             matchedProofs={[]}
             savedDraft={(job.messages ?? []).find((m) => m.type === 'cover' && !m.sentAt && m.draftText)?.draftText ?? null}
+            isAdmin={isAdmin}
+            reps={reps}
+            actingRepId={actingRepId}
+            profilesLoadFailed={profilesLoadFailed}
           />
         </div>
       </V4Panel>

@@ -5,23 +5,46 @@
  *
  * Generate from a sending profile, edit, save, then mark applied after human
  * review. The profile requirement is explicit: without one, the workspace says
- * so and links to the profile screen instead of showing a dead button.
+ * so and offers the one action that unblocks it — a rep views their profiles,
+ * an admin assigns or configures one. A load failure is never reported as "no
+ * profile assigned".
  */
 import { useState, useCallback, useRef } from 'react'
-import { Check, Copy, RefreshCw, Sparkles, UserPlus } from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { Check, Copy, RefreshCw, Sparkles, UserPlus, AlertTriangle } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from 'cn'
-import type { Profile, ProofItem } from '@/lib/domain/types'
+import type { ProofItem } from '@/lib/domain/types'
+
+/**
+ * One eligible sending profile. A plain DTO, so this client component never
+ * imports the server-side read model that produced it.
+ */
+export interface ProposalProfileOption {
+  id: string
+  name: string
+  channels: string[]
+}
 
 interface UpworkJobActionsProps {
   jobId: string
   jobTitle: string
   /** Stored score from computeUpworkScore (see upwork-rubric.ts), or null if not yet scored. */
   jobScore: number | null
-  profiles: Profile[]
+  /** Eligible Upwork-capable profiles for the acting rep, already filtered. */
+  profiles: ProposalProfileOption[]
   matchedProofs: ProofItem[]
   /** The persisted cover draft, so a saved proposal survives a reload. */
   savedDraft?: string | null
+  /** Admin/owner: offer the on-behalf rep selector. */
+  isAdmin?: boolean
+  /** Org reps, used only for the admin on-behalf selector. */
+  reps?: Array<{ id: string; name: string }>
+  /** The rep whose profiles are eligible — the signed-in rep, or the selected rep. */
+  actingRepId?: string | null
+  /** True when the eligibility read failed. Distinct from a valid empty list. */
+  profilesLoadFailed?: boolean
 }
 
 // Relay does not recommend spending a Connect below this score — see
@@ -37,16 +60,38 @@ function markAppliedButtonClass(applied: boolean, belowGate: boolean): string {
   return 'bg-status-success text-on-accent hover:bg-status-success/90'
 }
 
-export function UpworkJobActions({ jobId, jobScore, profiles, matchedProofs, savedDraft }: UpworkJobActionsProps) {
+function channelLabel(channels: string[]): string {
+  return channels.map((channel) => channel.toUpperCase()).join(' · ')
+}
+
+export function UpworkJobActions({
+  jobId,
+  jobScore,
+  profiles,
+  matchedProofs,
+  savedDraft,
+  isAdmin = false,
+  reps = [],
+  actingRepId = null,
+  profilesLoadFailed = false,
+}: UpworkJobActionsProps) {
+  const router = useRouter()
   const belowGate = jobScore === null || jobScore < MIN_SCORE_TO_APPLY
   // Exact eligibility reason for the disabled Generate button (QA BUG-11-08):
   // never leave it disabled without saying why.
   const eligibility = (() => {
-    if (profiles.length === 0) return { ok: false, reason: 'Assign a sending profile first.' }
+    if (profilesLoadFailed) return { ok: false, reason: 'Profiles could not be loaded. Retry.' }
+    if (profiles.length === 0) return { ok: false, reason: 'Assign an Upwork profile first.' }
     if (jobScore === null) return { ok: false, reason: 'Analyze this job before generating a proposal.' }
     return { ok: true as const, reason: null as string | null }
   })()
-  const [selectedProfileId, setSelectedProfileId] = useState(profiles[0]?.id ?? '')
+  const [selectedProfileId, setSelectedProfileId] = useState('')
+  // A rep switch changes the eligible list; a stored id that is no longer
+  // eligible falls back to the first one rather than silently generating in a
+  // profile that does not belong to the acting rep.
+  const activeProfileId = profiles.some((option) => option.id === selectedProfileId)
+    ? selectedProfileId
+    : (profiles[0]?.id ?? '')
   // Restore the persisted draft: a saved proposal must survive a reload, or
   // "Save draft" is a lie (BUG-31).
   const [proposal, setProposal] = useState(savedDraft ?? '')
@@ -63,9 +108,10 @@ export function UpworkJobActions({ jobId, jobScore, profiles, matchedProofs, sav
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
   const saveInFlightRef = useRef(false)
   const proofHint = matchedProofs[0]?.projectSummary ?? null
+  const actingRep = reps.find((rep) => rep.id === actingRepId) ?? null
 
   const generate = useCallback(async () => {
-    if (!selectedProfileId) {
+    if (!activeProfileId) {
       setError('Select a profile first.')
       return
     }
@@ -79,7 +125,7 @@ export function UpworkJobActions({ jobId, jobScore, profiles, matchedProofs, sav
       const res = await fetch(`/api/upwork/jobs/${jobId}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileId: selectedProfileId, generationMode }),
+        body: JSON.stringify({ profileId: activeProfileId, generationMode, repId: actingRepId ?? undefined }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => null)
@@ -95,7 +141,7 @@ export function UpworkJobActions({ jobId, jobScore, profiles, matchedProofs, sav
     } finally {
       setGenerating(false)
     }
-  }, [jobId, selectedProfileId, generationMode])
+  }, [jobId, activeProfileId, generationMode, actingRepId])
 
   const copyProposal = useCallback(async () => {
     if (!proposal) return
@@ -122,7 +168,8 @@ export function UpworkJobActions({ jobId, jobScore, profiles, matchedProofs, sav
           jobId,
           draftText: proposal.trim(),
           type: 'cover',
-          profileId: selectedProfileId || undefined,
+          profileId: activeProfileId || undefined,
+          repId: actingRepId ?? undefined,
         }),
       })
       if (!res.ok) {
@@ -137,7 +184,7 @@ export function UpworkJobActions({ jobId, jobScore, profiles, matchedProofs, sav
     } finally {
       saveInFlightRef.current = false
     }
-  }, [jobId, proposal, selectedProfileId])
+  }, [jobId, proposal, activeProfileId, actingRepId])
 
   const markApplied = useCallback(async () => {
     if (!proposal.trim()) {
@@ -152,7 +199,11 @@ export function UpworkJobActions({ jobId, jobScore, profiles, matchedProofs, sav
       const res = await fetch(`/api/upwork/jobs/${jobId}/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sentText: proposal.trim() }),
+        body: JSON.stringify({
+          sentText: proposal.trim(),
+          profileId: activeProfileId || undefined,
+          repId: actingRepId ?? undefined,
+        }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => null)
@@ -162,7 +213,7 @@ export function UpworkJobActions({ jobId, jobScore, profiles, matchedProofs, sav
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to mark as applied.')
     }
-  }, [jobId, proposal, belowGate])
+  }, [jobId, proposal, belowGate, activeProfileId, actingRepId])
 
   return (
     <div className="space-y-4">
@@ -184,33 +235,101 @@ export function UpworkJobActions({ jobId, jobScore, profiles, matchedProofs, sav
         )}
       </div>
 
-      {/* No profile: say why and give the one action that unblocks it. */}
-      {profiles.length === 0 ? (
+      {/* Admin/owner on-behalf: pick the rep whose profiles are eligible. */}
+      {isAdmin && reps.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl bg-bone px-4 py-3 ring-1 ring-line">
+          <label className="text-[12px] font-medium text-graphite" htmlFor="upwork-acting-rep">Generate proposal for</label>
+          <select
+            id="upwork-acting-rep"
+            value={actingRepId ?? ''}
+            onChange={(e) => router.push(e.target.value ? `/upwork/${jobId}?repId=${e.target.value}` : `/upwork/${jobId}`)}
+            className="rounded-lg border border-line bg-bone-raised px-3 py-1.5 text-[13px] text-ink"
+          >
+            {reps.map((rep) => (
+              <option key={rep.id} value={rep.id}>{rep.name}</option>
+            ))}
+          </select>
+          {actingRep && <span className="text-[12px] text-stone">{actingRep.name}&apos;s profiles</span>}
+        </div>
+      )}
+
+      {/* Load failure: a data problem, explicitly not an empty assignment. */}
+      {profilesLoadFailed ? (
+        <div role="alert" className="flex flex-col items-start gap-3 rounded-xl border border-status-danger/30 bg-status-danger/5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-status-danger/10 ring-1 ring-status-danger/20">
+              <AlertTriangle className="size-4 text-status-danger" aria-hidden />
+            </span>
+            <div>
+              <p className="text-[13px] font-medium text-ink">Profiles could not be loaded</p>
+              <p className="mt-0.5 text-[12px] text-graphite">
+                This is a data problem, not an empty assignment. Retry — nothing was sent.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.refresh()}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[12px] font-medium text-graphite transition-colors hover:bg-bone hover:text-ink"
+          >
+            <RefreshCw className="size-3.5" aria-hidden />
+            Retry
+          </button>
+        </div>
+      ) : profiles.length === 0 ? (
+        /* Valid empty: actionable, and different for a rep than for an admin. */
         <div className="flex flex-col items-start gap-3 rounded-xl bg-bone px-4 py-4 ring-1 ring-line sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-orange-faint ring-1 ring-orange/20">
               <UserPlus className="size-4 text-orange" aria-hidden />
             </span>
             <div>
-              <p className="text-[13px] font-medium text-ink">No Upwork profile is assigned to you</p>
+              <p className="text-[13px] font-medium text-ink">No Upwork profile assigned</p>
               <p className="mt-0.5 text-[12px] text-graphite">
-                Proposals are written in a profile&apos;s voice and proof. Ask your manager to assign one.
+                {isAdmin
+                  ? 'Assign an Upwork-enabled profile to a rep, or configure one from the profile directory.'
+                  : 'You need an Upwork-enabled profile before Relay can generate proposals.'}
               </p>
             </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {isAdmin ? (
+              <>
+                <Link
+                  href="/team/profiles"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+                >
+                  Assign profile
+                </Link>
+                <Link
+                  href="/team/profiles?add=1"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[12px] font-medium text-graphite transition-colors hover:bg-bone hover:text-ink"
+                >
+                  Create / configure profile
+                </Link>
+              </>
+            ) : (
+              <Link
+                href="/rep/assigned-profiles"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+              >
+                View my profiles
+              </Link>
+            )}
           </div>
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-3 rounded-xl bg-bone px-4 py-3 ring-1 ring-line">
-          <label className="text-[12px] font-medium text-graphite" htmlFor="upwork-proposal-profile">Using profile</label>
+          <label className="text-[12px] font-medium text-graphite" htmlFor="upwork-proposal-profile">Proposal profile</label>
           <select
             id="upwork-proposal-profile"
-            value={selectedProfileId}
+            value={activeProfileId}
             onChange={(e) => setSelectedProfileId(e.target.value)}
             className="rounded-lg border border-line bg-bone-raised px-3 py-1.5 text-[13px] text-ink"
           >
-            {profiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.platform === 'linkedin' ? 'LinkedIn' : 'Upwork'} · {p.displayName ?? p.fullName ?? p.label ?? 'Profile'}
+            {profiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name} · {channelLabel(profile.channels)}
               </option>
             ))}
           </select>
@@ -259,7 +378,7 @@ export function UpworkJobActions({ jobId, jobScore, profiles, matchedProofs, sav
           <button
             type="button"
             onClick={() => void generate()}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13px] text-graphite transition-colors hover:bg-bone hover:text-ink"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[12px] text-graphite transition-colors hover:bg-bone hover:text-ink"
           >
             <RefreshCw className="size-3.5" aria-hidden />
             Regenerate

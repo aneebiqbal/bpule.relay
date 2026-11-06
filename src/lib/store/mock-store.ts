@@ -1811,9 +1811,19 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       upworkMessages.unshift(msg)
       return msg
     },
-    async markUpworkApplied(jobId, sentText, type = 'cover') {
+    async markUpworkApplied(jobId, sentText, type = 'cover', senderProfileIdOverride = null) {
       const job = upworkJobs.find((j) => j.id === jobId)
       if (job) job.status = 'applied'
+      // Same resolution as the Supabase store: caller override, job, then draft.
+      let senderProfileId = senderProfileIdOverride
+        ?? (job as { senderProfileId?: string | null } | undefined)?.senderProfileId
+        ?? null
+      if (!senderProfileId) {
+        const draft = [...upworkMessages]
+          .reverse()
+          .find((m) => m.jobId === jobId && m.type === type && !m.sentAt)
+        senderProfileId = draft?.senderProfileId ?? null
+      }
       upworkMessages.push({
         id: nextId('umsg'),
         organizationId: DEMO_ORG_ID,
@@ -1824,7 +1834,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         sentText,
         sentAt: new Date().toISOString(),
         modelUsed: null,
-        senderProfileId: null,
+        senderProfileId,
         createdAt: new Date().toISOString(),
       })
     },

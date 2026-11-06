@@ -12,7 +12,9 @@ import {
   assignedProfileName,
   filterAssignedProfilesByChannel,
   listAssignedProfiles,
+  listAssignedProfilesForRep,
 } from '@/lib/profiles/assigned-profiles'
+import { getAuthContext } from '@/lib/auth/organization'
 import type { Profile } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
@@ -36,7 +38,7 @@ export async function POST(
     return NextResponse.json({ error: 'Job id must be a UUID.' }, { status: 400 })
   }
 
-  let body: { profileId?: string; proofId?: string; generationMode?: 'standard' | 'premium' }
+  let body: { profileId?: string; proofId?: string; generationMode?: 'standard' | 'premium'; repId?: string }
   try {
     body = await request.json()
   } catch {
@@ -55,15 +57,71 @@ export async function POST(
   // Only Upwork-capable profiles assigned to this rep. An owned-but-unassigned
   // LinkedIn profile must never appear here, and an assigned Upwork identity
   // whose profile someone else owns must still be eligible.
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
+  // Admin/owner on-behalf: the acting rep must belong to the caller's org.
+  // A client-supplied repId is never trusted on its own.
+  const requestedRepId = typeof body.repId === 'string' ? body.repId : null
+  const isAdmin = Boolean(authCtx.isAdmin || authCtx.isOwner)
+  let actingRepId = user.rep.id
+  if (requestedRepId && requestedRepId !== user.rep.id) {
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Not authorized to generate for another rep.' }, { status: 403 })
+    }
+    const { data: repRow } = await store
+      .getSupabaseClient()
+      .from('reps')
+      .select('id')
+      .eq('id', requestedRepId)
+      .eq('organization_id', authCtx.orgId)
+      .maybeSingle()
+    if (!repRow) {
+      return NextResponse.json({ error: 'That rep is not in your organization.' }, { status: 403 })
+    }
+    actingRepId = repRow.id as string
+  }
+
   const [assignedProfiles, facts, plays] = await Promise.all([
-    listAssignedProfiles(),
+    actingRepId === user.rep.id
+      ? listAssignedProfiles()
+      : listAssignedProfilesForRep(authCtx.orgId, actingRepId),
     store.listFacts(),
     store.listPlays(),
   ])
   const upworkProfiles = filterAssignedProfilesByChannel(assignedProfiles, 'upwork')
   const profiles = upworkProfiles.map((a) => a.profile)
 
-  const profile = profiles.find((p) => p.id === body.profileId) ?? profiles[0] ?? null
+  // Never trust a client-selected profile: it must be one of the eligible
+  // Upwork-capable profiles assigned to the acting rep. An ineligible id is
+  // rejected, not silently replaced — a silent fallback would generate in a
+  // profile the rep never chose and attribute it to them.
+  const requestedProfileId = typeof body.profileId === 'string' ? body.profileId : null
+  const profile = requestedProfileId
+    ? profiles.find((p) => p.id === requestedProfileId) ?? null
+    : profiles[0] ?? null
+
+  if (requestedProfileId && !profile) {
+    return NextResponse.json(
+      { error: 'That profile is not assigned to you for Upwork. Select an eligible profile.' },
+      { status: 403 },
+    )
+  }
+  if (!profile) {
+    return NextResponse.json({ error: 'No Upwork profile is assigned to you.' }, { status: 400 })
+  }
+
+  if (process.env.RELAY_PROFILE_DEBUG === '1') {
+    console.info('[upwork/generate] eligibility', {
+      actingRepId,
+      orgId: authCtx.orgId,
+      channel: 'upwork',
+      eligibleProfileCount: profiles.length,
+      eligibleIdentityCount: upworkProfiles.reduce((n, a) => n + a.assignedIdentityIds.length, 0),
+      profileId: profile.id,
+    })
+  }
+
   const voiceProfile = await store.getVoiceProfile()
   const styleCard = injectStyleCard(voiceProfile?.styleCard)
 
@@ -309,6 +367,9 @@ export async function POST(
       matchedProof: matchedProof ? { id: matchedProof.id, projectSummary: matchedProof.projectSummary } : null,
     },
     generationMode,
+    // The profile actually used, so the client can prove
+    // displayed == generated == persisted instead of assuming it.
+    profileId: profile.id,
     eligibleProfiles: upworkProfiles.map((a) => ({
       profileId: a.profile.id,
       name: assignedProfileName(a),

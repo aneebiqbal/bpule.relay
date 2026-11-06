@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
+import { getAuthContext } from '@/lib/auth/organization'
+import {
+  filterAssignedProfilesByChannel,
+  listAssignedProfiles,
+  listAssignedProfilesForRep,
+} from '@/lib/profiles/assigned-profiles'
 import { hasUnfilledValues, UNFILLED_VALUES_MESSAGE } from '@/lib/relay/unfilled-values'
 
 // A job scoring below this is not recommended for a Connect spend — see
@@ -49,8 +55,34 @@ export async function POST(
     )
   }
 
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+
+  // Admin/owner on-behalf: the acting rep must belong to the caller's org.
+  const requestedRepId = typeof body.repId === 'string' ? body.repId : null
+  const isAdmin = Boolean(authCtx.isAdmin || authCtx.isOwner)
+  let actingRepId = authCtx.repId
+  if (requestedRepId && requestedRepId !== authCtx.repId) {
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Not authorized to apply for another rep.' }, { status: 403 })
+    }
+    const { data: repRow } = await store
+      .getSupabaseClient()
+      .from('reps')
+      .select('id')
+      .eq('id', requestedRepId)
+      .eq('organization_id', authCtx.orgId)
+      .maybeSingle()
+    if (!repRow) {
+      return NextResponse.json({ error: 'That rep is not in your organization.' }, { status: 403 })
+    }
+    actingRepId = repRow.id as string
+  }
+
   // Server-side score gate — reuses the score computed and stored at
-  // job-creation time (computeUpworkScore), never recomputed here.
+  // job-creation time (computeUpworkScore), never recomputed here. The job and
+  // its gate are checked before any profile work: a missing job or a score too
+  // low to spend a Connect on must not read profiles at all.
   const job = await store.getUpworkJob(jobId)
   if (!job) {
     return NextResponse.json({ error: 'Job not found.' }, { status: 404 })
@@ -64,6 +96,30 @@ export async function POST(
     )
   }
 
-  await store.markUpworkApplied(jobId, sentText, type as 'cover' | 'followup' | 'reply')
-  return NextResponse.json({ ok: true })
+  // The applied proposal must carry the same sender the rep selected, generated
+  // with and saved under. A client-supplied id is reauthorized against the
+  // acting rep's eligible Upwork profiles before it is persisted.
+  const assigned = actingRepId === authCtx.repId
+    ? await listAssignedProfiles()
+    : await listAssignedProfilesForRep(authCtx.orgId, actingRepId)
+  const upworkProfiles = filterAssignedProfilesByChannel(assigned, 'upwork')
+  const requestedProfileId = typeof body.profileId === 'string' ? body.profileId : null
+  const senderProfile = requestedProfileId
+    ? upworkProfiles.find((a) => a.profile.id === requestedProfileId) ?? null
+    : upworkProfiles[0] ?? null
+
+  if (requestedProfileId && !senderProfile) {
+    return NextResponse.json(
+      { error: 'That profile is not assigned to you for Upwork. Select an eligible profile.' },
+      { status: 403 },
+    )
+  }
+
+  await store.markUpworkApplied(
+    jobId,
+    sentText,
+    type as 'cover' | 'followup' | 'reply',
+    senderProfile?.profile.id ?? null,
+  )
+  return NextResponse.json({ ok: true, profileId: senderProfile?.profile.id ?? null })
 }

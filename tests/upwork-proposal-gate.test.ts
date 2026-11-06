@@ -13,13 +13,35 @@ import { POST as applyRoute } from '@/app/api/upwork/jobs/[id]/apply/route'
  * with a 4xx, without ever calling markUpworkApplied, when score < 6.
  */
 
-const { createScoutStoreMock } = vi.hoisted(() => ({
+const { createScoutStoreMock, listAssignedProfilesMock } = vi.hoisted(() => ({
   createScoutStoreMock: vi.fn(),
+  listAssignedProfilesMock: vi.fn(),
 }))
 
 vi.mock('@/lib/store', () => ({
   createScoutStore: createScoutStoreMock,
 }))
+
+vi.mock('@/lib/auth/organization', () => ({
+  getAuthContext: vi.fn().mockResolvedValue({
+    repId: 'rep-1',
+    orgId: 'org-1',
+    isAdmin: false,
+    isOwner: false,
+    isManager: false,
+  }),
+}))
+
+// The apply route reauthorizes the sender profile against the acting rep's
+// eligible Upwork profiles before persisting it.
+vi.mock('@/lib/profiles/assigned-profiles', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/profiles/assigned-profiles')>()
+  return {
+    ...actual,
+    listAssignedProfiles: listAssignedProfilesMock,
+    listAssignedProfilesForRep: vi.fn().mockResolvedValue([]),
+  }
+})
 
 function makeRequest(jobId: string, body: Record<string, unknown> = {}) {
   return new Request(`http://localhost/api/upwork/jobs/${jobId}/apply`, {
@@ -35,6 +57,14 @@ function callRoute(jobId: string, body: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   createScoutStoreMock.mockReset()
+  listAssignedProfilesMock.mockResolvedValue([
+    {
+      profile: { id: 'p-up' },
+      channels: ['upwork'],
+      assignedIdentityIds: ['ri-up'],
+      assignmentIds: ['a-up'],
+    },
+  ])
 })
 
 describe('POST /api/upwork/jobs/[id]/apply — score >= 6 hard gate', () => {
@@ -51,7 +81,7 @@ describe('POST /api/upwork/jobs/[id]/apply — score >= 6 hard gate', () => {
     expect(res.status).toBe(200)
     expect(data.ok).toBe(true)
     expect(markUpworkApplied).toHaveBeenCalledTimes(1)
-    expect(markUpworkApplied).toHaveBeenCalledWith('job-1', 'A tailored cover letter.', 'cover')
+    expect(markUpworkApplied).toHaveBeenCalledWith('job-1', 'A tailored cover letter.', 'cover', 'p-up')
   })
 
   it('allows the apply to succeed for a high score', async () => {

@@ -451,6 +451,15 @@ function mapProfile(r: Row): Profile {
     headline: (r.headline as string) ?? null,
     cvPath: (r.cv_path as string) ?? null,
     createdAt: r.created_at as string,
+    // Profile Intelligence writes these columns; dropping them here made every
+    // PI-sourced profile render as "Unnamed" on Rep Home, the switcher, the
+    // Team directory and the Upwork proposal selector.
+    fullName: (r.full_name as string) ?? null,
+    displayName: (r.display_name as string) ?? null,
+    currentRole: (r.current_role as string) ?? null,
+    professionalSummary: (r.professional_summary as string) ?? null,
+    primarySkills: Array.isArray(r.primary_skills) ? (r.primary_skills as string[]) : [],
+    archivedAt: (r.archived_at as string) ?? null,
   }
 }
 
@@ -3444,15 +3453,34 @@ export class SupabaseStore implements ScoutStore {
     jobId: string,
     sentText: string,
     type: UpworkMessage['type'] = 'cover',
+    senderProfileIdOverride?: string | null,
   ): Promise<void> {
     // Look up the job's connects cost before updating
     const { data: jobRow } = await this.client
       .from('upwork_jobs')
-      .select('connects_cost')
+      .select('connects_cost, sender_profile_id')
       .eq('id', jobId)
       .maybeSingle()
     const connectsCost = (jobRow as unknown as { connects_cost: number })?.connects_cost ?? 0
-    const senderProfileId = (jobRow as unknown as { sender_profile_id?: string | null })?.sender_profile_id ?? null
+    // Attribution resolution: the caller's authorized profile, then the draft
+    // row the proposal was saved with, then the job. The job column was the
+    // only source before drafts carried a sender, so applied proposals had no
+    // sender at all.
+    let senderProfileId = senderProfileIdOverride
+      ?? (jobRow as unknown as { sender_profile_id?: string | null })?.sender_profile_id
+      ?? null
+    if (!senderProfileId) {
+      const { data: draftRow } = await this.client
+        .from('upwork_messages')
+        .select('sender_profile_id')
+        .eq('job_id', jobId)
+        .eq('type', type)
+        .is('sent_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      senderProfileId = (draftRow as { sender_profile_id?: string | null } | null)?.sender_profile_id ?? null
+    }
 
     // `connects_used` was added in code (commit 3d0a4b4) without a migration and
     // does not exist in every environment. supabase-js resolves a query builder

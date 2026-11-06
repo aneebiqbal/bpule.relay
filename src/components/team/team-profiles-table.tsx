@@ -81,7 +81,7 @@ function TeamProfilesTableInner({
   const [channelFilter, setChannelFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
-  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(() => searchParams.get('add') === '1')
 
   const assigned = profiles.filter((profile) => profile.assignmentCount > 0)
   const unassigned = profiles.filter((profile) => profile.assignmentCount === 0)
