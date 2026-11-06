@@ -137,8 +137,9 @@ create table if not exists email_oauth_challenges (
 create index if not exists eoc_expires_idx on email_oauth_challenges (expires_at);
 
 alter table email_oauth_challenges enable row level security;
--- No authenticated policy: the callback runs as the service role and matches on
--- the state hash, which is unguessable.
+-- The connect route inserts with the authenticated client (the insert policy is
+-- added by 20261106140000_backend_db_fixes.sql); the callback runs as the service
+-- role and matches on the state hash, which is unguessable.
 
 comment on table email_oauth_challenges is
   'Server-side PKCE verifier and single-use marker for a mailbox OAuth handshake. A replayed state is rejected because consumed_at is already set.';

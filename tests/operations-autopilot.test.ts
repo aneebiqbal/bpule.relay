@@ -628,7 +628,12 @@ describe('COVERAGE_CONFIGURATION_REPLACES_CHAIN', () => {
 
     expect(result.ok).toBe(true)
     expect(tables.profile_coverage).toHaveLength(5) // 2 deactivated + 3 new
-    expect(tables.profile_coverage.filter((row) => row.active)).toHaveLength(3)
+    const active = tables.profile_coverage.filter((row) => row.active)
+    expect(active).toHaveLength(3)
+    // priority is 1-based: the DB carries `check (priority >= 1)`, so a
+    // PRIMARY row written with 0 is rejected. Primary = 1, backups follow.
+    expect(active.find((row) => row.role === 'PRIMARY')?.priority).toBe(1)
+    expect(active.filter((row) => row.role === 'BACKUP').map((row) => row.priority).sort()).toEqual([2, 3])
     expect(tables.coverage_events).toHaveLength(1)
     expect(tables.coverage_events[0].event_type).toBe('BACKUP_CONFIGURED')
   })

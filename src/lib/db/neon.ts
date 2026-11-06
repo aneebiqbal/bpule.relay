@@ -122,6 +122,7 @@ export interface NeonExecutorApi {
 }
 
 let pool: Pool | null = null
+let servicePool: Pool | null = null
 
 export function getNeonPool(): Pool {
   if (pool) return pool
@@ -135,10 +136,30 @@ export function getNeonPool(): Pool {
   return pool
 }
 
-/** Closes the pool. Used by tests and graceful shutdown. */
+/**
+ * The service pool. Falls back to `DATABASE_URL`, but a deployment that points
+ * `DATABASE_URL` at a least-privilege role (`relay_app`) must set
+ * `SERVICE_DATABASE_URL` to the owner URL — the service client relies on the
+ * owner's RLS bypass for scheduled jobs and signed callbacks.
+ */
+export function getNeonServicePool(): Pool {
+  if (servicePool) return servicePool
+  const url = process.env.SERVICE_DATABASE_URL ?? process.env.DATABASE_URL
+  if (!url) throw new Error('DATABASE_URL is not configured for the Neon provider')
+  servicePool = new Pool({
+    connectionString: url,
+    max: Number(process.env.DATABASE_POOL_MAX ?? 10),
+    types: { getTypeParser: (id, format) => neonTypeParser(id, format) },
+  })
+  return servicePool
+}
+
+/** Closes the pools. Used by tests and graceful shutdown. */
 export async function closeNeonPool(): Promise<void> {
   if (pool) await pool.end()
+  if (servicePool) await servicePool.end()
   pool = null
+  servicePool = null
 }
 
 export class NeonExecutorImpl implements NeonExecutorApi {
@@ -695,6 +716,6 @@ export function neonDbClient(userId: string, pool: Pool = getNeonPool()): DbClie
  * A Neon client with no identity in scope. The pooler connects as the branch
  * owner, which bypasses RLS — the service-role equivalent for scheduled jobs.
  */
-export function neonServiceDbClient(pool: Pool = getNeonPool()): DbClient {
+export function neonServiceDbClient(pool: Pool = getNeonServicePool()): DbClient {
   return new NeonDbClient(new NeonExecutorImpl(pool, null), null)
 }

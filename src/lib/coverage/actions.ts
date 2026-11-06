@@ -355,9 +355,15 @@ export async function configureCoverage(input: {
     .eq('profile_id', input.profileId)
   if (deactivateError) return { ok: false, error: deactivateError.message }
 
+  // priority is 1-based: the column carries `check (priority >= 1)`, so the
+  // primary is 1 and backups follow in order. The engine orders by this value.
   const rows = [
-    { role: 'PRIMARY', repId: input.primaryRepId, priority: 0 },
-    ...input.backups.map((backup) => ({ role: 'BACKUP' as const, repId: backup.repId, priority: backup.priority })),
+    { role: 'PRIMARY' as const, repId: input.primaryRepId, priority: 1 },
+    ...input.backups.map((backup, index) => ({
+      role: 'BACKUP' as const,
+      repId: backup.repId,
+      priority: index + 2,
+    })),
   ]
 
   const { error: insertError } = await client.from('profile_coverage').insert(
