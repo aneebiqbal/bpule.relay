@@ -326,6 +326,7 @@ function ResponsibilityCard({
           {profile.activeCoverageUntil
             ? `Coverage until ${formatDate(profile.activeCoverageUntil)}`
             : 'Coverage open-ended'}
+          {profile.coverageExpiring && <span className="text-status-warning"> · ends today</span>}
         </p>
       )}
 

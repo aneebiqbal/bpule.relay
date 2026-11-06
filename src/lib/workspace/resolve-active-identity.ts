@@ -22,7 +22,7 @@ export async function resolveAccessibleIdentity(identityId: string): Promise<Wor
   const store = await createScoutStore()
   const identities = auth.isOwner || auth.isAdmin
     ? await store.listRevenueIdentitiesAdmin()
-    : await store.listMyAssignedIdentities()
+    : await store.listMyWorkableIdentities()
   const identity = identities.find((item) => item.id === identityId && item.status === 'active')
   if (!identity) return null
 
@@ -42,7 +42,7 @@ export async function resolveActiveWorkspace(): Promise<WorkspaceIdentity | null
   const store = await createScoutStore()
   const identities = (auth.isOwner || auth.isAdmin
     ? await store.listRevenueIdentitiesAdmin()
-    : await store.listMyAssignedIdentities()
+    : await store.listMyWorkableIdentities()
   ).filter((identity) => identity.status === 'active')
   if (identities.length === 0) return null
 

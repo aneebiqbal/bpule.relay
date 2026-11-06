@@ -92,6 +92,9 @@ export function AdminCoveragePanel({
 
   const { summary, plan } = status
   const exceptions = plan.requiresApproval
+  // Uncovered profiles with no backup chain are an administrative gap, not a
+  // clean state — never report them as "everything is covered".
+  const needsConfiguration = plan.counts.UNCOVERED + plan.counts.AT_RISK
 
   return (
     <V4Panel>
@@ -124,7 +127,9 @@ export function AdminCoveragePanel({
             Action required
             <span className="ml-2 text-[12px] font-normal text-stone">
               {exceptions.length === 0
-                ? `✓ ${plan.unchanged} profile${plan.unchanged === 1 ? '' : 's'} unchanged`
+                ? needsConfiguration > 0
+                  ? `${needsConfiguration} profile${needsConfiguration === 1 ? '' : 's'} need${needsConfiguration === 1 ? 's' : ''} a primary or backup`
+                  : `✓ ${plan.unchanged} profile${plan.unchanged === 1 ? '' : 's'} unchanged`
                 : `${exceptions.length} change${exceptions.length === 1 ? '' : 's'} awaiting approval`}
             </span>
           </h3>
@@ -153,10 +158,17 @@ export function AdminCoveragePanel({
 
         {exceptions.length === 0 ? (
           <div className="mt-3">
-            <V4Empty
-              title="No coverage changes needed"
-              body="Every profile is covered by its primary rep. Leave coverage will appear here automatically."
-            />
+            {needsConfiguration > 0 ? (
+              <V4Empty
+                title="Profiles need a primary or backup"
+                body={`${needsConfiguration} profile${needsConfiguration === 1 ? ' has' : 's have'} no coverage chain configured. Configure a primary and ordered backups to enable leave cover.`}
+              />
+            ) : (
+              <V4Empty
+                title="No coverage changes needed"
+                body="Every profile is covered by its primary rep. Leave coverage will appear here automatically."
+              />
+            )}
           </div>
         ) : (
           <ul className="mt-3 space-y-2">
@@ -226,6 +238,9 @@ export function AdminCoveragePanel({
                 {profile.primaryRepName ?? 'No primary'}
                 {profile.activeCoveringRepName ? ` · covering ${profile.activeCoveringRepName}` : ''}
               </span>
+              {profile.coverageExpiring && (
+                <V4Chip tone="warning" className="w-fit sm:shrink-0">Ends today</V4Chip>
+              )}
               <V4Chip tone={STATUS_TONE[profile.status] ?? 'neutral'} className="w-fit sm:shrink-0">
                 {STATUS_LABEL[profile.status] ?? profile.status}
               </V4Chip>

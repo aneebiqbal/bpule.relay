@@ -143,6 +143,7 @@ import {
 } from '@/lib/store/pipeline-stage'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
 import { loadProfileEvidence } from '@/lib/generation/profile-evidence'
+import { listActiveCoveredIdentities, listWorkableProfiles } from '@/lib/coverage/access'
 import { pickPlayForSignal } from '@/lib/score/plays'
 import { loadRulebook } from '@/lib/score/rulebook'
 import {
@@ -6607,6 +6608,72 @@ export class SupabaseStore implements ScoutStore {
       const identity = identityById.get(a.revenue_identity_id as string) ?? {}
       return { ...this.mapRevenueIdentity(identity), assignmentId: a.id as string, assignedBy: (a.assigned_by as string) ?? null, assignedAt: a.created_at as string }
     })
+  }
+
+  /**
+   * Identities this rep may work today: canonical assignments plus active
+   * temporary coverage. Coverage is execution responsibility, not ownership —
+   * the covered identity is returned with the coverage assignment id so the
+   * caller can label it.
+   */
+  async listMyWorkableIdentities(): Promise<RevenueIdentityWithAssignment[]> {
+    const assigned = await this.listMyAssignedIdentities()
+    const businessDate = await this.businessDate()
+    const covered = await listActiveCoveredIdentities(this.client, this.orgId, this.rep.id, businessDate)
+    if (covered.length === 0) return assigned
+
+    const { data: identityRows } = await this.client
+      .from('revenue_identities')
+      .select('*')
+      .in('id', covered.map((row) => row.revenueIdentityId))
+    const identityById = new Map((identityRows ?? []).map((row) => [row.id as string, row]))
+
+    const merged = new Map<string, RevenueIdentityWithAssignment>()
+    for (const row of covered) {
+      const identity = identityById.get(row.revenueIdentityId) ?? {}
+      merged.set(row.revenueIdentityId, {
+        ...this.mapRevenueIdentity(identity),
+        assignmentId: row.coverageAssignmentId,
+        assignedBy: row.primaryRepId,
+        assignedAt: row.effectiveFrom,
+      })
+    }
+    // An assignment always wins over coverage for the same identity.
+    for (const identity of assigned) {
+      merged.set(identity.id, identity)
+    }
+    return [...merged.values()]
+  }
+
+  /** Profiles this rep may work today: owned plus actively covered. */
+  async listMyWorkableProfiles(): Promise<Profile[]> {
+    const owned = await this.listProfiles()
+    const businessDate = await this.businessDate()
+    return listWorkableProfiles(this.client, this.orgId, this.rep.id, businessDate, owned)
+  }
+
+  /** Leads this rep may act on today: owned plus leads on covered profiles. */
+  async listMyWorkableLeads(): Promise<Lead[]> {
+    const owned = await this.listOwnedLeads()
+    const businessDate = await this.businessDate()
+    const covered = await listActiveCoveredIdentities(this.client, this.orgId, this.rep.id, businessDate)
+    const coveredIdentityIds = covered.map((row) => row.revenueIdentityId)
+    if (coveredIdentityIds.length === 0) return owned
+
+    const { data, error } = await this.client
+      .from('leads')
+      .select(LEAD_LIST_COLUMNS)
+      .eq('organization_id', this.orgId)
+      .eq('archived', false)
+      .in('revenue_identity_id', coveredIdentityIds)
+      .limit(500)
+    if (error) throw error
+
+    const byId = new Map(owned.map((lead) => [lead.id, lead]))
+    for (const row of (data ?? []).map(mapLead)) {
+      if (!byId.has(row.id)) byId.set(row.id, row)
+    }
+    return [...byId.values()]
   }
 
   async getMyTodayAccountability(): Promise<import('@/lib/domain/types').RepTodayView> {

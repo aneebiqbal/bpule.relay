@@ -519,7 +519,7 @@ function ProfileCard({
           <span
             className={cn(
               'rounded-md px-2 py-1 font-mono text-xs',
-              profile.platform === 'linkedin' ? 'bg-[color-mix(in_oklch,#0a66c2_10%,transparent)] text-[#0a66c2]' : 'bg-[color-mix(in_oklch,#14a800_10%,transparent)] text-[#14a800]',
+              profile.platform === 'linkedin' ? 'bg-[color-mix(in_oklch,#0a66c2_10%,transparent)] text-[#0a66c2]' : 'bg-[color-mix(in_oklch,#14a800_10%,transparent)] text-[#0e6b00]',
             )}
           >
             {profile.platform}

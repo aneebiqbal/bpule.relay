@@ -31,7 +31,7 @@ function writeStoredActiveIdentity(assignmentId: string) {
 const CHANNEL_STYLE: Record<string, { bg: string; text: string; glyph: string }> = {
   linkedin: { bg: 'bg-[#0a66c2]/10', text: 'text-[#0a66c2]', glyph: 'in' },
   email: { bg: 'bg-[#d97706]/10', text: 'text-[#d97706]', glyph: '@' },
-  upwork: { bg: 'bg-[#14a800]/10', text: 'text-[#14a800]', glyph: 'U' },
+  upwork: { bg: 'bg-[#14a800]/10', text: 'text-[#0e6b00]', glyph: 'U' },
 }
 
 function channelStyle(channel: string) {
@@ -245,7 +245,7 @@ export function AssignedProfilesView() {
             <div className={cn('flex size-9 items-center justify-center rounded text-xs font-medium',
               ai.identity.channel === 'linkedin' ? 'bg-[#0a66c2]/10 text-[#0a66c2]' :
               ai.identity.channel === 'email' ? 'bg-[#d97706]/10 text-[#d97706]' :
-              ai.identity.channel === 'upwork' ? 'bg-[#14a800]/10 text-[#14a800]' : 'bg-graphite/10 text-graphite'
+              ai.identity.channel === 'upwork' ? 'bg-[#14a800]/10 text-[#0e6b00]' : 'bg-graphite/10 text-graphite'
             )}>
               {ai.identity.channel === 'linkedin' ? 'in' : ai.identity.channel === 'email' ? '@' : ai.identity.channel === 'upwork' ? 'U' : '•'}
             </div>

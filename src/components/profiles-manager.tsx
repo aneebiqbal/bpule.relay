@@ -60,7 +60,7 @@ function parseTags(raw: string): string[] {
 
 const PLATFORM_STYLE: Record<Platform, { bg: string; text: string }> = {
   linkedin: { bg: 'bg-[color-mix(in_oklch,#0a66c2_10%,transparent)]', text: 'text-[#0a66c2]' },
-  upwork: { bg: 'bg-[color-mix(in_oklch,#14a800_10%,transparent)]', text: 'text-[#14a800]' },
+  upwork: { bg: 'bg-[color-mix(in_oklch,#14a800_10%,transparent)]', text: 'text-[#0e6b00]' },
 }
 
 export function ProfilesManager({

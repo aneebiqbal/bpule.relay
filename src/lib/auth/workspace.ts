@@ -55,7 +55,9 @@ export interface RepWorkspace {
  */
 async function resolveAuthorizedIdentities(): Promise<AuthorizedIdentity[]> {
   const store = await createScoutStore()
-  const assigned = await store.listMyAssignedIdentities()
+  // Workable = canonical assignments plus active temporary coverage, so a
+  // covering rep can open and generate from the profile they are covering.
+  const assigned = await store.listMyWorkableIdentities()
 
   return assigned.map((identity) => ({
     assignmentId: identity.assignmentId,

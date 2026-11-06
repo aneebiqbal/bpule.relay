@@ -50,7 +50,7 @@ export default async function AppLayout({
       try {
         const identities = authCtx?.isOwner || authCtx?.isAdmin
           ? await store.listRevenueIdentitiesAdmin()
-          : await store.listMyAssignedIdentities();
+          : await store.listMyWorkableIdentities();
         return identities
           .filter((identity) => identity.status === "active")
           .map((identity) => ({

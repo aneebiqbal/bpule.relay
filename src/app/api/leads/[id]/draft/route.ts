@@ -90,7 +90,7 @@ export async function POST(
     const [facts, plays, profiles, fewShotPool] = await Promise.all([
       store.listFacts(),
       store.listPlays(),
-      store.listProfiles(),
+      store.listMyWorkableProfiles(),
       store.listFewShotWins(50),
     ])
 

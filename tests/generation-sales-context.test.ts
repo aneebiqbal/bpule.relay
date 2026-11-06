@@ -210,6 +210,13 @@ describe('GENERATION claim safety', () => {
     expect(unsupported[0]).toContain('$1500')
   })
 
+  it('findUnsupportedClaims flags an unsupported "configured" delivery claim', () => {
+    const text = "I've successfully configured Kubernetes integrations for similar platforms."
+    const unsupported = findUnsupportedClaims(text, context())
+    expect(unsupported).toHaveLength(1)
+    expect(unsupported[0]).toContain('configured')
+  })
+
   it('findUnsupportedClaims allows a number the client stated in the job', () => {
     const ctx = context({
       target: {

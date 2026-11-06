@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
     items,
     actorRepId: ctx.repId,
     actorName: ctx.orgName,
+    auth: ctx,
   })
 
   if (!result.ok) {

@@ -33,10 +33,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ review })
   }
 
-  const [plan, facts] = await Promise.all([
-    loadCoveragePlan(ctx.orgId, { date }),
-    loadCoverageFacts(ctx.orgId, { date }),
-  ])
+  const facts = await loadCoverageFacts(ctx.orgId, { date })
+  const plan = await loadCoveragePlan(ctx.orgId, { date }, facts)
 
   let visible = plan
   let availability = facts.availability

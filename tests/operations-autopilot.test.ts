@@ -25,8 +25,10 @@ import {
   restorePrimaryCoverage,
   setRepAvailability,
 } from '@/lib/coverage/actions'
+import { listActiveCoveredIdentities, listWorkableProfiles } from '@/lib/coverage/access'
 import { createFakeSupabase } from './helpers/fake-supabase'
 import type { DbClient } from '@/lib/db/types'
+import type { AuthContext } from '@/lib/auth/organization'
 
 const ROOT = process.cwd()
 const MIGRATION = '20261106120000_operations_autopilot.sql'
@@ -668,5 +670,140 @@ describe('migration shape', () => {
     expect(followUp).toContain('drop constraint if exists profile_coverage_organization_id_profile_id_role_priority_key')
     expect(followUp).toContain('drop constraint if exists profile_coverage_profile_id_rep_id_key')
     expect(followUp).toMatch(/create unique index[\s\S]*where active/i)
+  })
+})
+
+describe('COVERAGE_GRANTS_EXECUTION_ACCESS', () => {
+  it('returns the identities a covering rep may work today, and excludes expired coverage', async () => {
+    const { client, tables } = createFakeSupabase({
+      coverage_assignments: [
+        { id: 'ca-1', organization_id: ORG, profile_id: P_LINKEDIN, primary_rep_id: DAWOOD, covering_rep_id: MADIHA, status: 'ACTIVE', effective_from: '2026-11-06', effective_until: '2026-11-08' },
+        { id: 'ca-2', organization_id: ORG, profile_id: P_UPWORK, primary_rep_id: DAWOOD, covering_rep_id: MADIHA, status: 'ACTIVE', effective_from: '2026-11-01', effective_until: '2026-11-05' },
+        { id: 'ca-3', organization_id: ORG, profile_id: 'other-profile', primary_rep_id: DAWOOD, covering_rep_id: MADIHA, status: 'ACTIVE', effective_from: '2026-11-07', effective_until: null },
+      ],
+      revenue_identities: [
+        { id: 'ri-1', organization_id: ORG, profile_id: P_LINKEDIN, channel: 'linkedin', status: 'active' },
+        { id: 'ri-2', organization_id: ORG, profile_id: P_UPWORK, channel: 'upwork', status: 'active' },
+      ],
+    })
+    const db = client as unknown as DbClient
+    const covered = await listActiveCoveredIdentities(db, ORG, MADIHA, '2026-11-06')
+    const ids = covered.map((row) => row.revenueIdentityId)
+    expect(ids).toContain('ri-1')
+    expect(ids).not.toContain('ri-2') // expired
+    expect(covered[0].primaryRepId).toBe(DAWOOD)
+    expect(tables.coverage_assignments).toHaveLength(3) // read-only
+  })
+
+  it('adds covered profiles to the workable profile set without removing owned ones', async () => {
+    const { client } = createFakeSupabase({
+      coverage_assignments: [
+        { id: 'ca-1', organization_id: ORG, profile_id: P_LINKEDIN, primary_rep_id: DAWOOD, covering_rep_id: MADIHA, status: 'ACTIVE', effective_from: '2026-11-06', effective_until: null },
+      ],
+      revenue_identities: [
+        { id: 'ri-1', organization_id: ORG, profile_id: P_LINKEDIN, channel: 'linkedin', status: 'active' },
+      ],
+      profiles: [
+        { id: P_LINKEDIN, organization_id: ORG, rep_id: DAWOOD, platform: 'linkedin', label: 'Hassan · LinkedIn', created_at: '2026-11-06' },
+      ],
+    })
+    const db = client as unknown as DbClient
+    const owned = [{ id: 'owned-1' } as never]
+    const workable = await listWorkableProfiles(db, ORG, MADIHA, '2026-11-06', owned)
+    expect(workable.map((profile) => profile.id)).toEqual(['owned-1', P_LINKEDIN])
+  })
+})
+
+describe('COVERAGE_EXPIRY_IS_A_LIVE_EXCEPTION', () => {
+  it('flags expired coverage and recommends a new cover instead of letting it disappear', () => {
+    const plan = planFor(
+      baseInput({
+        availability: [
+          { repId: DAWOOD, state: 'ON_LEAVE' },
+          { repId: MADIHA, state: 'WORKING' },
+          { repId: AHMAD, state: 'WORKING' },
+        ],
+        activeCoverage: [{
+          profileId: P_LINKEDIN,
+          primaryRepId: DAWOOD,
+          coveringRepId: MADIHA,
+          effectiveUntil: '2026-11-05',
+          expired: true,
+        }],
+      }),
+    )
+    const profile = plan.profiles[0]
+    expect(profile.status).toBe('AT_RISK')
+    expect(profile.ineligibleReason).toBe('COVERAGE_EXPIRED')
+    expect(profile.recommendation).toBe('COVER')
+    expect(plan.requiresApproval[0].reason).toContain('expired')
+  })
+
+  it('flags coverage that ends today without changing the covered status', () => {
+    const plan = planFor(
+      baseInput({
+        availability: [
+          { repId: DAWOOD, state: 'ON_LEAVE' },
+          { repId: MADIHA, state: 'WORKING' },
+          { repId: AHMAD, state: 'WORKING' },
+        ],
+        activeCoverage: [{
+          profileId: P_LINKEDIN,
+          primaryRepId: DAWOOD,
+          coveringRepId: MADIHA,
+          effectiveUntil: '2026-11-06',
+        }],
+      }),
+    )
+    const profile = plan.profiles[0]
+    expect(profile.status).toBe('BACKUP_ACTIVE')
+    expect(profile.coverageExpiring).toBe(true)
+  })
+})
+
+describe('COVERAGE_TASK_HANDOFF_IS_PROFILE_BOUND_ONLY', () => {
+  it('moves profile-bound tasks to the covering rep and leaves personal tasks alone', async () => {
+    const { client, tables } = createFakeSupabase({
+      assigned_tasks: [
+        { id: 'task-1', organization_id: ORG, profile_id: P_LINKEDIN, assignee_rep_id: DAWOOD, status: 'OPEN', title: 'Reply to lead', due_at: null, created_at: '2026-11-06' },
+        { id: 'task-2', organization_id: ORG, profile_id: null, assignee_rep_id: DAWOOD, status: 'OPEN', title: 'Personal admin', due_at: null, created_at: '2026-11-06' },
+      ],
+      reps: [
+        { id: DAWOOD, organization_id: ORG, name: 'Dawood' },
+        { id: MADIHA, organization_id: ORG, name: 'Madiha' },
+      ],
+    })
+    const db = client as unknown as DbClient
+    const auth = {
+      orgId: ORG,
+      repId: ANEEB,
+      isAdmin: true,
+      isOwner: false,
+      isManager: false,
+      managedTeamIds: [],
+    } as AuthContext
+
+    const result = await approveCoveragePlan({
+      organizationId: ORG,
+      actorRepId: ANEEB,
+      actorName: 'Aneeb',
+      auth,
+      items: [{
+        profileId: P_LINKEDIN,
+        primaryRepId: DAWOOD,
+        coveringRepId: MADIHA,
+        kind: 'COVER',
+        reason: 'On leave',
+        businessDate: '2026-11-06',
+      }],
+      client: db,
+    })
+
+    expect(result.ok).toBe(true)
+    const moved = tables.assigned_tasks.find((row) => row.id === 'task-1')!
+    expect(moved.assignee_rep_id).toBe(MADIHA)
+    expect(moved.previous_assignee_rep_id).toBe(DAWOOD)
+    const personal = tables.assigned_tasks.find((row) => row.id === 'task-2')!
+    expect(personal.assignee_rep_id).toBe(DAWOOD)
   })
 })

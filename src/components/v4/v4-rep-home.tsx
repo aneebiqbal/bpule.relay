@@ -565,7 +565,7 @@ function ProfileTodayCard({ profile }: { profile: ProfileToday }) {
                 className={cn(
                   'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ring-1',
                   channel === 'linkedin' && 'bg-[#0a66c2]/10 text-[#0a66c2] ring-[#0a66c2]/20',
-                  channel === 'upwork' && 'bg-[#14a800]/10 text-[#14a800] ring-[#14a800]/20',
+                  channel === 'upwork' && 'bg-[#14a800]/10 text-[#0e6b00] ring-[#14a800]/20',
                   channel !== 'linkedin' && channel !== 'upwork' && 'bg-bone text-graphite ring-line',
                 )}
               >

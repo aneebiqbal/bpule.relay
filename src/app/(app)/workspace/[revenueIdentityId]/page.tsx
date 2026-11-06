@@ -42,7 +42,7 @@ async function loadWorkspaceDetail(identityId: string, admin: boolean) {
 
   const identity = admin
     ? await store.getRevenueIdentityAdmin(identityId).catch(() => null)
-    : await store.listMyAssignedIdentities().then((identities) =>
+    : await store.listMyWorkableIdentities().then((identities) =>
         identities.find((row) => row.id === identityId) ?? null
       )
 
@@ -66,7 +66,7 @@ async function loadWorkspaceDetail(identityId: string, admin: boolean) {
 
   const allLeads = admin
     ? await store.fetchLeadsAll().catch(() => [])
-    : await store.listOwnedLeads().catch(() => [])
+    : await store.listMyWorkableLeads().catch(() => [])
   const leads = allLeads
     .filter((lead) => lead.revenueIdentityId === identityId)
     .slice(0, 50)

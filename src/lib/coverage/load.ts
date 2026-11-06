@@ -177,6 +177,7 @@ export async function loadCoverageFacts(
     primaryRepId: row.primary_rep_id,
     coveringRepId: row.covering_rep_id,
     effectiveUntil: row.effective_until,
+    expired: row.effective_until != null && row.effective_until < businessDate,
   }))
 
   const readiness = ((readinessRes.data ?? []) as Array<{ profile_id: string; rep_id: string }>).map((row) => ({
@@ -293,21 +294,24 @@ export async function loadCoverageFacts(
 export async function loadCoveragePlan(
   orgId: string,
   options: { date?: string } = {},
+  facts?: CoverageFacts,
 ): Promise<CoveragePlan> {
-  const facts = await loadCoverageFacts(orgId, options)
+  // Callers that already loaded facts (Admin Home, the plan API) pass them in —
+  // otherwise this would read the same twelve tables twice.
+  const resolved = facts ?? (await loadCoverageFacts(orgId, options))
   const input: CoverageEngineInput = {
-    businessDate: facts.businessDate,
-    isWorkingDay: facts.isWorkingDay,
-    coveragePolicy: facts.coveragePolicy,
-    maxProfilesPerRep: facts.maxProfilesPerRep,
-    profiles: facts.profiles,
-    assignments: facts.assignments,
-    coverage: facts.coverage,
-    availability: facts.availability,
-    workloads: facts.workloads,
-    activeCoverage: facts.activeCoverage,
-    readiness: facts.readiness,
-    profileWork: facts.profileWork,
+    businessDate: resolved.businessDate,
+    isWorkingDay: resolved.isWorkingDay,
+    coveragePolicy: resolved.coveragePolicy,
+    maxProfilesPerRep: resolved.maxProfilesPerRep,
+    profiles: resolved.profiles,
+    assignments: resolved.assignments,
+    coverage: resolved.coverage,
+    availability: resolved.availability,
+    workloads: resolved.workloads,
+    activeCoverage: resolved.activeCoverage,
+    readiness: resolved.readiness,
+    profileWork: resolved.profileWork,
   }
   return evaluateDailyCoverage(input)
 }
@@ -327,10 +331,8 @@ export async function loadCoverageStatus(
   orgId: string,
   options: { date?: string } = {},
 ): Promise<CoverageStatusView> {
-  const [facts, plan] = await Promise.all([
-    loadCoverageFacts(orgId, options),
-    loadCoveragePlan(orgId, options),
-  ])
+  const facts = await loadCoverageFacts(orgId, options)
+  const plan = await loadCoveragePlan(orgId, options, facts)
   const summary = buildCoverageStatusSummary({
     availability: facts.availability,
     plan,

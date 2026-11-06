@@ -23,7 +23,7 @@ export default async function OnboardingPage() {
     if (user.rep.role === "admin") {
       initialIdentityCount = (await store.listRevenueIdentitiesAdmin()).length;
     } else {
-      initialIdentityCount = (await store.listMyAssignedIdentities()).length;
+      initialIdentityCount = (await store.listMyWorkableIdentities()).length;
     }
   } catch {
     initialIdentityCount = 0;

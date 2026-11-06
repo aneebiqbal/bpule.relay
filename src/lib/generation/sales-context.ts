@@ -162,7 +162,7 @@ const STOP = new Set([
 const CLAIM_INDICATOR = /\b(?:project|projects|client|clients|platform|platforms|product|integration|integrations|migration|onboarded|implemented|delivered|shipped|built|launched|managed|speciali[sz]ed|experience|years|metrics|results|successfully)\b/i
 
 /** First-person delivery claim: the model asserting it did work. */
-const DELIVERY_CLAIM_RE = /\b(?:i|we|i'?ve|we'?ve|i\s+have|we\s+have|i'?m|we'?re)\b[^.!?\n]{0,80}\b(?:built|shipped|delivered|led|managed|migrated|designed|implemented|launched|onboarded|speciali[sz]ed|worked)\b/i
+const DELIVERY_CLAIM_RE = /\b(?:i|we|i'?ve|we'?ve|i\s+have|we\s+have|i'?m|we'?re)\b[^.!?\n]{0,80}\b(?:built|shipped|delivered|led|managed|migrated|designed|implemented|launched|onboarded|speciali[sz]ed|worked|configured|deployed|developed|created|set\s+up)\b/i
 
 /** Third-person project/outcome claim that still needs evidence. */
 const PROJECT_CLAIM_RE = /\b(?:notable\s+project|project\s+involved|projects?\s+involving|successfully\s+onboarded|multiple\s+clients|track\s+record|proven\s+track)\b/i
@@ -182,6 +182,7 @@ const GENERIC_TOKENS = new Set([
   'marketplace', 'dashboard', 'tool', 'tools', 'online', 'digital', 'technical',
   'technology', 'technologies', 'software', 'development', 'engineer', 'engineering',
   'manager', 'management', 'senior', 'junior', 'leading', 'built', 'building',
+  'cloud', 'compliance', 'risk', 'similar', 'multiple', 'several', 'various',
 ])
 
 function norm(text: string): string {

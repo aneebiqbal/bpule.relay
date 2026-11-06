@@ -3,6 +3,8 @@ import type { DbClient } from '@/lib/db/types'
 import type { CoverageMode } from './engine'
 import { notifyOnce } from '@/lib/notifications/deliver'
 import { isMissingRelation } from '@/lib/operations/db-errors'
+import { reassignAssignedTask } from '@/lib/tasks/assigned-tasks'
+import type { AuthContext } from '@/lib/auth/organization'
 
 /**
  * Coverage writes. Every mutation is explicit, audited and idempotent where a
@@ -113,6 +115,9 @@ export async function approveCoveragePlan(input: {
   items: CoverageApprovalItemInput[]
   actorRepId: string
   actorName: string
+  /** Required for the profile-bound task handoff; without it coverage still
+   *  activates, but tasks stay with the primary. */
+  auth?: AuthContext
   client?: DbClient
 }): Promise<{ ok: boolean; results: CoverageApprovalResult[] }> {
   const client = input.client ?? (await createServerSupabase())
@@ -189,10 +194,53 @@ export async function approveCoveragePlan(input: {
       reason: item.reason,
     })
 
+    // Profile-bound work follows the coverage; personal tasks never move.
+    if (input.auth) {
+      await handoffProfileTasks(client, input.auth, {
+        profileId: item.profileId,
+        fromRepId: item.primaryRepId,
+        toRepId: item.coveringRepId,
+      })
+    }
+
     results.push({ profileId: item.profileId, coveringRepId: item.coveringRepId, applied: true, assignmentId })
   }
 
   return { ok: results.every((result) => result.applied), results }
+}
+
+/**
+ * Move profile-bound tasks from the primary to the covering rep. Personal
+ * tasks (no profile_id) are never touched. Uses the canonical reassign path,
+ * so scope, audit and notification behave exactly like a manual reassignment.
+ */
+async function handoffProfileTasks(
+  client: DbClient,
+  auth: AuthContext,
+  input: { profileId: string; fromRepId: string; toRepId: string },
+): Promise<void> {
+  const { data: tasks, error } = await client
+    .from('assigned_tasks')
+    .select('id')
+    .eq('organization_id', auth.orgId)
+    .eq('profile_id', input.profileId)
+    .eq('assignee_rep_id', input.fromRepId)
+    .in('status', ['OPEN', 'IN_PROGRESS'])
+    .limit(200)
+  if (error || !tasks || tasks.length === 0) return
+
+  for (const task of tasks) {
+    try {
+      await reassignAssignedTask(client, auth, task.id as string, input.toRepId)
+    } catch (err) {
+      // A task that cannot move (scope, permissions) must not block coverage.
+      console.warn('[coverage] task handoff failed', {
+        taskId: task.id,
+        profileId: input.profileId,
+        message: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
 }
 
 async function notifyCoverageActivated(

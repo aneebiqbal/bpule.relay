@@ -3238,6 +3238,16 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         })
         .filter((x): x is RevenueIdentityWithAssignment => x !== null)
     },
+    async listMyWorkableIdentities() {
+      // Demo store has no coverage assignments; assigned is the workable set.
+      return this.listMyAssignedIdentities()
+    },
+    async listMyWorkableProfiles() {
+      return this.listProfiles()
+    },
+    async listMyWorkableLeads() {
+      return this.listOwnedLeads()
+    },
     async getMyTodayAccountability() {
       return this.getRepTodayAccountability(rep.id)
     },

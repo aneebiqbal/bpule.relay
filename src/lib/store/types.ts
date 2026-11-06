@@ -1088,6 +1088,12 @@ export interface ScoutStore {
   getTeamAccountabilityAdmin(date?: string): Promise<import('@/lib/domain/types').TeamAccountabilityView>
   getCommandCenterAdmin(): Promise<import('@/lib/domain/types').CommandCenterView>
   listMyAssignedIdentities(): Promise<import('@/lib/domain/types').RevenueIdentityWithAssignment[]>
+  /** Assigned + actively covered identities — what the rep may work today. */
+  listMyWorkableIdentities(): Promise<import('@/lib/domain/types').RevenueIdentityWithAssignment[]>
+  /** Owned + actively covered profiles. */
+  listMyWorkableProfiles(): Promise<Profile[]>
+  /** Owned + covered-profile leads. */
+  listMyWorkableLeads(): Promise<Lead[]>
   getMyTodayAccountability(): Promise<import('@/lib/domain/types').RepTodayView>
   getRepTodayAccountability(repId: string): Promise<import('@/lib/domain/types').RepTodayView>
   listAccountabilityNotifications(): Promise<import('@/lib/domain/types').AppNotification[]>

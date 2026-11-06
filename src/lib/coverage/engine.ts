@@ -85,6 +85,9 @@ export interface ActiveCoverageInput {
   primaryRepId: string
   coveringRepId: string
   effectiveUntil: string | null
+  /** True when `effective_until` has passed. Access is revoked and the engine
+   *  asks for a new cover instead of letting it disappear silently. */
+  expired?: boolean
 }
 
 export interface ProfileWorkInput {
@@ -143,6 +146,8 @@ export interface CoverageProfileResult {
   recommendationReasons: string[]
   recommendedReady: boolean
   ineligibleReason: string | null
+  /** Active coverage ends today — surfaced before it expires. */
+  coverageExpiring: boolean
   work: ProfileWorkInput
 }
 
@@ -351,11 +356,42 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
     let recommendationReasons: string[] = []
     let recommendedReady = true
     let ineligibleReason: string | null = null
+    const coverageExpiring = Boolean(
+      active?.effectiveUntil && !active.expired && active.effectiveUntil === input.businessDate,
+    )
 
     if (!primary) {
       status = 'UNCOVERED'
       ineligibleReason = 'NO_PRIMARY_ASSIGNED'
       recommendation = 'NO_SAFE_COVERAGE'
+    } else if (active?.expired) {
+      // Expired coverage is a live operational problem, not a silent no-op:
+      // the covering rep has lost access, so the profile needs a new cover.
+      status = 'AT_RISK'
+      ineligibleReason = 'COVERAGE_EXPIRED'
+      if (recommended) {
+        recommendation = 'COVER'
+        recommendedRepId = recommended.repId
+        recommendedRepName = recommended.name
+        recommendationReasons = ['Temporary coverage expired', ...recommended.reasons]
+        recommendedReady = recommended.ready
+        requiresApproval.push({
+          profileId: profile.profileId,
+          profileName: profile.name,
+          channels: profile.channels,
+          fromRepId: primary.repId,
+          fromRepName: primaryWorkload?.name ?? primary.repId,
+          toRepId: recommended.repId,
+          toRepName: recommended.name,
+          kind: 'COVER',
+          reason: 'Temporary coverage expired',
+          effectiveUntil: null,
+          workPackage: work,
+          readinessRequired: !recommended.ready,
+        })
+      } else {
+        recommendation = 'NO_SAFE_COVERAGE'
+      }
     } else if (active) {
       // Coverage is already running. If the primary is back, the plan asks to
       // restore them; otherwise the backup continues.
@@ -383,6 +419,10 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
           workPackage: work,
           readinessRequired: !recommendedReady,
         })
+      } else if (coverageExpiring) {
+        // Still covered today, but the arrangement ends at the business date.
+        // Surface it without changing status; the admin can extend or restore.
+        ineligibleReason = 'COVERAGE_EXPIRING'
       }
     } else if (primaryIsAvailable) {
       status = 'COVERED'
@@ -435,6 +475,7 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
       recommendationReasons,
       recommendedReady,
       ineligibleReason,
+      coverageExpiring,
       work,
     })
   }
