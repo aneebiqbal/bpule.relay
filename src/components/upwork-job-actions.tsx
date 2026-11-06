@@ -238,7 +238,9 @@ export function UpworkJobActions({
       {/* Admin/owner on-behalf: pick the rep whose profiles are eligible. */}
       {isAdmin && reps.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl bg-bone px-4 py-3 ring-1 ring-line">
-          <label className="text-[12px] font-medium text-graphite" htmlFor="upwork-acting-rep">Generate proposal for</label>
+          {/* Deliberately not "Generate proposal for" — that wording collided
+              with the Generate button directly below and read as two actions. */}
+          <label className="text-[12px] font-medium text-graphite" htmlFor="upwork-acting-rep">Acting as</label>
           <select
             id="upwork-acting-rep"
             value={actingRepId ?? ''}

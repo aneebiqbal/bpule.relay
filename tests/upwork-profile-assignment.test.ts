@@ -289,7 +289,7 @@ describe('ADMIN_UPWORK_PROFILE_ASSIGNMENT_FLOW', () => {
     expect(page).toContain('listAssignedProfilesForRep')
 
     const ui = read('src/components/upwork-job-actions.tsx')
-    expect(ui).toContain('Generate proposal for')
+    expect(ui).toContain('Acting as')
     expect(ui).toContain('upwork-acting-rep')
     expect(ui).toContain('actingRepId')
   })
