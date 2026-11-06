@@ -6,6 +6,7 @@ import { ArrowLeft, ExternalLink } from 'lucide-react'
 import { cn } from 'cn'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DailyJobs, jobsFromTargets } from '@/components/rep/daily-jobs'
+import { normalizeExternalUrl } from '@/lib/profiles/display'
 
 interface TargetView {
   targetId: string
@@ -73,6 +74,7 @@ export function ResponsibilityWorkspaceDetail({
     contacted: 'Waiting',
   }
   const orderedLeads = [...leads].sort((a, b) => leadOrder.indexOf(a.status) - leadOrder.indexOf(b.status))
+  const profileUrl = normalizeExternalUrl(identity.profileUrl)
 
   return (
     <div className="space-y-6 pb-8">
@@ -103,9 +105,9 @@ export function ResponsibilityWorkspaceDetail({
             {identity.title || 'No title set'} · {identity.channel.toUpperCase()}
           </p>
           <p className="mt-0.5 text-[11px] text-stone">Assigned to you</p>
-          {identity.profileUrl && (
+          {profileUrl && (
             <a
-              href={identity.profileUrl}
+              href={profileUrl}
               target="_blank"
               rel="noopener"
               className="mt-1 inline-flex items-center gap-1 text-[11px] text-graphite hover:text-ink"

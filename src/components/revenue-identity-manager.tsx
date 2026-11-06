@@ -14,6 +14,7 @@ import { Dialog, DialogActions } from '@/components/ui/dialog'
 import { cn } from 'cn'
 import { EmptyNote, Initials, Panel, Pill } from '@/components/dashboard/kit'
 import type { RevenueIdentity, RevenueIdentityChannel, IdentityAssignment, Rep } from '@/lib/domain/types'
+import { normalizeExternalUrl } from '@/lib/profiles/display'
 
 interface IdentityForm {
   profileId: string
@@ -479,14 +480,15 @@ export function RevenueIdentityManager() {
               const meta = CHANNEL_META[ri.channel] ?? CHANNEL_META.other
               const linked = ri.profileId ? profileById.get(ri.profileId) : undefined
               const riAssignments = assignments.filter((a) => a.revenueIdentityId === ri.id)
+              const profileUrl = normalizeExternalUrl(ri.profileUrl)
               return (
                 <li key={ri.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5 lg:grid-cols-[auto_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto]">
                   <span className={cn('flex size-8 items-center justify-center rounded-lg text-[11px] font-semibold', meta.cls)} title={meta.label}>{meta.short}</span>
                   <div className="min-w-0">
                     <p className="flex items-center gap-2 text-[13px] font-medium text-ink">
                       <span className="truncate">{ri.identityName}</span>
-                      {ri.profileUrl && (
-                        <a href={ri.profileUrl} target="_blank" rel="noopener noreferrer" className="text-stone hover:text-cobalt" aria-label={`Open ${ri.identityName}'s public profile`}>
+                      {profileUrl && (
+                        <a href={profileUrl} target="_blank" rel="noopener noreferrer" className="text-stone hover:text-cobalt" aria-label={`Open ${ri.identityName}'s public profile`}>
                           <ExternalLink className="size-3" />
                         </a>
                       )}

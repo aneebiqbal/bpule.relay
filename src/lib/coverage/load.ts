@@ -11,6 +11,7 @@ import {
   evaluateDailyCoverage,
   fallbackAvailability,
   labelForAvailability,
+  resolveAvailability,
   type ActiveCoverageInput,
   type AvailabilityState,
   type CoverageAssignmentInput,
@@ -130,21 +131,18 @@ export async function loadCoverageFacts(
   const dayByRep = new Map(
     ((dayRes.data ?? []) as Array<{ rep_id: string; check_in_at: string | null; closed_at: string | null }>).map((row) => [row.rep_id, row]),
   )
-  // Availability authority: a strong explicit state (leave / offline /
-  // unavailable) overrides the clock; otherwise the canonical rep_day state
-  // wins, and an explicit AVAILABLE only applies when the rep has not checked
-  // in. Admin coverage and the rep's own check-in/out therefore read the same
-  // state instead of disagreeing.
-  const STRONG_EXPLICIT: ReadonlySet<AvailabilityState> = new Set(['ON_LEAVE', 'OFFLINE', 'UNAVAILABLE'])
+  // Availability authority: the one rule Admin coverage and Rep Home share.
   const availability: RepAvailabilityInput[] = reps.map((rep) => {
     const row = dayByRep.get(rep.repId)
-    const explicitState = explicit.get(rep.repId) ?? null
-    if (explicitState && STRONG_EXPLICIT.has(explicitState)) {
-      return { repId: rep.repId, state: explicitState }
+    return {
+      repId: rep.repId,
+      state: resolveAvailability({
+        explicit: explicit.get(rep.repId) ?? null,
+        checkInAt: row?.check_in_at ?? null,
+        closedAt: row?.closed_at ?? null,
+        isWorkingDay,
+      }),
     }
-    if (row?.closed_at) return { repId: rep.repId, state: 'CHECKED_OUT' }
-    if (row?.check_in_at) return { repId: rep.repId, state: 'WORKING' }
-    return { repId: rep.repId, state: explicitState ?? fallbackAvailability(isWorkingDay) }
   })
   // Eligibility: an assignment grants the channels of its active identity.
   const channelsByProfileRep = new Map<string, Set<RevenueIdentityChannel>>()

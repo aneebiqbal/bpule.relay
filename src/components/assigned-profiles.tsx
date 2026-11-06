@@ -6,6 +6,7 @@ import { Shield, ExternalLink, CheckCircle2, AlertTriangle, ArrowRight, Bell, Ch
 import { cn } from 'cn'
 import type { TargetProgressView, ActivityType } from '@/lib/domain/types'
 import { normalizeAssignedProfiles, type AssignedProfilesModel } from '@/lib/relay/assigned-profiles'
+import { normalizeExternalUrl } from '@/lib/profiles/display'
 
 const ACTIVE_IDENTITY_STORAGE_KEY = 'scout:active-identity-assignment-id'
 
@@ -229,6 +230,7 @@ export function AssignedProfilesView() {
         </div>
       {data.assignedIdentities.map((ai) => {
         const isActive = ai.assignmentId === activeAssignmentId
+        const profileUrl = normalizeExternalUrl(ai.identity.profileUrl)
         return (
         <article
           key={ai.assignmentId}
@@ -262,9 +264,9 @@ export function AssignedProfilesView() {
               </div>
               <p className="text-xs text-slate">{ai.identity.title || 'No title set'}</p>
             </div>
-            {ai.identity.profileUrl && (
+            {profileUrl && (
               <a
-                href={ai.identity.profileUrl}
+                href={profileUrl}
                 target="_blank"
                 rel="noopener"
                 onClick={(e) => e.stopPropagation()}

@@ -86,6 +86,7 @@ function TeamProfilesTableInner({
   const assigned = profiles.filter((profile) => profile.assignmentCount > 0)
   const unassigned = profiles.filter((profile) => profile.assignmentCount === 0)
   const attention = profiles.filter((profile) => profile.status === 'at_risk' || profile.status === 'missed')
+  const needsReview = profiles.filter((profile) => profile.needsReview)
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -113,6 +114,7 @@ function TeamProfilesTableInner({
     { key: 'assigned', label: 'Assigned', value: assigned.length, hint: 'With at least one rep', tone: 'neutral' },
     { key: 'unassigned', label: 'Unassigned', value: unassigned.length, hint: unassigned.length > 0 ? 'Needs a rep' : 'All assigned', tone: unassigned.length > 0 ? 'warning' : 'neutral' },
     { key: 'attention', label: 'Needs attention', value: attention.length, hint: 'At risk or missed', tone: attention.length > 0 ? 'danger' : 'neutral' },
+    { key: 'review', label: 'Needs review', value: needsReview.length, hint: needsReview.length > 0 ? 'Missing owner, name or channel' : 'All profiles complete', tone: needsReview.length > 0 ? 'warning' : 'neutral' },
   ]
 
   const views: Array<{ key: View; label: string; count: number }> = [
@@ -206,10 +208,9 @@ function TeamProfilesTableInner({
               <tr className="border-b border-line text-[10px] uppercase tracking-[0.12em] text-stone">
                 <th className="px-4 py-2 font-medium">Profile</th>
                 <th className="px-4 py-2 font-medium">Channel</th>
-                <th className="px-4 py-2 font-medium">Assigned rep</th>
+                <th className="px-4 py-2 font-medium">Primary</th>
+                <th className="px-4 py-2 font-medium">Backups</th>
                 <th className="px-4 py-2 font-medium">Today</th>
-                <th className="px-4 py-2 font-medium">Follow-ups</th>
-                <th className="px-4 py-2 font-medium">Proposals</th>
                 <th className="px-4 py-2 font-medium">Status</th>
                 <th className="px-4 py-2" />
               </tr>
@@ -221,16 +222,34 @@ function TeamProfilesTableInner({
                   <td className="px-4 py-3 text-[12px] text-graphite">
                     {profile.channels.join(' · ') || '—'}
                   </td>
+                  <td className="px-4 py-3 text-[12px]">
+                    {profile.primaryRepName ? (
+                      <span className="text-ink">{profile.primaryRepName}</span>
+                    ) : (
+                      <Link
+                        href={`/team/profiles/${profile.profileId}`}
+                        className="text-status-warning hover:underline"
+                      >
+                        Assign primary
+                      </Link>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-[12px] text-graphite">
-                    {profile.assignedReps.join(', ') || <span className="text-status-warning">Unassigned</span>}
+                    {profile.backups.length > 0 ? profile.backups.join(', ') : <span className="text-stone">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     <ProgressCell completed={profile.completedCount} target={profile.targetCount} />
                   </td>
-                  <td className="px-4 py-3 text-[12px] tabular-nums text-graphite">{profile.followUps || '—'}</td>
-                  <td className="px-4 py-3 text-[12px] tabular-nums text-graphite">{profile.proposals || '—'}</td>
                   <td className="px-4 py-3">
                     <V4Chip tone={STATUS_TONE[profile.status ?? ''] ?? 'neutral'}>{statusLabel(profile.status)}</V4Chip>
+                    {profile.needsReview && (
+                      <Link
+                        href={`/team/profiles/${profile.profileId}`}
+                        className="mt-1 block text-[11px] text-status-warning hover:underline"
+                      >
+                        Needs review
+                      </Link>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Link
@@ -253,7 +272,8 @@ function TeamProfilesTableInner({
                 <div className="min-w-0">
                   <p className="truncate text-[13px] font-medium text-ink">{profile.profileName}</p>
                   <p className="text-[11px] text-stone">
-                    {profile.channels.join(' · ') || '—'} · {profile.assignedReps.join(', ') || 'Unassigned'}
+                    {profile.channels.join(' · ') || '—'} · {profile.primaryRepName ?? 'No primary'}
+                    {profile.backups.length > 0 ? ` · Backups: ${profile.backups.join(', ')}` : ''}
                   </p>
                 </div>
                 <V4Chip tone={STATUS_TONE[profile.status ?? ''] ?? 'neutral'}>{statusLabel(profile.status)}</V4Chip>

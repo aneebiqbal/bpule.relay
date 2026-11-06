@@ -208,6 +208,26 @@ export function fallbackAvailability(isWorkingDay: boolean): AvailabilityState {
   return isWorkingDay ? 'AVAILABLE' : 'OFFLINE'
 }
 
+const STRONG_EXPLICIT: ReadonlySet<AvailabilityState> = new Set(['ON_LEAVE', 'OFFLINE', 'UNAVAILABLE'])
+
+/**
+ * The one availability authority. A strong explicit state (leave / offline /
+ * unavailable) overrides the clock; otherwise the canonical rep_day state
+ * wins, and an explicit AVAILABLE only applies when the rep has not checked in.
+ * Rep check-in/out and Admin coverage read this, so they cannot disagree.
+ */
+export function resolveAvailability(input: {
+  explicit: AvailabilityState | null
+  checkInAt: string | null
+  closedAt: string | null
+  isWorkingDay: boolean
+}): AvailabilityState {
+  if (input.explicit && STRONG_EXPLICIT.has(input.explicit)) return input.explicit
+  if (input.closedAt) return 'CHECKED_OUT'
+  if (input.checkInAt) return 'WORKING'
+  return input.explicit ?? fallbackAvailability(input.isWorkingDay)
+}
+
 function channelLabel(channel: RevenueIdentityChannel): string {
   return channel === 'linkedin' ? 'LinkedIn' : channel === 'upwork' ? 'Upwork' : channel
 }

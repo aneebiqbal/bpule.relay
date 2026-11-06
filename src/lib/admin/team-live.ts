@@ -149,8 +149,17 @@ export function assembleTeamLive(rows: TeamLiveRows): TeamLivePayload {
       .map((id) => identities.find((i) => i.id === id))
       .filter((i): i is IdentityRow => Boolean(i))
 
-    const repTargets = (rows.targets ?? []).filter((t) => t.rep_id === rep.id)
-    const repAccountability = (rows.accountability ?? []).filter((a) => a.rep_id === rep.id)
+    // Targets count only for identities the rep is actually assigned to. A
+    // target left over on an unassigned identity inflated the rep total while
+    // the profile rows (which iterate assigned identities) showed a different
+    // number — the Admin summary and the rows disagreed.
+    const assignedIdentityIds = new Set(repIdentities.map((identity) => identity.id))
+    const repTargets = (rows.targets ?? []).filter(
+      (t) => t.rep_id === rep.id && assignedIdentityIds.has(t.revenue_identity_id),
+    )
+    const repAccountability = (rows.accountability ?? []).filter(
+      (a) => a.rep_id === rep.id && assignedIdentityIds.has(a.revenue_identity_id),
+    )
 
     const goals = repTargets.map((t) => {
       const matches = repAccountability.filter(
