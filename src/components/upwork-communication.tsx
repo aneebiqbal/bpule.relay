@@ -14,7 +14,7 @@ interface Message {
   createdAt: string
 }
 
-export function UpworkCommunication({ jobId, job }: { jobId: string; job: UpworkJob }) {
+export function UpworkCommunication({ jobId, job, actingRepId = null }: { jobId: string; job: UpworkJob; actingRepId?: string | null }) {
   const [messages, setMessages] = useState<Message[]>(job.messages ?? [])
   const [showInbound, setShowInbound] = useState(false)
   const [inboundText, setInboundText] = useState('')
@@ -56,6 +56,7 @@ export function UpworkCommunication({ jobId, job }: { jobId: string; job: Upwork
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clientMessage: lastClientMsg,
+          repId: actingRepId ?? undefined,
         }),
       })
       if (res.ok) {
@@ -69,7 +70,7 @@ export function UpworkCommunication({ jobId, job }: { jobId: string; job: Upwork
       setReplyError('Network error')
     }
     setReplyGenerating(false)
-  }, [lastClientMsg, jobId])
+  }, [lastClientMsg, jobId, actingRepId])
 
   const saveReply = useCallback(async () => {
     if (!replyText.trim()) return

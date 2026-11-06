@@ -12,6 +12,7 @@ import { understandConversation, type CopilotUnderstandResult } from '@/lib/ai/c
 import { hasProvider } from '@/lib/ai/config'
 import type { ProofItem } from '@/lib/domain/types'
 import type { InboundReplyInput } from '@/lib/inbound/reply'
+import { buildSalesGenerationContext } from '@/lib/generation/sales-context'
 
 export const maxDuration = 60
 
@@ -77,6 +78,35 @@ export async function POST(req: NextRequest) {
       .filter((p: ProofItem) => !body.profileId || p.profileId === body.profileId)
       .slice(0, 3)
 
+    // Canonical profile evidence for the selected sender. The inbox reply used
+    // to read three proof items and nothing else, so a strong portfolio project
+    // or role never reached the writer.
+    const generationContext = profile
+      ? buildSalesGenerationContext({
+          profile,
+          evidence: await store.getProfileEvidence(profile.id),
+          voice: voiceProfileRow?.styleCard ?? null,
+          channel: 'linkedin',
+          target: {
+            channel: 'linkedin',
+            company: lead.company,
+            contactName: lead.contactName,
+            contactTitle: lead.contactTitle,
+            signalEvidence: lead.signalEvidence ?? '',
+            tags: lead.tags ?? [],
+          },
+          conversation: {
+            clientMessage: lead.inboundMessage ?? null,
+            priorMessages: messages
+              .filter((m: { sentText: string | null }) => m.sentText)
+              .map((m: { direction?: string; sentText: string | null }) => ({
+                direction: m.direction === 'inbound' ? 'inbound' : 'outbound',
+                text: m.sentText as string,
+              })),
+          },
+        })
+      : null
+
     const input: InboundReplyInput = {
       lead,
       intelligence: body.intelligence && typeof body.intelligence === 'object'
@@ -86,6 +116,7 @@ export async function POST(req: NextRequest) {
       proofItems,
       history: messages.filter((m: { sentText: string | null }) => m.sentText),
       styleCard: styleCardSummary,
+      generationContext,
     }
 
     // Prepend calibrated voice instructions to the reply prompt

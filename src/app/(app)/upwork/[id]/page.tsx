@@ -325,7 +325,7 @@ export default async function UpworkJobPage({
         </V4Panel>
       )}
 
-      <UpworkCommunication jobId={id} job={job} />
+      <UpworkCommunication jobId={id} job={job} actingRepId={actingRepId} />
     </div>
   )
 }

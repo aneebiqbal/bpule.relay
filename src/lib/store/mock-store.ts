@@ -2789,6 +2789,18 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async listProofCards(profileId: string) {
       return proofCards.filter((c) => c.profileId === profileId)
     },
+    async getProfileEvidence(profileId: string) {
+      // Demo store has no portfolio/experience/review tables; proof cards are
+      // the canonical demo evidence.
+      return {
+        proofCards: proofCards.filter((c) => c.profileId === profileId),
+        proofItems: [],
+        portfolioProjects: [],
+        experience: [],
+        reviews: [],
+        claims: [],
+      }
+    },
     async upsertProofCard(input) {
       const card: ProofCard = {
         id: input.id ?? nextId('pc'),

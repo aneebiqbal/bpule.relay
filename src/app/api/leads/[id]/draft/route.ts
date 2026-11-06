@@ -9,7 +9,7 @@ import { embedText } from '@/lib/ai/embed'
 import { mergeProofMatches } from '@/lib/ai/proof-match'
 import { createScoutStore } from '@/lib/store'
 import { sseStream } from '@/lib/sse/sse'
-import { buildProfileIntelligence, matchProofToLead, classifyLeadFact } from '@/lib/relay/profile-intelligence'
+import { classifyLeadFact } from '@/lib/relay/profile-intelligence'
 import { createOutreachStrategy } from '@/lib/relay/outreach-strategy'
 import {
   analyzeReply,
@@ -27,6 +27,7 @@ import {
   sourceFromLead,
 } from '@/lib/relay/revenue-strategy'
 import { factsFromCanonical } from '@/lib/relay/routing-context'
+import { buildSalesGenerationContext } from '@/lib/generation/sales-context'
 
 export const maxDuration = 120
 
@@ -156,15 +157,60 @@ export async function POST(
 
     let strategy: OutreachStrategy | null = null
     let safeFacts: SafeFact[] = []
+    let generationContext: ReturnType<typeof buildSalesGenerationContext> | null = null
     let matchedProofCards: MatchedProof[] = []
     let conversationContext: string | null = null
     let replyStrategy: ReturnType<typeof buildReplyStrategy> | null = null
 
     if (profile) {
-      const profileIntelligence = buildProfileIntelligence(profile, [])
-      matchedProofCards = matchProofToLead(profileIntelligence, detail.tags ?? [], 3)
+      // Canonical profile evidence — the same builder every generation path
+      // reads. Previously this built profile intelligence with no proof items
+      // and then discarded it, so the draft never saw a single proof card.
+      const evidence = await store.getProfileEvidence(profile.id)
+      generationContext = buildSalesGenerationContext({
+        profile,
+        evidence,
+        voice: voiceProfile?.styleCard ?? null,
+        channel: type === 'upwork' ? 'upwork' : 'linkedin',
+        target: {
+          channel: type === 'upwork' ? 'upwork' : 'linkedin',
+          company: detail.company,
+          contactName: detail.contactName,
+          contactTitle: detail.contactTitle,
+          signalEvidence: detail.signalEvidence ?? '',
+          tags: detail.tags ?? [],
+          title: detail.contactTitle ?? null,
+        },
+        conversation: {
+          priorMessages: (detail.messages ?? [])
+            .filter((m) => m.sentText)
+            .map((m) => ({ direction: m.direction === 'inbound' ? 'inbound' : 'outbound', text: m.sentText as string, sentAt: m.sentAt })),
+          alreadySentClaims: (detail.messages ?? [])
+            .filter((m) => m.sentText)
+            .map((m) => m.sentText as string)
+            .slice(0, 2),
+          questionsRequiringResponse: type === 'reply'
+            ? ((body.replyText?.match(/[^?\n]+\?/g) ?? []).map((q) => q.trim()).filter((q) => q.length >= 6).slice(0, 3))
+            : [],
+        },
+      })
       safeFacts = [classifyLeadFact(detail.signalEvidence ?? '', detail.signalEvidence ?? '', detail.signalType ?? null)]
-      void profileIntelligence
+      // The strategy engine still reads proof cards; feed it the canonical
+      // ranked set so a strong, relevant card can select the proof-led mode.
+      const rankedCards = generationContext
+      matchedProofCards = rankedCards
+        ? rankedCards.evidence.proofCards
+            .filter((card) => rankedCards.rankedProof.some((p) => p.id === card.id))
+            .map((card) => {
+              const ranked = rankedCards.rankedProof.find((p) => p.id === card.id)
+              return {
+                proofCard: card,
+                relevanceScore: ranked?.relevanceScore ?? 0,
+                matchingTags: ranked?.matchingTags ?? [],
+                safeClaim: card.safeClaim,
+              }
+            })
+        : []
 
       if (type === 'followup') {
         const followup = determineFollowup({
@@ -415,7 +461,7 @@ export async function POST(
           })),
           strategy: draftStrategy,
           safeFacts,
-          matchedProofCards,
+          generationContext: generationContext ?? undefined,
           conversationContext: conversationContext ?? undefined,
         },
         emit,

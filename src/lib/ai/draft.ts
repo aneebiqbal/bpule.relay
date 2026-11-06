@@ -44,6 +44,12 @@ import {
   VOICE_RULES,
   FORMATTING_RULES,
 } from '@/lib/ai/prompts'
+import {
+  formatConversationBlock,
+  formatEvidenceBlock,
+  formatProfileBlock,
+  type SalesGenerationContext,
+} from '@/lib/generation/sales-context'
 
 /** One entry per model call made while producing one draft, for cost/tier reporting on the route. */
 export interface DraftCallLog {
@@ -124,6 +130,8 @@ export interface DraftInput {
   safeFacts?: SafeFact[]
   /** Matched proof cards from the sender's profile. */
   matchedProofCards?: MatchedProof[]
+  /** Canonical generation context: profile, ranked proof, target and conversation. */
+  generationContext?: SalesGenerationContext | null
   /** Conversation context for replies. */
   conversationContext?: string | null
 }
@@ -279,29 +287,34 @@ export function buildUserPrompt(
   const roleBlock = `CONTACT ROLE: ${role}\n${rolePromptGuidance(role)}`
 
   const proof = input.matchedProof
-  const proofBlock = proof
-    ? [
-        `MATCHED PAST PROJECT (this is relevant prior work you delivered; reference it as your own):`,
-        `- Summary: ${proof.projectSummary}`,
-        proof.reviewQuote ? `- What the client said: ${proof.reviewQuote}` : null,
-        proof.permissionOnFile && proof.clientName ? `- Client may be named: ${proof.clientName}` : '- Client may NOT be named. Describe the project by shape only.',
-      ]
-        .filter(Boolean)
-        .join('\n')
-    : 'No matched past project. Do not invent one.'
+  const canonical = input.generationContext ?? null
+  const proofBlock = canonical
+    ? (formatEvidenceBlock(canonical) || 'No relevant past project in the profile. Do not invent one.')
+    : proof
+      ? [
+          `MATCHED PAST PROJECT (this is relevant prior work you delivered; reference it as your own):`,
+          `- Summary: ${proof.projectSummary}`,
+          proof.reviewQuote ? `- What the client said: ${proof.reviewQuote}` : null,
+          proof.permissionOnFile && proof.clientName ? `- Client may be named: ${proof.clientName}` : '- Client may NOT be named. Describe the project by shape only.',
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : 'No matched past project. Do not invent one.'
 
   const profile = input.profile
-  const profileBlock = profile
-    ? [
-        'THE SENDER IDENTITY (the profile this is sent from, do not contradict it):',
-        profile.label ? `- Label: ${profile.label}` : null,
-        `- Platform: ${profile.platform}`,
-        profile.headline ? `- Headline: ${profile.headline}` : null,
-        profile.profileUrl ? `- Profile URL: ${profile.profileUrl}` : null,
-      ]
-        .filter(Boolean)
-        .join('\n')
-    : ''
+  const profileBlock = canonical
+    ? formatProfileBlock(canonical)
+    : profile
+      ? [
+          'THE SENDER IDENTITY (the profile this is sent from, do not contradict it):',
+          profile.label ? `- Label: ${profile.label}` : null,
+          `- Platform: ${profile.platform}`,
+          profile.headline ? `- Headline: ${profile.headline}` : null,
+          profile.profileUrl ? `- Profile URL: ${profile.profileUrl}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : ''
 
   // Writer receives ONLY strategy-scoped facts. Raw scraped text is NEVER passed.
   const leadBlock = [
@@ -361,7 +374,7 @@ export function buildUserPrompt(
     '',
     fewShotBlock,
     '',
-    historyBlock,
+    canonical ? formatConversationBlock(canonical) : historyBlock,
     '',
     profileBlock,
     '',

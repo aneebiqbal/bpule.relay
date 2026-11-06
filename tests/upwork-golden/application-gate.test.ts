@@ -83,6 +83,14 @@ describe('screening answers gate', () => {
     expect(codes).toContain('MISSING_ANSWER')
     expect(r.passed).toBe(false)
   })
+  it('matches a question whose last word ends with a period', () => {
+    const question = 'Your proposed fixed price and completion timeline.'
+    const r = evaluateScreeningAnswers([
+      { question, answer: 'The timeline would depend on scope, but typically such setups span 2-4 weeks. Pricing would be contingent on a detailed scope agreement.' },
+    ], { ...job, screeningQuestions: [question] }, profile, GOOD)
+    expect(r.issues.filter((i) => i.severity === 'block')).toEqual([])
+    expect(r.passed).toBe(true)
+  })
   it('blocks an answer that copies the cover letter and truncates an over-long one', () => {
     const copy = GOOD.split('.').slice(0, 3).join('.') + '.'
     const r = evaluateScreeningAnswers([

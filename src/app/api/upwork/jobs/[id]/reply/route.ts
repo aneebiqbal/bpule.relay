@@ -1,14 +1,31 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
 import { generate } from '@/lib/ai/runtime'
 import { injectStyleCard } from '@/lib/style/inject'
 import { BANNED_PHRASES, AI_TELL_PHRASES } from '@/lib/writing/engine'
+import {
+  buildSalesGenerationContext,
+  formatConversationBlock,
+  formatEvidenceBlock,
+  formatProfileBlock,
+  formatTargetBlock,
+} from '@/lib/generation/sales-context'
+import {
+  filterAssignedProfilesByChannel,
+  listAssignedProfiles,
+  listAssignedProfilesForRep,
+} from '@/lib/profiles/assigned-profiles'
 
 /**
  * POST /api/upwork/jobs/[id]/reply
  * Generate a reply to a client message on Upwork.
- * Body: { clientMessage: string, proposalContext?: string }
+ * Body: { clientMessage: string, proposalContext?: string, profileId?: string }
+ *
+ * The reply is grounded in the same canonical profile evidence as the proposal:
+ * the sender profile is the one the cover draft was written for, or an explicit
+ * eligible Upwork profile. Without a profile there is no proof to reference.
  */
 export async function POST(
   request: Request,
@@ -16,7 +33,7 @@ export async function POST(
 ) {
   const { id } = await params
 
-  let body: { clientMessage?: string; proposalContext?: string }
+  let body: { clientMessage?: string; proposalContext?: string; profileId?: string; repId?: string }
   try {
     body = await request.json()
   } catch {
@@ -34,8 +51,90 @@ export async function POST(
   const job = await store.getUpworkJob(id)
   if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
 
-  const voiceProfile = await store.getVoiceProfile()
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
+  // Admin/owner on-behalf: the acting rep must belong to the caller's org.
+  // A client-supplied repId is never trusted on its own.
+  const requestedRepId = typeof body.repId === 'string' ? body.repId : null
+  const isAdmin = Boolean(authCtx.isAdmin || authCtx.isOwner)
+  let actingRepId = user.rep.id
+  if (requestedRepId && requestedRepId !== user.rep.id) {
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Not authorized to generate for another rep.' }, { status: 403 })
+    }
+    const { data: repRow } = await store
+      .getSupabaseClient()
+      .from('reps')
+      .select('id')
+      .eq('id', requestedRepId)
+      .eq('organization_id', authCtx.orgId)
+      .maybeSingle()
+    if (!repRow) {
+      return NextResponse.json({ error: 'That rep is not in your organization.' }, { status: 403 })
+    }
+    actingRepId = repRow.id as string
+  }
+
+  const assigned = actingRepId === authCtx.repId
+    ? await listAssignedProfiles()
+    : await listAssignedProfilesForRep(authCtx.orgId, actingRepId)
+  const upworkProfiles = filterAssignedProfilesByChannel(assigned, 'upwork')
+
+  // The profile the proposal was actually written for is canonical. An explicit
+  // profileId must still be one of the acting rep's eligible Upwork profiles.
+  const requestedProfileId = typeof body.profileId === 'string' ? body.profileId : null
+  const coverSenderProfileId = (job.messages ?? []).find((m) => m.type === 'cover')?.senderProfileId ?? null
+  const senderProfile = requestedProfileId
+    ? upworkProfiles.find((a) => a.profile.id === requestedProfileId) ?? null
+    : upworkProfiles.find((a) => a.profile.id === coverSenderProfileId) ?? upworkProfiles[0] ?? null
+
+  if (requestedProfileId && !senderProfile) {
+    return NextResponse.json(
+      { error: 'That profile is not assigned to you for Upwork. Select an eligible profile.' },
+      { status: 403 },
+    )
+  }
+  if (!senderProfile) {
+    return NextResponse.json({ error: 'No Upwork profile is assigned to you.' }, { status: 400 })
+  }
+
+  const voiceProfile = await store.getVoiceProfile(senderProfile.profile.id)
   const styleCard = injectStyleCard(voiceProfile?.styleCard)
+
+  const evidence = await store.getProfileEvidence(senderProfile.profile.id)
+  const budget = job.budgetMin || job.hourlyRateMin
+    ? job.budgetMin
+      ? `$${job.budgetMin}–$${job.budgetMax} fixed`
+      : `$${job.hourlyRateMin}–$${job.hourlyRateMax}/hr`
+    : null
+  const generationContext = buildSalesGenerationContext({
+    profile: senderProfile.profile,
+    evidence,
+    voice: voiceProfile?.styleCard ?? null,
+    channel: 'upwork',
+    target: {
+      channel: 'upwork',
+      title: job.title,
+      description: job.description,
+      requiredSkills: job.requiredSkills ?? [],
+      budget,
+      timeline: job.duration ?? job.weeklyHours ?? null,
+      screeningQuestions: job.screeningQuestions ?? [],
+      tags: job.tags ?? [],
+    },
+    conversation: {
+      clientMessage: body.clientMessage,
+      priorMessages: (job.messages ?? [])
+        .filter((m) => m.sentText)
+        .map((m) => ({ direction: m.type === 'reply' ? 'inbound' : 'outbound', text: m.sentText as string, sentAt: m.sentAt })),
+      alreadySentClaims: (job.messages ?? [])
+        .filter((m) => m.type === 'cover' && m.sentText)
+        .map((m) => m.sentText as string)
+        .slice(0, 2),
+      questionsRequiringResponse: extractQuestions(body.clientMessage),
+    },
+  })
 
   const systemPrompt = [
     'You are a senior Upwork freelancer who wins interviews and clients.',
@@ -52,17 +151,19 @@ export async function POST(
     '- Be warm, professional, concise (50-150 words max)',
     '- NEVER use first-contact openers ("came across your job", "Building AI...")',
     '- NEVER use placeholders like "%" or "[X]%"',
+    '- Reference a past project only when it appears in the RELEVANT PROOF block',
     `- No banned phrases: ${BANNED_PHRASES.slice(0, 8).join(', ')}.`,
     `- No AI tells: ${AI_TELL_PHRASES.slice(0, 8).join(', ')}.`,
     '',
-    '### CLIENT MESSAGE CONTEXT:',
-    body.clientMessage,
+    formatProfileBlock(generationContext),
     '',
-    body.proposalContext ? `### YOUR ORIGINAL PROPOSAL:\n${body.proposalContext}` : '',
+    formatEvidenceBlock(generationContext),
     '',
-    '### JOB DETAILS:',
-    `Title: ${job.title}`,
-    job.description ? `Description: ${job.description.slice(0, 300)}` : '',
+    formatTargetBlock(generationContext),
+    '',
+    formatConversationBlock(generationContext),
+    '',
+    body.proposalContext ? `### YOUR ORIGINAL PROPOSAL:\n${body.proposalContext.slice(0, 1200)}` : '',
   ].filter(Boolean).join('\n\n')
 
   const schema = {
@@ -106,8 +207,14 @@ export async function POST(
       reply: reply.replace(/\s{2,}/g, ' ').trim(),
       selfCheckPassed: result.data.self_check_passed,
       selfCheckNote: result.data.self_check_note,
+      profileId: senderProfile.profile.id,
+      evidenceUsed: generationContext.rankedProof.map((p) => ({ id: p.id, kind: p.kind, title: p.title, url: p.url })),
     })
   } catch {
     return NextResponse.json({ error: 'Reply generation failed. Please try again.' }, { status: 500 })
   }
+}
+
+function extractQuestions(text: string): string[] {
+  return (text.match(/[^?\n]+\?/g) ?? []).map((q) => q.trim()).filter((q) => q.length >= 6).slice(0, 3)
 }

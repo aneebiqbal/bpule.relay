@@ -142,6 +142,7 @@ import {
   type PipelineStageScope,
 } from '@/lib/store/pipeline-stage'
 import { matchProofItemsByTags } from '@/lib/ai/proof-match'
+import { loadProfileEvidence } from '@/lib/generation/profile-evidence'
 import { pickPlayForSignal } from '@/lib/score/plays'
 import { loadRulebook } from '@/lib/score/rulebook'
 import {
@@ -5549,6 +5550,10 @@ export class SupabaseStore implements ScoutStore {
       .eq('profile_id', profileId)
     if (error) throw error
     return (data ?? []).map(mapProofCard)
+  }
+
+  async getProfileEvidence(profileId: string): Promise<import('@/lib/generation/sales-context').ProfileEvidence> {
+    return loadProfileEvidence(this.client, profileId)
   }
 
   async upsertProofCard(input: {

@@ -1,4 +1,6 @@
 import type { Lead, Message, Profile, ProofItem, InboundIntelligence } from '@/lib/domain/types'
+import type { SalesGenerationContext } from '@/lib/generation/sales-context'
+import { formatEvidenceBlock, formatProfileBlock } from '@/lib/generation/sales-context'
 
 export interface InboundReplyInput {
   lead: Lead
@@ -8,6 +10,8 @@ export interface InboundReplyInput {
   history?: Message[]
   styleCard: string | null
   strategy?: string | null
+  /** Canonical generation context: profile, ranked proof and conversation. */
+  generationContext?: SalesGenerationContext | null
 }
 
 export interface InboundReplyResult {
@@ -154,18 +158,27 @@ export function buildInboundReplyUserPrompt(input: InboundReplyInput): string {
     }
   }
 
-  if (input.profile) {
-    parts.push(`\n## Your Revenue Identity`)
-    parts.push(`Profile: ${input.profile.label ?? input.profile.platform}`)
-    if (input.profile.headline) parts.push(`Headline: ${input.profile.headline}`)
-    if (input.profile.profileUrl) parts.push(`URL: ${input.profile.profileUrl}`)
-  }
+  const canonical = input.generationContext ?? null
 
-  if (input.proofItems.length > 0) {
-    parts.push(`\n## Relevant proof (use only this)`)
-    for (const p of input.proofItems) {
-      parts.push(`- ${p.projectSummary}`)
-      if (p.reviewQuote) parts.push(`  Quote: "${p.reviewQuote.slice(0, 150)}"`)
+  if (canonical) {
+    const profileBlock = formatProfileBlock(canonical)
+    const evidenceBlock = formatEvidenceBlock(canonical)
+    if (profileBlock) parts.push(`\n## Your Revenue Identity\n${profileBlock}`)
+    if (evidenceBlock) parts.push(`\n## Relevant proof (use only this)\n${evidenceBlock}`)
+  } else {
+    if (input.profile) {
+      parts.push(`\n## Your Revenue Identity`)
+      parts.push(`Profile: ${input.profile.label ?? input.profile.platform}`)
+      if (input.profile.headline) parts.push(`Headline: ${input.profile.headline}`)
+      if (input.profile.profileUrl) parts.push(`URL: ${input.profile.profileUrl}`)
+    }
+
+    if (input.proofItems.length > 0) {
+      parts.push(`\n## Relevant proof (use only this)`)
+      for (const p of input.proofItems) {
+        parts.push(`- ${p.projectSummary}`)
+        if (p.reviewQuote) parts.push(`  Quote: "${p.reviewQuote.slice(0, 150)}"`)
+      }
     }
   }
 

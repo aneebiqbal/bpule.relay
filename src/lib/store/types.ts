@@ -923,6 +923,8 @@ export interface ScoutStore {
   assignProfile(profileId: string): Promise<void>
   unassignProfile(profileId: string): Promise<void>
   listProofCards(profileId: string): Promise<ProofCard[]>
+  /** Canonical profile evidence for generation: proof, projects, experience, reviews, claims. */
+  getProfileEvidence(profileId: string): Promise<import('@/lib/generation/sales-context').ProfileEvidence>
   upsertProofCard(input: {
     id?: string
     profileId: string

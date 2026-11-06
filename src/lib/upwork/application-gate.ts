@@ -86,7 +86,7 @@ const STOP = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'your', 'you'
 
 const CLAIM_FILLER = new Set(['built', 'shipped', 'delivered', 'managed', 'migrated', 'designed', 'implemented', 'launched', 'large', 'small', 'system', 'systems', 'users', 'millions', 'thousands', 'handled', 'platform', 'application', 'applications', 'project', 'projects', 'client', 'clients', 'company', 'companies', 'recently', 'similar', 'experience', 'years', 'scale', 'production', 'scheduling', 'portal'])
 const words = (t: string) => t.trim().split(/\s+/).filter(Boolean)
-const tokens = (t: string) => t.toLowerCase().split(/[^a-z0-9.#+]+/).filter((w) => w.length >= 4 && !STOP.has(w))
+const tokens = (t: string) => t.toLowerCase().split(/[^a-z0-9.#+]+/).map((w) => w.replace(/\.+$/, '')).filter((w) => w.length >= 4 && !STOP.has(w))
 
 export function classifyQuestion(question: string): QuestionType {
   const q = question.toLowerCase()

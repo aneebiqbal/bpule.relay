@@ -16,6 +16,15 @@ import {
 } from '@/lib/profiles/assigned-profiles'
 import { getAuthContext } from '@/lib/auth/organization'
 import type { Profile } from '@/lib/domain/types'
+import {
+  buildSalesGenerationContext,
+  formatEvidenceBlock,
+  formatProfileBlock,
+  formatTargetBlock,
+  findUnsupportedClaims,
+  toClaimableText,
+  toAllowedNumbers,
+} from '@/lib/generation/sales-context'
 
 export const dynamic = 'force-dynamic'
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -125,13 +134,83 @@ export async function POST(
   const voiceProfile = await store.getVoiceProfile()
   const styleCard = injectStyleCard(voiceProfile?.styleCard)
 
-  const tagMatches = await store.matchProofItems(job.requiredSkills ?? [], 8, profile?.id ?? null)
-  let matched = tagMatches
+  // Canonical profile evidence: verified proof cards, portfolio projects, role
+  // history, reviews and approved claims. This is the only proof the proposal
+  // may reference — never a second, prompt-local copy of profile facts.
+  const evidence = await store.getProfileEvidence(profile.id)
+  const budget = job.budgetMin || job.hourlyRateMin
+    ? job.budgetMin
+      ? `$${job.budgetMin}–$${job.budgetMax} fixed`
+      : `$${job.hourlyRateMin}–$${job.hourlyRateMax}/hr`
+    : null
+  const screeningQuestions = job.screeningQuestions ?? []
+  const generationContext = buildSalesGenerationContext({
+    profile,
+    evidence,
+    voice: voiceProfile?.styleCard ?? null,
+    channel: 'upwork',
+    target: {
+      channel: 'upwork',
+      title: job.title,
+      description: job.description,
+      requiredSkills: job.requiredSkills ?? [],
+      budget,
+      timeline: job.duration ?? job.weeklyHours ?? null,
+      screeningQuestions,
+      applicationRequirements: job.applicationRequirements ?? [],
+      tags: job.tags ?? [],
+    },
+    conversation: {
+      priorMessages: (job.messages ?? [])
+        .filter((m) => m.sentText)
+        .map((m) => ({ direction: m.type === 'reply' ? 'inbound' : 'outbound', text: m.sentText as string, sentAt: m.sentAt })),
+      alreadySentClaims: (job.messages ?? [])
+        .filter((m) => m.type === 'cover' && m.sentText)
+        .map((m) => m.sentText as string)
+        .slice(0, 2),
+    },
+  })
+
+  // An explicit proofId still wins, but only when it is real canonical proof.
   if (body.proofId) {
-    const explicit = matched.find((p) => p.id === body.proofId) ?? null
-    if (explicit) matched = [explicit, ...matched.filter((p) => p.id !== body.proofId)]
+    const card = evidence.proofCards.find((c) => c.id === body.proofId)
+    const item = evidence.proofItems.find((p) => p.id === body.proofId)
+    const explicit = generationContext.rankedProof.find((p) => p.id === body.proofId)
+      ?? (card
+        ? {
+            id: card.id,
+            kind: 'proof_card' as const,
+            title: card.capability,
+            claim: card.safeClaim,
+            url: /^https?:\/\/[^\s]+$/i.test(card.sourceReference ?? '') ? card.sourceReference!.trim() : null,
+            technologies: card.tags,
+            strength: card.strength,
+            verified: card.verified,
+            relevanceScore: 0,
+            matchingTags: [],
+          }
+        : item
+          ? {
+              id: item.id,
+              kind: 'proof_item' as const,
+              title: item.projectSummary.split('.')[0] ?? item.projectSummary,
+              claim: item.projectSummary,
+              url: null,
+              technologies: item.tags,
+              strength: item.reviewQuote ? 'strong' as const : 'moderate' as const,
+              verified: Boolean(item.permissionOnFile),
+              relevanceScore: 0,
+              matchingTags: [],
+            }
+          : null)
+    if (explicit) {
+      generationContext.rankedProof = [
+        explicit,
+        ...generationContext.rankedProof.filter((p) => p.id !== explicit.id),
+      ]
+    }
   }
-  const matchedProof = matched[0] ?? null
+  const matchedProof = generationContext.rankedProof[0] ?? null
 
   // Profile matching: suggest best profile for this job
   const profileMatches = await rankProfilesForOpportunityForUpwork(job, profiles, store)
@@ -140,22 +219,9 @@ export async function POST(
     ? profileMatches.find((p: { profileId: string }) => p.profileId === profile.id) ?? null
     : null
 
-  // Screening questions from the job
-  const screeningQuestions = job.screeningQuestions ?? []
-
-  const jobContext = [
-    `Job Title: ${job.title}`,
-    job.budgetMin || job.hourlyRateMin
-      ? `Budget: ${job.budgetMin ? `$${job.budgetMin}–$${job.budgetMax} fixed` : `$${job.hourlyRateMin}–$${job.hourlyRateMax}/hr`}`
-      : null,
-    job.requiredSkills.length > 0 ? `Required skills: ${job.requiredSkills.join(', ')}` : null,
-    job.urgencySignal ? `Urgency: ${job.urgencySignal}` : null,
-    `Description: ${job.description}`,
-  ].filter(Boolean).join('\n')
-
-  const proofBlock = matchedProof
-    ? `RELEVANT PROOF (reference naturally, do not dump): ${matchedProof.projectSummary}${matchedProof.reviewQuote ? `\nClient said: "${matchedProof.reviewQuote}"` : ''}`
-    : ''
+  const profileBlock = formatProfileBlock(generationContext)
+  const evidenceBlock = formatEvidenceBlock(generationContext)
+  const targetBlock = formatTargetBlock(generationContext)
 
   const systemPrompt = [
     'You are a senior Upwork proposal strategist. The proposal is copy-pasted by a human; you never send anything yourself.',
@@ -173,13 +239,14 @@ export async function POST(
     '',
     '### STRUCTURE (follow exactly):',
     '1. **HOOK (1 sentence, max 15 words):** Show you read THEIR specific job. Reference their project/need. NEVER start with "I came across..." or "Hi, I\'m..."',
-    '2. **PROOF (2-3 sentences):** One specific past project matching their EXACT need. Use real metrics from proof/facts. No placeholders.',
+    '2. **PROOF (2-3 sentences):** One specific past project matching their EXACT need, taken from the RELEVANT PROOF block. No placeholders.',
     '3. **PLAN (2 sentences):** What you would do in the first 3 days. Specific to their stack.',
     '4. **QUESTION (1 sentence):** Ask something showing you understand their business.',
     '',
     '### SCREENING QUESTIONS:',
-    '- Answer each question directly and specifically',
-    '- Use real examples from your experience, never generic statements',
+    '- The proposal body must NOT contain the screening answers. Upwork shows them in separate fields.',
+    '- Return each answer only in the questionAnswers array, answering that exact question.',
+    '- Use real examples from the RELEVANT PROOF block, never generic statements',
     '- Keep answers 2-4 sentences each',
     '- If asked about availability/hours, be explicit',
     '- If asked about approach, give a concrete methodology',
@@ -193,10 +260,11 @@ export async function POST(
     '',
     `### WORD LIMIT: ${COVER_LETTER_WORDS[0]}-${COVER_LETTER_WORDS[1]} words for the proposal body. Short wins on Upwork.`,
     '- Write like a human consultant, not a cover letter. Conversational, direct.',
-    '- Reference your actual past projects/products by name if in your facts/proof.',
+    '- Reference your actual past projects/products by name only when they appear in the RELEVANT PROOF block.',
     '',
     '### METRICS RULE:',
-    '- ONLY include specific numbers/metrics that come from the profile facts or proof items',
+    '- ONLY include specific numbers/metrics that come from the RELEVANT PROOF block or the profile facts',
+    '- NEVER invent a price, rate, budget or timeline. If a screening question asks for one, say it depends on scope and the client\'s review process — no specific number.',
     '- NEVER write "by %", "by [X]%", or placeholder metrics',
     "- If you don't have a specific metric, describe the outcome qualitatively instead",
     '- Example: "improved deployment speed" (NOT "improved deployment efficiency by %")',
@@ -213,17 +281,19 @@ export async function POST(
     '- "Building AI...", "Building [product]...", "Creating AI..." — these are generic first-contact openers that ignore the specific prospect',
     '- Placeholder metrics like "%", "[X]%", "by %" — if you dont have a real number, describe qualitatively',
     '',
-    proofBlock,
+    profileBlock,
+    '',
+    evidenceBlock,
     '',
     '### HARD RULES:',
-    `- Claim ONLY facts from the facts table. Never fabricate experience.`,
-    `- If a required skill is missing from your profile, acknowledge it honestly and explain how you'd ramp up.`,
+    `- Claim ONLY facts from the SENDER PROFILE and RELEVANT PROOF blocks. Never fabricate experience, projects, clients, metrics or links.`,
+    `- If a required skill is missing from the profile, acknowledge it honestly and explain how you'd ramp up.`,
     `- No banned phrases: ${BANNED_PHRASES.slice(0, 12).join(', ')}.`,
     `- No AI tells: ${AI_TELL_PHRASES.slice(0, 10).join(', ')}.`,
   ].filter(Boolean).join('\n\n')
 
   const screeningBlock = screeningQuestions.length > 0
-    ? `\nSCREENING QUESTION(S) — you MUST answer each one. Include answers at the end of the proposal, clearly labeled:\n${screeningQuestions.map((q: string, i: number) => `  ${i + 1}. ${q}`).join('\n')}\n`
+    ? `\nSCREENING QUESTION(S) — answer each one in the questionAnswers array only. Do NOT put these answers in the proposal body:\n${screeningQuestions.map((q: string, i: number) => `  ${i + 1}. ${q}`).join('\n')}\n`
     : ''
 
   const skillMatchBlock = currentProfileMatch
@@ -233,8 +303,7 @@ export async function POST(
   const userPrompt = [
     `Write a world-class Upwork proposal for this job. Make it impossible to ignore.`,
     '',
-    '## JOB DETAILS',
-    jobContext,
+    targetBlock,
     '',
     skillMatchBlock,
     screeningBlock,
@@ -242,8 +311,8 @@ export async function POST(
     '## OUTPUT FORMAT',
     'Return JSON:',
     '{',
-    '  "proposal": "the proposal text — hook, proof, plan, question",',
-    '  "questionAnswers": [{"question": "...", "answer": "..."}],',
+    '  "proposal": "the proposal text only — hook, proof, plan, question. No screening answers here.",',
+    '  "questionAnswers": [{"question": "the exact screening question", "answer": "a direct answer grounded in the proof"}]',
     '  "self_check_passed": boolean,',
     '  "self_check_note": "specific reasons this proposal would/wouldn\'t win — be critical",',
     '  "quality_score": 1-10 — rate your own proposal on: hook specificity, proof relevance, plan actionability, question quality',
@@ -337,20 +406,22 @@ export async function POST(
   const sanitized = sanitizeDraft(proposal, facts)
 
   // Deterministic quality gate (the model's self-check is advisory only).
-  const stringsOf = (o: unknown): string[] => {
-    if (typeof o === 'string') return [o]
-    if (Array.isArray(o)) return o.flatMap(stringsOf)
-    if (o && typeof o === 'object') return Object.values(o as Record<string, unknown>).flatMap(stringsOf)
-    return []
-  }
   const profileCtx = {
-    claimableText: [...stringsOf(profile ?? {}), ...facts.map((f) => `${f.label} ${f.value}`)],
-    proof: matched.map((m) => [m.projectSummary, (m as { reviewQuote?: string | null }).reviewQuote ?? ''].filter(Boolean).join(' ')),
-    allowedNumbers: facts.flatMap((f) => (`${f.value}`.match(/\d[\d,.]*\s*(?:%|k|x|\+)?/gi) ?? []).map((n) => n.replace(/\s+/g, '').toLowerCase())),
+    claimableText: [...toClaimableText(generationContext), ...facts.map((f) => `${f.label} ${f.value}`)],
+    proof: generationContext.rankedProof.map((p) => `${p.title} ${p.claim}`),
+    allowedNumbers: [...toAllowedNumbers(generationContext), ...facts.flatMap((f) => (`${f.value}`.match(/\d[\d,.]*\s*(?:%|k|x|\+)?/gi) ?? []).map((n) => n.replace(/\s+/g, '').toLowerCase()))],
   }
   const jobCtx = { title: job.title, description: job.description, skills: job.requiredSkills ?? [], screeningQuestions }
   const letterGate = evaluateCoverLetter(sanitized.text, jobCtx, profileCtx)
   const answersGate = evaluateScreeningAnswers(best.questionAnswers ?? [], jobCtx, profileCtx, letterGate.text)
+  // Unsupported claims are checked in the proposal AND in every screening
+  // answer — an invented price or timeline in an answer is still an invention.
+  const unsupportedClaims = [
+    ...findUnsupportedClaims(letterGate.text, generationContext),
+    ...(best.questionAnswers ?? []).flatMap((answer) =>
+      findUnsupportedClaims(answer.answer, generationContext).map((claim) => `[Screening] ${claim}`),
+    ),
+  ]
 
   return NextResponse.json({
     draft: {
@@ -364,7 +435,27 @@ export async function POST(
         coverLetter: { passed: letterGate.passed, wordCount: letterGate.wordCount, jobReferences: letterGate.jobReferences, proofUsed: letterGate.proofUsed, issues: letterGate.issues },
         screening: { passed: answersGate.passed, issues: answersGate.issues, answers: answersGate.answers.map((a) => ({ question: a.question, type: a.type, wordCount: a.wordCount, issues: a.issues })) },
       },
-      matchedProof: matchedProof ? { id: matchedProof.id, projectSummary: matchedProof.projectSummary } : null,
+      matchedProof: matchedProof ? { id: matchedProof.id, projectSummary: `${matchedProof.title}: ${matchedProof.claim}` } : null,
+      // Sentences that claim delivery the profile cannot support. The rep must
+      // edit these before sending; they are surfaced, not silently shipped.
+      unsupportedClaims,
+      // The canonical proof actually available to the generator, so the rep
+      // can see what the proposal could and could not cite.
+      evidenceUsed: generationContext.rankedProof.map((p) => ({
+        id: p.id,
+        kind: p.kind,
+        title: p.title,
+        url: p.url,
+      })),
+      // Canonical links only — never an invented portfolio or case-study URL.
+      attachmentsOrLinks: [
+        ...(generationContext.profile.profileUrl
+          ? [{ id: `profile:${generationContext.profile.id}`, title: 'Profile', url: generationContext.profile.profileUrl }]
+          : []),
+        ...generationContext.rankedProof
+          .filter((p) => p.url)
+          .map((p) => ({ id: p.id, title: p.title, url: p.url as string })),
+      ],
     },
     generationMode,
     // The profile actually used, so the client can prove

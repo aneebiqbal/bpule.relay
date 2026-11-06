@@ -56,6 +56,8 @@ export async function generateEmailCopy(input: {
   sender: RevenueIdentity
   strategy: EmailStrategy
   generationMode: 'standard' | 'premium'
+  /** Canonical sender proof block, when the Revenue Identity maps to a profile. */
+  profileEvidence?: string | null
 }): Promise<GeneratedEmailCopy> {
   const seededSubjects = generateSubjectCandidates({ lead: input.lead, strategy: input.strategy })
 
@@ -65,6 +67,7 @@ export async function generateEmailCopy(input: {
     'No fake compliments, no fluff, no clickbait subject lines.',
     'Do not use these openings: Hope you are well, I came across your profile, Given your impressive background.',
     'Use only supplied allowed evidence. If evidence is weak, stay neutral and ask a lightweight question.',
+    'Reference a past project only when it appears in the Sender proof block; never invent one.',
     'First cold email should optimize for a reply, not a meeting ask.',
   ].join('\n')
 
@@ -77,9 +80,10 @@ export async function generateEmailCopy(input: {
     `Strongest evidence: ${input.strategy.strongestEvidence ?? 'n/a'}`,
     `Allowed evidence: ${input.strategy.allowedEvidence.join(' | ') || 'none'}`,
     `Do not claim: ${input.strategy.thingsNotToClaim.join(' | ') || 'none'}`,
+    input.profileEvidence ? `Sender proof (use only this):\n${input.profileEvidence}` : '',
     `Seed subjects: ${seededSubjects.join(' | ')}`,
     'Return JSON with subjectCandidates (2-6), body, and optional followupPlan.',
-  ].join('\n')
+  ].filter(Boolean).join('\n')
 
   try {
     const task = input.generationMode === 'premium' ? 'DEEP_WRITING' : 'INTERACTIVE_WRITING'

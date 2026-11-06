@@ -102,6 +102,9 @@ export function UpworkJobActions({
   const [selfCheckNote, setSelfCheckNote] = useState<string | null>(null)
   const [qualityScore, setQualityScore] = useState<number | null>(null)
   const [questionAnswers, setQuestionAnswers] = useState<Array<{ question: string; answer: string }>>([])
+  const [copiedAnswer, setCopiedAnswer] = useState<number | null>(null)
+  const [evidenceUsed, setEvidenceUsed] = useState<Array<{ id: string; kind: string; title: string; url: string | null }>>([])
+  const [unsupportedClaims, setUnsupportedClaims] = useState<string[]>([])
   const [generationMode, setGenerationMode] = useState<'standard' | 'premium'>('standard')
   const [applied, setApplied] = useState(false)
   // Save-draft lifecycle. `saved` is confirmed only after the server returns.
@@ -120,6 +123,8 @@ export function UpworkJobActions({
     setSelfCheckNote(null)
     setQualityScore(null)
     setQuestionAnswers([])
+    setEvidenceUsed([])
+    setUnsupportedClaims([])
     setProposal('')
     try {
       const res = await fetch(`/api/upwork/jobs/${jobId}/generate`, {
@@ -136,6 +141,8 @@ export function UpworkJobActions({
       setSelfCheckNote(data.draft.selfCheckNote)
       setQualityScore(data.draft.qualityScore ?? null)
       setQuestionAnswers(data.draft.questionAnswers ?? [])
+      setEvidenceUsed(data.draft.evidenceUsed ?? [])
+      setUnsupportedClaims(data.draft.unsupportedClaims ?? [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed.')
     } finally {
@@ -435,14 +442,70 @@ export function UpworkJobActions({
           {selfCheckNote && <p className="text-[12px] italic text-graphite">{selfCheckNote}</p>}
 
           {questionAnswers.length > 0 && (
-            <div className="space-y-2 rounded-xl bg-cobalt/[0.04] p-3 ring-1 ring-cobalt/15">
-              <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-cobalt">Screening answers</p>
+            <div className="space-y-3 rounded-xl bg-cobalt/[0.04] p-3 ring-1 ring-cobalt/15">
+              <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-cobalt">
+                Screening answers — edit each, then copy into Upwork
+              </p>
               {questionAnswers.map((qa, i) => (
-                <div key={i} className="space-y-0.5">
+                <div key={i} className="space-y-1">
                   <p className="text-[12px] font-medium text-ink">Q: {qa.question}</p>
-                  <p className="border-l-2 border-cobalt/20 pl-3 text-[12px] text-graphite">{qa.answer}</p>
+                  <textarea
+                    value={qa.answer}
+                    onChange={(e) => setQuestionAnswers((prev) => prev.map((item, index) => index === i ? { ...item, answer: e.target.value } : item))}
+                    rows={3}
+                    aria-label={`Answer: ${qa.question}`}
+                    className="w-full resize-y rounded-lg border border-line bg-bone-raised px-3 py-2 text-[12px] leading-relaxed text-ink focus:border-cobalt/40 focus:outline-none"
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(qa.answer)
+                          setCopiedAnswer(i)
+                          setTimeout(() => setCopiedAnswer(null), 1500)
+                        } catch { /* clipboard unavailable */ }
+                      }}
+                      className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11px] font-medium text-graphite transition-colors hover:bg-bone hover:text-ink"
+                    >
+                      {copiedAnswer === i ? <Check className="size-3 text-status-success" aria-hidden /> : <Copy className="size-3" aria-hidden />}
+                      {copiedAnswer === i ? 'Copied' : 'Copy answer'}
+                    </button>
+                  </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {unsupportedClaims.length > 0 && (
+            <div role="alert" className="space-y-1 rounded-xl border border-status-warning/30 bg-status-warning/5 px-3 py-2.5">
+              <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-status-warning">
+                Claims to verify before sending
+              </p>
+              <ul className="space-y-0.5">
+                {unsupportedClaims.map((claim, i) => (
+                  <li key={i} className="text-[12px] text-graphite">• {claim}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {evidenceUsed.length > 0 && (
+            <div className="space-y-1 rounded-xl bg-bone px-3 py-2.5 ring-1 ring-line">
+              <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Proof available to this proposal</p>
+              <ul className="space-y-0.5">
+                {evidenceUsed.map((item) => (
+                  <li key={item.id} className="flex items-baseline gap-2 text-[12px] text-graphite">
+                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-stone">{item.kind.replace(/_/g, ' ')}</span>
+                    <span className="min-w-0 truncate text-ink">{item.title}</span>
+                    {item.url && (
+                      <a href={item.url} target="_blank" rel="noreferrer" className="shrink-0 text-[11px] text-cobalt hover:underline">
+                        link
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

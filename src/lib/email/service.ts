@@ -22,6 +22,9 @@ import { validateEmailClaims } from '@/lib/email/claim-safety'
 import { getEmailProvider, type EmailProvider } from '@/lib/email/providers/email-provider'
 import { classifySendDisposition, inferFeedbackReasons } from '@/lib/relay/edit-learning'
 import type { DbClient } from '@/lib/db/types'
+import type { Profile } from '@/lib/domain/types'
+import { loadProfileEvidence } from '@/lib/generation/profile-evidence'
+import { buildSalesGenerationContext, formatEvidenceBlock } from '@/lib/generation/sales-context'
 
 /**
  * Record a failed attempt. Never called on the success path, and never allowed
@@ -294,6 +297,30 @@ export async function prepareEmailDraft(input: {
     followup: Boolean(input.followup),
   })
 
+  // Canonical sender proof for the email writer. The Revenue Identity carries
+  // the profile link; the profile's verified proof is what the email may cite.
+  const profileResult = senderIdentity.profileId
+    ? await input.client.from('profiles').select('*').eq('id', senderIdentity.profileId).maybeSingle()
+    : null
+  const profileData = profileResult?.data ?? null
+  const profileEvidence = profileData
+    ? formatEvidenceBlock(
+        buildSalesGenerationContext({
+          profile: profileData as Profile,
+          evidence: await loadProfileEvidence(input.client, senderIdentity.profileId as string),
+          channel: 'email',
+          target: {
+            channel: 'email',
+            company: lead.company,
+            contactName: lead.contactName,
+            contactTitle: lead.contactTitle,
+            signalEvidence: lead.signalEvidence ?? '',
+            tags: lead.tags ?? [],
+          },
+        }),
+      )
+    : null
+
   let draftStatus: PreparedEmailDraft['draftStatus'] = 'DRAFT'
   let blockedReason: string | null = null
   let subject: string | null = null
@@ -313,6 +340,7 @@ export async function prepareEmailDraft(input: {
       sender: senderIdentity,
       strategy,
       generationMode: input.generationMode === 'premium' ? 'premium' : 'standard',
+      profileEvidence,
     })
     subject = copy.subject
     body = copy.body
