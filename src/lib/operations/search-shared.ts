@@ -26,7 +26,7 @@ export const MANAGER_ONLY_COMMANDS: ReadonlySet<string> = new Set([
   'team-activity',
   'team-performance',
   // Profile configuration is a Team capability; reps reach their own
-  // assignments through /rep/assigned-profiles instead.
+  // assignments through the Rep Home instead.
   'search-profile',
   'add-profile',
   'assign-profile',

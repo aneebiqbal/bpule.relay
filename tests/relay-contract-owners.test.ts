@@ -49,7 +49,11 @@ const OWNERS: Owner[] = [
   { symbol: 'deriveTodayCounts', file: 'src/lib/relay/today-counts.ts' },
   { symbol: 'separateRoleFromEmployer', file: 'src/lib/intelligence-v2/extraction-pipeline.ts' },
   { symbol: 'resolveVerifiedBuyerIntent', file: 'src/lib/intelligence-v3/buyer-intent.ts' },
-  { symbol: 'imageRegenerationOutcome', file: 'src/lib/content/image-failure.ts' },
+  // `imageRegenerationOutcome` is deliberately not scanned: its only runtime
+  // consumer was the deleted /relay/persona-daily surface. The canonical Studio
+  // visual generator (`src/lib/writing/visual.ts`) is a local pure function with
+  // no provider-failure path, so the REL-QA-007 rule is asserted behaviorally by
+  // tests/qa-relay-product-contracts.test.ts instead of by a runtime import.
   { symbol: 'extractBuyerRequests', file: 'src/lib/relay/buyer-request-plan.ts' },
 ]
 

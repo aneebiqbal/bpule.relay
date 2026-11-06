@@ -189,7 +189,7 @@ export function CommandPalette({
       description: 'Choose an authorized identity',
       icon: Shuffle,
       group: 'Relay',
-      action: () => { router.push('/rep/assigned-profiles'); onOpenChange(false) },
+      action: () => { router.push('/dashboard'); onOpenChange(false) },
     },
     {
       id: 'quick-capture',

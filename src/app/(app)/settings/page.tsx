@@ -2,8 +2,7 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
-  Activity, BookOpen, Building2, ChevronRight, Clock, Palette, Shield, Sparkles,
-  Target, TrendingUp, User, UserCircle2, Users,
+  Building2, Clock, Palette, Shield, Sparkles, User,
 } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
@@ -119,19 +118,6 @@ export default async function SettingsPage() {
         <SendingPolicy initial={sendingPolicy} />
       )}
 
-      {isAdmin && (
-        <Panel title="Workspace" subtitle="Admin controls for your team" flush>
-          <ul className="grid divide-y divide-line/70 sm:grid-cols-2 sm:divide-y-0">
-            <LinkRow href="/admin/people" icon={<Users className="size-4" />} label="People" detail="Roles, teams and managers" />
-            <LinkRow href="/team/profiles" icon={<UserCircle2 className="size-4" />} label="Profiles & identities" detail="Who your team sends as" />
-            <LinkRow href="/admin/targets" icon={<Target className="size-4" />} label="Targets" detail="Daily activity per person" />
-            <LinkRow href="/admin/command" icon={<TrendingUp className="size-4" />} label="Command" detail="Today’s execution" />
-            <LinkRow href="/admin/ai-usage" icon={<Activity className="size-4" />} label="AI usage" detail="Spend, errors and speed" />
-            <LinkRow href="/docs" icon={<BookOpen className="size-4" />} label="Docs" detail="How Relay works" />
-          </ul>
-        </Panel>
-      )}
-
       <Panel flush>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line px-5 py-3 text-[12px]">
           <Link href="/docs" className="text-graphite hover:text-ink">Docs</Link>
@@ -224,17 +210,4 @@ function Row({ icon, label, value }: { icon: React.ReactNode; label: string; val
   )
 }
 
-function LinkRow({ href, icon, label, detail }: { href: string; icon: React.ReactNode; label: string; detail: string }) {
-  return (
-    <li className="sm:border-b sm:border-line/70 sm:odd:border-r">
-      <Link href={href} className="flex items-center gap-3 px-4 py-3 hover:bg-bone sm:px-5">
-        <span className="text-stone" aria-hidden="true">{icon}</span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[13px] font-medium text-ink">{label}</span>
-          <span className="block truncate text-[11px] text-stone">{detail}</span>
-        </span>
-        <ChevronRight className="size-4 text-stone" aria-hidden="true" />
-      </Link>
-    </li>
-  )
-}
+

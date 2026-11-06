@@ -194,6 +194,7 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
       { id: 'admin-targets', label: 'Targets', href: '/admin/targets', group: 'Organization' },
       { id: 'scoring-qa', label: 'Scoring QA', href: '/admin/scoring-qa', group: 'Quality' },
       { id: 'qa-trust', label: 'QA & Trust', href: '/admin/qa', group: 'Quality' },
+      { id: 'facts', label: 'Fact Guardrails', href: '/facts', group: 'Quality' },
       { id: 'dataset', label: 'Dataset', href: '/admin/dataset', group: 'System' },
       { id: 'training-data', label: 'Training Data', href: '/admin/training-data', group: 'System' },
       { id: 'admin-ai-usage', label: 'AI Usage', href: '/admin/ai-usage', group: 'System' },

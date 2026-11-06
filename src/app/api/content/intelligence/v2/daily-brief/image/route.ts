@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
+import { imageFailureReason, imageRegenerationOutcome } from '@/lib/content/image-failure'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -32,19 +33,22 @@ export async function POST(request: Request) {
     })
 
     if (!res.ok) {
-      const err = await res.text()
-      return NextResponse.json({ error: `Generation failed: ${res.status}` }, { status: 502 })
+      await res.text()
+      return NextResponse.json({ error: imageFailureReason(res.status) }, { status: 502 })
     }
 
     const json = await res.json()
     const item = json.data?.[0]
-    if (!item) return NextResponse.json({ error: 'No image returned' }, { status: 502 })
-
-    const imageUrl = item.b64_json
+    const imageUrl = item?.b64_json
       ? `data:image/png;base64,${item.b64_json}`
-      : item.url
+      : item?.url
 
-    if (!imageUrl) return NextResponse.json({ error: 'No image data' }, { status: 502 })
+    // The one decision a regeneration makes: only a successful response carrying
+    // a URL replaces the existing image. Any failure keeps it and reports why.
+    const outcome = imageRegenerationOutcome(res.status, imageUrl)
+    if (outcome.keepExisting) {
+      return NextResponse.json({ error: outcome.reason }, { status: 502 })
+    }
 
     return NextResponse.json({ url: imageUrl })
   } catch (err) {
