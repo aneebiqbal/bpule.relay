@@ -14,7 +14,8 @@ import { ChevronRight } from 'lucide-react'
 import { cn } from 'cn'
 import type { RepWorkspaceData } from '@/lib/rep-home/rep-workspace-data'
 import type { ManagerHomeTeamData } from '@/lib/team/manager-home-summary'
-import { RepCoveragePanel } from '@/components/coverage/rep-coverage-panel'
+import { RepDayControl } from '@/components/coverage/rep-day-control'
+import { RepHomeProfiles } from '@/components/coverage/rep-home-profiles'
 import { deriveTodayCounts } from '@/lib/relay/today-counts'
 import {
   actionDeepLink,
@@ -131,8 +132,10 @@ export function V4ManagerHome({
         <V4StatStrip items={stats} label="Manager today" />
       </section>
 
-      <section aria-label="Your responsibilities today">
-        <RepCoveragePanel coverage={personal.coverage} repDay={personal.repDay} />
+      <RepDayControl repDay={personal.repDay} />
+
+      <section aria-label="Your profiles">
+        <RepHomeProfiles coverage={personal.coverage} profilesToday={personal.profilesToday} role="manager" />
       </section>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-12">
