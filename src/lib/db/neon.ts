@@ -30,6 +30,29 @@ import type {
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/
 
+/**
+ * A Neon/pg client that fails while connecting or idle emits an `error` event.
+ * pg attaches its idle-client listener only after `connect()` resolves, so a
+ * failure before that point has no listener and would surface as an
+ * `uncaughtException`. Attach a pool-level listener: the query still rejects,
+ * so callers see the failure, but the server keeps serving.
+ */
+const reportedPoolErrors = new Set<string>()
+
+function logPoolError(label: string, err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err)
+  const key = `${label}:${message}`
+  if (reportedPoolErrors.has(key)) return
+  reportedPoolErrors.add(key)
+  console.error(`[db] ${label} client error (degraded): ${message}`)
+}
+
+/** Wires pool-level error handling. Must be called before the pool is used. */
+export function attachPoolErrorHandling(pool: Pool, label: string): Pool {
+  pool.on('error', (err: unknown) => logPoolError(label, err))
+  return pool
+}
+
 /** Query-level timing, off unless `RELAY_PERF_TRACE=1`. */
 const TRACE_QUERIES = process.env.RELAY_PERF_TRACE === '1'
 
@@ -128,11 +151,14 @@ export function getNeonPool(): Pool {
   if (pool) return pool
   const url = process.env.DATABASE_URL
   if (!url) throw new Error('DATABASE_URL is not configured for the Neon provider')
-  pool = new Pool({
-    connectionString: url,
-    max: Number(process.env.DATABASE_POOL_MAX ?? 10),
-    types: { getTypeParser: (id, format) => neonTypeParser(id, format) },
-  })
+  pool = attachPoolErrorHandling(
+    new Pool({
+      connectionString: url,
+      max: Number(process.env.DATABASE_POOL_MAX ?? 10),
+      types: { getTypeParser: (id, format) => neonTypeParser(id, format) },
+    }),
+    'neon',
+  )
   return pool
 }
 
@@ -146,11 +172,14 @@ export function getNeonServicePool(): Pool {
   if (servicePool) return servicePool
   const url = process.env.SERVICE_DATABASE_URL ?? process.env.DATABASE_URL
   if (!url) throw new Error('DATABASE_URL is not configured for the Neon provider')
-  servicePool = new Pool({
-    connectionString: url,
-    max: Number(process.env.DATABASE_POOL_MAX ?? 10),
-    types: { getTypeParser: (id, format) => neonTypeParser(id, format) },
-  })
+  servicePool = attachPoolErrorHandling(
+    new Pool({
+      connectionString: url,
+      max: Number(process.env.DATABASE_POOL_MAX ?? 10),
+      types: { getTypeParser: (id, format) => neonTypeParser(id, format) },
+    }),
+    'neon-service',
+  )
   return servicePool
 }
 
