@@ -38,7 +38,7 @@ describe('V3_NAV_PRIMARY_SINGLE_ACTIVE', () => {
     ['/reports/sales', 'insights'],
     ['/admin/ai-usage', 'admin'],
     ['/admin/revenue-intelligence', 'admin'],
-    ['/admin/command', 'team'],
+    ['/admin/command', 'admin'],
     ['/admin/people', 'admin'],
     ['/admin/scoring-qa', 'admin'],
     ['/profile-intelligence', 'team'],
@@ -48,8 +48,11 @@ describe('V3_NAV_PRIMARY_SINGLE_ACTIVE', () => {
   it('resolves exactly one primary domain per route', () => {
     for (const [pathname, expected] of cases) {
       expect(resolvePrimaryActiveId(pathname, admin), pathname).toBe(expected)
-      // Domain detection and role-aware resolution must agree for a permitted role.
-      expect(resolvePrimaryActiveId(pathname, admin), pathname).toBe(domainForPathname(pathname))
+      // Domain detection and role-aware resolution must agree for a permitted
+      // role, except the Command Center — one route reached from two domains.
+      if (pathname !== '/admin/command') {
+        expect(resolvePrimaryActiveId(pathname, admin), pathname).toBe(domainForPathname(pathname))
+      }
     }
   })
 
@@ -339,6 +342,14 @@ describe('domainForPathname', () => {
     expect(domainForPathname('/admin/people')).toBe('admin')
   })
 
+  it('resolves the Command Center to the domain the role reached it from', () => {
+    expect(resolvePrimaryActiveId('/admin/command', admin)).toBe('admin')
+    expect(resolvePrimaryActiveId('/admin/command/abc', admin)).toBe('admin')
+    expect(resolvePrimaryActiveId('/admin/command', manager)).toBe('team')
+    expect(resolvePrimaryActiveId('/admin/command', rep)).toBeNull()
+    expect(domainForPathname('/admin/command')).toBe('team')
+  })
+
   it('keeps conversation surfaces under Inbox', () => {
     expect(domainForPathname('/chats')).toBe('inbox')
     expect(domainForPathname('/inbound')).toBe('inbox')
@@ -370,7 +381,7 @@ const ROUTE_MATRIX: Array<[string, string]> = [
   ['/reports/revenue', 'insights'],
   ['/settings', 'settings'],
   ['/notifications', 'settings'],
-  ['/admin/command', 'team'],
+  ['/admin/command', 'admin'],
   ['/admin/people', 'admin'],
 ]
 

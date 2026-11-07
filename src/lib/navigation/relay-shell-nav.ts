@@ -308,6 +308,14 @@ export function resolvePrimaryActiveId(
   pathname: string,
   role: RelayNavRoleFlags,
 ): RelayNavDomain | null {
+  // One route, two front doors: managers reach the Command Center as
+  // Team → Daily Operations, admins as Admin → Command Center. Resolve it to
+  // the domain the role actually reached it from, so the rail the user clicked
+  // is the rail they see.
+  if (pathname === '/admin/command' || pathname.startsWith('/admin/command/')) {
+    const domain: RelayNavDomain = role.isAdmin || role.isOwner ? 'admin' : 'team'
+    return visibleDomains(role).some((d) => d.id === domain) ? domain : null
+  }
   const domain = domainForPathname(pathname)
   if (!domain) return null
   return visibleDomains(role).some((d) => d.id === domain) ? domain : null

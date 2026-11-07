@@ -35,7 +35,7 @@ describe('RELAY_V3_SINGLE_ACTIVE_NAV_ITEM', () => {
     expect(resolvePrimaryActiveId('/chats', rep)).toBe('inbox')
     expect(resolvePrimaryActiveId('/tasks', rep)).toBe('work')
     expect(resolvePrimaryActiveId('/reports/pipeline', rep)).toBe('insights')
-    expect(resolvePrimaryActiveId('/admin/command', admin)).toBe('team')
+    expect(resolvePrimaryActiveId('/admin/command', admin)).toBe('admin')
     expect(resolvePrimaryActiveId('/settings', rep)).toBe('settings')
   })
 
