@@ -298,7 +298,7 @@ describe('REPORTS', () => {
     const reports = ['/reports/sales', '/reports/pipeline', '/reports/team', '/reports/revenue', '/reports/activity']
     expect(rep).toEqual(reports)
     expect(mgr).toEqual(reports)
-    expect(admin).toEqual([...reports, '/admin/ai-usage'])
+    expect(admin).toEqual(reports)
     expect(visibleDomains({ isOwner: false, isAdmin: false, isManager: false }).find((i) => i.id === 'insights')!.href).toBe('/reports/sales')
   })
 })

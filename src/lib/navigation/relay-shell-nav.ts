@@ -167,7 +167,6 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
       { id: 'team-report', label: 'Team', href: '/reports/team', group: 'Reports' },
       { id: 'revenue-report', label: 'Revenue', href: '/reports/revenue', group: 'Reports' },
       { id: 'activity-report', label: 'Activity', href: '/reports/activity', group: 'Reports' },
-      { id: 'ai-usage', label: 'AI Usage', href: '/admin/ai-usage', visible: adminUp, group: 'System' },
     ],
   },
   {
@@ -215,8 +214,6 @@ export const PRIMARY_UTILITY_IDS: RelayNavDomain[] = ['settings', 'admin']
  */
 export function domainForPathname(pathname: string): RelayNavDomain | null {
   if (pathname === '/admin/command' || pathname.startsWith('/admin/command/')) return 'team'
-  if (pathname.startsWith('/admin/ai-usage')) return 'insights'
-  if (pathname.startsWith('/admin/revenue-intelligence')) return 'insights'
 
   if (pathname === '/dashboard') return 'home'
   if (pathname === '/chats' || pathname.startsWith('/chats/')) return 'inbox'

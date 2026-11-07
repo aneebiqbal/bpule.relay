@@ -68,7 +68,6 @@ Studio `/content` · Ideas `/content/ideas` · Growth `/content/growth` (Admin+)
 
 ### Insights
 **Reports** — Sales `/reports/sales` · Pipeline `/reports/pipeline` · Team `/reports/team` · Revenue `/reports/revenue` · Activity `/reports/activity`
-**System** — AI Usage `/admin/ai-usage` (Admin+)
 
 ### Settings
 **Account** — My Account `/settings` · Notifications `/notifications`

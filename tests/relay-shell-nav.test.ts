@@ -36,8 +36,8 @@ describe('V3_NAV_PRIMARY_SINGLE_ACTIVE', () => {
     ['/content/ideas', 'content'],
     ['/content/growth', 'content'],
     ['/reports/sales', 'insights'],
-    ['/admin/ai-usage', 'insights'],
-    ['/admin/revenue-intelligence', 'insights'],
+    ['/admin/ai-usage', 'admin'],
+    ['/admin/revenue-intelligence', 'admin'],
     ['/admin/command', 'team'],
     ['/admin/people', 'admin'],
     ['/admin/scoring-qa', 'admin'],
@@ -334,8 +334,8 @@ describe('domainForPathname', () => {
   it('routes admin-owned URLs to the domain that owns the feature', () => {
     expect(domainForPathname('/admin/command')).toBe('team')
     expect(domainForPathname('/admin/command/abc')).toBe('team')
-    expect(domainForPathname('/admin/ai-usage')).toBe('insights')
-    expect(domainForPathname('/admin/revenue-intelligence')).toBe('insights')
+    expect(domainForPathname('/admin/ai-usage')).toBe('admin')
+    expect(domainForPathname('/admin/revenue-intelligence')).toBe('admin')
     expect(domainForPathname('/admin/people')).toBe('admin')
   })
 

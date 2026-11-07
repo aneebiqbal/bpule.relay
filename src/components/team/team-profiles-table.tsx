@@ -221,7 +221,12 @@ function TeamProfilesTableInner({
       </div>
 
       <V4Panel padded={false}>
-        <div className="hidden overflow-x-auto md:block">
+        <div
+          className="hidden overflow-x-auto md:block"
+          tabIndex={0}
+          role="region"
+          aria-label="Profiles table"
+        >
           <table className="w-full min-w-[920px] text-left">
             <thead>
               <tr className="border-b border-line text-[10px] uppercase tracking-[0.12em] text-stone">
