@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import {
   AlertTriangle,
   Check,
@@ -347,7 +348,7 @@ export function LeadConversation({
                 ) : (
                   <>
                     <span className="text-status-warning">No sending profile</span>
-                    <a href="/team/profiles" className="text-cobalt hover:underline">Assign profile</a>
+                    <Link href="/team/profiles" className="text-cobalt hover:underline">Assign profile</Link>
                   </>
                 )}
               </span>
