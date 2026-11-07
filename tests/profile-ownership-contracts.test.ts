@@ -107,6 +107,22 @@ describe('PROFILE_EXECUTION_GLOBAL_PARITY', () => {
     expect(store).toMatch(/listActiveCoveredIdentities/)
   })
 
+  it('Team Profiles reads the canonical directory and renders ownership, backups and review state', () => {
+    const loader = read('src/lib/team/profiles.ts')
+    expect(loader).toMatch(/loadCanonicalProfileAssignments/)
+    const table = read('src/components/team/team-profiles-table.tsx')
+    expect(table).toMatch(/primaryRepName/)
+    expect(table).toMatch(/backups/)
+    expect(table).toMatch(/needsReview/)
+  })
+
+  it('the profile detail exposes primary, backups, readiness and today in one place', () => {
+    const detail = read('src/components/team/team-profile-detail.tsx')
+    expect(detail).toMatch(/CoverageConfigPanel/)
+    expect(detail).toMatch(/Access readiness/)
+    expect(detail).toMatch(/Today/)
+  })
+
   it('production: every permanent assignment is a canonical primary', async () => {
     const client = neonServiceDbClient()
     const [{ data: assignments }, { data: coverage }, { data: identities }] = await Promise.all([
