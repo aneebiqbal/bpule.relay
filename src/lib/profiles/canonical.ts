@@ -343,17 +343,45 @@ export async function loadCanonicalProfileAssignments(
   }
 }
 
-/** Profiles a rep may work: their primary/back-up assignments, plus temporary coverage. */
+/** Profiles where this rep is the canonical primary owner. */
+export function getPrimaryProfilesForRep(
+  set: CanonicalAssignmentSet,
+  repId: string,
+): CanonicalProfileAssignment[] {
+  return set.profiles.filter((profile) => profile.primaryRepId === repId)
+}
+
+/** Profiles where this rep is a configured backup — eligibility, never ownership. */
+export function getBackupEligibleProfilesForRep(
+  set: CanonicalAssignmentSet,
+  repId: string,
+): CanonicalProfileAssignment[] {
+  return set.profiles.filter((profile) => profile.backups.some((backup) => backup.repId === repId))
+}
+
+/**
+ * Profiles a rep may work today: their primary plus active temporary coverage.
+ * Backup eligibility alone never grants a daily working profile.
+ */
+export function getExecutableProfilesForRep(
+  set: CanonicalAssignmentSet,
+  repId: string,
+  activeCoverageProfileIds: ReadonlySet<string> = new Set(),
+): CanonicalProfileAssignment[] {
+  return set.profiles.filter(
+    (profile) => profile.primaryRepId === repId || activeCoverageProfileIds.has(profile.profileId),
+  )
+}
+
+/**
+ * Profiles a rep may work: their primary plus active temporary coverage.
+ * Backup eligibility is not ownership and never appears here.
+ */
 export function getProfilesForRep(
   set: CanonicalAssignmentSet,
   repId: string,
 ): CanonicalProfileAssignment[] {
-  return set.profiles.filter(
-    (profile) =>
-      profile.primaryRepId === repId ||
-      profile.backups.some((backup) => backup.repId === repId) ||
-      profile.assignedReps.some((rep) => rep.repId === repId),
-  )
+  return getPrimaryProfilesForRep(set, repId)
 }
 
 /** Profiles a rep may work on a specific channel. */

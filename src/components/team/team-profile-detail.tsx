@@ -29,6 +29,7 @@ export function TeamProfileDetailView({
 }) {
   const [assignOpen, setAssignOpen] = useState(false)
   const [repId, setRepId] = useState('')
+  const [backupIds, setBackupIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -41,6 +42,7 @@ export function TeamProfileDetailView({
     setSaving(true)
     setMessage(null)
     try {
+      // The primary is the permanent assignment.
       const responses = await Promise.all(
         detail.identityIds.map((identityId) =>
           fetch(`/api/admin/revenue-identities/${identityId}/assign`, {
@@ -52,10 +54,22 @@ export function TeamProfileDetailView({
       )
       if (responses.some((res) => !res.ok)) {
         setMessage('Some channel identities could not be assigned. Retry from this dialog.')
-      } else {
-        setMessage('Profile assigned.')
-        setAssignOpen(false)
+        setSaving(false)
+        return
       }
+      // Same transaction: backups are coverage eligibility, never ownership.
+      const coverage = await fetch(`/api/team/profiles/${detail.profileId}/coverage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ primaryRepId: repId, backups: backupIds.map((id) => ({ repId: id })) }),
+      })
+      if (!coverage.ok) {
+        setMessage('Profile assigned, but the backup chain could not be saved.')
+        setSaving(false)
+        return
+      }
+      setMessage('Profile assigned.')
+      setAssignOpen(false)
     } catch {
       setMessage('Could not assign the profile. Try again.')
     }
@@ -182,8 +196,10 @@ export function TeamProfileDetailView({
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/40 p-4 backdrop-blur-sm">
           <V4Panel className="my-8 w-full max-w-md" innerClassName="p-5">
             <h2 className="text-[18px] font-medium text-ink">Assign profile</h2>
-            <p className="mt-1 text-[12px] text-graphite">Choose the rep who will send as {detail.profileName}.</p>
-            <label htmlFor="detail-assign-rep" className="mt-4 block text-[12px] font-medium text-graphite">Rep</label>
+            <p className="mt-1 text-[12px] text-graphite">
+              Choose the primary owner and the backups who may cover {detail.profileName}.
+            </p>
+            <label htmlFor="detail-assign-rep" className="mt-4 block text-[12px] font-medium text-graphite">Primary rep</label>
             <select
               id="detail-assign-rep"
               value={repId}
@@ -195,6 +211,29 @@ export function TeamProfileDetailView({
                 <option key={rep.id} value={rep.id}>{rep.name}</option>
               ))}
             </select>
+            <fieldset className="mt-4">
+              <legend className="text-[12px] font-medium text-graphite">Backups</legend>
+              <p className="mt-1 text-[11px] text-stone">
+                Backups may cover this profile when the primary is away. They never own it.
+              </p>
+              <div className="mt-2 space-y-1.5">
+                {reps.filter((rep) => rep.id !== repId).map((rep) => (
+                  <label key={rep.id} className="flex items-center gap-2 text-[12px] text-ink">
+                    <input
+                      type="checkbox"
+                      checked={backupIds.includes(rep.id)}
+                      onChange={(event) =>
+                        setBackupIds((prev) =>
+                          event.target.checked ? [...prev, rep.id] : prev.filter((id) => id !== rep.id),
+                        )
+                      }
+                      className="size-4 accent-orange"
+                    />
+                    {rep.name}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"

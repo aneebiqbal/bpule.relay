@@ -12,6 +12,9 @@ import { assembleTeamLive, type TeamLiveRows } from '@/lib/admin/team-live'
 import { buildTeamProfiles } from '@/lib/team/profiles'
 import {
   derivePrimary,
+  getBackupEligibleProfilesForRep,
+  getExecutableProfilesForRep,
+  getPrimaryProfilesForRep,
   getProfilesForRep,
   getProfilesForRepByChannel,
   loadCanonicalProfileAssignments,
@@ -105,7 +108,7 @@ describe('PROFILE_ASSIGNMENT_GLOBAL_PARITY', () => {
     expect(result.repId).toBeNull()
   })
 
-  it('getProfilesForRep returns primary, backups and assigned reps once', () => {
+  it('getProfilesForRep returns only primary ownership — never backup eligibility', () => {
     const set: CanonicalAssignmentSet = {
       businessDate: '2026-11-06',
       profiles: [
@@ -120,9 +123,48 @@ describe('PROFILE_ASSIGNMENT_GLOBAL_PARITY', () => {
       ambiguous: [],
       unassigned: [],
     }
-    const forRep1 = getProfilesForRep(set, 'rep-1')
-    expect(forRep1.map((profile) => profile.profileId).sort()).toEqual(['p-1', 'p-2'])
+    expect(getProfilesForRep(set, 'rep-1').map((profile) => profile.profileId)).toEqual(['p-1'])
+    expect(getPrimaryProfilesForRep(set, 'rep-1').map((profile) => profile.profileId)).toEqual(['p-1'])
     expect(getProfilesForRep(set, 'rep-3')).toEqual([])
+  })
+
+  it('backup eligibility is a separate read from ownership', () => {
+    const set: CanonicalAssignmentSet = {
+      businessDate: '2026-11-06',
+      profiles: [
+        canonicalProfile({ profileId: 'p-1', primaryRepId: 'rep-1', backups: [] }),
+        canonicalProfile({
+          profileId: 'p-2',
+          primaryRepId: 'rep-2',
+          primaryRepName: 'Rep Two',
+          backups: [{ repId: 'rep-1', repName: 'Rep One', priority: 2, source: 'coverage' }],
+        }),
+      ],
+      ambiguous: [],
+      unassigned: [],
+    }
+    expect(getBackupEligibleProfilesForRep(set, 'rep-1').map((profile) => profile.profileId)).toEqual(['p-2'])
+  })
+
+  it('getExecutableProfilesForRep is primary plus active coverage only', () => {
+    const set: CanonicalAssignmentSet = {
+      businessDate: '2026-11-06',
+      profiles: [
+        canonicalProfile({ profileId: 'p-1', primaryRepId: 'rep-1', backups: [] }),
+        canonicalProfile({
+          profileId: 'p-2',
+          primaryRepId: 'rep-2',
+          primaryRepName: 'Rep Two',
+          backups: [{ repId: 'rep-1', repName: 'Rep One', priority: 2, source: 'coverage' }],
+        }),
+        canonicalProfile({ profileId: 'p-3', primaryRepId: 'rep-3', primaryRepName: 'Rep Three', backups: [] }),
+      ],
+      ambiguous: [],
+      unassigned: [],
+    }
+    // p-2 is backup-only for rep-1 and must not appear; p-3 is active coverage.
+    const executable = getExecutableProfilesForRep(set, 'rep-1', new Set(['p-3']))
+    expect(executable.map((profile) => profile.profileId).sort()).toEqual(['p-1', 'p-3'])
   })
 
   it('filters the workable set by channel capability', () => {

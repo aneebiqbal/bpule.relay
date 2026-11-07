@@ -6620,7 +6620,20 @@ export class SupabaseStore implements ScoutStore {
     const assigned = await this.listMyAssignedIdentities()
     const businessDate = await this.businessDate()
     const covered = await listActiveCoveredIdentities(this.client, this.orgId, this.rep.id, businessDate)
-    if (covered.length === 0) return assigned
+
+    // Canonical guard: only the profile's primary owner is a permanent working
+    // assignment. Backup eligibility is not assignment.
+    const { data: primaryRows } = await this.client
+      .from('profile_coverage')
+      .select('profile_id')
+      .eq('organization_id', this.orgId)
+      .eq('rep_id', this.rep.id)
+      .eq('role', 'PRIMARY')
+      .eq('active', true)
+      .limit(200)
+    const primaryProfileIds = new Set((primaryRows ?? []).map((row) => row.profile_id as string))
+    const owned = assigned.filter((identity) => identity.profileId && primaryProfileIds.has(identity.profileId))
+    if (covered.length === 0) return owned
 
     const { data: identityRows } = await this.client
       .from('revenue_identities')
@@ -6639,7 +6652,7 @@ export class SupabaseStore implements ScoutStore {
       })
     }
     // An assignment always wins over coverage for the same identity.
-    for (const identity of assigned) {
+    for (const identity of owned) {
       merged.set(identity.id, identity)
     }
     return [...merged.values()]

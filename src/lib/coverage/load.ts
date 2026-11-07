@@ -465,15 +465,15 @@ export async function loadRepCoverage(
   const availability = facts.availability.find((row) => row.repId === repId)?.state
     ?? fallbackAvailability(facts.isWorkingDay)
 
-  const ownIds = new Set(
-    facts.assignments.filter((row) => row.repId === repId).map((row) => row.profileId),
-  )
+  // `own` is canonical primary ownership from the coverage plan — never the raw
+  // assignment table, which may still carry backup eligibility.
+  const own = plan.profiles.filter((profile) => profile.primaryRepId === repId)
+  const ownIds = new Set(own.map((profile) => profile.profileId))
   const coveringIds = new Set(
     facts.activeCoverage.filter((row) => row.coveringRepId === repId).map((row) => row.profileId),
   )
 
   const byId = new Map(plan.profiles.map((profile) => [profile.profileId, profile]))
-  const own = [...ownIds].map((id) => byId.get(id)).filter((p): p is CoverageProfileResult => Boolean(p))
   const covering = [...coveringIds]
     .map((id) => byId.get(id))
     .filter((p): p is CoverageProfileResult => Boolean(p))
