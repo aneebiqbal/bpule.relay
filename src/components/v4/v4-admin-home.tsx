@@ -4,9 +4,9 @@
  * Relay V4 — Admin / Owner Command Center.
  *
  * An operating cockpit, not an analytics report. The page answers, in order:
- * what is happening today, who needs intervention, who is working, which
- * profiles are behind, what moved since yesterday. Deep people, profile and
- * analytics surfaces live in Team / Profiles / Reports.
+ * today, what needs my attention, who is working, which profiles are behind,
+ * coverage exceptions, and what moved since yesterday. Deep people, profile and
+ * analytics surfaces live in Team / Profiles / Reports / Coverage.
  *
  * Every value is canonical. A failed section degrades on its own.
  */
@@ -158,6 +158,8 @@ export function V4AdminHome({
   ).length
   const overdueWork = data.health.overdueTasks + data.health.followUpsOverdue
   const teamPct = pct(data.teamCompleted, data.teamTarget)
+  const coverageSummary = coverage?.summary
+  const repsWithOverdueWork = data.rows.filter((row) => row.overdueTasks > 0).length
   const workingDay = teamDay.isWorkingDay
     ? `${teamDay.workdayStart}–${teamDay.workdayEnd} ${teamDay.timezone} · ${formatDuration(teamDay.minutesRemaining)} remaining`
     : `Not a working day · ${teamDay.timezone}`
@@ -205,6 +207,12 @@ export function V4AdminHome({
               className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-bone-raised px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-bone"
             >
               Assign Task
+            </Link>
+            <Link
+              href="/team/profiles?add=1"
+              className="hidden items-center gap-1.5 rounded-lg border border-line bg-bone-raised px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-bone sm:inline-flex"
+            >
+              Add Profile
             </Link>
             <Link
               href="/admin/people"
@@ -279,6 +287,24 @@ export function V4AdminHome({
                   {data.movement.winsToday} wins
                 </Link>
               </div>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-graphite">
+                <span className="text-stone">Team status:</span>
+                <span>
+                  <span className="font-medium tabular-nums text-ink">{coverageSummary?.working ?? 0}</span> working
+                </span>
+                <span>
+                  <span className="font-medium tabular-nums text-ink">{coverageSummary?.onLeave ?? 0}</span> on leave
+                </span>
+                <span>
+                  <span className="font-medium tabular-nums text-ink">{coverageSummary?.offline ?? 0}</span> unavailable
+                </span>
+                <span>
+                  <span className="font-medium tabular-nums text-ink">{counts.NOT_STARTED + counts.MISSED}</span> not started
+                </span>
+                <Link href="/team" className="font-medium text-ink hover:underline">
+                  Team details
+                </Link>
+              </div>
             </div>
             <div className="lg:col-span-5">
               <div className="grid grid-cols-2 gap-2.5">
@@ -310,11 +336,6 @@ export function V4AdminHome({
             </div>
           </div>
         </V4Panel>
-      </section>
-
-      {/* COVERAGE — who is working, which profiles need cover, what to approve. */}
-      <section aria-label="Coverage">
-        <AdminCoveragePanel status={coverage} businessDate={teamDay.businessDate} />
       </section>
 
       {/* ATTENTION — the strongest block on the page. */}
@@ -365,192 +386,211 @@ export function V4AdminHome({
         </V4Panel>
       </section>
 
-      {/* OPERATING COLUMNS — Team + Movement left, Profiles + Pipeline right.
-          Below xl the wrappers become display:contents so the panels reorder
-          back to Today → Attention → Team → Profiles → Movement. */}
+      {/* TEAM + PROFILES — the two operational views. */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-        <div className="space-y-5 xl:col-span-7 max-xl:contents">
-          <div className="order-1">
-            <V4Panel>
-              <V4PanelHeader
-                eyebrow="Team"
-                title="Who is working"
-                hint={`${teamRows.length} reps · ${data.teamDay.totals.requiredRemaining} required actions left`}
-                action={
-                  <Link href="/team" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
-                    Team overview <ChevronRight className="size-3.5" aria-hidden />
-                  </Link>
-                }
-              />
-              {teamRows.length > 0 ? (
-                <ul className="mt-4 divide-y divide-line/70 overflow-hidden rounded-xl ring-1 ring-line">
-                  {teamRows.map((row) => (
-                    <li key={row.id}>
-                      <Link
-                        href={row.href}
-                        className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-bone sm:flex-row sm:items-center sm:gap-2"
-                      >
-                        <div className="flex items-center gap-3 sm:w-28 lg:w-36 sm:shrink-0">
-                          <V4Avatar name={row.name} size="sm" />
-                          <div className="min-w-0">
-                            <p className="truncate text-[13px] font-medium text-ink">{row.name}</p>
-                            <p className="truncate text-[11px] text-stone">
-                              {row.assignedProfiles.slice(0, 2).join(', ') || 'No profile assigned'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-baseline justify-between text-[10px] text-stone">
-                            <span>Today</span>
-                            <span className="tabular-nums text-ink">
-                              {row.completedToday}
-                              {row.targetCount > 0 ? ` / ${row.targetCount}` : ''}
-                            </span>
-                          </div>
-                          <div className="mt-1">
-                            <ProgressBar value={row.targetPct} label={`${row.name}'s progress today`} />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 sm:w-40 sm:shrink-0 sm:justify-end">
-                          <MiniStat label="left" value={row.requiredRemaining} />
-                          <MiniStat label="replies" value={row.repliesWaiting} />
-                          <MiniStat label="overdue" value={row.overdue} />
-                        </div>
-                        <V4Chip tone={REP_STATE_TONE[row.state]} className="self-start sm:self-center">
-                          {row.stateLabel}
-                        </V4Chip>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-4 rounded-xl px-4 py-6 text-[13px] text-graphite ring-1 ring-line">
-                  No reps are visible to you in this organization.
-                </p>
-              )}
-            </V4Panel>
-          </div>
-
-          <div className="order-3 xl:order-2">
-            <V4Panel>
-              <V4PanelHeader
-                eyebrow="Movement"
-                title="Today vs yesterday"
-                hint="Yesterday is the final count; today is in progress"
-                action={
-                  <Link href="/reports/sales" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
-                    Reports <ChevronRight className="size-3.5" aria-hidden />
-                  </Link>
-                }
-              />
-              <div className="mt-4 overflow-hidden rounded-xl ring-1 ring-line">
-                <div className="flex items-center gap-3 border-b border-line/70 bg-bone px-4 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-stone">
-                  <span className="min-w-0 flex-1">Metric</span>
-                  <span className="w-12 text-right">Today</span>
-                  <span className="w-12 text-right">Yesterday</span>
-                  <span className="w-14 text-right">Delta</span>
-                </div>
-                <ul className="divide-y divide-line/70">
-                  {movementRows.map((row) => (
-                    <li key={row.key} className="flex items-center gap-3 px-4 py-2.5">
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{row.label}</span>
-                      <span className="w-12 text-right text-[13px] tabular-nums text-ink">{row.today}</span>
-                      <span className="w-12 text-right text-[12px] tabular-nums text-stone">{row.yesterday ?? '—'}</span>
-                      <span
-                        className={cn(
-                          'w-14 text-right text-[12px] font-medium tabular-nums',
-                          row.delta == null ? 'text-stone' : row.delta > 0 ? FACT_TONE.success : row.delta < 0 ? FACT_TONE.danger : 'text-stone',
-                        )}
-                      >
-                        {row.delta == null ? '—' : row.delta > 0 ? `+${row.delta}` : row.delta}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+        <div className="xl:col-span-7">
+          <V4Panel className="h-full">
+            <V4PanelHeader
+              eyebrow="Team"
+              title="Who is working"
+              hint={`${teamRows.length} reps · ${data.teamDay.totals.requiredRemaining} required actions left`}
+              action={
+                <Link href="/team" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
+                  Team overview <ChevronRight className="size-3.5" aria-hidden />
+                </Link>
+              }
+            />
+            {(data.health.overdueTasks > 0 || repsWithOverdueWork > 0) && (
+              <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-bone px-3 py-2.5 text-[12px] text-graphite ring-1 ring-line/70">
+                <span>
+                  <span className="font-medium tabular-nums text-ink">{data.health.overdueTasks}</span> overdue task
+                  {data.health.overdueTasks === 1 ? '' : 's'}
+                </span>
+                <span className="text-stone">·</span>
+                <span>
+                  <span className="font-medium tabular-nums text-ink">{repsWithOverdueWork}</span> rep
+                  {repsWithOverdueWork === 1 ? '' : 's'} with overdue work
+                </span>
+                <Link href="/tasks?scope=team" className="ml-auto font-medium text-ink hover:underline">
+                  Open team work
+                </Link>
               </div>
-            </V4Panel>
-          </div>
-        </div>
+            )}
 
-        <div className="space-y-5 xl:col-span-5 max-xl:contents">
-          <div className="order-2">
-            <V4Panel>
-              <V4PanelHeader
-                eyebrow="Profiles"
-                title="Profile execution"
-                hint={`${profilesComplete} of ${profileRows.length} complete`}
-                action={
-                  <Link href="/team/profiles" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
-                    Manage <ChevronRight className="size-3.5" aria-hidden />
-                  </Link>
-                }
-              />
-              {profileRows.length > 0 ? (
-                <ul className="mt-4 divide-y divide-line/70 overflow-hidden rounded-xl ring-1 ring-line">
-                  {profileRows.map((row) => (
-                    <li key={row.profileId}>
-                      <Link
-                        href={`/team/profiles/${row.profileId}`}
-                        className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-bone"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                            <p className="truncate text-[13px] font-medium text-ink">{row.name}</p>
-                            {row.channels.map((channel) => (
-                              <span key={channel} className="text-[10px] text-stone">
-                                {channel}
-                              </span>
-                            ))}
-                          </div>
+            {teamRows.length > 0 ? (
+              <ul className="mt-4 divide-y divide-line/70 overflow-hidden rounded-xl ring-1 ring-line">
+                {teamRows.map((row) => (
+                  <li key={row.id}>
+                    <Link
+                      href={row.href}
+                      className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-bone sm:flex-row sm:items-center sm:gap-2"
+                    >
+                      <div className="flex items-center gap-3 sm:w-28 lg:w-36 sm:shrink-0">
+                        <V4Avatar name={row.name} size="sm" />
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-medium text-ink">{row.name}</p>
                           <p className="truncate text-[11px] text-stone">
-                            {row.assignedReps.join(', ') || 'Unassigned'}
+                            {row.assignedProfiles.slice(0, 2).join(', ') || 'No profile assigned'}
                           </p>
                         </div>
-                        <div className="w-24 shrink-0 sm:w-28">
-                          <div className="flex items-baseline justify-between text-[10px] text-stone">
-                            <span>Today</span>
-                            <span className="tabular-nums text-ink">
-                              {row.completedCount} / {row.targetCount}
-                            </span>
-                          </div>
-                          <div className="mt-1">
-                            <ProgressBar value={pct(row.completedCount, row.targetCount)} label={`${row.name}'s progress today`} />
-                          </div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between text-[10px] text-stone">
+                          <span>Today</span>
+                          <span className="tabular-nums text-ink">
+                            {row.completedToday}
+                            {row.targetCount > 0 ? ` / ${row.targetCount}` : ''}
+                          </span>
                         </div>
-                        {row.status ? (
-                          <V4Chip tone={PROFILE_STATUS_TONE[row.status]}>{PROFILE_STATUS_LABEL[row.status]}</V4Chip>
-                        ) : (
-                          <V4Chip tone="neutral">No target</V4Chip>
-                        )}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-4 rounded-xl px-4 py-6 text-[13px] text-graphite ring-1 ring-line">
-                  No assigned profiles yet.
-                </p>
-              )}
-            </V4Panel>
-          </div>
+                        <div className="mt-1">
+                          <ProgressBar value={row.targetPct} label={`${row.name}'s progress today`} />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 sm:w-40 sm:shrink-0 sm:justify-end">
+                        <MiniStat label="left" value={row.requiredRemaining} />
+                        <MiniStat label="replies" value={row.repliesWaiting} />
+                        <MiniStat label="overdue" value={row.overdue} />
+                      </div>
+                      <V4Chip tone={REP_STATE_TONE[row.state]} className="self-start sm:self-center">
+                        {row.stateLabel}
+                      </V4Chip>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 rounded-xl px-4 py-6 text-[13px] text-graphite ring-1 ring-line">
+                No reps are visible to you in this organization.
+              </p>
+            )}
+          </V4Panel>
+        </div>
 
-          <div className="order-4">
-            <V4Panel>
-              <V4PanelHeader
-                eyebrow="Pipeline"
-                title="Open opportunities"
-                hint="By stage"
-                action={
-                  <Link href="/leads?view=pipeline" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
-                    Pipeline <ChevronRight className="size-3.5" aria-hidden />
-                  </Link>
-                }
-              />
-              <div className="mt-4">
-                <V3StageStrip stages={pipeline} compact />
+        <div className="xl:col-span-5">
+          <V4Panel className="h-full">
+            <V4PanelHeader
+              eyebrow="Profiles"
+              title="Profile execution"
+              hint={`${profilesComplete} of ${profileRows.length} complete`}
+              action={
+                <Link href="/team/profiles" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
+                  View all profiles <ChevronRight className="size-3.5" aria-hidden />
+                </Link>
+              }
+            />
+            {profileRows.length > 0 ? (
+              <ul className="mt-4 divide-y divide-line/70 overflow-hidden rounded-xl ring-1 ring-line">
+                {profileRows.slice(0, 5).map((row) => (
+                  <li key={row.profileId}>
+                    <Link
+                      href={`/team/profiles/${row.profileId}`}
+                      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-bone"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <p className="truncate text-[13px] font-medium text-ink">{row.name}</p>
+                          {row.channels.map((channel) => (
+                            <span key={channel} className="text-[10px] text-stone">
+                              {channel}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="truncate text-[11px] text-stone">
+                          {row.assignedReps.join(', ') || 'Unassigned'}
+                        </p>
+                      </div>
+                      <div className="w-24 shrink-0 sm:w-28">
+                        <div className="flex items-baseline justify-between text-[10px] text-stone">
+                          <span>Today</span>
+                          <span className="tabular-nums text-ink">
+                            {row.completedCount} / {row.targetCount}
+                          </span>
+                        </div>
+                        <div className="mt-1">
+                          <ProgressBar value={pct(row.completedCount, row.targetCount)} label={`${row.name}'s progress today`} />
+                        </div>
+                      </div>
+                      {row.status ? (
+                        <V4Chip tone={PROFILE_STATUS_TONE[row.status]}>{PROFILE_STATUS_LABEL[row.status]}</V4Chip>
+                      ) : (
+                        <V4Chip tone="neutral">No target</V4Chip>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 rounded-xl px-4 py-6 text-[13px] text-graphite ring-1 ring-line">
+                No assigned profiles yet.
+              </p>
+            )}
+          </V4Panel>
+        </div>
+      </div>
+
+      {/* COVERAGE — exception-first autopilot. */}
+      <section aria-label="Coverage">
+        <AdminCoveragePanel status={coverage} businessDate={teamDay.businessDate} />
+      </section>
+
+      {/* MOVEMENT + PIPELINE. */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        <div className="xl:col-span-7">
+          <V4Panel className="h-full">
+            <V4PanelHeader
+              eyebrow="Movement"
+              title="Today vs yesterday"
+              hint="Yesterday is the final count; today is in progress"
+              action={
+                <Link href="/reports/sales" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
+                  Reports <ChevronRight className="size-3.5" aria-hidden />
+                </Link>
+              }
+            />
+            <div className="mt-4 overflow-hidden rounded-xl ring-1 ring-line">
+              <div className="flex items-center gap-3 border-b border-line/70 bg-bone px-4 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-stone">
+                <span className="min-w-0 flex-1">Metric</span>
+                <span className="w-12 text-right">Today</span>
+                <span className="w-12 text-right">Yesterday</span>
+                <span className="w-14 text-right">Delta</span>
               </div>
-            </V4Panel>
-          </div>
+              <ul className="divide-y divide-line/70">
+                {movementRows.slice(0, 5).map((row) => (
+                  <li key={row.key} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{row.label}</span>
+                    <span className="w-12 text-right text-[13px] tabular-nums text-ink">{row.today}</span>
+                    <span className="w-12 text-right text-[12px] tabular-nums text-stone">{row.yesterday ?? '—'}</span>
+                    <span
+                      className={cn(
+                        'w-14 text-right text-[12px] font-medium tabular-nums',
+                        row.delta == null ? 'text-stone' : row.delta > 0 ? FACT_TONE.success : row.delta < 0 ? FACT_TONE.danger : 'text-stone',
+                      )}
+                    >
+                      {row.delta == null ? '—' : row.delta > 0 ? `+${row.delta}` : row.delta}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </V4Panel>
+        </div>
+
+        <div className="xl:col-span-5">
+          <V4Panel className="h-full">
+            <V4PanelHeader
+              eyebrow="Pipeline"
+              title="Open opportunities"
+              hint="By stage"
+              action={
+                <Link href="/leads?view=pipeline" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
+                  Pipeline <ChevronRight className="size-3.5" aria-hidden />
+                </Link>
+              }
+            />
+            <div className="mt-4">
+              <V3StageStrip stages={pipeline} compact />
+            </div>
+          </V4Panel>
         </div>
       </div>
     </div>

@@ -100,23 +100,19 @@ export function AdminCoveragePanel({
   return (
     <V4Panel>
       <V4PanelHeader
-        eyebrow={`Operations · ${businessDate ?? plan.businessDate}`}
-        title="Team coverage"
-        hint={`Policy: ${plan.coveragePolicy === 'APPROVAL_REQUIRED' ? 'approval required' : plan.coveragePolicy.toLowerCase().replace(/_/g, ' ')}`}
+        eyebrow={`Autopilot · ${businessDate ?? plan.businessDate}`}
+        title="Coverage"
         action={
           <Link
             href="/team/coverage"
             className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink"
           >
-            Weekly review <ChevronRight className="size-3.5" aria-hidden />
+            Review coverage <ChevronRight className="size-3.5" aria-hidden />
           </Link>
         }
       />
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatusFact label="Working" value={summary.working} tone="text-status-success" />
-        <StatusFact label="On leave" value={summary.onLeave} tone="text-[#7d5410]" />
-        <StatusFact label="Offline" value={summary.offline} tone="text-graphite" />
+      <div className="mt-4 grid grid-cols-3 gap-3">
         <StatusFact label="Covered" value={summary.covered} tone="text-status-success" />
         <StatusFact label="Backup active" value={summary.backupActive} tone="text-cobalt" />
         <StatusFact label="At risk" value={summary.atRisk + summary.uncovered} tone="text-[#8f2b1e]" />
@@ -137,7 +133,7 @@ export function AdminCoveragePanel({
         </span>
         {plan.profiles.some((p) => !p.primaryReady) && (
           <Link href="/team/coverage" className="text-[12px] font-medium text-status-warning hover:underline">
-            {plan.profiles.filter((p) => !p.primaryReady).length} profile{plan.profiles.filter((p) => !p.primaryReady).length === 1 ? '' : 's'} not ready
+            {plan.profiles.filter((p) => !p.primaryReady).length} need confirmation · Review readiness
           </Link>
         )}
       </div>
