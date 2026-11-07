@@ -109,3 +109,33 @@ allowlists, e2e suites and QA scripts — deleting them breaks real tooling:
 `(app)/admin/command-center`, `(app)/admin/activity`,
 `(app)/admin/accountability`, `(app)/admin/revenue-identities`,
 `(app)/team/tasks`, `(app)/reports`, `(app)/admin`.
+
+---
+
+## IA CONSOLIDATION REMOVALS (2026-11-07)
+
+The navigation/IA pass removed duplicate shells, duplicate profile surfaces and
+pages with zero inbound links. Every route below was verified with a repo-wide
+reference crawl (nav config, `Link`/`router.push`, imports, tests, API callers)
+before removal.
+
+| FILE | WHY REMOVED | REPLACEMENT |
+|---|---|---|
+| `src/components/shell/relay-app-shell.tsx` | The V2/V3 shell. Zero consumers — `V4AppShell` is the only shell imported by the app layout. | `src/components/v4/v4-app-shell.tsx` |
+| `src/components/admin/admin-command-center-view.tsx` | Zero consumers; `/admin/command-center` was already a redirect to `/admin/command`. | `src/components/admin/command-centre.tsx` |
+| `src/components/admin/growth-dashboard.tsx` | Zero consumers; `/admin/growth` redirected to `/content/growth`. | `components/content-v3/growth-v3.tsx` |
+| `src/components/relay/persona-daily-post.tsx` | Only consumer was the deleted `/relay/persona-daily` page (zero inbound links). | `src/components/content-v3/studio-home.tsx` |
+| `src/components/post-editor-simple.tsx` | Only consumer was the deleted `/studio/post-detail` page. | `src/components/post-workspace.tsx` |
+| `src/components/studio-layout.tsx` | Only consumers were the four deleted `/content/[id]/*` pages. | `src/components/content-v3/studio-home.tsx` |
+| `src/components/studio-quick-capture.tsx` | Only consumer was the deleted `/content/[id]/create` page. | Studio quick capture inside `/content` |
+| `(app)/content/[id]/{create,identity,journey,library,today}/page.tsx` | Zero inbound links; `/content/[id]` already redirected to Studio. | `/content?persona=<id>` |
+| `src/app/api/admin/activity/route.ts` | Zero consumers after `/admin/activity` became a redirect. | `/reports/activity` API |
+| `src/app/api/admin/growth/route.ts` | Zero consumers after `/admin/growth` became a redirect. | `/content/growth` API |
+| `src/components/assigned-profiles.tsx` | Superseded by the Rep Home profile cards and Team → Profiles. | `components/coverage/rep-home-profiles.tsx` |
+
+Compat redirects added or kept for the deleted URLs:
+`/profiles`, `/manage-profiles`, `/profile-intelligence/[id]`, `/relay`,
+`/relay/persona-daily`, `/studio/post-detail`, `/accountability`,
+`/rep/assigned-profiles`, `/admin/activity`, `/admin/growth`,
+`/admin/command-center`, `/admin`, `/content/[id]`, `/team/tasks`,
+`/content-v2/*`, `/home`, `/admin/revenue-identities`.
