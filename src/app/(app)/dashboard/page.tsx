@@ -101,7 +101,6 @@ export default async function TodayPage() {
         data={repData}
         role={user.rep.role}
         greeting={greeting}
-        timeZone={user.organization.timezone ?? 'UTC'}
       />
     </Suspense>
   )

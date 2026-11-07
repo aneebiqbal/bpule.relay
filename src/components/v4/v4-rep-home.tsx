@@ -1,84 +1,29 @@
 'use client'
 
 /**
- * Relay V4 — Rep Home: the execution cockpit.
+ * Relay V4 — Rep Home: the daily cockpit.
  *
- * Above the fold a rep sees TODAY, ASSIGNED TO ME and DO THIS NEXT — in that
- * order. Charts answer "how am I doing" and never push the work down. Every
- * number is a canonical count; assigned work is separated from Relay-generated
- * work using the existing UnifiedTask source contract.
+ * A rep opens Relay and sees, in order: the day, the profiles they write as,
+ * the next five actions, manager-assigned work, and today's remaining target.
+ * Everything else lives one click away. No section is kept because it exists.
  */
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
-import { cn } from 'cn'
 import type { RepWorkspaceData } from '@/lib/rep-home/rep-workspace-data'
-import { buildProfileWarnings, type ProfileToday } from '@/lib/rep-home/profile-completion'
 import type { UnifiedTask } from '@/lib/tasks/types'
-import {
-  buildRepV3Actions,
-  buildRepV3Activity,
-  buildRepV3Stages,
-  buildRepTargetWindows,
-  buildRepWorkBreakdown,
-  countRepV3DueToday,
-  deriveRepV3MetricInput,
-  formatOverdueBreakdown,
-  REP_V3_EMPTY_STATE,
-  REP_V3_PRIMARY_CTA,
-  REP_TREND_SERIES,
-  type RepTargetWindow,
-} from '@/lib/rep-home/v3-present'
-import { rankActions, relativeWait } from '@/lib/rep-home/action-presentation'
+import type { RepCoverageView } from '@/lib/coverage/load'
+import { REP_V3_PRIMARY_CTA } from '@/lib/rep-home/v3-present'
+import { relativeWait } from '@/lib/rep-home/action-presentation'
 import { selectAssignedOpenTasks, selectAssignedOverdueTasks } from '@/lib/tasks/rank-unified-tasks'
-import { ProfileSwitcher } from '@/components/shell/profile-switcher'
-import { ContributionHeatmap } from '@/components/performance/contribution-heatmap'
+import { RepDayControl, repDayStartTime } from '@/components/coverage/rep-day-control'
+import { RepProfilesToday } from '@/components/coverage/rep-profiles-today'
 import {
-  V3CompareBars,
-  V3ProgressBlock,
-  V3TrendChart,
-  V3Value,
-} from '@/components/v3/visuals'
-import { V3StageStrip } from '@/components/v3/primitives'
-import {
-  V4Avatar,
-  V4Empty,
-  V4PageHeader,
   V4Panel,
   V4PanelHeader,
+  V4PageHeader,
   V4PriorityMark,
-  V4StatStrip,
 } from '@/components/v4/primitives'
-import { RepCoveragePanel } from '@/components/coverage/rep-coverage-panel'
-import type { RepCoverageView } from '@/lib/coverage/load'
-
-const TREND_COLORS: Record<string, string> = {
-  replies: 'var(--orange)',
-  meetings: 'var(--cobalt)',
-  tasks: 'var(--ink)',
-}
-
-type AssignedGroup = {
-  key: string
-  label: string
-  tasks: UnifiedTask[]
-}
-
-/**
- * Group open assigned work by its author. Only real assignments live here —
- * Relay-generated queue work is a separate kind and never labelled as assigned.
- */
-function groupAssignedWork(tasks: UnifiedTask[]): AssignedGroup[] {
-  // Caller passes the canonical open-assigned selection; no second predicate here.
-  const groups = new Map<string, AssignedGroup>()
-  for (const task of tasks) {
-    const key = task.createdByName ?? 'Unknown'
-    const group = groups.get(key) ?? { key, label: key, tasks: [] }
-    group.tasks.push(task)
-    groups.set(key, group)
-  }
-  return [...groups.values()].sort((a, b) => b.tasks.length - a.tasks.length)
-}
 
 function toPriority(priority: UnifiedTask['priority']): 'critical' | 'high' | 'normal' | 'watch' {
   if (priority === 'CRITICAL') return 'critical'
@@ -91,270 +36,128 @@ export function V4RepHome({
   data,
   role,
   greeting,
-  timeZone = 'UTC',
   coverage,
 }: {
   data: RepWorkspaceData
   role: 'admin' | 'rep' | 'sourcer' | 'manager'
   /** Server-computed in the viewer's timezone so SSR and hydration agree. */
   greeting: string
-  /** Org timezone — the one zone the server and client both render in. */
-  timeZone?: string
   /** Today's own + temporarily covered profiles. */
   coverage?: RepCoverageView | null
 }) {
-  const ranked = useMemo(() => rankActions(data.allActions ?? []), [data.allActions])
   const unified = useMemo(() => data.unifiedTasks ?? [], [data.unifiedTasks])
   const assignedOpen = useMemo(() => selectAssignedOpenTasks(unified), [unified])
   const assignedOverdue = useMemo(() => selectAssignedOverdueTasks(unified), [unified])
-  const assignedGroups = useMemo(() => groupAssignedWork(assignedOpen.slice(0, 5)), [assignedOpen])
-
-  const tasksDueToday = useMemo(() => countRepV3DueToday(unified), [unified])
-  const metricInput = useMemo(
-    () => deriveRepV3MetricInput({ ranked, openTasks: unified.length, tasksDueToday }),
-    [ranked, unified.length, tasksDueToday],
+  // Manager-assigned work is a separate kind: it never appears in Do this next.
+  const nextActions = useMemo(
+    () => unified.filter((task) => task.source !== 'ASSIGNED').slice(0, 5),
+    [unified],
   )
-  const actions = useMemo(() => buildRepV3Actions(unified, ranked), [unified, ranked])
-  const stages = useMemo(() => buildRepV3Stages(data.pipelineLeads ?? []), [data.pipelineLeads])
-  const activity = useMemo(() => buildRepV3Activity(data.activity ?? [], timeZone), [data.activity, timeZone])
-  const breakdown = useMemo(() => buildRepWorkBreakdown(unified, ranked), [unified, ranked])
-  const profileWarnings = useMemo(
-    () =>
-      buildProfileWarnings(
-        data.profilesToday ?? [],
-        data.day ?? { repliesWaiting: 0, followUpsDue: 0, isComplete: false },
-      ),
-    [data.profilesToday, data.day],
-  )
-
-  const daily = data.activityDaily ?? []
-  const todayActivity = daily.length > 0 ? daily[daily.length - 1] : null
 
   const targetTotal = data.targetSummary?.totalTarget ?? 0
   const targetDone = data.targetSummary?.totalCompleted ?? 0
   const targetRemaining = data.targetSummary?.totalRemaining ?? 0
-
-  const targetWindows = useMemo(
-    () =>
-      data.targetWindows
-        ? buildRepTargetWindows({
-            dailyDone: data.targetWindows.dailyDone,
-            dailyTarget: data.targetWindows.dailyTarget,
-            weeklyDone: data.targetWindows.weeklyDone,
-            weeklyWorkingDays: data.targetWindows.weeklyWorkingDays,
-            monthlyDone: data.targetWindows.monthlyDone,
-            monthlyWorkingDays: data.targetWindows.monthlyWorkingDays,
-          })
-        : null,
-    [data.targetWindows],
-  )
-
-  const trendSeries = REP_TREND_SERIES.map((series) => ({
-    key: series.key,
-    label: series.label,
-    color: TREND_COLORS[series.key] ?? 'var(--ink)',
-  }))
-
-  const stats: Array<{ key: string; label: string; value: number; hint: string; href: string; tone: 'neutral' | 'danger' | 'warning' | 'success' }> = [
-    { key: 'completed', label: 'Completed', value: targetDone, hint: targetTotal > 0 ? `of ${targetTotal} target` : 'No daily target', href: '/dashboard', tone: targetTotal > 0 && targetDone >= targetTotal ? 'success' : 'neutral' },
-    { key: 'assigned', label: 'Assigned to me', value: assignedOpen.length, hint: assignedOverdue.length > 0 ? `${assignedOverdue.length} overdue` : 'Open work', href: '/tasks', tone: assignedOverdue.length > 0 ? 'danger' : assignedOpen.length > 0 ? 'warning' : 'neutral' },
-    { key: 'replies', label: 'Replies waiting', value: data.day?.repliesWaiting ?? metricInput.repliesWaiting, hint: data.day?.repliesWaiting ? 'Need an answer' : 'Inbox clear', href: '/chats', tone: data.day?.repliesWaiting ? 'warning' : 'neutral' },
-    { key: 'overdue', label: 'Overdue', value: metricInput.followUpsOverdue + assignedOverdue.length, hint: formatOverdueBreakdown(metricInput.followUpsOverdue, assignedOverdue.length), href: '/tasks?view=overdue', tone: metricInput.followUpsOverdue + assignedOverdue.length > 0 ? 'danger' : 'neutral' },
-    { key: 'meetings', label: 'Meetings', value: todayActivity?.breakdown.meetings ?? data.outcomeEvents?.meetings ?? 0, hint: 'Booked today', href: '/reports/sales', tone: 'neutral' },
-  ]
+  const started = repDayStartTime(data.repDay)
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <V4PageHeader
         eyebrow="Home / Today"
         title={`Good ${greeting}, ${data.rep.name.split(' ')[0]}`}
-        subtitle="Your execution cockpit for today."
+        subtitle="Your day, your profiles, your next move."
         meta={
           <>
-            {data.identities.length > 0 && (
-              <span className="inline-flex items-center gap-1.5 text-[12px] text-graphite">
-                <span className="text-stone">Profiles</span>
-                <span className="font-medium text-ink">{data.identities.length}</span>
-              </span>
-            )}
+            <RepDayControl repDay={data.repDay} />
+            {started && <span className="text-[12px] text-graphite">Started {started}</span>}
             <span className="hidden h-3 w-px bg-line sm:block" aria-hidden />
             <p suppressHydrationWarning className="text-[12px] text-graphite">
-              <span className="font-medium text-ink">{targetDone}</span> completed
+              <span className="font-medium text-ink">{targetDone}</span>
+              <span className="text-stone"> / {targetTotal} complete</span>
               <span className="text-stone"> · </span>
-              <span className="font-medium text-ink">{targetRemaining}</span> remaining
+              <span className="font-medium text-ink">{targetRemaining}</span>
+              <span className="text-stone"> remaining</span>
             </p>
+            {(data.day?.repliesWaiting ?? 0) > 0 && (
+              <>
+                <span className="hidden h-3 w-px bg-line sm:block" aria-hidden />
+                <Link
+                  href="/chats"
+                  className="text-[12px] font-medium text-status-warning transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
+                >
+                  {data.day.repliesWaiting} waiting
+                </Link>
+              </>
+            )}
           </>
         }
         actions={
           <>
             <Link
               href={REP_V3_PRIMARY_CTA.href}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-3.5 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-3.5 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
             >
               {REP_V3_PRIMARY_CTA.label}
             </Link>
             <Link
-              href="/tasks"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-bone-raised px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-bone"
+              href="/chats"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-bone-raised px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-bone focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
             >
-              Create Task
+              Open Inbox
             </Link>
           </>
         }
       />
 
-      <section aria-label="Today">
-        <V4StatStrip items={stats} label="Today" />
+      <section aria-label="Your profiles">
+        <RepProfilesToday
+          coverage={coverage ?? data.coverage}
+          profilesToday={data.profilesToday}
+          role={role}
+        />
       </section>
-
-      <section aria-label="Your responsibilities today">
-        <RepCoveragePanel coverage={coverage ?? data.coverage} repDay={data.repDay} />
-      </section>
-
-      {data.profilesToday && data.profilesToday.length > 0 && (
-        <section aria-label="Your profiles today">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-mono-medium text-[11px] uppercase tracking-[0.18em] text-stone">
-                Your profiles today
-              </h2>
-              <p className="mt-1 text-[12px] text-stone">
-                {data.profilesToday.length} {data.profilesToday.length === 1 ? 'profile' : 'profiles'} assigned
-              </p>
-            </div>
-            <ProfileSwitcher role={role} />
-          </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {data.profilesToday.map((profile) => (
-              <ProfileTodayCard key={profile.profileId} profile={profile} />
-            ))}
-          </div>
-          {profileWarnings.length > 0 && (
-            <div className="mt-3 space-y-1.5">
-              {profileWarnings.map((warning) => (
-                <p key={warning.id} className="flex items-center gap-2 text-[12px] text-graphite">
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'size-1.5 shrink-0 rounded-full',
-                      warning.tone === 'danger' && 'bg-status-danger',
-                      warning.tone === 'warning' && 'bg-status-warning',
-                      warning.tone === 'info' && 'bg-cobalt',
-                    )}
-                  />
-                  {warning.message}
-                </p>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-12">
-        {/* Assigned to me — impossible to miss. */}
-        <div className="lg:col-span-5">
-          <V4Panel className="h-full">
-            <V4PanelHeader
-              eyebrow="Assigned to me"
-              title="Work someone gave you"
-              hint={`${assignedOpen.length} open`}
-              action={
-                <Link href="/tasks?source=ASSIGNED&view=all" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
-                  View all assigned work <ChevronRight className="size-3.5" aria-hidden />
-                </Link>
-              }
-            />
-            {assignedGroups.length === 0 ? (
-              <div className="mt-4">
-                <V4Empty
-                  title="No assigned work"
-                  body="When a manager or admin assigns you a task, it appears here before anywhere else. Relay-generated suggestions live in Do this next."
-                >
-                  <Link href="/tasks" className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid">
-                    Open my work
-                  </Link>
-                </V4Empty>
-              </div>
-            ) : (
-              <div className="mt-4 space-y-4">
-                {assignedGroups.map((group) => (
-                  <div key={group.key}>
-                    <div className="flex items-center gap-2">
-                      <V4Avatar name={group.label} size="sm" />
-                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">Assigned by {group.label}</p>
-                      <span className="rounded-full bg-bone px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-graphite">
-                        {group.tasks.length}
-                      </span>
-                    </div>
-                    <ul className="mt-2 divide-y divide-line/70 overflow-hidden rounded-xl ring-1 ring-line">
-                      {group.tasks.slice(0, 4).map((task) => (
-                        <li key={task.id}>
-                          <Link
-                            href={task.action.href}
-                            className="flex items-start gap-3 px-3 py-2.5 transition-colors hover:bg-bone"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <V4PriorityMark priority={toPriority(task.priority)} />
-                                <p className="truncate text-[13px] font-medium text-ink">{task.title}</p>
-                              </div>
-                              <p className="mt-0.5 truncate text-[12px] text-graphite">
-                                {[task.companyName, task.profileName].filter(Boolean).join(' · ')}
-                              </p>
-                              <p className="mt-0.5 line-clamp-2 text-[11px] text-stone">{task.reason}</p>
-                              <p suppressHydrationWarning className="mt-1 text-[11px] text-stone">
-                                {task.dueAt ? `Due ${relativeWait(task.dueAt)}` : `Assigned ${relativeWait(task.createdAt)}`}
-                              </p>
-                            </div>
-                            <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-solid px-2 py-1 text-[11px] font-medium text-on-solid">
-                              {task.action.label}
-                            </span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            )}
-          </V4Panel>
-        </div>
-
-        {/* Do this next — canonical ranking. */}
         <div className="lg:col-span-7">
           <V4Panel className="h-full">
             <V4PanelHeader
               eyebrow="Do this next"
-              title="Ranked for you"
-              hint="Canonical next-best-action order"
+              title="Your next 5 actions"
+              hint="Ranked in canonical order"
               action={
-                <Link href="/tasks" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
+                <Link
+                  href="/tasks"
+                  className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
+                >
                   My work <ChevronRight className="size-3.5" aria-hidden />
                 </Link>
               }
             />
-            {actions.length > 0 ? (
+            {nextActions.length > 0 ? (
               <ol className="mt-4 divide-y divide-line/70 overflow-hidden rounded-xl ring-1 ring-line">
-                {actions.map((action, index) => (
-                  <li key={`${action.id}-${index}`}>
+                {nextActions.map((task, index) => (
+                  <li key={task.id}>
                     <Link
-                      href={action.href}
-                      className="flex items-start gap-3 px-3 py-3 transition-colors hover:bg-bone"
+                      href={task.action.href}
+                      className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-bone focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
                     >
                       <span className="w-6 shrink-0 pt-0.5 text-[11px] font-medium tabular-nums text-stone">
                         {String(index + 1).padStart(2, '0')}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <V4PriorityMark priority={action.priority} />
-                          <p className="text-[13px] font-medium text-ink">{action.title}</p>
+                        <p className="text-[11px] font-medium text-graphite">
+                          {task.profileName ?? task.companyName ?? 'Your work'}
+                        </p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <V4PriorityMark priority={toPriority(task.priority)} />
+                          <p className="text-[13px] font-medium text-ink">{task.title}</p>
                         </div>
-                        {action.context && <p className="mt-0.5 truncate text-[12px] text-graphite">{action.context}</p>}
-                        {action.whyNow && <p className="mt-0.5 text-[11px] text-stone">{action.whyNow}</p>}
-                        <p suppressHydrationWarning className="mt-1 text-[11px] text-stone">{action.age}</p>
+                        <p className="mt-0.5 text-[12px] text-graphite">{task.reason}</p>
+                        <p suppressHydrationWarning className="mt-1 text-[11px] text-stone">
+                          {relativeWait(task.dueAt ?? task.createdAt)}
+                        </p>
                       </div>
                       <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-line bg-bone-raised px-2 py-1 text-[11px] font-medium text-ink">
-                        {action.ctaLabel}
+                        {task.action.label}
                         <ChevronRight className="size-3" aria-hidden />
                       </span>
                     </Link>
@@ -362,337 +165,120 @@ export function V4RepHome({
                 ))}
               </ol>
             ) : (
-              <div className="mt-4">
-                <V4Empty title={REP_V3_EMPTY_STATE.title} body={REP_V3_EMPTY_STATE.body}>
-                  <Link href={REP_V3_EMPTY_STATE.href} className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid">
-                    {REP_V3_EMPTY_STATE.cta}
-                  </Link>
-                </V4Empty>
-              </div>
+              <p className="mt-4 rounded-xl px-4 py-6 text-[13px] text-graphite ring-1 ring-line">
+                You&apos;re all caught up.
+              </p>
             )}
           </V4Panel>
         </div>
 
-        {/* Pipeline pulse */}
-        <div className="lg:col-span-7">
+        <div className="lg:col-span-5">
           <V4Panel className="h-full">
             <V4PanelHeader
-              eyebrow="Pipeline"
-              title="Open opportunities by stage"
-              hint="Status snapshots, not funnel transitions"
+              eyebrow="Assigned to me"
+              title="Work your manager gave you"
+              hint={`${assignedOpen.length} open${assignedOverdue.length > 0 ? ` · ${assignedOverdue.length} overdue` : ''}`}
               action={
-                <Link href="/leads?view=pipeline" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
-                  Pipeline <ChevronRight className="size-3.5" aria-hidden />
+                <Link
+                  href="/tasks?source=ASSIGNED&view=all"
+                  className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
+                >
+                  View all <ChevronRight className="size-3.5" aria-hidden />
                 </Link>
               }
             />
-            <div className="mt-4">
-              <V3StageStrip stages={stages} />
-            </div>
-          </V4Panel>
-        </div>
-
-        {/* Progress */}
-        <div className="lg:col-span-5">
-          <V4Panel className="h-full">
-            <V4PanelHeader eyebrow="Target" title="Today's progress" />
-            <div className="mt-4">
-              <V3ProgressBlock
-                done={targetDone}
-                target={targetTotal}
-                label="Today's progress"
-                remainingLabel="remaining"
-                doneLabel="Target completions — drafts and failed sends never count."
-              />
-            </div>
-            {targetWindows && (
-              <div className="mt-4 border-t border-line/70 pt-4">
-                <TargetWindows rows={targetWindows} />
-              </div>
-            )}
-          </V4Panel>
-        </div>
-
-        {/* My work breakdown */}
-        <div className="lg:col-span-5">
-          <V4Panel className="h-full">
-            <V4PanelHeader eyebrow="My work" title="Open, by category" />
-            <div className="mt-4">
-              <V3CompareBars rows={breakdown} label="My work breakdown" />
-            </div>
-          </V4Panel>
-        </div>
-
-        {/* Recent activity */}
-        <div className="lg:col-span-7">
-          <V4Panel className="h-full">
-            <V4PanelHeader
-              eyebrow="Activity"
-              title="Recent operational events"
-              action={
-                <Link href="/reports/activity" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
-                  View activity <ChevronRight className="size-3.5" aria-hidden />
-                </Link>
-              }
-            />
-            {activity.length > 0 ? (
+            {assignedOpen.length === 0 ? (
+              <p className="mt-4 rounded-xl px-4 py-6 text-[13px] text-graphite ring-1 ring-line">
+                No manager-assigned tasks today.
+              </p>
+            ) : (
               <ul className="mt-4 divide-y divide-line/70 overflow-hidden rounded-xl ring-1 ring-line">
-                {activity.map((item) => (
-                  <li key={item.id}>
-                    <Link href={item.href ?? '#'} className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-bone">
-                      <span suppressHydrationWarning className="w-10 shrink-0 text-right text-[11px] font-medium tabular-nums text-stone">{item.time}</span>
-                      <span className="flex w-3 shrink-0 flex-col items-center" aria-hidden>
-                        <span className="mt-1 size-1.5 rounded-full bg-orange" />
-                        <span className="w-px flex-1 bg-line" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] text-ink">{item.label}</span>
-                        {item.detail && <span className="block truncate text-[11px] text-graphite">{item.detail}</span>}
+                {assignedOpen.slice(0, 3).map((task) => (
+                  <li key={task.id}>
+                    <Link
+                      href={task.action.href}
+                      className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-bone focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <V4PriorityMark priority={toPriority(task.priority)} />
+                          <p className="truncate text-[13px] font-medium text-ink">{task.title}</p>
+                        </div>
+                        <p className="mt-0.5 truncate text-[12px] text-graphite">
+                          {task.createdByName
+                            ? `Assigned by ${task.createdByName}`
+                            : [task.companyName, task.profileName].filter(Boolean).join(' · ') || 'Assigned to you'}
+                        </p>
+                        <p suppressHydrationWarning className="mt-1 text-[11px] text-stone">
+                          {task.dueAt ? `Due ${relativeWait(task.dueAt)}` : `Assigned ${relativeWait(task.createdAt)}`}
+                        </p>
+                      </div>
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-solid px-2 py-1 text-[11px] font-medium text-on-solid">
+                        {task.action.label}
                       </span>
                     </Link>
                   </li>
                 ))}
               </ul>
-            ) : (
-              <p className="mt-4 rounded-xl px-4 py-6 text-[13px] text-graphite ring-1 ring-line">
-                No operational events yet today.
-              </p>
             )}
           </V4Panel>
         </div>
-
-        {daily.length > 0 && (
-          <>
-            <div className="lg:col-span-7">
-              <V4Panel className="h-full">
-                <V4PanelHeader eyebrow="Activity" title="Last 12 weeks" />
-                <div className="mt-4">
-                  <ContributionHeatmap daily={daily} dayHref="/performance?range=12w&date={date}" />
-                </div>
-              </V4Panel>
-            </div>
-            <div className="lg:col-span-5">
-              <V4Panel className="h-full">
-                <V4PanelHeader eyebrow="Performance" title="Are you improving?" />
-                <div className="mt-4">
-                  {data.trendPoints && data.trendPoints.length > 0 ? (
-                    <V3TrendChart points={data.trendPoints} series={trendSeries} label="Performance trend" />
-                  ) : (
-                    <p className="py-6 text-center text-[12px] text-stone">No trend data yet.</p>
-                  )}
-                </div>
-              </V4Panel>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-const PROFILE_STATUS_TONE: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
-  COMPLETE: 'success',
-  ON_TRACK: 'info',
-  BEHIND: 'warning',
-  AT_RISK: 'danger',
-  NOT_STARTED: 'neutral',
-}
-
-const PROFILE_STATUS_LABEL: Record<string, string> = {
-  COMPLETE: 'Complete',
-  ON_TRACK: 'On Track',
-  BEHIND: 'Behind',
-  AT_RISK: 'At Risk',
-  NOT_STARTED: 'Not Started',
-}
-
-function ProfileStatusBadge({ status }: { status: ProfileToday['status'] }) {
-  if (!status) {
-    return (
-      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-bone px-2.5 py-1 text-[10px] font-medium text-stone ring-1 ring-line">
-        <span className="size-1.5 rounded-full bg-stone/50" aria-hidden />
-        No target
-      </span>
-    )
-  }
-  const tone = PROFILE_STATUS_TONE[status] ?? 'neutral'
-  const label = PROFILE_STATUS_LABEL[status] ?? status
-  return (
-    <span
-      className={cn(
-        'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium ring-1',
-        tone === 'success' && 'bg-status-success/10 text-status-success ring-status-success/20',
-        tone === 'info' && 'bg-cobalt/10 text-cobalt ring-cobalt/20',
-        tone === 'warning' && 'bg-status-warning/10 text-[#7d5410] ring-status-warning/20',
-        tone === 'danger' && 'bg-status-danger/10 text-[#8f2b1e] ring-status-danger/20',
-        tone === 'neutral' && 'bg-bone text-graphite ring-line',
-      )}
-    >
-      <span
-        className={cn(
-          'size-1.5 rounded-full',
-          tone === 'success' && 'bg-status-success',
-          tone === 'info' && 'bg-cobalt',
-          tone === 'warning' && 'bg-status-warning',
-          tone === 'danger' && 'bg-status-danger',
-          tone === 'neutral' && 'bg-stone/50',
-        )}
-        aria-hidden
-      />
-      {label}
-    </span>
-  )
-}
-
-function ProfileTodayCard({ profile }: { profile: ProfileToday }) {
-  const pct = profile.targetCount > 0
-    ? Math.min(100, Math.round((profile.completedCount / profile.targetCount) * 100))
-    : 0
-  const hasTarget = profile.targetCount > 0
-
-  return (
-    <V4Panel className="h-full" innerClassName="flex h-full flex-col">
-      <div className="flex items-start gap-3">
-        <V4Avatar name={profile.name} size="md" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-medium tracking-[-0.01em] text-ink">
-            {profile.name}
-          </p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1">
-            {profile.channels.map((channel) => (
-              <span
-                key={channel}
-                className={cn(
-                  'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ring-1',
-                  channel === 'linkedin' && 'bg-[#0a66c2]/10 text-[#0a66c2] ring-[#0a66c2]/20',
-                  channel === 'upwork' && 'bg-[#14a800]/10 text-[#0e6b00] ring-[#14a800]/20',
-                  channel !== 'linkedin' && channel !== 'upwork' && 'bg-bone text-graphite ring-line',
-                )}
-              >
-                {channel}
-              </span>
-            ))}
-          </div>
-        </div>
-        <ProfileStatusBadge status={profile.status} />
       </div>
 
-      <div className="mt-5">
-        {hasTarget && (
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="text-[12px] text-graphite">
-              <span className="text-[20px] font-semibold leading-none tabular-nums text-ink">
-                {profile.completedCount}
-              </span>
-              <span className="text-stone"> / {profile.targetCount}</span>
-            </p>
-            <span className="text-[12px] font-medium tabular-nums text-graphite">{pct}%</span>
-          </div>
-        )}
-        <div
-          className={cn(
-            'mt-2 h-2 w-full overflow-hidden rounded-full bg-bone ring-1 ring-line/70',
-            !hasTarget && 'opacity-40',
-          )}
-          role="progressbar"
-          aria-valuenow={pct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={`${profile.name} completion`}
-        >
-          <div
-            className="h-full rounded-full bg-orange transition-[width] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
-            style={{ width: `${pct}%` }}
+      <section aria-label="Today's progress">
+        <V4Panel>
+          <V4PanelHeader
+            eyebrow="Today"
+            title="Daily progress"
+            hint={targetTotal > 0 ? `${targetRemaining} remaining` : 'No daily target set'}
           />
-        </div>
-      </div>
-
-      {profile.targets.length > 0 ? (
-        <ul className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-line/70 pt-4">
-          {profile.targets.map((target) => (
-            <li key={target.activityType} className="flex items-baseline justify-between gap-2">
-              <span className="text-[11px] text-graphite">{target.label}</span>
-              <span className="text-[12px] tabular-nums text-ink">
-                {target.completedCount}
-                <span className="text-stone"> / {target.targetCount}</span>
+          {targetTotal > 0 ? (
+            <div className="mt-4 flex items-center gap-4">
+              <p className="shrink-0 text-[13px] text-graphite">
+                <span className="text-[22px] font-semibold leading-none tabular-nums text-ink">{targetDone}</span>
+                <span className="text-stone"> / {targetTotal} complete</span>
+              </p>
+              <div
+                className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-bone ring-1 ring-line/70"
+                role="progressbar"
+                aria-valuenow={targetTotal > 0 ? Math.min(100, Math.round((targetDone / targetTotal) * 100)) : 0}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Today's target completion"
+              >
+                <div
+                  className="h-full rounded-full bg-orange transition-[width] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                  style={{
+                    width: `${targetTotal > 0 ? Math.min(100, Math.round((targetDone / targetTotal) * 100)) : 0}%`,
+                  }}
+                />
+              </div>
+              <span className="shrink-0 text-[13px] font-medium tabular-nums text-ink">
+                {Math.min(100, Math.round((targetDone / targetTotal) * 100))}%
               </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-4 border-t border-line/70 pt-4 text-[11px] text-stone">
-          No daily target set for this profile.
-        </p>
-      )}
+            </div>
+          ) : (
+            <p className="mt-4 text-[13px] text-graphite">No daily target set for today.</p>
+          )}
+        </V4Panel>
+      </section>
 
-      {profile.identityIds.length > 0 && (
-        <div className="mt-auto pt-5">
+      <section aria-label="More">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
-            href={`/workspace/${profile.identityIds[0]}`}
-            className="group flex w-full items-center justify-between gap-2 rounded-xl border border-line bg-bone px-3 py-2.5 text-[12px] font-medium text-ink transition-colors hover:border-ink/20 hover:bg-bone-raised"
+            href="/reports/activity"
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
           >
-            <span className="truncate">Continue {profile.name}&apos;s work</span>
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-solid text-on-solid transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0.5">
-              <ChevronRight className="size-3.5" aria-hidden />
-            </span>
+            Recent activity <ChevronRight className="size-3.5" aria-hidden />
+          </Link>
+          <Link
+            href="/reports/sales"
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
+          >
+            More insights <ChevronRight className="size-3.5" aria-hidden />
           </Link>
         </div>
-      )}
-    </V4Panel>
-  )
-}
-
-function TargetWindows({ rows }: { rows: RepTargetWindow[] }) {
-  // Weekly/monthly goals are the daily target × working days elapsed, so early
-  // in a week/month they can be identical to each other. Showing both verbatim
-  // read as a bug — collapse exact duplicates into one row.
-  const seen = new Set<string>()
-  const unique = rows.filter((row) => {
-    if (row.done == null || row.target <= 0) return false
-    const signature = `${row.done}/${row.target}`
-    if (seen.has(signature)) return false
-    seen.add(signature)
-    return true
-  })
-  const hasDerived = unique.some((row) => row.derived)
-
-  return (
-    <div>
-      <ul className="divide-y divide-line/70 overflow-hidden rounded-xl ring-1 ring-line">
-        {unique.map((row) => (
-          <li key={row.key} className="px-4 py-3">
-            <div className="flex items-baseline justify-between gap-3">
-              <p className="text-[13px] font-medium text-ink">{row.label}</p>
-              <p suppressHydrationWarning className="text-[13px] tabular-nums text-graphite">
-                <span className="font-medium text-ink">
-                  <V3Value value={row.done} />
-                </span>
-                {' / '}
-                {row.target}
-                {row.pct != null && <span className="ml-1.5 text-stone">{row.pct}%</span>}
-              </p>
-            </div>
-            <div
-              className="mt-2 h-1 w-full overflow-hidden rounded-full bg-bone"
-              role="progressbar"
-              aria-valuenow={row.pct ?? 0}
-              aria-label={row.label}
-            >
-              <div
-                className="h-full rounded-full bg-orange transition-[width] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
-                style={{ width: `${Math.min(100, Math.max(0, row.pct ?? 0))}%` }}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
-      {hasDerived && (
-        <p className="mt-2 text-[11px] leading-relaxed text-stone">
-          Weekly and monthly goals are your daily target times the working days elapsed, so they start small.
-        </p>
-      )}
+      </section>
     </div>
   )
 }
-
-
