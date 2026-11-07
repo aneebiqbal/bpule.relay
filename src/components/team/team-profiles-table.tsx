@@ -236,7 +236,7 @@ function TeamProfilesTableInner({
                 <th className="px-4 py-2 font-medium">Backups</th>
                 <th className="px-4 py-2 font-medium">Today</th>
                 <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2" />
+                <th className="px-4 py-2"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>

@@ -62,22 +62,24 @@ export function Panel({ title, subtitle, action, children, className, bodyClassN
 
 export type Tone = 'neutral' | 'orange' | 'cobalt' | 'success' | 'warning' | 'danger'
 
+// Text tones are darkened from the raw status tokens so they clear WCAG AA on
+// both the page background and the 10% tint chips.
 const TONE_TEXT: Record<Tone, string> = {
   neutral: 'text-ink',
-  orange: 'text-orange',
+  orange: 'text-[#9a4519]',
   cobalt: 'text-cobalt',
-  success: 'text-status-success',
-  warning: 'text-status-warning',
-  danger: 'text-status-danger',
+  success: 'text-[#256b4a]',
+  warning: 'text-[#7d5410]',
+  danger: 'text-[#a8342a]',
 }
 
 const TONE_ICON: Record<Tone, string> = {
   neutral: 'bg-bone text-stone',
-  orange: 'bg-orange/10 text-orange',
+  orange: 'bg-orange/10 text-[#9a4519]',
   cobalt: 'bg-cobalt/10 text-cobalt',
-  success: 'bg-status-success/10 text-status-success',
-  warning: 'bg-status-warning/10 text-status-warning',
-  danger: 'bg-status-danger/10 text-status-danger',
+  success: 'bg-status-success/10 text-[#256b4a]',
+  warning: 'bg-status-warning/10 text-[#7d5410]',
+  danger: 'bg-status-danger/10 text-[#a8342a]',
 }
 
 export function StatTile({ label, value, sub, tone = 'neutral', icon, href, className }: {
@@ -103,13 +105,13 @@ export function StatTile({ label, value, sub, tone = 'neutral', icon, href, clas
   return href ? <Link href={href} className={cls}>{body}</Link> : <div className={cls}>{body}</div>
 }
 
-export function Meter({ value, max, tone, className }: { value: number; max: number; tone?: Tone; className?: string }) {
+export function Meter({ value, max, tone, className, label = 'Progress' }: { value: number; max: number; tone?: Tone; className?: string; label?: string }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0
   const auto: Tone = pct >= 100 ? 'success' : pct >= 60 ? 'cobalt' : pct > 0 ? 'orange' : 'neutral'
   const t = tone ?? auto
   const fill = t === 'success' ? 'bg-status-success' : t === 'cobalt' ? 'bg-cobalt' : t === 'orange' ? 'bg-orange' : t === 'warning' ? 'bg-status-warning' : t === 'danger' ? 'bg-status-danger' : 'bg-stone-light'
   return (
-    <div className={cn('h-1.5 w-full overflow-hidden rounded-full bg-line/60', className)} role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+    <div className={cn('h-1.5 w-full overflow-hidden rounded-full bg-line/60', className)} role="progressbar" aria-label={label} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
       <div className={cn('h-full rounded-full transition-[width] duration-500', fill)} style={{ width: `${pct}%` }} />
     </div>
   )

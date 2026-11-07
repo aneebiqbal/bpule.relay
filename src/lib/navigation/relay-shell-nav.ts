@@ -265,6 +265,8 @@ const PAGE_OWNED_SUB_NAV: RegExp[] = [
   /^\/content\/ideas(\/|$)/,
   // Company keys are names, not ids, so any /accounts/<key> owns its tabs.
   /^\/accounts\/[^/]+/,
+  // A team group owns its own section tabs (overview / people / leads / ...).
+  /^\/team\/groups\/[^/]+/,
   // Record details own tabs only when the segment is a record, not a list page.
   /^\/leads\/(?!import$|new$)[^/]+/,
   /^\/team\/(?!people$|profiles$|coverage$|workload$|targets$|activity$|performance$|groups$|eval$|fixture-)[^/]+/,

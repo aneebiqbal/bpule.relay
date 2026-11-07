@@ -66,7 +66,7 @@ function RepRow({ row, timezone, workdayProgress, businessDate }: { row: TeamDay
       <td className="px-4 py-3 text-[12px] tabular-nums text-graphite">{formatDuration(row.minutesRemaining)}</td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
-          <Meter value={Math.round(row.commitmentProgress * 100)} max={100} className="w-16" />
+          <Meter value={Math.round(row.commitmentProgress * 100)} max={100} className="w-16" label="Commitment" />
           <span className="text-[12px] tabular-nums text-graphite">{Math.round(row.commitmentProgress * 100)}%</span>
         </div>
       </td>
@@ -105,7 +105,7 @@ function RepCard({ row, timezone, workdayProgress, businessDate }: { row: TeamDa
         <Pill tone={STATE_TONE[row.state]}>{STATE_LABEL[row.state]}</Pill>
       </div>
       <div className="mt-2.5 flex items-center gap-2">
-        <Meter value={Math.round(row.commitmentProgress * 100)} max={100} className="flex-1" />
+        <Meter value={Math.round(row.commitmentProgress * 100)} max={100} className="flex-1" label="Commitment" />
         <span className="text-[12px] tabular-nums text-graphite">{Math.round(row.commitmentProgress * 100)}%</span>
       </div>
       <dl className="mt-2.5 grid grid-cols-3 gap-2 text-[11px]">
@@ -280,7 +280,7 @@ export function CommandCentre({
                     <th className="px-4 py-2 font-medium">Replies</th>
                     <th className="px-4 py-2 font-medium">Pipeline</th>
                     <th className="px-4 py-2 font-medium">Last activity</th>
-                    <th className="px-4 py-2" />
+                    <th className="px-4 py-2"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>

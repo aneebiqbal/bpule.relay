@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { UserPlus } from 'lucide-react'
 import { V3PageHeader, V3PersonRow, V3EmptyState } from '@/components/v3/primitives'
-import { InlineError, LinkTabs, MetricStrip, Section, TimelineTable } from '@/components/operations/ops-primitives'
+import { InlineError, MetricStrip, Section, TimelineTable } from '@/components/operations/ops-primitives'
 import { AssignTaskButton } from '@/components/operations/assign-task-button'
 import { assignableReps, getPeopleDirectory, requireTeamContext } from '@/lib/operations/page-context'
 import { effectiveRepIds } from '@/lib/operations/scope'
@@ -11,16 +11,6 @@ import { buildTeamAttentionFromPeople } from '@/lib/team/attention-policy'
 import { buildWorkloadRows, workloadScale } from '@/lib/team/workload'
 
 export const dynamic = 'force-dynamic'
-
-const TABS = [
-  { value: 'overview', label: 'Overview', href: '/team' },
-  { value: 'people', label: 'People', href: '/team/people' },
-  { value: 'workload', label: 'Workload', href: '/team/workload' },
-  { value: 'activity', label: 'Activity', href: '/team/activity' },
-  { value: 'performance', label: 'Performance', href: '/team/performance' },
-  { value: 'targets', label: 'Targets', href: '/team/targets' },
-  { value: 'groups', label: 'Groups', href: '/team/groups' },
-]
 
 /**
  * Team → Overview. The manager's operational workspace: who needs attention,
@@ -73,8 +63,8 @@ export default async function TeamOverviewPage() {
         }
       />
 
-      <LinkTabs label="Team sections" active="overview" tabs={TABS} />
-
+      {/* Team sub-navigation is the shell's canonical section rail — a second
+          tab bar here duplicated it and left two "Team sections" landmarks. */}
       {!directory ? (
         <InlineError>The team could not be loaded. Refresh to try again.</InlineError>
       ) : rows.length === 0 ? (

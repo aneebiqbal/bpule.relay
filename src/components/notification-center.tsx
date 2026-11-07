@@ -98,8 +98,8 @@ export function NotificationCenter() {
       >
         <Bell className="size-4" aria-hidden="true" />
         {mounted && unread > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 min-w-[16px] rounded-full bg-orange px-1 text-center text-[10px] font-medium leading-4 text-on-accent">
-            {unread > 9 ? '9+' : unread}
+          <span className="absolute -right-0.5 -top-0.5 min-w-[16px] rounded-full bg-orange-dark px-1 text-center text-[10px] font-medium leading-4 text-on-accent">
+            {unread}
           </span>
         )}
       </button>
