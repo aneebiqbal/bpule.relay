@@ -23,6 +23,16 @@ import type { ProfileToday } from '@/lib/rep-home/profile-completion'
 const ACTION =
   'inline-flex items-center gap-1 rounded-md border border-line bg-bone px-2 py-1 text-[11px] font-medium text-graphite transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40'
 
+/** The human reason a rep is covering — the primary's own availability. */
+const COVERING_REASON: Record<string, string> = {
+  AVAILABLE: 'primary available',
+  WORKING: 'primary working',
+  ON_LEAVE: 'primary on leave',
+  OFFLINE: 'primary offline',
+  CHECKED_OUT: 'primary checked out',
+  UNAVAILABLE: 'primary unavailable',
+}
+
 function formatDate(date: string | null): string {
   if (!date) return ''
   const parsed = new Date(`${date}T00:00:00Z`)
@@ -224,6 +234,9 @@ function ProfileRow({
             {kind === 'covering' ? (
               <>
                 Covering for {profile.primaryRepName ?? 'primary'}
+                {profile.primaryAvailability
+                  ? ` · ${COVERING_REASON[profile.primaryAvailability] ?? profile.primaryAvailability.toLowerCase()}`
+                  : ''}
                 {profile.activeCoverageUntil ? ` · until ${formatDate(profile.activeCoverageUntil)}` : ''}
               </>
             ) : (
