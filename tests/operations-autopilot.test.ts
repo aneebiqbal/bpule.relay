@@ -480,12 +480,11 @@ describe('TASK_HANDOFF_PROFILE_BOUND_ONLY', () => {
 })
 
 describe('INBOX_HANDOFF_USES_CANONICAL_WAITING_STATE', () => {
-  it('the work package is derived from the canonical lead waiting states', () => {
+  it('the work package is derived from the canonical conversation state, not lead status', () => {
     const src = readFileSync(path.join(ROOT, 'src', 'lib', 'coverage', 'load.ts'), 'utf8')
-    expect(src).toContain("'replied'")
-    expect(src).toContain("'followed_up'")
-    expect(src).toContain("status === 'replied'")
-    expect(src).toContain("status === 'followed_up'")
+    expect(src).toContain('deriveConversationRow')
+    expect(src).not.toContain("status === 'replied'")
+    expect(src).not.toContain("status === 'followed_up'")
   })
 })
 
