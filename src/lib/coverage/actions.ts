@@ -98,6 +98,8 @@ export interface CoverageApprovalItemInput {
   businessDate: string
   /** Restore only: move open profile-bound tasks back to the primary. */
   returnOpenTasks?: boolean
+  /** Restore only: a specific subset of open tasks. Takes precedence. */
+  returnTaskIds?: string[]
 }
 
 export interface CoverageApprovalResult {
@@ -135,6 +137,7 @@ export async function approveCoveragePlan(input: {
         reason: item.reason,
         businessDate: item.businessDate,
         returnOpenTasks: item.returnOpenTasks ?? false,
+        returnTaskIds: item.returnTaskIds,
         auth: input.auth,
         client,
       })
@@ -293,6 +296,8 @@ export async function restorePrimaryCoverage(input: {
   businessDate: string
   /** Move the covering rep's open profile-bound tasks back to the primary. */
   returnOpenTasks?: boolean
+  /** A specific subset of tasks to return; when set, only these move. */
+  returnTaskIds?: string[]
   auth?: AuthContext
   client?: DbClient
 }): Promise<{ ok: boolean; assignmentId?: string; error?: string }> {
@@ -341,12 +346,12 @@ export async function restorePrimaryCoverage(input: {
 
   // Manual restore decision: open profile-bound work may return to the primary.
   // Completed work stays attributed to the covering rep — never rewritten.
-  if (input.returnOpenTasks && input.auth) {
+  if ((input.returnOpenTasks || (input.returnTaskIds && input.returnTaskIds.length > 0)) && input.auth) {
     await returnProfileTasksToPrimary(client, input.auth, {
       profileId: input.profileId,
       fromRepId: active.covering_rep_id as string,
       toRepId: active.primary_rep_id as string,
-    })
+    }, input.returnTaskIds)
   }
 
   return { ok: true, assignmentId: active.id as string }
@@ -360,8 +365,9 @@ async function returnProfileTasksToPrimary(
   client: DbClient,
   auth: AuthContext,
   input: { profileId: string; fromRepId: string; toRepId: string },
+  onlyTaskIds?: string[],
 ): Promise<void> {
-  const { data: tasks, error } = await client
+  let query = client
     .from('assigned_tasks')
     .select('id')
     .eq('organization_id', auth.orgId)
@@ -369,6 +375,10 @@ async function returnProfileTasksToPrimary(
     .eq('assignee_rep_id', input.fromRepId)
     .in('status', ['OPEN', 'IN_PROGRESS', 'WAITING'])
     .limit(200)
+  if (onlyTaskIds && onlyTaskIds.length > 0) {
+    query = query.in('id', onlyTaskIds.slice(0, 200))
+  }
+  const { data: tasks, error } = await query
   if (error || !tasks || tasks.length === 0) return
 
   for (const task of tasks) {

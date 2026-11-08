@@ -31,6 +31,9 @@ export async function POST(req: NextRequest) {
     businessDate: plan.businessDate,
     // Admin override may also return open work; completed work never moves.
     returnOpenTasks: body.returnOpenTasks === true,
+    returnTaskIds: Array.isArray(body.returnTaskIds)
+      ? body.returnTaskIds.filter((x: unknown): x is string => typeof x === 'string').slice(0, 200)
+      : undefined,
     auth: ctx,
   })
 

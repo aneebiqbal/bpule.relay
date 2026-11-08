@@ -204,12 +204,17 @@ export async function loadCoverageFacts(
 
   const tasksByProfile = new Map<string, number>()
   const tasksByRep = new Map<string, { open: number; overdue: number }>()
+  const personalTasksByRep = new Map<string, number>()
   for (const row of (tasksRes.data ?? []) as Array<{
     assignee_rep_id: string
     profile_id: string | null
     due_at: string | null
   }>) {
-    if (row.profile_id) tasksByProfile.set(row.profile_id, (tasksByProfile.get(row.profile_id) ?? 0) + 1)
+    if (row.profile_id) {
+      tasksByProfile.set(row.profile_id, (tasksByProfile.get(row.profile_id) ?? 0) + 1)
+    } else {
+      personalTasksByRep.set(row.assignee_rep_id, (personalTasksByRep.get(row.assignee_rep_id) ?? 0) + 1)
+    }
     const entry = tasksByRep.get(row.assignee_rep_id) ?? { open: 0, overdue: 0 }
     entry.open += 1
     if (row.due_at && row.due_at < now.toISOString()) entry.overdue += 1
@@ -265,6 +270,7 @@ export async function loadCoverageFacts(
       followUps: followUpsByRep.get(rep.repId) ?? 0,
       overdue: tasks?.overdue ?? 0,
       activeCoverageCount: coverageByRep.get(rep.repId) ?? 0,
+      personalTaskCount: personalTasksByRep.get(rep.repId) ?? 0,
     }
   })
 

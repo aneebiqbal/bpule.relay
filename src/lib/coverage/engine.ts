@@ -94,6 +94,8 @@ export interface RepWorkloadInput {
   followUps: number
   overdue: number
   activeCoverageCount: number
+  /** Open tasks with no profile — these never follow coverage. */
+  personalTaskCount: number
 }
 
 export interface ActiveCoverageInput {
@@ -181,6 +183,8 @@ export interface CoverageApprovalItem {
   reason: string
   effectiveUntil: string | null
   workPackage: ProfileWorkInput
+  /** Open personal tasks that stay put during a handoff. */
+  personalTaskCount: number
   readinessRequired: boolean
 }
 
@@ -358,6 +362,7 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
         replies: 0,
         overdue: 0,
         activeCoverageCount: 0,
+        personalTaskCount: 0,
       }
       const ready = readyPairs.has(`${profile.profileId}:${backup.repId}`)
       const verdict = evaluateBackupEligibility({
@@ -427,6 +432,7 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
           reason: 'Temporary coverage expired',
           effectiveUntil: null,
           workPackage: work,
+          personalTaskCount: primaryWorkload?.personalTaskCount ?? 0,
           readinessRequired: !recommended.ready,
         })
       } else {
@@ -457,6 +463,7 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
           reason: 'Primary rep is available again',
           effectiveUntil: null,
           workPackage: work,
+          personalTaskCount: workloadByRep.get(active.coveringRepId)?.personalTaskCount ?? 0,
           readinessRequired: !recommendedReady,
         })
       } else if (coverageExpiring) {
@@ -485,6 +492,7 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
         reason: `${primaryWorkload?.name ?? 'Primary'} is ${labelForAvailability(primaryAvailability).toLowerCase()}`,
         effectiveUntil: null,
         workPackage: work,
+        personalTaskCount: primaryWorkload?.personalTaskCount ?? 0,
         readinessRequired: !recommended.ready,
       })
     } else {

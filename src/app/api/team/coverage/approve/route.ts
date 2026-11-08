@@ -55,6 +55,9 @@ export async function POST(req: NextRequest) {
       businessDate: plan.businessDate,
       // Only a restore may return work, and only when the admin asks for it.
       returnOpenTasks: restoring ? raw.returnOpenTasks === true : false,
+      returnTaskIds: restoring && Array.isArray(raw.returnTaskIds)
+        ? raw.returnTaskIds.filter((x: unknown): x is string => typeof x === 'string').slice(0, 200)
+        : undefined,
     })
   }
 

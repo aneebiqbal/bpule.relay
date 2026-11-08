@@ -13,6 +13,9 @@ import { useRouter } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import { cn } from 'cn'
 import type { CoverageStatusView } from '@/lib/coverage/load'
+import type { CoverageApprovalItem } from '@/lib/coverage/engine'
+import { Dialog, DialogActions } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import {
   V4Avatar,
   V4Chip,
@@ -47,11 +50,47 @@ export function AdminCoveragePanel({
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [showAllProfiles, setShowAllProfiles] = useState(false)
+  const [restoreItem, setRestoreItem] = useState<CoverageApprovalItem | null>(null)
+  const [restoreTasks, setRestoreTasks] = useState<Array<{ id: string; title: string; status: string }>>([])
+  const [restoreSelected, setRestoreSelected] = useState<Set<string>>(new Set())
+  const [restoreLoading, setRestoreLoading] = useState(false)
+
+  async function openRestore(item: CoverageApprovalItem) {
+    setRestoreItem(item)
+    setRestoreTasks([])
+    setRestoreSelected(new Set())
+    setRestoreLoading(true)
+    try {
+      const res = await fetch(
+        `/api/team/coverage/${item.profileId}/tasks?coveringRepId=${item.fromRepId}`,
+      )
+      const json = await res.json().catch(() => ({}))
+      if (res.ok) setRestoreTasks(json.tasks ?? [])
+    } catch {
+      setRestoreTasks([])
+    } finally {
+      setRestoreLoading(false)
+    }
+  }
+
+  function toggleRestoreTask(id: string) {
+    setRestoreSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectAllRestoreTasks() {
+    setRestoreSelected(new Set(restoreTasks.map((task) => task.id)))
+  }
 
   async function approve(items: Array<{
     profileId: string
     kind: 'COVER' | 'RESTORE_PRIMARY'
     returnOpenTasks?: boolean
+    returnTaskIds?: string[]
   }>) {
     setBusy(true)
     setError(null)
@@ -220,6 +259,16 @@ export function AdminCoveragePanel({
                         {item.workPackage.tasks} task{item.workPackage.tasks === 1 ? '' : 's'}
                         {item.readinessRequired ? ' · device access not confirmed' : ''}
                       </p>
+                      <p className="mt-1 text-[11px] text-graphite">
+                        {item.kind === 'RESTORE_PRIMARY' ? 'Open temporary tasks: ' : 'Also moving: '}
+                        <span className="font-medium text-ink">
+                          {item.workPackage.tasks} profile task{item.workPackage.tasks === 1 ? '' : 's'}
+                        </span>
+                        {' · '}
+                        {item.personalTaskCount > 0
+                          ? `${item.personalTaskCount} personal task${item.personalTaskCount === 1 ? '' : 's'} stay`
+                          : 'no personal tasks'}
+                      </p>
                       {!item.readinessRequired && (
                         <p className="mt-1 text-[11px] text-status-success">✓ Covering rep confirmed on this device</p>
                       )}
@@ -236,14 +285,8 @@ export function AdminCoveragePanel({
                         approve([{ profileId: item.profileId, kind: item.kind }])
                         return
                       }
-                      // Manual restore: the admin decides whether open work returns.
-                      const openTasks = item.workPackage.tasks
-                      const message = openTasks > 0
-                        ? `${openTasks} open task${openTasks === 1 ? '' : 's'} will return to ${item.toRepName}. Completed work stays with ${item.fromRepName}. Return the open tasks?`
-                        : `No open tasks to return. Restore ${item.profileName} to ${item.toRepName}?`
-                      if (window.confirm(message)) {
-                        approve([{ profileId: item.profileId, kind: item.kind, returnOpenTasks: openTasks > 0 }])
-                      }
+                      // Manual restore: the admin decides which open tasks return.
+                      void openRestore(item)
                     }}
                     className={cn(
                       'shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-transform active:scale-[0.98] disabled:opacity-60',
@@ -301,6 +344,79 @@ export function AdminCoveragePanel({
           </ul>
         )}
       </div>
+
+      <Dialog
+        open={restoreItem !== null}
+        onClose={() => setRestoreItem(null)}
+        title={`Restore ${restoreItem?.profileName ?? ''}`}
+        description={`Current cover: ${restoreItem?.fromRepName ?? '—'} → primary ${restoreItem?.toRepName ?? '—'}. Choose which open tasks return. Completed work stays with the covering rep.`}
+        className="max-w-lg"
+      >
+        <div className="space-y-3">
+          {restoreLoading ? (
+            <p className="text-[13px] text-graphite">Loading open tasks…</p>
+          ) : restoreTasks.length === 0 ? (
+            <p className="text-[13px] text-graphite">
+              No open profile tasks to return. Restoring only ends the coverage.
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <p className="text-[12px] text-graphite">
+                  {restoreSelected.size} of {restoreTasks.length} selected
+                </p>
+                <button
+                  type="button"
+                  onClick={selectAllRestoreTasks}
+                  className="text-[12px] font-medium text-ink hover:underline"
+                >
+                  Return all open profile tasks
+                </button>
+              </div>
+              <ul className="max-h-64 space-y-1.5 overflow-y-auto">
+                {restoreTasks.map((task) => (
+                  <li key={task.id}>
+                    <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-line bg-bone px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={restoreSelected.has(task.id)}
+                        onChange={() => toggleRestoreTask(task.id)}
+                        className="mt-0.5"
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate text-[13px] text-ink">{task.title}</span>
+                        <span className="text-[11px] text-stone">{task.status}</span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+        <DialogActions className="mt-5">
+          <Button type="button" variant="ghost" onClick={() => setRestoreItem(null)} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={busy}
+            onClick={async () => {
+              if (!restoreItem) return
+              const ids = [...restoreSelected]
+              await approve([{
+                profileId: restoreItem.profileId,
+                kind: 'RESTORE_PRIMARY',
+                returnOpenTasks: ids.length === restoreTasks.length && restoreTasks.length > 0,
+                returnTaskIds: ids,
+              }])
+              setRestoreItem(null)
+            }}
+          >
+            Restore primary
+          </Button>
+        </DialogActions>
+      </Dialog>
     </V4Panel>
   )
 }
