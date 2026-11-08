@@ -5,6 +5,7 @@ import { isMissingRelation } from '@/lib/operations/db-errors'
 import { currentInstant, isOrgWorkingDay, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { normalizeChannel } from '@/lib/profiles/assigned-profiles'
+import { deriveConversationRow } from '@/lib/operations/conversations'
 import {
   buildCoverageStatusSummary,
   DEFAULT_MAX_PROFILES_PER_REP,
@@ -221,23 +222,73 @@ export async function loadCoverageFacts(
     tasksByRep.set(row.assignee_rep_id, entry)
   }
 
-  const openByRep = new Map<string, number>()
-  const repliesByRep = new Map<string, number>()
-  const followUpsByRep = new Map<string, number>()
-  for (const row of (leadsRes.data ?? []) as Array<{
+  // Canonical per-lead Inbox state for the coverage work package. Lead status
+  // alone is not the Inbox truth; the conversation timestamps decide.
+  const leadRows = (leadsRes.data ?? []) as Array<{
+    id: string
     owner_rep_id: string | null
     revenue_identity_id: string | null
     status: string
-  }>) {
+  }>
+  const leadStateResult = leadRows.length > 0
+    ? await supabase
+        .from('conversation_states')
+        .select('lead_id, stage, last_sent_at, last_reply_at, next_followup_at, won_at, lost_at')
+        .eq('organization_id', orgId)
+        .in('lead_id', leadRows.map((row) => row.id))
+        .limit(5000)
+    : { data: [], error: null }
+  const stateByLead = new Map(
+    ((leadStateResult.data ?? []) as Array<{
+      lead_id: string
+      stage: string | null
+      last_sent_at: string | null
+      last_reply_at: string | null
+      next_followup_at: string | null
+      won_at: string | null
+      lost_at: string | null
+    }>).map((row) => [row.lead_id, row]),
+  )
+
+  const openByRep = new Map<string, number>()
+  const repliesByRep = new Map<string, number>()
+  const followUpsByRep = new Map<string, number>()
+  for (const row of leadRows) {
     if (row.owner_rep_id) {
       openByRep.set(row.owner_rep_id, (openByRep.get(row.owner_rep_id) ?? 0) + 1)
-      if (row.status === 'replied') repliesByRep.set(row.owner_rep_id, (repliesByRep.get(row.owner_rep_id) ?? 0) + 1)
-      if (row.status === 'followed_up') followUpsByRep.set(row.owner_rep_id, (followUpsByRep.get(row.owner_rep_id) ?? 0) + 1)
     }
     const profileId = row.revenue_identity_id ? profileByIdentity.get(row.revenue_identity_id) : undefined
-    if (profileId && profileWork[profileId]) {
-      if (row.status === 'replied') profileWork[profileId].replies += 1
-      if (row.status === 'followed_up') profileWork[profileId].followUps += 1
+    const state = stateByLead.get(row.id)
+    const derived = deriveConversationRow(
+      {
+        id: row.id,
+        contactName: null,
+        company: null,
+        companyKey: null,
+        ownerRepId: row.owner_rep_id,
+        profileName: null,
+        status: row.status,
+      },
+      state
+        ? {
+            stage: state.stage,
+            lastSentAt: state.last_sent_at,
+            lastReplyAt: state.last_reply_at,
+            nextFollowupAt: state.next_followup_at,
+            wonAt: state.won_at,
+            lostAt: state.lost_at,
+          }
+        : null,
+      null,
+      now.getTime(),
+    )
+    if (derived?.state === 'waiting_on_rep') {
+      if (row.owner_rep_id) repliesByRep.set(row.owner_rep_id, (repliesByRep.get(row.owner_rep_id) ?? 0) + 1)
+      if (profileId && profileWork[profileId]) profileWork[profileId].replies += 1
+    }
+    if (derived?.state === 'follow_up_due') {
+      if (row.owner_rep_id) followUpsByRep.set(row.owner_rep_id, (followUpsByRep.get(row.owner_rep_id) ?? 0) + 1)
+      if (profileId && profileWork[profileId]) profileWork[profileId].followUps += 1
     }
   }
   for (const [profileId, count] of tasksByProfile) {

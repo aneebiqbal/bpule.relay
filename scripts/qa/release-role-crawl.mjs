@@ -14,8 +14,8 @@ import { chromium } from 'playwright'
 const base = process.env.BASE_URL || 'https://localhost:3000'
 const axeSource = fs.readFileSync(path.join(process.cwd(), 'node_modules/axe-core/axe.min.js'), 'utf8')
 const results = []
-const ok = (m) => results.push(`ok: ${m}`)
-const fail = (m) => results.push(`FAIL: ${m}`)
+const ok = (m) => { results.push(`ok: ${m}`); console.log(`ok: ${m}`) }
+const fail = (m) => { results.push(`FAIL: ${m}`); console.log(`FAIL: ${m}`) }
 
 const browser = await chromium.launch()
 const context = await browser.newContext({ ignoreHTTPSErrors: true })
@@ -27,7 +27,7 @@ async function login(email) {
   await page.fill('#login-email', email)
   await page.fill('#login-password', 'scout-dev-password')
   await page.waitForTimeout(600)
-  await page.locator('button[type="submit"]:not([disabled])').first().click()
+  await page.locator('button.auth-submit').click()
   // Some sessions render the cockpit before the URL settles; accept either.
   await page.waitForFunction(
     () => {
@@ -45,20 +45,24 @@ async function login(email) {
 
 async function crawl(page, routes, label) {
   for (const route of routes) {
-    await page.goto(`${base}${route}`, { waitUntil: 'networkidle' })
-    await page.waitForTimeout(900)
-    const url = new URL(page.url())
-    // A gate redirects reps away from manager/admin surfaces; that is a failure.
-    if (url.pathname === '/login') {
-      fail(`${label} ${route}: redirected to login`)
-      continue
+    try {
+      await page.goto(`${base}${route}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
+      await page.waitForTimeout(1800)
+      const url = new URL(page.url())
+      // A gate redirects reps away from manager/admin surfaces; that is a failure.
+      if (url.pathname === '/login') {
+        fail(`${label} ${route}: redirected to login`)
+        continue
+      }
+      const bodyText = await page.locator('body').innerText().catch(() => '')
+      if (/could not be loaded|not found|forbidden|unauthorized/i.test(bodyText.slice(0, 400)) && url.pathname !== '/dashboard') {
+        fail(`${label} ${route}: error copy visible`)
+        continue
+      }
+      ok(`${label} ${route}`)
+    } catch (err) {
+      fail(`${label} ${route}: ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`)
     }
-    const bodyText = await page.locator('body').innerText().catch(() => '')
-    if (/could not be loaded|not found|forbidden|unauthorized/i.test(bodyText.slice(0, 400)) && url.pathname !== '/dashboard') {
-      fail(`${label} ${route}: error copy visible`)
-      continue
-    }
-    ok(`${label} ${route}`)
   }
 }
 
@@ -87,7 +91,7 @@ async function axeCheck(page, label) {
   await crawl(page, repRoutes, 'rep')
 
   // Rep must never see the Team or Admin domains.
-  await page.goto(`${base}/dashboard`, { waitUntil: 'networkidle' })
+  await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 60000 })
   await page.waitForTimeout(900)
   const teamLinks = await page.locator('a[href^="/team"], a[href^="/admin"], a[href^="/profile-intelligence"]').count().catch(() => 0)
   if (teamLinks === 0) ok('rep: no Team/Admin/Identities nav leakage')
@@ -95,8 +99,8 @@ async function axeCheck(page, label) {
 
   // Rep must not reach manager/admin surfaces directly.
   for (const blocked of ['/team', '/admin/command', '/team/profiles']) {
-    await page.goto(`${base}${blocked}`, { waitUntil: 'networkidle' })
-    await page.waitForTimeout(700)
+    await page.goto(`${base}${blocked}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await page.waitForTimeout(3000)
     const landed = new URL(page.url()).pathname
     if (landed === blocked) fail(`rep: reached ${blocked} directly`)
     else ok(`rep: ${blocked} gated → ${landed}`)
@@ -135,8 +139,8 @@ async function axeCheck(page, label) {
   for (const vp of viewports) {
     await page.setViewportSize({ width: vp.width, height: vp.height })
     for (const surface of surfaces) {
-      await page.goto(`${base}${surface}`, { waitUntil: 'networkidle' })
-      await page.waitForTimeout(900)
+      await page.goto(`${base}${surface}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
+      await page.waitForTimeout(1800)
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
       if (overflow <= 1) ok(`responsive ${vp.name} ${surface}: overflow 0`)
       else fail(`responsive ${vp.name} ${surface}: overflow ${overflow}`)
@@ -145,12 +149,12 @@ async function axeCheck(page, label) {
   // axe on the core surfaces at desktop and mobile.
   for (const surface of ['/dashboard', '/leads', '/chats', '/tasks']) {
     await page.setViewportSize({ width: 1440, height: 900 })
-    await page.goto(`${base}${surface}`, { waitUntil: 'networkidle' })
+    await page.goto(`${base}${surface}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
     await page.waitForTimeout(900)
     await axeCheck(page, `desktop ${surface}`)
   }
   await page.setViewportSize({ width: 375, height: 812 })
-  await page.goto(`${base}/dashboard`, { waitUntil: 'networkidle' })
+  await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 60000 })
   await page.waitForTimeout(900)
   await axeCheck(page, 'mobile /dashboard')
   await page.close()

@@ -12,6 +12,7 @@ import {
   type OperatingPolicy,
 } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { getInboxCountsForRep } from '@/lib/operations/inbox-counts'
 
 
 /**
@@ -228,22 +229,21 @@ async function resolveDailyWorkspace(): Promise<{
   let followUpsDue = 0
   if (!isDemoMode()) {
     const client = await createServerSupabase()
-    const [{ count: repliesCount }, { count: followUpsCount }] = await Promise.all([
-      client
-        .from('leads')
-        .select('id', { count: 'exact', head: true })
-        .eq('owner_rep_id', rep.id)
-        .eq('status', 'replied')
-        .eq('archived', false),
-      client
-        .from('leads')
-        .select('id', { count: 'exact', head: true })
-        .eq('owner_rep_id', rep.id)
-        .eq('status', 'followed_up')
-        .eq('archived', false),
-    ])
-    repliesWaiting = repliesCount ?? 0
-    followUpsDue = followUpsCount ?? 0
+    // Canonical Inbox authority: the rep-day "mandatory" work is the same
+    // waiting_on_rep / follow_up_due truth the Inbox shows.
+    const counts = await getInboxCountsForRep(client, {
+      orgId: org.id,
+      repId: rep.id,
+      executableIdentities: identities.map((identity) => ({
+        id: identity.revenueIdentityId,
+        profileId: identity.profileId,
+      })),
+      coveredIdentityIds: identities
+        .filter((identity) => identity.access === 'coverage')
+        .map((identity) => identity.revenueIdentityId),
+    }).catch(() => null)
+    repliesWaiting = counts?.needsReply ?? 0
+    followUpsDue = counts?.followups ?? 0
   }
 
   const byIdentity = accountability.assignedIdentities.map((ai) => {
