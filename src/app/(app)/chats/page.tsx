@@ -19,7 +19,7 @@ import { opsHref, parseOpsFilters } from '@/lib/operations/filters'
 import { loadChatQueue, parseChatView, type ChatQueue, type ChatView } from '@/lib/operations/chat-queue'
 import { loadChatIntelligence } from '@/lib/operations/chat-intelligence'
 import { getDatabaseCapabilities } from '@/lib/operations/capabilities'
-import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
+import { getAuthorizedIdentities } from '@/lib/auth/workspace'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,11 +73,13 @@ export default async function ChatsPage({
   const rawStage = Array.isArray(sp.cstage) ? sp.cstage[0] : sp.cstage
   const stageGroup = ['contacted', 'conversation', 'meeting', 'proposal', 'won'].includes(rawStage ?? '') ? rawStage! : null
 
-  const [directory, reps, workspace, profilesRes, capabilities] = await Promise.all([
+  const [directory, reps, executableIdentities, profilesRes, capabilities] = await Promise.all([
     managerViews ? getPeopleDirectory().catch(() => null) : Promise.resolve(null),
     managerViews ? assignableReps(ctx) : Promise.resolve([] as Array<{ id: string; name: string }>),
-    // Team / org views are never narrowed by the viewer's own sending profile.
-    managerViews ? Promise.resolve(null) : resolveActiveWorkspace().catch(() => null),
+    // Reps work every executable profile (primary + active coverage), so the
+    // queue and its counts stay parity with Rep Home. Team / org views are
+    // never narrowed by the viewer's own sending profile.
+    managerViews ? Promise.resolve(null) : getAuthorizedIdentities().catch(() => null),
     ctx.client.from('revenue_identities').select('id, identity_name').eq('organization_id', ctx.auth.orgId).order('identity_name').limit(200),
     getDatabaseCapabilities(ctx.client),
   ])
@@ -91,7 +93,12 @@ export default async function ChatsPage({
     queue = await measureLoader('chats.queue', (c) => loadChatQueue(c!, {
       orgId: ctx.auth.orgId,
       repIds,
-      workspace: workspace ? { id: workspace.id, profileId: workspace.profileId ?? null } : null,
+      executableIdentities: executableIdentities
+        ? executableIdentities.map((identity) => ({ id: identity.revenueIdentityId, profileId: identity.profileId }))
+        : null,
+      coveredIdentityIds: executableIdentities
+        ? executableIdentities.filter((identity) => identity.access === 'coverage').map((identity) => identity.revenueIdentityId)
+        : null,
       profileId: filters.profile,
       source: filters.source,
       q: filters.q,

@@ -36,6 +36,8 @@ export interface AuthorizedIdentity {
   profileId: string | null
   profileUrl: string | null
   status: 'active' | 'archived'
+  /** `assigned` = primary ownership; `coverage` = active temporary cover. */
+  access: 'assigned' | 'coverage'
 }
 
 export interface RepWorkspace {
@@ -68,6 +70,7 @@ async function resolveAuthorizedIdentities(): Promise<AuthorizedIdentity[]> {
     profileId: identity.profileId,
     profileUrl: identity.profileUrl,
     status: identity.status,
+    access: identity.access,
   }))
 }
 

@@ -6606,7 +6606,7 @@ export class SupabaseStore implements ScoutStore {
     }
     return (data ?? []).map((a) => {
       const identity = identityById.get(a.revenue_identity_id as string) ?? {}
-      return { ...this.mapRevenueIdentity(identity), assignmentId: a.id as string, assignedBy: (a.assigned_by as string) ?? null, assignedAt: a.created_at as string }
+      return { ...this.mapRevenueIdentity(identity), assignmentId: a.id as string, assignedBy: (a.assigned_by as string) ?? null, assignedAt: a.created_at as string, access: 'assigned' as const }
     })
   }
 
@@ -6649,11 +6649,12 @@ export class SupabaseStore implements ScoutStore {
         assignmentId: row.coverageAssignmentId,
         assignedBy: row.primaryRepId,
         assignedAt: row.effectiveFrom,
+        access: 'coverage',
       })
     }
     // An assignment always wins over coverage for the same identity.
     for (const identity of owned) {
-      merged.set(identity.id, identity)
+      merged.set(identity.id, { ...identity, access: 'assigned' })
     }
     return [...merged.values()]
   }

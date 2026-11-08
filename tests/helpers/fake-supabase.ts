@@ -10,8 +10,8 @@ interface Filter {
 
 interface OrFilter {
   field: string
-  op: 'eq' | 'is'
-  value: string
+  op: 'eq' | 'is' | 'in'
+  value: any
 }
 
 interface FakeState {
@@ -54,19 +54,34 @@ function computeGeneratedColumns(table: string, row: Row): Row {
   return next
 }
 
+/** Split a PostgREST `or` list on top-level commas, keeping `in.(a,b)` intact. */
+function splitTopLevel(expression: string, sep = ','): string[] {
+  const out: string[] = []
+  let depth = 0
+  let start = 0
+  for (let i = 0; i < expression.length; i++) {
+    const ch = expression[i]
+    if (ch === '(') depth++
+    else if (ch === ')') depth--
+    else if (ch === sep && depth === 0) {
+      out.push(expression.slice(start, i))
+      start = i + 1
+    }
+  }
+  out.push(expression.slice(start))
+  return out.map((s) => s.trim()).filter(Boolean)
+}
+
 function parseOrFilters(expression: string): OrFilter[] {
-  return expression
-    .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean)
+  return splitTopLevel(expression)
     .map((part) => {
-      const match = /^([^\.]+)\.(eq|is)\.(.+)$/.exec(part)
+      const match = /^([^\.]+)\.(eq|is|in)\.(.+)$/.exec(part)
       if (!match) return null
-      return {
-        field: match[1],
-        op: match[2] as 'eq' | 'is',
-        value: match[3],
+      const [, field, op, raw] = match
+      if (op === 'in') {
+        return { field, op, value: raw.replace(/^\(|\)$/g, '').split(',').filter(Boolean) }
       }
+      return { field, op, value: raw }
     })
     .filter((v): v is OrFilter => v !== null)
 }
@@ -227,6 +242,7 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: Error | null; 
     return this.orFilters.some((f) => {
       if (f.op === 'eq') return String(row[f.field]) === f.value
       if (f.op === 'is' && f.value === 'null') return row[f.field] == null
+      if (f.op === 'in') return Array.isArray(f.value) && f.value.includes(row[f.field])
       return false
     })
   }

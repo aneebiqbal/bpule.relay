@@ -81,17 +81,14 @@ export function V4RepHome({
               <span className="font-medium text-ink">{targetRemaining}</span>
               <span className="text-stone"> remaining</span>
             </p>
-            {(data.day?.repliesWaiting ?? 0) > 0 && (
-              <>
-                <span className="hidden h-3 w-px bg-line sm:block" aria-hidden />
-                <Link
-                  href="/chats"
-                  className="text-[12px] font-medium text-status-warning transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
-                >
-                  {data.day.repliesWaiting} waiting
-                </Link>
-              </>
-            )}
+            <span className="hidden h-3 w-px bg-line sm:block" aria-hidden />
+            <Link
+              href="/chats?view=waiting_me"
+              className="text-[12px] font-medium text-status-warning transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
+            >
+              <span className="font-medium text-ink">{data.day.repliesWaiting}</span>
+              <span className="text-stone"> replies waiting</span>
+            </Link>
           </>
         }
         actions={

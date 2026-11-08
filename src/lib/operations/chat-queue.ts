@@ -15,7 +15,7 @@ import type { DbClient } from '@/lib/db/types'
  * The thread itself loads only when a conversation is opened.
  */
 import { chunkedIn } from '@/lib/supabase/chunked-in'
-import { leadBelongsToWorkspace } from '@/lib/workspace/active-identity'
+import { leadBelongsToAnyWorkspace } from '@/lib/workspace/active-identity'
 import { deriveConversationRow, type ConversationRow } from '@/lib/operations/conversations'
 import { sourceBucket, type OpsSource } from '@/lib/operations/filters'
 import { pipelineGroupForStage } from '@/lib/operations/reports'
@@ -144,8 +144,17 @@ export interface ChatQueueQuery {
   orgId: string
   /** null = organization. */
   repIds: string[] | null
-  /** Rep scope only: the active sending workspace (profile scoping, BUG-30). */
-  workspace?: { id: string; profileId?: string | null } | null
+  /**
+   * Rep scope only: the rep's executable identities (primary assignments plus
+   * active coverage). Every row and count is scoped to this set — Rep Home and
+   * the Inbox read the same authority.
+   */
+  executableIdentities?: ReadonlyArray<{ id: string; profileId?: string | null }> | null
+  /**
+   * Subset of `executableIdentities` the rep is covering. Their leads are
+   * visible to the covering rep even though the primary owns them.
+   */
+  coveredIdentityIds?: readonly string[] | null
   profileId?: string | null
   source?: OpsSource | null
   q?: string | null
@@ -159,6 +168,8 @@ export interface ChatQueueQuery {
   limit?: number
   /** `messagePreviews` capability: read the bounded DB-side preview view. */
   previewView?: boolean
+  /** Count-only callers skip the per-row preview read; counts still use scalar state. */
+  countOnly?: boolean
 }
 
 export interface ChatQueue {
@@ -272,7 +283,13 @@ export async function loadChatQueue(
     .eq('is_test', false)
     .order('created_at', { ascending: false })
     .limit(LEAD_CAP)
-  if (query.repIds) leadsQ = leadsQ.in('owner_rep_id', query.repIds)
+  if (query.repIds) {
+    const covered = query.coveredIdentityIds?.length ? query.coveredIdentityIds : null
+    leadsQ = covered
+      ? // The rep's own leads, plus the covered profiles' leads (owned by the primary).
+        leadsQ.or(`owner_rep_id.in.(${query.repIds.join(',')}),revenue_identity_id.in.(${covered.join(',')})`)
+      : leadsQ.in('owner_rep_id', query.repIds)
+  }
   if (query.profileId) leadsQ = leadsQ.eq('revenue_identity_id', query.profileId)
   if (query.q) {
     const term = query.q.replace(/[%,()\\*:]/g, ' ').trim().slice(0, 60)
@@ -281,9 +298,12 @@ export async function loadChatQueue(
   const { data, error } = await leadsQ
   if (error) throw error
   let leads = (data ?? []) as LeadRowRaw[]
-  if (query.workspace) {
+  if (query.executableIdentities) {
     leads = leads.filter((l) =>
-      leadBelongsToWorkspace({ revenueIdentityId: l.revenue_identity_id, senderProfileId: l.sender_profile_id }, query.workspace!),
+      leadBelongsToAnyWorkspace(
+        { revenueIdentityId: l.revenue_identity_id, senderProfileId: l.sender_profile_id },
+        query.executableIdentities!,
+      ),
     )
   }
   if (query.source) leads = leads.filter((l) => sourceBucket(l.source) === query.source)
@@ -353,13 +373,15 @@ export async function loadChatQueue(
   const limit = Math.min(Math.max(query.limit ?? 60, 1), 200)
   const page = filtered.slice(0, query.view === 'review' ? 200 : limit)
 
-  const latestBy = await loadLatestPreviews(client, page.map((r) => r.leadId), Boolean(query.previewView))
-  for (const row of page) {
-    const m = latestBy.get(row.leadId)
-    if (!m) continue
-    row.preview = truncatePreview(m.preview)
-    row.previewFrom = m.direction === 'inbound' ? 'client' : 'me'
-    row.needsReview = m.thread_status === 'UNVERIFIED' && m.direction === 'inbound'
+  if (!query.countOnly) {
+    const latestBy = await loadLatestPreviews(client, page.map((r) => r.leadId), Boolean(query.previewView))
+    for (const row of page) {
+      const m = latestBy.get(row.leadId)
+      if (!m) continue
+      row.preview = truncatePreview(m.preview)
+      row.previewFrom = m.direction === 'inbound' ? 'client' : 'me'
+      row.needsReview = m.thread_status === 'UNVERIFIED' && m.direction === 'inbound'
+    }
   }
 
   const rows = query.view === 'review' ? page.filter((r) => r.needsReview).slice(0, limit) : page

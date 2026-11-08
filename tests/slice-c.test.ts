@@ -167,9 +167,9 @@ describe('CHAT_QUEUE', () => {
     return { data: [] }
   }
 
-  it('CHAT_PROFILE_SCOPE: a rep sees only conversations for the active sending profile', async () => {
+  it('CHAT_EXECUTABLE_SCOPE: a rep sees only conversations on their executable profiles', async () => {
     const { client, calls } = fakeClient(respond)
-    const queue = await loadChatQueue(client, { orgId: 'org', repIds: ['r1'], workspace: { id: 'ws1' }, view: 'all', managerViews: false }, NOW)
+    const queue = await loadChatQueue(client, { orgId: 'org', repIds: ['r1'], executableIdentities: [{ id: 'ws1', profileId: null }], view: 'all', managerViews: false }, NOW)
     expect(queue.rows.map((r) => r.leadId)).toEqual(['l1'])
     expect(queue.rows[0]).toMatchObject({ preview: 'Yes, Thursday works', previewFrom: 'client', clientIntent: 'meeting_request', href: '/chats?lead=l1' })
     expect(has(calls.find((c) => c.table === 'leads')!, 'in', 'owner_rep_id', ['r1'])).toBe(true)

@@ -1233,6 +1233,8 @@ export interface RevenueIdentityWithAssignment extends RevenueIdentity {
   assignmentId: string
   assignedBy: string | null
   assignedAt: string
+  /** `assigned` = primary ownership; `coverage` = active temporary cover. */
+  access: 'assigned' | 'coverage'
 }
 
 export type ActivityType = 'dm' | 'email' | 'connection_request' | 'followup' | 'application' | 'proposal' | 'prospect_extracted' | 'other'

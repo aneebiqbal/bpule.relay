@@ -3234,9 +3234,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         .map((a) => {
           const identity = demoRevenueIdentities.find((r) => r.id === a.revenueIdentityId)
           if (!identity) return null
-          return { ...identity, assignmentId: a.id, assignedBy: a.assignedBy, assignedAt: a.createdAt }
+          return { ...identity, assignmentId: a.id, assignedBy: a.assignedBy, assignedAt: a.createdAt, access: 'assigned' as const }
         })
-        .filter((x): x is RevenueIdentityWithAssignment => x !== null)
+        .filter((x) => x !== null) as RevenueIdentityWithAssignment[]
     },
     async listMyWorkableIdentities() {
       // Demo store has no coverage assignments; assigned is the workable set.

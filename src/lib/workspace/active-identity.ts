@@ -45,6 +45,21 @@ export function leadBelongsToWorkspace(
 }
 
 /**
+ * The rep's executable set: primary assignments plus active coverage. A lead
+ * belongs when its stamped workspace is one of them, or — for leads captured
+ * before workspace stamping — its sender profile is one of theirs.
+ */
+export function leadBelongsToAnyWorkspace(
+  lead: { revenueIdentityId?: string | null; senderProfileId?: string | null },
+  identities: ReadonlyArray<{ id: string; profileId?: string | null }>,
+): boolean {
+  if (lead.revenueIdentityId) return identities.some((identity) => identity.id === lead.revenueIdentityId)
+  return identities.some(
+    (identity) => Boolean(identity.profileId) && lead.senderProfileId === identity.profileId,
+  )
+}
+
+/**
  * The workspace a new lead is saved under. The sender argument is ignored:
  * sending as another profile does not change which workspace owns the row.
  */

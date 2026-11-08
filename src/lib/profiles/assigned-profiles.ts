@@ -151,6 +151,7 @@ export async function listAssignedProfilesForRep(
     profileId: (row.profile_id as string) ?? null,
     profileUrl: (row.profile_url as string) ?? null,
     status: row.status === 'archived' ? 'archived' : 'active',
+    access: 'assigned',
   }))
 
   return groupAssignedProfiles(identities, profiles)

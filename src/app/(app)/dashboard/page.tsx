@@ -7,7 +7,7 @@ import { createScoutStore } from '@/lib/store'
 import { buildRoleContext } from '@/lib/relay/role-intelligence'
 import { buildRelayQueue } from '@/lib/relay/queue-engine'
 import { rankNextActions, type NextBestAction } from '@/lib/relay/next-best-action'
-import { deriveTodayCounts } from '@/lib/relay/today-counts'
+import { getInboxCountsForRep, type InboxCounts } from '@/lib/operations/inbox-counts'
 import { logRecommendation } from '@/lib/action-ledger'
 import type { RelayTodayAction } from '@/lib/tasks/relay-today-action'
 import type { RelayTaskKind } from '@/lib/domain/types'
@@ -294,7 +294,22 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     href: actionDeepLink(action),
   }))
   const actions = allActions.slice(0, 10)
-  const todayCounts = deriveTodayCounts(allActions)
+
+  // Canonical Inbox counts over the rep's executable profiles. Rep Home and
+  // /chats read the same authority, so the header metric and the queue agree.
+  const inboxCounts: InboxCounts = await perfTrace('rep:inboxCounts', () =>
+    getInboxCountsForRep(store.getSupabaseClient(), {
+      orgId: user.organization.id,
+      repId: user.rep.id,
+      executableIdentities: workspace.identities.map((identity) => ({
+        id: identity.revenueIdentityId,
+        profileId: identity.profileId,
+      })),
+      coveredIdentityIds: workspace.identities
+        .filter((identity) => identity.access === 'coverage')
+        .map((identity) => identity.revenueIdentityId),
+    }).catch(() => ({ needsReply: 0, waitingOnClient: 0, followups: 0, all: 0 })),
+  )
 
   const authCtx = await perfTrace('rep:getAuthContext', () => getAuthContext())
   let unifiedTasks: import('@/lib/tasks/types').UnifiedTask[] = []
@@ -415,10 +430,10 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     },
     day: {
       ...workspace.day,
-      repliesWaiting: todayCounts.repliesWaiting,
-      followUpsDue: todayCounts.followUpsDue,
-      totalRemaining: workspace.targetSummary.totalRemaining + todayCounts.repliesWaiting + todayCounts.followUpsDue,
-      isComplete: workspace.targetSummary.totalRemaining === 0 && todayCounts.repliesWaiting === 0 && todayCounts.followUpsDue === 0,
+      repliesWaiting: inboxCounts.needsReply,
+      followUpsDue: inboxCounts.followups,
+      totalRemaining: workspace.targetSummary.totalRemaining + inboxCounts.needsReply + inboxCounts.followups,
+      isComplete: workspace.targetSummary.totalRemaining === 0 && inboxCounts.needsReply === 0 && inboxCounts.followups === 0,
     },
     allActions,
     unifiedTasks,

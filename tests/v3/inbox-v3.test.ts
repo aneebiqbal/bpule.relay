@@ -124,14 +124,14 @@ describe('V3_INBOX_PROPOSAL_REQUEST', () => {
   })
 })
 
-describe('V3_INBOX_PROFILE_SCOPE', () => {
-  it('V3_INBOX_PROFILE_SCOPE: a rep queue is scoped to the active sending profile', () => {
+describe('V3_INBOX_EXECUTABLE_SCOPE', () => {
+  it('V3_INBOX_EXECUTABLE_SCOPE: a rep queue is scoped to their executable profiles', () => {
     const page = read('src/app/(app)/chats/page.tsx')
-    expect(page).toContain('resolveActiveWorkspace')
-    // The queue query carries the workspace, not just a profile id.
-    expect(page).toContain('workspace: workspace ? { id: workspace.id, profileId: workspace.profileId ?? null } : null')
-    // …and the loader applies the workspace scope to every row.
-    expect(read('src/lib/operations/chat-queue.ts')).toContain('leadBelongsToWorkspace')
+    expect(page).toContain('getAuthorizedIdentities')
+    // The queue query carries the executable identity set, not one active workspace.
+    expect(page).toContain('executableIdentities')
+    // …and the loader applies that scope to every row.
+    expect(read('src/lib/operations/chat-queue.ts')).toContain('leadBelongsToAnyWorkspace')
   })
 })
 
