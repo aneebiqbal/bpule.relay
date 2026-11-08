@@ -75,6 +75,7 @@ export function TaskWorkspaceView({
   teams = [],
   leads = [],
   profiles = [],
+  transferTargets,
   timeZone = 'UTC',
   now,
 }: {
@@ -86,6 +87,7 @@ export function TaskWorkspaceView({
   teams?: Array<{ id: string; name: string; memberIds: string[] }>
   leads?: Array<{ id: string; company: string | null }>
   profiles?: Array<{ id: string; name: string }>
+  transferTargets?: Array<{ id: string; name: string }>
   /** Org timezone — the one zone the server and client both render in. */
   timeZone?: string
   /** Server-computed once per request so SSR and hydration classify tabs identically. */
@@ -539,6 +541,7 @@ export function TaskWorkspaceView({
             key={selected.id}
             task={selected}
             reps={reps}
+            transferTargets={transferTargets}
             canManage={canAssign}
             currentRepId={currentRepId}
             now={now}

@@ -67,6 +67,7 @@ function toLocalInput(iso: string | null | undefined): string {
 export function TaskDetailDrawer({
   task,
   reps,
+  transferTargets,
   canManage,
   currentRepId,
   now,
@@ -74,11 +75,16 @@ export function TaskDetailDrawer({
 }: {
   task: UnifiedTask
   reps: Array<{ id: string; name: string }>
+  /** Reps a handoff may be requested to. Defaults to `reps` (assign scope). */
+  transferTargets?: Array<{ id: string; name: string }>
   canManage: boolean
   currentRepId: string
   now: number
   onChanged: () => void
 }) {
+  // A rep's assign scope is themselves only, but a handoff request needs the
+  // wider org list; the manager approval still enforces team scope.
+  const transferReps = transferTargets ?? reps
   const rawId = assignedTaskIdFromUnified(task.id)
   const [events, setEvents] = useState<TaskEventView[] | null>(null)
   const [assignee, setAssignee] = useState(task.assigneeRepId)
@@ -294,7 +300,7 @@ export function TaskDetailDrawer({
                   className="mt-1 h-8 w-full rounded-md border border-line bg-bone px-2 text-[13px] text-ink"
                 >
                   <option value="">Choose a rep…</option>
-                  {reps.filter((r) => r.id !== currentRepId).map((r) => (
+                  {transferReps.filter((r) => r.id !== currentRepId).map((r) => (
                     <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>

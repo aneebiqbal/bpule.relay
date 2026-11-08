@@ -28,11 +28,13 @@ export default async function TasksPage() {
 
   const showAssignee = auth.isManager || auth.isAdmin || auth.isOwner
   const canAssign = await canActorAssignTasks(auth)
-  const [derivedActions, reps, directory, composerOptions] = await Promise.all([
+  const [derivedActions, reps, directory, composerOptions, transferTargets] = await Promise.all([
     loadDerivedActionsForCurrentUser(),
     listAssignableReps(auth),
     showAssignee ? getPeopleDirectory().catch(() => null) : Promise.resolve(null),
     canAssign ? loadComposerOptions(auth.orgId).catch(() => null) : Promise.resolve(null),
+    // Handoff requests need the org list even when the viewer cannot assign.
+    loadTransferTargets(auth.orgId),
   ])
 
   const tasks = await loadUnifiedTasks({
@@ -56,6 +58,7 @@ export default async function TasksPage() {
         teams={(directory?.teams ?? []).map((t) => ({ id: t.id, name: t.name, memberIds: t.memberIds }))}
         leads={composerOptions?.leads ?? []}
         profiles={composerOptions?.profiles ?? []}
+        transferTargets={transferTargets}
       />
     </Suspense>
   )
@@ -94,6 +97,19 @@ async function loadComposerOptions(orgId: string): Promise<{
       }))
       .sort((a, b) => a.name.localeCompare(b.name)),
   }
+}
+
+/** Org reps a handoff may be requested to. Bounded, names only. */
+async function loadTransferTargets(orgId: string): Promise<Array<{ id: string; name: string }>> {
+  const store = await createScoutStore()
+  const { data } = await store
+    .getSupabaseClient()
+    .from('reps')
+    .select('id, name')
+    .eq('organization_id', orgId)
+    .order('name')
+    .limit(200)
+  return ((data ?? []) as Array<{ id: string; name: string }>).map((rep) => ({ id: rep.id, name: rep.name }))
 }
 
 /** Same ranking path as dashboard — derived tasks stay projections of queue state. */
