@@ -1,43 +1,61 @@
 'use client'
 
 /**
- * Rep Home — profile responsibilities.
+ * Rep Home — today by profile.
  *
- * The profiles are the primary object: who the rep writes as today, whether
- * they are primary or covering, and the work attached to each. Readiness is
- * interruptive, not a section — one compact warning opens a dialog that walks
- * the rep through each unconfirmed profile.
+ * One progress-first execution card per executable profile: what is left, what
+ * needs attention, and whether the day is on track. Readiness stays a single
+ * interruptive warning, never a per-card control.
  */
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronRight } from 'lucide-react'
+import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { cn } from 'cn'
 import { Dialog, DialogActions } from '@/components/ui/dialog'
-import { V4Avatar, V4Panel, V4PanelHeader } from '@/components/v4/primitives'
+import { V4Avatar, V4Chip, V4Panel, V4PanelHeader } from '@/components/v4/primitives'
 import { ProfileSwitcher } from '@/components/shell/profile-switcher'
 import type { RepCoverageView } from '@/lib/coverage/load'
 import type { CoverageProfileResult } from '@/lib/coverage/engine'
 import type { ProfileToday } from '@/lib/rep-home/profile-completion'
+import {
+  buildActivityBreakdown,
+  buildAttentionLine,
+  buildProfileCards,
+  ownershipLine,
+  statusLabel,
+  statusTone,
+  summarizeProfileCards,
+  type ProfileCardModel,
+  type ProfileCardTone,
+} from '@/lib/rep-home/profile-card-view'
 
 const ACTION =
   'inline-flex items-center gap-1 rounded-md border border-line bg-bone px-2 py-1 text-[11px] font-medium text-graphite transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40'
 
-/** The human reason a rep is covering — the primary's own availability. */
-const COVERING_REASON: Record<string, string> = {
-  AVAILABLE: 'primary available',
-  WORKING: 'primary working',
-  ON_LEAVE: 'primary on leave',
-  OFFLINE: 'primary offline',
-  CHECKED_OUT: 'primary checked out',
-  UNAVAILABLE: 'primary unavailable',
-}
+const CONTINUE =
+  'inline-flex items-center gap-1 rounded-lg bg-solid px-2.5 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40'
 
 function formatDate(date: string | null): string {
   if (!date) return ''
   const parsed = new Date(`${date}T00:00:00Z`)
   if (Number.isNaN(parsed.getTime())) return date
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+}
+
+function barTone(tone: ProfileCardTone): string {
+  switch (tone) {
+    case 'success':
+      return 'bg-status-success'
+    case 'warning':
+      return 'bg-status-warning'
+    case 'danger':
+      return 'bg-status-danger'
+    case 'info':
+      return 'bg-orange'
+    default:
+      return 'bg-stone'
+  }
 }
 
 export function RepProfilesToday({
@@ -60,11 +78,12 @@ export function RepProfilesToday({
   const covering = coverage?.covering ?? []
   const readiness = new Map((coverage?.readiness ?? []).map((row) => [row.profileId, row.ready]))
   const progressById = new Map((profilesToday ?? []).map((profile) => [profile.profileId, profile]))
-  const responsible = [...own, ...covering]
-  const unvalidated = responsible.filter((profile) => !readiness.get(profile.profileId))
+  const cards = buildProfileCards(own, covering, progressById)
+  const unvalidated = cards.filter((card) => !readiness.get(card.profile.profileId))
+  const summary = summarizeProfileCards(cards, unvalidated.length)
 
   function openReview() {
-    setQueue(unvalidated)
+    setQueue(unvalidated.map((card) => card.profile))
     setIndex(0)
     setError(null)
     setReviewOpen(true)
@@ -101,15 +120,43 @@ export function RepProfilesToday({
   }
 
   const current = queue[index]
+  const exceptions: string[] = []
+  if (summary.behindCount > 0) {
+    exceptions.push(`${summary.behindCount} profile${summary.behindCount === 1 ? '' : 's'} behind`)
+  }
+  if (summary.needsAccess > 0) {
+    exceptions.push(`${summary.needsAccess} needs access confirmation`)
+  }
 
   return (
     <V4Panel>
       <V4PanelHeader
         eyebrow="Your profiles today"
-        title="Who you write as"
+        title="Today by profile"
         hint={coverage ? `${own.length} own · ${covering.length} covering` : undefined}
         action={<ProfileSwitcher role={role} />}
       />
+
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-bone px-3.5 py-2.5 ring-1 ring-line/70">
+        <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-stone">Today</span>
+        {summary.totalTarget > 0 ? (
+          <span className="text-[12px] text-graphite">
+            <span className="font-semibold tabular-nums text-ink">
+              {summary.totalCompleted} / {summary.totalTarget}
+            </span>{' '}
+            complete
+            <span className="text-stone"> · </span>
+            <span className="font-semibold tabular-nums text-ink">{summary.totalRemaining}</span> remaining
+            <span className="text-stone"> · </span>
+            <span className="font-semibold tabular-nums text-ink">{summary.percent}%</span>
+          </span>
+        ) : (
+          <span className="text-[12px] text-stone">No daily target</span>
+        )}
+        {exceptions.length > 0 && (
+          <span className="ml-auto text-[12px] text-stone">{exceptions.join(' · ')}</span>
+        )}
+      </div>
 
       {unvalidated.length > 0 && (
         <button
@@ -122,7 +169,7 @@ export function RepProfilesToday({
               {unvalidated.length} profile{unvalidated.length === 1 ? ' needs' : 's need'} access confirmation
             </span>
             <span className="block truncate text-[12px] text-graphite">
-              {unvalidated.map((profile) => profile.name).join(', ')}
+              {unvalidated.map((card) => card.profile.name).join(', ')}
             </span>
           </span>
           <span className="shrink-0 rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid">
@@ -131,25 +178,12 @@ export function RepProfilesToday({
         </button>
       )}
 
-      {responsible.length === 0 ? (
+      {cards.length === 0 ? (
         <p className="mt-4 text-[13px] text-graphite">No profiles assigned yet.</p>
       ) : (
-        <ul className="mt-4 space-y-2">
-          {own.map((profile) => (
-            <ProfileRow
-              key={profile.profileId}
-              profile={profile}
-              kind="own"
-              progress={progressById.get(profile.profileId)}
-            />
-          ))}
-          {covering.map((profile) => (
-            <ProfileRow
-              key={profile.profileId}
-              profile={profile}
-              kind="covering"
-              progress={progressById.get(profile.profileId)}
-            />
+        <ul className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {cards.map((card) => (
+            <ProfileCard key={card.profile.profileId} card={card} />
           ))}
         </ul>
       )}
@@ -205,80 +239,103 @@ export function RepProfilesToday({
   )
 }
 
-function ProfileRow({
-  profile,
-  kind,
-  progress,
-}: {
-  profile: CoverageProfileResult
-  kind: 'own' | 'covering'
-  progress?: ProfileToday
-}) {
+function ProfileCard({ card }: { card: ProfileCardModel }) {
+  const { profile, kind, progress } = card
   const isLinkedIn = profile.channels.includes('linkedin')
   const isUpwork = profile.channels.includes('upwork')
   const continueHref = profile.identityIds[0] ? `/workspace/${profile.identityIds[0]}` : '/dashboard'
-  const done = progress?.completedCount ?? 0
   const target = progress?.targetCount ?? 0
+  const done = progress?.completedCount ?? 0
   const remaining = progress?.remaining ?? 0
-  const replies = profile.work?.replies ?? 0
-  const followUps = profile.work?.followUps ?? 0
+  const hasTarget = target > 0
+  const percent = hasTarget ? Math.min(100, Math.round((done / target) * 100)) : 0
+  const label = statusLabel(progress?.status ?? null, hasTarget)
+  const tone = statusTone(progress?.status ?? null, hasTarget)
+  const breakdown = buildActivityBreakdown(progress)
+  const attention = buildAttentionLine(profile.work ?? { replies: 0, followUps: 0, tasks: 0 })
+  const quiet = hasTarget && progress?.status === 'COMPLETE'
+  const coveringUntil =
+    kind === 'covering' && profile.activeCoverageUntil ? formatDate(profile.activeCoverageUntil) : null
 
   return (
-    <li className="rounded-xl bg-bone-raised p-3 ring-1 ring-line/70">
-      <div className="flex items-start gap-3">
-        <V4Avatar name={profile.name} size="md" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[14px] font-medium text-ink">{profile.name}</p>
-          <p className="text-[11px] text-stone">{profile.channels.join(' · ') || 'No channel'}</p>
-          <p className="mt-1 text-[12px] text-graphite">
-            {kind === 'covering' ? (
-              <>
-                Covering for {profile.primaryRepName ?? 'primary'}
-                {profile.primaryAvailability
-                  ? ` · ${COVERING_REASON[profile.primaryAvailability] ?? profile.primaryAvailability.toLowerCase()}`
-                  : ''}
-                {profile.activeCoverageUntil ? ` · until ${formatDate(profile.activeCoverageUntil)}` : ''}
-              </>
-            ) : (
-              'Primary'
-            )}
-          </p>
-          <p className="mt-0.5 text-[12px] text-graphite">
-            {target > 0 ? (
-              <>
-                <span className="font-medium text-ink">{done}</span>
-                <span className="text-stone"> / {target} done</span>
-                <span className="text-stone"> · </span>
-                <span className="font-medium text-ink">{remaining}</span>
-                <span className="text-stone"> remaining</span>
-              </>
-            ) : (
-              <span className="text-stone">No daily target</span>
-            )}
-            {replies > 0 && (
-              <>
-                <span className="text-stone"> · </span>
-                <span className="text-status-warning">{replies} waiting</span>
-              </>
-            )}
-            {followUps > 0 && (
-              <>
-                <span className="text-stone"> · </span>
-                <span>{followUps} follow-ups</span>
-              </>
-            )}
-          </p>
+    <li className={cn('rounded-xl bg-bone-raised p-3 ring-1 ring-line/70', quiet && 'opacity-75')}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <V4Avatar name={profile.name} size="md" />
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-medium text-ink">{profile.name}</p>
+            <p className="text-[11px] text-stone">{profile.channels.join(' · ') || 'No channel'}</p>
+            <p className="mt-0.5 text-[11px] text-graphite">{ownershipLine(card, coveringUntil)}</p>
+          </div>
         </div>
-        <Link
-          href={continueHref}
-          className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-solid px-2.5 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
-        >
+        <V4Chip tone={tone}>{label}</V4Chip>
+      </div>
+
+      {hasTarget ? (
+        <div className="mt-3">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-[12px] text-graphite">
+              <span className="text-[14px] font-semibold tabular-nums text-ink">{done}</span> of{' '}
+              <span className="tabular-nums">{target}</span> done today
+            </p>
+            <p className="shrink-0 text-[18px] font-semibold leading-none tabular-nums text-ink">
+              {remaining}
+              <span className="ml-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-stone">
+                left
+              </span>
+            </p>
+          </div>
+          <div
+            className="mt-1.5 h-2 overflow-hidden rounded-full bg-bone ring-1 ring-line/70"
+            role="progressbar"
+            aria-valuenow={percent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`${profile.name} today's target completion`}
+          >
+            <div
+              className={cn(
+                'h-full rounded-full transition-[width] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                barTone(tone),
+              )}
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+        </div>
+      ) : (
+        <p className="mt-3 text-[12px] text-stone">No daily target</p>
+      )}
+
+      {breakdown.items.length > 0 && (
+        <dl className="mt-2.5 space-y-0.5">
+          {breakdown.items.map((item) => (
+            <div key={item.activityType} className="flex items-baseline justify-between gap-2 text-[12px]">
+              <dt className="text-graphite">{item.label}</dt>
+              <dd className="tabular-nums text-ink">
+                {item.completedCount} / {item.targetCount}
+                {item.complete && <span className="ml-1 text-status-success">✓</span>}
+              </dd>
+            </div>
+          ))}
+          {breakdown.more > 0 && <p className="text-[11px] text-stone">+{breakdown.more} more</p>}
+        </dl>
+      )}
+
+      <p
+        className={cn(
+          'mt-2.5 flex items-center gap-1.5 text-[12px]',
+          attention.tone === 'warning' ? 'text-status-warning' : 'text-stone',
+        )}
+      >
+        {attention.tone === 'warning' && <AlertTriangle className="size-3.5 shrink-0" aria-hidden />}
+        <span className="min-w-0">{attention.text}</span>
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <Link href={continueHref} className={CONTINUE}>
           Continue
           <ChevronRight className="size-3.5" aria-hidden />
         </Link>
-      </div>
-
-      <div className="mt-2 flex flex-wrap gap-1.5">
         {isLinkedIn && (
           <Link href="/chats" className={ACTION}>
             Inbox
