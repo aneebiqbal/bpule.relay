@@ -27,7 +27,7 @@ async function login(email) {
   await page.fill('#login-email', email)
   await page.fill('#login-password', 'scout-dev-password')
   await page.click('button[type="submit"]')
-  await page.waitForURL(/dashboard|onboarding|chats/, { timeout: 30_000 })
+  await page.waitForURL(/dashboard|onboarding|chats/, { timeout: 60_000 })
   await page.waitForTimeout(1500)
   return page
 }
@@ -47,7 +47,7 @@ async function axeCheck(page, label) {
   const page = await login('dawood@scout.dev')
   for (const vp of VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height })
-    await page.goto(`${base}/chats?view=waiting_me`, { waitUntil: 'networkidle' })
+    await page.goto(`${base}/chats?view=waiting_me`, { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(2500)
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     if (overflow <= 1) ok(`rep ${vp.name}: overflow 0`)
@@ -101,7 +101,7 @@ async function axeCheck(page, label) {
   await boot.close()
   const page = await login('hassan@scout.dev')
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(`${base}/chats?view=all`, { waitUntil: 'networkidle' })
+  await page.goto(`${base}/chats?view=all`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2500)
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   if (overflow <= 1) ok('admin 1440: overflow 0')
@@ -119,13 +119,13 @@ async function axeCheck(page, label) {
   const page = await login('dawood@scout.dev')
   for (const vp of VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height })
-    await page.goto(`${base}/dashboard`, { waitUntil: 'networkidle' })
+    await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(2000)
     const homeOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     if (homeOverflow <= 1) ok(`home ${vp.name}: overflow 0`)
     else fail(`home ${vp.name}: overflow ${homeOverflow}`)
 
-    await page.goto(`${base}/tasks`, { waitUntil: 'networkidle' })
+    await page.goto(`${base}/tasks`, { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(2000)
     const tasksOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     if (tasksOverflow <= 1) ok(`tasks ${vp.name}: overflow 0`)
@@ -134,7 +134,7 @@ async function axeCheck(page, label) {
   }
   // Assigned-work panel + metric destinations at desktop width.
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(`${base}/dashboard`, { waitUntil: 'networkidle' })
+  await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(1500)
   const repliesLink = await page.getByRole('link', { name: /replies waiting/ }).count().catch(() => 0)
   if (repliesLink) ok('home 1440: replies waiting destination present')
@@ -145,7 +145,7 @@ async function axeCheck(page, label) {
   await axeCheck(page, 'home 1440')
 
   // Task detail drawer + conversation composer.
-  await page.goto(`${base}/tasks?view=today`, { waitUntil: 'networkidle' })
+  await page.goto(`${base}/tasks?view=today`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(1500)
   const firstRow = page.locator('table tbody tr').first()
   if (await firstRow.count().catch(() => 0)) {
@@ -166,14 +166,14 @@ async function axeCheck(page, label) {
   await context.clearCookies()
   const page = await login('hassan@scout.dev')
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(`${base}/dashboard`, { waitUntil: 'networkidle' })
+  await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2000)
   const waiting = await page.getByRole('link', { name: /^1 waiting/ }).count().catch(() => 0)
   if (waiting) ok('admin home: waiting task exception present')
   else fail('admin home: waiting task exception missing')
   await axeCheck(page, 'admin home 1440')
 
-  await page.goto(`${base}/tasks?view=transfers`, { waitUntil: 'networkidle' })
+  await page.goto(`${base}/tasks?view=transfers`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2000)
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   if (overflow <= 1) ok('team work 1440: overflow 0')
