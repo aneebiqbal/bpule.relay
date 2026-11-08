@@ -6,6 +6,8 @@
  * with the contract document, the document wins: investigate the test first.
  */
 import { describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { separateRoleFromEmployer } from '@/lib/intelligence-v2/extraction-pipeline'
 import { formatRoleLine, stripEmployerFromTitle } from '@/lib/leads/role-line'
 import { buildRevenueStrategy, sourceFromCanonical } from '@/lib/relay/revenue-strategy'
@@ -524,5 +526,28 @@ describe('Contract 13 — a recruiter is a relationship, not a buying signal', (
     expect(intent.verifiedBuyerRequest).toBe(true)
     expect(intent.buyerIntentLevel).toBe('HIGH')
     expect(intent.relationshipRole).toBe('BUYER')
+  })
+})
+
+describe('Contract 14 — task conversation is internal notes, separate from system events', () => {
+  const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8')
+
+  it('task comments are stored as internal_notes on the TASK subject', () => {
+    const sql = read('supabase/migrations/20261101120000_operations_workspace.sql')
+    expect(sql).toContain("subject_type in ('LEAD', 'ACCOUNT', 'REP', 'TASK')")
+    const notes = read('src/lib/operations/notes.ts')
+    expect(notes).toContain("subjectType === 'TASK'")
+  })
+
+  it('the task detail drawer renders the internal conversation, not the event log', () => {
+    const drawer = read('src/components/tasks/task-detail-drawer.tsx')
+    expect(drawer).toContain('NotesPanel')
+    expect(drawer).toContain('subjectType="TASK"')
+  })
+
+  it('task_events carries no comment body, so system events cannot absorb discussion', () => {
+    const sql = read('supabase/migrations/20261031120000_assigned_tasks.sql')
+    const eventsTable = sql.slice(sql.indexOf('create table if not exists task_events'))
+    expect(eventsTable).not.toContain('body')
   })
 })
