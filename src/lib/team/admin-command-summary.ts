@@ -370,8 +370,10 @@ export function assembleAdminCommandCenter(input: {
   yesterday?: AdminYesterday
   teamTarget?: number
   teamCompleted?: number
-  /** Canonical org-wide Inbox counts — the one truth for `repliesWaiting`. */
-  inboxCounts?: { needsReply: number }
+  /** Canonical org-wide Inbox counts — the one truth for reply/follow-up metrics. */
+  inboxCounts?: { needsReply: number; followups: number }
+  /** Canonical per-rep Inbox counts over each rep's executable profiles. */
+  inboxCountsByRep?: Map<string, { needsReply: number; followups: number }>
 }): AdminCommandCenterData {
   const team = assembleManagerHomeTeamData({
     teamName: input.orgName,
@@ -381,6 +383,7 @@ export function assembleAdminCommandCenter(input: {
     activity: input.activity,
     overdueTasksByRep: input.overdueTasksByRep,
     outcomeEventsByRep: input.outcomeEventsByRep,
+    inboxCountsByRep: input.inboxCountsByRep,
   })
 
   const missingProfileCount = input.openLeads.filter((l) => !l.revenueIdentityId).length
@@ -414,7 +417,7 @@ export function assembleAdminCommandCenter(input: {
       activeOpportunities,
       repliesWaiting: input.inboxCounts?.needsReply ?? team.metrics.repliesWaiting,
       repliesCritical,
-      followUpsOverdue: team.metrics.followUpsOverdue,
+      followUpsOverdue: input.inboxCounts?.followups ?? team.metrics.followUpsOverdue,
       overdueTasks: [...(input.overdueTasksByRep?.values() ?? [])].reduce((sum, n) => sum + n, 0),
       waitingTasks: input.waitingTasks ?? 0,
       transferRequests: input.transferRequests ?? 0,

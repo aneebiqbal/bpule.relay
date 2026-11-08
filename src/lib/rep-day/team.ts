@@ -25,6 +25,8 @@ import {
 } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { deriveRepDayState, type RepDayState } from './state-machine'
+import { deriveConversationRow } from '@/lib/operations/conversations'
+import { chunkedIn } from '@/lib/supabase/chunked-in'
 
 export interface TeamIdentity {
   id: string
@@ -180,7 +182,7 @@ export async function loadTeamDay(options: { date?: string } = {}): Promise<Team
     .eq('organization_id', ctx.orgId)
   const repliedQuery = supabase
     .from('leads')
-    .select('owner_rep_id')
+    .select('id, owner_rep_id, status')
     .eq('organization_id', ctx.orgId)
     .eq('status', 'replied')
     .eq('archived', false)
@@ -254,7 +256,60 @@ export async function loadTeamDay(options: { date?: string } = {}): Promise<Team
     return map
   }
 
-  const repliesByRep = countByRep(repliedResult.data as Array<Record<string, unknown>> | null)
+  // Canonical Inbox waiting state: the latest meaningful message is the client's.
+  // The app stamps lead status 'replied' on every inbound, so the replied scan is
+  // the canonical candidate set; the conversation timestamps decide.
+  const repliedRows = (repliedResult.data ?? []) as Array<{ id: string; owner_rep_id: string | null; status: string }>
+  const stateRows = repliedRows.length > 0
+    ? await chunkedIn<{
+        lead_id: string
+        stage: string | null
+        last_sent_at: string | null
+        last_reply_at: string | null
+        next_followup_at: string | null
+        won_at: string | null
+        lost_at: string | null
+      }>(
+        repliedRows.map((row) => row.id),
+        (chunk) =>
+          supabase
+            .from('conversation_states')
+            .select('lead_id, stage, last_sent_at, last_reply_at, next_followup_at, won_at, lost_at')
+            .in('lead_id', chunk),
+      )
+    : []
+  const stateByLead = new Map(stateRows.map((row) => [row.lead_id, row]))
+  const repliesByRep = new Map<string, number>()
+  for (const row of repliedRows) {
+    if (!row.owner_rep_id) continue
+    const state = stateByLead.get(row.id)
+    const derived = deriveConversationRow(
+      {
+        id: row.id,
+        contactName: null,
+        company: null,
+        companyKey: null,
+        ownerRepId: row.owner_rep_id,
+        profileName: null,
+        status: row.status,
+      },
+      state
+        ? {
+            stage: state.stage,
+            lastSentAt: state.last_sent_at,
+            lastReplyAt: state.last_reply_at,
+            nextFollowupAt: state.next_followup_at,
+            wonAt: state.won_at,
+            lostAt: state.lost_at,
+          }
+        : null,
+      null,
+      asOf.getTime(),
+    )
+    if (derived?.state === 'waiting_on_rep') {
+      repliesByRep.set(row.owner_rep_id, (repliesByRep.get(row.owner_rep_id) ?? 0) + 1)
+    }
+  }
   const pipelineByRep = countByRep(pipelineResult.data as Array<Record<string, unknown>> | null)
 
   const actionsByRep = new Map<string, number>()

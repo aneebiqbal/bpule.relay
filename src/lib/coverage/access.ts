@@ -89,6 +89,77 @@ export async function listActiveCoveredIdentities(
   )
 }
 
+export interface ExecutableIdentityScope {
+  executableIdentities: Array<{ id: string; profileId?: string | null }>
+  coveredIdentityIds: string[]
+}
+
+/**
+ * Canonical execution scope for any rep: primary assignments plus active
+ * coverage. Backup-only assignments are eligibility, not execution, and are
+ * excluded. Mirrors `listMyWorkableIdentities` for callers that need another
+ * rep's scope (Manager / Admin team views).
+ */
+export async function listExecutableIdentityScope(
+  client: DbClient,
+  orgId: string,
+  repId: string,
+  businessDate: string,
+): Promise<ExecutableIdentityScope> {
+  const { data: assignments, error } = await client
+    .from('identity_assignments')
+    .select('revenue_identity_id')
+    .eq('organization_id', orgId)
+    .eq('rep_id', repId)
+    .limit(500)
+  if (error) throw error
+
+  const { data: primaryRows, error: primaryError } = await client
+    .from('profile_coverage')
+    .select('profile_id')
+    .eq('organization_id', orgId)
+    .eq('rep_id', repId)
+    .eq('role', 'PRIMARY')
+    .eq('active', true)
+    .limit(200)
+  if (primaryError) throw primaryError
+  const primaryProfileIds = new Set((primaryRows ?? []).map((row) => row.profile_id as string))
+
+  const covered = await listActiveCoveredIdentities(client, orgId, repId, businessDate)
+  const coveredById = new Map(covered.map((row) => [row.revenueIdentityId, row]))
+
+  const ids = [
+    ...new Set([
+      ...(assignments ?? []).map((row) => row.revenue_identity_id as string).filter(Boolean),
+      ...covered.map((row) => row.revenueIdentityId),
+    ]),
+  ]
+  if (ids.length === 0) return { executableIdentities: [], coveredIdentityIds: [] }
+
+  const { data: identityRows, error: identityError } = await client
+    .from('revenue_identities')
+    .select('id, profile_id, status')
+    .eq('organization_id', orgId)
+    .in('id', ids)
+    .limit(500)
+  if (identityError) throw identityError
+
+  const executableIdentities: Array<{ id: string; profileId?: string | null }> = []
+  const coveredIdentityIds: string[] = []
+  const seen = new Set<string>()
+  for (const row of (identityRows ?? []) as Array<{ id: string; profile_id: string | null; status: string }>) {
+    if (row.status !== 'active') continue
+    const isCovered = coveredById.has(row.id)
+    const isPrimary = Boolean(row.profile_id && primaryProfileIds.has(row.profile_id))
+    if (!isCovered && !isPrimary) continue
+    if (seen.has(row.id)) continue
+    seen.add(row.id)
+    executableIdentities.push({ id: row.id, profileId: row.profile_id ?? null })
+    if (isCovered) coveredIdentityIds.push(row.id)
+  }
+  return { executableIdentities, coveredIdentityIds }
+}
+
 /** Profiles a rep may work today: their own plus every actively covered one. */
 export async function listWorkableProfiles(
   client: DbClient,

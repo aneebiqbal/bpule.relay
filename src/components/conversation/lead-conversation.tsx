@@ -16,6 +16,7 @@ import {
 import { cn } from 'cn'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Collapsible } from '@/components/chats/collapsible'
 import { notifyError, notifySuccess } from '@/lib/ui/notify'
 import type { ConversationView } from '@/lib/conversation/service'
 import type { ComposeIntent, ComposerDraft, ConversationTurn } from '@/lib/conversation/types'
@@ -65,6 +66,22 @@ function formatDay(iso: string | null): string {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' })
 }
 
+/** Canonical next action → one short CTA label. No state change, just focus. */
+function ctaLabel(action: string): string {
+  switch (action) {
+    case 'SEND_REPLY':
+      return 'Reply now'
+    case 'SEND_FOLLOWUP':
+      return 'Follow up'
+    case 'SEND_CONNECTION':
+      return 'Send connection'
+    case 'SEND_DM':
+      return 'Send first message'
+    default:
+      return 'Continue'
+  }
+}
+
 function toLocalInput(date: Date): string {
   const off = date.getTimezoneOffset()
   return new Date(date.getTime() - off * 60_000).toISOString().slice(0, 16)
@@ -110,6 +127,7 @@ export function LeadConversation({
   const [copied, setCopied] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef<HTMLDivElement | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hydrated = useRef(false)
@@ -352,48 +370,90 @@ export function LeadConversation({
                   </>
                 )}
               </span>
-              <div ref={moreRef} className="relative ml-auto">
-                <button
-                  type="button"
-                  aria-haspopup="menu"
-                  aria-expanded={moreOpen}
-                  onClick={() => setMoreOpen((v) => !v)}
-                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-bone px-2.5 text-[12px] font-medium text-ink transition-colors hover:bg-bone-raised"
-                >
-                  More
-                  <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
-                    <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                </button>
-                {moreOpen && (
-                  <div role="menu" aria-label="Composer options" className="absolute right-0 z-30 mb-1 w-56 rounded-lg border border-line bg-bone-raised p-1 shadow-lg">
-                    {THREAD_INTENTS.map((i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={intent === i}
-                        onClick={() => { setIntent(i); setMoreOpen(false) }}
-                        className={cn(
-                          'block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] hover:bg-bone focus-visible:bg-bone focus-visible:outline-none',
-                          intent === i ? 'font-medium text-ink' : 'text-graphite',
-                        )}
-                      >
-                        {INTENT_LABEL[i]}
-                        {i === view.suggestedIntent && intent !== i && <span className="ml-1 text-[11px] text-[#9e4517]">suggested</span>}
-                      </button>
-                    ))}
-                    <div className="my-1 border-t border-line" />
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => { setMode('client'); setMoreOpen(false) }}
-                      className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-graphite hover:bg-bone focus-visible:bg-bone focus-visible:outline-none"
-                    >
-                      Paste {firstName}&apos;s reply
-                    </button>
-                  </div>
+              <div className="ml-auto flex items-center gap-1.5">
+                {view.nextAction.requiresAction && (
+                  <button
+                    type="button"
+                    onClick={() => textareaRef.current?.focus()}
+                    className="inline-flex h-8 items-center rounded-lg bg-orange px-2.5 text-[12px] font-medium text-on-accent transition-opacity hover:opacity-90"
+                  >
+                    {ctaLabel(view.nextAction.action)}
+                  </button>
                 )}
+                <div ref={moreRef} className="relative">
+                  <button
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={moreOpen}
+                    onClick={() => setMoreOpen((v) => !v)}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-bone px-2.5 text-[12px] font-medium text-ink transition-colors hover:bg-bone-raised"
+                  >
+                    More
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+                      <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                  {moreOpen && (
+                    <div role="menu" aria-label="Composer options" className="absolute right-0 z-30 mb-1 w-56 rounded-lg border border-line bg-bone-raised p-1 shadow-lg">
+                      {THREAD_INTENTS.map((i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={intent === i}
+                          onClick={() => { setIntent(i); setMoreOpen(false) }}
+                          className={cn(
+                            'block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] hover:bg-bone focus-visible:bg-bone focus-visible:outline-none',
+                            intent === i ? 'font-medium text-ink' : 'text-graphite',
+                          )}
+                        >
+                          {INTENT_LABEL[i]}
+                          {i === view.suggestedIntent && intent !== i && <span className="ml-1 text-[11px] text-[#9e4517]">suggested</span>}
+                        </button>
+                      ))}
+                      <div className="my-1 border-t border-line" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setMode('client'); setMoreOpen(false) }}
+                        className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-graphite hover:bg-bone focus-visible:bg-bone focus-visible:outline-none"
+                      >
+                        Paste {firstName}&apos;s reply
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={composing}
+                        onClick={() => { setMoreOpen(false); void compose({ refine: Boolean(text.trim()) }) }}
+                        className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-graphite hover:bg-bone focus-visible:bg-bone focus-visible:outline-none disabled:opacity-50"
+                      >
+                        Rewrite with AI
+                      </button>
+                      {REFINEMENTS.slice(0, 3).map((r) => (
+                        <button
+                          key={r.label}
+                          type="button"
+                          role="menuitem"
+                          disabled={composing}
+                          onClick={() => { setMoreOpen(false); void compose({ instruction: r.instruction, refine: true }) }}
+                          className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-graphite hover:bg-bone focus-visible:bg-bone focus-visible:outline-none disabled:opacity-50"
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                      <div className="my-1 border-t border-line" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={!text.trim() || overLimit}
+                        onClick={() => { setMoreOpen(false); void logSent({ copyFirst: true }) }}
+                        className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-graphite hover:bg-bone focus-visible:bg-bone focus-visible:outline-none disabled:opacity-50"
+                      >
+                        Copy &amp; log as sent
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -429,6 +489,7 @@ export function LeadConversation({
             ) : (
               <div className="mt-2 space-y-2">
                 <Textarea
+                  ref={textareaRef}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder={view.awaitingReply ? `Reply to ${firstName}, or click "Generate with AI".` : 'Write your message, or click "Generate with AI".'}
@@ -438,17 +499,20 @@ export function LeadConversation({
                 />
 
                 {draft?.rationale && text.trim() && (
-                  <div className="rounded-md border border-line/70 bg-bone-raised/50 p-2 text-[11px] text-graphite">
-                    <p><span className="font-medium text-ink">Goal:</span> {draft.rationale.goal}</p>
-                    {draft.rationale.answers.length > 0 && (
-                      <ul className="mt-1 space-y-0.5">
-                        {draft.rationale.answers.map((a) => (
-                          <li key={a} className="flex items-start gap-1.5"><Check className="mt-0.5 size-3 shrink-0 text-status-success" aria-hidden="true" />Answers: {a}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {draft.rationale.why && <p className="mt-1 text-stone">{draft.rationale.why}</p>}
-                  </div>
+                  <Collapsible label="Why this reply?">
+                    <div className="rounded-md border border-line/70 bg-bone-raised/50 p-2 text-[11px] text-graphite">
+                      <p><span className="font-medium text-ink">Goal:</span> {draft.rationale.goal}</p>
+                      {facts.need && <p><span className="font-medium text-ink">Known facts:</span> {facts.need}</p>}
+                      {draft.rationale.answers.length > 0 && (
+                        <ul className="mt-1 space-y-0.5">
+                          {draft.rationale.answers.map((a) => (
+                            <li key={a} className="flex items-start gap-1.5"><Check className="mt-0.5 size-3 shrink-0 text-status-success" aria-hidden="true" />Question answered: {a}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {draft.rationale.why && <p className="mt-1 text-stone">Evidence used: {draft.rationale.why}</p>}
+                    </div>
+                  </Collapsible>
                 )}
 
                 {issues.length > 0 && (
@@ -460,28 +524,6 @@ export function LeadConversation({
                     ))}
                   </ul>
                 )}
-
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <Button variant="secondary" size="sm" onClick={() => void compose({ refine: Boolean(text.trim()) })} loading={composing}>
-                    <Sparkles className="size-3" aria-hidden="true" />
-                    {text.trim() ? 'Improve with AI' : 'Generate with AI'}
-                  </Button>
-                  {text.trim() && (
-                    <div className="flex flex-wrap gap-1.5" aria-label="Refine with AI">
-                      {REFINEMENTS.slice(0, 3).map((r) => (
-                        <button
-                          key={r.label}
-                          type="button"
-                          disabled={composing}
-                          onClick={() => void compose({ instruction: r.instruction, refine: true })}
-                          className="rounded-full border border-line px-2 py-0.5 text-[11px] text-graphite hover:border-cobalt/40 hover:text-ink disabled:opacity-50"
-                        >
-                          {r.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
 
                 <form
                   className="flex gap-2"
@@ -503,21 +545,16 @@ export function LeadConversation({
                 </form>
 
                 <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <span className={cn('font-mono text-[11px]', overLimit ? 'text-status-danger' : 'text-stone')}>
+                  <Button variant="secondary" size="sm" onClick={() => void compose({ refine: Boolean(text.trim()) })} loading={composing}>
+                    <Sparkles className="size-3" aria-hidden="true" />
+                    {text.trim() ? 'Improve with AI' : 'Generate with AI'}
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => void logSent({ copyFirst: false })} loading={sending} disabled={(!text.trim() && intent !== 'connection') || overLimit}>
+                    Log as sent
+                  </Button>
+                  <span className={cn('ml-auto font-mono text-[11px]', overLimit ? 'text-status-danger' : 'text-stone')}>
                     {intent === 'connection' ? `${charCount}/${CONNECTION_NOTE_LIMIT}` : `${text.trim() ? text.trim().split(/\s+/).length : 0} words`}
                   </span>
-                  <div className="ml-auto flex flex-wrap gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => void copy()} disabled={!text.trim()}>
-                      {copied ? <Check className="size-3" aria-hidden="true" /> : <Copy className="size-3" aria-hidden="true" />}
-                      {copied ? 'Copied' : 'Copy'}
-                    </Button>
-                    <Button variant="secondary" size="sm" onClick={() => void logSent({ copyFirst: false })} loading={sending} disabled={(!text.trim() && intent !== 'connection') || overLimit}>
-                      Log as sent
-                    </Button>
-                    <Button variant="orange" size="sm" onClick={() => void logSent({ copyFirst: true })} loading={sending} disabled={!text.trim() || overLimit}>
-                      <Send className="size-3" aria-hidden="true" /> Copy &amp; log as sent
-                    </Button>
-                  </div>
                 </div>
               </div>
             )}

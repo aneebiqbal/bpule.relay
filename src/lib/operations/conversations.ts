@@ -9,6 +9,7 @@ import type { DbClient } from '@/lib/db/types'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { leadLabel } from '@/lib/operations/labels'
 import { MEETING_OR_LATER_STAGES } from '@/lib/sales/stage-vocabulary'
+import { ageLabel } from '@/components/operations/ops-primitives'
 
 export type ConversationState = 'waiting_on_rep' | 'waiting_on_prospect' | 'follow_up_due' | 'meeting' | 'closed'
 
@@ -139,6 +140,44 @@ export function deriveConversationRow(
     ageHours,
     nextAction,
     href: `/chats?lead=${lead.id}`,
+  }
+}
+
+/**
+ * Why this conversation is in the Inbox, in one canonical sentence. Derived
+ * only from the waiting state and its age — never from AI reasoning, and never
+ * invented when the state is closed.
+ */
+export function attentionReason(row: Pick<ConversationRow, 'state' | 'ageHours'>): string {
+  const age = ageLabel(row.ageHours)
+  switch (row.state) {
+    case 'waiting_on_rep':
+      return `Client replied ${age} ago. No reply has been sent since.`
+    case 'follow_up_due':
+      return `Follow-up due. Last outbound was ${age} ago.`
+    case 'waiting_on_prospect':
+      return `Waiting on the client. Last outbound was ${age} ago.`
+    case 'meeting':
+      return `Meeting scheduled. Last client message was ${age} ago.`
+    case 'closed':
+      return 'This conversation is closed. No action needed.'
+  }
+}
+
+/** Compact queue-row form of the same canonical reason. */
+export function attentionShort(row: Pick<ConversationRow, 'state' | 'ageHours'>): string {
+  const age = ageLabel(row.ageHours)
+  switch (row.state) {
+    case 'waiting_on_rep':
+      return `Client replied ${age} ago`
+    case 'follow_up_due':
+      return `Follow-up due · ${age}`
+    case 'waiting_on_prospect':
+      return `Waiting on client · ${age}`
+    case 'meeting':
+      return `Meeting · ${age}`
+    case 'closed':
+      return 'Closed'
   }
 }
 

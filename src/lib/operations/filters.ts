@@ -113,6 +113,24 @@ export function filtersToRecord(filters: OpsFilters): Record<string, string | nu
   }
 }
 
+const SOURCE_LABELS: Record<string, string> = {
+  linkedin: 'LinkedIn',
+  upwork: 'Upwork',
+  email: 'Email',
+  referral: 'Referral',
+  other: 'Imported',
+}
+
+/**
+ * Canonical display label for a lead's stored source. Unknown or missing means
+ * the origin cannot be proven, so it says so — never "Other" or a guess.
+ */
+export function sourceLabel(source: string | null | undefined): string {
+  const s = (source ?? '').trim().toLowerCase()
+  if (!s) return 'Source not recorded'
+  return SOURCE_LABELS[s] ?? 'Source not recorded'
+}
+
 /** Lead source → comparison bucket. Never guesses: unknown is `other`. */
 export function sourceBucket(source: string | null | undefined): OpsSource {
   const s = (source ?? '').toLowerCase()

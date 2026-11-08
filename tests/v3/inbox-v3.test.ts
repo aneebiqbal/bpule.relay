@@ -306,7 +306,7 @@ describe('INBOX_THREAD_FAILURE_ISOLATED', () => {
 describe('INBOX_CONTEXT_FAILURE_ISOLATED', () => {
   it('INBOX_CONTEXT_FAILURE_ISOLATED: a failed context pane keeps the thread', () => {
     const page = read('src/app/(app)/chats/page.tsx')
-    expect(page).toContain('Couldn’t load this conversation’s context. The thread is still available.')
+    expect(page).toContain('Lead context could not be loaded. The conversation is still available.')
   })
 })
 

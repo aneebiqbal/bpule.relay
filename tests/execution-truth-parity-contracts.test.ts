@@ -197,3 +197,61 @@ describe('REP_PROFILE_CARD_LINK_FILTER_PARITY', () => {
     expect(card).toMatch(/profile=\$\{encodeURIComponent\(profile\.identityIds\[0\]\)\}/)
   })
 })
+
+describe('MANAGER_PERSONAL_INBOX_PARITY', () => {
+  it('the manager personal block reads the same canonical authority as Rep Home', () => {
+    expect(read('src/app/(app)/dashboard/page.tsx')).toMatch(/getInboxCountsForRep/)
+    const manager = read('src/components/v4/v4-manager-home.tsx')
+    expect(manager).toMatch(/personal\.day\?\.repliesWaiting/)
+    expect(manager).toMatch(/personal\.day\?\.waitingOnClient/)
+  })
+})
+
+describe('MANAGER_TEAM_INBOX_PARITY', () => {
+  it("team rows use canonical per-rep counts over each rep's executable scope", () => {
+    const loader = read('src/lib/team/load-manager-home.ts')
+    expect(loader).toMatch(/listExecutableIdentityScope/)
+    expect(loader).toMatch(/getInboxCountsForRep/)
+    expect(loader).toMatch(/inboxCountsByRep/)
+    expect(read('src/lib/team/manager-home-summary.ts')).toMatch(/canonical\?\.needsReply/)
+  })
+})
+
+describe('ADMIN_ORG_INBOX_PARITY', () => {
+  it('Admin reply and follow-up metrics come from the org canonical authority', () => {
+    const loader = read('src/lib/team/load-admin-command-center.ts')
+    expect(loader).toMatch(/getInboxCountsForOrg/)
+    const summary = read('src/lib/team/admin-command-summary.ts')
+    expect(summary).toMatch(/inboxCounts\?\.needsReply/)
+    expect(summary).toMatch(/inboxCounts\?\.followups/)
+  })
+})
+
+describe('INBOX_REFACTOR_PRESERVES_CANONICAL_COUNTS', () => {
+  it('canonical counts take precedence; lead status is only an explicit fallback', () => {
+    expect(read('src/lib/team/manager-home-summary.ts')).toMatch(/canonical\?\.needsReply \?\? row\.repliesWaiting/)
+  })
+
+  it('the queue authority still derives counts from conversation state', () => {
+    const queue = read('src/lib/operations/chat-queue.ts')
+    expect(queue).toMatch(/countChatViews/)
+    expect(queue).not.toMatch(/status === 'replied'/)
+  })
+})
+
+describe('INBOX_REFACTOR_PRESERVES_SCOPE', () => {
+  it('the executable scope is primary + active coverage, backup-only excluded', () => {
+    const access = read('src/lib/coverage/access.ts')
+    expect(access).toMatch(/role', 'PRIMARY'/)
+    expect(access).toMatch(/listActiveCoveredIdentities/)
+    expect(access).toMatch(/if \(!isCovered && !isPrimary\) continue/)
+  })
+})
+
+describe('INBOX_INTELLIGENCE_DOES_NOT_DRIVE_STATE', () => {
+  it('intelligence adds presentation only and never computes Inbox counts', () => {
+    const intel = read('src/lib/operations/chat-intelligence.ts')
+    expect(intel).toMatch(/deriveConversationRow/)
+    expect(intel).not.toMatch(/needsReply|waitingOnClient|followups|repliesWaiting/)
+  })
+})

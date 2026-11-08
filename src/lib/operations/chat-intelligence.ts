@@ -10,6 +10,7 @@ import type { AuthContext } from '@/lib/auth/organization'
 import { repInScope, type OperationalScope } from '@/lib/operations/scope'
 import { deriveConversationRow, type ConversationRow } from '@/lib/operations/conversations'
 import { isMissingRelation } from '@/lib/operations/db-errors'
+import { loadTimeline, type TimelineRow } from '@/lib/operations/activity'
 
 export interface SalesThesisView {
   whyThisAccount: string | null
@@ -32,6 +33,14 @@ export interface ChatIntelligence {
   ownerName: string | null
   profileId: string | null
   profileName: string | null
+  /** Raw stored source — display parity with the queue row and history. */
+  sourceRaw?: string | null
+  direction?: 'inbound' | 'outbound' | null
+  leadCreatedAt: string | null
+  /** Internal note count for the collapsed context section. null = unavailable. */
+  noteCount: number | null
+  /** Canonical lead history (action events only), newest first. */
+  history: TimelineRow[]
   score: number | null
   qualification: string | null
   buyerIntent: string | null
@@ -50,7 +59,14 @@ export interface ChatIntelligence {
     buyingSignals: string[]
   } | null
   lastClientIntent: string | null
-  openTasks: Array<{ id: string; title: string; priority: string; dueAt: string | null; status: string }> | null
+  openTasks: Array<{
+    id: string
+    title: string
+    priority: string
+    dueAt: string | null
+    status: string
+    assigneeName: string | null
+  }> | null
 }
 
 function strings(value: unknown): string[] {
@@ -98,6 +114,7 @@ export async function loadChatIntelligence(
     .from('leads')
     .select(
       'id, contact_name, contact_title, company, company_key, url, owner_rep_id, revenue_identity_id, status, canonical_score, ' +
+        'source, direction, created_at, ' +
         'buyer_intent:canonical_intelligence->buyerIntent, qualification:canonical_intelligence->>qualification, thesis:canonical_intelligence->salesThesis',
     )
     .eq('organization_id', auth.orgId)
@@ -110,7 +127,7 @@ export async function loadChatIntelligence(
   if (scope.repIds !== null && !(ownerRepId && repInScope(scope, ownerRepId))) return null
 
   const identityId = (row.revenue_identity_id as string | null) ?? null
-  const [stateRes, ownerRes, identityRes, tasksRes] = await Promise.all([
+  const [stateRes, ownerRes, identityRes, tasksRes, noteCountRes, historyRes] = await Promise.all([
     client
       .from('conversation_states')
       .select('stage, last_sent_at, last_reply_at, next_followup_at, won_at, lost_at, facts:memory->facts, analysis:memory->lastClientAnalysis')
@@ -123,13 +140,27 @@ export async function loadChatIntelligence(
     opts.tasks
       ? client
           .from('assigned_tasks')
-          .select('id, title, priority, due_at, status')
+          .select('id, title, priority, due_at, status, assignee_rep_id')
           .eq('organization_id', auth.orgId)
           .eq('lead_id', leadId)
           .in('status', ['OPEN', 'IN_PROGRESS', 'WAITING'])
           .order('due_at', { ascending: true, nullsFirst: false })
           .limit(10)
       : Promise.resolve({ data: null, error: null }),
+    (async () => {
+      try {
+        return await client
+          .from('internal_notes')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', auth.orgId)
+          .eq('subject_type', 'LEAD')
+          .eq('subject_id', leadId)
+          .is('deleted_at', null)
+      } catch {
+        return { data: null, count: null, error: null }
+      }
+    })(),
+    loadTimeline(client, { orgId: auth.orgId, repIds: null, leadIds: [leadId], limit: 10 }).catch(() => []),
   ])
 
   const state = (stateRes.data ?? null) as Record<string, unknown> | null
@@ -163,16 +194,37 @@ export async function loadChatIntelligence(
   )
 
   const taskError = (tasksRes as { error?: unknown }).error
-  const openTasks =
-    !opts.tasks || (taskError && isMissingRelation(taskError))
-      ? null
-      : (((tasksRes as { data?: unknown }).data ?? []) as Array<{ id: string; title: string; priority: string; due_at: string | null; status: string }>).map((t) => ({
-          id: t.id,
-          title: t.title,
-          priority: t.priority,
-          dueAt: t.due_at,
-          status: t.status,
-        }))
+  const tasksUnavailable = Boolean(taskError && isMissingRelation(taskError))
+  const taskRows = !opts.tasks || tasksUnavailable
+    ? []
+    : (((tasksRes as { data?: unknown }).data ?? []) as Array<{
+        id: string
+        title: string
+        priority: string
+        due_at: string | null
+        status: string
+        assignee_rep_id: string | null
+      }>)
+  const assigneeIds = [...new Set(taskRows.map((t) => t.assignee_rep_id).filter(Boolean))] as string[]
+  const assigneeRes = assigneeIds.length
+    ? await client.from('reps').select('id, name').eq('organization_id', auth.orgId).in('id', assigneeIds)
+    : { data: [] as Array<{ id: string; name: string }>, error: null }
+  const assigneeRows = ((assigneeRes as { data?: unknown }).data ?? []) as Array<{ id: string; name: string }>
+  const assigneeNames = new Map(assigneeRows.map((r) => [r.id, r.name]))
+  const openTasks = !opts.tasks || tasksUnavailable
+    ? null
+    : taskRows.map((t) => ({
+        id: t.id,
+        title: t.title,
+        priority: t.priority,
+        dueAt: t.due_at,
+        status: t.status,
+        assigneeName: t.assignee_rep_id ? assigneeNames.get(t.assignee_rep_id) ?? null : null,
+      }))
+  const noteCount = (noteCountRes as { count?: number | null }).count ?? null
+  // History is the canonical action timeline; tasks and notes have their own
+  // sections, so they never appear twice.
+  const history = (historyRes ?? []).filter((r) => r.category !== 'task' && r.category !== 'note')
 
   return {
     leadId,
@@ -185,6 +237,11 @@ export async function loadChatIntelligence(
     ownerName,
     profileId: identityId,
     profileName,
+    sourceRaw: (row.source as string | null) ?? null,
+    direction: row.direction === 'inbound' ? 'inbound' : 'outbound',
+    leadCreatedAt: (row.created_at as string | null) ?? null,
+    noteCount,
+    history,
     score: (row.canonical_score as number | null) ?? null,
     qualification: (row.qualification as string | null) ?? null,
     buyerIntent: buyerIntentLevel(row.buyer_intent),

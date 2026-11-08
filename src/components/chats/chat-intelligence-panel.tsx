@@ -1,10 +1,9 @@
 import Link from 'next/link'
 import { StatusBadge } from '@/components/ui/status-badge'
-import { InterventionMenu } from '@/components/operations/intervention-menu'
 import { AssignTaskButton } from '@/components/operations/assign-task-button'
 import { NotesPanel } from '@/components/operations/notes-panel'
-import { InlineEmpty, ageLabel, relativeTime } from '@/components/operations/ops-primitives'
-import { CONVERSATION_STATE_LABEL } from '@/lib/operations/conversations'
+import { InlineEmpty } from '@/components/operations/ops-primitives'
+import { Collapsible } from '@/components/chats/collapsible'
 import type { ChatIntelligence } from '@/lib/operations/chat-intelligence'
 
 const INTENT_VARIANT: Record<string, 'success' | 'info' | 'neutral'> = { HIGH: 'success', MEDIUM: 'info', LOW: 'neutral', UNKNOWN: 'neutral' }
@@ -42,10 +41,28 @@ function List({ title, items, tone }: { title: string; items: string[]; tone?: '
   )
 }
 
+function dueLabel(iso: string | null, now: number): string {
+  if (!iso) return 'No due date'
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return 'No due date'
+  const days = Math.ceil((t - now) / 86_400_000)
+  if (days < 0) return `${Math.abs(days)}d overdue`
+  if (days === 0) return 'Due today'
+  if (days === 1) return 'Tomorrow'
+  return `Due in ${days}d`
+}
+
+function historyDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 /**
- * Right pane: who this is, where the deal stands and what to do next. Every
- * fact is canonical intelligence — nothing is recomputed here. Internal notes
- * render in their own panel, never inside the thread.
+ * Right pane: a compact sales card. Overview, next action, related work,
+ * internal notes and lead history. Every fact is canonical intelligence —
+ * nothing is recomputed here. Deep thesis / facts stay collapsed; internal
+ * notes render in their own panel, never inside the thread.
  */
 export function ChatIntelligencePanel({
   intel,
@@ -64,41 +81,10 @@ export function ChatIntelligencePanel({
   const clock = now ?? Date.now()
   const c = intel.conversation
   return (
-    <div className="space-y-3" aria-label="Lead intelligence">
+    <div className="space-y-3" aria-label="Lead context">
       <section className="rounded-lg border border-line bg-bone p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h2 className="truncate text-[15px] font-medium tracking-[-0.01em] text-ink">{intel.person}</h2>
-            <p className="mt-0.5 truncate text-[12px] text-graphite">
-              {intel.title ?? 'No title'}
-              {intel.company && (
-                <>
-                  {' · '}
-                  {intel.companyKey ? (
-                    <Link href={`/accounts/${encodeURIComponent(intel.companyKey)}`} className="hover:underline">
-                      {intel.company}
-                    </Link>
-                  ) : (
-                    intel.company
-                  )}
-                </>
-              )}
-            </p>
-          </div>
-          {canIntervene && (
-            <InterventionMenu
-              repId={intel.ownerRepId}
-              leadId={intel.leadId}
-              companyKey={intel.companyKey}
-              reps={reps}
-              canAssign={tasksAvailable}
-              notesAnchor="#chat-notes"
-              label="Act"
-            />
-          )}
-        </div>
-
-        <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5">
+        <h3 className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">Overview</h3>
+        <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2">
           <Fact label="Stage">{intel.stage ?? intel.status ?? '—'}</Fact>
           <Fact label="Score">
             {intel.score !== null ? (
@@ -121,74 +107,62 @@ export function ChatIntelligencePanel({
               <span className="text-stone">Unknown</span>
             )}
           </Fact>
-          <Fact label="Waiting">
-            {c ? (
-              <>
-                {CONVERSATION_STATE_LABEL[c.state]}
-                {c.ageHours !== null ? ` · ${ageLabel(c.ageHours)}` : ''}
-              </>
-            ) : (
-              <span className="text-stone">No conversation yet</span>
-            )}
-          </Fact>
-          <Fact label="Owner">{intel.ownerName ?? <span className="text-status-warning">Unassigned</span>}</Fact>
-          <Fact label="Profile">{intel.profileName ?? <span className="text-status-warning">Not assigned</span>}</Fact>
         </dl>
-
         <p className="mt-3 rounded-md bg-bone-raised px-2.5 py-2 text-[12px] ring-1 ring-line/70">
           <span className="text-stone">Next action: </span>
           <span className="font-medium text-ink">{c?.nextAction ?? 'Start the conversation'}</span>
-          {intel.ownerName && <span className="text-stone"> · owner {intel.ownerName}</span>}
         </p>
       </section>
 
-      {intel.thesis && (
-        <Section title="Sales thesis">
-          <dl className="space-y-1.5 text-[12px]">
-            {intel.thesis.whyThisAccount && <Row label="Why this account" value={intel.thesis.whyThisAccount} />}
-            {intel.thesis.likelyOpportunity && <Row label="Opportunity" value={intel.thesis.likelyOpportunity} />}
-            {intel.thesis.whyThisSender && <Row label="Why this sender" value={intel.thesis.whyThisSender} />}
-            {intel.thesis.bestEntryPoint && <Row label="Entry point" value={intel.thesis.bestEntryPoint} />}
-          </dl>
-          <List title="Missing evidence" items={intel.thesis.missingEvidence} tone="warning" />
-          <List title="Risks" items={intel.thesis.risks} tone="warning" />
-          {intel.thesis.confidence && <p className="mt-2 text-[11px] text-stone">Confidence: {intel.thesis.confidence}</p>}
+      {(intel.thesis || intel.facts) && (
+        <Section title="Sales context">
+          <Collapsible label="Why this account" count={null}>
+            {intel.thesis && (
+              <dl className="space-y-1.5 text-[12px]">
+                {intel.thesis.whyThisAccount && <Row label="Why this account" value={intel.thesis.whyThisAccount} />}
+                {intel.thesis.likelyOpportunity && <Row label="Opportunity" value={intel.thesis.likelyOpportunity} />}
+                {intel.thesis.whyThisSender && <Row label="Why this sender" value={intel.thesis.whyThisSender} />}
+                {intel.thesis.bestEntryPoint && <Row label="Entry point" value={intel.thesis.bestEntryPoint} />}
+              </dl>
+            )}
+            {intel.thesis && <List title="Missing evidence" items={intel.thesis.missingEvidence} tone="warning" />}
+            {intel.thesis && <List title="Risks" items={intel.thesis.risks} tone="warning" />}
+            {intel.facts && (
+              <dl className="space-y-1.5 text-[12px]">
+                <Row label="Need" value={intel.facts.need} />
+                <Row label="Timeline" value={intel.facts.timeline} />
+                <Row label="Budget" value={intel.facts.budget} />
+                <Row label="Decision maker" value={intel.facts.decisionMaker} />
+                {intel.facts.nextStepNotes && <Row label="Next step" value={intel.facts.nextStepNotes} />}
+              </dl>
+            )}
+            {intel.facts && <List title="Waiting for your answer" items={intel.facts.openQuestions} tone="orange" />}
+            {intel.facts && <List title="Buying signals" items={intel.facts.buyingSignals} tone="success" />}
+            {intel.facts && <List title="Objections" items={intel.facts.objections} tone="warning" />}
+          </Collapsible>
         </Section>
       )}
 
-      {intel.facts && (
-        <Section title="Conversation facts">
-          <dl className="space-y-1.5 text-[12px]">
-            <Row label="Need" value={intel.facts.need} />
-            <Row label="Timeline" value={intel.facts.timeline} />
-            <Row label="Budget" value={intel.facts.budget} />
-            <Row label="Decision maker" value={intel.facts.decisionMaker} />
-            {intel.facts.nextStepNotes && <Row label="Next step" value={intel.facts.nextStepNotes} />}
-          </dl>
-          <List title="Waiting for your answer" items={intel.facts.openQuestions} tone="orange" />
-          <List title="Buying signals" items={intel.facts.buyingSignals} tone="success" />
-          <List title="Objections" items={intel.facts.objections} tone="warning" />
-        </Section>
-      )}
-
-      <Section title="Open tasks">
+      <Section title="Related work">
         {intel.openTasks === null ? (
-          <p className="text-[12px] text-graphite">This feature is unavailable right now.</p>
+          <p className="text-[12px] text-graphite">Tasks could not be loaded. The conversation is still available.</p>
         ) : intel.openTasks.length === 0 ? (
           <InlineEmpty>No open tasks on this lead.</InlineEmpty>
         ) : (
-          <ul className="space-y-1">
+          <ul className="space-y-1.5">
             {intel.openTasks.map((t) => (
               <li key={t.id}>
-                <Link href={`/tasks?task=assigned:${t.id}`} className="flex justify-between gap-2 text-[12px] hover:underline">
-                  <span className="truncate text-ink">{t.title}</span>
-                  <span className="shrink-0 text-stone">{t.dueAt ? relativeTime(t.dueAt, clock).replace(' ago', 'overdue') : t.priority.toLowerCase()}</span>
+                <Link href={`/tasks?task=assigned:${t.id}`} className="block rounded-md px-1.5 py-1 text-[12px] transition-colors hover:bg-bone-raised">
+                  <span className="block truncate text-ink">{t.title}</span>
+                  <span className="mt-0.5 block text-[11px] text-stone">
+                    {t.assigneeName ?? 'Unassigned'} · {dueLabel(t.dueAt, clock)}
+                  </span>
                 </Link>
               </li>
             ))}
           </ul>
         )}
-        {canIntervene && reps.length > 0 && (
+        {canIntervene && tasksAvailable && reps.length > 0 && (
           <div className="mt-2 border-t border-line/70 pt-2">
             <AssignTaskButton
               reps={reps}
@@ -200,13 +174,33 @@ export function ChatIntelligencePanel({
         )}
       </Section>
 
-      <div id="chat-notes" className="scroll-mt-20">
-        <NotesPanel subjectType="LEAD" subjectId={intel.leadId} />
-      </div>
+      <section id="chat-notes" className="scroll-mt-20 rounded-lg border border-line/70 bg-bone p-3">
+        <Collapsible label="Internal notes" count={intel.noteCount}>
+          <NotesPanel subjectType="LEAD" subjectId={intel.leadId} title="Notes" />
+        </Collapsible>
+      </section>
+
+      <section className="rounded-lg border border-line/70 bg-bone p-3">
+        <Collapsible label="Lead history" count={intel.history.length || null}>
+          {intel.history.length === 0 ? (
+            <p className="px-2 text-[12px] text-graphite">No history recorded yet.</p>
+          ) : (
+            <ul className="space-y-1.5 px-2">
+              {intel.history.map((h) => (
+                <li key={h.id} className="flex items-baseline gap-2 text-[12px]">
+                  <span className="w-12 shrink-0 tabular-nums text-stone">{historyDate(h.at)}</span>
+                  <span className="min-w-0 flex-1 text-ink">{h.event}</span>
+                  <span className="shrink-0 text-[11px] text-stone">{h.actorName ?? 'System'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Collapsible>
+      </section>
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[12px]">
         <Link href={`/leads/${intel.leadId}`} className="font-medium text-graphite hover:text-ink">
-          Open full lead →
+          View full lead →
         </Link>
         {intel.companyKey && (
           <Link href={`/accounts/${encodeURIComponent(intel.companyKey)}`} className="text-graphite hover:text-ink">
@@ -218,9 +212,6 @@ export function ChatIntelligencePanel({
             Open rep →
           </Link>
         )}
-        <a href="#chat-notes" className="text-graphite hover:text-ink">
-          Add note →
-        </a>
       </div>
     </div>
   )

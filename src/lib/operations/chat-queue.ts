@@ -40,6 +40,9 @@ export type ChatPriority = 'critical' | 'high' | 'normal' | 'low'
 export interface ChatRow extends ConversationRow {
   title: string | null
   source: OpsSource
+  /** Raw stored source — the display label must match the lead and history. */
+  sourceRaw?: string | null
+  direction?: 'inbound' | 'outbound' | null
   profileId: string | null
   /** Client's last analysed intent (canonical conversation memory). */
   clientIntent: string | null
@@ -192,6 +195,7 @@ interface LeadRowRaw {
   sender_profile_id: string | null
   status: string | null
   source: string | null
+  direction: string | null
 }
 
 interface StateRowRaw {
@@ -277,7 +281,7 @@ export async function loadChatQueue(
 
   let leadsQ = client
     .from('leads')
-    .select('id, contact_name, contact_title, company, company_key, owner_rep_id, revenue_identity_id, sender_profile_id, status, source')
+    .select('id, contact_name, contact_title, company, company_key, owner_rep_id, revenue_identity_id, sender_profile_id, status, source, direction')
     .eq('organization_id', query.orgId)
     .eq('archived', false)
     .eq('is_test', false)
@@ -350,6 +354,8 @@ export async function loadChatQueue(
       href: `/chats?lead=${lead.id}`,
       title: lead.contact_title,
       source: sourceBucket(lead.source),
+      sourceRaw: lead.source,
+      direction: lead.direction === 'inbound' ? 'inbound' : 'outbound',
       profileId: lead.revenue_identity_id,
       clientIntent,
       preview: null,

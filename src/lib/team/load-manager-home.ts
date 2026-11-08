@@ -14,6 +14,9 @@ import {
 } from '@/lib/team/manager-home-summary'
 import { countOverdueAssignedByRep } from '@/lib/tasks/assigned-tasks'
 import { loadOutcomeEventCounts } from '@/lib/operations/outcome-events'
+import { listExecutableIdentityScope } from '@/lib/coverage/access'
+import { getInboxCountsForRep } from '@/lib/operations/inbox-counts'
+import { perfTrace } from '@/lib/perf-trace'
 
 const MEANINGFUL_ACTIONS = [
   'REPLY_SENT',
@@ -96,6 +99,22 @@ export async function loadManagerHomeTeam(): Promise<{
           ? named[0]
           : named.join(' · ')
 
+    // Canonical Inbox counts per managed rep over each rep's executable
+    // profiles (primary + active coverage). Team scope never uses the
+    // manager's personal identity.
+    const inboxCountsByRep = await perfTrace('manager:inboxCounts', () =>
+      Promise.all([...allowed].map(async (repId) => {
+        const scope = await listExecutableIdentityScope(client, ctx.orgId, repId, teamDay.businessDate)
+        const counts = await getInboxCountsForRep(client, {
+          orgId: ctx.orgId,
+          repId,
+          executableIdentities: scope.executableIdentities,
+          coveredIdentityIds: scope.coveredIdentityIds,
+        }).catch(() => null)
+        return [repId, counts ? { needsReply: counts.needsReply, followups: counts.followups } : null] as const
+      })).then((entries) => new Map(entries.filter((entry): entry is [string, { needsReply: number; followups: number }] => entry[1] !== null))),
+    )
+
     const data = assembleManagerHomeTeamData({
       teamName,
       teamDay,
@@ -104,6 +123,7 @@ export async function loadManagerHomeTeam(): Promise<{
       activity,
       overdueTasksByRep,
       outcomeEventsByRep: outcomeEvents.byActor,
+      inboxCountsByRep,
     })
 
     return { data }

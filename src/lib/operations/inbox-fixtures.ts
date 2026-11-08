@@ -8,6 +8,7 @@
  */
 import type { ChatRow } from '@/lib/operations/chat-queue'
 import type { ChatIntelligence, SalesThesisView } from '@/lib/operations/chat-intelligence'
+import type { TimelineRow } from '@/lib/operations/activity'
 
 const NOW = Date.parse('2026-11-03T09:00:00.000Z')
 const hoursAgo = (h: number) => new Date(NOW - h * 3_600_000).toISOString()
@@ -252,6 +253,8 @@ export const INBOX_FIXTURE_ROWS: ChatRow[] = SEEDS.map((s) => ({
   href: `/chats?lead=${s.id}`,
   title: s.title,
   source: 'linkedin',
+  sourceRaw: 'linkedin',
+  direction: 'outbound',
   profileId: s.profileName ? `profile-${s.profileName.toLowerCase().replace(/\s+/g, '-')}` : null,
   clientIntent: s.intent,
   preview: s.preview,
@@ -273,6 +276,35 @@ const THESIS: SalesThesisView = {
   confidence: 'MEDIUM',
 }
 
+const FIXTURE_CREATED = hoursAgo(30)
+
+export const INBOX_FIXTURE_CREATED_AT = FIXTURE_CREATED
+
+/** Canonical action events for the fixture, derived from the row's own timestamps. */
+function inboxFixtureHistory(row: ChatRow): TimelineRow[] {
+  const base = {
+    actorRepId: row.ownerRepId,
+    actorName: row.ownerName,
+    profileName: row.profileName,
+    leadId: row.leadId,
+    leadLabel: row.person,
+    company: row.company,
+    companyKey: row.companyKey,
+    href: row.href,
+    source: 'linkedin' as const,
+  }
+  const events: TimelineRow[] = [
+    { ...base, id: 'h-created', at: FIXTURE_CREATED, event: 'Lead created', category: 'pipeline', result: null },
+  ]
+  if (row.lastOutboundAt) {
+    events.push({ ...base, id: 'h-out', at: row.lastOutboundAt, event: 'Connection sent', category: 'outreach', result: 'LinkedIn' })
+  }
+  if (row.lastInboundAt) {
+    events.push({ ...base, id: 'h-in', at: row.lastInboundAt, event: 'Inbound received', category: 'conversation', result: 'LinkedIn' })
+  }
+  return events.sort((a, b) => b.at.localeCompare(a.at))
+}
+
 export function inboxFixtureIntelligence(leadId: string): ChatIntelligence {
   const row = INBOX_FIXTURE_ROWS.find((r) => r.leadId === leadId) ?? INBOX_FIXTURE_ROWS[0]
   return {
@@ -286,6 +318,11 @@ export function inboxFixtureIntelligence(leadId: string): ChatIntelligence {
     ownerName: row.ownerName,
     profileId: row.profileId,
     profileName: row.profileName,
+    sourceRaw: row.sourceRaw,
+    direction: row.direction,
+    leadCreatedAt: FIXTURE_CREATED,
+    noteCount: 2,
+    history: inboxFixtureHistory(row),
     score: 82,
     qualification: 'WORTH_PURSUING',
     buyerIntent: 'HIGH',
@@ -321,8 +358,8 @@ export function inboxFixtureIntelligence(leadId: string): ChatIntelligence {
     },
     lastClientIntent: row.clientIntent,
     openTasks: [
-      { id: 'task-1', title: 'Send the MVP pricing one-pager', priority: 'HIGH', dueAt: null, status: 'OPEN' },
-      { id: 'task-2', title: 'Confirm the January onboarding date', priority: 'NORMAL', dueAt: null, status: 'OPEN' },
+      { id: 'task-1', title: 'Send the MVP pricing one-pager', priority: 'HIGH', dueAt: null, status: 'OPEN', assigneeName: 'Mehak' },
+      { id: 'task-2', title: 'Confirm the January onboarding date', priority: 'NORMAL', dueAt: null, status: 'OPEN', assigneeName: 'Dawood' },
     ],
   }
 }

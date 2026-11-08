@@ -7,12 +7,13 @@
  * same shell as /chats.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Send, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { ArrowLeft, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { cn } from 'cn'
 import { Drawer } from '@/components/ui/drawer'
 import { Select } from '@/components/ui/select'
 import { ChatQueueList } from '@/components/chats/chat-queue-list'
 import { ChatIntelligencePanel } from '@/components/chats/chat-intelligence-panel'
+import { Collapsible } from '@/components/chats/collapsible'
 import { IntelligenceDrawer } from '@/components/chats/intelligence-drawer'
 import { ThreadHeader } from '@/components/chats/thread-header'
 import { ageLabel } from '@/components/operations/ops-primitives'
@@ -20,6 +21,7 @@ import { CONVERSATION_STATE_LABEL } from '@/lib/operations/conversations'
 import { chatViewMatches, countChatViews, type ChatView } from '@/lib/operations/chat-queue'
 import { INBOX_PRIMARY_VIEWS } from '@/lib/navigation/inbox-nav'
 import {
+  INBOX_FIXTURE_CREATED_AT,
   INBOX_FIXTURE_MESSAGES,
   INBOX_FIXTURE_ROWS,
   inboxFixtureIntelligence,
@@ -199,6 +201,7 @@ export function InboxFixture({ showOwner = false, className }: { showOwner?: boo
           reps={[{ id: 'rep-mehak', name: 'Mehak' }]}
           canIntervene={showOwner}
           tasksAvailable
+          leadCreatedAt={INBOX_FIXTURE_CREATED_AT}
           contextAction={
             <div className="xl:hidden">
               <IntelligenceDrawer>
@@ -259,32 +262,55 @@ export function InboxFixture({ showOwner = false, className }: { showOwner?: boo
               <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-stone">
                 Sending as <span className="truncate font-medium text-graphite">{row.profileName ?? 'No profile'}</span>
               </span>
-              <div ref={moreRef} className="relative ml-auto">
+              <div className="ml-auto flex items-center gap-1.5">
                 <button
                   type="button"
-                  aria-haspopup="menu"
-                  aria-expanded={moreOpen}
-                  onClick={() => setMoreOpen((v) => !v)}
-                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-bone px-2.5 text-[12px] font-medium text-ink hover:bg-bone-raised"
+                  className="inline-flex h-8 items-center rounded-lg bg-orange px-2.5 text-[12px] font-medium text-on-accent transition-opacity hover:opacity-90"
                 >
-                  More
+                  Reply now
                 </button>
-                {moreOpen && (
-                  <div role="menu" aria-label="Composer options" className="absolute right-0 z-30 mb-1 w-56 rounded-lg border border-line bg-bone-raised p-1 shadow-lg">
-                    {['Connection note', 'First message', 'Follow-up', 'Reply', 'Message'].map((label) => (
-                      <button
-                        key={label}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={label === 'Reply'}
-                        className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-graphite hover:bg-bone focus-visible:bg-bone focus-visible:outline-none"
-                        onClick={() => setMoreOpen(false)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div ref={moreRef} className="relative">
+                  <button
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={moreOpen}
+                    onClick={() => setMoreOpen((v) => !v)}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-bone px-2.5 text-[12px] font-medium text-ink hover:bg-bone-raised"
+                  >
+                    More
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+                      <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                  {moreOpen && (
+                    <div role="menu" aria-label="Composer options" className="absolute right-0 z-30 mb-1 w-56 rounded-lg border border-line bg-bone-raised p-1 shadow-lg">
+                      {['Connection note', 'First message', 'Follow-up', 'Reply', 'Message'].map((label) => (
+                        <button
+                          key={label}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={label === 'Reply'}
+                          className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-graphite hover:bg-bone focus-visible:bg-bone focus-visible:outline-none"
+                          onClick={() => setMoreOpen(false)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                      <div className="my-1 border-t border-line" />
+                      {['Paste reply', 'Rewrite', 'Shorter', 'Warmer', 'More direct', 'Copy & log as sent'].map((label) => (
+                        <button
+                          key={label}
+                          type="button"
+                          role="menuitem"
+                          className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-graphite hover:bg-bone focus-visible:bg-bone focus-visible:outline-none"
+                          onClick={() => setMoreOpen(false)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <textarea
@@ -293,6 +319,13 @@ export function InboxFixture({ showOwner = false, className }: { showOwner?: boo
               aria-label="Your message"
               className="mt-2 w-full resize-none rounded-md border border-line bg-bone px-3 py-2 text-[13px] text-ink focus:border-orange/40 focus:outline-none"
             />
+            <Collapsible label="Why this reply?" className="mt-2">
+              <div className="rounded-md border border-line/70 bg-bone-raised/50 p-2 text-[11px] text-graphite">
+                <p><span className="font-medium text-ink">Goal:</span> Answer the client&apos;s pricing question with the two-seat pilot.</p>
+                <p><span className="font-medium text-ink">Known facts:</span> Budget approved for two seats; start in January.</p>
+                <p className="mt-1 text-stone">Evidence used: Their last message asked for MVP pricing.</p>
+              </div>
+            </Collapsible>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -302,15 +335,9 @@ export function InboxFixture({ showOwner = false, className }: { showOwner?: boo
               </button>
               <button
                 type="button"
-                className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-ink hover:bg-bone-raised"
+                className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-ink hover:bg-bone-raised"
               >
                 Log as sent
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-md bg-orange px-2.5 py-1.5 text-[12px] font-medium text-on-accent hover:opacity-90"
-              >
-                <Send className="size-3.5" aria-hidden /> Copy &amp; log as sent
               </button>
             </div>
           </div>

@@ -103,6 +103,12 @@ export function assembleManagerRepSnapshots(input: {
    * for callers that have not loaded events.
    */
   outcomeEventsByRep?: Map<string, { meetings: number; wins: number }>
+  /**
+   * Canonical Inbox counts by rep (needsReply / followups) over each rep's
+   * executable profiles. When given they are the only reply/follow-up truth;
+   * the lead-status fallbacks are for callers that have not loaded the queue.
+   */
+  inboxCountsByRep?: Map<string, { needsReply: number; followups: number }>
 }): ManagerRepSnapshot[] {
   const liveByRep = new Map(input.teamLive.people.map((p) => [p.repId, p]))
   const overdue = input.overdueTasksByRep ?? new Map<string, number>()
@@ -120,14 +126,15 @@ export function assembleManagerRepSnapshots(input: {
     const totalCompleted = live?.totalCompleted ?? row.actionsToday
     const targetPct = totalTarget > 0 ? (totalCompleted / totalTarget) * 100 : row.commitmentProgress * 100
     const profile = row.identities[0] ?? null
+    const canonical = input.inboxCountsByRep?.get(row.repId)
 
     snaps.push({
       repId: row.repId,
       repName: row.repName,
       activeProfile: profile?.name ?? live?.identities[0]?.name ?? null,
       completedToday: totalCompleted,
-      repliesWaiting: row.repliesWaiting,
-      followUpsOverdue: live ? followUpsOverdue(live) : 0,
+      repliesWaiting: canonical?.needsReply ?? row.repliesWaiting,
+      followUpsOverdue: canonical?.followups ?? (live ? followUpsOverdue(live) : 0),
       highPriorityUntouched: live ? highPriorityCount(live) : 0,
       overdueTasks: overdue.get(row.repId) ?? 0,
       meetings: meetingsFor(row.repId, live),
@@ -157,8 +164,8 @@ export function assembleManagerRepSnapshots(input: {
       repName: person.repName,
       activeProfile: person.identities[0]?.name ?? null,
       completedToday: person.totalCompleted,
-      repliesWaiting: person.openLeads.filter((l) => l.status === 'replied').length,
-      followUpsOverdue: followUpsOverdue(person),
+      repliesWaiting: input.inboxCountsByRep?.get(person.repId)?.needsReply ?? person.openLeads.filter((l) => l.status === 'replied').length,
+      followUpsOverdue: input.inboxCountsByRep?.get(person.repId)?.followups ?? followUpsOverdue(person),
       highPriorityUntouched: highPriorityCount(person),
       overdueTasks: overdue.get(person.repId) ?? 0,
       meetings: meetingsFor(person.repId, person),
@@ -187,6 +194,7 @@ export function assembleManagerHomeTeamData(input: {
   activity?: ManagerActivityItem[]
   overdueTasksByRep?: Map<string, number>
   outcomeEventsByRep?: Map<string, { meetings: number; wins: number }>
+  inboxCountsByRep?: Map<string, { needsReply: number; followups: number }>
 }): ManagerHomeTeamData {
   const snaps = assembleManagerRepSnapshots(input)
   const attention = buildTeamAttention(snaps)

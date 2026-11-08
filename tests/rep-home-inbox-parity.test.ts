@@ -22,6 +22,9 @@ import { deriveConversationRow } from '@/lib/operations/conversations'
 import { leadBelongsToAnyWorkspace } from '@/lib/workspace/active-identity'
 import { getInboxCountsForRep } from '@/lib/operations/inbox-counts'
 import { inboxViewHref, INBOX_PRIMARY_VIEWS } from '@/lib/navigation/inbox-nav'
+import { assembleManagerHomeTeamData } from '@/lib/team/manager-home-summary'
+import type { TeamDaySummary } from '@/lib/rep-day/team'
+import type { TeamLivePayload } from '@/lib/admin/team-live'
 import { createFakeSupabase } from './helpers/fake-supabase'
 
 type FakeSupabase = ReturnType<typeof createFakeSupabase>
@@ -340,5 +343,182 @@ describe('REP_HOME_PARITY_WITH_CANONICAL_DERIVATION', () => {
     )
     expect(derived?.state).toBe('waiting_on_prospect')
     expect(chatViewMatches({ ...row({ leadId: 'x' }), ...derived } as ChatRow, 'waiting_me')).toBe(false)
+  })
+})
+
+// ─── Role matrix contracts ────────────────────────────────────────────────────
+
+describe('REP_INBOX_EXECUTION_PARITY', () => {
+  it('REP_INBOX_EXECUTION_PARITY: Rep Home and Inbox read one canonical authority', () => {
+    const dashboard = read('src/app/(app)/dashboard/page.tsx')
+    const page = read('src/app/(app)/chats/page.tsx')
+    expect(dashboard).toContain('getInboxCountsForRep')
+    expect(page).toContain('loadChatQueue')
+    // Both call the same loader with the same executable-identity scope.
+    expect(dashboard).toContain('executableIdentities: workspace.identities')
+    expect(page).toContain('executableIdentities')
+  })
+})
+
+describe('MANAGER_PERSONAL_INBOX_PARITY', () => {
+  it('MANAGER_PERSONAL_INBOX_PARITY: Manager personal metrics read the canonical counts and deep-link to their views', () => {
+    const manager = read('src/components/v4/v4-manager-home.tsx')
+    expect(manager).not.toContain('deriveTodayCounts')
+    expect(manager).toMatch(/personal\.day\?\.repliesWaiting/)
+    expect(manager).toMatch(/personal\.day\?\.waitingOnClient/)
+    expect(manager).toMatch(/personal\.day\?\.followUpsDue/)
+    expect(manager).toContain("label: 'Replies waiting'")
+    expect(manager).toContain("label: 'Waiting on clients'")
+    expect(manager).toContain("label: 'Follow-ups due'")
+    expect(manager).toContain("href: '/chats?view=waiting_me'")
+    expect(manager).toContain("href: '/chats?view=waiting_them'")
+    expect(manager).toContain("href: '/chats?view=followups'")
+  })
+})
+
+describe('MANAGER_TEAM_INBOX_PARITY', () => {
+  it('MANAGER_TEAM_INBOX_PARITY: team rows use the canonical per-rep Inbox counts', () => {
+    const teamDay = {
+      businessDate: '2026-11-08',
+      timezone: 'UTC',
+      isWorkingDay: true,
+      workdayProgress: 0.5,
+      minutesRemaining: 240,
+      workdayStart: '09:00',
+      workdayEnd: '18:00',
+      counts: { NOT_STARTED: 0, ACTIVE: 1, AT_RISK: 0, CRITICAL: 0, READY_TO_CLOSE: 0, CLOSED: 0, MISSED: 0 },
+      totals: { reps: 1, requiredRemaining: 0, commitmentProgress: 0.7, repliesWaiting: 9, actionsToday: 3, pipelineCreated: 0 },
+      reps: [{
+        repId: 'r1', repName: 'Dawood', repRole: 'rep', state: 'ACTIVE' as const,
+        checkInAt: null, closedAt: null, lateStart: false, exceptionState: 'NONE',
+        commitmentProgress: 0.7, requiredRemaining: 0, minutesRemaining: 240,
+        repliesWaiting: 9, actionsToday: 3, pipelineCreated: 0,
+        lastActivityAt: new Date(NOW).toISOString(),
+        identities: [{ id: 'id-1', name: 'Dawood LinkedIn', channel: 'linkedin' }],
+      }],
+    } as TeamDaySummary
+    const teamLive = {
+      date: '2026-11-08',
+      people: [{
+        repId: 'r1', repName: 'Dawood', role: 'rep',
+        identities: [{ id: 'id-1', name: 'Dawood LinkedIn', title: null, channel: 'linkedin', profileId: 'prof-1', profileName: 'Dawood LinkedIn' }],
+        goals: [], openLeads: [], openLeadCount: 0, outreachSent: 0, repliesHandled: 0,
+        leadsSaved: 0, extractionsCount: 0, extractionFailures: 0,
+        totalTarget: 10, totalCompleted: 7, totalRemaining: 3,
+        lastActivityAt: new Date(NOW).toISOString(), identityCount: 1,
+      }],
+    } as unknown as TeamLivePayload
+
+    const data = assembleManagerHomeTeamData({
+      teamName: 'Team',
+      teamDay,
+      teamLive,
+      allowedRepIds: new Set(['r1']),
+      inboxCountsByRep: new Map([['r1', { needsReply: 2, followups: 5 }]]),
+    })
+    const row = data.rows.find((r) => r.repId === 'r1')
+    expect(row?.repliesWaiting).toBe(2)
+    expect(row?.followUpsOverdue).toBe(5)
+    expect(data.metrics.repliesWaiting).toBe(2)
+    expect(data.metrics.followUpsOverdue).toBe(5)
+  })
+})
+
+describe('ADMIN_ORG_INBOX_PARITY', () => {
+  it('ADMIN_ORG_INBOX_PARITY: Admin health reads the canonical org Inbox counts', () => {
+    const summary = read('src/lib/team/admin-command-summary.ts')
+    expect(summary).toMatch(/repliesWaiting: input\.inboxCounts\?\.needsReply/)
+    expect(summary).toMatch(/followUpsOverdue: input\.inboxCounts\?\.followups/)
+    const loader = read('src/lib/team/load-admin-command-center.ts')
+    expect(loader).toContain('getInboxCountsForOrg')
+  })
+})
+
+describe('INBOX_SCOPE_ROLE_PARITY', () => {
+  it('INBOX_SCOPE_ROLE_PARITY: reps scope by executable identities, managers by repIds', () => {
+    const queue = read('src/lib/operations/chat-queue.ts')
+    expect(queue).toContain('executableIdentities')
+    expect(queue).toContain('leadBelongsToAnyWorkspace')
+    const page = read('src/app/(app)/chats/page.tsx')
+    expect(page).toContain('getAuthorizedIdentities')
+    expect(page).toContain('managerViews ? Promise.resolve(null)')
+  })
+})
+
+describe('INBOX_PROFILE_FILTER_COUNT_PARITY', () => {
+  it('INBOX_PROFILE_FILTER_COUNT_PARITY: a profile filter narrows counts and rows together', async () => {
+    const { client } = seedInbox()
+    const queue = await loadChatQueue(client as never, {
+      orgId: ORG,
+      repIds: [REP],
+      executableIdentities: [
+        { id: 'id-1', profileId: 'prof-1' },
+        { id: 'id-2', profileId: 'prof-2' },
+      ],
+      coveredIdentityIds: ['id-2'],
+      profileId: 'id-1',
+      view: 'all',
+      managerViews: false,
+    }, NOW)
+    expect(queue.rows.every((r) => r.profileId === 'id-1')).toBe(true)
+    expect(queue.counts.waiting_me).toBe(queue.rows.filter((r) => chatViewMatches(r, 'waiting_me')).length)
+    expect(queue.counts.waiting_me).toBe(1)
+  })
+})
+
+describe('INBOX_METRIC_DESTINATION_PARITY', () => {
+  it('INBOX_METRIC_DESTINATION_PARITY: every Inbox metric links to its canonical view', () => {
+    const home = read('src/components/v4/v4-rep-home.tsx')
+    const manager = read('src/components/v4/v4-manager-home.tsx')
+    for (const source of [home, manager]) {
+      expect(source).toContain('/chats?view=waiting_me')
+      expect(source).toContain('/chats?view=waiting_them')
+      expect(source).toContain('/chats?view=followups')
+    }
+  })
+})
+
+describe('NO_DASHBOARD_USES_LEGACY_REPLY_NEEDED_COUNT', () => {
+  it('NO_DASHBOARD_USES_LEGACY_REPLY_NEEDED_COUNT: the V4 dashboards do not derive reply counts from the relay engine', () => {
+    const sources = [
+      read('src/components/v4/v4-rep-home.tsx'),
+      read('src/components/v4/v4-manager-home.tsx'),
+      read('src/components/v4/v4-admin-home.tsx'),
+    ]
+    for (const source of sources) {
+      expect(source).not.toContain('deriveTodayCounts')
+      expect(source).not.toMatch(/repliesWaiting:\s*counts\./)
+    }
+    // The relay engine's reply task kind stays a legitimate ranking input.
+    expect(read('src/lib/relay/queue-engine.ts')).toContain('reply_needed')
+  })
+})
+
+describe('INBOX_MULTI_PROFILE_EXECUTION_SCOPE', () => {
+  it('INBOX_MULTI_PROFILE_EXECUTION_SCOPE: a rep with multiple executable profiles sees work across all of them', async () => {
+    const { client } = seedInbox()
+    const all = await loadChatQueue(client as never, {
+      orgId: ORG,
+      repIds: [REP],
+      executableIdentities: [
+        { id: 'id-1', profileId: 'prof-1' },
+        { id: 'id-2', profileId: 'prof-2' },
+      ],
+      coveredIdentityIds: ['id-2'],
+      view: 'all',
+      managerViews: false,
+    }, NOW)
+    expect(new Set(all.rows.map((r) => r.profileId))).toEqual(new Set(['id-1', 'id-2']))
+
+    const single = await loadChatQueue(client as never, {
+      orgId: ORG,
+      repIds: [REP],
+      executableIdentities: [{ id: 'id-1', profileId: 'prof-1' }],
+      coveredIdentityIds: [],
+      view: 'all',
+      managerViews: false,
+    }, NOW)
+    expect(single.rows.every((r) => r.profileId === 'id-1')).toBe(true)
+    expect(all.rows.length).toBeGreaterThan(single.rows.length)
   })
 })

@@ -16,8 +16,10 @@ state, kept for context) · **ARCHIVE** (`docs/archive/`).
 
 | Doc | Class | What it is |
 |---|---|---|
+| `RELAY_PRODUCT_MAP.md` | **CURRENT** | **Start here.** Canonical domains, route matrix, role matrix, data authorities |
+| `RELAY_PUBLIC_RELEASE_READINESS.md` | **CURRENT** | Release gate: blockers, role workflows, security/perf/a11y status |
 | `RELAY_FEATURE_VISIBILITY_MATRIX.md` | **CURRENT** | Feature × role × entry-point matrix |
-| `RELAY_COMPLETE_ROUTE_AND_ROLE_MAP.md` | **CURRENT** | Full route + role inventory with per-route gating |
+| `RELAY_COMPLETE_ROUTE_AND_ROLE_MAP.md` | **HISTORICAL** | Route inventory dated Oct 2026; superseded by `RELAY_PRODUCT_MAP.md` |
 | `RELAY_NAVIGATION_V3.md` | **CURRENT** | Role-aware navigation contract (V4 shell) |
 | `RELAY_DEAD_CODE_REMOVAL_REPORT.md` | **CURRENT** | What was removed, what was kept, and why |
 ---

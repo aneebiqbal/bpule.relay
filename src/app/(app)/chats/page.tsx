@@ -126,6 +126,14 @@ export default async function ChatsPage({
   // not snap the queue back to the rep default.
   const linkState = { ...current, view: view === 'all' ? 'all' : current.view }
   const hasFilters = Boolean(filters.q || filters.profile || filters.source || minAgeHours || filters.rep || filters.team || stageGroup)
+  // The queue aggregates every executable profile; say so before the counts.
+  const inboxScopeLabel = executableIdentities
+    ? executableIdentities.length > 1
+      ? 'All your active profiles'
+      : (executableIdentities[0]?.identityName ?? 'Your active profile')
+    : managerViews
+      ? (ctx.scope.mode === 'org' ? 'All organization profiles' : 'Your team')
+      : 'Your active profile'
   const queueEmptyLabel =
     view === 'waiting_me'
       ? 'You’re caught up. No client replies need attention.'
@@ -207,6 +215,7 @@ export default async function ChatsPage({
                   {queue.counts.waiting_me ?? 0} need reply
                 </span>
               </div>
+              <p className="text-[11px] text-stone">{inboxScopeLabel}</p>
               <ChatFilters
                 basePath="/chats"
                 current={current}
@@ -339,6 +348,8 @@ async function SelectedThread({
       nextAction: intel!.conversation?.nextAction ?? 'Reply',
       href: `/chats?lead=${intel!.leadId}`,
       source: 'linkedin' as const,
+      sourceRaw: intel!.sourceRaw,
+      direction: intel!.direction,
       profileId: intel!.profileId,
       clientIntent: intel!.lastClientIntent,
       preview: null,
@@ -357,6 +368,7 @@ async function SelectedThread({
         reps={reps}
         canIntervene={ctx.scope.mode !== 'own'}
         tasksAvailable={tasksAvailable}
+        leadCreatedAt={intel?.leadCreatedAt ?? null}
         contextAction={
           <div className="xl:hidden">
             <IntelligenceDrawer>
@@ -377,7 +389,7 @@ async function IntelligenceSlot({ ctx, leadId, reps }: { ctx: OpsPageContext; le
     // A failed context pane must never take the thread down with it.
     return (
       <p role="alert" className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-[13px] text-graphite">
-        Couldn’t load this conversation’s context. The thread is still available.
+        Lead context could not be loaded. The conversation is still available.
       </p>
     )
   }

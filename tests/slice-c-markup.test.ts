@@ -37,7 +37,7 @@ describe('ACCESSIBILITY_MARKUP', () => {
     expect(html).toContain('<span class="sr-only">Priority: </span>Critical')
     expect(html).toContain('Them: </span>Yes, Thursday works')
     expect(html).toContain('Sender not verified')
-    expect(html).toContain('Waiting on rep · 1h')
+    expect(html).toContain('Client replied 1h ago')
   })
 
   it('chat queue: empty state is a sentence, not a blank pane', () => {

@@ -20,9 +20,9 @@ export function IntelligenceDrawer({ children }: { children: React.ReactNode }) 
         className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-bone px-2.5 text-[13px] text-ink hover:bg-bone-raised xl:hidden"
       >
         <PanelRight className="size-4" aria-hidden="true" />
-        Lead intelligence
+        Details
       </button>
-      <Drawer open={open} onClose={() => setOpen(false)} title="Lead intelligence" side="right">
+      <Drawer open={open} onClose={() => setOpen(false)} title="Lead context" side="right">
         <div className="p-3">{children}</div>
       </Drawer>
     </>

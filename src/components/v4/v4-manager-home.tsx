@@ -15,7 +15,6 @@ import { cn } from 'cn'
 import type { RepWorkspaceData } from '@/lib/rep-home/rep-workspace-data'
 import type { ManagerHomeTeamData } from '@/lib/team/manager-home-summary'
 import { RepCoveragePanel } from '@/components/coverage/rep-coverage-panel'
-import { deriveTodayCounts } from '@/lib/relay/today-counts'
 import {
   actionDeepLink,
   humanWhyNow,
@@ -61,7 +60,11 @@ export function V4ManagerHome({
   const [filter, setFilter] = useState<TeamFilter>('all')
 
   const ranked = useMemo(() => rankActions(personal.allActions ?? []), [personal.allActions])
-  const counts = useMemo(() => deriveTodayCounts(ranked), [ranked])
+  // Canonical Inbox counts over the manager's executable profiles — the same
+  // authority Rep Home and /chats read.
+  const myReplies = personal.day?.repliesWaiting ?? 0
+  const myWaitingOnClients = personal.day?.waitingOnClient ?? 0
+  const myFollowUps = personal.day?.followUpsDue ?? 0
   const highPriority = useMemo(() => ranked.filter(isHighPriorityOpportunity), [ranked])
   const doNext = ranked.slice(0, 5)
   const completedToday = personal.targetSummary?.totalCompleted ?? 0
@@ -76,8 +79,9 @@ export function V4ManagerHome({
   }, [team.rows, filter])
 
   const stats: Array<{ key: string; label: string; value: number; hint: string; href: string; tone: 'neutral' | 'danger' | 'warning' | 'success' }> = [
-    { key: 'my-replies', label: 'My replies waiting', value: counts.repliesWaiting, hint: 'Your inbox', href: '/chats', tone: counts.repliesWaiting > 0 ? 'warning' : 'neutral' },
-    { key: 'my-followups', label: 'My follow-ups due', value: counts.followUpsDue, hint: 'Your queue', href: '/tasks', tone: counts.followUpsDue > 0 ? 'warning' : 'neutral' },
+    { key: 'my-replies', label: 'Replies waiting', value: myReplies, hint: 'Your inbox', href: '/chats?view=waiting_me', tone: myReplies > 0 ? 'warning' : 'neutral' },
+    { key: 'my-waiting', label: 'Waiting on clients', value: myWaitingOnClients, hint: 'Your inbox', href: '/chats?view=waiting_them', tone: 'neutral' },
+    { key: 'my-followups', label: 'Follow-ups due', value: myFollowUps, hint: 'Your queue', href: '/chats?view=followups', tone: myFollowUps > 0 ? 'warning' : 'neutral' },
     { key: 'my-priority', label: 'My high-priority', value: highPriority.length, hint: 'Your book', href: '/dashboard', tone: 'neutral' },
     { key: 'my-done', label: 'My completed today', value: completedToday, hint: 'Your targets', href: '/dashboard', tone: 'neutral' },
     { key: 'team-attention', label: 'Team attention', value: team.needsAttentionCount, hint: `${team.memberCount} people`, href: '/team', tone: team.needsAttentionCount > 0 ? 'danger' : 'neutral' },
@@ -99,7 +103,7 @@ export function V4ManagerHome({
             <span className="inline-flex items-center gap-1.5 text-[12px] text-graphite">
               <span className="text-stone">Working as</span>
               <span className="font-medium text-ink">{personal.activeWorkspace.identityName}</span>
-              <span className="text-stone">· personal queue only</span>
+              <span className="text-stone">· all your active profiles</span>
             </span>
           )
         }
@@ -142,7 +146,7 @@ export function V4ManagerHome({
             <V4PanelHeader
               eyebrow="My work"
               title="Your personal queue"
-              hint="Profile-scoped to your active identity"
+              hint="Across your active profiles"
               action={
                 <Link href="/dashboard" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
                   My home <ChevronRight className="size-3.5" aria-hidden />
