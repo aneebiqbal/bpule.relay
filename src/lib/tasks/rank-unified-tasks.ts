@@ -1,7 +1,7 @@
 import type { UnifiedTask, UnifiedTaskKind, UnifiedTaskPriority } from '@/lib/tasks/types'
 import { overdueSeverity } from '@/lib/rep-home/action-presentation'
 
-export type UnifiedTaskTab = 'today' | 'overdue' | 'upcoming' | 'completed' | 'all'
+export type UnifiedTaskTab = 'today' | 'overdue' | 'waiting' | 'upcoming' | 'completed' | 'all'
 
 const PRIORITY_RANK: Record<UnifiedTaskPriority, number> = {
   CRITICAL: 0,
@@ -62,6 +62,8 @@ export function classifyUnifiedTaskTab(
   timeZone = 'UTC',
 ): Exclude<UnifiedTaskTab, 'all'> {
   if (task.status === 'DONE' || task.status === 'CANCELLED') return 'completed'
+  // A blocked task is waiting, not overdue — the rep cannot act on it yet.
+  if (task.status === 'WAITING') return 'waiting'
   if (isOverdue(task, now)) return 'overdue'
   if (
     task.priority === 'CRITICAL'
@@ -132,8 +134,12 @@ export function filterUnifiedTasks(
 }
 
 /** Cross-home parity helper: open-task count for the same filters. */
+export function isOpenTask(task: UnifiedTask): boolean {
+  return task.status === 'OPEN' || task.status === 'IN_PROGRESS' || task.status === 'WAITING'
+}
+
 export function countOpenUnifiedTasks(tasks: UnifiedTask[]): number {
-  return tasks.filter((t) => t.status === 'OPEN' || t.status === 'IN_PROGRESS').length
+  return tasks.filter(isOpenTask).length
 }
 
 /**
@@ -141,9 +147,7 @@ export function countOpenUnifiedTasks(tasks: UnifiedTask[]): number {
  * assignment belongs to `assignee_rep_id`, never to the active sending profile.
  */
 export function selectAssignedOpenTasks(tasks: UnifiedTask[]): UnifiedTask[] {
-  return filterUnifiedTasks(tasks, { source: 'ASSIGNED', tab: 'all' }).filter(
-    (t) => t.status === 'OPEN' || t.status === 'IN_PROGRESS',
-  )
+  return filterUnifiedTasks(tasks, { source: 'ASSIGNED', tab: 'all' }).filter(isOpenTask)
 }
 
 export function selectAssignedOverdueTasks(tasks: UnifiedTask[], now = Date.now()): UnifiedTask[] {

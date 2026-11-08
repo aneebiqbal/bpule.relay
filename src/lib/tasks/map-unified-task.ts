@@ -45,6 +45,7 @@ export function toUnifiedTaskFromAction(
     createdBy: null,
     createdByName: null,
     createdAt: action.createdAt,
+    updatedAt: action.createdAt,
     completedAt: null,
     note: null,
     action: {
@@ -61,6 +62,9 @@ export function toUnifiedTaskFromAssigned(
     profileName?: string | null
     createdByName?: string | null
     assigneeName?: string | null
+    transferToName?: string | null
+    primaryRepName?: string | null
+    executionRepName?: string | null
   },
 ): UnifiedTask {
   // An assigned task without a linked lead still has to open its detail —
@@ -92,9 +96,21 @@ export function toUnifiedTaskFromAssigned(
     priority: row.priority,
     dueAt: row.due_at,
     status: row.status,
+    waitingOn: row.waiting_on,
+    transfer: row.transfer_requested_to
+      ? {
+          toRepId: row.transfer_requested_to,
+          toRepName: enrich?.transferToName ?? null,
+          reason: row.transfer_reason,
+          requestedBy: row.transfer_requested_by ?? row.assignee_rep_id,
+        }
+      : null,
+    primaryRepName: enrich?.primaryRepName ?? null,
+    executionRepName: enrich?.executionRepName ?? null,
     createdBy: row.created_by_rep_id,
     createdByName: enrich?.createdByName ?? null,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
     completedAt: row.completed_at,
     note: row.description,
     action: {

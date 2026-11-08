@@ -197,7 +197,7 @@ export async function enrichLeads(
           .from('assigned_tasks')
           .select('lead_id')
           .eq('organization_id', authCtx.orgId)
-          .in('status', ['OPEN', 'IN_PROGRESS'])
+          .in('status', ['OPEN', 'IN_PROGRESS', 'WAITING'])
           .in('lead_id', chunk))
       } catch {
         // Table may not be migrated yet — treat as zero open tasks.

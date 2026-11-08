@@ -88,7 +88,7 @@ export async function loadCoverageFacts(
       supabase.from('coverage_assignments').select('profile_id, primary_rep_id, covering_rep_id, effective_until').eq('organization_id', orgId).eq('status', 'ACTIVE').limit(2000),
       supabase.from('profile_readiness').select('profile_id, rep_id').eq('organization_id', orgId).limit(4000),
       supabase.from('leads').select('id, owner_rep_id, revenue_identity_id, status').eq('organization_id', orgId).eq('archived', false).in('status', [...OPEN_LEAD_STATUSES]).limit(5000),
-      supabase.from('assigned_tasks').select('assignee_rep_id, profile_id, status, due_at').eq('organization_id', orgId).in('status', ['OPEN', 'IN_PROGRESS']).limit(5000),
+      supabase.from('assigned_tasks').select('assignee_rep_id, profile_id, status, due_at').eq('organization_id', orgId).in('status', ['OPEN', 'IN_PROGRESS', 'WAITING']).limit(5000),
       supabase.from('organization_operating_policy').select('timezone, coverage_policy, coverage_limits').eq('organization_id', orgId).maybeSingle(),
     ])
 

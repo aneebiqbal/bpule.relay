@@ -126,7 +126,7 @@ export async function loadChatIntelligence(
           .select('id, title, priority, due_at, status')
           .eq('organization_id', auth.orgId)
           .eq('lead_id', leadId)
-          .in('status', ['OPEN', 'IN_PROGRESS'])
+          .in('status', ['OPEN', 'IN_PROGRESS', 'WAITING'])
           .order('due_at', { ascending: true, nullsFirst: false })
           .limit(10)
       : Promise.resolve({ data: null, error: null }),

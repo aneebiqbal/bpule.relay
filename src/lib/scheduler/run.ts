@@ -324,6 +324,47 @@ export async function emitOverdueTaskNotifications(
   return { overdue: data?.length ?? 0, notified }
 }
 
+/**
+ * TASK_DUE_SOON: one notice per task per due date, inside the existing warning
+ * job. A task due within 24h that is not already overdue gets a single nudge.
+ */
+export async function emitDueSoonTaskNotifications(
+  client: DbClient,
+  organizationId: string,
+  now: Date,
+): Promise<{ dueSoon: number; notified: number }> {
+  const horizon = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString()
+  const { data, error } = await client
+    .from('assigned_tasks')
+    .select('id, assignee_rep_id, title, due_at')
+    .eq('organization_id', organizationId)
+    .in('status', ['OPEN', 'IN_PROGRESS'])
+    .not('due_at', 'is', null)
+    .gte('due_at', now.toISOString())
+    .lte('due_at', horizon)
+    .order('due_at', { ascending: true })
+    .limit(200)
+  if (error) {
+    if (isMissingRelation(error)) return { dueSoon: 0, notified: 0 }
+    throw error
+  }
+  let notified = 0
+  for (const task of (data ?? []) as Array<{ id: string; assignee_rep_id: string | null; title: string | null; due_at: string }>) {
+    if (!task.assignee_rep_id) continue
+    const didSend = await notifyOnce(client, {
+      organizationId,
+      recipientId: task.assignee_rep_id,
+      type: 'task_due_soon',
+      title: 'Task due soon',
+      body: task.title ?? 'Task',
+      link: `/tasks?task=assigned:${task.id}`,
+      dedupeKey: `task_due_soon:${task.id}:${task.due_at}`,
+    })
+    if (didSend) notified += 1
+  }
+  return { dueSoon: data?.length ?? 0, notified }
+}
+
 async function emitEscalations(
   client: DbClient,
   organizationId: string,
@@ -726,8 +767,16 @@ async function executeJob(client: DbClient, row: JobRow): Promise<Record<string,
       return refreshRepDays(client, policy, organizationId, businessDate)
     case 'EMIT_WARNING': {
       const warnings = await emitWarnings(client, policy, organizationId, businessDate)
-      const tasks = await emitOverdueTaskNotifications(client, organizationId, currentInstant())
-      return { ...warnings, overdueTasks: tasks.overdue, overdueNotified: tasks.notified }
+      const now = currentInstant()
+      const tasks = await emitOverdueTaskNotifications(client, organizationId, now)
+      const dueSoon = await emitDueSoonTaskNotifications(client, organizationId, now)
+      return {
+        ...warnings,
+        overdueTasks: tasks.overdue,
+        overdueNotified: tasks.notified,
+        dueSoonTasks: dueSoon.dueSoon,
+        dueSoonNotified: dueSoon.notified,
+      }
     }
     case 'EMIT_ESCALATION':
       return emitEscalations(client, organizationId, businessDate, policy)

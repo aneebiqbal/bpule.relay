@@ -23,7 +23,7 @@ export function sidebarBadge(value: number | null | undefined): { value: number;
 }
 
 const CLOSED_LEAD_STATUSES = ['won', 'lost', 'dead', 'no']
-const OPEN_TASK_STATUSES = ['OPEN', 'IN_PROGRESS']
+const OPEN_TASK_STATUSES = ['OPEN', 'IN_PROGRESS', 'WAITING']
 
 /** Canonical follow-up predicate, mirrored from `deriveConversationRow`. */
 export function conversationNeedsReply(row: {

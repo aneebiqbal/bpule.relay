@@ -11,6 +11,14 @@ export type TaskEventType =
   | 'TASK_COMPLETED'
   | 'TASK_CANCELLED'
   | 'TASK_RESCHEDULED'
+  | 'TASK_WAITING'
+  | 'TASK_REOPENED'
+  | 'TASK_TRANSFER_REQUESTED'
+  | 'TASK_TRANSFER_APPROVED'
+  | 'TASK_TRANSFER_CANCELLED'
+
+/** What a WAITING task is blocked on. */
+export type TaskWaitingOn = 'ADMIN' | 'REP' | 'CLIENT' | 'EXTERNAL'
 
 function isMissingRelation(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false
@@ -89,7 +97,8 @@ export async function listAssignedTaskRows(
     .order('created_at', { ascending: false })
 
   if (!opts?.includeCompleted) {
-    query = query.in('status', ['OPEN', 'IN_PROGRESS'])
+    // WAITING is open work — the rep is blocked, not done.
+    query = query.in('status', ['OPEN', 'IN_PROGRESS', 'WAITING'])
   }
 
   if (opts?.leadId) {
@@ -205,6 +214,7 @@ export async function reassignAssignedTask(
   auth: AuthContext,
   taskId: string,
   newAssigneeRepId: string,
+  reason?: string | null,
 ): Promise<AssignedTaskRow> {
   if (!auth.isManager && !auth.isAdmin && !auth.isOwner) {
     throw new Error('Only managers and admins can reassign tasks')
@@ -235,11 +245,15 @@ export async function reassignAssignedTask(
   }
 
   const previous = current.assignee_rep_id as string
+  const hadPendingRequest = Boolean(current.transfer_requested_to)
   const { data, error } = await client
     .from('assigned_tasks')
     .update({
       previous_assignee_rep_id: previous,
       assignee_rep_id: newAssigneeRepId,
+      transfer_requested_by: null,
+      transfer_requested_to: null,
+      transfer_reason: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', taskId)
@@ -254,8 +268,21 @@ export async function reassignAssignedTask(
     taskId: row.id,
     eventType: 'TASK_REASSIGNED',
     actorRepId: auth.repId,
-    metadata: { previous_assignee_rep_id: previous, new_assignee_rep_id: newAssigneeRepId },
+    metadata: {
+      previous_assignee_rep_id: previous,
+      new_assignee_rep_id: newAssigneeRepId,
+      reason: reason ?? null,
+    },
   })
+  if (hadPendingRequest) {
+    await emitTaskEvent(client, {
+      organizationId: auth.orgId,
+      taskId: row.id,
+      eventType: 'TASK_TRANSFER_APPROVED',
+      actorRepId: auth.repId,
+      metadata: { approved_request: true },
+    })
+  }
 
   await notifyForEvent(client, auth.orgId, {
     kind: 'TASK_REASSIGNED',
@@ -265,8 +292,327 @@ export async function reassignAssignedTask(
     actorName: null,
     title: row.title,
   })
+  // Both reps hear about a transfer — the one losing work as well as the one
+  // gaining it. The previous assignee is not the actor in a manager reassign.
+  if (previous !== auth.repId && previous !== newAssigneeRepId) {
+    await notifyTaskAssignee(client, {
+      organizationId: auth.orgId,
+      recipientId: previous,
+      type: 'task_transferred_away',
+      title: 'Task transferred away',
+      body: row.title,
+      link: `/tasks?task=assigned:${row.id}`,
+      dedupeKey: `task_transferred_away:${row.id}:${previous}`,
+    })
+  }
 
   return row
+}
+
+/** The actor may act on a task when they hold it, created it, or manage its scope. */
+async function canOperateOnTask(
+  client: DbClient,
+  auth: AuthContext,
+  task: AssignedTaskRow,
+): Promise<boolean> {
+  if (auth.isAdmin || auth.isOwner) return true
+  if (task.assignee_rep_id === auth.repId || task.created_by_rep_id === auth.repId) return true
+  if (auth.isManager) {
+    const scope = await resolveTaskAssigneeScope(client, auth)
+    return !scope.assigneeIds || scope.assigneeIds.includes(task.assignee_rep_id)
+  }
+  return false
+}
+
+/** Mark a task blocked. The assignee (or creator/manager) records what it waits on. */
+export async function setAssignedTaskWaiting(
+  client: DbClient,
+  auth: AuthContext,
+  taskId: string,
+  waitingOn: TaskWaitingOn | null,
+): Promise<AssignedTaskRow> {
+  const { data: current, error: loadError } = await client
+    .from('assigned_tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .maybeSingle()
+  if (loadError || !current) throw new Error('Task not found')
+  if (current.status === 'DONE' || current.status === 'CANCELLED') {
+    throw new Error('Closed tasks cannot be changed')
+  }
+  if (!(await canOperateOnTask(client, auth, current as AssignedTaskRow))) {
+    throw new Error('Not allowed to update this task')
+  }
+
+  const { data, error } = await client
+    .from('assigned_tasks')
+    .update({
+      status: waitingOn ? 'WAITING' : 'OPEN',
+      waiting_on: waitingOn,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .select('*')
+    .single()
+  if (error) throw error
+  const row = data as AssignedTaskRow
+
+  await emitTaskEvent(client, {
+    organizationId: auth.orgId,
+    taskId: row.id,
+    eventType: 'TASK_WAITING',
+    actorRepId: auth.repId,
+    metadata: { waiting_on: waitingOn ?? null, status: row.status },
+  })
+
+  return row
+}
+
+/** Reopen a completed task. Admin/owner, the creator, or a scoped manager. */
+export async function reopenAssignedTask(
+  client: DbClient,
+  auth: AuthContext,
+  taskId: string,
+): Promise<AssignedTaskRow> {
+  const { data: current, error: loadError } = await client
+    .from('assigned_tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .maybeSingle()
+  if (loadError || !current) throw new Error('Task not found')
+  if (current.status !== 'DONE' && current.status !== 'CANCELLED') {
+    throw new Error('Only closed tasks can be reopened')
+  }
+  if (!(await canOperateOnTask(client, auth, current as AssignedTaskRow))) {
+    throw new Error('Not allowed to reopen this task')
+  }
+
+  const { data, error } = await client
+    .from('assigned_tasks')
+    .update({
+      status: 'OPEN',
+      completed_at: null,
+      cancelled_at: null,
+      cancel_reason: null,
+      waiting_on: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .select('*')
+    .single()
+  if (error) throw error
+  const row = data as AssignedTaskRow
+
+  await emitTaskEvent(client, {
+    organizationId: auth.orgId,
+    taskId: row.id,
+    eventType: 'TASK_REOPENED',
+    actorRepId: auth.repId,
+  })
+
+  return row
+}
+
+/**
+ * A rep asks for a handoff. This never moves the task: it records the request,
+ * writes an event, and notifies the creator and every org manager/admin. Only
+ * `approveAssignedTaskTransfer` reassigns.
+ */
+export async function requestAssignedTaskTransfer(
+  client: DbClient,
+  auth: AuthContext,
+  taskId: string,
+  toRepId: string,
+  reason?: string | null,
+): Promise<AssignedTaskRow> {
+  const { data: current, error: loadError } = await client
+    .from('assigned_tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .maybeSingle()
+  if (loadError || !current) throw new Error('Task not found')
+  const task = current as AssignedTaskRow
+  if (task.status === 'DONE' || task.status === 'CANCELLED') {
+    throw new Error('Closed tasks cannot be transferred')
+  }
+  // Only the rep holding the work may request the handoff.
+  if (task.assignee_rep_id !== auth.repId) {
+    throw new Error('Only the assignee can request a transfer')
+  }
+  if (toRepId === auth.repId) throw new Error('Choose a different rep')
+
+  const { data: target } = await client
+    .from('reps')
+    .select('id, organization_id')
+    .eq('id', toRepId)
+    .maybeSingle()
+  if (!target || target.organization_id !== auth.orgId) {
+    throw new Error('Target rep not found in organization')
+  }
+
+  const { data, error } = await client
+    .from('assigned_tasks')
+    .update({
+      transfer_requested_by: auth.repId,
+      transfer_requested_to: toRepId,
+      transfer_reason: reason?.trim() ? reason.trim() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .select('*')
+    .single()
+  if (error) throw error
+  const row = data as AssignedTaskRow
+
+  await emitTaskEvent(client, {
+    organizationId: auth.orgId,
+    taskId: row.id,
+    eventType: 'TASK_TRANSFER_REQUESTED',
+    actorRepId: auth.repId,
+    metadata: { requested_to: toRepId, reason: reason?.trim() ? reason.trim() : null },
+  })
+
+  await notifyTaskTransferRequested(client, auth.orgId, {
+    taskId: row.id,
+    title: row.title,
+    fromRepId: auth.repId,
+    toRepId,
+    reason: reason?.trim() ? reason.trim() : null,
+    creatorRepId: row.created_by_rep_id,
+  })
+
+  return row
+}
+
+/** Manager/admin approval of a pending request. The request is the authority. */
+export async function approveAssignedTaskTransfer(
+  client: DbClient,
+  auth: AuthContext,
+  taskId: string,
+): Promise<AssignedTaskRow> {
+  if (!auth.isManager && !auth.isAdmin && !auth.isOwner) {
+    throw new Error('Only managers and admins can approve a transfer')
+  }
+  const { data: current, error: loadError } = await client
+    .from('assigned_tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .maybeSingle()
+  if (loadError || !current) throw new Error('Task not found')
+  const task = current as AssignedTaskRow
+  if (!task.transfer_requested_to) throw new Error('No transfer request is pending')
+
+  const scope = await resolveTaskAssigneeScope(client, auth)
+  if (scope.assigneeIds) {
+    if (
+      !scope.assigneeIds.includes(task.assignee_rep_id)
+      || !scope.assigneeIds.includes(task.transfer_requested_to)
+    ) {
+      throw new Error('Transfer outside your team scope')
+    }
+  }
+
+  return reassignAssignedTask(client, auth, taskId, task.transfer_requested_to, task.transfer_reason)
+}
+
+/** The requester (or a manager/admin) withdraws a pending request. */
+export async function cancelAssignedTaskTransfer(
+  client: DbClient,
+  auth: AuthContext,
+  taskId: string,
+): Promise<AssignedTaskRow> {
+  const { data: current, error: loadError } = await client
+    .from('assigned_tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .maybeSingle()
+  if (loadError || !current) throw new Error('Task not found')
+  const task = current as AssignedTaskRow
+  if (!task.transfer_requested_to) throw new Error('No transfer request is pending')
+  let allowed = auth.isAdmin || auth.isOwner || task.transfer_requested_by === auth.repId
+  if (!allowed && auth.isManager) {
+    const scope = await resolveTaskAssigneeScope(client, auth)
+    allowed = !scope.assigneeIds || scope.assigneeIds.includes(task.assignee_rep_id)
+  }
+  if (!allowed) throw new Error('Not allowed to cancel this transfer')
+
+  const { data, error } = await client
+    .from('assigned_tasks')
+    .update({
+      transfer_requested_by: null,
+      transfer_requested_to: null,
+      transfer_reason: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .select('*')
+    .single()
+  if (error) throw error
+  const row = data as AssignedTaskRow
+
+  await emitTaskEvent(client, {
+    organizationId: auth.orgId,
+    taskId: row.id,
+    eventType: 'TASK_TRANSFER_CANCELLED',
+    actorRepId: auth.repId,
+  })
+
+  return row
+}
+
+async function notifyTaskTransferRequested(
+  client: DbClient,
+  organizationId: string,
+  input: {
+    taskId: string
+    title: string
+    fromRepId: string
+    toRepId: string
+    reason: string | null
+    creatorRepId: string
+  },
+): Promise<void> {
+  const { data: admins } = await client
+    .from('organization_roles')
+    .select('person_id')
+    .eq('organization_id', organizationId)
+    .in('role', ['OWNER', 'ADMIN', 'MANAGER'])
+  const recipients = new Set<string>((admins ?? []).map((row) => row.person_id as string))
+  if (input.creatorRepId) recipients.add(input.creatorRepId)
+  recipients.delete(input.fromRepId)
+
+  for (const recipientId of recipients) {
+    await notifyTaskAssignee(client, {
+      organizationId,
+      recipientId,
+      type: 'task_transfer_requested',
+      title: 'Transfer requested',
+      body: input.reason ? `${input.title} · ${input.reason}` : input.title,
+      link: `/tasks?task=assigned:${input.taskId}`,
+      dedupeKey: `task_transfer_requested:${input.taskId}:${recipientId}`,
+    })
+  }
+  // The proposed recipient hears about it too, so the handoff is not a surprise.
+  if (input.toRepId !== input.fromRepId) {
+    await notifyTaskAssignee(client, {
+      organizationId,
+      recipientId: input.toRepId,
+      type: 'task_transfer_proposed',
+      title: 'Handoff proposed to you',
+      body: input.title,
+      link: `/tasks?task=assigned:${input.taskId}`,
+      dedupeKey: `task_transfer_proposed:${input.taskId}:${input.toRepId}`,
+    })
+  }
 }
 
 /** Change a task's due date. Creator, admin/owner, or a manager whose scope covers the assignee. */
@@ -415,6 +761,20 @@ export async function completeAssignedTask(
     actorRepId: auth.repId,
   })
 
+  // The creator (usually a manager) hears about completion; the assignee is
+  // the actor in the common case and never notifies themselves.
+  if (row.created_by_rep_id && row.created_by_rep_id !== auth.repId) {
+    await notifyTaskAssignee(client, {
+      organizationId: auth.orgId,
+      recipientId: row.created_by_rep_id,
+      type: 'task_completed',
+      title: 'Task completed',
+      body: row.title,
+      link: `/tasks?task=assigned:${row.id}`,
+      dedupeKey: `task_completed:${row.id}:${row.created_by_rep_id}`,
+    })
+  }
+
   return row
 }
 
@@ -526,7 +886,7 @@ export async function countUnassignedOpenTasks(
     .from('assigned_tasks')
     .select('assignee_rep_id')
     .eq('organization_id', orgId)
-    .in('status', ['OPEN', 'IN_PROGRESS'])
+    .in('status', ['OPEN', 'IN_PROGRESS', 'WAITING'])
   if (error) {
     if (isMissingRelation(error)) return 0
     throw error

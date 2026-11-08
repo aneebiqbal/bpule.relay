@@ -38,7 +38,7 @@ const PRIORITY_VARIANT: Record<UnifiedTaskPriority, 'danger' | 'orange' | 'neutr
   LOW: 'info',
 }
 const PRIORITY_LABEL: Record<UnifiedTaskPriority, string> = { CRITICAL: 'Critical', HIGH: 'High', NORMAL: 'Normal', LOW: 'Low' }
-const STATUS_LABEL = { OPEN: 'Open', IN_PROGRESS: 'In progress', DONE: 'Done', CANCELLED: 'Cancelled' } as const
+const STATUS_LABEL = { OPEN: 'Open', IN_PROGRESS: 'In progress', WAITING: 'Waiting', DONE: 'Done', CANCELLED: 'Cancelled' } as const
 
 
 function dueBucket(task: UnifiedTask, now: number): string {

@@ -34,21 +34,12 @@ export async function loadUnifiedTasks(input: {
 
   // Batch enrichment
   const leadIds = [...new Set(rows.map((r) => r.lead_id).filter(Boolean))] as string[]
-  const repIds = [
-    ...new Set([
-      ...rows.map((r) => r.assignee_rep_id),
-      ...rows.map((r) => r.created_by_rep_id),
-    ]),
-  ]
   const profileIds = [...new Set(rows.map((r) => r.profile_id).filter(Boolean))] as string[]
 
-  const [leadsRes, repsRes, profilesRes] = await Promise.all([
+  const [leadsRes, profilesRes, coverageRes, activeCoverageRes] = await Promise.all([
     leadIds.length
       ? client.from('leads').select('id, company').eq('organization_id', auth.orgId).in('id', leadIds)
       : Promise.resolve({ data: [] as Array<{ id: string; company: string | null }> }),
-    repIds.length
-      ? client.from('reps').select('id, name').eq('organization_id', auth.orgId).in('id', repIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
     profileIds.length
       ? client
           .from('revenue_identities')
@@ -56,10 +47,59 @@ export async function loadUnifiedTasks(input: {
           .eq('organization_id', auth.orgId)
           .in('id', profileIds)
       : Promise.resolve({ data: [] as Array<{ id: string; identity_name: string }> }),
+    // Canonical ownership + today's temporary execution, so a task can show
+    // "Primary: Dawood · Current execution: Madiha" without moving ownership.
+    profileIds.length
+      ? client
+          .from('profile_coverage')
+          .select('profile_id, rep_id, role')
+          .eq('organization_id', auth.orgId)
+          .eq('active', true)
+          .in('profile_id', profileIds)
+          .limit(500)
+      : Promise.resolve({ data: [] as Array<{ profile_id: string; rep_id: string; role: string }> }),
+    profileIds.length
+      ? client
+          .from('coverage_assignments')
+          .select('profile_id, covering_rep_id')
+          .eq('organization_id', auth.orgId)
+          .eq('status', 'ACTIVE')
+          .in('profile_id', profileIds)
+          .limit(500)
+      : Promise.resolve({ data: [] as Array<{ profile_id: string; covering_rep_id: string }> }),
   ])
 
+  const primaryRepByProfile = new Map<string, string>()
+  const executionRepByProfile = new Map<string, string>()
+  for (const row of (coverageRes.data ?? []) as Array<{ profile_id: string; rep_id: string; role: string }>) {
+    if (row.role === 'PRIMARY') primaryRepByProfile.set(row.profile_id, row.rep_id)
+  }
+  for (const row of (activeCoverageRes.data ?? []) as Array<{ profile_id: string; covering_rep_id: string }>) {
+    // First active row wins; there is a unique active coverage per profile.
+    if (!executionRepByProfile.has(row.profile_id)) executionRepByProfile.set(row.profile_id, row.covering_rep_id)
+  }
+  // With no active coverage the primary is the execution rep.
+  for (const [profileId, repId] of primaryRepByProfile) {
+    if (!executionRepByProfile.has(profileId)) executionRepByProfile.set(profileId, repId)
+  }
+
+  const repIds = [
+    ...new Set([
+      ...rows.map((r) => r.assignee_rep_id),
+      ...rows.map((r) => r.created_by_rep_id),
+      ...rows.map((r) => r.transfer_requested_to).filter(Boolean),
+      ...primaryRepByProfile.values(),
+      ...executionRepByProfile.values(),
+    ]),
+  ] as string[]
+
+  const repsQuery = repIds.length
+    ? await client.from('reps').select('id, name').eq('organization_id', auth.orgId).in('id', repIds)
+    : null
+  const repsRes = (repsQuery?.data ?? []) as Array<{ id: string; name: string }>
+
   const companyByLead = new Map((leadsRes.data ?? []).map((l) => [l.id, l.company]))
-  const nameByRep = new Map((repsRes.data ?? []).map((r) => [r.id, r.name]))
+  const nameByRep = new Map(repsRes.map((r) => [r.id, r.name]))
   const nameByProfile = new Map((profilesRes.data ?? []).map((p) => [p.id, p.identity_name]))
 
   const assigned: UnifiedTask[] = rows.map((row) =>
@@ -68,6 +108,11 @@ export async function loadUnifiedTasks(input: {
       profileName: row.profile_id ? nameByProfile.get(row.profile_id) ?? null : null,
       createdByName: nameByRep.get(row.created_by_rep_id) ?? null,
       assigneeName: nameByRep.get(row.assignee_rep_id) ?? null,
+      transferToName: row.transfer_requested_to ? nameByRep.get(row.transfer_requested_to) ?? null : null,
+      primaryRepName: row.profile_id ? nameByRep.get(primaryRepByProfile.get(row.profile_id) ?? '') ?? null : null,
+      executionRepName: row.profile_id
+        ? nameByRep.get(executionRepByProfile.get(row.profile_id) ?? '') ?? null
+        : null,
     }),
   )
 

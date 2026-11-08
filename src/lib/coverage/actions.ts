@@ -96,6 +96,8 @@ export interface CoverageApprovalItemInput {
   effectiveUntil?: string | null
   /** Supplied by the server; never trusted from the request body. */
   businessDate: string
+  /** Restore only: move open profile-bound tasks back to the primary. */
+  returnOpenTasks?: boolean
 }
 
 export interface CoverageApprovalResult {
@@ -132,6 +134,8 @@ export async function approveCoveragePlan(input: {
         actorName: input.actorName,
         reason: item.reason,
         businessDate: item.businessDate,
+        returnOpenTasks: item.returnOpenTasks ?? false,
+        auth: input.auth,
         client,
       })
       results.push({
@@ -225,7 +229,7 @@ async function handoffProfileTasks(
     .eq('organization_id', auth.orgId)
     .eq('profile_id', input.profileId)
     .eq('assignee_rep_id', input.fromRepId)
-    .in('status', ['OPEN', 'IN_PROGRESS'])
+    .in('status', ['OPEN', 'IN_PROGRESS', 'WAITING'])
     .limit(200)
   if (error || !tasks || tasks.length === 0) return
 
@@ -287,6 +291,9 @@ export async function restorePrimaryCoverage(input: {
   actorName: string
   reason: string
   businessDate: string
+  /** Move the covering rep's open profile-bound tasks back to the primary. */
+  returnOpenTasks?: boolean
+  auth?: AuthContext
   client?: DbClient
 }): Promise<{ ok: boolean; assignmentId?: string; error?: string }> {
   const client = input.client ?? (await createServerSupabase())
@@ -332,7 +339,49 @@ export async function restorePrimaryCoverage(input: {
     dedupeKey: `coverage_ended:${input.profileId}`,
   })
 
+  // Manual restore decision: open profile-bound work may return to the primary.
+  // Completed work stays attributed to the covering rep — never rewritten.
+  if (input.returnOpenTasks && input.auth) {
+    await returnProfileTasksToPrimary(client, input.auth, {
+      profileId: input.profileId,
+      fromRepId: active.covering_rep_id as string,
+      toRepId: active.primary_rep_id as string,
+    })
+  }
+
   return { ok: true, assignmentId: active.id as string }
+}
+
+/**
+ * Return open profile-bound tasks to the primary after a manual restore.
+ * Personal tasks (no profile_id) and completed/cancelled work are untouched.
+ */
+async function returnProfileTasksToPrimary(
+  client: DbClient,
+  auth: AuthContext,
+  input: { profileId: string; fromRepId: string; toRepId: string },
+): Promise<void> {
+  const { data: tasks, error } = await client
+    .from('assigned_tasks')
+    .select('id')
+    .eq('organization_id', auth.orgId)
+    .eq('profile_id', input.profileId)
+    .eq('assignee_rep_id', input.fromRepId)
+    .in('status', ['OPEN', 'IN_PROGRESS', 'WAITING'])
+    .limit(200)
+  if (error || !tasks || tasks.length === 0) return
+
+  for (const task of tasks) {
+    try {
+      await reassignAssignedTask(client, auth, task.id as string, input.toRepId, 'Primary returned to work')
+    } catch (err) {
+      console.warn('[coverage] task return failed', {
+        taskId: task.id,
+        profileId: input.profileId,
+        message: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
 }
 
 export async function revokeCoverage(input: {

@@ -3,11 +3,17 @@ import { getDatabaseCapabilities, notAvailableBody } from '@/lib/operations/capa
 import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
 import {
+  approveAssignedTaskTransfer,
   cancelAssignedTask,
+  cancelAssignedTaskTransfer,
   completeAssignedTask,
   loadAssignedTaskDetail,
   reassignAssignedTask,
+  reopenAssignedTask,
+  requestAssignedTaskTransfer,
   rescheduleAssignedTask,
+  setAssignedTaskWaiting,
+  type TaskWaitingOn,
 } from '@/lib/tasks/assigned-tasks'
 import { toUnifiedTaskFromAssigned } from '@/lib/tasks/map-unified-task'
 
@@ -42,11 +48,14 @@ export async function PATCH(
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json().catch(() => ({}))
-  const { action, assigneeRepId, reason, dueAt } = body as {
+  const { action, assigneeRepId, reason, dueAt, waitingOn } = body as {
     action?: 'complete' | 'cancel' | 'reassign' | 'start' | 'reschedule'
+      | 'waiting' | 'reopen'
+      | 'requestTransfer' | 'approveTransfer' | 'cancelTransfer'
     assigneeRepId?: string
     reason?: string
     dueAt?: string | null
+    waitingOn?: TaskWaitingOn | null
   }
 
   if (!action) {
@@ -72,7 +81,30 @@ export async function PATCH(
       if (!assigneeRepId) {
         return NextResponse.json({ error: 'assigneeRepId required' }, { status: 400 })
       }
-      const row = await reassignAssignedTask(client, auth, id, assigneeRepId)
+      const row = await reassignAssignedTask(client, auth, id, assigneeRepId, reason ?? null)
+      return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) })
+    }
+    if (action === 'waiting') {
+      const row = await setAssignedTaskWaiting(client, auth, id, waitingOn ?? null)
+      return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) })
+    }
+    if (action === 'reopen') {
+      const row = await reopenAssignedTask(client, auth, id)
+      return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) })
+    }
+    if (action === 'requestTransfer') {
+      if (!assigneeRepId) {
+        return NextResponse.json({ error: 'assigneeRepId required' }, { status: 400 })
+      }
+      const row = await requestAssignedTaskTransfer(client, auth, id, assigneeRepId, reason ?? null)
+      return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) })
+    }
+    if (action === 'approveTransfer') {
+      const row = await approveAssignedTaskTransfer(client, auth, id)
+      return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) })
+    }
+    if (action === 'cancelTransfer') {
+      const row = await cancelAssignedTaskTransfer(client, auth, id)
       return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) })
     }
     if (action === 'reschedule') {

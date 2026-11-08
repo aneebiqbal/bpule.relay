@@ -25,7 +25,16 @@ export const NOTIFICATION_CATEGORIES: Array<{ value: NotificationCategory; label
 export function categoryForType(type: string | null | undefined): NotificationCategory {
   const t = (type ?? '').toLowerCase()
   if (t === 'reply_received' || t === 'reply_waiting' || t === 'reply' || t === 'followups_due') return 'replies'
-  if (t === 'task_assigned' || t === 'task_reassigned' || t === 'task_cancelled' || t === 'task_overdue') return 'tasks'
+  if (
+    t === 'task_assigned'
+    || t === 'task_reassigned'
+    || t === 'task_cancelled'
+    || t === 'task_overdue'
+    || t === 'task_completed'
+    || t === 'task_transferred_away'
+    || t === 'task_transfer_requested'
+    || t === 'task_transfer_proposed'
+  ) return 'tasks'
   if (t.startsWith('identity_') || t === 'lead_reassigned' || t === 'lead_reassigned_away' || t === 'lead_referred') return 'assignments'
   if (t === 'meeting_requested' || t === 'proposal_requested') return 'meetings'
   if (t === 'update_requested' || t === 'thread_review') return 'admin_requests'

@@ -114,7 +114,7 @@ export async function searchOperational(
     .from('assigned_tasks')
     .select('id, title, status, assignee_rep_id')
     .eq('organization_id', auth.orgId)
-    .in('status', ['OPEN', 'IN_PROGRESS'])
+    .in('status', ['OPEN', 'IN_PROGRESS', 'WAITING'])
     .ilike('title', like)
     .order('created_at', { ascending: false })
     .limit(10)

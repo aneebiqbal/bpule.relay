@@ -29,6 +29,9 @@ export async function POST(req: NextRequest) {
     actorName: ctx.orgName,
     reason: typeof body.reason === 'string' && body.reason.trim() ? body.reason.trim() : 'Primary rep is available again',
     businessDate: plan.businessDate,
+    // Admin override may also return open work; completed work never moves.
+    returnOpenTasks: body.returnOpenTasks === true,
+    auth: ctx,
   })
 
   if (!result.ok) {

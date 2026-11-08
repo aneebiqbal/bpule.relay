@@ -101,7 +101,7 @@ export async function loadLeadPreview(leadId: string): Promise<LeadPreviewData |
       .from('assigned_tasks')
       .select('id', { count: 'exact', head: true })
       .eq('lead_id', leadId)
-      .in('status', ['OPEN', 'IN_PROGRESS']),
+      .in('status', ['OPEN', 'IN_PROGRESS', 'WAITING']),
     client
       .from('messages')
       .select('id, type, direction, sent_at')
