@@ -502,11 +502,11 @@ export async function loadRepDayDetail(repId: string, options: { date?: string }
         .eq('target_date', businessDate),
       supabase
         .from('leads')
-        .select('id', { count: 'exact', head: true })
+        .select('id, status')
         .eq('organization_id', ctx.orgId)
         .eq('owner_rep_id', repId)
-        .eq('status', 'replied')
-        .eq('archived', false),
+        .eq('archived', false)
+        .limit(SCAN_LIMIT),
       supabase
         .from('leads')
         .select('id', { count: 'exact', head: true })
@@ -582,6 +582,59 @@ export async function loadRepDayDetail(repId: string, options: { date?: string }
     if (occurred && (!lastActivityAt || occurred > lastActivityAt)) lastActivityAt = occurred
   }
 
+  // Canonical Inbox state for this rep: derive from conversation timestamps,
+  // never from the stored lead status.
+  const leadRows = (repliesResult.data ?? []) as Array<{ id: string; status: string }>
+  const leadStateRows = leadRows.length > 0
+    ? await chunkedIn<{
+        lead_id: string
+        stage: string | null
+        last_sent_at: string | null
+        last_reply_at: string | null
+        next_followup_at: string | null
+        won_at: string | null
+        lost_at: string | null
+      }>(
+        leadRows.map((row) => row.id),
+        (chunk) =>
+          supabase
+            .from('conversation_states')
+            .select('lead_id, stage, last_sent_at, last_reply_at, next_followup_at, won_at, lost_at')
+            .in('lead_id', chunk),
+      )
+    : []
+  const leadStateByLead = new Map(leadStateRows.map((row) => [row.lead_id, row]))
+  let repliesWaiting = 0
+  let followUpsDue = 0
+  for (const lead of leadRows) {
+    const state = leadStateByLead.get(lead.id)
+    const row = deriveConversationRow(
+      {
+        id: lead.id,
+        contactName: null,
+        company: null,
+        companyKey: null,
+        ownerRepId: repId,
+        profileName: null,
+        status: lead.status,
+      },
+      state
+        ? {
+            stage: state.stage,
+            lastSentAt: state.last_sent_at,
+            lastReplyAt: state.last_reply_at,
+            nextFollowupAt: state.next_followup_at,
+            wonAt: state.won_at,
+            lostAt: state.lost_at,
+          }
+        : null,
+      null,
+      asOf.getTime(),
+    )
+    if (row?.state === 'waiting_on_rep') repliesWaiting += 1
+    if (row?.state === 'follow_up_due') followUpsDue += 1
+  }
+
   const derived = deriveRepDayState({
     policy,
     businessDate,
@@ -618,8 +671,8 @@ export async function loadRepDayDetail(repId: string, options: { date?: string }
       remaining: targets.reduce((sum, row) => sum + row.remaining, 0),
     },
     actionsToday,
-    repliesWaiting: repliesResult.count ?? 0,
-    followUpsDue: 0,
+    repliesWaiting,
+    followUpsDue,
     pipelineCreated: pipelineResult.count ?? 0,
     lastActivityAt,
     warnings: (notificationsResult.data ?? []).map((row) => ({

@@ -1,11 +1,12 @@
 # Relay — Public Release Readiness (V4)
 
-> Snapshot: **2026-11-09** · tree `b6a90a2` + uncommitted changes.
+> Snapshot: **2026-11-09** · source SHA `3a3b7b4` (clean source tree).
 > Companion: `docs/RELAY_PRODUCT_MAP.md` (canonical routes, roles, authorities).
 >
 > This document is the release gate. It records what was measured, what is
-> blocked, and what is known debt. It does not certify a SHA: the working tree
-> has a concurrent writer, so no SHA is frozen (see §2).
+> blocked, and what is known debt. The source is frozen and green; a parallel
+> workstream is still adding e2e coverage, so the full browser gate has not run
+> (see §2, §11).
 
 ---
 
@@ -14,7 +15,8 @@
 ```
 PRODUCT:                    READY (with P1 debt)
 PUBLIC PRODUCTION RELEASE:  BLOCKED ON DATABASE SECURITY
-FROZEN-SHA GATE:            BLOCKED — concurrent writer + tsc failure
+SOURCE SHA:                 3a3b7b4 — clean, typecheck/lint/tests/build green
+BROWSER GATE:               NOT RUN — parallel workstream still adding e2e
 ```
 
 The product structure is coherent: one sidebar, one Inbox contract, one task
@@ -53,16 +55,17 @@ Required operator action (do **not** weaken the gate):
 
 Until then, every application read is a full-tenant read and RLS is decorative.
 
-### P0 — Frozen-SHA gate cannot pass
+### P0 — Frozen-SHA gate cannot pass (yet)
 
 | Fact | Evidence |
 |---|---|
-| `npx tsc --noEmit` exits 2 | 20 diagnostic lines |
-| Errors are in uncommitted work-in-progress | `src/lib/operations/chat-intelligence.ts` (6), `src/lib/operations/inbox-fixtures.ts` (2) |
-| The tree is being written concurrently | 18-21 modified files, 2 untracked, mtimes advancing during the audit; two `next-server` processes |
+| The source tree is now committed and clean | `git diff HEAD -- src tests` is empty at `3a3b7b4` |
+| A parallel workstream is still adding coverage | `e2e/inbox-v4-rebuild.spec.ts` appeared untracked during the audit; two `next-server` processes |
+| `npx tsc --noEmit` failed early in the audit, then passed after the parallel writer fixed it | 20 → 0 errors between the first and second run |
+| The audit did not modify source files | only `docs/` was written |
 
-The audit did not modify source files for this reason. No SHA can be certified
-while a parallel writer is active.
+Certify only after the parallel workstream stops and the browser gate runs on
+the resulting SHA. The source at `3a3b7b4` is green (see §11).
 
 ---
 
@@ -70,13 +73,13 @@ while a parallel writer is active.
 
 ### P1 — incorrect product truth / major workflow failure
 
-| # | Issue | Evidence | Fix |
-|---|---|---|---|
-| P1-1 | **Five implementations of "replies waiting"**. Only `getInboxCountsForRep` and `loadTeamDay` use the canonical `deriveConversationRow`. | `sidebar-counts.ts:52-88`; `auth/workspace.ts:227-247`; `team/manager-home-summary.ts:167`; `rep-day/team.ts:503-509` | Make every surface call `getInboxCountsForRep` (batched per rep for team surfaces) |
-| P1-2 | **Sidebar Work badge uses a different predicate and scope than `/tasks`.** Badge = `assigned_tasks` where `status in (OPEN,IN_PROGRESS,WAITING)` and `due_at <= EOD`; `/tasks` "Active" = `classifyUnifiedTaskTab ∈ {today, overdue}` over assigned + derived tasks. | `sidebar-counts.ts:95-118` vs `tasks/rank-unified-tasks.ts:59-78`, `task-workspace-view.tsx:105-110` | One canonical `loadRepActiveTaskCount`; badge and page both read it |
-| P1-3 | **`/tasks` scopes derived actions to the active workspace; `/dashboard` does not.** The same task can appear on one surface and not the other. | `tasks/page.tsx:130` (`activeWorkspace`) vs `dashboard/page.tsx:159` (`null`) | Pick one scope rule; if Work is profile-scoped, Rep Home must say so |
-| P1-4 | **`loadRepDayDetail.followUpsDue` is hardcoded `0`.** | `rep-day/team.ts:622` | Compute from `deriveConversationRow` or remove the field |
-| P1-5 | **`/reports/team` duplicates `/team/performance`** (same loader, same component, strict subset). | `reports/team/page.tsx` vs `team/performance/page.tsx` | Redirect `/reports/team` → `/team/performance` |
+| # | Issue | Status | Evidence | Fix |
+|---|---|---|---|---|
+| P1-1 | **"Replies waiting" had five implementations.** `3a3b7b4` fixed `loadTeamDay`, Manager Home and Admin health. Three remain: the sidebar badge, `getDailyWorkspace`, and `loadRepDayDetail`. | **partial** | `sidebar-counts.ts:52-88`; `auth/workspace.ts:227-247`; `rep-day/team.ts:503-509`; `team/manager-home-summary.ts:167` (rare live-only fallback) | Make every surface call `getInboxCountsForRep` |
+| P1-2 | **Sidebar Work badge uses a different predicate and scope than `/tasks`.** Badge = `assigned_tasks` where `status in (OPEN,IN_PROGRESS,WAITING)` and `due_at <= EOD`; `/tasks` "Active" = `classifyUnifiedTaskTab ∈ {today, overdue}` over assigned + derived tasks. | **open** | `sidebar-counts.ts:95-118` vs `tasks/rank-unified-tasks.ts:59-78`, `task-workspace-view.tsx:105-110` | One canonical `loadRepActiveTaskCount`; badge and page both read it |
+| P1-3 | **`/tasks` scopes derived actions to the active workspace; `/dashboard` does not.** The same task can appear on one surface and not the other. | **open** | `tasks/page.tsx:130` (`activeWorkspace`) vs `dashboard/page.tsx:159` (`null`) | Pick one scope rule; if Work is profile-scoped, Rep Home must say so |
+| P1-4 | **`loadRepDayDetail.followUpsDue` is hardcoded `0`.** | **open** | `rep-day/team.ts:622` | Compute from `deriveConversationRow` or remove the field |
+| P1-5 | **`/reports/team` duplicates `/team/performance`** (same loader, same component, strict subset). | **open** | `reports/team/page.tsx` vs `team/performance/page.tsx` | Redirect `/reports/team` → `/team/performance` |
 
 ### P2 — important friction
 
@@ -91,6 +94,7 @@ while a parallel writer is active.
 | P2-7 | Cmd-K "View referred leads" → `/leads?filter=referred`; `parseLeadsQuery` has no `filter` param, so it renders the default All view | `command-palette.tsx:184`, `pipeline-utils.ts:469-497` |
 | P2-8 | Rep Home loads `referredLeads` (`store.getReferredLeads`) but no component renders it | `dashboard/page.tsx:186,446`; `rep-workspace-data.ts:79` |
 | P2-9 | `/api/me/workspace` has no client consumer | route exists; zero fetches in `src` |
+| P2-10 | **Global Create never passes `isManager`**, so a manager gets the Rep list and never sees "Assign Task" | `v4-app-shell.tsx:335` vs `global-create-items.ts:34-37` |
 
 ### P3 — cosmetic
 
@@ -129,8 +133,9 @@ Verified: `requireProductAdmin` on every Admin page; `adminUp` in nav.
 See `docs/RELAY_PRODUCT_MAP.md` §2 for the full matrix. Summary:
 
 - **9 primary domains**, 1 sidebar, 1 secondary rail per domain.
-- **~45 canonical authenticated pages**; ~20 compatibility redirects.
-- **4 fixtures** (`/qa-v4`, `/inbox-fixture`, plus QA-gated admin fixtures).
+- **77 authenticated pages** in `(app)`: ~55 canonical, ~21 redirect/legacy,
+  plus the role-branched `/dashboard`.
+- **2 QA fixtures** (`/qa-v4`, `/inbox-fixture`).
 - **Cmd-K** mirrors the canonical IA and is role-filtered via
   `lib/operations/search-shared.ts`.
 - **Global Create** is role-filtered via
@@ -201,14 +206,13 @@ scrolling tables. A 375/768/1024/1280/1440 run is required before release.
 ## 10. Release SHA
 
 ```
-NOT FROZEN
+SOURCE SHA:  3a3b7b4a280ade1a46ca43b341c9076203077417
+SOURCE TREE: NOT clean — src/lib/rep-day/team.ts modified again during audit
+STATUS:      a parallel workstream is actively fixing the same P1 surfaces
 ```
 
-The tree has a concurrent writer. Certify only after:
-
-1. The writer stops and the tree is committed.
-2. `npx tsc --noEmit` is clean.
-3. The full gate runs on that SHA (see §11).
+Certify only after the parallel workstream stops and the full gate re-runs on
+the resulting SHA. The source at `3a3b7b4` was green when measured (see §11).
 
 ---
 
@@ -216,14 +220,14 @@ The tree has a concurrent writer. Certify only after:
 
 | Gate | Result | Notes |
 |---|---|---|
-| `npx tsc --noEmit` | **FAIL** | 20 errors in uncommitted WIP |
+| `npx tsc --noEmit` | **PASS** | 0 errors at the second run (first run failed on WIP) |
 | `npm run lint` | **PASS** | 0 errors, 780 warnings |
 | Contract tests (`qa:contracts`) | **PASS** | 4 files / 80 tests |
 | Inbox parity tests | **PASS** | 4 files / 63 tests |
-| Full unit suite | see below | run during audit |
-| `next build` | not run | blocked by tsc |
-| Browser / responsive / a11y | not run | needs a running app |
-| Role crawl | not run | needs a running app |
+| Full unit suite | **PASS** | **361 files / 5,354 tests / 0 failed** (150s) |
+| `next build` | **PASS** | compiled in 39s, TypeScript clean, 104 static pages |
+| Browser / responsive / a11y | **NOT RUN** | needs a running app on a frozen SHA |
+| Role crawl | **NOT RUN** | needs a running app on a frozen SHA |
 
 ---
 

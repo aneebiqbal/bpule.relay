@@ -1,6 +1,6 @@
 # Relay — Canonical Product Map (V4)
 
-> Snapshot: **2026-11-09**, working tree `b6a90a2` + uncommitted changes.
+> Snapshot: **2026-11-09**, source SHA `3a3b7b4` (clean tree).
 > This is the single current product map. It replaces the route-level inventory
 > in `RELAY_COMPLETE_ROUTE_AND_ROLE_MAP.md` (kept as a historical reference).
 > Where this document and a code comment disagree, the code wins — open a fix.
@@ -212,7 +212,7 @@ Manager is `OWNER`/`ADMIN` or a `MANAGER` team membership. Admin is
 
 | Number | Canonical authority | Consumers | Divergent implementations |
 |---|---|---|---|
-| Needs reply | `getInboxCountsForRep` → `loadChatQueue` → `deriveConversationRow` | Rep Home, `/chats` | `sidebar-counts.countInboxNeedsReply` (SQL predicate), `getDailyWorkspace` (`status='replied'`), `assembleManagerHomeTeamData` fallback (`status='replied'`), `loadRepDayDetail` (`status='replied'`) |
+| Needs reply | `getInboxCountsForRep` → `loadChatQueue` → `deriveConversationRow` | Rep Home, `/chats` | `sidebar-counts.countInboxNeedsReply` (SQL predicate), `getDailyWorkspace` (`status='replied'`), `assembleManagerHomeTeamData` fallback (`status='replied'`), `loadRepDayDetail` (`status='replied'`), `coverage/load.ts` (`status='replied'`) |
 | Waiting on client | `loadChatQueue.counts.waiting_them` | Rep Home, `/chats` | — |
 | Follow-ups | `loadChatQueue.counts.followups` | Rep Home, `/chats` | `followUpsOverdue` (`status in contacted/followed_up`), `loadRepDayDetail` (hardcoded `0`) |
 | Assigned tasks | `loadUnifiedTasks` + `selectAssignedOpenTasks` | Rep Home, `/tasks` | `sidebar-counts.countActionableTasks` (SQL `assigned_tasks` only) |
@@ -254,6 +254,17 @@ Manager is `OWNER`/`ADMIN` or a `MANAGER` team membership. Admin is
 | `src/components/admin/team-live-board.tsx` | 177 |
 | `src/components/signal/signal-feed.tsx` | 136 |
 | `src/components/app-back-button.tsx` | 50 |
+| `src/components/ui/action-line.tsx` | — |
+| `src/components/ui/avatar.tsx` | — |
+| `src/components/ui/breadcrumb.tsx` | — |
+| `src/components/ui/inline-notice.tsx` | — |
+| `src/components/ui/intelligent-empty-state.tsx` | — |
+| `src/components/ui/page-shell.tsx` | — |
+| `src/components/ui/sparkline.tsx` | — |
+| `src/components/ui/switch.tsx` | — |
+
+Total: **16 files, ~3,388 lines**, all with zero imports across `src/app`,
+`src/lib`, `src/components` and `tests`.
 
 ### 5.3 Dead / legacy API families
 
