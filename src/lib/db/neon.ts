@@ -200,33 +200,38 @@ export class NeonExecutorImpl implements NeonExecutorApi {
   ) {}
 
   async query<T>(text: string, values: unknown[] = []): Promise<T[]> {
-    // No identity means the connection keeps its own privileges (the pooler
-    // connects as the branch owner, which bypasses RLS) — the service-role
-    // equivalent. Nothing is written to Supabase in this mode.
+    // The RLS identity must be set before the statement's plan is built. A
+    // LATERAL set_config can be evaluated before the GUC is set for some plans,
+    // which silently returns zero rows; a transaction with SET LOCAL is the
+    // only reliable ordering. The connection is held for the read only.
     let n = 0
-    const inner = text.replace(/\?/g, () => `$${++n}`)
-    // With an identity in scope the GUC occupies $1, so the builder's
-    // placeholders shift by one. Without one they start at $1.
-    const shifted = this.userId
-      ? inner.replace(/\$(\d+)/g, (_, d: string) => `$${Number(d) + 1}`)
-      : inner
-    const sql = this.userId
-      ? `SELECT q.* FROM (SELECT set_config('app.current_user_id', $1, true) AS _g) AS ctx CROSS JOIN LATERAL (${shifted}) q`
-      : `SELECT q.* FROM (${shifted}) q`
-    const params = this.userId ? [this.userId, ...values] : values
-    let res
+    const rewritten = text.replace(/\?/g, () => `$${++n}`)
+    const client = await this.pool.connect()
     const started = TRACE_QUERIES ? performance.now() : 0
     try {
-      res = await this.pool.query(sql, params)
-    } catch (error) {
-      // Include the statement: a placeholder or quoting defect is otherwise
-      // invisible behind Postgres' terse position marker.
-      throw new Error(`Neon query failed: ${(error as Error).message}\n${sql}`)
+      await client.query('BEGIN')
+      if (this.userId) {
+        await client.query('SELECT set_config($1, $2, true)', ['app.current_user_id', this.userId])
+      }
+      let res
+      try {
+        res = await client.query(rewritten, values)
+      } catch (error) {
+        // Include the statement: a placeholder or quoting defect is otherwise
+        // invisible behind Postgres' terse position marker.
+        throw new Error(`Neon query failed: ${(error as Error).message}\n${rewritten}`)
+      }
+      await client.query('COMMIT')
+      if (TRACE_QUERIES) {
+        console.log(`[sql] ${Math.round(performance.now() - started)}ms ${rewritten.slice(0, 160)}`)
+      }
+      return res.rows as T[]
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {})
+      throw err
+    } finally {
+      client.release()
     }
-    if (TRACE_QUERIES) {
-      console.log(`[sql] ${Math.round(performance.now() - started)}ms ${sql.slice(0, 160)}`)
-    }
-    return res.rows as T[]
   }
 
   async queryInWrite<T>(text: string, values: unknown[] = []): Promise<T[]> {

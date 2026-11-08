@@ -230,17 +230,19 @@ describe('NEON executor — identity and placeholders', () => {
     }
   }
 
-  it('puts the identity GUC in $1 and shifts the builder placeholders', async () => {
+  it('sets the identity GUC in a transaction before the read', async () => {
     const { calls, pool } = fakePool()
     const executor = new NeonExecutorImpl(pool as never, 'user-1')
     await executor.query('SELECT * FROM "leads" WHERE "archived" = ? LIMIT 10', [false])
 
-    expect(calls).toHaveLength(1)
-    expect(calls[0].values).toEqual(['user-1', false])
-    expect(calls[0].sql).toMatch(
-      /^SELECT q\.\* FROM \(SELECT set_config\('app\.current_user_id', \$1, true\) AS _g\) AS ctx CROSS JOIN LATERAL \(/,
-    )
-    expect(calls[0].sql).toContain('"archived" = $2')
+    expect(calls.map((c) => c.sql)).toEqual([
+      'BEGIN',
+      'SELECT set_config($1, $2, true)',
+      'SELECT * FROM "leads" WHERE "archived" = $1 LIMIT 10',
+      'COMMIT',
+    ])
+    expect(calls[1].values).toEqual(['app.current_user_id', 'user-1'])
+    expect(calls[2].values).toEqual([false])
   })
 
   it('writes run in a transaction with SET LOCAL', async () => {
@@ -257,16 +259,19 @@ describe('NEON executor — identity and placeholders', () => {
     expect(calls[2].values).toEqual(['x'])
   })
 
-  it('does not shift placeholders when there is no identity in scope', async () => {
-    // The service client bypasses RLS and sets no GUC, so the builder's $1 must
-    // stay $1. Shifting it would leave the statement referencing a parameter
-    // that was never sent.
+  it('runs without an identity GUC when there is none in scope', async () => {
+    // The service client bypasses RLS and sets no GUC; the builder's $1 stays
+    // $1 and the read still runs in a transaction.
     const { calls, pool } = fakePool()
     const executor = new NeonExecutorImpl(pool as never, null)
     await executor.query('SELECT * FROM "organization_operating_policy" WHERE "organization_id" = ?', ['org-1'])
 
-    expect(calls[0].sql).toBe('SELECT q.* FROM (SELECT * FROM "organization_operating_policy" WHERE "organization_id" = $1) q')
-    expect(calls[0].values).toEqual(['org-1'])
+    expect(calls.map((c) => c.sql)).toEqual([
+      'BEGIN',
+      'SELECT * FROM "organization_operating_policy" WHERE "organization_id" = $1',
+      'COMMIT',
+    ])
+    expect(calls[1].values).toEqual(['org-1'])
   })
 })
 
