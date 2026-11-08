@@ -27,11 +27,12 @@ export default async function TasksPage() {
   if (!auth) redirect('/login')
 
   const showAssignee = auth.isManager || auth.isAdmin || auth.isOwner
-  const [derivedActions, canAssign, reps, directory] = await Promise.all([
+  const canAssign = await canActorAssignTasks(auth)
+  const [derivedActions, reps, directory, composerOptions] = await Promise.all([
     loadDerivedActionsForCurrentUser(),
-    canActorAssignTasks(auth),
     listAssignableReps(auth),
     showAssignee ? getPeopleDirectory().catch(() => null) : Promise.resolve(null),
+    canAssign ? loadComposerOptions(auth.orgId).catch(() => null) : Promise.resolve(null),
   ])
 
   const tasks = await loadUnifiedTasks({
@@ -53,9 +54,46 @@ export default async function TasksPage() {
         now={Date.now()}
         timeZone={user.organization.timezone ?? 'UTC'}
         teams={(directory?.teams ?? []).map((t) => ({ id: t.id, name: t.name, memberIds: t.memberIds }))}
+        leads={composerOptions?.leads ?? []}
+        profiles={composerOptions?.profiles ?? []}
       />
     </Suspense>
   )
+}
+
+/**
+ * Composer options: searchable leads + canonical profiles. Bounded reads, only
+ * for users who can actually assign.
+ */
+async function loadComposerOptions(orgId: string): Promise<{
+  leads: Array<{ id: string; company: string | null }>
+  profiles: Array<{ id: string; name: string }>
+}> {
+  const store = await createScoutStore()
+  const client = store.getSupabaseClient()
+  const [leadsRes, profilesRes] = await Promise.all([
+    client.from('leads').select('id, company').eq('organization_id', orgId).limit(500),
+    client
+      .from('profiles')
+      .select('id, display_name, full_name, label')
+      .eq('organization_id', orgId)
+      .limit(500),
+  ])
+  return {
+    leads: ((leadsRes.data ?? []) as Array<{ id: string; company: string | null }>)
+      .sort((a, b) => (a.company ?? '').localeCompare(b.company ?? '')),
+    profiles: ((profilesRes.data ?? []) as Array<{
+      id: string
+      display_name: string | null
+      full_name: string | null
+      label: string | null
+    }>)
+      .map((profile) => ({
+        id: profile.id,
+        name: profile.display_name ?? profile.full_name ?? profile.label ?? 'Unnamed',
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  }
 }
 
 /** Same ranking path as dashboard — derived tasks stay projections of queue state. */

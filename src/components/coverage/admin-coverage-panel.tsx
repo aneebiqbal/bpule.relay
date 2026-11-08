@@ -48,7 +48,11 @@ export function AdminCoveragePanel({
   const [notice, setNotice] = useState<string | null>(null)
   const [showAllProfiles, setShowAllProfiles] = useState(false)
 
-  async function approve(items: Array<{ profileId: string; kind: 'COVER' | 'RESTORE_PRIMARY' }>) {
+  async function approve(items: Array<{
+    profileId: string
+    kind: 'COVER' | 'RESTORE_PRIMARY'
+    returnOpenTasks?: boolean
+  }>) {
     setBusy(true)
     setError(null)
     setNotice(null)
@@ -227,7 +231,20 @@ export function AdminCoveragePanel({
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => approve([{ profileId: item.profileId, kind: item.kind }])}
+                    onClick={() => {
+                      if (item.kind !== 'RESTORE_PRIMARY') {
+                        approve([{ profileId: item.profileId, kind: item.kind }])
+                        return
+                      }
+                      // Manual restore: the admin decides whether open work returns.
+                      const openTasks = item.workPackage.tasks
+                      const message = openTasks > 0
+                        ? `${openTasks} open task${openTasks === 1 ? '' : 's'} will return to ${item.toRepName}. Completed work stays with ${item.fromRepName}. Return the open tasks?`
+                        : `No open tasks to return. Restore ${item.profileName} to ${item.toRepName}?`
+                      if (window.confirm(message)) {
+                        approve([{ profileId: item.profileId, kind: item.kind, returnOpenTasks: openTasks > 0 }])
+                      }
+                    }}
                     className={cn(
                       'shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-transform active:scale-[0.98] disabled:opacity-60',
                       item.kind === 'RESTORE_PRIMARY'

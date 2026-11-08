@@ -15,6 +15,21 @@ interface LeadPageProps {
 
 const LEAD_TABS = ['conversation', 'tasks', 'activity'] as const
 
+/** Reps the viewer may assign work to — empty for a plain rep. */
+async function loadLeadReps() {
+  const auth = await getAuthContext()
+  if (!auth || (!auth.isManager && !auth.isAdmin && !auth.isOwner)) return []
+  const store = await createScoutStore()
+  const { data } = await store
+    .getSupabaseClient()
+    .from('reps')
+    .select('id, name')
+    .eq('organization_id', auth.orgId)
+    .order('name')
+    .limit(200)
+  return ((data ?? []) as Array<{ id: string; name: string }>).map((rep) => ({ id: rep.id, name: rep.name }))
+}
+
 async function loadLeadData(id: string) {
   const auth = await getAuthContext()
   if (!auth) notFound()
@@ -44,6 +59,7 @@ async function loadLeadData(id: string) {
 
 export default async function LeadPage({ params, searchParams }: LeadPageProps) {
   const dataPromise = params.then(async ({ id }) => loadLeadData(id))
+  const reps = await loadLeadReps()
   const raw = await searchParams
   const rawTab = Array.isArray(raw.tab) ? raw.tab[0] : raw.tab
   const rawNext = Array.isArray(raw.next) ? raw.next[0] : raw.next
@@ -58,6 +74,7 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
         initialTab={initialTab}
         initialNext={rawNext ?? null}
         now={Date.now()}
+        reps={reps}
       />
     </Suspense>
   )

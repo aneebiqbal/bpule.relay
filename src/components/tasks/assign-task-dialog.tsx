@@ -18,12 +18,30 @@ const KINDS: Array<{ value: AssignedTaskKind; label: string }> = [
 
 const PRIORITIES: UnifiedTaskPriority[] = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL']
 
-function tomorrowIsoLocal(): string {
+export interface AssignTaskLeadOption {
+  id: string
+  company: string | null
+}
+
+export interface AssignTaskProfileOption {
+  id: string
+  name: string
+}
+
+function atLocal(days: number): string {
   const d = new Date()
-  d.setDate(d.getDate() + 1)
+  d.setDate(d.getDate() + days)
   d.setHours(17, 0, 0, 0)
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function todayIsoLocal(): string {
+  return atLocal(0)
+}
+
+function tomorrowIsoLocal(): string {
+  return atLocal(1)
 }
 
 export function AssignTaskDialog({
@@ -32,16 +50,24 @@ export function AssignTaskDialog({
   reps,
   defaultAssigneeId,
   defaultLeadId,
+  defaultProfileId,
   defaultKind = 'REVIEW',
   defaultTitle,
+  leads = [],
+  profiles = [],
 }: {
   open: boolean
   onClose: () => void
   reps: Array<{ id: string; name: string }>
   defaultAssigneeId?: string
   defaultLeadId?: string
+  defaultProfileId?: string
   defaultKind?: AssignedTaskKind
   defaultTitle?: string
+  /** Searchable lead options. When empty the lead field stays a raw id input. */
+  leads?: AssignTaskLeadOption[]
+  /** Canonical profile options. */
+  profiles?: AssignTaskProfileOption[]
 }) {
   const router = useRouter()
   const [assigneeRepId, setAssigneeRepId] = useState(defaultAssigneeId ?? reps[0]?.id ?? '')
@@ -49,8 +75,10 @@ export function AssignTaskDialog({
   const [title, setTitle] = useState(defaultTitle ?? '')
   const [note, setNote] = useState('')
   const [priority, setPriority] = useState<UnifiedTaskPriority>('NORMAL')
+  const [duePreset, setDuePreset] = useState<'today' | 'tomorrow' | 'custom'>('tomorrow')
   const [dueLocal, setDueLocal] = useState(tomorrowIsoLocal())
   const [leadId, setLeadId] = useState(defaultLeadId ?? '')
+  const [profileId, setProfileId] = useState(defaultProfileId ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -64,10 +92,18 @@ export function AssignTaskDialog({
     )
     setNote('')
     setPriority('NORMAL')
+    setDuePreset('tomorrow')
     setDueLocal(tomorrowIsoLocal())
     setLeadId(defaultLeadId ?? '')
+    setProfileId(defaultProfileId ?? '')
     setError(null)
-  }, [open, defaultAssigneeId, defaultKind, defaultLeadId, defaultTitle, reps])
+  }, [open, defaultAssigneeId, defaultKind, defaultLeadId, defaultProfileId, defaultTitle, reps])
+
+  function pickDuePreset(preset: 'today' | 'tomorrow' | 'custom') {
+    setDuePreset(preset)
+    if (preset === 'today') setDueLocal(todayIsoLocal())
+    if (preset === 'tomorrow') setDueLocal(tomorrowIsoLocal())
+  }
 
   async function submit() {
     if (!assigneeRepId || !title.trim()) {
@@ -89,6 +125,7 @@ export function AssignTaskDialog({
           priority,
           dueAt,
           leadId: leadId.trim() || null,
+          profileId: profileId || null,
         }),
       })
       const json = await res.json().catch(() => ({}))
@@ -147,15 +184,53 @@ export function AssignTaskDialog({
           />
         </label>
 
-        <label className="block space-y-1">
-          <span className="text-[12px] font-medium text-graphite">Lead ID (optional)</span>
-          <input
-            className="w-full rounded-lg border border-line bg-bone px-3 py-2 text-[13px] text-ink"
-            value={leadId}
-            onChange={(e) => setLeadId(e.target.value)}
-            placeholder="UUID if related to a lead"
-          />
-        </label>
+        <fieldset className="space-y-3 rounded-lg border border-line px-3 py-2.5">
+          <legend className="px-1 text-[12px] font-medium text-graphite">Related to</legend>
+          <label className="block space-y-1">
+            <span className="text-[12px] text-stone">Lead (optional)</span>
+            {leads.length > 0 ? (
+              <select
+                className="w-full rounded-lg border border-line bg-bone px-3 py-2 text-[13px] text-ink"
+                value={leadId}
+                onChange={(e) => setLeadId(e.target.value)}
+              >
+                <option value="">None</option>
+                {leads.map((lead) => (
+                  <option key={lead.id} value={lead.id}>{lead.company ?? 'Untitled lead'}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                className="w-full rounded-lg border border-line bg-bone px-3 py-2 text-[13px] text-ink"
+                value={leadId}
+                onChange={(e) => setLeadId(e.target.value)}
+                placeholder="Lead ID"
+              />
+            )}
+          </label>
+          <label className="block space-y-1">
+            <span className="text-[12px] text-stone">Profile (optional)</span>
+            {profiles.length > 0 ? (
+              <select
+                className="w-full rounded-lg border border-line bg-bone px-3 py-2 text-[13px] text-ink"
+                value={profileId}
+                onChange={(e) => setProfileId(e.target.value)}
+              >
+                <option value="">None</option>
+                {profiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>{profile.name}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                className="w-full rounded-lg border border-line bg-bone px-3 py-2 text-[13px] text-ink"
+                value={profileId}
+                onChange={(e) => setProfileId(e.target.value)}
+                placeholder="Profile ID"
+              />
+            )}
+          </label>
+        </fieldset>
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block space-y-1">
@@ -172,6 +247,21 @@ export function AssignTaskDialog({
           </label>
           <label className="block space-y-1">
             <span className="text-[12px] font-medium text-graphite">Due</span>
+            <select
+              className="w-full rounded-lg border border-line bg-bone px-3 py-2 text-[13px] text-ink"
+              value={duePreset}
+              onChange={(e) => pickDuePreset(e.target.value as 'today' | 'tomorrow' | 'custom')}
+            >
+              <option value="today">Today</option>
+              <option value="tomorrow">Tomorrow</option>
+              <option value="custom">Pick a date</option>
+            </select>
+          </label>
+        </div>
+
+        {duePreset === 'custom' && (
+          <label className="block space-y-1">
+            <span className="text-[12px] font-medium text-graphite">Due date</span>
             <input
               type="datetime-local"
               className="w-full rounded-lg border border-line bg-bone px-3 py-2 text-[13px] text-ink"
@@ -179,7 +269,7 @@ export function AssignTaskDialog({
               onChange={(e) => setDueLocal(e.target.value)}
             />
           </label>
-        </div>
+        )}
 
         <label className="block space-y-1">
           <span className="text-[12px] font-medium text-graphite">Note</span>

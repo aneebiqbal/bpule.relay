@@ -203,7 +203,7 @@ export function V4AdminHome({
               Analyze Prospect
             </Link>
             <Link
-              href="/tasks"
+              href="/tasks?assign=1"
               className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-bone-raised px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-bone"
             >
               Assign Task

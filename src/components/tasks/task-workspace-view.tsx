@@ -21,6 +21,7 @@ import { TaskDetailDrawer } from '@/components/tasks/task-detail-drawer'
 const TABS: Array<{ id: UnifiedTaskTab; label: string }> = [
   { id: 'today', label: 'Today' },
   { id: 'overdue', label: 'Overdue' },
+  { id: 'waiting', label: 'Waiting' },
   { id: 'upcoming', label: 'Upcoming' },
   { id: 'completed', label: 'Completed' },
   { id: 'all', label: 'All' },
@@ -72,6 +73,8 @@ export function TaskWorkspaceView({
   reps,
   currentRepId,
   teams = [],
+  leads = [],
+  profiles = [],
   timeZone = 'UTC',
   now,
 }: {
@@ -81,6 +84,8 @@ export function TaskWorkspaceView({
   reps: Array<{ id: string; name: string }>
   currentRepId: string
   teams?: Array<{ id: string; name: string; memberIds: string[] }>
+  leads?: Array<{ id: string; company: string | null }>
+  profiles?: Array<{ id: string; name: string }>
   /** Org timezone — the one zone the server and client both render in. */
   timeZone?: string
   /** Server-computed once per request so SSR and hydration classify tabs identically. */
@@ -104,6 +109,7 @@ export function TaskWorkspaceView({
   const [source, setSource] = useState<'DERIVED' | 'ASSIGNED' | 'ALL'>('ALL')
   const [due, setDue] = useState<'overdue' | 'today' | 'week' | 'later' | 'ALL'>('ALL')
   const [team, setTeam] = useState<string>('ALL')
+  const [profile, setProfile] = useState<string>('ALL')
   const [q, setQ] = useState('')
 
   useEffect(() => {
@@ -133,13 +139,16 @@ export function TaskWorkspaceView({
     const teamParam = searchParams.get('team')
     if (teamParam) setTeam(teamParam)
     else setTeam('ALL')
+    const profileParam = searchParams.get('profile')
+    if (profileParam) setProfile(profileParam)
+    else setProfile('ALL')
     const qParam = searchParams.get('q')
     if (qParam !== null) setQ(qParam)
     if (searchParams.get('assign')) {
       setAssignDefaultRep(undefined)
       setAssignOpen(true)
     }
-  }, [searchParams, showAssignee])
+  }, [searchParams, showAssignee, profiles])
 
   const nameByRep = useMemo(() => new Map(reps.map((r) => [r.id, r.name])), [reps])
   const teamMemberIds = team === 'ALL' ? null : new Set(teams.find((t) => t.id === team)?.memberIds ?? [])
@@ -177,13 +186,14 @@ export function TaskWorkspaceView({
           if ((new Date(t.dueAt).getTime() - now) / 86_400_000 < 7) return false
         }
       }
+      if (profile !== 'ALL' && t.profileId !== profile) return false
       if (q) {
-        const hay = `${t.title} ${t.companyName ?? ''} ${t.reason}`.toLowerCase()
+        const hay = `${t.title} ${t.companyName ?? ''} ${t.profileName ?? ''} ${t.reason}`.toLowerCase()
         if (!hay.includes(q.toLowerCase())) return false
       }
       return true
     })
-  }, [tasks, view, priority, source, assignee, showAssignee, due, teamMemberIds, q, timeZone])
+  }, [tasks, view, priority, source, assignee, showAssignee, due, teamMemberIds, profile, q, timeZone])
 
   const selected = openTaskId
     ? tasks.find((t) => t.id === openTaskId || t.id === `assigned:${openTaskId}`) ?? null
@@ -213,6 +223,7 @@ export function TaskWorkspaceView({
   if (source !== 'ALL') chips.push({ key: 'source', label: `Source: ${SOURCE_LABEL[source]}` })
   if (due !== 'ALL') chips.push({ key: 'due', label: `Due: ${due}` })
   if (team !== 'ALL') chips.push({ key: 'team', label: `Team: ${teams.find((t) => t.id === team)?.name ?? 'Unknown'}` })
+  if (profile !== 'ALL') chips.push({ key: 'profile', label: `Profile: ${profiles.find((p) => p.id === profile)?.name ?? 'Unknown'}` })
   if (q) chips.push({ key: 'q', label: `Record: ${q}` })
 
   const headerSubtitle = showAssignee
@@ -306,6 +317,17 @@ export function TaskWorkspaceView({
                 router.push(hrefWith({ team: v === 'ALL' ? null : v }), { scroll: false })
               }}
               options={[['ALL', 'All teams'], ...teams.map((t): [string, string] => [t.id, t.name])]}
+            />
+          )}
+          {profiles.length > 0 && (
+            <FilterSelect
+              label="Profile"
+              value={profile}
+              onChange={(v) => {
+                setProfile(v)
+                router.push(hrefWith({ profile: v === 'ALL' ? null : v }), { scroll: false })
+              }}
+              options={[['ALL', 'All profiles'], ...profiles.map((p): [string, string] => [p.id, p.name])]}
             />
           )}
           <label className="flex items-center gap-1.5 text-[12px] text-graphite">
@@ -410,6 +432,9 @@ export function TaskWorkspaceView({
                       )}
                       <td className="px-3 py-2.5">
                         <span className="text-[11px] text-stone">{sourceLine(task)}</span>
+                        <span suppressHydrationWarning className="block text-[11px] text-stone">
+                          Updated {relativeTime(task.updatedAt ?? task.createdAt, now)}
+                        </span>
                       </td>
                       <td className="px-3 py-2.5">
                         <span
@@ -481,7 +506,13 @@ export function TaskWorkspaceView({
                     </span>
                   </div>
                   <p className="mt-0.5 text-[12px] text-graphite">{task.reason}</p>
-                  <p className="mt-0.5 text-[11px] text-stone">{sourceLine(task)}</p>
+                  <p className="mt-0.5 text-[11px] text-stone">
+                    {sourceLine(task)}
+                    {' · '}
+                    <span suppressHydrationWarning>
+                      Updated {relativeTime(task.updatedAt ?? task.createdAt, now)}
+                    </span>
+                  </p>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <span suppressHydrationWarning className={cn('text-[11px]', isOverdue(task) ? 'font-medium text-status-danger' : 'text-stone')}>
                       {dueLabel(task, timeZone, now)}
@@ -522,6 +553,8 @@ export function TaskWorkspaceView({
           onClose={() => setAssignOpen(false)}
           reps={reps}
           defaultAssigneeId={assignDefaultRep}
+          leads={leads}
+          profiles={profiles}
         />
       )}
     </div>

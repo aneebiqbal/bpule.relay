@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { V4Chip, V4Panel } from '@/components/v4/primitives'
 import { CoverageConfigPanel } from '@/components/coverage/coverage-config-panel'
+import { AssignTaskButton } from '@/components/operations/assign-task-button'
 import type { TeamProfileDetail } from '@/lib/team/profile-detail'
 
 const STATUS_TONE: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
@@ -95,7 +96,7 @@ export function TeamProfileDetailView({
           </div>
         </div>
         {canManage && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setAssignOpen(true)}
@@ -103,6 +104,7 @@ export function TeamProfileDetailView({
             >
               {detail.assignedReps.length > 0 ? 'Reassign' : 'Assign rep'}
             </button>
+            <AssignTaskButton reps={reps} defaultProfileId={detail.profileId} />
             <Link
               href="/profile-intelligence?tab=identities"
               className="rounded-lg border border-line px-3.5 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-bone"

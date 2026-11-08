@@ -9,6 +9,7 @@ import { Tabs } from './ui/tabs'
 import { NotesPanel } from './operations/notes-panel'
 import { LeadContextPanel } from '@/components/sales/lead-context-panel'
 import { LeadStageStrip } from '@/components/sales/lead-stage-strip'
+import { AssignTaskButton } from '@/components/operations/assign-task-button'
 import { LeadDetailSkeleton } from '@/components/sales/lead-detail-skeleton'
 import { V3ActivityRow, V3Skeleton } from '@/components/v3/primitives'
 import { formatRelativeTime } from '@/lib/ui/time'
@@ -41,11 +42,14 @@ export function LeadWorkspaceAsync({
   initialTab,
   initialNext,
   now,
+  reps = [],
 }: {
   dataPromise: Promise<LeadData>
   initialTab: Tab
   initialNext: string | null
   now: number
+  /** Empty for a plain rep — the composer then stays out of the lead surface. */
+  reps?: Array<{ id: string; name: string }>
 }) {
   const { lead, profiles, dailyLimit, todaySends, ownerName } = use(dataPromise)
   const router = useRouter()
@@ -141,6 +145,11 @@ export function LeadWorkspaceAsync({
           ) : null}
           {tab === 'tasks' ? (
             <div className="mt-4">
+              {reps.length > 0 && (
+                <div className="mb-3 flex justify-end">
+                  <AssignTaskButton reps={reps} defaultLeadId={lead.id} defaultTitle={`Update ${lead.company ?? 'lead'}`} />
+                </div>
+              )}
               {tasksError ? (
                 <p role="alert" className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-4 py-3 text-[13px] text-graphite">
                   Couldn&apos;t load tasks. Refresh to try again.

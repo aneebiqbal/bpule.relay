@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { cn } from 'cn'
 import { relativeTime } from '@/components/operations/ops-primitives'
+import { NotesPanel } from '@/components/operations/notes-panel'
 import { isOverdue } from '@/lib/tasks/rank-unified-tasks'
 import { assignedTaskIdFromUnified } from '@/lib/tasks/map-unified-task'
 import type { UnifiedTask, UnifiedTaskPriority } from '@/lib/tasks/types'
@@ -17,9 +18,17 @@ const PRIORITY_LABEL: Record<UnifiedTaskPriority, string> = {
 const STATUS_LABEL = {
   OPEN: 'Open',
   IN_PROGRESS: 'In progress',
+  WAITING: 'Waiting',
   DONE: 'Done',
   CANCELLED: 'Cancelled',
 } as const
+
+const WAITING_ON_LABEL: Record<string, string> = {
+  ADMIN: 'Admin',
+  REP: 'Another rep',
+  CLIENT: 'Client',
+  EXTERNAL: 'External',
+}
 
 const EVENT_LABEL: Record<string, string> = {
   TASK_CREATED: 'Created',
@@ -29,6 +38,11 @@ const EVENT_LABEL: Record<string, string> = {
   TASK_COMPLETED: 'Completed',
   TASK_CANCELLED: 'Cancelled',
   TASK_RESCHEDULED: 'Due date changed',
+  TASK_WAITING: 'Marked waiting',
+  TASK_REOPENED: 'Reopened',
+  TASK_TRANSFER_REQUESTED: 'Transfer requested',
+  TASK_TRANSFER_APPROVED: 'Transfer approved',
+  TASK_TRANSFER_CANCELLED: 'Transfer request cancelled',
 }
 
 interface TaskEventView {
@@ -69,11 +83,17 @@ export function TaskDetailDrawer({
   const [events, setEvents] = useState<TaskEventView[] | null>(null)
   const [assignee, setAssignee] = useState(task.assigneeRepId)
   const [due, setDue] = useState(toLocalInput(task.dueAt))
+  const [waitingOn, setWaitingOn] = useState<string>(task.waitingOn ?? 'ADMIN')
+  const [transferTo, setTransferTo] = useState('')
+  const [transferReason, setTransferReason] = useState('')
+  const [reassignReason, setReassignReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const open = task.status === 'OPEN' || task.status === 'IN_PROGRESS'
+  const open = task.status === 'OPEN' || task.status === 'IN_PROGRESS' || task.status === 'WAITING'
   const isAssignee = task.assigneeRepId === currentRepId
   const isCreator = task.createdBy === currentRepId
+  const canManageTask = canManage || isCreator
+  const pendingTransfer = task.transfer ?? null
 
   useEffect(() => {
     if (!rawId) return
@@ -107,6 +127,15 @@ export function TaskDetailDrawer({
     }
   }
 
+  // Profile-bound tasks show canonical ownership next to today's execution —
+  // the leave-handoff context, without ever moving the primary.
+  const profileFacts: Array<[string, React.ReactNode]> = task.profileId
+    ? [
+        ['Primary', task.primaryRepName ?? '—'],
+        ['Current execution', task.executionRepName ?? '—'],
+      ]
+    : []
+
   const facts: Array<[string, React.ReactNode]> = [
     ['Reason', task.reason],
     ['Assignee', reps.find((r) => r.id === task.assigneeRepId)?.name ?? 'Unknown'],
@@ -123,9 +152,12 @@ export function TaskDetailDrawer({
     ],
     ['Company', task.companyName ?? '—'],
     ['Profile', task.profileName ?? '—'],
+    ...profileFacts,
     ['Priority', PRIORITY_LABEL[task.priority]],
     ['Due', task.dueAt ? `${new Date(task.dueAt).toLocaleString()}${isOverdue(task, now) ? ' · overdue' : ''}` : 'No due date'],
-    ['Status', STATUS_LABEL[task.status]],
+    ['Status', task.status === 'WAITING' && task.waitingOn
+      ? `Waiting on ${WAITING_ON_LABEL[task.waitingOn] ?? task.waitingOn}`
+      : STATUS_LABEL[task.status]],
   ]
 
   const button = 'h-8 rounded-md border border-line bg-bone px-2.5 text-[13px] text-ink hover:bg-bone-raised disabled:opacity-50'
@@ -160,6 +192,39 @@ export function TaskDetailDrawer({
         </div>
       ) : open ? (
         <div className="space-y-3 border-t border-line pt-3">
+          {pendingTransfer && (
+            <div className="rounded-lg border border-line bg-bone px-3 py-2.5 text-[12px]">
+              <p className="font-medium text-ink">
+                Transfer requested to {pendingTransfer.toRepName ?? 'another rep'}
+              </p>
+              {pendingTransfer.reason && (
+                <p className="mt-0.5 text-graphite">&ldquo;{pendingTransfer.reason}&rdquo;</p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {canManage && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className={cn(button, 'bg-solid text-on-solid hover:bg-solid/90')}
+                    onClick={() => act({ action: 'approveTransfer' })}
+                  >
+                    Approve transfer
+                  </button>
+                )}
+                {(isAssignee || canManage) && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className={button}
+                    onClick={() => act({ action: 'cancelTransfer' })}
+                  >
+                    Cancel request
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2">
             {isAssignee && task.status === 'OPEN' && (
               <button type="button" disabled={busy} className={button} onClick={() => act({ action: 'start' })}>
@@ -183,9 +248,78 @@ export function TaskDetailDrawer({
             )}
           </div>
 
+          {(isAssignee || canManageTask) && !pendingTransfer && (
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-[12px] text-graphite">
+                Waiting on
+                <select
+                  value={waitingOn}
+                  onChange={(e) => setWaitingOn(e.target.value)}
+                  className="ml-1 h-8 rounded-md border border-line bg-bone px-2 text-[13px] text-ink"
+                >
+                  {Object.entries(WAITING_ON_LABEL).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </label>
+              {task.status === 'WAITING' ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  className={button}
+                  onClick={() => act({ action: 'waiting', waitingOn: null })}
+                >
+                  Back to open
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  className={button}
+                  onClick={() => act({ action: 'waiting', waitingOn })}
+                >
+                  Mark waiting
+                </button>
+              )}
+            </div>
+          )}
+
+          {isAssignee && !pendingTransfer && (
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="min-w-0 flex-1 text-[12px] text-graphite">
+                Request transfer to
+                <select
+                  value={transferTo}
+                  onChange={(e) => setTransferTo(e.target.value)}
+                  className="mt-1 h-8 w-full rounded-md border border-line bg-bone px-2 text-[13px] text-ink"
+                >
+                  <option value="">Choose a rep…</option>
+                  {reps.filter((r) => r.id !== currentRepId).map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </label>
+              <input
+                value={transferReason}
+                onChange={(e) => setTransferReason(e.target.value)}
+                placeholder="Reason (optional)"
+                aria-label="Transfer reason"
+                className="h-8 min-w-0 flex-1 rounded-md border border-line bg-bone px-2 text-[13px] text-ink"
+              />
+              <button
+                type="button"
+                disabled={busy || !transferTo}
+                className={button}
+                onClick={() => act({ action: 'requestTransfer', assigneeRepId: transferTo, reason: transferReason })}
+              >
+                Request transfer
+              </button>
+            </div>
+          )}
+
           {canManage && (
             <>
-              <div className="flex items-end gap-2">
+              <div className="flex flex-wrap items-end gap-2">
                 <label className="min-w-0 flex-1 text-[12px] text-graphite">
                   Reassign to
                   <select
@@ -200,11 +334,18 @@ export function TaskDetailDrawer({
                     ))}
                   </select>
                 </label>
+                <input
+                  value={reassignReason}
+                  onChange={(e) => setReassignReason(e.target.value)}
+                  placeholder="Reason (optional)"
+                  aria-label="Reassignment reason"
+                  className="h-8 min-w-0 flex-1 rounded-md border border-line bg-bone px-2 text-[13px] text-ink"
+                />
                 <button
                   type="button"
                   disabled={busy || assignee === task.assigneeRepId}
                   className={button}
-                  onClick={() => act({ action: 'reassign', assigneeRepId: assignee })}
+                  onClick={() => act({ action: 'reassign', assigneeRepId: assignee, reason: reassignReason })}
                 >
                   Reassign
                 </button>
@@ -245,6 +386,15 @@ export function TaskDetailDrawer({
             </button>
           )}
         </div>
+      ) : rawId && canManageTask ? (
+        <div className="space-y-3 border-t border-line pt-3">
+          <p className="text-[12px] text-graphite">
+            This task is {task.status === 'DONE' ? 'completed' : 'cancelled'}.
+          </p>
+          <button type="button" disabled={busy} className={button} onClick={() => act({ action: 'reopen' })}>
+            Reopen
+          </button>
+        </div>
       ) : null}
 
       {error && (
@@ -252,6 +402,8 @@ export function TaskDetailDrawer({
           {error}
         </p>
       )}
+
+      {rawId && <NotesPanel subjectType="TASK" subjectId={rawId} title="Conversation" />}
 
       <section aria-label="Task activity" className="border-t border-line pt-3">
         <h4 className="text-[12px] font-medium uppercase tracking-[0.06em] text-stone">Activity</h4>
