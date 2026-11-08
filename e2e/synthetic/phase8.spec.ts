@@ -48,9 +48,9 @@ const repPath = (key: string) => `/team/${CAST[key]?.rep_id}`
 const ROUTES: Record<string, string[]> = {
   // /accounts is admin/owner only (RELAY_OPERATIONS_WORKSPACE_V2 §8.13); ACCOUNTS_ADMIN_ONLY checks the redirect.
   rep1: ['/dashboard', '/leads', '/chats', '/tasks', '/notifications', '/performance'],
-  manager: ['/dashboard', '/team', '/team/activity', '/team/performance', '/team/tasks', '/team/groups', '/chats', '/reports/team', '/notifications', repPath('rep1')],
-  admin: ['/dashboard', '/team', '/team/activity', '/team/performance', '/team/tasks', '/team/groups', '/chats', '/accounts', '/reports/team', '/notifications', repPath('rep3')],
-  owner: ['/dashboard', '/team', '/team/performance', '/accounts', '/reports/team'],
+  manager: ['/dashboard', '/team', '/team/activity', '/team/performance', '/team/tasks', '/team/groups', '/chats', '/notifications', repPath('rep1')],
+  admin: ['/dashboard', '/team', '/team/activity', '/team/performance', '/team/tasks', '/team/groups', '/chats', '/accounts', '/notifications', repPath('rep3')],
+  owner: ['/dashboard', '/team', '/team/performance', '/accounts'],
   adminb: ['/dashboard', '/team', '/chats', '/accounts'],
 }
 const FULL_WIDTH_ROLES = new Set(['rep1', 'admin'])

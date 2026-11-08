@@ -20,8 +20,8 @@ export async function getInboxCountsForRep(
   input: {
     orgId: string
     repId: string
-    executableIdentities: ReadonlyArray<{ id: string; profileId?: string | null }>
-    coveredIdentityIds: readonly string[]
+    executableIdentities?: ReadonlyArray<{ id: string; profileId?: string | null }>
+    coveredIdentityIds?: readonly string[]
   },
   now = Date.now(),
 ): Promise<InboxCounts> {

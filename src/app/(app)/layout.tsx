@@ -44,14 +44,18 @@ export default async function AppLayout({
     getAuthContext().catch(() => null),
   ])
 
-  const [queue, revenueIdentities, sidebarCounts] = await Promise.all([
-    store.getQueue(),
-    (async (): Promise<WorkspaceIdentity[]> => {
-      try {
-        const identities = authCtx?.isOwner || authCtx?.isAdmin
-          ? await store.listRevenueIdentitiesAdmin()
-          : await store.listMyWorkableIdentities();
-        return identities
+  // One workable-identity read feeds both the profile switcher and the sidebar
+  // badge scope (primary + active coverage), so the badge and /chats agree.
+  const identityDataPromise = (async (): Promise<{
+    identities: WorkspaceIdentity[]
+    coveredIdentityIds: string[]
+  }> => {
+    try {
+      const workable = authCtx?.isOwner || authCtx?.isAdmin
+        ? await store.listRevenueIdentitiesAdmin()
+        : await store.listMyWorkableIdentities();
+      return {
+        identities: workable
           .filter((identity) => identity.status === "active")
           .map((identity) => ({
             id: identity.id,
@@ -59,18 +63,33 @@ export default async function AppLayout({
             title: identity.title,
             channel: identity.channel,
             profileId: identity.profileId,
-          }));
-      } catch {
-        return [];
-      }
-    })(),
+          })),
+        coveredIdentityIds: workable
+          .filter((identity) => (identity as { access?: string }).access === "coverage")
+          .map((identity) => identity.id),
+      };
+    } catch {
+      return { identities: [], coveredIdentityIds: [] };
+    }
+  })();
+
+  const [queue, identityData, sidebarCounts] = await Promise.all([
+    store.getQueue(),
+    identityDataPromise,
     (async (): Promise<SidebarCounts> => {
       if (isDemoMode()) return { inboxNeedsReply: null, actionableTasks: null }
       try {
+        const { identities, coveredIdentityIds } = await identityDataPromise
         return await loadSidebarCounts(store.getSupabaseClient(), {
           orgId: user.organization.id,
           repId: user.rep.id,
           timeZone: user.organization.timezone ?? "UTC",
+          executableIdentities: identities.map((identity) => ({
+            id: identity.id,
+            profileId: identity.profileId,
+          })),
+          coveredIdentityIds,
+          orgWide: Boolean(authCtx?.isOwner || authCtx?.isAdmin),
         });
       } catch {
         // Badges are optional chrome: never block the shell on them.
@@ -78,6 +97,7 @@ export default async function AppLayout({
       }
     })(),
   ]);
+  const revenueIdentities = identityData.identities;
 
   const cookieStore = await cookies();
   const savedIdentityId = cookieStore.get(ACTIVE_IDENTITY_COOKIE)?.value ?? null;

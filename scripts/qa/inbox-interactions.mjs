@@ -81,9 +81,9 @@ async function axeCheck(page, label) {
 {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } })
   await page.goto(`${base}/inbox-fixture`, { waitUntil: 'networkidle' })
-  await page.getByRole('button', { name: /Lead intelligence/ }).click()
+  await page.getByRole('button', { name: /Details/ }).click()
   await page.waitForTimeout(250)
-  const drawer = page.getByRole('dialog', { name: 'Lead intelligence' })
+  const drawer = page.getByRole('dialog', { name: 'Lead context' })
   if (await drawer.isVisible()) ok('1024: context drawer opens')
   else fail('1024: context drawer did not open')
   // Focus trap: Tab cycles inside the drawer for a full loop.
@@ -118,9 +118,9 @@ async function axeCheck(page, label) {
   const composer = page.getByRole('textbox', { name: 'Your message' })
   if (await composer.isVisible()) ok('375: composer visible without scrolling')
   else fail('375: composer not visible')
-  await page.getByRole('button', { name: /Lead intelligence/ }).click()
+  await page.getByRole('button', { name: /Details/ }).click()
   await page.waitForTimeout(250)
-  const drawer = page.getByRole('dialog', { name: 'Lead intelligence' })
+  const drawer = page.getByRole('dialog', { name: 'Lead context' })
   if (await drawer.isVisible()) ok('375: context drawer opens')
   else fail('375: context drawer did not open')
   await page.keyboard.press('Escape')

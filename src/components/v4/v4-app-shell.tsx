@@ -332,7 +332,7 @@ export function V4AppShell({
           </button>
 
           <div className="ml-auto flex items-center gap-1.5">
-            <GlobalCreateMenu isAdmin={isAdmin || isOwner} />
+            <GlobalCreateMenu isAdmin={isAdmin || isOwner} isManager={isManager} />
             <NotificationCenter />
             <UserMenu
               name={repName}

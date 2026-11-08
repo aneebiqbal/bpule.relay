@@ -18,7 +18,7 @@ export const SAVED_VIEW_SURFACES = {
   chats: '/chats',
   'reports.sales': '/reports/sales',
   'reports.pipeline': '/reports/pipeline',
-  'reports.team': '/reports/team',
+  'reports.team': '/team/performance',
   'reports.revenue': '/reports/revenue',
 } as const
 

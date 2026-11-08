@@ -176,14 +176,6 @@ export function CommandPalette({
       action: () => { router.push(inboxViewHref('followups')); onOpenChange(false) },
     },
     {
-      id: 'view-referred',
-      label: 'View referred leads',
-      description: 'Leads referred to you',
-      icon: Shuffle,
-      group: 'Relay',
-      action: () => { router.push('/leads?filter=referred'); onOpenChange(false) },
-    },
-    {
       id: 'switch-identity',
       label: 'Switch profile',
       description: 'Choose an authorized identity',
@@ -288,14 +280,6 @@ export function CommandPalette({
       action: () => { router.push('/settings'); onOpenChange(false) },
     },
     {
-      id: 'inbound',
-      label: 'Inbound Desk',
-      description: 'Messages from clients',
-      icon: MessageSquare,
-      group: 'Relay',
-      action: () => { router.push('/inbound'); onOpenChange(false) },
-    },
-    {
       id: 'proof',
       label: 'Proof',
       description: 'Proof items and facts',
@@ -310,14 +294,6 @@ export function CommandPalette({
       icon: Sparkles,
       group: 'Studio',
       action: () => { router.push('/content'); onOpenChange(false) },
-    },
-    {
-      id: 'create-post',
-      label: 'Create Post',
-      description: 'Open the draft workspace',
-      icon: PenLine,
-      group: 'Studio',
-      action: () => { router.push('/studio/drafts/new'); onOpenChange(false) },
     },
     {
       id: 'ideas',

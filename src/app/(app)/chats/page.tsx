@@ -72,6 +72,10 @@ export default async function ChatsPage({
   const view: ChatView = filters.view ? parseChatView(filters.view, managerViews) : inboxDefaultView(managerViews)
   const rawStage = Array.isArray(sp.cstage) ? sp.cstage[0] : sp.cstage
   const stageGroup = ['contacted', 'conversation', 'meeting', 'proposal', 'won'].includes(rawStage ?? '') ? rawStage! : null
+  // `limit=all` lifts the default 60-row window to the 200-row cap so a rep can
+  // see every conversation in a view without paging.
+  const rawLimit = Array.isArray(sp.limit) ? sp.limit[0] : sp.limit
+  const limit = rawLimit === 'all' ? 200 : null
 
   const [directory, reps, executableIdentities, profilesRes, capabilities] = await Promise.all([
     managerViews ? getPeopleDirectory().catch(() => null) : Promise.resolve(null),
@@ -106,6 +110,7 @@ export default async function ChatsPage({
       managerViews,
       minAgeHours,
       stageGroup,
+      limit: limit ?? undefined,
       previewView: capabilities.messagePreviews,
     }), ctx.client)
   } catch (err) {
@@ -121,6 +126,7 @@ export default async function ChatsPage({
     q: filters.q,
     age: minAgeHours ? String(minAgeHours) : null,
     cstage: stageGroup,
+    limit: limit ? 'all' : null,
   }
   // Links keep the explicit All view so opening a conversation from All does
   // not snap the queue back to the rep default.
@@ -205,7 +211,7 @@ export default async function ChatsPage({
             aria-label="Conversation queue"
             className={cn(
               'min-h-0 min-w-0 flex flex-col overflow-hidden rounded-lg border border-line bg-bone-raised h-[calc(100dvh-14rem)] md:h-auto',
-              leadId && 'hidden md:block',
+              leadId && 'hidden md:flex',
             )}
           >
             <div className="flex shrink-0 flex-col gap-2 border-b border-line p-3">
@@ -226,7 +232,7 @@ export default async function ChatsPage({
               />
               <LinkTabs label="Conversation views" active={view} tabs={primaryTabs} compact />
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto" tabIndex={0} aria-label="Conversation list">
               <ChatQueueList
                 rows={queue.rows}
                 selectedLeadId={leadId}
@@ -257,9 +263,21 @@ export default async function ChatsPage({
                 </div>
               )}
               {queue.total > queue.rows.length && (
-                <p className="border-t border-line px-3 py-2 text-[11px] text-stone">
-                  Showing the {queue.rows.length} most urgent of {queue.total}. Narrow the filters to see others.
-                </p>
+                <div className="border-t border-line px-3 py-2 text-[11px] text-stone">
+                  <p>
+                    Showing the {queue.rows.length} most urgent of {queue.total}.
+                    {limit ? ' Narrow the filters to see others.' : ''}
+                  </p>
+                  {!limit && (
+                    <Link
+                      href={opsHref('/chats', linkState, { limit: 'all' })}
+                      scroll={false}
+                      className="mt-0.5 inline-block text-[12px] font-medium text-[#9e4517] hover:underline"
+                    >
+                      Show all {queue.total} conversations
+                    </Link>
+                  )}
+                </div>
               )}
               {queue.truncated && (
                 <p className="border-t border-line px-3 py-2 text-[11px] text-status-warning">Built from the 1,500 most recent leads in scope.</p>
@@ -295,7 +313,7 @@ export default async function ChatsPage({
           </section>
 
           {leadId && (
-            <aside aria-label="Lead intelligence pane" className="hidden min-h-0 min-w-0 overflow-y-auto rounded-lg border border-line bg-bone-raised xl:block">
+            <aside aria-label="Lead intelligence pane" tabIndex={0} className="hidden min-h-0 min-w-0 overflow-y-auto rounded-lg border border-line bg-bone-raised xl:block">
               <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
                 <IntelligenceSlot ctx={ctx} leadId={leadId} reps={reps} />
               </Suspense>

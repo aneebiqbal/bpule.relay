@@ -82,7 +82,7 @@ export function InboxFixture({ showOwner = false, className }: { showOwner?: boo
         aria-label="Conversation queue"
         className={cn(
           'min-h-0 min-w-0 flex flex-col overflow-hidden rounded-lg border border-line bg-bone-raised h-dvh md:h-auto',
-          selected ? 'hidden md:block' : '',
+          selected ? 'hidden md:flex' : '',
         )}
       >
         <div className="flex shrink-0 flex-col gap-2 border-b border-line p-3">
@@ -138,7 +138,7 @@ export function InboxFixture({ showOwner = false, className }: { showOwner?: boo
             </ul>
           </nav>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto" tabIndex={0} aria-label="Conversation list">
           <ChatQueueList
             rows={visible}
             selectedLeadId={selected}
@@ -218,7 +218,7 @@ export function InboxFixture({ showOwner = false, className }: { showOwner?: boo
         />
 
         <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-bone-raised/20" aria-label="Conversation">
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4" tabIndex={0} aria-label="Message list">
             {INBOX_FIXTURE_MESSAGES.map((m) => {
               const mine = m.direction === 'outbound'
               return (
@@ -345,7 +345,7 @@ export function InboxFixture({ showOwner = false, className }: { showOwner?: boo
 
       </section>
 
-      <aside aria-label="Lead intelligence pane" className="hidden min-h-0 min-w-0 overflow-y-auto rounded-lg border border-line bg-bone-raised xl:block">
+      <aside aria-label="Lead intelligence pane" tabIndex={0} className="hidden min-h-0 min-w-0 overflow-y-auto rounded-lg border border-line bg-bone-raised xl:block">
         <ChatIntelligencePanel intel={intel} reps={[{ id: 'rep-mehak', name: 'Mehak' }]} canIntervene={showOwner} tasksAvailable now={FIXTURE_NOW} />
       </aside>
     </div>

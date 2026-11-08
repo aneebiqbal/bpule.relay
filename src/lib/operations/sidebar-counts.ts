@@ -1,6 +1,7 @@
 import type { DbClient } from '@/lib/db/types'
-import { chunkedIn } from '@/lib/supabase/chunked-in'
-import { addDays, orgDate } from '@/lib/org-clock'
+import { getInboxCountsForOrg, getInboxCountsForRep } from '@/lib/operations/inbox-counts'
+import { deriveConversationRow } from '@/lib/operations/conversations'
+import { isCanonicalActiveTask } from '@/lib/tasks/rank-unified-tasks'
 
 /**
  * Sidebar badge contract.
@@ -22,10 +23,13 @@ export function sidebarBadge(value: number | null | undefined): { value: number;
   return { value, label: value >= 100 ? '99+' : String(value) }
 }
 
-const CLOSED_LEAD_STATUSES = ['won', 'lost', 'dead', 'no']
 const OPEN_TASK_STATUSES = ['OPEN', 'IN_PROGRESS', 'WAITING']
 
-/** Canonical follow-up predicate, mirrored from `deriveConversationRow`. */
+/**
+ * Needs-reply predicate — a thin delegation to the canonical conversation
+ * derivation. Kept as a named export for the sidebar contract test; the badge
+ * itself reads `getInboxCountsForRep`.
+ */
 export function conversationNeedsReply(row: {
   last_sent_at: string | null
   last_reply_at: string | null
@@ -33,102 +37,84 @@ export function conversationNeedsReply(row: {
   won_at: string | null
   lost_at: string | null
 }): boolean {
-  const lastIn = row.last_reply_at ?? null
-  const lastOut = row.last_sent_at ?? null
-  // No inbound message yet means the prospect has not moved; nothing to answer.
-  if (!lastIn) return false
-  if (lastOut && Date.parse(lastOut) >= Date.parse(lastIn)) return false
-  if (row.stage === 'won' || row.stage === 'lost') return false
-  if (row.won_at || row.lost_at) return false
-  return true
+  const derived = deriveConversationRow(
+    { id: '', contactName: null, company: null, companyKey: null, ownerRepId: null, profileName: null, status: null },
+    { stage: row.stage, lastSentAt: row.last_sent_at, lastReplyAt: row.last_reply_at, nextFollowupAt: null, wonAt: row.won_at, lostAt: row.lost_at },
+    null,
+    Date.now(),
+  )
+  return derived?.state === 'waiting_on_rep'
 }
 
 /**
- * Inbox badge: conversations where the prospect moved last and the thread is
- * not closed — exactly the /chats "Waiting on rep" view (`chatViewMatches`).
- * Closed leads, threads waiting on the prospect and unstarted threads never
- * count.
- */
-async function countInboxNeedsReply(
-  client: DbClient,
-  orgId: string,
-  repId: string,
-): Promise<number | null> {
-  try {
-    const { data: leads, error } = await client
-      .from('leads')
-      .select('id')
-      .eq('owner_rep_id', repId)
-      .eq('archived', false)
-      .not('status', 'in', CLOSED_LEAD_STATUSES)
-    if (error) return null
-
-    const leadIds = (leads ?? []).map((row) => row.id as string).filter(Boolean)
-    if (leadIds.length === 0) return 0
-
-    const states = await chunkedIn<{
-      lead_id: string
-      last_sent_at: string | null
-      last_reply_at: string | null
-      stage: string | null
-      won_at: string | null
-      lost_at: string | null
-    }>(leadIds, (chunk) =>
-      client
-        .from('conversation_states')
-        .select('lead_id, last_sent_at, last_reply_at, stage, won_at, lost_at')
-        .eq('organization_id', orgId)
-        .in('lead_id', chunk),
-    )
-
-    return states.filter(conversationNeedsReply).length
-  } catch {
-    return null
-  }
-}
-
-/**
- * Tasks badge: open tasks assigned to this rep that are due today or overdue,
- * i.e. actionable now. Tasks without a due date are scheduled work, not
- * today's, so they stay out of the badge.
+ * Tasks badge: open ASSIGNED work that the canonical classifier puts in the
+ * Active/Overdue views. Uses the same `classifyUnifiedTaskTab` rule as
+ * `/tasks`, so the badge and the page share one formula. Derived queue work
+ * (replies/follow-ups) lives in the Today page and the Inbox badge, not here.
  */
 async function countActionableTasks(
   client: DbClient,
   orgId: string,
-  repId: string,
+  repId: string | null,
   timeZone: string,
 ): Promise<number | null> {
   try {
     const now = new Date()
-    // End of the organization's current business day.
-    const endOfDay = `${addDays(orgDate(now, timeZone || 'UTC'), 1)}T00:00:00.000Z`
-    const { count, error } = await client
+    let query = client
       .from('assigned_tasks')
-      .select('id', { head: true, count: 'exact' })
+      .select('id, status, priority, kind, due_at, created_at, organization_id, assignee_rep_id, created_by_rep_id, lead_id, profile_id, description, waiting_on, waiting_note, transfer_requested_to, transfer_requested_by, transfer_reason, completed_at, cancelled_at, cancel_reason, previous_assignee_rep_id, updated_at')
       .eq('organization_id', orgId)
-      .eq('assignee_rep_id', repId)
       .in('status', OPEN_TASK_STATUSES)
-      .not('due_at', 'is', null)
-      .lte('due_at', endOfDay)
+      .limit(500)
+    if (repId) query = query.eq('assignee_rep_id', repId)
+    const { data, error } = await query
     if (error) return null
-    return count ?? 0
+    return (data ?? []).filter((row) =>
+      isCanonicalActiveTask(
+        {
+          source: 'ASSIGNED',
+          kind: row.kind,
+          priority: row.priority,
+          dueAt: row.due_at,
+          status: row.status,
+          createdAt: row.created_at,
+        },
+        now.getTime(),
+        timeZone || 'UTC',
+      ),
+    ).length
   } catch {
     return null
   }
 }
 
 /**
- * Two bounded reads for the whole shell: the rep's open lead ids plus one
- * conversation-state sweep, and one exact task count. No message bodies, no
- * task payloads, no N+1.
+ * Two bounded reads for the whole shell: the canonical Inbox count (same
+ * authority as Rep Home and /chats) and one assigned-task sweep classified by
+ * the shared rule. No message bodies, no task payloads, no N+1.
  */
 export async function loadSidebarCounts(
   client: DbClient,
-  input: { orgId: string; repId: string; timeZone?: string },
+  input: {
+    orgId: string
+    repId: string
+    timeZone?: string
+    executableIdentities?: ReadonlyArray<{ id: string; profileId?: string | null }>
+    coveredIdentityIds?: readonly string[]
+    /** Admin/Owner Inbox and Work are org-wide, matching `/chats` and `/tasks`. */
+    orgWide?: boolean
+  },
 ): Promise<SidebarCounts> {
-  const [inboxNeedsReply, actionableTasks] = await Promise.all([
-    countInboxNeedsReply(client, input.orgId, input.repId),
-    countActionableTasks(client, input.orgId, input.repId, input.timeZone ?? 'UTC'),
+  const [inbox, actionableTasks] = await Promise.all([
+    input.orgWide
+      ? getInboxCountsForOrg(client, { orgId: input.orgId }).catch(() => null)
+      : getInboxCountsForRep(client, {
+          orgId: input.orgId,
+          repId: input.repId,
+          executableIdentities: input.executableIdentities,
+          coveredIdentityIds: input.coveredIdentityIds,
+        }).catch(() => null),
+    countActionableTasks(client, input.orgId, input.orgWide ? null : input.repId, input.timeZone ?? 'UTC'),
   ])
-  return { inboxNeedsReply, actionableTasks }
+  return { inboxNeedsReply: inbox ? inbox.needsReply : null, actionableTasks }
 }

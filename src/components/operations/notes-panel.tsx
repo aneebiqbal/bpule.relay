@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Lock } from 'lucide-react'
 import type { InternalNote, NoteSubjectType } from '@/lib/operations/notes'
 
@@ -33,7 +33,7 @@ export function NotesPanel({
   // Outside the viewer's scope the panel is simply absent, not an error.
   const [hidden, setHidden] = useState(false)
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let cancelled = false
     fetch(`/api/notes?subjectType=${subjectType}&subjectId=${encodeURIComponent(subjectId)}`)
       .then(async (res) => {
@@ -44,18 +44,25 @@ export function NotesPanel({
           return
         }
         if (!res.ok) {
-          setError(json.error || 'Notes could not be loaded')
-          setNotes([])
+          setError(json.error || 'Notes could not be loaded. Try again.')
+          setNotes(null)
           return
         }
+        setError(null)
         setNotes(json.notes ?? [])
         setAvailable(json.available !== false)
       })
-      .catch(() => !cancelled && setNotes([]))
+      .catch(() => {
+        if (cancelled) return
+        setError('Notes could not be loaded. Try again.')
+        setNotes(null)
+      })
     return () => {
       cancelled = true
     }
   }, [subjectType, subjectId])
+
+  useEffect(() => load(), [load])
 
   async function add(event: React.FormEvent) {
     event.preventDefault()
@@ -146,13 +153,20 @@ export function NotesPanel({
             </div>
           </form>
           {error && (
-            <p role="alert" className="mt-1 text-[12px] text-[#8f2b1e]">
-              {error}
+            <p role="alert" className="mt-1 flex items-center gap-2 text-[12px] text-[#8f2b1e]">
+              <span>{error}</span>
+              <button
+                type="button"
+                onClick={() => load()}
+                className="font-medium text-graphite underline-offset-2 hover:text-ink hover:underline"
+              >
+                Try again
+              </button>
             </p>
           )}
           <ul className="mt-2 space-y-2" aria-label="Notes, newest first">
-            {notes === null && <li className="text-[12px] text-stone">Loading notes…</li>}
-            {notes?.length === 0 && <li className="text-[12px] text-stone">No notes yet.</li>}
+            {notes === null && !error && <li className="text-[12px] text-stone">Loading notes…</li>}
+            {notes?.length === 0 && !error && <li className="text-[12px] text-stone">No notes yet.</li>}
             {notes?.map((note) => (
               <li key={note.id} className="rounded-md border border-line/70 bg-bone-raised px-2.5 py-2">
                 <div className="flex items-baseline justify-between gap-2 text-[11px] text-stone">

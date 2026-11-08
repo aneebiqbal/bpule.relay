@@ -77,6 +77,19 @@ export function classifyUnifiedTaskTab(
   return 'upcoming'
 }
 
+/**
+ * Canonical "actionable now" rule, shared by the sidebar Work badge and the
+ * `/tasks` views: the task is in the Active (today) or Overdue bucket.
+ */
+export function isCanonicalActiveTask(
+  task: Pick<UnifiedTask, 'status' | 'priority' | 'kind' | 'dueAt' | 'source' | 'createdAt'>,
+  now: number,
+  timeZone = 'UTC',
+): boolean {
+  const tab = classifyUnifiedTaskTab(task as UnifiedTask, now, timeZone)
+  return tab === 'today' || tab === 'overdue'
+}
+
 function isDueToday(task: UnifiedTask, now: number, timeZone = 'UTC'): boolean {
   if (!task.dueAt) return false
   const due = new Date(task.dueAt).getTime()

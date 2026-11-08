@@ -127,9 +127,11 @@ async function loadDerivedActionsForCurrentUser(): Promise<RelayTodayAction[]> {
     store.getRelayQueueData(),
   ])
 
-  const scopedLeads = filterLeadsByWorkspace(dash.mine?.queue ?? [], activeWorkspace)
+  // Work is the rep's whole day, not one sending profile — the same scope rule
+  // as the dashboard, so a task cannot appear on one surface and not the other.
+  const scopedLeads = filterLeadsByWorkspace(dash.mine?.queue ?? [], null)
   const scopedFollowups = dash.followupsDue.filter((row) =>
-    filterLeadsByWorkspace([row.lead], activeWorkspace).length > 0,
+    filterLeadsByWorkspace([row.lead], null).length > 0,
   )
   const leadsById = new Map(scopedLeads.map((lead) => [lead.id, lead]))
 
@@ -168,7 +170,7 @@ async function loadDerivedActionsForCurrentUser(): Promise<RelayTodayAction[]> {
   const map = nbaToRelayAction(nbaToActionKind, workspace, activeWorkspace)
   const raw = rankedActions.map(map)
 
-  return filterActionsByWorkspace(raw, leadsById, activeWorkspace).map((action) => ({
+  return filterActionsByWorkspace(raw, leadsById, null).map((action) => ({
     ...action,
     href: actionDeepLink(action),
   }))

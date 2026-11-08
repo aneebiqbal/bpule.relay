@@ -25,13 +25,19 @@ async function axe(page: Page) {
   return page.evaluate(async () => {
     // @ts-expect-error injected axe
     const r = await window.axe.run(document, { resultTypes: ['violations'] })
-    const v = r.violations as Array<{ id: string; impact: string }>
+    const v = r.violations as Array<{ id: string; impact: string; nodes?: Array<{ target?: string[] }> }>
     return {
       critical: v.filter((x) => x.impact === 'critical').length,
       serious: v.filter((x) => x.impact === 'serious').length,
       rules: v
         .filter((x) => x.impact === 'critical' || x.impact === 'serious')
-        .map((x) => `${x.impact}:${x.id}`),
+        .map(
+          (x) =>
+            `${x.impact}:${x.id}:${(x.nodes ?? [])
+              .flatMap((n) => n.target ?? [])
+              .slice(0, 2)
+              .join(' ')}`,
+        ),
     }
   })
 }
@@ -60,7 +66,7 @@ test.describe('INBOX_V4_REBUILD', () => {
 
       const text = await page.locator('body').innerText()
       // 10-second comprehension: who, where from, sending as, why.
-      for (const needle of ['Sarah Chen', 'LinkedIn', 'Waiting on rep', 'Why this needs attention']) {
+      for (const needle of ['Sarah Chen', 'LinkedIn', 'Waiting on rep', 'WHY THIS NEEDS ATTENTION']) {
         expect.soft(text, `comprehension @${width}: ${needle}`).toContain(needle)
       }
       // Collapsed by default: the rationale body is not on screen.

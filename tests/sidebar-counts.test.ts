@@ -67,7 +67,7 @@ describe('SIDEBAR_BADGE_LOADS_BOUNDED', () => {
       from: (table: string) => {
         calls.push(table)
         const builder: Record<string, unknown> = {}
-        for (const method of ['select', 'eq', 'not', 'in', 'lte']) {
+        for (const method of ['select', 'eq', 'not', 'in', 'lte', 'order', 'limit', 'or', 'is', 'maybeSingle', 'single']) {
           builder[method] = () => builder
         }
         builder.then = (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
