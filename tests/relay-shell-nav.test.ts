@@ -173,7 +173,6 @@ describe('V3_NAV_CANONICAL_LABELS', () => {
     expect(byHref('/team/people')).toBe('People')
     expect(adminItem('/admin/command')).toBe('Command Center')
     expect(byHref('/admin/scoring-qa')).toBe('Scoring QA')
-    expect(byHref('/profile-intelligence?tab=identities')).toBe('Identities')
     expect(byHref('/team/profiles')).toBe('Profiles')
     expect(byHref('/team/coverage')).toBe('Coverage')
     expect(byHref('/content/growth')).toBe('Growth')
@@ -249,7 +248,6 @@ describe('V3_NAV_HIDDEN_FEATURES_EXPOSED', () => {
     ['/revenue/email', rep],
     ['/team/profiles', manager],
     ['/team/coverage', manager],
-    ['/profile-intelligence?tab=identities', manager],
   ]
 
   it('every formerly hidden feature has a nav entry point', () => {
@@ -467,7 +465,6 @@ describe('V3_NESTED_ROUTE_SELECTION', () => {
     expect(resolvePrimaryActiveId('/accounts/acme', admin)).toBe('sales')
     expect(resolveSecondaryActiveId('sales', '/accounts/acme', search(''), admin)).toBe('companies')
     expect(resolvePrimaryActiveId('/profile-intelligence?tab=identities', admin)).toBe('team')
-    expect(resolveSecondaryActiveId('team', '/profile-intelligence', search('tab=identities'), admin)).toBe('identities')
   })
 
   it('does not let a query-scoped alias claim a sibling route', () => {

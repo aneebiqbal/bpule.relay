@@ -1,11 +1,33 @@
 'use client'
 
+/**
+ * Profile detail — the operating center for ONE person.
+ *
+ * Tabs: Overview · Channels · Knowledge · Execution · History. Every channel is
+ * operationally separate (identity, primary, backups, readiness, targets, today,
+ * coverage); knowledge is shared across all of them.
+ */
 import { useState } from 'react'
 import Link from 'next/link'
-import { V4Chip, V4Panel } from '@/components/v4/primitives'
+import { useRouter } from 'next/navigation'
+import { Plus } from 'lucide-react'
+import { cn } from 'cn'
+import { Dialog, DialogActions } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { V4Chip, V4Panel, V4PanelHeader } from '@/components/v4/primitives'
 import { CoverageConfigPanel } from '@/components/coverage/coverage-config-panel'
 import { AssignTaskButton } from '@/components/operations/assign-task-button'
-import type { TeamProfileDetail } from '@/lib/team/profile-detail'
+import type { ProfileOperatingModel, ProfileChannelModel } from '@/lib/profiles/operating-model'
+
+type Tab = 'overview' | 'channels' | 'knowledge' | 'execution' | 'history'
+
+const TABS: Array<{ id: Tab; label: string }> = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'channels', label: 'Channels' },
+  { id: 'knowledge', label: 'Knowledge' },
+  { id: 'execution', label: 'Execution' },
+  { id: 'history', label: 'History' },
+]
 
 const STATUS_TONE: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
   completed: 'success',
@@ -19,243 +41,646 @@ function statusLabel(status: string | null): string {
   return status.replaceAll('_', ' ')
 }
 
+function pct(done: number, target: number): number {
+  return target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0
+}
+
 export function TeamProfileDetailView({
-  detail,
+  model,
   canManage,
   reps,
 }: {
-  detail: TeamProfileDetail
+  model: ProfileOperatingModel
   canManage: boolean
   reps: Array<{ id: string; name: string }>
 }) {
-  const [assignOpen, setAssignOpen] = useState(false)
-  const [repId, setRepId] = useState('')
-  const [backupIds, setBackupIds] = useState<string[]>([])
-  const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
+  const router = useRouter()
+  const [tab, setTab] = useState<Tab>('overview')
+  const [addChannelOpen, setAddChannelOpen] = useState(false)
 
-  const pct = detail.targetCount > 0
-    ? Math.min(100, Math.round((detail.completedCount / detail.targetCount) * 100))
-    : 0
-
-  async function handleAssign() {
-    if (!repId || detail.identityIds.length === 0) return
-    setSaving(true)
-    setMessage(null)
-    try {
-      // The primary is the permanent assignment.
-      const responses = await Promise.all(
-        detail.identityIds.map((identityId) =>
-          fetch(`/api/admin/revenue-identities/${identityId}/assign`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ repId }),
-          }),
-        ),
-      )
-      if (responses.some((res) => !res.ok)) {
-        setMessage('Some channel identities could not be assigned. Retry from this dialog.')
-        setSaving(false)
-        return
-      }
-      // Same transaction: backups are coverage eligibility, never ownership.
-      const coverage = await fetch(`/api/team/profiles/${detail.profileId}/coverage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ primaryRepId: repId, backups: backupIds.map((id) => ({ repId: id })) }),
-      })
-      if (!coverage.ok) {
-        setMessage('Profile assigned, but the backup chain could not be saved.')
-        setSaving(false)
-        return
-      }
-      setMessage('Profile assigned.')
-      setAssignOpen(false)
-    } catch {
-      setMessage('Could not assign the profile. Try again.')
-    }
-    setSaving(false)
-  }
+  const totalTarget = model.channels.reduce((sum, channel) => sum + channel.today.target, 0)
+  const totalDone = model.channels.reduce((sum, channel) => sum + channel.today.completed, 0)
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-mono-medium text-[10px] uppercase tracking-[0.18em] text-stone">Team / Profiles</p>
-          <h1 className="mt-1 text-[24px] font-light tracking-[-0.02em] text-ink">{detail.profileName}</h1>
+          <h1 className="mt-1 text-[24px] font-light tracking-[-0.02em] text-ink">{model.personName}</h1>
+          {model.headline && <p className="mt-1 text-[13px] text-graphite">{model.headline}</p>}
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            {detail.channels.map((channel) => (
+            {model.channels.map((channel) => (
               <span
-                key={channel}
+                key={channel.identityId}
                 className="rounded-full bg-bone px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-graphite ring-1 ring-line"
               >
-                {channel}
+                {channel.channel}
               </span>
             ))}
-            <span className="text-[12px] text-stone">{detail.businessDate}</span>
+            <span className="text-[12px] text-stone">{model.businessDate}</span>
           </div>
         </div>
         {canManage && (
           <div className="flex flex-wrap gap-2">
+            <AssignTaskButton reps={reps} defaultProfileId={model.personId} />
             <button
               type="button"
-              onClick={() => setAssignOpen(true)}
-              className="rounded-lg bg-solid px-3.5 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+              onClick={() => setAddChannelOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-bone"
             >
-              {detail.assignedReps.length > 0 ? 'Reassign' : 'Assign rep'}
+              <Plus className="size-3.5" aria-hidden />
+              Add channel
             </button>
-            <AssignTaskButton reps={reps} defaultProfileId={detail.profileId} />
-            <Link
-              href="/profile-intelligence?tab=identities"
-              className="rounded-lg border border-line px-3.5 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-bone"
-            >
-              Edit identities
-            </Link>
           </div>
         )}
       </div>
 
+      <div className="-mx-1 overflow-x-auto">
+        <nav aria-label="Profile sections" className="flex min-w-max gap-0.5 rounded-lg border border-line bg-bone-raised p-0.5">
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
+              aria-current={tab === item.id ? 'page' : undefined}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-[13px] transition-colors',
+                tab === item.id ? 'bg-bone font-medium text-ink shadow-sm' : 'text-graphite hover:text-ink',
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {tab === 'overview' && (
+        <OverviewTab model={model} totalDone={totalDone} totalTarget={totalTarget} />
+      )}
+      {tab === 'channels' && (
+        <ChannelsTab model={model} canManage={canManage} reps={reps} />
+      )}
+      {tab === 'knowledge' && <KnowledgeTab model={model} />}
+      {tab === 'execution' && <ExecutionTab model={model} />}
+      {tab === 'history' && <HistoryTab model={model} />}
+
+      <AddChannelDialog
+        open={addChannelOpen}
+        onClose={() => setAddChannelOpen(false)}
+        model={model}
+        onSaved={() => {
+          setAddChannelOpen(false)
+          router.refresh()
+        }}
+      />
+    </div>
+  )
+}
+
+function OverviewTab({
+  model,
+  totalDone,
+  totalTarget,
+}: {
+  model: ProfileOperatingModel
+  totalDone: number
+  totalTarget: number
+}) {
+  return (
+    <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <V4Panel>
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.18em] text-stone">Assigned rep</p>
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.18em] text-stone">Channels</p>
           <p className="mt-2 text-[14px] font-medium text-ink">
-            {detail.assignedReps.join(', ') || <span className="text-status-warning">Unassigned</span>}
+            {model.channels.length === 0
+              ? <span className="text-status-warning">No channels</span>
+              : model.channels.map((channel) => channel.channel).join(' · ')}
           </p>
         </V4Panel>
         <V4Panel>
           <p className="text-mono-medium text-[10px] uppercase tracking-[0.18em] text-stone">Today</p>
           <p className="mt-2 text-[14px] font-medium text-ink">
-            {detail.completedCount} / {detail.targetCount}
-            <span className="ml-1.5 text-[12px] text-stone">{pct}%</span>
+            {totalDone} / {totalTarget}
+            <span className="ml-1.5 text-[12px] text-stone">{pct(totalDone, totalTarget)}%</span>
           </p>
         </V4Panel>
         <V4Panel>
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.18em] text-stone">Status</p>
-          <div className="mt-2">
-            <V4Chip tone={STATUS_TONE[detail.status ?? ''] ?? 'neutral'}>{statusLabel(detail.status)}</V4Chip>
-          </div>
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.18em] text-stone">Needs attention</p>
+          <p className="mt-2 text-[14px] font-medium text-ink">
+            {model.readinessExceptions.length + model.coverageExceptions.length + model.tasks.length === 0
+              ? 'Nothing outstanding'
+              : `${model.readinessExceptions.length} readiness · ${model.coverageExceptions.length} coverage · ${model.tasks.length} open task${model.tasks.length === 1 ? '' : 's'}`}
+          </p>
         </V4Panel>
       </div>
 
       <V4Panel>
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.18em] text-stone">Today&apos;s activity</p>
-        {detail.targets.length > 0 ? (
-          <ul className="mt-3 divide-y divide-line/70">
-            {detail.targets.map((target) => (
-              <li key={target.activityType} className="flex items-center justify-between gap-3 py-2.5 text-[13px]">
-                <span className="text-graphite capitalize">{target.activityType.replace(/_/g, ' ')}</span>
-                <span className="tabular-nums text-ink">
-                  {target.completedCount} / {target.targetCount}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-3 text-[12px] text-stone">No daily target set for this profile.</p>
-        )}
-      </V4Panel>
-
-      <CoverageConfigPanel
-        profileId={detail.profileId}
-        primaryRepId={detail.coverage.primaryRepId}
-        backups={detail.coverage.backups}
-        reps={reps}
-        assignedRepIds={detail.assignedRepIds}
-        canManage={canManage}
-      />
-
-      <V4Panel>
-        <p className="text-mono-medium text-[10px] uppercase tracking-[0.18em] text-stone">Access readiness</p>
-        {detail.readiness.length === 0 ? (
-          <p className="mt-3 text-[12px] text-stone">
-            No coverage chain yet.{' '}
-            <Link href="/team/coverage" className="text-cobalt hover:underline">Configure coverage</Link>
-          </p>
+        <V4PanelHeader eyebrow="Channels" title="Who operates each channel" />
+        {model.channels.length === 0 ? (
+          <p className="mt-3 text-[12px] text-stone">No channel identities yet. Add a channel to start executing.</p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {detail.readiness.map((row) => (
-              <li key={row.repId} className="flex items-center justify-between gap-3 text-[13px]">
-                <span className="text-graphite">{row.name}</span>
-                <V4Chip tone={row.ready ? 'success' : 'warning'}>
-                  {row.ready ? 'Confirmed' : 'Not confirmed'}
-                </V4Chip>
+            {model.channels.map((channel) => (
+              <li key={channel.identityId} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+                <span className="w-20 text-[11px] font-medium uppercase tracking-[0.12em] text-stone">
+                  {channel.channel}
+                </span>
+                <span className="min-w-0 flex-1 text-ink">
+                  {channel.primaryRepName ?? <span className="text-status-warning">No operator</span>}
+                </span>
+                <span className="text-graphite">
+                  {channel.backups.length > 0
+                    ? `backups: ${channel.backups.map((backup) => backup.repName).join(', ')}`
+                    : 'no backups'}
+                </span>
+                {channel.activeCoverage.length > 0 && (
+                  <V4Chip tone="info">
+                    covered by {channel.activeCoverage.map((row) => row.coveringRepName).join(', ')}
+                  </V4Chip>
+                )}
               </li>
             ))}
           </ul>
         )}
-        <p className="mt-3 text-[11px] leading-relaxed text-stone">
-          Readiness is an explicit rep confirmation. It is the hard gate for automatic cover.
-        </p>
       </V4Panel>
 
-      {message && (
-        <div role="alert" className="rounded-xl border border-line bg-bone px-4 py-3 text-[12px] text-graphite">
-          {message}
-        </div>
+      {(model.readinessExceptions.length > 0 || model.coverageExceptions.length > 0) && (
+        <V4Panel>
+          <V4PanelHeader eyebrow="Exceptions" title="Needs your attention" />
+          <ul className="mt-3 space-y-2 text-[13px]">
+            {model.coverageExceptions.map((row) => (
+              <li key={row.identityId} className="flex items-center justify-between gap-3">
+                <span className="text-ink">{row.channel}</span>
+                <span className="text-status-warning">{row.reason}</span>
+              </li>
+            ))}
+            {model.readinessExceptions.map((row) => (
+              <li key={`${row.repId}:${row.repName}`} className="flex items-center justify-between gap-3">
+                <span className="text-ink">{row.repName}</span>
+                <span className="text-status-warning">Access not confirmed</span>
+              </li>
+            ))}
+          </ul>
+        </V4Panel>
       )}
 
-      {assignOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/40 p-4 backdrop-blur-sm">
-          <V4Panel className="my-8 w-full max-w-md" innerClassName="p-5">
-            <h2 className="text-[18px] font-medium text-ink">Assign profile</h2>
-            <p className="mt-1 text-[12px] text-graphite">
-              Choose the primary owner and the backups who may cover {detail.profileName}.
-            </p>
-            <label htmlFor="detail-assign-rep" className="mt-4 block text-[12px] font-medium text-graphite">Primary rep</label>
-            <select
-              id="detail-assign-rep"
-              value={repId}
-              onChange={(event) => setRepId(event.target.value)}
-              className="mt-1.5 h-10 w-full rounded-lg border border-line bg-bone-raised px-3 text-[13px] text-ink"
-            >
-              <option value="">Select a rep</option>
-              {reps.map((rep) => (
-                <option key={rep.id} value={rep.id}>{rep.name}</option>
-              ))}
-            </select>
-            <fieldset className="mt-4">
-              <legend className="text-[12px] font-medium text-graphite">Backups</legend>
-              <p className="mt-1 text-[11px] text-stone">
-                Backups may cover this profile when the primary is away. They never own it.
-              </p>
-              <div className="mt-2 space-y-1.5">
-                {reps.filter((rep) => rep.id !== repId).map((rep) => (
-                  <label key={rep.id} className="flex items-center gap-2 text-[12px] text-ink">
-                    <input
-                      type="checkbox"
-                      checked={backupIds.includes(rep.id)}
-                      onChange={(event) =>
-                        setBackupIds((prev) =>
-                          event.target.checked ? [...prev, rep.id] : prev.filter((id) => id !== rep.id),
-                        )
-                      }
-                      className="size-4 accent-orange"
-                    />
-                    {rep.name}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setAssignOpen(false)}
-                className="rounded-lg border border-line px-4 py-2 text-[13px] font-medium text-graphite hover:text-ink"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleAssign()}
-                disabled={!repId || saving}
-                className="rounded-lg bg-solid px-4 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {saving ? 'Assigning…' : 'Assign'}
-              </button>
-            </div>
-          </V4Panel>
-        </div>
+      {model.tasks.length > 0 && (
+        <V4Panel>
+          <V4PanelHeader eyebrow="Work" title="Open assigned tasks" />
+          <ul className="mt-3 divide-y divide-line/70">
+            {model.tasks.map((task) => (
+              <li key={task.id}>
+                <Link
+                  href={`/tasks?task=assigned:${task.id}`}
+                  className="flex items-center justify-between gap-3 py-2.5 text-[13px] hover:underline"
+                >
+                  <span className="min-w-0 flex-1 truncate text-ink">{task.title}</span>
+                  {task.channel && (
+                    <span className="text-[11px] uppercase tracking-[0.12em] text-stone">{task.channel}</span>
+                  )}
+                  <span className={cn('text-[11px]', task.status === 'WAITING' ? 'text-status-warning' : 'text-graphite')}>
+                    {task.status}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </V4Panel>
       )}
     </div>
+  )
+}
+
+function ChannelsTab({
+  model,
+  canManage,
+  reps,
+}: {
+  model: ProfileOperatingModel
+  canManage: boolean
+  reps: Array<{ id: string; name: string }>
+}) {
+  if (model.channels.length === 0) {
+    return (
+      <V4Panel>
+        <V4PanelHeader eyebrow="Channels" title="No channels yet" />
+        <p className="mt-3 text-[12px] text-stone">
+          A channel is a sending identity under {model.personName}. Add LinkedIn, Upwork or Email to begin.
+        </p>
+      </V4Panel>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {model.channels.map((channel) => (
+        <ChannelBlock
+          key={channel.identityId}
+          channel={channel}
+          canManage={canManage}
+          reps={reps}
+        />
+      ))}
+    </div>
+  )
+}
+
+function ChannelBlock({
+  channel,
+  canManage,
+  reps,
+}: {
+  channel: ProfileChannelModel
+  canManage: boolean
+  reps: Array<{ id: string; name: string }>
+}) {
+  const continueHref = `/workspace/${channel.identityId}`
+  return (
+    <V4Panel>
+      <V4PanelHeader
+        eyebrow="Channel"
+        title={channel.channel}
+        hint={channel.identityName}
+        action={
+          <Link
+            href={continueHref}
+            className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+          >
+            Continue
+          </Link>
+        }
+      />
+
+      <dl className="mt-4 grid grid-cols-[130px_1fr] gap-x-3 gap-y-1.5 text-[13px]">
+        <div className="contents">
+          <dt className="text-stone">Identity</dt>
+          <dd className="min-w-0 text-ink">
+            {channel.identityName}
+            {channel.url && (
+              <a href={channel.url} target="_blank" rel="noreferrer" className="ml-2 text-cobalt hover:underline">
+                link
+              </a>
+            )}
+          </dd>
+        </div>
+        <div className="contents">
+          <dt className="text-stone">Primary</dt>
+          <dd className="text-ink">{channel.primaryRepName ?? <span className="text-status-warning">Unassigned</span>}</dd>
+        </div>
+        <div className="contents">
+          <dt className="text-stone">Backups</dt>
+          <dd className="text-ink">
+            {channel.backups.length > 0
+              ? channel.backups.map((backup) => backup.repName).join(', ')
+              : <span className="text-stone">None</span>}
+          </dd>
+        </div>
+        <div className="contents">
+          <dt className="text-stone">Access</dt>
+          <dd className="text-ink">
+            {channel.readiness.every((row) => row.ready)
+              ? <span className="text-status-success">Confirmed</span>
+              : <span className="text-status-warning">Not confirmed</span>}
+          </dd>
+        </div>
+        <div className="contents">
+          <dt className="text-stone">Today</dt>
+          <dd className="tabular-nums text-ink">
+            {channel.today.completed} / {channel.today.target}
+            {channel.today.target > 0 && <span className="ml-1.5 text-stone">{pct(channel.today.completed, channel.today.target)}%</span>}
+          </dd>
+        </div>
+        <div className="contents">
+          <dt className="text-stone">Coverage</dt>
+          <dd className="text-ink">
+            {channel.activeCoverage.length > 0
+              ? `Covered by ${channel.activeCoverage.map((row) => row.coveringRepName).join(', ')}`
+              : 'None'}
+          </dd>
+        </div>
+      </dl>
+
+      {channel.targets.length > 0 && (
+        <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {channel.targets.map((target) => (
+            <div key={target.activityType} className="rounded-lg bg-bone px-3 py-2 ring-1 ring-line/70">
+              <dt className="text-[10px] uppercase tracking-[0.12em] text-stone">
+                {target.activityType.replace(/_/g, ' ')}
+              </dt>
+              <dd className="mt-0.5 tabular-nums text-ink">
+                {target.completedCount} / {target.targetCount}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {canManage && (
+        <div className="mt-4 border-t border-line/70 pt-4">
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-stone">
+            Assignment
+          </p>
+          <CoverageConfigPanel
+            profileId={channel.profileId}
+            primaryRepId={channel.primaryRepId}
+            backups={channel.backups}
+            reps={reps}
+            assignedRepIds={channel.backups.map((backup) => backup.repId)}
+            canManage={canManage}
+          />
+        </div>
+      )}
+    </V4Panel>
+  )
+}
+
+function KnowledgeTab({ model }: { model: ProfileOperatingModel }) {
+  const knowledge = model.knowledge
+  return (
+    <div className="space-y-4">
+      <V4Panel>
+        <V4PanelHeader
+          eyebrow="Knowledge"
+          title="Shared across every channel"
+          hint={knowledge.sources.length > 0 ? `${knowledge.sources.length} source file${knowledge.sources.length === 1 ? '' : 's'}` : 'No source uploaded'}
+        />
+        {knowledge.summary && <p className="mt-3 text-[13px] text-graphite">{knowledge.summary}</p>}
+        {knowledge.currentRole && <p className="mt-1 text-[12px] text-stone">{knowledge.currentRole}</p>}
+        {knowledge.skills.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {knowledge.skills.map((skill) => (
+              <span key={skill} className="rounded-full bg-bone px-2 py-0.5 text-[11px] text-graphite ring-1 ring-line">
+                {skill}
+              </span>
+            ))}
+          </div>
+        )}
+        {knowledge.sources.length > 0 && (
+          <ul className="mt-3 space-y-1 text-[12px] text-stone">
+            {knowledge.sources.map((source, index) => (
+              <li key={`${source.filename ?? 'source'}-${index}`}>
+                {source.filename ?? 'Source'} · {source.uploadedAt ? new Date(source.uploadedAt).toLocaleDateString() : 'unknown date'}
+              </li>
+            ))}
+          </ul>
+        )}
+      </V4Panel>
+
+      {knowledge.experience.length > 0 && (
+        <V4Panel>
+          <V4PanelHeader eyebrow="Knowledge" title="Experience" />
+          <ul className="mt-3 space-y-2">
+            {knowledge.experience.map((row, index) => (
+              <li key={`${row.role}-${row.company}-${index}`} className="text-[13px]">
+                <p className="font-medium text-ink">{row.role ?? 'Role'}</p>
+                <p className="text-graphite">
+                  {row.company ?? '—'}
+                  {row.startDate && <span className="text-stone"> · {row.startDate}{row.current ? ' – present' : row.endDate ? ` – ${row.endDate}` : ''}</span>}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </V4Panel>
+      )}
+
+      {knowledge.projects.length > 0 && (
+        <V4Panel>
+          <V4PanelHeader eyebrow="Knowledge" title="Projects" />
+          <ul className="mt-3 space-y-3">
+            {knowledge.projects.map((project, index) => (
+              <li key={`${project.title ?? 'project'}-${index}`}>
+                <p className="text-[13px] font-medium text-ink">{project.title ?? 'Project'}</p>
+                {project.role && <p className="text-[12px] text-graphite">{project.role}</p>}
+                {project.description && <p className="mt-0.5 text-[12px] text-graphite">{project.description}</p>}
+                {(project.skills.length > 0 || project.technologies.length > 0) && (
+                  <p className="mt-1 text-[11px] text-stone">
+                    {[...project.skills, ...project.technologies].join(' · ')}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </V4Panel>
+      )}
+
+      {knowledge.proof.length > 0 && (
+        <V4Panel>
+          <V4PanelHeader eyebrow="Knowledge" title="Proof" />
+          <ul className="mt-3 space-y-2 text-[13px]">
+            {knowledge.proof.map((row, index) => (
+              <li key={`${row.capability ?? 'proof'}-${index}`}>
+                <p className="font-medium text-ink">{row.capability ?? 'Capability'}</p>
+                {row.claim && <p className="text-graphite">{row.claim}</p>}
+                {row.reference && <p className="text-[11px] text-stone">{row.reference}</p>}
+              </li>
+            ))}
+          </ul>
+        </V4Panel>
+      )}
+
+      {knowledge.reviews.length > 0 && (
+        <V4Panel>
+          <V4PanelHeader eyebrow="Knowledge" title="Reviews" />
+          <ul className="mt-3 space-y-2 text-[13px]">
+            {knowledge.reviews.map((row, index) => (
+              <li key={`${row.reviewer ?? 'review'}-${index}`}>
+                <p className="text-graphite">{row.text}</p>
+                <p className="text-[11px] text-stone">{[row.reviewer, row.company].filter(Boolean).join(' · ')}</p>
+              </li>
+            ))}
+          </ul>
+        </V4Panel>
+      )}
+
+      {knowledge.claims.length > 0 && (
+        <V4Panel>
+          <V4PanelHeader eyebrow="Knowledge" title="Verified claims" />
+          <dl className="mt-3 space-y-1.5 text-[13px]">
+            {knowledge.claims.map((claim) => (
+              <div key={claim.key} className="contents">
+                <dt className="text-stone">{claim.key}</dt>
+                <dd className="text-ink">{claim.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </V4Panel>
+      )}
+    </div>
+  )
+}
+
+function ExecutionTab({ model }: { model: ProfileOperatingModel }) {
+  if (model.channels.length === 0) {
+    return (
+      <V4Panel>
+        <V4PanelHeader eyebrow="Execution" title="No channels yet" />
+        <p className="mt-3 text-[12px] text-stone">Execution is per channel. Add a channel to see today&apos;s work.</p>
+      </V4Panel>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {model.channels.map((channel) => (
+        <V4Panel key={channel.identityId}>
+          <V4PanelHeader
+            eyebrow="Execution"
+            title={channel.channel}
+            hint={`${channel.today.completed} / ${channel.today.target} complete`}
+          />
+          {channel.targets.length > 0 ? (
+            <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {channel.targets.map((target) => (
+                <div key={target.activityType} className="rounded-lg bg-bone px-3 py-2 ring-1 ring-line/70">
+                  <dt className="text-[10px] uppercase tracking-[0.12em] text-stone">
+                    {target.activityType.replace(/_/g, ' ')}
+                  </dt>
+                  <dd className="mt-0.5 tabular-nums text-ink">
+                    {target.completedCount} / {target.targetCount}
+                  </dd>
+                  <dd className="text-[11px] text-stone">{target.remaining} remaining</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="mt-3 text-[12px] text-stone">No targets configured for this channel.</p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              href={`/workspace/${channel.identityId}`}
+              className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+            >
+              Open {channel.channel} workspace
+            </Link>
+          </div>
+        </V4Panel>
+      ))}
+    </div>
+  )
+}
+
+function HistoryTab({ model }: { model: ProfileOperatingModel }) {
+  return (
+    <V4Panel>
+      <V4PanelHeader eyebrow="History" title="Operational timeline" hint={`${model.history.length} events`} />
+      {model.history.length === 0 ? (
+        <p className="mt-3 text-[12px] text-stone">No operational history recorded yet.</p>
+      ) : (
+        <ul className="mt-3 space-y-2 text-[13px]">
+          {model.history.map((entry, index) => (
+            <li key={`${entry.at}-${index}`} className="flex items-baseline justify-between gap-3">
+              <span className="text-ink">{entry.detail}</span>
+              <time className="shrink-0 text-[12px] text-stone">
+                {new Date(entry.at).toLocaleString()}
+              </time>
+            </li>
+          ))}
+        </ul>
+      )}
+    </V4Panel>
+  )
+}
+
+function AddChannelDialog({
+  open,
+  onClose,
+  model,
+  onSaved,
+}: {
+  open: boolean
+  onClose: () => void
+  model: ProfileOperatingModel
+  onSaved: () => void
+}) {
+  const [channel, setChannel] = useState<'linkedin' | 'upwork' | 'email'>('linkedin')
+  const [identityName, setIdentityName] = useState('')
+  const [url, setUrl] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save() {
+    if (!identityName.trim()) {
+      setError('Identity name is required')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const slug = `${identityName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${channel}`
+      const res = await fetch('/api/admin/revenue-identities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identityName: identityName.trim(),
+          slug,
+          channel,
+          profileUrl: url.trim() || null,
+          // The channel is created under the person's canonical profile — it can
+          // never create a new person.
+          profileId: model.personId,
+        }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || 'Could not add the channel')
+      onSaved()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add the channel')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={`Add a channel to ${model.personName}`}
+      description="The channel reuses this person's knowledge. Adding a channel never creates another person."
+      className="max-w-md"
+    >
+      <div className="space-y-3">
+        <label className="block space-y-1">
+          <span className="text-[12px] font-medium text-graphite">Channel</span>
+          <select
+            value={channel}
+            onChange={(event) => setChannel(event.target.value as 'linkedin' | 'upwork' | 'email')}
+            className="w-full rounded-lg border border-line bg-bone px-3 py-2 text-[13px] text-ink"
+          >
+            <option value="linkedin">LinkedIn</option>
+            <option value="upwork">Upwork</option>
+            <option value="email">Email</option>
+          </select>
+        </label>
+        <label className="block space-y-1">
+          <span className="text-[12px] font-medium text-graphite">Identity name</span>
+          <input
+            value={identityName}
+            onChange={(event) => setIdentityName(event.target.value)}
+            placeholder={model.personName}
+            className="w-full rounded-lg border border-line bg-bone px-3 py-2 text-[13px] text-ink"
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-[12px] font-medium text-graphite">Profile URL (optional)</span>
+          <input
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder="https://…"
+            className="w-full rounded-lg border border-line bg-bone px-3 py-2 text-[13px] text-ink"
+          />
+        </label>
+        {error && (
+          <p role="alert" className="text-[12px] text-status-danger">{error}</p>
+        )}
+      </div>
+      <DialogActions className="mt-5">
+        <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={save} disabled={busy}>
+          {busy ? 'Adding…' : 'Add channel'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   )
 }

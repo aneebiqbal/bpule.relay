@@ -154,6 +154,13 @@ describe('ADD_CHANNEL_DOES_NOT_CREATE_PERSON', () => {
     expect(migration).toMatch(/references profiles\(id\)/)
     expect(migration).not.toMatch(/insert into profiles/i)
   })
+
+  it('the add-channel dialog creates an identity under the canonical person, never a profile', () => {
+    const source = read('src/components/team/team-profile-detail.tsx')
+    expect(source).toMatch(/profileId: model\.personId/)
+    expect(source).toMatch(/api\/admin\/revenue-identities/)
+    expect(source).not.toMatch(/insert into profiles/i)
+  })
 })
 
 describe('ADMIN_PROFILE_SINGLE_ENTRY', () => {
@@ -178,8 +185,69 @@ describe('COVERAGE_DOES_NOT_CHANGE_PRIMARY', () => {
 
 describe('TARGETS_CHANNEL_AWARE', () => {
   it('targets are keyed by the channel identity', () => {
-    const source = read('src/lib/team/profile-detail.ts')
-    expect(source).toMatch(/revenue_identity_id/)
+    expect(read('src/lib/team/profile-detail.ts')).toMatch(/revenue_identity_id/)
+    const model = read('src/lib/profiles/operating-model.ts')
+    expect(model).toMatch(/revenue_identity_id/)
+    expect(model).toMatch(/activityType/)
+  })
+})
+
+describe('PROFILE_DETAIL_IS_OPERATING_CENTER', () => {
+  it('one page exposes overview, channels, knowledge, execution and history', () => {
+    const detail = read('src/components/team/team-profile-detail.tsx')
+    for (const tab of ['overview', 'channels', 'knowledge', 'execution', 'history']) {
+      expect(detail).toMatch(new RegExp(`'${tab}'`))
+    }
+  })
+
+  it('the operating model is the single read authority for the page', () => {
+    expect(read('src/app/(app)/team/profiles/[profileId]/page.tsx')).toMatch(/loadProfileOperatingModel/)
+  })
+})
+
+describe('ADMIN_PROFILE_FLOW_SINGLE_ENTRY', () => {
+  it('the Team nav exposes Profiles once and no Identities entry', () => {
+    const nav = read('src/lib/navigation/relay-shell-nav.ts')
+    expect(nav).toMatch(/href: '\/team\/profiles'/)
+    expect(nav).not.toMatch(/href: '\/profile-intelligence\?tab=identities'/)
+  })
+})
+
+describe('ADD_PROFILE_CREATES_ONE_PERSON', () => {
+  it('the add-profile wizard creates a person, not a channel per step', () => {
+    const wizard = read('src/components/team/add-profile-wizard.tsx')
+    expect(wizard).toMatch(/person|profile/i)
+    expect(read('supabase/migrations/20261109010000_profile_person.sql')).toMatch(/person_id/)
+  })
+})
+
+describe('ASSIGNMENT_MANAGED_FROM_CHANNEL', () => {
+  it('the channel block manages primary and backups inline', () => {
+    const detail = read('src/components/team/team-profile-detail.tsx')
+    expect(detail).toMatch(/CoverageConfigPanel/)
+    expect(detail).toMatch(/channel\.backups/)
+  })
+})
+
+describe('READINESS_CHANNEL_SCOPED', () => {
+  it('readiness is confirmed per channel identity', () => {
+    const model = read('src/lib/profiles/operating-model.ts')
+    expect(model).toMatch(/readiness/)
+    expect(model).toMatch(/profile_readiness/)
+  })
+})
+
+describe('COVERAGE_EXCEPTION_ONLY', () => {
+  it('the profile model surfaces coverage exceptions, not a second directory', () => {
+    const model = read('src/lib/profiles/operating-model.ts')
+    expect(model).toMatch(/coverageExceptions/)
+  })
+})
+
+describe('TASK_ENGINE_SHARED', () => {
+  it('the profile workspace assigns work through the canonical task composer', () => {
+    const detail = read('src/components/team/team-profile-detail.tsx')
+    expect(detail).toMatch(/AssignTaskButton/)
   })
 })
 
@@ -188,5 +256,53 @@ describe('ONE_TASK_ENGINE', () => {
     const migration = read('supabase/migrations/20261031120000_assigned_tasks.sql')
     expect(migration).toMatch(/profile_id uuid/)
     expect(read('src/lib/tasks/assigned-tasks.ts')).toMatch(/from\('assigned_tasks'\)/)
+  })
+})
+
+describe('PROFILE_OPERATING_MODEL', () => {
+  it('one canonical read model exists and is used by the profile page', () => {
+    const model = read('src/lib/profiles/operating-model.ts')
+    expect(model).toMatch(/export interface ProfileOperatingModel/)
+    expect(model).toMatch(/personId: string/)
+    expect(model).toMatch(/channels: ProfileChannelModel\[\]/)
+    expect(model).toMatch(/knowledge: ProfileKnowledgeModel/)
+    const page = read('src/app/(app)/team/profiles/[profileId]/page.tsx')
+    expect(page).toMatch(/loadProfileOperatingModel/)
+  })
+
+  it('knowledge is shared at the person level, execution per channel', () => {
+    const model = read('src/lib/profiles/operating-model.ts')
+    expect(model).toMatch(/headline: string \| null/)
+    expect(model).toMatch(/experience: Array</)
+    expect(model).toMatch(/projects: Array</)
+    expect(model).toMatch(/proof: Array/)
+    expect(model).toMatch(/targets: Array</)
+    expect(model).toMatch(/today: \{ completed: number; target: number; remaining: number \}/)
+  })
+})
+
+describe('PROFILE_DETAIL_TABS', () => {
+  it('the profile page exposes Overview, Channels, Knowledge, Execution and History', () => {
+    const source = read('src/components/team/team-profile-detail.tsx')
+    for (const tab of ['overview', 'channels', 'knowledge', 'execution', 'history']) {
+      expect(source).toMatch(new RegExp(`id: '${tab}'`))
+    }
+  })
+
+  it('the channels tab shows per-channel ownership, readiness and targets', () => {
+    const source = read('src/components/team/team-profile-detail.tsx')
+    expect(source).toMatch(/primaryRepName/)
+    expect(source).toMatch(/backups/)
+    expect(source).toMatch(/activeCoverage/)
+    expect(source).toMatch(/targets/)
+  })
+})
+
+describe('DIRECTORY_ONE_ROW_PERSON_WITH_CHANNELS', () => {
+  it('the directory row carries per-channel children, not duplicate person rows', () => {
+    const source = read('src/lib/team/profiles.ts')
+    expect(source).toMatch(/channelDetails: TeamProfileChannelDetail\[\]/)
+    expect(source).toMatch(/buildChannelDetails/)
+    expect(read('src/components/team/team-profiles-table.tsx')).toMatch(/profile\.channelDetails\.map/)
   })
 })

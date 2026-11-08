@@ -1,11 +1,17 @@
 import { notFound, redirect } from 'next/navigation'
 import { getAuthContext } from '@/lib/auth/organization'
 import { createServerSupabase } from '@/lib/supabase/server'
-import { loadTeamProfileDetail } from '@/lib/team/profile-detail'
+import { loadProfileOperatingModel } from '@/lib/profiles/operating-model'
 import { TeamProfileDetailView } from '@/components/team/team-profile-detail'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Profile detail — ONE page per person.
+ *
+ * The route accepts either a canonical person key or one of its channel
+ * profiles; the operating model resolves the person and unions every channel.
+ */
 export default async function TeamProfileDetailPage({
   params,
 }: {
@@ -17,22 +23,39 @@ export default async function TeamProfileDetailPage({
 
   const { profileId } = await params
 
-  let detail = await loadTeamProfileDetail(ctx.orgId, profileId)
-  if (!detail && profileId.startsWith('identity:')) {
-    // Directory keys for identities with no linked profile resolve to the
-    // profile when one exists.
-    const supabase = await createServerSupabase()
+  const supabase = await createServerSupabase()
+  const { data: profileRow } = await supabase
+    .from('profiles')
+    .select('id, person_id')
+    .eq('id', profileId)
+    .eq('organization_id', ctx.orgId)
+    .maybeSingle()
+
+  // Directory keys for identities with no linked profile resolve to the profile
+  // when one exists.
+  let personKey = profileRow ? (profileRow.person_id ?? profileRow.id) : null
+  if (!personKey && profileId.startsWith('identity:')) {
     const { data: identity } = await supabase
       .from('revenue_identities')
       .select('profile_id')
       .eq('id', profileId.slice('identity:'.length))
       .eq('organization_id', ctx.orgId)
       .maybeSingle()
-    if (identity?.profile_id) detail = await loadTeamProfileDetail(ctx.orgId, identity.profile_id)
+    if (identity?.profile_id) {
+      const { data: linked } = await supabase
+        .from('profiles')
+        .select('id, person_id')
+        .eq('id', identity.profile_id)
+        .eq('organization_id', ctx.orgId)
+        .maybeSingle()
+      personKey = linked ? (linked.person_id ?? linked.id) : identity.profile_id
+    }
   }
-  if (!detail) notFound()
+  if (!personKey) notFound()
 
-  const supabase = await createServerSupabase()
+  const model = await loadProfileOperatingModel(ctx.orgId, personKey)
+  if (!model) notFound()
+
   const { data: repRows } = await supabase
     .from('reps')
     .select('id, name')
@@ -41,7 +64,7 @@ export default async function TeamProfileDetailPage({
 
   return (
     <TeamProfileDetailView
-      detail={detail}
+      model={model}
       canManage={ctx.isAdmin || ctx.isOwner}
       reps={(repRows ?? []).map((rep) => ({ id: rep.id, name: rep.name }))}
     />

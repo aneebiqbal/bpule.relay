@@ -116,11 +116,13 @@ describe('PROFILE_EXECUTION_GLOBAL_PARITY', () => {
     expect(table).toMatch(/needsReview/)
   })
 
-  it('the profile detail exposes primary, backups, readiness and today in one place', () => {
+  it('the profile detail is the operating center: channels, assignment, readiness, today', () => {
     const detail = read('src/components/team/team-profile-detail.tsx')
     expect(detail).toMatch(/CoverageConfigPanel/)
-    expect(detail).toMatch(/Access readiness/)
+    expect(detail).toMatch(/Access/)
     expect(detail).toMatch(/Today/)
+    expect(detail).toMatch(/Channels/)
+    expect(detail).toMatch(/Execution/)
   })
 
   it('production: every permanent assignment is a canonical primary', async () => {

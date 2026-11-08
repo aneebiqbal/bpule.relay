@@ -2,7 +2,7 @@ import type { TeamLivePayload } from '@/lib/admin/team-live'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { loadTeamLive } from '@/lib/admin/load-team-live'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
-import { loadCanonicalProfileAssignments } from '@/lib/profiles/canonical'
+import { loadCanonicalProfileAssignments, type CanonicalProfileAssignment } from '@/lib/profiles/canonical'
 
 /**
  * Profile-first view of team execution.
@@ -92,6 +92,43 @@ export function buildTeamProfiles(
 
 export type CoverageState = 'EXPLICIT' | 'DERIVED' | 'AMBIGUOUS' | 'UNASSIGNED'
 
+type DirectoryIdentity = { id: string; profile_id: string | null; channel: string; identity_name: string }
+
+/**
+ * Per-channel execution for one person. The channels are children of the
+ * person, so the directory shows them inside one row — never as duplicates.
+ */
+function buildChannelDetails(
+  personKey: string,
+  identitiesByPerson: Map<string, DirectoryIdentity[]>,
+  canonicalByProfile: Map<string, CanonicalProfileAssignment>,
+  goalsByIdentity: Map<string, { completed: number; target: number }>,
+): TeamProfileChannelDetail[] {
+  return (identitiesByPerson.get(personKey) ?? []).map((identity) => {
+    const canonical = identity.profile_id ? canonicalByProfile.get(identity.profile_id) : undefined
+    const goal = goalsByIdentity.get(identity.id)
+    return {
+      identityId: identity.id,
+      channel: identity.channel,
+      identityName: identity.identity_name,
+      primaryRepName: canonical?.primaryRepName ?? null,
+      backups: canonical?.backups.map((backup) => backup.repName) ?? [],
+      completed: goal?.completed ?? 0,
+      target: goal?.target ?? 0,
+    }
+  })
+}
+
+export interface TeamProfileChannelDetail {
+  identityId: string
+  channel: string
+  identityName: string
+  primaryRepName: string | null
+  backups: string[]
+  completed: number
+  target: number
+}
+
 export interface TeamProfileDirectoryRow extends TeamProfileRow {
   assignmentCount: number
   primaryRepId: string | null
@@ -100,6 +137,8 @@ export interface TeamProfileDirectoryRow extends TeamProfileRow {
   coverageState: CoverageState
   needsReview: boolean
   reviewReasons: string[]
+  /** Per-channel execution — a person's channels are children, not duplicates. */
+  channelDetails: TeamProfileChannelDetail[]
 }
 
 /**
@@ -164,10 +203,34 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
     .eq('status', 'active')
     .limit(2000)
 
-  const unassignedIdentities = (identityRes.data ?? []).filter(
+  const identities = (identityRes.data ?? []) as DirectoryIdentity[]
+  const unassignedIdentities = identities.filter(
     (identity) => !assignedIdentityIds.has(identity.id),
   )
   const profileNameById = canonicalNameById
+
+  // Per-channel execution: group the person's identities under their person key
+  // and attach the canonical ownership plus today's goal for each channel.
+  const identitiesByPerson = new Map<string, DirectoryIdentity[]>()
+  for (const identity of identities) {
+    if (!identity.profile_id) continue
+    const key = personKeyByProfile.get(identity.profile_id)
+    if (!key) continue
+    const list = identitiesByPerson.get(key) ?? []
+    list.push(identity)
+    identitiesByPerson.set(key, list)
+  }
+  const goalsByIdentity = new Map<string, { completed: number; target: number }>()
+  for (const person of live.people) {
+    for (const goal of person.goals) {
+      const entry = goalsByIdentity.get(goal.identityId) ?? { completed: 0, target: 0 }
+      entry.completed += goal.completed
+      entry.target += goal.target
+      goalsByIdentity.set(goal.identityId, entry)
+    }
+  }
+  const channelDetailsFor = (personKey: string) =>
+    buildChannelDetails(personKey, identitiesByPerson, canonicalByProfile, goalsByIdentity)
 
   const emptyOwnership = {
     primaryRepId: null,
@@ -206,11 +269,13 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
         coverageState: canonical?.coverageState ?? emptyOwnership.coverageState,
         needsReview: canonical?.needsReview ?? true,
         reviewReasons: canonical?.reviewReasons ?? emptyOwnership.reviewReasons,
+        channelDetails: channelDetailsFor(key),
       }
       byProfile.set(key, row)
       unassignedRows.push(row)
     }
     if (!row.channels.includes(identity.channel)) row.channels.push(identity.channel)
+    row.channelDetails = channelDetailsFor(key)
   }
 
   const assignedDirectory: TeamProfileDirectoryRow[] = assignedRows.map((row) => {
@@ -224,6 +289,7 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
       coverageState: canonical?.coverageState ?? (row.assignedReps.length === 0 ? 'UNASSIGNED' : 'AMBIGUOUS'),
       needsReview: canonical?.needsReview ?? false,
       reviewReasons: canonical?.reviewReasons ?? [],
+      channelDetails: channelDetailsFor(row.profileId),
     }
   })
 
@@ -255,6 +321,7 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
       coverageState: 'UNASSIGNED',
       needsReview: true,
       reviewReasons: ['Profile has no channel identity'],
+      channelDetails: [],
       }
     })
 

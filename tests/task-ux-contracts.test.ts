@@ -161,7 +161,7 @@ describe('LEAD_TASK_CONTEXT_PARITY', () => {
 
 describe('PROFILE_TASK_CONTEXT_PARITY', () => {
   it('Profile detail opens the same composer with the profile prefilled', () => {
-    expect(read('src/components/team/team-profile-detail.tsx')).toMatch(/defaultProfileId=\{detail\.profileId\}/)
+    expect(read('src/components/team/team-profile-detail.tsx')).toMatch(/defaultProfileId=\{model\.personId\}/)
   })
 })
 

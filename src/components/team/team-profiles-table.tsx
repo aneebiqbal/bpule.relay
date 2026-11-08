@@ -1,5 +1,13 @@
 'use client'
 
+/**
+ * Team → Profiles: the single admin profile workspace.
+ *
+ * ONE row per PERSON. A person's channels are children rendered inside that
+ * row — never a second row, never a second name. Ownership, backups and
+ * coverage come from the canonical assignment service; today's completion
+ * comes from the same Team Live payload as Rep Home.
+ */
 import { Suspense, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -110,7 +118,7 @@ function TeamProfilesTableInner({
   ].sort()
 
   const stats: Array<{ key: string; label: string; value: number | string; hint: string; tone: 'neutral' | 'warning' | 'danger' | 'success' }> = [
-    { key: 'active', label: 'Active', value: profiles.length, hint: 'Sending profiles', tone: 'neutral' },
+    { key: 'active', label: 'People', value: profiles.length, hint: 'One row per person', tone: 'neutral' },
     { key: 'assigned', label: 'Assigned', value: assigned.length, hint: 'With at least one rep', tone: 'neutral' },
     { key: 'unassigned', label: 'Unassigned', value: unassigned.length, hint: unassigned.length > 0 ? 'Needs a rep' : 'All assigned', tone: unassigned.length > 0 ? 'warning' : 'neutral' },
     { key: 'attention', label: 'Needs attention', value: attention.length, hint: 'At risk or missed', tone: attention.length > 0 ? 'danger' : 'neutral' },
@@ -131,7 +139,7 @@ function TeamProfilesTableInner({
           <p className="text-mono-medium text-[10px] uppercase tracking-[0.18em] text-stone">Team / Profiles</p>
           <h1 className="mt-1 text-[24px] font-light tracking-[-0.02em] text-ink">Profiles</h1>
           <p className="mt-1 text-[13px] text-graphite">
-            Every sending profile, its channel, the rep it is assigned to and today&apos;s completion.
+            One row per person. Channels are children — shared knowledge, separate execution.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -141,12 +149,6 @@ function TeamProfilesTableInner({
             className="rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-graphite transition-colors hover:text-ink"
           >
             Coverage
-          </Link>
-          <Link
-            href="/team/coverage#readiness"
-            className="rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-graphite transition-colors hover:text-ink"
-          >
-            Readiness
           </Link>
           <button
             type="button"
@@ -195,8 +197,8 @@ function TeamProfilesTableInner({
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search profiles"
-            aria-label="Search profiles"
+            placeholder="Search people"
+            aria-label="Search people"
             className="h-9 w-40 rounded-lg border border-line bg-bone-raised px-3 text-[12px] text-ink"
           />
           <select value={repFilter} onChange={(event) => setRepFilter(event.target.value)} aria-label="Filter by rep" className="h-9 rounded-lg border border-line bg-bone-raised px-2 text-[12px] text-ink">
@@ -230,10 +232,8 @@ function TeamProfilesTableInner({
           <table className="w-full min-w-[920px] text-left">
             <thead>
               <tr className="border-b border-line text-[10px] uppercase tracking-[0.12em] text-stone">
-                <th className="px-4 py-2 font-medium">Profile</th>
-                <th className="px-4 py-2 font-medium">Channel</th>
-                <th className="px-4 py-2 font-medium">Primary</th>
-                <th className="px-4 py-2 font-medium">Backups</th>
+                <th className="px-4 py-2 font-medium">Person</th>
+                <th className="px-4 py-2 font-medium">Channels</th>
                 <th className="px-4 py-2 font-medium">Today</th>
                 <th className="px-4 py-2 font-medium">Status</th>
                 <th className="px-4 py-2"><span className="sr-only">Actions</span></th>
@@ -241,49 +241,7 @@ function TeamProfilesTableInner({
             </thead>
             <tbody>
               {filtered.map((profile) => (
-                <tr key={profile.profileId} className="border-b border-line/60 align-top last:border-0">
-                  <td className="px-4 py-3 text-[13px] font-medium text-ink">{profile.profileName}</td>
-                  <td className="px-4 py-3 text-[12px] text-graphite">
-                    {profile.channels.join(' · ') || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-[12px]">
-                    {profile.primaryRepName ? (
-                      <span className="text-ink">{profile.primaryRepName}</span>
-                    ) : (
-                      <Link
-                        href={`/team/profiles/${profile.profileId}`}
-                        className="text-status-warning hover:underline"
-                      >
-                        Assign primary
-                      </Link>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-[12px] text-graphite">
-                    {profile.backups.length > 0 ? profile.backups.join(', ') : <span className="text-stone">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <ProgressCell completed={profile.completedCount} target={profile.targetCount} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <V4Chip tone={STATUS_TONE[profile.status ?? ''] ?? 'neutral'}>{statusLabel(profile.status)}</V4Chip>
-                    {profile.needsReview && (
-                      <Link
-                        href={`/team/profiles/${profile.profileId}`}
-                        className="mt-1 block text-[11px] text-status-warning hover:underline"
-                      >
-                        Needs review
-                      </Link>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/team/profiles/${profile.profileId}`}
-                      className="inline-flex min-h-11 items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
-                    >
-                      Open
-                    </Link>
-                  </td>
-                </tr>
+                <PersonRow key={profile.profileId} profile={profile} />
               ))}
             </tbody>
           </table>
@@ -295,13 +253,24 @@ function TeamProfilesTableInner({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-[13px] font-medium text-ink">{profile.profileName}</p>
-                  <p className="text-[11px] text-stone">
-                    {profile.channels.join(' · ') || '—'} · {profile.primaryRepName ?? 'No primary'}
-                    {profile.backups.length > 0 ? ` · Backups: ${profile.backups.join(', ')}` : ''}
-                  </p>
+                  <p className="text-[11px] text-stone">{profile.channels.join(' · ') || '—'}</p>
                 </div>
                 <V4Chip tone={STATUS_TONE[profile.status ?? ''] ?? 'neutral'}>{statusLabel(profile.status)}</V4Chip>
               </div>
+              {profile.channelDetails.length > 0 && (
+                <ul className="mt-2 space-y-1.5 border-t border-line/70 pt-2">
+                  {profile.channelDetails.map((channel) => (
+                    <li key={channel.identityId} className="flex items-center justify-between gap-2 text-[12px]">
+                      <span className="min-w-0 truncate text-graphite">
+                        <span className="capitalize text-ink">{channel.channel}</span>
+                        {channel.primaryRepName ? ` · ${channel.primaryRepName}` : ' · No primary'}
+                        {channel.backups.length > 0 ? ` · Backups: ${channel.backups.join(', ')}` : ''}
+                      </span>
+                      <span className="shrink-0 tabular-nums text-ink">{channel.completed} / {channel.target}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <div className="mt-2.5">
                 <ProgressCell completed={profile.completedCount} target={profile.targetCount} />
               </div>
@@ -313,7 +282,7 @@ function TeamProfilesTableInner({
           <div className="p-4">
             <V4Empty
               title={view === 'unassigned' ? 'No unassigned profiles' : 'No profiles match this view'}
-              body={view === 'unassigned' ? 'Every sending profile has a rep.' : 'Adjust the filters or add a profile.'}
+              body={view === 'unassigned' ? 'Every person has a rep.' : 'Adjust the filters or add a profile.'}
             />
           </div>
         )}
@@ -325,6 +294,60 @@ function TeamProfilesTableInner({
         <AddProfileWizard reps={reps} onClose={() => setWizardOpen(false)} />
       )}
     </div>
+  )
+}
+
+/** One person: header row plus their channels as children. */
+function PersonRow({ profile }: { profile: TeamProfileDirectoryRow }) {
+  return (
+    <>
+      <tr className="border-b border-line/60 align-top last:border-0">
+        <td className="px-4 py-3 text-[13px] font-medium text-ink">{profile.profileName}</td>
+        <td className="px-4 py-3 text-[12px] text-graphite">
+          {profile.channels.join(' · ') || '—'}
+        </td>
+        <td className="px-4 py-3">
+          <ProgressCell completed={profile.completedCount} target={profile.targetCount} />
+        </td>
+        <td className="px-4 py-3">
+          <V4Chip tone={STATUS_TONE[profile.status ?? ''] ?? 'neutral'}>{statusLabel(profile.status)}</V4Chip>
+          {profile.needsReview && (
+            <Link
+              href={`/team/profiles/${profile.profileId}`}
+              className="mt-1 block text-[11px] text-status-warning hover:underline"
+            >
+              Needs review
+            </Link>
+          )}
+        </td>
+        <td className="px-4 py-3 text-right">
+          <Link
+            href={`/team/profiles/${profile.profileId}`}
+            className="inline-flex min-h-11 items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
+          >
+            Open
+          </Link>
+        </td>
+      </tr>
+      {profile.channelDetails.length > 0 && (
+        <tr className="border-b border-line/60 bg-bone/60 last:border-0">
+          <td colSpan={5} className="px-4 py-2.5">
+            <ul className="space-y-1.5">
+              {profile.channelDetails.map((channel) => (
+                <li key={channel.identityId} className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
+                  <span className="min-w-0 text-graphite">
+                    <span className="capitalize text-ink">{channel.channel}</span>
+                    {channel.primaryRepName ? ` · Primary ${channel.primaryRepName}` : ' · No primary'}
+                    {channel.backups.length > 0 ? ` · Backups ${channel.backups.join(', ')}` : ''}
+                  </span>
+                  <span className="shrink-0 tabular-nums text-ink">{channel.completed} / {channel.target}</span>
+                </li>
+              ))}
+            </ul>
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 
@@ -349,7 +372,7 @@ function RepInverse({ profiles }: { profiles: TeamProfileDirectoryRow[] }) {
     <V4Panel>
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2 className="text-mono-medium text-[11px] uppercase tracking-[0.18em] text-stone">Reps</h2>
-        <span className="text-[12px] text-stone">REP → profiles</span>
+        <span className="text-[12px] text-stone">REP → people</span>
       </div>
       <ul className="space-y-3">
         {reps.map(([rep, entry]) => {

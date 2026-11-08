@@ -132,8 +132,10 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
       // The canonical profile/identity front door. Identities is the same
       // surface scoped to the sending identities; Coverage owns primaries,
       // backups and access readiness.
+      // Profiles is the single front door: channels, assignment, readiness,
+      // coverage and targets are managed inside it. Raw identity setup is
+      // advanced and lives behind Profile → Channel → Advanced.
       { id: 'team-profiles', label: 'Profiles', href: '/team/profiles' },
-      { id: 'identities', label: 'Identities', href: '/profile-intelligence?tab=identities' },
       { id: 'coverage', label: 'Coverage', href: '/team/coverage' },
       { id: 'workload', label: 'Workload', href: '/team/workload' },
       { id: 'activity', label: 'Activity', href: '/team/activity' },
