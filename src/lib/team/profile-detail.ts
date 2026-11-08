@@ -31,17 +31,27 @@ export async function loadTeamProfileDetail(
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, display_name, full_name, label')
+    .select('id, display_name, full_name, label, person_id')
     .eq('id', profileId)
     .eq('organization_id', orgId)
     .maybeSingle()
   if (!profile) return null
 
+  // One person, many channels: the canonical profile plus every profile that
+  // points at it. All of their channel identities render on this one page.
+  const { data: personProfiles } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('organization_id', orgId)
+    .or(`id.eq.${profileId},person_id.eq.${profileId}`)
+    .limit(50)
+  const personProfileIds = (personProfiles ?? []).map((row) => row.id as string)
+
   const { data: identities } = await supabase
     .from('revenue_identities')
     .select('id, channel')
     .eq('organization_id', orgId)
-    .eq('profile_id', profileId)
+    .in('profile_id', personProfileIds.length > 0 ? personProfileIds : [profileId])
     .limit(50)
   const identityIds = (identities ?? []).map((identity) => identity.id)
 
@@ -55,8 +65,19 @@ export async function loadTeamProfileDetail(
     identityIds.length > 0
       ? supabase.from('daily_accountability').select('revenue_identity_id, activity_type, completed_count, status').eq('organization_id', orgId).in('revenue_identity_id', identityIds).eq('target_date', businessDate).limit(200)
       : Promise.resolve({ data: [] as Array<{ revenue_identity_id: string; activity_type: string; completed_count: number; status: string | null }> }),
-    supabase.from('profile_coverage').select('rep_id, role, priority').eq('organization_id', orgId).eq('profile_id', profileId).eq('active', true).limit(50),
-    supabase.from('profile_readiness').select('rep_id').eq('organization_id', orgId).eq('profile_id', profileId).limit(200),
+    supabase
+      .from('profile_coverage')
+      .select('rep_id, role, priority, profile_id')
+      .eq('organization_id', orgId)
+      .in('profile_id', personProfileIds.length > 0 ? personProfileIds : [profileId])
+      .eq('active', true)
+      .limit(50),
+    supabase
+      .from('profile_readiness')
+      .select('rep_id, profile_id')
+      .eq('organization_id', orgId)
+      .in('profile_id', personProfileIds.length > 0 ? personProfileIds : [profileId])
+      .limit(200),
   ])
 
   const repIds = [...new Set((assignmentRes.data ?? []).map((assignment) => assignment.rep_id))]
@@ -104,8 +125,12 @@ export async function loadTeamProfileDetail(
     assignedReps: repIds.map((id) => repNameById.get(id) ?? 'Unknown'),
     assignedRepIds: repIds,
     coverage: {
+      // The canonical profile's chain wins; grouped profiles fill any gap so a
+      // person never appears uncovered because their channels were split.
       primaryRepId:
-        (coverageRes.data ?? []).find((row) => row.role === 'PRIMARY')?.rep_id ?? null,
+        (coverageRes.data ?? []).find((row) => row.role === 'PRIMARY' && row.profile_id === profileId)?.rep_id
+        ?? (coverageRes.data ?? []).find((row) => row.role === 'PRIMARY')?.rep_id
+        ?? null,
       backups: (coverageRes.data ?? [])
         .filter((row) => row.role === 'BACKUP')
         .sort((a, b) => a.priority - b.priority)

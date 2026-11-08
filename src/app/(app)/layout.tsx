@@ -54,16 +54,30 @@ export default async function AppLayout({
       const workable = authCtx?.isOwner || authCtx?.isAdmin
         ? await store.listRevenueIdentitiesAdmin()
         : await store.listMyWorkableIdentities();
+      const active = workable.filter((identity) => identity.status === "active")
+      const profileIds = [...new Set(active.map((identity) => identity.profileId).filter((id): id is string => Boolean(id)))]
+      const personIdByProfile = new Map<string, string>()
+      if (profileIds.length > 0) {
+        const { data: personRows } = await store
+          .getSupabaseClient()
+          .from('profiles')
+          .select('id, person_id')
+          .eq('organization_id', authCtx?.orgId ?? user.organization.id)
+          .in('id', profileIds)
+          .limit(500)
+        for (const row of (personRows ?? []) as Array<{ id: string; person_id: string | null }>) {
+          personIdByProfile.set(row.id, row.person_id ?? row.id)
+        }
+      }
       return {
-        identities: workable
-          .filter((identity) => identity.status === "active")
-          .map((identity) => ({
-            id: identity.id,
-            identityName: identity.identityName,
-            title: identity.title,
-            channel: identity.channel,
-            profileId: identity.profileId,
-          })),
+        identities: active.map((identity) => ({
+          id: identity.id,
+          identityName: identity.identityName,
+          title: identity.title,
+          channel: identity.channel,
+          profileId: identity.profileId,
+          personId: identity.profileId ? (personIdByProfile.get(identity.profileId) ?? identity.profileId) : null,
+        })),
         coveredIdentityIds: workable
           .filter((identity) => (identity as { access?: string }).access === "coverage")
           .map((identity) => identity.id),

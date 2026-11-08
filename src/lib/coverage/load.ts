@@ -80,7 +80,7 @@ export async function loadCoverageFacts(
   const [repsRes, profilesRes, identitiesRes, assignmentsRes, coverageRes, availabilityRes, dayRes, activeCoverageRes, readinessRes, leadsRes, tasksRes, policyRes] =
     await Promise.all([
       supabase.from('reps').select('id, name').eq('organization_id', orgId).limit(2000),
-      supabase.from('profiles').select('id, display_name, full_name, label').eq('organization_id', orgId).limit(2000),
+      supabase.from('profiles').select('id, display_name, full_name, label, person_id').eq('organization_id', orgId).limit(2000),
       supabase.from('revenue_identities').select('id, profile_id, channel, status').eq('organization_id', orgId).eq('status', 'active').limit(4000),
       supabase.from('identity_assignments').select('rep_id, revenue_identity_id').eq('organization_id', orgId).limit(4000),
       supabase.from('profile_coverage').select('profile_id, rep_id, role, priority, active').eq('organization_id', orgId).eq('active', true).limit(4000),
@@ -107,6 +107,7 @@ export async function loadCoverageFacts(
     display_name: string | null
     full_name: string | null
     label: string | null
+    person_id: string | null
   }>
   const profileNameById = new Map(
     profiles.map((profile) => [profile.id, profile.display_name ?? profile.full_name ?? profile.label ?? 'Unnamed']),
@@ -339,6 +340,7 @@ export async function loadCoverageFacts(
     availability,
     profiles: [...profileIds].map((profileId) => ({
       profileId,
+      personId: profiles.find((profile) => profile.id === profileId)?.person_id ?? null,
       name: profileNameById.get(profileId) ?? 'Unnamed',
       channels: [...new Set(
         identities
@@ -413,6 +415,42 @@ export async function loadCoverageStatus(
     businessDate: facts.businessDate,
     isWorkingDay: facts.isWorkingDay,
   }
+}
+
+/**
+ * One card per person: merge the channel profiles that share a `person_id`,
+ * union their channels/identities, and keep the canonical profile's name and
+ * ownership (the canonical profile is the one whose id equals its personId).
+ */
+function groupProfilesByPerson(profiles: CoverageProfileResult[]): CoverageProfileResult[] {
+  const byPerson = new Map<string, CoverageProfileResult>()
+  for (const profile of profiles) {
+    const key = profile.personId ?? profile.profileId
+    const existing = byPerson.get(key)
+    if (!existing) {
+      byPerson.set(key, {
+        ...profile,
+        profileId: key,
+        channels: [...profile.channels],
+        identityIds: [...profile.identityIds],
+      })
+      continue
+    }
+    existing.channels = [...new Set([...existing.channels, ...profile.channels])]
+    existing.identityIds = [...new Set([...existing.identityIds, ...profile.identityIds])]
+    const profileIsCanonical = profile.personId === null || profile.personId === profile.profileId
+    const existingIsCanonical = existing.personId === null || existing.personId === existing.profileId
+    if (profileIsCanonical && !existingIsCanonical) {
+      existing.name = profile.name
+      existing.primaryRepId = profile.primaryRepId
+      existing.primaryRepName = profile.primaryRepName
+      existing.primaryAvailability = profile.primaryAvailability
+      existing.primaryIsAvailable = profile.primaryIsAvailable
+      existing.backups = profile.backups
+      existing.status = profile.status
+    }
+  }
+  return [...byPerson.values()]
 }
 
 export interface RepReturningCoverage {
@@ -523,17 +561,20 @@ export async function loadRepCoverage(
     ?? fallbackAvailability(facts.isWorkingDay)
 
   // `own` is canonical primary ownership from the coverage plan — never the raw
-  // assignment table, which may still carry backup eligibility.
-  const own = plan.profiles.filter((profile) => profile.primaryRepId === repId)
+  // assignment table, which may still carry backup eligibility. Profiles are
+  // grouped by person, so a two-channel person renders once on Rep Home.
+  const own = groupProfilesByPerson(plan.profiles.filter((profile) => profile.primaryRepId === repId))
   const ownIds = new Set(own.map((profile) => profile.profileId))
   const coveringIds = new Set(
     facts.activeCoverage.filter((row) => row.coveringRepId === repId).map((row) => row.profileId),
   )
 
   const byId = new Map(plan.profiles.map((profile) => [profile.profileId, profile]))
-  const covering = [...coveringIds]
-    .map((id) => byId.get(id))
-    .filter((p): p is CoverageProfileResult => Boolean(p))
+  const covering = groupProfilesByPerson(
+    [...coveringIds]
+      .map((id) => byId.get(id))
+      .filter((p): p is CoverageProfileResult => Boolean(p)),
+  )
 
   const readiness = [...new Set([...ownIds, ...coveringIds])].map((profileId) => ({
     profileId,

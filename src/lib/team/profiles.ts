@@ -34,14 +34,19 @@ const STATUS_RANK: Record<string, number> = {
   on_track: 0,
 }
 
-export function buildTeamProfiles(payload: TeamLivePayload): TeamProfileRow[] {
+export function buildTeamProfiles(
+  payload: TeamLivePayload,
+  personKeyByProfile?: Map<string, string>,
+): TeamProfileRow[] {
   const byProfile = new Map<string, TeamProfileRow>()
   const statusRankById = new Map<string, number>()
 
   for (const person of payload.people) {
     for (const identity of person.identities) {
-      // An identity with no linked profile is its own profile row.
-      const key = identity.profileId ?? `${person.repId}:${identity.id}`
+      // One row per PERSON: duplicate/orphan profiles point at their canonical
+      // profile via person_id, so a two-channel person renders once.
+      const profileKey = identity.profileId ?? `${person.repId}:${identity.id}`
+      const key = (identity.profileId && personKeyByProfile?.get(identity.profileId)) || profileKey
       let row = byProfile.get(key)
       if (!row) {
         row = {
@@ -114,13 +119,39 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
   timezone: string
 }> {
   const supabase = await createServerSupabase()
-  const [canonical, live] = await Promise.all([
+  const [canonical, live, allProfilesRes] = await Promise.all([
     loadCanonicalProfileAssignments(orgId, { client: supabase }),
     loadTeamLive(orgId),
+    supabase
+      .from('profiles')
+      .select('id, display_name, full_name, label, person_id')
+      .eq('organization_id', orgId)
+      .limit(2000),
   ])
   const canonicalByProfile = new Map(canonical.profiles.map((profile) => [profile.profileId, profile]))
 
-  const assignedRows = buildTeamProfiles(live)
+  // Person grouping: a duplicate/orphan profile renders under its canonical
+  // person, so the directory is one row per human, never one per channel.
+  const allProfiles = (allProfilesRes.data ?? []) as Array<{
+    id: string
+    display_name: string | null
+    full_name: string | null
+    label: string | null
+    person_id: string | null
+  }>
+  const personKeyByProfile = new Map<string, string>()
+  const canonicalNameById = new Map<string, string>()
+  for (const profile of allProfiles) {
+    const key = profile.person_id ?? profile.id
+    personKeyByProfile.set(profile.id, key)
+    // The canonical profile's own name wins; otherwise keep the first seen.
+    if (!canonicalNameById.has(key)) {
+      canonicalNameById.set(key, profile.display_name ?? profile.full_name ?? profile.label ?? 'Unnamed profile')
+    }
+  }
+
+  const assignedRows = buildTeamProfiles(live, personKeyByProfile)
+    .map((row) => ({ ...row, profileName: canonicalNameById.get(row.profileId) ?? row.profileName }))
   const assignedKeys = new Set(assignedRows.map((row) => row.profileId))
   const assignedIdentityIds = new Set(
     live.people.flatMap((person) => person.identities.map((identity) => identity.id)),
@@ -136,22 +167,7 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
   const unassignedIdentities = (identityRes.data ?? []).filter(
     (identity) => !assignedIdentityIds.has(identity.id),
   )
-  const profileIds = [
-    ...new Set(
-      unassignedIdentities
-        .map((identity) => identity.profile_id)
-        .filter((id): id is string => Boolean(id)),
-    ),
-  ]
-  const profileRows = profileIds.length > 0
-    ? (await supabase.from('profiles').select('id, display_name, full_name, label').in('id', profileIds).limit(2000)).data ?? []
-    : []
-  const profileNameById = new Map(
-    profileRows.map((profile) => [
-      profile.id,
-      profile.display_name ?? profile.full_name ?? profile.label ?? 'Unnamed profile',
-    ]),
-  )
+  const profileNameById = canonicalNameById
 
   const emptyOwnership = {
     primaryRepId: null,
@@ -165,16 +181,15 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
   const unassignedRows: TeamProfileDirectoryRow[] = []
   const byProfile = new Map<string, TeamProfileDirectoryRow>()
   for (const identity of unassignedIdentities) {
-    const key = identity.profile_id ?? `identity:${identity.id}`
+    const profileKey = identity.profile_id ?? `identity:${identity.id}`
+    const key = (identity.profile_id && personKeyByProfile.get(identity.profile_id)) || profileKey
     if (assignedKeys.has(key)) continue
     let row = byProfile.get(key)
     if (!row) {
-      const canonical = identity.profile_id ? canonicalByProfile.get(identity.profile_id) : undefined
+      const canonical = identity.profile_id ? canonicalByProfile.get(key) : undefined
       row = {
         profileId: key,
-        profileName: identity.profile_id
-          ? (profileNameById.get(identity.profile_id) ?? 'Unnamed profile')
-          : identity.identity_name,
+        profileName: profileNameById.get(key) ?? identity.identity_name,
         channels: [],
         assignedReps: [],
         assignedRepIds: [],
@@ -217,16 +232,13 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
   const coveredProfileIds = new Set(
     [...assignedDirectory, ...unassignedRows].map((row) => row.profileId),
   )
-  const orphanRes = await supabase
-    .from('profiles')
-    .select('id, display_name, full_name, label')
-    .eq('organization_id', orgId)
-    .limit(2000)
-  const orphanRows: TeamProfileDirectoryRow[] = (orphanRes.data ?? [])
-    .filter((profile) => !coveredProfileIds.has(profile.id))
-    .map((profile) => ({
-      profileId: profile.id,
-      profileName: profile.display_name ?? profile.full_name ?? profile.label ?? 'Unnamed profile',
+  const orphanRows: TeamProfileDirectoryRow[] = allProfiles
+    .filter((profile) => !coveredProfileIds.has(personKeyByProfile.get(profile.id) ?? profile.id))
+    .map((profile) => {
+      const key = personKeyByProfile.get(profile.id) ?? profile.id
+      return {
+      profileId: key,
+      profileName: canonicalNameById.get(key) ?? 'Unnamed profile',
       channels: [],
       assignedReps: [],
       assignedRepIds: [],
@@ -243,7 +255,8 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
       coverageState: 'UNASSIGNED',
       needsReview: true,
       reviewReasons: ['Profile has no channel identity'],
-    }))
+      }
+    })
 
   const rows = [...assignedDirectory, ...unassignedRows, ...orphanRows].sort((a, b) =>
     a.profileName.localeCompare(b.profileName),

@@ -57,6 +57,8 @@ export function isAutoCoverEligible(backup: Pick<BackupCandidate, 'eligible' | '
 
 export interface CoverageProfileInput {
   profileId: string
+  /** Canonical person this profile belongs to (self when it is the canonical). */
+  personId?: string | null
   name: string
   channels: RevenueIdentityChannel[]
   /** Active revenue identities on this profile — the workspace deep link. */
@@ -146,6 +148,8 @@ export interface BackupCandidate {
 
 export interface CoverageProfileResult {
   profileId: string
+  /** Canonical person key — the directory and Rep Home group by this. */
+  personId: string | null
   name: string
   channels: RevenueIdentityChannel[]
   identityIds: string[]
@@ -505,6 +509,7 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
 
     profiles.push({
       profileId: profile.profileId,
+      personId: profile.personId ?? null,
       name: profile.name,
       channels: profile.channels,
       identityIds: profile.identityIds,
