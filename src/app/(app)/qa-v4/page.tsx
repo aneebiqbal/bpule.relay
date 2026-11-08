@@ -39,6 +39,7 @@ const personal: RepWorkspaceData = {
   day: {
     totalRemaining: 12,
     repliesWaiting: 2,
+    waitingOnClient: 0,
     followUpsDue: 1,
     outreachRemaining: 9,
     isComplete: false,

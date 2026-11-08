@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path'
 import {
   chatViewMatches,
   countChatViews,
+  loadChatQueue,
   type ChatRow,
   type ChatView,
 } from '@/lib/operations/chat-queue'
@@ -155,6 +156,68 @@ describe('ACTIVE_COVERAGE_INBOX_INCLUDED', () => {
       { id: 'covered-1', profileId: 'covered-prof' },
     ]
     expect(leadBelongsToAnyWorkspace({ revenueIdentityId: 'covered-1', senderProfileId: null }, identities)).toBe(true)
+  })
+})
+
+describe('REP_HOME_INBOX_COUNT_DESTINATION_PARITY', () => {
+  it('REP_HOME_INBOX_COUNT_DESTINATION_PARITY: the Rep Home count equals the Inbox destination count', async () => {
+    const { client } = seedInbox()
+    const scope = {
+      orgId: ORG,
+      repId: REP,
+      executableIdentities: [
+        { id: 'id-1', profileId: 'prof-1' },
+        { id: 'id-2', profileId: 'prof-2' },
+      ] as const,
+      coveredIdentityIds: ['id-2'],
+    }
+    const repHome = await getInboxCountsForRep(client as never, scope, NOW)
+    const inbox = await loadChatQueue(client as never, {
+      orgId: ORG,
+      repIds: [REP],
+      executableIdentities: [...scope.executableIdentities],
+      coveredIdentityIds: scope.coveredIdentityIds,
+      view: 'all',
+      managerViews: false,
+    }, NOW)
+    expect(repHome.needsReply).toBe(inbox.counts.waiting_me ?? 0)
+    expect(repHome.waitingOnClient).toBe(inbox.counts.waiting_them ?? 0)
+    expect(repHome.followups).toBe(inbox.counts.followups ?? 0)
+    expect(repHome.all).toBe(inbox.counts.all ?? 0)
+    // The destination rows are exactly the filtered rows.
+    expect(inbox.rows.filter((r) => chatViewMatches(r, 'waiting_me'))).toHaveLength(repHome.needsReply)
+  })
+})
+
+describe('INBOX_COVERAGE_EXECUTION_SCOPE', () => {
+  it('INBOX_COVERAGE_EXECUTION_SCOPE: the covering rep executes the covered profile\'s actionable work', async () => {
+    const { client } = seedInbox()
+    // Madiha covers id-2, whose lead l4 is owned by Dawood. Coverage is shared
+    // execution: the covering rep sees it, and the primary still owns it.
+    const covering = await getInboxCountsForRep(client as never, {
+      orgId: ORG,
+      repId: 'rep-3',
+      executableIdentities: [{ id: 'id-2', profileId: 'prof-2' }],
+      coveredIdentityIds: ['id-2'],
+    }, NOW)
+    expect(covering.needsReply).toBe(1)
+
+    const primary = await getInboxCountsForRep(client as never, {
+      orgId: ORG,
+      repId: PRIMARY_REP,
+      executableIdentities: [{ id: 'id-2', profileId: 'prof-2' }],
+      coveredIdentityIds: [],
+    }, NOW)
+    expect(primary.needsReply).toBe(1)
+
+    // A rep with no assignment and no coverage never sees the covered lead.
+    const outsider = await getInboxCountsForRep(client as never, {
+      orgId: ORG,
+      repId: 'rep-4',
+      executableIdentities: [{ id: 'id-2', profileId: 'prof-2' }],
+      coveredIdentityIds: [],
+    }, NOW)
+    expect(outsider.needsReply).toBe(0)
   })
 })
 

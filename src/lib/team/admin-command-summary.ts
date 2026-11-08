@@ -370,6 +370,8 @@ export function assembleAdminCommandCenter(input: {
   yesterday?: AdminYesterday
   teamTarget?: number
   teamCompleted?: number
+  /** Canonical org-wide Inbox counts — the one truth for `repliesWaiting`. */
+  inboxCounts?: { needsReply: number }
 }): AdminCommandCenterData {
   const team = assembleManagerHomeTeamData({
     teamName: input.orgName,
@@ -410,7 +412,7 @@ export function assembleAdminCommandCenter(input: {
     isOwner: input.isOwner,
     health: {
       activeOpportunities,
-      repliesWaiting: team.metrics.repliesWaiting,
+      repliesWaiting: input.inboxCounts?.needsReply ?? team.metrics.repliesWaiting,
       repliesCritical,
       followUpsOverdue: team.metrics.followUpsOverdue,
       overdueTasks: [...(input.overdueTasksByRep?.values() ?? [])].reduce((sum, n) => sum + n, 0),

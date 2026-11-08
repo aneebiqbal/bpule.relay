@@ -30,6 +30,7 @@ import {
 import { loadOutcomeEventCounts } from '@/lib/operations/outcome-events'
 import { normalizeChannel } from '@/lib/profiles/assigned-profiles'
 import { groupMetrics, identityResolver, PERFORMANCE_ACTION_TYPES, type PerfEvent } from '@/lib/operations/performance'
+import { getInboxCountsForOrg } from '@/lib/operations/inbox-counts'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { taskCompletionCountsSql } from '@/lib/analytics/aggregates'
 import { buildAdminExecutionByRep } from '@/lib/admin/v3-command-present'
@@ -140,7 +141,7 @@ export async function loadAdminCommandCenter(): Promise<{
     const weekStart = new Date(dayRange.start)
     weekStart.setUTCDate(weekStart.getUTCDate() - 7)
 
-    const [teamDay, teamLiveFull, leadsResult, identitiesResult, assignmentsResult, profileEventsResult, activityResult, repsResult, overdueTasksByRep, unassignedTasks, waitingAndTransfers, unreadTaskUpdates, todayOutcomes, weekOutcomes, yesterdayAccountabilityResult, todayNewLeadsResult, yesterdayNewLeadsResult, yesterdayEventsResult, yesterdayOutcomes] =
+    const [teamDay, teamLiveFull, leadsResult, identitiesResult, assignmentsResult, profileEventsResult, activityResult, repsResult, overdueTasksByRep, unassignedTasks, waitingAndTransfers, unreadTaskUpdates, todayOutcomes, weekOutcomes, yesterdayAccountabilityResult, todayNewLeadsResult, yesterdayNewLeadsResult, yesterdayEventsResult, yesterdayOutcomes, inboxCounts] =
       await perfTrace('admin:main-batch', () => Promise.all([
         loadTeamDay(),
         loadTeamLive(ctx.orgId),
@@ -217,6 +218,7 @@ export async function loadAdminCommandCenter(): Promise<{
           .lt('occurred_at', yesterdayRange.end)
           .limit(5000),
         loadOutcomeEventCounts(supabase, { orgId: ctx.orgId, repIds: null, start: yesterdayRange.start, end: yesterdayRange.end }),
+        getInboxCountsForOrg(supabase, { orgId: ctx.orgId }).catch(() => null),
       ]))
 
     const allowed = new Set(teamDay.reps.map((r) => r.repId))
@@ -420,6 +422,7 @@ export async function loadAdminCommandCenter(): Promise<{
       yesterday,
       teamTarget,
       teamCompleted,
+      inboxCounts: inboxCounts ?? undefined,
     })
 
     return {

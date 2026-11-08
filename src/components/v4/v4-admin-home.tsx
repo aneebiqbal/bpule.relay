@@ -368,7 +368,7 @@ export function V4AdminHome({
                 </Link>
               )}
               {data.health.unreadTaskUpdates > 0 && (
-                <Link href="/tasks?source=ASSIGNED" className="font-medium text-ink hover:underline">
+                <Link href="/tasks?source=ASSIGNED&view=all" className="font-medium text-ink hover:underline">
                   {data.health.unreadTaskUpdates} unread update{data.health.unreadTaskUpdates === 1 ? '' : 's'}
                 </Link>
               )}

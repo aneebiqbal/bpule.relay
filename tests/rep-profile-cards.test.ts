@@ -186,6 +186,7 @@ describe('REP_PROFILE_CARD_ATTENTION_PARITY', () => {
     expect(buildAttentionLine({ replies: 0, followUps: 0, tasks: 0 })).toEqual({
       text: 'Inbox clear · No overdue work',
       tone: 'neutral',
+      parts: [],
     })
   })
 })

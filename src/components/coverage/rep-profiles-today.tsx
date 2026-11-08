@@ -26,6 +26,7 @@ import {
   statusLabel,
   statusTone,
   summarizeProfileCards,
+  type AttentionPart,
   type ProfileCardModel,
   type ProfileCardTone,
 } from '@/lib/rep-home/profile-card-view'
@@ -256,6 +257,16 @@ function ProfileCard({ card }: { card: ProfileCardModel }) {
   const quiet = hasTarget && progress?.status === 'COMPLETE'
   const coveringUntil =
     kind === 'covering' && profile.activeCoverageUntil ? formatDate(profile.activeCoverageUntil) : null
+  // Each attention segment deep-links to its exact Inbox dataset, preserving
+  // the profile filter so the destination equals the number.
+  const profileFilter = profile.identityIds[0]
+    ? `&profile=${encodeURIComponent(profile.identityIds[0])}`
+    : ''
+  const attentionHrefFor = (kind: AttentionPart['kind']): string | null => {
+    if (kind === 'replies') return `/chats?view=waiting_me${profileFilter}`
+    if (kind === 'followUps') return `/chats?view=followups${profileFilter}`
+    return null
+  }
 
   return (
     <li className={cn('rounded-xl bg-bone-raised p-3 ring-1 ring-line/70', quiet && 'opacity-75')}>
@@ -328,7 +339,30 @@ function ProfileCard({ card }: { card: ProfileCardModel }) {
         )}
       >
         {attention.tone === 'warning' && <AlertTriangle className="size-3.5 shrink-0" aria-hidden />}
-        <span className="min-w-0">{attention.text}</span>
+        <span className="min-w-0">
+          {attention.parts.length === 0 ? (
+            attention.text
+          ) : (
+            attention.parts.map((part, index) => {
+              const href = attentionHrefFor(part.kind)
+              return (
+                <span key={part.kind}>
+                  {index > 0 && <span> · </span>}
+                  {href ? (
+                    <Link
+                      href={href}
+                      className="underline-offset-2 transition-colors hover:text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
+                    >
+                      {part.label}
+                    </Link>
+                  ) : (
+                    part.label
+                  )}
+                </span>
+              )
+            })
+          )}
+        </span>
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">

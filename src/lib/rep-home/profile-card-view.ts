@@ -133,9 +133,17 @@ export function buildActivityBreakdown(
   }
 }
 
+export interface AttentionPart {
+  kind: 'replies' | 'followUps' | 'tasks'
+  count: number
+  label: string
+}
+
 export interface AttentionLine {
   text: string
   tone: 'warning' | 'neutral'
+  /** Same truth as structured parts, so each segment can deep-link to its exact dataset. */
+  parts: AttentionPart[]
 }
 
 /** Canonical Inbox + assigned-work truth, presented verbatim. */
@@ -144,12 +152,18 @@ export function buildAttentionLine(work: {
   followUps: number
   tasks: number
 }): AttentionLine {
-  const parts: string[] = []
-  if (work.replies > 0) parts.push(`${work.replies} ${work.replies === 1 ? 'reply' : 'replies'} waiting`)
-  if (work.followUps > 0) parts.push(`${work.followUps} follow-up${work.followUps === 1 ? '' : 's'}`)
-  if (work.tasks > 0) parts.push(`${work.tasks} task${work.tasks === 1 ? '' : 's'}`)
-  if (parts.length === 0) return { text: 'Inbox clear · No overdue work', tone: 'neutral' }
-  return { text: parts.join(' · '), tone: 'warning' }
+  const parts: AttentionPart[] = []
+  if (work.replies > 0) {
+    parts.push({ kind: 'replies', count: work.replies, label: `${work.replies} ${work.replies === 1 ? 'reply' : 'replies'} waiting` })
+  }
+  if (work.followUps > 0) {
+    parts.push({ kind: 'followUps', count: work.followUps, label: `${work.followUps} follow-up${work.followUps === 1 ? '' : 's'}` })
+  }
+  if (work.tasks > 0) {
+    parts.push({ kind: 'tasks', count: work.tasks, label: `${work.tasks} task${work.tasks === 1 ? '' : 's'}` })
+  }
+  if (parts.length === 0) return { text: 'Inbox clear · No overdue work', tone: 'neutral', parts }
+  return { text: parts.map((part) => part.label).join(' · '), tone: 'warning', parts }
 }
 
 /** Ownership line — never internal assignment terminology. */

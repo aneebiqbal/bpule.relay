@@ -89,6 +89,22 @@ export function V4RepHome({
               <span className="font-medium text-ink">{data.day.repliesWaiting}</span>
               <span className="text-stone"> replies waiting</span>
             </Link>
+            <span className="hidden h-3 w-px bg-line sm:block" aria-hidden />
+            <Link
+              href="/chats?view=waiting_them"
+              className="text-[12px] text-graphite transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
+            >
+              <span className="font-medium text-ink">{data.day.waitingOnClient}</span>
+              <span className="text-stone"> waiting on clients</span>
+            </Link>
+            <span className="hidden h-3 w-px bg-line sm:block" aria-hidden />
+            <Link
+              href="/chats?view=followups"
+              className="text-[12px] text-graphite transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
+            >
+              <span className="font-medium text-ink">{data.day.followUpsDue}</span>
+              <span className="text-stone"> follow-ups due</span>
+            </Link>
           </>
         }
         actions={
@@ -126,7 +142,7 @@ export function V4RepHome({
               hint="Ranked in canonical order"
               action={
                 <Link
-                  href="/tasks"
+                  href="/tasks?view=today"
                   className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
                 >
                   My work <ChevronRight className="size-3.5" aria-hidden />

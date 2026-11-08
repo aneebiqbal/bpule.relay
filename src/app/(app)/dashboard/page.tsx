@@ -431,6 +431,7 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     day: {
       ...workspace.day,
       repliesWaiting: inboxCounts.needsReply,
+      waitingOnClient: inboxCounts.waitingOnClient,
       followUpsDue: inboxCounts.followups,
       totalRemaining: workspace.targetSummary.totalRemaining + inboxCounts.needsReply + inboxCounts.followups,
       isComplete: workspace.targetSummary.totalRemaining === 0 && inboxCounts.needsReply === 0 && inboxCounts.followups === 0,

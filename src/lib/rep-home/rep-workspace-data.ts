@@ -54,7 +54,10 @@ export interface RepWorkspaceData {
   }
   day: {
     totalRemaining: number
+    /** Canonical Inbox authority: latest meaningful message is client inbound. */
     repliesWaiting: number
+    /** Canonical Inbox authority: latest meaningful message is outbound. */
+    waitingOnClient: number
     followUpsDue: number
     outreachRemaining: number
     isComplete: boolean
