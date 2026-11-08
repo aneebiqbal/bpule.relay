@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { InterventionMenu } from '@/components/operations/intervention-menu'
+import { AssignTaskButton } from '@/components/operations/assign-task-button'
 import { NotesPanel } from '@/components/operations/notes-panel'
 import { InlineEmpty, ageLabel, relativeTime } from '@/components/operations/ops-primitives'
 import { CONVERSATION_STATE_LABEL } from '@/lib/operations/conversations'
@@ -181,11 +182,21 @@ export function ChatIntelligencePanel({
               <li key={t.id}>
                 <Link href={`/tasks?task=assigned:${t.id}`} className="flex justify-between gap-2 text-[12px] hover:underline">
                   <span className="truncate text-ink">{t.title}</span>
-                  <span className="shrink-0 text-stone">{t.dueAt ? relativeTime(t.dueAt, clock).replace(' ago', ' overdue') : t.priority.toLowerCase()}</span>
+                  <span className="shrink-0 text-stone">{t.dueAt ? relativeTime(t.dueAt, clock).replace(' ago', 'overdue') : t.priority.toLowerCase()}</span>
                 </Link>
               </li>
             ))}
           </ul>
+        )}
+        {canIntervene && reps.length > 0 && (
+          <div className="mt-2 border-t border-line/70 pt-2">
+            <AssignTaskButton
+              reps={reps}
+              defaultLeadId={intel.leadId}
+              defaultProfileId={intel.profileId ?? undefined}
+              defaultTitle={intel.company ? `Follow up with ${intel.company}` : undefined}
+            />
+          </div>
         )}
       </Section>
 

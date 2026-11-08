@@ -12,6 +12,7 @@ import type { DbClient } from '@/lib/db/types'
 import type { AuthContext } from '@/lib/auth/organization'
 import { isMissingRelation } from '@/lib/operations/db-errors'
 import { repInScope, type OperationalScope } from '@/lib/operations/scope'
+import { notifyOnce } from '@/lib/notifications/deliver'
 
 export type NoteSubjectType = 'LEAD' | 'ACCOUNT' | 'REP' | 'TASK'
 
@@ -195,7 +196,43 @@ export async function createNote(
     throw new NoteError(error?.message ?? 'Could not save note.', 500)
   }
   await audit(client, auth, (data as NoteDbRow).id, 'NOTE_CREATED', null)
+  if (input.subjectType === 'TASK') {
+    // The task's assignee and creator hear about the discussion. The
+    // notification's `read` flag is the unread state — no second model.
+    await notifyTaskCommentParticipants(client, auth, input.subjectId, (data as NoteDbRow).id, (data as NoteDbRow).body)
+  }
   return (await toNotes(client, auth, [data as NoteDbRow]))[0]
+}
+
+/** Notify the other task participants about a new internal comment. */
+async function notifyTaskCommentParticipants(
+  client: DbClient,
+  auth: AuthContext,
+  taskId: string,
+  noteId: string,
+  body: string,
+): Promise<void> {
+  const { data: task } = await client
+    .from('assigned_tasks')
+    .select('assignee_rep_id, created_by_rep_id')
+    .eq('organization_id', auth.orgId)
+    .eq('id', taskId)
+    .maybeSingle()
+  if (!task) return
+  const recipients = new Set<string>([task.assignee_rep_id, task.created_by_rep_id].filter(Boolean))
+  recipients.delete(auth.repId)
+  const preview = body.length > 140 ? `${body.slice(0, 140)}…` : body
+  for (const recipientId of recipients) {
+    await notifyOnce(client, {
+      organizationId: auth.orgId,
+      recipientId,
+      type: 'task_comment',
+      title: 'New internal comment',
+      body: preview,
+      link: `/tasks?task=assigned:${taskId}`,
+      dedupeKey: `task_comment:${noteId}:${recipientId}`,
+    })
+  }
 }
 
 async function loadNoteRow(client: DbClient, auth: AuthContext, id: string): Promise<NoteDbRow> {

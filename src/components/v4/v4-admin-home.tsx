@@ -351,6 +351,38 @@ export function V4AdminHome({
               </Link>
             }
           />
+          {(data.health.overdueTasks > 0
+            || data.health.waitingTasks > 0
+            || data.health.unreadTaskUpdates > 0
+            || data.health.transferRequests > 0) && (
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-bone px-3 py-2.5 text-[12px] text-graphite ring-1 ring-line/70">
+              <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Team work</span>
+              {data.health.overdueTasks > 0 && (
+                <Link href="/tasks?view=overdue" className="font-medium text-status-danger hover:underline">
+                  {data.health.overdueTasks} overdue
+                </Link>
+              )}
+              {data.health.waitingTasks > 0 && (
+                <Link href="/tasks?view=waiting" className="font-medium text-ink hover:underline">
+                  {data.health.waitingTasks} waiting
+                </Link>
+              )}
+              {data.health.unreadTaskUpdates > 0 && (
+                <Link href="/tasks?source=ASSIGNED" className="font-medium text-ink hover:underline">
+                  {data.health.unreadTaskUpdates} unread update{data.health.unreadTaskUpdates === 1 ? '' : 's'}
+                </Link>
+              )}
+              {data.health.transferRequests > 0 && (
+                <Link href="/tasks?view=transfers" className="font-medium text-status-warning hover:underline">
+                  {data.health.transferRequests} transfer request{data.health.transferRequests === 1 ? '' : 's'}
+                </Link>
+              )}
+              <Link href="/tasks?scope=team" className="ml-auto font-medium text-ink hover:underline">
+                Open Team Work
+              </Link>
+            </div>
+          )}
+
           {attention.length > 0 ? (
             <ul className="mt-4 grid gap-2 sm:grid-cols-2">
               {attention.map((row) => (

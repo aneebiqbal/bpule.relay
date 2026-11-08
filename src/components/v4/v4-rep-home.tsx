@@ -48,6 +48,10 @@ export function V4RepHome({
   const unified = useMemo(() => data.unifiedTasks ?? [], [data.unifiedTasks])
   const assignedOpen = useMemo(() => selectAssignedOpenTasks(unified), [unified])
   const assignedOverdue = useMemo(() => selectAssignedOverdueTasks(unified), [unified])
+  const assignedUnread = useMemo(
+    () => assignedOpen.reduce((sum, task) => sum + (task.unreadCount ?? 0), 0),
+    [assignedOpen],
+  )
   // Manager-assigned work is a separate kind: it never appears in Do this next.
   const nextActions = useMemo(
     () => unified.filter((task) => task.source !== 'ASSIGNED').slice(0, 5),
@@ -177,7 +181,7 @@ export function V4RepHome({
             <V4PanelHeader
               eyebrow="Assigned to me"
               title="Work your manager gave you"
-              hint={`${assignedOpen.length} open${assignedOverdue.length > 0 ? ` · ${assignedOverdue.length} overdue` : ''}`}
+              hint={`${assignedOpen.length} open${assignedOverdue.length > 0 ? ` · ${assignedOverdue.length} overdue` : ''}${assignedUnread > 0 ? ` · ${assignedUnread} unread` : ''}`}
               action={
                 <Link
                   href="/tasks?source=ASSIGNED&view=all"
@@ -209,7 +213,22 @@ export function V4RepHome({
                             ? `Assigned by ${task.createdByName}`
                             : [task.companyName, task.profileName].filter(Boolean).join(' · ') || 'Assigned to you'}
                         </p>
-                        <p suppressHydrationWarning className="mt-1 text-[11px] text-stone">
+                        <p className="mt-1 truncate text-[11px] text-stone">
+                          {(task.unreadCount ?? 0) > 0 && task.latestComment ? (
+                            <>
+                              <span className="font-medium text-ink">New comment</span>
+                              {' · '}
+                              <span suppressHydrationWarning>{relativeWait(task.latestComment.createdAt)}</span>
+                            </>
+                          ) : task.status === 'WAITING' ? (
+                            `Waiting${task.waitingOn ? ` · ${task.waitingOn}` : ''}`
+                          ) : task.latestComment ? (
+                            `${task.latestComment.authorName ?? 'Update'}: ${task.latestComment.body}`
+                          ) : (
+                            'No discussion yet'
+                          )}
+                        </p>
+                        <p suppressHydrationWarning className="mt-0.5 text-[11px] text-stone">
                           {task.dueAt ? `Due ${relativeWait(task.dueAt)}` : `Assigned ${relativeWait(task.createdAt)}`}
                         </p>
                       </div>

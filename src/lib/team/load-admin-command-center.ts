@@ -24,6 +24,8 @@ import type { ManagerActivityItem } from '@/lib/team/manager-home-summary'
 import {
   countOverdueAssignedByRep,
   countUnassignedOpenTasks,
+  countWaitingAndTransferTasks,
+  listUnreadTaskCommentCounts,
 } from '@/lib/tasks/assigned-tasks'
 import { loadOutcomeEventCounts } from '@/lib/operations/outcome-events'
 import { normalizeChannel } from '@/lib/profiles/assigned-profiles'
@@ -56,6 +58,9 @@ function emptyAdmin(orgName: string, isOwner: boolean): AdminCommandCenterData {
       repliesCritical: 0,
       followUpsOverdue: 0,
       overdueTasks: 0,
+      waitingTasks: 0,
+      transferRequests: 0,
+      unreadTaskUpdates: 0,
       meetingsThisWeek: 0,
       wins: 0,
     },
@@ -135,7 +140,7 @@ export async function loadAdminCommandCenter(): Promise<{
     const weekStart = new Date(dayRange.start)
     weekStart.setUTCDate(weekStart.getUTCDate() - 7)
 
-    const [teamDay, teamLiveFull, leadsResult, identitiesResult, assignmentsResult, profileEventsResult, activityResult, repsResult, overdueTasksByRep, unassignedTasks, todayOutcomes, weekOutcomes, yesterdayAccountabilityResult, todayNewLeadsResult, yesterdayNewLeadsResult, yesterdayEventsResult, yesterdayOutcomes] =
+    const [teamDay, teamLiveFull, leadsResult, identitiesResult, assignmentsResult, profileEventsResult, activityResult, repsResult, overdueTasksByRep, unassignedTasks, waitingAndTransfers, unreadTaskUpdates, todayOutcomes, weekOutcomes, yesterdayAccountabilityResult, todayNewLeadsResult, yesterdayNewLeadsResult, yesterdayEventsResult, yesterdayOutcomes] =
       await perfTrace('admin:main-batch', () => Promise.all([
         loadTeamDay(),
         loadTeamLive(ctx.orgId),
@@ -179,6 +184,8 @@ export async function loadAdminCommandCenter(): Promise<{
         supabase.from('reps').select('id, name').eq('organization_id', ctx.orgId),
         countOverdueAssignedByRep(supabase, ctx.orgId, null),
         countUnassignedOpenTasks(supabase, ctx.orgId),
+        countWaitingAndTransferTasks(supabase, ctx.orgId),
+        listUnreadTaskCommentCounts(supabase, ctx),
         loadOutcomeEventCounts(supabase, { orgId: ctx.orgId, repIds: null, start: dayRange.start, end: dayRange.end }),
         loadOutcomeEventCounts(supabase, { orgId: ctx.orgId, repIds: null, start: weekStart.toISOString(), end: dayRange.end }),
         supabase
@@ -404,6 +411,9 @@ export async function loadAdminCommandCenter(): Promise<{
       wins,
       overdueTasksByRep,
       unassignedTasks,
+      waitingTasks: waitingAndTransfers.waiting,
+      transferRequests: waitingAndTransfers.transferRequests,
+      unreadTaskUpdates: [...unreadTaskUpdates.values()].reduce((sum, n) => sum + n, 0),
       outcomeEventsByRep: todayOutcomes.byActor,
       profileExecution,
       movement,

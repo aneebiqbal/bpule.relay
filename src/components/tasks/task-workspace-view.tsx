@@ -18,10 +18,13 @@ import { assignedTaskIdFromUnified, isDerivedTaskId } from '@/lib/tasks/map-unif
 import { AssignTaskDialog } from '@/components/tasks/assign-task-dialog'
 import { TaskDetailDrawer } from '@/components/tasks/task-detail-drawer'
 
-const TABS: Array<{ id: UnifiedTaskTab; label: string }> = [
-  { id: 'today', label: 'Today' },
-  { id: 'overdue', label: 'Overdue' },
+type WorkView = UnifiedTaskTab | 'transfers'
+
+const TABS: Array<{ id: WorkView; label: string }> = [
+  { id: 'today', label: 'Active' },
   { id: 'waiting', label: 'Waiting' },
+  { id: 'overdue', label: 'Overdue' },
+  { id: 'transfers', label: 'Transfers' },
   { id: 'upcoming', label: 'Upcoming' },
   { id: 'completed', label: 'Completed' },
   { id: 'all', label: 'All' },
@@ -57,6 +60,46 @@ function dueLabel(task: UnifiedTask, timeZone: string, now: number): string {
   if (hours < 24) return 'Today'
   if (hours < 48) return 'Tomorrow'
   return new Date(task.dueAt).toLocaleDateString('en-US', { timeZone, month: 'short', day: 'numeric' })
+}
+
+/**
+ * Bounded latest-comment projection for a task row. Never loads the thread —
+ * the server sends one preview per task.
+ */
+function LatestComment({ task, now }: { task: UnifiedTask; now: number }) {
+  const stamp = task.latestComment?.createdAt ?? task.updatedAt ?? task.createdAt
+  if (task.unreadCount) {
+    return (
+      <span className="mt-1 flex items-center gap-1.5 text-[11px]">
+        <span className="shrink-0 rounded-full bg-orange/15 px-1.5 py-0.5 text-[10px] font-medium text-ink">
+          {task.unreadCount} new
+        </span>
+        {task.latestComment && (
+          <span className="min-w-0 flex-1 truncate text-graphite">
+            {task.latestComment.authorName ? `${task.latestComment.authorName}: ` : ''}
+            {task.latestComment.body}
+          </span>
+        )}
+        <span suppressHydrationWarning className="shrink-0 text-stone">
+          {relativeTime(stamp, now)}
+        </span>
+      </span>
+    )
+  }
+  if (task.latestComment) {
+    return (
+      <span className="mt-1 flex items-center gap-1.5 text-[11px] text-graphite">
+        <span className="min-w-0 flex-1 truncate">
+          {task.latestComment.authorName ? `${task.latestComment.authorName}: ` : ''}
+          {task.latestComment.body}
+        </span>
+        <span suppressHydrationWarning className="shrink-0 text-stone">
+          {relativeTime(task.latestComment.createdAt, now)}
+        </span>
+      </span>
+    )
+  }
+  return <span className="mt-1 block text-[11px] text-stone">No discussion yet</span>
 }
 
 function attentionCount(tasks: UnifiedTask[], timeZone: string, now: number): number {
@@ -101,10 +144,10 @@ export function TaskWorkspaceView({
   const viewParam = searchParams.get('view')
   const openTaskId = searchParams.get('task')
   // Deep-linked task (?task=…) opens on All so it is always visible.
-  const view: UnifiedTaskTab = openTaskId
+  const view: WorkView = openTaskId
     ? 'all'
     : TABS.some((t) => t.id === viewParam)
-      ? (viewParam as UnifiedTaskTab)
+      ? (viewParam as WorkView)
       : 'today'
   const [assignee, setAssignee] = useState<string>('ALL')
   const [priority, setPriority] = useState<UnifiedTaskPriority | 'ALL'>('ALL')
@@ -156,23 +199,29 @@ export function TaskWorkspaceView({
   const teamMemberIds = team === 'ALL' ? null : new Set(teams.find((t) => t.id === team)?.memberIds ?? [])
 
   const counts = useMemo(() => {
-    const out = {} as Record<UnifiedTaskTab, number>
+    const out = {} as Record<WorkView, number>
     for (const t of TABS) {
-      out[t.id] = t.id === 'all'
-        ? tasks.length
-        : tasks.filter((x) => classifyUnifiedTaskTab(x, now, timeZone) === t.id).length
+      out[t.id] =
+        t.id === 'all'
+          ? tasks.length
+          : t.id === 'transfers'
+            ? tasks.filter((x) => x.transfer && x.status !== 'DONE' && x.status !== 'CANCELLED').length
+            : tasks.filter((x) => classifyUnifiedTaskTab(x, now, timeZone) === t.id).length
     }
     return out
   }, [tasks, timeZone, now])
 
   const filtered = useMemo(() => {
-    return filterUnifiedTasks(tasks, {
-      tab: view,
-      priority,
-      source,
-      assigneeRepId: showAssignee ? assignee : 'ALL',
-      timeZone,
-    }).filter((t) => {
+    const base = view === 'transfers'
+      ? tasks.filter((t) => Boolean(t.transfer) && t.status !== 'DONE' && t.status !== 'CANCELLED')
+      : filterUnifiedTasks(tasks, {
+          tab: view,
+          priority,
+          source,
+          assigneeRepId: showAssignee ? assignee : 'ALL',
+          timeZone,
+        })
+    return base.filter((t) => {
       if (teamMemberIds && !teamMemberIds.has(t.assigneeRepId)) return false
       if (due !== 'ALL') {
         const bucket = classifyUnifiedTaskTab(t, now, timeZone)
@@ -424,7 +473,13 @@ export function TaskWorkspaceView({
                         >
                           {task.title}
                         </button>
+                        {(task.unreadCount ?? 0) > 0 && (
+                          <span className="ml-1.5 inline-block rounded-full bg-orange/15 px-1.5 py-0.5 align-middle text-[10px] font-medium text-ink">
+                            {task.unreadCount} new
+                          </span>
+                        )}
                         <p className="text-[11px] text-graphite">{task.reason}</p>
+                        {task.source === 'ASSIGNED' && <LatestComment task={task} now={now} />}
                       </td>
                       <td className="px-3 py-2.5 text-graphite">{task.companyName ?? '—'}</td>
                       {showAssignee && (
@@ -515,6 +570,7 @@ export function TaskWorkspaceView({
                       Updated {relativeTime(task.updatedAt ?? task.createdAt, now)}
                     </span>
                   </p>
+                  {task.source === 'ASSIGNED' && <LatestComment task={task} now={now} />}
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <span suppressHydrationWarning className={cn('text-[11px]', isOverdue(task) ? 'font-medium text-status-danger' : 'text-stone')}>
                       {dueLabel(task, timeZone, now)}

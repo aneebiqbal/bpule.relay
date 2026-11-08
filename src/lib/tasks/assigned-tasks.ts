@@ -15,6 +15,7 @@ export type TaskEventType =
   | 'TASK_REOPENED'
   | 'TASK_TRANSFER_REQUESTED'
   | 'TASK_TRANSFER_APPROVED'
+  | 'TASK_TRANSFER_DECLINED'
   | 'TASK_TRANSFER_CANCELLED'
 
 /** What a WAITING task is blocked on. */
@@ -330,6 +331,7 @@ export async function setAssignedTaskWaiting(
   auth: AuthContext,
   taskId: string,
   waitingOn: TaskWaitingOn | null,
+  note?: string | null,
 ): Promise<AssignedTaskRow> {
   const { data: current, error: loadError } = await client
     .from('assigned_tasks')
@@ -350,6 +352,7 @@ export async function setAssignedTaskWaiting(
     .update({
       status: waitingOn ? 'WAITING' : 'OPEN',
       waiting_on: waitingOn,
+      waiting_note: waitingOn ? (note?.trim() ? note.trim() : null) : null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', taskId)
@@ -364,7 +367,51 @@ export async function setAssignedTaskWaiting(
     taskId: row.id,
     eventType: 'TASK_WAITING',
     actorRepId: auth.repId,
-    metadata: { waiting_on: waitingOn ?? null, status: row.status },
+    metadata: { waiting_on: waitingOn ?? null, status: row.status, note: row.waiting_note ?? null },
+  })
+
+  return row
+}
+
+/** Resume blocked work: WAITING → IN_PROGRESS. A comment alone never resumes. */
+export async function resumeAssignedTask(
+  client: DbClient,
+  auth: AuthContext,
+  taskId: string,
+): Promise<AssignedTaskRow> {
+  const { data: current, error: loadError } = await client
+    .from('assigned_tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .maybeSingle()
+  if (loadError || !current) throw new Error('Task not found')
+  if (current.status !== 'WAITING') throw new Error('Only waiting tasks can be resumed')
+  if (!(await canOperateOnTask(client, auth, current as AssignedTaskRow))) {
+    throw new Error('Not allowed to resume this task')
+  }
+
+  const { data, error } = await client
+    .from('assigned_tasks')
+    .update({
+      status: 'IN_PROGRESS',
+      waiting_on: null,
+      waiting_note: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .select('*')
+    .single()
+  if (error) throw error
+  const row = data as AssignedTaskRow
+
+  await emitTaskEvent(client, {
+    organizationId: auth.orgId,
+    taskId: row.id,
+    eventType: 'TASK_STARTED',
+    actorRepId: auth.repId,
+    metadata: { resumed_from: 'WAITING' },
   })
 
   return row
@@ -564,6 +611,65 @@ export async function cancelAssignedTaskTransfer(
     taskId: row.id,
     eventType: 'TASK_TRANSFER_CANCELLED',
     actorRepId: auth.repId,
+  })
+
+  return row
+}
+
+/**
+ * Decline a pending transfer request. The current assignee is preserved and
+ * the request is recorded as declined — the requester and the proposed target
+ * both hear about it.
+ */
+export async function declineAssignedTaskTransfer(
+  client: DbClient,
+  auth: AuthContext,
+  taskId: string,
+): Promise<AssignedTaskRow> {
+  if (!auth.isManager && !auth.isAdmin && !auth.isOwner) {
+    throw new Error('Only managers and admins can decline a transfer')
+  }
+  const { data: current, error: loadError } = await client
+    .from('assigned_tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .maybeSingle()
+  if (loadError || !current) throw new Error('Task not found')
+  const task = current as AssignedTaskRow
+  if (!task.transfer_requested_to) throw new Error('No transfer request is pending')
+
+  const { data, error } = await client
+    .from('assigned_tasks')
+    .update({
+      transfer_requested_by: null,
+      transfer_requested_to: null,
+      transfer_reason: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .select('*')
+    .single()
+  if (error) throw error
+  const row = data as AssignedTaskRow
+
+  await emitTaskEvent(client, {
+    organizationId: auth.orgId,
+    taskId: row.id,
+    eventType: 'TASK_TRANSFER_DECLINED',
+    actorRepId: auth.repId,
+    metadata: { declined_request_to: task.transfer_requested_to },
+  })
+
+  await notifyTaskAssignee(client, {
+    organizationId: auth.orgId,
+    recipientId: row.assignee_rep_id,
+    type: 'task_transfer_declined',
+    title: 'Transfer request declined',
+    body: row.title,
+    link: `/tasks?task=assigned:${row.id}`,
+    dedupeKey: `task_transfer_declined:${row.id}:${row.assignee_rep_id}`,
   })
 
   return row
@@ -869,6 +975,128 @@ export async function countOverdueAssignedByRep(
     map.set(id, (map.get(id) ?? 0) + 1)
   }
   return map
+}
+
+/**
+ * Latest internal comment per task — one bounded read for the whole list.
+ * Ordered newest-first and deduped by task, so a list of N tasks costs one
+ * query (capped) instead of N thread reads.
+ */
+export async function listLatestTaskComments(
+  client: DbClient,
+  auth: AuthContext,
+  taskIds: string[],
+): Promise<Map<string, { body: string; authorName: string | null; createdAt: string }>> {
+  const out = new Map<string, { body: string; authorName: string | null; createdAt: string }>()
+  if (taskIds.length === 0) return out
+
+  const { data, error } = await client
+    .from('internal_notes')
+    .select('subject_id, body, author_rep_id, created_at')
+    .eq('organization_id', auth.orgId)
+    .eq('subject_type', 'TASK')
+    .in('subject_id', taskIds)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(500)
+  if (error) {
+    if (isMissingRelation(error)) return out
+    throw error
+  }
+
+  const authorIds = new Set<string>()
+  for (const row of (data ?? []) as Array<{ subject_id: string; body: string; author_rep_id: string; created_at: string }>) {
+    if (out.has(row.subject_id)) continue
+    out.set(row.subject_id, { body: row.body, authorName: null, createdAt: row.created_at })
+    authorIds.add(row.author_rep_id)
+  }
+  if (authorIds.size === 0) return out
+
+  const { data: reps } = await client
+    .from('reps')
+    .select('id, name')
+    .eq('organization_id', auth.orgId)
+    .in('id', [...authorIds])
+    .limit(100)
+  const names = new Map(((reps ?? []) as Array<{ id: string; name: string }>).map((r) => [r.id, r.name]))
+  for (const [taskId, comment] of out) {
+    const row = (data ?? []).find((r) => r.subject_id === taskId)
+    comment.authorName = row ? names.get(row.author_rep_id) ?? null : null
+  }
+  return out
+}
+
+/**
+ * Unread task discussions for the current viewer. Built on the canonical
+ * notification read flag: a comment notifies the task's assignee and creator,
+ * so an unread comment notification IS the unread state — no second model.
+ */
+export async function listUnreadTaskCommentCounts(
+  client: DbClient,
+  auth: AuthContext,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  const { data, error } = await client
+    .from('notifications')
+    .select('link')
+    .eq('organization_id', auth.orgId)
+    .eq('recipient_id', auth.repId)
+    .eq('notification_type', 'task_comment')
+    .eq('read', false)
+    .limit(500)
+  if (error) {
+    if (isMissingRelation(error)) return out
+    throw error
+  }
+  for (const row of (data ?? []) as Array<{ link: string | null }>) {
+    const match = /[?&]task=assigned:([^&]+)/.exec(row.link ?? '')
+    if (!match) continue
+    out.set(match[1], (out.get(match[1]) ?? 0) + 1)
+  }
+  return out
+}
+
+/** Opening a task conversation clears its unread comment notifications. */
+export async function markTaskCommentsRead(
+  client: DbClient,
+  auth: AuthContext,
+  taskId: string,
+): Promise<void> {
+  const { error } = await client
+    .from('notifications')
+    .update({ read: true })
+    .eq('organization_id', auth.orgId)
+    .eq('recipient_id', auth.repId)
+    .eq('notification_type', 'task_comment')
+    .eq('read', false)
+    .like('link', `%task=assigned:${taskId}%`)
+  if (error && !isMissingRelation(error)) {
+    console.error('[notifications] task mark-read failed', error.message)
+  }
+}
+
+/** Admin/Manager work exceptions: waiting tasks and pending transfer requests. */
+export async function countWaitingAndTransferTasks(
+  client: DbClient,
+  orgId: string,
+): Promise<{ waiting: number; transferRequests: number }> {
+  const { data, error } = await client
+    .from('assigned_tasks')
+    .select('status, transfer_requested_to')
+    .eq('organization_id', orgId)
+    .in('status', ['OPEN', 'IN_PROGRESS', 'WAITING'])
+    .limit(5000)
+  if (error) {
+    if (isMissingRelation(error)) return { waiting: 0, transferRequests: 0 }
+    throw error
+  }
+  let waiting = 0
+  let transferRequests = 0
+  for (const row of (data ?? []) as Array<{ status: string; transfer_requested_to: string | null }>) {
+    if (row.status === 'WAITING') waiting += 1
+    if (row.transfer_requested_to) transferRequests += 1
+  }
+  return { waiting, transferRequests }
 }
 
 export async function countUnassignedOpenTasks(

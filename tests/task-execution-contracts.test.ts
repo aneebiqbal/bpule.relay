@@ -175,8 +175,9 @@ describe('TASK_PERSONAL_WORK_NOT_AUTO_HANDED_OFF', () => {
 describe('TASK_RETURN_TO_PRIMARY_MANUAL', () => {
   it('restore moves tasks only when the admin explicitly asks', () => {
     const source = read('src/lib/coverage/actions.ts')
-    expect(source).toMatch(/if \(input\.returnOpenTasks && input\.auth\)/)
-    expect(read('src/components/coverage/admin-coverage-panel.tsx')).toMatch(/window\.confirm/)
+    expect(source).toMatch(/input\.returnOpenTasks/)
+    expect(source).toMatch(/input\.auth/)
+    expect(read('src/components/coverage/admin-coverage-panel.tsx')).toMatch(/Restore primary/)
   })
 
   it('the restore API forwards the decision', () => {

@@ -9,9 +9,11 @@ import {
   completeAssignedTask,
   loadAssignedTaskDetail,
   reassignAssignedTask,
+  declineAssignedTaskTransfer,
   reopenAssignedTask,
   requestAssignedTaskTransfer,
   rescheduleAssignedTask,
+  resumeAssignedTask,
   setAssignedTaskWaiting,
   type TaskWaitingOn,
 } from '@/lib/tasks/assigned-tasks'
@@ -48,14 +50,15 @@ export async function PATCH(
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json().catch(() => ({}))
-  const { action, assigneeRepId, reason, dueAt, waitingOn } = body as {
+  const { action, assigneeRepId, reason, dueAt, waitingOn, note } = body as {
     action?: 'complete' | 'cancel' | 'reassign' | 'start' | 'reschedule'
-      | 'waiting' | 'reopen'
-      | 'requestTransfer' | 'approveTransfer' | 'cancelTransfer'
+      | 'waiting' | 'resume' | 'reopen'
+      | 'requestTransfer' | 'approveTransfer' | 'declineTransfer' | 'cancelTransfer'
     assigneeRepId?: string
     reason?: string
     dueAt?: string | null
     waitingOn?: TaskWaitingOn | null
+    note?: string
   }
 
   if (!action) {
@@ -85,7 +88,11 @@ export async function PATCH(
       return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) })
     }
     if (action === 'waiting') {
-      const row = await setAssignedTaskWaiting(client, auth, id, waitingOn ?? null)
+      const row = await setAssignedTaskWaiting(client, auth, id, waitingOn ?? null, note ?? null)
+      return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) })
+    }
+    if (action === 'resume') {
+      const row = await resumeAssignedTask(client, auth, id)
       return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) })
     }
     if (action === 'reopen') {
@@ -101,6 +108,10 @@ export async function PATCH(
     }
     if (action === 'approveTransfer') {
       const row = await approveAssignedTaskTransfer(client, auth, id)
+      return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) })
+    }
+    if (action === 'declineTransfer') {
+      const row = await declineAssignedTaskTransfer(client, auth, id)
       return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) })
     }
     if (action === 'cancelTransfer') {

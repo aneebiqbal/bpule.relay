@@ -42,6 +42,7 @@ const EVENT_LABEL: Record<string, string> = {
   TASK_REOPENED: 'Reopened',
   TASK_TRANSFER_REQUESTED: 'Transfer requested',
   TASK_TRANSFER_APPROVED: 'Transfer approved',
+  TASK_TRANSFER_DECLINED: 'Transfer declined',
   TASK_TRANSFER_CANCELLED: 'Transfer request cancelled',
 }
 
@@ -90,6 +91,7 @@ export function TaskDetailDrawer({
   const [assignee, setAssignee] = useState(task.assigneeRepId)
   const [due, setDue] = useState(toLocalInput(task.dueAt))
   const [waitingOn, setWaitingOn] = useState<string>(task.waitingOn ?? 'ADMIN')
+  const [waitingNote, setWaitingNote] = useState(task.waitingNote ?? '')
   const [transferTo, setTransferTo] = useState('')
   const [transferReason, setTransferReason] = useState('')
   const [reassignReason, setReassignReason] = useState('')
@@ -111,6 +113,16 @@ export function TaskDetailDrawer({
     return () => {
       cancelled = true
     }
+  }, [rawId])
+
+  // Opening the conversation clears its unread comments (canonical read flag).
+  useEffect(() => {
+    if (!rawId) return
+    fetch('/api/notifications/read-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId: rawId }),
+    }).catch(() => {})
   }, [rawId])
 
   async function act(body: Record<string, unknown>) {
@@ -164,6 +176,9 @@ export function TaskDetailDrawer({
     ['Status', task.status === 'WAITING' && task.waitingOn
       ? `Waiting on ${WAITING_ON_LABEL[task.waitingOn] ?? task.waitingOn}`
       : STATUS_LABEL[task.status]],
+    ...(task.status === 'WAITING' && task.waitingNote
+      ? [['Waiting note', task.waitingNote] as [string, React.ReactNode]]
+      : []),
   ]
 
   const button = 'h-8 rounded-md border border-line bg-bone px-2.5 text-[13px] text-ink hover:bg-bone-raised disabled:opacity-50'
@@ -203,19 +218,30 @@ export function TaskDetailDrawer({
               <p className="font-medium text-ink">
                 Transfer requested to {pendingTransfer.toRepName ?? 'another rep'}
               </p>
+              <p className="mt-0.5 text-[11px] text-stone">Waiting for manager approval</p>
               {pendingTransfer.reason && (
                 <p className="mt-0.5 text-graphite">&ldquo;{pendingTransfer.reason}&rdquo;</p>
               )}
               <div className="mt-2 flex flex-wrap gap-2">
                 {canManage && (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className={cn(button, 'bg-solid text-on-solid hover:bg-solid/90')}
-                    onClick={() => act({ action: 'approveTransfer' })}
-                  >
-                    Approve transfer
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className={cn(button, 'bg-solid text-on-solid hover:bg-solid/90')}
+                      onClick={() => act({ action: 'approveTransfer' })}
+                    >
+                      Approve transfer
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className={button}
+                      onClick={() => act({ action: 'declineTransfer' })}
+                    >
+                      Decline
+                    </button>
+                  </>
                 )}
                 {(isAssignee || canManage) && (
                   <button
@@ -268,21 +294,28 @@ export function TaskDetailDrawer({
                   ))}
                 </select>
               </label>
+              <input
+                value={waitingNote}
+                onChange={(e) => setWaitingNote(e.target.value)}
+                placeholder="Note (optional)"
+                aria-label="Waiting note"
+                className="h-8 min-w-0 flex-1 rounded-md border border-line bg-bone px-2 text-[13px] text-ink"
+              />
               {task.status === 'WAITING' ? (
                 <button
                   type="button"
                   disabled={busy}
-                  className={button}
-                  onClick={() => act({ action: 'waiting', waitingOn: null })}
+                  className={cn(button, 'bg-solid text-on-solid hover:bg-solid/90')}
+                  onClick={() => act({ action: 'resume' })}
                 >
-                  Back to open
+                  Resume work
                 </button>
               ) : (
                 <button
                   type="button"
                   disabled={busy}
                   className={button}
-                  onClick={() => act({ action: 'waiting', waitingOn })}
+                  onClick={() => act({ action: 'waiting', waitingOn, note: waitingNote })}
                 >
                   Mark waiting
                 </button>
@@ -314,7 +347,7 @@ export function TaskDetailDrawer({
               />
               <button
                 type="button"
-                disabled={busy || !transferTo}
+                disabled={busy || !transferTo || !transferReason.trim()}
                 className={button}
                 onClick={() => act({ action: 'requestTransfer', assigneeRepId: transferTo, reason: transferReason })}
               >

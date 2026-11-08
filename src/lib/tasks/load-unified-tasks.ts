@@ -3,6 +3,8 @@ import type { AuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
 import {
   listAssignedTaskRows,
+  listLatestTaskComments,
+  listUnreadTaskCommentCounts,
   resolveTaskAssigneeScope,
 } from '@/lib/tasks/assigned-tasks'
 import { toUnifiedTaskFromAction, toUnifiedTaskFromAssigned } from '@/lib/tasks/map-unified-task'
@@ -102,6 +104,16 @@ export async function loadUnifiedTasks(input: {
   const nameByRep = new Map(repsRes.map((r) => [r.id, r.name]))
   const nameByProfile = new Map((profilesRes.data ?? []).map((p) => [p.id, p.identity_name]))
 
+  // Bounded list projections: one latest comment + unread count per task, never
+  // a full thread read.
+  // Bounded preview: the list is already ordered by due/created, so the first
+  // 200 assigned tasks carry the projection without an unbounded IN clause.
+  const assignedIds = rows.map((row) => row.id).slice(0, 200)
+  const [latestComments, unreadByTask] = await Promise.all([
+    listLatestTaskComments(client, auth, assignedIds),
+    listUnreadTaskCommentCounts(client, auth),
+  ])
+
   const assigned: UnifiedTask[] = rows.map((row) =>
     toUnifiedTaskFromAssigned(row, {
       companyName: row.lead_id ? companyByLead.get(row.lead_id) ?? null : null,
@@ -113,6 +125,8 @@ export async function loadUnifiedTasks(input: {
       executionRepName: row.profile_id
         ? nameByRep.get(executionRepByProfile.get(row.profile_id) ?? '') ?? null
         : null,
+      latestComment: latestComments.get(row.id) ?? null,
+      unreadCount: unreadByTask.get(row.id) ?? 0,
     }),
   )
 

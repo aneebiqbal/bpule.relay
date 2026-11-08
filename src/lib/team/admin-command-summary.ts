@@ -24,6 +24,12 @@ export interface OrgHealthMetrics {
   repliesCritical: number
   followUpsOverdue: number
   overdueTasks: number
+  /** Open tasks currently blocked on someone. */
+  waitingTasks: number
+  /** Rep handoff requests awaiting a manager decision. */
+  transferRequests: number
+  /** Unread internal task comments for the viewer. */
+  unreadTaskUpdates: number
   meetingsThisWeek: number
   wins: number
 }
@@ -355,6 +361,9 @@ export function assembleAdminCommandCenter(input: {
   wins: number
   overdueTasksByRep?: Map<string, number>
   unassignedTasks?: number
+  waitingTasks?: number
+  transferRequests?: number
+  unreadTaskUpdates?: number
   outcomeEventsByRep?: Map<string, { meetings: number; wins: number }>
   profileExecution?: AdminProfileExecutionRow[]
   movement?: AdminMovement
@@ -405,6 +414,9 @@ export function assembleAdminCommandCenter(input: {
       repliesCritical,
       followUpsOverdue: team.metrics.followUpsOverdue,
       overdueTasks: [...(input.overdueTasksByRep?.values() ?? [])].reduce((sum, n) => sum + n, 0),
+      waitingTasks: input.waitingTasks ?? 0,
+      transferRequests: input.transferRequests ?? 0,
+      unreadTaskUpdates: input.unreadTaskUpdates ?? 0,
       meetingsThisWeek: input.meetingsThisWeek,
       wins: input.wins,
     },

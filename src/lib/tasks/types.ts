@@ -39,6 +39,8 @@ export interface UnifiedTask {
   dueAt?: string | null
   status: UnifiedTaskStatus
   waitingOn?: UnifiedTaskWaitingOn | null
+  /** Optional note recorded with WAITING. */
+  waitingNote?: string | null
   /** A rep's pending handoff request. Only a manager/admin approval reassigns. */
   transfer?: {
     toRepId: string
@@ -49,6 +51,10 @@ export interface UnifiedTask {
   /** Canonical profile context for leave handoffs — ownership never moves. */
   primaryRepName?: string | null
   executionRepName?: string | null
+  /** Bounded latest internal comment — list rows never load the full thread. */
+  latestComment?: { body: string; authorName: string | null; createdAt: string } | null
+  /** Unread internal comments for the current viewer (notifications-backed). */
+  unreadCount?: number
   createdBy?: string | null
   createdByName?: string | null
   createdAt: string
@@ -82,6 +88,7 @@ export interface AssignedTaskRow {
   due_at: string | null
   status: UnifiedTaskStatus
   waiting_on: UnifiedTaskWaitingOn | null
+  waiting_note: string | null
   transfer_requested_by: string | null
   transfer_requested_to: string | null
   transfer_reason: string | null

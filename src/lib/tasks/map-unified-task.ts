@@ -65,6 +65,8 @@ export function toUnifiedTaskFromAssigned(
     transferToName?: string | null
     primaryRepName?: string | null
     executionRepName?: string | null
+    latestComment?: { body: string; authorName: string | null; createdAt: string } | null
+    unreadCount?: number
   },
 ): UnifiedTask {
   // An assigned task without a linked lead still has to open its detail —
@@ -97,6 +99,7 @@ export function toUnifiedTaskFromAssigned(
     dueAt: row.due_at,
     status: row.status,
     waitingOn: row.waiting_on,
+    waitingNote: row.waiting_note,
     transfer: row.transfer_requested_to
       ? {
           toRepId: row.transfer_requested_to,
@@ -107,6 +110,8 @@ export function toUnifiedTaskFromAssigned(
       : null,
     primaryRepName: enrich?.primaryRepName ?? null,
     executionRepName: enrich?.executionRepName ?? null,
+    latestComment: enrich?.latestComment ?? null,
+    unreadCount: enrich?.unreadCount ?? 0,
     createdBy: row.created_by_rep_id,
     createdByName: enrich?.createdByName ?? null,
     createdAt: row.created_at,
