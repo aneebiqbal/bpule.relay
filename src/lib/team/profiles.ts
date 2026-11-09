@@ -183,8 +183,10 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
   for (const profile of allProfiles) {
     const key = profile.person_id ?? profile.id
     personKeyByProfile.set(profile.id, key)
-    // The canonical profile's own name wins; otherwise keep the first seen.
-    if (!canonicalNameById.has(key)) {
+    // The canonical profile's own name wins — never a channel child's label,
+    // which may be "Fizza, LinkedIn" or "Fizza Upwork".
+    const isCanonical = profile.person_id === null
+    if (isCanonical || !canonicalNameById.has(key)) {
       canonicalNameById.set(key, profile.display_name ?? profile.full_name ?? profile.label ?? 'Unnamed profile')
     }
   }

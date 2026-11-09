@@ -73,9 +73,14 @@ export default async function AppLayout({
           full_name: string | null
           label: string | null
         }>) {
-          personIdByProfile.set(row.id, row.person_id ?? row.id)
+          const personId = row.person_id ?? row.id
+          personIdByProfile.set(row.id, personId)
+          // The canonical profile's name wins — never a channel child's label.
+          const isCanonical = row.person_id === null
           const name = row.display_name ?? row.full_name ?? row.label
-          if (name) personNameById.set(row.person_id ?? row.id, name)
+          if (name && (isCanonical || !personNameById.has(personId))) {
+            personNameById.set(personId, name)
+          }
         }
       }
       return {

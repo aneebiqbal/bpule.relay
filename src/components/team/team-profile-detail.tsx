@@ -734,22 +734,32 @@ function AddChannelDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // A person has one channel per network. Existing channels are not offered, so
+  // "Add channel" can never create a duplicate network.
+  const existing = new Set(model.channels.map((row) => row.channel))
+  const available = (['linkedin', 'upwork', 'email'] as const).filter((row) => !existing.has(row))
+  const selected = existing.has(channel) ? (available[0] ?? 'linkedin') : channel
+
   async function save() {
     if (!identityName.trim()) {
       setError('Identity name is required')
       return
     }
+    if (existing.has(selected)) {
+      setError(`This person already has a ${selected} channel.`)
+      return
+    }
     setBusy(true)
     setError(null)
     try {
-      const slug = `${identityName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${channel}`
+      const slug = `${identityName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${selected}`
       const res = await fetch('/api/admin/revenue-identities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           identityName: identityName.trim(),
           slug,
-          channel,
+          channel: selected,
           profileUrl: url.trim() || null,
           // The channel is created under the person's canonical profile — it can
           // never create a new person.
@@ -778,13 +788,17 @@ function AddChannelDialog({
         <label className="block space-y-1">
           <span className="text-[12px] font-medium text-graphite">Channel</span>
           <select
-            value={channel}
+            value={selected}
             onChange={(event) => setChannel(event.target.value as 'linkedin' | 'upwork' | 'email')}
             className="w-full rounded-lg border border-line bg-bone px-3 py-2 text-[13px] text-ink"
           >
-            <option value="linkedin">LinkedIn</option>
-            <option value="upwork">Upwork</option>
-            <option value="email">Email</option>
+            {available.length === 0 ? (
+              <option value="linkedin" disabled>Every channel already exists</option>
+            ) : (
+              available.map((row) => (
+                <option key={row} value={row} className="capitalize">{row}</option>
+              ))
+            )}
           </select>
         </label>
         <label className="block space-y-1">

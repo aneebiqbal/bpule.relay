@@ -500,6 +500,7 @@ export async function loadProfileOperatingModel(
     .sort((a, b) => b.at.localeCompare(a.at))
     .slice(0, 30)
 
+  // One row per person: the same rep covering two channels is one exception.
   const readinessExceptions = [
     ...new Map(
       channels
@@ -508,7 +509,7 @@ export async function loadProfileOperatingModel(
             .filter((entry) => !entry.ready)
             .map((entry) => ({ repId: entry.repId, repName: entry.repName, channel: channel.channel })),
         )
-        .map((entry) => [`${entry.repId}:${entry.channel}`, entry]),
+        .map((entry) => [entry.repId, entry]),
     ).values(),
   ]
 

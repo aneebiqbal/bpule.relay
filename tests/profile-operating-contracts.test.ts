@@ -161,6 +161,12 @@ describe('ADD_CHANNEL_DOES_NOT_CREATE_PERSON', () => {
     expect(source).toMatch(/api\/admin\/revenue-identities/)
     expect(source).not.toMatch(/insert into profiles/i)
   })
+
+  it('add-channel never offers a channel the person already has', () => {
+    const source = read('src/components/team/team-profile-detail.tsx')
+    expect(source).toMatch(/existing\.has\(/)
+    expect(source).toMatch(/available\.map\(/)
+  })
 })
 
 describe('ADMIN_PROFILE_SINGLE_ENTRY', () => {
