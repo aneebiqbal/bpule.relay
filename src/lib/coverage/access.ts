@@ -1,6 +1,6 @@
 import type { DbClient } from '@/lib/db/types'
 import type { Profile, RevenueIdentityChannel } from '@/lib/domain/types'
-import { normalizeChannel } from '@/lib/profiles/assigned-profiles'
+import { normalizeChannel } from '@/lib/profiles/channel'
 
 /**
  * Temporary coverage → execution access.
@@ -94,39 +94,60 @@ export interface ExecutableIdentityScope {
   coveredIdentityIds: string[]
 }
 
+/** One executable responsibility: an active channel identity and why it is executable. */
+export interface ExecutableIdentity {
+  id: string
+  profileId: string | null
+  assignmentId: string | null
+  assignedBy: string | null
+  assignedAt: string | null
+  access: 'primary' | 'coverage'
+  coverageAssignmentId?: string | null
+  coveragePrimaryRepId?: string | null
+  coverageEffectiveUntil?: string | null
+}
+
 /**
- * Canonical execution scope for any rep: primary assignments plus active
- * coverage. Backup-only assignments are eligibility, not execution, and are
- * excluded. Mirrors `listMyWorkableIdentities` for callers that need another
- * rep's scope (Manager / Admin team views).
+ * THE canonical execution scope for any rep: active PRIMARY ownership plus
+ * ACTIVE, NON-EXPIRED coverage. Backup eligibility (`identity_assignments`
+ * without a PRIMARY coverage row) is not execution and is excluded. Archived
+ * identities are never executable.
+ *
+ * Every sender selector, target view and Today surface must read this one
+ * function — not `identity_assignments`, not `profiles.rep_id`.
  */
-export async function listExecutableIdentityScope(
+export async function listExecutableIdentitiesForRep(
   client: DbClient,
   orgId: string,
   repId: string,
   businessDate: string,
-): Promise<ExecutableIdentityScope> {
-  const { data: assignments, error } = await client
-    .from('identity_assignments')
-    .select('revenue_identity_id')
-    .eq('organization_id', orgId)
-    .eq('rep_id', repId)
-    .limit(500)
+): Promise<ExecutableIdentity[]> {
+  const [{ data: assignments, error }, { data: primaryRows, error: primaryError }, covered] =
+    await Promise.all([
+      client
+        .from('identity_assignments')
+        .select('id, revenue_identity_id, assigned_by, created_at')
+        .eq('organization_id', orgId)
+        .eq('rep_id', repId)
+        .limit(500),
+      client
+        .from('profile_coverage')
+        .select('profile_id')
+        .eq('organization_id', orgId)
+        .eq('rep_id', repId)
+        .eq('role', 'PRIMARY')
+        .eq('active', true)
+        .limit(200),
+      listActiveCoveredIdentities(client, orgId, repId, businessDate),
+    ])
   if (error) throw error
-
-  const { data: primaryRows, error: primaryError } = await client
-    .from('profile_coverage')
-    .select('profile_id')
-    .eq('organization_id', orgId)
-    .eq('rep_id', repId)
-    .eq('role', 'PRIMARY')
-    .eq('active', true)
-    .limit(200)
   if (primaryError) throw primaryError
-  const primaryProfileIds = new Set((primaryRows ?? []).map((row) => row.profile_id as string))
 
-  const covered = await listActiveCoveredIdentities(client, orgId, repId, businessDate)
+  const primaryProfileIds = new Set((primaryRows ?? []).map((row) => row.profile_id as string))
   const coveredById = new Map(covered.map((row) => [row.revenueIdentityId, row]))
+  const assignmentByIdentity = new Map(
+    (assignments ?? []).map((row) => [row.revenue_identity_id as string, row]),
+  )
 
   const ids = [
     ...new Set([
@@ -134,7 +155,7 @@ export async function listExecutableIdentityScope(
       ...covered.map((row) => row.revenueIdentityId),
     ]),
   ]
-  if (ids.length === 0) return { executableIdentities: [], coveredIdentityIds: [] }
+  if (ids.length === 0) return []
 
   const { data: identityRows, error: identityError } = await client
     .from('revenue_identities')
@@ -144,8 +165,7 @@ export async function listExecutableIdentityScope(
     .limit(500)
   if (identityError) throw identityError
 
-  const executableIdentities: Array<{ id: string; profileId?: string | null }> = []
-  const coveredIdentityIds: string[] = []
+  const out: ExecutableIdentity[] = []
   const seen = new Set<string>()
   for (const row of (identityRows ?? []) as Array<{ id: string; profile_id: string | null; status: string }>) {
     if (row.status !== 'active') continue
@@ -154,10 +174,38 @@ export async function listExecutableIdentityScope(
     if (!isCovered && !isPrimary) continue
     if (seen.has(row.id)) continue
     seen.add(row.id)
-    executableIdentities.push({ id: row.id, profileId: row.profile_id ?? null })
-    if (isCovered) coveredIdentityIds.push(row.id)
+    const assignment = assignmentByIdentity.get(row.id)
+    const coverage = coveredById.get(row.id)
+    out.push({
+      id: row.id,
+      profileId: row.profile_id ?? null,
+      assignmentId: assignment?.id ?? coverage?.coverageAssignmentId ?? null,
+      assignedBy: (assignment?.assigned_by as string | null | undefined) ?? null,
+      assignedAt: (assignment?.created_at as string | null | undefined) ?? coverage?.effectiveFrom ?? null,
+      access: isCovered ? 'coverage' : 'primary',
+      coverageAssignmentId: coverage?.coverageAssignmentId ?? null,
+      coveragePrimaryRepId: coverage?.primaryRepId ?? null,
+      coverageEffectiveUntil: coverage?.effectiveUntil ?? null,
+    })
   }
-  return { executableIdentities, coveredIdentityIds }
+  return out
+}
+
+/**
+ * Thin scope view over `listExecutableIdentitiesForRep`, for callers that only
+ * need the identity ids (Inbox queue, Manager/Admin team views).
+ */
+export async function listExecutableIdentityScope(
+  client: DbClient,
+  orgId: string,
+  repId: string,
+  businessDate: string,
+): Promise<ExecutableIdentityScope> {
+  const rows = await listExecutableIdentitiesForRep(client, orgId, repId, businessDate)
+  return {
+    executableIdentities: rows.map((row) => ({ id: row.id, profileId: row.profileId })),
+    coveredIdentityIds: rows.filter((row) => row.access === 'coverage').map((row) => row.id),
+  }
 }
 
 /** Profiles a rep may work today: their own plus every actively covered one. */

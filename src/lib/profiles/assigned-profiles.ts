@@ -1,19 +1,9 @@
 import type { Profile, RevenueIdentityChannel } from '@/lib/domain/types'
 import { getAuthorizedIdentities, type AuthorizedIdentity } from '@/lib/auth/workspace'
 import { createScoutStore } from '@/lib/store'
+import { normalizeChannel } from '@/lib/profiles/channel'
 
-/**
- * The canonical "profiles assigned to this rep" read model.
- *
- * A Profile is a `profiles` row (the sender account). A profile supports a
- * channel when at least one active `revenue_identities` row points at it with
- * that channel — `profiles.platform` is single-valued and cannot express
- * "LinkedIn and Upwork", so it is never used as the capability authority.
- *
- * Assignment is rep-based (`identity_assignments.rep_id`). This module is the
- * single source every surface reads: rep home, the workspace switcher, the
- * Upwork proposal flow and the LinkedIn prospect flow.
- */
+export { normalizeChannel } from '@/lib/profiles/channel'
 
 export interface AssignedProfile {
   profile: Profile
@@ -25,21 +15,6 @@ export interface AssignedProfile {
 export function assignedProfileName(profile: AssignedProfile): string {
   const p = profile.profile
   return p.displayName ?? p.fullName ?? p.label ?? 'Unnamed profile'
-}
-
-/**
- * Canonical channel for any stored or typed value. Production rows have always
- * been lowercase, but a hand-edited row or an imported identity must not make a
- * profile disappear from a channel surface — every surface compares through
- * this, so `UPWORK` and `upwork` are the same capability.
- */
-export function normalizeChannel(value: string | null | undefined): RevenueIdentityChannel {
-  if (!value) return 'other'
-  const key = value.trim().toLowerCase().replace(/[\s-]+/g, '_')
-  if (key === 'linkedin' || key === 'linked_in') return 'linkedin'
-  if (key === 'upwork' || key === 'up_work') return 'upwork'
-  if (key === 'email' || key === 'e_mail') return 'email'
-  return 'other'
 }
 
 /** Group assigned channel identities by the profile they send as. */

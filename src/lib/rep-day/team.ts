@@ -1,4 +1,5 @@
 import { createServerSupabase } from '@/lib/supabase/server'
+import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
 /**
  * Team day — the canonical server-side contract for the Command Centre.
  *
@@ -437,7 +438,7 @@ export interface RepDayDetail {
   exceptionNote: string | null
   shortfall: Record<string, unknown>
   identities: Array<{ id: string; name: string; channel: string }>
-  targets: Array<{ activityType: string; target: number; completed: number; remaining: number }>
+  targets: Array<{ identityId: string; identityName: string | null; activityType: string; target: number; completed: number; remaining: number }>
   totals: { target: number; completed: number; remaining: number }
   actionsToday: number
   repliesWaiting: number
@@ -483,20 +484,16 @@ export async function loadRepDayDetail(repId: string, options: { date?: string }
         .eq('rep_id', repId)
         .eq('business_date', businessDate)
         .maybeSingle(),
-      supabase
-        .from('identity_assignments')
-        .select('revenue_identity_id')
-        .eq('organization_id', ctx.orgId)
-        .eq('rep_id', repId),
+      listExecutableIdentitiesForRep(supabase, ctx.orgId, repId, businessDate),
       supabase
         .from('daily_targets')
-        .select('activity_type, target_count')
+        .select('revenue_identity_id, activity_type, target_count')
         .eq('organization_id', ctx.orgId)
         .eq('rep_id', repId)
         .eq('active', true),
       supabase
         .from('daily_accountability')
-        .select('activity_type, completed_count')
+        .select('revenue_identity_id, activity_type, completed_count')
         .eq('organization_id', ctx.orgId)
         .eq('rep_id', repId)
         .eq('target_date', businessDate),
@@ -538,8 +535,8 @@ export async function loadRepDayDetail(repId: string, options: { date?: string }
 
   // The identity rows are a second read rather than a PostgREST embed
   // (`identity:revenue_identities`), which the Neon adapter cannot translate.
-  const identityIds = (assignmentsResult.data ?? [])
-    .map((row) => row.revenue_identity_id as string)
+  const identityIds = (assignmentsResult ?? [])
+    .map((row) => row.id as string)
     .filter(Boolean)
   const identityById = new Map<string, Record<string, unknown>>()
   if (identityIds.length > 0) {
@@ -560,12 +557,17 @@ export async function loadRepDayDetail(repId: string, options: { date?: string }
     }))
 
   const completedByType = new Map(
-    (accountabilityResult.data ?? []).map((row) => [row.activity_type as string, (row.completed_count as number) ?? 0]),
+    (accountabilityResult.data ?? []).map((row) => [
+      `${row.revenue_identity_id as string}:${row.activity_type as string}`,
+      (row.completed_count as number) ?? 0,
+    ]),
   )
   const targets = (targetsResult.data ?? []).map((row) => {
     const target = (row.target_count as number) ?? 0
-    const completed = completedByType.get(row.activity_type as string) ?? 0
+    const completed = completedByType.get(`${row.revenue_identity_id as string}:${row.activity_type as string}`) ?? 0
     return {
+      identityId: row.revenue_identity_id as string,
+      identityName: identityById.get(row.revenue_identity_id as string)?.identity_name as string ?? null,
       activityType: row.activity_type as string,
       target,
       completed,

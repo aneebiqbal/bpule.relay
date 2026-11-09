@@ -3,6 +3,7 @@ import type { DbClient } from '@/lib/db/types'
 import { currentInstant, orgDate, type OperatingPolicy } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
+import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
 import { opportunityKey } from '@/lib/scoring-v4/opportunity-key'
 import { determineFollowup } from '@/lib/relay/followup-engine'
 import { isTerminalStoredStage, isTerminalLeadStatus, checkOutreachAllowed } from '@/lib/conversation/terminal'
@@ -6713,56 +6714,24 @@ export class SupabaseStore implements ScoutStore {
       ? { data: null }
       : await this.client.from('reps').select('timezone').eq('id', repId).eq('organization_id', this.orgId).maybeSingle()
     const timezone = isSelf ? (this.rep.timezone ?? 'UTC') : ((repRow?.timezone as string) ?? 'UTC')
-    const { data: assignments } = await this.client
-      .from('identity_assignments').select('id, revenue_identity_id, assigned_by, created_at')
-      .eq('rep_id', repId).eq('organization_id', this.orgId)
 
-    // The executable set is primary ownership plus active temporary coverage.
-    // Coverage is execution responsibility, so its targets count today.
-    const executable = new Map<string, { assignmentId: string; assignedBy: string | null; assignedAt: string }>()
-    for (const a of assignments ?? []) {
-      executable.set(a.revenue_identity_id as string, {
-        assignmentId: a.id as string,
-        assignedBy: (a.assigned_by as string) ?? null,
-        assignedAt: a.created_at as string,
-      })
-    }
-    const { data: covered } = await this.client
-      .from('coverage_assignments')
-      .select('id, profile_id, effective_from, effective_until')
-      .eq('organization_id', this.orgId)
-      .eq('covering_rep_id', repId)
-      .eq('status', 'ACTIVE')
-      .limit(200)
-    const activeCovered = (covered ?? []).filter((row) => {
-      const from = row.effective_from as string
-      const until = (row.effective_until as string | null) ?? null
-      return from <= today && (until === null || until >= today)
-    })
-    if (activeCovered.length > 0) {
-      const coveredProfileIds = [...new Set(activeCovered.map((row) => row.profile_id as string))]
-      const { data: coveredIdentities } = await this.client
-        .from('revenue_identities')
-        .select('id, profile_id')
-        .eq('organization_id', this.orgId)
-        .eq('status', 'active')
-        .in('profile_id', coveredProfileIds)
-        .limit(500)
-      const coverageByProfile = new Map(activeCovered.map((row) => [row.profile_id as string, row]))
-      for (const identity of coveredIdentities ?? []) {
-        if (executable.has(identity.id as string)) continue
-        const coverage = coverageByProfile.get(identity.profile_id as string)
-        if (!coverage) continue
-        executable.set(identity.id as string, {
-          assignmentId: coverage.id as string,
-          assignedBy: null,
-          assignedAt: coverage.effective_from as string,
-        })
-      }
-    }
-    if (executable.size === 0) {
+    // Canonical execution scope: active PRIMARY ownership plus active,
+    // non-expired coverage. Backup eligibility is not execution, so a
+    // backup-only rep carries no target lanes.
+    const executableRows = await listExecutableIdentitiesForRep(this.client, this.orgId, repId, today)
+    if (executableRows.length === 0) {
       return { repId, repName, timezone, isWorkingDay: true, totalTarget: 0, totalCompleted: 0, totalRemaining: 0, overallStatus: 'on_track', assignedIdentities: [], notifications: [] }
     }
+    const executable = new Map(
+      executableRows.map((row) => [
+        row.id,
+        {
+          assignmentId: row.assignmentId ?? '',
+          assignedBy: row.assignedBy,
+          assignedAt: row.assignedAt,
+        },
+      ]),
+    )
     const identityIds = [...executable.keys()]
     const { data: targets } = await this.client.from('daily_targets').select('*').eq('rep_id', repId).in('revenue_identity_id', identityIds).eq('active', true)
     const { data: accountability } = await this.client.from('daily_accountability').select('*').eq('rep_id', repId).eq('target_date', today).eq('organization_id', this.orgId)

@@ -313,13 +313,13 @@ export async function loadProfileOperatingModel(
     identityIds.length > 0
       ? supabase
           .from('daily_targets')
-          .select('id, revenue_identity_id, activity_type, target_count')
+          .select('id, revenue_identity_id, rep_id, activity_type, target_count')
           .eq('organization_id', orgId)
           .in('revenue_identity_id', identityIds)
           .eq('active', true)
           .limit(200)
       : Promise.resolve({
-          data: [] as Array<{ id: string; revenue_identity_id: string; activity_type: string; target_count: number }>,
+          data: [] as Array<{ id: string; revenue_identity_id: string; rep_id: string; activity_type: string; target_count: number }>,
         }),
   ])
 
@@ -331,6 +331,7 @@ export async function loadProfileOperatingModel(
   const targets = (targetRes.data ?? []) as Array<{
     id: string
     revenue_identity_id: string
+    rep_id: string
     activity_type: string
     target_count: number
   }>
@@ -382,7 +383,7 @@ export async function loadProfileOperatingModel(
         priority: row.priority,
       }))
     const channelTargets = targets
-      .filter((row) => row.revenue_identity_id === identityId)
+      .filter((row) => row.revenue_identity_id === identityId && primary != null && row.rep_id === primary.rep_id)
       .map((row) => {
         const accountabilityRow = accountability.find(
           (entry) =>
