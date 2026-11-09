@@ -1,4 +1,5 @@
 import { orgDate } from '@/lib/org-clock'
+import { personNameFromProfile } from '@/lib/profiles/person-name'
 
 export const ACTIVITY_LABEL: Record<string, string> = {
   connection_request: 'connection notes',
@@ -134,7 +135,7 @@ export function assembleTeamLive(rows: TeamLiveRows): TeamLivePayload {
   const profileNameById = new Map(
     (rows.profiles ?? []).map((p) => [
       p.id as string,
-      p.display_name ?? p.full_name ?? p.label ?? null,
+      personNameFromProfile(p),
     ]),
   )
   const personKeyByProfile = new Map(

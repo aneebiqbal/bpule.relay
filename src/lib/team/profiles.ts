@@ -64,6 +64,11 @@ export function buildTeamProfiles(
         }
         byProfile.set(key, row)
       }
+      // The canonical sender account carries the person's real name; a
+      // channel account's label must not win once the rows are grouped.
+      if (identity.profileId && identity.personKey != null && identity.personKey === identity.profileId) {
+        row.profileName = identity.profileName ?? identity.name
+      }
       if (!row.channels.includes(identity.channel)) row.channels.push(identity.channel)
       if (!row.assignedReps.includes(person.repName)) row.assignedReps.push(person.repName)
       if (!row.assignedRepIds.includes(person.repId)) row.assignedRepIds.push(person.repId)

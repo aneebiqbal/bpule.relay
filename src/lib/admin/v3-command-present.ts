@@ -490,7 +490,12 @@ export function buildAdminTeamOperationRows(
         name: row.repName,
         state,
         stateLabel: REP_STATE_LABEL[state] ?? state,
-        assignedProfiles: (day?.identities ?? []).map((identity) => identity.name),
+        assignedProfiles: [...new Map(
+          (day?.identities ?? []).map((identity) => [
+            identity.personKey ?? identity.profileId ?? identity.id,
+            identity.profileName ?? identity.name,
+          ]),
+        ).values()].sort((a, b) => a.localeCompare(b)),
         completedToday: row.completedToday,
         targetCount: row.totalTarget ?? 0,
         targetPct: row.targetPct,

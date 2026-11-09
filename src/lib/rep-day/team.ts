@@ -27,12 +27,16 @@ import {
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { deriveRepDayState, type RepDayState } from './state-machine'
 import { deriveConversationRow } from '@/lib/operations/conversations'
+import { personNameFromProfile } from '@/lib/profiles/person-name'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 
 export interface TeamIdentity {
   id: string
   name: string
   channel: string
+  profileId?: string | null
+  personKey?: string | null
+  profileName?: string | null
 }
 
 export interface TeamDayRow {
@@ -231,9 +235,21 @@ export async function loadTeamDay(options: { date?: string } = {}): Promise<Team
   if (identityIds.size > 0) {
     const { data: identityRows } = await supabase
       .from('revenue_identities')
-      .select('id, identity_name, channel')
+      .select('id, identity_name, channel, profile_id, person_key')
       .in('id', [...identityIds])
     const byId = new Map((identityRows ?? []).map((r) => [r.id as string, r]))
+    const profileIds = [
+      ...new Set((identityRows ?? []).map((r) => r.profile_id as string | null).filter(Boolean)),
+    ]
+    const { data: profileRows } = profileIds.length
+      ? await supabase
+          .from('profiles')
+          .select('id, display_name, full_name, label')
+          .in('id', profileIds)
+      : { data: [] as Array<{ id: string; display_name: string | null; full_name: string | null; label: string | null }> }
+    const profileNameById = new Map(
+      (profileRows ?? []).map((p) => [p.id as string, personNameFromProfile(p)]),
+    )
     for (const row of assignmentsResult.data ?? []) {
       const identity = byId.get(row.revenue_identity_id as string)
       if (!identity) continue
@@ -242,6 +258,11 @@ export async function loadTeamDay(options: { date?: string } = {}): Promise<Team
         id: identity.id as string,
         name: (identity.identity_name as string) ?? 'Unnamed identity',
         channel: (identity.channel as string) ?? 'other',
+        profileId: (identity.profile_id as string | null) ?? null,
+        personKey: (identity.person_key as string | null) ?? null,
+        profileName: (identity.profile_id as string)
+          ? (profileNameById.get(identity.profile_id as string) ?? null)
+          : null,
       })
       identitiesByRep.set(row.rep_id as string, list)
     }
@@ -437,7 +458,7 @@ export interface RepDayDetail {
   exceptionReason: string | null
   exceptionNote: string | null
   shortfall: Record<string, unknown>
-  identities: Array<{ id: string; name: string; channel: string }>
+  identities: Array<{ id: string; name: string; channel: string; profileId?: string | null; personKey?: string | null; profileName?: string | null }>
   targets: Array<{ identityId: string; identityName: string | null; activityType: string; target: number; completed: number; remaining: number }>
   totals: { target: number; completed: number; remaining: number }
   actionsToday: number
