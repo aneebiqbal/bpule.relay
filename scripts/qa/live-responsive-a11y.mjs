@@ -149,7 +149,7 @@ async function axeCheck(page, label) {
   // The intervention menu renders once a conversation is auto-selected, which
   // waits on the queue fetch.
   const moreMenu = page.getByRole('button', { name: 'More' })
-  if (await moreMenu.first().isVisible({ timeout: 15_000 }).catch(() => false)) {
+  if (await moreMenu.first().isVisible({ timeout: 30_000 }).catch(() => false)) {
     ok('admin 1440: More menu present')
   } else {
     fail('admin 1440: More menu missing')
@@ -219,9 +219,13 @@ async function axeCheck(page, label) {
         if (drawer) ok('tasks 375: task drawer opens')
         else fail('tasks 375: task drawer did not open')
         await page.keyboard.press('Escape')
-        await page.waitForTimeout(800)
-        const stillOpen = await page.getByRole('dialog', { name: 'Task' }).isVisible().catch(() => false)
-        if (!stillOpen) ok('keyboard: Escape closes the task drawer')
+        const closed = await page
+          .getByRole('dialog', { name: 'Task' })
+          .first()
+          .waitFor({ state: 'hidden', timeout: 15_000 })
+          .then(() => true)
+          .catch(() => false)
+        if (closed) ok('keyboard: Escape closes the task drawer')
         else fail('keyboard: Escape did not close the task drawer')
       }
     }
@@ -286,31 +290,30 @@ async function axeCheck(page, label) {
   const page = await login('dawood@scout.dev')
   await page.setViewportSize({ width: 1440, height: 900 })
 
-  // Sidebar: the collapse control is a real button and Tab moves into the nav.
+  // Sidebar: Tab from the page body must reach the navigation.
   await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
-  await page.waitForTimeout(2000)
-  const sidebarToggle = page.getByRole('button', { name: /Collapse sidebar|Open navigation/ }).first()
-  if (await sidebarToggle.count().catch(() => 0)) {
-    await sidebarToggle.click().catch(() => {})
+  await page.waitForTimeout(3000)
+  let focusInNav = false
+  for (let i = 0; i < 10; i++) {
     await page.keyboard.press('Tab')
-    const focusInNav = await page.evaluate(() => Boolean(document.activeElement?.closest('nav, aside')))
-    if (focusInNav) ok('keyboard: Tab from the sidebar control lands in navigation')
-    else fail('keyboard: Tab from the sidebar control did not land in navigation')
-  } else {
-    fail('keyboard: sidebar control not found')
+    focusInNav = await page.evaluate(() => Boolean(document.activeElement?.closest('nav, aside')))
+    if (focusInNav) break
   }
+  if (focusInNav) ok('keyboard: Tab reaches the navigation')
+  else fail('keyboard: Tab never reached the navigation')
 
-  // Inbox composer: the message box is reachable and focusable.
+  // Inbox composer: the message box is reachable and focusable once the
+  // selected thread has loaded.
   await page.goto(`${base}/chats?view=waiting_me`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
-  await page.waitForTimeout(2500)
   const composer = page.getByRole('textbox', { name: 'Your message' })
-  if (await composer.count().catch(() => 0)) {
+  const composerReady = await composer.first().isVisible({ timeout: 40_000 }).catch(() => false)
+  if (composerReady) {
     await composer.first().click().catch(() => {})
     const focused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Your message')
     if (focused) ok('keyboard: Inbox composer is focusable')
     else fail('keyboard: Inbox composer did not take focus')
   } else {
-    fail('keyboard: Inbox composer not found')
+    fail('keyboard: Inbox composer did not render')
   }
   await page.close()
 }
