@@ -48,13 +48,21 @@ export function projectDailyActions(input: ProjectDailyActionsInput): DailyActio
   const now = input.now ?? Date.now()
   const actions: DailyAction[] = []
 
+  // Profile → channel, from the canonical profile completion. Never guessed.
+  const channelByProfile = new Map<string, string>()
+  for (const profile of input.data.profilesToday ?? []) {
+    if (profile.channels[0]) channelByProfile.set(profile.profileId, profile.channels[0])
+  }
+  const channelFor = (task: { profileId?: string | null; channel?: string }): string =>
+    channelLabel(task.channel ?? (task.profileId ? channelByProfile.get(task.profileId) : undefined))
+
   const tasks = input.data.unifiedTasks ?? []
 
   // ── Inbox + follow-ups + assigned work, from the canonical unified task list ──
   for (const task of tasks) {
     if (task.status === 'DONE' || task.status === 'CANCELLED') continue
 
-    const channel = channelLabel((task as { channel?: string }).channel)
+    const channel = channelFor(task)
     const profile = task.profileName
       ? `${task.profileName} · ${channel}`
       : profileLabel(null, task.companyName)
