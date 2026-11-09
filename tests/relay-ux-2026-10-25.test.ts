@@ -74,8 +74,9 @@ describe('Admin QA surface', () => {
   const page = read('src/app/(app)/admin/qa/page.tsx')
   const api = read('src/app/api/admin/qa-views/route.ts')
 
-  it('is reachable from the admin nav', () => {
-    expect(read('src/lib/navigation/relay-shell-nav.ts')).toContain("'/admin/qa'")
+  it('is reachable from the admin nav through System / Quality', () => {
+    expect(read('src/lib/navigation/relay-shell-nav.ts')).toContain("'/admin/system'")
+    expect(read('src/app/(app)/admin/system/page.tsx')).toContain('/admin/qa')
   })
 
   it('exposes routing, staleness and threads sections', () => {

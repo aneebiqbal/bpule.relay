@@ -169,12 +169,11 @@ describe('V3_NAV_CANONICAL_LABELS', () => {
     expect(byHref('/leads?view=pipeline')).toBe('Pipeline')
     expect(byHref('/reports/sales')).toBe('Sales')
     expect(byHref('/content')).toBe('Studio')
-    expect(byHref('/team')).toBe('Overview')
+    expect(byHref('/team')).toBe('Today')
     expect(byHref('/team/people')).toBe('People')
     expect(adminItem('/admin/command')).toBe('Command Center')
-    expect(byHref('/admin/scoring-qa')).toBe('Scoring QA')
+    expect(adminItem('/admin/system')).toBe('System / Quality')
     expect(byHref('/team/profiles')).toBe('Profiles')
-    expect(byHref('/team/coverage')).toBe('Coverage')
     expect(byHref('/content/growth')).toBe('Growth')
     expect(byHref('/admin/people')).toBe('People & Roles')
     expect(byHref('/admin/revenue-intelligence')).toBe('Revenue Intelligence')
@@ -207,8 +206,8 @@ describe('V3_NAV_ROLE_VISIBILITY', () => {
     expect(visibleDomains(owner).map((d) => d.id)).toContain('admin')
   })
 
-  it('managers reach Daily Operations through Team, not Admin', () => {
-    expect(secondaryItems('team', manager).map((i) => i.href)).toContain('/admin/command')
+  it('managers reach Today through Team; admins reach Command Center through Admin', () => {
+    expect(secondaryItems('team', manager).map((i) => i.href)).toContain('/team')
     expect(secondaryItems('team', admin).map((i) => i.href)).not.toContain('/admin/command')
     expect(secondaryItems('admin', admin).map((i) => i.href)).toContain('/admin/command')
   })
@@ -235,19 +234,13 @@ describe('V3_NAV_HIDDEN_FEATURES_EXPOSED', () => {
   const required: Array<[string, RelayNavRoleFlags]> = [
     ['/leads/import', rep],
     ['/upwork', rep],
-    ['/team/targets', manager],
     ['/team/groups', manager],
     ['/content', rep],
     ['/content/ideas', rep],
     ['/content/growth', admin],
-    ['/admin/scoring-qa', admin],
-    ['/admin/qa', admin],
-    ['/admin/dataset', admin],
-    ['/admin/training-data', admin],
-    ['/admin/ai-usage', admin],
+    ['/admin/system', admin],
     ['/revenue/email', rep],
     ['/team/profiles', manager],
-    ['/team/coverage', manager],
   ]
 
   it('every formerly hidden feature has a nav entry point', () => {
@@ -288,9 +281,9 @@ describe('V3_NAV_BREADCRUMB', () => {
       domainLabel: 'Team',
       itemLabel: 'Performance',
     })
-    expect(navBreadcrumb('/admin/scoring-qa', search(''), admin)).toMatchObject({
+    expect(navBreadcrumb('/admin/system', search(''), admin)).toMatchObject({
       domainLabel: 'Admin',
-      itemLabel: 'Scoring QA',
+      itemLabel: 'System / Quality',
     })
   })
 

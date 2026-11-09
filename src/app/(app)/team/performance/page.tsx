@@ -10,11 +10,13 @@ import {
   metricsToStrip,
 } from '@/components/operations/performance-views'
 import { TeamTrendChart } from '@/components/operations/team-trend-chart'
+import { TeamTargetsReport } from '@/components/team/team-targets-report'
 import { loadTeamTrend } from '@/lib/operations/team-trend'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { assignableReps, getPeopleDirectory, getPerformance, requireTeamContext } from '@/lib/operations/page-context'
 import { effectiveRepIds } from '@/lib/operations/scope'
 import { OPS_RANGES, opsHref, parseOpsFilters, rangeWindow } from '@/lib/operations/filters'
+import { PERIODS, type TargetPeriod } from '@/lib/operations/targets'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,7 +31,25 @@ export default async function TeamPerformancePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const ctx = await requireTeamContext()
-  const filters = parseOpsFilters(await searchParams, { range: '30d' })
+  const sp = await searchParams
+  const filters = parseOpsFilters(sp, { range: '30d' })
+
+  // Target progress is a Performance view; the editor stays in Admin → Daily
+  // Targets and Profile → Channel.
+  const rawPeriod = Array.isArray(sp.period) ? sp.period[0] : sp.period
+  const targetPeriod = (PERIODS.some((p) => p.value === rawPeriod) ? rawPeriod : 'DAY') as TargetPeriod
+  if (filters.view === 'targets') {
+    return (
+      <div className="space-y-5">
+        <PageHeader
+          eyebrow="Team"
+          title="Targets"
+          description="What each person set out to do, and what they actually executed. Progress counts executed events only."
+        />
+        <TeamTargetsReport period={targetPeriod} />
+      </div>
+    )
+  }
 
   const [reps, directory, profilesRes] = await Promise.all([
     assignableReps(ctx),
@@ -58,7 +78,7 @@ export default async function TeamPerformancePage({
     source: filters.source,
   }
   const activityHref = (event: string | null) =>
-    opsHref('/team/activity', { range: filters.range, team: filters.team, rep: filters.rep, profile: filters.profile }, { event })
+    opsHref('/reports/activity', { range: filters.range, team: filters.team, rep: filters.rep, profile: filters.profile }, { event })
   const rangeQuery = `range=${filters.range}`
   const profiles = (profilesRes.data ?? []) as Array<{ id: string; identity_name: string }>
 

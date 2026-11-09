@@ -105,12 +105,10 @@ export default async function TeamPeoplePage({
             metrics={[
               { label: 'People', value: rows.length, href: null },
               { label: 'Need attention', value: attentionCount, href: '/team/people?view=attention', tone: attentionCount ? 'attention' : 'default' },
-              { label: 'Replies waiting', value: sum('repliesWaiting'), href: `/leads?view=needs_reply&scope=${leadScope}`, tone: sum('repliesWaiting') ? 'attention' : 'default' },
-              { label: 'Follow-ups due', value: sum('followUpsOverdue'), href: `/leads?view=follow_ups&scope=${leadScope}` },
+              { label: 'Replies waiting', value: sum('repliesWaiting'), href: `/chats?view=needs_reply&scope=${leadScope}`, tone: sum('repliesWaiting') ? 'attention' : 'default' },
+              { label: 'Follow-ups due', value: sum('followUpsOverdue'), href: `/chats?view=follow_ups&scope=${leadScope}` },
               { label: 'Overdue tasks', value: sum('overdueTasks'), href: '/tasks?view=overdue', tone: sum('overdueTasks') ? 'critical' : 'default' },
               { label: 'Open leads', value: sum('openLeads'), href: `/leads?scope=${leadScope}` },
-              { label: 'Meetings today', value: sum('meetings'), href: '/admin/command', hint: "Today's meeting goal completions (Daily operations)." },
-              { label: 'Wins today', value: sum('wins'), href: '/team/activity?event=CLIENT_WON&range=today' },
             ]}
           />
 

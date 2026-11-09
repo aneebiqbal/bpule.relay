@@ -62,9 +62,8 @@ export interface RelayPrimaryDomain {
 
 const everyone = () => true
 const managerUp = (role: RelayNavRoleFlags) => role.isManager || role.isAdmin || role.isOwner
-const adminUp = (role: RelayNavRoleFlags) => role.isAdmin || role.isOwner
 /** Managers only — admins reach the same surface through the Admin domain. */
-const managerOnly = (role: RelayNavRoleFlags) => role.isManager && !role.isAdmin && !role.isOwner
+const adminUp = (role: RelayNavRoleFlags) => role.isAdmin || role.isOwner
 
 export const NAV_DOMAINS: RelayPrimaryDomain[] = [
   {
@@ -127,22 +126,15 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     icon: Users,
     visible: managerUp,
     secondary: [
-      { id: 'overview', label: 'Overview', href: '/team' },
+      { id: 'today', label: 'Today', href: '/team' },
       { id: 'people', label: 'People', href: '/team/people' },
-      // The canonical profile/identity front door. Identities is the same
-      // surface scoped to the sending identities; Coverage owns primaries,
-      // backups and access readiness.
-      // Profiles is the single front door: channels, assignment, readiness,
-      // coverage and targets are managed inside it. Raw identity setup is
-      // advanced and lives behind Profile → Channel → Advanced.
-      { id: 'team-profiles', label: 'Profiles', href: '/team/profiles', group: 'Profiles' },
-      { id: 'coverage', label: 'Coverage', href: '/team/coverage', group: 'Profiles' },
-      { id: 'targets', label: 'Targets', href: '/team/targets', group: 'Profiles' },
-      { id: 'workload', label: 'Workload', href: '/team/workload', group: 'Work' },
-      { id: 'activity', label: 'Activity', href: '/team/activity', group: 'Work' },
-      { id: 'performance', label: 'Performance', href: '/team/performance', group: 'Performance' },
-      { id: 'groups', label: 'Groups', href: '/team/groups', group: 'Structure' },
-      { id: 'daily-operations', label: 'Daily Operations', href: '/admin/command', visible: managerOnly, group: 'Operations' },
+      // Profiles is the single profile front door: channels, assignment,
+      // readiness, coverage and targets are managed inside the operating center.
+      { id: 'team-profiles', label: 'Profiles', href: '/team/profiles' },
+      { id: 'performance', label: 'Performance', href: '/team/performance' },
+      // Teams are real structure (scoping, memberships, roll-ups) — the one
+      // configuration surface kept beside the four operating surfaces.
+      { id: 'groups', label: 'Structure', href: '/team/groups' },
     ],
   },
   {
@@ -188,17 +180,14 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     icon: ShieldCheck,
     visible: adminUp,
     secondary: [
-      { id: 'command-center', label: 'Command Center', href: '/admin/command', group: 'Organization' },
-      { id: 'people-roles', label: 'People & Roles', href: '/admin/people', group: 'Organization' },
+      { id: 'command-center', label: 'Command Center', href: '/admin/command', group: 'Operations' },
+      { id: 'people-roles', label: 'People & Roles', href: '/admin/people', group: 'Operations' },
       // Admin configures targets; Team reviews target progress. One surface each.
-      { id: 'admin-targets', label: 'Targets', href: '/admin/targets', group: 'Organization' },
-      { id: 'scoring-qa', label: 'Scoring QA', href: '/admin/scoring-qa', group: 'Quality' },
-      { id: 'qa-trust', label: 'QA & Trust', href: '/admin/qa', group: 'Quality' },
-      { id: 'facts', label: 'Fact Guardrails', href: '/facts', group: 'Quality' },
-      { id: 'dataset', label: 'Dataset', href: '/admin/dataset', group: 'System' },
-      { id: 'training-data', label: 'Training Data', href: '/admin/training-data', group: 'System' },
-      { id: 'admin-ai-usage', label: 'AI Usage', href: '/admin/ai-usage', group: 'System' },
-      { id: 'revenue-intelligence', label: 'Revenue Intelligence', href: '/admin/revenue-intelligence', group: 'System' },
+      { id: 'admin-targets', label: 'Daily Targets', href: '/admin/targets', group: 'Operations' },
+      { id: 'revenue-intelligence', label: 'Revenue Intelligence', href: '/admin/revenue-intelligence', group: 'Intelligence' },
+      // Engineering / quality tooling lives behind one secondary entry, never
+      // beside the daily operating surfaces.
+      { id: 'system-quality', label: 'System / Quality', href: '/admin/system', group: 'System' },
     ],
   },
 ]

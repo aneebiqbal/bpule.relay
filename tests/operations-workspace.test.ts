@@ -265,19 +265,11 @@ describe('ROLE_VISIBILITY', () => {
     expect(secondaryItems('team', rep)).toEqual([])
   })
 
-  it('ROLE_TEAM_RAIL: managers keep Daily Operations; admins reach it through Admin', () => {
+  it('ROLE_TEAM_RAIL: Team is four operating surfaces plus Structure', () => {
     const hrefs = secondaryItems('team', manager).map((i) => i.href)
-    expect(hrefs).toContain('/team')
-    expect(hrefs).toContain('/team/people')
-    expect(hrefs).toContain('/team/workload')
-    expect(hrefs).toContain('/team/activity')
-    expect(hrefs).toContain('/team/performance')
-    expect(hrefs).toContain('/team/targets')
-    expect(hrefs).toContain('/team/groups')
-    expect(hrefs).toContain('/admin/command')
-    const adminHrefs = secondaryItems('team', admin).map((i) => i.href)
-    expect(adminHrefs).not.toContain('/admin/command')
-    expect(adminHrefs).toContain('/team/targets')
+    expect(hrefs).toEqual(['/team', '/team/people', '/team/profiles', '/team/performance', '/team/groups'])
+    expect(hrefs).not.toContain('/admin/command')
+    expect(secondaryItems('team', admin).map((i) => i.href)).toEqual(hrefs)
     expect(secondaryItems('admin', admin).map((i) => i.href)).toContain('/admin/people')
   })
 

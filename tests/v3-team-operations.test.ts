@@ -270,10 +270,10 @@ describe('V3 rep 360', () => {
   it('V3_REP360_PERFORMANCE — metrics strip carries drill-down links', () => {
     const strip = metricsToStrip(
       { connections: 1, messages: 2, replies: 3, meetings: 4, proposals: 5, wins: 6, applications: 7, tasksCompleted: 8, leadsWorked: 9, replyRate: 42 } as never,
-      (event) => `/team/activity?event=${event ?? 'ALL'}`,
+      (event) => `/reports/activity?event=${event ?? 'ALL'}`,
     )
     expect(strip).toHaveLength(8)
-    expect(strip.every((m) => m.href?.startsWith('/team/activity'))).toBe(true)
+    expect(strip.every((m) => m.href?.startsWith('/reports/activity'))).toBe(true)
   })
 })
 

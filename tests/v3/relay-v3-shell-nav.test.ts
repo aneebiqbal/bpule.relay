@@ -73,7 +73,7 @@ describe('V3_NO_PARALLEL_SELECTED_NAV', () => {
     '/inbound',
     '/team',
     '/team/people',
-    '/team/workload',
+    '/team/profiles',
     '/content/ideas',
     '/reports/sales',
   ]

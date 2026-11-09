@@ -38,7 +38,7 @@ export default async function SalesReportPage({
         activity: (event) =>
           ctx.scope.mode === 'own'
             ? opsHref('/reports/activity', { range: filters.range, event })
-            : opsHref('/team/activity', { range: filters.range, ...keep, event }),
+            : opsHref('/reports/activity', { range: filters.range, ...keep, event }),
       },
     ), ctx.client)
   } catch (err) {

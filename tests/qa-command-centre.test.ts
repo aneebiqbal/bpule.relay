@@ -94,9 +94,10 @@ describe('COMMAND_CENTRE_GATE — escalation recovery', () => {
 })
 
 describe('COMMAND_CENTRE_GATE — role enforcement', () => {
-  it('the page refuses a rep', () => {
+  it('the operating page refuses a rep', () => {
     const page = read('src/app/(app)/admin/command/page.tsx')
-    expect(page).toContain('if (!ctx.isAdmin && !ctx.isManager) redirect')
+    expect(page).toContain('TeamToday')
+    expect(read('src/components/team/team-today.tsx')).toContain('requireTeamContext')
   })
 
   it('the API refuses a rep, not only the navigation', () => {
@@ -125,8 +126,8 @@ describe('COMMAND_CENTRE_GATE — one query wave, not one per rep', () => {
     expect(loop).not.toContain('await ')
   })
 
-  it('the page reads the canonical loader and does not derive status', () => {
-    const page = read('src/app/(app)/admin/command/page.tsx')
+  it('the operating page reads the canonical loader and does not derive status', () => {
+    const page = read('src/components/team/team-today.tsx')
     expect(page).toContain('loadTeamDay')
     expect(page).not.toContain('deriveRepDayState')
     expect(page).not.toContain('computePace')
@@ -174,12 +175,9 @@ describe('COMMAND_CENTRE_GATE — day selection', () => {
     expect(team).toContain('options.date < today')
   })
 
-  it('the page passes the date and the command centre renders a day selector', () => {
-    const page = read('src/app/(app)/admin/command/page.tsx')
-    expect(page).toContain('loadTeamDay({ date: params.date })')
-    const component = read('src/components/admin/command-centre.tsx')
-    expect(component).toContain('Yesterday')
-    expect(component).toContain('type="date"')
+  it('the operating page is Team → Today; the rep-day detail keeps the date', () => {
+    expect(read('src/app/(app)/team/page.tsx')).toContain('TeamToday')
+    expect(read('src/app/(app)/admin/command/[repId]/page.tsx')).toContain('loadRepDayDetail')
   })
 })
 

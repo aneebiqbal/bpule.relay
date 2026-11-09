@@ -308,7 +308,7 @@ export function V4ManagerHome({
               eyebrow="Activity"
               title="Recent important team events"
               action={
-                <Link href="/team/activity" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
+                <Link href="/reports/activity" className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink">
                   All activity <ChevronRight className="size-3.5" aria-hidden />
                 </Link>
               }

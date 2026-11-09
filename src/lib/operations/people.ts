@@ -8,6 +8,7 @@ import type { DbClient } from '@/lib/db/types'
  * computes no status, pace or attention of its own.
  */
 import type { AuthContext } from '@/lib/auth/organization'
+import type { AvailabilityState } from '@/lib/coverage/engine'
 import { loadTeamDay, type TeamDaySummary } from '@/lib/rep-day/team'
 import { loadTeamLive } from '@/lib/admin/load-team-live'
 import type { TeamLivePayload } from '@/lib/admin/team-live'
@@ -34,6 +35,10 @@ export interface PeopleRow extends ManagerTeamRow {
   openLeads: number
   lastActivityAt: string | null
   dayState: string | null
+  /** Every channel the rep operates today — one row per person, not per channel. */
+  profiles: string[]
+  /** Today's availability state; null when no row exists (treated as available). */
+  availability: AvailabilityState | null
 }
 
 export interface TeamSummary {
@@ -99,6 +104,7 @@ export function assemblePeopleDirectory(input: {
   teams: Array<{ id: string; name: string; description: string | null }>
   memberships: MembershipRow[]
   orgRoles: Map<string, string>
+  availabilityByRep?: Map<string, AvailabilityState>
 }): PeopleDirectory {
   const base = assembleManagerHomeTeamData({
     teamName: 'Team',
@@ -138,6 +144,8 @@ export function assemblePeopleDirectory(input: {
       openLeads: live?.openLeadCount ?? 0,
       lastActivityAt: day?.lastActivityAt ?? live?.lastActivityAt ?? null,
       dayState: day?.state ?? null,
+      profiles: (live?.identities ?? []).map((identity) => identity.name).sort((a, b) => a.localeCompare(b)),
+      availability: input.availabilityByRep?.get(row.repId) ?? null,
     }
   })
 
@@ -175,11 +183,17 @@ export async function loadPeopleDirectory(
   auth: AuthContext,
   scope: OperationalScope,
 ): Promise<PeopleDirectory> {
-  const [teamDay, teamLiveFull, teamsRes, rolesRes] = await Promise.all([
-    loadTeamDay(),
+  const teamDay = await loadTeamDay()
+  const [teamLiveFull, teamsRes, rolesRes, availabilityRes] = await Promise.all([
     loadTeamLive(auth.orgId),
     client.from('teams').select('id, name, description').eq('organization_id', auth.orgId).eq('status', 'active'),
     client.from('organization_roles').select('person_id, role').eq('organization_id', auth.orgId),
+    client
+      .from('rep_availability')
+      .select('rep_id, state')
+      .eq('organization_id', auth.orgId)
+      .eq('business_date', teamDay.businessDate)
+      .limit(2000),
   ])
 
   const allowed = new Set(
@@ -216,6 +230,10 @@ export async function loadPeopleDirectory(
     ((rolesRes.data ?? []) as Array<{ person_id: string; role: string }>).map((r) => [r.person_id, r.role]),
   )
 
+  const availabilityByRep = new Map<string, AvailabilityState>(
+    ((availabilityRes.data ?? []) as Array<{ rep_id: string; state: AvailabilityState }>).map((r) => [r.rep_id, r.state]),
+  )
+
   return assemblePeopleDirectory({
     teamDay,
     teamLive,
@@ -225,5 +243,6 @@ export async function loadPeopleDirectory(
     teams: visibleTeams,
     memberships,
     orgRoles,
+    availabilityByRep,
   })
 }

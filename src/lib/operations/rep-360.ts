@@ -15,6 +15,7 @@ export interface RepIdentity {
   name: string
   title: string | null
   channel: string | null
+  profileId: string | null
 }
 
 export interface RepBasics {
@@ -64,18 +65,19 @@ export async function loadRepBasics(
   }
 
   const identityIds = (assignmentRes.data ?? []).map((a: { revenue_identity_id: string }) => a.revenue_identity_id)
-  const identities: { id: string; name: string; title: string | null; channel: string | null }[] = []
+  const identities: { id: string; name: string; title: string | null; channel: string | null; profileId: string | null }[] = []
   if (identityIds.length > 0) {
     const { data: identityRows } = await client
       .from('revenue_identities')
-      .select('id, identity_name, title, channel')
+      .select('id, identity_name, title, channel, profile_id')
       .in('id', identityIds)
     identities.push(
-      ...(identityRows ?? []).map((i: { id: string; identity_name: string; title: string | null; channel: string | null }) => ({
+      ...(identityRows ?? []).map((i: { id: string; identity_name: string; title: string | null; channel: string | null; profile_id: string | null }) => ({
         id: i.id,
         name: i.identity_name,
         title: i.title,
         channel: i.channel,
+        profileId: i.profile_id,
       })),
     )
   }

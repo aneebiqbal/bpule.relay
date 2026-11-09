@@ -11,7 +11,7 @@ import { isMissingRelation } from '@/lib/operations/db-errors'
 export const SAVED_VIEW_SURFACES = {
   'team.people': '/team/people',
   'team.tasks': '/tasks?scope=team',
-  'team.activity': '/team/activity',
+  'team.activity': '/reports/activity',
   'team.performance': '/team/performance',
   accounts: '/accounts',
   leads: '/leads',

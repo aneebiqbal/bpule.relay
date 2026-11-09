@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { DataTable, type Column, type SortState } from '@/components/ui/data-table'
 import { RepStatusBadge } from '@/components/operations/ops-primitives'
+import { labelForAvailability, type AvailabilityState } from '@/lib/coverage/engine'
 import type { PeopleRow } from '@/lib/operations/people'
 
 const STATUS_RANK = { Critical: 0, Attention: 1, 'On track': 2 } as const
@@ -44,6 +45,14 @@ function CountLink({ value, href, label, warn }: { value: number; href: string; 
   )
 }
 
+function todayLabel(row: PeopleRow): string {
+  return row.totalTarget ? `${row.completedToday} / ${row.totalTarget}` : `${row.completedToday} done`
+}
+
+function availabilityLabelFor(state: AvailabilityState | null): string | null {
+  return state ? labelForAvailability(state) : null
+}
+
 export function PeopleTable({ rows }: { rows: PeopleRow[] }) {
   const router = useRouter()
   const [sort, setSort] = useState<SortState | null>(null)
@@ -54,76 +63,69 @@ export function PeopleTable({ rows }: { rows: PeopleRow[] }) {
       key: 'person',
       header: 'Person',
       render: (r) => (
-        <Link href={`/team/${r.repId}`} onClick={(e) => e.stopPropagation()} className="font-medium text-ink hover:underline">
-          {r.repName}
-        </Link>
+        <div className="min-w-0">
+          <Link href={`/team/${r.repId}`} onClick={(e) => e.stopPropagation()} className="font-medium text-ink hover:underline">
+            {r.repName}
+          </Link>
+          <p className="mt-0.5 truncate text-[11px] text-stone">
+            {[r.roleLabel, availabilityLabelFor(r.availability)].filter(Boolean).join(' · ')}
+          </p>
+        </div>
       ),
     },
-    { key: 'role', header: 'Role', render: (r) => <span className="text-graphite">{r.roleLabel}</span>, hideBelow: 'lg' },
     {
-      key: 'team',
-      header: 'Team',
-      hideBelow: 'lg',
-      render: (r) =>
-        r.teams.length === 0 ? (
-          <span className="text-stone">—</span>
-        ) : (
-          <span className="flex flex-wrap gap-x-2">
-            {r.teams.map((t) => (
-              <Link key={t.id} href={`/team/groups/${t.id}`} onClick={(e) => e.stopPropagation()} className="text-graphite hover:underline">
-                {t.name}
-              </Link>
-            ))}
-          </span>
-        ),
+      key: 'today',
+      header: 'Today',
+      render: (r) => (
+        <div>
+          <span className="tabular-nums text-ink">{todayLabel(r)}</span>
+          {r.totalTarget ? (
+            <p className="mt-0.5 text-[11px] text-stone">{Math.max(0, r.totalTarget - r.completedToday)} remaining</p>
+          ) : null}
+        </div>
+      ),
     },
     {
-      key: 'profile',
-      header: 'Active profile',
-      hideBelow: 'xl',
+      key: 'profiles',
+      header: 'Profiles',
+      hideBelow: 'lg',
       render: (r) =>
-        r.activeProfile ? (
-          <span className="truncate text-graphite">{r.activeProfile}</span>
+        r.profiles.length > 0 ? (
+          <span className="truncate text-graphite">{r.profiles.join(' · ')}</span>
         ) : (
           <span className="text-[#7d5410]">No profile</span>
         ),
     },
     {
-      key: 'openLeads',
-      header: 'Open leads',
-      align: 'right',
-      render: (r) => <CountLink value={r.openLeads} href={`/team/${r.repId}?tab=leads`} label="open leads" />,
-    },
-    {
       key: 'repliesWaiting',
-      header: 'Replies waiting',
+      header: 'Replies',
       align: 'right',
       render: (r) => (
         <CountLink value={r.repliesWaiting} href={`/chats?rep=${r.repId}`} label="replies waiting" warn />
       ),
     },
     {
+      key: 'followUpsOverdue',
+      header: 'Follow-ups',
+      align: 'right',
+      render: (r) => (
+        <CountLink value={r.followUpsOverdue} href={`/chats?rep=${r.repId}`} label="overdue follow-ups" warn />
+      ),
+    },
+    {
       key: 'overdueTasks',
-      header: 'Overdue tasks',
+      header: 'Overdue',
       align: 'right',
       render: (r) => (
         <CountLink value={r.overdueTasks} href={`/team/${r.repId}?tab=work&view=overdue`} label="overdue tasks" warn />
       ),
     },
     {
-      key: 'meetings',
-      header: 'Meetings',
+      key: 'openLeads',
+      header: 'Leads',
       align: 'right',
       hideBelow: 'md',
-      render: (r) => <span className="tabular-nums">{r.meetings}</span>,
-    },
-    { key: 'wins', header: 'Wins', align: 'right', hideBelow: 'md', render: (r) => <span className="tabular-nums">{r.wins}</span> },
-    {
-      key: 'targetPct',
-      header: 'Target',
-      align: 'right',
-      hideBelow: 'sm',
-      render: (r) => <span className="tabular-nums">{Math.round(r.targetPct)}%</span>,
+      render: (r) => <CountLink value={r.openLeads} href={`/team/${r.repId}?tab=leads`} label="open leads" />,
     },
     { key: 'status', header: 'Status', render: (r) => <RepStatusBadge status={r.status} /> },
   ]
@@ -133,26 +135,55 @@ export function PeopleTable({ rows }: { rows: PeopleRow[] }) {
       columns={columns}
       rows={sorted}
       rowKey={(r) => r.repId}
-      caption="Team members and their current workload"
+      caption="Team members and the work in front of them today"
       sort={sort}
       onSortChange={setSort}
       onRowClick={(r) => router.push(`/team/${r.repId}`)}
       renderCard={(r) => (
-        <Link href={`/team/${r.repId}`} className="block rounded-lg border border-line bg-bone-raised px-3 py-2.5">
+        <div className="rounded-lg border border-line bg-bone-raised px-3 py-2.5">
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-[14px] font-medium text-ink">{r.repName}</span>
             <RepStatusBadge status={r.status} />
           </div>
           <p className="mt-0.5 truncate text-[12px] text-graphite">
-            {[r.roleLabel, r.teams.map((t) => t.name).join(', '), r.activeProfile].filter(Boolean).join(' · ')}
+            {[r.roleLabel, availabilityLabelFor(r.availability)].filter(Boolean).join(' · ')}
           </p>
+          {r.profiles.length > 0 && (
+            <p className="mt-1 truncate text-[12px] text-graphite">{r.profiles.join(' · ')}</p>
+          )}
           <dl className="mt-2 grid grid-cols-4 gap-2 text-[12px]">
-            <div><dt className="text-stone">Leads</dt><dd className="tabular-nums text-ink">{r.openLeads}</dd></div>
-            <div><dt className="text-stone">Replies</dt><dd className="tabular-nums text-ink">{r.repliesWaiting}</dd></div>
-            <div><dt className="text-stone">Overdue</dt><dd className="tabular-nums text-ink">{r.overdueTasks}</dd></div>
-            <div><dt className="text-stone">Target</dt><dd className="tabular-nums text-ink">{Math.round(r.targetPct)}%</dd></div>
+            <div>
+              <dt className="text-stone">Today</dt>
+              <dd className="tabular-nums text-ink">{todayLabel(r)}</dd>
+            </div>
+            <div>
+              <dt className="text-stone">Replies</dt>
+              <dd className="tabular-nums text-ink">{r.repliesWaiting}</dd>
+            </div>
+            <div>
+              <dt className="text-stone">Follow-ups</dt>
+              <dd className="tabular-nums text-ink">{r.followUpsOverdue}</dd>
+            </div>
+            <div>
+              <dt className="text-stone">Overdue</dt>
+              <dd className={`tabular-nums ${r.overdueTasks ? 'text-status-danger' : 'text-ink'}`}>{r.overdueTasks}</dd>
+            </div>
           </dl>
-        </Link>
+          <div className="mt-2.5 flex gap-2">
+            <Link
+              href={`/team/${r.repId}`}
+              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-graphite hover:text-ink"
+            >
+              Open
+            </Link>
+            <Link
+              href={`/chats?rep=${r.repId}`}
+              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-graphite hover:text-ink"
+            >
+              Replies
+            </Link>
+          </div>
+        </div>
       )}
       empty={<p className="px-3 py-6 text-center text-[13px] text-graphite">No one matches these filters.</p>}
     />

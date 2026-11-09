@@ -301,13 +301,13 @@ describe('ADD_PROFILE_PARTIAL_FAILURE_SAFE', () => {
 })
 
 describe('COVERAGE_EXCEPTION_ONLY', () => {
-  it('the coverage page renders exceptions, not a full directory', () => {
-    const view = read('src/components/coverage/coverage-review.tsx')
+  it('Team → Today renders exceptions, not a full directory', () => {
+    const view = read('src/components/team/team-today.tsx')
     expect(view).toMatch(/Action required/)
-    expect(view).toMatch(/Active coverage/)
-    expect(view).toMatch(/Readiness blockers/)
-    expect(view).toMatch(/Recent coverage history/)
-    expect(view).not.toMatch(/profile-directory|all profiles table/i)
+    expect(view).toMatch(/Active temporary cover/)
+    expect(view).toMatch(/Access not confirmed/)
+    expect(view).toMatch(/Coverage healthy/)
+    expect(view).not.toMatch(/Recent coverage history/)
   })
 })
 

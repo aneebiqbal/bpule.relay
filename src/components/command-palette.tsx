@@ -224,11 +224,11 @@ export function CommandPalette({
     },
     {
       id: 'open-coverage',
-      label: 'Open Coverage',
-      description: 'Primaries, backups and access readiness',
+      label: 'Coverage exceptions',
+      description: 'Uncovered profiles and cover decisions',
       icon: Shield,
       group: 'Team',
-      action: () => { router.push('/team/coverage'); onOpenChange(false) },
+      action: () => { router.push('/team'); onOpenChange(false) },
     },
     {
       id: 'today',
@@ -344,11 +344,11 @@ export function CommandPalette({
     },
     {
       id: 'team-activity',
-      label: 'Team Activity',
+      label: 'Activity report',
       description: 'Operational activity feed',
       icon: Activity,
       group: 'Navigation',
-      action: () => { router.push('/team/activity'); onOpenChange(false) },
+      action: () => { router.push('/reports/activity'); onOpenChange(false) },
     },
     {
       id: 'team-performance',
@@ -360,8 +360,8 @@ export function CommandPalette({
     },
     {
       id: 'targets',
-      label: 'Targets',
-      description: 'Daily targets',
+      label: 'Daily targets',
+      description: 'What each person should do per day',
       icon: Target,
       group: 'Admin',
       action: () => { router.push('/admin/targets'); onOpenChange(false) },
