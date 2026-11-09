@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { cn } from 'cn'
 import { V4Panel } from '@/components/v4/primitives'
 import { UploadBatchUploader } from '@/components/profile-intelligence/upload-batch'
 import { pollBatch } from '@/lib/profile-intelligence/batch-poller'
 
-type Step = 'source' | 'review' | 'channels' | 'assign' | 'ready'
+type Step = 'source' | 'review' | 'channels' | 'assign' | 'targets' | 'ready'
 
 interface RepOption {
   id: string
@@ -32,12 +33,33 @@ interface OnboardingResult {
 }
 
 const STEPS: Array<{ key: Step; label: string }> = [
-  { key: 'source', label: 'Source' },
-  { key: 'review', label: 'Review' },
+  { key: 'source', label: 'Person' },
+  { key: 'review', label: 'Knowledge' },
   { key: 'channels', label: 'Channels' },
-  { key: 'assign', label: 'Assign' },
-  { key: 'ready', label: 'Ready' },
+  { key: 'assign', label: 'Assignment' },
+  { key: 'targets', label: 'Targets' },
+  { key: 'ready', label: 'Review' },
 ]
+
+/** Channel-aware target templates — the same canonical activity types. */
+const CHANNEL_TARGETS: Record<string, Array<{ activityType: string; label: string; default: number }>> = {
+  linkedin: [
+    { activityType: 'prospect_extracted', label: 'Prospects', default: 30 },
+    { activityType: 'connection_request', label: 'Connections', default: 20 },
+    { activityType: 'dm', label: 'Messages', default: 33 },
+    { activityType: 'followup', label: 'Follow-ups', default: 5 },
+  ],
+  upwork: [
+    { activityType: 'prospect_extracted', label: 'Jobs reviewed', default: 10 },
+    { activityType: 'application', label: 'Proposals', default: 7 },
+    { activityType: 'followup', label: 'Follow-ups', default: 3 },
+  ],
+  email: [
+    { activityType: 'email', label: 'Emails sent', default: 30 },
+    { activityType: 'dm', label: 'Replies handled', default: 10 },
+    { activityType: 'followup', label: 'Follow-ups', default: 5 },
+  ],
+}
 
 interface ReviewField {
   label: string
@@ -45,7 +67,16 @@ interface ReviewField {
   state: 'extracted' | 'missing'
 }
 
-export function AddProfileWizard({ reps, onClose }: { reps: RepOption[]; onClose: () => void }) {
+export function AddProfileWizard({
+  reps,
+  existingPeople = [],
+  onClose,
+}: {
+  reps: RepOption[]
+  /** Canonical people already in the directory — used only to warn on duplicates. */
+  existingPeople?: Array<{ key: string; name: string }>
+  onClose: () => void
+}) {
   const router = useRouter()
   const [step, setStep] = useState<Step>('source')
   const [source, setSource] = useState<'paste' | 'upload'>('paste')
@@ -64,6 +95,7 @@ export function AddProfileWizard({ reps, onClose }: { reps: RepOption[]; onClose
   const [saving, setSaving] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<OnboardingResult | null>(null)
+  const [targets, setTargets] = useState<Record<string, Record<string, number>>>({})
   const [error, setError] = useState<string | null>(null)
 
   const selectedChannels = channels.filter((channel) => channel.enabled)
@@ -178,12 +210,52 @@ export function AddProfileWizard({ reps, onClose }: { reps: RepOption[]; onClose
         return
       }
       setResult(data)
-      setStep('ready')
-      router.refresh()
+      // Targets are channel-aware and need the created identity ids, so they are
+      // captured after the profile + channels exist.
+      setStep('targets')
     } catch {
       setError('Could not save the profile. Check your connection and try again.')
     }
     setSaving(false)
+  }
+
+  /** Persist the channel-aware target template. Failures never strand the person. */
+  async function saveTargets() {
+    if (!result?.identities?.length || !repId) {
+      setStep('ready')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      const requests: Array<Promise<unknown>> = []
+      for (const identity of result.identities) {
+        for (const item of CHANNEL_TARGETS[identity.channel] ?? []) {
+          const count = targets[identity.id]?.[item.activityType] ?? item.default
+          if (count <= 0) continue
+          requests.push(
+            fetch('/api/admin/targets', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                repId,
+                revenueIdentityId: identity.id,
+                activityType: item.activityType,
+                targetCount: count,
+              }),
+            }),
+          )
+        }
+      }
+      await Promise.all(requests)
+      setStep('ready')
+      router.refresh()
+    } catch {
+      setError('The profile was created, but some targets could not be saved. Edit them from Team → Profiles.')
+      setStep('ready')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const stepIndex = STEPS.findIndex((item) => item.key === step)
@@ -271,6 +343,26 @@ export function AddProfileWizard({ reps, onClose }: { reps: RepOption[]; onClose
                 <p className="text-[11px] text-stone">
                   {processing ? 'Processing the document…' : 'The document is processed before review.'}
                 </p>
+              </div>
+            )}
+
+            {fullName.trim() && existingPeople.some((person) => person.name.trim().toLowerCase() === fullName.trim().toLowerCase()) && (
+              <div role="alert" className="rounded-xl border border-status-warning/30 bg-status-warning/5 px-4 py-3">
+                <p className="text-[13px] font-medium text-ink">
+                  {existingPeople.find((person) => person.name.trim().toLowerCase() === fullName.trim().toLowerCase())?.name}{' '}
+                  already exists
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <Link
+                    href={`/team/profiles/${existingPeople.find((person) => person.name.trim().toLowerCase() === fullName.trim().toLowerCase())?.key}`}
+                    className="rounded-lg border border-line bg-bone-raised px-3 py-1.5 text-[12px] font-medium text-ink hover:bg-bone"
+                  >
+                    Open existing profile
+                  </Link>
+                  <span className="text-[12px] text-graphite">
+                    Continue only to create a separate person. Relay never merges silently.
+                  </span>
+                </div>
               </div>
             )}
 
@@ -420,6 +512,68 @@ export function AddProfileWizard({ reps, onClose }: { reps: RepOption[]; onClose
           </div>
         )}
 
+        {step === 'targets' && result && (
+          <div className="mt-5 space-y-4">
+            <p className="text-[13px] text-graphite">
+              Channel-aware daily targets. The profile and channels are already saved — targets can be
+              changed any time from the person&apos;s operating center.
+            </p>
+            <div className="space-y-3">
+              {result.identities.map((identity) => {
+                const template = CHANNEL_TARGETS[identity.channel] ?? []
+                if (template.length === 0) return null
+                const values = targets[identity.id] ?? {}
+                return (
+                  <fieldset key={identity.id} className="rounded-xl ring-1 ring-line">
+                    <legend className="ml-3 rounded-full bg-bone px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-graphite">
+                      {identity.channel}
+                    </legend>
+                    <div className="grid gap-3 p-4 sm:grid-cols-2">
+                      {template.map((item) => (
+                        <label key={item.activityType} className="block">
+                          <span className="text-[12px] font-medium text-graphite">{item.label}</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={values[item.activityType] ?? item.default}
+                            onChange={(event) =>
+                              setTargets((prev) => ({
+                                ...prev,
+                                [identity.id]: {
+                                  ...(prev[identity.id] ?? {}),
+                                  [item.activityType]: Math.max(0, Number(event.target.value) || 0),
+                                },
+                              }))
+                            }
+                            className="mt-1.5 h-10 w-full rounded-lg border border-line bg-bone-raised px-3 text-[13px] text-ink"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                )
+              })}
+            </div>
+            <div className="flex justify-between">
+              <button
+                type="button"
+                onClick={() => setStep('assign')}
+                className="rounded-lg border border-line px-4 py-2 text-[13px] font-medium text-graphite hover:text-ink"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveTargets()}
+                disabled={saving}
+                className="rounded-lg bg-solid px-4 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? 'Saving…' : 'Save targets'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {step === 'ready' && result && (
           <div className="mt-5 space-y-4">
             {result.status === 'failed' ? (
@@ -452,6 +606,14 @@ export function AddProfileWizard({ reps, onClose }: { reps: RepOption[]; onClose
               <button type="button" onClick={onClose} className="rounded-lg border border-line px-4 py-2 text-[13px] font-medium text-graphite hover:text-ink">
                 Close
               </button>
+              {result.profileId && (
+                <Link
+                  href={`/team/profiles/${result.profileId}`}
+                  className="rounded-lg bg-solid px-4 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+                >
+                  Open operating center
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -459,12 +621,13 @@ export function AddProfileWizard({ reps, onClose }: { reps: RepOption[]; onClose
                   setResult(null)
                   setProfileId(null)
                   setRepId('')
+                  setTargets({})
                   setChannels([
                     { channel: 'linkedin', enabled: true, identityName: '', title: '' },
                     { channel: 'upwork', enabled: false, identityName: '', title: '' },
                   ])
                 }}
-                className="rounded-lg bg-solid px-4 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+                className="rounded-lg border border-line px-4 py-2 text-[13px] font-medium text-graphite hover:text-ink"
               >
                 Add another profile
               </button>

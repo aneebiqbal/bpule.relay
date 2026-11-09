@@ -57,27 +57,40 @@ export default async function AppLayout({
       const active = workable.filter((identity) => identity.status === "active")
       const profileIds = [...new Set(active.map((identity) => identity.profileId).filter((id): id is string => Boolean(id)))]
       const personIdByProfile = new Map<string, string>()
+      const personNameById = new Map<string, string>()
       if (profileIds.length > 0) {
         const { data: personRows } = await store
           .getSupabaseClient()
           .from('profiles')
-          .select('id, person_id')
+          .select('id, person_id, display_name, full_name, label')
           .eq('organization_id', authCtx?.orgId ?? user.organization.id)
           .in('id', profileIds)
           .limit(500)
-        for (const row of (personRows ?? []) as Array<{ id: string; person_id: string | null }>) {
+        for (const row of (personRows ?? []) as Array<{
+          id: string
+          person_id: string | null
+          display_name: string | null
+          full_name: string | null
+          label: string | null
+        }>) {
           personIdByProfile.set(row.id, row.person_id ?? row.id)
+          const name = row.display_name ?? row.full_name ?? row.label
+          if (name) personNameById.set(row.person_id ?? row.id, name)
         }
       }
       return {
-        identities: active.map((identity) => ({
-          id: identity.id,
-          identityName: identity.identityName,
-          title: identity.title,
-          channel: identity.channel,
-          profileId: identity.profileId,
-          personId: identity.profileId ? (personIdByProfile.get(identity.profileId) ?? identity.profileId) : null,
-        })),
+        identities: active.map((identity) => {
+          const personId = identity.profileId ? (personIdByProfile.get(identity.profileId) ?? identity.profileId) : null
+          return {
+            id: identity.id,
+            identityName: identity.identityName,
+            title: identity.title,
+            channel: identity.channel,
+            profileId: identity.profileId,
+            personId,
+            personName: personId ? (personNameById.get(personId) ?? null) : null,
+          }
+        }),
         coveredIdentityIds: workable
           .filter((identity) => (identity as { access?: string }).access === "coverage")
           .map((identity) => identity.id),

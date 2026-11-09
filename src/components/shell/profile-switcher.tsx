@@ -28,7 +28,7 @@ function groupIdentitiesByPerson(
     const key = identity.personId ?? identity.profileId ?? identity.id
     let group = byKey.get(key)
     if (!group) {
-      group = { key, name: identity.identityName, identities: [] }
+      group = { key, name: identity.personName ?? identity.identityName, identities: [] }
       byKey.set(key, group)
       groups.push(group)
     }

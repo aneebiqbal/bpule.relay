@@ -83,7 +83,7 @@ async function axeCheck(page, label) {
       if (pane) ok(`rep ${vp.name}: context pane visible`)
       else fail(`rep ${vp.name}: context pane missing`)
     } else {
-      const drawerBtn = page.getByRole('button', { name: /Lead intelligence/ })
+      const drawerBtn = page.getByRole('button', { name: /Details/ })
       if (await drawerBtn.count().catch(() => 0)) ok(`rep ${vp.name}: context drawer reachable`)
       else fail(`rep ${vp.name}: context drawer button missing`)
     }
@@ -106,7 +106,7 @@ async function axeCheck(page, label) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   if (overflow <= 1) ok('admin 1440: overflow 0')
   else fail(`admin 1440: overflow ${overflow}`)
-  const act = await page.getByRole('region', { name: 'Thread' }).getByRole('button', { name: 'Act' }).count().catch(() => 0)
+  const act = await page.getByRole('region', { name: 'Thread' }).getByRole('button', { name: 'More' }).count().catch(() => 0)
   if (act) ok('admin 1440: Act menu present')
   else fail('admin 1440: Act menu missing')
   await axeCheck(page, 'admin 1440')

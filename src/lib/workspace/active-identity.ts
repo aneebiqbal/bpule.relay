@@ -27,6 +27,8 @@ export interface WorkspaceIdentity {
   profileId: string | null
   /** Canonical person key — the switcher groups channels under one person. */
   personId?: string | null
+  /** Canonical person's display name — the group header. */
+  personName?: string | null
 }
 
 export function isIdentityId(value: string | null | undefined): value is string {

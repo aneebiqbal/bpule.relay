@@ -31,7 +31,6 @@ export const MANAGER_ONLY_COMMANDS: ReadonlySet<string> = new Set([
   'add-profile',
   'assign-profile',
   'open-coverage',
-  'open-identities',
 ])
 
 export function commandVisible(

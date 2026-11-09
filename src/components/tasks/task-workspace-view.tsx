@@ -439,7 +439,9 @@ export function TaskWorkspaceView({
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden overflow-x-auto rounded-lg border border-line bg-bone-raised md:block">
+          {/* contain-layout keeps the wide table's scroll overflow from
+              widening the document; the container still scrolls. */}
+          <div className="hidden contain-layout overflow-x-auto rounded-lg border border-line bg-bone-raised md:block">
             <table className="w-full min-w-[900px] border-collapse text-left text-[13px]">
               <thead>
                 <tr className="border-b border-line text-[11px] uppercase tracking-wide text-stone">

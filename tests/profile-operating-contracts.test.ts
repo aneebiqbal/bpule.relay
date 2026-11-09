@@ -188,7 +188,15 @@ describe('TARGETS_CHANNEL_AWARE', () => {
     expect(read('src/lib/team/profile-detail.ts')).toMatch(/revenue_identity_id/)
     const model = read('src/lib/profiles/operating-model.ts')
     expect(model).toMatch(/revenue_identity_id/)
+    expect(model).toMatch(/targetId/)
     expect(model).toMatch(/activityType/)
+  })
+
+  it('the profile channel edits its own targets — the primary editing surface', () => {
+    const source = read('src/components/team/team-profile-detail.tsx')
+    expect(source).toMatch(/ChannelTargetsEditor/)
+    expect(source).toMatch(/defaultTargetsForChannel/)
+    expect(source).toMatch(/api\/admin\/targets/)
   })
 })
 
@@ -248,6 +256,76 @@ describe('TASK_ENGINE_SHARED', () => {
   it('the profile workspace assigns work through the canonical task composer', () => {
     const detail = read('src/components/team/team-profile-detail.tsx')
     expect(detail).toMatch(/AssignTaskButton/)
+  })
+})
+
+describe('ADD_PROFILE_CREATES_ONE_PERSON', () => {
+  it('the create flow inserts one profile regardless of channel count', async () => {
+    const source = read('src/app/api/team/profile-onboarding/route.ts')
+    expect(source).toMatch(/from\('profiles'\)[\s\S]*?\.insert\(/)
+    // One insert, then the channel loop.
+    expect(source.match(/from\('profiles'\)[\s\S]*?\.insert\(/g)).toHaveLength(1)
+    expect(source).toMatch(/channels/)
+  })
+})
+
+describe('ADD_PROFILE_MULTI_CHANNEL_CREATES_ONE_PERSON', () => {
+  it('every channel identity attaches to the same profile id', async () => {
+    const source = read('src/app/api/team/profile-onboarding/route.ts')
+    expect(source).toMatch(/profile_id: result\.profileId|profile_id: profile\.id/)
+    expect(source).toMatch(/for \(const channel of channels\)|channels\.map\(/)
+  })
+
+  it('the wizard offers LinkedIn and Upwork as one person', async () => {
+    const wizard = read('src/components/team/add-profile-wizard.tsx')
+    expect(wizard).toMatch(/linkedin/)
+    expect(wizard).toMatch(/upwork/)
+    expect(wizard).toMatch(/profileId/)
+  })
+})
+
+describe('ADD_PROFILE_PARTIAL_FAILURE_SAFE', () => {
+  it('the onboarding write reports the failed step and never deletes', async () => {
+    const source = read('src/app/api/team/profile-onboarding/route.ts')
+    expect(source).toMatch(/status = 'partial'|status: 'partial'/)
+    expect(source).toMatch(/failed:/)
+    expect(source).not.toMatch(/delete from profiles/i)
+    expect(source).toMatch(/does not delete anything on partial failure/i)
+  })
+})
+
+describe('COVERAGE_EXCEPTION_ONLY', () => {
+  it('the coverage page renders exceptions, not a full directory', () => {
+    const view = read('src/components/coverage/coverage-review.tsx')
+    expect(view).toMatch(/Action required/)
+    expect(view).toMatch(/Active coverage/)
+    expect(view).toMatch(/Readiness blockers/)
+    expect(view).toMatch(/Recent coverage history/)
+    expect(view).not.toMatch(/profile-directory|all profiles table/i)
+  })
+})
+
+describe('PRIMARY_NEVER_CHANGES_DURING_COVERAGE', () => {
+  it('coverage writes never reassign the permanent operator', () => {
+    const actions = read('src/lib/coverage/actions.ts')
+    expect(actions).not.toMatch(/identity_assignments\s*\)?\s*\.(insert|upsert|update|delete)/)
+  })
+})
+
+describe('RESTORE_PRIMARY_EXPLICIT', () => {
+  it('restore is a dedicated admin action, never automatic', () => {
+    expect(read('src/app/api/team/coverage/restore/route.ts')).toMatch(/restorePrimaryCoverage/)
+    expect(read('src/components/coverage/admin-coverage-panel.tsx')).toMatch(/Restore primary/)
+  })
+})
+
+describe('COMPLETED_WORK_ATTRIBUTION_PRESERVED', () => {
+  it('restore never moves completed or cancelled work', () => {
+    const actions = read('src/lib/coverage/actions.ts')
+    const fn = actions.slice(actions.indexOf('async function returnProfileTasksToPrimary'))
+    const body = fn.slice(0, fn.indexOf('\n}'))
+    expect(body).toMatch(/\.in\('status', \['OPEN', 'IN_PROGRESS', 'WAITING'\]\)/)
+    expect(body).not.toMatch(/DONE/)
   })
 })
 

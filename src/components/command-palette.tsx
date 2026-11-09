@@ -18,7 +18,6 @@ import {
   ArrowRight,
   Shield,
   BarChart3,
-  UserCircle2,
   TrendingUp,
   Building2,
   ListChecks,
@@ -230,14 +229,6 @@ export function CommandPalette({
       icon: Shield,
       group: 'Team',
       action: () => { router.push('/team/coverage'); onOpenChange(false) },
-    },
-    {
-      id: 'open-identities',
-      label: 'Open Identities',
-      description: 'The sending identities reps use',
-      icon: UserCircle2,
-      group: 'Team',
-      action: () => { router.push('/profile-intelligence?tab=identities'); onOpenChange(false) },
     },
     {
       id: 'today',

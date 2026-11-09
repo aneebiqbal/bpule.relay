@@ -29,6 +29,7 @@ export interface ProfileChannelModel {
   activeCoverage: Array<{ coveringRepId: string; coveringRepName: string; reason: string | null }>
   readiness: Array<{ repId: string; repName: string; ready: boolean }>
   targets: Array<{
+    targetId: string | null
     activityType: string
     targetCount: number
     completedCount: number
@@ -311,12 +312,14 @@ export async function loadProfileOperatingModel(
     identityIds.length > 0
       ? supabase
           .from('daily_targets')
-          .select('revenue_identity_id, activity_type, target_count')
+          .select('id, revenue_identity_id, activity_type, target_count')
           .eq('organization_id', orgId)
           .in('revenue_identity_id', identityIds)
           .eq('active', true)
           .limit(200)
-      : Promise.resolve({ data: [] as Array<{ revenue_identity_id: string; activity_type: string; target_count: number }> }),
+      : Promise.resolve({
+          data: [] as Array<{ id: string; revenue_identity_id: string; activity_type: string; target_count: number }>,
+        }),
   ])
 
   const assignments = (assignmentRes.data ?? []) as Array<{
@@ -325,6 +328,7 @@ export async function loadProfileOperatingModel(
     created_at: string
   }>
   const targets = (targetRes.data ?? []) as Array<{
+    id: string
     revenue_identity_id: string
     activity_type: string
     target_count: number
@@ -386,6 +390,7 @@ export async function loadProfileOperatingModel(
         const targetCount = row.target_count
         const completedCount = accountabilityRow?.completed_count ?? 0
         return {
+          targetId: row.id,
           activityType: row.activity_type,
           targetCount,
           completedCount,

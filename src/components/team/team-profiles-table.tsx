@@ -224,7 +224,7 @@ function TeamProfilesTableInner({
 
       <V4Panel padded={false}>
         <div
-          className="hidden overflow-x-auto md:block"
+          className="hidden contain-layout overflow-x-auto md:block"
           tabIndex={0}
           role="region"
           aria-label="Profiles table"
@@ -291,7 +291,11 @@ function TeamProfilesTableInner({
       <RepInverse profiles={profiles} />
 
       {wizardOpen && (
-        <AddProfileWizard reps={reps} onClose={() => setWizardOpen(false)} />
+        <AddProfileWizard
+          reps={reps}
+          existingPeople={profiles.map((profile) => ({ key: profile.profileId, name: profile.profileName }))}
+          onClose={() => setWizardOpen(false)}
+        />
       )}
     </div>
   )

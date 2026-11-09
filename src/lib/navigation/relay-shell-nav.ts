@@ -135,14 +135,14 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
       // Profiles is the single front door: channels, assignment, readiness,
       // coverage and targets are managed inside it. Raw identity setup is
       // advanced and lives behind Profile → Channel → Advanced.
-      { id: 'team-profiles', label: 'Profiles', href: '/team/profiles' },
-      { id: 'coverage', label: 'Coverage', href: '/team/coverage' },
-      { id: 'workload', label: 'Workload', href: '/team/workload' },
-      { id: 'activity', label: 'Activity', href: '/team/activity' },
-      { id: 'performance', label: 'Performance', href: '/team/performance' },
-      { id: 'targets', label: 'Targets', href: '/team/targets' },
-      { id: 'groups', label: 'Groups', href: '/team/groups' },
-      { id: 'daily-operations', label: 'Daily Operations', href: '/admin/command', visible: managerOnly },
+      { id: 'team-profiles', label: 'Profiles', href: '/team/profiles', group: 'Profiles' },
+      { id: 'coverage', label: 'Coverage', href: '/team/coverage', group: 'Profiles' },
+      { id: 'targets', label: 'Targets', href: '/team/targets', group: 'Profiles' },
+      { id: 'workload', label: 'Workload', href: '/team/workload', group: 'Work' },
+      { id: 'activity', label: 'Activity', href: '/team/activity', group: 'Work' },
+      { id: 'performance', label: 'Performance', href: '/team/performance', group: 'Performance' },
+      { id: 'groups', label: 'Groups', href: '/team/groups', group: 'Structure' },
+      { id: 'daily-operations', label: 'Daily Operations', href: '/admin/command', visible: managerOnly, group: 'Operations' },
     ],
   },
   {

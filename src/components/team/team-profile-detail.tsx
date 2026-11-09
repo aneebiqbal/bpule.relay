@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/button'
 import { V4Chip, V4Panel, V4PanelHeader } from '@/components/v4/primitives'
 import { CoverageConfigPanel } from '@/components/coverage/coverage-config-panel'
 import { AssignTaskButton } from '@/components/operations/assign-task-button'
+import { activityLabel, defaultTargetsForChannel } from '@/lib/accountability/default-targets'
+import type { ActivityType } from '@/lib/domain/types'
 import type { ProfileOperatingModel, ProfileChannelModel } from '@/lib/profiles/operating-model'
 
 type Tab = 'overview' | 'channels' | 'knowledge' | 'execution' | 'history'
@@ -360,20 +362,28 @@ function ChannelBlock({
         </div>
       </dl>
 
-      {channel.targets.length > 0 && (
-        <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {channel.targets.map((target) => (
-            <div key={target.activityType} className="rounded-lg bg-bone px-3 py-2 ring-1 ring-line/70">
-              <dt className="text-[10px] uppercase tracking-[0.12em] text-stone">
-                {target.activityType.replace(/_/g, ' ')}
-              </dt>
-              <dd className="mt-0.5 tabular-nums text-ink">
-                {target.completedCount} / {target.targetCount}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
+      <div className="mt-4">
+        <p className="text-[11px] uppercase tracking-[0.12em] text-stone">Targets</p>
+        {channel.targets.length > 0 ? (
+          <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {channel.targets.map((target) => (
+              <div key={target.activityType} className="rounded-lg bg-bone px-3 py-2 ring-1 ring-line/70">
+                <dt className="text-[10px] uppercase tracking-[0.12em] text-stone">
+                  {target.activityType.replace(/_/g, ' ')}
+                </dt>
+                <dd className="mt-0.5 tabular-nums text-ink">
+                  {target.completedCount} / {target.targetCount}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="mt-2 text-[12px] text-stone">No targets configured for this channel.</p>
+        )}
+        {canManage && (
+          <ChannelTargetsEditor channel={channel} repId={channel.primaryRepId} />
+        )}
+      </div>
 
       {canManage && (
         <div className="mt-4 border-t border-line/70 pt-4">
@@ -391,6 +401,132 @@ function ChannelBlock({
         </div>
       )}
     </V4Panel>
+  )
+}
+
+/**
+ * Channel targets — the only place a daily expectation is edited. The pack is
+ * channel-specific (LinkedIn ≠ Upwork ≠ Email), and every target is keyed by
+ * the channel identity, never the person.
+ */
+function ChannelTargetsEditor({
+  channel,
+  repId,
+}: {
+  channel: ProfileChannelModel
+  repId: string | null
+}) {
+  const router = useRouter()
+  const existing = new Map(channel.targets.map((target) => [target.activityType, target]))
+  const pack = defaultTargetsForChannel(
+    (['linkedin', 'upwork', 'email'].includes(channel.channel) ? channel.channel : 'linkedin') as
+      | 'linkedin'
+      | 'upwork'
+      | 'email',
+  )
+  const rows = [
+    ...pack.map((row) => ({
+      activityType: row.activityType,
+      targetId: existing.get(row.activityType)?.targetId ?? null,
+      count: existing.get(row.activityType)?.targetCount ?? row.targetCount,
+    })),
+    ...channel.targets
+      .filter((target) => !pack.some((row) => row.activityType === target.activityType))
+      .map((target) => ({ activityType: target.activityType, targetId: target.targetId, count: target.targetCount })),
+  ]
+
+  const [counts, setCounts] = useState<Record<string, number>>(() =>
+    Object.fromEntries(rows.map((row) => [row.activityType, row.count])),
+  )
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  function update(activityType: string, value: string) {
+    const parsed = Number(value)
+    setCounts((current) => ({
+      ...current,
+      [activityType]: Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 0,
+    }))
+  }
+
+  async function save() {
+    if (!repId) {
+      setError('Assign a primary rep before setting targets.')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    setMessage(null)
+    try {
+      for (const row of rows) {
+        const targetCount = counts[row.activityType] ?? row.count
+        if (targetCount <= 0) continue
+        const res = row.targetId
+          ? await fetch(`/api/admin/targets/${row.targetId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ targetCount }),
+            })
+          : await fetch('/api/admin/targets', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                repId,
+                revenueIdentityId: channel.identityId,
+                activityType: row.activityType,
+                targetCount,
+              }),
+            })
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(body.error ?? `Could not save ${activityLabel(row.activityType as ActivityType)}.`)
+      }
+      setMessage('Targets saved.')
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save targets.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-lg bg-bone px-3 py-2.5 ring-1 ring-line/70">
+      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">Edit targets</p>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {rows.map((row) => (
+          <label key={row.activityType} className="block">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-stone">
+              {activityLabel(row.activityType as ActivityType)}
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={counts[row.activityType] ?? row.count}
+              onChange={(event) => update(row.activityType, event.target.value)}
+              className="mt-0.5 h-8 w-full rounded-md border border-line bg-bone-raised px-2 text-[13px] tabular-nums text-ink"
+            />
+          </label>
+        ))}
+      </div>
+      <div className="mt-2.5 flex items-center justify-between gap-3">
+        <p className="text-[11px] text-stone">Daily expectation for this channel.</p>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Save targets'}
+        </button>
+      </div>
+      {error && (
+        <p role="alert" className="mt-2 text-[12px] text-status-danger">{error}</p>
+      )}
+      {message && (
+        <p className="mt-2 text-[12px] text-status-success">{message}</p>
+      )}
+    </div>
   )
 }
 

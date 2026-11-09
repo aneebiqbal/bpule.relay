@@ -266,7 +266,9 @@ export function CommandCentre({
         ) : (
           <>
             {/* Desktop table */}
-            <div className="hidden overflow-x-auto md:block">
+            {/* contain-layout: without it the 980px table's scrollable overflow
+                escapes the scroll container and widens the document. */}
+            <div className="hidden contain-layout overflow-x-auto md:block">
               <table className="w-full min-w-[980px] text-left">
                 <thead>
                   <tr className="border-b border-line text-[10px] uppercase tracking-[0.12em] text-stone">
