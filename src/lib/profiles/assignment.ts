@@ -270,6 +270,7 @@ export async function removeResponsibility(
     .eq('id', input.identityId)
     .eq('organization_id', input.orgId)
     .maybeSingle()
+  if (!identity) throw new Error('IDENTITY_NOT_FOUND')
 
   const now = new Date().toISOString()
   const { error: unassignError } = await client

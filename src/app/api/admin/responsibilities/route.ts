@@ -120,6 +120,10 @@ export async function DELETE(request: Request) {
     })
     return NextResponse.json({ ok: true, ...result })
   } catch (error) {
+    const message = error instanceof Error ? error.message : ''
+    if (message === 'IDENTITY_NOT_FOUND') {
+      return NextResponse.json({ error: 'That channel identity was not found in your organization.' }, { status: 404 })
+    }
     return safeErrorResponse(error, 500, 'Failed to remove responsibility.', 'admin/responsibilities')
   }
 }
