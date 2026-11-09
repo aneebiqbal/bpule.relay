@@ -268,7 +268,7 @@ async function OverviewTab({
               const body = (
                 <>
                   <span className="text-[12px] text-stone">{a.label}</span>
-                  <span className={a.tone === 'critical' ? 'text-status-danger' : a.tone === 'attention' ? 'text-orange' : 'text-ink'}>
+                  <span className={a.tone === 'critical' ? 'text-[#a8342a]' : a.tone === 'attention' ? 'text-[#b8531f]' : 'text-ink'}>
                     {a.detail}
                   </span>
                 </>

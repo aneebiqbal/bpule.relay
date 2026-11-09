@@ -146,7 +146,12 @@ export async function TeamToday() {
             <V4Empty title="No one in scope" body="Invite people to start operating the team." />
           ) : (
             <>
-              <div className="hidden overflow-x-auto md:block">
+              <div
+                className="hidden contain-layout overflow-x-auto md:block"
+                tabIndex={0}
+                role="region"
+                aria-label="People today table"
+              >
                 <table className="w-full min-w-[820px] text-left">
                   <thead>
                     <tr className="border-b border-line text-[10px] uppercase tracking-[0.12em] text-stone">

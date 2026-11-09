@@ -9,7 +9,7 @@ const alertVariants = cva(
       variant: {
         default: "border-line/60 bg-bg-bone-raised text-ink",
         destructive:
-          "border-status-danger/15 bg-status-danger/5 text-status-danger *:data-[slot=alert-description]:text-status-danger/90 *:[svg]:text-current",
+          "border-status-danger/15 bg-status-danger/5 text-[#a8342a] *:data-[slot=alert-description]:text-[#a8342a]/90 *:[svg]:text-current",
       },
     },
     defaultVariants: {

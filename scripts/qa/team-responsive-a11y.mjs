@@ -91,7 +91,7 @@ async function axeCheck(page, label) {
     for (const vp of VIEWPORTS) {
       await page.setViewportSize({ width: vp.width, height: vp.height })
       await page.goto(`${base}${surface.href}`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
-      await page.waitForTimeout(1800)
+      await page.waitForTimeout(2500)
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
       if (overflow <= 1) ok(`${surface.name} ${vp.name}: overflow 0`)
       else fail(`${surface.name} ${vp.name}: overflow ${overflow}`)

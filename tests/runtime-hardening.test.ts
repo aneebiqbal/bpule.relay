@@ -60,6 +60,14 @@ describe('DB_TRANSPORT_FAILURE_DEGRADES', () => {
     expect(isDatabaseTransportFailure(error)).toBe(true)
   })
 
+  it('recognises a bundled Neon transport failure whose stack has no node_modules path', () => {
+    const error = new Error('Connection terminated unexpectedly')
+    error.stack =
+      'Error: Connection terminated unexpectedly\n    at j.<anonymous> (.next/server/chunks/ssr/src_lib_db_neon_ts_15nurbo._.js:13:19242)'
+    expect(isDatabaseTransportFailure(error)).toBe(true)
+    expect(handleUncaughtException(error)).toBe(true)
+  })
+
   it('does not recognise an application error as a transport failure', () => {
     const error = new Error('Cannot read properties of undefined (reading "map")')
     error.stack = 'Error: Cannot read properties of undefined\n    at src/app/(app)/leads/page.tsx:42:10'

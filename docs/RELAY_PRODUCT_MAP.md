@@ -23,11 +23,11 @@ The primary sidebar is the only domain navigation. It is declared in
 | **Sales** | `/leads` | everyone | Prospects `/prospect`, Leads `/leads`, Pipeline `/leads?view=pipeline`, Companies `/accounts` (manager+), Import `/leads/import`, Upwork `/upwork`, Email `/revenue/email` |
 | **Inbox** | `/chats` | everyone | Needs reply `/chats?view=waiting_me`, Waiting `/chats?view=waiting_them`, Follow-ups `/chats?view=followups`, All `/chats?view=all` |
 | **Work** | `/tasks` | everyone | My Tasks `/tasks`, Today `/tasks?view=today`, Overdue `/tasks?view=overdue`, Upcoming `/tasks?view=upcoming`, Completed `/tasks?view=completed`, Team Tasks `/tasks?scope=team` (manager+) |
-| **Team** | `/team` | manager+ | Overview, People, Profiles, Identities, Coverage, Workload, Activity, Performance, Targets, Groups, Daily Operations (manager-only) |
+| **Team** | `/team` | manager+ | Today `/team`, People `/team/people`, Profiles `/team/profiles`, Performance `/team/performance` (target progress at `?view=targets`), Structure `/team/groups` |
 | **Content** | `/content` | everyone | Studio `/content`, Ideas `/content/ideas`, Growth `/content/growth` (admin+) |
 | **Insights** | `/reports/sales` | everyone | Sales, Pipeline, Team, Revenue, Activity |
 | **Settings** | `/settings` | everyone | My Account `/settings`, Notifications `/notifications` |
-| **Admin** | `/admin/command` | admin+ | Command Center, People & Roles, Targets, Scoring QA, QA & Trust, Fact Guardrails, Dataset, Training Data, AI Usage, Revenue Intelligence |
+| **Admin** | `/admin/command` | admin+ | Command Center `/admin/command`, People & Roles `/admin/people`, Daily Targets `/admin/targets`, Revenue Intelligence `/admin/revenue-intelligence`, System / Quality `/admin/system` |
 
 `PRIMARY_MAIN_IDS` = Home, Sales, Inbox, Work, Team, Content, Insights.
 `PRIMARY_UTILITY_IDS` = Settings, Admin (below the sidebar divider).
@@ -89,18 +89,18 @@ Legend: **KEEP** core · **KEEP** config · **REDIR** compatibility redirect ·
 
 | Path | File | Access | Purpose | Status | Loader |
 |---|---|---|---|---|---|
-| `/team` | `(app)/team/page.tsx` | manager+ | Team overview | KEEP | `getPeopleDirectory`, `loadTimeline` |
+| `/team` | `(app)/team/page.tsx` | manager+ | Today — the operating page | KEEP | `TeamToday`, `getPeopleDirectory`, `loadTeamDay`, `loadCoveragePlan`, `loadTimeline` |
 | `/team/people` | `(app)/team/people/page.tsx` | manager+ | People directory | KEEP | `getPeopleDirectory` |
 | `/team/profiles` | `(app)/team/profiles/page.tsx` | manager+ | Profile front door | KEEP | `lib/team/profiles.ts` |
-| `/team/profiles/[profileId]` | `(app)/team/profiles/[profileId]/page.tsx` | manager+ | Profile detail | KEEP | `lib/team/profile-detail.ts` |
+| `/team/profiles/[profileId]` | `(app)/team/profiles/[profileId]/page.tsx` | manager+ | Profile operating center | KEEP | `lib/profiles/operating-model.ts` |
 | `/profile-intelligence` | `(app)/profile-intelligence/page.tsx` | everyone (admin tab) | Identities (admin) / own profiles | KEEP | `ProfileIntelligenceDashboard` |
 | `/profile-intelligence/[id]` | `(app)/profile-intelligence/[id]/page.tsx` | manager+ | — | **REDIR** → `/team/profiles/[id]` | — |
-| `/team/coverage` | `(app)/team/coverage/page.tsx` | manager+ | Coverage lifecycle | KEEP | `lib/coverage/load.ts` |
-| `/team/workload` | `(app)/team/workload/page.tsx` | manager+ | Open-work comparison | KEEP | `buildWorkloadRows` |
-| `/team/activity` | `(app)/team/activity/page.tsx` | manager+ | Org activity feed | KEEP | `loadTimeline` |
-| `/team/performance` | `(app)/team/performance/page.tsx` | manager+ | Execution/conversion/comparison | KEEP | `getPerformance` |
-| `/team/targets` | `(app)/team/targets/page.tsx` | manager+ | Target progress | KEEP | `loadTargets` |
-| `/team/groups` | `(app)/team/groups/page.tsx` | manager+ | Teams index | KEEP | `getPeopleDirectory` |
+| `/team/coverage` | `(app)/team/coverage/page.tsx` | manager+ | — | **REDIR** → `/team` (exceptions live on Today and in the profile channel) | — |
+| `/team/workload` | `(app)/team/workload/page.tsx` | manager+ | — | **REDIR** → `/team/people` | — |
+| `/team/activity` | `(app)/team/activity/page.tsx` | manager+ | — | **REDIR** → `/reports/activity` | — |
+| `/team/performance` | `(app)/team/performance/page.tsx` | manager+ | Execution/conversion/comparison; `?view=targets` for target progress | KEEP | `getPerformance`, `TeamTargetsReport` |
+| `/team/targets` | `(app)/team/targets/page.tsx` | manager+ | — | **REDIR** → `/team/performance?view=targets` | — |
+| `/team/groups` | `(app)/team/groups/page.tsx` | manager+ | Teams index (Structure) | KEEP | `getPeopleDirectory` |
 | `/team/groups/[teamId]` | `(app)/team/groups/[teamId]/page.tsx` | manager+ | Team detail | KEEP | group scope |
 | `/team/[repId]` | `(app)/team/[repId]/page.tsx` | manager+ / self | Rep 360 | KEEP | `repInScope` |
 | `/team/eval` | `(app)/team/eval/page.tsx` | manager+ | Evaluation harness | KEEP | `/api/eval/*` |
@@ -201,7 +201,7 @@ Canonical role source: `organization_roles` (`src/lib/auth/organization.ts`).
 | Insights | ✅ own | ✅ team | ✅ org | ✅ org |
 | Settings / notifications | ✅ | ✅ | ✅ | ✅ |
 | Admin domain | ❌ | ❌ | ✅ | ✅ |
-| Command Center | ❌ | ✅ (as Team → Daily Operations) | ✅ (as Admin → Command Center) | ✅ |
+| Command Center | ❌ | ✅ (as Team → Today) | ✅ (as Admin → Command Center) | ✅ |
 
 Manager is `OWNER`/`ADMIN` or a `MANAGER` team membership. Admin is
 `OWNER`/`ADMIN`. `isProductAdmin` = `isOwner || isAdmin`, never `reps.role`.
@@ -217,12 +217,12 @@ Manager is `OWNER`/`ADMIN` or a `MANAGER` team membership. Admin is
 | Follow-ups | `loadChatQueue.counts.followups` | Rep Home, `/chats` | `followUpsOverdue` (`status in contacted/followed_up`), `loadRepDayDetail` (hardcoded `0`) |
 | Assigned tasks | `loadUnifiedTasks` + `selectAssignedOpenTasks` | Rep Home, `/tasks` | `sidebar-counts.countActionableTasks` (SQL `assigned_tasks` only) |
 | Active work | `loadUnifiedTasks` + `classifyUnifiedTaskTab` (`today`/`overdue`) | `/tasks` | `sidebar-counts.countActionableTasks` |
-| Daily target | `getDailyWorkspace.targetSummary` / `loadTargets` | Rep Home, Team Targets | — |
-| Coverage | `lib/coverage/load.ts` | Rep Home, Team Coverage, Admin Home | — |
+| Daily target | `getDailyWorkspace.targetSummary` / `loadTargets` | Rep Home, Admin Daily Targets, Profile → Channel, Team Performance (`?view=targets`) | — |
+| Coverage | `lib/coverage/load.ts` | Rep Home, Team Today (exceptions), Profile → Channel, Admin Home | — |
 | Profile ownership | `profile_coverage` (PRIMARY) + `coverage_assignments` (ACTIVE) | Team Profiles, `/tasks` enrichment | — |
 | Pipeline counts | `loadBoardPreview` / `loadFilteredBoard` | `/leads?view=pipeline` | — |
 | Meetings / wins | `loadOutcomeEventCounts` / `countOutcomeEventsToday` | Rep Home, Manager Home, Admin Home, Team Performance | — |
-| Activity timeline | `loadTimeline` | Rep Home, Team Activity, Reports | — |
+| Activity timeline | `loadTimeline` | Rep Home, Team Today, Rep Detail, Profile Detail, Reports → Activity | — |
 | Inbox navigation | `lib/navigation/inbox-nav.ts` | shell, `/chats`, palette, breadcrumb | — |
 | Global create | `lib/navigation/global-create-items.ts` | header menu, palette | — |
 
@@ -241,6 +241,11 @@ Manager is `OWNER`/`ADMIN` or a `MANAGER` team membership. Admin is
 | Profiles | `/team/profiles` | `/profiles`, `/manage-profiles`, `/profile-intelligence/[id]` | redirects |
 | Identities | `/profile-intelligence?tab=identities` | `/admin/revenue-identities` | redirect |
 | Command Center | `/admin/command` | `/admin/command-center` | redirect |
+| Team operating home | `/team` (Today) | `/admin/command` | one shared `TeamToday` component, two role entry points |
+| Coverage | Team Today → Coverage exceptions | `/team/coverage` | redirect; per-channel coverage lives in the profile operating center |
+| Workload | `/team/people` | `/team/workload` | redirect |
+| Activity | `/reports/activity` | `/team/activity` | redirect |
+| Target progress | `/team/performance?view=targets` | `/team/targets` | redirect; editing stays in Admin → Daily Targets and Profile → Channel |
 
 ### 5.2 Dead components (zero imports across `src/app`, `src/lib`, `src/components`, `tests`)
 
@@ -282,15 +287,13 @@ Login → `/dashboard` (Today) → profile switch → Do this next → `/leads/[
 `/upwork/[id]` → `/chats?view=waiting_me` → `/tasks` → `/content` → `/reports/sales`.
 
 ### Manager
-Login → `/dashboard` (Manager Home) → `/team` → People / Profiles / Coverage /
-Workload / Activity / Performance / Targets → `/tasks?scope=team` → `/chats` →
-`/admin/command` (Daily Operations).
+Login → `/dashboard` (Manager Home) → `/team` (Today) → People / Profiles /
+Performance / Structure → `/tasks?scope=team` → `/chats` → `/reports/activity`.
 
 ### Admin
-Login → `/dashboard` (Admin Home) → `/admin/command` → `/admin/people` /
-`/admin/targets` / `/admin/scoring-qa` / `/admin/qa` / `/admin/dataset` /
-`/admin/training-data` / `/admin/ai-usage` / `/admin/revenue-intelligence` →
-`/team/profiles` / `/team/coverage` → `/content/growth`.
+Login → `/dashboard` (Admin Home) → `/admin/command` (Command Center) →
+`/admin/people` / `/admin/targets` / `/admin/revenue-intelligence` /
+`/admin/system` → `/team/profiles` → `/content/growth`.
 
 ### Sales
 `/prospect` → analyze → save lead → `/leads` → work lead → `/chats?lead=` →

@@ -99,7 +99,7 @@ export async function TeamTargetsReport({ period }: { period: TargetPeriod }) {
 function TargetTable({ rows, drill }: { rows: TargetOwnerRow[]; drill: (row: TargetOwnerRow, cell: TargetCell) => string }) {
   if (rows.length === 0) return <p className="rounded-lg border border-dashed border-line px-3 py-4 text-[13px] text-graphite">No one in scope.</p>
   return (
-    <div className="overflow-x-auto rounded-lg border border-line">
+    <div className="contain-layout overflow-x-auto rounded-lg border border-line">
       <table className="w-full text-left text-[13px]">
         <caption className="sr-only">Target progress by owner and target type</caption>
         <thead className="bg-bone-raised text-[11px] uppercase tracking-[0.06em] text-stone">
@@ -131,7 +131,7 @@ function TargetTable({ rows, drill }: { rows: TargetOwnerRow[]; drill: (row: Tar
                   <Link
                     href={drill(row, cell)}
                     className="tabular-nums text-ink underline-offset-2 hover:underline"
-                    aria-label={`${cell.progress}${cell.goal !== null ? ` of ${cell.goal}` : ''} ${TARGET_TYPES.find((t) => t.type === cell.type)!.label} — open the events`}
+                    aria-label={`${cell.progress}${cell.goal !== null ? ` / ${cell.goal}` : ''} ${TARGET_TYPES.find((t) => t.type === cell.type)!.label} — open the events`}
                   >
                     {cell.progress}
                     {cell.goal !== null && <span className="text-stone"> / {cell.goal}</span>}

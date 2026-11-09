@@ -114,16 +114,15 @@ Never sees Team/Admin. Verified: Team is `managerUp`; Admin is `adminUp`;
 Rep Home renders `V4RepHome`.
 
 ### Manager
-Login → `/dashboard` (Manager Home) → `/team` → People / Profiles / Coverage /
-Workload / Activity / Performance / Targets → `/tasks?scope=team` → `/chats` →
-`/admin/command` (Daily Operations). Verified: `requireTeamContext` gates the
-Team domain; `resolvePrimaryActiveId` maps `/admin/command` to Team for managers.
+Login → `/dashboard` (Manager Home) → `/team` (Today) → People / Profiles /
+Performance / Structure → `/tasks?scope=team` → `/chats` → `/reports/activity`.
+Verified: `requireTeamContext` gates the Team domain; `/team` renders the shared
+`TeamToday` operating page.
 
 ### Admin
-Login → `/dashboard` (Admin Home) → `/admin/command` → `/admin/people` /
-`/admin/targets` / `/admin/scoring-qa` / `/admin/qa` / `/admin/dataset` /
-`/admin/training-data` / `/admin/ai-usage` / `/admin/revenue-intelligence` →
-`/team/profiles` / `/team/coverage` → `/content/growth`.
+Login → `/dashboard` (Admin Home) → `/admin/command` (Command Center) →
+`/admin/people` / `/admin/targets` / `/admin/revenue-intelligence` /
+`/admin/system` → `/team/profiles` → `/content/growth`.
 Verified: `requireProductAdmin` on every Admin page; `adminUp` in nav.
 
 ---

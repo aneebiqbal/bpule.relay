@@ -158,7 +158,7 @@ export function TargetsManager() {
 
   if (loading) {
     return (
-      <div className="space-y-4" aria-busy="true" aria-label="Loading targets">
+      <div className="space-y-4" role="status" aria-busy="true" aria-label="Loading targets">
         <div className="h-16 w-72 animate-pulse rounded-lg bg-bone" />
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[0, 1, 2, 3].map((i) => <div key={i} className="h-[88px] animate-pulse rounded-xl border border-line bg-bone-raised" />)}

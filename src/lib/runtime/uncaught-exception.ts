@@ -47,11 +47,13 @@ export function isDatabaseTransportFailure(err: unknown): boolean {
 
   // Any other transport-shaped message must also originate in a database
   // driver — a fetch failure in a route handler must not be mistaken for one.
+  // The production bundle inlines the driver into a chunk named after this
+  // module, so the chunk name is the signature when `node_modules` is absent.
   const haystack = `${message}\n${contextMessage}\n${stack}`
   const matchesTransport = TRANSPORT_PATTERNS.some((pattern) => pattern.test(haystack))
   if (!matchesTransport) return false
 
-  return /@neondatabase\/serverless|node_modules\/pg|realtime-js|supabase/.test(haystack)
+  return /@neondatabase\/serverless|node_modules\/pg|realtime-js|supabase|src_lib_db_neon_ts/.test(haystack)
 }
 
 /** Throttle repeated logging: a flapping socket must not flood the log. */
