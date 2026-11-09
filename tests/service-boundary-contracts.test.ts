@@ -48,10 +48,8 @@ const SERVICE_ALLOWLIST = [
   'lib/auth/invitations-server',
   // Trusted destructive admin operations.
   'api/organization/delete',
-  'api/account/delete',
   // Cross-rep / cross-profile operational reads and ML shadow capture.
   'api/dataset/',
-  'api/scoring-feedback',
   'api/profile-intelligence/',
   'api/admin/performance',
   'api/admin/rep-performance',
@@ -62,7 +60,6 @@ const SERVICE_ALLOWLIST = [
   'api/admin/health',
   'api/admin/training-data',
   'api/admin/invitations',
-  'api/performance/activity',
   'api/prospect/analyze',
   'api/prospect/save',
   'api/upwork/extract',

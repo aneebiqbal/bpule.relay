@@ -10,7 +10,7 @@
 
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
-import { createServiceSupabase } from '@/lib/supabase/service'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { currentVersions } from '@/lib/intelligence-v3/versions'
 import { ROUTING_VERSION } from '@/lib/relay/sender-routing-engine'
 import { captureFeedback } from '@/lib/dataset/service'
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'leadId, capturedProspectId or decisionRunId is required.' }, { status: 400 })
   }
 
-  const client = createServiceSupabase()
+  const client = await createServerSupabase()
   const observedVersions = (body.observed as { versions?: Record<string, unknown> } | undefined)?.versions
   const { data, error } = await client
     .from('scoring_feedback')
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
 
 /** Find the most recent sample linked to this lead/prospect/run. */
 async function findLatestSample(
-  client: ReturnType<typeof createServiceSupabase>,
+  client: Awaited<ReturnType<typeof createServerSupabase>>,
   orgId: string,
   leadId: string | null,
   capturedProspectId: string | null,
@@ -105,7 +105,7 @@ export async function GET(request: Request) {
   const leadId = url.searchParams.get('leadId')
   const limit = Math.min(200, Number(url.searchParams.get('limit') ?? '50') || 50)
 
-  const client = createServiceSupabase()
+  const client = await createServerSupabase()
   let query = client
     .from('scoring_feedback')
     .select('id, lead_id, captured_prospect_id, decision_run_id, feedback_type, note, observed, expected, versions, created_at, rep_id')

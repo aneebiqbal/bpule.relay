@@ -1,44 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceSupabase } from '@/lib/supabase/service'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { referLead, getReferralRecommendations } from '@/lib/lead-referral'
 
 export const maxDuration = 30
 
-/** Reps who can send as a profile: owner, direct assignees, and assignees of identities built from it. */
+/**
+ * Reps who can send as a profile: owner, direct assignees, and assignees of
+ * identities built from it. Resolved through a SECURITY DEFINER helper because
+ * RLS scopes assignment reads to the caller's own rows.
+ */
 async function profileHolders(
-  db: ReturnType<typeof createServiceSupabase>,
+  db: Awaited<ReturnType<typeof createServerSupabase>>,
   orgId: string,
   profileId: string,
 ): Promise<string[] | null> {
-  const [{ data: profile }, { data: direct }, { data: matchingIdentities }] = await Promise.all([
-    db.from('profiles').select('id, rep_id').eq('id', profileId).eq('organization_id', orgId).maybeSingle(),
-    db.from('profile_assignments').select('rep_id').eq('profile_id', profileId),
-    db
-      .from('revenue_identities')
-      .select('id, status')
-      .eq('organization_id', orgId)
-      .eq('profile_id', profileId),
-  ])
+  const { data: profile } = await db
+    .from('profiles')
+    .select('id')
+    .eq('id', profileId)
+    .eq('organization_id', orgId)
+    .maybeSingle()
   if (!profile) return null
-  const holders = new Set<string>()
-  if (profile.rep_id) holders.add(profile.rep_id as string)
-  for (const r of direct ?? []) if (r.rep_id) holders.add(r.rep_id as string)
-
-  // The assignment rows are a second read rather than a PostgREST embed
-  // (`revenue_identities!inner`), which the Neon adapter cannot translate.
-  const activeIdentityIds = (matchingIdentities ?? [])
-    .filter((r: { status: string | null }) => r.status !== 'archived')
-    .map((r: { id: string }) => r.id)
-  if (activeIdentityIds.length > 0) {
-    const { data: assignments } = await db
-      .from('identity_assignments')
-      .select('rep_id')
-      .eq('organization_id', orgId)
-      .in('revenue_identity_id', activeIdentityIds)
-    for (const a of assignments ?? []) if (a.rep_id) holders.add(a.rep_id as string)
-  }
-  return [...holders]
+  const { data } = await db.rpc<{ rep_id: string }[]>('get_profile_holder_reps', {
+    p_org: orgId,
+    p_profile_id: profileId,
+  })
+  return (data ?? []).map((row) => row.rep_id)
 }
 
 /**
@@ -65,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Choose a profile or a person to refer to.' }, { status: 400 })
   }
 
-  const db = createServiceSupabase()
+  const db = await createServerSupabase()
   const { data: lead } = await db
     .from('leads')
     .select('id, owner_rep_id')
