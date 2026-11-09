@@ -35,6 +35,8 @@ export interface UnifiedTask {
   companyName?: string | null
   profileId?: string | null
   profileName?: string | null
+  /** Canonical channel of the sender identity, when one is linked. */
+  channel?: string | null
   priority: UnifiedTaskPriority
   dueAt?: string | null
   status: UnifiedTaskStatus

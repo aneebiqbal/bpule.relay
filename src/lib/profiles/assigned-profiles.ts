@@ -149,6 +149,7 @@ export async function listAssignedProfilesForRep(
     title: (row.title as string) ?? null,
     channel: normalizeChannel(row.channel as string),
     profileId: (row.profile_id as string) ?? null,
+    personId: (row.profile_id as string) ?? null,
     profileUrl: (row.profile_url as string) ?? null,
     status: row.status === 'archived' ? 'archived' : 'active',
     access: 'assigned',

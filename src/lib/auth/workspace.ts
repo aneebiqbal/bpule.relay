@@ -35,6 +35,8 @@ export interface AuthorizedIdentity {
   title: string | null
   channel: string
   profileId: string | null
+  /** Canonical person key (`profiles.person_id ?? profiles.id`). */
+  personId: string | null
   profileUrl: string | null
   status: 'active' | 'archived'
   /** `assigned` = primary ownership; `coverage` = active temporary cover. */
@@ -62,6 +64,23 @@ async function resolveAuthorizedIdentities(): Promise<AuthorizedIdentity[]> {
   // covering rep can open and generate from the profile they are covering.
   const assigned = await store.listMyWorkableIdentities()
 
+  // Resolve the canonical person for each sender account so progress and
+  // coverage group the way the directory does.
+  const profileIds = [
+    ...new Set(assigned.map((identity) => identity.profileId).filter((id): id is string => Boolean(id))),
+  ]
+  const personIdByProfile = new Map<string, string>()
+  if (profileIds.length > 0) {
+    const { data: profileRows } = await store
+      .getSupabaseClient()
+      .from('profiles')
+      .select('id, person_id')
+      .in('id', profileIds)
+    for (const row of profileRows ?? []) {
+      personIdByProfile.set(row.id as string, (row.person_id as string | null) ?? (row.id as string))
+    }
+  }
+
   return assigned.map((identity) => ({
     assignmentId: identity.assignmentId,
     revenueIdentityId: identity.id,
@@ -69,6 +88,7 @@ async function resolveAuthorizedIdentities(): Promise<AuthorizedIdentity[]> {
     title: identity.title,
     channel: identity.channel,
     profileId: identity.profileId,
+    personId: identity.profileId ? (personIdByProfile.get(identity.profileId) ?? identity.profileId) : null,
     profileUrl: identity.profileUrl,
     status: identity.status,
     access: identity.access,

@@ -152,8 +152,10 @@ export function buildProfilesToday(
   workdayProgress: number,
   thresholds: WarningThresholds,
 ): ProfileToday[] {
+  // Group by the canonical person, not the sender account: a person who sells
+  // on two channels must see one card whose total is the sum of both lanes.
   const profileIdByIdentity = new Map(
-    identities.map((i) => [i.revenueIdentityId, i.profileId]),
+    identities.map((i) => [i.revenueIdentityId, i.personId ?? i.profileId]),
   )
   const grouped = new Map<string, ProfileToday>()
 

@@ -60,7 +60,7 @@ export function projectDailyActions(input: ProjectDailyActionsInput): DailyActio
       }
     }
   }
-  const channelFor = (task: { profileId?: string | null; channel?: string }): string => {
+  const channelFor = (task: { profileId?: string | null; channel?: string | null }): string => {
     if (task.channel) return channelLabel(task.channel)
     return channelLabel(task.profileId ? channelByIdentity.get(task.profileId) : undefined)
   }

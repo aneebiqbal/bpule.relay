@@ -39,6 +39,7 @@ export function toUnifiedTaskFromAction(
     companyName: action.subtitle || null,
     profileId: action.identity?.id ?? null,
     profileName: action.identity?.name ?? null,
+    channel: action.identity?.channel ?? null,
     priority: derivedTaskPriority(action),
     dueAt,
     status: 'OPEN',
