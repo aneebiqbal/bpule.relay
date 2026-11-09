@@ -144,12 +144,19 @@ export function assemblePeopleDirectory(input: {
       openLeads: live?.openLeadCount ?? 0,
       lastActivityAt: day?.lastActivityAt ?? live?.lastActivityAt ?? null,
       dayState: day?.state ?? null,
-      profiles: [...new Map(
-        (live?.identities ?? []).map((identity) => [
-          identity.personKey ?? identity.profileId ?? identity.id,
-          identity.profileName ?? identity.name,
-        ]),
-      ).values()].sort((a, b) => a.localeCompare(b)),
+      profiles: (() => {
+        const byPerson = new Map<string, string>()
+        for (const identity of live?.identities ?? []) {
+          const key = identity.personKey ?? identity.profileId ?? identity.id
+          const name = identity.profileName ?? identity.name
+          if (identity.profileId && identity.personKey != null && identity.personKey === identity.profileId) {
+            byPerson.set(key, name)
+          } else if (!byPerson.has(key)) {
+            byPerson.set(key, name)
+          }
+        }
+        return [...byPerson.values()]
+      })(),
       availability: input.availabilityByRep?.get(row.repId) ?? null,
     }
   })

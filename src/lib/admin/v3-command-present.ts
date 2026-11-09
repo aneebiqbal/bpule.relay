@@ -490,12 +490,20 @@ export function buildAdminTeamOperationRows(
         name: row.repName,
         state,
         stateLabel: REP_STATE_LABEL[state] ?? state,
-        assignedProfiles: [...new Map(
-          (day?.identities ?? []).map((identity) => [
-            identity.personKey ?? identity.profileId ?? identity.id,
-            identity.profileName ?? identity.name,
-          ]),
-        ).values()].sort((a, b) => a.localeCompare(b)),
+        assignedProfiles: (() => {
+          const byPerson = new Map<string, string>()
+          for (const identity of day?.identities ?? []) {
+            const key = identity.personKey ?? identity.profileId ?? identity.id
+            const name = identity.profileName ?? identity.name
+            // The canonical sender account carries the person's real name.
+            if (identity.profileId && identity.personKey != null && identity.personKey === identity.profileId) {
+              byPerson.set(key, name)
+            } else if (!byPerson.has(key)) {
+              byPerson.set(key, name)
+            }
+          }
+          return [...byPerson.values()].sort((a, b) => a.localeCompare(b))
+        })(),
         completedToday: row.completedToday,
         targetCount: row.totalTarget ?? 0,
         targetPct: row.targetPct,
