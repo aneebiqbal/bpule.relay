@@ -34,9 +34,14 @@ describe('REP_COCKPIT_SOURCES', () => {
     expect(profiles).not.toContain('profile_assignment')
   })
 
-  it('Do this next excludes manager-assigned work', () => {
+  it('Do this next is the canonical daily action projection', () => {
     const home = read('src/components/v4/v4-rep-home.tsx')
-    expect(home).toContain("task.source !== 'ASSIGNED'")
+    expect(home).toContain('projectDailyActions')
+  })
+
+  it('assigned work is ranked inside the projection, not hidden', () => {
+    const project = read('src/lib/daily-actions/project.ts')
+    expect(project).toContain("task.source === 'ASSIGNED'")
   })
 
   it('the day control uses the canonical availability APIs', () => {
