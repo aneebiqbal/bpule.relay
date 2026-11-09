@@ -68,12 +68,10 @@ if (version) {
 // before and after the page request — pooled connections opened by earlier
 // traffic would otherwise be mistaken for page traffic.
 let pool = null
-let myPid = null
 if (!SERVICE_URL) {
   fail('RELAY_CUTOVER_DB_URL is not set — cannot inspect pg_stat_activity')
 } else {
   pool = new Pool({ connectionString: normalize(SERVICE_URL), max: 1 })
-  myPid = (await pool.query('select pg_backend_pid() as pid')).rows[0].pid
 }
 
 const ownerPageBackends = () =>
@@ -83,8 +81,10 @@ const ownerPageBackends = () =>
       where datname = 'neondb'
         and usename = 'neondb_owner'
         and application_name like '%serverless%'
-        and pid <> $1`,
-    [myPid],
+        -- pg_backend_pid() is evaluated per statement, so a pooler reconnect
+        -- is never mistaken for a backend opened by page traffic.
+        and pid <> pg_backend_pid()`,
+    [],
   )
 const relayAppBackends = () =>
   pool.query(
@@ -92,8 +92,8 @@ const relayAppBackends = () =>
        from pg_stat_activity
       where datname = 'neondb'
         and usename = 'relay_app'
-        and pid <> $1`,
-    [myPid],
+        and pid <> pg_backend_pid()`,
+    [],
   )
 
 const ownerBefore = pool ? (await ownerPageBackends()).rows[0].n : null
@@ -147,9 +147,9 @@ if (!pool) {
          from pg_stat_activity
         where datname = 'neondb'
           and backend_start >= $1
-          and pid <> $2
+          and pid <> pg_backend_pid()
         group by usename`,
-      [startedAt, myPid],
+      [startedAt],
     )
     const sinceByRole = Object.fromEntries(sincePage.rows.map((r) => [r.usename, r.n]))
     assert(
