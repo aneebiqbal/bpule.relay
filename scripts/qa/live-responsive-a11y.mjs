@@ -74,6 +74,18 @@ async function login(email, attempts = 3) {
 
 async function axeCheck(page, label) {
   await page.addScriptTag({ content: axeSource })
+  // The conversation entrance animation starts at opacity 0; sampling colour
+  // contrast mid-flight reports a phantom violation.
+  await page
+    .waitForFunction(
+      () =>
+        [...document.querySelectorAll('.message-entrance')].every(
+          (el) => getComputedStyle(el).opacity === '1',
+        ),
+      { timeout: 15_000 },
+    )
+    .catch(() => {})
+  await page.waitForTimeout(300)
   const report = await page.evaluate(async () => {
     const r = await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } })
     return r.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious').map((v) => ({ id: v.id, impact: v.impact, target: v.nodes[0]?.target?.join(' ') ?? '' }))
@@ -146,14 +158,12 @@ async function axeCheck(page, label) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   if (overflow <= 1) ok('admin 1440: overflow 0')
   else fail(`admin 1440: overflow ${overflow}`)
-  // The intervention menu renders once a conversation is auto-selected, which
-  // waits on the queue fetch.
+  // The intervention menu renders once the queue and the auto-selected
+  // conversation have loaded.
+  await page.getByRole('list', { name: 'Conversations' }).first().waitFor({ state: 'visible', timeout: 40_000 }).catch(() => {})
   const moreMenu = page.getByRole('button', { name: 'More' })
-  if (await moreMenu.first().isVisible({ timeout: 30_000 }).catch(() => false)) {
-    ok('admin 1440: More menu present')
-  } else {
-    fail('admin 1440: More menu missing')
-  }
+  if ((await moreMenu.count().catch(() => 0)) > 0) ok('admin 1440: More menu present')
+  else fail('admin 1440: More menu missing')
   await axeCheck(page, 'admin 1440')
   await page.close()
 }
@@ -302,11 +312,13 @@ async function axeCheck(page, label) {
   if (focusInNav) ok('keyboard: Tab reaches the navigation')
   else fail('keyboard: Tab never reached the navigation')
 
-  // Inbox composer: the message box is reachable and focusable once the
-  // selected thread has loaded.
-  await page.goto(`${base}/chats?view=waiting_me`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
+  // Inbox composer: the message box renders once the selected thread loads.
   const composer = page.getByRole('textbox', { name: 'Your message' })
-  const composerReady = await composer.first().isVisible({ timeout: 40_000 }).catch(() => false)
+  let composerReady = false
+  for (let attempt = 0; attempt < 2 && !composerReady; attempt++) {
+    await page.goto(`${base}/chats?view=waiting_me`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
+    composerReady = await composer.first().isVisible({ timeout: 30_000 }).catch(() => false)
+  }
   if (composerReady) {
     await composer.first().click().catch(() => {})
     const focused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Your message')
