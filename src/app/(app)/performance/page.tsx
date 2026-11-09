@@ -2,7 +2,7 @@ import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
-import { createServiceSupabase } from '@/lib/supabase/service'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { getRepDailyActivity } from '@/lib/performance/activity-model'
 import { ContributionHeatmap } from '@/components/performance/contribution-heatmap'
 import { DayDrilldown } from '@/components/performance/day-drilldown'
@@ -26,7 +26,7 @@ export default async function PerformancePage({
   const timezone = (await loadOperatingPolicy(authCtx.orgId)).timezone
   const { start, end } = parseRange(range)
 
-  const supabase = createServiceSupabase()
+  const supabase = await createServerSupabase()
   const result = await getRepDailyActivity({
     repId: user.rep.id,
     orgId: authCtx.orgId,

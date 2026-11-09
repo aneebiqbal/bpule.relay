@@ -12,6 +12,8 @@ interface ReferralParams {
   reason?: string
   /** Owner before the change; told informationally when someone else moved the lead. */
   previousOwnerRepId?: string | null
+  /** Request-scoped RLS client; service access must be passed explicitly. */
+  client?: import('@/lib/db/types').DbClient
 }
 
 interface ReferralResult {
@@ -25,8 +27,8 @@ interface ReferralResult {
  * Preserves the same lead ID. Records in Action Ledger. Updates lead assignment.
  */
 export async function referLead(params: ReferralParams): Promise<ReferralResult> {
-  const { createServiceSupabase } = await import('@/lib/supabase/service')
-  const supabase = createServiceSupabase()
+  const { createServerSupabase } = await import('@/lib/supabase/server')
+  const supabase = params.client ?? (await createServerSupabase())
 
   // 1. Update lead assignment
   const { data: updated, error: updateError } = await supabase
@@ -93,9 +95,10 @@ export async function getReferralRecommendations(
   orgId: string,
   leadId: string,
   currentProfileId?: string,
+  client?: import('@/lib/db/types').DbClient,
 ): Promise<Array<{ profileId: string; identityName: string; matchScore: number; reason: string }>> {
-  const { createServiceSupabase } = await import('@/lib/supabase/service')
-  const supabase = createServiceSupabase()
+  const { createServerSupabase } = await import('@/lib/supabase/server')
+  const supabase = client ?? (await createServerSupabase())
 
   const { data: lead } = await supabase
     .from('leads')

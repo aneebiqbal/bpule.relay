@@ -4,7 +4,7 @@ import { createScoutStore } from '@/lib/store'
 import { computeUpworkScore } from '@/lib/score/upwork-rubric'
 import { matchProfilesToJob } from '@/lib/upwork/score'
 import { loadSenderProfiles } from '@/lib/relay/routing-context'
-import { createServiceSupabase } from '@/lib/supabase/service'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import type { RoutingResult } from '@/lib/relay/sender-routing-engine'
 import { ArrowLeft } from 'lucide-react'
@@ -123,7 +123,7 @@ export default async function UpworkJobPage({
   let profileMatch: RoutingResult | null = null
   try {
     if (auth && actingRepId) {
-      const senders = await loadSenderProfiles(createServiceSupabase(), auth.orgId, actingRepId)
+      const senders = await loadSenderProfiles(await createServerSupabase(), auth.orgId, actingRepId)
       if (senders.length) profileMatch = matchProfilesToJob(score.canonical.facts, senders, null)
     }
   } catch { profileMatch = null }

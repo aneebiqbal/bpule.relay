@@ -6,7 +6,7 @@ import type { DbClient } from '@/lib/db/types'
  * Every meaningful action emits an immutable ActionEvent.
  */
 
-import { createServiceSupabase } from '@/lib/supabase/service'
+import { createServerSupabase } from '@/lib/supabase/server'
 type ActionEventType =
   | 'LEAD_EXTRACTED'
   | 'CONNECTION_PREPARED'
@@ -45,6 +45,12 @@ interface EmitActionParams {
   metadata?: Record<string, unknown>
   /** Deterministic idempotency key. Same key = same event, no duplicates. */
   idempotencyKey?: string | null
+  /**
+   * Request-scoped RLS client. Required for normal requests — the ledger never
+   * silently falls back to service authority. Cron/scripts pass the service
+   * client explicitly.
+   */
+  client?: DbClient
 }
 
 interface DailySummary {
@@ -79,10 +85,11 @@ interface ActionLogEntry {
 
 let supabase: DbClient | null = null
 
-function getClient() {
+async function getClient() {
   // Static import, not a runtime require: the alias resolves under vitest, so
   // the ledger can be unit-tested with a stubbed client.
-  if (!supabase) supabase = createServiceSupabase()
+  // Default is the authenticated RLS client — never the service role.
+  if (!supabase) supabase = await createServerSupabase()
   return supabase!
 }
 
@@ -93,6 +100,7 @@ function getClient() {
  * so the same business action can be retried safely without creating duplicates.
  */
 export async function emitAction(params: EmitActionParams): Promise<string | null> {
+  const client = params.client ?? (await getClient())
   const payload: Record<string, unknown> = {
     organization_id: params.orgId,
     action_type: params.actionType,
@@ -122,7 +130,7 @@ export async function emitAction(params: EmitActionParams): Promise<string | nul
   // exist at all. Select-then-insert instead, and let the unique index arbitrate
   // the race — the same pattern markContacted() uses for messages.
   if (params.idempotencyKey) {
-    const { data: existing } = await getClient()
+    const { data: existing } = await client
       .from('action_events')
       .select('id')
       .eq('organization_id', params.orgId)
@@ -131,7 +139,7 @@ export async function emitAction(params: EmitActionParams): Promise<string | nul
     if (existing?.id) return existing.id
   }
 
-  const { data, error } = await getClient()
+  const { data, error } = await client
     .from('action_events')
     .insert(payload)
     .select('id')
@@ -141,7 +149,7 @@ export async function emitAction(params: EmitActionParams): Promise<string | nul
   // The unique index rejected ours; return the row it won with rather than
   // surfacing a raw constraint violation to the caller.
   if (error && (error as { code?: string }).code === '23505' && params.idempotencyKey) {
-    const { data: winner } = await getClient()
+    const { data: winner } = await client
       .from('action_events')
       .select('id')
       .eq('organization_id', params.orgId)
@@ -190,10 +198,16 @@ export async function logRecommendation(params: {
 /**
  * Get daily summary for admin operating view.
  */
-export async function getDailySummary(orgId: string, date: string, timezone: string = 'UTC'): Promise<DailySummary[]> {
+export async function getDailySummary(
+  orgId: string,
+  date: string,
+  timezone: string = 'UTC',
+  client?: DbClient,
+): Promise<DailySummary[]> {
+  const db = client ?? (await getClient())
   const { start: startOfDay, end: endOfDay } = tzDateRange(date, timezone)
 
-  const { data, error } = await getClient()
+  const { data, error } = await db
     .from('action_events')
     .select('actor_id, action_type, occurred_at')
     .eq('organization_id', orgId)
@@ -208,7 +222,7 @@ export async function getDailySummary(orgId: string, date: string, timezone: str
   const actorIds = [...new Set(data.map((e) => e.actor_id).filter((x): x is string => Boolean(x)))]
   const repNameById = new Map<string, string>()
   if (actorIds.length > 0) {
-    const { data: reps } = await getClient().from('reps').select('id, name').in('id', actorIds)
+    const { data: reps } = await db.from('reps').select('id, name').in('id', actorIds)
     for (const rep of reps ?? []) repNameById.set(rep.id as string, rep.name as string)
   }
 
@@ -290,10 +304,12 @@ export async function getRepDailyLog(
   date: string,
   limit: number = 100,
   timezone: string = 'UTC',
+  client?: DbClient,
 ): Promise<ActionLogEntry[]> {
+  const db = client ?? (await getClient())
   const { start: startOfDay, end: endOfDay } = tzDateRange(date, timezone)
 
-  const { data, error } = await getClient()
+  const { data, error } = await db
     .from('action_events')
     .select(`
       id,
@@ -321,10 +337,10 @@ export async function getRepDailyLog(
   const unique = (values: unknown[]) =>
     [...new Set(values.filter((x): x is string => Boolean(x)))]
   const [repRows, profileRows, leadRows, jobRows] = await Promise.all([
-    getClient().from('reps').select('id, name').in('id', unique(data.map((e) => e.actor_id))),
-    getClient().from('sender_profiles').select('id, identity_name').in('id', unique(data.map((e) => e.sender_profile_id))),
-    getClient().from('leads').select('id, company, contact_name').in('id', unique(data.map((e) => e.lead_id))),
-    getClient().from('upwork_jobs').select('id, title').in('id', unique(data.map((e) => e.job_id))),
+    db.from('reps').select('id, name').in('id', unique(data.map((e) => e.actor_id))),
+    db.from('sender_profiles').select('id, identity_name').in('id', unique(data.map((e) => e.sender_profile_id))),
+    db.from('leads').select('id, company, contact_name').in('id', unique(data.map((e) => e.lead_id))),
+    db.from('upwork_jobs').select('id, title').in('id', unique(data.map((e) => e.job_id))),
   ])
   const repNameById = new Map((repRows.data ?? []).map((r) => [r.id as string, r.name as string]))
   const profileNameById = new Map((profileRows.data ?? []).map((p) => [p.id as string, p.identity_name as string]))
@@ -349,9 +365,9 @@ export async function getRepDailyLog(
 /**
  * Get today's action counts for dashboard header.
  */
-export async function getTodayCounts(orgId: string): Promise<Record<string, number>> {
+export async function getTodayCounts(orgId: string, client?: DbClient): Promise<Record<string, number>> {
   const today = new Date().toISOString().split('T')[0]
-  const summary = await getDailySummary(orgId, today)
+  const summary = await getDailySummary(orgId, today, 'UTC', client)
 
   const totals: Record<string, number> = {
     connectionsSent: 0,
@@ -381,8 +397,8 @@ export async function getTodayCounts(orgId: string): Promise<Record<string, numb
 /**
  * Get pending actions for a rep (leads assigned but no outbound sent today).
  */
-export async function getPendingForRep(orgId: string, repId: string): Promise<number> {
-  const { count, error } = await getClient()
+export async function getPendingForRep(orgId: string, repId: string, client?: DbClient): Promise<number> {
+  const { count, error } = await (client ?? (await getClient()))
     .from('leads')
     .select('id', { count: 'exact', head: true })
     .eq('organization_id', orgId)

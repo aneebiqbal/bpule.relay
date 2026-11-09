@@ -35,7 +35,7 @@ import { ACTIVITY_EVENT_FILTERS, loadTimeline } from '@/lib/operations/activity'
 import { loadUnifiedTasks } from '@/lib/tasks/load-unified-tasks'
 import { countOverdueUnifiedTasks, isOverdue } from '@/lib/tasks/rank-unified-tasks'
 import { loadLeadsPage, parseLeadsQuery } from '@/lib/leads/leads-page'
-import { createServiceSupabase } from '@/lib/supabase/service'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { getRepDailyActivity } from '@/lib/performance/activity-model'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { ContributionHeatmap } from '@/components/performance/contribution-heatmap'
@@ -449,7 +449,7 @@ async function PerformanceTab({ ctx, repId, filters }: { ctx: OpsPageContext; re
     startDate: start,
     endDate: end,
     timezone,
-    supabase: createServiceSupabase(),
+    supabase: await createServerSupabase(),
     includeEventsForDate: null,
   }).catch(() => null)
   return (

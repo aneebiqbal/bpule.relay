@@ -9,7 +9,7 @@ import type { DbClient } from '@/lib/db/types'
  * falls back to what `organizations` already declares. The clock keeps working;
  * only the configurable window and target pack are unavailable.
  */
-import { createServiceSupabase } from '@/lib/supabase/service'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { currentInstant, orgDate } from './index'
 import {
   DEFAULT_POLICY,
@@ -78,7 +78,9 @@ export async function loadOperatingPolicy(
   const cached = cache.get(organizationId)
   if (cached && cached.expiresAt > Date.now()) return cached.policy
 
-  const db = client ?? createServiceSupabase()
+  // Runtime reads use the authenticated RLS client. Service access must be
+  // requested explicitly — never implied by a missing argument.
+  const db = client ?? (await createServerSupabase())
 
   const { data, error } = await db
     .from('organization_operating_policy')
