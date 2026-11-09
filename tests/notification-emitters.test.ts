@@ -156,7 +156,14 @@ describe('NOTIFICATION_LEAD_REASSIGNED', () => {
     vi.doMock('@/lib/supabase/service', () => ({ createServiceSupabase: () => service }))
     vi.doMock('@/lib/action-ledger', () => ({ emitAction: async () => 'ae-1' }))
     const { referLead } = await import('@/lib/lead-referral')
-    const result = await referLead({ orgId: ORG, leadId: 'l1', fromRepId: 'mgr-1', toRepId: 'rep-b', previousOwnerRepId: 'rep-a' })
+    const result = await referLead({
+      orgId: ORG,
+      leadId: 'l1',
+      fromRepId: 'mgr-1',
+      toRepId: 'rep-b',
+      previousOwnerRepId: 'rep-a',
+      client: service as never,
+    })
     expect(result.success).toBe(true)
     expect(notifications.map((n) => n.dedupe_key)).toEqual(['lead_reassigned:l1:rep-b', 'lead_reassigned_away:l1:rep-b'])
     vi.doUnmock('@/lib/supabase/service')

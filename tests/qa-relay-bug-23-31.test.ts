@@ -381,6 +381,7 @@ describe('BUG028_UPWORK_APPLIED_COUNTS_TODAY', () => {
       actorId: 'rep-1',
       jobId: 'job-1',
       idempotencyKey: 'upwork_applied:job-1',
+      client: { from } as never,
     })
 
     expect(inserts).toHaveLength(1)
@@ -406,6 +407,7 @@ describe('BUG029_ACTION_PROFILE_ATTRIBUTION', () => {
       jobId: 'job-1',
       senderProfileId: 'prof-aneeb',
       idempotencyKey: 'upwork_applied:job-1',
+      client: { from } as never,
     })
 
     expect(inserts[0].sender_profile_id).toBe('prof-aneeb')
@@ -419,7 +421,7 @@ describe('BUG029_ACTION_PROFILE_ATTRIBUTION', () => {
     vi.doMock('@/lib/supabase/service', () => ({ createServiceSupabase: () => ({ from }) }))
     const { emitAction: emit } = await import('@/lib/action-ledger')
 
-    await emit({ orgId: 'org-1', actionType: 'UPWORK_APPLIED', jobId: 'job-1', idempotencyKey: 'k' })
+    await emit({ orgId: 'org-1', actionType: 'UPWORK_APPLIED', jobId: 'job-1', idempotencyKey: 'k', client: { from } as never })
     expect(inserts[0].sender_profile_id).toBeNull()
   })
 })
