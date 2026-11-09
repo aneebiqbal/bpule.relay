@@ -1,6 +1,6 @@
 # Relay — Canonical Product Map (V4)
 
-> Snapshot: **2026-11-09**, source SHA `3a3b7b4` (clean tree).
+> Snapshot: **2026-11-10**, source SHA `e797a15` (clean tree, LOCAL == REMOTE).
 > This is the single current product map. It replaces the route-level inventory
 > in `RELAY_COMPLETE_ROUTE_AND_ROLE_MAP.md` (kept as a historical reference).
 > Where this document and a code comment disagree, the code wins — open a fix.
@@ -132,7 +132,7 @@ Legend: **KEEP** core · **KEEP** config · **REDIR** compatibility redirect ·
 | `/reports` | `(app)/reports/page.tsx` | everyone | — | **REDIR** → `/reports/sales` | — |
 | `/reports/sales` | `(app)/reports/sales/page.tsx` | everyone | Sales report | KEEP | `loadSalesReport` |
 | `/reports/pipeline` | `(app)/reports/pipeline/page.tsx` | everyone | Pipeline report | KEEP | `loadPipelineReport` |
-| `/reports/team` | `(app)/reports/team/page.tsx` | manager+ | Team report | **DUPLICATE** of `/team/performance` | `getPerformance` |
+| `/reports/team` | `(app)/reports/team/page.tsx` | manager+ | — | **REDIR** → `/team/performance` | — |
 | `/reports/revenue` | `(app)/reports/revenue/page.tsx` | everyone | Revenue outcomes | KEEP | `loadRevenueReport` |
 | `/reports/activity` | `(app)/reports/activity/page.tsx` | everyone | Personal activity (managers → `/team/activity`) | KEEP | `loadTimeline` |
 | `/performance` | `(app)/performance/page.tsx` | everyone | Personal consistency heatmap | KEEP | `getRepDailyActivity` |
@@ -235,7 +235,7 @@ Manager is `OWNER`/`ADMIN` or a `MANAGER` team membership. Admin is
 
 | Surface | Canonical | Duplicate | Evidence |
 |---|---|---|---|
-| Team performance | `/team/performance` | `/reports/team` | same `getPerformance` loader + `RepComparison` component; reports page is a strict subset |
+| Team performance | `/team/performance` | `/reports/team` | redirects to `/team/performance`; both read the same `getPerformance` loader |
 | Inbox | `/chats` | `/inbound` | separate queue loader + desk; reachable only from palette/archive |
 | Content studio | `/content` | `/content-v2/[id]/today`, `/content/[id]` | redirects |
 | Growth | `/content/growth` | `/content-v2/growth`, `/admin/growth` | redirects |
@@ -329,7 +329,7 @@ primary returns → admin manually restores → completed work stays attributed.
 3. **`/tasks` scopes derived actions to the active workspace; `/dashboard` does
    not.** The same task can appear on one surface and not the other.
 4. **`loadRepDayDetail.followUpsDue` is hardcoded `0`.**
-5. **`/reports/team` duplicates `/team/performance`.**
+5. **`/reports/team` redirects to `/team/performance`** (permanent config redirect).
 6. **`/studio/drafts/new` is linked from Cmd-K without a `personaId`**, so it
    always redirects to `/content`.
 7. **Eight dead components** (~2,900 lines).
