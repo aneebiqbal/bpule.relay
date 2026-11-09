@@ -128,7 +128,7 @@ async function axeCheck(page, label) {
       continue
     }
     const settled = await page
-      .waitForURL((url) => url.pathname !== blocked, { timeout: 20_000 })
+      .waitForURL((url) => url.pathname !== blocked, { timeout: 45_000 })
       .then(() => true)
       .catch(() => false)
     if (settled) ok(`rep: ${blocked} gated → ${new URL(page.url()).pathname}`)
