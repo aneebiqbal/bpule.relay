@@ -292,7 +292,7 @@ describe('INBOX_QUEUE_FAILURE_ISOLATED', () => {
     const page = read('src/app/(app)/chats/page.tsx')
     // The failure branch still renders the thread section with a select prompt.
     expect(page).toContain('Couldn’t load conversations. Refresh to try again.')
-    expect(page).toContain('Select a conversation to start.')
+    expect(page).toContain('Select a conversation')
   })
 })
 

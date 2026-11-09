@@ -41,6 +41,8 @@ export interface AuthorizedIdentity {
   status: 'active' | 'archived'
   /** `assigned` = primary ownership; `coverage` = active temporary cover. */
   access: 'assigned' | 'coverage'
+  /** When this responsibility started — drives the deterministic NEW state. */
+  assignedAt: string | null
 }
 
 export interface RepWorkspace {
@@ -92,6 +94,7 @@ async function resolveAuthorizedIdentities(): Promise<AuthorizedIdentity[]> {
     profileUrl: identity.profileUrl,
     status: identity.status,
     access: identity.access,
+    assignedAt: identity.assignedAt ?? null,
   }))
 }
 

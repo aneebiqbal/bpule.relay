@@ -34,6 +34,8 @@ export interface ProfileToday {
   remaining: number
   status: ProfileCompletionStatus | null
   targets: ProfileTodayTarget[]
+  /** Earliest responsibility start for the person — the NEW signal. */
+  assignedAt: string | null
 }
 
 const METRIC_LABELS: Record<ActivityType, string> = {
@@ -175,9 +177,16 @@ export function buildProfilesToday(
         remaining: 0,
         status: null,
         targets: [],
+        assignedAt: null,
       }
       grouped.set(profileId, entry)
     }
+    const assignedAt = identities
+      .filter((identity) => identity.revenueIdentityId === row.revenueIdentityId)
+      .map((identity) => identity.assignedAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()[0]
+    if (assignedAt && (!entry.assignedAt || assignedAt < entry.assignedAt)) entry.assignedAt = assignedAt
     if (!entry.channels.includes(row.channel)) entry.channels.push(row.channel)
     if (!entry.identityIds.includes(row.revenueIdentityId)) entry.identityIds.push(row.revenueIdentityId)
     entry.targetCount += row.targets.reduce((sum, t) => sum + t.targetCount, 0)

@@ -184,7 +184,7 @@ export function RepProfilesToday({
       ) : (
         <ul className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
           {cards.map((card) => (
-            <ProfileCard key={card.profile.profileId} card={card} />
+            <ProfileCard key={card.profile.profileId} card={card} newSince={coverage?.businessDate ?? null} />
           ))}
         </ul>
       )}
@@ -240,8 +240,13 @@ export function RepProfilesToday({
   )
 }
 
-function ProfileCard({ card }: { card: ProfileCardModel }) {
+function ProfileCard({ card, newSince }: { card: ProfileCardModel; newSince: string | null }) {
   const { profile, kind, progress } = card
+  // Deterministic NEW state: the responsibility started on the current
+  // operating day and access has not been confirmed yet.
+  const isNew = Boolean(
+    newSince && progress?.assignedAt && progress.assignedAt.slice(0, 10) === newSince,
+  )
   const isLinkedIn = profile.channels.includes('linkedin')
   const isUpwork = profile.channels.includes('upwork')
   const continueHref = profile.identityIds[0] ? `/workspace/${profile.identityIds[0]}` : '/dashboard'
@@ -279,7 +284,14 @@ function ProfileCard({ card }: { card: ProfileCardModel }) {
             <p className="mt-0.5 text-[11px] text-graphite">{ownershipLine(card, coveringUntil)}</p>
           </div>
         </div>
-        <V4Chip tone={tone}>{label}</V4Chip>
+        <div className="flex items-center gap-1.5">
+          <V4Chip tone={tone}>{label}</V4Chip>
+          {isNew && (
+            <span className="rounded-full bg-orange/15 px-2 py-0.5 text-[11px] font-medium text-[#b8531f]">
+              NEW
+            </span>
+          )}
+        </div>
       </div>
 
       {hasTarget ? (

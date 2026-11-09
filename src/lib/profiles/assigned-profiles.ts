@@ -128,6 +128,7 @@ export async function listAssignedProfilesForRep(
     profileUrl: (row.profile_url as string) ?? null,
     status: row.status === 'archived' ? 'archived' : 'active',
     access: 'assigned',
+    assignedAt: ((assignments ?? []).find((a) => a.revenue_identity_id === row.id)?.created_at as string | undefined) ?? null,
   }))
 
   return groupAssignedProfiles(identities, profiles)

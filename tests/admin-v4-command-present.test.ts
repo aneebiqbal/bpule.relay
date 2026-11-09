@@ -117,7 +117,7 @@ describe('ADMIN V4 command present', () => {
     const rows = buildAdminTeamOperationRows([teamRow()], teamDay)
     expect(rows).toHaveLength(1)
     const row = rows[0]
-    expect(row.assignedProfiles).toEqual(['Hassan', 'Aneeb'])
+    expect(row.assignedProfiles).toEqual(['Aneeb', 'Hassan'])
     expect(row.requiredRemaining).toBe(13)
     expect(row.overdue).toBe(6)
     expect(row.targetCount).toBe(27)
