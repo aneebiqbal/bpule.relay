@@ -16,9 +16,11 @@ const ok = (m) => results.push(`ok: ${m}`)
 
 const browser = await chromium.launch()
 const context = await browser.newContext({ ignoreHTTPSErrors: true })
-await context.addInitScript(() => {
-  try { localStorage.setItem('relay-active-identity', 'c26a685b-a18b-4672-b7ad-a55e211539b2') } catch {}
-})
+// The active identity is per-user; forcing one identity across every session
+// would stop another rep's workspace from resolving.
+const ACTIVE_IDENTITY = {
+  'dawood@scout.dev': 'c26a685b-a18b-4672-b7ad-a55e211539b2',
+}
 
 async function login(email, attempts = 3) {
   let lastErr
@@ -26,6 +28,12 @@ async function login(email, attempts = 3) {
     const page = await context.newPage()
     try {
       await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+      await page.evaluate((id) => {
+        try {
+          if (id) localStorage.setItem('relay-active-identity', id)
+          else localStorage.removeItem('relay-active-identity')
+        } catch {}
+      }, ACTIVE_IDENTITY[email] ?? '')
       await page.waitForSelector('#login-email', { timeout: 60_000 })
       await page.fill('#login-email', email)
       await page.fill('#login-password', 'scout-dev-password')
@@ -62,7 +70,7 @@ async function axeCheck(page, label) {
   const page = await login('dawood@scout.dev')
   for (const vp of VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height })
-    await page.goto(`${base}/chats?view=waiting_me`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`${base}/chats?view=waiting_me`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
     await page.waitForTimeout(2500)
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     if (overflow <= 1) ok(`rep ${vp.name}: overflow 0`)
@@ -111,12 +119,12 @@ async function axeCheck(page, label) {
 {
   await context.clearCookies()
   const boot = await context.newPage()
-  await boot.goto(`${base}/login`, { waitUntil: 'domcontentloaded' }).catch(() => {})
+  await boot.goto(`${base}/login`, { waitUntil: 'domcontentloaded', timeout: 90_000 }).catch(() => {})
   await boot.evaluate(() => localStorage.clear()).catch(() => {})
   await boot.close()
   const page = await login('hassan@scout.dev')
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(`${base}/chats?view=all`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${base}/chats?view=all`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
   await page.waitForTimeout(2500)
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   if (overflow <= 1) ok('admin 1440: overflow 0')
@@ -139,13 +147,13 @@ async function axeCheck(page, label) {
   const page = await login('dawood@scout.dev')
   for (const vp of VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height })
-    await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
     await page.waitForTimeout(2000)
     const homeOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     if (homeOverflow <= 1) ok(`home ${vp.name}: overflow 0`)
     else fail(`home ${vp.name}: overflow ${homeOverflow}`)
 
-    await page.goto(`${base}/tasks`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`${base}/tasks`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
     await page.waitForTimeout(2000)
     const tasksOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     if (tasksOverflow <= 1) ok(`tasks ${vp.name}: overflow 0`)
@@ -174,7 +182,7 @@ async function axeCheck(page, label) {
       // Mobile cards replace the desktop table, keeping the primary action.
       // The default "Active" tab can be legitimately empty, so check a view
       // that has work.
-      await page.goto(`${base}/tasks?view=overdue`, { waitUntil: 'domcontentloaded' })
+      await page.goto(`${base}/tasks?view=overdue`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
       await page.waitForTimeout(2500)
       const cards = page.locator('ul.md\\:hidden > li')
       const cardCount = await cards.count().catch(() => 0)
@@ -187,19 +195,24 @@ async function axeCheck(page, label) {
         else fail('tasks 375: card primary action missing')
 
         await cards.first().getByRole('button').first().click().catch(() => {})
-        await page.waitForTimeout(1500)
+        // The drawer is URL-backed (?task=…), so wait for the navigation.
+        await page.waitForURL(/[?&]task=/, { timeout: 20_000 }).catch(() => {})
+        await page.waitForTimeout(2000)
         const drawer = await page.getByRole('dialog', { name: 'Task' }).isVisible().catch(() => false)
         if (drawer) ok('tasks 375: task drawer opens')
         else fail('tasks 375: task drawer did not open')
         await page.keyboard.press('Escape')
-        await page.waitForTimeout(500)
+        await page.waitForTimeout(800)
+        const stillOpen = await page.getByRole('dialog', { name: 'Task' }).isVisible().catch(() => false)
+        if (!stillOpen) ok('keyboard: Escape closes the task drawer')
+        else fail('keyboard: Escape did not close the task drawer')
       }
     }
     await axeCheck(page, `tasks ${vp.name}`)
   }
   // Assigned-work panel + metric destinations at desktop width.
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
   await page.waitForTimeout(1500)
   const repliesLink = await page.getByRole('link', { name: /replies waiting/ }).count().catch(() => 0)
   if (repliesLink) ok('home 1440: replies waiting destination present')
@@ -210,7 +223,7 @@ async function axeCheck(page, label) {
   await axeCheck(page, 'home 1440')
 
   // Task detail drawer + conversation composer.
-  await page.goto(`${base}/tasks?view=today`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${base}/tasks?view=today`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
   await page.waitForTimeout(1500)
   const firstRow = page.locator('table tbody tr').first()
   if (await firstRow.count().catch(() => 0)) {
@@ -231,14 +244,14 @@ async function axeCheck(page, label) {
   await context.clearCookies()
   const page = await login('hassan@scout.dev')
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
   await page.waitForTimeout(2000)
   const waiting = await page.getByRole('link', { name: /^1 waiting/ }).count().catch(() => 0)
   if (waiting) ok('admin home: waiting task exception present')
   else fail('admin home: waiting task exception missing')
   await axeCheck(page, 'admin home 1440')
 
-  await page.goto(`${base}/tasks?view=transfers`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${base}/tasks?view=transfers`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
   await page.waitForTimeout(2000)
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   if (overflow <= 1) ok('team work 1440: overflow 0')
@@ -247,6 +260,41 @@ async function axeCheck(page, label) {
   if (transfersTab) ok('team work 1440: Transfers view present')
   else fail('team work 1440: Transfers view missing')
   await axeCheck(page, 'team work 1440')
+  await page.close()
+}
+
+// ── KEYBOARD ─────────────────────────────────────────────────────────────────
+{
+  await context.clearCookies()
+  const page = await login('dawood@scout.dev')
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  // Sidebar: the collapse control is a real button and Tab moves into the nav.
+  await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
+  await page.waitForTimeout(2000)
+  const sidebarToggle = page.getByRole('button', { name: /Collapse sidebar|Open navigation/ }).first()
+  if (await sidebarToggle.count().catch(() => 0)) {
+    await sidebarToggle.click().catch(() => {})
+    await page.keyboard.press('Tab')
+    const focusInNav = await page.evaluate(() => Boolean(document.activeElement?.closest('nav, aside')))
+    if (focusInNav) ok('keyboard: Tab from the sidebar control lands in navigation')
+    else fail('keyboard: Tab from the sidebar control did not land in navigation')
+  } else {
+    fail('keyboard: sidebar control not found')
+  }
+
+  // Inbox composer: the message box is reachable and focusable.
+  await page.goto(`${base}/chats?view=waiting_me`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
+  await page.waitForTimeout(2500)
+  const composer = page.getByRole('textbox', { name: 'Your message' })
+  if (await composer.count().catch(() => 0)) {
+    await composer.first().click().catch(() => {})
+    const focused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Your message')
+    if (focused) ok('keyboard: Inbox composer is focusable')
+    else fail('keyboard: Inbox composer did not take focus')
+  } else {
+    fail('keyboard: Inbox composer not found')
+  }
   await page.close()
 }
 
