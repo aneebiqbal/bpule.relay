@@ -156,7 +156,7 @@ export default async function AdminHealthPage() {
                 ? 'No missing tables and the AI failure ratio is inside tolerance.'
                 : 'Check the signals above before assuming a healthy system.'}
             </span>
-            <span className="ml-auto text-stone/70">
+            <span className="ml-auto text-stone">
               as of {new Date(report.timestamp).toLocaleString()}
             </span>
           </div>
