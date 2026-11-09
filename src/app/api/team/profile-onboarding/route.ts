@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { assignPrimaryResponsibility } from '@/lib/profiles/assignment'
 
 export const dynamic = 'force-dynamic'
 
@@ -176,24 +177,25 @@ export async function POST(request: Request) {
     return NextResponse.json(result)
   }
 
-  // 3. Assign every created identity to the rep.
+  // 3. Assign every created identity to the rep as PRIMARY. The canonical
+  //    assignment also installs the execution row and the default target pack,
+  //    so a fresh profile is workable immediately — no manual coverage step.
   for (const identity of result.identities) {
     try {
-      const { error } = await supabase
-        .from('identity_assignments')
-        .upsert(
-          {
-            organization_id: ctx.orgId,
-            revenue_identity_id: identity.id,
-            rep_id: repId,
-            assigned_by: ctx.repId,
-          },
-          { onConflict: 'revenue_identity_id,rep_id' },
-        )
-      if (error) throw error
+      await assignPrimaryResponsibility(supabase, {
+        orgId: ctx.orgId,
+        identityId: identity.id,
+        repId,
+        actorRepId: ctx.repId,
+        ensureTargets: true,
+      })
       result.assignments.push({ repId, identityId: identity.id })
-    } catch {
-      result.errors.push(`Could not assign the ${identity.channel} identity.`)
+    } catch (error) {
+      result.errors.push(
+        error instanceof Error && error.message === 'IDENTITY_HAS_NO_PROFILE'
+          ? `Could not assign the ${identity.channel} identity: no linked person.`
+          : `Could not assign the ${identity.channel} identity.`,
+      )
     }
   }
 

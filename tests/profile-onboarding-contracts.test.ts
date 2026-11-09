@@ -71,7 +71,11 @@ describe('PROFILE_CREATION_SINGLE_CANONICAL_FLOW', () => {
     const source = read('src/app/api/team/profile-onboarding/route.ts')
     expect(source).toContain("from('profiles')")
     expect(source).toContain("from('revenue_identities')")
-    expect(source).toContain("from('identity_assignments')")
+    // Assignment, PRIMARY coverage and the target pack are written by the one
+    // canonical responsibility module — the route holds no parallel write path.
+    expect(source).toContain('assignPrimaryResponsibility')
+    expect(read('src/lib/profiles/assignment.ts')).toContain("from('identity_assignments')")
+    expect(read('src/lib/profiles/assignment.ts')).toContain("from('profile_coverage')")
   })
 
   it('the wizard uses that endpoint, not a parallel path', () => {
