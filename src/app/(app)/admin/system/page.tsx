@@ -13,6 +13,11 @@ export default async function AdminSystemPage() {
 
   const tools = [
     {
+      href: '/admin/health',
+      name: 'Release Health',
+      body: 'Live operating signals: model traffic, Inbox sends, task throughput, coverage activations and daily active reps.',
+    },
+    {
       href: '/admin/qa',
       name: 'QA & Trust',
       body: 'Routing agreement, score staleness, thread trust, model comparison, funnel, message and thesis review.',
