@@ -96,7 +96,14 @@ async function axeCheck(page, label) {
       if (overflow <= 1) ok(`${surface.name} ${vp.name}: overflow 0`)
       else fail(`${surface.name} ${vp.name}: overflow ${overflow}`)
 
-      const body = await page.locator('body').innerText().catch(() => '')
+      // A client-rendered surface may still be loading its first payload; give
+      // the expected text a few seconds before calling it missing.
+      let body = ''
+      for (let attempt = 0; attempt < 5; attempt++) {
+        body = await page.locator('body').innerText().catch(() => '')
+        if (body.includes(surface.expect)) break
+        await page.waitForTimeout(1000)
+      }
       if (body.includes(surface.expect)) ok(`${surface.name} ${vp.name}: ${surface.expect} present`)
       else fail(`${surface.name} ${vp.name}: "${surface.expect}" missing`)
 
