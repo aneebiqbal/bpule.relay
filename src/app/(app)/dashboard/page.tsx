@@ -47,6 +47,9 @@ export default async function TodayPage() {
   if (!authCtx) redirect('/login')
   // Computed server-side in the org timezone so SSR and the client agree.
   const greeting = greetingFor(user.organization.timezone ?? 'UTC')
+  // Epoch captured once per request: the action projection must not differ
+  // between the server render and hydration.
+  const renderedAt = Date.now()
 
   if (authCtx.isOwner || authCtx.isAdmin) {
     // Org Command Center — no analytics fan-out on first paint (Reports owns charts).
@@ -101,6 +104,7 @@ export default async function TodayPage() {
         data={repData}
         role={user.rep.role}
         greeting={greeting}
+        now={renderedAt}
       />
     </Suspense>
   )

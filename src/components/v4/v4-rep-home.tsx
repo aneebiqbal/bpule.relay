@@ -13,6 +13,8 @@ import { ChevronRight } from 'lucide-react'
 import type { RepWorkspaceData } from '@/lib/rep-home/rep-workspace-data'
 import type { UnifiedTask } from '@/lib/tasks/types'
 import type { RepCoverageView } from '@/lib/coverage/load'
+import type { DailyAction } from '@/lib/daily-actions/types'
+import { projectDailyActions } from '@/lib/daily-actions/project'
 import { REP_V3_PRIMARY_CTA } from '@/lib/rep-home/v3-present'
 import { relativeWait } from '@/lib/rep-home/action-presentation'
 import { selectAssignedOpenTasks, selectAssignedOverdueTasks } from '@/lib/tasks/rank-unified-tasks'
@@ -32,11 +34,52 @@ function toPriority(priority: UnifiedTask['priority']): 'critical' | 'high' | 'n
   return 'normal'
 }
 
+/** Map the deterministic urgency class onto the existing visual priority scale. */
+function fromUrgency(urgency: DailyAction['urgency']): UnifiedTask['priority'] {
+  if (urgency === 'P0' || urgency === 'P1') return 'CRITICAL'
+  if (urgency === 'P2') return 'HIGH'
+  if (urgency === 'P6') return 'LOW'
+  return 'NORMAL'
+}
+
+function actionLabel(action: DailyAction): string {
+  switch (action.type) {
+    case 'INBOX_REPLY':
+      return 'Reply'
+    case 'TASK':
+      return 'Open task'
+    case 'FOLLOW_UP':
+      return 'Follow up'
+    case 'TARGET':
+      return 'Continue'
+    case 'COVERAGE':
+      return 'Review coverage'
+    case 'READINESS':
+      return 'Confirm access'
+    case 'UPWORK':
+      return 'Open job'
+  }
+}
+
+/** Smart empty state: name the next thing that is not urgent, not a void. */
+function upNextActionText(data: RepWorkspaceData): string {
+  const profiles = data.profilesToday ?? []
+  const next = profiles.find((p) => p.remaining > 0)
+  if (next) {
+    return `Next: continue ${next.name} · ${next.channels[0] ?? 'channel'} — ${next.remaining} actions remaining.`
+  }
+  if (data.repDay && data.repDay.state !== 'CLOSED') {
+    return 'Next: close out today when you are done.'
+  }
+  return 'Next: no remaining target work today.'
+}
+
 export function V4RepHome({
   data,
   role,
   greeting,
   coverage,
+  now,
 }: {
   data: RepWorkspaceData
   role: 'admin' | 'rep' | 'sourcer' | 'manager'
@@ -44,6 +87,8 @@ export function V4RepHome({
   greeting: string
   /** Today's own + temporarily covered profiles. */
   coverage?: RepCoverageView | null
+  /** Server-computed epoch so the projection is identical on both renders. */
+  now?: number
 }) {
   const unified = useMemo(() => data.unifiedTasks ?? [], [data.unifiedTasks])
   const assignedOpen = useMemo(() => selectAssignedOpenTasks(unified), [unified])
@@ -52,10 +97,10 @@ export function V4RepHome({
     () => assignedOpen.reduce((sum, task) => sum + (task.unreadCount ?? 0), 0),
     [assignedOpen],
   )
-  // Manager-assigned work is a separate kind: it never appears in Do this next.
+  // The single ordered action list: a pure projection over canonical facts.
   const nextActions = useMemo(
-    () => unified.filter((task) => task.source !== 'ASSIGNED').slice(0, 5),
-    [unified],
+    () => projectDailyActions({ data, coverage: coverage ?? data.coverage, now: now ?? 0 }),
+    [data, coverage, now],
   )
 
   const targetTotal = data.targetSummary?.totalTarget ?? 0
@@ -151,30 +196,26 @@ export function V4RepHome({
             />
             {nextActions.length > 0 ? (
               <ol className="mt-4 divide-y divide-line/70 overflow-hidden rounded-xl ring-1 ring-line">
-                {nextActions.map((task, index) => (
-                  <li key={task.id}>
+                {nextActions.map((action: DailyAction, index) => (
+                  <li key={action.id}>
                     <Link
-                      href={task.action.href}
+                      href={action.destination}
                       className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-bone focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
                     >
                       <span className="w-6 shrink-0 pt-0.5 text-[11px] font-medium tabular-nums text-stone">
                         {String(index + 1).padStart(2, '0')}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-medium text-graphite">
-                          {task.profileName ?? task.companyName ?? 'Your work'}
-                        </p>
+                        <p className="text-[11px] font-medium text-graphite">{action.profile}</p>
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <V4PriorityMark priority={toPriority(task.priority)} />
-                          <p className="text-[13px] font-medium text-ink">{task.title}</p>
+                          <V4PriorityMark priority={toPriority(fromUrgency(action.urgency))} />
+                          <p className="text-[13px] font-medium text-ink">{action.subject}</p>
                         </div>
-                        <p className="mt-0.5 text-[12px] text-graphite">{task.reason}</p>
-                        <p suppressHydrationWarning className="mt-1 text-[11px] text-stone">
-                          {relativeWait(task.dueAt ?? task.createdAt)}
-                        </p>
+                        <p className="mt-0.5 text-[12px] text-graphite">{action.reason}</p>
+                        <p className="mt-1 text-[11px] text-stone">{action.age}</p>
                       </div>
                       <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-line bg-bone-raised px-2 py-1 text-[11px] font-medium text-ink">
-                        {task.action.label}
+                        {actionLabel(action)}
                         <ChevronRight className="size-3" aria-hidden />
                       </span>
                     </Link>
@@ -182,9 +223,12 @@ export function V4RepHome({
                 ))}
               </ol>
             ) : (
-              <p className="mt-4 rounded-xl px-4 py-6 text-[13px] text-graphite ring-1 ring-line">
-                You&apos;re all caught up.
-              </p>
+              <div className="mt-4 rounded-xl px-4 py-5 ring-1 ring-line">
+                <p className="text-[13px] font-medium text-ink">You&apos;re caught up on urgent work.</p>
+                <p className="mt-1 text-[12px] text-graphite">
+                  {upNextActionText(data)}
+                </p>
+              </div>
             )}
           </V4Panel>
         </div>
