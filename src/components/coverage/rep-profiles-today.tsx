@@ -220,7 +220,7 @@ export function RepProfilesToday({
         </div>
         <DialogActions className="mt-5">
           <Link
-            href="/team/coverage"
+            href="/team"
             onClick={() => setReviewOpen(false)}
             className="rounded-lg border border-line bg-bone-raised px-4 py-2 text-[13px] font-medium text-graphite transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/40"
           >

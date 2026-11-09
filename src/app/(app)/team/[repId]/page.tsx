@@ -39,13 +39,17 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { getRepDailyActivity } from '@/lib/performance/activity-model'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { ContributionHeatmap } from '@/components/performance/contribution-heatmap'
+import { RepAvailabilityControl } from '@/components/team/rep-availability-control'
+import { availabilityLabel } from '@/lib/coverage/load'
+import type { AvailabilityState } from '@/lib/coverage/engine'
 
 export const dynamic = 'force-dynamic'
 
-const TABS = ['overview', 'work', 'leads', 'activity', 'performance'] as const
+const TABS = ['overview', 'profiles', 'work', 'leads', 'activity', 'performance'] as const
 type Tab = (typeof TABS)[number]
 const TAB_LABEL: Record<Tab, string> = {
   overview: 'Overview',
+  profiles: 'Profiles',
   work: 'Work',
   leads: 'Leads',
   activity: 'Activity',
@@ -137,7 +141,8 @@ export default async function Rep360Page({
       />
 
       <Suspense key={`${tab}:${JSON.stringify(sp)}`} fallback={<TabSkeleton />}>
-        {tab === 'overview' && <OverviewTab ctx={ctx} basics={basics} />}
+        {tab === 'overview' && <OverviewTab ctx={ctx} basics={basics} canAssign={canAssign} />}
+        {tab === 'profiles' && <ProfilesTab basics={basics} />}
         {tab === 'leads' && <LeadsTab repId={repId} sp={sp} leadScope={ctx.leadScope} />}
         {tab === 'work' && <WorkTab ctx={ctx} repId={repId} reps={reps} canAssign={canAssign} view={typeof sp.view === 'string' ? sp.view : null} />}
         {tab === 'activity' && <ActivityTab ctx={ctx} repId={repId} filters={filters} />}
@@ -196,7 +201,15 @@ async function RepMetrics({ repId }: { repId: string }) {
   )
 }
 
-async function OverviewTab({ ctx, basics }: { ctx: OpsPageContext; basics: RepBasics }) {
+async function OverviewTab({
+  ctx,
+  basics,
+  canAssign,
+}: {
+  ctx: OpsPageContext
+  basics: RepBasics
+  canAssign: boolean
+}) {
   const now = Date.now()
   const today = rangeWindow('today')
   const week = rangeWindow('7d')
@@ -225,6 +238,16 @@ async function OverviewTab({ ctx, basics }: { ctx: OpsPageContext; basics: RepBa
               { label: 'High-priority leads', value: row?.highPriority ?? 0, href: `${base}?tab=leads&priority=high` },
             ]}
           />
+        </Section>
+
+        <Section title="Availability" description="Whether this person is operating today.">
+          {canAssign ? (
+            <RepAvailabilityControl repId={basics.id} initial={(row?.availability as AvailabilityState | null) ?? null} />
+          ) : (
+            <p className="text-[13px] text-graphite">
+              {row?.availability ? availabilityLabel(row.availability as AvailabilityState) : 'No availability recorded'}
+            </p>
+          )}
         </Section>
 
         <Section title="Pipeline" description="Furthest known stage per lead, last 7 days. No stage is inferred past the evidence.">
@@ -323,6 +346,37 @@ async function OverviewTab({ ctx, basics }: { ctx: OpsPageContext; basics: RepBa
         <NotesPanel subjectType="REP" subjectId={basics.id} title={`Notes about ${basics.name}`} />
       </div>
     </div>
+  )
+}
+
+function ProfilesTab({ basics }: { basics: RepBasics }) {
+  return (
+    <Section title="Profiles" description="The channels this person operates.">
+      {basics.identities.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-line px-3 py-4 text-[13px] text-graphite">
+          No profiles assigned yet.
+        </p>
+      ) : (
+        <ul className="divide-y divide-line/70 overflow-hidden rounded-lg border border-line">
+          {basics.identities.map((identity) => (
+            <li key={identity.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-medium text-ink">{identity.name}</p>
+                <p className="text-[11px] text-stone">{identity.channel ?? 'Channel unknown'}</p>
+              </div>
+              {identity.profileId && (
+                <Link
+                  href={`/team/profiles/${identity.profileId}`}
+                  className="inline-flex min-h-11 shrink-0 items-center rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
+                >
+                  Open profile
+                </Link>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
   )
 }
 

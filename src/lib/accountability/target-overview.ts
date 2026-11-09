@@ -12,6 +12,8 @@ export interface PersonTargetLane {
   identityId: string
   identityName: string
   channel: RevenueIdentity['channel']
+  /** Canonical person profile — the operating-center deep link. */
+  profileId: string | null
   assigned: boolean
   activities: PersonTargetActivity[]
   actionsPerDay: number
@@ -37,7 +39,7 @@ export interface TeamTargetOverview {
 
 export function buildTeamTargetOverview(input: {
   reps: Pick<Rep, 'id' | 'name'>[]
-  identities: Array<Pick<RevenueIdentity, 'id' | 'identityName' | 'channel' | 'status'>>
+  identities: Array<Pick<RevenueIdentity, 'id' | 'identityName' | 'channel' | 'status' | 'profileId'>>
   assignments: Array<Pick<IdentityAssignment, 'repId' | 'revenueIdentityId'>>
   targets: DailyTarget[]
 }): TeamTargetOverview {
@@ -61,6 +63,7 @@ export function buildTeamTargetOverview(input: {
       identityId,
       identityName: identity.identityName,
       channel: identity.channel,
+      profileId: identity.profileId ?? null,
       assigned: false,
       activities: [],
       actionsPerDay: 0,

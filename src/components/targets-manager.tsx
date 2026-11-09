@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Plus, Trash2, Pause, Play, Target, Users, CheckCircle2, AlertTriangle, ChevronRight, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,6 +24,12 @@ const ACTIVITY_OPTIONS: { value: ActivityType; label: string }[] = [
   { value: 'proposal', label: 'Proposals' },
   { value: 'other', label: 'Other' },
 ]
+
+const CHANNEL_LABEL: Record<string, string> = {
+  linkedin: 'LinkedIn',
+  upwork: 'Upwork',
+  email: 'Email',
+}
 
 interface TargetsPayload {
   targets?: DailyTarget[]
@@ -50,6 +57,7 @@ export function TargetsManager() {
     assignIfNeeded: true,
   })
   const [draftCounts, setDraftCounts] = useState<Record<string, number>>({})
+  const [repFilter, setRepFilter] = useState('')
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/targets', { cache: 'no-store' })
@@ -73,6 +81,7 @@ export function TargetsManager() {
   const identityById = useMemo(() => new Map(identities.map((i) => [i.id, i])), [identities])
   const repsById = useMemo(() => new Map(reps.map((r) => [r.id, r])), [reps])
   const overview = useMemo(() => buildTeamTargetOverview({ reps, identities, assignments, targets }), [reps, identities, assignments, targets])
+  const people = repFilter ? overview.people.filter((person) => person.repId === repFilter) : overview.people
 
   const selectedIdentity = identityById.get(form.revenueIdentityId)
   const assignedRepsForIdentity = form.revenueIdentityId
@@ -167,7 +176,7 @@ export function TargetsManager() {
       <DashHeader
         eyebrow="Admin · Targets"
         title="Daily targets"
-        subtitle="What each person should do per day, for each identity they send as. Edit a number and it saves when you leave the field."
+        subtitle="What each person should do per day, for each channel they send as. Edit a number and it saves when you leave the field."
         actions={
           <>
             {overview.missingPacks > 0 && (
@@ -194,7 +203,7 @@ export function TargetsManager() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile label="People covered" value={overview.peopleCovered} icon={<Users className="size-3.5" />} tone="cobalt" />
         <StatTile label="Actions per day" value={overview.totalActionsPerDay} icon={<Target className="size-3.5" />} tone="orange" sub="Across the whole team" />
-        <StatTile label="Active targets" value={overview.activeTargets} sub={`${overview.identityLanes} identity lanes`} />
+        <StatTile label="Active targets" value={overview.activeTargets} sub={`${overview.identityLanes} channels`} />
         <StatTile label="Missing packs" value={overview.missingPacks} tone={overview.missingPacks > 0 ? 'warning' : 'success'} icon={<AlertTriangle className="size-3.5" />} sub={overview.missingPacks > 0 ? 'Someone has no standard pack' : 'Everyone is covered'} />
       </div>
 
@@ -258,8 +267,25 @@ export function TargetsManager() {
         </Panel>
       )}
 
-      <Panel title="Team targets" subtitle="One row per identity a person sends as" flush>
-        {overview.people.length === 0 ? (
+      <div className="flex flex-wrap items-center gap-2">
+        <label htmlFor="target-rep-filter" className="text-[12px] text-graphite">
+          Person
+        </label>
+        <select
+          id="target-rep-filter"
+          value={repFilter}
+          onChange={(event) => setRepFilter(event.target.value)}
+          className="h-9 rounded-lg border border-line bg-bone-raised px-2 text-[12px] text-ink"
+        >
+          <option value="">Everyone</option>
+          {reps.map((rep) => (
+            <option key={rep.id} value={rep.id}>{rep.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <Panel title="Team targets" subtitle="One row per channel a person sends as" flush>
+        {people.length === 0 ? (
           <div className="px-4 py-12 text-center">
             <Target className="mx-auto mb-3 size-7 text-stone" aria-hidden="true" />
             <p className="text-[14px] font-medium text-ink">No targets assigned yet</p>
@@ -267,7 +293,7 @@ export function TargetsManager() {
           </div>
         ) : (
           <ul className="divide-y divide-line">
-            {overview.people.map((person) => (
+            {people.map((person) => (
               <li key={person.repId} className="px-4 py-4 sm:px-5">
                 <div className="mb-3 flex items-center gap-2.5">
                   <Initials name={person.repName} tone={person.packComplete ? 'cobalt' : 'warning'} />
@@ -279,8 +305,21 @@ export function TargetsManager() {
                   {person.lanes.map((lane) => (
                     <div key={`${person.repId}-${lane.identityId}`} className="grid gap-2 rounded-lg border border-line/70 bg-bone/60 p-2.5 sm:grid-cols-[180px_1fr] sm:items-center">
                       <div className="min-w-0">
-                        <p className="truncate text-[12px] font-medium text-ink">{lane.identityName}</p>
-                        <p className="text-[11px] text-stone">{lane.channel} · {lane.actionsPerDay}/day</p>
+                        <p className="truncate text-[12px] font-medium text-ink">
+                          {lane.identityName}
+                          <span className="text-stone"> · {CHANNEL_LABEL[lane.channel] ?? lane.channel}</span>
+                        </p>
+                        <p className="text-[11px] text-stone">
+                          {lane.actionsPerDay}/day
+                          {lane.profileId && (
+                            <Link
+                              href={`/team/profiles/${lane.profileId}`}
+                              className="ml-2 text-graphite underline-offset-2 hover:text-ink hover:underline"
+                            >
+                              Open profile
+                            </Link>
+                          )}
+                        </p>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {lane.activities.map((activity) => {

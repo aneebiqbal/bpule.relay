@@ -147,7 +147,7 @@ export function AdminCoveragePanel({
         title="Coverage"
         action={
           <Link
-            href="/team/coverage"
+            href="/team"
             className="inline-flex items-center gap-1 text-[12px] font-medium text-graphite hover:text-ink"
           >
             Review coverage <ChevronRight className="size-3.5" aria-hidden />
@@ -165,18 +165,18 @@ export function AdminCoveragePanel({
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-bone px-3 py-2.5 ring-1 ring-line/70">
         <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Readiness</span>
         <span className="text-[12px] text-graphite">
-          <span className="font-medium tabular-nums text-ink">{plan.profiles.filter((p) => p.primaryReady).length}/{plan.profiles.length}</span> primaries confirmed
+          <span className="font-medium tabular-nums text-ink">{plan.profiles.filter((p) => p.primaryReady).length} of {plan.profiles.length}</span> primaries have confirmed access
         </span>
         <span className="text-[12px] text-graphite">
           <span className="font-medium tabular-nums text-ink">
             {plan.profiles.reduce((n, p) => n + p.backups.filter((b) => b.ready).length, 0)}
-            /
+            {' of '}
             {plan.profiles.reduce((n, p) => n + p.backups.length, 0)}
-          </span> backups confirmed
+          </span> backups can operate
         </span>
         {plan.profiles.some((p) => !p.primaryReady) && (
-          <Link href="/team/coverage" className="text-[12px] font-medium text-status-warning hover:underline">
-            {plan.profiles.filter((p) => !p.primaryReady).length} need confirmation · Review readiness
+          <Link href="/team" className="text-[12px] font-medium text-status-warning hover:underline">
+            {plan.profiles.filter((p) => !p.primaryReady).length} need to confirm access
           </Link>
         )}
       </div>

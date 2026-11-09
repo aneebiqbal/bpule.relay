@@ -16,7 +16,9 @@ import { Dialog, DialogActions } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { V4Chip, V4Panel, V4PanelHeader } from '@/components/v4/primitives'
 import { CoverageConfigPanel } from '@/components/coverage/coverage-config-panel'
+import { CoverageActions, type CoveragePending } from '@/components/coverage/coverage-actions'
 import { AssignTaskButton } from '@/components/operations/assign-task-button'
+import { RequestUpdateButton } from '@/components/operations/request-update-button'
 import { activityLabel, defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import type { ActivityType } from '@/lib/domain/types'
 import type { ProfileOperatingModel, ProfileChannelModel } from '@/lib/profiles/operating-model'
@@ -51,10 +53,16 @@ export function TeamProfileDetailView({
   model,
   canManage,
   reps,
+  coveragePending = {},
+  activeCoverage = [],
 }: {
   model: ProfileOperatingModel
   canManage: boolean
   reps: Array<{ id: string; name: string }>
+  /** Coverage decisions the plan derived for this person's channels. */
+  coveragePending?: Record<string, CoveragePending>
+  /** Channels with active temporary cover. */
+  activeCoverage?: string[]
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('overview')
@@ -85,6 +93,7 @@ export function TeamProfileDetailView({
         {canManage && (
           <div className="flex flex-wrap gap-2">
             <AssignTaskButton reps={reps} defaultProfileId={model.personId} />
+            <RequestUpdateButton reps={reps} label="Request readiness" title="Confirm access" />
             <button
               type="button"
               onClick={() => setAddChannelOpen(true)}
@@ -120,7 +129,13 @@ export function TeamProfileDetailView({
         <OverviewTab model={model} totalDone={totalDone} totalTarget={totalTarget} />
       )}
       {tab === 'channels' && (
-        <ChannelsTab model={model} canManage={canManage} reps={reps} />
+        <ChannelsTab
+          model={model}
+          canManage={canManage}
+          reps={reps}
+          coveragePending={coveragePending}
+          activeCoverage={activeCoverage}
+        />
       )}
       {tab === 'knowledge' && <KnowledgeTab model={model} />}
       {tab === 'execution' && <ExecutionTab model={model} />}
@@ -257,10 +272,14 @@ function ChannelsTab({
   model,
   canManage,
   reps,
+  coveragePending,
+  activeCoverage,
 }: {
   model: ProfileOperatingModel
   canManage: boolean
   reps: Array<{ id: string; name: string }>
+  coveragePending: Record<string, CoveragePending>
+  activeCoverage: string[]
 }) {
   if (model.channels.length === 0) {
     return (
@@ -281,6 +300,8 @@ function ChannelsTab({
           channel={channel}
           canManage={canManage}
           reps={reps}
+          pending={coveragePending[channel.profileId] ?? null}
+          active={activeCoverage.includes(channel.profileId)}
         />
       ))}
     </div>
@@ -291,10 +312,14 @@ function ChannelBlock({
   channel,
   canManage,
   reps,
+  pending,
+  active,
 }: {
   channel: ProfileChannelModel
   canManage: boolean
   reps: Array<{ id: string; name: string }>
+  pending: CoveragePending | null
+  active: boolean
 }) {
   const continueHref = `/workspace/${channel.identityId}`
   return (
@@ -340,9 +365,18 @@ function ChannelBlock({
         <div className="contents">
           <dt className="text-stone">Access</dt>
           <dd className="text-ink">
-            {channel.readiness.every((row) => row.ready)
-              ? <span className="text-status-success">Confirmed</span>
-              : <span className="text-status-warning">Not confirmed</span>}
+            {channel.readiness.length === 0 ? (
+              <span className="text-stone">No operators</span>
+            ) : channel.readiness.every((row) => row.ready) ? (
+              <span className="text-status-success">Confirmed</span>
+            ) : (
+              <span className="text-status-warning">
+                {channel.readiness.filter((row) => row.ready).length} of {channel.readiness.length} confirmed
+                {channel.readiness.some((row) => !row.ready)
+                  ? ` · ${channel.readiness.filter((row) => !row.ready).map((row) => row.repName).join(', ')} to confirm`
+                  : ''}
+              </span>
+            )}
           </dd>
         </div>
         <div className="contents">
@@ -400,6 +434,8 @@ function ChannelBlock({
           />
         </div>
       )}
+
+      {canManage && <CoverageActions profileId={channel.profileId} pending={pending} active={active} />}
     </V4Panel>
   )
 }

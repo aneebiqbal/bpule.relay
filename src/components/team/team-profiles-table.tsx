@@ -144,12 +144,6 @@ function TeamProfilesTableInner({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[12px] text-stone">{businessDate}</span>
-          <Link
-            href="/team/coverage"
-            className="rounded-lg border border-line px-3 py-2 text-[13px] font-medium text-graphite transition-colors hover:text-ink"
-          >
-            Coverage
-          </Link>
           <button
             type="button"
             onClick={() => setView('unassigned')}
