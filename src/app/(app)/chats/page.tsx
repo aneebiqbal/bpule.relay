@@ -230,7 +230,7 @@ export default async function ChatsPage({
                 conditions={conditions}
                 managerViews={managerViews}
               />
-              <LinkTabs label="Conversation views" active={view} tabs={primaryTabs} compact />
+              <LinkTabs label="Conversation views" active={view} tabs={primaryTabs} compact wrap />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto" tabIndex={0} aria-label="Conversation list">
               <ChatQueueList
