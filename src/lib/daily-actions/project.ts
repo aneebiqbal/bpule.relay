@@ -48,19 +48,21 @@ export function projectDailyActions(input: ProjectDailyActionsInput): DailyActio
   const now = input.now ?? Date.now()
   const actions: DailyAction[] = []
 
-  // Profile → channel, from the canonical coverage view. Keyed by profileId,
-  // which the unified task already carries; profileToday is not populated on
-  // the workspace payload and names differ between identity and profile.
-  const channelByProfileId = new Map<string, string>()
+  // Identity → channel, from the canonical coverage view. The unified task's
+  // `profileId` is the revenue identity id (its `profileName` is the identity
+  // name), so this is the key that actually matches.
+  const channelByIdentity = new Map<string, string>()
   const coverageView = input.coverage ?? input.data.coverage
   if (coverageView) {
     for (const profile of [...coverageView.own, ...coverageView.covering]) {
-      if (profile.channels[0]) channelByProfileId.set(profile.profileId, profile.channels[0])
+      for (const identityId of profile.identityIds) {
+        if (profile.channels[0]) channelByIdentity.set(identityId, profile.channels[0])
+      }
     }
   }
   const channelFor = (task: { profileId?: string | null; channel?: string }): string => {
     if (task.channel) return channelLabel(task.channel)
-    return channelLabel(task.profileId ? channelByProfileId.get(task.profileId) : undefined)
+    return channelLabel(task.profileId ? channelByIdentity.get(task.profileId) : undefined)
   }
 
   const tasks = input.data.unifiedTasks ?? []
