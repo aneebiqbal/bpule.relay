@@ -151,7 +151,7 @@ Legend: **KEEP** core · **KEEP** config · **REDIR** compatibility redirect ·
 | Path | File | Access | Purpose | Status | Loader |
 |---|---|---|---|---|---|
 | `/admin` | `(app)/admin/page.tsx` | admin+ | — | **REDIR** → `/admin/command` | — |
-| `/admin/command` | `(app)/admin/command/page.tsx` | manager+ | Command Center (today) | KEEP | `loadTeamDay` |
+| `/admin/command` | `(app)/admin/command/page.tsx` | manager+ | Command Center (today) | KEEP | `TeamToday` |
 | `/admin/command/[repId]` | `(app)/admin/command/[repId]/page.tsx` | manager+ | Rep day detail | KEEP | `loadRepDayDetail` |
 | `/admin/command-center` | `(app)/admin/command-center/page.tsx` | admin+ | — | **REDIR** → `/admin/command` | — |
 | `/admin/people` | `(app)/admin/people/page.tsx` | admin+ | People & roles | KEEP | `PeopleView` |
@@ -162,6 +162,7 @@ Legend: **KEEP** core · **KEEP** config · **REDIR** compatibility redirect ·
 | `/admin/training-data` | `(app)/admin/training-data/page.tsx` | admin+ | Training data | KEEP | `TrainingDataCenter` |
 | `/admin/ai-usage` | `(app)/admin/ai-usage/page.tsx` | admin+ | AI usage | KEEP | `/api/admin/ai-usage` |
 | `/admin/revenue-intelligence` | `(app)/admin/revenue-intelligence/page.tsx` | admin+ | Revenue intelligence | KEEP | `RevenueIntelligenceDashboard` |
+| `/admin/system` | `(app)/admin/system/page.tsx` | admin+ | System / Quality index (QA, scoring, facts, dataset, training, AI usage) | KEEP | static index |
 | `/admin/revenue-identities` | `(app)/admin/revenue-identities/page.tsx` | admin+ | — | **REDIR** → `/profile-intelligence?tab=identities` | — |
 | `/admin/activity` | `(app)/admin/activity/page.tsx` | admin+ | — | **REDIR** → `/reports/activity` | — |
 
