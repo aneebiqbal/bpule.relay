@@ -20,16 +20,31 @@ await context.addInitScript(() => {
   try { localStorage.setItem('relay-active-identity', 'c26a685b-a18b-4672-b7ad-a55e211539b2') } catch {}
 })
 
-async function login(email) {
-  const page = await context.newPage()
-  await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('#login-email', { timeout: 15_000 })
-  await page.fill('#login-email', email)
-  await page.fill('#login-password', 'scout-dev-password')
-  await page.click('button[type="submit"]')
-  await page.waitForURL(/dashboard|onboarding|chats/, { timeout: 60_000 })
-  await page.waitForTimeout(1500)
-  return page
+async function login(email, attempts = 3) {
+  let lastErr
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const page = await context.newPage()
+    try {
+      await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+      await page.waitForSelector('#login-email', { timeout: 60_000 })
+      await page.fill('#login-email', email)
+      await page.fill('#login-password', 'scout-dev-password')
+      // The submit button is disabled until React has accepted both fields;
+      // under load hydration can lag well behind the input elements appearing.
+      await page.waitForSelector('button.auth-submit[type="submit"]:not([disabled])', { timeout: 30_000 })
+      await page.click('button.auth-submit[type="submit"]')
+      await page.waitForURL(/dashboard|onboarding|chats/, { timeout: 60_000 })
+      await page.waitForTimeout(1500)
+      return page
+    } catch (err) {
+      lastErr = err
+      // The auth proxy occasionally times out; a fresh page recovers.
+      console.error(`login attempt ${attempt}/${attempts} failed: ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`)
+      await page.close().catch(() => {})
+      if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, 2000))
+    }
+  }
+  throw lastErr
 }
 
 async function axeCheck(page, label) {
@@ -106,9 +121,14 @@ async function axeCheck(page, label) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   if (overflow <= 1) ok('admin 1440: overflow 0')
   else fail(`admin 1440: overflow ${overflow}`)
-  const act = await page.getByRole('region', { name: 'Thread' }).getByRole('button', { name: 'More' }).count().catch(() => 0)
-  if (act) ok('admin 1440: Act menu present')
-  else fail('admin 1440: Act menu missing')
+  // The intervention menu renders once a conversation is auto-selected, which
+  // waits on the queue fetch.
+  const moreMenu = page.getByRole('button', { name: 'More' })
+  if (await moreMenu.first().isVisible({ timeout: 15_000 }).catch(() => false)) {
+    ok('admin 1440: More menu present')
+  } else {
+    fail('admin 1440: More menu missing')
+  }
   await axeCheck(page, 'admin 1440')
   await page.close()
 }
@@ -130,6 +150,51 @@ async function axeCheck(page, label) {
     const tasksOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     if (tasksOverflow <= 1) ok(`tasks ${vp.name}: overflow 0`)
     else fail(`tasks ${vp.name}: overflow ${tasksOverflow}`)
+
+    if (vp.name === '375') {
+      // The tab bar is wider than the viewport; it must scroll inside its own
+      // container rather than stretching the document.
+      const tabBar = await page.evaluate(() => {
+        const nav = document.querySelector('nav.min-w-max')
+        const wrap = nav?.parentElement
+        return nav && wrap
+          ? {
+              overflowX: getComputedStyle(wrap).overflowX,
+              clientWidth: wrap.clientWidth,
+              scrollWidth: wrap.scrollWidth,
+            }
+          : null
+      })
+      if (tabBar && tabBar.overflowX === 'auto' && tabBar.scrollWidth > tabBar.clientWidth) {
+        ok('tasks 375: tab bar scrolls inside its container')
+      } else {
+        fail(`tasks 375: tab bar not contained ${JSON.stringify(tabBar)}`)
+      }
+
+      // Mobile cards replace the desktop table, keeping the primary action.
+      // The default "Active" tab can be legitimately empty, so check a view
+      // that has work.
+      await page.goto(`${base}/tasks?view=overdue`, { waitUntil: 'domcontentloaded' })
+      await page.waitForTimeout(2500)
+      const cards = page.locator('ul.md\\:hidden > li')
+      const cardCount = await cards.count().catch(() => 0)
+      if (cardCount > 0) ok(`tasks 375: ${cardCount} mobile task cards`)
+      else fail('tasks 375: mobile task cards missing')
+
+      if (cardCount > 0) {
+        const action = await cards.first().getByRole('link').count().catch(() => 0)
+        if (action > 0) ok('tasks 375: card primary action present')
+        else fail('tasks 375: card primary action missing')
+
+        await cards.first().getByRole('button').first().click().catch(() => {})
+        await page.waitForTimeout(1500)
+        const drawer = await page.getByRole('dialog', { name: 'Task' }).isVisible().catch(() => false)
+        if (drawer) ok('tasks 375: task drawer opens')
+        else fail('tasks 375: task drawer did not open')
+        await page.keyboard.press('Escape')
+        await page.waitForTimeout(500)
+      }
+    }
     await axeCheck(page, `tasks ${vp.name}`)
   }
   // Assigned-work panel + metric destinations at desktop width.

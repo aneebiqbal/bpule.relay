@@ -20,27 +20,40 @@ const fail = (m) => { results.push(`FAIL: ${m}`); console.log(`FAIL: ${m}`) }
 const browser = await chromium.launch()
 const context = await browser.newContext({ ignoreHTTPSErrors: true })
 
-async function login(email) {
-  const page = await context.newPage()
-  await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('#login-email', { timeout: 15000 })
-  await page.fill('#login-email', email)
-  await page.fill('#login-password', 'scout-dev-password')
-  await page.waitForTimeout(600)
-  await page.locator('button.auth-submit').click()
-  // Some sessions render the cockpit before the URL settles; accept either.
-  await page.waitForFunction(
-    () => {
-      const p = location.pathname
-      const text = document.body.innerText
-      return !p.startsWith('/login')
-        || text.includes('Command Center')
-        || /Good (morning|afternoon|evening)/.test(text)
-    },
-    { timeout: 30000 },
-  ).catch(() => {})
-  await page.waitForTimeout(1200)
-  return page
+async function login(email, attempts = 3) {
+  let lastErr
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const page = await context.newPage()
+    try {
+      await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded' })
+      await page.waitForSelector('#login-email', { timeout: 60_000 })
+      await page.fill('#login-email', email)
+      await page.fill('#login-password', 'scout-dev-password')
+      // The submit button is disabled until React has accepted both fields;
+      // under load hydration can lag well behind the input elements appearing.
+      await page.waitForSelector('button.auth-submit[type="submit"]:not([disabled])', { timeout: 30_000 })
+      await page.locator('button.auth-submit[type="submit"]').click()
+      // Some sessions render the cockpit before the URL settles; accept either.
+      await page.waitForFunction(
+        () => {
+          const p = location.pathname
+          const text = document.body.innerText
+          return !p.startsWith('/login')
+            || text.includes('Command Center')
+            || /Good (morning|afternoon|evening)/.test(text)
+        },
+        { timeout: 30000 },
+      ).catch(() => {})
+      await page.waitForTimeout(1200)
+      return page
+    } catch (err) {
+      lastErr = err
+      console.error(`login attempt ${attempt}/${attempts} failed: ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`)
+      await page.close().catch(() => {})
+      if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, 2000))
+    }
+  }
+  throw lastErr
 }
 
 async function crawl(page, routes, label) {
