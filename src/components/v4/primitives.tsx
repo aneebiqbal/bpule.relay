@@ -161,7 +161,7 @@ export function V4StatStrip({
       {label && <p className="sr-only">{label}</p>}
       <div
         role="list"
-        className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-line ring-1 ring-line sm:grid-cols-3 lg:grid-cols-5"
+        className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"
       >
         {items.map((item, index) => {
           const body = (
@@ -185,7 +185,7 @@ export function V4StatStrip({
           )
           const spanLast = items.length % 2 !== 0 && index === items.length - 1
           const shell = cn(
-            'min-w-0 bg-bone-raised px-4 py-3.5 text-left transition-colors',
+            'min-w-0 rounded-lg bg-bone-raised px-4 py-3.5 text-left ring-1 ring-line transition-colors',
             spanLast && 'max-sm:col-span-2',
             item.href && 'hover:bg-bone cursor-pointer',
           )
