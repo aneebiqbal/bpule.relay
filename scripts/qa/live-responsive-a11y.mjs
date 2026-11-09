@@ -147,10 +147,6 @@ async function axeCheck(page, label) {
 // ── ADMIN ────────────────────────────────────────────────────────────────────
 {
   await context.clearCookies()
-  const boot = await context.newPage()
-  await boot.goto(`${base}/login`, { waitUntil: 'domcontentloaded', timeout: 90_000 }).catch(() => {})
-  await boot.evaluate(() => localStorage.clear()).catch(() => {})
-  await boot.close()
   const page = await login('hassan@scout.dev')
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(`${base}/chats?view=all`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
