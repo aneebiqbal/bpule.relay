@@ -107,6 +107,65 @@ describe('REP_ACTIONS_EXECUTABLE_PROFILE_ONLY', () => {
       expect(a.channel.length).toBeGreaterThan(0)
     }
   })
+
+  it('resolves the channel from the canonical coverage identity', () => {
+    const data = {
+      ...baseData,
+      unifiedTasks: [
+        {
+          id: 't1',
+          source: 'DERIVED',
+          kind: 'REPLY',
+          title: 'The Cloud Catalysts',
+          reason: 'Client replied',
+          organizationId: 'org',
+          assigneeRepId: 'rep-1',
+          profileId: 'identity-1',
+          profileName: 'Hassan',
+          priority: 'HIGH',
+          status: 'OPEN',
+        },
+      ],
+      coverage: {
+        businessDate: '2026-01-01',
+        isWorkingDay: true,
+        repId: 'rep-1',
+        repName: 'Dawood',
+        availability: 'AVAILABLE',
+        requiresApproval: 0,
+        readiness: [],
+        returning: [],
+        own: [
+          {
+            profileId: 'profile-1',
+            personId: null,
+            name: 'Hassan Upwork',
+            channels: ['upwork'],
+            identityIds: ['identity-1'],
+            primaryRepId: 'rep-1',
+            primaryRepName: 'Dawood',
+            primaryAvailability: 'AVAILABLE',
+            primaryIsAvailable: true,
+            backups: [],
+            activeCoveringRepId: null,
+            activeCoveringRepName: null,
+            activeCoverageUntil: null,
+            status: 'COVERED',
+            recommendation: 'NONE',
+            recommendedRepId: null,
+            recommendedRepName: null,
+            recommendationReasons: [],
+            recommendedReady: false,
+            ineligibleReason: null,
+          },
+        ],
+        covering: [],
+      },
+    } as unknown as RepWorkspaceData
+    const actions = projectDailyActions({ data, now: 0 })
+    expect(actions[0].channel).toBe('Upwork')
+    expect(actions[0].profile).toBe('Hassan · Upwork')
+  })
 })
 
 describe('EVERY_INTERVENTION_HAS_RESOLUTION', () => {
