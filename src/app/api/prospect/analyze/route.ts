@@ -14,6 +14,7 @@ import { qualifyCanonicalScore, displayScoreForCanonical } from '@/lib/scoring/q
 import { getAuthContext } from '@/lib/auth/organization'
 import { resolveAccessibleIdentity } from '@/lib/workspace/resolve-active-identity'
 import { createServiceSupabase } from '@/lib/supabase/service'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { createOutreachStrategy } from '@/lib/relay/outreach-strategy'
 import { streamDraft } from '@/lib/ai/draft-stream'
 import { type DraftMessageType } from '@/lib/ai/draft'
@@ -570,7 +571,7 @@ async function handlePost(request: Request) {
     try {
       const auth = await getAuthContext()
       if (auth) {
-        const senders = await loadSenderProfiles(createServiceSupabase(), auth.orgId, auth.repId)
+        const senders = await loadSenderProfiles(await createServerSupabase(), auth.orgId, auth.repId)
         senderRouting = routeLead(
           { company: extracted.company, contactName: extracted.name, contactTitle: extracted.title, rawInput: rawText, senderProfileId: explicitProfileId },
           packet,

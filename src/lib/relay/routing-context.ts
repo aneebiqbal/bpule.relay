@@ -76,6 +76,10 @@ export function factsFromCanonical(ci: unknown): SourceFactsSummary | null {
 }
 
 /** Every active sender profile in the org, with proof, industries and bounded historical outcomes. */
+/**
+ * Sender profiles for routing. Callers pass the request-scoped RLS client;
+ * service access must be explicit (used only by trusted dataset capture).
+ */
 export async function loadSenderProfiles(client: DbClient, orgId: string, repId: string): Promise<SenderProfile[]> {
   const [candidates, historicalMap] = await Promise.all([
     loadSenderCandidates(client, orgId, repId),
