@@ -144,6 +144,14 @@ export async function DELETE(
 
   if (error) return safeErrorResponse(error, 500, 'Failed to unassign identity.', 'admin/revenue-identities/[id]/assign')
 
+  // The rep no longer works this channel, so their target lane stops counting.
+  await supabase
+    .from('daily_targets')
+    .update({ active: false, updated_at: new Date().toISOString() })
+    .eq('revenue_identity_id', id)
+    .eq('rep_id', repId)
+    .eq('organization_id', authCtx.orgId)
+
   try {
     await supabase.from('accountability_audit_log').insert({
       organization_id: authCtx.orgId,

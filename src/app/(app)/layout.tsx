@@ -12,6 +12,7 @@ import { AnalyticsProvider } from "@/components/analytics-provider";
 import { ActiveIdentityProvider } from "@/components/workspace/active-identity-provider";
 import { ACTIVE_IDENTITY_COOKIE, isIdentityId, type WorkspaceIdentity } from "@/lib/workspace/active-identity";
 import { loadSidebarCounts, type SidebarCounts } from "@/lib/operations/sidebar-counts";
+import { loadOperatingPolicy } from "@/lib/org-clock/load";
 
 export const dynamic = "force-dynamic";
 
@@ -112,10 +113,11 @@ export default async function AppLayout({
       if (isDemoMode()) return { inboxNeedsReply: null, actionableTasks: null }
       try {
         const { identities, coveredIdentityIds } = await identityDataPromise
+        const policy = await loadOperatingPolicy(user.organization.id).catch(() => null)
         return await loadSidebarCounts(store.getSupabaseClient(), {
           orgId: user.organization.id,
           repId: user.rep.id,
-          timeZone: user.organization.timezone ?? "UTC",
+          timeZone: policy?.timezone ?? user.organization.timezone ?? "UTC",
           executableIdentities: identities.map((identity) => ({
             id: identity.id,
             profileId: identity.profileId,

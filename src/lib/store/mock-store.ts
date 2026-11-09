@@ -1811,8 +1811,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       upworkMessages.unshift(msg)
       return msg
     },
-    async markUpworkApplied(jobId, sentText, type = 'cover', senderProfileIdOverride = null) {
-      const job = upworkJobs.find((j) => j.id === jobId)
+    async markUpworkApplied(jobId, sentText, type = 'cover', senderProfileIdOverride = null, ownerRepId = null) {
+      const job = upworkJobs.find((j) => j.id === jobId && (ownerRepId === null || j.ownerRepId === ownerRepId))
       if (job) job.status = 'applied'
       // Same resolution as the Supabase store: caller override, job, then draft.
       let senderProfileId = senderProfileIdOverride

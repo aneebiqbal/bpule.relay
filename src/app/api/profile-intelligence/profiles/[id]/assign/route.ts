@@ -22,6 +22,24 @@ export async function POST(
 
   const client = createServiceSupabase()
 
+  // Cross-org boundary: the profile and the rep must both belong to the
+  // caller's organization. This route uses the service client, so RLS cannot
+  // enforce it.
+  const { data: profileRow } = await client
+    .from('profiles')
+    .select('id')
+    .eq('id', profileId)
+    .eq('organization_id', authCtx.orgId)
+    .maybeSingle()
+  if (!profileRow) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 })
+  const { data: repRow } = await client
+    .from('reps')
+    .select('id')
+    .eq('id', body.rep_id)
+    .eq('organization_id', authCtx.orgId)
+    .maybeSingle()
+  if (!repRow) return NextResponse.json({ error: 'Rep not found.' }, { status: 404 })
+
   const { data: existing } = await client
     .from('profile_assignments')
     .select('id')
@@ -64,6 +82,24 @@ export async function DELETE(
   }
 
   const client = createServiceSupabase()
+
+  // Cross-org boundary: the profile and the rep must both belong to the
+  // caller's organization. This route uses the service client, so RLS cannot
+  // enforce it.
+  const { data: profileRow } = await client
+    .from('profiles')
+    .select('id')
+    .eq('id', profileId)
+    .eq('organization_id', authCtx.orgId)
+    .maybeSingle()
+  if (!profileRow) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 })
+  const { data: repRow } = await client
+    .from('reps')
+    .select('id')
+    .eq('id', body.rep_id)
+    .eq('organization_id', authCtx.orgId)
+    .maybeSingle()
+  if (!repRow) return NextResponse.json({ error: 'Rep not found.' }, { status: 404 })
 
   const { error } = await client
     .from('profile_assignments')

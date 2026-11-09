@@ -43,6 +43,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'leadId is required.' }, { status: 400 })
   }
 
+  // A reply is sent from a profile. Without one there is no sender to
+  // attribute, so the org-wide proof pool must never be used as a fallback.
+  if (!body.profileId || typeof body.profileId !== 'string') {
+    return NextResponse.json({ error: 'profileId is required.' }, { status: 400 })
+  }
+
   if (!UUID_PATTERN.test(leadId)) {
     return NextResponse.json({ error: 'leadId must be a UUID.' }, { status: 400 })
   }

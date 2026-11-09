@@ -45,8 +45,10 @@ export default async function TodayPage() {
   if (!user) redirect('/login')
   const authCtx = await perfTrace('auth:getAuthContext', () => getAuthContext())
   if (!authCtx) redirect('/login')
-  // Computed server-side in the org timezone so SSR and the client agree.
-  const greeting = greetingFor(user.organization.timezone ?? 'UTC')
+  // Computed server-side in the org operating timezone so SSR and the client agree.
+  const policy = await loadOperatingPolicy(user.organization.id)
+  const timeZone = policy.timezone
+  const greeting = greetingFor(timeZone)
   // Epoch captured once per request: the action projection must not differ
   // between the server render and hydration.
   const renderedAt = Date.now()
@@ -90,7 +92,7 @@ export default async function TodayPage() {
           team={teamResult.data}
           error={teamResult.error}
           greeting={greeting}
-          timeZone={user.organization.timezone ?? 'UTC'}
+          timeZone={timeZone}
         />
       </Suspense>
     )

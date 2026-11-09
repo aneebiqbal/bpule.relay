@@ -3456,7 +3456,11 @@ export class SupabaseStore implements ScoutStore {
     sentText: string,
     type: UpworkMessage['type'] = 'cover',
     senderProfileIdOverride?: string | null,
+    ownerRepId?: string | null,
   ): Promise<void> {
+    // Admin on-behalf applies must update the acting rep's job, not the
+    // admin's — otherwise the update matches zero rows and the job stays 'new'.
+    const ownerRep = ownerRepId ?? this.rep.id
     // Look up the job's connects cost before updating
     const { data: jobRow } = await this.client
       .from('upwork_jobs')
@@ -3495,14 +3499,14 @@ export class SupabaseStore implements ScoutStore {
       .from('upwork_jobs')
       .update(statusUpdate)
       .eq('id', jobId)
-      .eq('owner_rep_id', this.rep.id)
+      .eq('owner_rep_id', ownerRep)
     if (statusResult.error && isOptionalSearchError(statusResult.error)) {
       delete statusUpdate.connects_used
       const retry = await this.client
         .from('upwork_jobs')
         .update(statusUpdate)
         .eq('id', jobId)
-        .eq('owner_rep_id', this.rep.id)
+        .eq('owner_rep_id', ownerRep)
       if (retry.error) throw retry.error
     } else if (statusResult.error) {
       throw statusResult.error
@@ -6382,6 +6386,13 @@ export class SupabaseStore implements ScoutStore {
 
   async assignIdentityAdmin(identityId: string, repId: string): Promise<IdentityAssignment> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
+    // Cross-org boundary: both the identity and the rep must belong to this
+    // organization. The upsert carries org scope, but it cannot verify it.
+    const [identity, rep] = await Promise.all([
+      this.client.from('revenue_identities').select('id').eq('id', identityId).eq('organization_id', this.orgId).maybeSingle(),
+      this.client.from('reps').select('id').eq('id', repId).eq('organization_id', this.orgId).maybeSingle(),
+    ])
+    if (!identity || !rep) throw new Error('Identity or rep not found in this organization')
     const { data, error } = await this.client
       .from('identity_assignments')
       .upsert({ organization_id: this.orgId, revenue_identity_id: identityId, rep_id: repId, assigned_by: this.rep.id }, { onConflict: 'revenue_identity_id,rep_id' })

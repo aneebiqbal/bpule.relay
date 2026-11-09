@@ -601,6 +601,8 @@ export interface ScoutStore {
     sentText: string,
     type?: UpworkMessage['type'],
     senderProfileId?: string | null,
+    /** Acting rep for admin on-behalf applies; defaults to the signed-in rep. */
+    ownerRepId?: string | null,
   ): Promise<void>
   // csv imports
   logCsvImport(input: Omit<CsvImport, 'id' | 'createdAt' | 'repId'>): Promise<CsvImport>

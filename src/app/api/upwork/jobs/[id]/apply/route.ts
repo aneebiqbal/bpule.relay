@@ -115,11 +115,21 @@ export async function POST(
     )
   }
 
+  // A proposal with no sender cannot be attributed. Never mark a job applied
+  // without the profile it was sent from.
+  if (!senderProfile) {
+    return NextResponse.json(
+      { error: 'Select an eligible Upwork profile before marking this job applied.' },
+      { status: 400 },
+    )
+  }
+
   await store.markUpworkApplied(
     jobId,
     sentText,
     type as 'cover' | 'followup' | 'reply',
     senderProfile?.profile.id ?? null,
+    actingRepId,
   )
   return NextResponse.json({ ok: true, profileId: senderProfile?.profile.id ?? null })
 }

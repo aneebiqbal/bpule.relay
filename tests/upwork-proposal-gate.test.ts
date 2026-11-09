@@ -81,7 +81,7 @@ describe('POST /api/upwork/jobs/[id]/apply — score >= 6 hard gate', () => {
     expect(res.status).toBe(200)
     expect(data.ok).toBe(true)
     expect(markUpworkApplied).toHaveBeenCalledTimes(1)
-    expect(markUpworkApplied).toHaveBeenCalledWith('job-1', 'A tailored cover letter.', 'cover', 'p-up')
+    expect(markUpworkApplied).toHaveBeenCalledWith('job-1', 'A tailored cover letter.', 'cover', 'p-up', 'rep-1')
   })
 
   it('allows the apply to succeed for a high score', async () => {

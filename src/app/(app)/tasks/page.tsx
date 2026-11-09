@@ -17,6 +17,7 @@ import { actionDeepLink } from '@/lib/rep-home/action-presentation'
 import { loadUnifiedTasks, listAssignableReps, canActorAssignTasks } from '@/lib/tasks/load-unified-tasks'
 import { TaskWorkspaceView } from '@/components/tasks/task-workspace-view'
 import { getPeopleDirectory } from '@/lib/operations/page-context'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,6 +45,7 @@ export default async function TasksPage() {
     forRepId: auth.isAdmin || auth.isOwner || auth.isManager ? undefined : auth.repId,
     includeCompleted: true,
   })
+  const policy = await loadOperatingPolicy(user.organization.id)
 
   return (
     <Suspense fallback={<div className="py-10 text-[13px] text-graphite">Loading tasks…</div>}>
@@ -54,7 +56,7 @@ export default async function TasksPage() {
         reps={reps}
         currentRepId={auth.repId}
         now={Date.now()}
-        timeZone={user.organization.timezone ?? 'UTC'}
+        timeZone={policy.timezone}
         teams={(directory?.teams ?? []).map((t) => ({ id: t.id, name: t.name, memberIds: t.memberIds }))}
         leads={composerOptions?.leads ?? []}
         profiles={composerOptions?.profiles ?? []}

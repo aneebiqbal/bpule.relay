@@ -109,6 +109,16 @@ export async function PATCH(
 
   if (error) return safeErrorResponse(error, 500, 'Failed to update identity.', 'admin/revenue-identities/[id]')
 
+  // Archiving a channel ends its target lanes; leaving them active keeps
+  // counting work the rep can no longer do.
+  if (update.status === 'archived') {
+    await supabase
+      .from('daily_targets')
+      .update({ active: false, updated_at: new Date().toISOString() })
+      .eq('revenue_identity_id', id)
+      .eq('organization_id', authCtx.orgId)
+  }
+
   await supabase.from('accountability_audit_log').insert({
     organization_id: authCtx.orgId,
     rep_id: authCtx.repId,
@@ -130,6 +140,36 @@ export async function DELETE(
   if (!can(authCtx, 'MANAGE_REVENUE_IDENTITIES')) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
 
   const supabase = await createServerSupabase()
+
+  const { data: identityRow } = await supabase
+    .from('revenue_identities')
+    .select('id')
+    .eq('id', id)
+    .eq('organization_id', authCtx.orgId)
+    .maybeSingle()
+  if (!identityRow) return NextResponse.json({ error: 'Not found.' }, { status: 404 })
+
+  // A channel with history must be archived, not deleted. The delete cascades
+  // targets, accountability, assignments and email artifacts, and orphans
+  // message attribution (`messages.revenue_identity_id` has no FK).
+  const [leads, messages, targets, assignments] = await Promise.all([
+    supabase.from('leads').select('id').eq('revenue_identity_id', id).limit(1),
+    supabase.from('messages').select('id').eq('revenue_identity_id', id).limit(1),
+    supabase.from('daily_targets').select('id').eq('revenue_identity_id', id).limit(1),
+    supabase.from('identity_assignments').select('id').eq('revenue_identity_id', id).limit(1),
+  ])
+  const hasHistory = [leads, messages, targets, assignments].some(
+    (result) => (result.data?.length ?? 0) > 0,
+  )
+  if (hasHistory) {
+    return NextResponse.json(
+      {
+        error:
+          'This identity has history (leads, messages, targets or assignments). Archive it instead of deleting it.',
+      },
+      { status: 409 },
+    )
+  }
 
   const { error } = await supabase
     .from('revenue_identities')
