@@ -138,7 +138,7 @@ export function RepProfilesToday({
         action={<ProfileSwitcher role={role} />}
       />
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-bone px-3.5 py-2.5 ring-1 ring-line/70">
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-bone px-3.5 py-2.5">
         <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-stone">Today</span>
         {summary.totalTarget > 0 ? (
           <span className="text-[12px] text-graphite">
@@ -269,7 +269,7 @@ function ProfileCard({ card }: { card: ProfileCardModel }) {
   }
 
   return (
-    <li className={cn('rounded-xl bg-bone-raised p-3 ring-1 ring-line/70', quiet && 'opacity-75')}>
+    <li className={cn('rounded-xl bg-bone p-3', quiet && 'opacity-70')}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2.5">
           <V4Avatar name={profile.name} size="md" />

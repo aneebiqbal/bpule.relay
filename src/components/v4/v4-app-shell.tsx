@@ -97,6 +97,12 @@ export function V4AppShell({
   const activeSecondaryId = activeDomain
     ? resolveSecondaryActiveId(activeDomain, pathname, search, roleFlags)
     : null
+  const activeDomainConfig = domains.find((d) => d.id === activeDomain) ?? null
+  const activeSecondary = activeSecondaryId
+    ? secondary
+        .flatMap((group) => group.items)
+        .find((item) => item.id === activeSecondaryId) ?? null
+    : null
   const showSectionTabs = Boolean(
     activeDomain &&
       secondary.length > 0 &&
@@ -171,9 +177,33 @@ export function V4AppShell({
     }
     return (
       <nav className="flex flex-col gap-0.5 px-2 py-2" aria-label="Domains">
-        {main.map(renderItem)}
-        {utility.length > 0 && <div className="my-2 border-t border-line" aria-hidden />}
-        {utility.map(renderItem)}
+        {main.length > 0 && (
+          <>
+            <p
+              className={cn(
+                'px-2.5 pb-1 text-[9px] font-medium uppercase tracking-[0.16em] text-stone',
+                collapsed && 'sr-only',
+              )}
+            >
+              Operate
+            </p>
+            {main.map(renderItem)}
+          </>
+        )}
+        {utility.length > 0 && (
+          <>
+            <div className={cn('my-2 border-t border-line', collapsed && 'my-1')} aria-hidden />
+            <p
+              className={cn(
+                'px-2.5 pb-1 text-[9px] font-medium uppercase tracking-[0.16em] text-stone',
+                collapsed && 'sr-only',
+              )}
+            >
+              System
+            </p>
+            {utility.map(renderItem)}
+          </>
+        )}
       </nav>
     )
   }
@@ -319,6 +349,22 @@ export function V4AppShell({
             <RelayBrand />
           </Link>
 
+          {/* Page identity: the domain and section the rep is standing in. */}
+          <div
+            className="hidden min-w-0 items-center gap-1.5 border-l border-line pl-3 text-[12px] md:flex"
+            aria-label="Current location"
+          >
+            <span className="shrink-0 text-stone">{activeDomainConfig?.label ?? 'Relay'}</span>
+            {activeSecondary && (
+              <>
+                <span className="text-line" aria-hidden>
+                  /
+                </span>
+                <span className="truncate font-medium text-ink">{activeSecondary.label}</span>
+              </>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={() => openPalette(true)}
@@ -354,6 +400,29 @@ export function V4AppShell({
           )}
           aria-label="Primary navigation"
         >
+          {/* Workspace identity: the tenant and the signed-in role. */}
+          <div className={cn('shrink-0 border-b border-line', collapsed ? 'px-2 py-2' : 'px-3 py-3')}>
+            {collapsed ? (
+              <div
+                className="flex size-7 items-center justify-center rounded-md bg-ink text-[11px] font-semibold text-bone"
+                title={organizationName}
+              >
+                {organizationName.slice(0, 1).toUpperCase()}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-ink text-[11px] font-semibold text-bone">
+                  {organizationName.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium leading-tight text-ink">{organizationName}</p>
+                  <p className="truncate text-[9px] font-medium uppercase tracking-[0.14em] text-stone">
+                    {role}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="min-h-0 flex-1 overflow-y-auto">{renderDomainNav()}</div>
           <div className="border-t border-line p-2">
             <button
