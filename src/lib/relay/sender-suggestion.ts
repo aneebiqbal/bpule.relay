@@ -209,10 +209,13 @@ export async function loadSenderCandidates(
     const proofCards = cardsByProfile.get(p.id) ?? []
     const proofItems = itemsByProfile.get(p.id) ?? []
     const portfolioProjects = portfolioByProfile.get(p.id) ?? []
+    // A malformed jsonb column (object instead of array) must not crash routing.
+    const asArray = (value: unknown): string[] =>
+      Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []
     const skills = [
-      ...(p.primary_skills ?? []), ...(p.secondary_skills ?? []), ...(p.technologies ?? []),
-      ...(p.specialties ?? []), ...(p.service_capabilities ?? []),
-      ...portfolioProjects.flatMap((pp: any) => pp.technologies ?? []),
+      ...asArray(p.primary_skills), ...asArray(p.secondary_skills), ...asArray(p.technologies),
+      ...asArray(p.specialties), ...asArray(p.service_capabilities),
+      ...portfolioProjects.flatMap((pp: any) => asArray(pp.technologies)),
     ].filter((s: unknown): s is string => typeof s === 'string')
     return {
       id: p.id,
