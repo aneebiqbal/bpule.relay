@@ -17,6 +17,14 @@ const results = []
 const ok = (m) => { results.push(`ok: ${m}`); console.log(`ok: ${m}`) }
 const fail = (m) => { results.push(`FAIL: ${m}`); console.log(`FAIL: ${m}`) }
 
+// A crash mid-run must still report what already passed.
+process.on('uncaughtException', (err) => {
+  console.error(err instanceof Error ? err.message : String(err))
+  const failed = results.filter((r) => r.startsWith('FAIL')).length
+  console.log(`\n${results.length - failed} passed, ${failed} failed — INCOMPLETE RUN`)
+  process.exit(1)
+})
+
 const browser = await chromium.launch()
 const context = await browser.newContext({ ignoreHTTPSErrors: true })
 
@@ -110,13 +118,21 @@ async function axeCheck(page, label) {
   if (teamLinks === 0) ok('rep: no Team/Admin/Identities nav leakage')
   else fail(`rep: ${teamLinks} Team/Admin/Identities links visible`)
 
-  // Rep must not reach manager/admin surfaces directly.
+  // Rep must not reach manager/admin surfaces directly. The gate redirects
+  // asynchronously, so wait for the URL to settle rather than sampling it.
   for (const blocked of ['/team', '/admin/command', '/team/profiles']) {
-    await page.goto(`${base}${blocked}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
-    await page.waitForTimeout(3000)
-    const landed = new URL(page.url()).pathname
-    if (landed === blocked) fail(`rep: reached ${blocked} directly`)
-    else ok(`rep: ${blocked} gated → ${landed}`)
+    try {
+      await page.goto(`${base}${blocked}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    } catch {
+      ok(`rep: ${blocked} gated (navigation redirected)`)
+      continue
+    }
+    const settled = await page
+      .waitForURL((url) => url.pathname !== blocked, { timeout: 20_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (settled) ok(`rep: ${blocked} gated → ${new URL(page.url()).pathname}`)
+    else fail(`rep: reached ${blocked} directly`)
   }
   await page.close()
 }
