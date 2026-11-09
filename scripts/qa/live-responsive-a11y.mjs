@@ -14,6 +14,15 @@ const results = []
 const fail = (m) => results.push(`FAIL: ${m}`)
 const ok = (m) => results.push(`ok: ${m}`)
 
+// A crash mid-run must still report what already passed.
+process.on('uncaughtException', (err) => {
+  console.error(err instanceof Error ? err.message : String(err))
+  console.log(results.join('\n'))
+  const failed = results.filter((r) => r.startsWith('FAIL')).length
+  console.log(`\n${results.length - failed} passed, ${failed} failed — INCOMPLETE RUN`)
+  process.exit(1)
+})
+
 const browser = await chromium.launch()
 const context = await browser.newContext({ ignoreHTTPSErrors: true })
 // The active identity is per-user; forcing one identity across every session
@@ -35,11 +44,19 @@ async function login(email, attempts = 3) {
         } catch {}
       }, ACTIVE_IDENTITY[email] ?? '')
       await page.waitForSelector('#login-email', { timeout: 60_000 })
-      await page.fill('#login-email', email)
-      await page.fill('#login-password', 'scout-dev-password')
-      // The submit button is disabled until React has accepted both fields;
-      // under load hydration can lag well behind the input elements appearing.
-      await page.waitForSelector('button.auth-submit[type="submit"]:not([disabled])', { timeout: 30_000 })
+      // Filling before hydration is lost when React re-renders the controlled
+      // inputs, leaving the submit button disabled. Re-fill until it enables.
+      let ready = false
+      for (let attempt = 0; attempt < 5 && !ready; attempt++) {
+        await page.fill('#login-email', email)
+        await page.fill('#login-password', 'scout-dev-password')
+        ready = await page
+          .waitForSelector('button.auth-submit[type="submit"]:not([disabled])', { timeout: 10_000 })
+          .then(() => true)
+          .catch(() => false)
+        if (!ready) await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {})
+      }
+      if (!ready) throw new Error('login form never became submittable')
       await page.click('button.auth-submit[type="submit"]')
       await page.waitForURL(/dashboard|onboarding|chats/, { timeout: 60_000 })
       await page.waitForTimeout(1500)
