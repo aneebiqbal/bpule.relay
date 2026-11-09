@@ -85,7 +85,7 @@ describe('PROFILES_ONE_ROW_PER_PERSON', () => {
 
 describe('TARGET_EDITING_SINGLE_AUTHORITY', () => {
   it('Team → Targets redirects to the Performance view', () => {
-    expect(read('src/app/(app)/team/targets/page.tsx')).toMatch(/redirect\('\/team\/performance\?view=targets'\)/)
+    expect(read('next.config.ts')).toMatch(/source: "\/team\/targets", destination: "\/team\/performance\?view=targets"/)
   })
 
   it('the Performance target view is read-only', () => {
@@ -102,7 +102,7 @@ describe('TARGET_EDITING_SINGLE_AUTHORITY', () => {
 
 describe('COVERAGE_EXCEPTION_ONLY', () => {
   it('the coverage directory redirects to Today', () => {
-    expect(read('src/app/(app)/team/coverage/page.tsx')).toMatch(/redirect\('\/team'\)/)
+    expect(read('next.config.ts')).toMatch(/source: "\/team\/coverage", destination: "\/team"/)
   })
 
   it('Today hides healthy coverage and explains readiness in plain language', () => {
@@ -115,7 +115,7 @@ describe('COVERAGE_EXCEPTION_ONLY', () => {
 
 describe('WORKLOAD_EMBEDDED_IN_PEOPLE', () => {
   it('the standalone workload page redirects to People', () => {
-    expect(read('src/app/(app)/team/workload/page.tsx')).toMatch(/redirect\('\/team\/people'\)/)
+    expect(read('next.config.ts')).toMatch(/source: "\/team\/workload", destination: "\/team\/people"/)
   })
 
   it('People shows concrete workload facts, not a score', () => {
@@ -127,7 +127,7 @@ describe('WORKLOAD_EMBEDDED_IN_PEOPLE', () => {
 
 describe('ACTIVITY_NOT_PRIMARY_OPERATION', () => {
   it('Team → Activity redirects to the canonical report', () => {
-    expect(read('src/app/(app)/team/activity/page.tsx')).toMatch(/redirect\('\/reports\/activity'\)/)
+    expect(read('next.config.ts')).toMatch(/source: "\/team\/activity", destination: "\/reports\/activity"/)
     expect(read('src/app/(app)/reports/activity/page.tsx')).not.toMatch(/redirect\('\/team\/activity'\)/)
   })
 
@@ -161,8 +161,7 @@ describe('NO_DUPLICATE_PROFILE_MANAGEMENT', () => {
 
 describe('NO_DUPLICATE_TARGET_CONFIGURATION', () => {
   it('only Admin → Daily Targets and the profile channel edit targets', () => {
-    const teamTargets = read('src/app/(app)/team/targets/page.tsx')
-    expect(teamTargets).toMatch(/redirect/)
+    expect(read('next.config.ts')).toMatch(/source: "\/team\/targets", destination: "\/team\/performance\?view=targets"/)
     expect(read('src/components/team/team-profile-detail.tsx')).toMatch(/ChannelTargetsEditor/)
   })
 })

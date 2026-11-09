@@ -12,6 +12,12 @@ const nextConfig: NextConfig = {
       { source: "/find-jobs", destination: "/upwork", permanent: true },
       { source: "/resume/generate", destination: "/content", permanent: true },
       { source: "/admin/revenue-identities", destination: "/profile-intelligence?tab=identities", permanent: true },
+      // Retired Team surfaces. Coverage, workload, activity and targets are now
+      // views or exceptions elsewhere; old bookmarks must not 404.
+      { source: "/team/coverage", destination: "/team", permanent: true },
+      { source: "/team/workload", destination: "/team/people", permanent: true },
+      { source: "/team/activity", destination: "/reports/activity", permanent: true },
+      { source: "/team/targets", destination: "/team/performance?view=targets", permanent: true },
     ];
   },
 

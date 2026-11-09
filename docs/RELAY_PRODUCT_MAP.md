@@ -95,11 +95,11 @@ Legend: **KEEP** core · **KEEP** config · **REDIR** compatibility redirect ·
 | `/team/profiles/[profileId]` | `(app)/team/profiles/[profileId]/page.tsx` | manager+ | Profile operating center | KEEP | `lib/profiles/operating-model.ts` |
 | `/profile-intelligence` | `(app)/profile-intelligence/page.tsx` | everyone (admin tab) | Identities (admin) / own profiles | KEEP | `ProfileIntelligenceDashboard` |
 | `/profile-intelligence/[id]` | `(app)/profile-intelligence/[id]/page.tsx` | manager+ | — | **REDIR** → `/team/profiles/[id]` | — |
-| `/team/coverage` | `(app)/team/coverage/page.tsx` | manager+ | — | **REDIR** → `/team` (exceptions live on Today and in the profile channel) | — |
-| `/team/workload` | `(app)/team/workload/page.tsx` | manager+ | — | **REDIR** → `/team/people` | — |
-| `/team/activity` | `(app)/team/activity/page.tsx` | manager+ | — | **REDIR** → `/reports/activity` | — |
+| `/team/coverage` | `next.config.ts` | manager+ | — | **REDIR** → `/team` (exceptions live on Today and in the profile channel) | — |
+| `/team/workload` | `next.config.ts` | manager+ | — | **REDIR** → `/team/people` | — |
+| `/team/activity` | `next.config.ts` | manager+ | — | **REDIR** → `/reports/activity` | — |
 | `/team/performance` | `(app)/team/performance/page.tsx` | manager+ | Execution/conversion/comparison; `?view=targets` for target progress | KEEP | `getPerformance`, `TeamTargetsReport` |
-| `/team/targets` | `(app)/team/targets/page.tsx` | manager+ | — | **REDIR** → `/team/performance?view=targets` | — |
+| `/team/targets` | `next.config.ts` | manager+ | — | **REDIR** → `/team/performance?view=targets` | — |
 | `/team/groups` | `(app)/team/groups/page.tsx` | manager+ | Teams index (Structure) | KEEP | `getPeopleDirectory` |
 | `/team/groups/[teamId]` | `(app)/team/groups/[teamId]/page.tsx` | manager+ | Team detail | KEEP | group scope |
 | `/team/[repId]` | `(app)/team/[repId]/page.tsx` | manager+ / self | Rep 360 | KEEP | `repInScope` |
