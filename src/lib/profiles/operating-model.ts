@@ -2,6 +2,7 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import type { DbClient } from '@/lib/db/types'
 import { currentInstant, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { personNameFromProfile } from '@/lib/profiles/person-name'
 
 /**
  * The canonical profile operating model — ONE person, MANY channels.
@@ -132,7 +133,7 @@ type ProfileRow = {
 }
 
 function personNameOf(profile: Pick<ProfileRow, 'display_name' | 'full_name' | 'label'>): string {
-  return profile.display_name ?? profile.full_name ?? profile.label ?? 'Unnamed profile'
+  return personNameFromProfile(profile)
 }
 
 function stringArray(value: unknown): string[] {

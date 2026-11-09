@@ -5,6 +5,7 @@ import { isMissingRelation } from '@/lib/operations/db-errors'
 import { currentInstant, isOrgWorkingDay, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { normalizeChannel } from '@/lib/profiles/assigned-profiles'
+import { personNameFromProfile } from '@/lib/profiles/person-name'
 import { deriveConversationRow } from '@/lib/operations/conversations'
 import {
   buildCoverageStatusSummary,
@@ -110,7 +111,7 @@ export async function loadCoverageFacts(
     person_id: string | null
   }>
   const profileNameById = new Map(
-    profiles.map((profile) => [profile.id, profile.display_name ?? profile.full_name ?? profile.label ?? 'Unnamed']),
+    profiles.map((profile) => [profile.id, personNameFromProfile(profile)]),
   )
 
   const identities = (identitiesRes.data ?? []) as Array<{
@@ -515,7 +516,7 @@ async function loadRecentReturningCoverage(
   const profileName = new Map(
     (profileRes.data ?? []).map((row) => [
       row.id as string,
-      (row.display_name as string) ?? (row.full_name as string) ?? (row.label as string) ?? 'Unnamed',
+      personNameFromProfile(row),
     ]),
   )
   const repName = new Map((repRes.data ?? []).map((row) => [row.id as string, row.name as string]))

@@ -32,7 +32,7 @@ export async function loadTeamLive(orgId: string, now = currentInstant()): Promi
     supabase.from('leads').select('owner_rep_id, created_at').eq('organization_id', orgId).gte('created_at', startOfDay).lt('created_at', endOfDay),
     supabase.from('extraction_runs').select('rep_id, success, created_at').eq('organization_id', orgId).gte('created_at', startOfDay).lt('created_at', endOfDay),
     supabase.from('leads').select('id, owner_rep_id, company, contact_name, status, canonical_score, score').eq('organization_id', orgId).in('status', OPEN_STATUSES).order('created_at', { ascending: false }).limit(800),
-    supabase.from('profiles').select('id, display_name, full_name, label').eq('organization_id', orgId),
+    supabase.from('profiles').select('id, display_name, full_name, label, person_id').eq('organization_id', orgId),
   ])
 
   return assembleTeamLive({

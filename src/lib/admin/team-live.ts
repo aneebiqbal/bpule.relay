@@ -27,6 +27,8 @@ export type TeamLiveIdentity = {
   channel: string
   profileId: string | null
   profileName: string | null
+  /** Canonical person key — one person with several channels appears once. */
+  personKey: string | null
 }
 
 export type TeamLiveGoal = {
@@ -72,7 +74,7 @@ export type TeamLivePayload = { date: string; people: TeamLivePerson[] }
 
 type RepRow = { id: string; name: string; role: string }
 type IdentityRow = { id: string; identity_name: string; channel: string; title: string | null; profile_id?: string | null }
-type ProfileRow = { id: string; display_name?: string | null; full_name?: string | null; label?: string | null }
+type ProfileRow = { id: string; display_name?: string | null; full_name?: string | null; label?: string | null; person_id?: string | null }
 type AssignmentRow = { revenue_identity_id?: string | null; identity_id?: string | null; rep_id: string }
 type TargetRow = { rep_id: string; revenue_identity_id: string; activity_type: string; target_count: number }
 type AccountabilityRow = { rep_id: string; revenue_identity_id: string; activity_type: string; completed_count: number | null; status?: string | null }
@@ -133,6 +135,12 @@ export function assembleTeamLive(rows: TeamLiveRows): TeamLivePayload {
     (rows.profiles ?? []).map((p) => [
       p.id as string,
       p.display_name ?? p.full_name ?? p.label ?? null,
+    ]),
+  )
+  const personKeyByProfile = new Map(
+    (rows.profiles ?? []).map((p) => [
+      p.id as string,
+      (p.person_id as string | null) ?? (p.id as string),
     ]),
   )
 
@@ -214,6 +222,7 @@ export function assembleTeamLive(rows: TeamLiveRows): TeamLivePayload {
         channel: i.channel,
         profileId: i.profile_id ?? null,
         profileName: i.profile_id ? (profileNameById.get(i.profile_id) ?? null) : null,
+        personKey: i.profile_id ? (personKeyByProfile.get(i.profile_id) ?? i.profile_id) : null,
       })),
       goals,
       openLeads,

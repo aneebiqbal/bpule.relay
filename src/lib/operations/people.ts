@@ -144,7 +144,12 @@ export function assemblePeopleDirectory(input: {
       openLeads: live?.openLeadCount ?? 0,
       lastActivityAt: day?.lastActivityAt ?? live?.lastActivityAt ?? null,
       dayState: day?.state ?? null,
-      profiles: (live?.identities ?? []).map((identity) => identity.name).sort((a, b) => a.localeCompare(b)),
+      profiles: [...new Map(
+        (live?.identities ?? []).map((identity) => [
+          identity.personKey ?? identity.profileId ?? identity.id,
+          identity.profileName ?? identity.name,
+        ]),
+      ).values()].sort((a, b) => a.localeCompare(b)),
       availability: input.availabilityByRep?.get(row.repId) ?? null,
     }
   })

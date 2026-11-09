@@ -46,7 +46,7 @@ export function buildTeamProfiles(
       // One row per PERSON: duplicate/orphan profiles point at their canonical
       // profile via person_id, so a two-channel person renders once.
       const profileKey = identity.profileId ?? `${person.repId}:${identity.id}`
-      const key = (identity.profileId && personKeyByProfile?.get(identity.profileId)) || profileKey
+      const key = (identity.personKey ?? (identity.profileId && personKeyByProfile?.get(identity.profileId))) || profileKey
       let row = byProfile.get(key)
       if (!row) {
         row = {

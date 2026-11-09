@@ -315,7 +315,7 @@ export function V4AdminHome({
                   tone={behind > 0 ? FACT_TONE.warning : FACT_TONE.neutral}
                 />
                 <Fact
-                  label="Profiles"
+                  label="People"
                   value={`${profilesComplete} / ${profileRows.length}`}
                   hint={`${profilesNotStarted} not started · ${profilesBehind} behind`}
                   tone={profilesBehind > 0 ? FACT_TONE.warning : FACT_TONE.neutral}
