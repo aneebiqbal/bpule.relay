@@ -189,6 +189,73 @@ export async function assignPrimaryResponsibility(
 }
 
 /**
+ * Add a rep as a backup on a channel: eligibility plus a BACKUP coverage row.
+ * Backups never carry daily targets and never appear as current work until a
+ * coverage assignment activates them.
+ */
+export async function assignBackupResponsibility(
+  client: DbClient,
+  input: { orgId: string; identityId: string; repId: string; actorRepId: string },
+): Promise<{ profileId: string }> {
+  const identity = await readIdentity(client, input.orgId, input.identityId)
+
+  const { error: assignmentError } = await client
+    .from('identity_assignments')
+    .upsert(
+      {
+        organization_id: input.orgId,
+        revenue_identity_id: input.identityId,
+        rep_id: input.repId,
+        assigned_by: input.actorRepId,
+      },
+      { onConflict: 'revenue_identity_id,rep_id' },
+    )
+  if (assignmentError) throw assignmentError
+
+  const { data: existing } = await client
+    .from('profile_coverage')
+    .select('id')
+    .eq('organization_id', input.orgId)
+    .eq('profile_id', identity.profile_id)
+    .eq('rep_id', input.repId)
+    .eq('active', true)
+    .maybeSingle()
+  if (!existing) {
+    const { data: chain } = await client
+      .from('profile_coverage')
+      .select('priority')
+      .eq('organization_id', input.orgId)
+      .eq('profile_id', identity.profile_id)
+      .eq('active', true)
+      .order('priority', { ascending: false })
+      .limit(1)
+    const priority = ((chain?.[0]?.priority as number | undefined) ?? 1) + 1
+    const { error: backupError } = await client
+      .from('profile_coverage')
+      .insert({
+        organization_id: input.orgId,
+        profile_id: identity.profile_id,
+        rep_id: input.repId,
+        role: 'BACKUP',
+        priority,
+        active: true,
+        created_by: input.actorRepId,
+      })
+    if (backupError) throw backupError
+  }
+
+  await client.from('accountability_audit_log').insert({
+    organization_id: input.orgId,
+    rep_id: input.actorRepId,
+    revenue_identity_id: input.identityId,
+    event_type: 'identity_backup_assigned',
+    detail: { rep_id: input.repId },
+  })
+
+  return { profileId: identity.profile_id }
+}
+
+/**
  * Remove a rep's responsibility for a channel: eligibility row gone, PRIMARY
  * coverage retired, target lanes deactivated. Leads, messages and history are
  * never touched.

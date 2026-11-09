@@ -20,7 +20,7 @@ async function requireAdminStore() {
   if (!authCtx) return { error: NextResponse.json({ error: 'Not signed in.' }, { status: 401 }) }
   if (!can(authCtx, 'MANAGE_TEAM_TARGETS')) return { error: NextResponse.json({ error: 'Not authorized.' }, { status: 403 }) }
   try {
-    return { store: await createScoutStore() }
+    return { authCtx, store: await createScoutStore() }
   } catch {
     return { error: NextResponse.json({ error: 'Not signed in.' }, { status: 401 }) }
   }
@@ -31,14 +31,48 @@ export async function GET() {
   if (auth.error) return auth.error
 
   try {
-    const [targets, identities, assignments, reps] = await Promise.all([
+    const client = auth.store.getSupabaseClient()
+    const today = new Date().toISOString().slice(0, 10)
+    const [targets, identities, assignments, reps, coverage, coverageAssignments] = await Promise.all([
       auth.store.listDailyTargetsAdmin(),
       auth.store.listRevenueIdentitiesAdmin(),
       auth.store.listIdentityAssignmentsAdmin(),
       auth.store.listAllReps(),
+      client.from('profile_coverage').select('profile_id, rep_id, role, active').eq('organization_id', auth.authCtx.orgId).limit(2000),
+      client
+        .from('coverage_assignments')
+        .select('profile_id, covering_rep_id, status, effective_from, effective_until')
+        .eq('organization_id', auth.authCtx.orgId)
+        .eq('status', 'ACTIVE')
+        .limit(1000),
     ])
+    if (coverage.error) throw coverage.error
+    if (coverageAssignments.error) throw coverageAssignments.error
+
+    const profileIdByIdentity = new Map(
+      (identities ?? []).map((identity) => [identity.id as string, (identity as unknown as { profileId: string | null }).profileId]),
+    )
+    const primaryByProfileRep = new Set(
+      ((coverage.data ?? []) as Array<{ profile_id: string; rep_id: string; role: string; active: boolean }>)
+        .filter((row) => row.active && row.role === 'PRIMARY')
+        .map((row) => `${row.profile_id}:${row.rep_id}`),
+    )
+    const coveredByProfileRep = new Set(
+      ((coverageAssignments.data ?? []) as Array<{ profile_id: string; covering_rep_id: string; effective_from: string; effective_until: string | null }>)
+        .filter((row) => row.effective_from <= today && (row.effective_until === null || row.effective_until >= today))
+        .map((row) => `${row.profile_id}:${row.covering_rep_id}`),
+    )
+    // Only executable responsibility appears as current work. Backup eligibility
+    // and stale lanes never show up in the daily-plan editor.
+    const executableTargets = targets.filter((target) => {
+      const profileId = profileIdByIdentity.get(target.revenueIdentityId)
+      if (!profileId) return false
+      const key = `${profileId}:${target.repId}`
+      return primaryByProfileRep.has(key) || coveredByProfileRep.has(key)
+    })
+
     return NextResponse.json({
-      targets,
+      targets: executableTargets,
       identities,
       assignments,
       reps,

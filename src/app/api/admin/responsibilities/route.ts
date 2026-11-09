@@ -3,6 +3,7 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 import {
+  assignBackupResponsibility,
   assignPrimaryResponsibility,
   removeResponsibility,
   transferResponsibility,
@@ -58,6 +59,16 @@ export async function POST(request: Request) {
         actorRepId: auth.authCtx.repId,
       })
       return NextResponse.json({ ok: true, transferred: true, ...result })
+    }
+
+    if (body.role === 'backup') {
+      const result = await assignBackupResponsibility(auth.client, {
+        orgId: auth.authCtx.orgId,
+        identityId,
+        repId,
+        actorRepId: auth.authCtx.repId,
+      })
+      return NextResponse.json({ ok: true, transferred: false, backup: true, ...result })
     }
 
     const result = await assignPrimaryResponsibility(auth.client, {

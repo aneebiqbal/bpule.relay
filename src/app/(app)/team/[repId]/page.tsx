@@ -40,6 +40,11 @@ import { getRepDailyActivity } from '@/lib/performance/activity-model'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { ContributionHeatmap } from '@/components/performance/contribution-heatmap'
 import { RepAvailabilityControl } from '@/components/team/rep-availability-control'
+import { RepOperatingPlanView, type AssignableIdentity } from '@/components/team/rep-operating-plan'
+import { loadRepOperatingPlan } from '@/lib/operations/rep-operating-plan'
+import { can } from '@/lib/auth/organization'
+import { personNameFromProfile } from '@/lib/profiles/person-name'
+import { normalizeChannel } from '@/lib/profiles/channel'
 import { availabilityLabel } from '@/lib/coverage/load'
 import type { AvailabilityState } from '@/lib/coverage/engine'
 
@@ -201,6 +206,49 @@ async function RepMetrics({ repId }: { repId: string }) {
   )
 }
 
+async function loadAssignableIdentities(ctx: OpsPageContext): Promise<AssignableIdentity[]> {
+  const identityRows = await ctx.client
+    .from('revenue_identities')
+    .select('id, profile_id, identity_name, channel, person_key, status')
+    .eq('organization_id', ctx.auth.orgId)
+    .eq('status', 'active')
+    .limit(500)
+  if (identityRows.error) return []
+  const rows = (identityRows.data ?? []) as Array<Record<string, unknown>>
+  const personKeys = [
+    ...new Set(
+      rows
+        .map((row) => (row.person_key as string | null) ?? (row.profile_id as string | null))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ]
+  const personRows = personKeys.length
+    ? await ctx.client
+        .from('profiles')
+        .select('id, display_name, full_name, label')
+        .eq('organization_id', ctx.auth.orgId)
+        .in('id', personKeys)
+        .limit(200)
+    : { data: [] as Array<Record<string, unknown>>, error: null }
+  const personNameById = new Map(
+    (personRows.data ?? []).map((row) => [row.id as string, personNameFromProfile(row)]),
+  )
+  return rows.map((row) => {
+    const profileId = (row.profile_id as string | null) ?? null
+    const personKey = (row.person_key as string | null) ?? profileId ?? (row.id as string)
+    return {
+      id: row.id as string,
+      identityName: (row.identity_name as string) ?? 'Unnamed',
+      channel: normalizeChannel(row.channel as string | null),
+      profileId,
+      personKey,
+      personName: personNameById.get(personKey) ?? (row.identity_name as string) ?? 'Unnamed',
+      primaryRepId: null,
+      primaryRepName: null,
+    }
+  })
+}
+
 async function OverviewTab({
   ctx,
   basics,
@@ -213,16 +261,19 @@ async function OverviewTab({
   const now = Date.now()
   const today = rangeWindow('today')
   const week = rangeWindow('7d')
-  const [directory, conversations, tasks, todayPerf, weekPerf] = await Promise.all([
+  const [directory, conversations, tasks, todayPerf, weekPerf, plan, assignable] = await Promise.all([
     getPeopleDirectory().catch(() => null),
     loadConversationRows(ctx.client, { orgId: ctx.auth.orgId, repIds: [basics.id] }, now).catch(() => []),
     loadUnifiedTasks({ auth: ctx.auth, derivedActions: [], forRepId: basics.id, includeCompleted: false }).catch(() => []),
     getPerformance(basics.id, today.start, today.end, null, null).catch(() => null),
     getPerformance(basics.id, week.start, week.end, null, null).catch(() => null),
+    loadRepOperatingPlan(ctx.client, { orgId: ctx.auth.orgId, repId: basics.id, repName: basics.name }).catch(() => null),
+    loadAssignableIdentities(ctx).catch(() => []),
   ])
   const row = directory?.rows.find((r) => r.repId === basics.id) ?? null
   const base = `/team/${basics.id}`
   const attention = buildRepAttention({ repId: basics.id, row, conversations, tasks, now })
+  const canManage = ctx.auth.isAdmin || ctx.auth.isOwner || can(ctx.auth, 'MANAGE_REVENUE_IDENTITIES')
   const t = todayPerf?.totals
   const w = weekPerf?.totals
 
@@ -250,16 +301,12 @@ async function OverviewTab({
           )}
         </Section>
 
-        <Section title="Pipeline" description="Furthest known stage per lead, last 7 days. No stage is inferred past the evidence.">
-          <V3StageStrip
-            stages={(weekPerf?.funnel ?? []).map((step) => ({
-              key: step.key,
-              label: step.label,
-              count: step.count,
-              href: `/leads?owner=${basics.id}`,
-              conversionPct: step.conversionPct,
-            }))}
-          />
+        <Section title="Responsibilities" description="Who this person works, and what is expected today.">
+          {plan ? (
+            <RepOperatingPlanView repId={basics.id} plan={plan} identities={assignable} canManage={canManage} />
+          ) : (
+            <p className="text-[13px] text-graphite">The operating plan could not be loaded.</p>
+          )}
         </Section>
 
         <Section title="Attention" description="What is oldest or at risk right now.">
@@ -288,7 +335,7 @@ async function OverviewTab({
           </ul>
         </Section>
 
-        <Section title="Today" description="Executed work since midnight (UTC). Drafts are not counted.">
+        <Section title="Today" description="Executed work since the operating day reset. Drafts are not counted.">
           <MetricStrip
             metrics={[
               { label: 'Connections', value: t?.connections ?? 0, href: `${base}?tab=activity&range=today&event=CONNECTION_SENT` },
