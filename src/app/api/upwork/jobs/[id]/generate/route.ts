@@ -311,6 +311,16 @@ export async function POST(
     "- If you don't have a specific metric, describe the outcome qualitatively instead",
     '- Example: "improved deployment speed" (NOT "improved deployment efficiency by %")',
     '',
+    '### NO GENERIC CLAIMS:',
+    '- Never write "I\'ve worked extensively...", "I understand the intricacies...",',
+    '  "seamless", "robust", "cutting-edge", "leverage", "streamline",',
+    '  "One of my recent projects involved...", "I am eager to...",',
+    '  "I\'m well-equipped...", "ensures...", "scalable app/solution/platform".',
+    '- Every sentence must carry a specific, checkable detail: a technology, a',
+    '  project name from the proof block, a number, or the client\'s own problem.',
+    '- If a sentence cannot be supported by the proof block or the job, delete it.',
+    '- Do NOT add a sign-off or your name; the client already knows who you are.',
+
     '### NEVER USE:',
     '- "I came across your job posting..."',
     '- "I\'d love the opportunity..."',
@@ -481,9 +491,17 @@ export async function POST(
     ...unsupportedClaims,
   ]
   // Coarse, actionable readiness only — never a 0-100 score for the rep.
+  // Substantive warnings also mean "needs review" — a proposal that reads as
+  // template output is not sendable, even when no claim is unsafe.
+  const reviewWarnings = [
+    ...letterGate.issues
+      .filter((issue) => issue.severity === 'warn' && ['NO_PROOF', 'GENERIC_LANGUAGE', 'FORMAL_SIGNOFF', 'PARROTS_JOB', 'TOO_MANY_QUESTIONS'].includes(issue.code))
+      .map((issue) => issue.message),
+    ...answersGate.issues.filter((issue) => issue.severity === 'warn').map((issue) => issue.message),
+  ]
   const readiness = {
-    status: blockers.length === 0 ? 'ready' : 'needs_review',
-    reasons: blockers.slice(0, 6),
+    status: blockers.length > 0 || reviewWarnings.length > 0 ? 'needs_review' : 'ready',
+    reasons: [...blockers, ...reviewWarnings].slice(0, 6),
   }
 
   return NextResponse.json({

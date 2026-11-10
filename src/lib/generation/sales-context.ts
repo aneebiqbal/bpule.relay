@@ -506,15 +506,20 @@ function canonicalEntityTokens(context: SalesGenerationContext): Set<string> {
 export function formatEvidenceBlock(context: SalesGenerationContext, limit = 3): string {
   const proof = context.rankedProof.slice(0, limit)
   if (proof.length === 0) return ''
+  const verified = proof.filter((p) => p.verified && p.strength !== 'weak').length
   const lines = proof.map((p) => {
     const url = p.url ? ` — ${p.url}` : ''
     const tags = p.technologies.length > 0 ? `\n  Technologies: ${p.technologies.join(', ')}` : ''
     return `• ${p.title} — ${p.claim}${url}${tags}`
   })
+  const qualityNote = verified === 0
+    ? '\nProof quality: none of these items is independently verified. State them as your own experience — never as a client result, and do not invent stronger evidence.'
+    : ''
   return [
     '## RELEVANT PROOF (reference only what is listed; never invent a project, client, metric or link)',
     ...lines,
-  ].join('\n')
+    qualityNote,
+  ].filter(Boolean).join('\n')
 }
 
 /** Prompt block: the selected profile, normalized. */

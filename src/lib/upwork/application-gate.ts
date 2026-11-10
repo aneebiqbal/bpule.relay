@@ -76,6 +76,29 @@ const BANNED_PHRASES: RegExp[] = [
   /\bbest\s+regards\b|\byours\s+sincerely\b/i,
 ]
 
+/**
+ * Generic marketing shapes (§2/§27). These are not banned words — a single
+ * "scalable" is fine. Two or more in one proposal means the model fell back on
+ * template language instead of the job and the proof.
+ */
+const GENERIC_SHAPES: RegExp[] = [
+  /\bworked\s+extensively\b/i,
+  /\bi\s+understand\s+the\s+intricacies\b/i,
+  /\bseamless(?:ly)?\b/i,
+  /\bcutting[-\s]?edge\b/i,
+  /\bone\s+of\s+my\s+recent\s+projects?\b/i,
+  /\bi\s+am\s+eager\s+to\b/i,
+  /\bi'?m\s+(?:well[-\s]?)?equipped\b/i,
+  /\bensures?\b/i,
+  /\bscalable\s+(?:apps?|solutions?|platforms?|workflows?)\b/i,
+  /\bstreamline\b/i,
+  /\bleverage\b/i,
+  /\bbest[-\s]?in[-\s]?class\b/i,
+  /\bensure\s+success\b/i,
+  /\brobust\s+(?:performance|solutions?|applications?)\b/i,
+  /\bintricacies\s+of\b/i,
+]
+
 const BIO_DUMP: RegExp[] = [
   /\bmy\s+(?:skills|expertise|experience)\s+includes?\s*:/i,
   /\bi\s+(?:have\s+)?(?:worked\s+with|am\s+proficient\s+in|specialize\s+in)\s+(?:[\w.#+-]+,\s*){4,}/i,
@@ -128,6 +151,18 @@ export function evaluateCoverLetter(text: string, job: ApplicationJobContext, pr
   for (const re of BANNED_OPENERS) if (re.test(t)) { issues.push({ code: 'GENERIC_OPENER', message: 'Opens like every other proposal', severity: 'block' }); break }
   for (const re of BANNED_PHRASES) { const m = t.match(re); if (m) issues.push({ code: 'BANNED_PHRASE', message: `Banned phrase: "${m[0]}"`, severity: 'block' }) }
   for (const re of BIO_DUMP) if (re.test(t)) { issues.push({ code: 'BIO_DUMP', message: 'Reads as a biography or skills list, not a response to this job', severity: 'block' }); break }
+
+  // Shape, not vocabulary: two or more marketing shapes means the proposal is
+  // template output rather than a response to this job.
+  const genericHits = GENERIC_SHAPES.filter((re) => re.test(t)).length
+  if (genericHits >= 2) {
+    issues.push({ code: 'GENERIC_LANGUAGE', message: `${genericHits} generic marketing shapes — replace with a specific detail from the proof or the job`, severity: 'warn' })
+  }
+
+  // A sign-off is a closing tell; the client already knows who you are.
+  if (/(?:^|\n)\s*(?:best(?: regards)?|kind regards|yours sincerely|warm regards|thanks(?: a lot)?)\s*,?\s*$/i.test(t)) {
+    issues.push({ code: 'FORMAL_SIGNOFF', message: 'Ends with a formal sign-off — end on the useful point instead', severity: 'warn' })
+  }
 
   // Specificity: must reference the job (skills, title words, distinctive description terms).
   const jobTerms = new Set([...job.skills.map((s) => s.toLowerCase()), ...tokens(job.title ?? ''), ...tokens(job.description).filter((w) => w.length >= 6)])
