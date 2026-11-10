@@ -343,6 +343,14 @@ function parseFilterString(filter: string, joiner = 'OR'): { sql: string; params
         if (raw === 'false') return `${col} IS FALSE`
         return `${col} = ${add(raw)}`
       }
+      case 'not.is': {
+        // PostgREST `col=not.is.null` — negated IS, not an equality against the
+        // string 'null'.
+        if (raw === 'null') return `${col} IS NOT NULL`
+        if (raw === 'true') return `${col} IS NOT TRUE`
+        if (raw === 'false') return `${col} IS NOT FALSE`
+        return `${col} <> ${add(raw)}`
+      }
       case 'like':
       case 'ilike':
         return `${col} ${op.toUpperCase()} ${add(raw.replace(/\*/g, '%'))}`

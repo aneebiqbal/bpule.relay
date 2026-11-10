@@ -180,7 +180,7 @@ export async function listAttentionForOrg(
     .from('responsibility_acknowledgements')
     .select(ACK_COLUMNS)
     .eq('organization_id', orgId)
-    .or('acknowledged_at.is.null,access_issue_at.is.not.null')
+    .or('acknowledged_at.is.null,access_issue_at.not.is.null')
     .limit(500)
   if (error) throw error
   const rows = ((data ?? []) as AckRow[]).filter(

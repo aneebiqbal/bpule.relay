@@ -36,4 +36,18 @@ describe('Neon query builder operators', () => {
     await db.from('upwork_jobs').select('id').not('status', 'neq', 'SAVED')
     expect(queries.some((q) => /NOT \("status" <> \$1\)/.test(q))).toBe(true)
   })
+
+  it("maps or(...,'col.not.is.null') to IS NOT NULL", async () => {
+    const { pool, queries } = capturingPool()
+    const db = neonDbClient('user', pool as never)
+    await db
+      .from('responsibility_acknowledgements')
+      .select('id')
+      .or('acknowledged_at.is.null,access_issue_at.not.is.null')
+    const query = queries.find((q) => q.includes('responsibility_acknowledgements'))
+    expect(query).toBeDefined()
+    expect(query).toMatch(/IS NOT NULL/)
+    // Guards the bug where 'is.not.null' parsed as equality against the string 'null'.
+    expect(query).not.toMatch(/access_issue_at" = \$\d+/)
+  })
 })
