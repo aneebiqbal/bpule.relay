@@ -1,4 +1,5 @@
 import type { RevenueIdentityChannel } from '@/lib/domain/types'
+import type { CoverageExecutionMode } from './access'
 
 /**
  * The daily coverage engine — one deterministic derivation, no AI.
@@ -101,10 +102,13 @@ export interface RepWorkloadInput {
 }
 
 export interface ActiveCoverageInput {
+  id: string
   profileId: string
   primaryRepId: string
   coveringRepId: string
   effectiveUntil: string | null
+  /** SHARED keeps the primary executing; REPLACE excludes it. */
+  mode: CoverageExecutionMode | null
   /** True when `effective_until` has passed. Access is revoked and the engine
    *  asks for a new cover instead of letting it disappear silently. */
   expired?: boolean
@@ -146,6 +150,13 @@ export interface BackupCandidate {
   ready: boolean
 }
 
+export interface ActiveOperatorResult {
+  repId: string
+  repName: string
+  mode: CoverageExecutionMode | null
+  effectiveUntil: string | null
+}
+
 export interface CoverageProfileResult {
   profileId: string
   /** Canonical person key — the directory and Rep Home group by this. */
@@ -158,9 +169,14 @@ export interface CoverageProfileResult {
   primaryAvailability: AvailabilityState
   primaryIsAvailable: boolean
   backups: BackupCandidate[]
+  /** First active operator — convenience for legacy consumers. */
   activeCoveringRepId: string | null
   activeCoveringRepName: string | null
   activeCoverageUntil: string | null
+  /** Every active operator on this profile, in activation order. */
+  activeOperators: ActiveOperatorResult[]
+  /** REPLACE excludes the primary; SHARED keeps them. Null when no coverage. */
+  activeCoverageMode: CoverageExecutionMode | null
   status: CoverageStatus
   recommendation: CoverageRecommendation
   recommendedRepId: string | null
@@ -330,7 +346,12 @@ export function compareBackupCandidates(a: BackupCandidate, b: BackupCandidate):
 export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan {
   const availabilityByRep = new Map(input.availability.map((row) => [row.repId, row.state]))
   const workloadByRep = new Map(input.workloads.map((row) => [row.repId, row]))
-  const activeByProfile = new Map(input.activeCoverage.map((row) => [row.profileId, row]))
+  const activeByProfile = new Map<string, ActiveCoverageInput[]>()
+  for (const row of input.activeCoverage) {
+    const list = activeByProfile.get(row.profileId) ?? []
+    list.push(row)
+    activeByProfile.set(row.profileId, list)
+  }
   const readyPairs = new Set(input.readiness.map((row) => `${row.profileId}:${row.repId}`))
 
   const profiles: CoverageProfileResult[] = []
@@ -349,7 +370,24 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
     const primaryIsAvailable = AVAILABLE_FOR_COVERAGE.has(primaryAvailability)
     const primaryWorkload = primary ? workloadByRep.get(primary.repId) : undefined
 
-    const active = activeByProfile.get(profile.profileId) ?? null
+    const coverageRows = activeByProfile.get(profile.profileId) ?? []
+    const activeList = coverageRows.filter((row) => !row.expired)
+    const expiredList = coverageRows.filter((row) => row.expired)
+    const active = activeList[0] ?? null
+    // REPLACE wins over SHARED, and a legacy row with no mode behaves as
+    // REPLACE — matching the canonical read authority in coverage/access.ts.
+    const activeMode: CoverageExecutionMode | null =
+      activeList.length === 0
+        ? null
+        : activeList.some((row) => row.mode !== 'SHARED')
+          ? 'REPLACE'
+          : 'SHARED'
+    const activeOperators: ActiveOperatorResult[] = activeList.map((row) => ({
+      repId: row.coveringRepId,
+      repName: workloadByRep.get(row.coveringRepId)?.name ?? row.coveringRepId,
+      mode: row.mode,
+      effectiveUntil: row.effectiveUntil,
+    }))
 
     const backups: BackupCandidate[] = backupConfig.map((backup) => {
       const assignment = input.assignments.find(
@@ -404,16 +442,14 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
     let recommendationReasons: string[] = []
     let recommendedReady = true
     let ineligibleReason: string | null = null
-    const coverageExpiring = Boolean(
-      active?.effectiveUntil && !active.expired && active.effectiveUntil === input.businessDate,
-    )
+    const coverageExpiring = activeList.some((row) => row.effectiveUntil === input.businessDate)
     const primaryReady = primary ? readyPairs.has(`${profile.profileId}:${primary.repId}`) : false
 
     if (!primary) {
       status = 'UNCOVERED'
       ineligibleReason = 'NO_PRIMARY_ASSIGNED'
       recommendation = 'NO_SAFE_COVERAGE'
-    } else if (active?.expired) {
+    } else if (expiredList.length > 0 && activeList.length === 0) {
       // Expired coverage is a live operational problem, not a silent no-op:
       // the covering rep has lost access, so the profile needs a new cover.
       status = 'AT_RISK'
@@ -442,11 +478,12 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
       } else {
         recommendation = 'NO_SAFE_COVERAGE'
       }
-    } else if (active) {
-      // Coverage is already running. If the primary is back, the plan asks to
-      // restore them; otherwise the backup continues.
+    } else if (activeList.length > 0) {
+      // Coverage is running. SHARED keeps the primary working, so there is
+      // nothing to restore. REPLACE excludes the primary, so once the primary
+      // is available again the plan asks to end the exclusion.
       status = 'BACKUP_ACTIVE'
-      if (primaryIsAvailable) {
+      if (activeMode !== 'SHARED' && primaryIsAvailable) {
         recommendation = 'RESTORE_PRIMARY'
         recommendedRepId = primary.repId
         recommendedRepName = primaryWorkload?.name ?? primary.repId
@@ -521,6 +558,8 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
       activeCoveringRepId: active?.coveringRepId ?? null,
       activeCoveringRepName: active ? workloadByRep.get(active.coveringRepId)?.name ?? active.coveringRepId : null,
       activeCoverageUntil: active?.effectiveUntil ?? null,
+      activeOperators,
+      activeCoverageMode: activeMode,
       status,
       recommendation,
       recommendedRepId,
@@ -570,6 +609,7 @@ export function filterCoveragePlanToReps(plan: CoveragePlan, repIds: Set<string>
     (profile) =>
       (profile.primaryRepId !== null && repIds.has(profile.primaryRepId)) ||
       (profile.activeCoveringRepId !== null && repIds.has(profile.activeCoveringRepId)) ||
+      profile.activeOperators.some((operator) => repIds.has(operator.repId)) ||
       profile.backups.some((backup) => repIds.has(backup.repId)),
   )
   const profileIds = new Set(profiles.map((profile) => profile.profileId))

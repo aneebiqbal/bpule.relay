@@ -6,6 +6,8 @@ import { currentInstant, isOrgWorkingDay, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { normalizeChannel } from '@/lib/profiles/assigned-profiles'
 import { isCoverageActiveOn } from '@/lib/coverage/access'
+import { listAcknowledgementsForRep, type ResponsibilityAcknowledgementView } from '@/lib/responsibility/load'
+import { emitDueAcknowledgementNotifications, listAdminRepIds } from '@/lib/responsibility/notify'
 import { personNameFromProfile } from '@/lib/profiles/person-name'
 import { deriveConversationRow } from '@/lib/operations/conversations'
 import {
@@ -88,7 +90,7 @@ export async function loadCoverageFacts(
       supabase.from('profile_coverage').select('profile_id, rep_id, role, priority, active').eq('organization_id', orgId).eq('active', true).limit(4000),
       supabase.from('rep_availability').select('rep_id, state').eq('organization_id', orgId).eq('business_date', businessDate).limit(2000),
       supabase.from('rep_day').select('rep_id, check_in_at, closed_at').eq('organization_id', orgId).eq('business_date', businessDate).limit(2000),
-      supabase.from('coverage_assignments').select('profile_id, primary_rep_id, covering_rep_id, effective_from, effective_until').eq('organization_id', orgId).eq('status', 'ACTIVE').limit(2000),
+      supabase.from('coverage_assignments').select('id, profile_id, primary_rep_id, covering_rep_id, effective_from, effective_until, coverage_mode').eq('organization_id', orgId).eq('status', 'ACTIVE').limit(2000),
       supabase.from('profile_readiness').select('profile_id, rep_id').eq('organization_id', orgId).limit(4000),
       supabase.from('leads').select('id, owner_rep_id, revenue_identity_id, status').eq('organization_id', orgId).eq('archived', false).in('status', [...OPEN_LEAD_STATUSES]).limit(5000),
       supabase.from('assigned_tasks').select('assignee_rep_id, profile_id, status, due_at').eq('organization_id', orgId).in('status', ['OPEN', 'IN_PROGRESS', 'WAITING']).limit(5000),
@@ -180,17 +182,21 @@ export async function loadCoverageFacts(
   }))
 
   const activeCoverage: ActiveCoverageInput[] = ((activeCoverageRes.data ?? []) as Array<{
+    id: string
     profile_id: string
     primary_rep_id: string
     covering_rep_id: string
     effective_from: string
     effective_until: string | null
+    coverage_mode: string | null
   }>).map((row) => ({
+    id: row.id,
     profileId: row.profile_id,
     primaryRepId: row.primary_rep_id,
     coveringRepId: row.covering_rep_id,
     effectiveFrom: row.effective_from,
     effectiveUntil: row.effective_until,
+    mode: row.coverage_mode === 'SHARED' || row.coverage_mode === 'REPLACE' ? row.coverage_mode : null,
     expired: !isCoverageActiveOn(
       { effectiveFrom: row.effective_from, effectiveUntil: row.effective_until },
       businessDate,
@@ -475,8 +481,12 @@ export interface RepCoverageView {
   availability: AvailabilityState
   own: CoverageProfileResult[]
   covering: CoverageProfileResult[]
+  /** Ownership retained while a REPLACE coverage excludes the rep from execution. */
+  replaced: CoverageProfileResult[]
   requiresApproval: number
   readiness: Array<{ profileId: string; repId: string; ready: boolean }>
+  /** Unacknowledged responsibilities for this rep — drives the persistent banner. */
+  acknowledgements: ResponsibilityAcknowledgementView[]
   /** Coverage that ended in the last week — the return-to-work summary. */
   returning: RepReturningCoverage[]
 }
@@ -570,7 +580,11 @@ export async function loadRepCoverage(
   // `own` is canonical primary ownership from the coverage plan — never the raw
   // assignment table, which may still carry backup eligibility. Profiles are
   // grouped by person, so a two-channel person renders once on Rep Home.
-  const own = groupProfilesByPerson(plan.profiles.filter((profile) => profile.primaryRepId === repId))
+  const ownedProfiles = plan.profiles.filter((profile) => profile.primaryRepId === repId)
+  // REPLACE removes the primary from execution; ownership is retained and
+  // surfaced separately so it never looks like a transfer.
+  const own = groupProfilesByPerson(ownedProfiles.filter((profile) => profile.activeCoverageMode !== 'REPLACE'))
+  const replaced = groupProfilesByPerson(ownedProfiles.filter((profile) => profile.activeCoverageMode === 'REPLACE'))
   const ownIds = new Set(own.map((profile) => profile.profileId))
   // Expired coverage is not execution: Rep Home must not keep offering a
   // profile whose cover window has passed.
@@ -593,6 +607,21 @@ export async function loadRepCoverage(
     ready: facts.readiness.some((row) => row.profileId === profileId && row.repId === repId),
   }))
 
+  const now = currentInstant().toISOString()
+  const modeByAssignment = new Map(facts.activeCoverage.map((row) => [row.id, row.mode]))
+  const supabase = await createServerSupabase()
+  const acknowledgements = await listAcknowledgementsForRep(supabase, orgId, repId, now, {
+    modeByAssignment,
+  })
+  // Lazy escalation: emit any due stage once, deduped per assignment+stage.
+  await emitDueAcknowledgementNotifications({
+    client: supabase,
+    orgId,
+    acknowledgements,
+    now,
+    adminRepIds: await listAdminRepIds(supabase, orgId).catch(() => []),
+  })
+
   return {
     businessDate: facts.businessDate,
     isWorkingDay: facts.isWorkingDay,
@@ -601,8 +630,10 @@ export async function loadRepCoverage(
     availability,
     own: own.sort((a, b) => a.name.localeCompare(b.name)),
     covering: covering.sort((a, b) => a.name.localeCompare(b.name)),
+    replaced: replaced.sort((a, b) => a.name.localeCompare(b.name)),
     requiresApproval: plan.requiresApproval.length,
     readiness,
+    acknowledgements,
     returning: returningRows,
   }
 }

@@ -5,15 +5,26 @@ import { normalizeChannel } from '@/lib/profiles/channel'
 /**
  * Temporary coverage → execution access.
  *
- * `identity_assignments` is the eligibility authority, but a rep who is
- * actively covering a profile must also be able to open that profile's
- * workspace, generate from it, and see its actionable work. This module is the
- * single read that turns an approved `coverage_assignments` row into the
- * identities and profiles the covering rep may work today.
+ * `identity_assignments` is the eligibility authority. A rep who is actively
+ * covering a profile must also be able to open that profile's workspace,
+ * generate from it, and see its actionable work.
  *
- * Expired coverage is never returned: once `effective_until` passes, the
- * covering rep loses access and the engine recommends new coverage.
+ * This module is the SINGLE read that decides who may execute which identity
+ * today. Every sender selector, target view, Inbox queue, Leads queue, Daily
+ * Actions surface and Rep Home must read `listExecutableIdentitiesForRep` —
+ * never `identity_assignments`, never `profiles.rep_id`.
+ *
+ * Expired or revoked coverage is never returned.
  */
+
+/** How a temporary coverage executes. Distinct from the org policy enum. */
+export type CoverageExecutionMode = 'SHARED' | 'REPLACE'
+
+export const COVERAGE_EXECUTION_MODES: readonly CoverageExecutionMode[] = ['SHARED', 'REPLACE']
+
+export function isCoverageExecutionMode(value: unknown): value is CoverageExecutionMode {
+  return value === 'SHARED' || value === 'REPLACE'
+}
 
 export interface CoveredIdentity {
   revenueIdentityId: string
@@ -23,15 +34,76 @@ export interface CoveredIdentity {
   primaryRepId: string
   effectiveFrom: string
   effectiveUntil: string | null
+  mode: CoverageExecutionMode | null
 }
 
-/** True when the assignment is active on `businessDate` (expiry inclusive). */
+/** A temporary coverage row, as the execution authority sees it. */
+export interface CoverageAssignmentRow {
+  id: string
+  profile_id: string
+  primary_rep_id: string
+  covering_rep_id: string
+  effective_from: string
+  effective_until: string | null
+  status: string
+  revoked_at: string | null
+  coverage_mode: string | null
+  created_at: string
+}
+
+const COVERAGE_COLUMNS =
+  'id, profile_id, primary_rep_id, covering_rep_id, effective_from, effective_until, status, revoked_at, coverage_mode, created_at'
+
+/**
+ * The ONE coverage window rule. No consumer carries its own expiry logic.
+ * `status` / `revokedAt` are optional so older callers that only pass the
+ * window still work.
+ */
 export function isCoverageActiveOn(
-  row: { effectiveFrom: string; effectiveUntil: string | null },
+  row: {
+    effectiveFrom: string
+    effectiveUntil: string | null
+    status?: string | null
+    revokedAt?: string | null
+  },
   businessDate: string,
 ): boolean {
+  if (row.status != null && row.status !== 'ACTIVE') return false
+  if (row.revokedAt) return false
   if (row.effectiveFrom > businessDate) return false
   return row.effectiveUntil == null || row.effectiveUntil >= businessDate
+}
+
+/**
+ * Every ACTIVE, in-window coverage row for a set of profiles — including rows
+ * where the rep is the PRIMARY being replaced. Needed so REPLACE can exclude
+ * the primary.
+ */
+export async function listActiveCoverageForProfiles(
+  client: DbClient,
+  orgId: string,
+  profileIds: string[],
+  businessDate: string,
+): Promise<CoverageAssignmentRow[]> {
+  if (profileIds.length === 0) return []
+  const { data, error } = await client
+    .from('coverage_assignments')
+    .select(COVERAGE_COLUMNS)
+    .eq('organization_id', orgId)
+    .in('profile_id', profileIds)
+    .limit(500)
+  if (error) throw error
+  return ((data ?? []) as CoverageAssignmentRow[]).filter((row) =>
+    isCoverageActiveOn(
+      {
+        effectiveFrom: row.effective_from,
+        effectiveUntil: row.effective_until,
+        status: row.status,
+        revokedAt: row.revoked_at,
+      },
+      businessDate,
+    ),
+  )
 }
 
 /** Active temporary coverage for one rep on one business date. */
@@ -43,22 +115,26 @@ export async function listActiveCoveredIdentities(
 ): Promise<CoveredIdentity[]> {
   const { data: coverage, error } = await client
     .from('coverage_assignments')
-    .select('id, profile_id, primary_rep_id, effective_from, effective_until')
+    .select(COVERAGE_COLUMNS)
     .eq('organization_id', orgId)
     .eq('covering_rep_id', repId)
-    .eq('status', 'ACTIVE')
     .limit(200)
   if (error) throw error
 
-  const active = (coverage ?? []).filter((row) =>
+  const active = ((coverage ?? []) as CoverageAssignmentRow[]).filter((row) =>
     isCoverageActiveOn(
-      { effectiveFrom: row.effective_from as string, effectiveUntil: (row.effective_until as string | null) ?? null },
+      {
+        effectiveFrom: row.effective_from,
+        effectiveUntil: row.effective_until,
+        status: row.status,
+        revokedAt: row.revoked_at,
+      },
       businessDate,
     ),
   )
   if (active.length === 0) return []
 
-  const profileIds = [...new Set(active.map((row) => row.profile_id as string))]
+  const profileIds = [...new Set(active.map((row) => row.profile_id))]
   const { data: identities, error: identityError } = await client
     .from('revenue_identities')
     .select('id, profile_id, channel')
@@ -77,14 +153,15 @@ export async function listActiveCoveredIdentities(
   }
 
   return active.flatMap((row) =>
-    (identitiesByProfile.get(row.profile_id as string) ?? []).map((identity) => ({
+    (identitiesByProfile.get(row.profile_id) ?? []).map((identity) => ({
       revenueIdentityId: identity.id,
-      profileId: row.profile_id as string,
+      profileId: row.profile_id,
       channel: normalizeChannel(identity.channel),
-      coverageAssignmentId: row.id as string,
-      primaryRepId: row.primary_rep_id as string,
-      effectiveFrom: row.effective_from as string,
-      effectiveUntil: (row.effective_until as string | null) ?? null,
+      coverageAssignmentId: row.id,
+      primaryRepId: row.primary_rep_id,
+      effectiveFrom: row.effective_from,
+      effectiveUntil: row.effective_until,
+      mode: isCoverageExecutionMode(row.coverage_mode) ? row.coverage_mode : null,
     })),
   )
 }
@@ -102,19 +179,22 @@ export interface ExecutableIdentity {
   assignedBy: string | null
   assignedAt: string | null
   access: 'primary' | 'coverage'
-  coverageAssignmentId?: string | null
-  coveragePrimaryRepId?: string | null
-  coverageEffectiveUntil?: string | null
+  coverageMode: CoverageExecutionMode | null
+  coverageAssignmentId: string | null
+  coveragePrimaryRepId: string | null
+  coverageEffectiveUntil: string | null
 }
 
 /**
- * THE canonical execution scope for any rep: active PRIMARY ownership plus
- * ACTIVE, NON-EXPIRED coverage. Backup eligibility (`identity_assignments`
- * without a PRIMARY coverage row) is not execution and is excluded. Archived
- * identities are never executable.
+ * THE canonical execution scope for any rep.
  *
- * Every sender selector, target view and Today surface must read this one
- * function — not `identity_assignments`, not `profiles.rep_id`.
+ *   EXECUTABLE(rep, identity, now) =
+ *       PRIMARY ownership of the identity's profile
+ *       UNLESS that profile has an active REPLACE coverage
+ *       OR   the rep is an active covering operator (SHARED or REPLACE)
+ *
+ * Backups never execute. Archived identities never execute. Expired or revoked
+ * coverage never executes. Ownership is never rewritten by coverage.
  */
 export async function listExecutableIdentitiesForRep(
   client: DbClient,
@@ -144,6 +224,23 @@ export async function listExecutableIdentitiesForRep(
   if (primaryError) throw primaryError
 
   const primaryProfileIds = new Set((primaryRows ?? []).map((row) => row.profile_id as string))
+  const coveredProfileIds = [...new Set(covered.map((row) => row.profileId))]
+
+  // Load every active coverage row touching the rep's own profiles, so a
+  // REPLACE coverage taken by someone else can exclude the primary.
+  const activeForProfiles = await listActiveCoverageForProfiles(
+    client,
+    orgId,
+    [...new Set([...primaryProfileIds, ...coveredProfileIds])],
+    businessDate,
+  )
+
+  // REPLACE wins defensively if a conflict ever reaches the read path.
+  const replacedProfileIds = new Set<string>()
+  for (const row of activeForProfiles) {
+    if (row.coverage_mode === 'REPLACE') replacedProfileIds.add(row.profile_id)
+  }
+
   const coveredById = new Map(covered.map((row) => [row.revenueIdentityId, row]))
   const assignmentByIdentity = new Map(
     (assignments ?? []).map((row) => [row.revenue_identity_id as string, row]),
@@ -170,7 +267,9 @@ export async function listExecutableIdentitiesForRep(
   for (const row of (identityRows ?? []) as Array<{ id: string; profile_id: string | null; status: string }>) {
     if (row.status !== 'active') continue
     const isCovered = coveredById.has(row.id)
-    const isPrimary = Boolean(row.profile_id && primaryProfileIds.has(row.profile_id))
+    const isPrimary = Boolean(
+      row.profile_id && primaryProfileIds.has(row.profile_id) && !replacedProfileIds.has(row.profile_id),
+    )
     if (!isCovered && !isPrimary) continue
     if (seen.has(row.id)) continue
     seen.add(row.id)
@@ -183,6 +282,7 @@ export async function listExecutableIdentitiesForRep(
       assignedBy: (assignment?.assigned_by as string | null | undefined) ?? null,
       assignedAt: (assignment?.created_at as string | null | undefined) ?? coverage?.effectiveFrom ?? null,
       access: isCovered ? 'coverage' : 'primary',
+      coverageMode: coverage?.mode ?? null,
       coverageAssignmentId: coverage?.coverageAssignmentId ?? null,
       coveragePrimaryRepId: coverage?.primaryRepId ?? null,
       coverageEffectiveUntil: coverage?.effectiveUntil ?? null,
@@ -208,7 +308,7 @@ export async function listExecutableIdentityScope(
   }
 }
 
-/** Profiles a rep may work today: their own plus every actively covered one. */
+/** Profiles a rep may work today, derived from the canonical executable scope. */
 export async function listWorkableProfiles(
   client: DbClient,
   orgId: string,
@@ -216,27 +316,27 @@ export async function listWorkableProfiles(
   businessDate: string,
   owned: Profile[],
 ): Promise<Profile[]> {
-  const covered = await listActiveCoveredIdentities(client, orgId, repId, businessDate)
-  const coveredProfileIds = [...new Set(covered.map((row) => row.profileId))]
-  if (coveredProfileIds.length === 0) return owned
-
-  const { data, error } = await client
-    .from('profiles')
-    .select('*')
-    .eq('organization_id', orgId)
-    .in('id', coveredProfileIds)
-    .limit(200)
-  if (error) throw error
+  const executable = await listExecutableIdentitiesForRep(client, orgId, repId, businessDate)
+  const profileIds = [
+    ...new Set(executable.map((row) => row.profileId).filter((id): id is string => Boolean(id))),
+  ]
+  if (profileIds.length === 0) return []
 
   const byId = new Map(owned.map((profile) => [profile.id, profile]))
-  for (const row of (data ?? []) as Array<Record<string, unknown>>) {
-    const id = row.id as string
-    if (!byId.has(id)) {
-      // Reuse the store's mapper shape without importing the store (avoid a cycle).
-      byId.set(id, mapProfileRow(row))
+  const missing = profileIds.filter((id) => !byId.has(id))
+  if (missing.length > 0) {
+    const { data, error } = await client
+      .from('profiles')
+      .select('*')
+      .eq('organization_id', orgId)
+      .in('id', missing)
+      .limit(200)
+    if (error) throw error
+    for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+      byId.set(row.id as string, mapProfileRow(row))
     }
   }
-  return [...byId.values()]
+  return profileIds.map((id) => byId.get(id)).filter((profile): profile is Profile => Boolean(profile))
 }
 
 /** Minimal profile mapper for rows the store did not already provide. */

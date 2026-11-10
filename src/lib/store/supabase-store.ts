@@ -6689,52 +6689,29 @@ export class SupabaseStore implements ScoutStore {
   }
 
   /**
-   * Identities this rep may work today: canonical assignments plus active
-   * temporary coverage. Coverage is execution responsibility, not ownership —
-   * the covered identity is returned with the coverage assignment id so the
-   * caller can label it.
+   * Identities this rep may execute today, from the ONE canonical authority.
+   * Backup eligibility is not execution, and a REPLACE coverage removes the
+   * primary from this set.
    */
   async listMyWorkableIdentities(): Promise<RevenueIdentityWithAssignment[]> {
-    const assigned = await this.listMyAssignedIdentities()
     const businessDate = await this.businessDate()
-    const covered = await listActiveCoveredIdentities(this.client, this.orgId, this.rep.id, businessDate)
-
-    // Canonical guard: only the profile's primary owner is a permanent working
-    // assignment. Backup eligibility is not assignment.
-    const { data: primaryRows } = await this.client
-      .from('profile_coverage')
-      .select('profile_id')
-      .eq('organization_id', this.orgId)
-      .eq('rep_id', this.rep.id)
-      .eq('role', 'PRIMARY')
-      .eq('active', true)
-      .limit(200)
-    const primaryProfileIds = new Set((primaryRows ?? []).map((row) => row.profile_id as string))
-    const owned = assigned.filter((identity) => identity.profileId && primaryProfileIds.has(identity.profileId))
-    if (covered.length === 0) return owned
+    const executable = await listExecutableIdentitiesForRep(this.client, this.orgId, this.rep.id, businessDate)
+    if (executable.length === 0) return []
 
     const { data: identityRows } = await this.client
       .from('revenue_identities')
       .select('*')
-      .in('id', covered.map((row) => row.revenueIdentityId))
+      .in('id', executable.map((row) => row.id))
+      .limit(500)
     const identityById = new Map((identityRows ?? []).map((row) => [row.id as string, row]))
 
-    const merged = new Map<string, RevenueIdentityWithAssignment>()
-    for (const row of covered) {
-      const identity = identityById.get(row.revenueIdentityId) ?? {}
-      merged.set(row.revenueIdentityId, {
-        ...this.mapRevenueIdentity(identity),
-        assignmentId: row.coverageAssignmentId,
-        assignedBy: row.primaryRepId,
-        assignedAt: row.effectiveFrom,
-        access: 'coverage',
-      })
-    }
-    // An assignment always wins over coverage for the same identity.
-    for (const identity of owned) {
-      merged.set(identity.id, { ...identity, access: 'assigned' })
-    }
-    return [...merged.values()]
+    return executable.map((row) => ({
+      ...this.mapRevenueIdentity(identityById.get(row.id) ?? {}),
+      assignmentId: row.assignmentId,
+      assignedBy: row.assignedBy,
+      assignedAt: row.assignedAt,
+      access: row.access === 'coverage' ? 'coverage' : 'assigned',
+    }))
   }
 
   /** Profiles this rep may work today: owned plus actively covered. */
@@ -6744,28 +6721,22 @@ export class SupabaseStore implements ScoutStore {
     return listWorkableProfiles(this.client, this.orgId, this.rep.id, businessDate, owned)
   }
 
-  /** Leads this rep may act on today: owned plus leads on covered profiles. */
+  /** Leads this rep may act on today, derived from the canonical executable scope. */
   async listMyWorkableLeads(): Promise<Lead[]> {
-    const owned = await this.listOwnedLeads()
     const businessDate = await this.businessDate()
-    const covered = await listActiveCoveredIdentities(this.client, this.orgId, this.rep.id, businessDate)
-    const coveredIdentityIds = covered.map((row) => row.revenueIdentityId)
-    if (coveredIdentityIds.length === 0) return owned
+    const executable = await listExecutableIdentitiesForRep(this.client, this.orgId, this.rep.id, businessDate)
+    const identityIds = executable.map((row) => row.id)
+    if (identityIds.length === 0) return []
 
     const { data, error } = await this.client
       .from('leads')
       .select(LEAD_LIST_COLUMNS)
       .eq('organization_id', this.orgId)
       .eq('archived', false)
-      .in('revenue_identity_id', coveredIdentityIds)
+      .in('revenue_identity_id', identityIds)
       .limit(500)
     if (error) throw error
-
-    const byId = new Map(owned.map((lead) => [lead.id, lead]))
-    for (const row of (data ?? []).map(mapLead)) {
-      if (!byId.has(row.id)) byId.set(row.id, row)
-    }
-    return [...byId.values()]
+    return (data ?? []).map(mapLead)
   }
 
   async getMyTodayAccountability(): Promise<import('@/lib/domain/types').RepTodayView> {

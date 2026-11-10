@@ -19,6 +19,7 @@ import { ChannelBadge } from '@/components/ui/channel-badge'
 import { ResponsibilityStatus } from '@/components/ui/responsibility-status'
 import type { RepCoverageView } from '@/lib/coverage/load'
 import type { CoverageProfileResult } from '@/lib/coverage/engine'
+import type { ResponsibilityAcknowledgementView } from '@/lib/responsibility/load'
 import {
   V4Avatar,
   V4Chip,
@@ -70,6 +71,9 @@ export function RepCoveragePanel({
   const [until, setUntil] = useState('')
   const [pendingProfile, setPendingProfile] = useState<CoverageProfileResult | null>(null)
   const [confirmError, setConfirmError] = useState<string | null>(null)
+  const [accessIssueAck, setAccessIssueAck] = useState<ResponsibilityAcknowledgementView | null>(null)
+  const [accessIssue, setAccessIssue] = useState('')
+  const [accessIssueNote, setAccessIssueNote] = useState('')
 
   async function call(key: string, init: { url: string; method: string; body?: unknown }) {
     setBusy(key)
@@ -125,6 +129,8 @@ export function RepCoveragePanel({
 
   const own = coverage?.own ?? []
   const covering = coverage?.covering ?? []
+  const replaced = coverage?.replaced ?? []
+  const acknowledgements = coverage?.acknowledgements ?? []
   const readinessByProfile = new Map((coverage?.readiness ?? []).map((row) => [row.profileId, row.ready]))
   const responsible = [...own, ...covering]
 
@@ -156,6 +162,68 @@ export function RepCoveragePanel({
           <p className="mt-2 text-[11px] text-stone">
             Historical work stays attributed to the covering rep.
           </p>
+        </div>
+      )}
+
+      {/* New responsibility — acknowledgement is separate from access. */}
+      {acknowledgements.length > 0 && (
+        <div
+          role="alert"
+          className="mb-4 rounded-xl border border-status-warning/30 bg-status-warning/5 px-4 py-3"
+        >
+          <p className="text-[13px] font-medium text-ink">Action required</p>
+          <p className="mt-0.5 text-[12px] text-graphite">
+            You have {acknowledgements.length} new responsibilit
+            {acknowledgements.length === 1 ? 'y' : 'ies'} to acknowledge.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {acknowledgements.map((ack) => (
+              <li key={ack.id} className="rounded-lg bg-bone-raised px-3 py-2 ring-1 ring-line/70">
+                <p className="text-[12px] font-medium text-ink">
+                  {ack.profileName}
+                  {ack.channel ? ` · ${ack.channel}` : ''}
+                </p>
+                <p className="mt-0.5 text-[11px] text-stone">
+                  {ack.subject === 'PRIMARY'
+                    ? 'Permanent owner'
+                    : ack.mode === 'SHARED'
+                      ? 'Temporary · Shared coverage'
+                      : 'Temporary · Replacing the primary'}
+                  {' · Assigned '}
+                  {ack.elapsedMinutes}m ago
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      call(`ack:${ack.id}`, {
+                        url: '/api/rep/coverage',
+                        method: 'POST',
+                        body: { action: 'acknowledge', acknowledgementId: ack.id },
+                      })
+                    }
+                    className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:opacity-60"
+                  >
+                    Acknowledge
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => {
+                      setAccessIssueAck(ack)
+                      setAccessIssue('')
+                      setAccessIssueNote('')
+                      setError(null)
+                    }}
+                    className="rounded-lg border border-line bg-bone px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-bone-raised disabled:opacity-60"
+                  >
+                    Report access issue
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -284,6 +352,31 @@ export function RepCoveragePanel({
         </div>
       )}
 
+      {/* REPLACE coverage: ownership retained, execution paused. */}
+      {replaced.length > 0 && (
+        <div className="mt-4">
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-stone">
+            Temporarily covered — ownership retained
+          </p>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {replaced.map((profile) => (
+              <div key={profile.profileId} className="rounded-xl bg-bone px-4 py-3 ring-1 ring-line/70">
+                <p className="text-[13px] font-medium text-ink">{profile.name}</p>
+                <p className="mt-0.5 text-[12px] text-graphite">
+                  Permanent owner: you · Working now:{' '}
+                  <span className="font-medium text-ink">
+                    {profile.activeOperators.map((op) => op.repName).join(', ') || '—'}
+                  </span>
+                </p>
+                <p className="mt-1 text-[11px] text-stone">
+                  Your ownership is unchanged. Execution is paused until coverage ends.
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <Dialog
         open={pendingProfile !== null}
         onClose={() => setPendingProfile(null)}
@@ -317,6 +410,71 @@ export function RepCoveragePanel({
             className="rounded-lg bg-solid px-4 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:opacity-60"
           >
             {busy !== null ? 'Confirming…' : 'Yes, I have access'}
+          </button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={accessIssueAck !== null}
+        onClose={() => setAccessIssueAck(null)}
+        title="Report an access issue"
+        description={
+          accessIssueAck
+            ? `${accessIssueAck.profileName} — reporting an issue does not change your acknowledgement or ownership.`
+            : undefined
+        }
+      >
+        <label className="mb-3 block">
+          <span className="mb-1 block text-[12px] font-medium text-ink">What is wrong?</span>
+          <select
+            value={accessIssue}
+            onChange={(event) => setAccessIssue(event.target.value)}
+            className="w-full rounded-lg border border-line bg-bone-raised px-3 py-2 text-[13px] text-ink"
+          >
+            <option value="">Select an issue</option>
+            <option value="CANNOT_LOG_IN">Cannot log in</option>
+            <option value="CREDENTIALS_MISSING">Credentials missing</option>
+            <option value="TWO_FA_BLOCKED">2FA blocked</option>
+            <option value="ACCOUNT_RESTRICTED">Account restricted</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </label>
+        <label className="mb-3 block">
+          <span className="mb-1 block text-[12px] font-medium text-ink">Details (optional)</span>
+          <textarea
+            value={accessIssueNote}
+            onChange={(event) => setAccessIssueNote(event.target.value)}
+            rows={3}
+            className="w-full rounded-lg border border-line bg-bone-raised px-3 py-2 text-[13px] text-ink"
+          />
+        </label>
+        <DialogActions className="mt-4">
+          <button
+            type="button"
+            onClick={() => setAccessIssueAck(null)}
+            className="rounded-lg border border-line bg-bone-raised px-4 py-2 text-[13px] font-medium text-graphite transition-colors hover:text-ink"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={busy !== null || !accessIssue}
+            onClick={() => {
+              if (!accessIssueAck) return
+              void call(`issue:${accessIssueAck.id}`, {
+                url: '/api/rep/coverage',
+                method: 'POST',
+                body: {
+                  action: 'access_issue',
+                  acknowledgementId: accessIssueAck.id,
+                  issue: accessIssue,
+                  note: accessIssueNote || null,
+                },
+              }).then(() => setAccessIssueAck(null))
+            }}
+            className="rounded-lg bg-solid px-4 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:opacity-60"
+          >
+            {busy !== null ? 'Reporting…' : 'Report issue'}
           </button>
         </DialogActions>
       </Dialog>
@@ -390,9 +548,13 @@ function ResponsibilityCard({
         <p className="mt-3 text-[12px] text-graphite">
           Primary rep: <span className="font-medium text-ink">{profile.primaryRepName ?? 'Unknown'}</span>
           {' · '}
+          <span className="font-medium text-ink">
+            {profile.activeCoverageMode === 'SHARED' ? 'Shared' : 'Replacing primary'}
+          </span>
+          {' · '}
           {profile.activeCoverageUntil
-            ? `Coverage until ${formatDate(profile.activeCoverageUntil)}`
-            : 'Coverage open-ended'}
+            ? `until ${formatDate(profile.activeCoverageUntil)}`
+            : 'open-ended'}
           {profile.coverageExpiring && <span className="text-status-warning"> · ends today</span>}
         </p>
       )}

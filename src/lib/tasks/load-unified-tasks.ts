@@ -69,7 +69,7 @@ export async function loadUnifiedTasks(input: {
     profileIds.length
       ? client
           .from('coverage_assignments')
-          .select('profile_id, covering_rep_id, effective_from, effective_until')
+          .select('profile_id, covering_rep_id, effective_from, effective_until, coverage_mode')
           .eq('organization_id', auth.orgId)
           .eq('status', 'ACTIVE')
           .in('profile_id', profileIds)
@@ -80,6 +80,7 @@ export async function loadUnifiedTasks(input: {
             covering_rep_id: string
             effective_from: string
             effective_until: string | null
+            coverage_mode: string | null
           }>,
         }),
   ])
@@ -99,10 +100,14 @@ export async function loadUnifiedTasks(input: {
     covering_rep_id: string
     effective_from: string
     effective_until: string | null
+    coverage_mode: string | null
   }>) {
     if (!isCoverageActiveOn({ effectiveFrom: row.effective_from, effectiveUntil: row.effective_until }, businessDate)) {
       continue
     }
+    // SHARED keeps the primary as the execution rep of record — both may work
+    // the profile. REPLACE hands execution to the covering rep.
+    if (row.coverage_mode === 'SHARED') continue
     if (!executionRepByProfile.has(row.profile_id)) executionRepByProfile.set(row.profile_id, row.covering_rep_id)
   }
   // With no active coverage the primary is the execution rep.

@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth/current'
 import { computeStatus } from '@/lib/relay/accountability-engine'
 import { currentInstant, isOrgWorkingDay, orgDate, workdayProgress, type OperatingPolicy } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -18,13 +19,12 @@ export async function GET() {
   const businessDate = orgDate(now, policy.timezone)
   const isWorking = isOrgWorkingDay(policy, businessDate)
 
-  const { data: assignments } = await supabase
-    .from('identity_assignments')
-    .select('id, revenue_identity_id, assigned_by, created_at')
-    .eq('rep_id', rep.id)
-    .eq('organization_id', org.id)
+  // Canonical execution scope: active PRIMARY ownership plus active coverage,
+  // minus any profile under REPLACE coverage. Backup eligibility is not
+  // execution, so a backup-only rep carries no target lanes here.
+  const executable = await listExecutableIdentitiesForRep(supabase, org.id, rep.id, businessDate)
 
-  if (!assignments || assignments.length === 0) {
+  if (executable.length === 0) {
     return NextResponse.json({
       repName: rep.name,
       isWorkingDay: isWorking,
@@ -37,7 +37,7 @@ export async function GET() {
     })
   }
 
-  const identityIds = assignments.map((a) => a.revenue_identity_id)
+  const identityIds = executable.map((row) => row.id)
   // The identity rows are a second read rather than a PostgREST embed
   // (`identity:revenue_identities`), which the Neon adapter cannot translate.
   const { data: identityRows } = await supabase
@@ -45,9 +45,10 @@ export async function GET() {
     .select('*')
     .in('id', identityIds)
   const identityById = new Map((identityRows ?? []).map((r) => [r.id as string, r]))
-  const assignmentsWithIdentity = assignments.map((a) => ({
-    ...a,
-    identity: identityById.get(a.revenue_identity_id as string) ?? null,
+  const assignmentsWithIdentity = executable.map((row) => ({
+    id: row.assignmentId,
+    revenue_identity_id: row.id,
+    identity: identityById.get(row.id) ?? null,
   }))
   const { data: targets } = await supabase
     .from('daily_targets')

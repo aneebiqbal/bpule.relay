@@ -53,6 +53,8 @@ export async function POST(req: NextRequest) {
       reason: match.reason,
       effectiveUntil: match.effectiveUntil,
       businessDate: plan.businessDate,
+      // Execution mode is required for a COVER; RESTORE has nothing to execute.
+      mode: raw?.mode === 'SHARED' ? 'SHARED' : 'REPLACE',
       // Only a restore may return work, and only when the admin asks for it.
       returnOpenTasks: restoring ? raw.returnOpenTasks === true : false,
       returnTaskIds: restoring && Array.isArray(raw.returnTaskIds)

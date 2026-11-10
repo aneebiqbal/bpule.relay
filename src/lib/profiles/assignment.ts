@@ -1,6 +1,7 @@
 import type { DbClient } from '@/lib/db/types'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { normalizeChannel } from '@/lib/profiles/channel'
+import { ensurePrimaryAcknowledgement } from '@/lib/responsibility/load'
 
 /**
  * Responsibility assignment — the one write path for "who works which channel".
@@ -98,7 +99,7 @@ export async function assignPrimaryResponsibility(
     .or(`rep_id.eq.${input.repId},role.eq.PRIMARY`)
   if (retireError) throw retireError
 
-  const { error: primaryError } = await client
+  const { data: primaryInserted, error: primaryError } = await client
     .from('profile_coverage')
     .insert({
       organization_id: input.orgId,
@@ -109,7 +110,19 @@ export async function assignPrimaryResponsibility(
       active: true,
       created_by: input.actorRepId,
     })
+    .select('id')
   if (primaryError) throw primaryError
+
+  const primaryRowId = (primaryInserted?.[0]?.id as string | undefined) ?? null
+  if (primaryRowId) {
+    await ensurePrimaryAcknowledgement(client, {
+      organizationId: input.orgId,
+      profileId,
+      repId: input.repId,
+      sourceRowId: primaryRowId,
+      assignedAt: now,
+    })
+  }
 
   // 3. Target lanes follow the primary. Move the previous primary's active
   //    rows for this identity to the new rep so the daily plan is continuous.
