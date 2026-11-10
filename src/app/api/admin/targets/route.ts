@@ -12,6 +12,7 @@ const ACTIVITY_TYPES: ActivityType[] = [
   'followup',
   'application',
   'proposal',
+  'prospect_extracted',
   'other',
 ]
 

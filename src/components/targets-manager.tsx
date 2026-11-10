@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
-import { activityLabel, formatDefaultPack } from '@/lib/accountability/default-targets'
+import { activityLabel, formatDefaultPack, type DefaultDailyTarget } from '@/lib/accountability/default-targets'
 import { buildTeamTargetOverview } from '@/lib/accountability/target-overview'
 import { DEFAULT_WEIGHTS } from '@/lib/performance/execution-score'
 import { DashHeader, Initials, Panel, Pill, StatTile } from '@/components/dashboard/kit'
@@ -57,6 +57,7 @@ export function TargetsManager() {
     assignIfNeeded: true,
   })
   const [draftCounts, setDraftCounts] = useState<Record<string, number>>({})
+  const [missingDrafts, setMissingDrafts] = useState<Record<string, number>>({})
   const [repFilter, setRepFilter] = useState('')
 
   const load = useCallback(async () => {
@@ -154,6 +155,28 @@ export function TargetsManager() {
     const res = await fetch(`/api/admin/targets/${id}`, { method: 'DELETE' })
     if (!res.ok) { setError('Delete failed'); return }
     setTargets((prev) => prev.filter((t) => t.id !== id))
+  }
+
+  /** Add one missing lane with the rep's chosen count (the pack default). */
+  async function addMissingTarget(repId: string, identityId: string, missing: DefaultDailyTarget) {
+    setSaving(true); setError(null)
+    try {
+      const count = missingDrafts[`${repId}:${identityId}:${missing.activityType}`] ?? missing.targetCount
+      const res = await fetch('/api/admin/targets', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repId,
+          revenueIdentityId: identityId,
+          activityType: missing.activityType,
+          targetCount: count,
+          assignIfNeeded: true,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Failed to add target.')
+      await load()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Failed to add target.') }
+    finally { setSaving(false) }
   }
 
   if (loading) {
@@ -346,11 +369,31 @@ export function TargetsManager() {
                             </div>
                           )
                         })}
-                        {lane.missing.map((m) => (
-                          <span key={m.activityType} className="flex items-center rounded-md border border-dashed border-status-warning/40 bg-status-warning/5 px-2.5 py-1 text-[11px] text-status-warning">
-                            Missing · {activityLabel(m.activityType)}
-                          </span>
-                        ))}
+                        {lane.missing.map((m) => {
+                          const key = `${person.repId}:${lane.identityId}:${m.activityType}`
+                          return (
+                            <span key={m.activityType} className="flex items-center gap-1.5 rounded-md border border-dashed border-status-warning/40 bg-status-warning/5 py-1 pl-2.5 pr-1 text-[11px] text-status-warning">
+                              <span>Missing · {activityLabel(m.activityType)}</span>
+                              <input
+                                type="number"
+                                min={1}
+                                aria-label={`${activityLabel(m.activityType)} target for ${lane.identityName}`}
+                                className="h-6 w-12 rounded border border-line bg-bone px-1.5 text-right text-[12px] tabular-nums text-ink focus:border-orange/50 focus:outline-none"
+                                value={missingDrafts[key] ?? m.targetCount}
+                                onChange={(e) => setMissingDrafts((prev) => ({ ...prev, [key]: Number.parseInt(e.target.value, 10) || 0 }))}
+                              />
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => void addMissingTarget(person.repId, lane.identityId, m)}
+                                className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-medium text-status-warning hover:bg-status-warning/10 disabled:opacity-50"
+                                aria-label={`Add ${activityLabel(m.activityType)} target`}
+                              >
+                                <Plus className="size-3" /> Add
+                              </button>
+                            </span>
+                          )
+                        })}
                       </div>
                     </div>
                   ))}
