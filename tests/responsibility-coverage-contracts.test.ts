@@ -196,6 +196,51 @@ describe('TARGET_PACK_SINGLE_AUTHORITY', () => {
   })
 })
 
+describe('COVERAGE_EXPIRY_PARITY', () => {
+  it('every execution surface honours the until date', () => {
+    expect(read('src/lib/coverage/access.ts')).toMatch(/isCoverageActiveOn/)
+    expect(read('src/lib/coverage/load.ts')).toMatch(/!row\.expired/)
+    expect(read('src/lib/tasks/load-unified-tasks.ts')).toMatch(/isCoverageActiveOn/)
+    expect(read('src/lib/operations/chat-queue.ts')).toMatch(/isCoverageActiveOn/)
+  })
+
+  it('expiry is inclusive of the until date', () => {
+    const row = { effectiveFrom: '2026-01-01', effectiveUntil: '2026-01-05' }
+    expect(isCoverageActiveOn(row, '2026-01-05')).toBe(true)
+    expect(isCoverageActiveOn(row, '2026-01-06')).toBe(false)
+    expect(isCoverageActiveOn({ effectiveFrom: '2026-01-01', effectiveUntil: null }, '2026-01-05')).toBe(true)
+  })
+})
+
+describe('TARGET_TOTAL_PARITY', () => {
+  it('person total equals the sum of active channel lanes', async () => {
+    const { buildTeamTargetOverview } = await import('@/lib/accountability/target-overview')
+    const { defaultTargetsForChannel } = await import('@/lib/accountability/default-targets')
+    const pack = defaultTargetsForChannel('linkedin')
+    const targets = pack.map((row, index) => ({
+      id: `t${index}`,
+      organizationId: 'org',
+      repId: 'rep-1',
+      revenueIdentityId: 'ri-1',
+      activityType: row.activityType,
+      targetCount: row.targetCount,
+      active: true,
+      createdBy: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }))
+    const overview = buildTeamTargetOverview({
+      reps: [{ id: 'rep-1', name: 'Ahmad' }],
+      identities: [{ id: 'ri-1', identityName: 'Mehak Seedat', channel: 'linkedin', status: 'active', profileId: null }],
+      assignments: [{ repId: 'rep-1', revenueIdentityId: 'ri-1' }],
+      targets,
+    })
+    const expected = pack.reduce((sum, row) => sum + row.targetCount, 0)
+    expect(overview.people[0].totalActionsPerDay).toBe(expected)
+    expect(overview.totalActionsPerDay).toBe(expected)
+  })
+})
+
 describe('WHO_WORKS_WHAT', () => {
   function profile(over: Partial<CoverageProfileResult> = {}): CoverageProfileResult {
     return {
