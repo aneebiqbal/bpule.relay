@@ -51,7 +51,7 @@ export async function PATCH(
 ) {
   const { id } = await params
 
-  let body: { status?: string; notes?: string; proposedRate?: number | null }
+  let body: { status?: string }
   try {
     body = await request.json()
   } catch {
@@ -101,29 +101,25 @@ export async function PATCH(
 
   // Lifecycle timestamps live on the application, never on message rows.
   if (next === 'CLIENT_REPLIED' && application) {
-    await store.updateUpworkApplication(id, {
+    await store.updateUpworkApplication(application.id, {
       firstReplyAt: application.firstReplyAt ?? now,
       latestReplyAt: now,
     })
   }
   if (next === 'INTERVIEW' && application) {
-    await store.updateUpworkApplication(id, { interviewAt: application.interviewAt ?? now })
+    await store.updateUpworkApplication(application.id, { interviewAt: application.interviewAt ?? now })
   }
   if (next === 'WON' && application) {
-    await store.updateUpworkApplication(id, { wonAt: application.wonAt ?? now })
+    await store.updateUpworkApplication(application.id, { wonAt: application.wonAt ?? now })
   }
   if (next === 'LOST' && application) {
-    await store.updateUpworkApplication(id, { lostAt: application.lostAt ?? now })
+    await store.updateUpworkApplication(application.id, { lostAt: application.lostAt ?? now })
   }
   if (next === 'ARCHIVED' && application) {
-    await store.updateUpworkApplication(id, { status: 'archived', archivedAt: now })
+    await store.updateUpworkApplication(application.id, { status: 'archived', archivedAt: now })
   }
 
-  await store.updateUpworkJob(id, {
-    status: next,
-    notes: body.notes !== undefined ? body.notes : undefined,
-    proposedRate: body.proposedRate !== undefined ? body.proposedRate : undefined,
-  })
+  await store.updateUpworkJob(id, { status: next })
 
   if (next) {
     const eventFor: Partial<Record<UpworkJobStatus,

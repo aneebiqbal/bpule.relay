@@ -3331,13 +3331,13 @@ export class SupabaseStore implements ScoutStore {
     id: string,
     updates: {
       status?: UpworkJob['status']
-      notes?: string | null
-      proposedRate?: number | null
     },
   ): Promise<void> {
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (updates.status !== undefined) payload.status = updates.status
     let query = this.client
       .from('upwork_jobs')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update(payload)
       .eq('id', id)
       .eq('organization_id', this.orgId)
     if (this.rep.role !== 'admin') query = query.eq('owner_rep_id', this.rep.id)

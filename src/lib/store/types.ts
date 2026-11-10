@@ -599,7 +599,7 @@ export interface ScoutStore {
   /** Update the editable job fields on an existing row (the extract step creates it; Save corrects it). */
   updateUpworkJobFields(id: string, fields: Partial<Parameters<ScoutStore['createUpworkJob']>[0]>): Promise<void>
   updateUpworkJobScore(id: string, score: { total: number; verdict: UpworkJob['verdict']; canonicalScore?: number | null; scoreVersion?: string | null; scoreBreakdown?: unknown; jobFacts?: unknown; profileMatch?: unknown }): Promise<void>
-  updateUpworkJob(id: string, updates: { status?: UpworkJob['status']; notes?: string | null; proposedRate?: number | null }): Promise<void>
+  updateUpworkJob(id: string, updates: { status?: UpworkJob['status'] }): Promise<void>
   /** Canonical application submission: version + application + job status commit together. */
   submitUpworkApplication(input: {
     jobId: string

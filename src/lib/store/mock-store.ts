@@ -1798,7 +1798,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       const job = upworkJobs.find((j) => j.id === id)
       if (job) {
         if (updates.status) job.status = updates.status
-        if (updates.notes !== undefined) job.notes = updates.notes as any
       }
     },
     async submitUpworkApplication(input) {
