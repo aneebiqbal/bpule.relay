@@ -54,6 +54,7 @@
 
   --color-cobalt: var(--cobalt);
   --color-cobalt-light: var(--cobalt-light);
+  --color-cobalt-ink: var(--cobalt-light);
   --color-cobalt-dark: var(--cobalt-dark);
   --color-cobalt-faint: var(--cobalt-faint);
 
@@ -257,6 +258,8 @@
   --cobalt-light: #5c7afa;
   --cobalt-dark: #2f48b8;
   --cobalt-faint: #eef2ff;
+  /* Text on dark cobalt tints: WCAG AA on bg-cobalt/10. */
+  --color-cobalt-ink: #a9bcff;
 
   --status-success: #4caf7e;
   --status-warning: #d6a13c;
