@@ -14,6 +14,7 @@ import { Check, Copy, RefreshCw, Sparkles, UserPlus, AlertTriangle, Archive, Tra
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from 'cn'
 import type { ProofItem, UpworkApplication, UpworkScreeningAnswer } from '@/lib/domain/types'
+import { responseTimeMs } from '@/lib/upwork/lifecycle'
 
 export interface ProposalProfileOption {
   id: string
@@ -42,6 +43,15 @@ interface UpworkJobActionsProps {
 }
 
 const MIN_SCORE_TO_APPLY = 6
+
+function formatResponseTime(ms: number): string {
+  const minutes = Math.round(ms / 60_000)
+  const days = Math.floor(minutes / (60 * 24))
+  const hours = Math.floor((minutes % (60 * 24)) / 60)
+  if (days > 0) return hours > 0 ? `${days}d ${hours}h` : `${days}d`
+  if (hours > 0) return `${hours}h`
+  return `${minutes}m`
+}
 
 function markAppliedButtonClass(applied: boolean, belowGate: boolean): string {
   if (applied) return 'bg-status-success/10 text-status-success'
@@ -581,6 +591,9 @@ export function UpworkJobActions({
             {application.firstReplyAt && (
               <p className="mt-1 text-[12px] text-status-success">
                 Client replied {new Date(application.firstReplyAt).toLocaleString()}
+                {application.submittedAt && responseTimeMs(application.submittedAt, application.firstReplyAt) !== null
+                  ? ` (after ${formatResponseTime(responseTimeMs(application.submittedAt, application.firstReplyAt)!)})`
+                  : ''}
               </p>
             )}
           </div>

@@ -33,6 +33,7 @@ import { buildSendDecision } from '@/lib/email/send-decision'
 import { createStoreForRep } from '@/lib/email/store-context'
 import { sendPreparedEmail } from '@/lib/email/service'
 import { planOperationalJobs, recoveredRepIds, type OperationalJobKind } from './plan'
+import { emitUpworkLifecycleNotifications } from '@/lib/upwork/sweep'
 
 export interface SchedulerSummary {
   ok: boolean
@@ -770,12 +771,16 @@ async function executeJob(client: DbClient, row: JobRow): Promise<Record<string,
       const now = currentInstant()
       const tasks = await emitOverdueTaskNotifications(client, organizationId, now)
       const dueSoon = await emitDueSoonTaskNotifications(client, organizationId, now)
+      const upwork = await emitUpworkLifecycleNotifications(client, organizationId, now)
       return {
         ...warnings,
         overdueTasks: tasks.overdue,
         overdueNotified: tasks.notified,
         dueSoonTasks: dueSoon.dueSoon,
         dueSoonNotified: dueSoon.notified,
+        upworkFollowUp1: upwork.followUp1,
+        upworkFollowUp2: upwork.followUp2,
+        upworkArchiveCandidate: upwork.archiveCandidate,
       }
     }
     case 'EMIT_ESCALATION':

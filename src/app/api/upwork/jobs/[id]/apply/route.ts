@@ -57,6 +57,13 @@ export async function POST(
   const boostConnects = typeof body.boostConnects === 'number' && Number.isFinite(body.boostConnects)
     ? Math.round(body.boostConnects)
     : 0
+  // A Connect count is a small non-negative integer; anything else is a client bug.
+  if (connectsSpent !== null && (connectsSpent < 0 || connectsSpent > 10_000)) {
+    return NextResponse.json({ error: 'Connects used must be between 0 and 10,000.' }, { status: 400 })
+  }
+  if (boostConnects < 0 || boostConnects > 10_000) {
+    return NextResponse.json({ error: 'Boost connects must be between 0 and 10,000.' }, { status: 400 })
+  }
   const modelTier = typeof body.modelTier === 'string' ? body.modelTier : null
   const promptVersion = typeof body.promptVersion === 'string' ? body.promptVersion : null
   const proofRefs = Array.isArray(body.proofRefs) ? (body.proofRefs as unknown[]) : []
@@ -100,6 +107,10 @@ export async function POST(
       { error: `Score below ${MIN_SCORE_TO_APPLY} — Relay does not recommend spending a Connect here.` },
       { status: 400 },
     )
+  }
+  // A closed job cannot take a new application.
+  if (job.status === 'ARCHIVED' || job.status === 'WON' || job.status === 'LOST') {
+    return NextResponse.json({ error: 'This job is closed and cannot be applied to.' }, { status: 400 })
   }
 
   // The applied proposal must carry the sender the rep selected. A client-

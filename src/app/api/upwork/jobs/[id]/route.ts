@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { getAuthContext } from '@/lib/auth/organization'
 import { canTransition, type UpworkJobStatus } from '@/lib/upwork/lifecycle'
+import { normalizeJobStatus } from '@/lib/upwork/compat'
 import { cancelAssignedTask } from '@/lib/tasks/assigned-tasks'
 import { notifyForEvent } from '@/lib/notifications/deliver'
 import { emitAction } from '@/lib/action-ledger'
@@ -89,7 +90,7 @@ export async function PATCH(
   }
 
   const next = body.status as UpworkJobStatus | undefined
-  if (next && !canTransition(job.status, next)) {
+  if (next && !canTransition(normalizeJobStatus(job.status), next)) {
     return NextResponse.json(
       { error: `Cannot move from ${job.status} to ${next}.` },
       { status: 400 },
