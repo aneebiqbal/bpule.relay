@@ -275,10 +275,21 @@ function AssignDialog({
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [review, setReview] = useState(false)
 
   const channels = available.filter((identity) => identity.personKey === personKey)
   const selected = available.find((identity) => identity.id === identityId) ?? null
   const pack = defaultTargetsForChannel(normalizeChannel(selected?.channel ?? 'linkedin'))
+  const total = pack.reduce((sum, row) => sum + (counts[row.activityType] ?? row.targetCount), 0)
+
+  function startReview() {
+    if (!identityId) {
+      setError('Select a person and a channel.')
+      return
+    }
+    setError(null)
+    setReview(true)
+  }
 
   async function save() {
     if (!identityId) {
@@ -317,7 +328,61 @@ function AssignDialog({
   }
 
   return (
-    <Dialog title="Assign responsibility" onClose={onClose}>
+    <Dialog title={review ? 'Review assignment' : 'Assign responsibility'} onClose={onClose}>
+      {review ? (
+        <div className="space-y-3">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-stone">Review assignment</p>
+          <dl className="space-y-2 rounded-lg bg-bone px-3 py-2.5 ring-1 ring-line/70">
+            <ReviewRow label="Rep" value={plan.repName} />
+            <ReviewRow label="Person" value={selected?.personName ?? '—'} />
+            <ReviewRow label="Channel" value={selected ? <ChannelBadge channel={selected.channel} /> : '—'} />
+            <ReviewRow label="Role" value={role === 'primary' ? 'Primary' : 'Backup'} />
+            {role === 'primary' ? (
+              <div>
+                <dt className="text-[11px] uppercase tracking-[0.12em] text-stone">Daily plan</dt>
+                <dd className="mt-1 space-y-0.5">
+                  {pack.map((row) => (
+                    <p key={row.activityType} className="flex justify-between text-[13px] text-ink">
+                      <span>{activityLabel(row.activityType)}</span>
+                      <span className="tabular-nums">{counts[row.activityType] ?? row.targetCount}</span>
+                    </p>
+                  ))}
+                  <p className="mt-1 flex justify-between border-t border-line/70 pt-1 text-[13px] font-medium text-ink">
+                    <span>Total</span>
+                    <span className="tabular-nums">{total} actions/day</span>
+                  </p>
+                </dd>
+              </div>
+            ) : (
+              <div>
+                <dt className="text-[11px] uppercase tracking-[0.12em] text-stone">Backup eligibility only</dt>
+                <dd className="mt-1 text-[13px] text-graphite">
+                  No daily target. No execution access. Does not appear in My Day unless coverage activates.
+                </dd>
+              </div>
+            )}
+            <ReviewRow label="Access" value={`${plan.repName} will be asked to confirm.`} />
+          </dl>
+          {error && <p role="alert" className="text-[12px] text-status-danger">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setReview(false)}
+              className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-graphite"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving}
+              className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:opacity-50"
+            >
+              {saving ? 'Assigning…' : 'Confirm assignment'}
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="space-y-3">
         <label className="block">
           <span className="text-[11px] uppercase tracking-[0.12em] text-stone">Person</span>
@@ -415,15 +480,25 @@ function AssignDialog({
           </button>
           <button
             type="button"
-            onClick={() => void save()}
+            onClick={startReview}
             disabled={saving}
             className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:opacity-50"
           >
-            {saving ? 'Assigning…' : 'Assign responsibility'}
+            Review assignment
           </button>
         </div>
       </div>
+      )}
     </Dialog>
+  )
+}
+
+function ReviewRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-3 text-[13px]">
+      <dt className="shrink-0 text-[11px] uppercase tracking-[0.12em] text-stone">{label}</dt>
+      <dd className="min-w-0 text-right text-ink">{value}</dd>
+    </div>
   )
 }
 
