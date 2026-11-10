@@ -1,13 +1,16 @@
 import { createServerSupabase } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
-import { computeStatus } from '@/lib/relay/accountability-engine'
 import { businessDateForOrg } from '@/lib/org-clock/load'
 
 /**
- * Record a completed activity event for accountability.
- * Called server-side when Relay detects canonical events (message sent, application submitted, etc.)
- * Reps cannot fake this — it's triggered by actual system events.
+ * Record a completed activity.
+ *
+ * This route is an AUTHORIZATION BOUNDARY, not a second completion authority.
+ * It verifies the rep may work the identity, then delegates to the ONE
+ * canonical writer (`record_activity_event`). Writing `daily_accountability`
+ * here directly — as this route used to, with its own hardcoded pace — is how
+ * one real action ends up with two credits.
  */
 export async function POST(request: Request) {
   const user = await getCurrentUser()
@@ -27,83 +30,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'revenueIdentityId and activityType are required.' }, { status: 400 })
   }
 
-  // SECURITY: Validate that the identity belongs to the rep's org and is assigned to them
   const supabase = await createServerSupabase()
-  const org = user.organization
-  const rep = user.rep
 
   const { isRevenueIdentityAssignedToRep } = await import('@/lib/auth/workspace')
-  const isAuthorized = await isRevenueIdentityAssignedToRep(rep.id, rawIdentityId)
+  const isAuthorized = await isRevenueIdentityAssignedToRep(user.rep.id, rawIdentityId)
   if (!isAuthorized) {
     return NextResponse.json({ error: 'Identity not assigned to you.' }, { status: 403 })
   }
 
-  const revenueIdentityId = rawIdentityId
-  const today = await businessDateForOrg(org.id)
-
-  const { data: target } = await supabase
-    .from('daily_targets')
-    .select('*')
-    .eq('rep_id', rep.id)
-    .eq('revenue_identity_id', revenueIdentityId)
-    .eq('activity_type', activityType)
-    .eq('active', true)
-    .maybeSingle()
-
-  if (!target) return NextResponse.json({ ok: true, message: 'No active target for this activity.' })
-
-  // Upsert accountability row, incrementing completed_count
-  const { data: existingAcc } = await supabase
-    .from('daily_accountability')
-    .select('*')
-    .eq('rep_id', rep.id)
-    .eq('revenue_identity_id', revenueIdentityId)
-    .eq('activity_type', activityType)
-    .eq('target_date', today)
-    .maybeSingle()
-
-  let newCount = 1
-  let accId = existingAcc?.id
-
-  if (existingAcc) {
-    newCount = existingAcc.completed_count + 1
-    const { data: updated } = await supabase
-      .from('daily_accountability')
-      .update({
-        completed_count: newCount,
-        status: computeStatus(target.target_count, newCount, 0.5),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', existingAcc.id)
-      .select('*')
-      .single()
-    if (updated) accId = updated.id
-  } else {
-    const { data: created } = await supabase
-      .from('daily_accountability')
-      .insert({
-        organization_id: org.id,
-        rep_id: rep.id,
-        revenue_identity_id: revenueIdentityId,
-        activity_type: activityType,
-        target_date: today,
-        target_count: target.target_count,
-        completed_count: newCount,
-        status: computeStatus(target.target_count, newCount, 0.5),
-        closed: false,
-      })
-      .select('*')
-      .single()
-    if (created) accId = created.id
-  }
-
-  await supabase.from('accountability_audit_log').insert({
-    organization_id: org.id,
-    rep_id: rep.id,
-    revenue_identity_id: revenueIdentityId,
-    event_type: 'work_completed',
-    detail: { activity_type: activityType, new_count: newCount },
+  const { data, error } = await supabase.rpc('record_activity_event', {
+    p_rep_id: user.rep.id,
+    p_identity_id: rawIdentityId,
+    p_activity_type: activityType,
+    p_org_id: user.organization.id,
+    p_source_event_id: typeof body.sourceEventId === 'string' ? body.sourceEventId : null,
+    p_date: await businessDateForOrg(user.organization.id),
   })
 
-  return NextResponse.json({ ok: true, completedCount: newCount, accountabilityId: accId })
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  const result = (data ?? {}) as {
+    recorded?: boolean
+    reason?: string
+    completed_count?: number | null
+    target_count?: number | null
+  }
+
+  return NextResponse.json({
+    ok: result.recorded ?? true,
+    recorded: result.recorded ?? true,
+    reason: result.reason ?? null,
+    completedCount: result.completed_count ?? null,
+    targetCount: result.target_count ?? null,
+  })
 }
