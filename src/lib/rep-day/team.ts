@@ -136,16 +136,21 @@ function emptySummary(
 /** Rep ids the caller may see, or 'all' for org-wide. */
 async function scopedRepIds(ctx: AuthContext): Promise<Set<string> | 'all'> {
   if (ctx.isAdmin) return 'all'
-  if (!ctx.isManager || ctx.managedTeamIds.length === 0) return new Set()
+  if (!ctx.isManager) return new Set()
 
   const supabase = await createServerSupabase()
-  const { data } = await supabase
-    .from('team_memberships')
-    .select('person_id')
-    .in('team_id', ctx.managedTeamIds)
-    .eq('active', true)
+  const { data } = ctx.managedTeamIds.length
+    ? await supabase
+        .from('team_memberships')
+        .select('person_id')
+        .in('team_id', ctx.managedTeamIds)
+        .eq('active', true)
+    : { data: [] as Array<{ person_id: string }> }
 
-  return new Set((data ?? []).map((row) => row.person_id as string))
+  // Team scope is managed team + self, matching /chats.
+  const ids = new Set((data ?? []).map((row) => row.person_id as string))
+  ids.add(ctx.repId)
+  return ids
 }
 
 export async function loadTeamDay(options: { date?: string } = {}): Promise<TeamDaySummary> {
