@@ -7,6 +7,7 @@ import { injectStyleCard } from '@/lib/style/inject'
 import { sanitizeDraft } from '@/lib/facts/sanitize'
 import { evaluateCoverLetter, evaluateScreeningAnswers, COVER_LETTER_WORDS } from '@/lib/upwork/application-gate'
 import { AI_TELL_PHRASES, BANNED_PHRASES } from '@/lib/writing/engine'
+import { checkHumanization, rewriteToHumanize } from '@/lib/ai/humanization'
 import { rankProfilesForOpportunity, recommendBestProfile } from '@/lib/profile-match'
 import {
   assignedProfileName,
@@ -223,6 +224,16 @@ export async function POST(
   const evidenceBlock = formatEvidenceBlock(generationContext)
   const targetBlock = formatTargetBlock(generationContext)
 
+  // Length follows the job, not a fixed band: a two-line bug fix and a complex
+  // architecture role should not read the same length.
+  const complexity = [
+    (job.description ?? '').length > 1200,
+    (job.requiredSkills ?? []).length > 6,
+    screeningQuestions.length > 2,
+    (job.applicationRequirements ?? []).length > 2,
+  ].filter(Boolean).length
+  const wordBand: [number, number] = complexity >= 2 ? [120, 220] : complexity === 1 ? [90, 180] : [60, 120]
+
   const systemPrompt = [
     'You are a senior Upwork proposal strategist. The proposal is copy-pasted by a human; you never send anything yourself.',
     '',
@@ -237,11 +248,40 @@ export async function POST(
     '- Use their EXACT terminology — if they say "Replit", say "Replit"',
     '- Mention their specific project name or core need in the hook',
     '',
-    '### STRUCTURE (follow exactly):',
-    '1. **HOOK (1 sentence, max 15 words):** Show you read THEIR specific job. Reference their project/need. NEVER start with "I came across..." or "Hi, I\'m..."',
-    '2. **PROOF (2-3 sentences):** One specific past project matching their EXACT need, taken from the RELEVANT PROOF block. No placeholders.',
-    '3. **PLAN (2 sentences):** What you would do in the first 3 days. Specific to their stack.',
-    '4. **QUESTION (1 sentence):** Ask something showing you understand their business.',
+    '### STRUCTURE (choose what fits this job — never force a template):',
+    'Pick the shape that answers THIS job best. Natural options:',
+    '- problem recognition → direct relevant proof → short approach',
+    '- a specific technical observation → relevant experience → a useful question',
+    '- proof first → how you would handle the issue',
+    '- a short direct answer → relevant proof → close',
+    'A small bug fix may be two or three sentences. A complex architecture role may',
+    'carry a short plan. Do not pad to a fixed number of paragraphs.',
+
+    '### OPENING (the first two sentences decide everything):',
+    '- Do NOT restate the job title, the client, or their whole stack.',
+    '- Never open with "I came across...", "Hi, I\'m...", "I have X+ years...",',
+    '  "I understand you\'re looking for...", "Your app..." or "Your project...".',
+    '- Prove you read the job: a direct experience, a specific technical observation,',
+    '  a problem recognition, a proof-first line, a short question, or an outcome.',
+    '- Vary the opening structure across proposals — never the same grammatical',
+    '  opening every time.',
+    '- Reference 1-3 concrete job signals (their stack, their problem, their scale)',
+    '  in your own words. Never quote the job description back at them.',
+
+    '### PLAN (optional):',
+    '- Include a plan only when the client has a debugging, migration or delivery',
+    '  problem. Do not invent a timeline ("In the first three days...") unless the',
+    '  job asks for one.',
+
+    '### QUESTION (optional):',
+    '- Ask one only if it reveals a real unknown, starts a technical conversation,',
+    '  or changes the implementation. Otherwise end after the useful point.',
+    '- Never ask "Would you like to discuss?" or "Let\'s connect."',
+
+    '### CLOSING:',
+    '- Do not add a formal closing unless it is natural. "Looking forward to',
+    '  hearing from you", "I\'d love to discuss" and "Let\'s connect" are not',
+    '  required — the proposal is often stronger without them.',
     '',
     '### SCREENING QUESTIONS:',
     '- The proposal body must NOT contain the screening answers. Upwork shows them in separate fields.',
@@ -252,13 +292,15 @@ export async function POST(
     '- If asked about approach, give a concrete methodology',
     '',
     '### SELF-CHECK (rate before outputting):',
-    '- Does the first line prove I read their specific job? (not generic)',
-    '- Is the proof directly relevant to their stated problem?',
+    '- Does the opening prove I read their specific job — without restating it?',
+    '- Is the proof the strongest relevant evidence, not the most metadata?',
     '- Did I avoid all banned phrases and AI tells?',
-    '- Is the question at the end specific and useful?',
+    '- Is any question earned? Is any plan useful here?',
     '- Would a busy client stop scrolling and read this?',
     '',
-    `### WORD LIMIT: ${COVER_LETTER_WORDS[0]}-${COVER_LETTER_WORDS[1]} words for the proposal body. Short wins on Upwork.`,
+    `### LENGTH: aim for ${wordBand[0]}-${wordBand[1]} words. Short wins on Upwork.`,
+    '- Simple jobs stay short. Complex roles go longer only when the extra detail is useful.',
+    '- Never a wall of text.',
     '- Write like a human consultant, not a cover letter. Conversational, direct.',
     '- Reference your actual past projects/products by name only when they appear in the RELEVANT PROOF block.',
     '',
@@ -349,9 +391,11 @@ export async function POST(
     quality_score: number
   }
 
-  // Premium: use stronger model + client research
-  const clientResearch = generationMode === 'premium'
-    ? `\n## CLIENT RESEARCH\n- Hire rate: unknown (no history)\n- Avg spend: unknown\n- Note: Premium mode uses GPT-4o for stronger reasoning.\n`
+  // Premium adds reasoning depth and an opening-selection pass. No client-history
+  // source is wired, so no "unknown" block is emitted — an unknown value must
+  // never reach the prompt.
+  const premiumBrief = generationMode === 'premium'
+    ? `\n## PREMIUM MODE\n- Reason about the client's underlying problem before writing, not just the stated requirements.\n- Choose the strongest evidence for THIS job, not the item with the most metadata.\n- Draft two candidate openings, keep the stronger one, delete the other.\n- Use the sender's canonical voice; do not flatten it toward a house style.\n`
     : ''
 
   // Runtime V3 handles provider routing: OpenCode Go → Groq → GPT → LongCat
@@ -360,7 +404,7 @@ export async function POST(
   try {
     const result = await generate<ProposalResult>({
       task: 'DEEP_WRITING',
-      system: systemPrompt + clientResearch,
+      system: systemPrompt + premiumBrief,
       user: userPrompt,
       schema: schema as unknown as Record<string, unknown>,
       maxTokens: generationMode === 'premium' ? 2048 : 1536,
@@ -405,6 +449,13 @@ export async function POST(
   // Sanitize against facts table
   const sanitized = sanitizeDraft(proposal, facts)
 
+  // Humanization pass (§23): only when the draft shows a structural tell.
+  // It may change phrasing, structure, rhythm and length — never facts.
+  const humanization = checkHumanization(sanitized.text)
+  const humanized = humanization.passed
+    ? sanitized
+    : { ...sanitized, text: rewriteToHumanize(sanitized.text, humanization.flaggedTells) }
+
   // Deterministic quality gate (the model's self-check is advisory only).
   const profileCtx = {
     claimableText: [...toClaimableText(generationContext), ...facts.map((f) => `${f.label} ${f.value}`)],
@@ -412,16 +463,28 @@ export async function POST(
     allowedNumbers: [...toAllowedNumbers(generationContext), ...facts.flatMap((f) => (`${f.value}`.match(/\d[\d,.]*\s*(?:%|k|x|\+)?/gi) ?? []).map((n) => n.replace(/\s+/g, '').toLowerCase()))],
   }
   const jobCtx = { title: job.title, description: job.description, skills: job.requiredSkills ?? [], screeningQuestions }
-  const letterGate = evaluateCoverLetter(sanitized.text, jobCtx, profileCtx)
+  const letterGate = evaluateCoverLetter(humanized.text, jobCtx, profileCtx)
   const answersGate = evaluateScreeningAnswers(best.questionAnswers ?? [], jobCtx, profileCtx, letterGate.text)
   // Unsupported claims are checked in the proposal AND in every screening
   // answer — an invented price or timeline in an answer is still an invention.
+  // The claim gate runs again after humanization: a rewrite may not introduce
+  // a fact the profile cannot support.
   const unsupportedClaims = [
     ...findUnsupportedClaims(letterGate.text, generationContext),
     ...(best.questionAnswers ?? []).flatMap((answer) =>
       findUnsupportedClaims(answer.answer, generationContext).map((claim) => `[Screening] ${claim}`),
     ),
   ]
+  const blockers = [
+    ...letterGate.issues.filter((issue) => issue.severity === 'block').map((issue) => issue.message),
+    ...answersGate.issues.filter((issue) => issue.severity === 'block').map((issue) => issue.message),
+    ...unsupportedClaims,
+  ]
+  // Coarse, actionable readiness only — never a 0-100 score for the rep.
+  const readiness = {
+    status: blockers.length === 0 ? 'ready' : 'needs_review',
+    reasons: blockers.slice(0, 6),
+  }
 
   return NextResponse.json({
     draft: {
@@ -429,12 +492,10 @@ export async function POST(
       questionAnswers: answersGate.answers.map((a) => ({ question: a.question, answer: a.answer })),
       selfCheckPassed: best.self_check_passed,
       selfCheckNote: best.self_check_note,
-      qualityScore: best.quality_score ?? 5,
-      quality: {
-        passed: letterGate.passed && answersGate.passed,
-        coverLetter: { passed: letterGate.passed, wordCount: letterGate.wordCount, jobReferences: letterGate.jobReferences, proofUsed: letterGate.proofUsed, issues: letterGate.issues },
-        screening: { passed: answersGate.passed, issues: answersGate.issues, answers: answersGate.answers.map((a) => ({ question: a.question, type: a.type, wordCount: a.wordCount, issues: a.issues })) },
-      },
+      readiness,
+      // The job signals the proposal could legitimately reference — shown so
+      // the rep can see what the generator had to work with.
+      jobSignals: [...new Set([...(job.requiredSkills ?? []), ...(job.tags ?? [])].filter(Boolean))].slice(0, 8),
       matchedProof: matchedProof ? { id: matchedProof.id, projectSummary: `${matchedProof.title}: ${matchedProof.claim}` } : null,
       // Sentences that claim delivery the profile cannot support. The rep must
       // edit these before sending; they are surfaced, not silently shipped.

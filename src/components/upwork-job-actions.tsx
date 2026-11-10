@@ -97,8 +97,9 @@ export function UpworkJobActions({
   const canGenerate = eligibility.ok && !generating
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [qualityScore, setQualityScore] = useState<number | null>(null)
+  const [readiness, setReadiness] = useState<{ status: 'ready' | 'needs_review'; reasons: string[] } | null>(null)
   const [evidenceUsed, setEvidenceUsed] = useState<Array<{ id: string; kind: string; title: string; url: string | null }>>([])
+  const [jobSignals, setJobSignals] = useState<string[]>([])
   const [unsupportedClaims, setUnsupportedClaims] = useState<string[]>([])
   const [generationMode, setGenerationMode] = useState<'standard' | 'premium'>('standard')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
@@ -118,7 +119,7 @@ export function UpworkJobActions({
     }
     setGenerating(true)
     setError(null)
-    setQualityScore(null)
+    setReadiness(null)
     setEvidenceUsed([])
     setUnsupportedClaims([])
     setProposal('')
@@ -134,9 +135,10 @@ export function UpworkJobActions({
       }
       const data = await res.json()
       setProposal(data.draft.text)
-      setQualityScore(data.draft.qualityScore ?? null)
+      setReadiness(data.draft.readiness ?? null)
       setScreeningAnswers(data.draft.questionAnswers ?? [])
       setEvidenceUsed(data.draft.evidenceUsed ?? [])
+      setJobSignals(data.draft.jobSignals ?? [])
       setUnsupportedClaims(data.draft.unsupportedClaims ?? [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed.')
@@ -469,17 +471,26 @@ export function UpworkJobActions({
             />
           </div>
 
-          {qualityScore !== null && (
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Proposal quality</span>
-              <span className={cn(
-                'rounded-full px-2 py-0.5 text-[11px] font-medium',
-                qualityScore >= 8 ? 'bg-status-success/15 text-status-success' :
-                qualityScore >= 5 ? 'bg-status-warning/15 text-status-warning' :
-                'bg-status-danger/15 text-status-danger',
-              )}>
-                {qualityScore}/10
-              </span>
+          {readiness !== null && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Proposal</span>
+                <span className={cn(
+                  'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                  readiness.status === 'ready'
+                    ? 'bg-status-success/15 text-status-success'
+                    : 'bg-status-warning/15 text-status-warning',
+                )}>
+                  {readiness.status === 'ready' ? 'Ready to send' : 'Needs review'}
+                </span>
+              </div>
+              {readiness.reasons.length > 0 && (
+                <ul className="space-y-0.5">
+                  {readiness.reasons.map((reason, index) => (
+                    <li key={index} className="text-[11px] text-graphite">· {reason}</li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
@@ -521,7 +532,8 @@ export function UpworkJobActions({
               <summary className="cursor-pointer text-[10px] font-medium uppercase tracking-[0.14em] text-stone">
                 Why this proposal — evidence used
               </summary>
-              <ul className="mt-2 space-y-0.5">
+              <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Relevant evidence</p>
+              <ul className="mt-1 space-y-0.5">
                 {evidenceUsed.map((item) => (
                   <li key={item.id} className="flex items-baseline gap-2 text-[12px] text-graphite">
                     <span className="shrink-0 text-[10px] uppercase tracking-wide text-stone">{item.kind.replace(/_/g, ' ')}</span>
@@ -534,6 +546,18 @@ export function UpworkJobActions({
                   </li>
                 ))}
               </ul>
+              {jobSignals.length > 0 && (
+                <>
+                  <p className="mt-2.5 text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Job signals used</p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {jobSignals.map((signal) => (
+                      <span key={signal} className="rounded-full bg-bone-raised px-2 py-0.5 text-[10px] text-graphite ring-1 ring-line/70">
+                        {signal}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
             </details>
           )}
 

@@ -135,6 +135,20 @@ export function evaluateCoverLetter(text: string, job: ApplicationJobContext, pr
   const jobReferences = [...jobTerms].filter((term) => letterTokens.has(term) || t.toLowerCase().includes(term)).slice(0, 12)
   if (jobReferences.length < 2) issues.push({ code: 'NOT_SPECIFIC', message: 'Fewer than two references to this job', severity: 'block' })
 
+  // Parroting: repeating a whole sentence from the job description is the
+  // clearest "this was written from the posting" tell. Necessary technical nouns
+  // are not sentences, so only long verbatim runs are flagged.
+  const jobSentences = (job.description ?? '')
+    .split(/[.!?]\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 40)
+  for (const sentence of jobSentences) {
+    if (t.toLowerCase().includes(sentence.toLowerCase())) {
+      issues.push({ code: 'PARROTS_JOB', message: 'Repeats a full sentence from the job description', severity: 'warn' })
+      break
+    }
+  }
+
   // Proof: a real project/outcome must be cited when proof exists.
   const proofTokens = new Set(profile.proof.flatMap(tokens))
   const proofHits = [...letterTokens].filter((w) => proofTokens.has(w)).length
