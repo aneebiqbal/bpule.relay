@@ -35,8 +35,10 @@ export interface PeopleRow extends ManagerTeamRow {
   openLeads: number
   lastActivityAt: string | null
   dayState: string | null
-  /** Every channel the rep operates today — one row per person, not per channel. */
+  /** Person names the rep operates today — one entry per person, not per channel. */
   profiles: string[]
+  /** The same people with their channels, for surfaces that show the channel. */
+  responsibilities: Array<{ name: string; channels: string[] }>
   /** Today's availability state; null when no row exists (treated as available). */
   availability: AvailabilityState | null
 }
@@ -144,6 +146,20 @@ export function assemblePeopleDirectory(input: {
       openLeads: live?.openLeadCount ?? 0,
       lastActivityAt: day?.lastActivityAt ?? live?.lastActivityAt ?? null,
       dayState: day?.state ?? null,
+      responsibilities: (() => {
+        const byPerson = new Map<string, { name: string; channels: string[] }>()
+        for (const identity of live?.identities ?? []) {
+          const key = identity.personKey ?? identity.profileId ?? identity.id
+          const name = identity.profileName ?? identity.name
+          let entry = byPerson.get(key)
+          if (!entry) {
+            entry = { name, channels: [] }
+            byPerson.set(key, entry)
+          }
+          if (!entry.channels.includes(identity.channel)) entry.channels.push(identity.channel)
+        }
+        return [...byPerson.values()].sort((a, b) => a.name.localeCompare(b.name))
+      })(),
       profiles: (() => {
         const byPerson = new Map<string, string>()
         for (const identity of live?.identities ?? []) {

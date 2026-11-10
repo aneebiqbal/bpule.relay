@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { DataTable, type Column, type SortState } from '@/components/ui/data-table'
 import { RepStatusBadge } from '@/components/operations/ops-primitives'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 import { labelForAvailability, type AvailabilityState } from '@/lib/coverage/engine'
 import type { PeopleRow } from '@/lib/operations/people'
 
@@ -87,11 +88,18 @@ export function PeopleTable({ rows }: { rows: PeopleRow[] }) {
     },
     {
       key: 'profiles',
-      header: 'Profiles',
+      header: 'Responsibilities',
       hideBelow: 'lg',
       render: (r) =>
-        r.profiles.length > 0 ? (
-          <span className="truncate text-graphite">{r.profiles.join(' · ')}</span>
+        r.responsibilities.length > 0 ? (
+          <span className="flex flex-col gap-1">
+            {r.responsibilities.map((person) => (
+              <span key={person.name} className="flex flex-wrap items-center gap-1">
+                <span className="text-graphite">{person.name}</span>
+                {person.channels.map((channel) => <ChannelBadge key={channel} channel={channel} />)}
+              </span>
+            ))}
+          </span>
         ) : (
           <span className="text-[#7d5410]">No profile</span>
         ),
@@ -148,8 +156,15 @@ export function PeopleTable({ rows }: { rows: PeopleRow[] }) {
           <p className="mt-0.5 truncate text-[12px] text-graphite">
             {[r.roleLabel, availabilityLabelFor(r.availability)].filter(Boolean).join(' · ')}
           </p>
-          {r.profiles.length > 0 && (
-            <p className="mt-1 truncate text-[12px] text-graphite">{r.profiles.join(' · ')}</p>
+          {r.responsibilities.length > 0 && (
+            <div className="mt-1 space-y-1">
+              {r.responsibilities.map((person) => (
+                <p key={person.name} className="flex flex-wrap items-center gap-1 text-[12px] text-graphite">
+                  <span>{person.name}</span>
+                  {person.channels.map((channel) => <ChannelBadge key={channel} channel={channel} />)}
+                </p>
+              ))}
+            </div>
           )}
           <dl className="mt-2 grid grid-cols-4 gap-2 text-[12px]">
             <div>

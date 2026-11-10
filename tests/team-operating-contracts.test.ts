@@ -60,7 +60,7 @@ describe('PEOPLE_ONE_ROW_PER_REP', () => {
   it('the directory keys rows by rep, never by channel', () => {
     const source = read('src/components/operations/people-table.tsx')
     expect(source).toMatch(/rowKey=\{\(r\) => r\.repId\}/)
-    expect(source).toMatch(/r\.profiles\.join/)
+    expect(source).toMatch(/r\.responsibilities/)
   })
 
   it('the directory carries concrete per-person facts', () => {
