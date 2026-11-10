@@ -72,6 +72,13 @@ export async function POST(request: Request) {
   const repId = typeof body.repId === 'string' ? body.repId : ''
   if (!repId) return NextResponse.json({ error: 'repId is required.' }, { status: 400 })
 
+  const supabase = await createServerSupabase()
+
+  // Cross-org boundary: the rep must belong to the caller's organization.
+  const { data: repRow } = await supabase
+    .from('reps').select('id').eq('id', repId).eq('organization_id', ctx.orgId).maybeSingle()
+  if (!repRow) return NextResponse.json({ error: 'That rep is not in your organization.' }, { status: 404 })
+
   const channels = (body.channels ?? []).filter(
     (channel): channel is ChannelInput =>
       Boolean(channel && channel.channel && channel.identityName?.trim()),
@@ -80,7 +87,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Select at least one channel.' }, { status: 400 })
   }
 
-  const supabase = await createServerSupabase()
   const result: OnboardingResult = {
     status: 'ready',
     profileId: null,

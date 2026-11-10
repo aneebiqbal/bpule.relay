@@ -164,6 +164,25 @@ export async function createAssignedTask(
     throw new Error('Assignee not found in organization')
   }
 
+  // Every referenced resource must belong to the caller's organization; a
+  // client-supplied UUID is never trusted implicitly.
+  if (input.leadId) {
+    const { data: lead } = await client.from('leads').select('id, organization_id').eq('id', input.leadId).maybeSingle()
+    if (!lead || lead.organization_id !== auth.orgId) throw new Error('Lead not found in organization')
+  }
+  if (input.profileId) {
+    const { data: profile } = await client.from('profiles').select('id, organization_id').eq('id', input.profileId).maybeSingle()
+    if (!profile || profile.organization_id !== auth.orgId) throw new Error('Profile not found in organization')
+  }
+  if (input.revenueIdentityId) {
+    const { data: identity } = await client.from('revenue_identities').select('id, organization_id').eq('id', input.revenueIdentityId).maybeSingle()
+    if (!identity || identity.organization_id !== auth.orgId) throw new Error('Identity not found in organization')
+  }
+  if (input.jobId) {
+    const { data: job } = await client.from('upwork_jobs').select('id, organization_id').eq('id', input.jobId).maybeSingle()
+    if (!job || job.organization_id !== auth.orgId) throw new Error('Job not found in organization')
+  }
+
   const dueAt =
     input.dueAt
     ?? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
@@ -419,6 +438,52 @@ export async function resumeAssignedTask(
     eventType: 'TASK_STARTED',
     actorRepId: auth.repId,
     metadata: { resumed_from: 'WAITING' },
+  })
+
+  return row
+}
+
+/** Start an open or waiting task. Emits TASK_STARTED and clears waiting state. */
+export async function startAssignedTask(
+  client: DbClient,
+  auth: AuthContext,
+  taskId: string,
+): Promise<AssignedTaskRow> {
+  const { data: current, error: loadError } = await client
+    .from('assigned_tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .maybeSingle()
+  if (loadError || !current) throw new Error('Task not found')
+  if (current.status !== 'OPEN' && current.status !== 'WAITING') {
+    throw new Error('Only open or waiting tasks can be started')
+  }
+  if (!(await canOperateOnTask(client, auth, current as AssignedTaskRow))) {
+    throw new Error('Not allowed to start this task')
+  }
+
+  const { data, error } = await client
+    .from('assigned_tasks')
+    .update({
+      status: 'IN_PROGRESS',
+      waiting_on: null,
+      waiting_note: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', taskId)
+    .eq('organization_id', auth.orgId)
+    .select('*')
+    .single()
+  if (error) throw error
+  const row = data as AssignedTaskRow
+
+  await emitTaskEvent(client, {
+    organizationId: auth.orgId,
+    taskId: row.id,
+    eventType: 'TASK_STARTED',
+    actorRepId: auth.repId,
+    metadata: { started_from: current.status },
   })
 
   return row
@@ -851,6 +916,8 @@ export async function completeAssignedTask(
     || auth.isAdmin
     || auth.isOwner
   if (!canComplete) throw new Error('Not allowed to complete this task')
+  // A cancelled task must be reopened before it can be completed.
+  if (current.status === 'CANCELLED') throw new Error('Reopen the task before completing it')
 
   const now = new Date().toISOString()
   const { data, error } = await client
@@ -917,6 +984,8 @@ export async function cancelAssignedTask(
   if (scope.assigneeIds && !scope.assigneeIds.includes(current.assignee_rep_id)) {
     throw new Error('Cancel outside your team scope')
   }
+  // A completed task is historical; it must be reopened before cancellation.
+  if (current.status === 'DONE') throw new Error('Reopen the completed task before cancelling it')
 
   const now = new Date().toISOString()
   const { data, error } = await client

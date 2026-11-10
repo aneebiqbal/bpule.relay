@@ -31,6 +31,14 @@ export async function POST(
   const isAdmin = Boolean(authCtx.isAdmin || authCtx.isOwner)
   const actingRepId = requestedRepId && isAdmin ? requestedRepId : authCtx.repId
 
+  // Admin on-behalf: the acting rep must belong to the caller's organization.
+  if (requestedRepId && isAdmin && requestedRepId !== authCtx.repId) {
+    const { data: actingRep } = await store
+      .getSupabaseClient()
+      .from('reps').select('id').eq('id', requestedRepId).eq('organization_id', authCtx.orgId).maybeSingle()
+    if (!actingRep) return NextResponse.json({ error: 'That rep is not in your organization.' }, { status: 404 })
+  }
+
   const job = await store.getUpworkJob(id)
   if (!job) return NextResponse.json({ error: 'Job not found.' }, { status: 404 })
   if (job.organizationId !== authCtx.orgId) {

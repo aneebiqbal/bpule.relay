@@ -65,6 +65,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'repId or all=true required.' }, { status: 400 })
     }
 
+    // Cross-org boundary: the rep must belong to the caller's organization.
+    const { data: repRow } = await supabase
+      .from('reps').select('id').eq('id', body.repId).eq('organization_id', authCtx.orgId).maybeSingle()
+    if (!repRow) {
+      return NextResponse.json({ error: 'That rep is not in your organization.' }, { status: 404 })
+    }
+
     const existing = await supabase
       .from('voice_profiles')
       .select('id')

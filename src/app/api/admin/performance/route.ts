@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
     .from('reps')
     .select('id, name')
     .eq('id', repId)
+    .eq('organization_id', auth.orgId)
     .single()
 
   if (!targetRep) return NextResponse.json({ error: 'Rep not found.' }, { status: 404 })

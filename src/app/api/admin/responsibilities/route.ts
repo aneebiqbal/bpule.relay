@@ -49,6 +49,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'identityId and repId are required.' }, { status: 400 })
   }
 
+  // Cross-org boundary: every rep named in the request must belong to the
+  // caller's organization.
+  for (const namedRepId of [repId, fromRepId].filter(Boolean)) {
+    const { data: repRow } = await auth.client
+      .from('reps').select('id').eq('id', namedRepId).eq('organization_id', auth.authCtx.orgId).maybeSingle()
+    if (!repRow) {
+      return NextResponse.json({ error: 'That rep is not in your organization.' }, { status: 404 })
+    }
+  }
+
   try {
     if (fromRepId) {
       const result = await transferResponsibility(auth.client, {
@@ -109,6 +119,13 @@ export async function DELETE(request: Request) {
   const repId = typeof body.repId === 'string' ? body.repId.trim() : ''
   if (!identityId || !repId) {
     return NextResponse.json({ error: 'identityId and repId are required.' }, { status: 400 })
+  }
+
+  // Cross-org boundary: the rep must belong to the caller's organization.
+  const { data: repRow } = await auth.client
+    .from('reps').select('id').eq('id', repId).eq('organization_id', auth.authCtx.orgId).maybeSingle()
+  if (!repRow) {
+    return NextResponse.json({ error: 'That rep is not in your organization.' }, { status: 404 })
   }
 
   try {

@@ -14,6 +14,7 @@ import {
   requestAssignedTaskTransfer,
   rescheduleAssignedTask,
   resumeAssignedTask,
+  startAssignedTask,
   setAssignedTaskWaiting,
   type TaskWaitingOn,
 } from '@/lib/tasks/assigned-tasks'
@@ -123,18 +124,8 @@ export async function PATCH(
       return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) })
     }
     if (action === 'start') {
-      const { data, error } = await client
-        .from('assigned_tasks')
-        .update({ status: 'IN_PROGRESS', updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .eq('organization_id', auth.orgId)
-        .eq('assignee_rep_id', auth.repId)
-        .select('*')
-        .single()
-      if (error || !data) {
-        return NextResponse.json({ error: error?.message ?? 'Not found' }, { status: 404 })
-      }
-      return NextResponse.json({ task: toUnifiedTaskFromAssigned(data) })
+      const row = await startAssignedTask(client, auth, id)
+      return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) })
     }
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
   } catch (err) {
