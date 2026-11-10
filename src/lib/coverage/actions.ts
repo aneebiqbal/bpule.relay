@@ -4,7 +4,42 @@ import type { CoverageMode } from './engine'
 import { notifyOnce } from '@/lib/notifications/deliver'
 import { isMissingRelation } from '@/lib/operations/db-errors'
 import { reassignAssignedTask } from '@/lib/tasks/assigned-tasks'
+import { channelLabel } from '@/lib/profiles/channel'
 import type { AuthContext } from '@/lib/auth/organization'
+
+/** The profile's human label — identity name plus channel, never a bare id. */
+async function coverageProfileLabel(
+  client: DbClient,
+  organizationId: string,
+  profileId: string,
+): Promise<string> {
+  const { data: identity } = await client
+    .from('revenue_identities')
+    .select('identity_name, channel')
+    .eq('organization_id', organizationId)
+    .eq('profile_id', profileId)
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle()
+  const name = (identity?.identity_name as string | null) ?? 'Profile'
+  const channel = identity?.channel as string | null
+  return channel ? `${name} · ${channelLabel(channel)}` : name
+}
+
+async function repLabel(
+  client: DbClient,
+  organizationId: string,
+  repId: string,
+  fallback: string,
+): Promise<string> {
+  const { data } = await client
+    .from('reps')
+    .select('name')
+    .eq('organization_id', organizationId)
+    .eq('id', repId)
+    .maybeSingle()
+  return (data?.name as string | null) ?? fallback
+}
 
 /**
  * Coverage writes. Every mutation is explicit, audited and idempotent where a
@@ -261,12 +296,16 @@ async function notifyCoverageActivated(
     reason: string
   },
 ): Promise<void> {
+  const label = await coverageProfileLabel(client, input.organizationId, input.profileId)
+  const primaryName = await repLabel(client, input.organizationId, input.primaryRepId, 'the primary')
+  const coveringName = await repLabel(client, input.organizationId, input.coveringRepId, 'A colleague')
+
   await notifyOnce(client, {
     organizationId: input.organizationId,
     recipientId: input.coveringRepId,
     type: 'coverage_activated',
-    title: 'You are covering a profile today',
-    body: input.reason,
+    title: 'Temporary responsibility assigned',
+    body: `${label} — covering for ${primaryName}. ${input.reason}`.trim(),
     link: '/dashboard',
     dedupeKey: `coverage_activated:${input.profileId}:${input.coveringRepId}`,
   })
@@ -275,8 +314,8 @@ async function notifyCoverageActivated(
       organizationId: input.organizationId,
       recipientId: input.primaryRepId,
       type: 'coverage_activated_primary',
-      title: 'Coverage activated while you are away',
-      body: input.reason,
+      title: 'Coverage activated',
+      body: `${label} is being covered by ${coveringName}. Your ownership is unchanged.`,
       link: '/dashboard',
       dedupeKey: `coverage_activated_primary:${input.profileId}:${input.primaryRepId}`,
     })
@@ -334,14 +373,26 @@ export async function restorePrimaryCoverage(input: {
     actor_rep_id: input.actorRepId,
   })
 
+  const label = await coverageProfileLabel(client, input.organizationId, input.profileId)
+  const primaryName = await repLabel(client, input.organizationId, active.primary_rep_id as string, 'the primary')
+
   await notifyOnce(client, {
     organizationId: input.organizationId,
     recipientId: active.covering_rep_id as string,
     type: 'coverage_ended',
     title: 'Coverage ended',
-    body: input.reason,
+    body: `${label} is restored to ${primaryName}. ${input.reason}`.trim(),
     link: '/dashboard',
     dedupeKey: `coverage_ended:${input.profileId}`,
+  })
+  await notifyOnce(client, {
+    organizationId: input.organizationId,
+    recipientId: active.primary_rep_id as string,
+    type: 'coverage_restored_primary',
+    title: 'Responsibility restored',
+    body: `${label} is restored to you. Your ownership never changed.`,
+    link: '/dashboard',
+    dedupeKey: `coverage_restored_primary:${input.profileId}`,
   })
 
   // Manual restore decision: open profile-bound work may return to the primary.

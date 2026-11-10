@@ -215,6 +215,16 @@ describe('CHANNEL_BADGE_PARITY', () => {
   })
 })
 
+describe('COVERAGE_NOTIFICATION_CONTEXT', () => {
+  it('coverage notifications name the profile, channel and the other rep', () => {
+    const source = read('src/lib/coverage/actions.ts')
+    expect(source).toMatch(/Temporary responsibility assigned/)
+    expect(source).toMatch(/covering for \$\{primaryName\}/)
+    expect(source).toMatch(/Your ownership is unchanged/)
+    expect(source).toMatch(/is restored to you/)
+  })
+})
+
 describe('COVERAGE_VISUAL_STATE_PARITY', () => {
   it('coverage panels never use the ambiguous "Backup active" label', () => {
     const source = read('src/components/coverage/admin-coverage-panel.tsx')
