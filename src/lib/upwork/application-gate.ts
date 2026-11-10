@@ -200,6 +200,17 @@ export function evaluateCoverLetter(
   const proofUsed = profile.proof.length === 0 ? false : proofHits >= 3
   if (profile.proof.length > 0 && !proofUsed) issues.push({ code: 'NO_PROOF', message: 'Does not cite any real proof item', severity: 'warn' })
 
+  // Paraphrasing a specific capability into a generality is the same failure:
+  // "I build RAG pipelines and AI agents" must appear as itself, not as
+  // "I have extensive experience in AI workflows".
+  const proofPhraseUsed = profile.proof.some((claim) => {
+    const trimmed = claim.trim()
+    return trimmed.length >= 15 && t.toLowerCase().includes(trimmed.toLowerCase())
+  })
+  if (profile.proof.length > 0 && !proofPhraseUsed) {
+    issues.push({ code: 'PROOF_PARAPHRASED', message: 'Does not cite the proof in its own words — quote the capability instead of generalising it', severity: 'warn' })
+  }
+
   // Hallucination: numbers and product names must come from facts, proof or the job.
   const allowedNumbers = new Set([...(profile.allowedNumbers ?? []), ...(`${job.description} ${profile.proof.join(' ')} ${profile.claimableText.join(' ')}`.match(/\d[\d,.]*\s*(?:%|k|x|\+)?/gi) ?? []).map((n) => n.replace(/\s+/g, '').toLowerCase())])
   for (const n of t.match(/\d[\d,.]*\s*(?:%|k|x|\+)?/gi) ?? []) {

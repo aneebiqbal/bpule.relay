@@ -267,6 +267,9 @@ export async function POST(
     '  opening every time.',
     '- Reference 1-3 concrete job signals (their stack, their problem, their scale)',
     '  in your own words. Never quote the job description back at them.',
+    '- When you cite proof, use the proof item\'s OWN words. Do not paraphrase a',
+    '  specific capability ("I build RAG pipelines and AI agents") into a',
+    '  generality ("I have extensive experience in AI workflows").',
 
     '### PLAN (optional):',
     '- Include a plan only when the client has a debugging, migration or delivery',
@@ -507,7 +510,7 @@ export async function POST(
   // template output is not sendable, even when no claim is unsafe.
   const reviewWarnings = [
     ...letterGate.issues
-      .filter((issue) => issue.severity === 'warn' && ['NO_PROOF', 'GENERIC_LANGUAGE', 'FORMAL_SIGNOFF', 'PARROTS_JOB', 'TOO_MANY_QUESTIONS'].includes(issue.code))
+      .filter((issue) => issue.severity === 'warn' && ['NO_PROOF', 'PROOF_PARAPHRASED', 'GENERIC_LANGUAGE', 'FORMAL_SIGNOFF', 'PARROTS_JOB', 'TOO_MANY_QUESTIONS'].includes(issue.code))
       .map((issue) => issue.message),
     ...answersGate.issues.filter((issue) => issue.severity === 'warn').map((issue) => issue.message),
   ]
