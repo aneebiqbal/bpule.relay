@@ -16,6 +16,14 @@ alter table upwork_jobs drop constraint if exists upwork_jobs_status_check;
 alter table upwork_jobs add constraint upwork_jobs_status_check
   check (status in ('SAVED','DRAFT_READY','APPLIED','CLIENT_REPLIED','INTERVIEW','WON','LOST','ARCHIVED'));
 
+-- The action ledger's full type set (the parity test scans the latest
+-- definition; this is the final one).
+alter table action_events drop constraint if exists action_events_action_type_check;
+alter table action_events add constraint action_events_action_type_check
+  check (action_type in (
+    'LEAD_EXTRACTED','CONNECTION_PREPARED','CONNECTION_SENT','DM_PREPARED','DM_SENT','FOLLOWUP_SENT','REPLY_SENT','REPLY_RECEIVED','LEAD_REFERRED','PROFILE_RECOMMENDED','UPWORK_JOB_EXTRACTED','UPWORK_JOB_SAVED','UPWORK_PROPOSAL_PREPARED','UPWORK_APPLIED','UPWORK_APPLICATION_SUBMITTED','UPWORK_FOLLOWUP_SENT','UPWORK_CLIENT_REPLIED','UPWORK_INTERVIEW','UPWORK_WON','UPWORK_LOST','UPWORK_ARCHIVED','UPWORK_DELETED','OPPORTUNITY_CREATED','MEETING_BOOKED','CLIENT_WON','LEAD_ARCHIVED','RECOMMENDATION_SHOWN','RECOMMENDATION_ACTED'
+  ));
+
 -- ============================================================================
 -- 2. Drop legacy application columns (the canonical columns hold the data)
 -- ============================================================================
