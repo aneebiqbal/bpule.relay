@@ -187,19 +187,18 @@ describe('UPWORK_HIDES_UNASSIGNED_PROFILE', () => {
     expect(rows.map((row) => row.profile.id)).toEqual(['p-assigned'])
   })
 
-  it('the read model derives from assignments only', () => {
+  it('the read model derives from the canonical execution authority', () => {
     const source = read('src/lib/profiles/assigned-profiles.ts')
     expect(source).toContain('getAuthorizedIdentities')
-    expect(source).toContain("from('identity_assignments')")
+    expect(source).toContain('listExecutableIdentitiesForRep')
   })
 })
 
 describe('UPWORK_HIDES_OTHER_REP_PROFILE', () => {
-  it('the on-behalf loader scopes by rep_id and organization_id', () => {
+  it('the on-behalf loader scopes by the canonical authority for that rep', () => {
     const source = read('src/lib/profiles/assigned-profiles.ts')
     expect(source).toContain('listAssignedProfilesForRep')
-    expect(source).toContain(".eq('rep_id', repId)")
-    expect(source).toContain(".eq('organization_id', orgId)")
+    expect(source).toContain('listExecutableIdentitiesForRep')
   })
 
   it('the generate API rejects a repId the caller may not act for', () => {
@@ -306,7 +305,7 @@ describe('ADMIN_UPWORK_PROFILE_ASSIGNMENT_FLOW', () => {
 
   it('assignment changes reach the Upwork surface without a second model', () => {
     const canonical = read('src/lib/profiles/assigned-profiles.ts')
-    expect(canonical).toContain("from('identity_assignments')")
+    expect(canonical).toContain('listExecutableIdentitiesForRep')
     expect(canonical).not.toContain('profile_assignments')
   })
 })

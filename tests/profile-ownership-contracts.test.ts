@@ -101,10 +101,11 @@ describe('PROFILE_EXECUTION_GLOBAL_PARITY', () => {
     expect(load).toMatch(/plan\.profiles\.filter\(\(profile\) => profile\.primaryRepId === repId\)/)
   })
 
-  it('the switcher and channel selectors read primary plus active coverage', () => {
+  it('the switcher and channel selectors read the one canonical execution authority', () => {
     const store = read('src/lib/store/supabase-store.ts')
-    expect(store).toMatch(/role', 'PRIMARY'/)
-    expect(store).toMatch(/listActiveCoveredIdentities/)
+    expect(store).toMatch(/listExecutableIdentitiesForRep/)
+    const access = read('src/lib/coverage/access.ts')
+    expect(access).toMatch(/export async function listExecutableIdentitiesForRep/)
   })
 
   it('Team Profiles reads the canonical directory and renders ownership, backups and review state', () => {

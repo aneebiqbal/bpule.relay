@@ -90,6 +90,7 @@ export async function listActiveCoverageForProfiles(
     .from('coverage_assignments')
     .select(COVERAGE_COLUMNS)
     .eq('organization_id', orgId)
+    .eq('status', 'ACTIVE')
     .in('profile_id', profileIds)
     .limit(500)
   if (error) throw error
