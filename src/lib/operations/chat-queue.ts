@@ -20,8 +20,7 @@ import { deriveConversationRow, type ConversationRow } from '@/lib/operations/co
 import { sourceBucket, type OpsSource } from '@/lib/operations/filters'
 import { pipelineGroupForStage } from '@/lib/operations/reports'
 import { isCoverageActiveOn } from '@/lib/coverage/access'
-import { loadOperatingPolicy } from '@/lib/org-clock/load'
-import { orgToday } from '@/lib/org-clock'
+import { orgDate } from '@/lib/org-clock'
 
 export const CHAT_VIEWS = [
   { value: 'waiting_me', label: 'Needs reply', managerOnly: false },
@@ -338,9 +337,23 @@ export async function loadChatQueue(
 
   // Coverage context: who is working each sending profile now, and who owns it.
   // A covering rep must be able to see why the profile is available to them.
-  const profileIds = [...new Set(identities.map((i) => i.profile_id).filter((id): id is string => Boolean(id)))]
-  const policy = await loadOperatingPolicy(query.orgId, client)
-  const businessDate = orgToday(policy)
+  // Count-only callers (sidebar badges, Inbox counts) never render the context,
+  // so they skip the extra reads entirely.
+  const needsCoverageContext = !query.countOnly
+  const profileIds = needsCoverageContext
+    ? [...new Set(identities.map((i) => i.profile_id).filter((id): id is string => Boolean(id)))]
+    : []
+  // This module also ships in the client bundle (the queue list imports its
+  // helpers), so the business date must come from the database — never from the
+  // server-only policy loader.
+  const { data: policyRow } = needsCoverageContext
+    ? await client
+        .from('organization_operating_policy')
+        .select('timezone')
+        .eq('organization_id', query.orgId)
+        .maybeSingle()
+    : { data: null }
+  const businessDate = orgDate(new Date(), (policyRow?.timezone as string | null) ?? 'UTC')
   const [coverageRes, primaryRes] = profileIds.length
     ? await Promise.all([
         client
