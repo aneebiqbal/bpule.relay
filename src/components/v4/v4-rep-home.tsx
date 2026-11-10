@@ -20,6 +20,7 @@ import { relativeWait } from '@/lib/rep-home/action-presentation'
 import { selectAssignedOpenTasks, selectAssignedOverdueTasks } from '@/lib/tasks/rank-unified-tasks'
 import { RepDayControl, repDayStartTime } from '@/components/coverage/rep-day-control'
 import { RepProfilesToday } from '@/components/coverage/rep-profiles-today'
+import { AcknowledgementBanner } from '@/components/coverage/acknowledgement-banner'
 import { UpworkRepHomeSummary } from '@/components/upwork/rep-home-summary'
 import {
   V4Panel,
@@ -170,6 +171,8 @@ export function V4RepHome({
           </>
         }
       />
+
+      <AcknowledgementBanner acknowledgements={(coverage ?? data.coverage)?.acknowledgements ?? []} />
 
       <section aria-label="Your profiles">
         <RepProfilesToday
