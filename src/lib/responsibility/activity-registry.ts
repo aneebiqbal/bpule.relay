@@ -122,7 +122,9 @@ export const ACTIVITY_REGISTRY: Record<ActivityKey, ActivityDefinition> = {
     defaultWeight: 3,
     completionAuthority: 'upwork_applications.submitted_at',
     destination: '/upwork',
-    sourceEventTypes: ['UPWORK_APPLICATION_SUBMITTED'],
+    // UPWORK_APPLIED is the legacy historical alias of the same business event.
+    // Both resolve here; analytics dedupe by job so neither is counted twice.
+    sourceEventTypes: ['UPWORK_APPLICATION_SUBMITTED', 'UPWORK_APPLIED'],
   },
   proposal_generated: {
     key: 'proposal_generated',

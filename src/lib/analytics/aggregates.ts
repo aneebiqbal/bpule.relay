@@ -33,6 +33,7 @@ export const PERFORMANCE_EVENT_TYPES = [
   MEETING_EVENT,
   'UPWORK_PROPOSAL_PREPARED',
   'UPWORK_APPLIED',
+  'UPWORK_APPLICATION_SUBMITTED',
   'CLIENT_WON',
 ] as const
 
@@ -45,6 +46,7 @@ export const ACTIVITY_EVENT_TYPES = [
   'FOLLOWUP_SENT',
   'REPLY_SENT',
   'UPWORK_APPLIED',
+  'UPWORK_APPLICATION_SUBMITTED',
   MEETING_EVENT,
   'CLIENT_WON',
   'OPPORTUNITY_CREATED',
@@ -58,6 +60,7 @@ export const TARGET_EVENT_TYPES = [
   'FOLLOWUP_SENT',
   'REPLY_SENT',
   'UPWORK_APPLIED',
+  'UPWORK_APPLICATION_SUBMITTED',
   MEETING_EVENT,
   'UPWORK_PROPOSAL_PREPARED',
 ] as const
@@ -72,7 +75,10 @@ const METRICS_SELECT = `COUNT(*) FILTER (WHERE action_type = 'CONNECTION_SENT') 
   COUNT(*) FILTER (WHERE action_type = '${MEETING_EVENT}') AS meetings,
   COUNT(*) FILTER (WHERE action_type = 'UPWORK_PROPOSAL_PREPARED') AS proposals,
   COUNT(*) FILTER (WHERE action_type = 'CLIENT_WON') AS wins,
-  COUNT(*) FILTER (WHERE action_type = 'UPWORK_APPLIED') AS applications,
+  -- UPWORK_APPLIED is the legacy alias of UPWORK_APPLICATION_SUBMITTED: one
+  -- business event, two historical spellings. Dedupe by job so a job that was
+  -- logged under both names is still counted exactly once.
+  COUNT(DISTINCT job_id) FILTER (WHERE action_type IN ('UPWORK_APPLIED', 'UPWORK_APPLICATION_SUBMITTED')) AS applications,
   COUNT(DISTINCT lead_id) FILTER (WHERE action_type IN (${quoteList(PERFORMANCE_EVENT_TYPES)})) AS leads_worked,
   COUNT(DISTINCT lead_id) FILTER (WHERE action_type IN ('CONNECTION_SENT', 'DM_SENT', 'FOLLOWUP_SENT')) AS leads_contacted,
   COUNT(DISTINCT lead_id) FILTER (WHERE action_type = 'REPLY_RECEIVED') AS leads_replied`

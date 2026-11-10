@@ -36,7 +36,7 @@ describe('PROFILE_CHANNEL_PLAN_SINGLETON', () => {
 
   it('the production backfill produced exactly one plan per lane', () => {
     const migration = readFileSync(
-      'supabase/migrations/20261111120000_daily_target_plans_v61.sql',
+      'supabase/migrations/20261111130000_daily_target_plans_v61.sql',
       'utf8',
     )
     expect(migration).toMatch(/dtp_active_lane_uniq/)
@@ -172,7 +172,7 @@ describe('ONE_COMPLETION_AUTHORITY', () => {
 describe('TARGET_HISTORY_NOT_REWRITTEN', () => {
   it('the plan model is effective-dated in the schema', () => {
     const migration = readFileSync(
-      'supabase/migrations/20261111120000_daily_target_plans_v61.sql',
+      'supabase/migrations/20261111130000_daily_target_plans_v61.sql',
       'utf8',
     )
     expect(migration).toMatch(/effective_from date not null/)

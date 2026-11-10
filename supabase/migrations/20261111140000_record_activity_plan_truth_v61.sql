@@ -9,6 +9,11 @@
 -- Behaviour is unchanged for solo profiles: the backfilled plans carry the same
 -- target_count values. It changes only WHO owns the requirement.
 
+-- Retire the old 4-argument overload: it still resolved the requirement from
+-- daily_targets, which made a shared profile a per-operator requirement. Two
+-- live completion authorities is exactly the defect this migration removes.
+drop function if exists public.record_activity_event(uuid, uuid, text, uuid);
+
 create or replace function public.record_activity_event(
   p_rep_id uuid,
   p_identity_id uuid,

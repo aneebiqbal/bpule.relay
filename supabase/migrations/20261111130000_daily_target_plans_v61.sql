@@ -8,13 +8,16 @@
 -- toward it; daily_accountability already records who contributed what and is
 -- left untouched as contribution truth.
 --
--- Migration analysis (§4), production, run before this file:
---   active daily_targets rows:            28
---   duplicate (identity, activity) lanes:  0
+-- Migration analysis (§9), production, run before this file:
+--   active daily_targets rows:            30
+--   duplicate (identity, activity) lanes:  2  (Aneeb · upwork application and
+--                                              proposal: a STALE Ahmad lane plus
+--                                              the PRIMARY Dawood lane, equal targets)
 --   ambiguous rows:                       0
---   activity types: application 6, connection_request 4, dm 4,
---                    followup 4, proposal 6, prospect_extracted 4
--- So the backfill is one plan per unique lane. Nothing is merged or discarded.
+--   activity types: application 7, connection_request 4, dm 4,
+--                    followup 4, proposal 7, prospect_extracted 4
+-- So the backfill is one plan per unique lane. Nothing is merged or discarded;
+-- when a lane is duplicated, the PRIMARY's row wins deterministically.
 --
 -- `proposal` lanes are carried across with targetable = false: generating a
 -- draft is real work but is NOT a submitted application, so it is tracked and
@@ -68,12 +71,14 @@ create policy "dtp_delete" on daily_target_plans
 comment on table daily_target_plans is
   'One daily requirement per channel identity and activity. Operators contribute toward it (daily_accountability); they never own it. Effective-dated so a change never rewrites yesterday.';
 
--- Backfill: one plan per unique active lane, preserving who created it.
+-- Backfill: one plan per unique active lane, preserving who created it. When a
+-- lane is duplicated (two operators carrying the same target), the PRIMARY's
+-- row wins so the plan's provenance is the canonical owner.
 insert into daily_target_plans (
   organization_id, revenue_identity_id, activity_type, target_count, targetable,
   effective_from, active, created_by, created_at, updated_at
 )
-select
+select distinct on (dt.organization_id, dt.revenue_identity_id, dt.activity_type)
   dt.organization_id,
   dt.revenue_identity_id,
   dt.activity_type,
@@ -85,10 +90,16 @@ select
   dt.created_at,
   dt.updated_at
 from daily_targets dt
+left join revenue_identities ri on ri.id = dt.revenue_identity_id
+left join profile_coverage pc
+  on pc.profile_id = ri.profile_id
+ and pc.rep_id = dt.rep_id
+ and pc.active
+ and pc.role = 'PRIMARY'
 where dt.active
-  and not exists (
-    select 1 from daily_target_plans p
-    where p.organization_id = dt.organization_id
-      and p.revenue_identity_id = dt.revenue_identity_id
-      and p.activity_type = dt.activity_type
-  );
+order by
+  dt.organization_id,
+  dt.revenue_identity_id,
+  dt.activity_type,
+  case when pc.rep_id is null then 1 else 0 end,
+  dt.created_at;
