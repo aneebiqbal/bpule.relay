@@ -11,6 +11,9 @@ import { rangeWindow } from '@/lib/operations/filters'
 import { AssignTaskButton } from '@/components/operations/assign-task-button'
 import { V4Chip, V4Empty, V4Panel, V4PanelHeader, V4StatStrip } from '@/components/v4/primitives'
 import { InlineError, RepStatusBadge, TimelineTable } from '@/components/operations/ops-primitives'
+import { ChannelBadge } from '@/components/ui/channel-badge'
+import { ResponsibilityStatus } from '@/components/ui/responsibility-status'
+import { buildWhoWorksWhat } from '@/lib/team/who-works-what'
 
 /**
  * Team → Today — the one operating page for managers and admins.
@@ -189,6 +192,8 @@ export async function TeamToday() {
         </div>
       </V4Panel>
 
+      <WhoWorksWhat plan={plan} />
+
       <CoverageExceptions plan={plan} />
 
       <V4Panel>
@@ -352,6 +357,56 @@ function PeopleCard({
         </Link>
       </div>
     </div>
+  )
+}
+
+function WhoWorksWhat({ plan }: { plan: CoveragePlan }) {
+  const rows = buildWhoWorksWhat(plan)
+
+  return (
+    <V4Panel>
+      <V4PanelHeader
+        eyebrow="Operating"
+        title="Who works what"
+        hint="Permanent ownership and active temporary cover, from the canonical coverage plan. Backups never appear here."
+      />
+      <div className="mt-3">
+        {rows.length === 0 ? (
+          <V4Empty title="No responsibilities" body="Assign a responsibility to start operating the team." />
+        ) : (
+          <div className="space-y-4">
+            {rows.map((rep) => (
+              <div key={rep.repId}>
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-stone">{rep.repName}</p>
+                <ul className="mt-1.5 space-y-2">
+                  {rep.people.map((person) => (
+                    <li key={person.profileId} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <Link
+                        href={`/team/profiles/${person.profileId}`}
+                        className="min-w-0 truncate text-[13px] font-medium text-ink hover:underline"
+                      >
+                        {person.name}
+                      </Link>
+                      <span className="flex flex-wrap items-center gap-1">
+                        {person.channels.map((channel) => (
+                          <span key={channel.channel} className="inline-flex items-center gap-1">
+                            <ChannelBadge channel={channel.channel} />
+                            <ResponsibilityStatus status={channel.role} />
+                            {channel.coveringFor && (
+                              <span className="text-[11px] text-stone">covering for {channel.coveringFor}</span>
+                            )}
+                          </span>
+                        ))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </V4Panel>
   )
 }
 

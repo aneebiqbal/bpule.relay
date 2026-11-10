@@ -12,6 +12,8 @@ import { join } from 'node:path'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { isCoverageActiveOn } from '@/lib/coverage/access'
 import { getExecutableProfilesForRep, type CanonicalAssignmentSet } from '@/lib/profiles/canonical'
+import { buildWhoWorksWhat } from '@/lib/team/who-works-what'
+import type { CoveragePlan, CoverageProfileResult } from '@/lib/coverage/engine'
 import { neonServiceDbClient } from '@/lib/db/neon'
 
 const ROOT = process.cwd()
@@ -191,6 +193,97 @@ describe('TARGET_PACK_SINGLE_AUTHORITY', () => {
   it('the profile target editor derives the pack from the identity channel', () => {
     const source = read('src/components/team/team-profile-detail.tsx')
     expect(source).toMatch(/defaultTargetsForChannel\(normalizeChannel\(channel\.channel\)\)/)
+  })
+})
+
+describe('WHO_WORKS_WHAT', () => {
+  function profile(over: Partial<CoverageProfileResult> = {}): CoverageProfileResult {
+    return {
+      profileId: 'p-1',
+      personId: null,
+      name: 'Zaira',
+      channels: ['upwork'],
+      identityIds: ['i-1'],
+      primaryRepId: 'rep-hassan',
+      primaryRepName: 'Hassan',
+      primaryAvailability: 'ON_LEAVE',
+      primaryIsAvailable: false,
+      backups: [],
+      activeCoveringRepId: null,
+      activeCoveringRepName: null,
+      activeCoverageUntil: null,
+      status: 'COVERED',
+      recommendation: 'NONE',
+      recommendedRepId: null,
+      recommendedRepName: null,
+      recommendationReasons: [],
+      recommendedReady: false,
+      ineligibleReason: null,
+      coverageExpiring: false,
+      primaryReady: true,
+      work: { replies: 0, followUps: 0, tasks: 0 },
+      ...over,
+    }
+  }
+
+  const plan = (profiles: CoverageProfileResult[]): CoveragePlan => ({
+    businessDate: '2026-11-10',
+    isWorkingDay: true,
+    coveragePolicy: 'AUTO_COVER',
+    totalProfiles: profiles.length,
+    counts: { COVERED: 0, BACKUP_ACTIVE: 0, AT_RISK: 0, UNCOVERED: 0 },
+    profiles,
+    requiresApproval: [],
+    unchanged: profiles.length,
+  })
+
+  it('groups permanent ownership by rep and person, and labels temporary cover', () => {
+    const rows = buildWhoWorksWhat(
+      plan([
+        profile({
+          profileId: 'p-zaira',
+          name: 'Zaira',
+          channels: ['upwork'],
+          primaryRepId: 'rep-hassan',
+          primaryRepName: 'Hassan',
+          activeCoveringRepId: 'rep-dawood',
+          activeCoveringRepName: 'Dawood',
+        }),
+        profile({
+          profileId: 'p-mehak',
+          name: 'Mehak Seedat',
+          channels: ['linkedin', 'upwork'],
+          primaryRepId: 'rep-ahmad',
+          primaryRepName: 'Ahmad',
+        }),
+      ]),
+    )
+
+    const ahmad = rows.find((row) => row.repId === 'rep-ahmad')
+    expect(ahmad?.people).toHaveLength(1)
+    expect(ahmad?.people[0].channels.map((channel) => [channel.channel, channel.role])).toEqual([
+      ['linkedin', 'PRIMARY'],
+      ['upwork', 'PRIMARY'],
+    ])
+
+    const hassan = rows.find((row) => row.repId === 'rep-hassan')
+    expect(hassan?.people[0].channels.map((channel) => channel.role)).toEqual(['PRIMARY'])
+
+    const dawood = rows.find((row) => row.repId === 'rep-dawood')
+    expect(dawood?.people[0].channels[0]).toMatchObject({ role: 'TEMPORARY', coveringFor: 'Hassan' })
+  })
+
+  it('never lists a backup as an operator', () => {
+    const rows = buildWhoWorksWhat(
+      plan([
+        profile({
+          primaryRepId: 'rep-hassan',
+          primaryRepName: 'Hassan',
+          backups: [{ repId: 'rep-madiha', repName: 'Madiha', priority: 2, source: 'coverage', eligible: true, ready: true }],
+        }),
+      ]),
+    )
+    expect(rows.map((row) => row.repId)).toEqual(['rep-hassan'])
   })
 })
 
