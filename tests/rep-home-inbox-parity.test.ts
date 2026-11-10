@@ -370,9 +370,10 @@ describe('MANAGER_PERSONAL_INBOX_PARITY', () => {
     expect(manager).toContain("label: 'Replies waiting'")
     expect(manager).toContain("label: 'Waiting on clients'")
     expect(manager).toContain("label: 'Follow-ups due'")
-    expect(manager).toContain("href: '/chats?view=waiting_me'")
-    expect(manager).toContain("href: '/chats?view=waiting_them'")
-    expect(manager).toContain("href: '/chats?view=followups'")
+    // Personal metrics deep-link to the URL-backed personal scope.
+    expect(manager).toContain("href: '/chats?view=waiting_me&scope=me'")
+    expect(manager).toContain("href: '/chats?view=waiting_them&scope=me'")
+    expect(manager).toContain("href: '/chats?view=followups&scope=me'")
   })
 })
 
@@ -441,7 +442,9 @@ describe('INBOX_SCOPE_ROLE_PARITY', () => {
     expect(queue).toContain('leadBelongsToAnyWorkspace')
     const page = read('src/app/(app)/chats/page.tsx')
     expect(page).toContain('getAuthorizedIdentities')
-    expect(page).toContain('managerViews ? Promise.resolve(null)')
+    // Team scope (default) is not narrowed by the viewer's identities; the
+    // explicit personal scope is.
+    expect(page).toContain('managerViews && !personalScope ? Promise.resolve(null)')
   })
 })
 
